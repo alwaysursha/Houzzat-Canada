@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "houzzat",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2024-12-30",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "routes": [
+    {
+      "pattern": "houzzat.ca",
+      "custom_domain": true
+    }
+  ],
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "houzzat"
+    }
+  ],
+  "vars": {
+    "NEXTAUTH_URL": "https://houzzat.ca",
+    "NEXT_PUBLIC_SITE_URL": "https://houzzat.ca"
+  },
+  "limits": {
+    "cpu_ms": 30000
+  }
+}

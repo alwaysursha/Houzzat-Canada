@@ -1,0 +1,89 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { requireCustomerUser } from "@/lib/account";
+import { prisma } from "@/lib/prisma";
+
+export async function GET() {
+  const user = await requireCustomerUser();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+  }
+
+  const items = await prisma.areaMonitor.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return NextResponse.json({ items });
+}
+
+const postSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  city: z.string().trim().min(1).max(80),
+  community: z.string().trim().max(80).optional().nullable(),
+  transactionType: z.enum(["SALE", "LEASE", "ALL"]).optional(),
+  segment: z
+    .enum(["RESIDENTIAL", "COMMERCIAL", "PRE_CONSTRUCTION"])
+    .optional()
+    .nullable(),
+  notifyNew: z.boolean().optional(),
+  notifySold: z.boolean().optional(),
+  emailAlerts: z.boolean().optional(),
+});
+
+export async function POST(request: Request) {
+  const user = await requireCustomerUser();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+  }
+
+  const parsed = postSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid area." }, { status: 400 });
+  }
+
+  const data = parsed.data;
+  const name =
+    data.name ||
+    [data.community, data.city].filter(Boolean).join(", ") ||
+    data.city;
+
+  const item = await prisma.areaMonitor.create({
+    data: {
+      userId: user.id,
+      name,
+      city: data.city,
+      community: data.community || null,
+      transactionType: data.transactionType ?? "SALE",
+      segment: data.segment ?? "RESIDENTIAL",
+      notifyNew: data.notifyNew ?? true,
+      notifySold: data.notifySold ?? true,
+      emailAlerts: data.emailAlerts ?? true,
+      lastSeenListingAt: new Date(),
+    },
+  });
+
+  return NextResponse.json({ ok: true, item });
+}
+
+const deleteSchema = z.object({
+  id: z.string().min(1),
+});
+
+export async function DELETE(request: Request) {
+  const user = await requireCustomerUser();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+  }
+
+  const parsed = deleteSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid id." }, { status: 400 });
+  }
+
+  await prisma.areaMonitor.deleteMany({
+    where: { id: parsed.data.id, userId: user.id },
+  });
+
+  return NextResponse.json({ ok: true });
+}

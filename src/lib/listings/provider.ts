@@ -1,0 +1,478 @@
+import type {
+  ListingStatus,
+  Prisma,
+  PropertyType,
+} from "@prisma/client";
+import { ownerListingTag } from "@/lib/owner/pricing";
+import { prisma } from "@/lib/prisma";
+import type {
+  AutocompleteSuggestion,
+  ListingCard,
+  ListingDetail,
+  ListingProvider,
+  ListingSearchParams,
+  ListingSearchResult,
+} from "@/lib/listings/types";
+
+export function toCard(
+  listing: Prisma.ListingGetPayload<{
+    include: {
+      media: true;
+      openHouses: true;
+    };
+  }>,
+): ListingCard {
+  const primary =
+    listing.media.find((m) => m.isPrimary) ?? listing.media[0] ?? null;
+  const upcoming = listing.openHouses
+    .filter((oh) => oh.endsAt.getTime() >= Date.now())
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+    .slice(0, 2);
+
+  const isOwner = listing.dataSource === "fsbo";
+
+  return {
+    mlsNumber: listing.mlsNumber,
+    status: listing.status,
+    segment: listing.segment,
+    transactionType: listing.transactionType,
+    propertyType: listing.propertyType,
+    listPrice: listing.listPrice,
+    soldPrice: listing.soldPrice,
+    beds: listing.beds,
+    baths: listing.baths,
+    sqft: listing.sqft,
+    parkingSpaces: listing.parkingSpaces,
+    addressLine: listing.addressLine,
+    unitNumber: listing.unitNumber,
+    city: listing.city,
+    community: listing.community,
+    postalCode: listing.postalCode,
+    province: listing.province,
+    brokerageName: listing.brokerageName,
+    lat: listing.lat,
+    lng: listing.lng,
+    primaryImageUrl: primary?.url ?? null,
+    openHouses: upcoming.map((oh) => ({
+      startsAt: oh.startsAt.toISOString(),
+      endsAt: oh.endsAt.toISOString(),
+    })),
+    daysOnMarket: listing.daysOnMarket,
+    isMock: listing.isMock,
+    dataSource: listing.dataSource,
+    ownerTag: isOwner ? ownerListingTag(listing.transactionType) : null,
+  };
+}
+
+export class MockListingProvider implements ListingProvider {
+  readonly name = "mock" as const;
+
+  async search(params: ListingSearchParams): Promise<ListingSearchResult> {
+    const limit = Math.min(params.limit ?? 40, 100);
+    const status =
+      params.status && params.status !== "ALL"
+        ? params.status
+        : ("ACTIVE" as ListingStatus);
+
+    const where: Prisma.ListingWhereInput = {
+      status,
+      AND: [],
+    };
+
+    if (params.dataSource === "fsbo") {
+      (where.AND as Prisma.ListingWhereInput[]).push({
+        dataSource: "fsbo",
+        ownerStatus: "ACTIVE",
+      });
+    } else if (params.dataSource === "mls") {
+      (where.AND as Prisma.ListingWhereInput[]).push({
+        dataSource: { not: "fsbo" },
+      });
+    } else {
+      (where.AND as Prisma.ListingWhereInput[]).push({
+        OR: [
+          { dataSource: { not: "fsbo" } },
+          { dataSource: "fsbo", ownerStatus: "ACTIVE" },
+        ],
+      });
+    }
+
+    if (params.city) {
+      where.city = { equals: params.city, mode: "insensitive" };
+    }
+    if (params.propertyTypes?.length) {
+      where.propertyType = { in: params.propertyTypes };
+    } else if (params.propertyType) {
+      where.propertyType = params.propertyType;
+    }
+    if (params.segment && params.segment !== "ALL") {
+      where.segment = params.segment;
+    } else if (!params.segment) {
+      // Default public search excludes pre-construction (has its own hub)
+      where.segment = { in: ["RESIDENTIAL", "COMMERCIAL"] };
+    }
+    if (params.transactionType && params.transactionType !== "ALL") {
+      where.transactionType = params.transactionType;
+    } else if (!params.transactionType && params.dataSource !== "fsbo") {
+      // Default to sale so existing buy/search links stay correct
+      where.transactionType = "SALE";
+    }
+    if (params.minPrice != null || params.maxPrice != null) {
+      where.listPrice = {
+        gte: params.minPrice,
+        lte: params.maxPrice,
+      };
+    }
+    if (params.minBeds != null) {
+      where.beds = { gte: params.minBeds };
+    }
+    const andFilters = Array.isArray(where.AND)
+      ? [...where.AND]
+      : where.AND
+        ? [where.AND]
+        : [];
+    if (params.communities?.length) {
+      andFilters.push({
+        OR: params.communities.map((community) => ({
+          community: { equals: community, mode: "insensitive" as const },
+        })),
+      });
+    } else if (params.community) {
+      where.community = { equals: params.community, mode: "insensitive" };
+    }
+    if (
+      params.west != null &&
+      params.south != null &&
+      params.east != null &&
+      params.north != null
+    ) {
+      andFilters.push(
+        { lng: { gte: params.west, lte: params.east } },
+        { lat: { gte: params.south, lte: params.north } },
+      );
+    }
+    if (params.openHouseOnly) {
+      where.openHouses = {
+        some: { endsAt: { gte: new Date() } },
+      };
+    }
+    if (params.q?.trim()) {
+      const q = params.q.trim();
+      andFilters.push({
+        OR: [
+          { mlsNumber: { contains: q, mode: "insensitive" } },
+          { addressLine: { contains: q, mode: "insensitive" } },
+          { city: { contains: q, mode: "insensitive" } },
+          { community: { contains: q, mode: "insensitive" } },
+          { postalCode: { contains: q, mode: "insensitive" } },
+        ],
+      });
+    }
+    where.AND = andFilters;
+
+    const orderBy =
+      params.sort === "newest"
+        ? ([{ listedAt: "desc" }, { mlsNumber: "desc" }] as const)
+        : ([{ listPrice: "asc" }, { mlsNumber: "asc" }] as const);
+
+    const [total, rows] = await Promise.all([
+      prisma.listing.count({ where }),
+      prisma.listing.findMany({
+        where,
+        include: {
+          media: { orderBy: { sortOrder: "asc" } },
+          openHouses: { orderBy: { startsAt: "asc" } },
+        },
+        orderBy: [...orderBy],
+        take: limit + 1,
+        ...(params.cursor
+          ? {
+              skip: 1,
+              cursor: { mlsNumber: params.cursor },
+            }
+          : {}),
+      }),
+    ]);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+
+    return {
+      items: page.map(toCard),
+      nextCursor: hasMore ? page[page.length - 1]?.mlsNumber ?? null : null,
+      total,
+      provider: "mock",
+    };
+  }
+
+  async getByMls(mlsNumber: string): Promise<ListingDetail | null> {
+    const listing = await prisma.listing.findUnique({
+      where: { mlsNumber },
+      include: {
+        media: { orderBy: { sortOrder: "asc" } },
+        openHouses: { orderBy: { startsAt: "asc" } },
+        history: { orderBy: { contractDate: "desc" } },
+      },
+    });
+    if (!listing) return null;
+    if (
+      listing.dataSource === "fsbo" &&
+      listing.ownerStatus !== "ACTIVE"
+    ) {
+      return null;
+    }
+    return listing;
+  }
+
+  async autocomplete(
+    query: string,
+    options?: { transactionType?: "SALE" | "LEASE" },
+  ): Promise<AutocompleteSuggestion[]> {
+    const q = query.trim();
+    if (q.length < 1) return [];
+
+    const listings = await prisma.listing.findMany({
+      where: {
+        AND: [
+          {
+            OR: [
+              { dataSource: { not: "fsbo" } },
+              { dataSource: "fsbo", ownerStatus: "ACTIVE" },
+            ],
+          },
+          { status: "ACTIVE" },
+          ...(options?.transactionType
+            ? [{ transactionType: options.transactionType }]
+            : []),
+          {
+            OR: [
+              { mlsNumber: { contains: q, mode: "insensitive" } },
+              { addressLine: { contains: q, mode: "insensitive" } },
+              { city: { contains: q, mode: "insensitive" } },
+              { community: { contains: q, mode: "insensitive" } },
+              { postalCode: { contains: q, mode: "insensitive" } },
+              { unitNumber: { contains: q, mode: "insensitive" } },
+            ],
+          },
+        ],
+      },
+      take: 10,
+      orderBy: { listPrice: "asc" },
+      select: {
+        mlsNumber: true,
+        addressLine: true,
+        unitNumber: true,
+        city: true,
+        community: true,
+        province: true,
+        postalCode: true,
+        lat: true,
+        lng: true,
+        transactionType: true,
+      },
+    });
+
+    const listingSuggestions: AutocompleteSuggestion[] = listings.map((l) => {
+      const street = l.unitNumber
+        ? `${l.addressLine} Unit ${l.unitNumber}`
+        : l.addressLine;
+      const locality = [l.city, l.province || "ON", l.postalCode]
+        .filter(Boolean)
+        .join(", ");
+      return {
+        type: "listing" as const,
+        label: street,
+        subtitle: [locality, l.community, `MLS® ${l.mlsNumber}`]
+          .filter(Boolean)
+          .join(" · "),
+        mlsNumber: l.mlsNumber,
+        city: l.city,
+        community: l.community,
+        province: l.province || "ON",
+        unitNumber: l.unitNumber,
+        lat: l.lat,
+        lng: l.lng,
+        href: `/listing/${l.mlsNumber}`,
+      };
+    });
+
+    const places = MOCK_PLACES.filter(
+      (p) =>
+        p.label.toLowerCase().includes(q.toLowerCase()) ||
+        p.city.toLowerCase().includes(q.toLowerCase()),
+    ).slice(0, 5);
+
+    const txn = options?.transactionType;
+    const placeSuggestions: AutocompleteSuggestion[] = places.map((p) => {
+      const params = new URLSearchParams({
+        city: p.city,
+        lat: String(p.lat),
+        lng: String(p.lng),
+      });
+      if (txn) params.set("transactionType", txn);
+      return {
+        type: "place" as const,
+        label: p.label,
+        subtitle: `${p.city}, ON`,
+        city: p.city,
+        province: "ON",
+        lat: p.lat,
+        lng: p.lng,
+        href: `/search?${params.toString()}`,
+      };
+    });
+
+    return [...listingSuggestions, ...placeSuggestions].slice(0, 12);
+  }
+
+  async openHouses(params: {
+    city?: string;
+    community?: string;
+    communities?: string[];
+    propertyTypes?: PropertyType[];
+    minPrice?: number;
+    maxPrice?: number;
+    from?: Date;
+    to?: Date;
+  }): Promise<ListingCard[]> {
+    const from = params.from ?? new Date();
+    const to =
+      params.to ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
+    const andFilters: Prisma.ListingWhereInput[] = [];
+    if (params.communities?.length) {
+      andFilters.push({
+        OR: params.communities.map((community) => ({
+          community: { equals: community, mode: "insensitive" as const },
+        })),
+      });
+    } else if (params.community) {
+      andFilters.push({
+        community: { equals: params.community, mode: "insensitive" },
+      });
+    }
+
+    const rows = await prisma.listing.findMany({
+      where: {
+        status: "ACTIVE",
+        transactionType: "SALE",
+        ...(params.city
+          ? { city: { equals: params.city, mode: "insensitive" } }
+          : {}),
+        ...(params.propertyTypes?.length
+          ? { propertyType: { in: params.propertyTypes } }
+          : {}),
+        ...(params.minPrice != null || params.maxPrice != null
+          ? {
+              listPrice: {
+                gte: params.minPrice,
+                lte: params.maxPrice,
+              },
+            }
+          : {}),
+        ...(andFilters.length ? { AND: andFilters } : {}),
+        openHouses: {
+          some: {
+            startsAt: { lte: to },
+            endsAt: { gte: from },
+          },
+        },
+      },
+      include: {
+        media: { orderBy: { sortOrder: "asc" } },
+        openHouses: {
+          where: {
+            startsAt: { lte: to },
+            endsAt: { gte: from },
+          },
+          orderBy: { startsAt: "asc" },
+        },
+      },
+      orderBy: { listPrice: "asc" },
+      take: 60,
+    });
+
+    return rows.map(toCard);
+  }
+
+  async syncStatus() {
+    const listingCount = await prisma.listing.count();
+    const latest = await prisma.listing.findFirst({
+      orderBy: { updatedAt: "desc" },
+      select: { updatedAt: true },
+    });
+
+    return {
+      provider: "mock" as const,
+      healthy: listingCount > 0,
+      message:
+        listingCount > 0
+          ? "Using mock GTA listings. Swap LISTING_PROVIDER=proptx when credentials are ready."
+          : "No listings seeded. Run pnpm db:seed.",
+      listingCount,
+      lastSyncedAt: latest?.updatedAt.toISOString() ?? null,
+    };
+  }
+}
+
+const MOCK_PLACES = [
+  { label: "Toronto", city: "Toronto", lat: 43.6532, lng: -79.3832 },
+  { label: "Downtown Toronto", city: "Toronto", lat: 43.6548, lng: -79.388 },
+  { label: "North York", city: "Toronto", lat: 43.7615, lng: -79.4111 },
+  { label: "Scarborough", city: "Toronto", lat: 43.7764, lng: -79.2318 },
+  { label: "Etobicoke", city: "Toronto", lat: 43.6205, lng: -79.5132 },
+  { label: "Mississauga", city: "Mississauga", lat: 43.589, lng: -79.6441 },
+  { label: "Brampton", city: "Brampton", lat: 43.7315, lng: -79.7624 },
+  { label: "Markham", city: "Markham", lat: 43.8561, lng: -79.337 },
+  { label: "Vaughan", city: "Vaughan", lat: 43.8361, lng: -79.4983 },
+  { label: "Oakville", city: "Oakville", lat: 43.4675, lng: -79.6877 },
+  { label: "Richmond Hill", city: "Richmond Hill", lat: 43.8828, lng: -79.4403 },
+  { label: "Burlington", city: "Burlington", lat: 43.3255, lng: -79.799 },
+];
+
+/** Reserved for Phase 1+ live feed — keep interface parity.
+ *
+ * When wiring PropTx VOW, map listing history cycles to ListingHistory:
+ * - ListingContractDate → contractDate
+ * - ModificationTimestamp → lastUpdatedAt (history) / updatedAtMls (current listing)
+ * - Price Change events: previous ListPrice → originalPrice, new ListPrice → price
+ * Past sold/expired/leased rows remain visibility=restricted under VOW rules.
+ */
+export class PropTxListingProvider implements ListingProvider {
+  readonly name = "proptx" as const;
+
+  private unsupported(): never {
+    throw new Error(
+      "PropTx provider is not configured yet. Set LISTING_PROVIDER=mock until credentials are available.",
+    );
+  }
+
+  search(): Promise<ListingSearchResult> {
+    return this.unsupported();
+  }
+  getByMls(): Promise<ListingDetail | null> {
+    return this.unsupported();
+  }
+  autocomplete(): Promise<AutocompleteSuggestion[]> {
+    return this.unsupported();
+  }
+  openHouses(): Promise<ListingCard[]> {
+    return this.unsupported();
+  }
+  async syncStatus() {
+    return {
+      provider: "proptx" as const,
+      healthy: false,
+      message: "PropTx credentials not configured.",
+      listingCount: 0,
+      lastSyncedAt: null,
+    };
+  }
+}
+
+export function getListingProvider(): ListingProvider {
+  if (process.env.LISTING_PROVIDER === "proptx") {
+    return new PropTxListingProvider();
+  }
+  return new MockListingProvider();
+}

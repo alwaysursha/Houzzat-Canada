@@ -1,0 +1,45 @@
+import type { Metadata } from "next";
+import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
+import { Providers } from "@/components/Providers";
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/constants";
+import "./globals.css";
+
+export const dynamic = "force-dynamic";
+
+const jakarta = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+});
+
+export const metadata: Metadata = {
+  title: {
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html
+      lang="en"
+      className={`${jakarta.variable} ${fraunces.variable} h-full antialiased`}
+      suppressHydrationWarning
+    >
+      <body className="h-full">
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
+}

@@ -1,0 +1,867 @@
+generator client {
+  provider      = "prisma-client-js"
+  engineType    = "client"
+  compilerBuild = "small"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CUSTOMER
+  AGENT
+  ADMIN
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  ACTIVE_BUYER
+  ACTIVE_SELLER
+  SHOWING
+  OFFER
+  CLIENT
+  NURTURE
+  LOST
+}
+
+enum LeadSource {
+  PROPERTY_INQUIRY
+  SHOWING_REQUEST
+  VIRTUAL_VIEWING
+  HOME_VALUATION
+  BUYER_SESSION
+  SAVED_SEARCH
+  LANDING_PAGE
+  OPEN_HOUSE
+  PAID_AD
+  AFFORDABILITY
+  SELLER_READINESS
+  OTHER
+}
+
+enum AppointmentType {
+  SHOWING
+  VIRTUAL_VIEWING
+  BUYER_SESSION
+  VALUATION_CALL
+}
+
+enum AppointmentStatus {
+  REQUESTED
+  CONFIRMED
+  RESCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  role          Role      @default(CUSTOMER)
+  phone         String?
+  caslConsentAt DateTime?
+  vowAcceptedAt DateTime?
+  vowVersion    String?
+  emailAlertsEnabled Boolean @default(true)
+  smsAlertsEnabled   Boolean @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  agentProfile  AgentProfile?
+  leads         Lead[]            @relation("CustomerLeads")
+  assignedLeads Lead[]            @relation("AssignedLeads")
+  activities    LeadActivity[]
+  appointments  Appointment[]     @relation("CustomerAppointments")
+  agentAppointments Appointment[] @relation("AgentAppointments")
+  landingPages  LandingPage[]
+  consentEvents ConsentEvent[]
+  savedListings SavedListing[]
+  savedSearches SavedSearch[]
+  listingViews  ListingView[]
+  listingNotes  ListingNote[]
+  propertyMonitors PropertyMonitor[]
+  areaMonitors  AreaMonitor[]
+  customerAlerts CustomerAlert[]
+  adCampaigns   AdCampaign[]
+  cmaReports    CmaReport[]
+  referralHandoffs ReferralHandoff[] @relation("AgentHandoffs")
+  ownedListings Listing[]            @relation("OwnerListings")
+  ownerOrders   OwnerListingOrder[]  @relation("OwnerOrders")
+  reviewedOwnerListings Listing[]    @relation("OwnerListingReviewer")
+  waivedOwnerOrders OwnerListingOrder[] @relation("OwnerOrderAdmin")
+  ownerConsents OwnerListingConsent[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model AgentProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  bio       String?  @db.Text
+  markets   String[] @default([])
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Lead {
+  id              String     @id @default(cuid())
+  status          LeadStatus @default(NEW)
+  source          LeadSource @default(OTHER)
+  score           Int        @default(0)
+  notes           String?    @db.Text
+  listingMls      String?
+  customerId      String?
+  assignedAgentId String?
+  landingPageId   String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  utmContent      String?
+  adCampaignId    String?
+  /** CASL-style consent to be contacted by a Houzzat agent about this request. */
+  contactConsentAt DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  customer      User?          @relation("CustomerLeads", fields: [customerId], references: [id], onDelete: SetNull)
+  assignedAgent User?          @relation("AssignedLeads", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  landingPage   LandingPage?   @relation(fields: [landingPageId], references: [id], onDelete: SetNull)
+  adCampaign    AdCampaign?    @relation(fields: [adCampaignId], references: [id], onDelete: SetNull)
+  activities    LeadActivity[]
+  appointments  Appointment[]
+
+  @@index([status, assignedAgentId])
+  @@index([source])
+  @@index([utmCampaign])
+  @@index([adCampaignId])
+}
+
+model LeadActivity {
+  id        String   @id @default(cuid())
+  leadId    String
+  userId    String?
+  type      String
+  body      String?  @db.Text
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, createdAt])
+}
+
+model Appointment {
+  id          String            @id @default(cuid())
+  type        AppointmentType
+  status      AppointmentStatus @default(REQUESTED)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  listingMls  String?
+  notes       String?           @db.Text
+  focusNotes  String?           @db.Text
+  videoJoinUrl String?
+  customerId  String?
+  agentId     String?
+  leadId      String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  customer User? @relation("CustomerAppointments", fields: [customerId], references: [id], onDelete: SetNull)
+  agent    User? @relation("AgentAppointments", fields: [agentId], references: [id], onDelete: SetNull)
+  lead     Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([status, startsAt])
+  @@index([agentId, status])
+}
+
+model LandingPage {
+  id             String   @id @default(cuid())
+  slug           String   @unique
+  title          String
+  headline       String?
+  subtitle       String?  @db.Text
+  ctaLabel       String?  @default("Get started")
+  ctaHref        String?  @default("/home-valuation")
+  heroImageUrl   String?
+  areaFocus      String?
+  utmCampaign    String?
+  content        Json?
+  published      Boolean  @default(false)
+  ownerAgentId   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ownerAgent User?  @relation(fields: [ownerAgentId], references: [id], onDelete: SetNull)
+  leads      Lead[]
+}
+
+model ConsentEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  leadId    String?
+  email     String?
+  kind      String
+  version   String
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, kind])
+  @@index([leadId])
+  @@index([email])
+}
+
+model MlsSyncCursor {
+  id        String   @id @default(cuid())
+  resource  String   @unique
+  cursor    String?
+  updatedAt DateTime @updatedAt
+}
+
+model MlsSyncRun {
+  id         String    @id @default(cuid())
+  resource   String
+  status     String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  message    String?   @db.Text
+  stats      Json?
+}
+
+model SavedListing {
+  id        String   @id @default(cuid())
+  userId    String
+  mlsNumber String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, mlsNumber])
+  @@index([userId, createdAt])
+}
+
+model SavedSearch {
+  id                String   @id @default(cuid())
+  userId            String
+  name              String
+  query             Json
+  emailAlerts       Boolean  @default(true)
+  smsAlerts         Boolean  @default(false)
+  /** When true, homepage rails are filtered to this search (one per user). */
+  isHomepageActive  Boolean  @default(false)
+  lastAlertedAt     DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, isHomepageActive])
+}
+
+model ListingView {
+  id        String   @id @default(cuid())
+  userId    String?
+  mlsNumber String
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([mlsNumber, createdAt])
+}
+
+model ListingNote {
+  id        String   @id @default(cuid())
+  userId    String
+  mlsNumber String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, mlsNumber])
+  @@index([userId, updatedAt])
+}
+
+model PropertyMonitor {
+  id                   String   @id @default(cuid())
+  userId               String
+  mlsNumber            String
+  emailAlerts          Boolean  @default(true)
+  lastKnownPrice       Int
+  lastKnownStatus      ListingStatus
+  lastKnownOwnerStatus OwnerListingStatus?
+  lastAlertedAt        DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, mlsNumber])
+  @@index([userId, createdAt])
+}
+
+enum AreaMonitorTransaction {
+  SALE
+  LEASE
+  ALL
+}
+
+model AreaMonitor {
+  id              String                 @id @default(cuid())
+  userId          String
+  name            String
+  city            String
+  community       String?
+  transactionType AreaMonitorTransaction @default(SALE)
+  segment         ListingSegment?
+  notifyNew       Boolean                @default(true)
+  notifySold      Boolean                @default(true)
+  emailAlerts     Boolean                @default(true)
+  lastAlertedAt   DateTime?
+  lastSeenListingAt DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alerts CustomerAlert[]
+
+  @@index([userId, createdAt])
+  @@index([city, community])
+}
+
+enum CustomerAlertKind {
+  PRICE_CHANGE
+  STATUS_CHANGE
+  OWNER_STATUS_CHANGE
+  AREA_NEW
+  AREA_SOLD
+  SYSTEM
+}
+
+model CustomerAlert {
+  id            String            @id @default(cuid())
+  userId        String
+  kind          CustomerAlertKind
+  title         String
+  body          String            @db.Text
+  mlsNumber     String?
+  areaMonitorId String?
+  readAt        DateTime?
+  createdAt     DateTime          @default(now())
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  areaMonitor AreaMonitor? @relation(fields: [areaMonitorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  LEASED
+  SUSPENDED
+  EXPIRED
+  TERMINATED
+}
+
+enum ListingTransactionType {
+  SALE
+  LEASE
+}
+
+enum OwnerListingStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PENDING_REVIEW
+  ACTIVE
+  PAUSED
+  EXPIRED
+  CANCELLED
+  REJECTED
+}
+
+enum OwnerPaymentStatus {
+  PENDING
+  PAID
+  WAIVED
+  FAILED
+}
+
+enum OwnerConsentKind {
+  LISTING_TERMS
+  COOP_COMMISSION
+}
+
+enum PropertyType {
+  DETACHED
+  SEMI_DETACHED
+  TOWNHOUSE
+  CONDO_APT
+  CONDO_TOWNHOUSE
+  MULTIPLEX
+  VACANT_LAND
+  OFFICE
+  RETAIL
+  INDUSTRIAL
+  MIXED_USE
+  OTHER
+}
+
+enum ListingSegment {
+  RESIDENTIAL
+  COMMERCIAL
+  PRE_CONSTRUCTION
+}
+
+model Listing {
+  id               String                  @id @default(cuid())
+  mlsNumber        String                  @unique
+  status           ListingStatus           @default(ACTIVE)
+  segment          ListingSegment          @default(RESIDENTIAL)
+  transactionType  ListingTransactionType  @default(SALE)
+  dataSource       String                  @default("mock")
+  propertyType     PropertyType            @default(DETACHED)
+  listPrice        Int
+  soldPrice        Int?
+  beds             Float
+  baths            Float
+  sqft             Int?
+  parkingSpaces    Int                     @default(0)
+  yearBuilt        Int?
+  taxes            Int?
+  maintenanceFee   Int?
+  addressLine      String
+  unitNumber       String?
+  city             String
+  community        String?
+  postalCode       String?
+  province         String                  @default("ON")
+  lat              Float
+  lng              Float
+  description      String                  @db.Text
+  brokerageName    String
+  /** PropTx VOW / RESO: ListingContractDate */
+  listedAt         DateTime
+  soldAt           DateTime?
+  /** PropTx VOW / RESO: ModificationTimestamp */
+  updatedAtMls     DateTime
+  daysOnMarket     Int                     @default(0)
+  isMock           Boolean                 @default(true)
+  ownerUserId      String?
+  ownerStatus      OwnerListingStatus?
+  listedUntil      DateTime?
+  ownerReviewedAt  DateTime?
+  ownerReviewedById String?
+  ownerReviewNote  String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  owner          User?                 @relation("OwnerListings", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  reviewedBy     User?                 @relation("OwnerListingReviewer", fields: [ownerReviewedById], references: [id], onDelete: SetNull)
+  media          ListingMedia[]
+  openHouses     OpenHouse[]
+  history        ListingHistory[]
+  titleParties   OwnerTitleParty[]
+  ownerOrders    OwnerListingOrder[]
+  ownerConsents  OwnerListingConsent[]
+
+  @@index([status, city, listPrice])
+  @@index([status, community, listPrice])
+  @@index([segment, status, city])
+  @@index([transactionType, segment, status, city])
+  @@index([dataSource, ownerStatus, status])
+  @@index([ownerUserId])
+  @@index([lat, lng])
+  @@index([listedAt])
+  @@index([addressLine])
+}
+
+model OwnerTitleParty {
+  id              String   @id @default(cuid())
+  listingId       String
+  fullName        String
+  licenseImageUrl String
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, sortOrder])
+}
+
+model OwnerListingOrder {
+  id                     String             @id @default(cuid())
+  userId                 String
+  listingId              String
+  baseAmount             Int
+  addOns                 Json
+  discountAmount         Int                @default(0)
+  totalAmount            Int
+  currency               String             @default("CAD")
+  paymentStatus          OwnerPaymentStatus @default(PENDING)
+  stripeCheckoutSessionId String?
+  createdByAdminId       String?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  user    User     @relation("OwnerOrders", fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  admin   User?    @relation("OwnerOrderAdmin", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([listingId])
+  @@index([paymentStatus])
+}
+
+model OwnerListingConsent {
+  id        String           @id @default(cuid())
+  userId    String
+  listingId String
+  kind      OwnerConsentKind
+  version   String
+  acceptedAt DateTime        @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, kind, version])
+  @@index([userId])
+}
+
+model ListingMedia {
+  id        String   @id @default(cuid())
+  listingId String
+  url       String
+  sortOrder Int      @default(0)
+  isPrimary Boolean  @default(false)
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, sortOrder])
+}
+
+model OpenHouse {
+  id        String   @id @default(cuid())
+  listingId String
+  startsAt  DateTime
+  endsAt    DateTime
+  notes     String?
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([startsAt])
+  @@index([listingId])
+}
+
+model ListingHistory {
+  id          String    @id @default(cuid())
+  listingId   String
+  event       String
+  /**
+   * List / close price for this history event.
+   * For Price Change events: the new list price (PropTx post-change ListPrice).
+   */
+  price       Int?
+  /**
+   * Prior list price before a Price Change event.
+   * PropTx VOW: previous ListPrice / HistoryTransactional prior value.
+   * UI: Original Price (Price Changes tab).
+   */
+  originalPrice Int?
+  /**
+   * Contract date for this history cycle.
+   * PropTx VOW / RESO: ListingContractDate (or HistoryTransactional equivalent).
+   */
+  contractDate DateTime
+  /**
+   * Last MLS update for this cycle (status/price change close-out).
+   * PropTx VOW / RESO: ModificationTimestamp.
+   */
+  lastUpdatedAt DateTime?
+  /** Prior cycle MLS® / board ID when different from the current listing. */
+  externalMls String?
+  /**
+   * public = IDX-visible (usually the current cycle).
+   * restricted = VOW / client-only (past sold, expired, leased details).
+   */
+  visibility  String    @default("restricted")
+  note        String?
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, contractDate])
+}
+
+enum PoiType {
+  SCHOOL
+  PARK
+  TRANSIT
+  GROCERY
+  OTHER
+}
+
+model Poi {
+  id        String   @id @default(cuid())
+  type      PoiType
+  name      String
+  address   String?
+  city      String?
+  lat       Float
+  lng       Float
+  source    String   @default("seed")
+  sourceId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([source, sourceId])
+  @@index([type, lat, lng])
+  @@index([city, type])
+}
+
+model GeoPlace {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  city        String
+  community   String?
+  displayName String
+  summary     String?  @db.Text
+  lat         Float?
+  lng         Float?
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([city, community])
+}
+
+model AiContentCache {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  contentHash String
+  body       String   @db.Text
+  model      String   @default("template")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([entityType, entityId])
+  @@index([contentHash])
+}
+
+enum AdPlatform {
+  META
+  GOOGLE
+  BOTH
+}
+
+enum AdCampaignGoal {
+  BUYER
+  SELLER
+  OPEN_HOUSE
+  VALUATION
+  BRAND
+}
+
+enum AdCampaignStatus {
+  DRAFT
+  READY
+  EXPORTED
+  PUBLISH_STUB
+}
+
+enum AdSourceType {
+  LISTING
+  LANDING
+  OPEN_HOUSE
+  AREA
+  VALUATION
+}
+
+model AdCampaign {
+  id              String           @id @default(cuid())
+  name            String
+  goal            AdCampaignGoal   @default(BUYER)
+  platform        AdPlatform       @default(BOTH)
+  status          AdCampaignStatus @default(DRAFT)
+  sourceType      AdSourceType
+  sourceId        String
+  destinationUrl  String
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  utmContent      String?
+  audienceHints  Json?
+  complianceNotes String[]         @default([])
+  assignedAgentId String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  assignedAgent User?         @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  creatives     AdCreative[]
+  leads         Lead[]
+
+  @@index([status, createdAt])
+  @@index([sourceType, sourceId])
+}
+
+model AdCreative {
+  id           String   @id @default(cuid())
+  campaignId   String
+  platform     AdPlatform
+  headlines    String[]
+  primaryTexts String[]
+  descriptions String[]
+  imageUrls    String[]  @default([])
+  imagePresets Json?
+  exportBundle Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  campaign AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+}
+
+model AdAccountConnection {
+  id           String   @id @default(cuid())
+  provider     String
+  accountLabel String?
+  status       String   @default("disconnected")
+  meta         Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([provider])
+}
+
+model CmaReport {
+  id             String   @id @default(cuid())
+  token          String   @unique @default(cuid())
+  listingMls     String?
+  subjectAddress String?
+  city           String
+  community      String?
+  beds           Float?
+  baths          Float?
+  lat            Float?
+  lng            Float?
+  summary        String   @db.Text
+  comps          Json
+  agentId        String
+  createdAt      DateTime @default(now())
+
+  agent User @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, createdAt])
+  @@index([listingMls])
+}
+
+enum PartnerType {
+  MORTGAGE
+  LAWYER
+  INSPECTOR
+  OTHER
+}
+
+enum HandoffStatus {
+  SENT
+  VIEWED
+  ACCEPTED
+  DECLINED
+  CLOSED
+}
+
+model ReferralPartner {
+  id          String      @id @default(cuid())
+  type        PartnerType
+  name        String
+  company     String?
+  email       String
+  phone       String?
+  city        String?
+  bio         String?     @db.Text
+  active      Boolean     @default(true)
+  portalToken String      @unique @default(cuid())
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  handoffs ReferralHandoff[]
+
+  @@index([type, active])
+}
+
+model ReferralHandoff {
+  id          String        @id @default(cuid())
+  token       String        @unique @default(cuid())
+  partnerId   String
+  agentId     String
+  leadId      String?
+  customerName String?
+  customerEmail String?
+  listingMls  String?
+  notes       String?       @db.Text
+  status      HandoffStatus @default(SENT)
+  viewedAt    DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  partner ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  agent   User            @relation("AgentHandoffs", fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, status])
+  @@index([agentId, createdAt])
+}

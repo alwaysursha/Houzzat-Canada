@@ -1,0 +1,99 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import type { AppointmentStatus } from "@prisma/client";
+import { canManageAllLeads, requireAgentUser } from "@/lib/agent";
+import { sendNotification } from "@/lib/notifications";
+import { prisma } from "@/lib/prisma";
+
+const schema = z.object({
+  appointmentId: z.string().min(1),
+  status: z
+    .enum(["REQUESTED", "CONFIRMED", "RESCHEDULED", "COMPLETED", "CANCELLED"])
+    .optional(),
+  startsAt: z.string().datetime().optional(),
+  endsAt: z.string().datetime().optional(),
+  videoJoinUrl: z.string().optional(),
+  notes: z.string().max(2000).optional(),
+});
+
+export async function PATCH(request: Request) {
+  const agent = await requireAgentUser();
+  if (!agent) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: parsed.data.appointmentId },
+    include: {
+      customer: { select: { email: true, phone: true, name: true } },
+      lead: true,
+    },
+  });
+
+  if (!appointment) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (
+    !canManageAllLeads(agent.role) &&
+    appointment.agentId &&
+    appointment.agentId !== agent.id
+  ) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const updated = await prisma.appointment.update({
+    where: { id: appointment.id },
+    data: {
+      status: parsed.data.status as AppointmentStatus | undefined,
+      startsAt: parsed.data.startsAt
+        ? new Date(parsed.data.startsAt)
+        : undefined,
+      endsAt: parsed.data.endsAt ? new Date(parsed.data.endsAt) : undefined,
+      videoJoinUrl:
+        parsed.data.videoJoinUrl === ""
+          ? null
+          : parsed.data.videoJoinUrl,
+      notes: parsed.data.notes,
+      agentId: appointment.agentId ?? agent.id,
+    },
+  });
+
+  if (
+    parsed.data.status === "CONFIRMED" &&
+    appointment.customer?.email
+  ) {
+    const label =
+      appointment.type === "VIRTUAL_VIEWING"
+        ? "Virtual Viewing"
+        : "Showing";
+    void sendNotification({
+      toEmail: appointment.customer.email,
+      toPhone: appointment.customer.phone,
+      subject: `Your ${label} is confirmed`,
+      text: [
+        `Hi ${appointment.customer.name ?? "there"},`,
+        `Your ${label} for ${appointment.listingMls ?? "a property"} is confirmed.`,
+        updated.startsAt
+          ? `When: ${updated.startsAt.toLocaleString("en-CA")}`
+          : null,
+        updated.videoJoinUrl
+          ? `Join link: ${updated.videoJoinUrl}`
+          : appointment.type === "VIRTUAL_VIEWING"
+            ? "Your agent will share the video link shortly."
+            : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      smsText: `Houzzat: ${label} confirmed${updated.startsAt ? ` ${updated.startsAt.toLocaleString("en-CA")}` : ""}.`,
+    });
+  }
+
+  return NextResponse.json({ ok: true, appointment: updated });
+}
