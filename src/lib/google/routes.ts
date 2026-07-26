@@ -11,6 +11,8 @@ function getApiKey() {
 export type DriveRouteResult = {
   distanceMeters: number;
   durationSeconds: number;
+  /** Encoded polyline when requested via `includePolyline`. */
+  encodedPolyline?: string;
 };
 
 type ComputeRoutesResponse = {
@@ -18,6 +20,7 @@ type ComputeRoutesResponse = {
     distanceMeters?: number;
     duration?: string;
     staticDuration?: string;
+    polyline?: { encodedPolyline?: string };
   }>;
   error?: { message?: string; status?: string };
 };
@@ -38,7 +41,12 @@ export async function computeDriveRoute(input: {
   originLng: number;
   destLat: number;
   destLng: number;
+  includePolyline?: boolean;
 }): Promise<DriveRouteResult> {
+  const fieldMask = input.includePolyline
+    ? "routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline"
+    : "routes.duration,routes.staticDuration,routes.distanceMeters";
+
   const res = await fetch(
     "https://routes.googleapis.com/directions/v2:computeRoutes",
     {
@@ -46,7 +54,7 @@ export async function computeDriveRoute(input: {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": getApiKey(),
-        "X-Goog-FieldMask": "routes.duration,routes.staticDuration,routes.distanceMeters",
+        "X-Goog-FieldMask": fieldMask,
       },
       body: JSON.stringify({
         origin: {
@@ -107,5 +115,9 @@ export async function computeDriveRoute(input: {
     throw new Error("No driving route found between these locations.");
   }
 
-  return { distanceMeters, durationSeconds };
+  return {
+    distanceMeters,
+    durationSeconds,
+    encodedPolyline: route?.polyline?.encodedPolyline,
+  };
 }

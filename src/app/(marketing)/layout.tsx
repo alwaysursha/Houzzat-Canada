@@ -5,6 +5,8 @@ import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
 import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
+import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
+import { ViewingDayFloatingChip } from "@/components/viewing-day/ViewingDayFloatingChip";
 import { getPopularCities } from "@/lib/listings/popular-cities";
 
 export default async function MarketingLayout({
@@ -16,7 +18,7 @@ export default async function MarketingLayout({
   const cities = popularCities.map((row) => row.city);
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="min-h-dvh">
       <AdsTrackingPixels />
       <Suspense fallback={null}>
         <UtmCapture />
@@ -24,8 +26,10 @@ export default async function MarketingLayout({
       <SiteHeader />
       <HomepagePersonalizationBanner cities={cities} />
       <SavedSearchChipBar cities={cities} />
-      <main className="flex-1">{children}</main>
+      <main>{children}</main>
       <SiteFooter />
+      <ViewingDayFloatingChip />
+      <ScrollToTopButton />
     </div>
   );
 }

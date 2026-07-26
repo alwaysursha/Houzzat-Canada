@@ -67,6 +67,7 @@ export function HomeRecentlyViewedRail({
 
   return (
     <HomeListingRail
+      id="rail-recently-viewed"
       title="Recently viewed"
       href={useLocalFallback && items.length === 0 ? "/search" : "/account"}
       items={resolved}

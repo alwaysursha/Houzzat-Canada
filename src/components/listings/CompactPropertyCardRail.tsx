@@ -110,7 +110,7 @@ export function CompactPropertyCardRail({
         {Array.from({ length: 3 }).map((_, i) => (
           <CompactPropertyCardSkeleton
             key={i}
-            className="w-[min(340px,calc(100vw-2.5rem))] shrink-0 md:w-[min(340px,88vw)]"
+            className="w-[min(340px,calc(100vw-4rem))] shrink-0 md:w-[min(340px,88vw)]"
           />
         ))}
       </div>
@@ -155,7 +155,7 @@ export function CompactPropertyCardRail({
           {items.map((listing) => (
             <div
               key={listing.mlsNumber}
-              className="w-[min(340px,calc(100vw-2.5rem))] shrink-0 grow-0 md:w-[min(340px,88vw)]"
+              className="w-[min(340px,calc(100vw-4rem))] shrink-0 grow-0 md:w-[min(340px,88vw)]"
             >
               <CompactPropertyCard listing={listing} />
             </div>

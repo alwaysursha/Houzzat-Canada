@@ -4,12 +4,14 @@ import { ListingCard } from "@/components/listings/ListingCard";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 
 export function HomeListingRail({
+  id,
   title,
   subtitle,
   href,
   items,
   emptyLabel,
 }: {
+  id?: string;
   title: string;
   subtitle?: string;
   href: string;
@@ -17,7 +19,10 @@ export function HomeListingRail({
   emptyLabel?: string;
 }) {
   return (
-    <section className="space-y-5">
+    <section
+      id={id}
+      className="scroll-mt-[calc(var(--site-header-stack)+0.75rem)] space-y-5"
+    >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-display text-2xl text-ink">{title}</h2>

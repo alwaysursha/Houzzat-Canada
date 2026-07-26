@@ -15,13 +15,21 @@ import { cn } from "@/lib/utils";
 
 type Mode = "buy" | "rent" | "sell";
 
-export function HomeHeroSearch() {
+/** `hero` = white type on green photo; `page` = ink type on soft mint wash (mobile). */
+type SearchSurface = "hero" | "page";
+
+export function HomeHeroSearch({
+  surface = "hero",
+}: {
+  surface?: SearchSurface;
+}) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("buy");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AutocompleteSuggestion | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const onPage = surface === "page";
 
   function txn() {
     return mode === "rent" ? "LEASE" : "SALE";
@@ -205,14 +213,23 @@ export function HomeHeroSearch() {
               }}
               className={cn(
                 "rounded-md px-3 py-1.5 text-sm transition",
-                mode === value
-                  ? "font-semibold text-white"
-                  : "font-medium text-white/65 hover:text-white/90",
+                onPage
+                  ? mode === value
+                    ? "font-semibold text-ink"
+                    : "font-medium text-ink/50 hover:text-ink/80"
+                  : mode === value
+                    ? "font-semibold text-white"
+                    : "font-medium text-white/65 hover:text-white/90",
               )}
             >
               {label}
               {mode === value ? (
-                <span className="mt-1 block h-0.5 rounded-full bg-white" />
+                <span
+                  className={cn(
+                    "mt-1 block h-0.5 rounded-full",
+                    onPage ? "bg-canopy" : "bg-white",
+                  )}
+                />
               ) : (
                 <span className="mt-1 block h-0.5 rounded-full bg-transparent" />
               )}
@@ -222,7 +239,12 @@ export function HomeHeroSearch() {
 
         <div
           data-search-bar
-          className="flex flex-col gap-2 rounded-md bg-white/90 p-2.5 shadow-lg backdrop-blur-md sm:flex-row sm:items-stretch"
+          className={cn(
+            "flex flex-col gap-2 rounded-md p-2.5 sm:flex-row sm:items-stretch",
+            onPage
+              ? "border border-line bg-surface shadow-sm"
+              : "bg-white/90 shadow-lg backdrop-blur-md",
+          )}
         >
           <div className="min-w-0 flex-1">
             <AddressAutocomplete
@@ -240,7 +262,7 @@ export function HomeHeroSearch() {
                   ? "Enter your home address with unit# (if applicable)"
                   : mode === "rent"
                     ? "Search rentals by address, neighbourhood, or MLS®"
-                    : "Search address, neighbourhood, or MLS® number"
+                    : "Search active or sold listings by MLS® #, address or neighbourhood"
               }
               inputClassName="h-11 rounded-md border-0 bg-transparent text-[15px] shadow-none focus-visible:ring-0"
               onQueryChange={(value) => {
@@ -284,16 +306,35 @@ export function HomeHeroSearch() {
 
       {mode === "sell" ? (
         <div className="mt-2 min-h-[2.5rem]">
-          <p className="text-xs leading-relaxed text-white/70">
+          <p
+            className={cn(
+              "text-xs leading-relaxed",
+              onPage ? "text-ink/55" : "text-white/70",
+            )}
+          >
             Estimated value is pulled using technology. For a precise valuation,
             book an appointment with us.
           </p>
           {error ? (
-            <p className="mt-1 text-xs font-medium text-amber-200">{error}</p>
+            <p
+              className={cn(
+                "mt-1 text-xs font-medium",
+                onPage ? "text-amber-800" : "text-amber-200",
+              )}
+            >
+              {error}
+            </p>
           ) : null}
         </div>
       ) : error ? (
-        <p className="mt-2 text-xs font-medium text-amber-200">{error}</p>
+        <p
+          className={cn(
+            "mt-2 text-xs font-medium",
+            onPage ? "text-amber-800" : "text-amber-200",
+          )}
+        >
+          {error}
+        </p>
       ) : null}
     </div>
   );

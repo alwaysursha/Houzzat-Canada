@@ -103,3 +103,12 @@ export function pushLocalRecentSearch(entry: {
     // Quota / private mode — ignore.
   }
 }
+
+export function clearLocalRecentSearches() {
+  if (!canUseStorage()) return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}

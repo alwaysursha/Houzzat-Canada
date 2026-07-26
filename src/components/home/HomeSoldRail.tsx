@@ -126,7 +126,10 @@ export function HomeSoldRail({
   if (items.length === 0 && !emptyLabel) return null;
 
   return (
-    <section id="recently-sold" className="space-y-5">
+    <section
+      id="recently-sold"
+      className="scroll-mt-[calc(var(--site-header-stack)+0.75rem)] space-y-5"
+    >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h2 className="font-display text-2xl text-ink">Recently sold</h2>
         {isClient ? (

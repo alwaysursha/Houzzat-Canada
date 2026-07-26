@@ -3,6 +3,7 @@ import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { HomeAreaRail } from "@/components/home/HomeAreaRail";
 import { HomeCustomerToolsStrip } from "@/components/home/HomeCustomerToolsStrip";
 import { HomeCustomerToolsTease } from "@/components/home/HomeCustomerToolsTease";
+import { HomeBrowseChips } from "@/components/home/HomeBrowseChips";
 import { HomeHeroSearch } from "@/components/home/HomeHeroSearch";
 import { HomeListingRail } from "@/components/home/HomeListingRail";
 import { HomeOwnerListingRail } from "@/components/home/HomeOwnerListingRail";
@@ -310,7 +311,8 @@ export default async function HomePage() {
   return (
     <div>
       <section id="home-hero" className="relative z-[35]">
-        <div className="absolute inset-0 overflow-hidden">
+        {/* Desktop brand hero — hidden on mobile so listings start near the fold */}
+        <div className="absolute inset-0 hidden overflow-hidden sm:block">
           {/* eslint-disable-next-line @next/next/no-img-element -- serve original hero pixels without optimizer recompression */}
           <img
             src="/images/hero-canadian-homes.jpg"
@@ -327,7 +329,21 @@ export default async function HomePage() {
             }}
           />
         </div>
-        <div className="relative flex min-h-[40vh] w-full flex-col justify-end px-4 pb-8 pt-20 sm:px-6 lg:px-10">
+
+        {/* Mobile: compact search + section shortcuts (no tall hero) */}
+        <div
+          className="relative px-4 pb-4 pt-3 sm:hidden"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, rgb(15 107 76 / 0.2) 0%, rgb(15 107 76 / 0.08) 45%, rgb(15 107 76 / 0) 100%)",
+          }}
+        >
+          <HomeHeroSearch surface="page" />
+          <HomeBrowseChips className="mt-3" />
+        </div>
+
+        {/* Desktop hero copy + search */}
+        <div className="relative hidden min-h-[40vh] w-full flex-col justify-end px-4 pb-8 pt-20 sm:flex sm:px-6 lg:px-10">
           <div>
             <p className="font-display text-3xl tracking-tight text-white sm:text-4xl md:text-5xl">
               Find Homes in Ontario
@@ -354,10 +370,12 @@ export default async function HomePage() {
           cities={popularCities.map((row) => row.city)}
         />
       ) : !user ? (
-        <HomeCustomerToolsTease />
+        <div className="hidden sm:block">
+          <HomeCustomerToolsTease />
+        </div>
       ) : null}
 
-      <div className="w-full px-4 pb-2 pt-1 sm:px-6 lg:px-10">
+      <div className="hidden w-full px-4 pb-2 pt-1 sm:block sm:px-6 lg:px-10">
         {popularCities.length > 0 ? (
           <section className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-ink/40">
@@ -382,7 +400,7 @@ export default async function HomePage() {
         ) : null}
       </div>
 
-      <div className="w-full space-y-16 px-4 py-10 sm:px-6 lg:px-10">
+      <div className="w-full space-y-10 px-4 py-6 sm:space-y-16 sm:px-6 sm:py-10 lg:px-10">
         <HomepageSortedRails
           reorderEmptyLast={personalized}
           personalization={personalization}
@@ -417,6 +435,7 @@ export default async function HomePage() {
               resultCount: newResidential.items.length,
               node: (
                 <HomeListingRail
+                  id="rail-new-listings"
                   title="New Listings"
                   href={
                     seeAllBase
@@ -436,48 +455,11 @@ export default async function HomePage() {
               ),
             },
             {
-              id: "for-lease",
-              resultCount: forLease.items.length,
-              node: (
-                <HomeListingRail
-                  title="For lease"
-                  href={
-                    seeAllBase
-                      ? seeAllBase({ transactionType: "LEASE" })
-                      : "/search?transactionType=LEASE"
-                  }
-                  items={forLease.items}
-                  emptyLabel={
-                    personalized
-                      ? "No lease listings match your homepage search."
-                      : "No lease listings in demo inventory right now."
-                  }
-                />
-              ),
-            },
-            ...(ownerListings.items.length > 0 || personalized
-              ? [
-                  {
-                    id: "owner",
-                    resultCount: ownerListings.items.length,
-                    node: (
-                      <HomeOwnerListingRail
-                        items={ownerListings.items}
-                        emptyLabel={
-                          personalized
-                            ? "No owner listings match your homepage search."
-                            : undefined
-                        }
-                      />
-                    ),
-                  },
-                ]
-              : []),
-            {
               id: "open-houses",
               resultCount: openHouseItems.length,
               node: (
                 <HomeListingRail
+                  id="rail-open-houses"
                   title="Open Houses this Weekend"
                   href={
                     seeAllBase
@@ -516,10 +498,50 @@ export default async function HomePage() {
                 ]
               : []),
             {
+              id: "for-lease",
+              resultCount: forLease.items.length,
+              node: (
+                <HomeListingRail
+                  id="rail-for-lease"
+                  title="For lease"
+                  href={
+                    seeAllBase
+                      ? seeAllBase({ transactionType: "LEASE" })
+                      : "/search?transactionType=LEASE"
+                  }
+                  items={forLease.items}
+                  emptyLabel={
+                    personalized
+                      ? "No lease listings match your homepage search."
+                      : "No lease listings in demo inventory right now."
+                  }
+                />
+              ),
+            },
+            ...(ownerListings.items.length > 0 || personalized
+              ? [
+                  {
+                    id: "owner",
+                    resultCount: ownerListings.items.length,
+                    node: (
+                      <HomeOwnerListingRail
+                        items={ownerListings.items}
+                        emptyLabel={
+                          personalized
+                            ? "No owner listings match your homepage search."
+                            : undefined
+                        }
+                      />
+                    ),
+                  },
+                ]
+              : []),
+            {
               id: "commercial",
               resultCount: commercial.items.length,
               node: (
                 <HomeListingRail
+                  id="rail-commercial"
                   title="Commercial"
                   href={
                     seeAllBase

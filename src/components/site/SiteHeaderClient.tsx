@@ -150,7 +150,7 @@ function BuySearchControls({
         <AddressAutocomplete
           minChars={1}
           transactionType="SALE"
-          placeholder="Search address, neighbourhood, or MLS® number"
+          placeholder="Search active or sold listings by MLS® #, address or neighbourhood"
           inputClassName="h-9 rounded-md border-0 bg-transparent text-[15px] shadow-none focus-visible:ring-0"
           onQueryChange={(value) => {
             setQuery(value);

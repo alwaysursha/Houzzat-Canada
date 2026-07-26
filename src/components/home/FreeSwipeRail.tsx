@@ -120,7 +120,7 @@ export function FreeSwipeRail({
                 : index
             }
             data-free-swipe-item
-            className="w-[min(22.5rem,calc(100vw-1.5rem))] shrink-0 grow-0 sm:w-auto sm:min-w-0 sm:shrink"
+            className="w-[min(22.5rem,calc(100vw-3.75rem))] shrink-0 grow-0 sm:w-auto sm:min-w-0 sm:shrink"
           >
             {child}
           </div>

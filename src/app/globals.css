@@ -32,12 +32,14 @@
   --font-display: var(--font-fraunces);
 }
 
-html,
-body {
+html {
   height: 100%;
 }
 
 body {
+  /* min-height (not height) so long pages grow cleanly and the footer
+     doesn’t leave a tall empty mist band below its content */
+  min-height: 100%;
   /* Fade to same-hue 0-alpha (not `transparent`) — avoids a muddy/dark
      elliptical band that reads as a hard horizontal line mid-page. */
   background:

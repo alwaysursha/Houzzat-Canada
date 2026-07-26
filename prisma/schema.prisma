@@ -107,6 +107,7 @@ model User {
   reviewedOwnerListings Listing[]    @relation("OwnerListingReviewer")
   waivedOwnerOrders OwnerListingOrder[] @relation("OwnerOrderAdmin")
   ownerConsents OwnerListingConsent[]
+  viewingTours  ViewingTour[]
 }
 
 model Account {
@@ -295,6 +296,59 @@ model SavedListing {
 
   @@unique([userId, mlsNumber])
   @@index([userId, createdAt])
+}
+
+enum ViewingTourStatus {
+  DRAFT
+  REQUESTED
+  ARCHIVED
+}
+
+/** Ordered viewing-day itinerary for a customer (route planner). */
+model ViewingTour {
+  id                  String            @id @default(cuid())
+  userId              String
+  name                String            @default("Viewing day")
+  status              ViewingTourStatus @default(DRAFT)
+  /** At most one active draft tour is used as the client bucket. */
+  isActive            Boolean           @default(true)
+  startAddress        String?
+  startLat            Float?
+  startLng            Float?
+  startAt             DateTime?
+  defaultDwellMinutes Int               @default(30)
+  bufferMinutes       Int               @default(5)
+  shareToken          String?           @unique
+  requestedAt         DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  user  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stops ViewingTourStop[]
+
+  @@index([userId, isActive])
+  @@index([userId, status, updatedAt])
+}
+
+model ViewingTourStop {
+  id                   String    @id @default(cuid())
+  tourId               String
+  mlsNumber            String
+  sortOrder            Int
+  locked               Boolean   @default(false)
+  dwellMinutes         Int?
+  notes                String?   @db.Text
+  driveFromPrevSeconds Int?
+  driveFromPrevMeters  Int?
+  suggestedArriveAt    DateTime?
+  suggestedLeaveAt     DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  tour ViewingTour @relation(fields: [tourId], references: [id], onDelete: Cascade)
+
+  @@unique([tourId, mlsNumber])
+  @@index([tourId, sortOrder])
 }
 
 model SavedSearch {

@@ -7,6 +7,7 @@ import { Check, Heart, Link2, Share2 } from "lucide-react";
 import { useSavedListingsStatus } from "@/components/account/SavedListingsProvider";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
+import { ViewingDayToggleButton } from "@/components/viewing-day/ViewingDayToggleButton";
 import { SITE_NAME } from "@/lib/constants";
 import { flyHeartToSaved } from "@/lib/fly-to-saved";
 import { SITE_MESSAGES } from "@/lib/site-messages";
@@ -22,10 +23,12 @@ function listingUrl(mlsNumber: string) {
 export function ListingCardActions({
   mlsNumber,
   title,
+  listingStatus,
   className,
 }: {
   mlsNumber: string;
   title: string;
+  listingStatus?: string;
   className?: string;
 }) {
   const { status } = useSession();
@@ -165,6 +168,11 @@ export function ListingCardActions({
           strokeWidth={2.25}
         />
       </button>
+
+      <ViewingDayToggleButton
+        mlsNumber={mlsNumber}
+        listingStatus={listingStatus}
+      />
 
       <div className="relative">
         <button

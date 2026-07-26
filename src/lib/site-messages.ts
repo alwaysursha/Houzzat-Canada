@@ -10,6 +10,8 @@ export const SITE_MESSAGES = {
   watchRemovedToast: "Removed from watchlist. You won’t get alerts for this home.",
   saveAddedToast: "Added to Saved Listings",
   saveRemovedToast: "Removed from Saved Listings",
+  viewingDayAddedToast: "Added to Viewing day",
+  viewingDayRemovedToast: "Removed from Viewing day",
   areaWatchedToast: "Area added to your watchlist.",
   areaRemovedToast: "Area removed from your watchlist.",
   genericErrorToast: "Something went wrong. Please try again.",

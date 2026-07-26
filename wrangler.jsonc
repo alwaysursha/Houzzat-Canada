@@ -18,6 +18,8 @@
   ],
   "vars": {
     "NEXTAUTH_URL": "https://houzzat.teamalisyed.workers.dev",
-    "NEXT_PUBLIC_SITE_URL": "https://houzzat.teamalisyed.workers.dev"
+    "NEXT_PUBLIC_SITE_URL": "https://houzzat.teamalisyed.workers.dev",
+    // Temporary public gate — set to "1" to show Coming Soon to visitors
+    "COMING_SOON": "0"
   }
 }

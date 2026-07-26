@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, CalendarDays, Search } from "lucide-react";
+import { Bell, CalendarDays, Route, Search } from "lucide-react";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
@@ -11,6 +11,7 @@ import {
   ViewingBookingModal,
   type ViewingContactDefaults,
 } from "@/components/listings/ViewingBookingModal";
+import { useViewingDay } from "@/components/viewing-day/ViewingDayProvider";
 import { Button } from "@/components/ui/button";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,8 @@ export function ListingMobileActionBar({
   const router = useRouter();
   const { openAuth } = useAuthModal();
   const { alert, confirm, toast } = useSiteAlert();
+  const viewingDay = useViewingDay();
+  const onTour = viewingDay?.isOnTour(mlsNumber) ?? false;
   const [watching, setWatching] = useState(initiallyWatching);
   const [pending, setPending] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -156,6 +159,43 @@ export function ListingMobileActionBar({
                 <span className="truncate">
                   {watching ? "Watching" : "Add to Watchlist"}
                 </span>
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="lg"
+                className={cn(
+                  "h-12 shrink-0 gap-1.5 px-3 text-sm",
+                  onTour && "border-canopy text-canopy",
+                )}
+                onClick={() => {
+                  void (async () => {
+                    if (!viewingDay) return;
+                    const result = await viewingDay.toggleStop(mlsNumber);
+                    if (!result.ok) {
+                      toast({
+                        message:
+                          result.error ?? SITE_MESSAGES.genericErrorToast,
+                        tone: "error",
+                      });
+                      return;
+                    }
+                    toast({
+                      message: result.added
+                        ? SITE_MESSAGES.viewingDayAddedToast
+                        : SITE_MESSAGES.viewingDayRemovedToast,
+                      tone: result.added ? "success" : "info",
+                    });
+                  })();
+                }}
+                aria-label={
+                  onTour ? "Remove from Viewing day" : "Add to Viewing day"
+                }
+              >
+                <Route
+                  className={cn("size-4 shrink-0", onTour && "text-canopy")}
+                />
+                <span className="sr-only sm:not-sr-only sm:inline">Tour</span>
               </Button>
               <Button
                 type="button"

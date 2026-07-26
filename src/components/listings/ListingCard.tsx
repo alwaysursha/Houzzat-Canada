@@ -257,6 +257,7 @@ export function ListingCard({
           <ListingCardActions
             mlsNumber={listing.mlsNumber}
             title={shareTitle}
+            listingStatus={listing.status}
           />
         )}
         <p className="min-w-0 truncate text-right text-xs font-semibold uppercase tracking-wide text-ink/55">

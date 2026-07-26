@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, X } from "lucide-react";
+import { MoreHorizontal, Route, X } from "lucide-react";
 import {
   NotesMenuButton,
   SavedHomesMenuButton,
@@ -14,6 +14,7 @@ import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { PersonalizeHomepageButton } from "@/components/home/PersonalizeHomepageButton";
 import { PersonalizeHomepageModal } from "@/components/home/PersonalizeHomepageModal";
 import { Input } from "@/components/ui/input";
+import { useViewingDay } from "@/components/viewing-day/ViewingDayProvider";
 import { parseHomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,7 @@ export function HomeCustomerToolsStrip({
 }) {
   const router = useRouter();
   const { confirm, toast } = useSiteAlert();
+  const viewingDay = useViewingDay();
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(false);
   const [activeSearch, setActiveSearch] = useState<ActiveSearch | null>(null);
@@ -392,6 +394,18 @@ export function HomeCustomerToolsStrip({
                   <SavedHomesMenuButton />
                   <WatchlistMenuButton />
                   <NotesMenuButton />
+                  <Link
+                    href="/viewing-day"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-canopy/30 bg-surface px-3 py-2 text-xs font-semibold text-canopy-deep transition hover:border-canopy/50 hover:bg-canopy/5"
+                  >
+                    <Route className="size-3.5" strokeWidth={2.25} />
+                    Viewing day
+                    {(viewingDay?.count ?? 0) > 0 ? (
+                      <span className="rounded-md bg-canopy/15 px-1.5 py-0.5 text-[10px] font-bold text-canopy">
+                        {viewingDay?.count}
+                      </span>
+                    ) : null}
+                  </Link>
                 </div>
               </div>
             </div>

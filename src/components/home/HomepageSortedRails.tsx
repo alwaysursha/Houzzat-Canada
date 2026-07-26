@@ -80,7 +80,7 @@ export function HomepageSortedRails({
   }
 
   return (
-    <div className="flex flex-col gap-16">
+    <div className="flex flex-col gap-10 sm:gap-16">
       {rails.map((section, index) => {
         if (section.id === "near-me" && !nearMe.visible) {
           return (
@@ -94,7 +94,9 @@ export function HomepageSortedRails({
           ? { order: emptyRank * 1000 + index }
           : { order: index };
         return (
-          <div key={section.id} style={style}>
+          // Collapse when a rail returns null (e.g. no recently viewed) so
+          // flex gap does not leave a blank strip above the next section.
+          <div key={section.id} className="empty:hidden" style={style}>
             {section.node}
           </div>
         );

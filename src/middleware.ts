@@ -1,4 +1,5 @@
 import { auth } from "@/auth.edge";
+import { isComingSoonEnabled } from "@/lib/coming-soon";
 import { NextResponse, type NextRequest } from "next/server";
 
 function redirectToSignIn(request: NextRequest, callbackPath: string) {
@@ -16,9 +17,27 @@ function redirectToPath(request: NextRequest, pathname: string) {
   return NextResponse.redirect(url);
 }
 
+function isComingSoonBypass(pathname: string) {
+  if (pathname === "/coming-soon") return true;
+  if (pathname.startsWith("/api/")) return true;
+  if (pathname.startsWith("/auth/")) return true;
+  if (pathname.startsWith("/admin")) return true;
+  if (pathname.startsWith("/agent")) return true;
+  if (pathname.startsWith("/account")) return true;
+  if (pathname.startsWith("/owner")) return true;
+  if (pathname.startsWith("/images/")) return true;
+  if (pathname === "/favicon.ico") return true;
+  if (pathname === "/robots.txt") return true;
+  return false;
+}
+
 export default auth((request) => {
   const { pathname } = request.nextUrl;
   const session = request.auth;
+
+  if (isComingSoonEnabled() && !isComingSoonBypass(pathname)) {
+    return redirectToPath(request, "/coming-soon");
+  }
 
   if (pathname.startsWith("/admin")) {
     if (!session?.user) {
@@ -63,5 +82,11 @@ export default auth((request) => {
 });
 
 export const config = {
-  matcher: ["/admin/:path*", "/agent/:path*", "/account/:path*", "/owner/:path*"],
+  matcher: [
+    /*
+     * Match all paths except Next static assets and common image files.
+     * Coming-soon gate + role guards run here.
+     */
+    "/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };

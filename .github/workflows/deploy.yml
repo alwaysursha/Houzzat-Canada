@@ -1,8 +1,10 @@
 name: Deploy to Cloudflare
 
+# Production deploy after a PR is merged into main (push to main).
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: production
@@ -11,6 +13,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,14 +41,19 @@ jobs:
       - name: Build and deploy to production
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_ADMIN_TO: ${{ secrets.EMAIL_ADMIN_TO }}
-          NEXTAUTH_URL: https://houzzat.ca
-          NEXT_PUBLIC_SITE_URL: https://houzzat.ca
+          # Match wrangler.jsonc / current Workers URL
+          NEXTAUTH_URL: https://houzzat.teamalisyed.workers.dev
+          NEXT_PUBLIC_SITE_URL: https://houzzat.teamalisyed.workers.dev
+          COMING_SOON: "0"
         run: pnpm run deploy:cf
