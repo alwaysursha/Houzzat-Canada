@@ -12,7 +12,7 @@ export async function GET() {
 
   try {
     const { env } = await getCloudflareContext({ async: true });
-    const bindings = env as Record<string, unknown>;
+    const bindings = env as unknown as Record<string, unknown>;
     bindingKeys = Object.keys(bindings).sort();
     const databaseUrl = bindings.DATABASE_URL;
     databaseUrlType = typeof databaseUrl;
