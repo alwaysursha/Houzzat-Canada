@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
+import { SITE_MESSAGES } from "@/lib/site-messages";
 
 export function OwnerListingActions({
   listingId,
@@ -12,12 +14,23 @@ export function OwnerListingActions({
   ownerStatus: string | null;
 }) {
   const router = useRouter();
+  const { confirm, toast } = useSiteAlert();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function act(action: "pause" | "resume") {
+    if (action === "pause") {
+      const ok = await confirm({
+        title: "Pause this listing?",
+        message:
+          "Buyers won’t see this owner listing while it’s paused. You can resume it anytime.",
+        confirmLabel: "Pause listing",
+        cancelLabel: "Keep active",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+
     setBusy(true);
-    setError(null);
     const res = await fetch(`/api/owner/listings/${listingId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -26,9 +39,19 @@ export function OwnerListingActions({
     setBusy(false);
     if (!res.ok) {
       const data = (await res.json()) as { error?: string };
-      setError(data.error ?? "Action failed.");
+      toast({
+        message: data.error ?? SITE_MESSAGES.genericErrorToast,
+        tone: "error",
+      });
       return;
     }
+    toast({
+      message:
+        action === "pause"
+          ? "Listing paused."
+          : "Listing resumed and visible again.",
+      tone: "success",
+    });
     router.refresh();
   }
 
@@ -56,7 +79,6 @@ export function OwnerListingActions({
           Resume listing
         </Button>
       )}
-      {error ? <p className="text-sm text-danger">{error}</p> : null}
     </div>
   );
 }

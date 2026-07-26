@@ -43,19 +43,34 @@ export async function POST(request: Request) {
   }
 
   const data = parsed.data;
+  const city = data.city;
+  const community = data.community || null;
+  const transactionType = data.transactionType ?? "SALE";
+  const segment = data.segment ?? "RESIDENTIAL";
   const name =
-    data.name ||
-    [data.community, data.city].filter(Boolean).join(", ") ||
-    data.city;
+    data.name || [community, city].filter(Boolean).join(", ") || city;
+
+  const existing = await prisma.areaMonitor.findFirst({
+    where: {
+      userId: user.id,
+      city,
+      community,
+      transactionType,
+      segment,
+    },
+  });
+  if (existing) {
+    return NextResponse.json({ ok: true, item: existing, alreadyWatching: true });
+  }
 
   const item = await prisma.areaMonitor.create({
     data: {
       userId: user.id,
       name,
-      city: data.city,
-      community: data.community || null,
-      transactionType: data.transactionType ?? "SALE",
-      segment: data.segment ?? "RESIDENTIAL",
+      city,
+      community,
+      transactionType,
+      segment,
       notifyNew: data.notifyNew ?? true,
       notifySold: data.notifySold ?? true,
       emailAlerts: data.emailAlerts ?? true,
@@ -66,9 +81,18 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, item });
 }
 
-const deleteSchema = z.object({
-  id: z.string().min(1),
-});
+const deleteSchema = z.union([
+  z.object({ id: z.string().min(1) }),
+  z.object({
+    city: z.string().trim().min(1).max(80),
+    community: z.string().trim().max(80).optional().nullable(),
+    transactionType: z.enum(["SALE", "LEASE", "ALL"]).optional(),
+    segment: z
+      .enum(["RESIDENTIAL", "COMMERCIAL", "PRE_CONSTRUCTION"])
+      .optional()
+      .nullable(),
+  }),
+]);
 
 export async function DELETE(request: Request) {
   const user = await requireCustomerUser();
@@ -78,12 +102,27 @@ export async function DELETE(request: Request) {
 
   const parsed = deleteSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid id." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid area." }, { status: 400 });
   }
 
-  await prisma.areaMonitor.deleteMany({
-    where: { id: parsed.data.id, userId: user.id },
-  });
+  if ("id" in parsed.data) {
+    await prisma.areaMonitor.deleteMany({
+      where: { id: parsed.data.id, userId: user.id },
+    });
+  } else {
+    const data = parsed.data;
+    await prisma.areaMonitor.deleteMany({
+      where: {
+        userId: user.id,
+        city: data.city,
+        community: data.community || null,
+        ...(data.transactionType
+          ? { transactionType: data.transactionType }
+          : {}),
+        ...(data.segment ? { segment: data.segment } : {}),
+      },
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

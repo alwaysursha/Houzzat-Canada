@@ -5,6 +5,11 @@ import type {
 } from "@prisma/client";
 import { ownerListingTag } from "@/lib/owner/pricing";
 import { prisma } from "@/lib/prisma";
+import { getPopularCities } from "@/lib/listings/popular-cities";
+import {
+  filterAndRankListingsByQuery,
+  listingQueryCandidateWhere,
+} from "@/lib/listings/search-match";
 import type {
   AutocompleteSuggestion,
   ListingCard,
@@ -12,6 +17,7 @@ import type {
   ListingProvider,
   ListingSearchParams,
   ListingSearchResult,
+  AutocompleteOptions,
 } from "@/lib/listings/types";
 
 export function toCard(
@@ -58,6 +64,8 @@ export function toCard(
       endsAt: oh.endsAt.toISOString(),
     })),
     daysOnMarket: listing.daysOnMarket,
+    listedAt: listing.listedAt.toISOString(),
+    soldAt: listing.soldAt ? listing.soldAt.toISOString() : null,
     isMock: listing.isMock,
     dataSource: listing.dataSource,
     ownerTag: isOwner ? ownerListingTag(listing.transactionType) : null,
@@ -69,15 +77,20 @@ export class MockListingProvider implements ListingProvider {
 
   async search(params: ListingSearchParams): Promise<ListingSearchResult> {
     const limit = Math.min(params.limit ?? 40, 100);
-    const status =
-      params.status && params.status !== "ALL"
-        ? params.status
-        : ("ACTIVE" as ListingStatus);
 
     const where: Prisma.ListingWhereInput = {
-      status,
       AND: [],
     };
+
+    if (params.status === "UNLISTED") {
+      where.status = { in: ["SUSPENDED", "TERMINATED", "EXPIRED"] };
+    } else if (params.status === "ALL") {
+      // No status filter — active + sold/leased/unlisted.
+    } else if (params.status) {
+      where.status = params.status;
+    } else {
+      where.status = "ACTIVE";
+    }
 
     if (params.dataSource === "fsbo") {
       (where.AND as Prisma.ListingWhereInput[]).push({
@@ -157,16 +170,7 @@ export class MockListingProvider implements ListingProvider {
       };
     }
     if (params.q?.trim()) {
-      const q = params.q.trim();
-      andFilters.push({
-        OR: [
-          { mlsNumber: { contains: q, mode: "insensitive" } },
-          { addressLine: { contains: q, mode: "insensitive" } },
-          { city: { contains: q, mode: "insensitive" } },
-          { community: { contains: q, mode: "insensitive" } },
-          { postalCode: { contains: q, mode: "insensitive" } },
-        ],
-      });
+      andFilters.push(listingQueryCandidateWhere(params.q));
     }
     where.AND = andFilters;
 
@@ -226,38 +230,40 @@ export class MockListingProvider implements ListingProvider {
 
   async autocomplete(
     query: string,
-    options?: { transactionType?: "SALE" | "LEASE" },
+    options?: AutocompleteOptions,
   ): Promise<AutocompleteSuggestion[]> {
+    const txn = options?.transactionType;
+    const publishedWhere: Prisma.ListingWhereInput = {
+      AND: [
+        {
+          OR: [
+            { dataSource: { not: "fsbo" } },
+            { dataSource: "fsbo", ownerStatus: "ACTIVE" },
+          ],
+        },
+        ...(txn ? [{ transactionType: txn }] : []),
+      ],
+    };
+    /** City / community browse chips stay ACTIVE-only. */
+    const publicWhere: Prisma.ListingWhereInput = {
+      AND: [publishedWhere, { status: "ACTIVE" }],
+    };
+
+    if (options?.empty) {
+      return this.emptyAutocomplete(txn);
+    }
+
     const q = query.trim();
     if (q.length < 1) return [];
 
-    const listings = await prisma.listing.findMany({
+    const looksLikeMls = /^[A-Za-z]?\d[\w-]{2,}$/.test(q) || /^[A-Za-z]\d/i.test(q);
+
+    const candidates = await prisma.listing.findMany({
       where: {
-        AND: [
-          {
-            OR: [
-              { dataSource: { not: "fsbo" } },
-              { dataSource: "fsbo", ownerStatus: "ACTIVE" },
-            ],
-          },
-          { status: "ACTIVE" },
-          ...(options?.transactionType
-            ? [{ transactionType: options.transactionType }]
-            : []),
-          {
-            OR: [
-              { mlsNumber: { contains: q, mode: "insensitive" } },
-              { addressLine: { contains: q, mode: "insensitive" } },
-              { city: { contains: q, mode: "insensitive" } },
-              { community: { contains: q, mode: "insensitive" } },
-              { postalCode: { contains: q, mode: "insensitive" } },
-              { unitNumber: { contains: q, mode: "insensitive" } },
-            ],
-          },
-        ],
+        AND: [publishedWhere, listingQueryCandidateWhere(q)],
       },
-      take: 10,
-      orderBy: { listPrice: "asc" },
+      take: 80,
+      orderBy: looksLikeMls ? { mlsNumber: "asc" } : { listPrice: "asc" },
       select: {
         mlsNumber: true,
         addressLine: true,
@@ -269,18 +275,42 @@ export class MockListingProvider implements ListingProvider {
         lat: true,
         lng: true,
         transactionType: true,
+        listPrice: true,
+        beds: true,
+        baths: true,
+        status: true,
+        propertyType: true,
+        media: {
+          orderBy: { sortOrder: "asc" },
+          take: 1,
+          select: { url: true, isPrimary: true },
+        },
       },
     });
 
-    const listingSuggestions: AutocompleteSuggestion[] = listings.map((l) => {
+    const matched = filterAndRankListingsByQuery(candidates, q);
+    // Active first, keep fuzzy rank within each bucket.
+    const ranked = [
+      ...matched.filter((l) => l.status === "ACTIVE"),
+      ...matched.filter((l) => l.status !== "ACTIVE"),
+    ].slice(0, 16);
+
+    const mlsHits: AutocompleteSuggestion[] = [];
+    const listingHits: AutocompleteSuggestion[] = [];
+
+    for (const l of ranked) {
+      const primary =
+        l.media.find((m) => m.isPrimary) ?? l.media[0] ?? null;
       const street = l.unitNumber
         ? `${l.addressLine} Unit ${l.unitNumber}`
         : l.addressLine;
       const locality = [l.city, l.province || "ON", l.postalCode]
         .filter(Boolean)
         .join(", ");
-      return {
-        type: "listing" as const,
+      const mlsMatch = l.mlsNumber.toLowerCase().includes(q.toLowerCase());
+      const row: AutocompleteSuggestion = {
+        type: mlsMatch && looksLikeMls ? "mls" : "listing",
+        group: mlsMatch && looksLikeMls ? "mls" : "listings",
         label: street,
         subtitle: [locality, l.community, `MLS® ${l.mlsNumber}`]
           .filter(Boolean)
@@ -293,36 +323,211 @@ export class MockListingProvider implements ListingProvider {
         lat: l.lat,
         lng: l.lng,
         href: `/listing/${l.mlsNumber}`,
+        listPrice: l.listPrice,
+        beds: l.beds,
+        baths: l.baths,
+        status: l.status,
+        propertyType: l.propertyType,
+        imageUrl: primary?.url ?? null,
+        transactionType: l.transactionType,
       };
-    });
+      if (mlsMatch && looksLikeMls) mlsHits.push(row);
+      else listingHits.push(row);
+    }
 
-    const places = MOCK_PLACES.filter(
-      (p) =>
-        p.label.toLowerCase().includes(q.toLowerCase()) ||
-        p.city.toLowerCase().includes(q.toLowerCase()),
-    ).slice(0, 5);
+    const qLower = q.toLowerCase();
+    const citySet = new Map<string, { lat: number; lng: number }>();
+    const communitySet = new Map<
+      string,
+      { city: string; lat: number; lng: number }
+    >();
 
-    const txn = options?.transactionType;
-    const placeSuggestions: AutocompleteSuggestion[] = places.map((p) => {
-      const params = new URLSearchParams({
-        city: p.city,
-        lat: String(p.lat),
-        lng: String(p.lng),
+    for (const l of ranked) {
+      if (l.city.toLowerCase().includes(qLower) && !citySet.has(l.city)) {
+        citySet.set(l.city, { lat: l.lat, lng: l.lng });
+      }
+      if (
+        l.community &&
+        l.community.toLowerCase().includes(qLower) &&
+        !communitySet.has(l.community)
+      ) {
+        communitySet.set(l.community, {
+          city: l.city,
+          lat: l.lat,
+          lng: l.lng,
+        });
+      }
+    }
+
+    for (const p of MOCK_PLACES) {
+      if (
+        (p.label.toLowerCase().includes(qLower) ||
+          p.city.toLowerCase().includes(qLower)) &&
+        !citySet.has(p.city) &&
+        p.label === p.city
+      ) {
+        citySet.set(p.city, { lat: p.lat, lng: p.lng });
+      }
+      if (
+        p.label.toLowerCase().includes(qLower) &&
+        p.label !== p.city &&
+        !communitySet.has(p.label)
+      ) {
+        communitySet.set(p.label, {
+          city: p.city,
+          lat: p.lat,
+          lng: p.lng,
+        });
+      }
+    }
+
+    // Distinct cities / communities from DB when query is short place-like
+    if (citySet.size < 4) {
+      const cities = await prisma.listing.findMany({
+        where: {
+          AND: [publicWhere, { city: { contains: q, mode: "insensitive" } }],
+        },
+        distinct: ["city"],
+        take: 6,
+        select: { city: true, lat: true, lng: true },
       });
+      for (const row of cities) {
+        if (!citySet.has(row.city)) {
+          citySet.set(row.city, { lat: row.lat, lng: row.lng });
+        }
+      }
+    }
+
+    if (communitySet.size < 4) {
+      const communities = await prisma.listing.findMany({
+        where: {
+          AND: [
+            publicWhere,
+            { community: { contains: q, mode: "insensitive" } },
+            { NOT: { community: null } },
+          ],
+        },
+        distinct: ["community"],
+        take: 6,
+        select: { community: true, city: true, lat: true, lng: true },
+      });
+      for (const row of communities) {
+        if (row.community && !communitySet.has(row.community)) {
+          communitySet.set(row.community, {
+            city: row.city,
+            lat: row.lat,
+            lng: row.lng,
+          });
+        }
+      }
+    }
+
+    const searchParamsBase = () => {
+      const params = new URLSearchParams();
       if (txn) params.set("transactionType", txn);
+      return params;
+    };
+
+    const citySuggestions: AutocompleteSuggestion[] = [...citySet.entries()]
+      .slice(0, 4)
+      .map(([city, coords]) => {
+        const params = searchParamsBase();
+        params.set("city", city);
+        params.set("lat", String(coords.lat));
+        params.set("lng", String(coords.lng));
+        return {
+          type: "city" as const,
+          group: "cities" as const,
+          label: city,
+          subtitle: "City · ON",
+          city,
+          province: "ON",
+          lat: coords.lat,
+          lng: coords.lng,
+          href: `/search?${params.toString()}`,
+        };
+      });
+
+    const communitySuggestions: AutocompleteSuggestion[] = [
+      ...communitySet.entries(),
+    ]
+      .slice(0, 4)
+      .map(([community, meta]) => {
+        const params = searchParamsBase();
+        params.set("city", meta.city);
+        params.set("community", community);
+        params.set("lat", String(meta.lat));
+        params.set("lng", String(meta.lng));
+        return {
+          type: "community" as const,
+          group: "communities" as const,
+          label: community,
+          subtitle: `${meta.city}, ON`,
+          city: meta.city,
+          community,
+          province: "ON",
+          lat: meta.lat,
+          lng: meta.lng,
+          href: `/search?${params.toString()}`,
+        };
+      });
+
+    const out: AutocompleteSuggestion[] = [
+      ...mlsHits.slice(0, 3),
+      ...listingHits.slice(0, 4),
+      ...citySuggestions,
+      ...communitySuggestions,
+    ];
+
+    return out.slice(0, 14);
+  }
+
+  private async emptyAutocomplete(
+    txn?: "SALE" | "LEASE",
+  ): Promise<AutocompleteSuggestion[]> {
+    const popular = await getPopularCities(6);
+    const paramsBase = () => {
+      const params = new URLSearchParams();
+      if (txn) params.set("transactionType", txn);
+      return params;
+    };
+
+    const cityRows: AutocompleteSuggestion[] = popular.map((row) => {
+      const params = paramsBase();
+      params.set("city", row.city);
       return {
-        type: "place" as const,
-        label: p.label,
-        subtitle: `${p.city}, ON`,
-        city: p.city,
+        type: "city" as const,
+        group: "popular" as const,
+        label: row.city,
+        subtitle: `${row.count} active listing${row.count === 1 ? "" : "s"}`,
+        city: row.city,
         province: "ON",
-        lat: p.lat,
-        lng: p.lng,
         href: `/search?${params.toString()}`,
       };
     });
 
-    return [...listingSuggestions, ...placeSuggestions].slice(0, 12);
+    const ohParams = paramsBase();
+    ohParams.set("openHouseOnly", "1");
+
+    const actions: AutocompleteSuggestion[] = [
+      {
+        type: "action",
+        group: "actions",
+        action: "near_me",
+        label: "Near me",
+        subtitle: "Use your current location",
+      },
+      {
+        type: "action",
+        group: "actions",
+        action: "open_houses",
+        label: "Open houses this weekend",
+        subtitle: "Homes you can tour soon",
+        href: `/search?${ohParams.toString()}`,
+      },
+    ];
+
+    return [...actions, ...cityRows];
   }
 
   async openHouses(params: {

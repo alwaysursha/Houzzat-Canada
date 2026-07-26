@@ -13,6 +13,10 @@ import { ListingCard } from "@/components/listings/ListingCard";
 import { SearchMap } from "@/components/listings/SearchMap";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  parseSearchQuery,
+  searchHrefFromParsed,
+} from "@/lib/listings/parse-search-query";
 
 type Filters = {
   segment: "RESIDENTIAL" | "COMMERCIAL" | "ALL";
@@ -24,7 +28,7 @@ type Filters = {
   maxPrice: string;
   minBeds: string;
   openHouseOnly: boolean;
-  status: "ACTIVE" | "SOLD" | "LEASED" | "ALL";
+  status: "ACTIVE" | "SOLD" | "LEASED" | "UNLISTED" | "ALL";
 };
 
 function parseInitialStatus(
@@ -34,7 +38,8 @@ function parseInitialStatus(
     statusParam === "ALL" ||
     statusParam === "SOLD" ||
     statusParam === "LEASED" ||
-    statusParam === "ACTIVE"
+    statusParam === "ACTIVE" ||
+    statusParam === "UNLISTED"
   ) {
     return statusParam;
   }
@@ -129,13 +134,14 @@ export function SearchExperience() {
   const load = useCallback(async () => {
     const res = await fetch(`/api/listings/search?${queryString}`);
     const data = (await res.json()) as {
-      items: ListingCardData[];
-      total: number;
-      provider: string;
+      items?: ListingCardData[];
+      total?: number;
+      provider?: string;
+      requiresAuth?: boolean;
     };
-    setItems(data.items);
-    setTotal(data.total);
-    setProvider(data.provider);
+    setItems(data.items ?? []);
+    setTotal(data.total ?? 0);
+    setProvider(data.provider ?? "mock");
   }, [queryString]);
 
   useEffect(() => {
@@ -170,25 +176,58 @@ export function SearchExperience() {
   }
 
   function onPlaceSelect(suggestion: AutocompleteSuggestion) {
+    if (suggestion.action === "near_me" && suggestion.href) {
+      router.push(suggestion.href);
+      return;
+    }
     if (suggestion.mlsNumber) {
       router.push(`/listing/${suggestion.mlsNumber}`);
+      return;
+    }
+    if (suggestion.href?.startsWith("/search")) {
+      router.push(suggestion.href);
       return;
     }
     if (suggestion.lat != null && suggestion.lng != null) {
       setFocus({ lat: suggestion.lat, lng: suggestion.lng, zoom: 12 });
     }
-    if (suggestion.type === "place" && suggestion.subtitle) {
-      const next = { ...filters, city: suggestion.subtitle };
+    if (
+      suggestion.type === "city" ||
+      suggestion.type === "community" ||
+      suggestion.type === "place"
+    ) {
+      const next = {
+        ...filters,
+        city: suggestion.city ?? suggestion.subtitle ?? filters.city,
+        community:
+          suggestion.type === "community"
+            ? (suggestion.community ?? suggestion.label)
+            : filters.community,
+      };
       setFilters(next);
       syncUrl(next);
     }
   }
 
+  function onBarSearchSubmit(raw: string) {
+    const parsed = parseSearchQuery(raw);
+    const txn =
+      parsed.transactionType ??
+      (filters.transactionType === "LEASE" || filters.transactionType === "SALE"
+        ? filters.transactionType
+        : "SALE");
+    const href = searchHrefFromParsed(
+      { ...parsed, transactionType: txn, hasFilters: true },
+      { transactionType: txn },
+    );
+    router.push(href);
+  }
+
   const isLease = filters.transactionType === "LEASE";
   const statusOptions = (
     isLease
-      ? (["ACTIVE", "LEASED", "ALL"] as const)
-      : (["ACTIVE", "SOLD", "ALL"] as const)
+      ? (["ACTIVE", "LEASED", "UNLISTED", "ALL"] as const)
+      : (["ACTIVE", "SOLD", "UNLISTED", "ALL"] as const)
   );
   const transactionButtons: Array<[Filters["transactionType"], string]> = [
     ["SALE", "For sale"],
@@ -277,12 +316,24 @@ export function SearchExperience() {
         ))}
       </div>
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface/90 p-4 md:flex-row md:items-end">
+      <div
+        data-search-bar
+        className="flex flex-col gap-3 rounded-md border border-line bg-surface/90 p-4 md:flex-row md:items-end"
+      >
         <div className="flex-1 space-y-2">
           <label className="text-xs font-semibold uppercase tracking-wide text-ink/50">
             Address search
           </label>
-          <AddressAutocomplete onPlaceSelect={onPlaceSelect} />
+          <AddressAutocomplete
+            transactionType={
+              filters.transactionType === "LEASE" ||
+              filters.transactionType === "SALE"
+                ? filters.transactionType
+                : undefined
+            }
+            onPlaceSelect={onPlaceSelect}
+            onSearchSubmit={onBarSearchSubmit}
+          />
         </div>
         <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-5">
           <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/50">
@@ -414,7 +465,9 @@ export function SearchExperience() {
                 type="button"
                 className={
                   filters.status === statusOption
-                    ? "font-semibold text-canopy"
+                    ? statusOption === "SOLD" || statusOption === "LEASED"
+                      ? "font-semibold text-danger"
+                      : "font-semibold text-canopy"
                     : "text-ink/50 hover:text-ink"
                 }
                 onClick={() => {
@@ -429,9 +482,11 @@ export function SearchExperience() {
                     ? "Sold"
                     : statusOption === "LEASED"
                       ? "Leased"
-                      : isLease
-                        ? "For lease"
-                        : "For sale"}
+                      : statusOption === "UNLISTED"
+                        ? "Unlisted"
+                        : isLease
+                          ? "For lease"
+                          : "For sale"}
               </button>
             ))}
           </div>
@@ -453,6 +508,9 @@ export function SearchExperience() {
               listing={listing}
               active={listing.mlsNumber === activeMls}
               onFocus={() => setActiveMls(listing.mlsNumber)}
+              lockedPreview={
+                !signedIn && listing.status !== "ACTIVE" ? "link" : false
+              }
             />
           ))}
           {items.length === 0 && !pending ? (

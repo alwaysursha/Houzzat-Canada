@@ -7,6 +7,7 @@ const schema = z.object({
   emailAlertsEnabled: z.boolean().optional(),
   smsAlertsEnabled: z.boolean().optional(),
   phone: z.string().trim().max(40).optional(),
+  relatedListingsMode: z.enum(["SAME_AREA", "SAME_FEATURES"]).optional(),
 });
 
 export async function PATCH(request: Request) {
@@ -27,6 +28,7 @@ export async function PATCH(request: Request) {
       emailAlertsEnabled: parsed.data.emailAlertsEnabled,
       smsAlertsEnabled: parsed.data.smsAlertsEnabled,
       phone: parsed.data.phone,
+      relatedListingsMode: parsed.data.relatedListingsMode,
       caslConsentAt:
         parsed.data.emailAlertsEnabled || parsed.data.smsAlertsEnabled
           ? user.caslConsentAt ?? new Date()
@@ -36,6 +38,7 @@ export async function PATCH(request: Request) {
       emailAlertsEnabled: true,
       smsAlertsEnabled: true,
       phone: true,
+      relatedListingsMode: true,
       vowAcceptedAt: true,
       vowVersion: true,
     },

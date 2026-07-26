@@ -8,10 +8,7 @@ import { HomeListingRail } from "@/components/home/HomeListingRail";
 import { HomeOwnerListingRail } from "@/components/home/HomeOwnerListingRail";
 import { HomeRecentlyViewedRail } from "@/components/home/HomeRecentlyViewedRail";
 import { HomeSoldRail } from "@/components/home/HomeSoldRail";
-import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
 import { HomepageSortedRails } from "@/components/home/HomepageSortedRails";
-import { PersonalizeHomepageButton } from "@/components/home/PersonalizeHomepageButton";
-import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
 import { auth } from "@/lib/auth";
 import { cityLandmarkImage } from "@/lib/geo/area-images";
 import {
@@ -29,10 +26,12 @@ import type { ListingSegment, PropertyType } from "@prisma/client";
 export default async function HomePage() {
   const session = await auth();
   const user = session?.user?.email
-    ? await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: { id: true, role: true },
-      })
+    ? await prisma.user
+        .findUnique({
+          where: { email: session.user.email },
+          select: { id: true, role: true },
+        })
+        .catch(() => null)
     : null;
   const isClient = hasClientAccess(user);
   const isCustomer = Boolean(
@@ -41,9 +40,11 @@ export default async function HomePage() {
 
   const activeHomepageSearch =
     isCustomer && user
-      ? await prisma.savedSearch.findFirst({
-          where: { userId: user.id, isHomepageActive: true },
-        })
+      ? await prisma.savedSearch
+          .findFirst({
+            where: { userId: user.id, isHomepageActive: true },
+          })
+          .catch(() => null)
       : null;
   const personalization = activeHomepageSearch
     ? parseHomepagePersonalizationQuery(activeHomepageSearch.query)
@@ -152,15 +153,17 @@ export default async function HomePage() {
             prisma.customerAlert.count({
               where: { userId: user.id, readAt: null },
             }),
-          ])
+          ]).catch(() => null)
         : Promise.resolve(null),
       isCustomer && user
-        ? prisma.listingView.findMany({
-            where: { userId: user.id },
-            orderBy: { createdAt: "desc" },
-            take: personalized ? 80 : 40,
-            select: { mlsNumber: true },
-          })
+        ? prisma.listingView
+            .findMany({
+              where: { userId: user.id },
+              orderBy: { createdAt: "desc" },
+              take: personalized ? 80 : 40,
+              select: { mlsNumber: true },
+            })
+            .catch(() => [])
         : Promise.resolve([]),
       getPopularCities(8),
     ]);
@@ -337,27 +340,9 @@ export default async function HomePage() {
             <div className="min-w-0 flex-1">
               <HomeHeroSearch />
             </div>
-            {isCustomer ? (
-              <div className="shrink-0 pb-1">
-                <PersonalizeHomepageButton
-                  cities={popularCities.map((row) => row.city)}
-                />
-              </div>
-            ) : null}
           </div>
         </div>
       </section>
-
-      <div className="empty:hidden">
-        <HomepagePersonalizationBanner
-          cities={popularCities.map((row) => row.city)}
-          forceShow
-        />
-        <SavedSearchChipBar
-          forceShow
-          cities={popularCities.map((row) => row.city)}
-        />
-      </div>
 
       {isCustomer && customerTools ? (
         <HomeCustomerToolsStrip
@@ -366,6 +351,7 @@ export default async function HomePage() {
           propertyWatchCount={customerTools[2]}
           areaWatchCount={customerTools[3]}
           unreadAlerts={customerTools[4]}
+          cities={popularCities.map((row) => row.city)}
         />
       ) : !user ? (
         <HomeCustomerToolsTease />
@@ -397,34 +383,25 @@ export default async function HomePage() {
       </div>
 
       <div className="w-full space-y-16 px-4 py-10 sm:px-6 lg:px-10">
-        {personalized ? (
-          <p className="rounded-2xl border border-canopy/20 bg-canopy/5 px-4 py-3 text-sm text-canopy-deep">
-            Showing listings that match your homepage search
-            {activeHomepageSearch ? (
-              <>
-                {" "}
-                <span className="font-semibold">
-                  {activeHomepageSearch.name}
-                </span>
-              </>
-            ) : null}
-            . Use <span className="font-semibold">Show all listings</span> in
-            the banner above to restore the full homepage.
-          </p>
-        ) : null}
-
         <HomepageSortedRails
           reorderEmptyLast={personalized}
           personalization={personalization}
           sections={[
-            ...(recentlyViewed.length > 0 || personalized
+            ...(recentlyViewed.length > 0 || personalized || !isCustomer
               ? [
                   {
                     id: "recently-viewed",
-                    resultCount: recentlyViewed.length,
+                    // Guests may hydrate from localStorage — keep slot until empty.
+                    resultCount:
+                      recentlyViewed.length > 0
+                        ? recentlyViewed.length
+                        : !isCustomer
+                          ? 1
+                          : 0,
                     node: (
                       <HomeRecentlyViewedRail
                         items={recentlyViewed}
+                        useLocalFallback={!isCustomer}
                         emptyLabel={
                           personalized
                             ? "None of your recently viewed homes match your homepage search."

@@ -12,6 +12,7 @@ const buttonVariants = cva(
           "bg-surface text-ink border border-line hover:border-canopy/40",
         ghost: "text-ink hover:bg-white/70",
         signal: "bg-signal text-white hover:bg-signal/90",
+        danger: "bg-danger text-white hover:bg-danger/90",
       },
       size: {
         default: "h-11 px-5",

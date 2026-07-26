@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
 import { ListingCard } from "@/components/listings/ListingCard";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 
@@ -31,11 +32,11 @@ export function HomeListingRail({
       {items.length === 0 ? (
         <p className="text-sm text-ink/50">{emptyLabel ?? "Nothing here yet."}</p>
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <FreeSwipeRail label={title}>
           {items.map((listing) => (
             <ListingCard key={listing.mlsNumber} listing={listing} />
           ))}
-        </div>
+        </FreeSwipeRail>
       )}
     </section>
   );

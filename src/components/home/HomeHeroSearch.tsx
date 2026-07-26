@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import { Button } from "@/components/ui/button";
+import {
+  parseSearchQuery,
+  searchHrefFromParsed,
+} from "@/lib/listings/parse-search-query";
+import { pushLocalRecentSearch } from "@/lib/listings/recent-searches-local";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { cn } from "@/lib/utils";
 
@@ -18,16 +23,26 @@ export function HomeHeroSearch() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  function txn() {
+    return mode === "rent" ? "LEASE" : "SALE";
+  }
+
   function searchParamsForMode(suggestion?: AutocompleteSuggestion | null) {
     const params = new URLSearchParams({
-      transactionType: mode === "rent" ? "LEASE" : "SALE",
+      transactionType: txn(),
     });
     if (suggestion?.city) params.set("city", suggestion.city);
+    if (suggestion?.community) params.set("community", suggestion.community);
     if (suggestion?.lat != null && suggestion?.lng != null) {
       params.set("lat", String(suggestion.lat));
       params.set("lng", String(suggestion.lng));
     }
     return params;
+  }
+
+  function goHref(href: string, label: string) {
+    pushLocalRecentSearch({ label, href });
+    router.push(href);
   }
 
   function onSearchPlace(suggestion: AutocompleteSuggestion) {
@@ -37,17 +52,32 @@ export function HomeHeroSearch() {
         ? `${suggestion.label}, ${suggestion.city}, ${suggestion.province}`
         : suggestion.label,
     );
+    // Soft-select a Google address — wait for Search or an around-option click.
+    if (suggestion.type === "place" && !suggestion.action) {
+      return;
+    }
+    if (suggestion.action === "near_me" && suggestion.href) {
+      goHref(suggestion.href, "Near me");
+      return;
+    }
     if (suggestion.mlsNumber) {
-      router.push(`/listing/${suggestion.mlsNumber}`);
+      goHref(`/listing/${suggestion.mlsNumber}`, suggestion.label);
+      return;
+    }
+    if (suggestion.href) {
+      goHref(suggestion.href, suggestion.label);
       return;
     }
     if (suggestion.lat != null && suggestion.lng != null) {
-      router.push(`/search?${searchParamsForMode(suggestion).toString()}`);
+      goHref(
+        `/search?${searchParamsForMode(suggestion).toString()}`,
+        suggestion.label,
+      );
       return;
     }
     const params = searchParamsForMode();
     params.set("q", suggestion.label);
-    router.push(`/search?${params.toString()}`);
+    goHref(`/search?${params.toString()}`, suggestion.label);
   }
 
   function onSellPlace(suggestion: AutocompleteSuggestion) {
@@ -59,25 +89,35 @@ export function HomeHeroSearch() {
     );
   }
 
-  function onInventorySearch() {
-    const q = query.trim();
+  function onInventorySearch(rawQuery?: string) {
+    const q = (rawQuery ?? query).trim();
     if (!q) {
-      router.push(
-        `/search?transactionType=${mode === "rent" ? "LEASE" : "SALE"}`,
+      router.push(`/search?transactionType=${txn()}`);
+      return;
+    }
+    if (selected?.mlsNumber && !rawQuery) {
+      goHref(`/listing/${selected.mlsNumber}`, selected.label);
+      return;
+    }
+    if (selected?.href && !rawQuery) {
+      goHref(selected.href, selected.label);
+      return;
+    }
+    if (selected?.lat != null && selected?.lng != null && !rawQuery) {
+      goHref(
+        `/search?${searchParamsForMode(selected).toString()}`,
+        selected.label,
       );
       return;
     }
-    if (selected?.mlsNumber) {
-      router.push(`/listing/${selected.mlsNumber}`);
-      return;
+
+    const parsed = parseSearchQuery(q);
+    if (!parsed.transactionType) {
+      parsed.transactionType = txn();
+      parsed.hasFilters = true;
     }
-    if (selected?.lat != null && selected?.lng != null) {
-      router.push(`/search?${searchParamsForMode(selected).toString()}`);
-      return;
-    }
-    const params = searchParamsForMode();
-    params.set("q", q);
-    router.push(`/search?${params.toString()}`);
+    const href = searchHrefFromParsed(parsed, { transactionType: txn() });
+    goHref(href, q);
   }
 
   async function onGetEstimate() {
@@ -180,7 +220,10 @@ export function HomeHeroSearch() {
           ))}
         </div>
 
-        <div className="flex flex-col gap-2 rounded-2xl bg-white/90 p-3 shadow-lg backdrop-blur-md sm:flex-row sm:items-stretch">
+        <div
+          data-search-bar
+          className="flex flex-col gap-2 rounded-md bg-white/90 p-2.5 shadow-lg backdrop-blur-md sm:flex-row sm:items-stretch"
+        >
           <div className="min-w-0 flex-1">
             <AddressAutocomplete
               key={mode}
@@ -188,6 +231,7 @@ export function HomeHeroSearch() {
               fillOnly={mode === "sell"}
               minChars={mode === "sell" ? 2 : 1}
               source={mode === "sell" ? "google" : "listings"}
+              closeWhenHiddenBehindHeader
               transactionType={
                 mode === "buy" ? "SALE" : mode === "rent" ? "LEASE" : undefined
               }
@@ -198,17 +242,31 @@ export function HomeHeroSearch() {
                     ? "Search rentals by address, neighbourhood, or MLS®"
                     : "Search address, neighbourhood, or MLS® number"
               }
-              inputClassName="border-0 bg-transparent shadow-none focus-visible:ring-0"
+              inputClassName="h-11 rounded-md border-0 bg-transparent text-[15px] shadow-none focus-visible:ring-0"
               onQueryChange={(value) => {
                 setQuery(value);
                 setSelected(null);
               }}
               onPlaceSelect={isInventory ? onSearchPlace : onSellPlace}
+              onPlaceResolved={
+                isInventory
+                  ? (place) => {
+                      setSelected(place);
+                    }
+                  : undefined
+              }
+              onSearchSubmit={
+                isInventory ? (q) => onInventorySearch(q) : undefined
+              }
             />
           </div>
           <Button
             type="button"
-            className="h-11 w-full shrink-0 sm:w-[8.75rem]"
+            className={
+              isInventory
+                ? "hidden h-11 w-full shrink-0 rounded-md sm:inline-flex sm:w-[8.75rem]"
+                : "h-11 w-full shrink-0 rounded-md sm:w-[8.75rem]"
+            }
             disabled={pending}
             onClick={() => {
               if (isInventory) onInventorySearch();

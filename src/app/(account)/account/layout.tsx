@@ -9,7 +9,7 @@ const nav = [
   { href: "/account/saved", label: "Saved" },
   { href: "/account/notes", label: "Notes" },
   { href: "/account/searches", label: "Searches" },
-  { href: "/account/monitors", label: "Monitors" },
+  { href: "/account/watchlist", label: "Watchlist" },
   { href: "/account/activity", label: "Activity" },
   { href: "/search", label: "Search" },
   { href: "/", label: "Home" },

@@ -33,6 +33,8 @@ export type ListingCard = {
   /** Upcoming open houses from MLS (usually 0–2 in a week). */
   openHouses: { startsAt: string; endsAt: string }[];
   daysOnMarket: number;
+  listedAt: string;
+  soldAt: string | null;
   isMock: boolean;
   dataSource?: string;
   /** Present for owner listings — FSBO (sale) or FLBO (lease). */
@@ -47,7 +49,11 @@ export type ListingDetail = Listing & {
 
 export type ListingSearchParams = {
   q?: string;
-  status?: ListingStatus | "ALL";
+  /**
+   * UNLISTED = PropTx off-market group: Suspended, Terminated, Expired
+   * (board “Canceled” typically maps to TERMINATED in our schema).
+   */
+  status?: ListingStatus | "ALL" | "UNLISTED";
   segment?: "RESIDENTIAL" | "COMMERCIAL" | "PRE_CONSTRUCTION" | "ALL";
   transactionType?: ListingTransactionType | "ALL";
   dataSource?: "fsbo" | "mls" | "ALL";
@@ -79,8 +85,30 @@ export type ListingSearchResult = {
   provider: "mock" | "proptx";
 };
 
+export type AutocompleteSuggestionType =
+  | "listing"
+  | "address"
+  | "community"
+  | "city"
+  | "mls"
+  | "action"
+  /** Google Places (sell / valuation). */
+  | "place";
+
+export type AutocompleteSuggestionGroup =
+  | "listings"
+  | "addresses"
+  | "communities"
+  | "cities"
+  | "mls"
+  | "actions"
+  | "recent"
+  | "popular"
+  /** Derived from a resolved Google address (near / area / city). */
+  | "around";
+
 export type AutocompleteSuggestion = {
-  type: "listing" | "place";
+  type: AutocompleteSuggestionType;
   label: string;
   subtitle?: string;
   mlsNumber?: string;
@@ -94,11 +122,31 @@ export type AutocompleteSuggestion = {
   lat?: number;
   lng?: number;
   href?: string;
+  group?: AutocompleteSuggestionGroup;
+  /** Rich listing row fields */
+  listPrice?: number;
+  beds?: number;
+  baths?: number;
+  status?: ListingStatus;
+  propertyType?: PropertyType;
+  imageUrl?: string | null;
+  transactionType?: ListingTransactionType;
+  action?:
+    | "near_me"
+    | "search_for"
+    | "open_houses"
+    | "near_address"
+    | "area_listings"
+    | "city_search"
+    /** Placeholder row when no inventory matches the query. */
+    | "listings_empty";
 };
 
 export type AutocompleteOptions = {
   /** When set, listing suggestions are limited to that transaction type. */
   transactionType?: ListingTransactionType;
+  /** Empty-focus panel: popular cities + Near me / open houses. */
+  empty?: boolean;
 };
 
 export interface ListingProvider {

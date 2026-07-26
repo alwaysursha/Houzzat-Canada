@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -190,12 +191,12 @@ export function PersonalizeHomepageModal({
 
   if (!open) return null;
 
-  return (
+  const panel = (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="personalize-home-title"
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-ink/55 p-4 sm:items-center"
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-ink/55 p-4 sm:items-center"
       onClick={onClose}
     >
       <div
@@ -208,7 +209,7 @@ export function PersonalizeHomepageModal({
               id="personalize-home-title"
               className="font-display text-2xl text-ink"
             >
-              Personalized listings
+              Create Custom Search
             </p>
             <p className="mt-1 text-sm text-ink/55">
               Save a search and apply it to your homepage. You can create more
@@ -404,4 +405,7 @@ export function PersonalizeHomepageModal({
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(panel, document.body);
 }

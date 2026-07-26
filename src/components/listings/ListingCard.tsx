@@ -2,14 +2,15 @@ import Link from "next/link";
 import Image from "next/image";
 import { Bath, Bed, Calendar, Car, Maximize2 } from "lucide-react";
 import { ListingCardActions } from "@/components/listings/ListingCardActions";
+import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
-  closedPriceLabel,
-  formatDaysAgo,
+  formatListingTiming,
   formatListPrice,
   formatListingAddress,
   formatOpenHouseChip,
   isClosedListingStatus,
+  listingStatusBadgeClass,
   listingStatusLabel,
   propertyTypeLabel,
 } from "@/lib/listings/constants";
@@ -34,16 +35,21 @@ export function ListingCard({
   listing: ListingCardData;
   active?: boolean;
   onFocus?: () => void;
-  /** Soft-lock preview: photo more blurred, price/address headings less blurred. */
-  lockedPreview?: boolean;
+  /**
+   * Soft-lock preview: photo/details blurred.
+   * `true` — non-interactive (homepage sold rail).
+   * `"link"` — still navigates to the listing (search teasers).
+   */
+  lockedPreview?: boolean | "link";
   /** Only pass for near-me rails — hidden everywhere else. */
   distanceKm?: number;
 }) {
+  const isLocked = Boolean(lockedPreview);
+  const blockInteraction = lockedPreview === true;
   const isCommercial = listing.segment === "COMMERCIAL";
   const isLease = listing.transactionType === "LEASE";
   const isClosed = isClosedListingStatus(listing.status);
   const showClosedPrice = isClosed && listing.soldPrice != null;
-  const closedLabel = closedPriceLabel(listing.status);
   const addressLines = formatListingAddress(listing);
   const shareTitle = `${listing.addressLine}, ${listing.city}`;
 
@@ -52,7 +58,7 @@ export function ListingCard({
       <div
         className={cn(
           "relative aspect-[4/3] bg-mist",
-          lockedPreview && "blur-[4px] saturate-75",
+          isLocked && "blur-[4px] saturate-75",
         )}
       >
         {listing.primaryImageUrl ? (
@@ -93,8 +99,8 @@ export function ListingCard({
         <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-2">
           <span
             className={cn(
-              "rounded-md px-3.5 py-1.5 text-sm font-bold tracking-wide text-white shadow-md",
-              isClosed ? "bg-ink" : "bg-canopy",
+              "rounded-md px-3.5 py-1.5 text-sm font-bold tracking-wide shadow-md",
+              listingStatusBadgeClass(listing.status),
             )}
           >
             {listingStatusLabel(listing.status, listing.transactionType)}
@@ -111,33 +117,19 @@ export function ListingCard({
         <div
           className={cn(
             "flex items-start justify-between gap-3",
-            lockedPreview && "blur-[0.6px]",
+            isLocked && "blur-[0.6px]",
           )}
         >
           {isClosed ? (
-            <div className="min-w-0 space-y-1">
-              <p className="text-sm font-medium text-ink/70">
-                {isLease ? "Asking rent:" : "Asking:"}{" "}
-                <span className="font-semibold text-ink/55 line-through decoration-2">
-                  {formatListPrice(listing.listPrice, listing.transactionType)}
-                </span>
-              </p>
-              <p className="text-sm font-semibold text-ink">
-                {closedLabel}:{" "}
-                {showClosedPrice ? (
-                  <span className="text-xl font-bold tracking-tight text-danger">
-                    {formatListPrice(
-                      listing.soldPrice!,
-                      listing.transactionType,
-                    )}
-                  </span>
-                ) : (
-                  <span className="text-base font-bold text-ink/40">
-                    Register to unlock
-                  </span>
-                )}
-              </p>
-            </div>
+            <SoldForPrice
+              listPrice={listing.listPrice}
+              soldPrice={listing.soldPrice}
+              status={listing.status}
+              transactionType={listing.transactionType}
+              tone="light"
+              locked={!showClosedPrice}
+              size="md"
+            />
           ) : (
             <p className="text-sm font-semibold text-ink">
               {isLease ? "Rent:" : "Listed:"}{" "}
@@ -147,7 +139,7 @@ export function ListingCard({
             </p>
           )}
           <div className="shrink-0 space-y-0.5 pt-1 text-right text-sm font-semibold">
-            <p className="text-ink/65">{formatDaysAgo(listing.daysOnMarket)}</p>
+            <p className="text-ink/65">{formatListingTiming(listing)}</p>
             {distanceKm != null ? (
               <p className="text-canopy">{formatDistanceKm(distanceKm)}</p>
             ) : null}
@@ -157,7 +149,7 @@ export function ListingCard({
         <div
           className={cn(
             "text-[15px] leading-snug text-ink",
-            lockedPreview && "blur-[0.6px]",
+            isLocked && "blur-[0.6px]",
           )}
         >
           {addressLines.map((line, index) => (
@@ -170,7 +162,7 @@ export function ListingCard({
         <p
           className={cn(
             "text-sm font-medium text-ink/75",
-            lockedPreview && "blur-[2.5px]",
+            isLocked && "blur-[2.5px]",
           )}
         >
           {propertyTypeLabel(listing.propertyType)}
@@ -179,7 +171,7 @@ export function ListingCard({
         <ul
           className={cn(
             "mt-1 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[15px] font-semibold text-ink",
-            lockedPreview && "blur-[2.5px]",
+            isLocked && "blur-[2.5px]",
           )}
         >
           {!isCommercial ? (
@@ -234,10 +226,10 @@ export function ListingCard({
         active
           ? "border-canopy shadow-md ring-2 ring-canopy/20"
           : "border-line hover:border-canopy/50 hover:shadow-sm",
-        lockedPreview && "pointer-events-none select-none",
+        blockInteraction && "pointer-events-none select-none",
       )}
     >
-      {lockedPreview ? (
+      {blockInteraction ? (
         <div className="flex flex-1 flex-col">{body}</div>
       ) : (
         <Link
@@ -253,10 +245,10 @@ export function ListingCard({
       <div
         className={cn(
           "mt-3 flex items-center justify-between gap-3 border-t border-line px-4 py-3",
-          lockedPreview && "blur-[2.5px]",
+          isLocked && "blur-[2.5px]",
         )}
       >
-        {lockedPreview ? (
+        {blockInteraction ? (
           <div className="flex gap-1.5">
             <span className="size-9 rounded-lg border border-line bg-mist" />
             <span className="size-9 rounded-lg border border-line bg-mist" />
@@ -276,7 +268,7 @@ export function ListingCard({
         <p
           className={cn(
             "border-t border-line bg-mist/60 px-4 py-2 text-[11px] leading-snug text-ink/60",
-            lockedPreview && "blur-[2.5px]",
+            isLocked && "blur-[2.5px]",
           )}
         >
           {listing.brokerageName}

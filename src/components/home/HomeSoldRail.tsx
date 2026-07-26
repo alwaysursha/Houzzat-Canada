@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useState } from "react";
 import { Lock, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
+import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
 import { ListingCard } from "@/components/listings/ListingCard";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import { VOW_PUBLIC_NOTE } from "@/lib/vow";
@@ -149,7 +150,7 @@ export function HomeSoldRail({
       {items.length === 0 ? (
         <p className="text-sm text-ink/50">{emptyLabel}</p>
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <FreeSwipeRail label="Recently sold">
           {items.map((listing) =>
             isClient ? (
               <ListingCard key={listing.mlsNumber} listing={listing} />
@@ -157,7 +158,7 @@ export function HomeSoldRail({
               <LockedSoldCard key={listing.mlsNumber} listing={listing} />
             ),
           )}
-        </div>
+        </FreeSwipeRail>
       )}
     </section>
   );

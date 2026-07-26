@@ -88,6 +88,8 @@ async function seedUsers() {
       phone: "+1 519 555 0140",
       vowAcceptedAt: new Date(),
       vowVersion: "2026-07-1",
+      termsAcceptedAt: new Date(),
+      termsVersion: "terms-2026-07",
     },
     create: {
       email: "customer@houzzat.ca",
@@ -97,6 +99,8 @@ async function seedUsers() {
       phone: "+1 519 555 0140",
       vowAcceptedAt: new Date(),
       vowVersion: "2026-07-1",
+      termsAcceptedAt: new Date(),
+      termsVersion: "terms-2026-07",
     },
   });
 

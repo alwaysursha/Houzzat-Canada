@@ -4,8 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useSession } from "next-auth/react";
 import { Check, Heart, Link2, Share2 } from "lucide-react";
+import { useSavedListingsStatus } from "@/components/account/SavedListingsProvider";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { SITE_NAME } from "@/lib/constants";
+import { flyHeartToSaved } from "@/lib/fly-to-saved";
+import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
 function listingUrl(mlsNumber: string) {
@@ -25,31 +29,25 @@ export function ListingCardActions({
   className?: string;
 }) {
   const { status } = useSession();
+  const savedStatus = useSavedListingsStatus();
   const { openAuth } = useAuthModal();
+  const { toast } = useSiteAlert();
   const [saved, setSaved] = useState(false);
   const [pending, setPending] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (status !== "authenticated") {
       setSaved(false);
       return;
     }
-    let cancelled = false;
-    void (async () => {
-      const res = await fetch(
-        `/api/saved-listings?mlsNumber=${encodeURIComponent(mlsNumber)}`,
-      );
-      if (!res.ok || cancelled) return;
-      const data = (await res.json()) as { saved?: boolean };
-      if (!cancelled) setSaved(Boolean(data.saved));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [status, mlsNumber]);
+    if (savedStatus?.ready) {
+      setSaved(savedStatus.isSaved(mlsNumber));
+    }
+  }, [status, mlsNumber, savedStatus, savedStatus?.ready]);
 
   useEffect(() => {
     function onDocClick(event: MouseEvent) {
@@ -75,6 +73,8 @@ export function ListingCardActions({
       return;
     }
 
+    const saving = !saved;
+
     setPending(true);
     const res = await fetch("/api/saved-listings", {
       method: saved ? "DELETE" : "POST",
@@ -82,8 +82,19 @@ export function ListingCardActions({
       body: JSON.stringify({ mlsNumber }),
     });
     setPending(false);
-    if (!res.ok) return;
+    if (!res.ok) {
+      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+      return;
+    }
     setSaved(!saved);
+    savedStatus?.setSavedState(mlsNumber, saving);
+    if (saving && saveButtonRef.current) {
+      flyHeartToSaved(saveButtonRef.current);
+      toast({ message: SITE_MESSAGES.saveAddedToast, tone: "success" });
+    } else {
+      window.dispatchEvent(new Event("houzzat:saved-listings-changed"));
+      toast({ message: SITE_MESSAGES.saveRemovedToast, tone: "info" });
+    }
   }
 
   async function shareNative(event: ReactMouseEvent) {
@@ -139,6 +150,7 @@ export function ListingCardActions({
       onClick={(event) => event.stopPropagation()}
     >
       <button
+        ref={saveButtonRef}
         type="button"
         aria-label={saved ? "Remove saved property" : "Save property"}
         disabled={pending}

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await requireCustomerUser();
   if (!user) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
@@ -14,7 +14,33 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json({ items });
+  const enrich = new URL(request.url).searchParams.get("enrich") === "1";
+  if (!enrich) {
+    return NextResponse.json({ items });
+  }
+
+  const listings = await prisma.listing.findMany({
+    where: { mlsNumber: { in: items.map((item) => item.mlsNumber) } },
+    select: {
+      mlsNumber: true,
+      addressLine: true,
+      unitNumber: true,
+      city: true,
+    },
+  });
+  const byMls = new Map(listings.map((l) => [l.mlsNumber, l]));
+
+  return NextResponse.json({
+    items: items.map((item) => {
+      const listing = byMls.get(item.mlsNumber);
+      return {
+        ...item,
+        addressLine: listing?.addressLine,
+        unitNumber: listing?.unitNumber ?? null,
+        city: listing?.city,
+      };
+    }),
+  });
 }
 
 const postSchema = z.object({

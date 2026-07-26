@@ -1,8 +1,27 @@
-import { prisma } from "@/lib/prisma";
-import { isAdminRole, isAgentRole } from "@/lib/constants";
+import type { Prisma, Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
+import { isAdminRole, isAgentRole } from "@/lib/constants";
+import { prisma } from "@/lib/prisma";
 
-export async function requireAgentUser() {
+const agentUserSelect = {
+  id: true,
+  email: true,
+  name: true,
+  image: true,
+  phone: true,
+  role: true,
+} satisfies Prisma.UserSelect;
+
+export type AgentUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+  phone: string | null;
+  role: Role;
+};
+
+export async function requireAgentUser(): Promise<AgentUser | null> {
   const session = await auth();
   if (!session?.user) return null;
 
@@ -10,6 +29,7 @@ export async function requireAgentUser() {
     where: session.user.id
       ? { id: session.user.id }
       : { email: session.user.email },
+    select: agentUserSelect,
   });
 
   if (!user || !isAgentRole(user.role)) return null;
@@ -23,6 +43,7 @@ export async function pickAssigneeAgentId() {
       agentProfile: { active: true },
     },
     orderBy: { createdAt: "asc" },
+    select: { id: true },
   });
   return agent?.id ?? null;
 }

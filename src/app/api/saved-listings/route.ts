@@ -25,7 +25,37 @@ export async function GET(request: Request) {
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json({ items: saved });
+  const enrich = new URL(request.url).searchParams.get("enrich") === "1";
+  if (!enrich) {
+    return NextResponse.json({ items: saved });
+  }
+
+  const listings = await prisma.listing.findMany({
+    where: { mlsNumber: { in: saved.map((s) => s.mlsNumber) } },
+    select: {
+      mlsNumber: true,
+      addressLine: true,
+      unitNumber: true,
+      city: true,
+      listPrice: true,
+      transactionType: true,
+    },
+  });
+  const byMls = new Map(listings.map((l) => [l.mlsNumber, l]));
+
+  return NextResponse.json({
+    items: saved.map((row) => {
+      const listing = byMls.get(row.mlsNumber);
+      return {
+        ...row,
+        addressLine: listing?.addressLine,
+        unitNumber: listing?.unitNumber ?? null,
+        city: listing?.city,
+        listPrice: listing?.listPrice,
+        transactionType: listing?.transactionType,
+      };
+    }),
+  });
 }
 
 const postSchema = z.object({

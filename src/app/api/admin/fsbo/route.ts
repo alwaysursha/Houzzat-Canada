@@ -60,6 +60,7 @@ export async function POST(request: Request) {
   if (data.ownerEmail) {
     const owner = await prisma.user.findUnique({
       where: { email: data.ownerEmail.toLowerCase() },
+      select: { id: true },
     });
     ownerUserId = owner?.id ?? null;
   }

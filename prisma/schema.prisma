@@ -14,6 +14,11 @@ enum Role {
   ADMIN
 }
 
+enum RelatedListingsMode {
+  SAME_AREA
+  SAME_FEATURES
+}
+
 enum LeadStatus {
   NEW
   CONTACTED
@@ -69,8 +74,11 @@ model User {
   caslConsentAt DateTime?
   vowAcceptedAt DateTime?
   vowVersion    String?
+  termsAcceptedAt DateTime?
+  termsVersion    String?
   emailAlertsEnabled Boolean @default(true)
   smsAlertsEnabled   Boolean @default(false)
+  relatedListingsMode RelatedListingsMode @default(SAME_AREA)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

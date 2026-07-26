@@ -106,7 +106,7 @@ export default async function SavedSearchesPage() {
         <p className="rounded-2xl border border-dashed border-line bg-surface p-8 text-center text-sm text-ink/55">
           No saved searches yet. Use{" "}
           <Link href="/" className="text-canopy">
-            Personalized listings
+            Create Custom Search
           </Link>{" "}
           on the homepage, or save a search from{" "}
           <Link href="/search" className="text-canopy">

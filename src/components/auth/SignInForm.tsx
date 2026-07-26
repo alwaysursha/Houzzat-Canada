@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -67,7 +68,11 @@ export function SignInForm({
 
     if (result?.error) {
       setPending(false);
-      setError("Invalid email or password.");
+      if (result.error === "Configuration") {
+        setError("Sign-in is temporarily unavailable. Please try again shortly.");
+      } else {
+        setError("Invalid email or password.");
+      }
       return;
     }
 
@@ -82,10 +87,7 @@ export function SignInForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <p className="text-sm text-ink/65">
-        Customers unlock sold data after registration. Agents and admins use the
-        same sign-in.
-      </p>
+      <AuthBenefitsPanel />
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="auth-signin-email">
           Email
@@ -124,7 +126,7 @@ export function SignInForm({
             onClick={onSwitchMode}
             className="font-semibold text-canopy hover:underline"
           >
-            Create a customer account
+            Create account
           </button>
         </p>
       ) : null}

@@ -11,6 +11,8 @@ import {
   formatListPrice,
   formatListingAddress,
   formatPrice,
+  isClosedListingStatus,
+  listingStatusLabel,
   propertyTypeLabel,
 } from "@/lib/listings/constants";
 import type { ListingCard } from "@/lib/listings/types";
@@ -117,6 +119,15 @@ function CompactMapCard({
 
   if (!listing) return null;
   const [street, cityLine] = formatListingAddress(listing);
+  const isClosed = isClosedListingStatus(listing.status);
+  const statusLabel = listingStatusLabel(
+    listing.status,
+    listing.transactionType,
+  );
+  const isUnavailable =
+    listing.status === "SUSPENDED" ||
+    listing.status === "TERMINATED" ||
+    listing.status === "EXPIRED";
 
   return (
     <Link
@@ -132,6 +143,20 @@ function CompactMapCard({
             className="object-cover"
             sizes="280px"
           />
+        ) : null}
+        {(isClosed || isUnavailable) ? (
+          <span
+            className={cn(
+              "absolute left-2.5 top-2.5 rounded-md px-2.5 py-1 text-[11px] font-bold tracking-wide text-white shadow-md",
+              isUnavailable ||
+                listing.status === "SOLD" ||
+                listing.status === "LEASED"
+                ? "bg-danger"
+                : "bg-ink",
+            )}
+          >
+            {statusLabel}
+          </span>
         ) : null}
       </div>
       <div className="space-y-1 px-3 py-2.5">

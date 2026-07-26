@@ -11,6 +11,7 @@ import {
 } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type AlertRequest = {
   kind: "alert";
@@ -26,10 +27,20 @@ type ConfirmRequest = {
   message?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  destructive?: boolean;
   resolve: (value: boolean) => void;
 };
 
 type SiteAlertRequest = AlertRequest | ConfirmRequest;
+
+export type SiteToastTone = "success" | "error" | "info";
+
+type SiteToast = {
+  id: number;
+  message: string;
+  title?: string;
+  tone: SiteToastTone;
+};
 
 type SiteAlertContextValue = {
   alert: (options: {
@@ -42,7 +53,14 @@ type SiteAlertContextValue = {
     message?: string;
     confirmLabel?: string;
     cancelLabel?: string;
+    destructive?: boolean;
   }) => Promise<boolean>;
+  toast: (options: {
+    message: string;
+    title?: string;
+    tone?: SiteToastTone;
+    durationMs?: number;
+  }) => void;
 };
 
 const SiteAlertContext = createContext<SiteAlertContextValue | null>(null);
@@ -63,6 +81,7 @@ function SiteAlertPanel({
   onClose: (confirmed: boolean) => void;
 }) {
   const titleId = "site-alert-title";
+  const destructive = request.kind === "confirm" && request.destructive;
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 py-8">
@@ -106,7 +125,11 @@ function SiteAlertPanel({
               {request.cancelLabel ?? "Not now"}
             </Button>
           ) : null}
-          <Button type="button" onClick={() => onClose(true)}>
+          <Button
+            type="button"
+            variant={destructive ? "danger" : "default"}
+            onClick={() => onClose(true)}
+          >
             {request.confirmLabel ??
               (request.kind === "confirm" ? "Continue" : "OK")}
           </Button>
@@ -116,9 +139,73 @@ function SiteAlertPanel({
   );
 }
 
+function SiteToastStack({
+  toasts,
+  onDismiss,
+}: {
+  toasts: SiteToast[];
+  onDismiss: (id: number) => void;
+}) {
+  if (toasts.length === 0) return null;
+
+  return (
+    <div
+      className="pointer-events-none fixed inset-x-0 z-[115] flex flex-col items-center gap-2 px-4 pb-2 pt-2 bottom-[max(5.25rem,calc(env(safe-area-inset-bottom)+4.5rem))] md:bottom-6 md:pb-0"
+      aria-live="polite"
+    >
+      {toasts.map((item) => (
+        <div
+          key={item.id}
+          role="status"
+          className={cn(
+            "pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border px-3.5 py-3 shadow-lg backdrop-blur-md transition",
+            item.tone === "success" &&
+              "border-canopy/35 bg-surface text-canopy-deep",
+            item.tone === "error" &&
+              "border-danger/35 bg-surface text-danger",
+            item.tone === "info" && "border-line bg-ink text-white",
+          )}
+        >
+          <div className="min-w-0 flex-1">
+            {item.title ? (
+              <p className="text-xs font-bold uppercase tracking-[0.12em] opacity-70">
+                {item.title}
+              </p>
+            ) : null}
+            <p
+              className={cn(
+                "text-sm font-medium leading-snug",
+                item.title && "mt-0.5",
+              )}
+            >
+              {item.message}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onDismiss(item.id)}
+            className={cn(
+              "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition",
+              item.tone === "info"
+                ? "text-white/70 hover:bg-white/10 hover:text-white"
+                : "text-ink/45 hover:bg-mist hover:text-ink",
+            )}
+            aria-label="Dismiss"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function SiteAlertProvider({ children }: { children: React.ReactNode }) {
   const [request, setRequest] = useState<SiteAlertRequest | null>(null);
+  const [toasts, setToasts] = useState<SiteToast[]>([]);
   const queueRef = useRef<SiteAlertRequest[]>([]);
+  const toastIdRef = useRef(0);
+  const toastTimersRef = useRef<Map<number, number>>(new Map());
 
   const showNext = useCallback(() => {
     setRequest(queueRef.current[0] ?? null);
@@ -137,12 +224,20 @@ export function SiteAlertProvider({ children }: { children: React.ReactNode }) {
       const current = queueRef.current.shift();
       if (!current) return;
       if (current.kind === "confirm") current.resolve(confirmed);
-      else if (confirmed) current.resolve();
       else current.resolve();
       showNext();
     },
     [showNext],
   );
+
+  const dismissToast = useCallback((id: number) => {
+    const timer = toastTimersRef.current.get(id);
+    if (timer != null) {
+      window.clearTimeout(timer);
+      toastTimersRef.current.delete(id);
+    }
+    setToasts((prev) => prev.filter((item) => item.id !== id));
+  }, []);
 
   const alert = useCallback(
     (options: {
@@ -168,6 +263,7 @@ export function SiteAlertProvider({ children }: { children: React.ReactNode }) {
       message?: string;
       confirmLabel?: string;
       cancelLabel?: string;
+      destructive?: boolean;
     }) =>
       new Promise<boolean>((resolve) => {
         enqueue({
@@ -176,10 +272,36 @@ export function SiteAlertProvider({ children }: { children: React.ReactNode }) {
           message: options.message,
           confirmLabel: options.confirmLabel,
           cancelLabel: options.cancelLabel,
+          destructive: options.destructive,
           resolve,
         });
       }),
     [enqueue],
+  );
+
+  const toast = useCallback(
+    (options: {
+      message: string;
+      title?: string;
+      tone?: SiteToastTone;
+      durationMs?: number;
+    }) => {
+      const id = ++toastIdRef.current;
+      const tone = options.tone ?? "info";
+      const durationMs = options.durationMs ?? 3200;
+      setToasts((prev) => [
+        ...prev.slice(-2),
+        {
+          id,
+          message: options.message,
+          title: options.title,
+          tone,
+        },
+      ]);
+      const timer = window.setTimeout(() => dismissToast(id), durationMs);
+      toastTimersRef.current.set(id, timer);
+    },
+    [dismissToast],
   );
 
   useEffect(() => {
@@ -196,7 +318,18 @@ export function SiteAlertProvider({ children }: { children: React.ReactNode }) {
     };
   }, [request, finish]);
 
-  const value = useMemo(() => ({ alert, confirm }), [alert, confirm]);
+  useEffect(() => {
+    const timers = toastTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) window.clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+
+  const value = useMemo(
+    () => ({ alert, confirm, toast }),
+    [alert, confirm, toast],
+  );
 
   return (
     <SiteAlertContext.Provider value={value}>
@@ -204,6 +337,7 @@ export function SiteAlertProvider({ children }: { children: React.ReactNode }) {
       {request ? (
         <SiteAlertPanel request={request} onClose={finish} />
       ) : null}
+      <SiteToastStack toasts={toasts} onDismiss={dismissToast} />
     </SiteAlertContext.Provider>
   );
 }

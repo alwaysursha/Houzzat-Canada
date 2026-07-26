@@ -47,7 +47,10 @@ export default async function AreaPage({ params }: Params) {
 
   const session = await auth();
   const user = session?.user?.email
-    ? await prisma.user.findUnique({ where: { email: session.user.email } })
+    ? await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      })
     : null;
   const vowOk = hasVowAccess(user);
 

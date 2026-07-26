@@ -21,6 +21,7 @@ export async function POST(request: Request) {
         vowVersion: VOW_VERSION,
         caslConsentAt: user.caslConsentAt ?? new Date(),
       },
+      select: { id: true },
     }),
     prisma.consentEvent.create({
       data: {

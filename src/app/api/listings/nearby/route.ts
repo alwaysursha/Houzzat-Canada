@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { ListingStatus } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { boundingBox, haversineKm } from "@/lib/geo/distance";
 import {
@@ -38,6 +39,16 @@ export async function GET(request: Request) {
       : undefined,
   });
 
+  const statusParam = searchParams.get("status");
+  const status: ListingStatus | "UNLISTED" =
+    statusParam === "SOLD" ||
+    statusParam === "LEASED" ||
+    statusParam === "UNLISTED"
+      ? statusParam
+      : "ACTIVE";
+  const restrictedStatus =
+    status === "SOLD" || status === "LEASED" || status === "UNLISTED";
+
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return NextResponse.json(
       { error: "lat and lng are required." },
@@ -54,14 +65,38 @@ export async function GET(request: Request) {
     : null;
   const isClient = hasClientAccess(user);
 
+  if (restrictedStatus && !isClient) {
+    return NextResponse.json(
+      {
+        error: "Sign in required to view sold and unlisted listings.",
+        items: [],
+        requiresAuth: true,
+      },
+      { status: 401 },
+    );
+  }
+
   const box = boundingBox(lat, lng, radiusKm);
   const provider = getListingProvider();
+  // Keep sale vs lease comps separate:
+  // - Nearby sold → SOLD + SALE
+  // - Nearby leased → LEASED + LEASE
+  // - Unlisted → off-market that were offered for sale (SALE only)
+  const searchTransactionType =
+    status === "UNLISTED"
+      ? "SALE"
+      : status === "SOLD"
+        ? "SALE"
+        : status === "LEASED"
+          ? "LEASE"
+          : transactionType;
+
   const result = await provider.search(
     applyPersonalizationToSearchParams(
       {
-        status: "ACTIVE",
+        status,
         segment: "RESIDENTIAL",
-        transactionType,
+        transactionType: searchTransactionType,
         west: box.west,
         south: box.south,
         east: box.east,
