@@ -35,9 +35,17 @@ export function useExpertWhatsAppNumber(initial?: string | null) {
     let cancelled = false;
     void fetch("/api/public-config", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { whatsappExpert?: string | null } | null) => {
+      .then((data: unknown) => {
         if (cancelled) return;
-        const next = normalizeWhatsAppNumber(data?.whatsappExpert);
+        const expert =
+          data &&
+          typeof data === "object" &&
+          "whatsappExpert" in data &&
+          typeof (data as { whatsappExpert?: unknown }).whatsappExpert ===
+            "string"
+            ? (data as { whatsappExpert: string }).whatsappExpert
+            : null;
+        const next = normalizeWhatsAppNumber(expert);
         if (next) setDigits(next);
       })
       .catch(() => undefined)
