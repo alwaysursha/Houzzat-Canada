@@ -9,7 +9,7 @@ import {
   defaultViewingMessage,
   type ViewingContactDefaults,
 } from "@/components/listings/ViewingBookingModal";
-import { ViewingDayToggleButton } from "@/components/viewing-day/ViewingDayToggleButton";
+import { RoutePlannerToggleButton } from "@/components/route-planner/RoutePlannerToggleButton";
 
 function defaultInquiryMessage(mlsNumber: string) {
   return `I'd like details or something similar to MLS® ${mlsNumber}. Please contact me.`;
@@ -95,7 +95,7 @@ export function ViewingRequestPanel({
   return (
     <div className="sticky top-[calc(4rem+var(--listing-sticky-bar-height,5.5rem)+0.5rem)] z-10 rounded-2xl border border-line bg-surface p-5 shadow-sm">
       <div className="mb-4">
-        <ViewingDayToggleButton
+        <RoutePlannerToggleButton
           mlsNumber={mlsNumber}
           listingStatus="ACTIVE"
           size="button"

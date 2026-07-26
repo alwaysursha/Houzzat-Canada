@@ -5,20 +5,20 @@ import { RecentViewsSync } from "@/components/account/RecentViewsSync";
 import { SavedListingsProvider } from "@/components/account/SavedListingsProvider";
 import { AuthModalProvider } from "@/components/auth/AuthModalProvider";
 import { SiteAlertProvider } from "@/components/feedback/SiteAlertProvider";
-import { ViewingDayProvider } from "@/components/viewing-day/ViewingDayProvider";
+import { RoutePlannerProvider } from "@/components/route-planner/RoutePlannerProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider refetchOnWindowFocus>
       <SavedListingsProvider>
-        <ViewingDayProvider>
+        <RoutePlannerProvider>
           <SiteAlertProvider>
             <AuthModalProvider>
               <RecentViewsSync />
               {children}
             </AuthModalProvider>
           </SiteAlertProvider>
-        </ViewingDayProvider>
+        </RoutePlannerProvider>
       </SavedListingsProvider>
     </SessionProvider>
   );

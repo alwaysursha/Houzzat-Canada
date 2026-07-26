@@ -7,7 +7,7 @@ import { Check, Heart, Link2, Share2 } from "lucide-react";
 import { useSavedListingsStatus } from "@/components/account/SavedListingsProvider";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
-import { ViewingDayToggleButton } from "@/components/viewing-day/ViewingDayToggleButton";
+import { RoutePlannerToggleButton } from "@/components/route-planner/RoutePlannerToggleButton";
 import { SITE_NAME } from "@/lib/constants";
 import { flyHeartToSaved } from "@/lib/fly-to-saved";
 import { SITE_MESSAGES } from "@/lib/site-messages";
@@ -169,7 +169,7 @@ export function ListingCardActions({
         />
       </button>
 
-      <ViewingDayToggleButton
+      <RoutePlannerToggleButton
         mlsNumber={mlsNumber}
         listingStatus={listingStatus}
       />

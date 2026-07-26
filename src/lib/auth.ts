@@ -129,15 +129,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user.role && user.email) {
           const dbUser = await prisma.user.findUnique({
             where: { email: user.email },
-            select: { role: true, name: true },
+            select: { id: true, role: true, name: true },
           });
           if (dbUser) {
+            token.sub = dbUser.id;
             token.role = dbUser.role;
             if (dbUser.name) token.name = dbUser.name;
           }
         } else if (user.name) {
           token.name = user.name;
         }
+        token.idVerified = true;
+      } else if (
+        !token.idVerified &&
+        typeof token.email === "string" &&
+        token.email
+      ) {
+        // One-time heal: stale JWT `sub` after DB rebuild/switch (same email, new id).
+        const dbUser = await prisma.user.findUnique({
+          where: { email: token.email.toLowerCase() },
+          select: { id: true, role: true, name: true },
+        });
+        if (dbUser) {
+          token.sub = dbUser.id;
+          token.role = dbUser.role;
+          if (dbUser.name) token.name = dbUser.name;
+        }
+        token.idVerified = true;
       }
       return token;
     },

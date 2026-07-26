@@ -89,6 +89,10 @@ body {
   .houzzat-saved-pulse {
     animation: none !important;
   }
+
+  .houzzat-route-planner-pulse {
+    animation: none !important;
+  }
 }
 
 @keyframes houzzat-saved-pulse {
@@ -108,5 +112,57 @@ body {
 
 .houzzat-saved-pulse {
   animation: houzzat-saved-pulse 0.65s ease;
+}
+
+@keyframes houzzat-route-planner-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    border-color: rgb(15 107 76 / 0.3);
+    box-shadow:
+      0 10px 15px -3px rgb(20 32 28 / 0.12),
+      0 0 0 0 rgb(15 107 76 / 0);
+  }
+  18% {
+    transform: scale(1.08);
+    border-color: rgb(15 107 76 / 0.9);
+    box-shadow:
+      0 10px 15px -3px rgb(20 32 28 / 0.12),
+      0 0 0 8px rgb(15 107 76 / 0.28);
+  }
+  36% {
+    transform: scale(1.02);
+    border-color: rgb(15 107 76 / 0.45);
+    box-shadow:
+      0 10px 15px -3px rgb(20 32 28 / 0.12),
+      0 0 0 0 rgb(15 107 76 / 0);
+  }
+  54% {
+    transform: scale(1.1);
+    border-color: rgb(15 107 76 / 0.95);
+    box-shadow:
+      0 10px 15px -3px rgb(20 32 28 / 0.12),
+      0 0 0 10px rgb(15 107 76 / 0.32);
+  }
+  72% {
+    transform: scale(1.03);
+    border-color: rgb(15 107 76 / 0.5);
+    box-shadow:
+      0 10px 15px -3px rgb(20 32 28 / 0.12),
+      0 0 0 0 rgb(15 107 76 / 0);
+  }
+  88% {
+    transform: scale(1.06);
+    border-color: rgb(15 107 76 / 0.8);
+    box-shadow:
+      0 10px 15px -3px rgb(20 32 28 / 0.12),
+      0 0 0 6px rgb(15 107 76 / 0.22);
+  }
+}
+
+.houzzat-route-planner-pulse {
+  /* Keep solid surface fill — flash via border + ring only */
+  background-color: var(--surface, #ffffff) !important;
+  animation: houzzat-route-planner-pulse 1.15s ease;
 }
 

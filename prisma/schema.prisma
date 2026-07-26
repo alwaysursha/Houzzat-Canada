@@ -71,6 +71,10 @@ model User {
   image         String?
   role          Role      @default(CUSTOMER)
   phone         String?
+  /** Client home / location address — used as Route Planner start + admin CRM. */
+  homeAddress   String?
+  homeLat       Float?
+  homeLng       Float?
   caslConsentAt DateTime?
   vowAcceptedAt DateTime?
   vowVersion    String?
@@ -304,11 +308,11 @@ enum ViewingTourStatus {
   ARCHIVED
 }
 
-/** Ordered viewing-day itinerary for a customer (route planner). */
+/** Ordered Route Planner itinerary for a customer. */
 model ViewingTour {
   id                  String            @id @default(cuid())
   userId              String
-  name                String            @default("Viewing day")
+  name                String            @default("Route Planner")
   status              ViewingTourStatus @default(DRAFT)
   /** At most one active draft tour is used as the client bucket. */
   isActive            Boolean           @default(true)

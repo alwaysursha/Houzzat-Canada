@@ -21,11 +21,45 @@ export function buildListingExpertWhatsAppUrl(input: {
 }) {
   const question = input.question?.trim();
   const lines = [
-    "Hi Houzzat — I'd like to Ask the Expert about this listing:",
+    "Hi, I'd like to Ask the Expert about this listing:",
     `MLS® ${input.mlsNumber}`,
     `${input.addressLine}, ${input.city}`,
     question ? `Question: ${question}` : null,
   ].filter(Boolean);
+
+  const text = lines.join("\n");
+  return `https://wa.me/${input.phoneDigits}?text=${encodeURIComponent(text)}`;
+}
+
+export function buildRoutePlannerExpertWhatsAppUrl(input: {
+  phoneDigits: string;
+  startAddress: string;
+  startAt: string;
+  stops: Array<{ mlsNumber: string; addressLine: string; city: string }>;
+  message?: string;
+  sharePath?: string | null;
+}) {
+  const message = input.message?.trim();
+  const startLabel = new Date(input.startAt).toLocaleString("en-CA", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const stopLines = input.stops.map((stop, index) => {
+    return `${index + 1}. MLS® ${stop.mlsNumber} — ${stop.addressLine}, ${stop.city}`;
+  });
+  const lines = [
+    "Hi, I'd like to book viewings from my Route Planner:",
+    `Starting from: ${input.startAddress}`,
+    `First viewing time: ${startLabel}`,
+    "",
+    "Homes:",
+    ...stopLines,
+    message ? `\nNote: ${message}` : null,
+    input.sharePath ? `\nItinerary: ${input.sharePath}` : null,
+  ].filter((line): line is string => line != null);
 
   const text = lines.join("\n");
   return `https://wa.me/${input.phoneDigits}?text=${encodeURIComponent(text)}`;

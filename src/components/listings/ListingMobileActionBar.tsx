@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, CalendarDays, Route, Search } from "lucide-react";
@@ -11,8 +11,9 @@ import {
   ViewingBookingModal,
   type ViewingContactDefaults,
 } from "@/components/listings/ViewingBookingModal";
-import { useViewingDay } from "@/components/viewing-day/ViewingDayProvider";
+import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
 import { Button } from "@/components/ui/button";
+import { flyRouteToPlanner } from "@/lib/fly-to-route-planner";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
@@ -47,8 +48,9 @@ export function ListingMobileActionBar({
   const router = useRouter();
   const { openAuth } = useAuthModal();
   const { alert, confirm, toast } = useSiteAlert();
-  const viewingDay = useViewingDay();
-  const onTour = viewingDay?.isOnTour(mlsNumber) ?? false;
+  const routePlanner = useRoutePlanner();
+  const onTour = routePlanner?.isOnTour(mlsNumber) ?? false;
+  const routeButtonRef = useRef<HTMLButtonElement>(null);
   const [watching, setWatching] = useState(initiallyWatching);
   const [pending, setPending] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -161,6 +163,7 @@ export function ListingMobileActionBar({
                 </span>
               </Button>
               <Button
+                ref={routeButtonRef}
                 type="button"
                 variant="secondary"
                 size="lg"
@@ -170,8 +173,8 @@ export function ListingMobileActionBar({
                 )}
                 onClick={() => {
                   void (async () => {
-                    if (!viewingDay) return;
-                    const result = await viewingDay.toggleStop(mlsNumber);
+                    if (!routePlanner) return;
+                    const result = await routePlanner.toggleStop(mlsNumber);
                     if (!result.ok) {
                       toast({
                         message:
@@ -180,22 +183,27 @@ export function ListingMobileActionBar({
                       });
                       return;
                     }
+                    if (result.added && routeButtonRef.current) {
+                      const el = routeButtonRef.current;
+                      requestAnimationFrame(() => {
+                        requestAnimationFrame(() => flyRouteToPlanner(el));
+                      });
+                      return;
+                    }
                     toast({
-                      message: result.added
-                        ? SITE_MESSAGES.viewingDayAddedToast
-                        : SITE_MESSAGES.viewingDayRemovedToast,
-                      tone: result.added ? "success" : "info",
+                      message: SITE_MESSAGES.routePlannerRemovedToast,
+                      tone: "info",
                     });
                   })();
                 }}
                 aria-label={
-                  onTour ? "Remove from Viewing day" : "Add to Viewing day"
+                  onTour ? "Remove from Route Planner" : "Add to Route Planner"
                 }
               >
                 <Route
                   className={cn("size-4 shrink-0", onTour && "text-canopy")}
                 />
-                <span className="sr-only sm:not-sr-only sm:inline">Tour</span>
+                <span className="sr-only sm:not-sr-only sm:inline">Route</span>
               </Button>
               <Button
                 type="button"

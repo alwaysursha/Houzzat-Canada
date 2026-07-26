@@ -6,7 +6,7 @@ import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersona
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
-import { ViewingDayFloatingChip } from "@/components/viewing-day/ViewingDayFloatingChip";
+import { RoutePlannerFloatingChip } from "@/components/route-planner/RoutePlannerFloatingChip";
 import { getPopularCities } from "@/lib/listings/popular-cities";
 
 export default async function MarketingLayout({
@@ -28,7 +28,7 @@ export default async function MarketingLayout({
       <SavedSearchChipBar cities={cities} />
       <main>{children}</main>
       <SiteFooter />
-      <ViewingDayFloatingChip />
+      <RoutePlannerFloatingChip />
       <ScrollToTopButton />
     </div>
   );

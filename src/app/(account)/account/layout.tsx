@@ -6,7 +6,7 @@ import { SITE_NAME } from "@/lib/constants";
 
 const nav = [
   { href: "/account", label: "Your Houzzat" },
-  { href: "/viewing-day", label: "Viewing day" },
+  { href: "/route-planner", label: "Route Planner" },
   { href: "/account/saved", label: "Saved" },
   { href: "/account/notes", label: "Notes" },
   { href: "/account/searches", label: "Searches" },

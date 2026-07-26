@@ -9,6 +9,9 @@ export const customerUserSelect = {
   name: true,
   image: true,
   phone: true,
+  homeAddress: true,
+  homeLat: true,
+  homeLng: true,
   role: true,
   caslConsentAt: true,
   vowAcceptedAt: true,
@@ -26,6 +29,9 @@ export type CustomerUser = {
   name: string | null;
   image: string | null;
   phone: string | null;
+  homeAddress: string | null;
+  homeLat: number | null;
+  homeLng: number | null;
   role: Role;
   caslConsentAt: Date | null;
   vowAcceptedAt: Date | null;
@@ -51,22 +57,14 @@ const customerUserSelectLegacy = {
  * Falls back to legacy columns if Neon is behind the Prisma schema
  * so /account stays up until `db:push` catches up.
  */
-export async function requireCustomerUser(): Promise<CustomerUser | null> {
-  const session = await auth();
-  if (!session?.user?.id && !session?.user?.email) {
-    return null;
-  }
-
-  const where = session.user.id
-    ? { id: session.user.id }
-    : { email: session.user.email! };
-
+async function findCustomerUser(
+  where: { id: string } | { email: string },
+): Promise<CustomerUser | null> {
   try {
-    const user = await prisma.user.findFirst({
+    return await prisma.user.findFirst({
       where,
       select: customerUserSelect,
     });
-    return user;
   } catch (error) {
     console.error(
       "[account] full customer select failed; retrying legacy fields",
@@ -80,6 +78,9 @@ export async function requireCustomerUser(): Promise<CustomerUser | null> {
     return {
       ...user,
       phone: null,
+      homeAddress: null,
+      homeLat: null,
+      homeLng: null,
       caslConsentAt: null,
       vowAcceptedAt: null,
       vowVersion: null,
@@ -90,4 +91,27 @@ export async function requireCustomerUser(): Promise<CustomerUser | null> {
       termsVersion: null,
     };
   }
+}
+
+export async function requireCustomerUser(): Promise<CustomerUser | null> {
+  const session = await auth();
+  if (!session?.user?.id && !session?.user?.email) {
+    return null;
+  }
+
+  // Prefer id, but fall back to email. After a DB switch (e.g. local → Neon)
+  // the JWT can still carry a stale `sub` while the same email exists with a
+  // new id — homepage lookups by email succeed, id-only API/account lookups 401.
+  if (session.user.id) {
+    const byId = await findCustomerUser({ id: session.user.id });
+    if (byId) return byId;
+  }
+
+  if (session.user.email) {
+    return findCustomerUser({
+      email: session.user.email.trim().toLowerCase(),
+    });
+  }
+
+  return null;
 }
