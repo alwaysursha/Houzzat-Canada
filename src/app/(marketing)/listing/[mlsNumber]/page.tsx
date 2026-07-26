@@ -43,6 +43,7 @@ import { findNearbyPois } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
 import { hasVowAccess } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import { getExpertWhatsAppNumber } from "@/lib/whatsapp";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
@@ -616,6 +617,7 @@ export default async function ListingDetailPage({ params }: Params) {
             city={listing.city}
             title={t(locale, "grounded_qa_title")}
             hint={t(locale, "grounded_qa_hint")}
+            expertWhatsApp={getExpertWhatsAppNumber()}
           />
 
           <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />

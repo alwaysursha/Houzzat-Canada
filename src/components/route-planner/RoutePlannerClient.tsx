@@ -22,6 +22,7 @@ import {
   patchLocalRoutePlannerStart,
   useRoutePlanner,
 } from "@/components/route-planner/RoutePlannerProvider";
+import { useExpertWhatsAppNumber } from "@/components/whatsapp/useExpertWhatsAppNumber";
 import { formatListPrice } from "@/lib/listings/constants";
 import {
   loadLocalRoutePlanner,
@@ -29,10 +30,7 @@ import {
 } from "@/lib/route-planner/local";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { cn } from "@/lib/utils";
-import {
-  buildRoutePlannerExpertWhatsAppUrl,
-  getExpertWhatsAppNumber,
-} from "@/lib/whatsapp";
+import { buildRoutePlannerExpertWhatsAppUrl } from "@/lib/whatsapp";
 
 type TourStop = {
   id: string;
@@ -96,10 +94,12 @@ export function RoutePlannerClient({
   readOnly = false,
   initialTour = null,
   shareMode = false,
+  expertWhatsApp: expertWhatsAppProp = null,
 }: {
   readOnly?: boolean;
   initialTour?: TourPayload | null;
   shareMode?: boolean;
+  expertWhatsApp?: string | null;
 }) {
   const { status } = useSession();
   const { openAuth } = useAuthModal();
@@ -112,7 +112,8 @@ export function RoutePlannerClient({
   const [bookingMessage, setBookingMessage] = useState("");
   const [polylines, setPolylines] = useState<string[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const expertWhatsApp = useMemo(() => getExpertWhatsAppNumber(), []);
+  const { digits: expertWhatsApp, ready: expertWhatsAppReady } =
+    useExpertWhatsAppNumber(expertWhatsAppProp);
 
   const loadTour = useCallback(async () => {
     if (shareMode && initialTour) {
@@ -816,7 +817,9 @@ export function RoutePlannerClient({
                 </p>
               </div>
 
-              {!expertWhatsApp ? (
+              {!expertWhatsAppReady ? (
+                <p className="text-sm text-ink/50">Loading WhatsApp…</p>
+              ) : !expertWhatsApp ? (
                 <p className="rounded-xl border border-amber/30 bg-amber/5 px-4 py-3 text-sm text-ink/75">
                   WhatsApp expert number is not configured yet. Set{" "}
                   <code className="text-xs">NEXT_PUBLIC_WHATSAPP_EXPERT</code>{" "}

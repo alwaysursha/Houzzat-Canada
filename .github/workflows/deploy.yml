@@ -55,5 +55,7 @@ jobs:
           # Match wrangler.jsonc / current Workers URL
           NEXTAUTH_URL: https://houzzat.teamalisyed.workers.dev
           NEXT_PUBLIC_SITE_URL: https://houzzat.teamalisyed.workers.dev
+          # Public wa.me number (safe to bake into the client bundle at build).
+          NEXT_PUBLIC_WHATSAPP_EXPERT: "16472214949"
           COMING_SOON: "0"
         run: pnpm run deploy:cf

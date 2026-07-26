@@ -19,6 +19,9 @@
   "vars": {
     "NEXTAUTH_URL": "https://houzzat.teamalisyed.workers.dev",
     "NEXT_PUBLIC_SITE_URL": "https://houzzat.teamalisyed.workers.dev",
+    // Public wa.me destination — also set NEXT_PUBLIC_WHATSAPP_EXPERT at build
+    // time (GitHub Actions) so client bundles can inline it.
+    "NEXT_PUBLIC_WHATSAPP_EXPERT": "16472214949",
     // Temporary public gate — set to "1" to show Coming Soon to visitors
     "COMING_SOON": "0"
   }

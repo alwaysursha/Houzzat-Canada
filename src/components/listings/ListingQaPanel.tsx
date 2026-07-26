@@ -1,12 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  buildListingExpertWhatsAppUrl,
-  getExpertWhatsAppNumber,
-} from "@/lib/whatsapp";
+import { useExpertWhatsAppNumber } from "@/components/whatsapp/useExpertWhatsAppNumber";
+import { buildListingExpertWhatsAppUrl } from "@/lib/whatsapp";
 
 export function ListingQaPanel({
   mlsNumber,
@@ -14,15 +12,17 @@ export function ListingQaPanel({
   city,
   title,
   hint,
+  expertWhatsApp = null,
 }: {
   mlsNumber: string;
   addressLine: string;
   city: string;
   title: string;
   hint: string;
+  expertWhatsApp?: string | null;
 }) {
   const [question, setQuestion] = useState("");
-  const phoneDigits = useMemo(() => getExpertWhatsAppNumber(), []);
+  const { digits: phoneDigits, ready } = useExpertWhatsAppNumber(expertWhatsApp);
 
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -45,7 +45,9 @@ export function ListingQaPanel({
         <p className="mt-1 text-xs text-ink/50">{hint}</p>
       </div>
 
-      {!phoneDigits ? (
+      {!ready ? (
+        <p className="text-sm text-ink/50">Loading WhatsApp…</p>
+      ) : !phoneDigits ? (
         <p className="rounded-xl border border-amber/30 bg-amber/5 px-4 py-3 text-sm text-ink/75">
           WhatsApp expert number is not configured yet. Set{" "}
           <code className="text-xs">NEXT_PUBLIC_WHATSAPP_EXPERT</code> in{" "}
