@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import {
   GripVertical,
   Loader2,
+  Lock,
   Printer,
   Share2,
   Trash2,
@@ -90,6 +91,26 @@ function formatDrive(seconds: number | null) {
   return rem === 0 ? `${h} hr drive` : `${h} hr ${rem} min drive`;
 }
 
+/** Snapshot of inputs that invalidate a built route when they change. */
+function routeBuildFingerprint(tour: TourPayload) {
+  return JSON.stringify({
+    stops: tour.stops.map((s) => s.mlsNumber),
+    startAt: tour.startAt,
+    startLat: tour.startLat,
+    startLng: tour.startLng,
+    startAddress: tour.startAddress,
+    defaultDwellMinutes: tour.defaultDwellMinutes,
+    bufferMinutes: tour.bufferMinutes,
+  });
+}
+
+function tourLooksBuilt(tour: TourPayload) {
+  if (tour.stops.length === 0) return false;
+  return tour.stops.some(
+    (s) => s.suggestedArriveAt != null || s.driveFromPrevSeconds != null,
+  );
+}
+
 export function RoutePlannerClient({
   readOnly = false,
   initialTour = null,
@@ -112,6 +133,12 @@ export function RoutePlannerClient({
   const [bookingMessage, setBookingMessage] = useState("");
   const [polylines, setPolylines] = useState<string[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  /** Fingerprint of the last successful Build Route; null = itinerary locked. */
+  const [builtFingerprint, setBuiltFingerprint] = useState<string | null>(() =>
+    initialTour && tourLooksBuilt(initialTour)
+      ? routeBuildFingerprint(initialTour)
+      : null,
+  );
   const { digits: expertWhatsApp, ready: expertWhatsAppReady } =
     useExpertWhatsAppNumber(expertWhatsAppProp);
 
@@ -210,6 +237,12 @@ export function RoutePlannerClient({
         return;
       }
       setTour(data.tour);
+      setBuiltFingerprint((prev) => {
+        if (prev != null) return prev;
+        return tourLooksBuilt(data.tour!)
+          ? routeBuildFingerprint(data.tour!)
+          : null;
+      });
     } catch {
       toast({ message: "Could not load Route Planner.", tone: "error" });
     } finally {
@@ -220,6 +253,15 @@ export function RoutePlannerClient({
   useEffect(() => {
     void loadTour();
   }, [loadTour]);
+
+  const currentFingerprint = tour ? routeBuildFingerprint(tour) : null;
+  const routeIsBuilt =
+    Boolean(shareMode || readOnly) ||
+    Boolean(
+      builtFingerprint &&
+        currentFingerprint &&
+        builtFingerprint === currentFingerprint,
+    );
 
   const mapPoints = useMemo(() => {
     if (!tour) return [];
@@ -275,8 +317,12 @@ export function RoutePlannerClient({
   }, [tour, status, shareMode]);
 
   useEffect(() => {
+    if (!routeIsBuilt) {
+      setPolylines([]);
+      return;
+    }
     void loadGeometry();
-  }, [loadGeometry]);
+  }, [loadGeometry, routeIsBuilt]);
 
   async function saveStartFields(next: Partial<TourPayload>) {
     if (!tour || readOnly) return;
@@ -339,6 +385,7 @@ export function RoutePlannerClient({
         return;
       }
       setTour(data.tour);
+      setBuiltFingerprint(routeBuildFingerprint(data.tour));
       toast({
         message: reorder ? "Route rebuilt and ordered." : "Times updated for current order.",
         tone: "success",
@@ -647,7 +694,13 @@ export function RoutePlannerClient({
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
-          disabled={guestLocked || optimizing || saving || tour.stops.length === 0}
+          disabled={
+            guestLocked ||
+            optimizing ||
+            saving ||
+            tour.stops.length === 0 ||
+            routeIsBuilt
+          }
           onClick={() => {
             if (guestLocked) {
               requireSignIn();
@@ -656,23 +709,38 @@ export function RoutePlannerClient({
             void onRebuild(true);
           }}
         >
-          {optimizing ? "Building…" : "Build Route"}
+          {optimizing
+            ? "Building…"
+            : routeIsBuilt
+              ? "Route built"
+              : builtFingerprint
+                ? "Rebuild Route"
+                : "Build Route"}
         </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={guestLocked || optimizing || saving || tour.stops.length === 0}
-          onClick={() => {
-            if (guestLocked) {
-              requireSignIn();
-              return;
-            }
-            void onRebuild(false);
-          }}
-        >
-          Update times
-        </Button>
+        {routeIsBuilt ? (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={guestLocked || optimizing || saving}
+            onClick={() => {
+              if (guestLocked) {
+                requireSignIn();
+                return;
+              }
+              void onRebuild(false);
+            }}
+          >
+            Update times
+          </Button>
+        ) : null}
       </div>
+      {!routeIsBuilt && tour.stops.length > 0 && !guestLocked ? (
+        <p className="text-xs text-ink/50">
+          {builtFingerprint
+            ? "Homes or start details changed — rebuild to refresh your itinerary."
+            : "Build the route to unlock your timed itinerary and map path."}
+        </p>
+      ) : null}
     </div>
   ) : tour.startAddress ? (
     <p className="text-sm text-ink/65">
@@ -704,7 +772,7 @@ export function RoutePlannerClient({
               <div className="flex items-center gap-3 py-2 pl-5">
                 <div className="h-6 w-px bg-canopy/25" aria-hidden />
                 <p className="text-xs font-medium text-canopy">
-                  {stop.driveFromPrevSeconds != null
+                  {routeIsBuilt && stop.driveFromPrevSeconds != null
                     ? formatDrive(stop.driveFromPrevSeconds)
                     : "Next stop"}
                 </p>
@@ -766,11 +834,17 @@ export function RoutePlannerClient({
                     ? `${formatListPrice(stop.listing.listPrice)} · ${stop.listing.beds} bd · ${stop.listing.baths} ba`
                     : null}
                 </p>
-                <p className="mt-1.5 text-sm font-semibold tabular-nums text-ink">
-                  {formatClock(stop.suggestedArriveAt)}
-                  {" – "}
-                  {formatClock(stop.suggestedLeaveAt)}
-                </p>
+                {routeIsBuilt ? (
+                  <p className="mt-1.5 text-sm font-semibold tabular-nums text-ink">
+                    {formatClock(stop.suggestedArriveAt)}
+                    {" – "}
+                    {formatClock(stop.suggestedLeaveAt)}
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-xs font-medium text-ink/40">
+                    Viewing window after you build the route
+                  </p>
+                )}
               </div>
               {stopsInteractive ? (
                 <button
@@ -831,7 +905,9 @@ export function RoutePlannerClient({
             {tour.stops.length > 0
               ? ` · ${tour.stops.length} stop${tour.stops.length === 1 ? "" : "s"}`
               : ""}
-            {totalDriveMins > 0 ? ` · ~${totalDriveMins} min driving` : ""}
+            {routeIsBuilt && totalDriveMins > 0
+              ? ` · ~${totalDriveMins} min driving`
+              : ""}
             {tour.status === "REQUESTED" ? " · Requested" : ""}
           </p>
           <p className="text-xs text-ink/40">
@@ -886,11 +962,33 @@ export function RoutePlannerClient({
 
           <section className="space-y-3">
             <div className="flex items-baseline justify-between gap-3">
-              <h2 className="font-display text-xl text-ink">Itinerary</h2>
+              <h2 className="font-display text-xl text-ink">
+                {routeIsBuilt ? "Itinerary" : "Homes on this route"}
+              </h2>
               {tour.stops.length > 0 && stopsInteractive ? (
                 <p className="text-xs text-ink/45">Drag to reorder</p>
               ) : null}
             </div>
+
+            {!routeIsBuilt && tour.stops.length > 0 && !shareMode && !readOnly ? (
+              <div className="flex items-start gap-3 rounded-xl border border-dashed border-canopy/35 bg-canopy/[0.05] px-4 py-3">
+                <Lock
+                  className="mt-0.5 size-4 shrink-0 text-canopy"
+                  aria-hidden
+                />
+                <div className="min-w-0 space-y-1">
+                  <p className="text-sm font-semibold text-ink">
+                    Timed itinerary locked
+                  </p>
+                  <p className="text-xs text-ink/55">
+                    {builtFingerprint
+                      ? "Something changed since your last build. Press Rebuild Route to unlock drive times and viewing windows."
+                      : "Add your start details, then press Build Route to unlock drive times, viewing windows, and the map path."}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
             {stopList}
           </section>
 

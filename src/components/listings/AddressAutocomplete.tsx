@@ -190,6 +190,12 @@ export function AddressAutocomplete({
   const sheetInputRef = useRef<HTMLInputElement>(null);
   /** While query matches a just-selected address, do not refetch or reopen. */
   const selectedQueryRef = useRef<string | null>(null);
+  /** Last value we emitted via onQueryChange — parent often echoes it as initialQuery. */
+  const lastEmittedQueryRef = useRef<string | null>(null);
+  const mobileSheetOpenRef = useRef(mobileSheetOpen);
+  mobileSheetOpenRef.current = mobileSheetOpen;
+  const openRef = useRef(open);
+  openRef.current = open;
   const onPlaceResolvedRef = useRef(onPlaceResolved);
   onPlaceResolvedRef.current = onPlaceResolved;
   const [panelStyle, setPanelStyle] = useState<CSSProperties | undefined>();
@@ -274,14 +280,20 @@ export function AddressAutocomplete({
   useEffect(() => {
     setQuery(initialQuery);
     const trimmed = initialQuery.trim();
-    if (trimmed) {
-      // Treat a prefilled/saved address as already selected so we don't
-      // refetch Google suggestions and pop the panel on mount/update.
-      selectedQueryRef.current = trimmed;
-      setSuggestions([]);
-      setOpen(false);
-      setMobileSheetOpen(false);
+    if (!trimmed) {
+      // Cleared from parent — allow suggestions again.
+      if (selectedQueryRef.current) selectedQueryRef.current = null;
+      return;
     }
+    // Parent echoing our own keystrokes/selection via onQueryChange → initialQuery.
+    // Must not treat that as an external prefill or Google/listing fetch never runs.
+    if (initialQuery === lastEmittedQueryRef.current) return;
+
+    // True external prefill (saved address, remount with value, etc.).
+    selectedQueryRef.current = trimmed;
+    setSuggestions([]);
+    setOpen(false);
+    setMobileSheetOpen(false);
   }, [initialQuery]);
 
   useEffect(() => {
@@ -472,7 +484,9 @@ export function AddressAutocomplete({
         ) {
           return;
         }
-        setSuggestions(data.suggestions ?? []);
+        setSuggestions(
+          (data.suggestions ?? []).map((p) => placeToAddressSuggestion(p)),
+        );
         setOpen((data.suggestions ?? []).length > 0);
         setActiveIndex(-1);
       } finally {
@@ -642,6 +656,7 @@ export function AddressAutocomplete({
             ? `${resolved.label}, ${resolved.city}, ${resolved.province}`
             : (resolved.subtitle ?? resolved.label);
         selectedQueryRef.current = filled;
+        lastEmittedQueryRef.current = filled;
         setQuery(filled);
         onQueryChange?.(filled);
         onPlaceResolvedRef.current?.(addressRow);
@@ -660,6 +675,7 @@ export function AddressAutocomplete({
         ? `${resolved.label}, ${resolved.city}, ${resolved.province}`
         : (resolved.subtitle ?? resolved.label);
     selectedQueryRef.current = filled;
+    lastEmittedQueryRef.current = filled;
     setQuery(filled);
     setOpen(false);
     setMobileSheetOpen(false);
@@ -772,6 +788,7 @@ export function AddressAutocomplete({
 
   function onQueryInputChange(value: string) {
     selectedQueryRef.current = null;
+    lastEmittedQueryRef.current = value;
     setResolvedNearHref(null);
     setResolvedNearLabel(null);
     setQuery(value);
@@ -895,9 +912,9 @@ export function AddressAutocomplete({
                       role="option"
                       aria-selected={active}
                       className={cn(
-                        "flex w-full items-stretch gap-3 px-4 text-left transition hover:bg-white/50",
+                        "flex w-full items-stretch gap-3 px-4 text-left transition hover:bg-mist/80",
                         large ? "py-3.5" : "py-3",
-                        active && "bg-white/50",
+                        active && "bg-mist/80",
                       )}
                       onMouseEnter={() => setActiveIndex(index)}
                       onClick={() => onSuggestionActivate(suggestion)}
@@ -928,9 +945,9 @@ export function AddressAutocomplete({
               role="option"
               aria-selected={activeIndex === flat.length - 1}
               className={cn(
-                "flex w-full items-start gap-3 px-4 text-left transition hover:bg-white/50",
+                "flex w-full items-start gap-3 px-4 text-left transition hover:bg-mist/80",
                 large ? "py-3.5" : "py-3",
-                activeIndex === flat.length - 1 && "bg-white/50",
+                activeIndex === flat.length - 1 && "bg-mist/80",
               )}
               onMouseEnter={() => setActiveIndex(flat.length - 1)}
               onClick={() => {
