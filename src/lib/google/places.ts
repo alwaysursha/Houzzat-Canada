@@ -4,6 +4,8 @@ export type GooglePlaceSuggestion = {
   label: string;
   subtitle?: string;
   city?: string;
+  /** Neighbourhood / sublocality when Google provides it. */
+  community?: string | null;
   province?: string;
   postalCode?: string | null;
   lat?: number;
@@ -161,6 +163,12 @@ export async function googlePlaceDetails(
     component(data.addressComponents, "postal_town") ??
     component(data.addressComponents, "administrative_area_level_3");
 
+  const community =
+    component(data.addressComponents, "neighborhood") ??
+    component(data.addressComponents, "sublocality") ??
+    component(data.addressComponents, "sublocality_level_1") ??
+    null;
+
   const province = component(
     data.addressComponents,
     "administrative_area_level_1",
@@ -174,6 +182,7 @@ export async function googlePlaceDetails(
     label,
     subtitle: data.formattedAddress,
     city,
+    community,
     province: province ?? "ON",
     postalCode,
     lat: data.location?.latitude,

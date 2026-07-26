@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import { SaveListingButton } from "@/components/account/SaveListingButton";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { WatchListingButton } from "@/components/account/WatchListingButton";
@@ -12,6 +12,59 @@ type Crumb = {
   label: string;
   href?: string;
 };
+
+function ListingBreadcrumbs({
+  crumbs,
+  className,
+}: {
+  crumbs: Crumb[];
+  className?: string;
+}) {
+  return (
+    <nav aria-label="Listing location" className={cn("min-w-0", className)}>
+      <ol className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm">
+        {crumbs.map((crumb, index) => {
+          const isLast = index === crumbs.length - 1;
+          return (
+            <Fragment key={`${crumb.label}-${index}`}>
+              {index > 0 ? (
+                <li aria-hidden className="text-ink/30">
+                  <ChevronRight className="size-3.5" />
+                </li>
+              ) : null}
+              <li
+                className={cn(
+                  "min-w-0",
+                  isLast && "max-w-[14rem] truncate sm:max-w-xs",
+                )}
+              >
+                {crumb.href && !isLast ? (
+                  <Link
+                    href={crumb.href}
+                    className="font-medium text-canopy transition hover:text-canopy-deep hover:underline"
+                  >
+                    {crumb.label}
+                  </Link>
+                ) : (
+                  <span
+                    className={cn(
+                      isLast
+                        ? "font-semibold text-ink"
+                        : "font-medium text-ink/55",
+                    )}
+                    aria-current={isLast ? "page" : undefined}
+                  >
+                    {crumb.label}
+                  </span>
+                )}
+              </li>
+            </Fragment>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
 
 export function ListingStickyBar({
   crumbs,
@@ -23,6 +76,8 @@ export function ListingStickyBar({
   community,
   transactionType,
   segment,
+  inactive = false,
+  similarHomesHref,
 }: {
   crumbs: Crumb[];
   mlsNumber: string;
@@ -33,6 +88,8 @@ export function ListingStickyBar({
   community?: string | null;
   transactionType: "SALE" | "LEASE";
   segment?: "RESIDENTIAL" | "COMMERCIAL" | "PRE_CONSTRUCTION" | string;
+  inactive?: boolean;
+  similarHomesHref?: string;
 }) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -74,108 +131,97 @@ export function ListingStickyBar({
   }, [stuck]);
 
   const watchSegment =
-    segment === "COMMERCIAL"
-      ? "COMMERCIAL"
-      : ("RESIDENTIAL" as const);
+    segment === "COMMERCIAL" ? "COMMERCIAL" : ("RESIDENTIAL" as const);
 
   return (
     <>
-      <div ref={sentinelRef} className="h-0 w-full" aria-hidden />
-      <div
-        ref={barRef}
-        className={cn(
-          "sticky top-16 z-30 -mx-4 transition-[box-shadow,background-color,border-color] duration-300 sm:-mx-6 lg:-mx-10",
-          stuck
-            ? "border-b border-canopy/20 bg-mist/95 shadow-[0_8px_24px_-12px_rgba(15,107,76,0.35)] backdrop-blur-md"
-            : "border-b border-transparent bg-transparent",
-        )}
-      >
+      {/* Mobile — plain path in page flow, not sticky */}
+      <ListingBreadcrumbs crumbs={crumbs} className="md:hidden" />
+
+      {/*
+        Desktop sticky must stay in the page flow (not inside a short wrapper),
+        otherwise position:sticky has no room to stick.
+        md:contents lifts children into the parent layout on desktop.
+      */}
+      <div className="hidden md:contents">
+        <div ref={sentinelRef} className="h-0 w-full" aria-hidden />
         <div
+          ref={barRef}
           className={cn(
-            "mx-auto w-full px-4 transition-[padding] duration-300 sm:px-6 lg:px-10",
-            stuck ? "py-2.5" : "py-0",
+            "sticky top-16 z-30 -mx-4 transition-[box-shadow,background-color,border-color] duration-300 sm:-mx-6 lg:-mx-10",
+            stuck
+              ? "border-b border-canopy/20 bg-mist/95 shadow-[0_8px_24px_-12px_rgba(15,107,76,0.35)] backdrop-blur-md"
+              : "border-b border-transparent bg-transparent",
           )}
         >
-          <section
+          <div
             className={cn(
-              "rounded-2xl border px-4 py-3 transition duration-300 sm:px-5",
-              stuck
-                ? "border-canopy/25 bg-surface/95"
-                : "border-canopy/15 bg-surface",
+              "mx-auto w-full px-4 transition-[padding] duration-300 sm:px-6 lg:px-10",
+              stuck ? "py-2.5" : "py-0",
             )}
           >
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
-              <nav
-                aria-label="Listing location"
-                className="min-w-0 overflow-hidden"
-              >
-                <ol className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm">
-                  {crumbs.map((crumb, index) => {
-                    const isLast = index === crumbs.length - 1;
-                    return (
-                      <Fragment key={`${crumb.label}-${index}`}>
-                        {index > 0 ? (
-                          <li aria-hidden className="text-ink/30">
-                            <ChevronRight className="size-3.5" />
-                          </li>
-                        ) : null}
-                        <li
-                          className={cn(
-                            "min-w-0",
-                            isLast && "max-w-[14rem] truncate sm:max-w-xs",
-                          )}
-                        >
-                          {crumb.href && !isLast ? (
-                            <Link
-                              href={crumb.href}
-                              className="font-medium text-canopy transition hover:text-canopy-deep hover:underline"
-                            >
-                              {crumb.label}
-                            </Link>
-                          ) : (
-                            <span
-                              className={cn(
-                                isLast
-                                  ? "font-semibold text-ink"
-                                  : "font-medium text-ink/55",
-                              )}
-                              aria-current={isLast ? "page" : undefined}
-                            >
-                              {crumb.label}
-                            </span>
-                          )}
-                        </li>
-                      </Fragment>
-                    );
-                  })}
-                </ol>
-              </nav>
+            <section
+              className={cn(
+                "rounded-2xl border px-4 py-3 transition duration-300 sm:px-5",
+                stuck
+                  ? "border-canopy/25 bg-surface/95"
+                  : "border-canopy/15 bg-surface",
+              )}
+            >
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+                <ListingBreadcrumbs crumbs={crumbs} className="overflow-hidden" />
 
-              <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
-                <SaveListingButton
-                  mlsNumber={mlsNumber}
-                  initiallySaved={initiallySaved}
-                  signedIn={signedIn}
-                />
-                <WatchListingButton
-                  mlsNumber={mlsNumber}
-                  initiallyWatching={initiallyWatching}
-                  signedIn={signedIn}
-                  idleLabel="Watch property"
-                  activeLabel="Watching"
-                />
-                <WatchAreaButton
-                  city={city}
-                  community={community ?? undefined}
-                  transactionType={transactionType}
-                  segment={watchSegment}
-                  signedIn={signedIn}
-                  idleLabel="Watch area"
-                  authCallbackUrl={`/listing/${mlsNumber}`}
-                />
+                <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
+                  <SaveListingButton
+                    mlsNumber={mlsNumber}
+                    initiallySaved={initiallySaved}
+                    signedIn={signedIn}
+                  />
+                  {inactive ? (
+                    <>
+                      <WatchAreaButton
+                        city={city}
+                        community={community ?? undefined}
+                        transactionType={transactionType}
+                        segment={watchSegment}
+                        signedIn={signedIn}
+                        idleLabel="Watch this area"
+                        authCallbackUrl={`/listing/${mlsNumber}`}
+                      />
+                      {similarHomesHref ? (
+                        <Link
+                          href={similarHomesHref}
+                          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-canopy px-3 text-xs font-semibold text-white transition hover:bg-canopy-deep"
+                        >
+                          <Search className="size-3.5" aria-hidden />
+                          Find similar homes
+                        </Link>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <WatchListingButton
+                        mlsNumber={mlsNumber}
+                        initiallyWatching={initiallyWatching}
+                        signedIn={signedIn}
+                        idleLabel="Watch property"
+                        activeLabel="Watching"
+                      />
+                      <WatchAreaButton
+                        city={city}
+                        community={community ?? undefined}
+                        transactionType={transactionType}
+                        segment={watchSegment}
+                        signedIn={signedIn}
+                        idleLabel="Watch area"
+                        authCallbackUrl={`/listing/${mlsNumber}`}
+                      />
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
       </div>
     </>

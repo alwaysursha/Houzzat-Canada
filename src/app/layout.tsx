@@ -37,7 +37,7 @@ export default function RootLayout({
       className={`${jakarta.variable} ${fraunces.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="h-full">
+      <body className="min-h-full">
         <Providers>{children}</Providers>
       </body>
     </html>

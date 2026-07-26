@@ -4,10 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { PersonalizeHomepageModal } from "@/components/home/PersonalizeHomepageModal";
 import {
   parseHomepagePersonalizationQuery,
 } from "@/lib/listings/homepage-personalization";
+import { SITE_MESSAGES } from "@/lib/site-messages";
 
 type ActiveSearch = {
   id: string;
@@ -27,6 +29,7 @@ export function HomepagePersonalizationBanner({
   const role = data?.user?.role;
   const pathname = usePathname();
   const router = useRouter();
+  const { confirm, toast } = useSiteAlert();
   const [active, setActive] = useState<ActiveSearch | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -75,13 +78,23 @@ export function HomepagePersonalizationBanner({
 
   async function showAllListings() {
     if (!active) return;
+    const ok = await confirm({
+      ...SITE_MESSAGES.clearHomepageSearch,
+    });
+    if (!ok) return;
+
     setPending(true);
-    await fetch("/api/saved-searches", {
+    const res = await fetch("/api/saved-searches", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: active.id, isHomepageActive: false }),
     });
     setPending(false);
+    if (!res.ok) {
+      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+      return;
+    }
+    toast({ message: "Homepage now shows all listings.", tone: "success" });
     window.dispatchEvent(new Event("houzzat:homepage-personalization-changed"));
     window.dispatchEvent(new Event("houzzat:saved-searches-changed"));
     router.refresh();

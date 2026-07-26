@@ -1220,6 +1220,322 @@ export const MOCK_LISTINGS: SeedListing[] = [
     images: [IMG[5], IMG[3]],
   },
 
+  // ——— Related comps for X9KWLEASE1 (Nearby / Similar homes) ———
+  // 10 similar: same Downtown Kitchener + LEASE + CONDO_APT + 2 beds
+  ...Array.from({ length: 10 }, (_, index) => {
+    const n = index + 1;
+    const unit = 200 + n * 11;
+    return {
+      mlsNumber: `X9KWLS${String(n).padStart(2, "0")}`,
+      status: "ACTIVE" as const,
+      transactionType: "LEASE" as const,
+      propertyType: "CONDO_APT" as const,
+      listPrice: 2100 + n * 45,
+      beds: 2,
+      baths: n % 2 === 0 ? 2 : 1,
+      sqft: 720 + n * 18,
+      parkingSpaces: 1,
+      yearBuilt: 2014 + (n % 8),
+      maintenanceFee: 0,
+      addressLine: [
+        "50 Victoria St S",
+        "85 King St W",
+        "155 King St E",
+        "1 Victoria St S",
+        "31 Charles St E",
+        "72 Queen St N",
+        "100 Benton St",
+        "29 Duke St W",
+        "60 Gaukel St",
+        "19 Weber St W",
+      ][index]!,
+      unitNumber: String(unit),
+      city: "Kitchener",
+      community: "Downtown Kitchener",
+      postalCode: "N2G 2B2",
+      lat: 43.4472 + (n - 5) * 0.0012,
+      lng: -80.4905 + (n - 5) * 0.0011,
+      description: `Demo similar lease — 2-bed condo apt in Downtown Kitchener near X9KWLEASE1 (#${n}).`,
+      brokerageName: "Houzzat Realty Demo Brokerage",
+      // Higher n = more recent (listed later, fewer days on market).
+      listedAt: `2026-07-${String(8 + n).padStart(2, "0")}T14:00:00.000Z`,
+      daysOnMarket: 12 - n,
+      images: gallery(20 + n, [IMG[(n + 2) % IMG.length]!, IMG[(n + 5) % IMG.length]!]),
+    };
+  }),
+  // 10 nearby-only: same area + LEASE, but different type and/or beds (excluded from Similar homes)
+  ...Array.from({ length: 10 }, (_, index) => {
+    const n = index + 1;
+    const variants = [
+      { propertyType: "CONDO_APT" as const, beds: 1, baths: 1, sqft: 520, label: "1-bed condo" },
+      { propertyType: "CONDO_APT" as const, beds: 3, baths: 2, sqft: 1050, label: "3-bed condo" },
+      { propertyType: "TOWNHOUSE" as const, beds: 3, baths: 2, sqft: 1400, label: "townhouse" },
+      { propertyType: "TOWNHOUSE" as const, beds: 2, baths: 2, sqft: 1180, label: "2-bed townhouse" },
+      { propertyType: "DETACHED" as const, beds: 3, baths: 2, sqft: 1600, label: "detached" },
+      { propertyType: "SEMI_DETACHED" as const, beds: 3, baths: 2, sqft: 1450, label: "semi-detached" },
+      { propertyType: "CONDO_APT" as const, beds: 1, baths: 1, sqft: 480, label: "studio-style 1-bed" },
+      { propertyType: "TOWNHOUSE" as const, beds: 4, baths: 3, sqft: 1750, label: "4-bed townhouse" },
+      { propertyType: "DETACHED" as const, beds: 4, baths: 3, sqft: 2100, label: "4-bed detached" },
+      { propertyType: "CONDO_TOWNHOUSE" as const, beds: 2, baths: 2, sqft: 1100, label: "condo townhouse" },
+    ] as const;
+    const v = variants[index]!;
+    return {
+      mlsNumber: `X9KWNEAR${String(n).padStart(2, "0")}`,
+      status: "ACTIVE" as const,
+      transactionType: "LEASE" as const,
+      propertyType: v.propertyType,
+      listPrice: 1950 + n * 85,
+      beds: v.beds,
+      baths: v.baths,
+      sqft: v.sqft,
+      parkingSpaces: v.beds >= 3 ? 2 : 1,
+      yearBuilt: 2008 + (n % 12),
+      maintenanceFee: v.propertyType.startsWith("CONDO") ? 0 : undefined,
+      addressLine: [
+        "42 Queen St S",
+        "120 King St W",
+        "8 Frederick St",
+        "250 King St E",
+        "15 Ellen St E",
+        "77 Ontario St N",
+        "33 Benton St",
+        "190 Ottawa St S",
+        "5 Michael St",
+        "88 Joseph St",
+      ][index]!,
+      unitNumber: v.propertyType.includes("CONDO") ? String(100 + n * 7) : undefined,
+      city: "Kitchener",
+      community: "Downtown Kitchener",
+      postalCode: "N2G 1W5",
+      lat: 43.448 + (n - 5) * 0.0014,
+      lng: -80.492 + (n - 5) * 0.0013,
+      description: `Demo nearby lease — ${v.label} in Downtown Kitchener (different features from X9KWLEASE1).`,
+      brokerageName: "Houzzat Realty Demo Brokerage",
+      listedAt: `2026-07-${String(9 + n).padStart(2, "0")}T15:00:00.000Z`,
+      daysOnMarket: 13 - n,
+      images: gallery(40 + n, [IMG[(n + 1) % IMG.length]!, IMG[(n + 7) % IMG.length]!]),
+    };
+  }),
+  // 10 recent sold (5 similar + 5 nearby-only) so Recent sold tab is testable too
+  ...Array.from({ length: 5 }, (_, index) => {
+    const n = index + 1;
+    return {
+      mlsNumber: `X9KWSOLD${String(n).padStart(2, "0")}`,
+      status: "SOLD" as const,
+      transactionType: "LEASE" as const,
+      propertyType: "CONDO_APT" as const,
+      listPrice: 2200 + n * 30,
+      soldPrice: 2150 + n * 25,
+      beds: 2,
+      baths: 1,
+      sqft: 740 + n * 12,
+      parkingSpaces: 1,
+      yearBuilt: 2015,
+      addressLine: `${40 + n * 3} Victoria St S`,
+      unitNumber: String(300 + n),
+      city: "Kitchener",
+      community: "Downtown Kitchener",
+      postalCode: "N2G 2B3",
+      lat: 43.446 + n * 0.0008,
+      lng: -80.489 - n * 0.0007,
+      description: `Recently leased 2-bed condo in Downtown Kitchener (demo sold for Similar homes).`,
+      brokerageName: "Houzzat Realty Demo Brokerage",
+      listedAt: `2026-05-${String(5 + n).padStart(2, "0")}T14:00:00.000Z`,
+      soldAt: `2026-06-${String(10 + n).padStart(2, "0")}T14:00:00.000Z`,
+      daysOnMarket: 18 - n,
+      images: gallery(60 + n, [IMG[n % IMG.length]!]),
+    };
+  }),
+  ...Array.from({ length: 5 }, (_, index) => {
+    const n = index + 1;
+    return {
+      mlsNumber: `X9KWSOLDN${String(n).padStart(2, "0")}`,
+      status: "SOLD" as const,
+      transactionType: "LEASE" as const,
+      propertyType: n % 2 === 0 ? ("TOWNHOUSE" as const) : ("DETACHED" as const),
+      listPrice: 2800 + n * 100,
+      soldPrice: 2700 + n * 90,
+      beds: 3,
+      baths: 2,
+      sqft: 1500 + n * 40,
+      parkingSpaces: 2,
+      yearBuilt: 2000 + n,
+      addressLine: `${100 + n * 8} Weber St E`,
+      city: "Kitchener",
+      community: "Downtown Kitchener",
+      postalCode: "N2H 1E8",
+      lat: 43.45 + n * 0.0009,
+      lng: -80.486 - n * 0.0008,
+      description: `Recently leased ${n % 2 === 0 ? "townhouse" : "detached"} in Downtown Kitchener (demo sold for Nearby).`,
+      brokerageName: "Houzzat Realty Demo Brokerage",
+      listedAt: `2026-04-${String(8 + n).padStart(2, "0")}T14:00:00.000Z`,
+      soldAt: `2026-05-${String(15 + n).padStart(2, "0")}T14:00:00.000Z`,
+      daysOnMarket: 22 - n,
+      images: gallery(70 + n, [IMG[(n + 3) % IMG.length]!]),
+    };
+  }),
+
+  // ——— Downtown Kitchener SALE comps for map filters (Nearby sold / Unlisted) ———
+  // 5 recently sold for-sale homes clustered near City Hall / Victoria Park
+  ...Array.from({ length: 5 }, (_, index) => {
+    const n = index + 1;
+    const types = [
+      "CONDO_APT",
+      "TOWNHOUSE",
+      "DETACHED",
+      "SEMI_DETACHED",
+      "CONDO_APT",
+    ] as const;
+    const streets = [
+      "15 King St W",
+      "88 Queen St S",
+      "42 Frederick St",
+      "120 Benton St",
+      "7 Gaukel St",
+    ] as const;
+    const listPrice = [549900, 689900, 825000, 749900, 499000][index]!;
+    const soldPrice = [565000, 702000, 810000, 760000, 512500][index]!;
+    const beds = [1, 3, 3, 3, 2][index]!;
+    const baths = [1, 2.5, 3, 2, 2][index]!;
+    const sqft = [620, 1480, 1920, 1650, 880][index]!;
+    return {
+      mlsNumber: `X9KWSALE${String(n).padStart(2, "0")}`,
+      status: "SOLD" as const,
+      transactionType: "SALE" as const,
+      propertyType: types[index]!,
+      listPrice,
+      soldPrice,
+      beds,
+      baths,
+      sqft,
+      parkingSpaces: beds >= 3 ? 2 : 1,
+      yearBuilt: 1998 + n * 4,
+      taxes: 3200 + n * 400,
+      addressLine: streets[index]!,
+      unitNumber: types[index]!.includes("CONDO")
+        ? String(400 + n * 12)
+        : undefined,
+      city: "Kitchener",
+      community: "Downtown Kitchener",
+      postalCode: "N2G 1A1",
+      lat: 43.4512 + (n - 3) * 0.0014,
+      lng: -80.4928 + (n - 3) * 0.0013,
+      description: `Recently sold ${types[index]!.toLowerCase().replaceAll("_", " ")} in Downtown Kitchener near City Hall (demo SALE sold for Nearby sold map filter).`,
+      brokerageName: "Houzzat Realty Demo Brokerage",
+      listedAt: `2026-03-${String(8 + n * 3).padStart(2, "0")}T14:00:00.000Z`,
+      soldAt: `2026-05-${String(4 + n * 2).padStart(2, "0")}T18:00:00.000Z`,
+      daysOnMarket: 14 + n * 3,
+      images: gallery(80 + n, [
+        IMG[(n + 1) % IMG.length]!,
+        IMG[(n + 6) % IMG.length]!,
+      ]),
+      history: [
+        {
+          event: "Listed",
+          price: listPrice,
+          contractDate: `2026-03-${String(8 + n * 3).padStart(2, "0")}T14:00:00.000Z`,
+        },
+        {
+          event: "Sold",
+          price: soldPrice,
+          contractDate: `2026-05-${String(4 + n * 2).padStart(2, "0")}T18:00:00.000Z`,
+        },
+      ],
+    };
+  }),
+  // 3 terminated (deal fell through / withdrawn) — Unlisted filter
+  ...Array.from({ length: 3 }, (_, index) => {
+    const n = index + 1;
+    const streets = ["55 Victoria St S", "19 Duke St W", "210 King St E"] as const;
+    const listPrice = [629900, 899000, 459900][index]!;
+    const types = ["TOWNHOUSE", "DETACHED", "CONDO_APT"] as const;
+    return {
+      mlsNumber: `X9KWTERM${String(n).padStart(2, "0")}`,
+      status: "TERMINATED" as const,
+      transactionType: "SALE" as const,
+      propertyType: types[index]!,
+      listPrice,
+      beds: [3, 4, 2][index]!,
+      baths: [2.5, 3, 2][index]!,
+      sqft: [1350, 2200, 790][index]!,
+      parkingSpaces: index === 2 ? 1 : 2,
+      yearBuilt: 2005 + n * 5,
+      taxes: 3800 + n * 500,
+      addressLine: streets[index]!,
+      unitNumber: types[index] === "CONDO_APT" ? String(510 + n) : undefined,
+      city: "Kitchener",
+      community: "Downtown Kitchener",
+      postalCode: "N2G 2B6",
+      lat: 43.449 + n * 0.0015,
+      lng: -80.491 - n * 0.0012,
+      description: `Terminated sale listing in Downtown Kitchener — previously offered for sale, now unlisted (demo TERMINATED for Unlisted map filter).`,
+      brokerageName: "Houzzat Realty Demo Brokerage",
+      listedAt: `2026-04-${String(2 + n * 4).padStart(2, "0")}T14:00:00.000Z`,
+      daysOnMarket: 30 + n * 8,
+      images: gallery(90 + n, [IMG[(n + 4) % IMG.length]!]),
+      history: [
+        {
+          event: "Listed",
+          price: listPrice,
+          contractDate: `2026-04-${String(2 + n * 4).padStart(2, "0")}T14:00:00.000Z`,
+        },
+        {
+          event: "Terminated",
+          price: listPrice,
+          contractDate: `2026-06-${String(5 + n * 3).padStart(2, "0")}T16:00:00.000Z`,
+          note: "Listing terminated — no longer available for sale.",
+        },
+      ],
+    };
+  }),
+  // 2 expired — Unlisted filter
+  ...Array.from({ length: 2 }, (_, index) => {
+    const n = index + 1;
+    const streets = ["33 Charles St W", "90 Ontario St N"] as const;
+    const listPrice = [574900, 715000][index]!;
+    const types = ["SEMI_DETACHED", "TOWNHOUSE"] as const;
+    return {
+      mlsNumber: `X9KWEXP${String(n).padStart(2, "0")}`,
+      status: "EXPIRED" as const,
+      transactionType: "SALE" as const,
+      propertyType: types[index]!,
+      listPrice,
+      beds: [3, 3][index]!,
+      baths: [2, 2.5][index]!,
+      sqft: [1520, 1410][index]!,
+      parkingSpaces: 2,
+      yearBuilt: 1992 + n * 10,
+      taxes: 4100 + n * 300,
+      addressLine: streets[index]!,
+      city: "Kitchener",
+      community: "Downtown Kitchener",
+      postalCode: "N2G 1H4",
+      lat: 43.4528 - n * 0.0016,
+      lng: -80.4885 + n * 0.0014,
+      description: `Expired sale listing in Downtown Kitchener — was offered for sale, listing period ended (demo EXPIRED for Unlisted map filter).`,
+      brokerageName: "Houzzat Realty Demo Brokerage",
+      listedAt: `2026-01-${String(10 + n * 5).padStart(2, "0")}T14:00:00.000Z`,
+      daysOnMarket: 90 + n * 12,
+      images: gallery(100 + n, [
+        IMG[(n + 8) % IMG.length]!,
+        IMG[(n + 2) % IMG.length]!,
+      ]),
+      history: [
+        {
+          event: "Listed",
+          price: listPrice,
+          contractDate: `2026-01-${String(10 + n * 5).padStart(2, "0")}T14:00:00.000Z`,
+        },
+        {
+          event: "Expired",
+          price: listPrice,
+          contractDate: `2026-04-${String(12 + n * 4).padStart(2, "0")}T23:59:00.000Z`,
+          note: "Listing expired without a sale.",
+        },
+      ],
+    };
+  }),
+
   // ——— FSBO / FLBO by-owner demos (public when ownerStatus ACTIVE) ———
   {
     mlsNumber: "FSBO-KW01",

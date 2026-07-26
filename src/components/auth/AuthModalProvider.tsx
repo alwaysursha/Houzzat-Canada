@@ -56,49 +56,51 @@ function AuthModalPanel() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="auth-modal-title"
-        className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
+        className="relative z-10 flex h-[min(78vh,38rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 id="auth-modal-title" className="font-display text-2xl text-ink">
-            {mode === "sign-in" ? "Sign in" : "Create account"}
-          </h2>
+        <h2 id="auth-modal-title" className="sr-only">
+          {mode === "sign-in" ? "Sign in" : "Sign up"}
+        </h2>
+        <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3.5 sm:px-5">
+          <div
+            className="grid min-w-0 flex-1 grid-cols-2 rounded-xl bg-mist p-1"
+            role="tablist"
+            aria-label="Account"
+          >
+            {(
+              [
+                ["sign-in", "Sign in"],
+                ["sign-up", "Sign up"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={mode === value}
+                onClick={() => setMode(value)}
+                className={cn(
+                  "rounded-lg px-3 py-2.5 text-sm transition",
+                  mode === value
+                    ? "bg-surface font-semibold text-canopy shadow-sm ring-1 ring-canopy/20"
+                    : "font-medium text-ink/50 hover:text-ink/75",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             onClick={closeAuth}
-            className="inline-flex size-9 items-center justify-center rounded-lg border border-line text-ink/70 transition hover:bg-mist"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-line text-ink/70 transition hover:bg-mist"
             aria-label="Close"
           >
             <X className="size-4" />
           </button>
         </div>
 
-        <div className="flex border-b border-line px-5">
-          {(
-            [
-              ["sign-in", "Sign in"],
-              ["sign-up", "Sign up"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setMode(value)}
-              className={cn(
-                "relative px-3 py-3 text-sm transition",
-                mode === value
-                  ? "font-semibold text-canopy"
-                  : "font-medium text-ink/50 hover:text-ink/75",
-              )}
-            >
-              {label}
-              {mode === value ? (
-                <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-canopy" />
-              ) : null}
-            </button>
-          ))}
-        </div>
-
-        <div className="max-h-[min(70vh,32rem)] overflow-y-auto px-5 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
           {mode === "sign-in" ? (
             <SignInForm
               callbackUrl={callbackUrl}

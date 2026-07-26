@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Bell, BellOff } from "lucide-react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
+import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
 export function WatchListingButton({
@@ -22,6 +24,7 @@ export function WatchListingButton({
 }) {
   const router = useRouter();
   const { openAuth } = useAuthModal();
+  const { alert, confirm, toast } = useSiteAlert();
   const [watching, setWatching] = useState(initiallyWatching);
   const [pending, setPending] = useState(false);
 
@@ -34,6 +37,14 @@ export function WatchListingButton({
       return;
     }
 
+    if (watching) {
+      const ok = await confirm({
+        ...SITE_MESSAGES.stopWatchingHome,
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+
     setPending(true);
     const res = await fetch("/api/account/property-monitors", {
       method: watching ? "DELETE" : "POST",
@@ -41,9 +52,19 @@ export function WatchListingButton({
       body: JSON.stringify({ mlsNumber }),
     });
     setPending(false);
-    if (!res.ok) return;
-    setWatching(!watching);
+    if (!res.ok) {
+      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+      return;
+    }
+    const next = !watching;
+    setWatching(next);
     router.refresh();
+
+    if (next) {
+      await alert({ ...SITE_MESSAGES.watchAdded });
+    } else {
+      toast({ message: SITE_MESSAGES.watchRemovedToast, tone: "info" });
+    }
   }
 
   return (

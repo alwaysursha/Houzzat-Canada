@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useState } from "react";
 import { Lock, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
+import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
 import { ListingCard } from "@/components/listings/ListingCard";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import { VOW_PUBLIC_NOTE } from "@/lib/vow";
@@ -125,7 +126,10 @@ export function HomeSoldRail({
   if (items.length === 0 && !emptyLabel) return null;
 
   return (
-    <section id="recently-sold" className="space-y-5">
+    <section
+      id="recently-sold"
+      className="scroll-mt-[calc(var(--site-header-stack)+0.75rem)] space-y-5"
+    >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h2 className="font-display text-2xl text-ink">Recently sold</h2>
         {isClient ? (
@@ -149,7 +153,7 @@ export function HomeSoldRail({
       {items.length === 0 ? (
         <p className="text-sm text-ink/50">{emptyLabel}</p>
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <FreeSwipeRail label="Recently sold">
           {items.map((listing) =>
             isClient ? (
               <ListingCard key={listing.mlsNumber} listing={listing} />
@@ -157,7 +161,7 @@ export function HomeSoldRail({
               <LockedSoldCard key={listing.mlsNumber} listing={listing} />
             ),
           )}
-        </div>
+        </FreeSwipeRail>
       )}
     </section>
   );

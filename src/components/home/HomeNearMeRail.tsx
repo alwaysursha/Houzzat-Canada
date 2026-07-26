@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
+import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
 import { ListingCard } from "@/components/listings/ListingCard";
 import {
   appendPersonalizationToUrlSearchParams,
@@ -213,7 +214,10 @@ export function HomeNearMeRail({
       : "/search";
 
   return (
-    <section className="space-y-5">
+    <section
+      id="listings-near-me"
+      className="scroll-mt-[calc(var(--site-header-stack)+0.75rem)] space-y-5"
+    >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h2 className="font-display text-2xl text-ink">Listings near me</h2>
         <Link href={mapHref} className="text-sm font-semibold text-canopy">
@@ -226,7 +230,7 @@ export function HomeNearMeRail({
           No homes within 20 km of you match your homepage search.
         </p>
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <FreeSwipeRail label="Listings near me">
           {items.map((listing) => (
             <ListingCard
               key={listing.mlsNumber}
@@ -234,7 +238,7 @@ export function HomeNearMeRail({
               distanceKm={listing.distanceKm}
             />
           ))}
-        </div>
+        </FreeSwipeRail>
       )}
     </section>
   );

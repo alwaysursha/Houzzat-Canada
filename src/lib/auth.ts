@@ -41,26 +41,41 @@ const providers: Provider[] = [
         return null;
       }
 
-      const user = await prisma.user.findUnique({
-        where: { email },
-      });
+      try {
+        // Select only auth fields so missing optional User columns
+        // (e.g. termsAcceptedAt before schema push) cannot break sign-in.
+        const user = await prisma.user.findUnique({
+          where: { email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            image: true,
+            role: true,
+            password: true,
+          },
+        });
 
-      if (!user?.password) {
-        return null;
+        if (!user?.password) {
+          return null;
+        }
+
+        const valid = await bcrypt.compare(password, user.password);
+        if (!valid) {
+          return null;
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          image: user.image,
+          role: user.role,
+        };
+      } catch (error) {
+        console.error("[auth] authorize failed", error);
+        throw error;
       }
-
-      const valid = await bcrypt.compare(password, user.password);
-      if (!valid) {
-        return null;
-      }
-
-      return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        image: user.image,
-        role: user.role,
-      };
     },
   }),
 ];
@@ -107,27 +122,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return baseUrl;
     },
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = user.role ?? Role.CUSTOMER;
+        // Resolve role once at sign-in (JWT carries it afterward — avoid DB on every session).
+        if (!user.role && user.email) {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: user.email },
+            select: { role: true, name: true },
+          });
+          if (dbUser) {
+            token.role = dbUser.role;
+            if (dbUser.name) token.name = dbUser.name;
+          }
+        } else if (user.name) {
+          token.name = user.name;
+        }
+      }
+      return token;
+    },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub as string;
         session.user.role = (token.role as Role) ?? Role.CUSTOMER;
-      }
-
-      if (session.user?.email) {
-        const dbUser = await prisma.user.findUnique({
-          where: { email: session.user.email },
-          select: { id: true, role: true, name: true },
-        });
-
-        if (dbUser) {
-          session.user.id = dbUser.id;
-          session.user.role = dbUser.role;
-          if (dbUser.name) {
-            session.user.name = dbUser.name;
-          }
+        if (typeof token.name === "string" && token.name) {
+          session.user.name = token.name;
         }
       }
-
       return session;
     },
   },

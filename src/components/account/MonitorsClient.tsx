@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
+import { SITE_MESSAGES } from "@/lib/site-messages";
 
 type PropertyMonitorRow = {
   id: string;
@@ -44,35 +46,63 @@ export function MonitorsClient({
   alerts: AlertRow[];
 }) {
   const router = useRouter();
+  const { confirm, toast } = useSiteAlert();
   const [tab, setTab] = useState<"homes" | "areas" | "alerts">("homes");
   const [busy, setBusy] = useState(false);
 
   async function unwatchHome(mlsNumber: string) {
+    const ok = await confirm({
+      ...SITE_MESSAGES.stopWatchingHome,
+      destructive: true,
+    });
+    if (!ok) return;
+
     setBusy(true);
-    await fetch("/api/account/property-monitors", {
+    const res = await fetch("/api/account/property-monitors", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mlsNumber }),
     });
     setBusy(false);
+    if (!res.ok) {
+      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+      return;
+    }
+    toast({ message: SITE_MESSAGES.watchRemovedToast, tone: "info" });
     router.refresh();
   }
 
   async function unwatchArea(id: string) {
+    const ok = await confirm({
+      ...SITE_MESSAGES.removeAreaWatch,
+      destructive: true,
+    });
+    if (!ok) return;
+
     setBusy(true);
-    await fetch("/api/account/area-monitors", {
+    const res = await fetch("/api/account/area-monitors", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
     setBusy(false);
+    if (!res.ok) {
+      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+      return;
+    }
+    toast({ message: SITE_MESSAGES.areaRemovedToast, tone: "info" });
     router.refresh();
   }
 
   async function runCheck() {
     setBusy(true);
-    await fetch("/api/account/monitors/check", { method: "POST" });
+    const res = await fetch("/api/account/monitors/check", { method: "POST" });
     setBusy(false);
+    if (!res.ok) {
+      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+      return;
+    }
+    toast({ message: "Watchlist checked for updates.", tone: "success" });
     router.refresh();
   }
 
@@ -181,7 +211,7 @@ export function MonitorsClient({
           ))}
           {areaMonitors.length === 0 ? (
             <p className="text-sm text-ink/55">
-              No area monitors yet. On Search, set a city and tap Watch this
+              No watched areas yet. On Search, set a city and tap Watch this
               area.
             </p>
           ) : null}

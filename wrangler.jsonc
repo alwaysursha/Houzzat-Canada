@@ -8,12 +8,8 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
-  "routes": [
-    {
-      "pattern": "houzzat.ca",
-      "custom_domain": true
-    }
-  ],
+  // Add houzzat.ca back after the domain is added to this Cloudflare account:
+  // "routes": [{ "pattern": "houzzat.ca", "custom_domain": true }],
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
@@ -21,10 +17,9 @@
     }
   ],
   "vars": {
-    "NEXTAUTH_URL": "https://houzzat.ca",
-    "NEXT_PUBLIC_SITE_URL": "https://houzzat.ca"
-  },
-  "limits": {
-    "cpu_ms": 30000
+    "NEXTAUTH_URL": "https://houzzat.teamalisyed.workers.dev",
+    "NEXT_PUBLIC_SITE_URL": "https://houzzat.teamalisyed.workers.dev",
+    // Temporary public gate — set to "1" to show Coming Soon to visitors
+    "COMING_SOON": "0"
   }
 }

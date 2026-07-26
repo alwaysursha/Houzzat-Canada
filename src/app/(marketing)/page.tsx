@@ -3,15 +3,13 @@ import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { HomeAreaRail } from "@/components/home/HomeAreaRail";
 import { HomeCustomerToolsStrip } from "@/components/home/HomeCustomerToolsStrip";
 import { HomeCustomerToolsTease } from "@/components/home/HomeCustomerToolsTease";
+import { HomeBrowseChips } from "@/components/home/HomeBrowseChips";
 import { HomeHeroSearch } from "@/components/home/HomeHeroSearch";
 import { HomeListingRail } from "@/components/home/HomeListingRail";
 import { HomeOwnerListingRail } from "@/components/home/HomeOwnerListingRail";
 import { HomeRecentlyViewedRail } from "@/components/home/HomeRecentlyViewedRail";
 import { HomeSoldRail } from "@/components/home/HomeSoldRail";
-import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
 import { HomepageSortedRails } from "@/components/home/HomepageSortedRails";
-import { PersonalizeHomepageButton } from "@/components/home/PersonalizeHomepageButton";
-import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
 import { auth } from "@/lib/auth";
 import { cityLandmarkImage } from "@/lib/geo/area-images";
 import {
@@ -29,10 +27,12 @@ import type { ListingSegment, PropertyType } from "@prisma/client";
 export default async function HomePage() {
   const session = await auth();
   const user = session?.user?.email
-    ? await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: { id: true, role: true },
-      })
+    ? await prisma.user
+        .findUnique({
+          where: { email: session.user.email },
+          select: { id: true, role: true },
+        })
+        .catch(() => null)
     : null;
   const isClient = hasClientAccess(user);
   const isCustomer = Boolean(
@@ -41,9 +41,11 @@ export default async function HomePage() {
 
   const activeHomepageSearch =
     isCustomer && user
-      ? await prisma.savedSearch.findFirst({
-          where: { userId: user.id, isHomepageActive: true },
-        })
+      ? await prisma.savedSearch
+          .findFirst({
+            where: { userId: user.id, isHomepageActive: true },
+          })
+          .catch(() => null)
       : null;
   const personalization = activeHomepageSearch
     ? parseHomepagePersonalizationQuery(activeHomepageSearch.query)
@@ -152,15 +154,17 @@ export default async function HomePage() {
             prisma.customerAlert.count({
               where: { userId: user.id, readAt: null },
             }),
-          ])
+          ]).catch(() => null)
         : Promise.resolve(null),
       isCustomer && user
-        ? prisma.listingView.findMany({
-            where: { userId: user.id },
-            orderBy: { createdAt: "desc" },
-            take: personalized ? 80 : 40,
-            select: { mlsNumber: true },
-          })
+        ? prisma.listingView
+            .findMany({
+              where: { userId: user.id },
+              orderBy: { createdAt: "desc" },
+              take: personalized ? 80 : 40,
+              select: { mlsNumber: true },
+            })
+            .catch(() => [])
         : Promise.resolve([]),
       getPopularCities(8),
     ]);
@@ -307,7 +311,8 @@ export default async function HomePage() {
   return (
     <div>
       <section id="home-hero" className="relative z-[35]">
-        <div className="absolute inset-0 overflow-hidden">
+        {/* Desktop brand hero — hidden on mobile so listings start near the fold */}
+        <div className="absolute inset-0 hidden overflow-hidden sm:block">
           {/* eslint-disable-next-line @next/next/no-img-element -- serve original hero pixels without optimizer recompression */}
           <img
             src="/images/hero-canadian-homes.jpg"
@@ -324,7 +329,21 @@ export default async function HomePage() {
             }}
           />
         </div>
-        <div className="relative flex min-h-[40vh] w-full flex-col justify-end px-4 pb-8 pt-20 sm:px-6 lg:px-10">
+
+        {/* Mobile: compact search + section shortcuts (no tall hero) */}
+        <div
+          className="relative px-4 pb-4 pt-3 sm:hidden"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, rgb(15 107 76 / 0.2) 0%, rgb(15 107 76 / 0.08) 45%, rgb(15 107 76 / 0) 100%)",
+          }}
+        >
+          <HomeHeroSearch surface="page" />
+          <HomeBrowseChips className="mt-3" />
+        </div>
+
+        {/* Desktop hero copy + search */}
+        <div className="relative hidden min-h-[40vh] w-full flex-col justify-end px-4 pb-8 pt-20 sm:flex sm:px-6 lg:px-10">
           <div>
             <p className="font-display text-3xl tracking-tight text-white sm:text-4xl md:text-5xl">
               Find Homes in Ontario
@@ -337,27 +356,9 @@ export default async function HomePage() {
             <div className="min-w-0 flex-1">
               <HomeHeroSearch />
             </div>
-            {isCustomer ? (
-              <div className="shrink-0 pb-1">
-                <PersonalizeHomepageButton
-                  cities={popularCities.map((row) => row.city)}
-                />
-              </div>
-            ) : null}
           </div>
         </div>
       </section>
-
-      <div className="empty:hidden">
-        <HomepagePersonalizationBanner
-          cities={popularCities.map((row) => row.city)}
-          forceShow
-        />
-        <SavedSearchChipBar
-          forceShow
-          cities={popularCities.map((row) => row.city)}
-        />
-      </div>
 
       {isCustomer && customerTools ? (
         <HomeCustomerToolsStrip
@@ -366,12 +367,15 @@ export default async function HomePage() {
           propertyWatchCount={customerTools[2]}
           areaWatchCount={customerTools[3]}
           unreadAlerts={customerTools[4]}
+          cities={popularCities.map((row) => row.city)}
         />
       ) : !user ? (
-        <HomeCustomerToolsTease />
+        <div className="hidden sm:block">
+          <HomeCustomerToolsTease />
+        </div>
       ) : null}
 
-      <div className="w-full px-4 pb-2 pt-1 sm:px-6 lg:px-10">
+      <div className="hidden w-full px-4 pb-2 pt-1 sm:block sm:px-6 lg:px-10">
         {popularCities.length > 0 ? (
           <section className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-ink/40">
@@ -396,35 +400,26 @@ export default async function HomePage() {
         ) : null}
       </div>
 
-      <div className="w-full space-y-16 px-4 py-10 sm:px-6 lg:px-10">
-        {personalized ? (
-          <p className="rounded-2xl border border-canopy/20 bg-canopy/5 px-4 py-3 text-sm text-canopy-deep">
-            Showing listings that match your homepage search
-            {activeHomepageSearch ? (
-              <>
-                {" "}
-                <span className="font-semibold">
-                  {activeHomepageSearch.name}
-                </span>
-              </>
-            ) : null}
-            . Use <span className="font-semibold">Show all listings</span> in
-            the banner above to restore the full homepage.
-          </p>
-        ) : null}
-
+      <div className="w-full space-y-10 px-4 py-6 sm:space-y-16 sm:px-6 sm:py-10 lg:px-10">
         <HomepageSortedRails
           reorderEmptyLast={personalized}
           personalization={personalization}
           sections={[
-            ...(recentlyViewed.length > 0 || personalized
+            ...(recentlyViewed.length > 0 || personalized || !isCustomer
               ? [
                   {
                     id: "recently-viewed",
-                    resultCount: recentlyViewed.length,
+                    // Guests may hydrate from localStorage — keep slot until empty.
+                    resultCount:
+                      recentlyViewed.length > 0
+                        ? recentlyViewed.length
+                        : !isCustomer
+                          ? 1
+                          : 0,
                     node: (
                       <HomeRecentlyViewedRail
                         items={recentlyViewed}
+                        useLocalFallback={!isCustomer}
                         emptyLabel={
                           personalized
                             ? "None of your recently viewed homes match your homepage search."
@@ -440,6 +435,7 @@ export default async function HomePage() {
               resultCount: newResidential.items.length,
               node: (
                 <HomeListingRail
+                  id="rail-new-listings"
                   title="New Listings"
                   href={
                     seeAllBase
@@ -459,48 +455,11 @@ export default async function HomePage() {
               ),
             },
             {
-              id: "for-lease",
-              resultCount: forLease.items.length,
-              node: (
-                <HomeListingRail
-                  title="For lease"
-                  href={
-                    seeAllBase
-                      ? seeAllBase({ transactionType: "LEASE" })
-                      : "/search?transactionType=LEASE"
-                  }
-                  items={forLease.items}
-                  emptyLabel={
-                    personalized
-                      ? "No lease listings match your homepage search."
-                      : "No lease listings in demo inventory right now."
-                  }
-                />
-              ),
-            },
-            ...(ownerListings.items.length > 0 || personalized
-              ? [
-                  {
-                    id: "owner",
-                    resultCount: ownerListings.items.length,
-                    node: (
-                      <HomeOwnerListingRail
-                        items={ownerListings.items}
-                        emptyLabel={
-                          personalized
-                            ? "No owner listings match your homepage search."
-                            : undefined
-                        }
-                      />
-                    ),
-                  },
-                ]
-              : []),
-            {
               id: "open-houses",
               resultCount: openHouseItems.length,
               node: (
                 <HomeListingRail
+                  id="rail-open-houses"
                   title="Open Houses this Weekend"
                   href={
                     seeAllBase
@@ -539,10 +498,50 @@ export default async function HomePage() {
                 ]
               : []),
             {
+              id: "for-lease",
+              resultCount: forLease.items.length,
+              node: (
+                <HomeListingRail
+                  id="rail-for-lease"
+                  title="For lease"
+                  href={
+                    seeAllBase
+                      ? seeAllBase({ transactionType: "LEASE" })
+                      : "/search?transactionType=LEASE"
+                  }
+                  items={forLease.items}
+                  emptyLabel={
+                    personalized
+                      ? "No lease listings match your homepage search."
+                      : "No lease listings in demo inventory right now."
+                  }
+                />
+              ),
+            },
+            ...(ownerListings.items.length > 0 || personalized
+              ? [
+                  {
+                    id: "owner",
+                    resultCount: ownerListings.items.length,
+                    node: (
+                      <HomeOwnerListingRail
+                        items={ownerListings.items}
+                        emptyLabel={
+                          personalized
+                            ? "No owner listings match your homepage search."
+                            : undefined
+                        }
+                      />
+                    ),
+                  },
+                ]
+              : []),
+            {
               id: "commercial",
               resultCount: commercial.items.length,
               node: (
                 <HomeListingRail
+                  id="rail-commercial"
                   title="Commercial"
                   href={
                     seeAllBase

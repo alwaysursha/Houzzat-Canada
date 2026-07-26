@@ -40,6 +40,13 @@ yarn-error.log*
 .dev.vars
 !.dev.vars.example
 
+# local / editor / agent tooling (not for deploy)
+.agents/
+.cursor/
+.neon
+skills-lock.json
+Houzzat Canada/
+
 # vercel
 .vercel
 

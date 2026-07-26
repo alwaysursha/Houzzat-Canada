@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SITE_MESSAGES } from "@/lib/site-messages";
 
 export function SaveSearchButton({
   query,
@@ -13,6 +15,7 @@ export function SaveSearchButton({
   signedIn: boolean;
 }) {
   const { openAuth } = useAuthModal();
+  const { toast } = useSiteAlert();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("My search");
   const [pending, setPending] = useState(false);
@@ -30,9 +33,13 @@ export function SaveSearchButton({
       body: JSON.stringify({ name, query, emailAlerts: true }),
     });
     setPending(false);
-    if (!res.ok) return;
+    if (!res.ok) {
+      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+      return;
+    }
     setDone(true);
     setOpen(false);
+    toast({ message: "Search saved to your account.", tone: "success" });
     window.dispatchEvent(new Event("houzzat:saved-searches-changed"));
   }
 

@@ -65,7 +65,7 @@ export default async function AccountPage() {
       <div>
         <h1 className="font-display text-4xl text-ink">Your Houzzat</h1>
         <p className="mt-2 text-sm text-ink/60">
-          Saved homes, notes, searches, and monitors — signed in as {user.email}
+          Saved homes, notes, searches, and watchlist — signed in as {user.email}
         </p>
       </div>
 
@@ -79,9 +79,9 @@ export default async function AccountPage() {
             href: "/account/searches",
           },
           {
-            label: "Monitors",
+            label: "Watchlist",
             value: propertyWatchCount + areaWatchCount,
-            href: "/account/monitors",
+            href: "/account/watchlist",
             hint: alertCount > 0 ? `${alertCount} new alerts` : undefined,
           },
           {

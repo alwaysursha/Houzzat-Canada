@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -16,27 +17,6 @@ const globalForPrisma = globalThis as typeof globalThis & {
   __houzzatPrisma?: PrismaClient;
 };
 
-function readDatabaseUrl(): string | undefined {
-  if (process.env.DATABASE_URL) {
-    return process.env.DATABASE_URL;
-  }
-
-  try {
-    const { env } = getCloudflareContext();
-    const bindings = env as typeof env & CloudflareBindings;
-    if (typeof bindings.DATABASE_URL === "string" && bindings.DATABASE_URL) {
-      return bindings.DATABASE_URL;
-    }
-    if (bindings.HYPERDRIVE?.connectionString) {
-      return bindings.HYPERDRIVE.connectionString;
-    }
-  } catch {
-    // Outside Cloudflare runtime (local build, tests, etc.)
-  }
-
-  return undefined;
-}
-
 function shouldUseNeonAdapter(connectionString: string) {
   return (
     process.env.USE_NEON_ADAPTER === "1" ||
@@ -45,26 +25,72 @@ function shouldUseNeonAdapter(connectionString: string) {
   );
 }
 
-function createPrismaClient() {
-  const connectionString = readDatabaseUrl();
+function readDatabaseUrlFromEnv(env: CloudflareBindings | NodeJS.ProcessEnv) {
+  const databaseUrl = env.DATABASE_URL;
+  if (typeof databaseUrl === "string" && databaseUrl.trim()) {
+    return databaseUrl.trim();
+  }
+  return undefined;
+}
 
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is not set");
+function readDatabaseUrl(): string | undefined {
+  // Prefer live Worker bindings — OpenNext only copies env into process.env
+  // once on the first request, which can miss secrets.
+  try {
+    const { env } = getCloudflareContext();
+    const bindings = env as typeof env & CloudflareBindings;
+    const fromBinding = readDatabaseUrlFromEnv(bindings);
+    if (fromBinding) return fromBinding;
+    if (bindings.HYPERDRIVE?.connectionString) {
+      return bindings.HYPERDRIVE.connectionString;
+    }
+  } catch {
+    // Outside Cloudflare request context (local build, tests, etc.)
   }
 
+  return readDatabaseUrlFromEnv(process.env);
+}
+
+function createPrismaClient(connectionString: string) {
   if (shouldUseNeonAdapter(connectionString)) {
     const adapter = new PrismaNeon({ connectionString });
     return new PrismaClient({ adapter });
   }
 
-  // Cap pool size so Next.js HMR / parallel routes don't exhaust Postgres.
-  const adapter = new PrismaPg({ connectionString, max: 5 });
+  // Workers must not reuse pooled connections across requests.
+  const adapter = new PrismaPg({
+    connectionString,
+    max: 1,
+    maxUses: 1,
+  });
   return new PrismaClient({ adapter });
 }
 
-export function getPrisma() {
+/** Per-request client (preferred on Cloudflare Workers). */
+export const getPrisma = cache(() => {
+  const connectionString = readDatabaseUrl();
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is not set");
+  }
+  return createPrismaClient(connectionString);
+});
+
+function getPrismaCompat() {
+  // Local Next.js HMR benefits from a reusable client; Workers should not.
+  const isWorkerd =
+    typeof navigator !== "undefined" &&
+    navigator.userAgent === "Cloudflare-Workers";
+
+  if (isWorkerd) {
+    return getPrisma();
+  }
+
   if (!globalForPrisma.__houzzatPrisma) {
-    globalForPrisma.__houzzatPrisma = createPrismaClient();
+    const connectionString = readDatabaseUrl();
+    if (!connectionString) {
+      throw new Error("DATABASE_URL is not set");
+    }
+    globalForPrisma.__houzzatPrisma = createPrismaClient(connectionString);
   }
   return globalForPrisma.__houzzatPrisma;
 }
@@ -72,7 +98,7 @@ export function getPrisma() {
 // Lazy proxy so build-time imports don't require DATABASE_URL
 export const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop) {
-    const client = getPrisma();
+    const client = getPrismaCompat();
     const value = client[prop as keyof PrismaClient];
     if (typeof value === "function") {
       return value.bind(client);

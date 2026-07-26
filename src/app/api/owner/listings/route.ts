@@ -127,6 +127,7 @@ export async function POST(request: Request) {
   await prisma.user.update({
     where: { id: user.id },
     data: { phone: data.phone },
+    select: { id: true },
   });
 
   const mlsNumber = generateOwnerMlsNumber(data.transactionType);

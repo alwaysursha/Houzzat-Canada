@@ -14,16 +14,21 @@ import { ListingQaPanel } from "@/components/listings/ListingQaPanel";
 import { ListingStickyBar } from "@/components/listings/ListingStickyBar";
 import { NearbyAmenities } from "@/components/listings/NearbyAmenities";
 import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
+import { ListingRelatedSection } from "@/components/listings/ListingRelatedSection";
+import { ListingMobileSideMenu } from "@/components/listings/ListingMobileSideMenu";
+import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
+import { RecordRecentView } from "@/components/listings/RecordRecentView";
 import { MarketPulseCard } from "@/components/market/MarketPulseCard";
 import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
+import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import { slugifyPlace } from "@/lib/geo/distance";
 import { buildListingHistoryRows, getLatestListPriceChange } from "@/lib/listings/history-rows";
 import {
-  closedPriceLabel,
-  formatDaysAgo,
+  formatListingTiming,
   formatListPrice,
   formatPrice,
   isClosedListingStatus,
+  listingStatusBadgeClass,
   listingStatusLabel,
   propertyTypeLabel,
   segmentLabel,
@@ -92,7 +97,37 @@ export default async function ListingDetailPage({ params }: Params) {
   const session = await auth();
   const locale = await getLocale();
   const user = session?.user?.email
-    ? await prisma.user.findUnique({ where: { email: session.user.email } })
+    ? await (async () => {
+        const email = session.user!.email!;
+        try {
+          return await prisma.user.findUnique({
+            where: { email },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              role: true,
+              relatedListingsMode: true,
+            },
+          });
+        } catch {
+          // Prefer schema include relatedListingsMode; fall back if DB not migrated yet.
+          const base = await prisma.user.findUnique({
+            where: { email },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              role: true,
+            },
+          });
+          return base
+            ? { ...base, relatedListingsMode: "SAME_AREA" as const }
+            : null;
+        }
+      })()
     : null;
 
   const vowOk = hasVowAccess(user);
@@ -155,7 +190,20 @@ export default async function ListingDetailPage({ params }: Params) {
 
   const showClosedPrice =
     isClosedListingStatus(listing.status) && listing.soldPrice != null;
+  const isInactive = listing.status !== "ACTIVE";
+  const similarHomesHref = (() => {
+    const params = new URLSearchParams();
+    params.set("status", "ACTIVE");
+    params.set("transactionType", listing.transactionType);
+    params.set("city", listing.city);
+    if (listing.community) params.set("community", listing.community);
+    if (listing.segment) params.set("segment", listing.segment);
+    params.set("propertyType", listing.propertyType);
+    params.set("minBeds", String(Math.floor(listing.beds)));
+    return `/search?${params.toString()}`;
+  })();
   const canSeeRestricted = vowOk;
+  const detailsLocked = isInactive && !canSeeRestricted;
   const latestPriceChange = getLatestListPriceChange(
     listing.history,
     listing.mlsNumber,
@@ -182,6 +230,20 @@ export default async function ListingDetailPage({ params }: Params) {
     });
   }
   crumbs.push({ label: addressLabel });
+
+  const coverTagLabel = listingStatusLabel(
+    listing.status,
+    listing.transactionType,
+  );
+  const segmentTagMeta = {
+    label: segmentLabel(listing.segment),
+    tone:
+      listing.segment === "COMMERCIAL"
+        ? ("commercial" as const)
+        : listing.segment === "PRE_CONSTRUCTION"
+          ? ("preconstruction" as const)
+          : ("residential" as const),
+  };
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -216,11 +278,49 @@ export default async function ListingDetailPage({ params }: Params) {
 
   return (
     <>
+      <RecordRecentView mlsNumber={listing.mlsNumber} />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className="w-full space-y-8 px-4 pb-8 pt-0 sm:px-6 lg:px-10">
+      <ListingMobileSideMenu
+        mlsNumber={listing.mlsNumber}
+        initiallySaved={saved}
+        initiallyWatching={watching}
+        signedIn={Boolean(user)}
+        city={listing.city}
+        community={listing.community}
+        transactionType={listing.transactionType}
+        segment={listing.segment}
+        inactive={isInactive}
+        similarHomesHref={similarHomesHref}
+      />
+      <ListingMobileActionBar
+        mlsNumber={listing.mlsNumber}
+        initiallyWatching={watching}
+        signedIn={Boolean(user)}
+        inactive={isInactive}
+        similarHomesHref={similarHomesHref}
+        city={listing.city}
+        community={listing.community}
+        transactionType={listing.transactionType}
+        segment={listing.segment}
+        contact={
+          user
+            ? {
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+              }
+            : undefined
+        }
+      />
+      <div className="w-full min-w-0 space-y-8 px-4 pb-[calc(2rem+4.25rem+env(safe-area-inset-bottom,0px))] pt-3 sm:px-6 md:pb-8 md:pt-6 lg:px-10">
+        {/*
+          Sticky bar must be a descendant of this tall page section (including the
+          grid below), not a short breadcrumbs+gallery wrapper — otherwise sticky
+          ends when the gallery scrolls away.
+        */}
         <ListingStickyBar
           crumbs={crumbs}
           mlsNumber={listing.mlsNumber}
@@ -231,132 +331,192 @@ export default async function ListingDetailPage({ params }: Params) {
           community={listing.community}
           transactionType={listing.transactionType}
           segment={listing.segment}
+          inactive={isInactive}
+          similarHomesHref={similarHomesHref}
         />
 
-        <div className="-mx-4 empty:hidden sm:-mx-6 lg:-mx-10">
-          <HomepagePersonalizationBanner
-            cities={personalizationCities}
-            forceShow
+        <div className="-mt-5 space-y-3 md:mt-8 md:space-y-8">
+          <div className="-mx-4 empty:hidden sm:-mx-6 lg:-mx-10">
+            <HomepagePersonalizationBanner
+              cities={personalizationCities}
+              forceShow
+            />
+            <SavedSearchChipBar forceShow cities={personalizationCities} />
+          </div>
+
+          <ListingGallery
+            addressLabel={addressLabel}
+            mlsNumber={listing.mlsNumber}
+            coverTag={coverTagLabel}
+            coverTagClassName={listingStatusBadgeClass(listing.status)}
+            segmentTag={segmentTagMeta}
+            allowBooking={!isInactive}
+            detailsLocked={detailsLocked}
+            mapSubject={
+              Number.isFinite(listing.lat) && Number.isFinite(listing.lng)
+                ? {
+                    mlsNumber: listing.mlsNumber,
+                    lat: listing.lat,
+                    lng: listing.lng,
+                    addressLabel: listing.unitNumber
+                      ? `${listing.unitNumber} – ${listing.addressLine}`
+                      : listing.addressLine,
+                    city: listing.city,
+                    listPrice: listing.listPrice,
+                    transactionType: listing.transactionType,
+                    status: listing.status,
+                    propertyType: listing.propertyType,
+                    beds: listing.beds,
+                    baths: listing.baths,
+                    sqft: listing.sqft,
+                    primaryImageUrl: listing.media[0]?.url ?? null,
+                    unitNumber: listing.unitNumber,
+                    addressLine: listing.addressLine,
+                    postalCode: listing.postalCode,
+                    province: listing.province,
+                  }
+                : undefined
+            }
+            contact={
+              user
+                ? {
+                    name: user.name,
+                    email: user.email,
+                    phone: user.phone,
+                  }
+                : undefined
+            }
+            photos={listing.media.map((media) => ({
+              id: media.id,
+              url: media.url,
+            }))}
           />
-          <SavedSearchChipBar forceShow cities={personalizationCities} />
         </div>
 
-        <ListingGallery
-          addressLabel={addressLabel}
-          mlsNumber={listing.mlsNumber}
-          coverTag={listingStatusLabel(
-            listing.status,
-            listing.transactionType,
-          )}
-          segmentTag={{
-            label: segmentLabel(listing.segment),
-            tone:
-              listing.segment === "COMMERCIAL"
-                ? "commercial"
-                : listing.segment === "PRE_CONSTRUCTION"
-                  ? "preconstruction"
-                  : "residential",
-          }}
-          mapSubject={
-            Number.isFinite(listing.lat) && Number.isFinite(listing.lng)
-              ? {
-                  mlsNumber: listing.mlsNumber,
-                  lat: listing.lat,
-                  lng: listing.lng,
-                  addressLabel: listing.unitNumber
-                    ? `${listing.unitNumber} – ${listing.addressLine}`
-                    : listing.addressLine,
-                  city: listing.city,
-                  listPrice: listing.listPrice,
-                  transactionType: listing.transactionType,
-                  status: listing.status,
-                  propertyType: listing.propertyType,
-                  beds: listing.beds,
-                  baths: listing.baths,
-                  sqft: listing.sqft,
-                  primaryImageUrl: listing.media[0]?.url ?? null,
-                  unitNumber: listing.unitNumber,
-                  addressLine: listing.addressLine,
-                  postalCode: listing.postalCode,
-                  province: listing.province,
-                }
-              : undefined
-          }
-          contact={
-            user
-              ? {
-                  name: user.name,
-                  email: user.email,
-                  phone: user.phone,
-                }
-              : undefined
-          }
-          photos={listing.media.map((media) => ({
-            id: media.id,
-            url: media.url,
-          }))}
-        />
-
-      <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="space-y-6">
-          <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-5">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-3">
-                <p className="text-3xl font-bold tracking-tight text-canopy sm:text-4xl">
-                  {formatListPrice(listing.listPrice, listing.transactionType)}
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <div className="min-w-0 space-y-6">
+          <div className="flex flex-col gap-5 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-x-8 md:gap-y-5">
+            <div className="min-w-0 w-full md:flex-1">
+              {(coverTagLabel || segmentTagMeta) ? (
+                <div className="mb-2.5 flex items-center justify-between gap-3 md:hidden">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    {coverTagLabel ? (
+                      <span
+                        className={`rounded-md px-3 py-1.5 text-xs font-bold tracking-wide ${listingStatusBadgeClass(listing.status)}`}
+                      >
+                        {coverTagLabel}
+                      </span>
+                    ) : null}
+                    {segmentTagMeta ? (
+                      <span
+                        className={
+                          segmentTagMeta.tone === "commercial"
+                            ? "rounded-md bg-ink px-3 py-1.5 text-xs font-bold tracking-wide text-white"
+                            : segmentTagMeta.tone === "preconstruction"
+                              ? "rounded-md bg-signal px-3 py-1.5 text-xs font-bold tracking-wide text-white"
+                              : "rounded-md bg-mist px-3 py-1.5 text-xs font-bold tracking-wide text-ink ring-1 ring-line"
+                        }
+                      >
+                        {segmentTagMeta.label}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="shrink-0 text-right text-base font-medium leading-snug text-ink/55">
+                    {formatListingTiming(listing)}
+                  </p>
+                </div>
+              ) : (
+                <p className="mb-2.5 text-right text-base font-medium leading-snug text-ink/55 md:hidden">
+                  {formatListingTiming(listing)}
                 </p>
-                {latestPriceChange ? (
-                  <span
-                    className={
-                      latestPriceChange.delta < 0
-                        ? "inline-flex items-center gap-1 rounded-full bg-danger/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-danger"
-                        : "inline-flex items-center gap-1 rounded-full bg-canopy/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-canopy-deep"
-                    }
-                    title={
-                      latestPriceChange.delta < 0
-                        ? `Reduced from ${formatPrice(latestPriceChange.originalPrice)}`
-                        : `Increased from ${formatPrice(latestPriceChange.originalPrice)}`
-                    }
-                  >
-                    {latestPriceChange.delta < 0 ? (
-                      <ArrowDown className="size-3.5" aria-hidden />
-                    ) : (
-                      <ArrowUp className="size-3.5" aria-hidden />
-                    )}
-                    {latestPriceChange.delta < 0 ? "−" : "+"}
-                    {formatPrice(Math.abs(latestPriceChange.delta))}
-                  </span>
-                ) : null}
+              )}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-3">
+                  {showClosedPrice ? (
+                    <SoldForPrice
+                      listPrice={listing.listPrice}
+                      soldPrice={listing.soldPrice}
+                      status={listing.status}
+                      transactionType={listing.transactionType}
+                      tone="light"
+                      locked={!canSeeRestricted}
+                      size="lg"
+                    />
+                  ) : detailsLocked ? (
+                    <p className="text-3xl font-bold tracking-tight text-ink/55 sm:text-4xl">
+                      <span className="mr-2 text-base font-semibold text-ink/45 sm:text-lg">
+                        {listing.transactionType === "LEASE"
+                          ? "Rent:"
+                          : "Listed:"}
+                      </span>
+                      Sign in to see price
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-bold tracking-tight text-canopy sm:text-4xl">
+                        {formatListPrice(
+                          listing.listPrice,
+                          listing.transactionType,
+                        )}
+                      </p>
+                      {latestPriceChange ? (
+                        <span
+                          className={
+                            latestPriceChange.delta < 0
+                              ? "inline-flex items-center gap-1 rounded-full bg-danger/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-danger"
+                              : "inline-flex items-center gap-1 rounded-full bg-canopy/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-canopy-deep"
+                          }
+                          title={
+                            latestPriceChange.delta < 0
+                              ? `Reduced from ${formatPrice(latestPriceChange.originalPrice)}`
+                              : `Increased from ${formatPrice(latestPriceChange.originalPrice)}`
+                          }
+                        >
+                          {latestPriceChange.delta < 0 ? (
+                            <ArrowDown className="size-3.5" aria-hidden />
+                          ) : (
+                            <ArrowUp className="size-3.5" aria-hidden />
+                          )}
+                          {latestPriceChange.delta < 0 ? "−" : "+"}
+                          {formatPrice(Math.abs(latestPriceChange.delta))}
+                        </span>
+                      ) : null}
+                    </>
+                  )}
+                </div>
               </div>
               <h1 className="mt-1.5 text-base font-medium text-ink/70 sm:text-lg">
-                {[
-                  listing.unitNumber
-                    ? `${listing.unitNumber} – ${listing.addressLine}`
-                    : listing.addressLine,
-                  listing.city,
-                  listing.province || "ON",
-                  listing.postalCode,
-                ]
-                  .filter(Boolean)
-                  .join(", ")}
-              </h1>
-              {showClosedPrice ? (
-                canSeeRestricted ? (
-                  <p className="mt-1 text-sm font-medium text-ink/50">
-                    {closedPriceLabel(listing.status)}{" "}
-                    {formatListPrice(
-                      listing.soldPrice!,
-                      listing.transactionType,
-                    )}
-                  </p>
+                {detailsLocked ? (
+                  <>
+                    <span className="select-none blur-[5px]">
+                      {listing.unitNumber
+                        ? `${listing.unitNumber} – ${listing.addressLine}`
+                        : listing.addressLine}
+                    </span>
+                    {`, ${listing.city}, ${listing.province || "ON"}`}
+                  </>
                 ) : (
-                  <p className="mt-1 text-sm font-medium text-ink/40">
-                    {closedPriceLabel(listing.status)} price locked · register
-                    to unlock
-                  </p>
-                )
-              ) : null}
-              {listing.community ? (
+                  [
+                    listing.unitNumber
+                      ? `${listing.unitNumber} – ${listing.addressLine}`
+                      : listing.addressLine,
+                    listing.city,
+                    listing.province || "ON",
+                    listing.postalCode,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")
+                )}
+              </h1>
+              {detailsLocked ? (
+                <p className="mt-1 text-sm text-ink/55">
+                  {propertyTypeLabel(listing.propertyType)}
+                  {" · "}
+                  {listing.city}
+                  {" · "}
+                  Sign in for full details
+                </p>
+              ) : listing.community ? (
                 <p className="mt-1 text-sm text-ink/55">
                   <Link
                     href={`/areas/${areaSlug}`}
@@ -378,56 +538,64 @@ export default async function ListingDetailPage({ params }: Params) {
               )}
             </div>
 
-            <div className="flex shrink-0 flex-col items-end gap-2">
-              <p className="text-base font-medium text-ink/55">
-                {listing.daysOnMarket <= 0
-                  ? "Added today"
-                  : `Added ${formatDaysAgo(listing.daysOnMarket)}`}
+            <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:shrink-0 md:items-end">
+              <p className="hidden text-base font-medium text-ink/55 md:block">
+                {formatListingTiming(listing)}
               </p>
-              <div className="flex items-start gap-7 sm:gap-10">
+              {/*
+                Mobile: equal columns so the row fits the content width.
+                Desktop (md+): keep the original fixed min-widths and gaps.
+              */}
+              <div
+                className={
+                  listing.segment !== "COMMERCIAL"
+                    ? `grid w-full grid-cols-4 gap-2 md:flex md:w-auto md:items-start md:gap-10 ${detailsLocked ? "select-none blur-[5px]" : ""}`
+                    : `grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:items-start md:gap-10 ${detailsLocked ? "select-none blur-[5px]" : ""}`
+                }
+              >
                 {listing.segment !== "COMMERCIAL" ? (
                   <>
-                    <div className="flex min-w-[5rem] flex-col items-center gap-2 text-center">
+                    <div className="flex min-w-0 flex-col items-center gap-1.5 text-center md:min-w-[5rem] md:gap-2">
                       <Bed
-                        className="size-7 text-ink sm:size-8"
+                        className="size-6 text-ink md:size-8"
                         strokeWidth={1.75}
                         aria-hidden
                       />
-                      <span className="text-base font-semibold text-ink">
+                      <span className="text-base font-semibold leading-tight text-ink">
                         {listing.beds} {listing.beds === 1 ? "Bed" : "Beds"}
                       </span>
                     </div>
-                    <div className="flex min-w-[5rem] flex-col items-center gap-2 text-center">
+                    <div className="flex min-w-0 flex-col items-center gap-1.5 text-center md:min-w-[5rem] md:gap-2">
                       <Bath
-                        className="size-7 text-ink sm:size-8"
+                        className="size-6 text-ink md:size-8"
                         strokeWidth={1.75}
                         aria-hidden
                       />
-                      <span className="text-base font-semibold text-ink">
+                      <span className="text-base font-semibold leading-tight text-ink">
                         {listing.baths} {listing.baths === 1 ? "Bath" : "Baths"}
                       </span>
                     </div>
                   </>
                 ) : null}
-                <div className="flex min-w-[5rem] flex-col items-center gap-2 text-center">
+                <div className="flex min-w-0 flex-col items-center gap-1.5 text-center md:min-w-[5rem] md:gap-2">
                   <Maximize2
-                    className="size-7 text-ink sm:size-8"
+                    className="size-6 text-ink md:size-8"
                     strokeWidth={1.75}
                     aria-hidden
                   />
-                  <span className="text-base font-semibold text-ink">
+                  <span className="text-base font-semibold leading-tight text-ink">
                     {listing.sqft
                       ? `${listing.sqft.toLocaleString()} SqFt`
                       : "n/a SqFt"}
                   </span>
                 </div>
-                <div className="flex min-w-[5rem] flex-col items-center gap-2 text-center">
+                <div className="flex min-w-0 flex-col items-center gap-1.5 text-center md:min-w-[5rem] md:gap-2">
                   <Car
-                    className="size-7 text-ink sm:size-8"
+                    className="size-6 text-ink md:size-8"
                     strokeWidth={1.75}
                     aria-hidden
                   />
-                  <span className="text-base font-semibold text-ink">
+                  <span className="text-base font-semibold leading-tight text-ink">
                     {listing.parkingSpaces}{" "}
                     {listing.parkingSpaces === 1 ? "Parking" : "Parkings"}
                   </span>
@@ -509,9 +677,23 @@ export default async function ListingDetailPage({ params }: Params) {
             </div>
             <div>
               <dt className="text-ink/45">Brokerage</dt>
-              <dd className="font-medium">{listing.brokerageName}</dd>
+              <dd className="break-words font-medium">{listing.brokerageName}</dd>
             </div>
           </dl>
+
+          <ListingRelatedSection
+            subject={{
+              mlsNumber: listing.mlsNumber,
+              city: listing.city,
+              community: listing.community,
+              propertyType: listing.propertyType,
+              beds: listing.beds,
+              transactionType: listing.transactionType,
+              segment: listing.segment,
+            }}
+            initialMode={user?.relatedListingsMode ?? "SAME_AREA"}
+            signedIn={Boolean(user)}
+          />
 
           <NearbyAmenities
             lat={listing.lat}
@@ -548,8 +730,8 @@ export default async function ListingDetailPage({ params }: Params) {
           ) : null}
         </div>
 
-        <aside className="space-y-6">
-          {!canSeeRestricted && showClosedPrice ? (
+        <aside className="min-w-0 space-y-6">
+          {detailsLocked ? (
             <VowAcceptCard callbackPath={`/listing/${listing.mlsNumber}`} />
           ) : null}
           <ListingNotesPanel
@@ -557,18 +739,27 @@ export default async function ListingDetailPage({ params }: Params) {
             signedIn={Boolean(user)}
             initialBody={notePreview?.body ?? ""}
           />
-          <ViewingRequestPanel
-            mlsNumber={listing.mlsNumber}
-            contact={
-              user
-                ? {
-                    name: user.name,
-                    email: user.email,
-                    phone: user.phone,
-                  }
-                : undefined
-            }
-          />
+          <div className="hidden md:block">
+            <ViewingRequestPanel
+              mlsNumber={listing.mlsNumber}
+              inactive={isInactive}
+              similarHomesHref={similarHomesHref}
+              city={listing.city}
+              community={listing.community}
+              transactionType={listing.transactionType}
+              segment={listing.segment}
+              signedIn={Boolean(user)}
+              contact={
+                user
+                  ? {
+                      name: user.name,
+                      email: user.email,
+                      phone: user.phone,
+                    }
+                  : undefined
+              }
+            />
+          </div>
           <MlsDisclaimer />
         </aside>
       </div>

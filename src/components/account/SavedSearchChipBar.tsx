@@ -6,8 +6,10 @@ import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import { PersonalizeHomepageModal } from "@/components/home/PersonalizeHomepageModal";
+import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Input } from "@/components/ui/input";
 import { parseHomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
+import { SITE_MESSAGES } from "@/lib/site-messages";
 
 type SavedSearchItem = {
   id: string;
@@ -56,6 +58,7 @@ export function SavedSearchChipBar({
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [editSearch, setEditSearch] = useState<SavedSearchItem | null>(null);
+  const { confirm, toast } = useSiteAlert();
 
   const load = useCallback(async () => {
     const res = await fetch("/api/saved-searches");
@@ -120,15 +123,26 @@ export function SavedSearchChipBar({
   }
 
   async function remove(id: string) {
+    const ok = await confirm({
+      ...SITE_MESSAGES.deleteSavedSearch,
+      destructive: true,
+    });
+    if (!ok) return;
+
     const res = await fetch("/api/saved-searches", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
-    if (res.ok) {
-      setMenuId(null);
-      await load();
+    if (!res.ok) {
+      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+      return;
     }
+    setMenuId(null);
+    toast({ message: "Saved search deleted.", tone: "success" });
+    window.dispatchEvent(new Event("houzzat:saved-searches-changed"));
+    window.dispatchEvent(new Event("houzzat:homepage-personalization-changed"));
+    await load();
   }
 
   const editInitial = editSearch

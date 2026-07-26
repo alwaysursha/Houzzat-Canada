@@ -1,7 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useId, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   ViewingBookingModal,
   type ViewingContactDefaults,
@@ -10,7 +17,10 @@ import {
   ListingMapViewButton,
   type ListingMapSubject,
 } from "@/components/listings/ListingMapView";
+import { ListingGalleryMapSlide } from "@/components/listings/ListingGalleryMapSlide";
+import { ListingLockedGateOverlay } from "@/components/listings/ListingLockedGateOverlay";
 import { cn } from "@/lib/utils";
+import { Images, MapPinned } from "lucide-react";
 
 export type GalleryPhoto = {
   id: string;
@@ -18,14 +28,31 @@ export type GalleryPhoto = {
   alt?: string | null;
 };
 
+function useIsMobileGallery() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  return isMobile;
+}
+
 export function ListingGallery({
   photos,
   addressLabel,
   mlsNumber,
   contact,
   coverTag,
+  coverTagClassName,
   segmentTag,
   mapSubject,
+  allowBooking = true,
+  detailsLocked = false,
 }: {
   photos: GalleryPhoto[];
   addressLabel: string;
@@ -33,6 +60,8 @@ export function ListingGallery({
   contact?: ViewingContactDefaults;
   /** Bottom-left hero badge: For Sale / For Lease / Sold / etc. */
   coverTag?: string;
+  /** Optional override for cover status pill (e.g. sold = danger red). */
+  coverTagClassName?: string;
   /** Bottom-left hero badge: Residential / Commercial / Pre-construction */
   segmentTag?: {
     label: string;
@@ -40,57 +69,256 @@ export function ListingGallery({
   };
   /** When set, shows Map view on the cover (top-left). */
   mapSubject?: ListingMapSubject;
+  /** Hide book-a-viewing on inactive (sold/leased) listings. */
+  allowBooking?: boolean;
+  /** Guest lock: blur photos + login overlay (status badge stays visible). */
+  detailsLocked?: boolean;
 }) {
+  const lockCallback = `/listing/${mlsNumber}`;
   const labelId = useId();
-  const [open, setOpen] = useState(false);
+  const isMobile = useIsMobileGallery();
+  const [stackOpen, setStackOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [index, setIndex] = useState(0);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [thumbsVisible, setThumbsVisible] = useState(false);
+  const dragRef = useRef<{
+    id: number;
+    startX: number;
+    startY: number;
+    dragging: boolean;
+  } | null>(null);
+  const [dragX, setDragX] = useState(0);
 
   const count = photos.length;
   const hero = photos[0];
   const side = photos.slice(1, 5);
   const remaining = Math.max(0, count - 5);
+  const mobileScrollerRef = useRef<HTMLDivElement>(null);
+  const mobileScrollAnimatingRef = useRef(false);
+  const mobileScrollFinishTimerRef = useRef<number | null>(null);
+  const [mobileSlide, setMobileSlide] = useState(0);
+  const hasMapSlide = Boolean(
+    mapSubject &&
+      Number.isFinite(mapSubject.lat) &&
+      Number.isFinite(mapSubject.lng),
+  );
+  const mobileSlideCount = count + (hasMapSlide ? 1 : 0);
+  const mapSlideIndex = hasMapSlide ? count : -1;
+  const onMapSlide = mobileSlide === mapSlideIndex;
 
-  const openAt = useCallback((i: number) => {
-    setIndex(i);
-    setOpen(true);
+  const openStack = useCallback(() => {
+    setStackOpen(true);
   }, []);
 
-  const close = useCallback(() => {
+  const openViewerAt = useCallback((i: number) => {
+    setIndex(i);
+    setViewerOpen(true);
+    setDragX(0);
+    setThumbsVisible(false);
+  }, []);
+
+  const openFromCover = useCallback(
+    (i: number) => {
+      if (isMobile) {
+        openStack();
+        return;
+      }
+      openViewerAt(i);
+    },
+    [isMobile, openStack, openViewerAt],
+  );
+
+  const syncMobileSlide = useCallback(() => {
+    if (mobileScrollAnimatingRef.current) return;
+    const el = mobileScrollerRef.current;
+    if (!el || el.clientWidth <= 0) return;
+    const next = Math.round(el.scrollLeft / el.clientWidth);
+    setMobileSlide(Math.min(mobileSlideCount - 1, Math.max(0, next)));
+  }, [mobileSlideCount]);
+
+  const goToMobileSlide = useCallback(
+    (slideIndex: number) => {
+      const el = mobileScrollerRef.current;
+      if (!el || el.clientWidth <= 0) return;
+
+      const clamped = Math.min(
+        mobileSlideCount - 1,
+        Math.max(0, slideIndex),
+      );
+      const width = el.clientWidth;
+      const targetLeft = clamped * width;
+
+      // Ignore repeat taps / mid-animation taps — prevents scroll thrash.
+      if (mobileScrollAnimatingRef.current) return;
+      if (Math.abs(el.scrollLeft - targetLeft) < 2) {
+        setMobileSlide(clamped);
+        return;
+      }
+
+      mobileScrollAnimatingRef.current = true;
+      setMobileSlide(clamped);
+      // Ensure map gesture lock is cleared so scroll can run.
+      el.style.overflowX = "";
+
+      el.scrollTo({ left: targetLeft, behavior: "smooth" });
+
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (mobileScrollFinishTimerRef.current != null) {
+          window.clearTimeout(mobileScrollFinishTimerRef.current);
+          mobileScrollFinishTimerRef.current = null;
+        }
+        el.removeEventListener("scrollend", onScrollEnd);
+        // Settle exactly on the slide (smooth scroll can stop slightly off).
+        el.scrollLeft = targetLeft;
+        setMobileSlide(clamped);
+        mobileScrollAnimatingRef.current = false;
+      };
+
+      function onScrollEnd() {
+        finish();
+      }
+
+      el.addEventListener("scrollend", onScrollEnd, { once: true });
+      // Safari / older WebKit may not fire scrollend.
+      mobileScrollFinishTimerRef.current = window.setTimeout(finish, 480);
+    },
+    [mobileSlideCount],
+  );
+
+  const lockMobileCarousel = useCallback(() => {
+    if (mobileScrollAnimatingRef.current) return;
+    const el = mobileScrollerRef.current;
+    if (!el) return;
+    el.style.overflowX = "hidden";
+  }, []);
+
+  const unlockMobileCarousel = useCallback(() => {
+    const el = mobileScrollerRef.current;
+    if (!el) return;
+    el.style.overflowX = "";
+  }, []);
+
+  useEffect(() => {
+    const el = mobileScrollerRef.current;
+    if (!el) return;
+    syncMobileSlide();
+    el.addEventListener("scroll", syncMobileSlide, { passive: true });
+    const ro = new ResizeObserver(syncMobileSlide);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", syncMobileSlide);
+      ro.disconnect();
+      if (mobileScrollFinishTimerRef.current != null) {
+        window.clearTimeout(mobileScrollFinishTimerRef.current);
+      }
+    };
+  }, [syncMobileSlide, photos.length]);
+
+  const closeViewer = useCallback(() => {
     if (bookingOpen) return;
-    setOpen(false);
+    setViewerOpen(false);
+    setDragX(0);
   }, [bookingOpen]);
+
+  const closeStack = useCallback(() => {
+    if (bookingOpen || viewerOpen) return;
+    setStackOpen(false);
+  }, [bookingOpen, viewerOpen]);
 
   const step = useCallback(
     (delta: number) => {
       if (count === 0) return;
       setIndex((current) => (current + delta + count) % count);
+      setDragX(0);
     },
     [count],
   );
 
   useEffect(() => {
-    if (!open) return;
-
-    function onKey(event: KeyboardEvent) {
-      if (bookingOpen) return;
-      if (event.key === "Escape") close();
-      if (event.key === "ArrowRight") step(1);
-      if (event.key === "ArrowLeft") step(-1);
-    }
-
-    document.addEventListener("keydown", onKey);
+    if (!stackOpen && !viewerOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previousOverflow;
     };
-  }, [open, close, step, bookingOpen]);
+  }, [stackOpen, viewerOpen]);
+
+  useEffect(() => {
+    if (!viewerOpen && !stackOpen) return;
+
+    function onKey(event: KeyboardEvent) {
+      if (bookingOpen) return;
+      if (event.key === "Escape") {
+        if (viewerOpen) closeViewer();
+        else closeStack();
+      }
+      if (viewerOpen) {
+        if (event.key === "ArrowRight") step(1);
+        if (event.key === "ArrowLeft") step(-1);
+      }
+    }
+
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [
+    viewerOpen,
+    stackOpen,
+    bookingOpen,
+    closeViewer,
+    closeStack,
+    step,
+  ]);
+
+  function onViewerPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    dragRef.current = {
+      id: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onViewerPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const state = dragRef.current;
+    if (!state || state.id !== event.pointerId) return;
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+    if (!state.dragging && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+      state.dragging = true;
+    }
+    if (state.dragging) {
+      setDragX(dx);
+    }
+  }
+
+  function onViewerPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    const state = dragRef.current;
+    if (!state || state.id !== event.pointerId) return;
+    dragRef.current = null;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // already released
+    }
+    if (!state.dragging) {
+      setDragX(0);
+      return;
+    }
+    const dx = event.clientX - state.startX;
+    if (dx <= -56) step(1);
+    else if (dx >= 56) step(-1);
+    else setDragX(0);
+  }
 
   if (!hero) {
     return (
-      <div className="flex h-[42vh] min-h-[280px] items-center justify-center rounded-2xl bg-mist text-sm text-ink/50">
+      <div className="-mx-4 flex h-[42vh] min-h-[280px] items-center justify-center bg-mist text-sm text-ink/50 sm:-mx-6 md:mx-0 md:rounded-2xl">
         Photos coming soon
       </div>
     );
@@ -98,10 +326,111 @@ export function ListingGallery({
 
   return (
     <>
-      <div className="relative">
+      {/* ——— Mobile cover: full-bleed swipe carousel (desktop unchanged below) ——— */}
+      <div className="relative -mx-4 sm:-mx-6 md:hidden">
+        <div
+          ref={mobileScrollerRef}
+          className={cn(
+            "flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            detailsLocked && "blur-[6px] saturate-75",
+          )}
+          style={{ WebkitOverflowScrolling: "touch" }}
+          aria-label={`${addressLabel} photos`}
+        >
+          {photos.map((photo, i) => (
+            <button
+              key={photo.id}
+              type="button"
+              onClick={() => {
+                if (detailsLocked) return;
+                openStack();
+              }}
+              className="relative min-h-[52vh] w-full min-w-full shrink-0 snap-center snap-always overflow-hidden bg-mist text-left"
+              aria-label={`Photo ${i + 1} of ${count}. Open gallery.`}
+            >
+              <Image
+                src={photo.url}
+                alt={photo.alt ?? `${addressLabel} photo ${i + 1}`}
+                fill
+                priority={i === 0}
+                className="object-cover"
+                sizes="100vw"
+              />
+            </button>
+          ))}
+
+          {hasMapSlide && mapSubject ? (
+            <ListingGalleryMapSlide
+              lat={mapSubject.lat}
+              lng={mapSubject.lng}
+              addressLabel={mapSubject.addressLabel}
+              mlsNumber={mapSubject.mlsNumber}
+              city={mapSubject.city}
+              transactionType={mapSubject.transactionType}
+              active={mobileSlide === mapSlideIndex}
+              onMapGestureStart={lockMobileCarousel}
+              onMapGestureEnd={unlockMobileCarousel}
+            />
+          ) : null}
+        </div>
+
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between p-3">
+          {mapSubject && hasMapSlide ? (
+            <div className="pointer-events-auto">
+              {onMapSlide ? (
+                <button
+                  type="button"
+                  onClick={() => goToMobileSlide(Math.max(0, count - 1))}
+                  className="group inline-flex items-center gap-2 rounded-md border border-white/50 bg-white/55 px-3.5 py-2 text-sm font-semibold text-ink shadow-lg backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/75 hover:shadow-xl"
+                >
+                  <span className="flex size-7 items-center justify-center rounded-full bg-canopy text-white shadow-sm transition group-hover:scale-105">
+                    <Images className="size-3.5" aria-hidden />
+                  </span>
+                  Back to photos
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => goToMobileSlide(mapSlideIndex)}
+                  className="group inline-flex items-center gap-2 rounded-md border border-white/50 bg-white/55 px-3.5 py-2 text-sm font-semibold text-ink shadow-lg backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/75 hover:shadow-xl"
+                >
+                  <span className="flex size-7 items-center justify-center rounded-full bg-canopy text-white shadow-sm transition group-hover:scale-105">
+                    <MapPinned className="size-3.5" aria-hidden />
+                  </span>
+                  Map view
+                </button>
+              )}
+            </div>
+          ) : (
+            <span />
+          )}
+          <span className="rounded-md bg-ink/70 px-2.5 py-1 text-xs font-semibold tabular-nums text-white shadow-sm backdrop-blur-sm">
+            {mobileSlide + 1} / {mobileSlideCount}
+          </span>
+        </div>
+        {detailsLocked ? (
+          <ListingLockedGateOverlay callbackUrl={lockCallback} />
+        ) : null}
+        {detailsLocked && coverTag ? (
+          <div className="pointer-events-none absolute bottom-3 left-3 z-30">
+            <span
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-bold tracking-wide text-white shadow-md",
+                coverTagClassName ?? "bg-canopy",
+              )}
+            >
+              {coverTag}
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      {/* ——— Desktop cover grid (untouched layout) ——— */}
+      <div className="relative hidden md:block">
         <div
           className={cn(
             "grid gap-2 overflow-hidden rounded-2xl md:gap-2.5",
+            detailsLocked && "blur-[6px] saturate-75",
             side.length >= 4
               ? "md:grid-cols-4 md:grid-rows-2"
               : side.length > 0
@@ -111,7 +440,10 @@ export function ListingGallery({
         >
           <button
             type="button"
-            onClick={() => openAt(0)}
+            onClick={() => {
+              if (detailsLocked) return;
+              openFromCover(0);
+            }}
             className={cn(
               "group relative min-h-[52vh] overflow-hidden bg-mist text-left md:min-h-[560px]",
               side.length >= 4
@@ -141,14 +473,19 @@ export function ListingGallery({
                       segmentTag.tone === "preconstruction" &&
                         "bg-signal text-white",
                       segmentTag.tone === "residential" &&
-                        "bg-canopy text-white",
+                        "bg-mist text-ink ring-1 ring-line",
                     )}
                   >
                     {segmentTag.label}
                   </span>
                 ) : null}
                 {coverTag ? (
-                  <span className="rounded-md bg-mist px-3 py-1.5 text-xs font-bold tracking-wide text-ink shadow-md sm:text-sm">
+                  <span
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-xs font-bold tracking-wide text-white shadow-md sm:text-sm",
+                      coverTagClassName ?? "bg-canopy",
+                    )}
+                  >
                     {coverTag}
                   </span>
                 ) : null}
@@ -163,7 +500,10 @@ export function ListingGallery({
               <button
                 key={photo.id}
                 type="button"
-                onClick={() => openAt(photoIndex)}
+                onClick={() => {
+                  if (detailsLocked) return;
+                  openFromCover(photoIndex);
+                }}
                 className={cn(
                   "group relative hidden min-h-[274px] overflow-hidden bg-mist text-left md:block",
                   side.length === 1 ? "md:row-span-2" : "",
@@ -195,60 +535,139 @@ export function ListingGallery({
           })}
         </div>
 
-        {mapSubject ? (
+        {mapSubject && !detailsLocked ? (
           <div className="absolute left-3 top-3 z-10 sm:left-4 sm:top-4">
             <ListingMapViewButton subject={mapSubject} />
           </div>
         ) : null}
 
-        <button
-          type="button"
-          onClick={() => openAt(0)}
-          className="absolute bottom-4 right-4 z-10 rounded-lg bg-white/95 px-4 py-2.5 text-sm font-semibold text-ink shadow-md backdrop-blur-sm transition hover:bg-white"
-        >
-          Show all {count} photos
-        </button>
+        {!detailsLocked ? (
+          <button
+            type="button"
+            onClick={() => openViewerAt(0)}
+            className="absolute bottom-4 right-4 z-10 rounded-lg bg-white/95 px-4 py-2.5 text-sm font-semibold text-ink shadow-md backdrop-blur-sm transition hover:bg-white"
+          >
+            Show all {count} photos
+          </button>
+        ) : null}
+
+        {detailsLocked ? (
+          <ListingLockedGateOverlay callbackUrl={lockCallback} />
+        ) : null}
+        {detailsLocked && coverTag ? (
+          <div className="pointer-events-none absolute bottom-3 left-3 z-30 sm:bottom-4 sm:left-4">
+            <span
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-bold tracking-wide text-white shadow-md sm:text-sm",
+                coverTagClassName ?? "bg-canopy",
+              )}
+            >
+              {coverTag}
+            </span>
+          </div>
+        ) : null}
       </div>
 
-      {open ? (
+      {/* Step 1 — mobile stacked gallery */}
+      {stackOpen ? (
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby={labelId}
-          className="fixed inset-0 z-[80] flex flex-col bg-ink/95"
+          className="fixed inset-0 z-[80] flex flex-col bg-mist md:hidden"
+        >
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3">
+            <p
+              id={labelId}
+              className="min-w-0 truncate text-sm font-semibold text-ink"
+            >
+              {addressLabel}
+              <span className="ml-2 font-medium text-ink/45">
+                {count} photos
+              </span>
+            </p>
+            <button
+              type="button"
+              onClick={closeStack}
+              className="shrink-0 rounded-lg bg-mist px-3 py-2 text-sm font-semibold text-ink hover:bg-line/60"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <ul className="divide-y divide-line/40">
+              {photos.map((photo, i) => (
+                <li key={photo.id}>
+                  <button
+                    type="button"
+                    onClick={() => openViewerAt(i)}
+                    className="relative block w-full bg-ink text-left"
+                    aria-label={`Open photo ${i + 1} of ${count} full screen`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- full-bleed natural height stack */}
+                    <img
+                      src={photo.url}
+                      alt={photo.alt ?? `${addressLabel} photo ${i + 1}`}
+                      className="block h-auto w-full"
+                      loading={i < 2 ? "eager" : "lazy"}
+                    />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Step 2 — fullscreen viewer (mobile swipe + desktop arrows) */}
+      {viewerOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${addressLabel} photo ${index + 1} of ${count}`}
+          className="fixed inset-0 z-[90] flex flex-col bg-ink"
         >
           <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
-            <p id={labelId} className="truncate text-sm font-medium text-white/85">
+            <p className="truncate text-sm font-medium text-white/85">
               {addressLabel}
               <span className="ml-2 text-white/50">
                 {index + 1} / {count}
               </span>
             </p>
             <div className="flex shrink-0 items-center gap-2">
+              {allowBooking ? (
+                <button
+                  type="button"
+                  onClick={() => setBookingOpen(true)}
+                  className="hidden rounded-lg bg-canopy px-3 py-2 text-sm font-semibold text-white hover:bg-canopy-deep sm:inline-flex sm:px-4"
+                >
+                  Book a viewing
+                </button>
+              ) : null}
               <button
                 type="button"
-                onClick={() => setBookingOpen(true)}
-                className="rounded-lg bg-canopy px-3 py-2 text-sm font-semibold text-white hover:bg-canopy-deep sm:px-4"
-              >
-                Book a viewing
-              </button>
-              <button
-                type="button"
-                onClick={close}
+                onClick={closeViewer}
                 className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/15"
               >
-                Close
+                {isMobile && stackOpen ? "Back" : "Close"}
               </button>
             </div>
           </div>
 
-          <div className="relative flex min-h-0 flex-1 items-center justify-center px-2 sm:px-16">
+          <div
+            className="relative flex min-h-0 flex-1 touch-pan-y items-center justify-center overflow-hidden"
+            onPointerDown={onViewerPointerDown}
+            onPointerMove={onViewerPointerMove}
+            onPointerUp={onViewerPointerUp}
+            onPointerCancel={onViewerPointerUp}
+          >
             {count > 1 ? (
               <>
                 <button
                   type="button"
                   onClick={() => step(-1)}
-                  className="absolute left-1 z-10 rounded-full bg-white/10 px-3 py-3 text-lg text-white hover:bg-white/20 sm:left-3"
+                  className="absolute left-3 z-10 hidden rounded-full bg-white/10 px-3 py-3 text-lg text-white hover:bg-white/20 md:block"
                   aria-label="Previous photo"
                 >
                   ←
@@ -256,7 +675,7 @@ export function ListingGallery({
                 <button
                   type="button"
                   onClick={() => step(1)}
-                  className="absolute right-1 z-10 rounded-full bg-white/10 px-3 py-3 text-lg text-white hover:bg-white/20 sm:right-3"
+                  className="absolute right-3 z-10 hidden rounded-full bg-white/10 px-3 py-3 text-lg text-white hover:bg-white/20 md:block"
                   aria-label="Next photo"
                 >
                   →
@@ -264,68 +683,122 @@ export function ListingGallery({
               </>
             ) : null}
 
-            <Image
-              key={photos[index]!.id}
-              src={photos[index]!.url}
-              alt={
-                photos[index]!.alt ?? `${addressLabel} photo ${index + 1}`
-              }
-              width={2400}
-              height={1600}
-              quality={90}
-              className="h-auto max-h-[calc(100vh-10.5rem)] w-auto max-w-[calc(100vw-1rem)] rounded-2xl object-contain shadow-2xl sm:max-w-[calc(100vw-8rem)]"
-              sizes="100vw"
-              priority
-            />
+            <div
+              className={cn(
+                "flex h-full w-full items-center justify-center",
+                dragX === 0 && "transition-transform duration-200 ease-out",
+              )}
+              style={{ transform: `translate3d(${dragX}px, 0, 0)` }}
+            >
+              <Image
+                key={photos[index]!.id}
+                src={photos[index]!.url}
+                alt={
+                  photos[index]!.alt ?? `${addressLabel} photo ${index + 1}`
+                }
+                width={2400}
+                height={1600}
+                quality={90}
+                className="h-full max-h-full w-full max-w-full object-contain"
+                sizes="100vw"
+                priority
+                draggable={false}
+              />
+            </div>
           </div>
 
-          <div className="flex shrink-0 flex-col gap-2 px-4 pb-4 sm:px-6">
-            <div className="flex justify-center sm:hidden">
-              <button
-                type="button"
-                onClick={() => setBookingOpen(true)}
-                className="w-full max-w-sm rounded-lg bg-canopy px-4 py-2.5 text-sm font-semibold text-white hover:bg-canopy-deep"
-              >
-                Book a viewing
-              </button>
-            </div>
+          <div className="flex shrink-0 flex-col gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 md:relative md:px-0 md:pb-0">
+            {allowBooking ? (
+              <div className="flex justify-center md:hidden">
+                <button
+                  type="button"
+                  onClick={() => setBookingOpen(true)}
+                  className="w-full max-w-sm rounded-lg bg-canopy px-4 py-2.5 text-sm font-semibold text-white hover:bg-canopy-deep"
+                >
+                  Book a viewing
+                </button>
+              </div>
+            ) : null}
+
             {count > 1 ? (
-              <div className="flex justify-center gap-2 overflow-x-auto">
-                {photos.map((photo, i) => (
-                  <button
-                    key={photo.id}
-                    type="button"
-                    onClick={() => setIndex(i)}
-                    className={cn(
-                      "relative h-14 w-20 shrink-0 overflow-hidden rounded-xl ring-2 transition sm:h-16 sm:w-24",
-                      i === index
-                        ? "ring-white"
-                        : "ring-transparent opacity-70 hover:opacity-100",
-                    )}
-                    aria-label={`Go to photo ${i + 1}`}
-                    aria-current={i === index}
-                  >
-                    <Image
-                      src={photo.url}
-                      alt=""
-                      fill
-                      className="rounded-xl object-cover"
-                      sizes="96px"
-                    />
-                  </button>
-                ))}
+              <div
+                className="pointer-events-none absolute inset-x-0 bottom-0 z-20 hidden md:block"
+                onMouseEnter={() => setThumbsVisible(true)}
+                onMouseLeave={() => setThumbsVisible(false)}
+              >
+                {/* Hover hit area when strip is hidden */}
+                <div className="pointer-events-auto h-14" />
+
+                {/* Hidden-state cue */}
+                <div
+                  className={cn(
+                    "pointer-events-none absolute inset-x-0 bottom-3 flex justify-center transition duration-300",
+                    thumbsVisible
+                      ? "translate-y-2 opacity-0"
+                      : "translate-y-0 opacity-100",
+                  )}
+                >
+                  <div className="flex items-center gap-2 rounded-full bg-white/12 px-3.5 py-1.5 text-xs font-semibold text-white/85 shadow-sm backdrop-blur-sm ring-1 ring-white/15">
+                    <span className="inline-block size-1.5 rounded-full bg-white/80" />
+                    {index + 1} / {count} · Hover for photos
+                    <span aria-hidden className="text-white/60">
+                      ˄
+                    </span>
+                  </div>
+                </div>
+
+                {/* Thumbnail strip */}
+                <div
+                  className={cn(
+                    "pointer-events-auto border-t border-white/10 bg-ink/95 px-6 pb-4 pt-3 backdrop-blur-md transition duration-300",
+                    thumbsVisible
+                      ? "translate-y-0 opacity-100"
+                      : "pointer-events-none translate-y-full opacity-0",
+                  )}
+                >
+                  <div className="flex justify-center gap-2 overflow-x-auto">
+                    {photos.map((photo, i) => (
+                      <button
+                        key={photo.id}
+                        type="button"
+                        onClick={() => {
+                          setIndex(i);
+                          setDragX(0);
+                        }}
+                        className={cn(
+                          "relative h-16 w-24 shrink-0 overflow-hidden rounded-xl ring-2 transition",
+                          i === index
+                            ? "ring-white"
+                            : "ring-transparent opacity-70 hover:opacity-100",
+                        )}
+                        aria-label={`Go to photo ${i + 1}`}
+                        aria-current={i === index}
+                      >
+                        <Image
+                          src={photo.url}
+                          alt=""
+                          fill
+                          className="rounded-xl object-cover"
+                          sizes="96px"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : null}
           </div>
         </div>
       ) : null}
 
-      <ViewingBookingModal
-        open={bookingOpen}
-        onClose={() => setBookingOpen(false)}
-        mlsNumber={mlsNumber}
-        contact={contact}
-      />
+      {allowBooking ? (
+        <ViewingBookingModal
+          open={bookingOpen}
+          onClose={() => setBookingOpen(false)}
+          mlsNumber={mlsNumber}
+          contact={contact}
+        />
+      ) : null}
     </>
   );
 }

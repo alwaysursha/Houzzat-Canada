@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
 import { prisma } from "@/lib/prisma";
 import { VOW_VERSION } from "@/lib/vow";
 
@@ -8,8 +9,19 @@ const schema = z.object({
   name: z.string().trim().min(1).max(120),
   email: z.string().trim().email().max(254),
   password: z.string().min(8).max(128),
-  acceptVow: z.literal(true),
+  acceptTerms: z.literal(true),
 });
+
+function requestClientMeta(request: Request) {
+  const forwarded = request.headers.get("x-forwarded-for");
+  const ip =
+    forwarded?.split(",")[0]?.trim() ||
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-real-ip") ||
+    undefined;
+  const userAgent = request.headers.get("user-agent") || undefined;
+  return { ip, userAgent };
+}
 
 export async function POST(request: Request) {
   try {
@@ -20,14 +32,17 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Please provide name, email, password, and accept client/VOW terms.",
+            "Please provide name, email, password, and accept the Terms & Conditions.",
         },
         { status: 400 },
       );
     }
 
     const email = parsed.data.email.toLowerCase();
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
 
     if (existing) {
       return NextResponse.json(
@@ -38,6 +53,7 @@ export async function POST(request: Request) {
 
     const password = await bcrypt.hash(parsed.data.password, 10);
     const now = new Date();
+    const { ip, userAgent } = requestClientMeta(request);
 
     const user = await prisma.user.create({
       data: {
@@ -45,14 +61,29 @@ export async function POST(request: Request) {
         email,
         password,
         role: "CUSTOMER",
+        termsAcceptedAt: now,
+        termsVersion: TERMS_VERSION,
+        // Registration still establishes client / VOW access for sold data.
         vowAcceptedAt: now,
         vowVersion: VOW_VERSION,
         caslConsentAt: now,
         consentEvents: {
-          create: {
-            kind: "vow_accept",
-            version: VOW_VERSION,
-          },
+          create: [
+            {
+              kind: TERMS_ACCEPT_KIND,
+              version: TERMS_VERSION,
+              email,
+              ip,
+              userAgent,
+            },
+            {
+              kind: "vow_accept",
+              version: VOW_VERSION,
+              email,
+              ip,
+              userAgent,
+            },
+          ],
         },
       },
     });

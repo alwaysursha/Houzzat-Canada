@@ -40,10 +40,12 @@ export async function GET(request: Request) {
         .filter(Boolean)
     : undefined;
 
+  const statusParam = searchParams.get("status");
+
   const result = await provider.search({
     q: searchParams.get("q") ?? undefined,
     status:
-      (searchParams.get("status") as ListingStatus | "ALL" | null) ?? "ACTIVE",
+      (statusParam as ListingStatus | "ALL" | "UNLISTED" | null) ?? "ACTIVE",
     segment: (segmentParam as ListingSegment | "ALL" | null) ?? undefined,
     transactionType:
       (transactionParam as ListingTransactionType | "ALL" | null) ?? undefined,
@@ -88,5 +90,5 @@ export async function GET(request: Request) {
     result.items = result.items.map((item) => ({ ...item, soldPrice: null }));
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json({ ...result, requiresAuth: false });
 }

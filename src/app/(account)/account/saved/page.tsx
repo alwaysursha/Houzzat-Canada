@@ -73,6 +73,8 @@ export default async function SavedHomesPage() {
           endsAt: oh.endsAt.toISOString(),
         })),
         daysOnMarket: row.daysOnMarket,
+        listedAt: row.listedAt.toISOString(),
+        soldAt: row.soldAt ? row.soldAt.toISOString() : null,
         isMock: row.isMock,
         dataSource: row.dataSource,
         ownerTag:

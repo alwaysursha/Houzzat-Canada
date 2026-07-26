@@ -12,6 +12,8 @@
   --danger: #b42318;
   --background: var(--mist);
   --foreground: var(--ink);
+  /* Sticky offset below site header (grows when mobile search bar is open). */
+  --site-header-stack: 4rem;
 }
 
 @theme inline {
@@ -30,16 +32,29 @@
   --font-display: var(--font-fraunces);
 }
 
-html,
-body {
+html {
   height: 100%;
 }
 
 body {
+  /* min-height (not height) so long pages grow cleanly and the footer
+     doesn’t leave a tall empty mist band below its content */
+  min-height: 100%;
+  /* Fade to same-hue 0-alpha (not `transparent`) — avoids a muddy/dark
+     elliptical band that reads as a hard horizontal line mid-page. */
   background:
-    radial-gradient(1200px 600px at 10% -10%, rgb(15 107 76 / 0.12), transparent 55%),
-    radial-gradient(900px 500px at 90% 0%, rgb(31 122 140 / 0.1), transparent 50%),
+    radial-gradient(
+      1600px 1100px at 8% -12%,
+      rgb(15 107 76 / 0.1),
+      rgb(15 107 76 / 0) 72%
+    ),
+    radial-gradient(
+      1400px 1000px at 92% -8%,
+      rgb(31 122 140 / 0.08),
+      rgb(31 122 140 / 0) 70%
+    ),
     var(--mist);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-jakarta), system-ui, sans-serif;
 }
@@ -47,3 +62,51 @@ body {
 ::selection {
   background: rgb(15 107 76 / 0.22);
 }
+
+/* Translate X only — vertical centering is handled by the flex wrapper so we
+   never stack translateY on top of Tailwind's translate utilities. */
+@keyframes listing-side-tab-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  28% {
+    transform: translateX(-9px);
+  }
+  52% {
+    transform: translateX(-3px);
+  }
+  72% {
+    transform: translateX(-7px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listing-side-tab-nudge {
+    animation: none !important;
+  }
+
+  .houzzat-saved-pulse {
+    animation: none !important;
+  }
+}
+
+@keyframes houzzat-saved-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgb(15 107 76 / 0);
+  }
+  35% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 8px rgb(15 107 76 / 0.18);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgb(15 107 76 / 0);
+  }
+}
+
+.houzzat-saved-pulse {
+  animation: houzzat-saved-pulse 0.65s ease;
+}
+
