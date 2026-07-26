@@ -123,46 +123,104 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return baseUrl;
     },
     async jwt({ token, user }) {
-      if (user) {
-        token.role = user.role ?? Role.CUSTOMER;
-        // Resolve role once at sign-in (JWT carries it afterward — avoid DB on every session).
-        if (!user.role && user.email) {
+      const emailFromUser =
+        typeof user?.email === "string"
+          ? user.email.trim().toLowerCase()
+          : null;
+      const emailFromToken =
+        typeof token.email === "string"
+          ? token.email.trim().toLowerCase()
+          : null;
+      const email = emailFromUser ?? emailFromToken;
+
+      // Always bind identity from DB by email at sign-in (source of truth).
+      if (user && email) {
+        try {
           const dbUser = await prisma.user.findUnique({
-            where: { email: user.email },
+            where: { email },
             select: { id: true, role: true, name: true },
           });
           if (dbUser) {
             token.sub = dbUser.id;
+            token.email = email;
             token.role = dbUser.role;
             if (dbUser.name) token.name = dbUser.name;
+          } else {
+            token.sub = user.id;
+            token.email = email;
+            token.role = user.role ?? Role.CUSTOMER;
+            if (user.name) token.name = user.name;
           }
-        } else if (user.name) {
-          token.name = user.name;
+        } catch (error) {
+          console.error("[auth] jwt sign-in reconcile failed", error);
+          token.sub = user.id;
+          token.email = email;
+          token.role = user.role ?? Role.CUSTOMER;
         }
-        token.idVerified = true;
-      } else if (
-        !token.idVerified &&
-        typeof token.email === "string" &&
-        token.email
-      ) {
-        // One-time heal: stale JWT `sub` after DB rebuild/switch (same email, new id).
+        token.subVerifiedAt = Date.now();
+        return token;
+      }
+
+      if (user) {
+        token.sub = user.id;
+        token.role = user.role ?? Role.CUSTOMER;
+        if (user.name) token.name = user.name;
+        token.subVerifiedAt = Date.now();
+        return token;
+      }
+
+      if (!email) {
+        return token;
+      }
+
+      // Re-heal periodically. Old cookies only had a one-shot `idVerified` flag,
+      // so missing `subVerifiedAt` forces an immediate check after deploy.
+      const verifiedAt =
+        typeof token.subVerifiedAt === "number" ? token.subVerifiedAt : 0;
+      const RECHECK_MS = 5 * 60 * 1000;
+      const needsRecheck =
+        !token.sub || Date.now() - verifiedAt > RECHECK_MS;
+
+      if (!needsRecheck) {
+        return token;
+      }
+
+      try {
         const dbUser = await prisma.user.findUnique({
-          where: { email: token.email.toLowerCase() },
+          where: { email },
           select: { id: true, role: true, name: true },
         });
-        if (dbUser) {
-          token.sub = dbUser.id;
-          token.role = dbUser.role;
-          if (dbUser.name) token.name = dbUser.name;
+        if (!dbUser) {
+          // Email no longer exists (DB rebuild) — drop identity so UI stops
+          // treating this cookie as signed-in.
+          console.warn("[auth] JWT email missing in DB; clearing session", email);
+          return null;
         }
-        token.idVerified = true;
+        if (token.sub !== dbUser.id) {
+          console.info("[auth] healed stale JWT sub", {
+            email,
+            from: token.sub,
+            to: dbUser.id,
+          });
+        }
+        token.sub = dbUser.id;
+        token.email = email;
+        token.role = dbUser.role;
+        if (dbUser.name) token.name = dbUser.name;
+        token.subVerifiedAt = Date.now();
+      } catch (error) {
+        console.error("[auth] jwt reconcile failed", error);
       }
+
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub as string;
         session.user.role = (token.role as Role) ?? Role.CUSTOMER;
+        if (typeof token.email === "string" && token.email) {
+          session.user.email = token.email;
+        }
         if (typeof token.name === "string" && token.name) {
           session.user.name = token.name;
         }

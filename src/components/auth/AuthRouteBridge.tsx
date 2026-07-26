@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { getSession } from "next-auth/react";
+import { getSession, signOut } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   useAuthModal,
@@ -49,10 +49,18 @@ export function AuthRouteBridge({ mode }: { mode: AuthMode }) {
     void (async () => {
       const session = await getSession();
       if (session?.user) {
-        // Already signed in — skip the modal bounce and go where they asked.
-        router.replace(safeCallbackPath(callbackUrl));
-        router.refresh();
-        return;
+        // Cookie can look valid while JWT `sub` points at a deleted user row
+        // after a DB switch. Confirm the account still resolves before skipping
+        // the modal — otherwise we bounce /account ↔ /auth/sign-in forever.
+        const me = await fetch("/api/me", { cache: "no-store" }).catch(
+          () => null,
+        );
+        if (me?.ok) {
+          router.replace(safeCallbackPath(callbackUrl));
+          router.refresh();
+          return;
+        }
+        await signOut({ redirect: false });
       }
       openAuth({ mode, callbackUrl });
       router.replace(backgroundPath(callbackUrl));

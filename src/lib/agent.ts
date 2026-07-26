@@ -23,14 +23,21 @@ export type AgentUser = {
 
 export async function requireAgentUser(): Promise<AgentUser | null> {
   const session = await auth();
-  if (!session?.user) return null;
+  if (!session?.user?.id && !session?.user?.email) return null;
 
-  const user = await prisma.user.findFirst({
-    where: session.user.id
-      ? { id: session.user.id }
-      : { email: session.user.email },
-    select: agentUserSelect,
-  });
+  let user: AgentUser | null = null;
+  if (session.user.id) {
+    user = await prisma.user.findFirst({
+      where: { id: session.user.id },
+      select: agentUserSelect,
+    });
+  }
+  if (!user && session.user.email) {
+    user = await prisma.user.findFirst({
+      where: { email: session.user.email.trim().toLowerCase() },
+      select: agentUserSelect,
+    });
+  }
 
   if (!user || !isAgentRole(user.role)) return null;
   return user;
