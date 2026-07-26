@@ -44,9 +44,16 @@ function buildStatsLine(listing: ListingCardData) {
 export function CompactPropertyCard({
   listing,
   className,
+  active,
+  onFocus,
+  onOpen,
 }: {
   listing: ListingCardData;
   className?: string;
+  active?: boolean;
+  onFocus?: () => void;
+  /** When set, card opens this instead of navigating to the listing page. */
+  onOpen?: () => void;
 }) {
   const isClosed = isClosedListingStatus(listing.status);
   const showClosedPrice = isClosed && listing.soldPrice != null;
@@ -61,7 +68,10 @@ export function CompactPropertyCard({
     <article
       data-compact-card
       className={cn(
-        "group relative h-[340px] w-full min-w-0 shrink-0 overflow-hidden rounded-[14px] border border-white/10 bg-ink shadow-[0_1px_0_rgba(20,32,28,0.06)] transition duration-300 hover:-translate-y-0.5 hover:border-canopy/40",
+        "group relative h-[340px] w-full min-w-0 shrink-0 overflow-hidden rounded-[14px] border bg-ink shadow-[0_1px_0_rgba(20,32,28,0.06)] transition duration-300 hover:-translate-y-0.5",
+        active
+          ? "border-canopy ring-2 ring-canopy/35"
+          : "border-white/10 hover:border-canopy/40",
         className,
       )}
     >
@@ -69,6 +79,16 @@ export function CompactPropertyCard({
         href={`/listing/${listing.mlsNumber}`}
         className="absolute inset-0 block"
         aria-label={`${street}, ${place}`}
+        onMouseEnter={onFocus}
+        onFocus={onFocus}
+        onClick={
+          onOpen
+            ? (event) => {
+                event.preventDefault();
+                onOpen();
+              }
+            : undefined
+        }
       >
         {listing.primaryImageUrl ? (
           <Image

@@ -9,23 +9,24 @@ export function AuthOpenButton({
   className,
   children,
   onClick,
+  ...rest
 }: {
   mode?: AuthMode;
   callbackUrl?: string;
   className?: string;
   children: React.ReactNode;
-  onClick?: () => void;
-}) {
+} & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "type">) {
   const { openAuth } = useAuthModal();
 
   return (
     <button
       type="button"
       className={cn(className)}
-      onClick={() => {
-        onClick?.();
+      onClick={(event) => {
+        onClick?.(event);
         openAuth({ mode, callbackUrl });
       }}
+      {...rest}
     >
       {children}
     </button>

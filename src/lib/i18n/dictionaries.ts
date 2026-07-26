@@ -3,11 +3,13 @@ export type Locale = "en" | "fr";
 const dictionaries = {
   en: {
     nav_search: "Search",
+    nav_map_search: "Map Search",
     nav_open_houses: "Open houses",
     nav_areas: "Areas",
     nav_affordability: "Affordability",
     nav_precon: "Pre-construction",
     nav_valuation: "Home valuation",
+    nav_home_worth: "What's my Home Worth?",
     nav_partners: "Partners",
     sign_in: "Sign in",
     my_account: "Your Houzzat",
@@ -24,11 +26,13 @@ const dictionaries = {
   },
   fr: {
     nav_search: "Recherche",
+    nav_map_search: "Recherche carte",
     nav_open_houses: "Portes ouvertes",
     nav_areas: "Quartiers",
     nav_affordability: "Capacité d'achat",
     nav_precon: "Préconstruction",
     nav_valuation: "Évaluation",
+    nav_home_worth: "Quelle est la valeur de ma maison?",
     nav_partners: "Partenaires",
     sign_in: "Connexion",
     my_account: "Mon compte",

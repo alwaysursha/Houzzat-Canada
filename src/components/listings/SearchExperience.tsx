@@ -4,46 +4,107 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import type { PropertyType } from "@prisma/client";
+import {
+  Columns2,
+  LayoutGrid,
+  Map as MapIcon,
+  Loader2,
+} from "lucide-react";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { SaveSearchButton } from "@/components/account/SaveSearchButton";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
-import { ListingCard } from "@/components/listings/ListingCard";
+import {
+  SearchFilterChips,
+  type SearchFilters,
+  type SearchStatusOption,
+  type SearchViewMode,
+} from "@/components/listings/SearchFilterChips";
 import { SearchMap } from "@/components/listings/SearchMap";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchMapListingOverlay } from "@/components/listings/SearchMapListingOverlay";
+import { SearchResultsPane } from "@/components/listings/SearchResultsPane";
 import {
   parseSearchQuery,
   searchHrefFromParsed,
 } from "@/lib/listings/parse-search-query";
+import { pointInPolygon, polygonBBox } from "@/lib/maps/geo";
+import { cn } from "@/lib/utils";
 
-type Filters = {
-  segment: "RESIDENTIAL" | "COMMERCIAL" | "ALL";
-  transactionType: "SALE" | "LEASE" | "ALL";
-  dataSource: "fsbo" | "";
-  city: string;
-  community: string;
-  minPrice: string;
-  maxPrice: string;
-  minBeds: string;
-  openHouseOnly: boolean;
-  status: "ACTIVE" | "SOLD" | "LEASED" | "UNLISTED" | "ALL";
+type Bounds = {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
 };
 
-function parseInitialStatus(
+type LngLat = [number, number];
+
+const PROPERTY_TYPES = new Set<string>([
+  "DETACHED",
+  "SEMI_DETACHED",
+  "TOWNHOUSE",
+  "CONDO_APT",
+  "CONDO_TOWNHOUSE",
+  "MULTIPLEX",
+  "VACANT_LAND",
+  "OFFICE",
+  "RETAIL",
+  "INDUSTRIAL",
+  "MIXED_USE",
+  "OTHER",
+]);
+
+function parseInitialStatuses(
   statusParam: string | null,
-): Filters["status"] {
-  if (
-    statusParam === "ALL" ||
-    statusParam === "SOLD" ||
-    statusParam === "LEASED" ||
-    statusParam === "ACTIVE" ||
-    statusParam === "UNLISTED"
-  ) {
-    return statusParam;
+  isLease: boolean,
+): SearchStatusOption[] {
+  if (!statusParam || statusParam === "ACTIVE") return ["ACTIVE"];
+  if (statusParam === "ALL") {
+    return isLease
+      ? ["ACTIVE", "LEASED", "UNLISTED"]
+      : ["ACTIVE", "SOLD", "UNLISTED"];
   }
-  return "ACTIVE";
+  const allowed = new Set<SearchStatusOption>(
+    isLease
+      ? ["ACTIVE", "LEASED", "UNLISTED"]
+      : ["ACTIVE", "SOLD", "UNLISTED"],
+  );
+  const parsed = statusParam
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s): s is SearchStatusOption =>
+      allowed.has(s as SearchStatusOption),
+    );
+  return parsed.length ? parsed : ["ACTIVE"];
+}
+
+function statusesQueryValue(statuses: SearchStatusOption[]): string | null {
+  if (statuses.length === 1 && statuses[0] === "ACTIVE") return null;
+  return statuses.join(",");
+}
+
+function parseSort(raw: string | null): SearchFilters["sort"] {
+  if (raw === "price_asc" || raw === "price") return "price_asc";
+  if (raw === "price_desc") return "price_desc";
+  return "newest";
+}
+
+function parseView(
+  raw: string | null,
+  isMobileDefault: boolean,
+): SearchViewMode {
+  if (raw === "map" || raw === "cards" || raw === "split") return raw;
+  return isMobileDefault ? "cards" : "split";
+}
+
+function parsePropertyTypes(raw: string | null): PropertyType[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t): t is PropertyType => PROPERTY_TYPES.has(t));
 }
 
 export function SearchExperience() {
@@ -56,47 +117,102 @@ export function SearchExperience() {
   const [items, setItems] = useState<ListingCardData[]>([]);
   const [total, setTotal] = useState(0);
   const [activeMls, setActiveMls] = useState<string | null>(null);
+  const [detailMls, setDetailMls] = useState<string | null>(null);
   const [provider, setProvider] = useState("mock");
   const [focus, setFocus] = useState<{
     lat: number;
     lng: number;
     zoom?: number;
   } | null>(null);
-  const [bounds, setBounds] = useState<{
-    west: number;
-    south: number;
-    east: number;
-    north: number;
-  } | null>(null);
+  const [mapBounds, setMapBounds] = useState<Bounds | null>(null);
+  const [appliedBounds, setAppliedBounds] = useState<Bounds | null>(null);
+  const [areaDirty, setAreaDirty] = useState(false);
+  const [polygon, setPolygon] = useState<LngLat[] | null>(null);
+  const [isNarrow, setIsNarrow] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    function sync() {
+      setIsNarrow(mq.matches);
+    }
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   const txnParam = searchParams.get("transactionType");
-  const initialTxn: Filters["transactionType"] =
+  const initialTxn: SearchFilters["transactionType"] =
     txnParam === "LEASE" || txnParam === "ALL" || txnParam === "SALE"
       ? txnParam
       : searchParams.get("dataSource") === "fsbo"
         ? "ALL"
         : "SALE";
-  const initialStatus = parseInitialStatus(searchParams.get("status"));
-  const initialDataSource =
-    searchParams.get("dataSource") === "fsbo" ? "fsbo" : "";
 
-  const [filters, setFilters] = useState<Filters>({
+  const [filters, setFilters] = useState<SearchFilters>({
     segment:
-      (searchParams.get("segment") as Filters["segment"]) || "RESIDENTIAL",
+      (searchParams.get("segment") as SearchFilters["segment"]) ||
+      "RESIDENTIAL",
     transactionType: initialTxn,
-    dataSource: initialDataSource,
+    dataSource: searchParams.get("dataSource") === "fsbo" ? "fsbo" : "",
     city: searchParams.get("city") ?? "",
     community: searchParams.get("community") ?? "",
     minPrice: searchParams.get("minPrice") ?? "",
     maxPrice: searchParams.get("maxPrice") ?? "",
     minBeds: searchParams.get("minBeds") ?? "",
+    minBaths: searchParams.get("minBaths") ?? "",
+    propertyTypes: parsePropertyTypes(searchParams.get("propertyTypes")),
     openHouseOnly: searchParams.get("openHouseOnly") === "1",
-    status: initialStatus,
+    statuses: parseInitialStatuses(
+      searchParams.get("status"),
+      initialTxn === "LEASE",
+    ),
+    sort: parseSort(searchParams.get("sort")),
   });
 
-  // Multi-value personalization params (homepage See all / saved searches)
+  const [view, setView] = useState<SearchViewMode>(() =>
+    parseView(searchParams.get("view"), false),
+  );
+
+  useEffect(() => {
+    if (!searchParams.get("view")) {
+      setView(isNarrow ? "cards" : "split");
+    }
+  }, [isNarrow, searchParams]);
+
   const communitiesParam = searchParams.get("communities") ?? "";
-  const propertyTypesParam = searchParams.get("propertyTypes") ?? "";
+  const qParam = searchParams.get("q") ?? "";
+
+  const syncUrl = useCallback(
+    (next: SearchFilters, nextView: SearchViewMode = view) => {
+      const params = new URLSearchParams();
+      if (next.segment && next.segment !== "RESIDENTIAL") {
+        params.set("segment", next.segment);
+      }
+      params.set("transactionType", next.transactionType);
+      if (next.dataSource) params.set("dataSource", next.dataSource);
+      if (next.city) params.set("city", next.city);
+      if (communitiesParam) {
+        params.set("communities", communitiesParam);
+      } else if (next.community) {
+        params.set("community", next.community);
+      }
+      if (next.propertyTypes.length) {
+        params.set("propertyTypes", next.propertyTypes.join(","));
+      }
+      if (next.minPrice) params.set("minPrice", next.minPrice);
+      if (next.maxPrice) params.set("maxPrice", next.maxPrice);
+      if (next.minBeds) params.set("minBeds", next.minBeds);
+      if (next.minBaths) params.set("minBaths", next.minBaths);
+      if (next.openHouseOnly) params.set("openHouseOnly", "1");
+      const statusQ = statusesQueryValue(next.statuses);
+      if (statusQ) params.set("status", statusQ);
+      if (next.sort !== "newest") params.set("sort", next.sort);
+      if (qParam) params.set("q", qParam);
+      if (nextView !== "split") params.set("view", nextView);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [communitiesParam, pathname, qParam, router, view],
+  );
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -113,23 +229,31 @@ export function SearchExperience() {
     } else if (filters.community) {
       params.set("community", filters.community);
     }
-    if (propertyTypesParam) {
-      params.set("propertyTypes", propertyTypesParam);
+    if (filters.propertyTypes.length) {
+      params.set("propertyTypes", filters.propertyTypes.join(","));
     }
     if (filters.minPrice) params.set("minPrice", filters.minPrice);
     if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
     if (filters.minBeds) params.set("minBeds", filters.minBeds);
+    if (filters.minBaths) params.set("minBaths", filters.minBaths);
     if (filters.openHouseOnly) params.set("openHouseOnly", "1");
-    if (filters.status !== "ACTIVE") params.set("status", filters.status);
-    if (bounds) {
-      params.set("west", String(bounds.west));
-      params.set("south", String(bounds.south));
-      params.set("east", String(bounds.east));
-      params.set("north", String(bounds.north));
+    const statusQ = statusesQueryValue(filters.statuses);
+    if (statusQ) params.set("status", statusQ);
+    params.set("sort", filters.sort);
+    if (qParam) params.set("q", qParam);
+
+    const box = polygon
+      ? polygonBBox(polygon)
+      : appliedBounds;
+    if (box) {
+      params.set("west", String(box.west));
+      params.set("south", String(box.south));
+      params.set("east", String(box.east));
+      params.set("north", String(box.north));
     }
     params.set("limit", "60");
     return params.toString();
-  }, [filters, bounds, communitiesParam, propertyTypesParam]);
+  }, [filters, appliedBounds, communitiesParam, polygon, qParam]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/listings/search?${queryString}`);
@@ -137,12 +261,17 @@ export function SearchExperience() {
       items?: ListingCardData[];
       total?: number;
       provider?: string;
-      requiresAuth?: boolean;
     };
-    setItems(data.items ?? []);
-    setTotal(data.total ?? 0);
+    let nextItems = data.items ?? [];
+    if (polygon && polygon.length >= 3) {
+      nextItems = nextItems.filter((item) =>
+        pointInPolygon(item.lng, item.lat, polygon),
+      );
+    }
+    setItems(nextItems);
+    setTotal(polygon ? nextItems.length : (data.total ?? nextItems.length));
     setProvider(data.provider ?? "mock");
-  }, [queryString]);
+  }, [queryString, polygon]);
 
   useEffect(() => {
     startTransition(() => {
@@ -158,22 +287,22 @@ export function SearchExperience() {
     }
   }, [searchParams]);
 
-  function syncUrl(next: Filters) {
-    const params = new URLSearchParams();
-    if (next.segment && next.segment !== "RESIDENTIAL") {
-      params.set("segment", next.segment);
-    }
-    params.set("transactionType", next.transactionType);
-    if (next.dataSource) params.set("dataSource", next.dataSource);
-    if (next.city) params.set("city", next.city);
-    if (next.community) params.set("community", next.community);
-    if (next.minPrice) params.set("minPrice", next.minPrice);
-    if (next.maxPrice) params.set("maxPrice", next.maxPrice);
-    if (next.minBeds) params.set("minBeds", next.minBeds);
-    if (next.openHouseOnly) params.set("openHouseOnly", "1");
-    if (next.status !== "ACTIVE") params.set("status", next.status);
-    router.replace(`${pathname}?${params.toString()}`);
+  function updateFilters(next: SearchFilters) {
+    setFilters(next);
+    syncUrl(next, view);
   }
+
+  function updateView(next: SearchViewMode) {
+    setView(next);
+    syncUrl(filters, next);
+  }
+
+  // Hybrid/split is desktop-only.
+  useEffect(() => {
+    if (!isNarrow || view !== "split") return;
+    setView("cards");
+    syncUrl(filters, "cards");
+  }, [isNarrow, view, filters, syncUrl]);
 
   function onPlaceSelect(suggestion: AutocompleteSuggestion) {
     if (suggestion.action === "near_me" && suggestion.href) {
@@ -204,8 +333,7 @@ export function SearchExperience() {
             ? (suggestion.community ?? suggestion.label)
             : filters.community,
       };
-      setFilters(next);
-      syncUrl(next);
+      updateFilters(next);
     }
   }
 
@@ -223,303 +351,285 @@ export function SearchExperience() {
     router.push(href);
   }
 
-  const isLease = filters.transactionType === "LEASE";
-  const statusOptions = (
-    isLease
-      ? (["ACTIVE", "LEASED", "UNLISTED", "ALL"] as const)
-      : (["ACTIVE", "SOLD", "UNLISTED", "ALL"] as const)
-  );
-  const transactionButtons: Array<[Filters["transactionType"], string]> = [
-    ["SALE", "For sale"],
-    ["LEASE", "For lease"],
-  ];
-  if (filters.dataSource === "fsbo") {
-    transactionButtons.push(["ALL", "Sale & lease"]);
+  function onMapBoundsChange(next: Bounds) {
+    setMapBounds(next);
+    if (!appliedBounds) {
+      setAppliedBounds(next);
+      setAreaDirty(false);
+      return;
+    }
+    const moved =
+      Math.abs(next.west - appliedBounds.west) > 0.0008 ||
+      Math.abs(next.south - appliedBounds.south) > 0.0008 ||
+      Math.abs(next.east - appliedBounds.east) > 0.0008 ||
+      Math.abs(next.north - appliedBounds.north) > 0.0008;
+    setAreaDirty(moved && !polygon);
   }
 
+  function onSearchThisArea() {
+    if (!mapBounds) return;
+    setAppliedBounds(mapBounds);
+    setAreaDirty(false);
+    setPolygon(null);
+  }
+
+  function onPolygonChange(ring: LngLat[] | null) {
+    setPolygon(ring);
+    setAreaDirty(false);
+    if (ring && ring.length >= 3) {
+      setAppliedBounds(polygonBBox(ring));
+    }
+  }
+
+  const isLease = filters.transactionType === "LEASE";
+  const transactionButtons: Array<[SearchFilters["transactionType"], string]> =
+    [
+      ["SALE", "Buy"],
+      ["LEASE", "Rent"],
+    ];
+  if (filters.dataSource === "fsbo") {
+    transactionButtons.push(["ALL", "Both"]);
+  }
+
+  const showMap = view === "split" || view === "map";
+  const showList = view === "split" || view === "cards";
+  const activeListing = items.find((i) => i.mlsNumber === activeMls) ?? null;
+  const detailListing = items.find((i) => i.mlsNumber === detailMls) ?? null;
+
+  function openListingDetail(mlsNumber: string) {
+    setActiveMls(mlsNumber);
+    setDetailMls(mlsNumber);
+  }
+
+  // Listing detail popup is desktop-only; mobile uses the full listing page.
+  useEffect(() => {
+    if (isNarrow) setDetailMls(null);
+  }, [isNarrow]);
+
+  const noun =
+    filters.segment === "COMMERCIAL"
+      ? "properties"
+      : isLease
+        ? "rentals"
+        : "homes";
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {transactionButtons.map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => {
-              const next: Filters = {
-                ...filters,
-                transactionType: value,
-                status: "ACTIVE",
-                openHouseOnly: value === "LEASE" ? false : filters.openHouseOnly,
-              };
-              setFilters(next);
-              syncUrl(next);
-            }}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-              filters.transactionType === value
-                ? "bg-canopy text-white"
-                : "border border-line bg-surface text-ink/70 hover:border-canopy/40"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-        {filters.dataSource === "fsbo" ? (
-          <button
-            type="button"
-            onClick={() => {
-              const next: Filters = { ...filters, dataSource: "" };
-              setFilters(next);
-              syncUrl(next);
-            }}
-            className="rounded-lg bg-signal px-4 py-2 text-sm font-semibold text-white"
-          >
-            By owner · clear
-          </button>
-        ) : (
-          <Link
-            href="/owner/new"
-            className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink/70 hover:border-canopy/40"
-          >
-            List your property
-          </Link>
-        )}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ["RESIDENTIAL", "Residential"],
-            ["COMMERCIAL", "Commercial"],
-            ["ALL", "All types"],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => {
-              const next = {
-                ...filters,
-                segment: value,
-                minBeds: value === "COMMERCIAL" ? "" : filters.minBeds,
-              };
-              setFilters(next);
-              syncUrl(next);
-            }}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-              filters.segment === value
-                ? "bg-ink text-white"
-                : "border border-line bg-surface text-ink/70 hover:border-canopy/40"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div
-        data-search-bar
-        className="flex flex-col gap-3 rounded-md border border-line bg-surface/90 p-4 md:flex-row md:items-end"
-      >
-        <div className="flex-1 space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-ink/50">
-            Address search
-          </label>
-          <AddressAutocomplete
-            transactionType={
-              filters.transactionType === "LEASE" ||
-              filters.transactionType === "SALE"
-                ? filters.transactionType
-                : undefined
-            }
-            onPlaceSelect={onPlaceSelect}
-            onSearchSubmit={onBarSearchSubmit}
-          />
-        </div>
-        <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-5">
-          <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/50">
-            City
-            <Input
-              value={filters.city}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, city: e.target.value }))
-              }
-              placeholder="Toronto"
-            />
-          </label>
-          <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/50">
-            Community
-            <Input
-              value={filters.community}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, community: e.target.value }))
-              }
-              placeholder="The Beaches"
-            />
-          </label>
-          <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/50">
-            {isLease ? "Min rent" : "Min price"}
-            <Input
-              value={filters.minPrice}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, minPrice: e.target.value }))
-              }
-              placeholder={isLease ? "2500" : "500000"}
-            />
-          </label>
-          <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/50">
-            {isLease ? "Max rent" : "Max price"}
-            <Input
-              value={filters.maxPrice}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, maxPrice: e.target.value }))
-              }
-              placeholder={isLease ? "4500" : "2000000"}
-            />
-          </label>
-          <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/50">
-            Beds
-            <Input
-              value={filters.minBeds}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, minBeds: e.target.value }))
-              }
-              placeholder="3"
-              disabled={filters.segment === "COMMERCIAL"}
-            />
-          </label>
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 space-y-2.5 border-b border-line/80 bg-surface px-3 py-2.5 sm:px-4">
         <div className="flex flex-wrap items-center gap-2">
-          {!isLease ? (
-            <Button
-              type="button"
-              variant={filters.openHouseOnly ? "default" : "secondary"}
-              size="sm"
-              onClick={() => {
-                const next = {
-                  ...filters,
-                  openHouseOnly: !filters.openHouseOnly,
-                };
-                setFilters(next);
-                syncUrl(next);
-              }}
-            >
-              Open houses
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            onClick={() => {
-              syncUrl(filters);
-              void load();
-            }}
-          >
-            Apply
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-3 text-sm text-ink/60">
-        <p>
-          {pending
-            ? "Updating…"
-            : `${total} ${
-                filters.segment === "COMMERCIAL"
-                  ? "properties"
-                  : isLease
-                    ? "rentals"
-                    : "homes"
-              }`}
-          {provider === "mock" ? " · demo data" : ""}
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <SaveSearchButton
-            signedIn={signedIn}
-            query={{
-              segment:
-                filters.segment !== "RESIDENTIAL" ? filters.segment : undefined,
-              transactionType:
-                filters.transactionType !== "ALL"
-                  ? filters.transactionType
-                  : undefined,
-              dataSource: filters.dataSource || undefined,
-              city: filters.city || undefined,
-              community: filters.community || undefined,
-              minPrice: filters.minPrice || undefined,
-              maxPrice: filters.maxPrice || undefined,
-              minBeds: filters.minBeds || undefined,
-              openHouseOnly: filters.openHouseOnly ? "1" : undefined,
-              status: filters.status !== "ACTIVE" ? filters.status : undefined,
-            }}
-          />
-          <WatchAreaButton
-            signedIn={signedIn}
-            city={filters.city}
-            community={filters.community || undefined}
-            transactionType={filters.transactionType}
-            segment={filters.segment}
-          />
-          <div className="flex gap-2">
-            {statusOptions.map((statusOption) => (
+          <div className="flex rounded-full bg-mist p-0.5">
+            {transactionButtons.map(([value, label]) => (
               <button
-                key={statusOption}
+                key={value}
                 type="button"
-                className={
-                  filters.status === statusOption
-                    ? statusOption === "SOLD" || statusOption === "LEASED"
-                      ? "font-semibold text-danger"
-                      : "font-semibold text-canopy"
-                    : "text-ink/50 hover:text-ink"
-                }
                 onClick={() => {
-                  const next = { ...filters, status: statusOption };
-                  setFilters(next);
-                  syncUrl(next);
+                  updateFilters({
+                    ...filters,
+                    transactionType: value,
+                    statuses: ["ACTIVE"],
+                    openHouseOnly:
+                      value === "LEASE" ? false : filters.openHouseOnly,
+                  });
                 }}
+                className={cn(
+                  "rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
+                  filters.transactionType === value
+                    ? "bg-canopy text-white shadow-sm"
+                    : "text-ink/55 hover:text-ink",
+                )}
               >
-                {statusOption === "ALL"
-                  ? "All"
-                  : statusOption === "SOLD"
-                    ? "Sold"
-                    : statusOption === "LEASED"
-                      ? "Leased"
-                      : statusOption === "UNLISTED"
-                        ? "Unlisted"
-                        : isLease
-                          ? "For lease"
-                          : "For sale"}
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div
+            data-search-bar
+            className="min-w-0 flex-1 basis-[16rem] rounded-full border border-line bg-mist/60 px-1"
+          >
+            <AddressAutocomplete
+              transactionType={
+                filters.transactionType === "LEASE" ||
+                filters.transactionType === "SALE"
+                  ? filters.transactionType
+                  : undefined
+              }
+              placeholder="City, neighbourhood, address, or MLS® #"
+              inputClassName="h-9 border-0 bg-transparent shadow-none focus-visible:ring-0"
+              onPlaceSelect={onPlaceSelect}
+              onSearchSubmit={onBarSearchSubmit}
+            />
+          </div>
+
+          <div className="flex rounded-full border border-line bg-mist p-0.5">
+            {(
+              [
+                ["map", MapIcon, "Map"],
+                ["split", Columns2, "Split"],
+                ["cards", LayoutGrid, "Cards"],
+              ] as const
+            )
+              .filter(([mode]) => !(isNarrow && mode === "split"))
+              .map(([mode, Icon, label]) => (
+              <button
+                key={mode}
+                type="button"
+                aria-label={label}
+                title={label}
+                onClick={() => updateView(mode)}
+                className={cn(
+                  "inline-flex size-9 items-center justify-center rounded-full transition",
+                  view === mode
+                    ? "bg-surface text-canopy shadow-sm"
+                    : "text-ink/45 hover:text-ink",
+                )}
+              >
+                <Icon className="size-4" aria-hidden />
               </button>
             ))}
           </div>
         </div>
-      </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <SearchMap
-          listings={items}
-          activeMls={activeMls}
-          focus={focus}
-          onSelect={setActiveMls}
-          onBoundsChange={setBounds}
-        />
-        <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-1">
-          {items.map((listing) => (
-            <ListingCard
-              key={listing.mlsNumber}
-              listing={listing}
-              active={listing.mlsNumber === activeMls}
-              onFocus={() => setActiveMls(listing.mlsNumber)}
-              lockedPreview={
-                !signedIn && listing.status !== "ACTIVE" ? "link" : false
-              }
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <SearchFilterChips filters={filters} onChange={updateFilters} />
+          <div className="flex flex-wrap items-center gap-2 text-xs text-ink/50">
+            <span className="inline-flex items-center gap-1.5 font-medium text-ink/65">
+              {pending ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              ) : null}
+              {pending ? "Updating…" : `${total.toLocaleString("en-CA")} ${noun}`}
+              {provider === "mock" ? " · demo" : ""}
+            </span>
+            <SaveSearchButton
+              signedIn={signedIn}
+              query={{
+                segment:
+                  filters.segment !== "RESIDENTIAL"
+                    ? filters.segment
+                    : undefined,
+                transactionType:
+                  filters.transactionType !== "ALL"
+                    ? filters.transactionType
+                    : undefined,
+                dataSource: filters.dataSource || undefined,
+                city: filters.city || undefined,
+                community: filters.community || undefined,
+                propertyTypes: filters.propertyTypes.length
+                  ? filters.propertyTypes.join(",")
+                  : undefined,
+                minPrice: filters.minPrice || undefined,
+                maxPrice: filters.maxPrice || undefined,
+                minBeds: filters.minBeds || undefined,
+                minBaths: filters.minBaths || undefined,
+                openHouseOnly: filters.openHouseOnly ? "1" : undefined,
+                status: statusesQueryValue(filters.statuses) ?? undefined,
+                sort: filters.sort !== "newest" ? filters.sort : undefined,
+              }}
             />
-          ))}
-          {items.length === 0 && !pending ? (
-            <p className="rounded-2xl border border-dashed border-line bg-surface p-8 text-center text-sm text-ink/55">
-              No listings match these filters. Pan the map or clear filters.
-            </p>
-          ) : null}
+            <WatchAreaButton
+              signedIn={signedIn}
+              city={filters.city}
+              community={filters.community || undefined}
+              transactionType={filters.transactionType}
+              segment={filters.segment}
+            />
+            {filters.dataSource === "fsbo" ? (
+              <button
+                type="button"
+                onClick={() => updateFilters({ ...filters, dataSource: "" })}
+                className="rounded-full bg-signal/15 px-2.5 py-1 font-semibold text-signal"
+              >
+                By owner · clear
+              </button>
+            ) : (
+              <Link
+                href="/owner/new"
+                className="hidden font-semibold text-ink/45 hover:text-canopy sm:inline"
+              >
+                List yours
+              </Link>
+            )}
+          </div>
         </div>
       </div>
+
+      <div
+        className={cn(
+          "relative min-h-0 flex-1",
+          view === "split" && "flex flex-col lg:flex-row",
+        )}
+      >
+        {showMap ? (
+          <div
+            className={cn(
+              "relative min-h-0 bg-mist",
+              view === "map" && "h-full w-full",
+              view === "split" && "h-[42vh] w-full lg:h-full lg:w-[55%]",
+            )}
+          >
+            <SearchMap
+              listings={items}
+              activeMls={activeMls}
+              activeListing={activeListing}
+              focus={focus}
+              onSelect={setActiveMls}
+              onClearSelection={() => setActiveMls(null)}
+              onBoundsChange={onMapBoundsChange}
+              polygon={polygon}
+              onPolygonChange={onPolygonChange}
+              areaDirty={areaDirty}
+              onSearchThisArea={onSearchThisArea}
+              status={filters.statuses}
+              isLease={isLease}
+              onStatusToggle={(value) => {
+                const selected = filters.statuses.includes(value);
+                const nextStatuses = selected
+                  ? filters.statuses.length === 1
+                    ? filters.statuses
+                    : filters.statuses.filter((s) => s !== value)
+                  : [...filters.statuses, value];
+                updateFilters({ ...filters, statuses: nextStatuses });
+                setActiveMls(null);
+              }}
+              expandCardOnClick={!isNarrow}
+              onOpenListing={!isNarrow ? openListingDetail : undefined}
+              className="h-full w-full"
+            />
+          </div>
+        ) : null}
+
+        {showList ? (
+          <div
+            className={cn(
+              "min-h-0 bg-mist/40",
+              view === "cards" && "h-full w-full",
+              view === "split" && "min-h-0 flex-1 lg:w-[45%]",
+            )}
+          >
+            <SearchResultsPane
+              items={items}
+              activeMls={activeMls}
+              onFocus={setActiveMls}
+              onOpenListing={!isNarrow ? openListingDetail : undefined}
+              signedIn={signedIn}
+              pending={pending}
+              view={view}
+              emptyHint={
+                polygon
+                  ? "No listings inside this drawn area. Clear the draw or expand it."
+                  : "No listings match. Adjust filters or search this map area."
+              }
+            />
+          </div>
+        ) : null}
+      </div>
+
+      {detailListing ? (
+        <SearchMapListingOverlay
+          listing={detailListing}
+          onClose={() => setDetailMls(null)}
+        />
+      ) : null}
     </div>
   );
 }

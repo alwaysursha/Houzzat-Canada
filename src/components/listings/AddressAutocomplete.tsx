@@ -273,6 +273,15 @@ export function AddressAutocomplete({
 
   useEffect(() => {
     setQuery(initialQuery);
+    const trimmed = initialQuery.trim();
+    if (trimmed) {
+      // Treat a prefilled/saved address as already selected so we don't
+      // refetch Google suggestions and pop the panel on mount/update.
+      selectedQueryRef.current = trimmed;
+      setSuggestions([]);
+      setOpen(false);
+      setMobileSheetOpen(false);
+    }
   }, [initialQuery]);
 
   useEffect(() => {
@@ -774,7 +783,7 @@ export function AddressAutocomplete({
       selectedQueryRef.current !== null &&
       query.trim() === selectedQueryRef.current.trim()
     ) {
-      if (isMobile) setMobileSheetOpen(true);
+      // Prefill / already-chosen address — don't reopen suggestions.
       return;
     }
     if (isMobile) {

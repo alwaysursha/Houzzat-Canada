@@ -6,24 +6,19 @@ export const metadata = { title: "Search" };
 
 export default function SearchPage() {
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6">
-      <div>
-        <h1 className="font-display text-4xl text-ink">Search</h1>
-        <p className="mt-2 max-w-2xl text-ink/70">
-          Switch between Residential and Commercial inventory. Demo GTA data
-          until PropTx is connected.
-        </p>
-      </div>
+    <div className="flex h-[calc(100dvh-var(--site-header-stack,4rem))] flex-col overflow-hidden bg-mist">
       <Suspense
         fallback={
-          <div className="rounded-2xl border border-line bg-surface p-8 text-sm text-ink/50">
+          <div className="flex flex-1 items-center justify-center text-sm text-ink/50">
             Loading search…
           </div>
         }
       >
         <SearchExperience />
       </Suspense>
-      <MlsDisclaimer />
+      <div className="shrink-0 border-t border-line/80 bg-surface px-4 py-1.5">
+        <MlsDisclaimer className="text-[10px] leading-snug text-ink/40" />
+      </div>
     </div>
   );
 }

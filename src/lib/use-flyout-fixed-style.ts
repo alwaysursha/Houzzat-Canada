@@ -37,11 +37,25 @@ export function useFlyoutFixedStyle(
         VIEWPORT_PAD,
         Math.min(left, window.innerWidth - VIEWPORT_PAD - width),
       );
+
+      const gap = 4;
+      const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_PAD - gap;
+      const spaceAbove = rect.top - VIEWPORT_PAD - gap;
+      const placeBelow = spaceBelow >= 180 || spaceBelow >= spaceAbove;
+      const maxHeight = Math.max(
+        140,
+        placeBelow ? spaceBelow : spaceAbove,
+      );
+      const top = placeBelow
+        ? rect.bottom + gap
+        : Math.max(VIEWPORT_PAD, rect.top - gap - maxHeight);
+
       setStyle({
         position: "fixed",
-        top: rect.bottom + 4,
+        top,
         left,
         width,
+        maxHeight,
         zIndex: 80,
       });
     }

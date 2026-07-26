@@ -41,11 +41,34 @@ export async function GET(request: Request) {
     : undefined;
 
   const statusParam = searchParams.get("status");
+  const statusParts = statusParam
+    ? statusParam
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+  const validStatusToken = (
+    s: string,
+  ): s is ListingStatus | "UNLISTED" | "ALL" =>
+    s === "ACTIVE" ||
+    s === "SOLD" ||
+    s === "LEASED" ||
+    s === "UNLISTED" ||
+    s === "ALL" ||
+    s === "SUSPENDED" ||
+    s === "TERMINATED" ||
+    s === "EXPIRED";
+  const tokens = statusParts.filter(validStatusToken);
+  const useAll = tokens.length === 1 && tokens[0] === "ALL";
+  const statuses =
+    !useAll && tokens.length > 0
+      ? (tokens.filter((t) => t !== "ALL") as Array<ListingStatus | "UNLISTED">)
+      : undefined;
 
   const result = await provider.search({
     q: searchParams.get("q") ?? undefined,
-    status:
-      (statusParam as ListingStatus | "ALL" | "UNLISTED" | null) ?? "ACTIVE",
+    status: useAll ? "ALL" : statuses ? undefined : "ACTIVE",
+    statuses,
     segment: (segmentParam as ListingSegment | "ALL" | null) ?? undefined,
     transactionType:
       (transactionParam as ListingTransactionType | "ALL" | null) ?? undefined,
@@ -67,6 +90,9 @@ export async function GET(request: Request) {
     minBeds: searchParams.get("minBeds")
       ? Number(searchParams.get("minBeds"))
       : undefined,
+    minBaths: searchParams.get("minBaths")
+      ? Number(searchParams.get("minBaths"))
+      : undefined,
     openHouseOnly: searchParams.get("openHouseOnly") === "1",
     west: searchParams.get("west")
       ? Number(searchParams.get("west"))
@@ -84,6 +110,13 @@ export async function GET(request: Request) {
     limit: searchParams.get("limit")
       ? Number(searchParams.get("limit"))
       : 40,
+    sort: (() => {
+      const s = searchParams.get("sort");
+      if (s === "newest" || s === "price_asc" || s === "price_desc" || s === "price") {
+        return s === "price" ? "price_asc" : s;
+      }
+      return undefined;
+    })(),
   });
 
   if (!isClient) {

@@ -1,9 +1,7 @@
 import { Suspense } from "react";
 import { AdsTrackingPixels } from "@/components/ads/AdsTrackingPixels";
 import { UtmCapture } from "@/components/ads/UtmCapture";
-import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
-import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
-import { SiteFooter } from "@/components/site/SiteFooter";
+import { MarketingBelowHeader } from "@/components/site/MarketingBelowHeader";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
 import { RoutePlannerFloatingChip } from "@/components/route-planner/RoutePlannerFloatingChip";
@@ -24,10 +22,7 @@ export default async function MarketingLayout({
         <UtmCapture />
       </Suspense>
       <SiteHeader />
-      <HomepagePersonalizationBanner cities={cities} />
-      <SavedSearchChipBar cities={cities} />
-      <main>{children}</main>
-      <SiteFooter />
+      <MarketingBelowHeader cities={cities}>{children}</MarketingBelowHeader>
       <RoutePlannerFloatingChip />
       <ScrollToTopButton />
     </div>

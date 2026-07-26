@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { Menu, UserRound, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import { LanguageToggle } from "@/components/site/LanguageToggle";
@@ -13,8 +14,13 @@ import {
 } from "@/lib/listings/parse-search-query";
 import { pushLocalRecentSearch } from "@/lib/listings/recent-searches-local";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
-import type { Locale } from "@/lib/i18n/dictionaries";
+import { t, type Locale } from "@/lib/i18n/dictionaries";
 import { cn } from "@/lib/utils";
+
+const SITE_NAV = [
+  { href: "/search?view=map", labelKey: "nav_map_search" as const },
+  { href: "/home-valuation", labelKey: "nav_home_worth" as const },
+];
 
 function useHomeHeroSearchVisible() {
   const pathname = usePathname();
@@ -191,7 +197,23 @@ export function SiteHeaderClient({
   portalHref: string | null;
   portalLabel: string;
 }) {
+  const pathname = usePathname();
   const visible = useHomeHeroSearchVisible();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuId = useId();
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   // Keep homepage sticky rails below the mobile search bar when it is showing.
   useEffect(() => {
@@ -217,6 +239,9 @@ export function SiteHeaderClient({
     };
   }, [visible]);
 
+  const navLinkClass =
+    "rounded-md px-2.5 py-1.5 text-sm font-semibold text-ink/70 transition hover:bg-canopy/5 hover:text-canopy";
+
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-line/80 bg-mist/85 backdrop-blur-md">
@@ -241,25 +266,93 @@ export function SiteHeaderClient({
             <BuySearchControls visible={visible} />
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+            <nav
+              className="mr-1 hidden items-center gap-0.5 lg:flex"
+              aria-label="Site"
+            >
+              {SITE_NAV.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={navLinkClass}
+                >
+                  {t(locale, item.labelKey)}
+                </Link>
+              ))}
+            </nav>
             <LanguageToggle locale={locale} />
             {portalHref ? (
               <Link
                 href={portalHref}
-                className="rounded-lg bg-canopy px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-canopy-deep"
+                data-houzzat-account-target=""
+                aria-label={portalLabel}
+                title={portalLabel}
+                className={cn(
+                  "relative inline-flex size-10 items-center justify-center rounded-full",
+                  "bg-canopy text-white transition hover:bg-canopy-deep",
+                  "ring-2 ring-canopy/25 ring-offset-2 ring-offset-mist",
+                )}
               >
-                {portalLabel}
+                <UserRound className="size-5" strokeWidth={2.25} aria-hidden />
+                <span
+                  className="absolute right-0.5 top-0.5 size-2.5 rounded-full bg-signal ring-2 ring-mist"
+                  aria-hidden
+                />
               </Link>
             ) : (
               <AuthOpenButton
                 mode="sign-in"
-                className="rounded-lg bg-canopy px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-canopy-deep"
+                data-houzzat-account-target=""
+                aria-label={portalLabel}
+                title={portalLabel}
+                className={cn(
+                  "inline-flex size-10 items-center justify-center rounded-full",
+                  "border border-line bg-surface text-ink/70 transition",
+                  "hover:border-canopy/40 hover:text-canopy",
+                )}
               >
-                {portalLabel}
+                <UserRound className="size-5" strokeWidth={2} aria-hidden />
               </AuthOpenButton>
             )}
+            <button
+              type="button"
+              className="inline-flex size-10 items-center justify-center rounded-full border border-line bg-surface text-ink/70 transition hover:border-canopy/40 hover:text-canopy lg:hidden"
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={menuOpen}
+              aria-controls={menuId}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              {menuOpen ? (
+                <X className="size-5" aria-hidden />
+              ) : (
+                <Menu className="size-5" aria-hidden />
+              )}
+            </button>
           </div>
         </div>
+
+        {menuOpen ? (
+          <nav
+            id={menuId}
+            aria-label="Site"
+            className="border-t border-line/80 bg-mist/95 px-4 py-3 lg:hidden sm:px-6"
+          >
+            <ul className="space-y-1">
+              {SITE_NAV.map((item) => (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-ink transition hover:bg-canopy/5 hover:text-canopy"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    {t(locale, item.labelKey)}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ) : null}
       </header>
 
       {/* Mobile only — sticky below header, above hero (hero is z-[35]) */}

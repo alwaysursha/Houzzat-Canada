@@ -517,14 +517,20 @@ export function RoutePlannerClient({
     return sum + Math.max(1, Math.round(stop.driveFromPrevSeconds / 60));
   }, 0);
 
+  const isSignedIn = status === "authenticated";
+  const guestLocked = !readOnly && !shareMode && status === "unauthenticated";
+  // Guests can view stops; interactions (edit / reorder / remove) stay off.
+  const stopsInteractive = !readOnly && isSignedIn;
+
   const canShareOrPrint =
-    status === "authenticated" &&
+    isSignedIn &&
     Boolean(tour.startAddress?.trim()) &&
     tour.startLat != null &&
     tour.startLng != null &&
     Boolean(tour.startAt);
 
   const canBookViewings =
+    isSignedIn &&
     Boolean(expertWhatsApp) &&
     Boolean(tour.startAddress?.trim()) &&
     tour.startLat != null &&
@@ -532,29 +538,50 @@ export function RoutePlannerClient({
     Boolean(tour.startAt) &&
     tour.stops.length > 0;
 
+  function requireSignIn() {
+    openAuth({ mode: "sign-in", callbackUrl: "/route-planner" });
+  }
+
   const controls = !readOnly ? (
-    <div className="space-y-4">
+    <div
+      className={cn("space-y-4", guestLocked && "opacity-55")}
+      aria-disabled={guestLocked}
+    >
       <div className="space-y-2">
         <label className="text-xs font-semibold uppercase tracking-[0.12em] text-ink/45">
           Your location address
         </label>
-        <AddressAutocomplete
-          fillOnly
-          source="google"
-          minChars={2}
-          placeholder="Your location address"
-          initialQuery={tour.startAddress ?? ""}
-          onPlaceSelect={(place: AutocompleteSuggestion) => {
-            void saveStartFields({
-              startAddress:
-                place.city && place.province
-                  ? `${place.label}, ${place.city}, ${place.province}`
-                  : place.label,
-              startLat: place.lat ?? null,
-              startLng: place.lng ?? null,
-            });
-          }}
-        />
+        <div className="relative">
+          <AddressAutocomplete
+            fillOnly
+            source="google"
+            minChars={2}
+            placeholder="Your location address"
+            initialQuery={tour.startAddress ?? ""}
+            onPlaceSelect={(place: AutocompleteSuggestion) => {
+              if (guestLocked) {
+                requireSignIn();
+                return;
+              }
+              void saveStartFields({
+                startAddress:
+                  place.city && place.province
+                    ? `${place.label}, ${place.city}, ${place.province}`
+                    : place.label,
+                startLat: place.lat ?? null,
+                startLng: place.lng ?? null,
+              });
+            }}
+          />
+          {guestLocked ? (
+            <button
+              type="button"
+              className="absolute inset-0 z-10 cursor-pointer rounded-md"
+              aria-label="Sign in to set starting location"
+              onClick={requireSignIn}
+            />
+          ) : null}
+        </div>
         <p className="text-xs text-ink/45">
           Saved to your profile for future routes.
         </p>
@@ -567,8 +594,12 @@ export function RoutePlannerClient({
           </span>
           <DateTimePicker
             value={tour.startAt}
-            disabled={saving}
+            disabled={saving || guestLocked}
             onChange={(nextIso) => {
+              if (guestLocked) {
+                requireSignIn();
+                return;
+              }
               void saveStartFields({ startAt: nextIso });
             }}
           />
@@ -582,7 +613,8 @@ export function RoutePlannerClient({
               type="number"
               min={10}
               max={180}
-              className="h-11 w-full rounded-md border border-line bg-mist px-3"
+              disabled={guestLocked || saving}
+              className="h-11 w-full rounded-md border border-line bg-mist px-3 disabled:cursor-not-allowed"
               value={tour.defaultDwellMinutes}
               onChange={(e) => {
                 void saveStartFields({
@@ -599,7 +631,8 @@ export function RoutePlannerClient({
               type="number"
               min={0}
               max={60}
-              className="h-11 w-full rounded-md border border-line bg-mist px-3"
+              disabled={guestLocked || saving}
+              className="h-11 w-full rounded-md border border-line bg-mist px-3 disabled:cursor-not-allowed"
               value={tour.bufferMinutes}
               onChange={(e) => {
                 void saveStartFields({
@@ -614,16 +647,28 @@ export function RoutePlannerClient({
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
-          disabled={optimizing || saving || tour.stops.length === 0}
-          onClick={() => void onRebuild(true)}
+          disabled={guestLocked || optimizing || saving || tour.stops.length === 0}
+          onClick={() => {
+            if (guestLocked) {
+              requireSignIn();
+              return;
+            }
+            void onRebuild(true);
+          }}
         >
           {optimizing ? "Building…" : "Build Route"}
         </Button>
         <Button
           type="button"
           variant="secondary"
-          disabled={optimizing || saving || tour.stops.length === 0}
-          onClick={() => void onRebuild(false)}
+          disabled={guestLocked || optimizing || saving || tour.stops.length === 0}
+          onClick={() => {
+            if (guestLocked) {
+              requireSignIn();
+              return;
+            }
+            void onRebuild(false);
+          }}
         >
           Update times
         </Button>
@@ -668,14 +713,20 @@ export function RoutePlannerClient({
             <div
               className={cn(
                 "group flex gap-3 rounded-xl border border-line bg-surface p-3 transition hover:border-canopy/35",
-                !readOnly && "cursor-grab active:cursor-grabbing",
+                stopsInteractive && "cursor-grab active:cursor-grabbing",
               )}
-              draggable={!readOnly}
-              onDragStart={() => setDragIndex(index)}
+              draggable={stopsInteractive}
+              onDragStart={() => {
+                if (!stopsInteractive) return;
+                setDragIndex(index);
+              }}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={() => void onDropReorder(index)}
+              onDrop={() => {
+                if (!stopsInteractive) return;
+                void onDropReorder(index);
+              }}
             >
-              {!readOnly ? (
+              {stopsInteractive ? (
                 <span className="mt-3 text-ink/30 group-hover:text-ink/50">
                   <GripVertical className="size-4" />
                 </span>
@@ -721,7 +772,7 @@ export function RoutePlannerClient({
                   {formatClock(stop.suggestedLeaveAt)}
                 </p>
               </div>
-              {!readOnly ? (
+              {stopsInteractive ? (
                 <button
                   type="button"
                   aria-label="Remove stop"
@@ -739,6 +790,34 @@ export function RoutePlannerClient({
 
   return (
     <div className="space-y-6 print:space-y-4 lg:space-y-8">
+      {guestLocked ? (
+        <div className="flex flex-col gap-3 rounded-2xl border border-canopy/30 bg-canopy/[0.06] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 print:hidden">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-ink">
+              Sign in to use Route Planner
+            </p>
+            <p className="max-w-xl text-sm text-ink/60">
+              Your added homes are saved below. Sign in to set a starting
+              point, build the route, share, print, and book viewings.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button type="button" onClick={requireSignIn}>
+              Sign in
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() =>
+                openAuth({ mode: "sign-up", callbackUrl: "/route-planner" })
+              }
+            >
+              Create account
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <header className="flex flex-col gap-4 border-b border-line/80 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1.5">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-canopy">
@@ -764,7 +843,13 @@ export function RoutePlannerClient({
             <Button
               type="button"
               variant="secondary"
-              onClick={() => void onShare()}
+              onClick={() => {
+                if (guestLocked) {
+                  requireSignIn();
+                  return;
+                }
+                void onShare();
+              }}
               disabled={!canShareOrPrint}
             >
               <Share2 className="size-4" />
@@ -773,7 +858,13 @@ export function RoutePlannerClient({
             <Button
               type="button"
               variant="secondary"
-              onClick={() => window.print()}
+              onClick={() => {
+                if (guestLocked) {
+                  requireSignIn();
+                  return;
+                }
+                window.print();
+              }}
               disabled={!canShareOrPrint}
             >
               <Printer className="size-4" />
@@ -796,17 +887,20 @@ export function RoutePlannerClient({
           <section className="space-y-3">
             <div className="flex items-baseline justify-between gap-3">
               <h2 className="font-display text-xl text-ink">Itinerary</h2>
-              {tour.stops.length > 0 ? (
-                <p className="text-xs text-ink/45">
-                  Drag to reorder
-                </p>
+              {tour.stops.length > 0 && stopsInteractive ? (
+                <p className="text-xs text-ink/45">Drag to reorder</p>
               ) : null}
             </div>
             {stopList}
           </section>
 
           {!readOnly && !shareMode ? (
-            <section className="space-y-3 rounded-2xl border border-line bg-surface p-4 sm:p-5 print:hidden">
+            <section
+              className={cn(
+                "space-y-3 rounded-2xl border border-line bg-surface p-4 sm:p-5 print:hidden",
+                guestLocked && "opacity-55",
+              )}
+            >
               <div>
                 <h2 className="font-display text-xl text-ink">
                   Book these viewings
@@ -830,6 +924,10 @@ export function RoutePlannerClient({
                 <form
                   onSubmit={(event) => {
                     event.preventDefault();
+                    if (guestLocked) {
+                      requireSignIn();
+                      return;
+                    }
                     onBookViewingsWhatsApp();
                   }}
                   className="flex flex-col gap-2 sm:flex-row"
@@ -850,7 +948,11 @@ export function RoutePlannerClient({
                   </Button>
                 </form>
               )}
-              {!canBookViewings && expertWhatsApp ? (
+              {guestLocked ? (
+                <p className="text-xs text-ink/45">
+                  Sign in to book viewings from this route.
+                </p>
+              ) : !canBookViewings && expertWhatsApp ? (
                 <p className="text-xs text-ink/45">
                   Add your starting location, first viewing time, and at least
                   one home to enable WhatsApp booking.
@@ -879,8 +981,9 @@ export function RoutePlannerClient({
             <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-mist/40 px-6 text-center lg:h-[28rem]">
               <p className="text-sm font-medium text-ink/70">Map preview</p>
               <p className="mt-1 max-w-xs text-xs text-ink/45">
-                Add your location address and at least one stop to see the route
-                on the map.
+                {guestLocked
+                  ? "Sign in, then add your location to see the route on the map."
+                  : "Add your location address and at least one stop to see the route on the map."}
               </p>
             </div>
           )}

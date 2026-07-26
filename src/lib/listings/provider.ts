@@ -82,7 +82,17 @@ export class MockListingProvider implements ListingProvider {
       AND: [],
     };
 
-    if (params.status === "UNLISTED") {
+    if (params.statuses?.length) {
+      const prismaStatuses: ListingStatus[] = [];
+      for (const s of params.statuses) {
+        if (s === "UNLISTED") {
+          prismaStatuses.push("SUSPENDED", "TERMINATED", "EXPIRED");
+        } else {
+          prismaStatuses.push(s);
+        }
+      }
+      where.status = { in: [...new Set(prismaStatuses)] };
+    } else if (params.status === "UNLISTED") {
       where.status = { in: ["SUSPENDED", "TERMINATED", "EXPIRED"] };
     } else if (params.status === "ALL") {
       // No status filter — active + sold/leased/unlisted.
@@ -139,6 +149,9 @@ export class MockListingProvider implements ListingProvider {
     if (params.minBeds != null) {
       where.beds = { gte: params.minBeds };
     }
+    if (params.minBaths != null) {
+      where.baths = { gte: params.minBaths };
+    }
     const andFilters = Array.isArray(where.AND)
       ? [...where.AND]
       : where.AND
@@ -177,7 +190,9 @@ export class MockListingProvider implements ListingProvider {
     const orderBy =
       params.sort === "newest"
         ? ([{ listedAt: "desc" }, { mlsNumber: "desc" }] as const)
-        : ([{ listPrice: "asc" }, { mlsNumber: "asc" }] as const);
+        : params.sort === "price_desc"
+          ? ([{ listPrice: "desc" }, { mlsNumber: "desc" }] as const)
+          : ([{ listPrice: "asc" }, { mlsNumber: "asc" }] as const);
 
     const [total, rows] = await Promise.all([
       prisma.listing.count({ where }),

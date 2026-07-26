@@ -52,8 +52,11 @@ export type ListingSearchParams = {
   /**
    * UNLISTED = PropTx off-market group: Suspended, Terminated, Expired
    * (board “Canceled” typically maps to TERMINATED in our schema).
+   * Prefer `statuses` for multi-select; `status` kept for single-value callers.
    */
   status?: ListingStatus | "ALL" | "UNLISTED";
+  /** Multi status OR filter (preferred when set). */
+  statuses?: Array<ListingStatus | "UNLISTED">;
   segment?: "RESIDENTIAL" | "COMMERCIAL" | "PRE_CONSTRUCTION" | "ALL";
   transactionType?: ListingTransactionType | "ALL";
   dataSource?: "fsbo" | "mls" | "ALL";
@@ -67,6 +70,7 @@ export type ListingSearchParams = {
   minPrice?: number;
   maxPrice?: number;
   minBeds?: number;
+  minBaths?: number;
   openHouseOnly?: boolean;
   west?: number;
   south?: number;
@@ -74,8 +78,8 @@ export type ListingSearchParams = {
   north?: number;
   cursor?: string;
   limit?: number;
-  /** Default: price ascending. Use newest for “New Listings” rails. */
-  sort?: "price" | "newest";
+  /** Default: price ascending. */
+  sort?: "price" | "price_asc" | "price_desc" | "newest";
 };
 
 export type ListingSearchResult = {

@@ -93,6 +93,10 @@ body {
   .houzzat-route-planner-pulse {
     animation: none !important;
   }
+
+  .houzzat-account-pulse {
+    animation: none !important;
+  }
 }
 
 @keyframes houzzat-saved-pulse {
@@ -164,5 +168,24 @@ body {
   /* Keep solid surface fill — flash via border + ring only */
   background-color: var(--surface, #ffffff) !important;
   animation: houzzat-route-planner-pulse 1.15s ease;
+}
+
+@keyframes houzzat-account-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgb(15 107 76 / 0);
+  }
+  35% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 8px rgb(15 107 76 / 0.22);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgb(15 107 76 / 0);
+  }
+}
+
+.houzzat-account-pulse {
+  animation: houzzat-account-pulse 0.85s ease;
 }
 

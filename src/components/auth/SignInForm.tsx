@@ -1,47 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-function homeForRole(role: string | undefined) {
-  if (role === "ADMIN") return "/admin";
-  if (role === "AGENT") return "/agent";
-  return "/account";
-}
-
-function resolveDestination(
-  role: string | undefined,
-  callbackUrl: string | null | undefined,
-) {
-  const roleHome = homeForRole(role);
-  if (
-    !callbackUrl ||
-    !callbackUrl.startsWith("/") ||
-    callbackUrl.startsWith("//")
-  ) {
-    return roleHome;
-  }
-
-  if (
-    (role === "AGENT" || role === "ADMIN") &&
-    callbackUrl.startsWith("/account")
-  ) {
-    return roleHome;
-  }
-
-  if (role === "AGENT" && callbackUrl.startsWith("/admin")) {
-    return "/agent";
-  }
-
-  return callbackUrl;
-}
+import { flyToAccountPortal } from "@/lib/fly-to-account";
 
 export function SignInForm({
-  callbackUrl = null,
+  callbackUrl: _callbackUrl = null,
   onSuccess,
   onSwitchMode,
 }: {
@@ -50,6 +18,7 @@ export function SignInForm({
   onSwitchMode?: () => void;
 }) {
   const router = useRouter();
+  const submitRef = useRef<HTMLButtonElement>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -76,13 +45,13 @@ export function SignInForm({
       return;
     }
 
-    const session = await getSession();
-    const destination = resolveDestination(session?.user?.role, callbackUrl);
-
+    await getSession();
+    const fromRect = submitRef.current?.getBoundingClientRect() ?? null;
     setPending(false);
     onSuccess?.();
-    router.push(destination);
     router.refresh();
+    // Stay on the current page — fly to the header account / dashboard control.
+    window.setTimeout(() => flyToAccountPortal(fromRect), 40);
   }
 
   return (
@@ -115,7 +84,7 @@ export function SignInForm({
         />
       </div>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
-      <Button type="submit" className="w-full" disabled={pending}>
+      <Button type="submit" className="w-full" disabled={pending} ref={submitRef}>
         {pending ? "Signing in…" : "Sign in"}
       </Button>
       {onSwitchMode ? (

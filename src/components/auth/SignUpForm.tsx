@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { flyToAccountPortal } from "@/lib/fly-to-account";
 
 export function SignUpForm({
-  callbackUrl = null,
+  callbackUrl: _callbackUrl = null,
   onSuccess,
   onSwitchMode,
 }: {
@@ -17,6 +18,7 @@ export function SignUpForm({
   onSwitchMode?: () => void;
 }) {
   const router = useRouter();
+  const submitRef = useRef<HTMLButtonElement>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,15 +58,11 @@ export function SignUpForm({
       return;
     }
 
+    const fromRect = submitRef.current?.getBoundingClientRect() ?? null;
     onSuccess?.();
-    const destination =
-      callbackUrl &&
-      callbackUrl.startsWith("/") &&
-      !callbackUrl.startsWith("//")
-        ? callbackUrl
-        : "/account";
-    router.push(destination);
     router.refresh();
+    // Stay on the current page — fly to the header account / dashboard control.
+    window.setTimeout(() => flyToAccountPortal(fromRect), 40);
   }
 
   return (
@@ -109,7 +107,7 @@ export function SignUpForm({
         />
       </div>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
-      <Button type="submit" className="w-full" disabled={pending}>
+      <Button type="submit" className="w-full" disabled={pending} ref={submitRef}>
         {pending ? "Creating…" : "Create Houzzat client account"}
       </Button>
       {onSwitchMode ? (

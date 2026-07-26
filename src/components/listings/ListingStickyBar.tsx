@@ -135,9 +135,6 @@ export function ListingStickyBar({
 
   return (
     <>
-      {/* Mobile — plain path in page flow, not sticky */}
-      <ListingBreadcrumbs crumbs={crumbs} className="md:hidden" />
-
       {/*
         Desktop sticky must stay in the page flow (not inside a short wrapper),
         otherwise position:sticky has no room to stick.

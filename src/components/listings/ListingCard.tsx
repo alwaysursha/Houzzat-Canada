@@ -29,12 +29,15 @@ export function ListingCard({
   listing,
   active,
   onFocus,
+  onOpen,
   lockedPreview = false,
   distanceKm,
 }: {
   listing: ListingCardData;
   active?: boolean;
   onFocus?: () => void;
+  /** When set, card opens this instead of navigating to the listing page. */
+  onOpen?: () => void;
   /**
    * Soft-lock preview: photo/details blurred.
    * `true` — non-interactive (homepage sold rail).
@@ -57,7 +60,7 @@ export function ListingCard({
     <>
       <div
         className={cn(
-          "relative aspect-[4/3] bg-mist",
+          "relative aspect-[4/3] shrink-0 bg-mist",
           isLocked && "blur-[4px] saturate-75",
         )}
       >
@@ -113,7 +116,7 @@ export function ListingCard({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 px-4 pt-4">
+      <div className="flex shrink-0 flex-col gap-2 px-4 pt-4">
         <div
           className={cn(
             "flex items-start justify-between gap-3",
@@ -222,7 +225,7 @@ export function ListingCard({
   return (
     <article
       className={cn(
-        "group relative flex h-full flex-col overflow-hidden rounded-2xl border bg-surface transition",
+        "group relative flex flex-col overflow-hidden rounded-2xl border bg-surface transition",
         active
           ? "border-canopy shadow-md ring-2 ring-canopy/20"
           : "border-line hover:border-canopy/50 hover:shadow-sm",
@@ -230,13 +233,21 @@ export function ListingCard({
       )}
     >
       {blockInteraction ? (
-        <div className="flex flex-1 flex-col">{body}</div>
+        <div className="flex flex-col">{body}</div>
       ) : (
         <Link
           href={`/listing/${listing.mlsNumber}`}
           onMouseEnter={onFocus}
           onFocus={onFocus}
-          className="flex flex-1 flex-col"
+          onClick={
+            onOpen
+              ? (event) => {
+                  event.preventDefault();
+                  onOpen();
+                }
+              : undefined
+          }
+          className="flex flex-col"
         >
           {body}
         </Link>
