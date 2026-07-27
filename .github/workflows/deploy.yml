@@ -57,5 +57,5 @@ jobs:
           NEXT_PUBLIC_SITE_URL: https://houzzat.teamalisyed.workers.dev
           # Public wa.me number (safe to bake into the client bundle at build).
           NEXT_PUBLIC_WHATSAPP_EXPERT: "16472214949"
-          COMING_SOON: "0"
+          COMING_SOON: "1"
         run: pnpm run deploy:cf
