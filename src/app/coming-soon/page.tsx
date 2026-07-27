@@ -52,6 +52,24 @@ export default function ComingSoonPage() {
             <p className="mt-3">Royal LePage Credit Valley Real Estate</p>
             <p>1-10045 Hurontario St.</p>
             <p>Brampton, ON, L6Z 0E6</p>
+            <p className="mt-3">
+              Office:{" "}
+              <a
+                href="tel:+19057935000"
+                className="font-medium text-canopy hover:underline"
+              >
+                905-793-5000
+              </a>
+            </p>
+            <p>
+              Cell:{" "}
+              <a
+                href="tel:+16472214949"
+                className="font-medium text-canopy hover:underline"
+              >
+                647-221-4949
+              </a>
+            </p>
           </address>
         </div>
       </main>
