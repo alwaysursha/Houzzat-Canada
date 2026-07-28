@@ -44,11 +44,52 @@ export function formatRelativeAge(from: Date | string) {
 
   if (minutes < 1) return "just now";
   if (minutes === 1) return "1 min ago";
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60) return `${minutes} mins ago`;
   if (hours === 1) return "1 hour ago";
   if (hours < 24) return `${hours} hours ago`;
   if (days === 1) return "1 day ago";
   return `${days} days ago`;
+}
+
+/**
+ * Days on market from MLS list date (ListingContractDate / listedAt).
+ * Active → now − listedAt; sold/leased → soldAt − listedAt.
+ */
+export function daysOnMarketFromListedAt(input: {
+  listedAt?: Date | string | null;
+  soldAt?: Date | string | null;
+  status?: ListingStatus | string | null;
+  /** Fallback when listedAt is missing (legacy stored DOM). */
+  daysOnMarket?: number | null;
+}): number {
+  const listedRaw = input.listedAt;
+  if (listedRaw) {
+    const listed =
+      typeof listedRaw === "string" ? new Date(listedRaw) : listedRaw;
+    if (!Number.isNaN(listed.getTime())) {
+      const closed =
+        input.status === "SOLD" ||
+        input.status === "LEASED" ||
+        input.status === "EXPIRED" ||
+        input.status === "TERMINATED";
+      let end = new Date();
+      if (closed && input.soldAt) {
+        const sold =
+          typeof input.soldAt === "string"
+            ? new Date(input.soldAt)
+            : input.soldAt;
+        if (!Number.isNaN(sold.getTime())) end = sold;
+      }
+      return Math.max(
+        0,
+        Math.floor((end.getTime() - listed.getTime()) / 86_400_000),
+      );
+    }
+  }
+  const fallback = input.daysOnMarket;
+  return fallback != null && Number.isFinite(fallback)
+    ? Math.max(0, Math.round(fallback))
+    : 0;
 }
 
 /** @deprecated Prefer formatListingTiming — kept for callers that only have DOM. */
@@ -137,7 +178,7 @@ export function closedPriceLabel(
 
 /**
  * Site-wide listing timing label:
- * - Active → "Added … ago" (hours/mins when listedAt is known)
+ * - Active → "Added … ago" from MLS listedAt (ListingContractDate)
  * - Sold/Leased → "Sold on …" / "Leased on …"
  */
 export function formatListingTiming(listing: {
@@ -165,33 +206,98 @@ export function formatListingTiming(listing: {
     if (age) return age === "just now" ? "Added just now" : `Added ${age}`;
   }
 
-  if (listing.daysOnMarket != null) {
-    if (listing.daysOnMarket <= 0) return "Added just now";
-    return `Added ${formatDaysAgo(listing.daysOnMarket)}`;
-  }
-
-  return "Added recently";
+  const dom = daysOnMarketFromListedAt(listing);
+  if (dom <= 0) return "Added just now";
+  return `Added ${formatDaysAgo(dom)}`;
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function canadianPostalPattern(postal: string) {
+  const compact = postal.replace(/\s+/g, "").toUpperCase();
+  if (!/^[A-Z]\d[A-Z]\d[A-Z]\d$/.test(compact)) {
+    return escapeRegExp(postal.trim());
+  }
+  return `${compact.slice(0, 3)}\\s*${compact.slice(3)}`;
+}
+
+/**
+ * Street + locality lines for cards / map popups.
+ * AMPRE UnparsedAddress often already includes city/province/postal — strip those
+ * so we don't render "… Brampton, ON L6Z 3V7" twice.
+ */
 export function formatListingAddress(listing: {
   addressLine: string;
   unitNumber?: string | null;
   city: string;
   province?: string | null;
   postalCode?: string | null;
-}) {
-  const street = listing.unitNumber
-    ? `${listing.addressLine} Unit ${listing.unitNumber}`
-    : listing.addressLine;
+}): [string, string] {
+  const city = listing.city.trim();
+  const province = (listing.province?.trim() || "ON").toUpperCase();
+  const postal = listing.postalCode?.trim() || null;
+  const unit = listing.unitNumber?.trim() || null;
 
-  const cityLine = [
-    listing.city,
-    [listing.province?.trim() || "ON", listing.postalCode?.trim()]
-      .filter(Boolean)
-      .join(" "),
-  ].join(", ");
+  let street = listing.addressLine.trim().replace(/,+\s*$/g, "");
+
+  // Drop trailing ", City, ON A1A 1A1" (and loose variants) from UnparsedAddress.
+  if (city) {
+    const postalPart = postal
+      ? `(?:,?\\s*${canadianPostalPattern(postal)})?`
+      : `(?:,?\\s*[A-Z]\\d[A-Z]\\s*\\d[A-Z]\\d)?`;
+    const localityTail = new RegExp(
+      `,\\s*${escapeRegExp(city)}\\s*,?\\s*${escapeRegExp(province)}${postalPart}\\s*$`,
+      "i",
+    );
+    street = street.replace(localityTail, "").replace(/,+\s*$/g, "").trim();
+
+    // Also drop a bare trailing ", City"
+    street = street
+      .replace(new RegExp(`,\\s*${escapeRegExp(city)}\\s*$`, "i"), "")
+      .replace(/,+\s*$/g, "")
+      .trim();
+  }
+
+  // Drop a trailing postal that survived without city (truncated UnparsedAddress).
+  if (postal) {
+    street = street
+      .replace(new RegExp(`,?\\s*${canadianPostalPattern(postal)}\\s*$`, "i"), "")
+      .replace(/,+\s*$/g, "")
+      .trim();
+  }
+
+  // Avoid "Unit 1205" when the street already ends with that unit token.
+  if (unit) {
+    const unitAlready =
+      new RegExp(`\\b(?:unit\\s*)?${escapeRegExp(unit)}\\b`, "i").test(street) ||
+      new RegExp(`\\b${escapeRegExp(unit)}\\s*$`, "i").test(street);
+    if (!unitAlready) {
+      street = `${street} Unit ${unit}`;
+    }
+  }
+
+  if (!street) {
+    street = listing.addressLine.trim().replace(/,+\s*$/g, "") || city;
+  }
+
+  const cityLine = [city, [province, postal].filter(Boolean).join(" ")]
+    .filter(Boolean)
+    .join(", ");
 
   return [street, cityLine];
+}
+
+/** Single-line address for titles, share text, breadcrumbs. */
+export function formatListingAddressOneLine(listing: {
+  addressLine: string;
+  unitNumber?: string | null;
+  city: string;
+  province?: string | null;
+  postalCode?: string | null;
+}) {
+  return formatListingAddress(listing).join(", ");
 }
 
 export function propertyTypeLabel(type: PropertyType) {

@@ -1,13 +1,14 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Bath, Bed, Calendar, Car, Maximize2 } from "lucide-react";
 import { ListingCardActions } from "@/components/listings/ListingCardActions";
+import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
   formatListingTiming,
   formatListPrice,
   formatListingAddress,
+  formatListingAddressOneLine,
   formatOpenHouseChip,
   isClosedListingStatus,
   listingStatusBadgeClass,
@@ -54,7 +55,7 @@ export function ListingCard({
   const isClosed = isClosedListingStatus(listing.status);
   const showClosedPrice = isClosed && listing.soldPrice != null;
   const addressLines = formatListingAddress(listing);
-  const shareTitle = `${listing.addressLine}, ${listing.city}`;
+  const shareTitle = formatListingAddressOneLine(listing);
 
   const body = (
     <>
@@ -65,7 +66,7 @@ export function ListingCard({
         )}
       >
         {listing.primaryImageUrl ? (
-          <Image
+          <ListingPhoto
             src={listing.primaryImageUrl}
             alt={listing.addressLine}
             fill

@@ -7,7 +7,9 @@ import { ListingNotesPanel } from "@/components/account/ListingNotesPanel";
 import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
 import { VowAcceptCard } from "@/components/account/VowAcceptCard";
 import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
+import { ListingFactsPanel } from "@/components/listings/ListingFactsPanel";
 import { ListingGallery } from "@/components/listings/ListingGallery";
+import { ListingRoomsPanel } from "@/components/listings/ListingRoomsPanel";
 import { ListingHistoryPanel } from "@/components/listings/ListingHistoryPanel";
 import { ListingNarrative } from "@/components/listings/ListingNarrative";
 import { ListingQaPanel } from "@/components/listings/ListingQaPanel";
@@ -27,6 +29,9 @@ import {
   formatListingTiming,
   formatListPrice,
   formatPrice,
+  formatListingAddress,
+  formatListingAddressOneLine,
+  daysOnMarketFromListedAt,
   isClosedListingStatus,
   listingStatusBadgeClass,
   listingStatusLabel,
@@ -55,7 +60,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
   const cover =
     listing.media.find((media) => media.isPrimary) ?? listing.media[0] ?? null;
-  const title = `${listing.addressLine}, ${listing.city}`;
+  const title = formatListingAddressOneLine(listing);
   const description = listing.description.slice(0, 160);
   const url = `${SITE_URL}/listing/${listing.mlsNumber}`;
   const images = cover?.url
@@ -226,9 +231,10 @@ export default async function ListingDetailPage({ params }: Params) {
     ? slugifyPlace(listing.city, listing.community)
     : slugifyPlace(listing.city);
   const province = listing.province?.trim() || "ON";
-  const addressLabel = listing.unitNumber
-    ? `${listing.unitNumber} – ${listing.addressLine}`
-    : listing.addressLine;
+  const [streetLine] = formatListingAddress(listing);
+  const addressLabel = formatListingAddressOneLine(listing);
+  const daysOnMarket = daysOnMarketFromListedAt(listing);
+  const timingLabel = formatListingTiming(listing);
   const crumbs: { label: string; href?: string }[] = [
     { label: province, href: "/search" },
     {
@@ -242,7 +248,7 @@ export default async function ListingDetailPage({ params }: Params) {
       href: `/areas/${areaSlug}`,
     });
   }
-  crumbs.push({ label: addressLabel });
+  crumbs.push({ label: streetLine });
 
   const coverTagLabel = listingStatusLabel(
     listing.status,
@@ -371,9 +377,7 @@ export default async function ListingDetailPage({ params }: Params) {
                     mlsNumber: listing.mlsNumber,
                     lat: listing.lat,
                     lng: listing.lng,
-                    addressLabel: listing.unitNumber
-                      ? `${listing.unitNumber} – ${listing.addressLine}`
-                      : listing.addressLine,
+                    addressLabel: formatListingAddressOneLine(listing),
                     city: listing.city,
                     listPrice: listing.listPrice,
                     transactionType: listing.transactionType,
@@ -434,13 +438,13 @@ export default async function ListingDetailPage({ params }: Params) {
                       </span>
                     ) : null}
                   </div>
-                  <p className="shrink-0 text-right text-base font-medium leading-snug text-ink/55">
-                    {formatListingTiming(listing)}
+                  <p className="shrink-0 text-right text-sm font-medium leading-snug text-ink/55">
+                    {timingLabel}
                   </p>
                 </div>
               ) : (
-                <p className="mb-2.5 text-right text-base font-medium leading-snug text-ink/55 md:hidden">
-                  {formatListingTiming(listing)}
+                <p className="mb-2.5 text-right text-sm font-medium leading-snug text-ink/55 md:hidden">
+                  {timingLabel}
                 </p>
               )}
               <div className="flex items-start justify-between gap-3">
@@ -500,25 +504,9 @@ export default async function ListingDetailPage({ params }: Params) {
               </div>
               <h1 className="mt-1.5 text-base font-medium text-ink/70 sm:text-lg">
                 {detailsLocked ? (
-                  <>
-                    <span className="select-none blur-[5px]">
-                      {listing.unitNumber
-                        ? `${listing.unitNumber} – ${listing.addressLine}`
-                        : listing.addressLine}
-                    </span>
-                    {`, ${listing.city}, ${listing.province || "ON"}`}
-                  </>
+                  <span className="select-none blur-[5px]">{addressLabel}</span>
                 ) : (
-                  [
-                    listing.unitNumber
-                      ? `${listing.unitNumber} – ${listing.addressLine}`
-                      : listing.addressLine,
-                    listing.city,
-                    listing.province || "ON",
-                    listing.postalCode,
-                  ]
-                    .filter(Boolean)
-                    .join(", ")
+                  addressLabel
                 )}
               </h1>
               {detailsLocked ? (
@@ -552,8 +540,8 @@ export default async function ListingDetailPage({ params }: Params) {
             </div>
 
             <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:shrink-0 md:items-end">
-              <p className="hidden text-base font-medium text-ink/55 md:block">
-                {formatListingTiming(listing)}
+              <p className="hidden text-right text-sm font-medium leading-snug text-ink/55 md:block">
+                {timingLabel}
               </p>
               {/*
                 Mobile: equal columns so the row fits the content width.
@@ -619,13 +607,36 @@ export default async function ListingDetailPage({ params }: Params) {
 
           <ListingNarrative body={listing.description} />
 
+          <ListingFactsPanel
+            facts={listing.facts}
+            propertyTypeLabel={propertyTypeLabel(listing.propertyType)}
+            mlsNumber={listing.mlsNumber}
+            community={listing.community}
+            postalCode={listing.postalCode}
+            taxesLabel={listing.taxes ? formatPrice(listing.taxes) : null}
+            maintenanceLabel={
+              listing.maintenanceFee
+                ? `${formatPrice(listing.maintenanceFee)}/mo`
+                : null
+            }
+            parkingSpaces={listing.parkingSpaces}
+            yearBuilt={listing.yearBuilt}
+            sqftLabel={
+              listing.sqft
+                ? `${listing.sqft.toLocaleString()} sqft`
+                : null
+            }
+            daysOnMarket={daysOnMarket}
+            brokerageName={listing.brokerageName}
+            beds={listing.beds}
+            baths={listing.baths}
+          />
+
+          <ListingRoomsPanel rooms={listing.rooms} />
+
           <ListingQaPanel
             mlsNumber={listing.mlsNumber}
-            addressLine={
-              listing.unitNumber
-                ? `${listing.unitNumber} – ${listing.addressLine}`
-                : listing.addressLine
-            }
+            addressLine={addressLabel}
             city={listing.city}
             title={t(locale, "grounded_qa_title")}
             hint={t(locale, "grounded_qa_hint")}
@@ -635,12 +646,7 @@ export default async function ListingDetailPage({ params }: Params) {
           <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
 
           <ListingHistoryPanel
-            addressLabel={[
-              listing.unitNumber
-                ? `${listing.unitNumber} – ${listing.addressLine}`
-                : listing.addressLine,
-              listing.city,
-            ].join(", ")}
+            addressLabel={addressLabel}
             propertyType={listing.propertyType}
             transactionType={listing.transactionType}
             callbackPath={`/listing/${listing.mlsNumber}`}
@@ -661,39 +667,6 @@ export default async function ListingDetailPage({ params }: Params) {
             pulse={pulse}
             vowCallbackPath={`/listing/${listing.mlsNumber}`}
           />
-
-          <dl className="grid grid-cols-2 gap-4 rounded-2xl border border-line bg-surface p-5 text-sm sm:grid-cols-3">
-            <div>
-              <dt className="text-ink/45">Taxes</dt>
-              <dd className="font-medium">
-                {listing.taxes ? formatPrice(listing.taxes) : "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-ink/45">Maintenance</dt>
-              <dd className="font-medium">
-                {listing.maintenanceFee
-                  ? `${formatPrice(listing.maintenanceFee)}/mo`
-                  : "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-ink/45">Parking</dt>
-              <dd className="font-medium">{listing.parkingSpaces}</dd>
-            </div>
-            <div>
-              <dt className="text-ink/45">Year built</dt>
-              <dd className="font-medium">{listing.yearBuilt ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-ink/45">Days on market</dt>
-              <dd className="font-medium">{listing.daysOnMarket}</dd>
-            </div>
-            <div>
-              <dt className="text-ink/45">Brokerage</dt>
-              <dd className="break-words font-medium">{listing.brokerageName}</dd>
-            </div>
-          </dl>
 
           <ListingRelatedSection
             subject={{

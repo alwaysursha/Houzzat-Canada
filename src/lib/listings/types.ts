@@ -2,6 +2,7 @@ import type {
   Listing,
   ListingHistory,
   ListingMedia,
+  ListingRoom,
   OpenHouse,
   ListingStatus,
   ListingTransactionType,
@@ -47,6 +48,7 @@ export type ListingDetail = Listing & {
   media: ListingMedia[];
   openHouses: OpenHouse[];
   history: ListingHistory[];
+  rooms: ListingRoom[];
 };
 
 export type ListingSearchParams = {

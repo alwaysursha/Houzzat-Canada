@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
+  formatListingAddress,
   formatListingTiming,
   isClosedListingStatus,
   listingStatusBadgeClass,
@@ -57,12 +58,10 @@ export function CompactPropertyCard({
 }) {
   const isClosed = isClosedListingStatus(listing.status);
   const showClosedPrice = isClosed && listing.soldPrice != null;
-  const street = listing.unitNumber
-    ? `${listing.unitNumber} – ${listing.addressLine}`
-    : listing.addressLine;
+  const [street, cityLine] = formatListingAddress(listing);
   const place = listing.community
     ? `${listing.community}, ${listing.city}`
-    : listing.city;
+    : cityLine;
 
   return (
     <article
@@ -91,7 +90,7 @@ export function CompactPropertyCard({
         }
       >
         {listing.primaryImageUrl ? (
-          <Image
+          <ListingPhoto
             src={listing.primaryImageUrl}
             alt=""
             fill

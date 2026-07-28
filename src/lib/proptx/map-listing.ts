@@ -5,6 +5,7 @@ import type {
   PropertyType,
   Prisma,
 } from "@prisma/client";
+import type { ListingFacts } from "@/lib/listings/facts";
 
 /** Loose RESO / PropTx Property row — fields vary by agreement. */
 export type PropTxProperty = Record<string, unknown>;
@@ -224,6 +225,8 @@ function resolveCoordinates(row: PropTxProperty): {
     "GeoLat",
     "PropertyLatitude",
     "ListingLatitude",
+    "MapCenterLatitude",
+    "LatitudeY",
   );
   let lng = num(
     row,
@@ -233,6 +236,8 @@ function resolveCoordinates(row: PropTxProperty): {
     "GeoLng",
     "PropertyLongitude",
     "ListingLongitude",
+    "MapCenterLongitude",
+    "LongitudeX",
   );
 
   const geo = row.GeoLocation ?? row.Location ?? row.Coordinates;
@@ -272,8 +277,187 @@ function resolveCoordinates(row: PropTxProperty): {
   return { lat: 43.7, lng: -79.4, approximate: true };
 }
 
+function strList(row: PropTxProperty, ...keys: string[]): string[] | null {
+  for (const key of keys) {
+    const v = row[key];
+    if (Array.isArray(v)) {
+      const items = v
+        .filter((x): x is string => typeof x === "string" && Boolean(x.trim()))
+        .map((s) => s.trim());
+      if (items.length) return items;
+    }
+    if (typeof v === "string" && v.trim()) return [v.trim()];
+  }
+  return null;
+}
+
+function compactFacts(facts: ListingFacts): ListingFacts | undefined {
+  const out: ListingFacts = {};
+  let any = false;
+  for (const [key, value] of Object.entries(facts) as Array<
+    [keyof ListingFacts, ListingFacts[keyof ListingFacts]]
+  >) {
+    if (value == null) continue;
+    if (typeof value === "string" && !value.trim()) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    (out as Record<string, unknown>)[key] = value;
+    any = true;
+  }
+  return any ? out : undefined;
+}
+
+/** Map AMPRE Property extras into Listing.facts JSON. */
+export function mapListingFacts(row: PropTxProperty): ListingFacts | undefined {
+  const possessionDate = date(row, "PossessionDate");
+  return compactFacts({
+    lotSizeArea: num(row, "LotSizeArea"),
+    lotSizeUnits: str(row, "LotSizeUnits", "LotSizeAreaUnits"),
+    lotDepth: num(row, "LotDepth"),
+    frontageLength: num(row, "FrontageLength", "LotWidth", "LotFrontage"),
+    lotSizeSource: str(row, "LotSizeSource"),
+    basement: strList(row, "Basement"),
+    cooling: strList(row, "Cooling"),
+    heatType: str(row, "HeatType"),
+    heatSource: str(row, "HeatSource"),
+    fireplace: bool(row, "FireplaceYN"),
+    garageType: str(row, "GarageType"),
+    parkingFeatures: strList(row, "ParkingFeatures"),
+    coveredSpaces: num(row, "CoveredSpaces", "GarageParkingSpaces"),
+    possessionType: str(row, "PossessionType"),
+    possessionDate: possessionDate
+      ? possessionDate.toISOString().slice(0, 10)
+      : null,
+    possessionDetails: str(row, "PossessionDetails"),
+    crossStreet: str(row, "CrossStreet"),
+    directions: str(row, "Directions"),
+    architecturalStyle: strList(row, "ArchitecturalStyle"),
+    exteriorFeatures: strList(row, "ExteriorFeatures"),
+    interiorFeatures: strList(row, "InteriorFeatures"),
+    constructionMaterials: strList(row, "ConstructionMaterials"),
+    roof: strList(row, "Roof"),
+    sewer: strList(row, "Sewer", "Sewage"),
+    poolFeatures: strList(row, "PoolFeatures"),
+    waterfront: bool(row, "WaterfrontYN"),
+    balconyType: str(row, "BalconyType"),
+    kitchensTotal: num(row, "KitchensTotal", "NumberOfKitchens"),
+    bedroomsAboveGrade: num(row, "BedroomsAboveGrade"),
+    bedroomsBelowGrade: num(row, "BedroomsBelowGrade"),
+    livingAreaRange: str(row, "LivingAreaRange"),
+    approximateAge: str(row, "ApproximateAge"),
+    associationFeeIncludes: strList(row, "AssociationFeeIncludes"),
+    associationAmenities: strList(row, "AssociationAmenities"),
+    petsAllowed: strList(row, "PetsAllowed"),
+    inclusions: str(row, "Inclusions"),
+    exclusions: str(row, "Exclusions"),
+    virtualTourUrl: str(
+      row,
+      "VirtualTourURLUnbranded",
+      "VirtualTourURLBranded",
+      "VirtualTourURLUnbranded2",
+    ),
+  });
+}
+
+function parseRangeMidpoint(raw: string | null): number | null {
+  if (!raw) return null;
+  const range = raw.match(/(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)/);
+  if (range) {
+    const a = Number(range[1]);
+    const b = Number(range[2]);
+    if (Number.isFinite(a) && Number.isFinite(b)) {
+      return Math.round((a + b) / 2);
+    }
+  }
+  const single = raw.match(/(\d+(?:\.\d+)?)/);
+  if (!single) return null;
+  const n = Number(single[1]);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+function mapSqft(row: PropTxProperty): number | null {
+  const direct = num(
+    row,
+    "LivingArea",
+    "BuildingAreaTotal",
+    "AboveGradeFinishedArea",
+    "FinishedSqFt",
+    "SquareFootage",
+  );
+  if (direct != null && direct > 0) return Math.round(direct);
+
+  const fromRange = parseRangeMidpoint(
+    str(
+      row,
+      "LivingAreaRange",
+      "BuildingAreaRange",
+      "ApproximateSquareFootage",
+      "SqftRange",
+    ),
+  );
+  return fromRange != null && fromRange > 0 ? fromRange : null;
+}
+
+function mapYearBuilt(row: PropTxProperty): number | null {
+  const direct = num(row, "YearBuilt", "YearBuiltEffective");
+  if (direct != null && direct >= 1800 && direct <= new Date().getFullYear() + 2) {
+    return Math.round(direct);
+  }
+
+  const ageRaw = str(
+    row,
+    "ApproximateAge",
+    "Age",
+    "BuildingAge",
+    "PropertyAge",
+  );
+  if (!ageRaw) return null;
+  if (/new|under\s*construct/i.test(ageRaw)) {
+    return new Date().getFullYear();
+  }
+  const mid = parseRangeMidpoint(ageRaw);
+  if (mid == null) return null;
+  const year = new Date().getFullYear() - mid;
+  return year >= 1800 && year <= new Date().getFullYear() + 2 ? year : null;
+}
+
+function mapBeds(row: PropTxProperty): number {
+  const total = num(row, "BedroomsTotal", "BedsTotal", "Bedrooms");
+  if (total != null) return total;
+  const above = num(row, "BedroomsAboveGrade") ?? 0;
+  const below = num(row, "BedroomsBelowGrade") ?? 0;
+  return above + below;
+}
+
+function mapBaths(row: PropTxProperty): number {
+  const decimal = num(
+    row,
+    "BathroomsTotalDecimal",
+    "BathroomsTotal",
+    "BathsTotal",
+  );
+  if (decimal != null) return decimal;
+  const full =
+    num(row, "BathroomsTotalInteger", "BathroomsFull") ?? 0;
+  const half = num(row, "BathroomsHalfInteger", "BathroomsPartial") ?? 0;
+  return full + half * 0.5;
+}
+
+export const APPROX_PIN_NOTE =
+  "[Map pin approximate — coordinates missing from feed.]";
+
+export function stripApproxPinNote(description: string): string {
+  return description
+    .replace(/\n*\s*\[Map pin approximate[^\]]*\]\s*/gi, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export type MapPropertyResult =
-  | { ok: true; data: Prisma.ListingCreateInput }
+  | {
+      ok: true;
+      data: Prisma.ListingCreateInput;
+      approximateCoords: boolean;
+    }
   | { ok: false; reason: string };
 
 export function mapPropertyToListingResult(
@@ -312,23 +496,9 @@ export function mapPropertyToListingResult(
     date(row, "ModificationTimestamp", "PhotosChangeTimestamp") ?? listedAt;
   const soldAt = date(row, "CloseDate", "PurchaseContractDate", "SoldDate");
 
-  const beds = num(row, "BedroomsTotal", "BedsTotal", "Bedrooms") ?? 0;
-  const baths =
-    num(
-      row,
-      "BathroomsTotalInteger",
-      "BathroomsTotalDecimal",
-      "BathroomsTotal",
-      "BathsTotal",
-    ) ?? 0;
-  const sqftRaw = num(
-    row,
-    "LivingArea",
-    "BuildingAreaTotal",
-    "AboveGradeFinishedArea",
-    "SquareFootage",
-  );
-  const sqft = sqftRaw != null ? Math.round(sqftRaw) : null;
+  const beds = mapBeds(row);
+  const baths = mapBaths(row);
+  const sqft = mapSqft(row);
   const parking =
     Math.round(
       num(
@@ -337,16 +507,33 @@ export function mapPropertyToListingResult(
         "GarageSpaces",
         "CoveredSpaces",
         "ParkingSpaces",
+        "TotalParking",
       ) ?? 0,
     ) || 0;
-  const yearBuiltRaw = num(row, "YearBuilt");
-  const yearBuilt = yearBuiltRaw != null ? Math.round(yearBuiltRaw) : null;
-  const taxesRaw = num(row, "TaxAnnualAmount", "Taxes");
+  const yearBuilt = mapYearBuilt(row);
+  const taxesRaw = num(row, "TaxAnnualAmount", "Taxes", "AnnualTaxes");
   const taxes = taxesRaw != null ? Math.round(taxesRaw) : null;
   const feeRaw = num(row, "AssociationFee", "MaintenanceFee", "CondoFee");
   const maintenanceFee = feeRaw != null ? Math.round(feeRaw) : null;
-  const daysOnMarket =
-    Math.round(num(row, "DaysOnMarket", "CumulativeDaysOnMarket") ?? 0) || 0;
+  const daysOnMarket = (() => {
+    if (listedAt) {
+      const end =
+        soldAt &&
+        (status === "SOLD" ||
+          status === "LEASED" ||
+          status === "EXPIRED" ||
+          status === "TERMINATED")
+          ? soldAt
+          : new Date();
+      return Math.max(
+        0,
+        Math.floor((end.getTime() - listedAt.getTime()) / 86_400_000),
+      );
+    }
+    return (
+      Math.round(num(row, "DaysOnMarket", "CumulativeDaysOnMarket") ?? 0) || 0
+    );
+  })();
 
   const city = str(row, "City", "CityRegion", "Municipality") ?? "Ontario";
   const community = str(
@@ -354,14 +541,19 @@ export function mapPropertyToListingResult(
     "CityRegion",
     "SubdivisionName",
     "Community",
+    "CommunityName",
     "Neighborhood",
+    "Neighbourhood",
     "District",
+    "Area",
   );
   const postalCode = str(row, "PostalCode", "ZipCode");
   const province = str(row, "StateOrProvince", "Province") ?? "ON";
   const unitNumber = str(row, "UnitNumber", "ApartmentNumber");
-  const description =
-    str(row, "PublicRemarks", "PublicRemarksNew", "Description") ?? "";
+  const description = stripApproxPinNote(
+    str(row, "PublicRemarks", "PublicRemarksNew", "Description", "Remarks") ??
+      "",
+  );
   const brokerageName =
     str(
       row,
@@ -371,12 +563,12 @@ export function mapPropertyToListingResult(
       "BrokerageName",
     ) ?? "MLS® Brokerage";
 
-  const approxNote = coords.approximate
-    ? "\n\n[Map pin approximate — coordinates missing from feed.]"
-    : "";
+  const approxNote = coords.approximate ? `\n\n${APPROX_PIN_NOTE}` : "";
+  const facts = mapListingFacts(row);
 
   return {
     ok: true,
+    approximateCoords: coords.approximate,
     data: {
       mlsNumber,
       listingKey: listingKey ?? undefined,
@@ -404,6 +596,7 @@ export function mapPropertyToListingResult(
       lng: coords.lng,
       description: `${description}${approxNote}`.trim(),
       brokerageName,
+      facts: facts ?? undefined,
       listedAt,
       soldAt: soldAt ?? undefined,
       updatedAtMls,
@@ -426,13 +619,38 @@ export function mapMediaRow(row: PropTxProperty): {
   sortOrder: number;
   isPrimary: boolean;
 } | null {
+  const resourceName = str(row, "ResourceName");
+  if (resourceName && resourceName.toLowerCase() !== "property") return null;
+
+  const mediaType = (
+    str(row, "MediaType", "MimeType", "MediaCategory") ?? ""
+  ).toLowerCase();
+  if (
+    mediaType &&
+    !mediaType.includes("image") &&
+    !mediaType.includes("photo") &&
+    !mediaType.includes("jpeg") &&
+    !mediaType.includes("jpg") &&
+    !mediaType.includes("png") &&
+    !mediaType.includes("webp")
+  ) {
+    return null;
+  }
+
   const listingKey = str(
     row,
     "ResourceRecordKey",
     "ListingKey",
     "ResourceRecordID",
   );
-  const url = str(row, "MediaURL", "MediaUrl", "Url", "LongURL");
+  const url = str(
+    row,
+    "MediaURL",
+    "MediaUrl",
+    "Url",
+    "LongURL",
+    "MediaObjectID",
+  );
   if (!listingKey || !url) return null;
   if (!/^https?:\/\//i.test(url)) return null;
 
@@ -445,7 +663,7 @@ export function mapMediaRow(row: PropTxProperty): {
     listingKey,
     url,
     sortOrder: order,
-    isPrimary: preferred === true || order === 0,
+    isPrimary: preferred === true || order === 0 || order === 1,
   };
 }
 
@@ -471,6 +689,60 @@ export function mapOpenHouseRow(row: PropTxProperty): {
     startsAt,
     endsAt,
     notes: str(row, "OpenHouseRemarks", "Remarks"),
+  };
+}
+
+export function mapRoomRow(row: PropTxProperty): {
+  listingKey: string;
+  roomKey: string;
+  roomType: string;
+  roomLevel: string | null;
+  dimensions: string | null;
+  length: number | null;
+  width: number | null;
+  units: string | null;
+  features: string | null;
+  sortOrder: number;
+} | null {
+  const listingKey = str(row, "ListingKey", "ResourceRecordKey");
+  const roomKey = str(row, "RoomKey");
+  const roomType = str(row, "RoomType");
+  if (!listingKey || !roomKey || !roomType) return null;
+
+  const status = (str(row, "RoomStatus") ?? "Active").toLowerCase();
+  if (status && status !== "active") return null;
+
+  const featureParts = [
+    str(row, "RoomFeature1"),
+    str(row, "RoomFeature2"),
+    str(row, "RoomFeature3"),
+  ].filter(Boolean) as string[];
+  const featureList = strList(row, "RoomFeatures") ?? [];
+  const features = [...new Set([...featureParts, ...featureList])]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(", ");
+
+  const length = num(row, "RoomLength");
+  const width = num(row, "RoomWidth");
+  const units = str(row, "RoomLengthWidthUnits", "RoomAreaUnits");
+  const dimensions =
+    str(row, "RoomDimensions") ??
+    (length != null && width != null
+      ? `${length} x ${width}${units ? ` ${units}` : ""}`
+      : null);
+
+  return {
+    listingKey,
+    roomKey,
+    roomType,
+    roomLevel: str(row, "RoomLevel"),
+    dimensions,
+    length,
+    width,
+    units,
+    features: features || null,
+    sortOrder: Math.round(num(row, "Order") ?? 0),
   };
 }
 

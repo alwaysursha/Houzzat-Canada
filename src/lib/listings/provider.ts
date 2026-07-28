@@ -10,6 +10,7 @@ import {
   filterAndRankListingsByQuery,
   listingQueryCandidateWhere,
 } from "@/lib/listings/search-match";
+import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import type {
   AutocompleteSuggestion,
   ListingCard,
@@ -38,13 +39,15 @@ export function toCard(
     const urls: string[] = [];
     const seen = new Set<string>();
     if (primary?.url) {
-      urls.push(primary.url);
-      seen.add(primary.url);
+      const src = listingPhotoSrc(primary.url) ?? primary.url;
+      urls.push(src);
+      seen.add(src);
     }
     for (const m of listing.media) {
-      if (!m.url || seen.has(m.url)) continue;
-      urls.push(m.url);
-      seen.add(m.url);
+      const src = listingPhotoSrc(m.url) ?? m.url;
+      if (!m.url || seen.has(src)) continue;
+      urls.push(src);
+      seen.add(src);
       if (urls.length >= 12) break;
     }
     return urls;
@@ -77,7 +80,9 @@ export function toCard(
     brokerageName: listing.brokerageName,
     lat: listing.lat,
     lng: listing.lng,
-    primaryImageUrl: primary?.url ?? null,
+    primaryImageUrl: primary?.url
+      ? listingPhotoSrc(primary.url) ?? primary.url
+      : null,
     imageUrls,
     openHouses: upcoming.map((oh) => ({
       startsAt: oh.startsAt.toISOString(),
@@ -271,6 +276,7 @@ export class DbListingProvider implements ListingProvider {
         media: { orderBy: { sortOrder: "asc" } },
         openHouses: { orderBy: { startsAt: "asc" } },
         history: { orderBy: { contractDate: "desc" } },
+        rooms: { orderBy: { sortOrder: "asc" } },
       },
     });
     if (!listing) return null;

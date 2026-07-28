@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import {
   useCallback,
   useEffect,
@@ -19,6 +18,7 @@ import {
 } from "@/components/listings/ListingMapView";
 import { ListingGalleryMapSlide } from "@/components/listings/ListingGalleryMapSlide";
 import { ListingLockedGateOverlay } from "@/components/listings/ListingLockedGateOverlay";
+import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { cn } from "@/lib/utils";
 import { Images, MapPinned } from "lucide-react";
 
@@ -348,7 +348,7 @@ export function ListingGallery({
               className="relative min-h-[52vh] w-full min-w-full shrink-0 snap-center snap-always overflow-hidden bg-mist text-left"
               aria-label={`Photo ${i + 1} of ${count}. Open gallery.`}
             >
-              <Image
+              <ListingPhoto
                 src={photo.url}
                 alt={photo.alt ?? `${addressLabel} photo ${i + 1}`}
                 fill
@@ -454,7 +454,7 @@ export function ListingGallery({
             )}
             aria-label={`View photo 1 of ${count}`}
           >
-            <Image
+            <ListingPhoto
               src={hero.url}
               alt={hero.alt ?? `${addressLabel} photo 1`}
               fill
@@ -514,7 +514,7 @@ export function ListingGallery({
                     : `View photo ${photoIndex + 1} of ${count}`
                 }
               >
-                <Image
+                <ListingPhoto
                   src={photo.url}
                   alt={photo.alt ?? `${addressLabel} photo ${photoIndex + 1}`}
                   fill
@@ -690,7 +690,7 @@ export function ListingGallery({
               )}
               style={{ transform: `translate3d(${dragX}px, 0, 0)` }}
             >
-              <Image
+              <ListingPhoto
                 key={photos[index]!.id}
                 src={photos[index]!.url}
                 alt={
@@ -774,7 +774,7 @@ export function ListingGallery({
                         aria-label={`Go to photo ${i + 1}`}
                         aria-current={i === index}
                       >
-                        <Image
+                        <ListingPhoto
                           src={photo.url}
                           alt=""
                           fill

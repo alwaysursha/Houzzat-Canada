@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { ListingCardActions } from "@/components/listings/ListingCardActions";
+import { ListingFactsPanel } from "@/components/listings/ListingFactsPanel";
 import { ListingGallery } from "@/components/listings/ListingGallery";
 import { ListingHistoryPanel } from "@/components/listings/ListingHistoryPanel";
 import { ListingNarrative } from "@/components/listings/ListingNarrative";
@@ -26,8 +27,10 @@ import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
   formatListPrice,
+  formatListingAddressOneLine,
   formatListingTiming,
   formatPrice,
+  daysOnMarketFromListedAt,
   isClosedListingStatus,
   listingStatusBadgeClass,
   listingStatusLabel,
@@ -158,13 +161,7 @@ export function SearchMapListingOverlay({
   const detailsLocked = isInactive && !signedIn;
   const isCommercial =
     (listing?.segment ?? card.segment) === "COMMERCIAL";
-  const addressLabel = listing
-    ? listing.unitNumber
-      ? `${listing.unitNumber} – ${listing.addressLine}`
-      : listing.addressLine
-    : card.unitNumber
-      ? `${card.unitNumber} – ${card.addressLine}`
-      : card.addressLine;
+  const addressLabel = formatListingAddressOneLine(listing ?? card);
 
   const coverTagLabel = listingStatusLabel(
     listing?.status ?? card.status,
@@ -230,7 +227,7 @@ export function SearchMapListingOverlay({
       ? [{ id: "cover", url: card.primaryImageUrl }]
       : [];
 
-  const shareTitle = `${card.addressLine}, ${card.city}`;
+  const shareTitle = formatListingAddressOneLine(card);
 
   if (!mounted) return null;
 
@@ -397,28 +394,18 @@ export function SearchMapListingOverlay({
                           </span>
                         ) : null}
                       </div>
-                      <p className="shrink-0 text-sm font-medium text-ink/55">
+                      <p className="shrink-0 text-right text-sm font-medium leading-snug text-ink/55">
                         {formatListingTiming(listing)}
                       </p>
                     </div>
 
                     <h2 className="text-lg font-medium text-ink/80">
                       {detailsLocked ? (
-                        <>
-                          <span className="select-none blur-[5px]">
-                            {addressLabel}
-                          </span>
-                          {`, ${listing.city}, ${listing.province || "ON"}`}
-                        </>
+                        <span className="select-none blur-[5px]">
+                          {addressLabel}
+                        </span>
                       ) : (
-                        [
-                          addressLabel,
-                          listing.city,
-                          listing.province || "ON",
-                          listing.postalCode,
-                        ]
-                          .filter(Boolean)
-                          .join(", ")
+                        addressLabel
                       )}
                     </h2>
 
@@ -498,42 +485,32 @@ export function SearchMapListingOverlay({
                     rows={historyRows}
                   />
 
-                  <dl className="grid grid-cols-2 gap-4 rounded-2xl border border-line bg-surface p-5 text-sm sm:grid-cols-3">
-                    <div>
-                      <dt className="text-ink/45">Taxes</dt>
-                      <dd className="font-medium">
-                        {listing.taxes ? formatPrice(listing.taxes) : "—"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-ink/45">Maintenance</dt>
-                      <dd className="font-medium">
-                        {listing.maintenanceFee
-                          ? `${formatPrice(listing.maintenanceFee)}/mo`
-                          : "—"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-ink/45">Parking</dt>
-                      <dd className="font-medium">{listing.parkingSpaces}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-ink/45">Year built</dt>
-                      <dd className="font-medium">
-                        {listing.yearBuilt ?? "—"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-ink/45">Days on market</dt>
-                      <dd className="font-medium">{listing.daysOnMarket}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-ink/45">Brokerage</dt>
-                      <dd className="break-words font-medium">
-                        {listing.brokerageName ?? "—"}
-                      </dd>
-                    </div>
-                  </dl>
+                  <ListingFactsPanel
+                    facts={listing.facts}
+                    propertyTypeLabel={propertyTypeLabel(listing.propertyType)}
+                    mlsNumber={listing.mlsNumber}
+                    community={listing.community}
+                    postalCode={listing.postalCode}
+                    taxesLabel={
+                      listing.taxes ? formatPrice(listing.taxes) : null
+                    }
+                    maintenanceLabel={
+                      listing.maintenanceFee
+                        ? `${formatPrice(listing.maintenanceFee)}/mo`
+                        : null
+                    }
+                    parkingSpaces={listing.parkingSpaces}
+                    yearBuilt={listing.yearBuilt}
+                    sqftLabel={
+                      listing.sqft
+                        ? `${listing.sqft.toLocaleString()} sqft`
+                        : null
+                    }
+                    daysOnMarket={daysOnMarketFromListedAt(listing)}
+                    brokerageName={listing.brokerageName}
+                    beds={listing.beds}
+                    baths={listing.baths}
+                  />
 
                   <ListingRelatedSection
                     subject={{

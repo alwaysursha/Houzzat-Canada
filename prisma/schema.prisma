@@ -561,6 +561,11 @@ model Listing {
   lng              Float
   description      String                  @db.Text
   brokerageName    String
+  /**
+   * PropTx / RESO extended fact sheet (lot, basement, heat, garage, features, etc.).
+   * Shape: ListingFacts in src/lib/listings/facts.ts
+   */
+  facts            Json?
   /** PropTx VOW / RESO: ListingContractDate */
   listedAt         DateTime
   soldAt           DateTime?
@@ -582,6 +587,7 @@ model Listing {
   media          ListingMedia[]
   openHouses     OpenHouse[]
   history        ListingHistory[]
+  rooms          ListingRoom[]
   titleParties   OwnerTitleParty[]
   ownerOrders    OwnerListingOrder[]
   ownerConsents  OwnerListingConsent[]
@@ -596,6 +602,27 @@ model Listing {
   @@index([listedAt])
   @@index([addressLine])
   @@index([updatedAtMls])
+}
+
+model ListingRoom {
+  id          String   @id @default(cuid())
+  listingId   String
+  /** PropTx / RESO RoomKey */
+  roomKey     String   @unique
+  roomType    String
+  roomLevel   String?
+  dimensions  String?
+  length      Float?
+  width       Float?
+  units       String?
+  features    String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, sortOrder])
 }
 
 model OwnerTitleParty {

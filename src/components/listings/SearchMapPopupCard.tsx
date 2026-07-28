@@ -8,19 +8,20 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bath, Bed, ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
   formatListPrice,
+  formatListingAddress,
   formatListingTiming,
   isClosedListingStatus,
   listingStatusBadgeClass,
   listingStatusLabel,
   propertyTypeLabel,
 } from "@/lib/listings/constants";
+import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import { cn } from "@/lib/utils";
 
@@ -154,13 +155,12 @@ function CardImageSlider({
             transform: dragX ? `translateX(${dragX}px)` : undefined,
           }}
         >
-          <Image
+          <ListingPhoto
             src={current}
             alt={alt}
             fill
             className="pointer-events-none object-cover"
             sizes="320px"
-            draggable={false}
           />
         </div>
       ) : null}
@@ -228,12 +228,10 @@ export function SearchMapPopupCard({
   onOpen?: () => void;
   className?: string;
 }) {
-  const street = listing.unitNumber
-    ? `${listing.unitNumber} – ${listing.addressLine}`
-    : listing.addressLine;
+  const [street, cityLine] = formatListingAddress(listing);
   const place = listing.community
     ? `${listing.community}, ${listing.city}`
-    : listing.city;
+    : cityLine;
   const isClosed = isClosedListingStatus(listing.status);
   const isCommercial = listing.segment === "COMMERCIAL";
   const urls = listingImageUrls(listing);
