@@ -8,10 +8,18 @@ import type {
 import { auth } from "@/lib/auth";
 import { getListingProvider } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
+import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { hasClientAccess } from "@/lib/vow";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const dataSourceParam = searchParams.get("dataSource");
+  const gated = await mlsClientGate({
+    allowAnonymousFsbo: true,
+    dataSource: dataSourceParam,
+  });
+  if (gated) return gated;
+
   const provider = getListingProvider();
   const segmentParam = searchParams.get("segment");
   const transactionParam = searchParams.get("transactionType");

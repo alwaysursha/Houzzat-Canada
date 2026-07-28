@@ -535,6 +535,8 @@ enum ListingSegment {
 model Listing {
   id               String                  @id @default(cuid())
   mlsNumber        String                  @unique
+  /** PropTx / RESO ListingKey — used to join Media / History / OpenHouse. */
+  listingKey       String?                 @unique
   status           ListingStatus           @default(ACTIVE)
   segment          ListingSegment          @default(RESIDENTIAL)
   transactionType  ListingTransactionType  @default(SALE)
@@ -593,6 +595,7 @@ model Listing {
   @@index([lat, lng])
   @@index([listedAt])
   @@index([addressLine])
+  @@index([updatedAtMls])
 }
 
 model OwnerTitleParty {

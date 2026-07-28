@@ -1,5 +1,6 @@
 import { auth } from "@/auth.edge";
 import { isComingSoonEnabled } from "@/lib/coming-soon";
+import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { NextResponse, type NextRequest } from "next/server";
 
 function redirectToSignIn(request: NextRequest, callbackPath: string) {
@@ -31,12 +32,28 @@ function isComingSoonBypass(pathname: string) {
   return false;
 }
 
+function isPublicFsboSearch(request: NextRequest) {
+  return request.nextUrl.searchParams.get("dataSource") === "fsbo";
+}
+
 export default auth((request) => {
   const { pathname } = request.nextUrl;
   const session = request.auth;
 
   if (isComingSoonEnabled() && !isComingSoonBypass(pathname)) {
     return redirectToPath(request, "/coming-soon");
+  }
+
+  // PropTx VOW-only: MLS map search requires a registered client (IDX still pending).
+  if (
+    isVowOnlyMlsMode() &&
+    pathname === "/search" &&
+    !isPublicFsboSearch(request)
+  ) {
+    if (!session?.user) {
+      const callback = `${pathname}${request.nextUrl.search}`;
+      return redirectToSignIn(request, callback);
+    }
   }
 
   if (pathname.startsWith("/admin")) {

@@ -19,6 +19,10 @@ import type {
   ListingSearchResult,
   AutocompleteOptions,
 } from "@/lib/listings/types";
+import {
+  getPropTxSyncHealth,
+} from "@/lib/proptx/sync";
+import { isPropTxConfigured } from "@/lib/proptx/config";
 
 export function toCard(
   listing: Prisma.ListingGetPayload<{
@@ -88,8 +92,42 @@ export function toCard(
   };
 }
 
-export class MockListingProvider implements ListingProvider {
-  readonly name = "mock" as const;
+export class DbListingProvider implements ListingProvider {
+  constructor(readonly name: "mock" | "proptx") {}
+
+  /**
+   * PropTx mode must not surface seeded mock inventory.
+   * Mock mode keeps demo rows + FSBO.
+   */
+  private inventorySourceFilter(
+    dataSource?: ListingSearchParams["dataSource"],
+  ): Prisma.ListingWhereInput {
+    if (dataSource === "fsbo") {
+      return { dataSource: "fsbo", ownerStatus: "ACTIVE" };
+    }
+
+    if (this.name === "proptx") {
+      if (dataSource === "mls") {
+        return { dataSource: "mls", isMock: false };
+      }
+      return {
+        OR: [
+          { dataSource: "mls", isMock: false },
+          { dataSource: "fsbo", ownerStatus: "ACTIVE" },
+        ],
+      };
+    }
+
+    if (dataSource === "mls") {
+      return { dataSource: { not: "fsbo" } };
+    }
+    return {
+      OR: [
+        { dataSource: { not: "fsbo" } },
+        { dataSource: "fsbo", ownerStatus: "ACTIVE" },
+      ],
+    };
+  }
 
   async search(params: ListingSearchParams): Promise<ListingSearchResult> {
     const limit = Math.min(params.limit ?? 40, 100);
@@ -118,23 +156,9 @@ export class MockListingProvider implements ListingProvider {
       where.status = "ACTIVE";
     }
 
-    if (params.dataSource === "fsbo") {
-      (where.AND as Prisma.ListingWhereInput[]).push({
-        dataSource: "fsbo",
-        ownerStatus: "ACTIVE",
-      });
-    } else if (params.dataSource === "mls") {
-      (where.AND as Prisma.ListingWhereInput[]).push({
-        dataSource: { not: "fsbo" },
-      });
-    } else {
-      (where.AND as Prisma.ListingWhereInput[]).push({
-        OR: [
-          { dataSource: { not: "fsbo" } },
-          { dataSource: "fsbo", ownerStatus: "ACTIVE" },
-        ],
-      });
-    }
+    (where.AND as Prisma.ListingWhereInput[]).push(
+      this.inventorySourceFilter(params.dataSource),
+    );
 
     if (params.city) {
       where.city = { equals: params.city, mode: "insensitive" };
@@ -236,7 +260,7 @@ export class MockListingProvider implements ListingProvider {
       items: page.map(toCard),
       nextCursor: hasMore ? page[page.length - 1]?.mlsNumber ?? null : null,
       total,
-      provider: "mock",
+      provider: this.name,
     };
   }
 
@@ -256,6 +280,13 @@ export class MockListingProvider implements ListingProvider {
     ) {
       return null;
     }
+    if (
+      this.name === "proptx" &&
+      listing.isMock &&
+      listing.dataSource !== "fsbo"
+    ) {
+      return null;
+    }
     return listing;
   }
 
@@ -266,12 +297,7 @@ export class MockListingProvider implements ListingProvider {
     const txn = options?.transactionType;
     const publishedWhere: Prisma.ListingWhereInput = {
       AND: [
-        {
-          OR: [
-            { dataSource: { not: "fsbo" } },
-            { dataSource: "fsbo", ownerStatus: "ACTIVE" },
-          ],
-        },
+        this.inventorySourceFilter(),
         ...(txn ? [{ transactionType: txn }] : []),
       ],
     };
@@ -590,29 +616,36 @@ export class MockListingProvider implements ListingProvider {
 
     const rows = await prisma.listing.findMany({
       where: {
-        status: "ACTIVE",
-        transactionType: "SALE",
-        ...(params.city
-          ? { city: { equals: params.city, mode: "insensitive" } }
-          : {}),
-        ...(params.propertyTypes?.length
-          ? { propertyType: { in: params.propertyTypes } }
-          : {}),
-        ...(params.minPrice != null || params.maxPrice != null
-          ? {
-              listPrice: {
-                gte: params.minPrice,
-                lte: params.maxPrice,
+        AND: [
+          this.inventorySourceFilter(),
+          { status: "ACTIVE" },
+          { transactionType: "SALE" },
+          ...(params.city
+            ? [{ city: { equals: params.city, mode: "insensitive" as const } }]
+            : []),
+          ...(params.propertyTypes?.length
+            ? [{ propertyType: { in: params.propertyTypes } }]
+            : []),
+          ...(params.minPrice != null || params.maxPrice != null
+            ? [
+                {
+                  listPrice: {
+                    gte: params.minPrice,
+                    lte: params.maxPrice,
+                  },
+                },
+              ]
+            : []),
+          ...andFilters,
+          {
+            openHouses: {
+              some: {
+                startsAt: { lte: to },
+                endsAt: { gte: from },
               },
-            }
-          : {}),
-        ...(andFilters.length ? { AND: andFilters } : {}),
-        openHouses: {
-          some: {
-            startsAt: { lte: to },
-            endsAt: { gte: from },
+            },
           },
-        },
+        ],
       },
       include: {
         media: { orderBy: { sortOrder: "asc" } },
@@ -632,6 +665,24 @@ export class MockListingProvider implements ListingProvider {
   }
 
   async syncStatus() {
+    if (this.name === "proptx") {
+      const health = await getPropTxSyncHealth();
+      return {
+        provider: "proptx" as const,
+        healthy: health.configured && health.mlsCount > 0,
+        message: !isPropTxConfigured()
+          ? "PropTx credentials not configured."
+          : health.mlsCount > 0
+            ? `Serving ${health.mlsCount.toLocaleString("en-CA")} MLS listings from PropTx VOW sync.`
+            : health.lastRun?.status === "error"
+              ? `PropTx sync error: ${health.lastRun.message ?? "unknown"}`
+              : "PropTx configured — run POST /api/admin/mls/sync to pull listings.",
+        listingCount: health.mlsCount,
+        lastSyncedAt:
+          health.lastRun?.finishedAt ?? health.lastRun?.startedAt ?? null,
+      };
+    }
+
     const listingCount = await prisma.listing.count();
     const latest = await prisma.listing.findFirst({
       orderBy: { updatedAt: "desc" },
@@ -643,7 +694,7 @@ export class MockListingProvider implements ListingProvider {
       healthy: listingCount > 0,
       message:
         listingCount > 0
-          ? "Using mock GTA listings. Swap LISTING_PROVIDER=proptx when credentials are ready."
+          ? "Using mock GTA listings. Swap LISTING_PROVIDER=proptx when PropTx sync is healthy."
           : "No listings seeded. Run pnpm db:seed.",
       listingCount,
       lastSyncedAt: latest?.updatedAt.toISOString() ?? null,
@@ -666,43 +717,17 @@ const MOCK_PLACES = [
   { label: "Burlington", city: "Burlington", lat: 43.3255, lng: -79.799 },
 ];
 
-/** Reserved for Phase 1+ live feed — keep interface parity.
- *
- * When wiring PropTx VOW, map listing history cycles to ListingHistory:
- * - ListingContractDate → contractDate
- * - ModificationTimestamp → lastUpdatedAt (history) / updatedAtMls (current listing)
- * - Price Change events: previous ListPrice → originalPrice, new ListPrice → price
- * Past sold/expired/leased rows remain visibility=restricted under VOW rules.
- */
-export class PropTxListingProvider implements ListingProvider {
-  readonly name = "proptx" as const;
+/** PropTx mode: same Postgres reads as mock; data filled by VOW sync job. */
+export class PropTxListingProvider extends DbListingProvider {
+  constructor() {
+    super("proptx");
+  }
+}
 
-  private unsupported(): never {
-    throw new Error(
-      "PropTx provider is not configured yet. Set LISTING_PROVIDER=mock until credentials are available.",
-    );
-  }
-
-  search(): Promise<ListingSearchResult> {
-    return this.unsupported();
-  }
-  getByMls(): Promise<ListingDetail | null> {
-    return this.unsupported();
-  }
-  autocomplete(): Promise<AutocompleteSuggestion[]> {
-    return this.unsupported();
-  }
-  openHouses(): Promise<ListingCard[]> {
-    return this.unsupported();
-  }
-  async syncStatus() {
-    return {
-      provider: "proptx" as const,
-      healthy: false,
-      message: "PropTx credentials not configured.",
-      listingCount: 0,
-      lastSyncedAt: null,
-    };
+/** @deprecated Alias — prefer DbListingProvider("mock"). */
+export class MockListingProvider extends DbListingProvider {
+  constructor() {
+    super("mock");
   }
 }
 

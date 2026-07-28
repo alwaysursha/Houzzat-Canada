@@ -4,9 +4,13 @@ import { auth } from "@/lib/auth";
 import { getListingProvider } from "@/lib/listings/provider";
 import type { AutocompleteSuggestionGroup } from "@/lib/listings/types";
 import { prisma } from "@/lib/prisma";
+import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { hasClientAccess } from "@/lib/vow";
 
 export async function GET(request: Request) {
+  const gated = await mlsClientGate();
+  if (gated) return gated;
+
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q") ?? "";
   const empty = searchParams.get("empty") === "1";

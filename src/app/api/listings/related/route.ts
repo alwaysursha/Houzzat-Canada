@@ -3,9 +3,13 @@ import type { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { toCard } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
+import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { hasClientAccess } from "@/lib/vow";
 
 export async function GET(request: Request) {
+  const gated = await mlsClientGate();
+  if (gated) return gated;
+
   const { searchParams } = new URL(request.url);
   const mlsNumber = searchParams.get("mlsNumber")?.trim();
   const modeParam = searchParams.get("mode");

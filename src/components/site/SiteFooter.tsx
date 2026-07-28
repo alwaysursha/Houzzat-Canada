@@ -11,8 +11,8 @@ export function SiteFooter() {
         <div className="space-y-2">
           <p className="font-display text-lg text-ink">{SITE_NAME}</p>
           <p className="max-w-md text-sm text-ink/55">
-            MLS® listing data coming via TRREB / PropTx. This Phase 0 shell is
-            foundation only.
+            MLS® listing data via TRREB / PropTx (VOW). Sold prices and history
+            are shown to registered Houzzat clients only.
           </p>
         </div>
 

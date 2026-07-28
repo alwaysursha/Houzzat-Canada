@@ -21,8 +21,17 @@ import {
 import { getListingProvider, toCard } from "@/lib/listings/provider";
 import { getPopularCities } from "@/lib/listings/popular-cities";
 import { prisma } from "@/lib/prisma";
+import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { hasClientAccess } from "@/lib/vow";
 import type { ListingSegment, PropertyType } from "@prisma/client";
+import type { ListingSearchResult } from "@/lib/listings/types";
+
+const EMPTY_SEARCH: ListingSearchResult = {
+  items: [],
+  nextCursor: null,
+  total: 0,
+  provider: process.env.LISTING_PROVIDER === "proptx" ? "proptx" : "mock",
+};
 
 export default async function HomePage() {
   const session = await auth();
@@ -38,6 +47,7 @@ export default async function HomePage() {
   const isCustomer = Boolean(
     user && user.role !== "ADMIN" && user.role !== "AGENT",
   );
+  const vowOnlyGuest = isVowOnlyMlsMode() && !isClient;
 
   const activeHomepageSearch =
     isCustomer && user
@@ -57,6 +67,9 @@ export default async function HomePage() {
     : null;
 
   const provider = getListingProvider();
+  const mlsSearch = vowOnlyGuest
+    ? async () => EMPTY_SEARCH
+    : (params: Parameters<typeof provider.search>[0]) => provider.search(params);
 
   const [
     newResidential,
@@ -70,7 +83,7 @@ export default async function HomePage() {
     recentViews,
     popularCities,
   ] = await Promise.all([
-      provider.search(
+      mlsSearch(
         applyPersonalizationToSearchParams(
           {
             status: "ACTIVE",
@@ -82,7 +95,7 @@ export default async function HomePage() {
           personalization,
         ),
       ),
-      provider.search(
+      mlsSearch(
         applyPersonalizationToSearchParams(
           {
             status: "ACTIVE",
@@ -93,7 +106,7 @@ export default async function HomePage() {
           personalization,
         ),
       ),
-      provider.search(
+      mlsSearch(
         applyPersonalizationToSearchParams(
           {
             status: "ACTIVE",
@@ -104,20 +117,22 @@ export default async function HomePage() {
           personalization,
         ),
       ),
-      provider.openHouses({
-        city: personalization?.city,
-        communities: personalization?.communities,
-        propertyTypes: personalization?.propertyTypes as
-          | PropertyType[]
-          | undefined,
-        minPrice: personalization?.minPrice
-          ? Number(personalization.minPrice)
-          : undefined,
-        maxPrice: personalization?.maxPrice
-          ? Number(personalization.maxPrice)
-          : undefined,
-      }),
-      provider.search(
+      vowOnlyGuest
+        ? Promise.resolve([])
+        : provider.openHouses({
+            city: personalization?.city,
+            communities: personalization?.communities,
+            propertyTypes: personalization?.propertyTypes as
+              | PropertyType[]
+              | undefined,
+            minPrice: personalization?.minPrice
+              ? Number(personalization.minPrice)
+              : undefined,
+            maxPrice: personalization?.maxPrice
+              ? Number(personalization.maxPrice)
+              : undefined,
+          }),
+      mlsSearch(
         applyPersonalizationToSearchParams(
           {
             status: "SOLD",

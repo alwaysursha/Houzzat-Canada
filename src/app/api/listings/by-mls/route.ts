@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import { toCard } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { hasClientAccess } from "@/lib/vow";
 
 export async function GET(request: Request) {
+  const gated = await mlsClientGate();
+  if (gated) return gated;
+
   const ids = new URL(request.url).searchParams.get("ids");
   if (!ids?.trim()) {
     return NextResponse.json({ items: [] });

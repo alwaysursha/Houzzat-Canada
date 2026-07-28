@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Bath, Bed, Car, Maximize2, ArrowDown, ArrowUp } from "lucide-react";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { ListingNotesPanel } from "@/components/account/ListingNotesPanel";
@@ -41,6 +41,7 @@ import { t } from "@/lib/i18n/dictionaries";
 import { getLocale } from "@/lib/i18n/locale";
 import { findNearbyPois } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
+import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { hasVowAccess } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import { getExpertWhatsAppNumber } from "@/lib/whatsapp";
@@ -130,6 +131,17 @@ export default async function ListingDetailPage({ params }: Params) {
         }
       })()
     : null;
+
+  // VOW-only: MLS listings require a registered client; FSBO stays public.
+  if (
+    isVowOnlyMlsMode() &&
+    listing.dataSource !== "fsbo" &&
+    !hasVowAccess(user)
+  ) {
+    redirect(
+      `/auth/sign-in?callbackUrl=${encodeURIComponent(`/listing/${listing.mlsNumber}`)}`,
+    );
+  }
 
   const vowOk = hasVowAccess(user);
   const saved = user
