@@ -8,6 +8,7 @@ import type { PropertyType } from "@prisma/client";
 import {
   Columns2,
   LayoutGrid,
+  ListFilter,
   Map as MapIcon,
   Loader2,
 } from "lucide-react";
@@ -18,10 +19,12 @@ import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import {
   SearchFilterChips,
+  countActiveSearchFilters,
   type SearchFilters,
   type SearchStatusOption,
   type SearchViewMode,
 } from "@/components/listings/SearchFilterChips";
+import { SearchFiltersSheet } from "@/components/listings/SearchFiltersSheet";
 import { SearchMap } from "@/components/listings/SearchMap";
 import { SearchMapListingOverlay } from "@/components/listings/SearchMapListingOverlay";
 import { SearchResultsPane } from "@/components/listings/SearchResultsPane";
@@ -129,6 +132,7 @@ export function SearchExperience() {
   const [areaDirty, setAreaDirty] = useState(false);
   const [polygon, setPolygon] = useState<LngLat[] | null>(null);
   const [isNarrow, setIsNarrow] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1023px)");
@@ -393,6 +397,7 @@ export function SearchExperience() {
 
   const showMap = view === "split" || view === "map";
   const showList = view === "split" || view === "cards";
+  const activeFilterCount = countActiveSearchFilters(filters);
   const activeListing = items.find((i) => i.mlsNumber === activeMls) ?? null;
   const detailListing = items.find((i) => i.mlsNumber === detailMls) ?? null;
 
@@ -461,37 +466,61 @@ export function SearchExperience() {
             />
           </div>
 
-          <div className="flex rounded-full border border-line bg-mist p-0.5">
-            {(
-              [
-                ["map", MapIcon, "Map"],
-                ["split", Columns2, "Split"],
-                ["cards", LayoutGrid, "Cards"],
-              ] as const
-            )
-              .filter(([mode]) => !(isNarrow && mode === "split"))
-              .map(([mode, Icon, label]) => (
+          <div className="flex items-center gap-2">
+            {isNarrow && !showMap ? (
               <button
-                key={mode}
                 type="button"
-                aria-label={label}
-                title={label}
-                onClick={() => updateView(mode)}
-                className={cn(
-                  "inline-flex size-9 items-center justify-center rounded-full transition",
-                  view === mode
-                    ? "bg-surface text-canopy shadow-sm"
-                    : "text-ink/45 hover:text-ink",
-                )}
+                onClick={() => setFiltersOpen(true)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-mist px-3 text-xs font-semibold text-ink transition hover:border-canopy/40"
               >
-                <Icon className="size-4" aria-hidden />
+                <ListFilter className="size-3.5" aria-hidden />
+                Filters
+                {activeFilterCount > 0 ? (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-canopy px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
               </button>
-            ))}
+            ) : null}
+            <div className="flex rounded-full border border-line bg-mist p-0.5">
+              {(
+                [
+                  ["map", MapIcon, "Map"],
+                  ["split", Columns2, "Split"],
+                  ["cards", LayoutGrid, "Cards"],
+                ] as const
+              )
+                .filter(([mode]) => !(isNarrow && mode === "split"))
+                .map(([mode, Icon, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-label={label}
+                  title={label}
+                  onClick={() => updateView(mode)}
+                  className={cn(
+                    "inline-flex size-9 items-center justify-center rounded-full transition",
+                    view === mode
+                      ? "bg-surface text-canopy shadow-sm"
+                      : "text-ink/45 hover:text-ink",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden />
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <SearchFilterChips filters={filters} onChange={updateFilters} />
+        <div
+          className={cn(
+            "flex flex-wrap items-center justify-between gap-2",
+            isNarrow && "justify-end",
+          )}
+        >
+          {!isNarrow ? (
+            <SearchFilterChips filters={filters} onChange={updateFilters} />
+          ) : null}
           <div className="flex flex-wrap items-center gap-2 text-xs text-ink/50">
             <span className="inline-flex items-center gap-1.5 font-medium text-ink/65">
               {pending ? (
@@ -593,6 +622,10 @@ export function SearchExperience() {
               }}
               expandCardOnClick={!isNarrow}
               onOpenListing={!isNarrow ? openListingDetail : undefined}
+              onOpenFilters={
+                isNarrow ? () => setFiltersOpen(true) : undefined
+              }
+              activeFilterCount={activeFilterCount}
               className="h-full w-full"
             />
           </div>
@@ -623,6 +656,18 @@ export function SearchExperience() {
           </div>
         ) : null}
       </div>
+
+      {isNarrow ? (
+        <SearchFiltersSheet
+          open={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          filters={filters}
+          onChange={updateFilters}
+          resultCount={total}
+          pending={pending}
+          resultNoun={noun}
+        />
+      ) : null}
 
       {detailListing ? (
         <SearchMapListingOverlay

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { requireCustomerUser } from "@/lib/account";
-import type { ListingCard as ListingCardData } from "@/lib/listings/types";
+import { toCard } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Saved homes" };
@@ -35,56 +35,10 @@ export default async function SavedHomesPage() {
 
   const byMls = new Map(listings.map((l) => [l.mlsNumber, l]));
 
-  const cards: ListingCardData[] = saved
+  const cards = saved
     .map((s) => byMls.get(s.mlsNumber))
     .filter(Boolean)
-    .map((listing) => {
-      const row = listing!;
-      const primary =
-        row.media.find((m) => m.isPrimary) ?? row.media[0] ?? null;
-      const upcoming = row.openHouses
-        .filter((oh) => oh.endsAt.getTime() >= Date.now())
-        .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
-        .slice(0, 2);
-      return {
-        mlsNumber: row.mlsNumber,
-        status: row.status,
-        segment: row.segment,
-        transactionType: row.transactionType,
-        propertyType: row.propertyType,
-        listPrice: row.listPrice,
-        soldPrice: row.soldPrice,
-        beds: row.beds,
-        baths: row.baths,
-        sqft: row.sqft,
-        parkingSpaces: row.parkingSpaces,
-        addressLine: row.addressLine,
-        unitNumber: row.unitNumber,
-        city: row.city,
-        community: row.community,
-        postalCode: row.postalCode,
-        province: row.province,
-        brokerageName: row.brokerageName,
-        lat: row.lat,
-        lng: row.lng,
-        primaryImageUrl: primary?.url ?? null,
-        openHouses: upcoming.map((oh) => ({
-          startsAt: oh.startsAt.toISOString(),
-          endsAt: oh.endsAt.toISOString(),
-        })),
-        daysOnMarket: row.daysOnMarket,
-        listedAt: row.listedAt.toISOString(),
-        soldAt: row.soldAt ? row.soldAt.toISOString() : null,
-        isMock: row.isMock,
-        dataSource: row.dataSource,
-        ownerTag:
-          row.dataSource === "fsbo"
-            ? row.transactionType === "LEASE"
-              ? "FLBO"
-              : "FSBO"
-            : null,
-      };
-    });
+    .map((listing) => toCard(listing!));
 
   return (
     <div className="space-y-6">

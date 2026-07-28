@@ -23,6 +23,6 @@
     // time (GitHub Actions) so client bundles can inline it.
     "NEXT_PUBLIC_WHATSAPP_EXPERT": "16472214949",
     // Temporary public gate — set to "1" to show Coming Soon to visitors
-    "COMING_SOON": "1"
+    "COMING_SOON": "0"
   }
 }

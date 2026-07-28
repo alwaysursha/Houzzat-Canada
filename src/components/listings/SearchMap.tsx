@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Check, Pencil, Trash2, X } from "lucide-react";
+import { Check, ListFilter, Pencil, Trash2, X } from "lucide-react";
 import type { ListingCard } from "@/lib/listings/types";
 import { formatListPrice } from "@/lib/listings/constants";
 import { OSM_STYLE } from "@/lib/maps/osm-style";
@@ -113,6 +113,8 @@ export function SearchMap({
   isLease = false,
   expandCardOnClick = false,
   onOpenListing,
+  onOpenFilters,
+  activeFilterCount = 0,
   className,
 }: {
   listings: ListingCard[];
@@ -132,6 +134,9 @@ export function SearchMap({
   /** Pin card opens listing detail overlay instead of navigating away. */
   expandCardOnClick?: boolean;
   onOpenListing?: (mlsNumber: string) => void;
+  /** Mobile: open full filter sheet from the map. */
+  onOpenFilters?: () => void;
+  activeFilterCount?: number;
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -540,6 +545,24 @@ export function SearchMap({
           </button>
         ) : null}
       </div>
+
+      {onOpenFilters ? (
+        <div className="absolute right-3 top-3 z-10">
+          <button
+            type="button"
+            onClick={onOpenFilters}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink shadow-md transition hover:border-canopy/40"
+          >
+            <ListFilter className="size-3.5" aria-hidden />
+            Filters
+            {activeFilterCount > 0 ? (
+              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-canopy px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                {activeFilterCount}
+              </span>
+            ) : null}
+          </button>
+        </div>
+      ) : null}
 
       {areaDirty && !drawing ? (
         <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">

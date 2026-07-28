@@ -22,6 +22,11 @@ const SITE_NAV = [
   { href: "/home-valuation", labelKey: "nav_home_worth" as const },
 ];
 
+/**
+ * Homepage only: reveal header search after the hero scrolls away.
+ * Uses scroll + hysteresis (not IntersectionObserver) so iOS Safari does not
+ * flicker when the sticky/fixed search chrome appears near the threshold.
+ */
 function useHomeHeroSearchVisible() {
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
@@ -38,19 +43,44 @@ function useHomeHeroSearchVisible() {
       return;
     }
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setVisible(!entry.isIntersecting);
-      },
-      {
-        root: null,
-        threshold: 0,
-        rootMargin: "-135px 0px 0px 0px",
-      },
-    );
+    // Hero bottom vs viewport top. SHOW_AT < HIDE_AT → dead band (no flip).
+    const SHOW_AT = 96;
+    const HIDE_AT = 168;
 
-    observer.observe(hero);
-    return () => observer.disconnect();
+    let frame = 0;
+
+    function readVisible(prev: boolean): boolean {
+      const bottom = hero!.getBoundingClientRect().bottom;
+      if (!prev) return bottom <= SHOW_AT;
+      return bottom < HIDE_AT;
+    }
+
+    function update() {
+      frame = 0;
+      setVisible((prev) => {
+        const next = readVisible(prev);
+        return next === prev ? prev : next;
+      });
+    }
+
+    function onScrollOrResize() {
+      if (frame) return;
+      frame = window.requestAnimationFrame(update);
+    }
+
+    update();
+    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize);
+    window.visualViewport?.addEventListener("resize", onScrollOrResize);
+    window.visualViewport?.addEventListener("scroll", onScrollOrResize);
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+      window.visualViewport?.removeEventListener("resize", onScrollOrResize);
+      window.visualViewport?.removeEventListener("scroll", onScrollOrResize);
+    };
   }, [pathname]);
 
   return visible;
@@ -148,7 +178,7 @@ function BuySearchControls({
     <div
       data-search-bar
       className={cn(
-        "flex items-center gap-2 rounded-md border border-line bg-surface/95 p-1 shadow-sm backdrop-blur",
+        "flex items-center gap-2 rounded-md border border-line bg-surface/95 p-1 shadow-sm",
         compact && "w-full",
       )}
     >
@@ -184,7 +214,8 @@ function BuySearchControls({
 
 /**
  * Sticky site header. Desktop: buy search slides into the header row.
- * Mobile: buy search sticks in a bar below the header after the hero scrolls away.
+ * Mobile: buy search is fixed below the header after the hero scrolls away
+ * (out of document flow so show/hide cannot thrash scroll on iOS).
  */
 export function SiteHeaderClient({
   siteName,
@@ -244,7 +275,7 @@ export function SiteHeaderClient({
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-line/80 bg-mist/85 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-line/80 bg-mist/95">
         <div className="flex h-16 w-full items-center gap-2 px-4 sm:px-6 lg:px-10">
           <Link
             href="/"
@@ -355,17 +386,23 @@ export function SiteHeaderClient({
         ) : null}
       </header>
 
-      {/* Mobile only — sticky below header, above hero (hero is z-[35]) */}
+      {/*
+        Mobile: fixed (not sticky-in-flow). Expanding a sticky bar used to push
+        the page and flip the reveal threshold → iOS flicker loop.
+      */}
       <div
         className={cn(
-          "sticky top-16 z-[39] border-b border-line/80 bg-mist/85 backdrop-blur-md transition-[opacity,transform,max-height,padding] duration-300 ease-out md:hidden",
+          "fixed inset-x-0 top-16 z-[39] border-b border-line/80 bg-mist md:hidden",
+          "transition-[opacity,transform,visibility] duration-200 ease-out",
           visible
-            ? "max-h-24 translate-y-0 px-4 pb-2.5 pt-2 opacity-100 sm:px-6"
-            : "pointer-events-none max-h-0 -translate-y-2 overflow-hidden px-4 py-0 opacity-0 sm:px-6",
+            ? "visible translate-y-0 opacity-100"
+            : "pointer-events-none invisible -translate-y-1 opacity-0",
         )}
         aria-hidden={!visible}
       >
-        <BuySearchControls visible={visible} compact />
+        <div className="px-4 pb-2.5 pt-2 sm:px-6">
+          <BuySearchControls visible={visible} compact />
+        </div>
       </div>
     </>
   );

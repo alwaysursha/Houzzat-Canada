@@ -30,6 +30,21 @@ export function toCard(
 ): ListingCard {
   const primary =
     listing.media.find((m) => m.isPrimary) ?? listing.media[0] ?? null;
+  const imageUrls = (() => {
+    const urls: string[] = [];
+    const seen = new Set<string>();
+    if (primary?.url) {
+      urls.push(primary.url);
+      seen.add(primary.url);
+    }
+    for (const m of listing.media) {
+      if (!m.url || seen.has(m.url)) continue;
+      urls.push(m.url);
+      seen.add(m.url);
+      if (urls.length >= 12) break;
+    }
+    return urls;
+  })();
   const upcoming = listing.openHouses
     .filter((oh) => oh.endsAt.getTime() >= Date.now())
     .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
@@ -59,6 +74,7 @@ export function toCard(
     lat: listing.lat,
     lng: listing.lng,
     primaryImageUrl: primary?.url ?? null,
+    imageUrls,
     openHouses: upcoming.map((oh) => ({
       startsAt: oh.startsAt.toISOString(),
       endsAt: oh.endsAt.toISOString(),

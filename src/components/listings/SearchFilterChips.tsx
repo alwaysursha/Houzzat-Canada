@@ -31,6 +31,42 @@ export type SearchFilters = {
   sort: "newest" | "price_asc" | "price_desc";
 };
 
+export function countActiveSearchFilters(filters: SearchFilters): number {
+  let n = 0;
+  if (filters.minPrice || filters.maxPrice) n += 1;
+  if (filters.minBeds) n += 1;
+  if (filters.minBaths) n += 1;
+  if (filters.propertyTypes.length > 0) n += 1;
+  if (filters.openHouseOnly) n += 1;
+  if (filters.city) n += 1;
+  if (filters.community) n += 1;
+  if (filters.segment !== "RESIDENTIAL") n += 1;
+  if (filters.sort !== "newest") n += 1;
+  if (
+    !(filters.statuses.length === 1 && filters.statuses[0] === "ACTIVE")
+  ) {
+    n += 1;
+  }
+  return n;
+}
+
+export function resetSearchFilters(filters: SearchFilters): SearchFilters {
+  return {
+    ...filters,
+    segment: "RESIDENTIAL",
+    city: "",
+    community: "",
+    minPrice: "",
+    maxPrice: "",
+    minBeds: "",
+    minBaths: "",
+    propertyTypes: [],
+    openHouseOnly: false,
+    statuses: ["ACTIVE"],
+    sort: "newest",
+  };
+}
+
 const RESIDENTIAL_TYPES: PropertyType[] = [
   "DETACHED",
   "SEMI_DETACHED",

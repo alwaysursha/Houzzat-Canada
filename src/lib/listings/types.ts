@@ -30,6 +30,8 @@ export type ListingCard = {
   lat: number;
   lng: number;
   primaryImageUrl: string | null;
+  /** Gallery URLs for card carousels (primary first). Cap kept small for search payloads. */
+  imageUrls: string[];
   /** Upcoming open houses from MLS (usually 0–2 in a week). */
   openHouses: { startsAt: string; endsAt: string }[];
   daysOnMarket: number;
