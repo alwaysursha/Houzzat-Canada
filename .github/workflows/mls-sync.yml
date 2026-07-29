@@ -25,8 +25,10 @@ on:
         default: "property,openHouse"
 
 concurrency:
-  group: mls-sync
-  cancel-in-progress: true
+  # Manual backfills must not be killed by the 15-min schedule.
+  # Scheduled runs share one group and can cancel each other.
+  group: ${{ github.event_name == 'workflow_dispatch' && format('mls-sync-manual-{0}', github.run_id) || 'mls-sync-schedule' }}
+  cancel-in-progress: ${{ github.event_name == 'schedule' }}
 
 jobs:
   sync:
