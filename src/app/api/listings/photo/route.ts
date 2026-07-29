@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getPropTxConfig } from "@/lib/proptx/config";
+import { getPropTxIdxConfig, getPropTxConfig } from "@/lib/proptx/config";
 
 export const runtime = "nodejs";
 
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
   // Some AMPRE MediaURL targets expect the feed bearer token.
   if (res.status === 401 || res.status === 403) {
-    const config = getPropTxConfig();
+    const config = getPropTxIdxConfig() ?? getPropTxConfig();
     if (config) {
       res = await fetch(src, {
         headers: {

@@ -44,7 +44,7 @@ export default auth((request) => {
     return redirectToPath(request, "/coming-soon");
   }
 
-  // PropTx VOW-only: MLS map search requires a registered client (IDX still pending).
+  // IDX mode: /search is public. VOW-only legacy: require a registered client.
   if (
     isVowOnlyMlsMode() &&
     pathname === "/search" &&

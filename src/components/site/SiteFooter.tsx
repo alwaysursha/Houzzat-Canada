@@ -11,8 +11,8 @@ export function SiteFooter() {
         <div className="space-y-2">
           <p className="font-display text-lg text-ink">{SITE_NAME}</p>
           <p className="max-w-md text-sm text-ink/55">
-            MLS® listing data via TRREB / PropTx (VOW). Sold prices and history
-            are shown to registered Houzzat clients only.
+            MLS® listing data via TRREB / PropTx (IDX). Sold prices and history
+            are shown to registered Houzzat clients only (VOW).
           </p>
         </div>
 

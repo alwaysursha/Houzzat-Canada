@@ -701,7 +701,7 @@ export class DbListingProvider implements ListingProvider {
         message: !isPropTxConfigured()
           ? "PropTx credentials not configured."
           : health.mlsCount > 0
-            ? `Serving ${health.mlsCount.toLocaleString("en-CA")} MLS listings from PropTx VOW sync.`
+            ? `Serving ${health.mlsCount.toLocaleString("en-CA")} MLS listings from PropTx sync.`
             : health.lastRun?.status === "error"
               ? `PropTx sync error: ${health.lastRun.message ?? "unknown"}`
               : "PropTx configured — run POST /api/admin/mls/sync to pull listings.",

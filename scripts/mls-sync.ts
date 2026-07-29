@@ -1,5 +1,5 @@
 /**
- * Local / CI PropTx VOW sync:
+ * Local / CI PropTx MLS sync:
  *   pnpm mls:sync [maxPages] [fullBackfillDays] [resources]
  *
  * resources (optional, comma-separated):
@@ -40,7 +40,7 @@ async function main() {
   const cities = getMlsSyncCities();
 
   console.log(
-    `Starting PropTx VOW sync (maxPages=${maxPages}, fullBackfillDays=${fullBackfillDays}, resources=${resources.join(",")})…`,
+    `Starting PropTx MLS sync (maxPages=${maxPages}, fullBackfillDays=${fullBackfillDays}, resources=${resources.join(",")})…`,
   );
   console.log(`City allowlist (${cities.length}): ${cities.join(", ")}`);
 

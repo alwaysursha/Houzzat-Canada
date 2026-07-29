@@ -137,7 +137,7 @@ export default async function ListingDetailPage({ params }: Params) {
       })()
     : null;
 
-  // VOW-only: MLS listings require a registered client; FSBO stays public.
+  // MLS listing pages are public in IDX mode; VOW-only legacy still requires login.
   if (
     isVowOnlyMlsMode() &&
     listing.dataSource !== "fsbo" &&

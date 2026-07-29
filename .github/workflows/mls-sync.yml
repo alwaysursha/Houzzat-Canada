@@ -4,7 +4,8 @@ name: MLS Sync
 #
 # Required GitHub secrets:
 #   DATABASE_URL, DIRECT_URL (optional),
-#   PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID
+#   PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID  (IDX Token — visitor listings)
+# Optional: PROPTX_VOW_BEARER_TOKEN, PROPTX_VOW_TOKEN_ID (sold enrichment for clients)
 on:
   schedule:
     # Just-listed + status changes every 5 minutes (GitHub cron can drift).
@@ -66,7 +67,9 @@ jobs:
           PROPTX_ENDPOINT_URL: ${{ secrets.PROPTX_ENDPOINT_URL }}
           PROPTX_BEARER_TOKEN: ${{ secrets.PROPTX_BEARER_TOKEN }}
           PROPTX_TOKEN_ID: ${{ secrets.PROPTX_TOKEN_ID }}
-          PROPTX_FEED: vow
+          PROPTX_VOW_BEARER_TOKEN: ${{ secrets.PROPTX_VOW_BEARER_TOKEN }}
+          PROPTX_VOW_TOKEN_ID: ${{ secrets.PROPTX_VOW_TOKEN_ID }}
+          PROPTX_FEED: idx
           LISTING_PROVIDER: proptx
           MAX_PAGES: ${{ github.event.inputs.maxPages || '30' }}
           BACKFILL_DAYS: ${{ github.event.inputs.fullBackfillDays || '7' }}
@@ -78,8 +81,8 @@ jobs:
             exit 1
           fi
           if [[ -z "${PROPTX_BEARER_TOKEN:-}" || -z "${PROPTX_TOKEN_ID:-}" || -z "${PROPTX_ENDPOINT_URL:-}" ]]; then
-            echo "Missing PropTx secrets (PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID)"
+            echo "Missing IDX secrets (PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID)"
             exit 1
           fi
-          echo "Running pnpm mls:sync ${MAX_PAGES} ${BACKFILL_DAYS} ${RESOURCES}"
+          echo "Running pnpm mls:sync ${MAX_PAGES} ${BACKFILL_DAYS} ${RESOURCES} (IDX; VOW enrichment=$([ -n "${PROPTX_VOW_TOKEN_ID:-}" ] && echo yes || echo no))"
           pnpm mls:sync "${MAX_PAGES}" "${BACKFILL_DAYS}" "${RESOURCES}"

@@ -1,4 +1,4 @@
-import { getPropTxConfig, type PropTxConfig } from "@/lib/proptx/config";
+import { getPropTxSyncConfig, type PropTxConfig } from "@/lib/proptx/config";
 
 export class PropTxError extends Error {
   status: number;
@@ -29,11 +29,11 @@ function resolveUrl(config: PropTxConfig, pathOrUrl: string): string {
 export async function proptxFetch(
   pathOrUrl: string,
   init: RequestInit = {},
-  config: PropTxConfig | null = getPropTxConfig(),
+  config: PropTxConfig | null = getPropTxSyncConfig(),
 ): Promise<Response> {
   if (!config) {
     throw new PropTxError(
-      "PropTx credentials not configured (PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID).",
+      "PropTx credentials not configured (PROPTX_ENDPOINT_URL + IDX Token ID / bearer).",
       0,
       "",
     );
@@ -78,7 +78,7 @@ export async function* proptxPages<T>(
     config?: PropTxConfig | null;
   },
 ): AsyncGenerator<T[], void, unknown> {
-  const config = options?.config ?? getPropTxConfig();
+  const config = options?.config ?? getPropTxSyncConfig();
   const maxPages = options?.maxPages ?? 50;
   let next: string | null = path;
   let pages = 0;
@@ -95,7 +95,7 @@ export async function* proptxPages<T>(
 
 export async function proptxJson<T>(
   path: string,
-  config: PropTxConfig | null = getPropTxConfig(),
+  config: PropTxConfig | null = getPropTxSyncConfig(),
 ): Promise<T> {
   const res = await proptxFetch(path, {}, config);
   return (await res.json()) as T;

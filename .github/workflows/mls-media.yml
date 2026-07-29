@@ -52,7 +52,9 @@ jobs:
           PROPTX_ENDPOINT_URL: ${{ secrets.PROPTX_ENDPOINT_URL }}
           PROPTX_BEARER_TOKEN: ${{ secrets.PROPTX_BEARER_TOKEN }}
           PROPTX_TOKEN_ID: ${{ secrets.PROPTX_TOKEN_ID }}
-          PROPTX_FEED: vow
+          PROPTX_VOW_BEARER_TOKEN: ${{ secrets.PROPTX_VOW_BEARER_TOKEN }}
+          PROPTX_VOW_TOKEN_ID: ${{ secrets.PROPTX_VOW_TOKEN_ID }}
+          PROPTX_FEED: idx
           LISTING_PROVIDER: proptx
           MAX_PAGES: ${{ github.event.inputs.maxPages || '50' }}
         run: |

@@ -27,9 +27,9 @@
     "NEXT_PUBLIC_WHATSAPP_EXPERT": "16472214949",
     // Temporary public gate — set to "1" to show Coming Soon to visitors
     "COMING_SOON": "0",
-    // PropTx VOW — registered clients only until IDX is approved
+    // PropTx: IDX public browse + VOW for registered clients (sold/history)
     "LISTING_PROVIDER": "proptx",
-    "PROPTX_FEED": "vow",
+    "PROPTX_FEED": "idx",
     "PROPTX_ENDPOINT_URL": "https://query.ampre.ca/odata/"
   }
 }

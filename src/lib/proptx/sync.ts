@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { getPropTxConfig, isPropTxConfigured } from "@/lib/proptx/config";
+import {
+  getPropTxSoldSyncConfig,
+  getPropTxSyncConfig,
+  isPropTxConfigured,
+} from "@/lib/proptx/config";
 import { PropTxError, proptxJson, proptxPages } from "@/lib/proptx/client";
+import type { PropTxConfig } from "@/lib/proptx/config";
 import {
   buildListingGeocodeQuery,
   geocodeAddress,
@@ -728,19 +733,21 @@ async function syncRecentProperties(options: {
   days: number;
   maxPages: number;
   stats: MlsSyncStats;
+  config?: PropTxConfig | null;
 }): Promise<void> {
   const from = new Date();
   from.setUTCDate(from.getUTCDate() - options.days);
   const filter = `ModificationTimestamp ge ${toODataDate(from)}`;
   const path = `Property?$filter=${encodeURIComponent(filter)}&$orderby=${encodeURIComponent("ModificationTimestamp desc,ListingKey desc")}&$top=100`;
   console.log(
-    `[mls] Recent Property pass (last ${options.days}d, maxPages=${options.maxPages}, newest-first)`,
+    `[mls] Recent Property pass (last ${options.days}d, maxPages=${options.maxPages}, newest-first, feed=${options.config?.feed ?? "default"})`,
   );
 
   const skipReasons: Record<string, number> = {};
   let pageNo = 0;
   for await (const page of proptxPages<PropTxProperty>(path, {
     maxPages: options.maxPages,
+    config: options.config,
   })) {
     pageNo += 1;
     options.stats.pages += 1;
@@ -770,6 +777,7 @@ async function syncRecentProperties(options: {
 async function syncActiveInventory(options: {
   maxPages: number;
   stats: MlsSyncStats;
+  config?: PropTxConfig | null;
 }): Promise<void> {
   const cities = getMlsSyncCities();
   // Heavier markets first so a page budget still covers core GTA.
@@ -820,6 +828,7 @@ async function syncActiveInventory(options: {
     try {
       for await (const page of proptxPages<PropTxProperty>(path, {
         maxPages: cityBudget,
+        config: options.config,
       })) {
         pageNo += 1;
         pagesLeft -= 1;
@@ -857,13 +866,14 @@ async function syncProperties(options: {
   fullBackfillDays: number;
   stats: MlsSyncStats;
   fetchNested?: boolean;
+  config?: PropTxConfig | null;
 }): Promise<string | null> {
   const since = await getCursor(RESOURCE_PROPERTY);
   const filter = propertyFilter(since, options.fullBackfillDays);
   // Ascending — advances cursor through backlog safely.
   const path = `Property?$filter=${encodeURIComponent(filter)}&$orderby=${encodeURIComponent("ModificationTimestamp,ListingKey")}&$top=100`;
   console.log(
-    `[mls] Property backlog start (maxPages=${options.maxPages}, since=${since ?? "none"})`,
+    `[mls] Property backlog start (maxPages=${options.maxPages}, since=${since ?? "none"}, feed=${options.config?.feed ?? "default"})`,
   );
 
   let maxMod: Date | null = since ? new Date(since) : null;
@@ -874,6 +884,7 @@ async function syncProperties(options: {
   let pageNo = 0;
   for await (const page of proptxPages<PropTxProperty>(path, {
     maxPages: options.maxPages,
+    config: options.config,
   })) {
     pageNo += 1;
     options.stats.pages += 1;
@@ -1161,7 +1172,7 @@ async function syncHistory(options: {
 }
 
 /**
- * Pull PropTx VOW feed into Postgres. Safe to re-run (idempotent upserts).
+ * Pull PropTx MLS feed into Postgres. Safe to re-run (idempotent upserts).
  */
 export async function runPropTxMlsSync(options?: {
   maxPages?: number;
@@ -1180,12 +1191,12 @@ export async function runPropTxMlsSync(options?: {
   /** Run city-by-city Active inventory (heavy — off by default on cron). */
   activeInventory?: boolean;
 }): Promise<MlsSyncResult> {
-  const config = getPropTxConfig();
+  const config = getPropTxSyncConfig();
   if (!config) {
     return {
       ok: false,
       message:
-        "PropTx credentials missing. Set PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID.",
+        "PropTx credentials missing. Set PROPTX_ENDPOINT_URL plus IDX Token ID (PROPTX_TOKEN_ID / PROPTX_BEARER_TOKEN or PROPTX_IDX_*), and optionally PROPTX_VOW_* for sold.",
       stats: emptyStats(),
       runId: "",
     };
@@ -1205,7 +1216,7 @@ export async function runPropTxMlsSync(options?: {
     data: {
       resource: "all",
       status: "running",
-      message: `VOW sync starting (${config.feed})`,
+      message: `MLS sync starting (${config.feed})`,
     },
   });
 
@@ -1231,6 +1242,7 @@ export async function runPropTxMlsSync(options?: {
         days: recentDays,
         maxPages: recentPages,
         stats,
+        config,
       });
       // 2) Ascending cursor backlog — keeps catching sold/off-market changes.
       await syncProperties({
@@ -1238,7 +1250,25 @@ export async function runPropTxMlsSync(options?: {
         fullBackfillDays,
         stats,
         fetchNested: false,
+        config,
       });
+
+      // 2b) Optional VOW Token pass — sold/history enrichment for registered clients.
+      // Visitor active inventory still comes from the IDX Token above.
+      const vowConfig = getPropTxSoldSyncConfig();
+      if (vowConfig && config.feed === "idx") {
+        const vowPages = Math.min(15, Math.max(5, Math.ceil(recentPages / 2)));
+        console.log(
+          `[mls] VOW enrichment pass (sold/history for clients, maxPages=${vowPages})`,
+        );
+        await syncRecentProperties({
+          days: recentDays,
+          maxPages: vowPages,
+          stats,
+          config: vowConfig,
+        });
+      }
+
       // 3) Small photo gap-fill only — bulk photos belong in mls-media.yml.
       // (maxPages*150 on a 200-page run → 30k PropTx calls and looks "stuck".)
       try {
@@ -1265,6 +1295,8 @@ export async function runPropTxMlsSync(options?: {
       await syncActiveInventory({
         maxPages: activePages,
         stats,
+        // Active book for visitors must use IDX Token when available.
+        config,
       });
     }
 
@@ -1389,6 +1421,7 @@ export async function getPropTxSyncHealth() {
   const lastPropTxRun = await prisma.mlsSyncRun.findFirst({
     where: {
       OR: [
+        { message: { contains: "MLS sync" } },
         { message: { contains: "VOW sync" } },
         { message: { startsWith: "Synced properties=" } },
         { message: { contains: "PropTx" } },
