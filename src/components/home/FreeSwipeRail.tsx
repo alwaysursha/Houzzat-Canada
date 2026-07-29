@@ -16,8 +16,7 @@ const GAP_PX = 20;
 const KEYBOARD_STEP_RATIO = 0.8;
 
 /**
- * Mobile: free horizontal swipe rail with smooth scroll + arrow/Home/End keys.
- * sm+: responsive grid (unchanged desktop layout).
+ * Free horizontal swipe rail (all breakpoints) with smooth scroll + arrow/Home/End keys.
  */
 export function FreeSwipeRail({
   children,
@@ -36,8 +35,6 @@ export function FreeSwipeRail({
   const scrollByDir = useCallback((dir: number) => {
     const el = scrollerRef.current;
     if (!el) return;
-    // Only treat as a slider on mobile widths.
-    if (window.matchMedia("(min-width: 640px)").matches) return;
     const card = el.querySelector<HTMLElement>("[data-free-swipe-item]");
     const step = card
       ? card.offsetWidth + GAP_PX
@@ -51,7 +48,6 @@ export function FreeSwipeRail({
     function onKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented) return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (window.matchMedia("(min-width: 640px)").matches) return;
       const target = event.target;
       if (
         target instanceof HTMLElement &&
@@ -97,7 +93,7 @@ export function FreeSwipeRail({
       }}
     >
       <p id={labelId} className="sr-only">
-        {label}. On mobile, swipe freely or use arrow keys when focused.
+        {label}. Swipe or scroll horizontally, or use arrow keys when focused.
       </p>
       <div
         ref={scrollerRef}
@@ -108,7 +104,6 @@ export function FreeSwipeRail({
           "flex w-full min-w-0 gap-5 overflow-x-auto overscroll-x-contain scroll-smooth touch-pan-x touch-pan-y pb-1",
           "outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           "focus-visible:ring-2 focus-visible:ring-canopy/40 focus-visible:ring-offset-2 focus-visible:ring-offset-mist",
-          "sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 sm:outline-none sm:focus-visible:ring-0 xl:grid-cols-4",
         )}
         style={{ WebkitOverflowScrolling: "touch" }}
       >
@@ -120,7 +115,7 @@ export function FreeSwipeRail({
                 : index
             }
             data-free-swipe-item
-            className="w-[min(22.5rem,calc(100vw-3.75rem))] shrink-0 grow-0 sm:w-auto sm:min-w-0 sm:shrink"
+            className="w-[min(22.5rem,calc(100vw-3.75rem))] shrink-0 grow-0 sm:w-[min(20rem,calc((100%-3.75rem)/2))] lg:w-[min(18.5rem,calc((100%-5rem)/3))] xl:w-[min(17.5rem,calc((100%-6.25rem)/4))]"
           >
             {child}
           </div>
