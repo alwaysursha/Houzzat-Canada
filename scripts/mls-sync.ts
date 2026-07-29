@@ -4,11 +4,12 @@
  *
  * resources (optional, comma-separated):
  *   property,media,rooms,openHouse,syntheticHistory,history
- * Default resources: property,openHouse (fast incremental).
- * Add media/rooms for richer backfill when you have time.
+ * Default resources: property,openHouse
+ * Property always runs: recent → per-city Active inventory → cursor backlog → photo gap-fill.
  *
  * Examples:
- *   pnpm mls:sync 15 7
+ *   pnpm mls:sync 40 14
+ *   pnpm mls:sync 80 30 property,openHouse
  *   pnpm mls:sync 50 30 property,media,rooms,openHouse
  */
 import { config } from "dotenv";

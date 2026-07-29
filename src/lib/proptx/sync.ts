@@ -17,7 +17,7 @@ import {
   toODataDate,
   type PropTxProperty,
 } from "@/lib/proptx/map-listing";
-import { cityAllowedForMlsSync, getMlsSyncCities } from "@/lib/proptx/sync-cities";
+import { cityAllowedForMlsSync, getMlsSyncCities, normalizeCityName } from "@/lib/proptx/sync-cities";
 
 export type MlsSyncStats = {
   propertyUpserted: number;
@@ -737,6 +737,95 @@ async function syncRecentProperties(options: {
   };
 }
 
+/**
+ * Fill active inventory city-by-city (ModificationTimestamp sync alone never
+ * walks the full active book). One City eq filter at a time — giant OR lists hang AMPRE.
+ */
+async function syncActiveInventory(options: {
+  maxPages: number;
+  stats: MlsSyncStats;
+}): Promise<void> {
+  const cities = getMlsSyncCities();
+  // Heavier markets first so a page budget still covers core GTA.
+  const priority = new Map(
+    [
+      "Toronto",
+      "Mississauga",
+      "Brampton",
+      "Vaughan",
+      "Markham",
+      "Oakville",
+      "Hamilton",
+      "London",
+      "Burlington",
+      "Richmond Hill",
+    ].map((c, i) => [normalizeCityName(c), i]),
+  );
+  const ordered = [...cities].sort((a, b) => {
+    const pa = priority.get(normalizeCityName(a)) ?? 100;
+    const pb = priority.get(normalizeCityName(b)) ?? 100;
+    if (pa !== pb) return pa - pb;
+    return a.localeCompare(b);
+  });
+
+  let pagesLeft = options.maxPages;
+  console.log(
+    `[mls] Active inventory pass (${ordered.length} cities, maxPages=${options.maxPages})`,
+  );
+
+  for (const city of ordered) {
+    if (pagesLeft <= 0) break;
+
+    const cityBudget = Math.min(
+      pagesLeft,
+      normalizeCityName(city) === "toronto" ? 30 : 8,
+    );
+    // StandardStatus is RESO; MlsStatus 'A' is common on older TRREB feeds.
+    // Toronto districts are often "Toronto C01" — use startswith for that city.
+    const cityClause =
+      normalizeCityName(city) === "toronto"
+        ? "startswith(City,'Toronto')"
+        : `City eq ${odataStringLiteral(city)}`;
+    const filter = `(StandardStatus eq 'Active' or MlsStatus eq 'A') and ${cityClause}`;
+    const path = `Property?$filter=${encodeURIComponent(filter)}&$orderby=${encodeURIComponent("ListingKey")}&$top=100`;
+    const skipReasons: Record<string, number> = {};
+    let pageNo = 0;
+
+    try {
+      for await (const page of proptxPages<PropTxProperty>(path, {
+        maxPages: cityBudget,
+      })) {
+        pageNo += 1;
+        pagesLeft -= 1;
+        options.stats.pages += 1;
+        console.log(
+          `[mls] Active ${city} page ${pageNo}/${cityBudget} (+${page.length} rows, upserted=${options.stats.propertyUpserted}, skipped=${options.stats.propertySkipped})`,
+        );
+        for (const row of page) {
+          await upsertPropertyRow(row, {
+            stats: options.stats,
+            skipReasons,
+            fetchNested: false,
+          });
+        }
+        if (page.length === 0) break;
+      }
+    } catch (err) {
+      options.stats.errors.push(
+        `active inventory ${city}: ${err instanceof Error ? err.message : "failed"}`,
+      );
+      console.error(`[mls] Active inventory failed for ${city}`, err);
+    }
+
+    options.stats.skipReasons = {
+      ...(options.stats.skipReasons ?? {}),
+      ...Object.fromEntries(
+        Object.entries(skipReasons).map(([k, v]) => [`active:${city}:${k}`, v]),
+      ),
+    };
+  }
+}
+
 async function syncProperties(options: {
   maxPages: number;
   fullBackfillDays: number;
@@ -811,7 +900,8 @@ async function syncMediaBackfill(options: {
     },
     select: { id: true, listingKey: true, mlsNumber: true },
     take: options.maxListings,
-    orderBy: { updatedAt: "desc" },
+    // Newest listings first so just-listed get photos before older gaps.
+    orderBy: [{ listedAt: "desc" }, { updatedAt: "desc" }],
   });
 
   const concurrency = Math.max(1, Math.min(options.concurrency ?? 6, 12));
@@ -1088,12 +1178,30 @@ export async function runPropTxMlsSync(options?: {
         maxPages: recentPages,
         stats,
       });
+      // City-by-city Active book — ModificationTimestamp alone never fills areas.
+      const activePages = Math.max(maxPages * 2, 60);
+      await syncActiveInventory({
+        maxPages: activePages,
+        stats,
+      });
       await syncProperties({
         maxPages,
         fullBackfillDays,
         stats,
         fetchNested: false,
       });
+      // Always gap-fill photos after property upserts (nested fetch is off for speed).
+      try {
+        await syncMediaBackfill({
+          maxListings: Math.max(maxPages * 100, 800),
+          stats,
+          concurrency: 8,
+        });
+      } catch (err) {
+        stats.errors.push(
+          `Media backfill: ${err instanceof Error ? err.message : "unavailable"}`,
+        );
+      }
     }
     if (resources.includes("media")) {
       try {
@@ -1101,6 +1209,7 @@ export async function runPropTxMlsSync(options?: {
           maxPages,
           fullBackfillDays,
           stats,
+          // Property pass already ran gap-fill; optional Media feed is incremental.
           backfillOnly: options?.mediaBackfillOnly === true,
         });
       } catch (err) {

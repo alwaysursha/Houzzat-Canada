@@ -12,15 +12,15 @@ on:
   workflow_dispatch:
     inputs:
       maxPages:
-        description: "Max Property pages (~100 listings/page)"
+        description: "Max Property backlog pages (~100 listings/page). Active inventory uses ~2x this."
         required: false
-        default: "20"
+        default: "40"
       fullBackfillDays:
         description: "Days back when no Property cursor exists yet"
         required: false
-        default: "7"
+        default: "14"
       resources:
-        description: "Comma-separated: property,openHouse,media,rooms"
+        description: "Comma-separated: property,openHouse,media,rooms (photos auto-backfill with property)"
         required: false
         default: "property,openHouse"
 
@@ -33,9 +33,9 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    # Fast property upserts (no nested media/rooms). Recent-first pass
-    # lands just-listed before the ascending backlog walk.
-    timeout-minutes: 90
+    # Property + per-city Active inventory + photo gap-fill.
+    # Manual backfills can raise maxPages further.
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,8 +69,8 @@ jobs:
           PROPTX_TOKEN_ID: ${{ secrets.PROPTX_TOKEN_ID }}
           PROPTX_FEED: vow
           LISTING_PROVIDER: proptx
-          MAX_PAGES: ${{ github.event.inputs.maxPages || '20' }}
-          BACKFILL_DAYS: ${{ github.event.inputs.fullBackfillDays || '7' }}
+          MAX_PAGES: ${{ github.event.inputs.maxPages || '40' }}
+          BACKFILL_DAYS: ${{ github.event.inputs.fullBackfillDays || '14' }}
           RESOURCES: ${{ github.event.inputs.resources || 'property,openHouse' }}
         run: |
           set -euo pipefail
