@@ -489,7 +489,9 @@ async function syncMediaForListing(
   listingKey: string,
   listingId: string,
   stats: MlsSyncStats,
+  options?: { maxPhotos?: number },
 ): Promise<void> {
+  const maxPhotos = Math.max(1, Math.min(options?.maxPhotos ?? 10, 40));
   const rows = await fetchPropertyPhotos(listingKey);
   // One URL per photo object — AMPRE returns Large/Medium/Thumbnail variants.
   const preferred = new Map<
@@ -520,15 +522,41 @@ async function syncMediaForListing(
     }
   }
 
-  for (const { mapped } of preferred.values()) {
+  const selected = [...preferred.values()]
+    .sort((a, b) => {
+      if (a.mapped.isPrimary !== b.mapped.isPrimary) {
+        return a.mapped.isPrimary ? -1 : 1;
+      }
+      return a.mapped.sortOrder - b.mapped.sortOrder;
+    })
+    .slice(0, maxPhotos);
+
+  for (const { mapped } of selected) {
     try {
       await upsertMappedMedia(listingId, mapped, stats);
     } catch (err) {
-      stats.errors.push(
+      pushSyncError(
+        stats,
         `media ${listingKey}: ${err instanceof Error ? err.message : "failed"}`,
       );
+      // Neon free tier full — stop hammering inserts.
+      if (isNeonSizeLimitError(err)) throw err;
     }
   }
+}
+
+function isNeonSizeLimitError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    /project size limit/i.test(msg) ||
+    /could not extend file/i.test(msg) ||
+    /53100/.test(msg)
+  );
+}
+
+function pushSyncError(stats: MlsSyncStats, message: string) {
+  if (stats.errors.length >= 40) return;
+  stats.errors.push(message);
 }
 
 async function upsertPropertyRow(
@@ -934,11 +962,20 @@ async function syncMediaBackfill(options: {
       isMock: false,
       listingKey: { not: null },
       media: { none: {} },
+      // Fill active inventory first — visitors care about these.
+      status: { in: ["ACTIVE", "SOLD", "LEASED"] },
     },
-    select: { id: true, listingKey: true, mlsNumber: true },
+    select: { id: true, listingKey: true, mlsNumber: true, status: true },
     take: options.maxListings,
-    // Newest listings first so just-listed get photos before older gaps.
-    orderBy: [{ listedAt: "desc" }, { updatedAt: "desc" }],
+    // Active first, then newest.
+    orderBy: [{ status: "asc" }, { listedAt: "desc" }, { updatedAt: "desc" }],
+  });
+
+  // Prefer ACTIVE over SOLD/LEASED (Prisma enum order isn't guaranteed for that).
+  listings.sort((a, b) => {
+    const rank = (s: string) => (s === "ACTIVE" ? 0 : s === "LEASED" ? 1 : 2);
+    const d = rank(a.status) - rank(b.status);
+    return d;
   });
 
   console.log(
@@ -948,9 +985,10 @@ async function syncMediaBackfill(options: {
   const concurrency = Math.max(1, Math.min(options.concurrency ?? 6, 12));
   let index = 0;
   let completed = 0;
+  let stoppedForDisk = false;
 
   async function worker() {
-    while (index < listings.length) {
+    while (index < listings.length && !stoppedForDisk) {
       const current = listings[index];
       index += 1;
       if (!current?.listingKey) continue;
@@ -959,11 +997,20 @@ async function syncMediaBackfill(options: {
           current.listingKey,
           current.id,
           options.stats,
+          { maxPhotos: 10 },
         );
       } catch (err) {
-        options.stats.errors.push(
+        pushSyncError(
+          options.stats,
           `media backfill ${current.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
         );
+        if (isNeonSizeLimitError(err)) {
+          stoppedForDisk = true;
+          console.error(
+            "[mls] Media backfill stopped — Neon project size limit reached. Upgrade Neon or prune more media.",
+          );
+          break;
+        }
       }
       completed += 1;
       if (completed === 1 || completed % 50 === 0 || completed === listings.length) {
@@ -980,7 +1027,7 @@ async function syncMediaBackfill(options: {
     ),
   );
   console.log(
-    `[mls] Media backfill done (upserted=${options.stats.mediaUpserted})`,
+    `[mls] Media backfill done (upserted=${options.stats.mediaUpserted}${stoppedForDisk ? ", stopped: disk full" : ""})`,
   );
 }
 
@@ -993,7 +1040,7 @@ async function syncMedia(options: {
 }): Promise<void> {
   // Primary path: fill gaps for inventory we already have.
   await syncMediaBackfill({
-    maxListings: Math.max(options.maxPages * 50, 2500),
+    maxListings: Math.max(options.maxPages * 50, 100),
     stats: options.stats,
     concurrency: 10,
   });
@@ -1366,15 +1413,25 @@ export async function runPropTxMlsSync(options?: {
     }
 
     const message = `Synced properties=${stats.propertyUpserted} media=${stats.mediaUpserted} rooms=${stats.roomsUpserted} openHouses=${stats.openHousesUpserted} history=${stats.historyUpserted} skipped=${stats.propertySkipped}`;
-    await prisma.mlsSyncRun.update({
-      where: { id: run.id },
-      data: {
-        status: "ok",
-        finishedAt: new Date(),
-        message,
-        stats,
-      },
-    });
+    try {
+      await prisma.mlsSyncRun.update({
+        where: { id: run.id },
+        data: {
+          status: "ok",
+          finishedAt: new Date(),
+          message,
+          stats: {
+            ...stats,
+            errors: stats.errors.slice(0, 40),
+          },
+        },
+      });
+    } catch (err) {
+      console.error(
+        "[mls] Failed to write MlsSyncRun ok status:",
+        err instanceof Error ? err.message : err,
+      );
+    }
 
     return { ok: true, message, stats, runId: run.id };
   } catch (err) {
@@ -1384,16 +1441,26 @@ export async function runPropTxMlsSync(options?: {
         : err instanceof Error
           ? err.message
           : "MLS sync failed";
-    stats.errors.push(message);
-    await prisma.mlsSyncRun.update({
-      where: { id: run.id },
-      data: {
-        status: "error",
-        finishedAt: new Date(),
-        message,
-        stats,
-      },
-    });
+    pushSyncError(stats, message);
+    try {
+      await prisma.mlsSyncRun.update({
+        where: { id: run.id },
+        data: {
+          status: "error",
+          finishedAt: new Date(),
+          message,
+          stats: {
+            ...stats,
+            errors: stats.errors.slice(0, 40),
+          },
+        },
+      });
+    } catch (writeErr) {
+      console.error(
+        "[mls] Failed to write MlsSyncRun error status:",
+        writeErr instanceof Error ? writeErr.message : writeErr,
+      );
+    }
 
     return { ok: false, message, stats, runId: run.id };
   }

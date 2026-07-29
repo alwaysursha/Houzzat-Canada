@@ -11,7 +11,7 @@ on:
       maxPages:
         description: "Scale factor (~50 listings/page via media backfill)"
         required: false
-        default: "50"
+        default: "40"
 
 concurrency:
   group: mls-media-backfill
@@ -56,8 +56,9 @@ jobs:
           PROPTX_VOW_TOKEN_ID: ${{ secrets.PROPTX_VOW_TOKEN_ID }}
           PROPTX_FEED: idx
           LISTING_PROVIDER: proptx
-          MAX_PAGES: ${{ github.event.inputs.maxPages || '50' }}
+          MAX_PAGES: ${{ github.event.inputs.maxPages || '40' }}
         run: |
           set -euo pipefail
-          echo "Running pnpm mls:media ${MAX_PAGES}"
+          echo "Running pnpm mls:media ${MAX_PAGES} (~$(( MAX_PAGES * 50 )) listings)"
           pnpm mls:media "${MAX_PAGES}"
+          echo "Tip: if Neon hits 512MB, prune with: pnpm exec tsx scripts/prune-listing-media.ts 10 && pnpm exec tsx scripts/vacuum-listing-media.ts"
