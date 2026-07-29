@@ -72,6 +72,8 @@ type OverlayListing = {
   listedAt: string;
   soldAt: string | null;
   updatedAtMls: string | null;
+  /** PropTx fact sheet JSON from Listing.facts */
+  facts?: unknown;
   media: Array<{ id: string; url: string; isPrimary?: boolean }>;
   openHouses: Array<{
     id: string;
