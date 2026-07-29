@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { getSession, signOut } from "next-auth/react";
+import { getSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   useAuthModal,
@@ -60,7 +60,9 @@ export function AuthRouteBridge({ mode }: { mode: AuthMode }) {
           router.refresh();
           return;
         }
-        await signOut({ redirect: false });
+        // Stale JWT after DB rebuild — hard-clear cookies on Workers.
+        window.location.assign("/api/auth/logout");
+        return;
       }
       openAuth({ mode, callbackUrl });
       router.replace(backgroundPath(callbackUrl));

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { requireCustomerUser } from "@/lib/account";
-import { auth, signOut } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { SITE_NAME } from "@/lib/constants";
 
 const nav = [
@@ -31,7 +31,7 @@ export default async function AccountLayout({
   // Clear it so we don't bounce /account ↔ /auth/sign-in forever.
   const customer = await requireCustomerUser();
   if (!customer) {
-    await signOut({ redirectTo: "/auth/sign-in?callbackUrl=/account" });
+    redirect("/api/auth/logout");
   }
 
   if (session.user.role === "ADMIN") {

@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
-import { signOut } from "@/lib/auth";
 
 /**
- * Auth.js cookie names used across local + production (Secure / Host prefixes).
- * Clearing all variants avoids stale sessions after domain switches
- * (workers.dev → houzzat.com) or CSRF failures on client signOut.
+ * Hard logout for Cloudflare Workers / OpenNext.
+ *
+ * Do NOT call Auth.js `signOut()` here: on Workers it often emits a blank
+ * Set-Cookie then a refreshed session cookie; Chrome keeps the last one, so
+ * the user stays signed in. Also clear chunked JWTs (`…session-token.0`, etc.).
  */
-const AUTH_COOKIE_NAMES = [
+
+const KNOWN_AUTH_COOKIES = [
   "authjs.session-token",
   "__Secure-authjs.session-token",
   "__Host-authjs.session-token",
@@ -27,14 +29,43 @@ const AUTH_COOKIE_NAMES = [
   "__Secure-authjs.state",
   "authjs.nonce",
   "__Secure-authjs.nonce",
+  "authjs.challenge",
+  "__Secure-authjs.challenge",
 ] as const;
 
-function expireCookie(
-  response: NextResponse,
-  name: string,
-  secure: boolean,
-) {
+const AUTH_COOKIE_NAME_RE =
+  /^(?:__Secure-|__Host-)?(?:authjs|next-auth)\./i;
+
+function collectCookieNames(request: Request): string[] {
+  const names = new Set<string>();
+
+  for (const base of KNOWN_AUTH_COOKIES) {
+    names.add(base);
+    // Auth.js chunks large JWTs across session-token.0 … .N
+    for (let i = 0; i < 12; i += 1) {
+      names.add(`${base}.${i}`);
+    }
+  }
+
+  const header = request.headers.get("cookie") ?? "";
+  for (const part of header.split(";")) {
+    const name = part.trim().split("=")[0]?.trim();
+    if (name && AUTH_COOKIE_NAME_RE.test(name)) {
+      names.add(name);
+    }
+  }
+
+  return [...names];
+}
+
+function expireCookie(response: NextResponse, name: string) {
   const isHost = name.startsWith("__Host-");
+  const secure =
+    isHost ||
+    name.startsWith("__Secure-") ||
+    process.env.NODE_ENV === "production";
+
+  // Match Auth.js attributes so the browser treats this as the same cookie.
   response.cookies.set({
     name,
     value: "",
@@ -45,27 +76,46 @@ function expireCookie(
     sameSite: "lax",
     secure: isHost || secure,
   });
+
+  // Also append a raw header — Workers cookie merging can drop cookies.set clears.
+  const parts = [
+    `${name}=`,
+    "Path=/",
+    "Max-Age=0",
+    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    "HttpOnly",
+    "SameSite=Lax",
+  ];
+  if (isHost || secure) parts.push("Secure");
+  response.headers.append("Set-Cookie", parts.join("; "));
 }
 
-export async function POST() {
-  const secure = process.env.NODE_ENV === "production";
-  const response = NextResponse.json({ ok: true });
-
-  try {
-    await signOut({ redirect: false });
-  } catch {
-    // Still clear cookies below even if Auth.js signOut throws.
+function clearedRedirect(request: Request) {
+  const url = new URL(request.url);
+  const dest = new URL("/", url.origin);
+  dest.searchParams.set("signedOut", "1");
+  const response = NextResponse.redirect(dest, 303);
+  for (const name of collectCookieNames(request)) {
+    expireCookie(response, name);
   }
-
-  for (const name of AUTH_COOKIE_NAMES) {
-    expireCookie(response, name, secure);
-  }
-
-  response.headers.set("Cache-Control", "no-store");
+  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
   return response;
 }
 
-/** Allow GET for simple browser navigation fallbacks. */
-export async function GET() {
-  return POST();
+function clearedJson(request: Request) {
+  const response = NextResponse.json({ ok: true });
+  for (const name of collectCookieNames(request)) {
+    expireCookie(response, name);
+  }
+  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  return response;
+}
+
+/** Prefer this from the browser — Set-Cookie applies on the redirect response. */
+export async function GET(request: Request) {
+  return clearedRedirect(request);
+}
+
+export async function POST(request: Request) {
+  return clearedJson(request);
 }

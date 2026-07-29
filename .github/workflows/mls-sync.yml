@@ -33,8 +33,9 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    # Keep under GitHub's practical limit; large backfills should be chunked.
-    timeout-minutes: 45
+    # Fast property upserts (no nested media/rooms). Recent-first pass
+    # lands just-listed before the ascending backlog walk.
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v4

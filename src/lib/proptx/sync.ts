@@ -526,190 +526,264 @@ async function syncMediaForListing(
   }
 }
 
-async function syncProperties(options: {
-  maxPages: number;
-  fullBackfillDays: number;
-  stats: MlsSyncStats;
-}): Promise<string | null> {
-  const since = await getCursor(RESOURCE_PROPERTY);
-  const filter = propertyFilter(since, options.fullBackfillDays);
-  // Match AMPRE examples: order by ModificationTimestamp,ListingKey
-  const path = `Property?$filter=${encodeURIComponent(filter)}&$orderby=${encodeURIComponent("ModificationTimestamp,ListingKey")}&$top=100`;
-  console.log(`[mls] Property query start (maxPages=${options.maxPages})`);
+async function upsertPropertyRow(
+  row: PropTxProperty,
+  options: {
+    stats: MlsSyncStats;
+    skipReasons: Record<string, number>;
+    /** When false, skip geocode + per-listing media/rooms (much faster). */
+    fetchNested: boolean;
+  },
+): Promise<Date | null> {
+  const mapped = mapPropertyToListingResult(row);
+  if (!mapped.ok) {
+    options.stats.propertySkipped += 1;
+    const key = mapped.reason.startsWith("missing mls")
+      ? "missing mls"
+      : mapped.reason.slice(0, 80);
+    options.skipReasons[key] = (options.skipReasons[key] ?? 0) + 1;
+    if (
+      options.stats.errors.length < 8 &&
+      mapped.reason.startsWith("missing mls")
+    ) {
+      options.stats.errors.push(mapped.reason);
+    }
+    return null;
+  }
 
-  let maxMod: Date | null = since ? new Date(since) : null;
-  if (maxMod && Number.isNaN(maxMod.getTime())) maxMod = null;
-  const skipReasons: Record<string, number> = {};
+  const allowlist = getMlsSyncCities();
+  const cityName = String(mapped.data.city ?? "");
+  if (!cityAllowedForMlsSync(cityName, allowlist)) {
+    options.stats.propertySkipped += 1;
+    options.skipReasons["city filter"] =
+      (options.skipReasons["city filter"] ?? 0) + 1;
+    return null;
+  }
 
-  for await (const page of proptxPages<PropTxProperty>(path, {
-    maxPages: options.maxPages,
-  })) {
-    options.stats.pages += 1;
-    console.log(
-      `[mls] Property page ${options.stats.pages}/${options.maxPages} (+${page.length} rows, upserted=${options.stats.propertyUpserted}, skipped=${options.stats.propertySkipped})`,
-    );
-    for (const row of page) {
-      const mapped = mapPropertyToListingResult(row);
-      if (!mapped.ok) {
-        options.stats.propertySkipped += 1;
-        const key = mapped.reason.startsWith("missing mls")
-          ? "missing mls"
-          : mapped.reason.slice(0, 80);
-        skipReasons[key] = (skipReasons[key] ?? 0) + 1;
-        if (options.stats.errors.length < 8 && mapped.reason.startsWith("missing mls")) {
-          options.stats.errors.push(mapped.reason);
-        }
-        continue;
+  let data = mapped.data;
+  if (options.fetchNested && mapped.approximateCoords) {
+    try {
+      const query = buildListingGeocodeQuery({
+        addressLine: String(data.addressLine),
+        unitNumber:
+          typeof data.unitNumber === "string" ? data.unitNumber : null,
+        city: String(data.city),
+        province: typeof data.province === "string" ? data.province : "ON",
+        postalCode:
+          typeof data.postalCode === "string" ? data.postalCode : null,
+      });
+      const geo = await geocodeAddress(query);
+      if (geo) {
+        data = {
+          ...data,
+          lat: geo.lat,
+          lng: geo.lng,
+          description: stripApproxPinNote(String(data.description ?? "")),
+        };
       }
+    } catch (err) {
+      options.stats.errors.push(
+        `geocode ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
+      );
+    }
+  }
 
-      const allowlist = getMlsSyncCities();
-      const cityName = String(mapped.data.city ?? "");
-      if (!cityAllowedForMlsSync(cityName, allowlist)) {
-        options.stats.propertySkipped += 1;
-        skipReasons["city filter"] = (skipReasons["city filter"] ?? 0) + 1;
-        continue;
-      }
+  try {
+    const listing = await prisma.listing.upsert({
+      where: { mlsNumber: data.mlsNumber },
+      create: data,
+      update: {
+        listingKey: data.listingKey,
+        status: data.status,
+        segment: data.segment,
+        transactionType: data.transactionType,
+        dataSource: "mls",
+        propertyType: data.propertyType,
+        listPrice: data.listPrice,
+        soldPrice: data.soldPrice,
+        beds: data.beds,
+        baths: data.baths,
+        sqft: data.sqft,
+        parkingSpaces: data.parkingSpaces,
+        yearBuilt: data.yearBuilt,
+        taxes: data.taxes,
+        maintenanceFee: data.maintenanceFee,
+        addressLine: data.addressLine,
+        unitNumber: data.unitNumber,
+        city: data.city,
+        community: data.community,
+        postalCode: data.postalCode,
+        province: data.province,
+        lat: data.lat,
+        lng: data.lng,
+        description: data.description,
+        brokerageName: data.brokerageName,
+        facts: data.facts,
+        listedAt: data.listedAt,
+        soldAt: data.soldAt,
+        updatedAtMls: data.updatedAtMls,
+        daysOnMarket: data.daysOnMarket,
+        isMock: false,
+      },
+    });
+    options.stats.propertyUpserted += 1;
 
-      let data = mapped.data;
-      if (mapped.approximateCoords) {
+    try {
+      await upsertSyntheticHistoryFromProperty(
+        listing.id,
+        row,
+        options.stats,
+      );
+    } catch (err) {
+      options.stats.errors.push(
+        `synthetic history ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
+      );
+    }
+
+    if (options.fetchNested && data.listingKey) {
+      const mediaCount = await prisma.listingMedia.count({
+        where: { listingId: listing.id },
+      });
+      if (mediaCount === 0) {
         try {
-          const query = buildListingGeocodeQuery({
-            addressLine: String(data.addressLine),
-            unitNumber:
-              typeof data.unitNumber === "string" ? data.unitNumber : null,
-            city: String(data.city),
-            province:
-              typeof data.province === "string" ? data.province : "ON",
-            postalCode:
-              typeof data.postalCode === "string" ? data.postalCode : null,
-          });
-          const geo = await geocodeAddress(query);
-          if (geo) {
-            data = {
-              ...data,
-              lat: geo.lat,
-              lng: geo.lng,
-              description: stripApproxPinNote(String(data.description ?? "")),
-            };
-          }
-        } catch (err) {
-          options.stats.errors.push(
-            `geocode ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
-          );
-        }
-      }
-      try {
-        const listing = await prisma.listing.upsert({
-          where: { mlsNumber: data.mlsNumber },
-          create: data,
-          update: {
-            listingKey: data.listingKey,
-            status: data.status,
-            segment: data.segment,
-            transactionType: data.transactionType,
-            dataSource: "mls",
-            propertyType: data.propertyType,
-            listPrice: data.listPrice,
-            soldPrice: data.soldPrice,
-            beds: data.beds,
-            baths: data.baths,
-            sqft: data.sqft,
-            parkingSpaces: data.parkingSpaces,
-            yearBuilt: data.yearBuilt,
-            taxes: data.taxes,
-            maintenanceFee: data.maintenanceFee,
-            addressLine: data.addressLine,
-            unitNumber: data.unitNumber,
-            city: data.city,
-            community: data.community,
-            postalCode: data.postalCode,
-            province: data.province,
-            lat: data.lat,
-            lng: data.lng,
-            description: data.description,
-            brokerageName: data.brokerageName,
-            facts: data.facts,
-            listedAt: data.listedAt,
-            soldAt: data.soldAt,
-            updatedAtMls: data.updatedAtMls,
-            daysOnMarket: data.daysOnMarket,
-            isMock: false,
-          },
-        });
-        options.stats.propertyUpserted += 1;
-
-        try {
-          await upsertSyntheticHistoryFromProperty(
+          await syncMediaForListing(
+            data.listingKey,
             listing.id,
-            row,
             options.stats,
           );
         } catch (err) {
           options.stats.errors.push(
-            `synthetic history ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
+            `media ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
           );
         }
+      }
 
-        // Pull photos / rooms when still missing (avoid re-fetch every sync).
-        if (data.listingKey) {
-          const mediaCount = await prisma.listingMedia.count({
-            where: { listingId: listing.id },
-          });
-          if (mediaCount === 0) {
-            try {
-              await syncMediaForListing(
-                data.listingKey,
-                listing.id,
-                options.stats,
-              );
-            } catch (err) {
-              options.stats.errors.push(
-                `media ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
-              );
-            }
-          }
-
-          const roomCount = await prisma.listingRoom.count({
-            where: { listingId: listing.id },
-          });
-          if (roomCount === 0) {
-            try {
-              await syncRoomsForListing(
-                data.listingKey,
-                listing.id,
-                options.stats,
-              );
-            } catch (err) {
-              options.stats.errors.push(
-                `rooms ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
-              );
-            }
-          }
+      const roomCount = await prisma.listingRoom.count({
+        where: { listingId: listing.id },
+      });
+      if (roomCount === 0) {
+        try {
+          await syncRoomsForListing(
+            data.listingKey,
+            listing.id,
+            options.stats,
+          );
+        } catch (err) {
+          options.stats.errors.push(
+            `rooms ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
+          );
         }
+      }
+    }
 
-        const updatedAtMls =
-          data.updatedAtMls instanceof Date
-            ? data.updatedAtMls
-            : data.updatedAtMls
-              ? new Date(data.updatedAtMls)
-              : null;
-        if (
-          updatedAtMls &&
-          !Number.isNaN(updatedAtMls.getTime()) &&
-          (!maxMod || updatedAtMls.getTime() > maxMod.getTime())
-        ) {
-          maxMod = updatedAtMls;
-        }
-      } catch (err) {
-        options.stats.propertySkipped += 1;
-        options.stats.errors.push(
-          `property ${data.mlsNumber}: ${err instanceof Error ? err.message : "upsert failed"}`,
-        );
+    const updatedAtMls =
+      data.updatedAtMls instanceof Date
+        ? data.updatedAtMls
+        : data.updatedAtMls
+          ? new Date(data.updatedAtMls)
+          : null;
+    if (updatedAtMls && !Number.isNaN(updatedAtMls.getTime())) {
+      return updatedAtMls;
+    }
+  } catch (err) {
+    options.stats.propertySkipped += 1;
+    options.stats.errors.push(
+      `property ${data.mlsNumber}: ${err instanceof Error ? err.message : "upsert failed"}`,
+    );
+  }
+  return null;
+}
+
+/**
+ * Pull newest MLS changes first (just-listed / recent mods).
+ * Does not advance the Property cursor — backlog catch-up stays ascending.
+ */
+async function syncRecentProperties(options: {
+  days: number;
+  maxPages: number;
+  stats: MlsSyncStats;
+}): Promise<void> {
+  const from = new Date();
+  from.setUTCDate(from.getUTCDate() - options.days);
+  const filter = `ModificationTimestamp ge ${toODataDate(from)}`;
+  const path = `Property?$filter=${encodeURIComponent(filter)}&$orderby=${encodeURIComponent("ModificationTimestamp desc,ListingKey desc")}&$top=100`;
+  console.log(
+    `[mls] Recent Property pass (last ${options.days}d, maxPages=${options.maxPages}, newest-first)`,
+  );
+
+  const skipReasons: Record<string, number> = {};
+  let pageNo = 0;
+  for await (const page of proptxPages<PropTxProperty>(path, {
+    maxPages: options.maxPages,
+  })) {
+    pageNo += 1;
+    options.stats.pages += 1;
+    console.log(
+      `[mls] Recent page ${pageNo}/${options.maxPages} (+${page.length} rows, upserted=${options.stats.propertyUpserted}, skipped=${options.stats.propertySkipped})`,
+    );
+    for (const row of page) {
+      await upsertPropertyRow(row, {
+        stats: options.stats,
+        skipReasons,
+        fetchNested: false,
+      });
+    }
+  }
+  options.stats.skipReasons = {
+    ...(options.stats.skipReasons ?? {}),
+    ...Object.fromEntries(
+      Object.entries(skipReasons).map(([k, v]) => [`recent:${k}`, v]),
+    ),
+  };
+}
+
+async function syncProperties(options: {
+  maxPages: number;
+  fullBackfillDays: number;
+  stats: MlsSyncStats;
+  fetchNested?: boolean;
+}): Promise<string | null> {
+  const since = await getCursor(RESOURCE_PROPERTY);
+  const filter = propertyFilter(since, options.fullBackfillDays);
+  // Ascending — advances cursor through backlog safely.
+  const path = `Property?$filter=${encodeURIComponent(filter)}&$orderby=${encodeURIComponent("ModificationTimestamp,ListingKey")}&$top=100`;
+  console.log(
+    `[mls] Property backlog start (maxPages=${options.maxPages}, since=${since ?? "none"})`,
+  );
+
+  let maxMod: Date | null = since ? new Date(since) : null;
+  if (maxMod && Number.isNaN(maxMod.getTime())) maxMod = null;
+  const skipReasons: Record<string, number> = {};
+  const fetchNested = options.fetchNested === true;
+
+  let pageNo = 0;
+  for await (const page of proptxPages<PropTxProperty>(path, {
+    maxPages: options.maxPages,
+  })) {
+    pageNo += 1;
+    options.stats.pages += 1;
+    console.log(
+      `[mls] Property page ${pageNo}/${options.maxPages} (+${page.length} rows, upserted=${options.stats.propertyUpserted}, skipped=${options.stats.propertySkipped})`,
+    );
+    for (const row of page) {
+      const updatedAtMls = await upsertPropertyRow(row, {
+        stats: options.stats,
+        skipReasons,
+        fetchNested,
+      });
+      if (
+        updatedAtMls &&
+        (!maxMod || updatedAtMls.getTime() > maxMod.getTime())
+      ) {
+        maxMod = updatedAtMls;
       }
     }
   }
 
-  options.stats.skipReasons = skipReasons;
+  options.stats.skipReasons = {
+    ...(options.stats.skipReasons ?? {}),
+    ...skipReasons,
+  };
 
   if (maxMod) {
     const cursor = toODataDate(maxMod);
@@ -1006,7 +1080,20 @@ export async function runPropTxMlsSync(options?: {
 
   try {
     if (resources.includes("property")) {
-      await syncProperties({ maxPages, fullBackfillDays, stats });
+      // Newest-first so "just listed" lands even if backlog times out.
+      const recentDays = Math.min(3, Math.max(1, fullBackfillDays));
+      const recentPages = Math.min(15, Math.max(5, Math.ceil(maxPages / 2)));
+      await syncRecentProperties({
+        days: recentDays,
+        maxPages: recentPages,
+        stats,
+      });
+      await syncProperties({
+        maxPages,
+        fullBackfillDays,
+        stats,
+        fetchNested: false,
+      });
     }
     if (resources.includes("media")) {
       try {

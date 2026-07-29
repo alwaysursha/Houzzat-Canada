@@ -1,6 +1,5 @@
 "use client";
 
-import { signOut } from "next-auth/react";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
@@ -15,26 +14,10 @@ export function SignOutButton({ className }: { className?: string }) {
     });
     if (!ok) return;
 
-    // 1) Server hard-clear of all Auth.js cookie variants
-    try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-      });
-    } catch {
-      // continue
-    }
-
-    // 2) Client Auth.js cleanup (session store)
-    try {
-      await signOut({ redirect: false });
-    } catch {
-      // continue
-    }
-
-    // 3) Hard navigation so UI cannot keep a stale SessionProvider state
-    window.location.href = "/?signedOut=1";
+    // Hard navigation to the logout route — one response clears cookies and
+    // redirects. Avoid next-auth client signOut on Cloudflare Workers: Auth.js
+    // middleware can re-issue the session cookie after a blank clear.
+    window.location.assign("/api/auth/logout");
   }
 
   return (

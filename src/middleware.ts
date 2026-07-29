@@ -103,7 +103,10 @@ export const config = {
     /*
      * Match all paths except Next static assets and common image files.
      * Coming-soon gate + role guards run here.
+     *
+     * Exclude /api/auth/logout — Auth.js middleware re-issues session cookies
+     * on Cloudflare Workers, which undoes hard cookie clears on sign-out.
      */
-    "/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|api/auth/logout|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
