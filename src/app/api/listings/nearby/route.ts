@@ -2,14 +2,18 @@ import { NextResponse } from "next/server";
 import type { ListingStatus } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { boundingBox, haversineKm } from "@/lib/geo/distance";
+import { resolveRegionFromCoords } from "@/lib/geo/regions";
 import {
   applyPersonalizationToSearchParams,
   parseHomepagePersonalizationQuery,
 } from "@/lib/listings/homepage-personalization";
 import { getListingProvider } from "@/lib/listings/provider";
+import type { ListingCard } from "@/lib/listings/types";
 import { prisma } from "@/lib/prisma";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { hasClientAccess } from "@/lib/vow";
+
+type Ranked = ListingCard & { distanceKm: number; inRadius: boolean };
 
 export async function GET(request: Request) {
   const gated = await mlsClientGate();
@@ -19,10 +23,10 @@ export async function GET(request: Request) {
   const lat = Number(searchParams.get("lat"));
   const lng = Number(searchParams.get("lng"));
   const radiusKm = Math.min(
-    Math.max(Number(searchParams.get("radiusKm") ?? 15), 1),
+    Math.max(Number(searchParams.get("radiusKm") ?? 35), 1),
     80,
   );
-  const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? 4), 1), 60);
+  const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? 12), 1), 60);
   const transactionTypeParam = searchParams.get("transactionType");
   const transactionType =
     transactionTypeParam === "LEASE" || transactionTypeParam === "SALE"
@@ -80,12 +84,9 @@ export async function GET(request: Request) {
     );
   }
 
+  const { region, browseCity } = resolveRegionFromCoords(lat, lng);
   const box = boundingBox(lat, lng, radiusKm);
   const provider = getListingProvider();
-  // Keep sale vs lease comps separate:
-  // - Nearby sold → SOLD + SALE
-  // - Nearby leased → LEASED + LEASE
-  // - Unlisted → off-market that were offered for sale (SALE only)
   const searchTransactionType =
     status === "UNLISTED"
       ? "SALE"
@@ -95,43 +96,76 @@ export async function GET(request: Request) {
           ? "LEASE"
           : transactionType;
 
-  const result = await provider.search(
-    applyPersonalizationToSearchParams(
-      {
-        status,
-        segment: "RESIDENTIAL",
-        transactionType: searchTransactionType,
-        west: box.west,
-        south: box.south,
-        east: box.east,
-        north: box.north,
-        limit: 80,
-      },
-      personalization,
-    ),
-  );
+  const base = {
+    status,
+    segment: "RESIDENTIAL" as const,
+    transactionType: searchTransactionType,
+    sort: "newest" as const,
+    limit: 100,
+  };
 
-  const ranked = result.items
-    .map((item) => ({
+  // Region-city search catches homes whose MLS city is right but map pins are wrong
+  // (centroids / GTA defaults). Bbox search catches well-pinned homes nearby.
+  const [byRegion, byBox] = await Promise.all([
+    provider.search(
+      applyPersonalizationToSearchParams(
+        { ...base, cities: region.cities },
+        personalization,
+      ),
+    ),
+    provider.search(
+      applyPersonalizationToSearchParams(
+        {
+          ...base,
+          west: box.west,
+          south: box.south,
+          east: box.east,
+          north: box.north,
+        },
+        personalization,
+      ),
+    ),
+  ]);
+
+  const byMls = new Map<string, ListingCard>();
+  for (const item of [...byRegion.items, ...byBox.items]) {
+    if (excludeMls && item.mlsNumber === excludeMls) continue;
+    byMls.set(item.mlsNumber, item);
+  }
+
+  const ranked: Ranked[] = [...byMls.values()].map((item) => {
+    const distanceKm = haversineKm(lat, lng, item.lat, item.lng);
+    return {
       ...item,
-      distanceKm: haversineKm(lat, lng, item.lat, item.lng),
-    }))
-    .filter(
-      (item) =>
-        item.distanceKm <= radiusKm &&
-        (!excludeMls || item.mlsNumber !== excludeMls),
-    )
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, limit);
+      distanceKm,
+      inRadius: Number.isFinite(distanceKm) && distanceKm <= radiusKm,
+    };
+  });
+
+  ranked.sort((a, b) => {
+    if (a.inRadius !== b.inRadius) return a.inRadius ? -1 : 1;
+    if (a.inRadius && b.inRadius) return a.distanceKm - b.distanceKm;
+    // Same region / bad pins: newest first
+    return (
+      new Date(b.listedAt).getTime() - new Date(a.listedAt).getTime()
+    );
+  });
+
+  const sliced = ranked.slice(0, limit).map(({ inRadius, distanceKm, ...item }) => ({
+    ...item,
+    // Only show a distance chip when the pin is trustworthy enough to be in-radius.
+    distanceKm: inRadius ? distanceKm : undefined,
+  }));
 
   const items = isClient
-    ? ranked
-    : ranked.map((item) => ({ ...item, soldPrice: null }));
+    ? sliced
+    : sliced.map((item) => ({ ...item, soldPrice: null }));
 
   return NextResponse.json({
     items,
     center: { lat, lng },
     radiusKm,
+    region: { id: region.id, label: region.label, browseCity },
     total: items.length,
   });
 }

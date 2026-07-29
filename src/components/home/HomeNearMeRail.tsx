@@ -17,7 +17,8 @@ type NearMeListing = ListingCardData & { distanceKm?: number };
 type Status = "idle" | "locating" | "loading" | "ready" | "empty" | "hidden";
 
 const GEO_ASKED_KEY = "houzzat-geo-asked";
-const NEAR_ME_RADIUS_KM = 20;
+const NEAR_ME_RADIUS_KM = 35;
+const NEAR_ME_LIMIT = 12;
 
 async function readGeolocationPermission(): Promise<PermissionState | "unknown"> {
   if (typeof navigator === "undefined" || !navigator.permissions?.query) {
@@ -77,7 +78,7 @@ export function HomeNearMeRail({
         lat: String(lat),
         lng: String(lng),
         radiusKm: String(NEAR_ME_RADIUS_KM),
-        limit: "4",
+        limit: String(NEAR_ME_LIMIT),
       });
       appendPersonalizationToUrlSearchParams(params, personalization);
       const res = await fetch(`/api/listings/nearby?${params.toString()}`);
@@ -234,7 +235,7 @@ export function HomeNearMeRail({
 
       {status === "empty" || items.length === 0 ? (
         <p className="text-sm text-ink/50">
-          No homes within 20 km of you match your homepage search.
+          No homes near you match your homepage search.
         </p>
       ) : (
         <FreeSwipeRail label="Listings near me">
