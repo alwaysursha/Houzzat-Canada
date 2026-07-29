@@ -184,6 +184,7 @@ export function SearchExperience() {
   }, [isNarrow, searchParams]);
 
   const communitiesParam = searchParams.get("communities") ?? "";
+  const citiesParam = searchParams.get("cities") ?? "";
   const qParam = searchParams.get("q") ?? "";
 
   const syncUrl = useCallback(
@@ -194,7 +195,11 @@ export function SearchExperience() {
       }
       params.set("transactionType", next.transactionType);
       if (next.dataSource) params.set("dataSource", next.dataSource);
-      if (next.city) params.set("city", next.city);
+      if (citiesParam) {
+        params.set("cities", citiesParam);
+      } else if (next.city) {
+        params.set("city", next.city);
+      }
       if (communitiesParam) {
         params.set("communities", communitiesParam);
       } else if (next.community) {
@@ -215,7 +220,7 @@ export function SearchExperience() {
       if (nextView !== "split") params.set("view", nextView);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [communitiesParam, pathname, qParam, router, view],
+    [citiesParam, communitiesParam, pathname, qParam, router, view],
   );
 
   const queryString = useMemo(() => {
@@ -227,7 +232,11 @@ export function SearchExperience() {
     }
     params.set("transactionType", filters.transactionType);
     if (filters.dataSource) params.set("dataSource", filters.dataSource);
-    if (filters.city) params.set("city", filters.city);
+    if (citiesParam) {
+      params.set("cities", citiesParam);
+    } else if (filters.city) {
+      params.set("city", filters.city);
+    }
     if (communitiesParam) {
       params.set("communities", communitiesParam);
     } else if (filters.community) {
@@ -257,7 +266,7 @@ export function SearchExperience() {
     }
     params.set("limit", "60");
     return params.toString();
-  }, [filters, appliedBounds, communitiesParam, polygon, qParam]);
+  }, [filters, appliedBounds, citiesParam, communitiesParam, polygon, qParam]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/listings/search?${queryString}`);

@@ -118,10 +118,14 @@ export function HomeSoldRail({
   items,
   isClient,
   emptyLabel,
+  regionLabel,
+  seeAllHref = "/search?status=SOLD",
 }: {
   items: ListingCardData[];
   isClient: boolean;
   emptyLabel?: string;
+  regionLabel?: string;
+  seeAllHref?: string;
 }) {
   if (items.length === 0 && !emptyLabel) return null;
 
@@ -131,10 +135,15 @@ export function HomeSoldRail({
       className="scroll-mt-[calc(var(--site-header-stack)+0.75rem)] space-y-5"
     >
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h2 className="font-display text-2xl text-ink">Recently sold</h2>
+        <div>
+          <h2 className="font-display text-2xl text-ink">Recently sold</h2>
+          {regionLabel ? (
+            <p className="mt-1 text-sm text-ink/60">{regionLabel}</p>
+          ) : null}
+        </div>
         {isClient ? (
           <Link
-            href="/search?status=SOLD"
+            href={seeAllHref}
             className="text-sm font-semibold text-canopy"
           >
             See sold search →

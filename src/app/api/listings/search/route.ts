@@ -84,6 +84,15 @@ export async function GET(request: Request) {
       (searchParams.get("dataSource") as "fsbo" | "mls" | "ALL" | null) ??
       undefined,
     city: searchParams.get("city") ?? undefined,
+    cities: (() => {
+      const raw = searchParams.get("cities");
+      if (!raw?.trim()) return undefined;
+      const list = raw
+        .split("|")
+        .map((c) => c.trim())
+        .filter(Boolean);
+      return list.length ? list : undefined;
+    })(),
     community: searchParams.get("community") ?? undefined,
     communities,
     propertyType:

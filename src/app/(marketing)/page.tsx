@@ -5,10 +5,9 @@ import { HomeCustomerToolsStrip } from "@/components/home/HomeCustomerToolsStrip
 import { HomeCustomerToolsTease } from "@/components/home/HomeCustomerToolsTease";
 import { HomeBrowseChips } from "@/components/home/HomeBrowseChips";
 import { HomeHeroSearch } from "@/components/home/HomeHeroSearch";
-import { HomeListingRail } from "@/components/home/HomeListingRail";
 import { HomeOwnerListingRail } from "@/components/home/HomeOwnerListingRail";
 import { HomeRecentlyViewedRail } from "@/components/home/HomeRecentlyViewedRail";
-import { HomeSoldRail } from "@/components/home/HomeSoldRail";
+import { HomepageMarketRails } from "@/components/home/HomepageMarketRails";
 import { HomepageSortedRails } from "@/components/home/HomepageSortedRails";
 import { auth } from "@/lib/auth";
 import { cityLandmarkImage } from "@/lib/geo/area-images";
@@ -24,14 +23,6 @@ import { prisma } from "@/lib/prisma";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { hasClientAccess } from "@/lib/vow";
 import type { ListingSegment, PropertyType } from "@prisma/client";
-import type { ListingSearchResult } from "@/lib/listings/types";
-
-const EMPTY_SEARCH: ListingSearchResult = {
-  items: [],
-  nextCursor: null,
-  total: 0,
-  provider: process.env.LISTING_PROVIDER === "proptx" ? "proptx" : "mock",
-};
 
 export default async function HomePage() {
   const session = await auth();
@@ -67,82 +58,14 @@ export default async function HomePage() {
     : null;
 
   const provider = getListingProvider();
-  const mlsSearch = vowOnlyGuest
-    ? async () => EMPTY_SEARCH
-    : (params: Parameters<typeof provider.search>[0]) => provider.search(params);
 
   const [
-    newResidential,
-    forLease,
-    commercial,
-    openHouses,
-    soldResult,
     ownerListings,
     places,
     customerTools,
     recentViews,
     popularCities,
   ] = await Promise.all([
-      mlsSearch(
-        applyPersonalizationToSearchParams(
-          {
-            status: "ACTIVE",
-            segment: "RESIDENTIAL",
-            transactionType: "SALE",
-            sort: "newest",
-            limit: 4,
-          },
-          personalization,
-        ),
-      ),
-      mlsSearch(
-        applyPersonalizationToSearchParams(
-          {
-            status: "ACTIVE",
-            transactionType: "LEASE",
-            segment: "ALL",
-            limit: 4,
-          },
-          personalization,
-        ),
-      ),
-      mlsSearch(
-        applyPersonalizationToSearchParams(
-          {
-            status: "ACTIVE",
-            segment: "COMMERCIAL",
-            transactionType: "SALE",
-            limit: 4,
-          },
-          personalization,
-        ),
-      ),
-      vowOnlyGuest
-        ? Promise.resolve([])
-        : provider.openHouses({
-            city: personalization?.city,
-            communities: personalization?.communities,
-            propertyTypes: personalization?.propertyTypes as
-              | PropertyType[]
-              | undefined,
-            minPrice: personalization?.minPrice
-              ? Number(personalization.minPrice)
-              : undefined,
-            maxPrice: personalization?.maxPrice
-              ? Number(personalization.maxPrice)
-              : undefined,
-          }),
-      mlsSearch(
-        applyPersonalizationToSearchParams(
-          {
-            status: "SOLD",
-            segment: "ALL",
-            transactionType: "SALE",
-            limit: 4,
-          },
-          personalization,
-        ),
-      ),
       provider.search(
         applyPersonalizationToSearchParams(
           {
@@ -306,23 +229,6 @@ export default async function HomePage() {
     }),
   );
 
-  const weekendOpenHouses = openHouses
-    .filter((l) =>
-      l.openHouses.some((oh) => {
-        const day = new Date(oh.startsAt).getDay();
-        return day === 0 || day === 6;
-      }),
-    )
-    .slice(0, 4);
-
-  const soldForDisplay = isClient
-    ? soldResult.items
-    : soldResult.items.map((item) => ({ ...item, soldPrice: null }));
-
-  const openHouseItems = weekendOpenHouses.length
-    ? weekendOpenHouses
-    : openHouses.slice(0, 4);
-
   return (
     <div>
       <section id="home-hero" className="relative z-[35]">
@@ -446,90 +352,13 @@ export default async function HomePage() {
                 ]
               : []),
             {
-              id: "new-listings",
-              resultCount: newResidential.items.length,
+              id: "market-rails",
+              resultCount: 1,
               node: (
-                <HomeListingRail
-                  id="rail-new-listings"
-                  title="New Listings"
-                  href={
-                    seeAllBase
-                      ? seeAllBase({
-                          transactionType: "SALE",
-                          segment: "RESIDENTIAL",
-                        })
-                      : "/search?transactionType=SALE"
-                  }
-                  items={newResidential.items}
-                  emptyLabel={
-                    personalized
-                      ? "No new listings match your homepage search."
-                      : undefined
-                  }
-                />
-              ),
-            },
-            {
-              id: "open-houses",
-              resultCount: openHouseItems.length,
-              node: (
-                <HomeListingRail
-                  id="rail-open-houses"
-                  title="Open Houses this Weekend"
-                  href={
-                    seeAllBase
-                      ? seeAllBase({
-                          transactionType: "SALE",
-                          openHouseOnly: "1",
-                        })
-                      : "/open-houses"
-                  }
-                  items={openHouseItems}
-                  emptyLabel={
-                    personalized
-                      ? "No open houses match your homepage search."
-                      : "No open houses in the demo window right now."
-                  }
-                />
-              ),
-            },
-            ...(soldForDisplay.length > 0 || personalized
-              ? [
-                  {
-                    id: "recently-sold",
-                    resultCount: soldForDisplay.length,
-                    node: (
-                      <HomeSoldRail
-                        items={soldForDisplay}
-                        isClient={isClient}
-                        emptyLabel={
-                          personalized
-                            ? "No recently sold homes match your homepage search."
-                            : undefined
-                        }
-                      />
-                    ),
-                  },
-                ]
-              : []),
-            {
-              id: "for-lease",
-              resultCount: forLease.items.length,
-              node: (
-                <HomeListingRail
-                  id="rail-for-lease"
-                  title="For lease"
-                  href={
-                    seeAllBase
-                      ? seeAllBase({ transactionType: "LEASE" })
-                      : "/search?transactionType=LEASE"
-                  }
-                  items={forLease.items}
-                  emptyLabel={
-                    personalized
-                      ? "No lease listings match your homepage search."
-                      : "No lease listings in demo inventory right now."
-                  }
+                <HomepageMarketRails
+                  isClient={isClient}
+                  vowOnlyGuest={vowOnlyGuest}
+                  personalization={personalization}
                 />
               ),
             },
@@ -551,30 +380,6 @@ export default async function HomePage() {
                   },
                 ]
               : []),
-            {
-              id: "commercial",
-              resultCount: commercial.items.length,
-              node: (
-                <HomeListingRail
-                  id="rail-commercial"
-                  title="Commercial"
-                  href={
-                    seeAllBase
-                      ? seeAllBase({
-                          segment: "COMMERCIAL",
-                          transactionType: "SALE",
-                        })
-                      : "/search?segment=COMMERCIAL&transactionType=SALE"
-                  }
-                  items={commercial.items}
-                  emptyLabel={
-                    personalized
-                      ? "No commercial listings match your homepage search."
-                      : "No commercial listings yet."
-                  }
-                />
-              ),
-            },
           ]}
         />
 

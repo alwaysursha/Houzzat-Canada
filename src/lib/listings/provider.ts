@@ -165,7 +165,13 @@ export class DbListingProvider implements ListingProvider {
       this.inventorySourceFilter(params.dataSource),
     );
 
-    if (params.city) {
+    if (params.cities?.length) {
+      (where.AND as Prisma.ListingWhereInput[]).push({
+        OR: params.cities.map((city) => ({
+          city: { equals: city, mode: "insensitive" as const },
+        })),
+      });
+    } else if (params.city) {
       where.city = { equals: params.city, mode: "insensitive" };
     }
     if (params.propertyTypes?.length) {
@@ -234,7 +240,9 @@ export class DbListingProvider implements ListingProvider {
 
     const orderBy =
       params.sort === "newest"
-        ? ([{ listedAt: "desc" }, { mlsNumber: "desc" }] as const)
+        ? params.status === "SOLD" || params.statuses?.includes("SOLD")
+          ? ([{ soldAt: "desc" }, { listedAt: "desc" }, { mlsNumber: "desc" }] as const)
+          : ([{ listedAt: "desc" }, { mlsNumber: "desc" }] as const)
         : params.sort === "price_desc"
           ? ([{ listPrice: "desc" }, { mlsNumber: "desc" }] as const)
           : ([{ listPrice: "asc" }, { mlsNumber: "asc" }] as const);
@@ -595,6 +603,7 @@ export class DbListingProvider implements ListingProvider {
 
   async openHouses(params: {
     city?: string;
+    cities?: string[];
     community?: string;
     communities?: string[];
     propertyTypes?: PropertyType[];
@@ -605,9 +614,20 @@ export class DbListingProvider implements ListingProvider {
   }): Promise<ListingCard[]> {
     const from = params.from ?? new Date();
     const to =
-      params.to ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      params.to ?? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
     const andFilters: Prisma.ListingWhereInput[] = [];
+    if (params.cities?.length) {
+      andFilters.push({
+        OR: params.cities.map((city) => ({
+          city: { equals: city, mode: "insensitive" as const },
+        })),
+      });
+    } else if (params.city) {
+      andFilters.push({
+        city: { equals: params.city, mode: "insensitive" },
+      });
+    }
     if (params.communities?.length) {
       andFilters.push({
         OR: params.communities.map((community) => ({
@@ -626,9 +646,6 @@ export class DbListingProvider implements ListingProvider {
           this.inventorySourceFilter(),
           { status: "ACTIVE" },
           { transactionType: "SALE" },
-          ...(params.city
-            ? [{ city: { equals: params.city, mode: "insensitive" as const } }]
-            : []),
           ...(params.propertyTypes?.length
             ? [{ propertyType: { in: params.propertyTypes } }]
             : []),
@@ -663,8 +680,8 @@ export class DbListingProvider implements ListingProvider {
           orderBy: { startsAt: "asc" },
         },
       },
-      orderBy: { listPrice: "asc" },
-      take: 60,
+      orderBy: [{ listedAt: "desc" }, { listPrice: "asc" }],
+      take: 80,
     });
 
     return rows.map(toCard);

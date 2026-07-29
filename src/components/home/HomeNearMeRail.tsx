@@ -122,6 +122,25 @@ export function HomeNearMeRail({
     setStatus("locating");
     try {
       const position = await readPosition();
+      try {
+        sessionStorage.setItem(
+          "houzzat-region-geo",
+          JSON.stringify({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          }),
+        );
+      } catch {
+        // ignore
+      }
+      window.dispatchEvent(
+        new CustomEvent("houzzat:geo", {
+          detail: {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          },
+        }),
+      );
       await loadNearby(position.coords.latitude, position.coords.longitude);
     } catch (error) {
       commitStatus("hidden");

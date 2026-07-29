@@ -65,6 +65,8 @@ export type ListingSearchParams = {
   transactionType?: ListingTransactionType | "ALL";
   dataSource?: "fsbo" | "mls" | "ALL";
   city?: string;
+  /** Multi-city OR filter (preferred over single city when set). */
+  cities?: string[];
   community?: string;
   /** Multi-community OR filter (preferred over single community when set). */
   communities?: string[];
