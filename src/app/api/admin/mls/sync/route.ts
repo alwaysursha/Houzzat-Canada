@@ -27,7 +27,9 @@ export async function GET(request: Request) {
   return NextResponse.json(health);
 }
 
-/** Admin / cron: run incremental (or bounded backfill) PropTx VOW sync. */
+/** Admin / cron: run a small incremental PropTx sync.
+ * Large backfills must use GitHub Actions (`MLS Sync` workflow) — Workers time out.
+ */
 export async function POST(request: Request) {
   const admin = await requireAdminUser();
   const cronOk = authorizeSyncRequest(request);
@@ -46,9 +48,16 @@ export async function POST(request: Request) {
     body = {};
   }
 
+  // Hard cap — Cloudflare Workers cannot finish large PropTx pulls in one request.
+  const maxPages = Math.min(Math.max(body.maxPages ?? 5, 1), 8);
+  const fullBackfillDays = Math.min(
+    Math.max(body.fullBackfillDays ?? 3, 1),
+    14,
+  );
+
   const result = await runPropTxMlsSync({
-    maxPages: body.maxPages,
-    fullBackfillDays: body.fullBackfillDays,
+    maxPages,
+    fullBackfillDays,
     resources: body.resources,
   });
 

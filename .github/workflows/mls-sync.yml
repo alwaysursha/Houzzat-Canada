@@ -1,19 +1,23 @@
 name: MLS Sync
 
-# Keeps Neon inventory fresh from PropTx without manual runs.
-# Requires GitHub secrets: MLS_SYNC_SECRET, and optionally SITE_URL.
+# Runs PropTx → Neon sync on GitHub runners (not via Worker HTTP).
+# Large syncs on Cloudflare Workers time out (503); this avoids that.
+#
+# Required GitHub secrets:
+#   DATABASE_URL, DIRECT_URL (optional),
+#   PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID
 on:
   schedule:
-    # Every 15 minutes (GitHub cron can drift a few minutes).
+    # Incremental catch-up every 15 minutes (GitHub cron can drift).
     - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       maxPages:
-        description: "Max Property pages this run (~100 listings/page)"
+        description: "Max Property pages (~100 listings/page). Keep small for scheduled; raise for backfill."
         required: false
-        default: "50"
+        default: "15"
       fullBackfillDays:
-        description: "Days back if no sync cursor yet"
+        description: "Days back when no Property cursor exists yet"
         required: false
         default: "7"
 
@@ -24,32 +28,51 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 90
     steps:
-      - name: Trigger PropTx → Neon sync
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
         env:
-          MLS_SYNC_SECRET: ${{ secrets.MLS_SYNC_SECRET }}
-          SITE_URL: ${{ secrets.SITE_URL }}
-          MAX_PAGES: ${{ github.event.inputs.maxPages || '50' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+      - name: Run PropTx MLS sync
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          PROPTX_ENDPOINT_URL: ${{ secrets.PROPTX_ENDPOINT_URL }}
+          PROPTX_BEARER_TOKEN: ${{ secrets.PROPTX_BEARER_TOKEN }}
+          PROPTX_TOKEN_ID: ${{ secrets.PROPTX_TOKEN_ID }}
+          PROPTX_FEED: vow
+          LISTING_PROVIDER: proptx
+          MAX_PAGES: ${{ github.event.inputs.maxPages || '15' }}
           BACKFILL_DAYS: ${{ github.event.inputs.fullBackfillDays || '7' }}
         run: |
           set -euo pipefail
-          if [[ -z "${MLS_SYNC_SECRET:-}" ]]; then
-            echo "Missing secret MLS_SYNC_SECRET — add it in GitHub repo Settings → Secrets."
+          if [[ -z "${DATABASE_URL:-}" ]]; then
+            echo "Missing secret DATABASE_URL"
             exit 1
           fi
-          BASE_URL="${SITE_URL:-https://houzzat.com}"
-          BASE_URL="${BASE_URL%/}"
-          echo "POST ${BASE_URL}/api/admin/mls/sync (maxPages=${MAX_PAGES}, fullBackfillDays=${BACKFILL_DAYS})"
-          curl -fsS -X POST "${BASE_URL}/api/admin/mls/sync" \
-            -H "Authorization: Bearer ${MLS_SYNC_SECRET}" \
-            -H "Content-Type: application/json" \
-            -d "{\"maxPages\":${MAX_PAGES},\"fullBackfillDays\":${BACKFILL_DAYS}}" \
-            | tee /tmp/mls-sync.json
-          python3 - <<'PY'
-          import json, sys
-          data = json.load(open("/tmp/mls-sync.json"))
-          ok = bool(data.get("ok"))
-          print("ok=", ok, "message=", data.get("message"))
-          sys.exit(0 if ok else 1)
-          PY
+          if [[ -z "${PROPTX_BEARER_TOKEN:-}" || -z "${PROPTX_TOKEN_ID:-}" || -z "${PROPTX_ENDPOINT_URL:-}" ]]; then
+            echo "Missing PropTx secrets (PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID)"
+            exit 1
+          fi
+          echo "Running pnpm mls:sync ${MAX_PAGES} ${BACKFILL_DAYS}"
+          pnpm mls:sync "${MAX_PAGES}" "${BACKFILL_DAYS}"
