@@ -5,10 +5,13 @@ import { NextResponse } from "next/server";
  *
  * Do NOT call Auth.js `signOut()` here: on Workers it often emits a blank
  * Set-Cookie then a refreshed session cookie; Chrome keeps the last one, so
- * the user stays signed in. Also clear chunked JWTs (`…session-token.0`, etc.).
+ * the user stays signed in.
+ *
+ * Only clear cookies that are actually on the request (plus a tiny always-clear
+ * set). Pre-emitting hundreds of chunk variants blows CF header limits → 502.
  */
 
-const KNOWN_AUTH_COOKIES = [
+const ALWAYS_CLEAR = [
   "authjs.session-token",
   "__Secure-authjs.session-token",
   "__Host-authjs.session-token",
@@ -17,35 +20,15 @@ const KNOWN_AUTH_COOKIES = [
   "authjs.csrf-token",
   "__Host-authjs.csrf-token",
   "__Secure-authjs.csrf-token",
-  "next-auth.csrf-token",
-  "__Host-next-auth.csrf-token",
   "authjs.callback-url",
   "__Secure-authjs.callback-url",
-  "next-auth.callback-url",
-  "__Secure-next-auth.callback-url",
-  "authjs.pkce.code_verifier",
-  "__Secure-authjs.pkce.code_verifier",
-  "authjs.state",
-  "__Secure-authjs.state",
-  "authjs.nonce",
-  "__Secure-authjs.nonce",
-  "authjs.challenge",
-  "__Secure-authjs.challenge",
 ] as const;
 
 const AUTH_COOKIE_NAME_RE =
   /^(?:__Secure-|__Host-)?(?:authjs|next-auth)\./i;
 
 function collectCookieNames(request: Request): string[] {
-  const names = new Set<string>();
-
-  for (const base of KNOWN_AUTH_COOKIES) {
-    names.add(base);
-    // Auth.js chunks large JWTs across session-token.0 … .N
-    for (let i = 0; i < 12; i += 1) {
-      names.add(`${base}.${i}`);
-    }
-  }
+  const names = new Set<string>(ALWAYS_CLEAR);
 
   const header = request.headers.get("cookie") ?? "";
   for (const part of header.split(";")) {
@@ -65,7 +48,6 @@ function expireCookie(response: NextResponse, name: string) {
     name.startsWith("__Secure-") ||
     process.env.NODE_ENV === "production";
 
-  // Match Auth.js attributes so the browser treats this as the same cookie.
   response.cookies.set({
     name,
     value: "",
@@ -76,18 +58,6 @@ function expireCookie(response: NextResponse, name: string) {
     sameSite: "lax",
     secure: isHost || secure,
   });
-
-  // Also append a raw header — Workers cookie merging can drop cookies.set clears.
-  const parts = [
-    `${name}=`,
-    "Path=/",
-    "Max-Age=0",
-    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
-    "HttpOnly",
-    "SameSite=Lax",
-  ];
-  if (isHost || secure) parts.push("Secure");
-  response.headers.append("Set-Cookie", parts.join("; "));
 }
 
 function clearedRedirect(request: Request) {
