@@ -38,7 +38,7 @@ jobs:
             echo "Missing secret MLS_SYNC_SECRET — add it in GitHub repo Settings → Secrets."
             exit 1
           fi
-          BASE_URL="${SITE_URL:-https://houzzat.teamalisyed.workers.dev}"
+          BASE_URL="${SITE_URL:-https://houzzat.com}"
           BASE_URL="${BASE_URL%/}"
           echo "POST ${BASE_URL}/api/admin/mls/sync (maxPages=${MAX_PAGES}, fullBackfillDays=${BACKFILL_DAYS})"
           curl -fsS -X POST "${BASE_URL}/api/admin/mls/sync" \

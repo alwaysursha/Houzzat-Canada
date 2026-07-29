@@ -58,12 +58,23 @@ async function setCursor(resource: string, cursor: string) {
 
 function propertyFilter(since: string | null, fullBackfillDays: number): string {
   // AMPRE docs use `ge` (not `gt`) on ModificationTimestamp.
-  if (since) {
-    return `ModificationTimestamp ge ${since}`;
-  }
-  const from = new Date();
-  from.setUTCDate(from.getUTCDate() - fullBackfillDays);
-  return `ModificationTimestamp ge ${toODataDate(from)}`;
+  const cities = getMlsSyncCities();
+  const cityClause =
+    cities.length > 0
+      ? `(${cities
+          .map((city) => `City eq ${odataStringLiteral(city)}`)
+          .join(" or ")})`
+      : null;
+
+  const timeClause = since
+    ? `ModificationTimestamp ge ${since}`
+    : (() => {
+        const from = new Date();
+        from.setUTCDate(from.getUTCDate() - fullBackfillDays);
+        return `ModificationTimestamp ge ${toODataDate(from)}`;
+      })();
+
+  return cityClause ? `${cityClause} and ${timeClause}` : timeClause;
 }
 
 async function resolveListingIdByKey(

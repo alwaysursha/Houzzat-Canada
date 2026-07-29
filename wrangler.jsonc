@@ -8,8 +8,10 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
-  // Add houzzat.ca back after the domain is added to this Cloudflare account:
-  // "routes": [{ "pattern": "houzzat.ca", "custom_domain": true }],
+  "routes": [
+    { "pattern": "houzzat.com", "custom_domain": true },
+    { "pattern": "www.houzzat.com", "custom_domain": true }
+  ],
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
@@ -17,8 +19,8 @@
     }
   ],
   "vars": {
-    "NEXTAUTH_URL": "https://houzzat.teamalisyed.workers.dev",
-    "NEXT_PUBLIC_SITE_URL": "https://houzzat.teamalisyed.workers.dev",
+    "NEXTAUTH_URL": "https://houzzat.com",
+    "NEXT_PUBLIC_SITE_URL": "https://houzzat.com",
     // Public wa.me destination — also set NEXT_PUBLIC_WHATSAPP_EXPERT at build
     // time (GitHub Actions) so client bundles can inline it.
     "NEXT_PUBLIC_WHATSAPP_EXPERT": "16472214949",

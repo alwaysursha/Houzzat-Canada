@@ -2,6 +2,7 @@
 
 import { signOut } from "next-auth/react";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
+import { SITE_URL } from "@/lib/constants";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +15,7 @@ export function SignOutButton({ className }: { className?: string }) {
       destructive: true,
     });
     if (!ok) return;
-    void signOut({ callbackUrl: "/" });
+    void signOut({ callbackUrl: SITE_URL });
   }
 
   return (

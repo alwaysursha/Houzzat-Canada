@@ -27,7 +27,7 @@ export default async function LandingPublicPage({
 
   const ctaHref = (() => {
     const base = page.ctaHref || "/home-valuation";
-    const url = new URL(base, "https://houzzat.ca");
+    const url = new URL(base, "https://houzzat.com");
     if (page.utmCampaign) url.searchParams.set("utm_campaign", page.utmCampaign);
     if (utmSource) url.searchParams.set("utm_source", utmSource);
     return `${url.pathname}${url.search}`;

@@ -79,7 +79,7 @@ async function geocodeNominatim(query: string): Promise<GeocodeResult | null> {
   const res = await fetch(url, {
     headers: {
       Accept: "application/json",
-      "User-Agent": "HouzzatMLSSync/1.0 (houzzat.ca; listing geocode)",
+      "User-Agent": "HouzzatMLSSync/1.0 (houzzat.com; listing geocode)",
     },
   });
   if (!res.ok) return null;
