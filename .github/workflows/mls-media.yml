@@ -4,18 +4,19 @@ name: MLS Media Backfill
 # Complements mls-sync.yml (which also backfills a batch after each property pass).
 on:
   schedule:
-    # Offset from property sync (:00/:05/…) — run at :07/:22/:37/:52
-    - cron: "7,22,37,52 * * * *"
+    # Hourly — jobs take ~10–20m; every-15m + cancel-in-progress was killing runs mid-batch.
+    - cron: "22 * * * *"
   workflow_dispatch:
     inputs:
       maxPages:
-        description: "Scale factor (~50 listings/page via media backfill)"
+        description: "Scale factor (~50 listings per page; 20 ≈ 1000 listings)"
         required: false
-        default: "40"
+        default: "20"
 
 concurrency:
   group: mls-media-backfill
-  cancel-in-progress: true
+  # Never cancel an in-flight backfill — that left listings without photos.
+  cancel-in-progress: false
 
 jobs:
   media:
@@ -56,9 +57,8 @@ jobs:
           PROPTX_VOW_TOKEN_ID: ${{ secrets.PROPTX_VOW_TOKEN_ID }}
           PROPTX_FEED: idx
           LISTING_PROVIDER: proptx
-          MAX_PAGES: ${{ github.event.inputs.maxPages || '40' }}
+          MAX_PAGES: ${{ github.event.inputs.maxPages || '20' }}
         run: |
           set -euo pipefail
           echo "Running pnpm mls:media ${MAX_PAGES} (~$(( MAX_PAGES * 50 )) listings)"
           pnpm mls:media "${MAX_PAGES}"
-          echo "Tip: if Neon hits 512MB, prune with: pnpm exec tsx scripts/prune-listing-media.ts 10 && pnpm exec tsx scripts/vacuum-listing-media.ts"

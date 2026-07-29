@@ -1,7 +1,7 @@
 /**
  * Backfill MLS listing photos for rows with zero media.
- * Usage: pnpm mls:media [maxPages=40]
- * Processes maxPages * 50 listings (default ~2000).
+ * Usage: pnpm mls:media [maxPages=20]
+ * Processes maxPages * 50 listings (default ~1000).
  */
 import { config } from "dotenv";
 
@@ -10,7 +10,7 @@ config({ path: ".env" });
 
 async function main() {
   const { runPropTxMlsSync } = await import("../src/lib/proptx/sync");
-  const maxPages = Number(process.argv[2] ?? 40);
+  const maxPages = Number(process.argv[2] ?? 20);
 
   console.log(
     `MLS media backfill (maxPages=${maxPages}, ~${Math.max(maxPages * 50, 100)} listings)…`,
