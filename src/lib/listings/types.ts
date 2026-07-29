@@ -169,6 +169,7 @@ export interface ListingProvider {
   ): Promise<AutocompleteSuggestion[]>;
   openHouses(params: {
     city?: string;
+    cities?: string[];
     community?: string;
     communities?: string[];
     propertyTypes?: PropertyType[];
