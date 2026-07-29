@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { ListingStatus } from "@prisma/client";
+import type { ListingStatus, ListingTransactionType } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { boundingBox, haversineKm } from "@/lib/geo/distance";
 import { resolveRegionFromCoords } from "@/lib/geo/regions";
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   );
   const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? 12), 1), 60);
   const transactionTypeParam = searchParams.get("transactionType");
-  const transactionType =
+  const transactionType: ListingTransactionType =
     transactionTypeParam === "LEASE" || transactionTypeParam === "SALE"
       ? transactionTypeParam
       : "SALE";
@@ -87,7 +87,7 @@ export async function GET(request: Request) {
   const { region, browseCity } = resolveRegionFromCoords(lat, lng);
   const box = boundingBox(lat, lng, radiusKm);
   const provider = getListingProvider();
-  const searchTransactionType =
+  const searchTransactionType: ListingTransactionType =
     status === "UNLISTED"
       ? "SALE"
       : status === "SOLD"
