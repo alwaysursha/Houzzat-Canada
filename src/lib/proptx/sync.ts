@@ -57,24 +57,14 @@ async function setCursor(resource: string, cursor: string) {
 }
 
 function propertyFilter(since: string | null, fullBackfillDays: number): string {
-  // AMPRE docs use `ge` (not `gt`) on ModificationTimestamp.
-  const cities = getMlsSyncCities();
-  const cityClause =
-    cities.length > 0
-      ? `(${cities
-          .map((city) => `City eq ${odataStringLiteral(city)}`)
-          .join(" or ")})`
-      : null;
-
-  const timeClause = since
-    ? `ModificationTimestamp ge ${since}`
-    : (() => {
-        const from = new Date();
-        from.setUTCDate(from.getUTCDate() - fullBackfillDays);
-        return `ModificationTimestamp ge ${toODataDate(from)}`;
-      })();
-
-  return cityClause ? `${cityClause} and ${timeClause}` : timeClause;
+  // Time window only — a giant `City eq … or City eq …` filter hangs AMPRE.
+  // City allowlisting is applied after fetch via cityAllowedForMlsSync().
+  if (since) {
+    return `ModificationTimestamp ge ${since}`;
+  }
+  const from = new Date();
+  from.setUTCDate(from.getUTCDate() - fullBackfillDays);
+  return `ModificationTimestamp ge ${toODataDate(from)}`;
 }
 
 async function resolveListingIdByKey(
@@ -545,6 +535,7 @@ async function syncProperties(options: {
   const filter = propertyFilter(since, options.fullBackfillDays);
   // Match AMPRE examples: order by ModificationTimestamp,ListingKey
   const path = `Property?$filter=${encodeURIComponent(filter)}&$orderby=${encodeURIComponent("ModificationTimestamp,ListingKey")}&$top=100`;
+  console.log(`[mls] Property query start (maxPages=${options.maxPages})`);
 
   let maxMod: Date | null = since ? new Date(since) : null;
   if (maxMod && Number.isNaN(maxMod.getTime())) maxMod = null;
@@ -554,6 +545,9 @@ async function syncProperties(options: {
     maxPages: options.maxPages,
   })) {
     options.stats.pages += 1;
+    console.log(
+      `[mls] Property page ${options.stats.pages}/${options.maxPages} (+${page.length} rows, upserted=${options.stats.propertyUpserted}, skipped=${options.stats.propertySkipped})`,
+    );
     for (const row of page) {
       const mapped = mapPropertyToListingResult(row);
       if (!mapped.ok) {
@@ -994,9 +988,8 @@ export async function runPropTxMlsSync(options?: {
   const fullBackfillDays = options?.fullBackfillDays ?? 90;
   const resources = options?.resources ?? [
     "property",
-    "media",
-    "rooms",
     "openHouse",
+    // media/rooms are heavy — run via `pnpm mls:sync … property,media,rooms,openHouse`
     // HistoryTransactional is not on all AMPRE feeds (VOW may omit it).
     // Property-derived synthetic history is written during property upserts.
   ];

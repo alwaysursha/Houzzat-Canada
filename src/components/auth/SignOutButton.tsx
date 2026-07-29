@@ -15,14 +15,26 @@ export function SignOutButton({ className }: { className?: string }) {
     });
     if (!ok) return;
 
-    // Clear session on the current host, then hard-navigate.
-    // Absolute SITE_URL redirects were leaving a stale session cookie.
+    // 1) Server hard-clear of all Auth.js cookie variants
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      });
+    } catch {
+      // continue
+    }
+
+    // 2) Client Auth.js cleanup (session store)
     try {
       await signOut({ redirect: false });
     } catch {
-      // Still force a clean reload below.
+      // continue
     }
-    window.location.assign("/");
+
+    // 3) Hard navigation so UI cannot keep a stale SessionProvider state
+    window.location.href = "/?signedOut=1";
   }
 
   return (

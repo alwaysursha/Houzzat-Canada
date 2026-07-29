@@ -1,7 +1,6 @@
 name: MLS Sync
 
 # Runs PropTx → Neon sync on GitHub runners (not via Worker HTTP).
-# Large syncs on Cloudflare Workers time out (503); this avoids that.
 #
 # Required GitHub secrets:
 #   DATABASE_URL, DIRECT_URL (optional),
@@ -13,22 +12,27 @@ on:
   workflow_dispatch:
     inputs:
       maxPages:
-        description: "Max Property pages (~100 listings/page). Keep small for scheduled; raise for backfill."
+        description: "Max Property pages (~100 listings/page)"
         required: false
-        default: "15"
+        default: "20"
       fullBackfillDays:
         description: "Days back when no Property cursor exists yet"
         required: false
         default: "7"
+      resources:
+        description: "Comma-separated: property,openHouse,media,rooms"
+        required: false
+        default: "property,openHouse"
 
 concurrency:
   group: mls-sync
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # Keep under GitHub's practical limit; large backfills should be chunked.
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,8 +66,9 @@ jobs:
           PROPTX_TOKEN_ID: ${{ secrets.PROPTX_TOKEN_ID }}
           PROPTX_FEED: vow
           LISTING_PROVIDER: proptx
-          MAX_PAGES: ${{ github.event.inputs.maxPages || '15' }}
+          MAX_PAGES: ${{ github.event.inputs.maxPages || '20' }}
           BACKFILL_DAYS: ${{ github.event.inputs.fullBackfillDays || '7' }}
+          RESOURCES: ${{ github.event.inputs.resources || 'property,openHouse' }}
         run: |
           set -euo pipefail
           if [[ -z "${DATABASE_URL:-}" ]]; then
@@ -74,5 +79,5 @@ jobs:
             echo "Missing PropTx secrets (PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID)"
             exit 1
           fi
-          echo "Running pnpm mls:sync ${MAX_PAGES} ${BACKFILL_DAYS}"
-          pnpm mls:sync "${MAX_PAGES}" "${BACKFILL_DAYS}"
+          echo "Running pnpm mls:sync ${MAX_PAGES} ${BACKFILL_DAYS} ${RESOURCES}"
+          pnpm mls:sync "${MAX_PAGES}" "${BACKFILL_DAYS}" "${RESOURCES}"

@@ -1,12 +1,15 @@
 /**
- * Local PropTx VOW sync: pnpm mls:sync [maxPages] [fullBackfillDays]
+ * Local / CI PropTx VOW sync:
+ *   pnpm mls:sync [maxPages] [fullBackfillDays] [resources]
  *
- * Defaults are intentionally high so inventory is not capped at ~500.
- * City allowlist: src/lib/proptx/sync-cities.ts (+ optional MLS_SYNC_CITIES).
+ * resources (optional, comma-separated):
+ *   property,media,rooms,openHouse,syntheticHistory,history
+ * Default resources: property,openHouse (fast incremental).
+ * Add media/rooms for richer backfill when you have time.
  *
  * Examples:
- *   pnpm mls:sync           # 200 pages (~20k rows scanned), 90-day window
- *   pnpm mls:sync 500 180   # larger backfill
+ *   pnpm mls:sync 15 7
+ *   pnpm mls:sync 50 30 property,media,rooms,openHouse
  */
 import { config } from "dotenv";
 
@@ -17,16 +20,33 @@ async function main() {
   const { runPropTxMlsSync } = await import("../src/lib/proptx/sync");
   const { getMlsSyncCities } = await import("../src/lib/proptx/sync-cities");
 
-  const maxPages = Number(process.argv[2] ?? 200);
-  const fullBackfillDays = Number(process.argv[3] ?? 90);
+  const maxPages = Number(process.argv[2] ?? 15);
+  const fullBackfillDays = Number(process.argv[3] ?? 7);
+  const resourcesArg = process.argv[4]?.trim();
+  const resources = (
+    resourcesArg
+      ? resourcesArg.split(",").map((s) => s.trim()).filter(Boolean)
+      : ["property", "openHouse"]
+  ) as Array<
+    | "property"
+    | "media"
+    | "rooms"
+    | "openHouse"
+    | "history"
+    | "syntheticHistory"
+  >;
   const cities = getMlsSyncCities();
 
   console.log(
-    `Starting PropTx VOW sync (maxPages=${maxPages}, fullBackfillDays=${fullBackfillDays})…`,
+    `Starting PropTx VOW sync (maxPages=${maxPages}, fullBackfillDays=${fullBackfillDays}, resources=${resources.join(",")})…`,
   );
   console.log(`City allowlist (${cities.length}): ${cities.join(", ")}`);
 
-  const result = await runPropTxMlsSync({ maxPages, fullBackfillDays });
+  const result = await runPropTxMlsSync({
+    maxPages,
+    fullBackfillDays,
+    resources,
+  });
   console.log(JSON.stringify(result, null, 2));
   if (!result.ok) process.exitCode = 1;
 }

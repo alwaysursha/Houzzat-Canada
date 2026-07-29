@@ -9,7 +9,7 @@ import { RoutePlannerProvider } from "@/components/route-planner/RoutePlannerPro
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider refetchOnWindowFocus>
+    <SessionProvider refetchOnWindowFocus={false} refetchInterval={0}>
       <SavedListingsProvider>
         <RoutePlannerProvider>
           <SiteAlertProvider>

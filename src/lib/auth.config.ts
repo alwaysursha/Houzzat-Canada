@@ -19,11 +19,39 @@ export const authConfig = {
   },
   cookies: {
     sessionToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-authjs.session-token"
+          : "authjs.session-token",
       options: {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
         maxAge: SESSION_MAX_AGE_SECONDS,
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+    csrfToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Host-authjs.csrf-token"
+          : "authjs.csrf-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+    callbackUrl: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-authjs.callback-url"
+          : "authjs.callback-url",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
         secure: process.env.NODE_ENV === "production",
       },
     },
