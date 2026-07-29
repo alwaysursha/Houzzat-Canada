@@ -90,7 +90,12 @@ export function toCard(
     })),
     daysOnMarket: listing.daysOnMarket,
     listedAt: listing.listedAt.toISOString(),
-    soldAt: listing.soldAt ? listing.soldAt.toISOString() : null,
+    soldAt: (() => {
+      if (!listing.soldAt) return null;
+      // CloseDate was historically stored as soldAt; ignore future closings.
+      if (listing.soldAt.getTime() > Date.now() + 86_400_000) return null;
+      return listing.soldAt.toISOString();
+    })(),
     isMock: listing.isMock,
     dataSource: listing.dataSource,
     ownerTag: isOwner ? ownerListingTag(listing.transactionType) : null,

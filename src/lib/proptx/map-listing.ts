@@ -53,6 +53,44 @@ function date(row: PropTxProperty, ...keys: string[]): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Date shown as "Sold on …" / used for recently-sold sort.
+ * Prefer firm/sold timing over CloseDate — CloseDate is often a future closing
+ * / possession date and shows up as "Sold on Oct 2026" while still July.
+ */
+function mapSoldAt(row: PropTxProperty): Date | null {
+  const purchase = date(
+    row,
+    "PurchaseContractDate",
+    "PendingDate",
+    "UnderContractDate",
+    "ContractDate",
+  );
+  const closed = date(
+    row,
+    "CloseDate",
+    "SoldDate",
+    "DateSold",
+    "ClosingDate",
+  );
+  const statusChanged = date(
+    row,
+    "StatusChangeTimestamp",
+    "SoldEntryTimestamp",
+    "OffMarketDate",
+  );
+
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+
+  if (closed && closed.getTime() <= endOfToday.getTime()) {
+    return closed;
+  }
+  if (purchase) return purchase;
+  if (statusChanged) return statusChanged;
+  return null;
+}
+
 export function mapMlsNumber(row: PropTxProperty): string | null {
   // AMPRE: ListingId is MLS® # when present; ListingKey is always the OData key.
   return str(
@@ -494,7 +532,7 @@ export function mapPropertyToListingResult(
     new Date();
   const updatedAtMls =
     date(row, "ModificationTimestamp", "PhotosChangeTimestamp") ?? listedAt;
-  const soldAt = date(row, "CloseDate", "PurchaseContractDate", "SoldDate");
+  const soldAt = mapSoldAt(row);
 
   const beds = mapBeds(row);
   const baths = mapBaths(row);
@@ -867,7 +905,7 @@ export function mapSyntheticHistoryFromProperty(
 
   if (status === "SOLD") {
     const at =
-      date(row, "CloseDate", "PurchaseContractDate", "SoldDate") ??
+      mapSoldAt(row) ??
       date(row, "SoldEntryTimestamp") ??
       modAt ??
       listedAt;
@@ -884,7 +922,7 @@ export function mapSyntheticHistoryFromProperty(
     }
   } else if (status === "LEASED") {
     const at =
-      date(row, "CloseDate", "PurchaseContractDate") ??
+      mapSoldAt(row) ??
       date(row, "LeasedEntryTimestamp") ??
       modAt ??
       listedAt;

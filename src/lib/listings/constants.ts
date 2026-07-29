@@ -193,10 +193,18 @@ export function formatListingTiming(listing: {
       listing.status === "LEASED" || listing.transactionType === "LEASE"
         ? "Leased"
         : "Sold";
-    const when = listing.soldAt ?? listing.listedAt;
-    if (when) {
-      const formatted = formatClosedOnDate(when);
-      if (formatted) return `${verb} on ${formatted}`;
+    const rawWhen = listing.soldAt ?? listing.listedAt;
+    if (rawWhen) {
+      const when =
+        typeof rawWhen === "string" ? new Date(rawWhen) : rawWhen;
+      // Guard: never show a future closing date as "Sold on …"
+      if (
+        !Number.isNaN(when.getTime()) &&
+        when.getTime() <= Date.now() + 86_400_000
+      ) {
+        const formatted = formatClosedOnDate(when);
+        if (formatted) return `${verb} on ${formatted}`;
+      }
     }
     return verb;
   }

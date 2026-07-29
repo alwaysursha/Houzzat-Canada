@@ -1212,6 +1212,16 @@ export async function runPropTxMlsSync(options?: {
   const stats = emptyStats();
 
   try {
+    // CloseDate was stored as soldAt; clear future closings so "Recently sold"
+    // sorts by real firm dates after the next property upsert remaps them.
+    await prisma.listing.updateMany({
+      where: {
+        status: { in: ["SOLD", "LEASED"] },
+        soldAt: { gt: new Date() },
+      },
+      data: { soldAt: null },
+    });
+
     if (resources.includes("property")) {
       // 1) Newest mods first — just-listed + status flips (sold/terminated).
       // Cap recent pages so a large maxPages (e.g. 200) doesn't double the work.
