@@ -22,6 +22,9 @@ async function main() {
     mapPropertyToListingResult,
     stripApproxPinNote,
   } = await import("../src/lib/proptx/map-listing");
+  const { upsertSyntheticHistoryFromProperty } = await import(
+    "../src/lib/proptx/sync"
+  );
   type PropTxProperty = Record<string, unknown>;
 
   const limit = Number(process.argv[2] ?? 100);
@@ -144,6 +147,7 @@ async function main() {
           isMock: false,
         },
       });
+      await upsertSyntheticHistoryFromProperty(listing.id, row);
       upserted += 1;
       console.log("ok", listing.mlsNumber, {
         sqft: data.sqft ?? null,

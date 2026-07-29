@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getPropTxConfig, isPropTxConfigured } from "@/lib/proptx/config";
-import { PropTxError, proptxPages } from "@/lib/proptx/client";
+import { PropTxError, proptxJson, proptxPages } from "@/lib/proptx/client";
 import {
   buildListingGeocodeQuery,
   geocodeAddress,
@@ -11,10 +11,13 @@ import {
   mapOpenHouseRow,
   mapPropertyToListingResult,
   mapRoomRow,
+  mapSyntheticHistoryFromProperty,
   stripApproxPinNote,
+  SYNTHETIC_HISTORY_NOTE_PREFIX,
   toODataDate,
   type PropTxProperty,
 } from "@/lib/proptx/map-listing";
+import { cityAllowedForMlsSync, getMlsSyncCities } from "@/lib/proptx/sync-cities";
 
 export type MlsSyncStats = {
   propertyUpserted: number;
@@ -252,6 +255,124 @@ async function syncRoomsBackfill(options: {
   );
 }
 
+/**
+ * Replace Property-derived history rows for a listing.
+ * Leaves HistoryTransactional rows (non-synthetic notes) intact.
+ */
+export async function upsertSyntheticHistoryFromProperty(
+  listingId: string,
+  row: PropTxProperty,
+  stats?: Pick<MlsSyncStats, "historyUpserted" | "errors">,
+): Promise<number> {
+  const events = mapSyntheticHistoryFromProperty(row);
+  await prisma.listingHistory.deleteMany({
+    where: {
+      listingId,
+      note: { startsWith: SYNTHETIC_HISTORY_NOTE_PREFIX },
+    },
+  });
+
+  let count = 0;
+  for (const event of events) {
+    try {
+      await prisma.listingHistory.create({
+        data: {
+          listingId,
+          event: event.event,
+          price: event.price,
+          originalPrice: event.originalPrice,
+          contractDate: event.contractDate,
+          lastUpdatedAt: event.lastUpdatedAt,
+          visibility: event.visibility,
+          note: event.note,
+        },
+      });
+      count += 1;
+      if (stats) stats.historyUpserted += 1;
+    } catch (err) {
+      stats?.errors.push(
+        `synthetic history: ${err instanceof Error ? err.message : "failed"}`,
+      );
+    }
+  }
+
+  // Marker so backfill won't re-fetch listings with no deriveable events.
+  if (events.length === 0) {
+    const listedAt =
+      typeof row.ListingContractDate === "string"
+        ? new Date(row.ListingContractDate)
+        : new Date();
+    const contractDate = Number.isNaN(listedAt.getTime()) ? new Date() : listedAt;
+    await prisma.listingHistory.create({
+      data: {
+        listingId,
+        event: "Synced",
+        price: null,
+        originalPrice: null,
+        contractDate,
+        lastUpdatedAt: new Date(),
+        visibility: "public",
+        note: `${SYNTHETIC_HISTORY_NOTE_PREFIX}empty`,
+      },
+    });
+  }
+
+  return count;
+}
+
+async function syncSyntheticHistoryBackfill(options: {
+  maxListings: number;
+  stats: MlsSyncStats;
+  concurrency?: number;
+}): Promise<void> {
+  const listings = await prisma.listing.findMany({
+    where: {
+      dataSource: "mls",
+      isMock: false,
+      listingKey: { not: null },
+      NOT: {
+        history: {
+          some: { note: { startsWith: SYNTHETIC_HISTORY_NOTE_PREFIX } },
+        },
+      },
+    },
+    select: { id: true, listingKey: true, mlsNumber: true },
+    take: options.maxListings,
+    orderBy: { updatedAt: "desc" },
+  });
+
+  const concurrency = Math.max(1, Math.min(options.concurrency ?? 6, 10));
+  let index = 0;
+
+  async function worker() {
+    while (index < listings.length) {
+      const current = listings[index]!;
+      index += 1;
+      if (!current.listingKey) continue;
+      try {
+        const row = await proptxJson<PropTxProperty>(
+          `Property('${encodeURIComponent(current.listingKey)}')`,
+        );
+        await upsertSyntheticHistoryFromProperty(
+          current.id,
+          row,
+          options.stats,
+        );
+      } catch (err) {
+        options.stats.errors.push(
+          `synthetic history ${current.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
+        );
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, listings.length || 1) }, () =>
+      worker(),
+    ),
+  );
+}
+
 async function syncHistoryForListing(
   listingKey: string,
   listingId: string,
@@ -435,6 +556,15 @@ async function syncProperties(options: {
         }
         continue;
       }
+
+      const allowlist = getMlsSyncCities();
+      const cityName = String(mapped.data.city ?? "");
+      if (!cityAllowedForMlsSync(cityName, allowlist)) {
+        options.stats.propertySkipped += 1;
+        skipReasons["city filter"] = (skipReasons["city filter"] ?? 0) + 1;
+        continue;
+      }
+
       let data = mapped.data;
       if (mapped.approximateCoords) {
         try {
@@ -502,6 +632,18 @@ async function syncProperties(options: {
           },
         });
         options.stats.propertyUpserted += 1;
+
+        try {
+          await upsertSyntheticHistoryFromProperty(
+            listing.id,
+            row,
+            options.stats,
+          );
+        } catch (err) {
+          options.stats.errors.push(
+            `synthetic history ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
+          );
+        }
 
         // Pull photos / rooms when still missing (avoid re-fetch every sync).
         if (data.listingKey) {
@@ -816,7 +958,12 @@ export async function runPropTxMlsSync(options?: {
   maxPages?: number;
   fullBackfillDays?: number;
   resources?: Array<
-    "property" | "media" | "rooms" | "openHouse" | "history"
+    | "property"
+    | "media"
+    | "rooms"
+    | "openHouse"
+    | "history"
+    | "syntheticHistory"
   >;
   /** Media gap-fill only (skip slow global Media feed). */
   mediaBackfillOnly?: boolean;
@@ -832,14 +979,15 @@ export async function runPropTxMlsSync(options?: {
     };
   }
 
-  const maxPages = options?.maxPages ?? 20;
-  const fullBackfillDays = options?.fullBackfillDays ?? 45;
+  const maxPages = options?.maxPages ?? 200;
+  const fullBackfillDays = options?.fullBackfillDays ?? 90;
   const resources = options?.resources ?? [
     "property",
     "media",
     "rooms",
     "openHouse",
     // HistoryTransactional is not on all AMPRE feeds (VOW may omit it).
+    // Property-derived synthetic history is written during property upserts.
   ];
 
   const run = await prisma.mlsSyncRun.create({
@@ -889,6 +1037,19 @@ export async function runPropTxMlsSync(options?: {
       } catch (err) {
         stats.errors.push(
           `OpenHouse resource: ${err instanceof Error ? err.message : "unavailable"}`,
+        );
+      }
+    }
+    if (resources.includes("syntheticHistory")) {
+      try {
+        await syncSyntheticHistoryBackfill({
+          maxListings: Math.max(maxPages * 50, 200),
+          stats,
+          concurrency: 6,
+        });
+      } catch (err) {
+        stats.errors.push(
+          `Synthetic history: ${err instanceof Error ? err.message : "unavailable"}`,
         );
       }
     }

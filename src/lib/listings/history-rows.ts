@@ -115,6 +115,7 @@ export function buildListingHistoryRows(input: {
     lastUpdatedAt?: Date | string | null;
     externalMls?: string | null;
     visibility?: string | null;
+    note?: string | null;
   }>;
 }): HistoryRow[] {
   const currentEvent =
@@ -137,25 +138,30 @@ export function buildListingHistoryRows(input: {
     public: true,
   };
 
-  const past = input.history.map((h) => {
-    const eventLower = h.event.toLowerCase();
-    const mappedEvent =
-      eventLower === "listed"
-        ? input.transactionType === "LEASE"
-          ? "For Lease"
-          : "For Sale"
-        : h.event;
-    return {
-      id: h.id,
-      contractDate: toIso(h.contractDate),
-      lastUpdate: toIso(h.lastUpdatedAt ?? null),
-      price: h.price,
-      originalPrice: h.originalPrice ?? null,
-      event: mappedEvent,
-      listingId: h.externalMls ?? input.mlsNumber,
-      public: h.visibility === "public",
-    } satisfies HistoryRow;
-  });
+  const past = input.history
+    .filter((h) => {
+      if (h.note === "synthetic:empty" || h.event === "Synced") return false;
+      return true;
+    })
+    .map((h) => {
+      const eventLower = h.event.toLowerCase();
+      const mappedEvent =
+        eventLower === "listed"
+          ? input.transactionType === "LEASE"
+            ? "For Lease"
+            : "For Sale"
+          : h.event;
+      return {
+        id: h.id,
+        contractDate: toIso(h.contractDate),
+        lastUpdate: toIso(h.lastUpdatedAt ?? null),
+        price: h.price,
+        originalPrice: h.originalPrice ?? null,
+        event: mappedEvent,
+        listingId: h.externalMls ?? input.mlsNumber,
+        public: h.visibility === "public",
+      } satisfies HistoryRow;
+    });
 
   const filteredPast = past.filter(
     (row) =>

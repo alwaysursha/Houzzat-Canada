@@ -795,6 +795,166 @@ export function mapHistoryRow(row: PropTxProperty): {
   };
 }
 
+/** Marker prefix for Property-derived history (vs HistoryTransactional). */
+export const SYNTHETIC_HISTORY_NOTE_PREFIX = "synthetic:";
+
+export type SyntheticHistoryEvent = {
+  event: string;
+  price: number | null;
+  originalPrice: number | null;
+  contractDate: Date;
+  lastUpdatedAt: Date | null;
+  visibility: "restricted" | "public";
+  note: string;
+};
+
+/**
+ * Build listing-history rows from Property status/price fields.
+ * Used while HistoryTransactional is not entitled on the VOW feed.
+ * Does not emit a "Listed" row — the UI already synthesizes the current cycle.
+ */
+export function mapSyntheticHistoryFromProperty(
+  row: PropTxProperty,
+): SyntheticHistoryEvent[] {
+  const transactionType = mapTransactionType(row);
+  const status = mapListingStatus(row, transactionType);
+  const listPriceRaw = num(row, "ListPrice", "CurrentPrice");
+  const listPrice =
+    listPriceRaw != null ? Math.round(listPriceRaw) : null;
+  const listedAt =
+    date(row, "ListingContractDate", "OriginalEntryTimestamp", "OnMarketDate") ??
+    date(row, "ModificationTimestamp");
+  const modAt = date(row, "ModificationTimestamp");
+
+  const events: SyntheticHistoryEvent[] = [];
+
+  const previousList = num(row, "PreviousListPrice", "PriorListPrice");
+  const originalList = num(row, "OriginalListPrice");
+  const priorStatus = (str(row, "PriorMlsStatus") ?? "").toLowerCase();
+  const priorPrice =
+    previousList != null
+      ? Math.round(previousList)
+      : priorStatus.includes("price") && originalList != null
+        ? Math.round(originalList)
+        : originalList != null &&
+            listPrice != null &&
+            Math.round(originalList) !== listPrice
+          ? Math.round(originalList)
+          : null;
+  const priceChangeAt =
+    date(row, "PriceChangeTimestamp") ?? modAt ?? listedAt;
+
+  if (
+    priorPrice != null &&
+    listPrice != null &&
+    priorPrice !== listPrice &&
+    priceChangeAt
+  ) {
+    events.push({
+      event: "Price Change",
+      price: listPrice,
+      originalPrice: priorPrice,
+      contractDate: listedAt ?? priceChangeAt,
+      lastUpdatedAt: priceChangeAt,
+      visibility: "restricted",
+      note: `${SYNTHETIC_HISTORY_NOTE_PREFIX}Price Change`,
+    });
+  }
+
+  const closePriceRaw = num(row, "ClosePrice", "SoldPrice");
+  const closePrice =
+    closePriceRaw != null ? Math.round(closePriceRaw) : null;
+
+  if (status === "SOLD") {
+    const at =
+      date(row, "CloseDate", "PurchaseContractDate", "SoldDate") ??
+      date(row, "SoldEntryTimestamp") ??
+      modAt ??
+      listedAt;
+    if (at) {
+      events.push({
+        event: "Sold",
+        price: closePrice ?? listPrice,
+        originalPrice: null,
+        contractDate: listedAt ?? at,
+        lastUpdatedAt: at,
+        visibility: "restricted",
+        note: `${SYNTHETIC_HISTORY_NOTE_PREFIX}Sold`,
+      });
+    }
+  } else if (status === "LEASED") {
+    const at =
+      date(row, "CloseDate", "PurchaseContractDate") ??
+      date(row, "LeasedEntryTimestamp") ??
+      modAt ??
+      listedAt;
+    if (at) {
+      events.push({
+        event: "Leased",
+        price: closePrice ?? listPrice,
+        originalPrice: null,
+        contractDate: listedAt ?? at,
+        lastUpdatedAt: at,
+        visibility: "restricted",
+        note: `${SYNTHETIC_HISTORY_NOTE_PREFIX}Leased`,
+      });
+    }
+  } else if (status === "TERMINATED") {
+    const at =
+      date(row, "TerminatedDate", "UnavailableDate") ??
+      date(row, "TerminatedEntryTimestamp") ??
+      modAt ??
+      listedAt;
+    if (at) {
+      events.push({
+        event: "Terminated",
+        price: listPrice,
+        originalPrice: null,
+        contractDate: listedAt ?? at,
+        lastUpdatedAt: at,
+        visibility: "public",
+        note: `${SYNTHETIC_HISTORY_NOTE_PREFIX}Terminated`,
+      });
+    }
+  } else if (status === "EXPIRED") {
+    const at =
+      date(row, "UnavailableDate") ??
+      date(row, "ExpirationDate") ??
+      modAt ??
+      listedAt;
+    if (at) {
+      events.push({
+        event: "Expired",
+        price: listPrice,
+        originalPrice: null,
+        contractDate: listedAt ?? at,
+        lastUpdatedAt: at,
+        visibility: "public",
+        note: `${SYNTHETIC_HISTORY_NOTE_PREFIX}Expired`,
+      });
+    }
+  } else if (status === "SUSPENDED") {
+    const at =
+      date(row, "SuspendedDate") ??
+      date(row, "SuspendedEntryTimestamp") ??
+      modAt ??
+      listedAt;
+    if (at) {
+      events.push({
+        event: "Suspended",
+        price: listPrice,
+        originalPrice: null,
+        contractDate: listedAt ?? at,
+        lastUpdatedAt: at,
+        visibility: "public",
+        note: `${SYNTHETIC_HISTORY_NOTE_PREFIX}Suspended`,
+      });
+    }
+  }
+
+  return events;
+}
+
 /** Format an ISO timestamp for OData $filter comparisons (AMPRE style). */
 export function toODataDate(value: Date): string {
   return value.toISOString().replace(/\.\d{3}Z$/, "Z");

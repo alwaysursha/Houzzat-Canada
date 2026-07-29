@@ -1,0 +1,55 @@
+name: MLS Sync
+
+# Keeps Neon inventory fresh from PropTx without manual runs.
+# Requires GitHub secrets: MLS_SYNC_SECRET, and optionally SITE_URL.
+on:
+  schedule:
+    # Every 15 minutes (GitHub cron can drift a few minutes).
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      maxPages:
+        description: "Max Property pages this run (~100 listings/page)"
+        required: false
+        default: "50"
+      fullBackfillDays:
+        description: "Days back if no sync cursor yet"
+        required: false
+        default: "7"
+
+concurrency:
+  group: mls-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Trigger PropTx → Neon sync
+        env:
+          MLS_SYNC_SECRET: ${{ secrets.MLS_SYNC_SECRET }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          MAX_PAGES: ${{ github.event.inputs.maxPages || '50' }}
+          BACKFILL_DAYS: ${{ github.event.inputs.fullBackfillDays || '7' }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${MLS_SYNC_SECRET:-}" ]]; then
+            echo "Missing secret MLS_SYNC_SECRET — add it in GitHub repo Settings → Secrets."
+            exit 1
+          fi
+          BASE_URL="${SITE_URL:-https://houzzat.teamalisyed.workers.dev}"
+          BASE_URL="${BASE_URL%/}"
+          echo "POST ${BASE_URL}/api/admin/mls/sync (maxPages=${MAX_PAGES}, fullBackfillDays=${BACKFILL_DAYS})"
+          curl -fsS -X POST "${BASE_URL}/api/admin/mls/sync" \
+            -H "Authorization: Bearer ${MLS_SYNC_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d "{\"maxPages\":${MAX_PAGES},\"fullBackfillDays\":${BACKFILL_DAYS}}" \
+            | tee /tmp/mls-sync.json
+          python3 - <<'PY'
+          import json, sys
+          data = json.load(open("/tmp/mls-sync.json"))
+          ok = bool(data.get("ok"))
+          print("ok=", ok, "message=", data.get("message"))
+          sys.exit(0 if ok else 1)
+          PY
