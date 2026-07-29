@@ -930,8 +930,13 @@ async function syncMediaBackfill(options: {
     orderBy: [{ listedAt: "desc" }, { updatedAt: "desc" }],
   });
 
+  console.log(
+    `[mls] Media backfill start (${listings.length} listings missing photos, concurrency=${Math.max(1, Math.min(options.concurrency ?? 6, 12))})`,
+  );
+
   const concurrency = Math.max(1, Math.min(options.concurrency ?? 6, 12));
   let index = 0;
+  let completed = 0;
 
   async function worker() {
     while (index < listings.length) {
@@ -949,13 +954,22 @@ async function syncMediaBackfill(options: {
           `media backfill ${current.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
         );
       }
+      completed += 1;
+      if (completed === 1 || completed % 50 === 0 || completed === listings.length) {
+        console.log(
+          `[mls] Media backfill ${completed}/${listings.length} (upserted=${options.stats.mediaUpserted})`,
+        );
+      }
     }
   }
 
   await Promise.all(
-    Array.from({ length: Math.min(concurrency, listings.length) }, () =>
+    Array.from({ length: Math.min(concurrency, listings.length || 1) }, () =>
       worker(),
     ),
+  );
+  console.log(
+    `[mls] Media backfill done (upserted=${options.stats.mediaUpserted})`,
   );
 }
 
@@ -1200,8 +1214,9 @@ export async function runPropTxMlsSync(options?: {
   try {
     if (resources.includes("property")) {
       // 1) Newest mods first — just-listed + status flips (sold/terminated).
+      // Cap recent pages so a large maxPages (e.g. 200) doesn't double the work.
       const recentDays = Math.min(3, Math.max(1, fullBackfillDays));
-      const recentPages = Math.max(20, maxPages);
+      const recentPages = Math.min(25, Math.max(10, Math.ceil(maxPages / 2)));
       await syncRecentProperties({
         days: recentDays,
         maxPages: recentPages,
@@ -1214,12 +1229,14 @@ export async function runPropTxMlsSync(options?: {
         stats,
         fetchNested: false,
       });
-      // 3) Photo gap-fill (newest listings without media first).
+      // 3) Small photo gap-fill only — bulk photos belong in mls-media.yml.
+      // (maxPages*150 on a 200-page run → 30k PropTx calls and looks "stuck".)
       try {
+        const mediaCap = Math.min(Math.max(maxPages * 25, 400), 1500);
         await syncMediaBackfill({
-          maxListings: Math.max(maxPages * 150, 2500),
+          maxListings: mediaCap,
           stats,
-          concurrency: 10,
+          concurrency: 8,
         });
       } catch (err) {
         stats.errors.push(
