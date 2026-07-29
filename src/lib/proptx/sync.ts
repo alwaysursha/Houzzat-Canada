@@ -956,27 +956,47 @@ async function syncMediaBackfill(options: {
   stats: MlsSyncStats;
   concurrency?: number;
 }): Promise<void> {
-  const listings = await prisma.listing.findMany({
-    where: {
-      dataSource: "mls",
-      isMock: false,
-      listingKey: { not: null },
-      media: { none: {} },
-      // Fill active inventory first — visitors care about these.
-      status: { in: ["ACTIVE", "SOLD", "LEASED"] },
+  const take = options.maxListings;
+  const baseWhere = {
+    dataSource: "mls" as const,
+    isMock: false,
+    listingKey: { not: null },
+    media: { none: {} },
+  };
+
+  // Newest ACTIVE without photos first (what visitors see), then LEASED/SOLD.
+  const active = await prisma.listing.findMany({
+    where: { ...baseWhere, status: "ACTIVE" },
+    select: {
+      id: true,
+      listingKey: true,
+      mlsNumber: true,
+      status: true,
+      listedAt: true,
     },
-    select: { id: true, listingKey: true, mlsNumber: true, status: true },
-    take: options.maxListings,
-    // Active first, then newest.
-    orderBy: [{ status: "asc" }, { listedAt: "desc" }, { updatedAt: "desc" }],
+    take,
+    orderBy: [{ listedAt: "desc" }, { updatedAt: "desc" }],
   });
 
-  // Prefer ACTIVE over SOLD/LEASED (Prisma enum order isn't guaranteed for that).
-  listings.sort((a, b) => {
-    const rank = (s: string) => (s === "ACTIVE" ? 0 : s === "LEASED" ? 1 : 2);
-    const d = rank(a.status) - rank(b.status);
-    return d;
-  });
+  let listings = active;
+  if (active.length < take) {
+    const rest = await prisma.listing.findMany({
+      where: {
+        ...baseWhere,
+        status: { in: ["LEASED", "SOLD"] },
+      },
+      select: {
+        id: true,
+        listingKey: true,
+        mlsNumber: true,
+        status: true,
+        listedAt: true,
+      },
+      take: take - active.length,
+      orderBy: [{ listedAt: "desc" }, { updatedAt: "desc" }],
+    });
+    listings = [...active, ...rest];
+  }
 
   console.log(
     `[mls] Media backfill start (${listings.length} listings missing photos, concurrency=${Math.max(1, Math.min(options.concurrency ?? 6, 12))})`,
