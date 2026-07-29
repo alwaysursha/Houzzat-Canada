@@ -266,11 +266,6 @@ export function HomepageMarketRails({
   }, [isClient, personalization, vowOnlyGuest]);
 
   const citiesParam = citiesQueryParam(region.cities);
-  const subtitle = ready
-    ? region.id === "default"
-      ? `Showing ${region.cities.slice(0, 3).join(", ")} & nearby`
-      : `${region.label} · newest first`
-    : "Finding homes near you…";
 
   const seeAll = (extra: Record<string, string>) => {
     const q = new URLSearchParams({ cities: citiesParam, ...extra });
@@ -291,7 +286,6 @@ export function HomepageMarketRails({
       <HomeListingRail
         id="rail-new-listings"
         title="New Listings"
-        subtitle={subtitle}
         href={seeAll({
           transactionType: "SALE",
           segment: "RESIDENTIAL",
@@ -307,20 +301,16 @@ export function HomepageMarketRails({
 
       <HomeOpenHousesRail
         items={openHouses}
-        subtitle={subtitle}
         href={seeAll({
           transactionType: "SALE",
           openHouseOnly: "1",
         })}
-        emptyLabel={
-          ready ? undefined : "Loading open houses…"
-        }
+        emptyLabel={ready ? undefined : "Loading open houses…"}
       />
 
       <HomeSoldRail
         items={sold}
         isClient={isClient}
-        regionLabel={subtitle}
         seeAllHref={seeAll({ status: "SOLD", sort: "newest" })}
         emptyLabel={
           ready
@@ -332,7 +322,6 @@ export function HomepageMarketRails({
       <HomeListingRail
         id="rail-for-lease"
         title="For lease"
-        subtitle={subtitle}
         href={seeAll({ transactionType: "LEASE", sort: "newest" })}
         items={forLease}
         emptyLabel={
@@ -345,7 +334,6 @@ export function HomepageMarketRails({
       <HomeListingRail
         id="rail-commercial"
         title="Commercial"
-        subtitle={subtitle}
         href={seeAll({
           segment: "COMMERCIAL",
           transactionType: "SALE",
