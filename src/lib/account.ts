@@ -1,5 +1,6 @@
 import type { Prisma, Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
+import { DatabaseUnavailableError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 
 /** Fields account + API routes actually need from User. */
@@ -56,6 +57,9 @@ const customerUserSelectLegacy = {
  * Load the signed-in customer with a narrow select.
  * Falls back to legacy columns if Neon is behind the Prisma schema
  * so /account stays up until `db:push` catches up.
+ *
+ * Throws DatabaseUnavailableError when both queries fail (do not log the user out).
+ * Returns null only when the DB answered and no matching user exists.
  */
 async function findCustomerUser(
   where: { id: string } | { email: string },
@@ -70,31 +74,43 @@ async function findCustomerUser(
       "[account] full customer select failed; retrying legacy fields",
       error,
     );
-    const user = await prisma.user.findFirst({
-      where,
-      select: customerUserSelectLegacy,
-    });
-    if (!user) return null;
-    return {
-      ...user,
-      phone: null,
-      homeAddress: null,
-      homeLat: null,
-      homeLng: null,
-      caslConsentAt: null,
-      vowAcceptedAt: null,
-      vowVersion: null,
-      emailAlertsEnabled: true,
-      smsAlertsEnabled: false,
-      relatedListingsMode: "SAME_AREA",
-      termsAcceptedAt: null,
-      termsVersion: null,
-    };
+    try {
+      const user = await prisma.user.findFirst({
+        where,
+        select: customerUserSelectLegacy,
+      });
+      if (!user) return null;
+      return {
+        ...user,
+        phone: null,
+        homeAddress: null,
+        homeLat: null,
+        homeLng: null,
+        caslConsentAt: null,
+        vowAcceptedAt: null,
+        vowVersion: null,
+        emailAlertsEnabled: true,
+        smsAlertsEnabled: false,
+        relatedListingsMode: "SAME_AREA",
+        termsAcceptedAt: null,
+        termsVersion: null,
+      };
+    } catch (legacyError) {
+      console.error("[account] legacy customer select failed", legacyError);
+      throw new DatabaseUnavailableError();
+    }
   }
 }
 
 export async function requireCustomerUser(): Promise<CustomerUser | null> {
-  const session = await auth();
+  let session;
+  try {
+    session = await auth();
+  } catch (error) {
+    console.error("[account] auth() failed", error);
+    throw new DatabaseUnavailableError();
+  }
+
   if (!session?.user?.id && !session?.user?.email) {
     return null;
   }

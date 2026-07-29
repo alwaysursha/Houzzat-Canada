@@ -8,13 +8,94 @@ import { hasVowAccess } from "@/lib/vow";
 
 export const metadata = { title: "Your Houzzat" };
 
+type AccountStats = {
+  savedCount: number;
+  searchCount: number;
+  noteCount: number;
+  propertyWatchCount: number;
+  areaWatchCount: number;
+  alertCount: number;
+  leadCount: number;
+  appointmentCount: number;
+  viewCount: number;
+  recentNotes: Array<{
+    id: string;
+    mlsNumber: string;
+    body: string;
+    updatedAt: Date;
+  }>;
+  loadError: boolean;
+};
+
+async function loadAccountStats(userId: string): Promise<AccountStats> {
+  try {
+    const [
+      savedCount,
+      searchCount,
+      noteCount,
+      propertyWatchCount,
+      areaWatchCount,
+      alertCount,
+      leadCount,
+      appointmentCount,
+      viewCount,
+      recentNotes,
+    ] = await Promise.all([
+      prisma.savedListing.count({ where: { userId } }),
+      prisma.savedSearch.count({ where: { userId } }),
+      prisma.listingNote.count({ where: { userId } }),
+      prisma.propertyMonitor.count({ where: { userId } }),
+      prisma.areaMonitor.count({ where: { userId } }),
+      prisma.customerAlert.count({ where: { userId, readAt: null } }),
+      prisma.lead.count({ where: { customerId: userId } }),
+      prisma.appointment.count({ where: { customerId: userId } }),
+      prisma.listingView.count({ where: { userId } }),
+      prisma.listingNote.findMany({
+        where: { userId },
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+      }),
+    ]);
+
+    return {
+      savedCount,
+      searchCount,
+      noteCount,
+      propertyWatchCount,
+      areaWatchCount,
+      alertCount,
+      leadCount,
+      appointmentCount,
+      viewCount,
+      recentNotes,
+      loadError: false,
+    };
+  } catch (error) {
+    console.error("[account] stats load failed", error);
+    return {
+      savedCount: 0,
+      searchCount: 0,
+      noteCount: 0,
+      propertyWatchCount: 0,
+      areaWatchCount: 0,
+      alertCount: 0,
+      leadCount: 0,
+      appointmentCount: 0,
+      viewCount: 0,
+      recentNotes: [],
+      loadError: true,
+    };
+  }
+}
+
 export default async function AccountPage() {
   const user = await requireCustomerUser();
   if (!user) {
     redirect("/auth/sign-in?callbackUrl=/account");
   }
 
-  const [
+  const stats = await loadAccountStats(user.id);
+  const {
     savedCount,
     searchCount,
     noteCount,
@@ -25,38 +106,37 @@ export default async function AccountPage() {
     appointmentCount,
     viewCount,
     recentNotes,
-  ] = await Promise.all([
-    prisma.savedListing.count({ where: { userId: user.id } }),
-    prisma.savedSearch.count({ where: { userId: user.id } }),
-    prisma.listingNote.count({ where: { userId: user.id } }),
-    prisma.propertyMonitor.count({ where: { userId: user.id } }),
-    prisma.areaMonitor.count({ where: { userId: user.id } }),
-    prisma.customerAlert.count({ where: { userId: user.id, readAt: null } }),
-    prisma.lead.count({ where: { customerId: user.id } }),
-    prisma.appointment.count({ where: { customerId: user.id } }),
-    prisma.listingView.count({ where: { userId: user.id } }),
-    prisma.listingNote.findMany({
-      where: { userId: user.id },
-      orderBy: { updatedAt: "desc" },
-      take: 5,
-    }),
-  ]);
+    loadError,
+  } = stats;
 
-  const noteListings =
-    recentNotes.length === 0
-      ? []
-      : await prisma.listing.findMany({
-          where: {
-            mlsNumber: { in: recentNotes.map((n) => n.mlsNumber) },
-          },
-          select: {
-            mlsNumber: true,
-            addressLine: true,
-            unitNumber: true,
-            city: true,
-          },
-        });
-  const listingByMls = new Map(noteListings.map((l) => [l.mlsNumber, l]));
+  let listingByMls = new Map<
+    string,
+    {
+      mlsNumber: string;
+      addressLine: string;
+      unitNumber: string | null;
+      city: string;
+    }
+  >();
+
+  if (recentNotes.length > 0) {
+    try {
+      const noteListings = await prisma.listing.findMany({
+        where: {
+          mlsNumber: { in: recentNotes.map((n) => n.mlsNumber) },
+        },
+        select: {
+          mlsNumber: true,
+          addressLine: true,
+          unitNumber: true,
+          city: true,
+        },
+      });
+      listingByMls = new Map(noteListings.map((l) => [l.mlsNumber, l]));
+    } catch (error) {
+      console.error("[account] note listings load failed", error);
+    }
+  }
 
   const vowOk = hasVowAccess(user);
 
@@ -68,6 +148,16 @@ export default async function AccountPage() {
           Saved homes, notes, searches, and watchlist — signed in as {user.email}
         </p>
       </div>
+
+      {loadError ? (
+        <div className="rounded-2xl border border-signal/30 bg-signal/5 px-4 py-3 text-sm text-ink">
+          Some account numbers couldn’t load just now.{" "}
+          <Link href="/account" className="font-semibold text-canopy">
+            Refresh
+          </Link>{" "}
+          to try again — your saved homes are still here.
+        </div>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-3">
         {[

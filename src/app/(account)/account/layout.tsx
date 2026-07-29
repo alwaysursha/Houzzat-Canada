@@ -4,6 +4,7 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import { requireCustomerUser } from "@/lib/account";
 import { auth } from "@/lib/auth";
 import { SITE_NAME } from "@/lib/constants";
+import { isDatabaseUnavailableError } from "@/lib/errors";
 
 const nav = [
   { href: "/account", label: "Your Houzzat" },
@@ -22,14 +23,30 @@ export default async function AccountLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  let session;
+  try {
+    session = await auth();
+  } catch (error) {
+    console.error("[account-layout] auth failed", error);
+    throw error;
+  }
+
   if (!session?.user) {
     redirect("/auth/sign-in?callbackUrl=/account");
   }
 
   // JWT may still decrypt after a DB rebuild while the user id is gone.
   // Clear it so we don't bounce /account ↔ /auth/sign-in forever.
-  const customer = await requireCustomerUser();
+  // If the DB is down, do NOT log them out — surface the error boundary instead.
+  let customer;
+  try {
+    customer = await requireCustomerUser();
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) throw error;
+    console.error("[account-layout] customer load failed", error);
+    throw error;
+  }
+
   if (!customer) {
     redirect("/api/auth/logout");
   }

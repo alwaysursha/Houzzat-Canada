@@ -1,11 +1,25 @@
 import { SiteHeaderClient } from "@/components/site/SiteHeaderClient";
 import { SITE_NAME } from "@/lib/constants";
 import { auth } from "@/lib/auth";
-import { t } from "@/lib/i18n/dictionaries";
+import { t, type Locale } from "@/lib/i18n/dictionaries";
 import { getLocale } from "@/lib/i18n/locale";
 
 export async function SiteHeader() {
-  const [session, locale] = await Promise.all([auth(), getLocale()]);
+  let session = null;
+  let locale: Locale = "en";
+
+  try {
+    session = await auth();
+  } catch (error) {
+    console.error("[SiteHeader] auth failed", error);
+  }
+
+  try {
+    locale = await getLocale();
+  } catch (error) {
+    console.error("[SiteHeader] locale failed", error);
+  }
+
   const role = session?.user?.role;
 
   let portalHref: string | null = null;
