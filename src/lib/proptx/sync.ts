@@ -561,7 +561,8 @@ async function upsertPropertyRow(
   }
 
   let data = mapped.data;
-  if (options.fetchNested && mapped.approximateCoords) {
+  let approximateCoords = mapped.approximateCoords;
+  if (options.fetchNested && approximateCoords) {
     try {
       const query = buildListingGeocodeQuery({
         addressLine: String(data.addressLine),
@@ -580,11 +581,36 @@ async function upsertPropertyRow(
           lng: geo.lng,
           description: stripApproxPinNote(String(data.description ?? "")),
         };
+        approximateCoords = false;
       }
     } catch (err) {
       options.stats.errors.push(
         `geocode ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
       );
+    }
+  }
+
+  // Feed often omits lat/lng → we fall back to city centroids. Never overwrite a
+  // previously geocoded (or otherwise stored) pin with that centroid on update.
+  if (approximateCoords) {
+    const existing = await prisma.listing.findUnique({
+      where: { mlsNumber: String(data.mlsNumber) },
+      select: { lat: true, lng: true, description: true },
+    });
+    if (existing) {
+      const existingWasApprox =
+        typeof existing.description === "string" &&
+        /Map pin approximate|coordinates missing from feed/i.test(
+          existing.description,
+        );
+      data = {
+        ...data,
+        lat: existing.lat,
+        lng: existing.lng,
+        description: existingWasApprox
+          ? String(data.description ?? "")
+          : stripApproxPinNote(String(data.description ?? "")),
+      };
     }
   }
 
@@ -942,9 +968,9 @@ async function syncMedia(options: {
 }): Promise<void> {
   // Primary path: fill gaps for inventory we already have.
   await syncMediaBackfill({
-    maxListings: Math.max(options.maxPages * 50, 200),
+    maxListings: Math.max(options.maxPages * 50, 2500),
     stats: options.stats,
-    concurrency: 6,
+    concurrency: 10,
   });
 
   if (options.backfillOnly) return;
@@ -1133,9 +1159,12 @@ export async function runPropTxMlsSync(options?: {
     | "openHouse"
     | "history"
     | "syntheticHistory"
+    | "activeInventory"
   >;
   /** Media gap-fill only (skip slow global Media feed). */
   mediaBackfillOnly?: boolean;
+  /** Run city-by-city Active inventory (heavy — off by default on cron). */
+  activeInventory?: boolean;
 }): Promise<MlsSyncResult> {
   const config = getPropTxConfig();
   if (!config) {
@@ -1170,32 +1199,27 @@ export async function runPropTxMlsSync(options?: {
 
   try {
     if (resources.includes("property")) {
-      // Newest-first so "just listed" lands even if backlog times out.
+      // 1) Newest mods first — just-listed + status flips (sold/terminated).
       const recentDays = Math.min(3, Math.max(1, fullBackfillDays));
-      const recentPages = Math.min(15, Math.max(5, Math.ceil(maxPages / 2)));
+      const recentPages = Math.max(20, maxPages);
       await syncRecentProperties({
         days: recentDays,
         maxPages: recentPages,
         stats,
       });
-      // City-by-city Active book — ModificationTimestamp alone never fills areas.
-      const activePages = Math.max(maxPages * 2, 60);
-      await syncActiveInventory({
-        maxPages: activePages,
-        stats,
-      });
+      // 2) Ascending cursor backlog — keeps catching sold/off-market changes.
       await syncProperties({
         maxPages,
         fullBackfillDays,
         stats,
         fetchNested: false,
       });
-      // Always gap-fill photos after property upserts (nested fetch is off for speed).
+      // 3) Photo gap-fill (newest listings without media first).
       try {
         await syncMediaBackfill({
-          maxListings: Math.max(maxPages * 100, 800),
+          maxListings: Math.max(maxPages * 150, 2500),
           stats,
-          concurrency: 8,
+          concurrency: 10,
         });
       } catch (err) {
         stats.errors.push(
@@ -1203,6 +1227,20 @@ export async function runPropTxMlsSync(options?: {
         );
       }
     }
+
+    // Optional heavy Active book fill (manual / nightly — not every cron tick).
+    const runActiveInventory =
+      options?.activeInventory === true ||
+      resources.includes("activeInventory") ||
+      process.env.MLS_SYNC_ACTIVE_INVENTORY === "1";
+    if (runActiveInventory) {
+      const activePages = Math.max(maxPages * 2, 60);
+      await syncActiveInventory({
+        maxPages: activePages,
+        stats,
+      });
+    }
+
     if (resources.includes("media")) {
       try {
         await syncMedia({

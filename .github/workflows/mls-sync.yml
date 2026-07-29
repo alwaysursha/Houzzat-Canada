@@ -7,20 +7,20 @@ name: MLS Sync
 #   PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID
 on:
   schedule:
-    # Incremental catch-up every 15 minutes (GitHub cron can drift).
-    - cron: "*/15 * * * *"
+    # Just-listed + status changes every 5 minutes (GitHub cron can drift).
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       maxPages:
-        description: "Max Property backlog pages (~100 listings/page). Active inventory uses ~2x this."
+        description: "Max Property backlog pages (~100 listings/page)"
         required: false
-        default: "40"
+        default: "30"
       fullBackfillDays:
         description: "Days back when no Property cursor exists yet"
         required: false
-        default: "14"
+        default: "7"
       resources:
-        description: "Comma-separated: property,openHouse,media,rooms (photos auto-backfill with property)"
+        description: "Comma-separated: property,openHouse,media,rooms"
         required: false
         default: "property,openHouse"
 
@@ -69,8 +69,8 @@ jobs:
           PROPTX_TOKEN_ID: ${{ secrets.PROPTX_TOKEN_ID }}
           PROPTX_FEED: vow
           LISTING_PROVIDER: proptx
-          MAX_PAGES: ${{ github.event.inputs.maxPages || '40' }}
-          BACKFILL_DAYS: ${{ github.event.inputs.fullBackfillDays || '14' }}
+          MAX_PAGES: ${{ github.event.inputs.maxPages || '30' }}
+          BACKFILL_DAYS: ${{ github.event.inputs.fullBackfillDays || '7' }}
           RESOURCES: ${{ github.event.inputs.resources || 'property,openHouse' }}
         run: |
           set -euo pipefail

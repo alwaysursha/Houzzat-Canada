@@ -1,0 +1,61 @@
+name: MLS Media Backfill
+
+# Continuous photo gap-fill so missing images catch up without manual runs.
+# Complements mls-sync.yml (which also backfills a batch after each property pass).
+on:
+  schedule:
+    # Offset from property sync (:00/:05/…) — run at :07/:22/:37/:52
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+    inputs:
+      maxPages:
+        description: "Scale factor (~50 listings/page via media backfill)"
+        required: false
+        default: "50"
+
+concurrency:
+  group: mls-media-backfill
+  cancel-in-progress: true
+
+jobs:
+  media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+      - name: Backfill missing MLS photos
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          PROPTX_ENDPOINT_URL: ${{ secrets.PROPTX_ENDPOINT_URL }}
+          PROPTX_BEARER_TOKEN: ${{ secrets.PROPTX_BEARER_TOKEN }}
+          PROPTX_TOKEN_ID: ${{ secrets.PROPTX_TOKEN_ID }}
+          PROPTX_FEED: vow
+          LISTING_PROVIDER: proptx
+          MAX_PAGES: ${{ github.event.inputs.maxPages || '50' }}
+        run: |
+          set -euo pipefail
+          echo "Running pnpm mls:media ${MAX_PAGES}"
+          pnpm mls:media "${MAX_PAGES}"

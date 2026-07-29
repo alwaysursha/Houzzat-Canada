@@ -35,6 +35,7 @@ async function main() {
     | "openHouse"
     | "history"
     | "syntheticHistory"
+    | "activeInventory"
   >;
   const cities = getMlsSyncCities();
 

@@ -1,0 +1,55 @@
+name: MLS Geocode Approximate Pins
+
+# Repair city-centroid map pins so Map Search + Near Me work.
+on:
+  schedule:
+    - cron: "15 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Max listings to geocode this run"
+        required: false
+        default: "400"
+
+concurrency:
+  group: mls-geocode
+  cancel-in-progress: true
+
+jobs:
+  geocode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+      - name: Geocode approximate MLS pins
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          LIMIT: ${{ github.event.inputs.limit || '400' }}
+        run: |
+          set -euo pipefail
+          echo "Running pnpm mls:geocode ${LIMIT}"
+          pnpm mls:geocode "${LIMIT}"

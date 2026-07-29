@@ -47,7 +47,7 @@ export function HomeNearMeRail({
   const personalizationKey = personalized
     ? JSON.stringify(personalization)
     : "";
-  const { confirm, alert } = useSiteAlert();
+  const { alert } = useSiteAlert();
   const [status, setStatus] = useState<Status>("idle");
   const [items, setItems] = useState<NearMeListing[]>([]);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
@@ -162,6 +162,9 @@ export function HomeNearMeRail({
         return;
       }
 
+      // permission === "prompt" | "unknown"
+      // Do not show a site confirm first — that causes a double prompt
+      // (our modal, then the browser). Go straight to the browser prompt once.
       const alreadyAsked =
         typeof sessionStorage !== "undefined" &&
         sessionStorage.getItem(GEO_ASKED_KEY) === "1";
@@ -172,21 +175,6 @@ export function HomeNearMeRail({
       }
 
       sessionStorage.setItem(GEO_ASKED_KEY, "1");
-      const allowed = await confirm({
-        title: "Show homes near you?",
-        message:
-          "Houzzat can use your current location to find active listings within about 20 km. Your location stays on this device and is only used for nearby search.",
-        confirmLabel: "Use my location",
-        cancelLabel: "Not now",
-      });
-
-      if (cancelled) return;
-
-      if (!allowed) {
-        commitStatus("hidden");
-        return;
-      }
-
       await fetchWithLocation();
     }
 
