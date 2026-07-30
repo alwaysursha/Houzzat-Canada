@@ -6,10 +6,7 @@ import {
 } from "@/lib/proptx/config";
 import { PropTxError, proptxJson, proptxPages } from "@/lib/proptx/client";
 import type { PropTxConfig } from "@/lib/proptx/config";
-import {
-  buildListingGeocodeQuery,
-  geocodeAddress,
-} from "@/lib/geo/geocode";
+import { geocodeListing } from "@/lib/geo/geocode";
 import {
   mapHistoryRow,
   mapMediaRow,
@@ -597,16 +594,17 @@ async function upsertPropertyRow(
   let approximateCoords = mapped.approximateCoords;
   if (options.fetchNested && approximateCoords) {
     try {
-      const query = buildListingGeocodeQuery({
+      const geo = await geocodeListing({
         addressLine: String(data.addressLine),
         unitNumber:
           typeof data.unitNumber === "string" ? data.unitNumber : null,
         city: String(data.city),
+        community:
+          typeof data.community === "string" ? data.community : null,
         province: typeof data.province === "string" ? data.province : "ON",
         postalCode:
           typeof data.postalCode === "string" ? data.postalCode : null,
       });
-      const geo = await geocodeAddress(query);
       if (geo) {
         data = {
           ...data,

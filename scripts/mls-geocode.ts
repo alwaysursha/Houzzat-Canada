@@ -1,6 +1,8 @@
 /**
  * Geocode MLS listings that still use city-centroid / approximate map pins.
- * Usage: pnpm mls:geocode [limit=100]
+ * Prefers street address → neighbourhood/area → city.
+ *
+ * Usage: pnpm mls:geocode [limit=500]
  */
 import { config } from "dotenv";
 
@@ -8,64 +10,94 @@ config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
-  const { PrismaClient } = await import("@prisma/client");
-  const { PrismaPg } = await import("@prisma/adapter-pg");
-  const pg = await import("pg");
-  const {
-    buildListingGeocodeQuery,
-    geocodeAddress,
-  } = await import("../src/lib/geo/geocode");
+  const { prisma } = await import("../src/lib/prisma");
+  const { geocodeListing } = await import("../src/lib/geo/geocode");
   const { stripApproxPinNote } = await import("../src/lib/proptx/map-listing");
 
-  const limit = Number(process.argv[2] ?? 150);
-  const pool = new pg.default.Pool({
-    connectionString: process.env.DATABASE_URL!,
-  });
-  const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+  const limit = Math.max(1, Number(process.argv[2] ?? 500));
 
-  const listings = await prisma.listing.findMany({
-    where: {
-      dataSource: "mls",
-      isMock: false,
-      OR: [
-        { description: { contains: "Map pin approximate" } },
-        { description: { contains: "coordinates missing from feed" } },
-      ],
-    },
+  const approxWhere = {
+    dataSource: "mls" as const,
+    isMock: false,
+    OR: [
+      { description: { contains: "Map pin approximate" } },
+      { description: { contains: "coordinates missing from feed" } },
+    ],
+  };
+
+  // ACTIVE newest first — what visitors see on the map.
+  const active = await prisma.listing.findMany({
+    where: { ...approxWhere, status: "ACTIVE" },
     select: {
       id: true,
       mlsNumber: true,
       addressLine: true,
       unitNumber: true,
       city: true,
+      community: true,
       province: true,
       postalCode: true,
       description: true,
-      lat: true,
-      lng: true,
     },
     take: limit,
-    orderBy: { updatedAt: "desc" },
+    orderBy: [{ listedAt: "desc" }, { updatedAt: "desc" }],
   });
 
-  console.log(`Geocoding ${listings.length} approximate MLS pins…`);
+  let listings = active;
+  if (active.length < limit) {
+    const rest = await prisma.listing.findMany({
+      where: {
+        ...approxWhere,
+        status: { not: "ACTIVE" },
+        id: { notIn: active.map((l) => l.id) },
+      },
+      select: {
+        id: true,
+        mlsNumber: true,
+        addressLine: true,
+        unitNumber: true,
+        city: true,
+        community: true,
+        province: true,
+        postalCode: true,
+        description: true,
+      },
+      take: limit - active.length,
+      orderBy: [{ listedAt: "desc" }, { updatedAt: "desc" }],
+    });
+    listings = [...active, ...rest];
+  }
+
+  console.log(
+    `Geocoding ${listings.length} approximate MLS pins (ACTIVE first, Google→Nominatim)…`,
+  );
   let ok = 0;
   let fail = 0;
-
-  // Modest concurrency — Google/Nominatim rate limits.
-  const concurrency = 4;
+  const concurrency = 6;
   let index = 0;
 
   async function worker() {
     while (index < listings.length) {
       const listing = listings[index]!;
       index += 1;
-      const query = buildListingGeocodeQuery(listing);
       try {
-        const geo = await geocodeAddress(query);
+        const geo = await geocodeListing({
+          addressLine: listing.addressLine,
+          unitNumber: listing.unitNumber,
+          city: listing.city,
+          community: listing.community,
+          province: listing.province,
+          postalCode: listing.postalCode,
+        });
         if (!geo) {
           fail += 1;
-          console.log("miss", listing.mlsNumber, query.slice(0, 80));
+          if (fail <= 12 || fail % 50 === 0) {
+            console.log(
+              "miss",
+              listing.mlsNumber,
+              listing.addressLine.slice(0, 60),
+            );
+          }
           continue;
         }
         await prisma.listing.update({
@@ -77,13 +109,15 @@ async function main() {
           },
         });
         ok += 1;
-        console.log(
-          "ok",
-          listing.mlsNumber,
-          geo.source,
-          geo.lat.toFixed(5),
-          geo.lng.toFixed(5),
-        );
+        if (ok <= 8 || ok % 25 === 0) {
+          console.log(
+            "ok",
+            listing.mlsNumber,
+            geo.source,
+            geo.lat.toFixed(5),
+            geo.lng.toFixed(5),
+          );
+        }
       } catch (err) {
         fail += 1;
         console.log(
@@ -101,20 +135,19 @@ async function main() {
     ),
   );
 
-  const remaining = await prisma.listing.count({
-    where: {
-      dataSource: "mls",
-      isMock: false,
-      OR: [
-        { description: { contains: "Map pin approximate" } },
-        { description: { contains: "coordinates missing from feed" } },
-      ],
-    },
+  const remaining = await prisma.listing.count({ where: approxWhere });
+  const remainingActive = await prisma.listing.count({
+    where: { ...approxWhere, status: "ACTIVE" },
   });
 
-  console.log(JSON.stringify({ ok, fail, remaining }, null, 2));
+  console.log(
+    JSON.stringify(
+      { ok, fail, remaining, remainingActive, processed: listings.length },
+      null,
+      2,
+    ),
+  );
   await prisma.$disconnect();
-  await pool.end();
 }
 
 main().catch((err) => {

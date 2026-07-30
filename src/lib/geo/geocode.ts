@@ -208,3 +208,43 @@ export function buildListingGeocodeQuery(input: {
   ].filter(Boolean);
   return parts.join(", ");
 }
+
+/**
+ * Street first, then neighbourhood/area, then city — always prefer a real
+ * geocoder hit over the hardcoded MLS city centroid.
+ */
+export async function geocodeListing(input: {
+  addressLine: string;
+  unitNumber?: string | null;
+  city: string;
+  community?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
+}): Promise<GeocodeResult | null> {
+  const primary = buildListingGeocodeQuery(input);
+  const streetHit = await geocodeAddress(primary);
+  if (streetHit) return streetHit;
+
+  const city = input.city.trim();
+  const community = input.community?.trim() || "";
+  const province = (input.province ?? "ON").trim() || "ON";
+
+  if (
+    community &&
+    city &&
+    community.length >= 2 &&
+    !community.toLowerCase().includes(city.toLowerCase())
+  ) {
+    const areaHit = await geocodeAddress(
+      `${community}, ${city}, ${province}, Canada`,
+    );
+    if (areaHit) return areaHit;
+  }
+
+  if (city.length >= 2) {
+    const cityHit = await geocodeAddress(`${city}, ${province}, Canada`);
+    if (cityHit) return cityHit;
+  }
+
+  return null;
+}
