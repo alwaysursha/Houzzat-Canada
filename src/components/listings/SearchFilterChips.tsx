@@ -290,6 +290,21 @@ export function SearchFilterChips({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {filters.city || filters.community ? (
+        <button
+          type="button"
+          title="Clear location"
+          onClick={() => onChange({ ...filters, city: "", community: "" })}
+          className="inline-flex h-9 max-w-[14rem] items-center gap-1.5 rounded-full border border-canopy/35 bg-canopy/10 px-3 text-xs font-semibold text-canopy transition hover:bg-canopy/15"
+        >
+          <span className="truncate">
+            {filters.community
+              ? `${filters.community}, ${filters.city || "ON"}`
+              : filters.city}
+          </span>
+          <X className="size-3.5 shrink-0 opacity-70" aria-hidden />
+        </button>
+      ) : null}
       <FilterPopover label={priceLabel} active={Boolean(filters.minPrice || filters.maxPrice)} wide>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/45">
           {isLease ? "Monthly rent" : "List price"}

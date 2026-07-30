@@ -33,6 +33,7 @@ import {
   searchHrefFromParsed,
 } from "@/lib/listings/parse-search-query";
 import { pointInPolygon, polygonBBox } from "@/lib/maps/geo";
+import { cityMapCenter } from "@/lib/geo/regions";
 import { cn } from "@/lib/utils";
 
 type Bounds = {
@@ -187,20 +188,84 @@ export function SearchExperience() {
   const citiesParam = searchParams.get("cities") ?? "";
   const qParam = searchParams.get("q") ?? "";
 
+  // Keep filter state aligned when URL changes (autocomplete / typed city search).
+  useEffect(() => {
+    const txn = searchParams.get("transactionType");
+    const nextTxn: SearchFilters["transactionType"] =
+      txn === "LEASE" || txn === "ALL" || txn === "SALE"
+        ? txn
+        : searchParams.get("dataSource") === "fsbo"
+          ? "ALL"
+          : "SALE";
+    setFilters((prev) => ({
+      ...prev,
+      segment:
+        (searchParams.get("segment") as SearchFilters["segment"]) ||
+        "RESIDENTIAL",
+      transactionType: nextTxn,
+      dataSource: searchParams.get("dataSource") === "fsbo" ? "fsbo" : "",
+      city: searchParams.get("city") ?? "",
+      community: searchParams.get("community") ?? "",
+      minPrice: searchParams.get("minPrice") ?? "",
+      maxPrice: searchParams.get("maxPrice") ?? "",
+      minBeds: searchParams.get("minBeds") ?? "",
+      minBaths: searchParams.get("minBaths") ?? "",
+      propertyTypes: parsePropertyTypes(searchParams.get("propertyTypes")),
+      openHouseOnly: searchParams.get("openHouseOnly") === "1",
+      statuses: parseInitialStatuses(
+        searchParams.get("status"),
+        nextTxn === "LEASE",
+      ),
+      sort: parseSort(searchParams.get("sort")),
+    }));
+  }, [searchParams]);
+
+  const placeFilterActive = Boolean(
+    filters.city.trim() ||
+      filters.community.trim() ||
+      citiesParam.trim() ||
+      communitiesParam.trim(),
+  );
+
+  // Place search owns the criteria — drop stale map-area bounds.
+  useEffect(() => {
+    if (!placeFilterActive) return;
+    setAppliedBounds(null);
+    setAreaDirty(false);
+    setPolygon(null);
+  }, [placeFilterActive, filters.city, filters.community, citiesParam, communitiesParam]);
+
+  const searchBarQuery =
+    filters.community.trim() ||
+    filters.city.trim() ||
+    qParam.trim() ||
+    "";
+
+  // Fly map to the selected city (don't rely on map viewport for results).
+  useEffect(() => {
+    const center = cityMapCenter(filters.city);
+    if (!center) return;
+    setFocus({ lat: center.lat, lng: center.lng, zoom: 11 });
+  }, [filters.city]);
+
   const syncUrl = useCallback(
-    (next: SearchFilters, nextView: SearchViewMode = view) => {
+    (
+      next: SearchFilters,
+      nextView: SearchViewMode = view,
+      options?: { clearMultiPlace?: boolean },
+    ) => {
       const params = new URLSearchParams();
       if (next.segment && next.segment !== "RESIDENTIAL") {
         params.set("segment", next.segment);
       }
       params.set("transactionType", next.transactionType);
       if (next.dataSource) params.set("dataSource", next.dataSource);
-      if (citiesParam) {
+      if (!options?.clearMultiPlace && citiesParam) {
         params.set("cities", citiesParam);
       } else if (next.city) {
         params.set("city", next.city);
       }
-      if (communitiesParam) {
+      if (!options?.clearMultiPlace && communitiesParam) {
         params.set("communities", communitiesParam);
       } else if (next.community) {
         params.set("community", next.community);
@@ -258,7 +323,10 @@ export function SearchExperience() {
     const box = polygon
       ? polygonBBox(polygon)
       : appliedBounds;
-    if (box) {
+    // City / multi-city / community search must not be AND'd with the map
+    // viewport — the first map frame is often the wrong city and returns 0.
+    // Bounds apply for "Search this area", draw-polygon, or no place filter.
+    if (box && (polygon || !placeFilterActive)) {
       params.set("west", String(box.west));
       params.set("south", String(box.south));
       params.set("east", String(box.east));
@@ -266,7 +334,15 @@ export function SearchExperience() {
     }
     params.set("limit", "60");
     return params.toString();
-  }, [filters, appliedBounds, citiesParam, communitiesParam, polygon, qParam]);
+  }, [
+    filters,
+    appliedBounds,
+    citiesParam,
+    communitiesParam,
+    polygon,
+    qParam,
+    placeFilterActive,
+  ]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/listings/search?${queryString}`);
@@ -384,6 +460,12 @@ export function SearchExperience() {
     setAppliedBounds(mapBounds);
     setAreaDirty(false);
     setPolygon(null);
+    // Map-area mode: drop place filters so bounds are the search criteria.
+    if (placeFilterActive) {
+      const next = { ...filters, city: "", community: "" };
+      setFilters(next);
+      syncUrl(next, view, { clearMultiPlace: true });
+    }
   }
 
   function onPolygonChange(ring: LngLat[] | null) {
@@ -462,6 +544,7 @@ export function SearchExperience() {
             className="min-w-0 flex-1 basis-[16rem] rounded-full border border-line bg-mist/60 px-1"
           >
             <AddressAutocomplete
+              initialQuery={searchBarQuery}
               transactionType={
                 filters.transactionType === "LEASE" ||
                 filters.transactionType === "SALE"

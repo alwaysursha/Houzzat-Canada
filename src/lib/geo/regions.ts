@@ -254,3 +254,13 @@ export function resolveRegionFromCoords(
 export function citiesQueryParam(cities: string[]): string {
   return cities.join("|");
 }
+
+/** Map fly-to target for a city name (case-insensitive). */
+export function cityMapCenter(
+  city: string | null | undefined,
+): { lat: number; lng: number } | null {
+  if (!city?.trim()) return null;
+  const key = normalizeCityKey(city);
+  const hit = CITY_CENTROIDS.find((row) => normalizeCityKey(row.city) === key);
+  return hit ? { lat: hit.lat, lng: hit.lng } : null;
+}
