@@ -31,6 +31,28 @@ export function buildListingExpertWhatsAppUrl(input: {
   return `https://wa.me/${input.phoneDigits}?text=${encodeURIComponent(text)}`;
 }
 
+export function buildValuationMeetingWhatsAppUrl(input: {
+  phoneDigits: string;
+  address: string;
+  city?: string | null;
+  estimateLow?: number | null;
+  estimateHigh?: number | null;
+}) {
+  const place = [input.address, input.city].filter(Boolean).join(", ");
+  const range =
+    input.estimateLow != null && input.estimateHigh != null
+      ? `Online range so far: $${input.estimateLow.toLocaleString()} – $${input.estimateHigh.toLocaleString()}.`
+      : null;
+  const text = [
+    "Hi, I'd like to book a meeting for a more accurate home valuation:",
+    place,
+    range,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return `https://wa.me/${input.phoneDigits}?text=${encodeURIComponent(text)}`;
+}
+
 export function buildRoutePlannerExpertWhatsAppUrl(input: {
   phoneDigits: string;
   startAddress: string;
