@@ -629,6 +629,17 @@ export default async function ListingDetailPage({ params }: Params) {
             </div>
           </div>
 
+          <ListingQaPanel
+            mlsNumber={listing.mlsNumber}
+            addressLine={addressLabel}
+            city={listing.city}
+            title={t(locale, "grounded_qa_title")}
+            hint={t(locale, "grounded_qa_hint")}
+            expertWhatsApp={getExpertWhatsAppNumber()}
+          />
+
+          <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
+
           <ListingNarrative body={listing.description} />
 
           <ListingFactsPanel
@@ -657,17 +668,6 @@ export default async function ListingDetailPage({ params }: Params) {
           />
 
           <ListingRoomsPanel rooms={listing.rooms} />
-
-          <ListingQaPanel
-            mlsNumber={listing.mlsNumber}
-            addressLine={addressLabel}
-            city={listing.city}
-            title={t(locale, "grounded_qa_title")}
-            hint={t(locale, "grounded_qa_hint")}
-            expertWhatsApp={getExpertWhatsAppNumber()}
-          />
-
-          <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
 
           <ListingHistoryPanel
             addressLabel={addressLabel}
