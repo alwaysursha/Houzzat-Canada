@@ -84,7 +84,11 @@ export async function GET(request: Request) {
     },
     orderBy:
       tab === "sold"
-        ? [{ soldAt: "desc" }, { updatedAtMls: "desc" }, { mlsNumber: "desc" }]
+        ? [
+            { soldAt: { sort: "desc", nulls: "last" } },
+            { updatedAtMls: "desc" },
+            { mlsNumber: "desc" },
+          ]
         : [
             { listedAt: "desc" },
             { daysOnMarket: "asc" },

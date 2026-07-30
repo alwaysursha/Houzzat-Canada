@@ -194,6 +194,8 @@ export function SearchMapListingOverlay({
       listPrice: listing.listPrice,
       listedAt: listing.listedAt,
       updatedAtMls: listing.updatedAtMls,
+      soldAt: listing.soldAt,
+      soldPrice: listing.soldPrice,
       status: listing.status,
       transactionType: listing.transactionType,
       history: listing.history,

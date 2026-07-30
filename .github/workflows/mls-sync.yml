@@ -84,5 +84,5 @@ jobs:
             echo "Missing IDX secrets (PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID)"
             exit 1
           fi
-          echo "Running pnpm mls:sync ${MAX_PAGES} ${BACKFILL_DAYS} ${RESOURCES} (IDX; VOW enrichment=$([ -n "${PROPTX_VOW_TOKEN_ID:-}" ] && echo yes || echo no))"
+          echo "Running pnpm mls:sync ${MAX_PAGES} ${BACKFILL_DAYS} ${RESOURCES} (prefer VOW Token when set; VOW=$([ -n "${PROPTX_VOW_TOKEN_ID:-}" ] && echo yes || echo no))"
           pnpm mls:sync "${MAX_PAGES}" "${BACKFILL_DAYS}" "${RESOURCES}"

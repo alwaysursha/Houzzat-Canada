@@ -2,7 +2,7 @@
  * Free Neon space by capping photos per listing.
  * Long AMPRE MediaURLs inflate ListingMedia (~308MB / 548k rows).
  *
- * Usage: pnpm exec tsx scripts/prune-listing-media.ts [maxPerListing=10]
+ * Usage: pnpm exec tsx scripts/prune-listing-media.ts [maxPerListing=1]
  */
 import { config } from "dotenv";
 
@@ -10,7 +10,7 @@ config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
-  const maxKeep = Math.max(1, Number(process.argv[2] ?? 10));
+  const maxKeep = Math.max(1, Number(process.argv[2] ?? 1));
   const { prisma } = await import("../src/lib/prisma");
 
   const before = await prisma.listingMedia.count();

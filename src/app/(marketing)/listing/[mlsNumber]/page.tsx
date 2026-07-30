@@ -39,6 +39,7 @@ import {
   segmentLabel,
 } from "@/lib/listings/constants";
 import { getListingProvider } from "@/lib/listings/provider";
+import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { getPopularCities } from "@/lib/listings/popular-cities";
 import { getMarketPulse } from "@/lib/market/pulse";
 import { auth } from "@/lib/auth";
@@ -47,6 +48,8 @@ import { getLocale } from "@/lib/i18n/locale";
 import { findNearbyPois } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
+import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
+import { lookupAndUpsertOnDemand } from "@/lib/proptx/on-demand-lookup";
 import { hasVowAccess } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import { getExpertWhatsAppNumber } from "@/lib/whatsapp";
@@ -98,8 +101,32 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function ListingDetailPage({ params }: Params) {
   const { mlsNumber } = await params;
-  const listing = await getListingProvider().getByMls(mlsNumber);
+  const provider = getListingProvider();
+  let listing = await provider.getByMls(mlsNumber);
+  if (!listing) {
+    // On-demand PropTx pull when someone deep-links an MLS not yet in Neon
+    const pulled = await lookupAndUpsertOnDemand(mlsNumber);
+    if (pulled.mlsNumbers.length > 0) {
+      listing = await provider.getByMls(mlsNumber);
+    }
+  }
   if (!listing) notFound();
+
+  // Full gallery from PropTx MediaURLs (DB only keeps cover for search/cards).
+  const livePhotos =
+    listing.dataSource === "mls" && listing.listingKey
+      ? await fetchListingPhotosFromPropTx(listing.listingKey)
+      : [];
+  const galleryPhotos =
+    livePhotos.length > 0
+      ? livePhotos.map((photo) => ({
+          id: photo.id,
+          url: listingPhotoSrc(photo.url) ?? photo.url,
+        }))
+      : listing.media.map((media) => ({
+          id: media.id,
+          url: listingPhotoSrc(media.url) ?? media.url,
+        }));
 
   const session = await auth();
   const locale = await getLocale();
@@ -403,10 +430,7 @@ export default async function ListingDetailPage({ params }: Params) {
                   }
                 : undefined
             }
-            photos={listing.media.map((media) => ({
-              id: media.id,
-              url: media.url,
-            }))}
+            photos={galleryPhotos}
           />
         </div>
 
@@ -657,6 +681,8 @@ export default async function ListingDetailPage({ params }: Params) {
               listPrice: listing.listPrice,
               listedAt: listing.listedAt,
               updatedAtMls: listing.updatedAtMls,
+              soldAt: listing.soldAt,
+              soldPrice: listing.soldPrice,
               status: listing.status,
               transactionType: listing.transactionType,
               history: listing.history,

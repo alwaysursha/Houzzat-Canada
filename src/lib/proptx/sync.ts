@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import {
+  getPropTxIdxConfig,
   getPropTxSoldSyncConfig,
   getPropTxSyncConfig,
   isPropTxConfigured,
@@ -8,8 +9,13 @@ import { PropTxError, proptxJson, proptxPages } from "@/lib/proptx/client";
 import type { PropTxConfig } from "@/lib/proptx/config";
 import { geocodeListing } from "@/lib/geo/geocode";
 import {
+  fetchRawPropertyMedia,
+  preferListingPhotos,
+} from "@/lib/proptx/listing-photos";
+import {
   mapHistoryRow,
   mapMediaRow,
+  mapMlsNumber,
   mapOpenHouseRow,
   mapPropertyToListingResult,
   mapRoomRow,
@@ -97,29 +103,14 @@ function odataStringLiteral(value: string): string {
 async function fetchPropertyPhotos(
   listingKey: string,
 ): Promise<PropTxProperty[]> {
-  const keyLit = odataStringLiteral(listingKey);
-  const attempts = [
-    `ResourceRecordKey eq ${keyLit} and ImageSizeDescription eq 'Large'`,
-    `ResourceRecordKey eq ${keyLit} and ImageSizeDescription eq 'Largest'`,
-    `ResourceRecordKey eq ${keyLit}`,
-  ];
-
-  for (const filter of attempts) {
-    const path = `Media?$filter=${encodeURIComponent(filter)}&$orderby=${encodeURIComponent("Order,MediaKey")}&$top=100`;
-    const rows: PropTxProperty[] = [];
-    for await (const page of proptxPages<PropTxProperty>(path, {
-      maxPages: 1,
-    })) {
-      rows.push(...page);
-    }
-    if (rows.length > 0) return rows;
-  }
-  return [];
+  const config = getPropTxSyncConfig();
+  if (!config) return [];
+  return fetchRawPropertyMedia(listingKey, config);
 }
 
 async function upsertMappedMedia(
   listingId: string,
-  mapped: NonNullable<ReturnType<typeof mapMediaRow>>,
+  mapped: { url: string; sortOrder: number; isPrimary: boolean },
   stats: MlsSyncStats,
 ): Promise<void> {
   const existing = await prisma.listingMedia.findFirst({
@@ -481,65 +472,46 @@ async function syncHistoryBackfill(options: {
   );
 }
 
-/** Attach photos for one listing by ListingKey (not the global media cursor). */
+/** Attach cover photo only — full gallery is loaded live from PropTx on detail pages. */
 async function syncMediaForListing(
   listingKey: string,
   listingId: string,
   stats: MlsSyncStats,
   options?: { maxPhotos?: number },
 ): Promise<void> {
-  const maxPhotos = Math.max(1, Math.min(options?.maxPhotos ?? 10, 40));
+  const maxPhotos = Math.max(1, Math.min(options?.maxPhotos ?? 1, 3));
   const rows = await fetchPropertyPhotos(listingKey);
-  // One URL per photo object — AMPRE returns Large/Medium/Thumbnail variants.
-  const preferred = new Map<
-    string,
-    { row: PropTxProperty; score: number; mapped: NonNullable<ReturnType<typeof mapMediaRow>> }
-  >();
-  const sizeScore = (row: PropTxProperty): number => {
-    const size = String(row.ImageSizeDescription ?? "").toLowerCase();
-    if (size === "large") return 40;
-    if (size === "largest") return 30;
-    if (size === "medium") return 20;
-    if (size === "thumbnail" || size === "small") return 5;
-    return 10;
-  };
+  const selected = preferListingPhotos(rows, maxPhotos);
+  if (selected.length === 0) return;
 
-  for (const row of rows) {
-    const mapped = mapMediaRow(row);
-    if (!mapped) continue;
-    const objectId =
-      (typeof row.MediaObjectID === "string" && row.MediaObjectID) ||
-      (typeof row.SourceSystemMediaKey === "string" &&
-        row.SourceSystemMediaKey) ||
-      mapped.url;
-    const score = sizeScore(row);
-    const prev = preferred.get(objectId);
-    if (!prev || score > prev.score) {
-      preferred.set(objectId, { row, score, mapped });
-    }
-  }
-
-  const selected = [...preferred.values()]
-    .sort((a, b) => {
-      if (a.mapped.isPrimary !== b.mapped.isPrimary) {
-        return a.mapped.isPrimary ? -1 : 1;
-      }
-      return a.mapped.sortOrder - b.mapped.sortOrder;
-    })
-    .slice(0, maxPhotos);
-
-  for (const { mapped } of selected) {
+  const keepUrls = new Set(selected.map((p) => p.url));
+  for (const photo of selected) {
     try {
-      await upsertMappedMedia(listingId, mapped, stats);
+      await upsertMappedMedia(
+        listingId,
+        {
+          url: photo.url,
+          sortOrder: photo.sortOrder,
+          isPrimary: photo.isPrimary,
+        },
+        stats,
+      );
     } catch (err) {
       pushSyncError(
         stats,
         `media ${listingKey}: ${err instanceof Error ? err.message : "failed"}`,
       );
-      // Neon free tier full — stop hammering inserts.
       if (isNeonSizeLimitError(err)) throw err;
     }
   }
+
+  // Drop extras so Neon only keeps the cover (or tiny set).
+  await prisma.listingMedia.deleteMany({
+    where: {
+      listingId,
+      url: { notIn: [...keepUrls] },
+    },
+  });
 }
 
 function isNeonSizeLimitError(err: unknown): boolean {
@@ -563,6 +535,8 @@ async function upsertPropertyRow(
     skipReasons: Record<string, number>;
     /** When false, skip geocode + per-listing media/rooms (much faster). */
     fetchNested: boolean;
+    /** Explicit user lookup — do not apply MLS sync city allowlist. */
+    skipCityAllowlist?: boolean;
   },
 ): Promise<Date | null> {
   const mapped = mapPropertyToListingResult(row);
@@ -581,13 +555,15 @@ async function upsertPropertyRow(
     return null;
   }
 
-  const allowlist = getMlsSyncCities();
-  const cityName = String(mapped.data.city ?? "");
-  if (!cityAllowedForMlsSync(cityName, allowlist)) {
-    options.stats.propertySkipped += 1;
-    options.skipReasons["city filter"] =
-      (options.skipReasons["city filter"] ?? 0) + 1;
-    return null;
+  if (!options.skipCityAllowlist) {
+    const allowlist = getMlsSyncCities();
+    const cityName = String(mapped.data.city ?? "");
+    if (!cityAllowedForMlsSync(cityName, allowlist)) {
+      options.stats.propertySkipped += 1;
+      options.skipReasons["city filter"] =
+        (options.skipReasons["city filter"] ?? 0) + 1;
+      return null;
+    }
   }
 
   let data = mapped.data;
@@ -657,7 +633,6 @@ async function upsertPropertyRow(
         dataSource: "mls",
         propertyType: data.propertyType,
         listPrice: data.listPrice,
-        soldPrice: data.soldPrice,
         beds: data.beds,
         baths: data.baths,
         sqft: data.sqft,
@@ -677,7 +652,13 @@ async function upsertPropertyRow(
         brokerageName: data.brokerageName,
         facts: data.facts,
         listedAt: data.listedAt,
-        soldAt: data.soldAt,
+        // Never wipe firm sold timing with an incomplete IDX/partial payload.
+        ...(data.status === "SOLD" || data.status === "LEASED"
+          ? {
+              ...(data.soldAt ? { soldAt: data.soldAt } : {}),
+              ...(data.soldPrice != null ? { soldPrice: data.soldPrice } : {}),
+            }
+          : { soldAt: null, soldPrice: null }),
         updatedAtMls: data.updatedAtMls,
         daysOnMarket: data.daysOnMarket,
         isMock: false,
@@ -749,6 +730,72 @@ async function upsertPropertyRow(
     );
   }
   return null;
+}
+
+/**
+ * Request-path upsert for on-demand PropTx lookups (MLS / address / street).
+ * Skips city allowlist; fetches cover photo only (no geocode / rooms).
+ */
+export async function upsertPropTxPropertiesOnDemand(
+  rows: PropTxProperty[],
+  options?: { concurrency?: number },
+): Promise<string[]> {
+  if (rows.length === 0) return [];
+
+  const stats = emptyStats();
+  const skipReasons: Record<string, number> = {};
+  const mlsNumbers: string[] = [];
+  const concurrency = Math.max(1, Math.min(options?.concurrency ?? 3, 6));
+  let index = 0;
+
+  async function worker() {
+    while (index < rows.length) {
+      const row = rows[index]!;
+      index += 1;
+      const mls = mapMlsNumber(row);
+      await upsertPropertyRow(row, {
+        stats,
+        skipReasons,
+        fetchNested: false,
+        skipCityAllowlist: true,
+      });
+      if (!mls) continue;
+
+      const listing = await prisma.listing.findFirst({
+        where: { mlsNumber: mls },
+        select: { id: true, listingKey: true },
+      });
+      if (!listing) continue;
+      mlsNumbers.push(mls);
+
+      if (listing.listingKey) {
+        const mediaCount = await prisma.listingMedia.count({
+          where: { listingId: listing.id },
+        });
+        if (mediaCount === 0) {
+          try {
+            await syncMediaForListing(listing.listingKey, listing.id, stats, {
+              maxPhotos: 1,
+            });
+          } catch {
+            // Cover photo is best-effort on request path
+          }
+        }
+      }
+
+      try {
+        await upsertSyntheticHistoryFromProperty(listing.id, row, stats);
+      } catch {
+        // History is best-effort
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, rows.length) }, () => worker()),
+  );
+
+  return [...new Set(mlsNumbers)];
 }
 
 /**
@@ -1015,7 +1062,7 @@ async function syncMediaBackfill(options: {
           current.listingKey,
           current.id,
           options.stats,
-          { maxPhotos: 10 },
+          { maxPhotos: 1 },
         );
       } catch (err) {
         pushSyncError(
@@ -1047,6 +1094,88 @@ async function syncMediaBackfill(options: {
   console.log(
     `[mls] Media backfill done (upserted=${options.stats.mediaUpserted}${stoppedForDisk ? ", stopped: disk full" : ""})`,
   );
+}
+
+/**
+ * Fill missing soldAt/soldPrice on SOLD|LEASED rows via VOW Property fetch.
+ * IDX often omits PurchaseContractDate — leaves "Recently sold" stuck on list dates.
+ */
+async function syncSoldAtBackfill(options: {
+  maxListings: number;
+  stats: MlsSyncStats;
+  concurrency?: number;
+}): Promise<void> {
+  const config =
+    getPropTxSoldSyncConfig() ?? getPropTxSyncConfig();
+  if (!config) return;
+
+  const take = Math.max(1, Math.min(options.maxListings, 2000));
+  const listings = await prisma.listing.findMany({
+    where: {
+      dataSource: "mls",
+      isMock: false,
+      status: { in: ["SOLD", "LEASED"] },
+      OR: [{ soldAt: null }, { soldPrice: null }],
+    },
+    select: {
+      id: true,
+      listingKey: true,
+      mlsNumber: true,
+    },
+    take,
+    orderBy: [{ updatedAtMls: "desc" }, { listedAt: "desc" }],
+  });
+
+  if (listings.length === 0) return;
+
+  console.log(
+    `[mls] Sold-date backfill start (${listings.length} missing soldAt/price, feed=${config.feed})`,
+  );
+
+  const concurrency = Math.max(1, Math.min(options.concurrency ?? 6, 10));
+  let index = 0;
+  let filled = 0;
+
+  async function worker() {
+    while (index < listings.length) {
+      const current = listings[index];
+      index += 1;
+      if (!current) continue;
+      const key = current.listingKey || current.mlsNumber;
+      try {
+        const raw = await proptxJson<PropTxProperty>(
+          `Property('${key.replace(/'/g, "''")}')`,
+          config,
+        );
+        const mapped = mapPropertyToListingResult(raw);
+        if (!mapped.ok) continue;
+        const soldAt = mapped.data.soldAt ?? null;
+        const soldPrice = mapped.data.soldPrice ?? null;
+        if (!soldAt && soldPrice == null) continue;
+        await prisma.listing.update({
+          where: { id: current.id },
+          data: {
+            ...(soldAt ? { soldAt } : {}),
+            ...(soldPrice != null ? { soldPrice } : {}),
+          },
+        });
+        filled += 1;
+        options.stats.propertyUpserted += 1;
+      } catch (err) {
+        pushSyncError(
+          options.stats,
+          `soldAt ${current.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
+        );
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, listings.length || 1) }, () =>
+      worker(),
+    ),
+  );
+  console.log(`[mls] Sold-date backfill done (filled=${filled}/${listings.length})`);
 }
 
 async function syncMedia(options: {
@@ -1085,6 +1214,11 @@ async function syncMedia(options: {
       const listingId = await resolveListingIdByKey(mapped.listingKey, keyCache);
       if (!listingId) continue;
       try {
+        // Cover only — full gallery is live from PropTx on detail pages.
+        const existingCount = await prisma.listingMedia.count({
+          where: { listingId },
+        });
+        if (existingCount >= 1) continue;
         await upsertMappedMedia(listingId, mapped, options.stats);
       } catch (err) {
         options.stats.errors.push(
@@ -1318,8 +1452,7 @@ export async function runPropTxMlsSync(options?: {
         config,
       });
 
-      // 2b) Optional VOW Token pass — sold/history enrichment for registered clients.
-      // Visitor active inventory still comes from the IDX Token above.
+      // 2b) Optional extra VOW pass when primary sync is IDX-only.
       const vowConfig = getPropTxSoldSyncConfig();
       if (vowConfig && config.feed === "idx") {
         const vowPages = Math.min(15, Math.max(5, Math.ceil(recentPages / 2)));
@@ -1332,6 +1465,20 @@ export async function runPropTxMlsSync(options?: {
           stats,
           config: vowConfig,
         });
+      }
+
+      // 2c) Fill firm sold dates missing from earlier IDX-only syncs.
+      try {
+        const soldCap = Math.min(Math.max(maxPages * 5, 150), 800);
+        await syncSoldAtBackfill({
+          maxListings: soldCap,
+          stats,
+          concurrency: 6,
+        });
+      } catch (err) {
+        stats.errors.push(
+          `Sold-date backfill: ${err instanceof Error ? err.message : "unavailable"}`,
+        );
       }
 
       // 3) Small photo gap-fill only — bulk photos belong in mls-media.yml.
@@ -1357,11 +1504,12 @@ export async function runPropTxMlsSync(options?: {
       process.env.MLS_SYNC_ACTIVE_INVENTORY === "1";
     if (runActiveInventory) {
       const activePages = Math.max(maxPages * 2, 60);
+      // Active book for visitors must use IDX Token when available.
+      const idxConfig = getPropTxIdxConfig() ?? config;
       await syncActiveInventory({
         maxPages: activePages,
         stats,
-        // Active book for visitors must use IDX Token when available.
-        config,
+        config: idxConfig,
       });
     }
 

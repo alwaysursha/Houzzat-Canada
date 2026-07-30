@@ -8,6 +8,10 @@ import type {
 import { auth } from "@/lib/auth";
 import { getListingProvider } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
+import {
+  clientIpFromRequest,
+  lookupAndUpsertOnDemand,
+} from "@/lib/proptx/on-demand-lookup";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { hasClientAccess } from "@/lib/vow";
 
@@ -73,9 +77,10 @@ export async function GET(request: Request) {
       ? (tokens.filter((t) => t !== "ALL") as Array<ListingStatus | "UNLISTED">)
       : undefined;
 
-  const result = await provider.search({
-    q: searchParams.get("q") ?? undefined,
-    status: useAll ? "ALL" : statuses ? undefined : "ACTIVE",
+  const q = searchParams.get("q") ?? undefined;
+  const searchParamsBody = {
+    q,
+    status: useAll ? ("ALL" as const) : statuses ? undefined : ("ACTIVE" as const),
     statuses,
     segment: (segmentParam as ListingSegment | "ALL" | null) ?? undefined,
     transactionType:
@@ -129,12 +134,38 @@ export async function GET(request: Request) {
       : 40,
     sort: (() => {
       const s = searchParams.get("sort");
-      if (s === "newest" || s === "price_asc" || s === "price_desc" || s === "price") {
-        return s === "price" ? "price_asc" : s;
-      }
+      if (s === "newest" || s === "price_asc" || s === "price_desc") return s;
+      if (s === "price") return "price_asc" as const;
       return undefined;
-    })(),
-  });
+    })() as "newest" | "price_asc" | "price_desc" | undefined,
+  };
+
+  let result = await provider.search(searchParamsBody);
+
+  // Neon miss + MLS/address/street query → PropTx on-demand (skip when map/filters dominate)
+  const lightFilters =
+    !searchParamsBody.city &&
+    !searchParamsBody.cities?.length &&
+    !searchParamsBody.community &&
+    !searchParamsBody.communities?.length &&
+    !searchParamsBody.propertyType &&
+    !searchParamsBody.propertyTypes?.length &&
+    searchParamsBody.minPrice == null &&
+    searchParamsBody.maxPrice == null &&
+    searchParamsBody.minBeds == null &&
+    searchParamsBody.minBaths == null &&
+    !searchParamsBody.openHouseOnly &&
+    searchParamsBody.west == null &&
+    !searchParamsBody.cursor;
+
+  if (result.items.length === 0 && q?.trim() && lightFilters) {
+    const pulled = await lookupAndUpsertOnDemand(q, {
+      clientIp: clientIpFromRequest(request),
+    });
+    if (pulled.mlsNumbers.length > 0) {
+      result = await provider.search(searchParamsBody);
+    }
+  }
 
   if (!isClient) {
     result.items = result.items.map((item) => ({ ...item, soldPrice: null }));

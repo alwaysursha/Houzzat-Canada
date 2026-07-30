@@ -107,7 +107,7 @@ function listingsEmptySuggestion(): AutocompleteSuggestion {
     type: "action",
     group: "listings",
     action: "listings_empty",
-    label: "No history available",
+    label: "No matching listings yet",
   };
 }
 
@@ -198,6 +198,9 @@ export function AddressAutocomplete({
   openRef.current = open;
   const onPlaceResolvedRef = useRef(onPlaceResolved);
   onPlaceResolvedRef.current = onPlaceResolved;
+  /** Ignore stale autocomplete responses while the user keeps typing. */
+  const listingsFetchGenRef = useRef(0);
+  const placesFetchGenRef = useRef(0);
   const [panelStyle, setPanelStyle] = useState<CSSProperties | undefined>();
 
   useEffect(() => {
@@ -340,6 +343,11 @@ export function AddressAutocomplete({
       return;
     }
 
+    const ac = new AbortController();
+    const fetchGen = ++listingsFetchGenRef.current;
+    const isCurrent = () =>
+      !ac.signal.aborted && fetchGen === listingsFetchGenRef.current;
+
     const handle = window.setTimeout(async () => {
       setLoading(true);
       try {
@@ -350,16 +358,21 @@ export function AddressAutocomplete({
 
         const fetchPlaces = trimmed.length >= 3;
         const [listingRes, placesRes] = await Promise.all([
-          fetch(`/api/listings/autocomplete?${listingParams}`),
+          fetch(`/api/listings/autocomplete?${listingParams}`, {
+            signal: ac.signal,
+          }),
           fetchPlaces
             ? fetch(
                 `/api/places/autocomplete?${new URLSearchParams({
                   q: trimmed,
                   sessionToken,
                 })}`,
+                { signal: ac.signal },
               ).catch(() => null)
             : Promise.resolve(null),
         ]);
+
+        if (!isCurrent()) return;
 
         const listingData = (await listingRes.json()) as {
           suggestions: AutocompleteSuggestion[];
@@ -375,8 +388,9 @@ export function AddressAutocomplete({
         }
 
         if (
-          selectedQueryRef.current !== null &&
-          query.trim() === selectedQueryRef.current.trim()
+          !isCurrent() ||
+          (selectedQueryRef.current !== null &&
+            query.trim() === selectedQueryRef.current.trim())
         ) {
           return;
         }
@@ -398,8 +412,9 @@ export function AddressAutocomplete({
                 placeId: topPlace.placeId,
                 sessionToken,
               })}`,
+              { signal: ac.signal },
             );
-            if (detailRes.ok) {
+            if (detailRes.ok && isCurrent()) {
               const detailData = (await detailRes.json()) as {
                 place?: AutocompleteSuggestion;
               };
@@ -408,7 +423,6 @@ export function AddressAutocomplete({
                   ...detailData.place,
                   placeId: topPlace.placeId,
                 });
-                // Prefer resolved address as first Addresses row.
                 places = [
                   resolved,
                   ...places.filter((p) => p.placeId !== topPlace.placeId),
@@ -425,8 +439,9 @@ export function AddressAutocomplete({
         }
 
         if (
-          selectedQueryRef.current !== null &&
-          query.trim() === selectedQueryRef.current.trim()
+          !isCurrent() ||
+          (selectedQueryRef.current !== null &&
+            query.trim() === selectedQueryRef.current.trim())
         ) {
           return;
         }
@@ -440,12 +455,18 @@ export function AddressAutocomplete({
         setSuggestions([...listingRows, ...places, ...around]);
         setOpen(true);
         setActiveIndex(-1);
+      } catch {
+        if (ac.signal.aborted) return;
+        // Keep prior suggestions rather than wiping on transient errors.
       } finally {
-        setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
-    }, 180);
+    }, 220);
 
-    return () => window.clearTimeout(handle);
+    return () => {
+      window.clearTimeout(handle);
+      ac.abort();
+    };
   }, [query, minChars, transactionType, source, sessionToken]);
 
   useEffect(() => {
@@ -467,6 +488,11 @@ export function AddressAutocomplete({
       return;
     }
 
+    const ac = new AbortController();
+    const fetchGen = ++placesFetchGenRef.current;
+    const isCurrent = () =>
+      !ac.signal.aborted && fetchGen === placesFetchGenRef.current;
+
     const handle = window.setTimeout(async () => {
       setLoading(true);
       try {
@@ -474,13 +500,17 @@ export function AddressAutocomplete({
           q: query.trim(),
           sessionToken,
         });
-        const res = await fetch(`/api/places/autocomplete?${params}`);
+        const res = await fetch(`/api/places/autocomplete?${params}`, {
+          signal: ac.signal,
+        });
+        if (!isCurrent()) return;
         const data = (await res.json()) as {
           suggestions: AutocompleteSuggestion[];
         };
         if (
-          selectedQueryRef.current !== null &&
-          query.trim() === selectedQueryRef.current.trim()
+          !isCurrent() ||
+          (selectedQueryRef.current !== null &&
+            query.trim() === selectedQueryRef.current.trim())
         ) {
           return;
         }
@@ -489,12 +519,17 @@ export function AddressAutocomplete({
         );
         setOpen((data.suggestions ?? []).length > 0);
         setActiveIndex(-1);
+      } catch {
+        if (ac.signal.aborted) return;
       } finally {
-        setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
     }, 220);
 
-    return () => window.clearTimeout(handle);
+    return () => {
+      window.clearTimeout(handle);
+      ac.abort();
+    };
   }, [query, minChars, source, sessionToken]);
 
   async function loadEmptyState() {
@@ -916,6 +951,10 @@ export function AddressAutocomplete({
                         large ? "py-3.5" : "py-3",
                         active && "bg-mist/80",
                       )}
+                      onMouseDown={(event) => {
+                        // Keep input focus so the panel doesn't dismiss before click.
+                        event.preventDefault();
+                      }}
                       onMouseEnter={() => setActiveIndex(index)}
                       onClick={() => onSuggestionActivate(suggestion)}
                     >
@@ -949,6 +988,10 @@ export function AddressAutocomplete({
                 large ? "py-3.5" : "py-3",
                 activeIndex === flat.length - 1 && "bg-mist/80",
               )}
+              onMouseDown={(event) => {
+                // Keep input focus so the panel doesn't dismiss before click.
+                event.preventDefault();
+              }}
               onMouseEnter={() => setActiveIndex(flat.length - 1)}
               onClick={() => {
                 if (searchForRow.href) {

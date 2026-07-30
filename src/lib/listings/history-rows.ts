@@ -104,6 +104,10 @@ export function buildListingHistoryRows(input: {
   listedAt: Date | string;
   /** Current listing last MLS update (PropTx ModificationTimestamp → updatedAtMls). */
   updatedAtMls?: Date | string | null;
+  /** Firm sold/leased date — preferred Last Update for closed current row. */
+  soldAt?: Date | string | null;
+  /** Close/sold price — preferred Price for closed current row. */
+  soldPrice?: number | null;
   status: string;
   transactionType: string;
   history: Array<{
@@ -118,6 +122,8 @@ export function buildListingHistoryRows(input: {
     note?: string | null;
   }>;
 }): HistoryRow[] {
+  const isClosed =
+    input.status === "SOLD" || input.status === "LEASED";
   const currentEvent =
     input.status === "SOLD"
       ? "Sold"
@@ -127,11 +133,28 @@ export function buildListingHistoryRows(input: {
           ? "For Lease"
           : "For Sale";
 
+  const currentPrice =
+    isClosed && input.soldPrice != null && input.soldPrice > 0
+      ? input.soldPrice
+      : input.listPrice;
+
+  // Guard: never surface a future closing as Last Update on the current row.
+  const soldAtMs =
+    input.soldAt != null
+      ? new Date(input.soldAt).getTime()
+      : NaN;
+  const soldAtUsable =
+    Number.isFinite(soldAtMs) && soldAtMs <= Date.now() + 86_400_000
+      ? input.soldAt
+      : null;
+
   const current: HistoryRow = {
     id: `current-${input.mlsNumber}`,
     contractDate: toIso(input.listedAt),
-    lastUpdate: toIso(input.updatedAtMls ?? null),
-    price: input.listPrice,
+    lastUpdate: toIso(
+      (isClosed ? soldAtUsable : null) ?? input.updatedAtMls ?? null,
+    ),
+    price: currentPrice,
     originalPrice: null,
     event: currentEvent,
     listingId: input.mlsNumber,
@@ -163,13 +186,25 @@ export function buildListingHistoryRows(input: {
       } satisfies HistoryRow;
     });
 
-  const filteredPast = past.filter(
-    (row) =>
-      !(
-        row.listingId === input.mlsNumber &&
-        /for sale|for lease|listed/i.test(row.event)
-      ),
-  );
+  const filteredPast = past.filter((row) => {
+    // UI already synthesizes the current cycle as "For Sale" / "For Lease".
+    if (
+      row.listingId === input.mlsNumber &&
+      /for sale|for lease|listed/i.test(row.event)
+    ) {
+      return false;
+    }
+    // Same MLS Sold/Leased row duplicates the current closed cycle
+    // (list price vs sold price looked like two different Sold rows).
+    if (
+      isClosed &&
+      row.listingId === input.mlsNumber &&
+      /^(sold|leased)$/i.test(row.event.trim())
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   // Current listing stays on top; remaining rows newest-first.
   return [

@@ -75,11 +75,11 @@ export function getPropTxConfig(): PropTxConfig | null {
 
 /**
  * Credentials for MLS sync into Neon.
- * Prefer IDX (visitor agreement). Use optional VOW Token when IDX is missing,
- * or pass VOW config explicitly for sold enrichment.
+ * Prefer VOW when available — IDX often omits sold listings / firm dates.
+ * Site access stays IDX (`PROPTX_FEED=idx`); VOW is for sync + client surfaces.
  */
 export function getPropTxSyncConfig(): PropTxConfig | null {
-  return getPropTxIdxConfig() ?? getPropTxVowConfig();
+  return getPropTxVowConfig() ?? getPropTxIdxConfig();
 }
 
 /** VOW Token when configured — used to keep sold/history fresh for clients. */

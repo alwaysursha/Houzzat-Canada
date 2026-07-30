@@ -193,10 +193,12 @@ export function formatListingTiming(listing: {
       listing.status === "LEASED" || listing.transactionType === "LEASE"
         ? "Leased"
         : "Sold";
-    const rawWhen = listing.soldAt ?? listing.listedAt;
-    if (rawWhen) {
+    // Never fall back to listedAt — that made null soldAt look like old list dates.
+    if (listing.soldAt) {
       const when =
-        typeof rawWhen === "string" ? new Date(rawWhen) : rawWhen;
+        typeof listing.soldAt === "string"
+          ? new Date(listing.soldAt)
+          : listing.soldAt;
       // Guard: never show a future closing date as "Sold on …"
       if (
         !Number.isNaN(when.getTime()) &&

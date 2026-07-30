@@ -55,8 +55,8 @@ function date(row: PropTxProperty, ...keys: string[]): Date | null {
 
 /**
  * Date shown as "Sold on …" / used for recently-sold sort.
- * Prefer firm/sold timing over CloseDate — CloseDate is often a future closing
- * / possession date and shows up as "Sold on Oct 2026" while still July.
+ * Prefer PurchaseContractDate (TRREB "Sold Date") over CloseDate — CloseDate is
+ * often a future closing / possession date and showed up as "Sold on Oct 2026".
  */
 function mapSoldAt(row: PropTxProperty): Date | null {
   const purchase = date(
@@ -75,19 +75,25 @@ function mapSoldAt(row: PropTxProperty): Date | null {
   );
   const statusChanged = date(
     row,
-    "StatusChangeTimestamp",
     "SoldEntryTimestamp",
+    "StatusChangeTimestamp",
     "OffMarketDate",
+    "ModificationTimestamp",
   );
 
   const endOfToday = new Date();
   endOfToday.setHours(23, 59, 59, 999);
 
+  // Firm / offer-accepted date (best "Sold on" for TRREB)
+  if (purchase) return purchase;
+  // Closing already happened (never use a future CloseDate)
   if (closed && closed.getTime() <= endOfToday.getTime()) {
     return closed;
   }
-  if (purchase) return purchase;
-  if (statusChanged) return statusChanged;
+  // When IDX/partial payloads omit PurchaseContractDate
+  if (statusChanged && statusChanged.getTime() <= endOfToday.getTime()) {
+    return statusChanged;
+  }
   return null;
 }
 
@@ -910,12 +916,17 @@ export function mapSyntheticHistoryFromProperty(
       modAt ??
       listedAt;
     if (at) {
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 999);
+      // Never use a future CloseDate as Last Update in history.
+      const lastUpdatedAt =
+        at.getTime() <= endOfToday.getTime() ? at : (modAt ?? listedAt ?? at);
       events.push({
         event: "Sold",
         price: closePrice ?? listPrice,
         originalPrice: null,
         contractDate: listedAt ?? at,
-        lastUpdatedAt: at,
+        lastUpdatedAt,
         visibility: "restricted",
         note: `${SYNTHETIC_HISTORY_NOTE_PREFIX}Sold`,
       });
@@ -927,12 +938,16 @@ export function mapSyntheticHistoryFromProperty(
       modAt ??
       listedAt;
     if (at) {
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 999);
+      const lastUpdatedAt =
+        at.getTime() <= endOfToday.getTime() ? at : (modAt ?? listedAt ?? at);
       events.push({
         event: "Leased",
         price: closePrice ?? listPrice,
         originalPrice: null,
         contractDate: listedAt ?? at,
-        lastUpdatedAt: at,
+        lastUpdatedAt,
         visibility: "restricted",
         note: `${SYNTHETIC_HISTORY_NOTE_PREFIX}Leased`,
       });

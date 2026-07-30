@@ -246,7 +246,12 @@ export class DbListingProvider implements ListingProvider {
     const orderBy =
       params.sort === "newest"
         ? params.status === "SOLD" || params.statuses?.includes("SOLD")
-          ? ([{ soldAt: "desc" }, { listedAt: "desc" }, { mlsNumber: "desc" }] as const)
+          ? ([
+              { soldAt: { sort: "desc", nulls: "last" } },
+              { updatedAtMls: "desc" },
+              { listedAt: "desc" },
+              { mlsNumber: "desc" },
+            ] as const)
           : ([{ listedAt: "desc" }, { mlsNumber: "desc" }] as const)
         : params.sort === "price_desc"
           ? ([{ listPrice: "desc" }, { mlsNumber: "desc" }] as const)
@@ -257,7 +262,7 @@ export class DbListingProvider implements ListingProvider {
       prisma.listing.findMany({
         where,
         include: {
-          media: { orderBy: { sortOrder: "asc" } },
+          media: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], take: 1 },
           openHouses: { orderBy: { startsAt: "asc" } },
         },
         orderBy: [...orderBy],
@@ -676,7 +681,7 @@ export class DbListingProvider implements ListingProvider {
         ],
       },
       include: {
-        media: { orderBy: { sortOrder: "asc" } },
+        media: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], take: 1 },
         openHouses: {
           where: {
             startsAt: { lte: to },

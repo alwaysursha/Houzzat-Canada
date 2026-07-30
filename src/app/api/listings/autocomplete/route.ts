@@ -4,6 +4,10 @@ import { auth } from "@/lib/auth";
 import { getListingProvider } from "@/lib/listings/provider";
 import type { AutocompleteSuggestionGroup } from "@/lib/listings/types";
 import { prisma } from "@/lib/prisma";
+import {
+  clientIpFromRequest,
+  lookupAndUpsertOnDemand,
+} from "@/lib/proptx/on-demand-lookup";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { hasClientAccess } from "@/lib/vow";
 
@@ -34,6 +38,22 @@ export async function GET(request: Request) {
     transactionType,
     empty,
   });
+
+  // Neon miss on MLS / exact address / street → live PropTx pull + upsert
+  const listingHits = suggestions.filter(
+    (s) => s.type === "listing" || s.type === "mls",
+  );
+  if (!empty && q.trim() && listingHits.length === 0) {
+    const pulled = await lookupAndUpsertOnDemand(q, {
+      clientIp: clientIpFromRequest(request),
+    });
+    if (pulled.mlsNumbers.length > 0) {
+      suggestions = await provider.autocomplete(q, {
+        transactionType,
+        empty,
+      });
+    }
+  }
 
   if (!isClient) {
     suggestions = suggestions.map((s) => {
