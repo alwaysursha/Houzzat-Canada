@@ -17,7 +17,7 @@ export function SiteFooter() {
         </div>
 
         <div className="flex max-w-md flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
-          <div className="inline-flex shrink-0 self-start rounded-md bg-white px-2.5 py-2 shadow-sm">
+          <div className="inline-flex shrink-0 self-start">
             {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
             <img
               src="/images/royal-lepage-logo.png"
@@ -31,6 +31,24 @@ export function SiteFooter() {
             <p className="font-semibold text-ink">Ali Syed</p>
             <p>Sales Representative</p>
             <p>Royal LePage Credit Valley Real Estate</p>
+            <p>
+              Direct:{" "}
+              <a
+                href="tel:+16472214949"
+                className="text-ink/80 underline-offset-2 hover:underline"
+              >
+                647 - 221 - 4949
+              </a>
+            </p>
+            <p>
+              Office:{" "}
+              <a
+                href="tel:+19057935000"
+                className="text-ink/80 underline-offset-2 hover:underline"
+              >
+                905 - 793 - 5000
+              </a>
+            </p>
             <p>1-10045 Hurontario St.</p>
             <p>Brampton, ON, L6Z 0E6</p>
           </address>

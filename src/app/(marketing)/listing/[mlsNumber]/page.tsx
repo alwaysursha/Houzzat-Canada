@@ -39,7 +39,7 @@ import {
   segmentLabel,
 } from "@/lib/listings/constants";
 import { getListingProvider } from "@/lib/listings/provider";
-import { listingPhotoSrc } from "@/lib/listings/photo-src";
+import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
 import { getPopularCities } from "@/lib/listings/popular-cities";
 import { getMarketPulse } from "@/lib/market/pulse";
 import { auth } from "@/lib/auth";
@@ -48,7 +48,6 @@ import { getLocale } from "@/lib/i18n/locale";
 import { findNearbyPois } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
-import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
 import { lookupAndUpsertOnDemand } from "@/lib/proptx/on-demand-lookup";
 import { hasVowAccess } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
@@ -113,20 +112,7 @@ export default async function ListingDetailPage({ params }: Params) {
   if (!listing) notFound();
 
   // Full gallery from PropTx MediaURLs (DB only keeps cover for search/cards).
-  const livePhotos =
-    listing.dataSource === "mls" && listing.listingKey
-      ? await fetchListingPhotosFromPropTx(listing.listingKey)
-      : [];
-  const galleryPhotos =
-    livePhotos.length > 0
-      ? livePhotos.map((photo) => ({
-          id: photo.id,
-          url: listingPhotoSrc(photo.url) ?? photo.url,
-        }))
-      : listing.media.map((media) => ({
-          id: media.id,
-          url: listingPhotoSrc(media.url) ?? media.url,
-        }));
+  const galleryPhotos = await resolveListingGalleryPhotos(listing);
 
   const session = await auth();
   const locale = await getLocale();
@@ -752,27 +738,26 @@ export default async function ListingDetailPage({ params }: Params) {
             signedIn={Boolean(user)}
             initialBody={notePreview?.body ?? ""}
           />
-          <div className="hidden md:block">
-            <ViewingRequestPanel
-              mlsNumber={listing.mlsNumber}
-              inactive={isInactive}
-              similarHomesHref={similarHomesHref}
-              city={listing.city}
-              community={listing.community}
-              transactionType={listing.transactionType}
-              segment={listing.segment}
-              signedIn={Boolean(user)}
-              contact={
-                user
-                  ? {
-                      name: user.name,
-                      email: user.email,
-                      phone: user.phone,
-                    }
-                  : undefined
-              }
-            />
-          </div>
+          <ViewingRequestPanel
+            className="hidden md:block"
+            mlsNumber={listing.mlsNumber}
+            inactive={isInactive}
+            similarHomesHref={similarHomesHref}
+            city={listing.city}
+            community={listing.community}
+            transactionType={listing.transactionType}
+            segment={listing.segment}
+            signedIn={Boolean(user)}
+            contact={
+              user
+                ? {
+                    name: user.name,
+                    email: user.email,
+                    phone: user.phone,
+                  }
+                : undefined
+            }
+          />
           <MlsDisclaimer />
         </aside>
       </div>

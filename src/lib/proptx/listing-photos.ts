@@ -47,9 +47,10 @@ export function preferListingPhotos(
     const mapped = mapMediaRow(row);
     if (!mapped) continue;
     const objectId =
-      (typeof row.MediaObjectID === "string" && row.MediaObjectID) ||
+      (typeof row.MediaObjectID === "string" && row.MediaObjectID.trim()) ||
       (typeof row.SourceSystemMediaKey === "string" &&
-        row.SourceSystemMediaKey) ||
+        row.SourceSystemMediaKey.trim()) ||
+      (typeof row.MediaKey === "string" && row.MediaKey.trim()) ||
       mapped.url;
     const score = sizeScore(row);
     const prev = preferred.get(objectId);
@@ -90,6 +91,7 @@ export async function fetchRawPropertyMedia(
     `ResourceRecordKey eq ${keyLit}`,
   ];
 
+  let best: PropTxProperty[] = [];
   for (const filter of attempts) {
     const path = `Media?$filter=${encodeURIComponent(filter)}&$orderby=${encodeURIComponent("Order,MediaKey")}&$top=100`;
     const rows: PropTxProperty[] = [];
@@ -99,9 +101,16 @@ export async function fetchRawPropertyMedia(
     })) {
       rows.push(...page);
     }
-    if (rows.length > 0) return rows;
+    if (rows.length === 0) continue;
+    // Prefer the attempt that yields more distinct gallery photos. Some
+    // listings only expose one "Large" row even when more sizes exist.
+    if (preferListingPhotos(rows).length > preferListingPhotos(best).length) {
+      best = rows;
+    }
+    // Enough for a full gallery — stop early.
+    if (preferListingPhotos(best).length >= 8) break;
   }
-  return [];
+  return best;
 }
 
 /**
@@ -121,7 +130,9 @@ export async function fetchListingPhotosFromPropTx(
   );
   if (configs.length === 0) return [];
 
-  const timeoutMs = options?.timeoutMs ?? 4500;
+  // PropTx Media can take several seconds on cold/edge; 4.5s often fell back
+  // to the single cover photo stored in Neon.
+  const timeoutMs = options?.timeoutMs ?? 12_000;
 
   const work = async (): Promise<PropTxListingPhoto[]> => {
     for (const config of configs) {

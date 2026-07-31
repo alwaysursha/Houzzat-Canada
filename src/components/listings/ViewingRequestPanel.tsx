@@ -10,6 +10,7 @@ import {
   type ViewingContactDefaults,
 } from "@/components/listings/ViewingBookingModal";
 import { RoutePlannerToggleButton } from "@/components/route-planner/RoutePlannerToggleButton";
+import { cn } from "@/lib/utils";
 
 function defaultInquiryMessage(mlsNumber: string) {
   return `I'd like details or something similar to MLS® ${mlsNumber}. Please contact me.`;
@@ -25,6 +26,7 @@ export function ViewingRequestPanel({
   transactionType = "SALE",
   segment,
   signedIn = false,
+  className,
 }: {
   mlsNumber: string;
   contact?: ViewingContactDefaults;
@@ -35,6 +37,7 @@ export function ViewingRequestPanel({
   transactionType?: "SALE" | "LEASE";
   segment?: "RESIDENTIAL" | "COMMERCIAL" | "PRE_CONSTRUCTION" | string;
   signedIn?: boolean;
+  className?: string;
 }) {
   const [mode, setMode] = useState<"showing" | "virtual_viewing">("showing");
   const watchSegment =
@@ -43,9 +46,16 @@ export function ViewingRequestPanel({
     similarHomesHref ??
     `/search?status=ACTIVE&city=${encodeURIComponent(city ?? "")}`;
 
+  const shellClass = cn(
+    // Parent column must be the tall grid aside — do not wrap this in a short
+    // div, or sticky has no room to travel.
+    "sticky top-[calc(4rem+var(--listing-sticky-bar-height,5.5rem)+0.5rem)] z-10 rounded-2xl border border-line bg-surface p-5 shadow-sm",
+    className,
+  );
+
   if (inactive) {
     return (
-      <div className="sticky top-[calc(4rem+var(--listing-sticky-bar-height,5.5rem)+0.5rem)] z-10 rounded-2xl border border-line bg-surface p-5 shadow-sm">
+      <div className={shellClass}>
         <h2 className="font-semibold text-ink">Ask about this home</h2>
         <p className="mt-1.5 text-sm text-ink/60">
           This listing is no longer active. Send an inquiry and we’ll help with
@@ -93,7 +103,7 @@ export function ViewingRequestPanel({
   }
 
   return (
-    <div className="sticky top-[calc(4rem+var(--listing-sticky-bar-height,5.5rem)+0.5rem)] z-10 rounded-2xl border border-line bg-surface p-5 shadow-sm">
+    <div className={shellClass}>
       <div className="mb-4">
         <RoutePlannerToggleButton
           mlsNumber={mlsNumber}

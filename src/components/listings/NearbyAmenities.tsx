@@ -53,8 +53,10 @@ export function NearbyAmenities({
       <div>
         <h2 className="font-display text-2xl text-ink">Nearby</h2>
         <p className="mt-1 text-sm text-ink/60">
-          Schools, parks, transit, and grocery within ~2 km — from Houzzat’s
-          amenity catalogue (not live Google results).
+          Schools, parks, transit, and grocery within ~2 km.
+        </p>
+        <p className="mt-1 text-xs text-ink/40">
+          Sources: Toronto open data, GTFS transit feeds, and OpenStreetMap.
         </p>
       </div>
 

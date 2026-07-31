@@ -36,7 +36,7 @@ export default function ComingSoonPage() {
         </p>
 
         <div className="mt-10 flex flex-col gap-5 rounded-xl border border-line/80 bg-surface/90 p-5 shadow-sm backdrop-blur-sm sm:flex-row sm:items-start sm:gap-6 sm:p-6">
-          <div className="inline-flex shrink-0 self-start rounded-md bg-white px-2.5 py-2 shadow-sm">
+          <div className="inline-flex shrink-0 self-start">
             {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
             <img
               src="/images/royal-lepage-logo.png"
