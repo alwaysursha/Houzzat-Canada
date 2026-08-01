@@ -90,9 +90,20 @@ function extractStreetNumber(text: string): string | null {
   return match?.[1] ?? null;
 }
 
+function extractStreetName(query: string): string | null {
+  const streetPart = query.split(",")[0]?.trim() ?? query;
+  const withoutNum = streetPart
+    .replace(/^\d+\S*\s+/, "")
+    .replace(/\b(Ave|Avenue|St|Street|Rd|Road|Dr|Drive|Blvd|Cres|Crescent|Way|Lane|Ct|Court|Pl|Place|Ter|Terrace)\.?$/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return withoutNum.length >= 4 ? withoutNum : null;
+}
+
 /**
- * Street-level only: result must include the same civic number and must not
- * land on a known city centroid (those are still approximate).
+ * Street-level: prefer matching civic number. If OSM only has the road (common
+ * in Canada), accept a same-named street hit in-city rather than leaving the
+ * pin on a Toronto/GTA centroid hundreds of km away.
  */
 function isStreetLevelHit(
   query: string,
@@ -112,8 +123,17 @@ function isStreetLevelHit(
     return true;
   }
 
-  if (formattedAddress) {
-    return new RegExp(`\\b${queryNum}\\b`, "i").test(formattedAddress);
+  if (formattedAddress && new RegExp(`\\b${queryNum}\\b`, "i").test(formattedAddress)) {
+    return true;
+  }
+
+  // Road-only OSM hit: street name must appear in the result.
+  const streetName = extractStreetName(query);
+  if (streetName && formattedAddress) {
+    const compact = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    if (compact(formattedAddress).includes(compact(streetName))) {
+      return true;
+    }
   }
 
   return false;
