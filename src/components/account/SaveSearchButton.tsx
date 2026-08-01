@@ -1,11 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
+import { UpdateSavedSearchDialog } from "@/components/listings/UpdateSavedSearchDialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { savePrimarySearch } from "@/lib/listings/save-primary-search";
 import { SITE_MESSAGES } from "@/lib/site-messages";
+import { cn } from "@/lib/utils";
+
+type SavedSearchItem = {
+  id: string;
+  name: string;
+  query: Record<string, unknown>;
+  isPrimary?: boolean;
+};
+
+function normalizeQuery(query: Record<string, unknown>): string {
+  const cleaned: Record<string, unknown> = {};
+  for (const key of Object.keys(query).sort()) {
+    const value = query[key];
+    if (value == null || value === "") continue;
+    cleaned[key] = value;
+  }
+  return JSON.stringify(cleaned);
+}
+
+function nameFromQuery(query: Record<string, unknown>): string {
+  const place =
+    (typeof query.community === "string" && query.community) ||
+    (typeof query.city === "string" && query.city) ||
+    "";
+  const txn = query.transactionType === "LEASE" ? "rentals" : "homes";
+  return place ? `${place} ${txn}` : `My ${txn} search`;
+}
 
 export function SaveSearchButton({
   query,
@@ -16,73 +44,120 @@ export function SaveSearchButton({
 }) {
   const { openAuth } = useAuthModal();
   const { toast } = useSiteAlert();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("My search");
+  const [savedBaselineKey, setSavedBaselineKey] = useState<string | null>(null);
+  const [sessionBaselineKey, setSessionBaselineKey] = useState<string | null>(
+    null,
+  );
   const [pending, setPending] = useState(false);
-  const [done, setDone] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  async function save() {
+  const currentKey = useMemo(() => normalizeQuery(query), [query]);
+
+  // Initial page criteria count as "already current" until something changes.
+  useEffect(() => {
+    setSessionBaselineKey((prev) => prev ?? currentKey);
+  }, [currentKey]);
+
+  const refreshSavedBaseline = useCallback(async () => {
+    if (!signedIn) {
+      setSavedBaselineKey(null);
+      return;
+    }
+    const res = await fetch("/api/saved-searches");
+    if (!res.ok) {
+      setSavedBaselineKey(null);
+      return;
+    }
+    const data = (await res.json()) as { items?: SavedSearchItem[] };
+    const items = data.items ?? [];
+    const primary =
+      items.find((item) => item.isPrimary) ?? items[0] ?? null;
+    setSavedBaselineKey(
+      primary ? normalizeQuery(primary.query ?? {}) : null,
+    );
+  }, [signedIn]);
+
+  useEffect(() => {
+    void refreshSavedBaseline();
+  }, [refreshSavedBaseline]);
+
+  useEffect(() => {
+    function onChanged() {
+      void refreshSavedBaseline();
+    }
+    window.addEventListener("houzzat:saved-searches-changed", onChanged);
+    return () =>
+      window.removeEventListener("houzzat:saved-searches-changed", onChanged);
+  }, [refreshSavedBaseline]);
+
+  const baselineKey = savedBaselineKey ?? sessionBaselineKey;
+  const criteriaChanged =
+    baselineKey != null && currentKey !== baselineKey;
+  const disabled = !criteriaChanged || pending;
+
+  async function persist(confirmReplace: boolean) {
     if (!signedIn) {
       openAuth({ mode: "sign-in", callbackUrl: "/search" });
       return;
     }
     setPending(true);
-    const res = await fetch("/api/saved-searches", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, query, emailAlerts: true }),
+    const outcome = await savePrimarySearch({
+      name: nameFromQuery(query),
+      query,
+      confirmReplace,
     });
     setPending(false);
-    if (!res.ok) {
-      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+
+    if (outcome.status === "auth") {
+      openAuth({ mode: "sign-in", callbackUrl: "/search" });
       return;
     }
-    setDone(true);
-    setOpen(false);
-    toast({ message: "Search saved to your account.", tone: "success" });
-    window.dispatchEvent(new Event("houzzat:saved-searches-changed"));
+    if (outcome.status === "needs_confirm") {
+      setConfirmOpen(true);
+      return;
+    }
+    if (outcome.status === "error") {
+      toast({
+        message: outcome.message || SITE_MESSAGES.genericErrorToast,
+        tone: "error",
+      });
+      return;
+    }
+
+    setSavedBaselineKey(currentKey);
+    setSessionBaselineKey(currentKey);
+    setConfirmOpen(false);
+    toast({
+      message: confirmReplace
+        ? "Primary search updated. Previous search kept as secondary."
+        : "Search saved to your buyer profile.",
+      tone: "success",
+    });
   }
 
-  if (done) {
-    return (
-      <p className="text-sm font-medium text-canopy">
-        Search saved — manage alerts in your account.
-      </p>
-    );
-  }
-
-  if (!open) {
-    return (
+  return (
+    <>
       <Button
         type="button"
         variant="secondary"
         size="sm"
-        onClick={() => setOpen(true)}
+        disabled={disabled}
+        title={
+          disabled
+            ? "No new search criteria to save"
+            : "Save this search to your buyer profile"
+        }
+        onClick={() => void persist(false)}
+        className={cn(disabled && "border-line/70 text-ink/35")}
       >
-        Save this search
+        {pending ? "Saving…" : "Saved Search"}
       </Button>
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="h-9 w-44"
-        placeholder="Search name"
+      <UpdateSavedSearchDialog
+        open={confirmOpen}
+        pending={pending}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => void persist(true)}
       />
-      <Button type="button" size="sm" disabled={pending} onClick={save}>
-        {pending ? "Saving…" : "Save"}
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        onClick={() => setOpen(false)}
-      >
-        Cancel
-      </Button>
-    </div>
+    </>
   );
 }

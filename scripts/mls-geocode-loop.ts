@@ -45,12 +45,18 @@ function runGeocode(limit: number): Promise<{
         reject(new Error(`mls:geocode exited ${code}`));
         return;
       }
-      const match = out.match(/\{[\s\S]*"remainingActive"[\s\S]*\}/);
-      if (!match) {
+      // Prefer the batch summary object (dotenv tips also print `{ … }` blobs).
+      const matches = [
+        ...out.matchAll(
+          /\{\s*"ok"\s*:\s*\d+[\s\S]*?"remainingActive"\s*:\s*\d+[\s\S]*?\}/g,
+        ),
+      ];
+      const raw = matches[matches.length - 1]?.[0];
+      if (!raw) {
         reject(new Error("Could not parse geocode summary JSON"));
         return;
       }
-      const summary = JSON.parse(match[0]) as {
+      const summary = JSON.parse(raw) as {
         ok: number;
         fail: number;
         remainingActive: number;

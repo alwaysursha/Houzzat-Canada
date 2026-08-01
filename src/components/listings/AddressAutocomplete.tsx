@@ -12,7 +12,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Bath, Bed, MapPin, Search } from "lucide-react";
+import { ArrowLeft, Bath, Bed, MapPin, Search, X } from "lucide-react";
 import {
   formatListPrice,
   listingStatusLabel,
@@ -350,42 +350,31 @@ export function AddressAutocomplete({
 
     const handle = window.setTimeout(async () => {
       setLoading(true);
+      // Open immediately so typing always shows the panel (even while loading).
+      setOpen(true);
       try {
         const listingParams = new URLSearchParams({ q: trimmed });
         if (transactionType) {
           listingParams.set("transactionType", transactionType);
         }
 
-        const fetchPlaces = trimmed.length >= 3;
-        const [listingRes, placesRes] = await Promise.all([
-          fetch(`/api/listings/autocomplete?${listingParams}`, {
-            signal: ac.signal,
-          }),
-          fetchPlaces
-            ? fetch(
-                `/api/places/autocomplete?${new URLSearchParams({
-                  q: trimmed,
-                  sessionToken,
-                })}`,
-                { signal: ac.signal },
-              ).catch(() => null)
-            : Promise.resolve(null),
-        ]);
-
+        // Listings first (fast). Google Places is secondary and must not block
+        // the dropdown from showing inventory matches.
+        const listingRes = await fetch(
+          `/api/listings/autocomplete?${listingParams}`,
+          { signal: ac.signal },
+        );
         if (!isCurrent()) return;
 
         const listingData = (await listingRes.json()) as {
           suggestions: AutocompleteSuggestion[];
         };
-        let places: AutocompleteSuggestion[] = [];
-        if (placesRes?.ok) {
-          const placesData = (await placesRes.json()) as {
-            suggestions: AutocompleteSuggestion[];
-          };
-          places = (placesData.suggestions ?? []).map((p) =>
-            placeToAddressSuggestion(p),
-          );
-        }
+        const inventory = listingData.suggestions ?? [];
+        const invCount = inventoryHitCount(inventory);
+        const listingRows =
+          invCount === 0
+            ? [listingsEmptySuggestion(), ...inventory]
+            : inventory;
 
         if (
           !isCurrent() ||
@@ -395,17 +384,39 @@ export function AddressAutocomplete({
           return;
         }
 
-        const inventory = listingData.suggestions ?? [];
-        const invCount = inventoryHitCount(inventory);
+        setSuggestions(listingRows);
+        setActiveIndex(-1);
+
+        const fetchPlaces = trimmed.length >= 3;
+        if (!fetchPlaces) return;
+
+        const placesRes = await fetch(
+          `/api/places/autocomplete?${new URLSearchParams({
+            q: trimmed,
+            sessionToken,
+          })}`,
+          { signal: ac.signal },
+        ).catch(() => null);
+
+        if (!isCurrent() || !placesRes?.ok) return;
+
+        const placesData = (await placesRes.json()) as {
+          suggestions: AutocompleteSuggestion[];
+        };
+        let places = (placesData.suggestions ?? []).map((p) =>
+          placeToAddressSuggestion(p),
+        );
+
         const addressLike = looksLikeStreetAddress(trimmed);
         const promoteAddress = addressLike || invCount === 0;
-
         let around: AutocompleteSuggestion[] = [];
         let nearHref: string | null = null;
         let nearLabel: string | null = null;
 
         const topPlace = places[0];
-        if (topPlace?.placeId && (promoteAddress || addressLike)) {
+        // Only resolve place details when inventory is empty or query is a
+        // clear street address — skips an extra round-trip on most keystrokes.
+        if (topPlace?.placeId && promoteAddress) {
           try {
             const detailRes = await fetch(
               `/api/places/details?${new URLSearchParams({
@@ -448,10 +459,6 @@ export function AddressAutocomplete({
 
         setResolvedNearHref(nearHref);
         setResolvedNearLabel(nearLabel);
-        const listingRows =
-          invCount === 0
-            ? [listingsEmptySuggestion(), ...inventory]
-            : inventory;
         setSuggestions([...listingRows, ...places, ...around]);
         setOpen(true);
         setActiveIndex(-1);
@@ -461,7 +468,7 @@ export function AddressAutocomplete({
       } finally {
         if (isCurrent()) setLoading(false);
       }
-    }, 220);
+    }, 180);
 
     return () => {
       window.clearTimeout(handle);
@@ -830,6 +837,22 @@ export function AddressAutocomplete({
     onQueryChange?.(value);
   }
 
+  function clearQuery() {
+    selectedQueryRef.current = null;
+    lastEmittedQueryRef.current = "";
+    setResolvedNearHref(null);
+    setResolvedNearLabel(null);
+    setQuery("");
+    setSuggestions([]);
+    setActiveIndex(-1);
+    setOpen(false);
+    onQueryChange?.("");
+    if (isMobile && mobileSheetOpen) {
+      sheetInputRef.current?.focus();
+      void loadEmptyState();
+    }
+  }
+
   function openFromFocus() {
     if (
       selectedQueryRef.current !== null &&
@@ -1091,11 +1114,23 @@ export function AddressAutocomplete({
                         ? `${listboxId}-opt-${activeIndex}`
                         : undefined
                     }
-                    className="h-11 rounded-md border-white/80 bg-white/85 pl-10 text-[15px] shadow-sm"
+                    className={cn(
+                      "h-11 rounded-md border-white/80 bg-white/85 pl-10 text-[15px] shadow-sm",
+                      query.trim() ? "pr-10" : undefined,
+                    )}
                     autoComplete="street-address"
                     enterKeyHint="search"
                   />
-                  {loading ? (
+                  {query.trim() ? (
+                    <button
+                      type="button"
+                      onClick={clearQuery}
+                      className="absolute right-2 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-ink/45 transition hover:bg-ink/5 hover:text-ink/70"
+                      aria-label="Clear search"
+                    >
+                      <X className="size-4" aria-hidden />
+                    </button>
+                  ) : loading ? (
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink/40">
                       …
                     </span>
@@ -1137,7 +1172,11 @@ export function AddressAutocomplete({
         aria-activedescendant={
           activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined
         }
-        className={cn("rounded-md pl-10 text-[15px]", inputClassName)}
+        className={cn(
+          "rounded-md pl-10 text-[15px]",
+          query.trim() ? "pr-10" : undefined,
+          inputClassName,
+        )}
         autoComplete="street-address"
         readOnly={isMobile}
         inputMode={isMobile ? "none" : undefined}
@@ -1145,7 +1184,20 @@ export function AddressAutocomplete({
           if (isMobile) openFromFocus();
         }}
       />
-      {loading && !mobileSheetOpen ? (
+      {query.trim() && !mobileSheetOpen ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            clearQuery();
+          }}
+          className="absolute right-2 top-1/2 z-[1] inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-ink/45 transition hover:bg-ink/5 hover:text-ink/70"
+          aria-label="Clear search"
+        >
+          <X className="size-4" aria-hidden />
+        </button>
+      ) : loading && !mobileSheetOpen ? (
         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink/40">
           …
         </span>

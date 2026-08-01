@@ -45,7 +45,11 @@ export default async function SavedSearchesPage() {
 
   const searches = await prisma.savedSearch.findMany({
     where: { userId: user.id },
-    orderBy: [{ isHomepageActive: "desc" }, { createdAt: "desc" }],
+    orderBy: [
+      { isPrimary: "desc" },
+      { isHomepageActive: "desc" },
+      { createdAt: "desc" },
+    ],
   });
 
   return (
@@ -53,8 +57,9 @@ export default async function SavedSearchesPage() {
       <div>
         <h1 className="font-display text-4xl text-ink">Saved searches</h1>
         <p className="mt-2 text-sm text-ink/60">
-          Apply a search to your homepage to personalize listing rails. Email
-          alerts are queued for Phase 3 delivery.
+          Your latest applied search is primary for property alerts. Earlier
+          searches are kept as secondary. You can also apply one to your
+          homepage rails.
         </p>
       </div>
 
@@ -72,8 +77,17 @@ export default async function SavedSearchesPage() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-semibold text-ink">{search.name}</p>
-                  {search.isHomepageActive ? (
+                  {search.isPrimary ? (
                     <span className="rounded-md bg-canopy/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-canopy-deep">
+                      Primary
+                    </span>
+                  ) : (
+                    <span className="rounded-md bg-mist px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-ink/45">
+                      Secondary
+                    </span>
+                  )}
+                  {search.isHomepageActive ? (
+                    <span className="rounded-md bg-signal/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-signal">
                       On homepage
                     </span>
                   ) : null}

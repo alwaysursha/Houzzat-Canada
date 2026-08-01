@@ -101,15 +101,17 @@ export async function GET(request: Request) {
     segment: "RESIDENTIAL" as const,
     transactionType: searchTransactionType,
     sort: "newest" as const,
-    limit: 100,
   };
+
+  // Tight local box so older-but-close homes aren't dropped by "100 newest".
+  const nearBox = boundingBox(lat, lng, Math.min(radiusKm, 5));
 
   // Region-city search catches homes whose MLS city is right but map pins are wrong
   // (centroids / GTA defaults). Bbox search catches well-pinned homes nearby.
-  const [byRegion, byBox] = await Promise.all([
+  const [byRegion, byBox, byNear] = await Promise.all([
     provider.search(
       applyPersonalizationToSearchParams(
-        { ...base, cities: region.cities },
+        { ...base, cities: region.cities, limit: 120 },
         personalization,
       ),
     ),
@@ -121,6 +123,20 @@ export async function GET(request: Request) {
           south: box.south,
           east: box.east,
           north: box.north,
+          limit: 250,
+        },
+        personalization,
+      ),
+    ),
+    provider.search(
+      applyPersonalizationToSearchParams(
+        {
+          ...base,
+          west: nearBox.west,
+          south: nearBox.south,
+          east: nearBox.east,
+          north: nearBox.north,
+          limit: 200,
         },
         personalization,
       ),
@@ -128,7 +144,7 @@ export async function GET(request: Request) {
   ]);
 
   const byMls = new Map<string, ListingCard>();
-  for (const item of [...byRegion.items, ...byBox.items]) {
+  for (const item of [...byNear.items, ...byBox.items, ...byRegion.items]) {
     if (excludeMls && item.mlsNumber === excludeMls) continue;
     byMls.set(item.mlsNumber, item);
   }

@@ -240,7 +240,7 @@ export function HomeHeroSearch({
         <div
           data-search-bar
           className={cn(
-            "flex flex-col gap-2 rounded-md p-2.5 sm:flex-row sm:items-stretch",
+            "flex flex-col gap-1.5 rounded-md p-1.5 sm:flex-row sm:items-stretch sm:gap-2 sm:p-2.5",
             onPage
               ? "border border-line bg-surface shadow-sm"
               : "bg-white/90 shadow-lg backdrop-blur-md",
@@ -264,7 +264,7 @@ export function HomeHeroSearch({
                     ? "Search rentals by address, neighbourhood, or MLS®"
                     : "Search active or sold listings by MLS® #, address or neighbourhood"
               }
-              inputClassName="h-11 rounded-md border-0 bg-transparent text-[15px] shadow-none focus-visible:ring-0"
+              inputClassName="h-9 rounded-md border-0 bg-transparent text-sm shadow-none focus-visible:ring-0 sm:h-11 sm:text-[15px]"
               onQueryChange={(value) => {
                 setQuery(value);
                 setSelected(null);
@@ -286,8 +286,8 @@ export function HomeHeroSearch({
             type="button"
             className={
               isInventory
-                ? "hidden h-11 w-full shrink-0 rounded-md sm:inline-flex sm:w-[8.75rem]"
-                : "h-11 w-full shrink-0 rounded-md sm:w-[8.75rem]"
+                ? "hidden h-9 w-full shrink-0 rounded-md sm:inline-flex sm:h-11 sm:w-[8.75rem]"
+                : "h-9 w-full shrink-0 rounded-md sm:h-11 sm:w-[8.75rem]"
             }
             disabled={pending}
             onClick={() => {

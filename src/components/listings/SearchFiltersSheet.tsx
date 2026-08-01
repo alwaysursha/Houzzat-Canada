@@ -4,6 +4,8 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { PropertyType } from "@prisma/client";
 import { ArrowLeft, Check, Loader2, RotateCcw } from "lucide-react";
+import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,7 +13,14 @@ import {
   type SearchFilters,
   type SearchStatusOption,
 } from "@/components/listings/SearchFilterChips";
+import { UpdateSavedSearchDialog } from "@/components/listings/UpdateSavedSearchDialog";
 import { propertyTypeLabel } from "@/lib/listings/constants";
+import { savePrimarySearch } from "@/lib/listings/save-primary-search";
+import {
+  savedSearchDisplayName,
+  searchFiltersToSavedQuery,
+} from "@/lib/listings/saved-search-query";
+import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
 const RESIDENTIAL_TYPES: PropertyType[] = [
@@ -105,6 +114,7 @@ export function SearchFiltersSheet({
   resultCount,
   pending = false,
   resultNoun = "homes",
+  signedIn = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -113,10 +123,15 @@ export function SearchFiltersSheet({
   resultCount: number;
   pending?: boolean;
   resultNoun?: string;
+  signedIn?: boolean;
 }) {
+  const { openAuth } = useAuthModal();
+  const { toast } = useSiteAlert();
   const titleId = useId();
   const [mounted, setMounted] = useState(false);
   const [entered, setEntered] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const isLease = filters.transactionType === "LEASE";
   const pricePresets = isLease ? LEASE_PRICE_PRESETS : SALE_PRICE_PRESETS;
   const typeOptions =
@@ -155,6 +170,48 @@ export function SearchFiltersSheet({
       document.removeEventListener("keydown", onKey);
     };
   }, [open, onClose]);
+
+  async function persist(confirmReplace: boolean) {
+    if (!signedIn) {
+      openAuth({ mode: "sign-in", callbackUrl: "/search" });
+      toast({
+        message: "Sign in to save this search to your buyer profile.",
+        tone: "info",
+      });
+      onClose();
+      return;
+    }
+    setSaving(true);
+    const outcome = await savePrimarySearch({
+      name: savedSearchDisplayName(filters),
+      query: searchFiltersToSavedQuery(filters),
+      confirmReplace,
+    });
+    setSaving(false);
+    if (outcome.status === "auth") {
+      openAuth({ mode: "sign-in", callbackUrl: "/search" });
+      return;
+    }
+    if (outcome.status === "needs_confirm") {
+      setConfirmOpen(true);
+      return;
+    }
+    if (outcome.status === "error") {
+      toast({
+        message: outcome.message || SITE_MESSAGES.genericErrorToast,
+        tone: "error",
+      });
+      return;
+    }
+    toast({
+      message: confirmReplace
+        ? "Primary search updated. Previous search kept as secondary."
+        : "Search saved to your buyer profile.",
+      tone: "success",
+    });
+    setConfirmOpen(false);
+    onClose();
+  }
 
   if (!mounted || !open) return null;
 
@@ -355,20 +412,6 @@ export function SearchFiltersSheet({
             ) : null}
           </Section>
 
-          <Section title="Sort">
-            <ChipRow
-              value={filters.sort}
-              options={[
-                { value: "newest", label: "Newest" },
-                { value: "price_asc", label: "Price: low to high" },
-                { value: "price_desc", label: "Price: high to low" },
-              ]}
-              onChange={(v) =>
-                onChange({ ...filters, sort: v as SearchFilters["sort"] })
-              }
-            />
-          </Section>
-
           <Section title="Segment">
             <ChipRow
               value={filters.segment}
@@ -418,15 +461,20 @@ export function SearchFiltersSheet({
         </div>
 
         <div className="shrink-0 border-t border-line bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <Button type="button" className="h-12 w-full gap-2" onClick={onClose}>
-            {pending ? (
+          <Button
+            type="button"
+            className="h-12 w-full gap-2"
+            disabled={saving}
+            onClick={() => void persist(false)}
+          >
+            {pending || saving ? (
               <>
                 <Loader2 className="size-4 animate-spin" aria-hidden />
-                Updating…
+                {saving ? "Saving…" : "Updating…"}
               </>
             ) : (
               <>
-                Show{" "}
+                Apply ·{" "}
                 <span className="tabular-nums">
                   {resultCount.toLocaleString("en-CA")}
                 </span>{" "}
@@ -434,8 +482,17 @@ export function SearchFiltersSheet({
               </>
             )}
           </Button>
+          <p className="mt-2 text-center text-[11px] text-ink/45">
+            Saves to your buyer profile for property alerts
+          </p>
         </div>
       </div>
+      <UpdateSavedSearchDialog
+        open={confirmOpen}
+        pending={saving}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => void persist(true)}
+      />
     </div>,
     document.body,
   );

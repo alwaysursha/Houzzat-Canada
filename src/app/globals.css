@@ -114,6 +114,30 @@ body {
   }
 }
 
+@keyframes houzzat-coach-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 9999px rgb(15 23 20 / 0.45),
+      0 0 0 0 rgb(15 107 76 / 0);
+  }
+  50% {
+    box-shadow:
+      0 0 0 9999px rgb(15 23 20 / 0.45),
+      0 0 0 8px rgb(15 107 76 / 0.28);
+  }
+}
+
+.houzzat-coach-pulse {
+  animation: houzzat-coach-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .houzzat-coach-pulse {
+    animation: none !important;
+  }
+}
+
 .houzzat-saved-pulse {
   animation: houzzat-saved-pulse 0.65s ease;
 }

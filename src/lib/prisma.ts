@@ -13,8 +13,12 @@ type CloudflareBindings = {
   HYPERDRIVE?: HyperdriveBinding;
 };
 
+/** Bump when Prisma schema fields change so local HMR drops a stale singleton. */
+const PRISMA_CLIENT_GENERATION = "saved-search-isPrimary-v1";
+
 const globalForPrisma = globalThis as typeof globalThis & {
   __houzzatPrisma?: PrismaClient;
+  __houzzatPrismaGeneration?: string;
 };
 
 function shouldUseNeonAdapter(connectionString: string) {
@@ -85,12 +89,17 @@ function getPrismaCompat() {
     return getPrisma();
   }
 
-  if (!globalForPrisma.__houzzatPrisma) {
+  if (
+    !globalForPrisma.__houzzatPrisma ||
+    globalForPrisma.__houzzatPrismaGeneration !== PRISMA_CLIENT_GENERATION
+  ) {
     const connectionString = readDatabaseUrl();
     if (!connectionString) {
       throw new Error("DATABASE_URL is not set");
     }
+    void globalForPrisma.__houzzatPrisma?.$disconnect().catch(() => undefined);
     globalForPrisma.__houzzatPrisma = createPrismaClient(connectionString);
+    globalForPrisma.__houzzatPrismaGeneration = PRISMA_CLIENT_GENERATION;
   }
   return globalForPrisma.__houzzatPrisma;
 }

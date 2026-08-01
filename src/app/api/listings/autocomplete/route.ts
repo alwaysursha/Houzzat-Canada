@@ -39,20 +39,16 @@ export async function GET(request: Request) {
     empty,
   });
 
-  // Neon miss on MLS / exact address / street → live PropTx pull + upsert
+  // Neon miss: kick off PropTx pull in the background so typing stays snappy.
+  // Blocking on-demand lookup made the dropdown lag / never open while typing.
   const listingHits = suggestions.filter(
     (s) => s.type === "listing" || s.type === "mls",
   );
   if (!empty && q.trim() && listingHits.length === 0) {
-    const pulled = await lookupAndUpsertOnDemand(q, {
-      clientIp: clientIpFromRequest(request),
+    const clientIp = clientIpFromRequest(request);
+    void lookupAndUpsertOnDemand(q, { clientIp }).catch(() => {
+      // Best-effort warm of Neon — autocomplete already returned.
     });
-    if (pulled.mlsNumbers.length > 0) {
-      suggestions = await provider.autocomplete(q, {
-        transactionType,
-        empty,
-      });
-    }
   }
 
   if (!isClient) {

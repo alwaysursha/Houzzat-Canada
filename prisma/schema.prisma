@@ -377,6 +377,8 @@ model SavedSearch {
   smsAlerts         Boolean  @default(false)
   /** When true, homepage rails are filtered to this search (one per user). */
   isHomepageActive  Boolean  @default(false)
+  /** Latest buyer-profile search used for alerts (one per user). Others are secondary. */
+  isPrimary         Boolean  @default(false)
   lastAlertedAt     DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -385,6 +387,7 @@ model SavedSearch {
 
   @@index([userId, createdAt])
   @@index([userId, isHomepageActive])
+  @@index([userId, isPrimary])
 }
 
 model ListingView {

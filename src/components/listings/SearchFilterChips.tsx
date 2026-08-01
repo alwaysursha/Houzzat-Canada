@@ -41,7 +41,6 @@ export function countActiveSearchFilters(filters: SearchFilters): number {
   if (filters.city) n += 1;
   if (filters.community) n += 1;
   if (filters.segment !== "RESIDENTIAL") n += 1;
-  if (filters.sort !== "newest") n += 1;
   if (
     !(filters.statuses.length === 1 && filters.statuses[0] === "ACTIVE")
   ) {
@@ -281,13 +280,6 @@ export function SearchFilterChips({
             "Status")
           : `${filters.statuses.length} statuses`;
 
-  const sortLabel =
-    filters.sort === "newest"
-      ? "Newest"
-      : filters.sort === "price_desc"
-        ? "Price ↓"
-        : "Price ↑";
-
   return (
     <div className="flex flex-wrap items-center gap-2">
       {filters.city || filters.community ? (
@@ -468,20 +460,6 @@ export function SearchFilterChips({
             Open houses only
           </label>
         ) : null}
-      </FilterPopover>
-
-      <FilterPopover label={sortLabel} active={filters.sort !== "newest"}>
-        <ChipRow
-          value={filters.sort}
-          options={[
-            { value: "newest", label: "Newest" },
-            { value: "price_asc", label: "Price: low to high" },
-            { value: "price_desc", label: "Price: high to low" },
-          ]}
-          onChange={(v) =>
-            onChange({ ...filters, sort: v as SearchFilters["sort"] })
-          }
-        />
       </FilterPopover>
 
       <FilterPopover label="More" wide>

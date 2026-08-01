@@ -106,8 +106,6 @@ export function SearchMap({
   focus,
   polygon,
   onPolygonChange,
-  areaDirty,
-  onSearchThisArea,
   status = ["ACTIVE"],
   onStatusToggle,
   isLease = false,
@@ -126,8 +124,6 @@ export function SearchMap({
   focus?: { lat: number; lng: number; zoom?: number } | null;
   polygon: LngLat[] | null;
   onPolygonChange: (ring: LngLat[] | null) => void;
-  areaDirty: boolean;
-  onSearchThisArea: () => void;
   status?: MapStatus[];
   onStatusToggle?: (status: MapStatus) => void;
   isLease?: boolean;
@@ -327,7 +323,7 @@ export function SearchMap({
       map.resize();
     });
     return () => window.cancelAnimationFrame(id);
-  }, [className, areaDirty, drawing, polygon]);
+  }, [className, drawing, polygon]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -562,18 +558,6 @@ export function SearchMap({
                 {activeFilterCount}
               </span>
             ) : null}
-          </button>
-        </div>
-      ) : null}
-
-      {areaDirty && !drawing ? (
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">
-          <button
-            type="button"
-            onClick={onSearchThisArea}
-            className="pointer-events-auto rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-ink/90"
-          >
-            Search this area
           </button>
         </div>
       ) : null}

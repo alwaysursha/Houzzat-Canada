@@ -140,7 +140,8 @@ export class DbListingProvider implements ListingProvider {
   }
 
   async search(params: ListingSearchParams): Promise<ListingSearchResult> {
-    const limit = Math.min(params.limit ?? 40, 100);
+    // Map search needs a denser pin set; list pages stay lighter.
+    const limit = Math.min(params.limit ?? 40, 500);
 
     const where: Prisma.ListingWhereInput = {
       AND: [],
@@ -338,13 +339,20 @@ export class DbListingProvider implements ListingProvider {
     if (q.length < 1) return [];
 
     const looksLikeMls = /^[A-Za-z]?\d[\w-]{2,}$/.test(q) || /^[A-Za-z]\d/i.test(q);
+    const addressLike = /^\d+\s+\S+/.test(q) || /\d/.test(q);
 
     const candidates = await prisma.listing.findMany({
       where: {
         AND: [publishedWhere, listingQueryCandidateWhere(q)],
       },
-      take: 80,
-      orderBy: looksLikeMls ? { mlsNumber: "asc" } : { listPrice: "asc" },
+      // Address queries: larger pool + newest first so progressive typing isn't
+      // drowned by cheap unrelated matches ordered by listPrice.
+      take: addressLike || !looksLikeMls ? 120 : 80,
+      orderBy: looksLikeMls
+        ? { mlsNumber: "asc" }
+        : addressLike
+          ? { updatedAt: "desc" }
+          : { listedAt: "desc" },
       select: {
         mlsNumber: true,
         addressLine: true,

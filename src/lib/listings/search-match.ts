@@ -28,6 +28,9 @@ const TOKEN_ALIASES: Record<string, string[]> = {
   parkway: ["pkwy", "parkway"],
   cir: ["cir", "circle"],
   circle: ["cir", "circle"],
+  trail: ["trail", "tr"],
+  tr: ["tr", "trail"],
+  way: ["way"],
   e: ["e", "east"],
   east: ["e", "east"],
   w: ["w", "west"],
@@ -51,17 +54,37 @@ export function tokenVariants(token: string): string[] {
   const t = token.toLowerCase();
   const aliases = TOKEN_ALIASES[t];
   const out = new Set<string>(aliases ?? [t]);
-  // Drop last character for common end typos (webr → web, kitchene → kitchen…).
-  if (t.length >= 4) {
+  // Mild typo tolerance only — never emit ultra-short prefixes like "riv"
+  // from "rivertrail" (those flood autocomplete with unrelated streets).
+  if (t.length >= 6) {
     out.add(t.slice(0, -1));
   }
-  if (t.length >= 5) {
-    out.add(t.slice(0, 4));
-  }
-  if (t.length >= 4) {
-    out.add(t.slice(0, 3));
+  if (t.length >= 8) {
+    out.add(t.slice(0, Math.max(5, t.length - 2)));
   }
   return [...out];
+}
+
+/** True when `hay` contains `needle` as a whole word/token. */
+function includesWholeToken(hay: string, needle: string): boolean {
+  if (!needle) return false;
+  if (hay === needle) return true;
+  return new RegExp(
+    `(?:^|[^\\p{L}\\p{N}])${escapeRegExp(needle)}(?:[^\\p{L}\\p{N}]|$)`,
+    "iu",
+  ).test(hay);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Street # match: "153" matches "153 River…" but not "1539 Bayshire". */
+function streetNumberMatches(addressLine: string, numberToken: string): boolean {
+  const addr = addressLine.toLowerCase();
+  const n = numberToken.toLowerCase();
+  if (addr.startsWith(`${n} `) || addr.startsWith(`${n},`)) return true;
+  return includesWholeToken(addr, n);
 }
 
 function fieldContainsAny(
@@ -83,8 +106,8 @@ function fieldContainsAny(
 }
 
 /**
- * Broad Prisma filter to pull candidates. Uses street # + strongest token
- * (prefix-tolerant) so typos still return a pool we can score in memory.
+ * Broad Prisma filter to pull candidates. Prefers the full strong token so
+ * progressive typing ("Rivertrail") isn't drowned out by "riv…" noise.
  */
 export function listingQueryCandidateWhere(
   q: string,
@@ -94,6 +117,29 @@ export function listingQueryCandidateWhere(
 
   if (tokens.length === 1) {
     const t = tokens[0]!;
+    // Single long street token: require the typed prefix itself (not 3-letter
+    // stubs) so "Rivertrail" can surface before random "Drive" listings.
+    if (t.length >= 4 && !/^\d+[a-z]?$/i.test(t)) {
+      return {
+        OR: [
+          { addressLine: { contains: t, mode: "insensitive" } },
+          { city: { contains: t, mode: "insensitive" } },
+          { community: { contains: t, mode: "insensitive" } },
+          { mlsNumber: { contains: t, mode: "insensitive" } },
+          // One-char typo only for longer tokens.
+          ...(t.length >= 6
+            ? [
+                {
+                  addressLine: {
+                    contains: t.slice(0, -1),
+                    mode: "insensitive" as const,
+                  },
+                },
+              ]
+            : []),
+        ],
+      };
+    }
     return { OR: fieldContainsAny(tokenVariants(t)) };
   }
 
@@ -106,20 +152,32 @@ export function listingQueryCandidateWhere(
   const and: Prisma.ListingWhereInput[] = [];
 
   if (numberToken) {
+    // Prefer "153 " so we don't pull every 1539 / 2153 address into the pool.
     and.push({
-      addressLine: { contains: numberToken, mode: "insensitive" },
+      OR: [
+        { addressLine: { startsWith: `${numberToken} `, mode: "insensitive" } },
+        { addressLine: { startsWith: `${numberToken},`, mode: "insensitive" } },
+        // Fall back to contains for unit-prefixed lines, scored later.
+        { addressLine: { contains: `${numberToken} `, mode: "insensitive" } },
+      ],
     });
   }
 
   if (strong) {
-    and.push({ OR: fieldContainsAny(tokenVariants(strong)) });
+    // Prefer the typed token itself (incl. 2–3 letter progressive prefixes).
+    // Only expand aliases for known street types / directions.
+    const variants =
+      strong.length >= 2 && !TOKEN_ALIASES[strong]
+        ? [strong, ...(strong.length >= 6 ? [strong.slice(0, -1)] : [])]
+        : tokenVariants(strong);
+    and.push({ OR: fieldContainsAny(variants) });
   }
 
-  // Also require remaining short tokens loosely when we have 3+ parts
-  // (e.g. direction "e") so the pool stays relevant.
+  // Direction tokens only (e/w/n/s) — keep pool tight.
   for (const token of alphaTokens) {
     if (token === strong) continue;
     if (token.length > 2) continue;
+    if (!TOKEN_ALIASES[token]) continue;
     and.push({ OR: fieldContainsAny(tokenVariants(token)) });
   }
 
@@ -200,12 +258,26 @@ export function scoreListingAgainstQuery(
 
   const words = haystackWords(listing);
   const hay = words.join(" ");
+  const addressLower = listing.addressLine.toLowerCase();
   let score = 0;
 
   for (const token of tokens) {
+    const isNumber = /^\d+[a-z]?$/i.test(token);
+
+    if (isNumber) {
+      if (streetNumberMatches(listing.addressLine, token)) {
+        // Exact leading civic number is the strongest signal.
+        score += addressLower.startsWith(`${token.toLowerCase()} `) ? 40 : 24;
+        continue;
+      }
+      // "153" inside "1539" is not a match.
+      return -1;
+    }
+
     const variants = tokenVariants(token);
-    if (variants.some((v) => hay.includes(v))) {
-      score += token.length <= 2 ? 6 : 12;
+    // Prefer whole-word / real prefix matches over tiny substring noise.
+    if (variants.some((v) => v.length >= 3 && includesWholeToken(hay, v))) {
+      score += token.length <= 2 ? 6 : 18;
       continue;
     }
 
@@ -213,32 +285,54 @@ export function scoreListingAgainstQuery(
     let best = Infinity;
     for (const w of words) {
       for (const v of variants) {
-        if (w.startsWith(v) || v.startsWith(w)) {
-          // Reject "eden"↔"e" / "trail"↔"t" style prefix hits on tiny tokens.
-          const minL = Math.min(w.length, v.length);
-          const maxL = Math.max(w.length, v.length);
-          if (minL < 3 && minL !== maxL) {
-            continue;
-          }
+        // Progressive street typing from 2+ letters: "ri" → "rivertrail".
+        // Stored word must start with the typed token (not reverse stub matches).
+        if (w.startsWith(v) && v.length >= 2 && w.length >= v.length) {
           matched = true;
-          score += 8;
+          score += w.startsWith(token) ? 16 : 12;
           break;
         }
-        best = Math.min(best, levenshtein(v, w));
+        if (v.length >= 4 && w.length >= 4 && v.startsWith(w)) {
+          matched = true;
+          score += 10;
+          break;
+        }
+        if (v.length >= 4 && w.length >= 4) {
+          best = Math.min(best, levenshtein(v, w));
+        }
       }
       if (matched) break;
     }
 
     if (!matched) {
       const maxDist =
-        token.length >= 6 ? 2 : token.length >= 4 ? 1 : 0;
+        token.length >= 7 ? 2 : token.length >= 5 ? 1 : 0;
       if (best <= maxDist && maxDist > 0) {
         matched = true;
-        score += 7 - best;
+        score += 8 - best;
+      }
+    }
+
+    // Progressive typing: "ri" / "riv" / "river" → "rivertrail".
+    if (!matched && token.length >= 2) {
+      const prefixHit = words.some(
+        (w) => w.startsWith(token) && w.length > token.length,
+      );
+      if (prefixHit) {
+        matched = true;
+        score += 14;
       }
     }
 
     if (!matched) return -1;
+  }
+
+  // Bonus when the typed phrase is a prefix of the address line.
+  const typedStreet = tokens.join(" ");
+  if (addressLower.startsWith(typedStreet)) {
+    score += 20;
+  } else if (addressLower.includes(typedStreet)) {
+    score += 10;
   }
 
   return score;

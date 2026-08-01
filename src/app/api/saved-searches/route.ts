@@ -12,7 +12,11 @@ export async function GET() {
 
   const items = await prisma.savedSearch.findMany({
     where: { userId: user.id },
-    orderBy: [{ isHomepageActive: "desc" }, { createdAt: "desc" }],
+    orderBy: [
+      { isPrimary: "desc" },
+      { isHomepageActive: "desc" },
+      { createdAt: "desc" },
+    ],
   });
 
   return NextResponse.json({ items });
@@ -23,6 +27,8 @@ const postSchema = z.object({
   query: z.record(z.string(), z.unknown()),
   emailAlerts: z.boolean().optional(),
   applyToHomepage: z.boolean().optional(),
+  /** Latest buyer-profile search; demotes any previous primary. */
+  asPrimary: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -38,12 +44,19 @@ export async function POST(request: Request) {
   }
 
   const applyToHomepage = parsed.data.applyToHomepage ?? false;
+  const asPrimary = parsed.data.asPrimary ?? false;
 
   const item = await prisma.$transaction(async (tx) => {
     if (applyToHomepage) {
       await tx.savedSearch.updateMany({
         where: { userId: user.id, isHomepageActive: true },
         data: { isHomepageActive: false },
+      });
+    }
+    if (asPrimary) {
+      await tx.savedSearch.updateMany({
+        where: { userId: user.id, isPrimary: true },
+        data: { isPrimary: false },
       });
     }
     return tx.savedSearch.create({
@@ -53,6 +66,7 @@ export async function POST(request: Request) {
         query: parsed.data.query as Prisma.InputJsonValue,
         emailAlerts: parsed.data.emailAlerts ?? true,
         isHomepageActive: applyToHomepage,
+        isPrimary: asPrimary,
       },
     });
   });
@@ -66,6 +80,7 @@ const patchSchema = z.object({
   emailAlerts: z.boolean().optional(),
   smsAlerts: z.boolean().optional(),
   isHomepageActive: z.boolean().optional(),
+  isPrimary: z.boolean().optional(),
   query: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -80,7 +95,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Invalid update." }, { status: 400 });
   }
 
-  const { id, isHomepageActive, query, ...data } = parsed.data;
+  const { id, isHomepageActive, isPrimary, query, ...data } = parsed.data;
 
   const existing = await prisma.savedSearch.findFirst({
     where: { id, userId: user.id },
@@ -97,6 +112,12 @@ export async function PATCH(request: Request) {
         data: { isHomepageActive: false },
       });
     }
+    if (isPrimary === true) {
+      await tx.savedSearch.updateMany({
+        where: { userId: user.id, isPrimary: true },
+        data: { isPrimary: false },
+      });
+    }
 
     return tx.savedSearch.update({
       where: { id },
@@ -107,6 +128,7 @@ export async function PATCH(request: Request) {
           : {}),
         ...(data.smsAlerts !== undefined ? { smsAlerts: data.smsAlerts } : {}),
         ...(isHomepageActive !== undefined ? { isHomepageActive } : {}),
+        ...(isPrimary !== undefined ? { isPrimary } : {}),
         ...(query !== undefined
           ? { query: query as Prisma.InputJsonValue }
           : {}),

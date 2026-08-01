@@ -1,11 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { PropertyType } from "@prisma/client";
 import {
+  ArrowUpDown,
+  ChevronDown,
   Columns2,
   LayoutGrid,
   ListFilter,
@@ -18,13 +27,14 @@ import { SaveSearchButton } from "@/components/account/SaveSearchButton";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import {
-  SearchFilterChips,
   countActiveSearchFilters,
   type SearchFilters,
   type SearchStatusOption,
   type SearchViewMode,
 } from "@/components/listings/SearchFilterChips";
+import { SearchFiltersMenu } from "@/components/listings/SearchFiltersMenu";
 import { SearchFiltersSheet } from "@/components/listings/SearchFiltersSheet";
+import { MapSearchCoachMarks } from "@/components/listings/MapSearchCoachMarks";
 import { SearchMap } from "@/components/listings/SearchMap";
 import { SearchMapListingOverlay } from "@/components/listings/SearchMapListingOverlay";
 import { SearchResultsPane } from "@/components/listings/SearchResultsPane";
@@ -128,10 +138,14 @@ export function SearchExperience() {
     lng: number;
     zoom?: number;
   } | null>(null);
-  const [mapBounds, setMapBounds] = useState<Bounds | null>(null);
   const [appliedBounds, setAppliedBounds] = useState<Bounds | null>(null);
-  const [areaDirty, setAreaDirty] = useState(false);
   const [polygon, setPolygon] = useState<LngLat[] | null>(null);
+  const boundsApplyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const appliedBoundsRef = useRef<Bounds | null>(null);
+  appliedBoundsRef.current = appliedBounds;
+  const viewToggleRef = useRef<HTMLDivElement>(null);
+  const saveSearchRef = useRef<HTMLDivElement>(null);
+  const [mapMoved, setMapMoved] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -231,9 +245,14 @@ export function SearchExperience() {
   useEffect(() => {
     if (!placeFilterActive) return;
     setAppliedBounds(null);
-    setAreaDirty(false);
     setPolygon(null);
   }, [placeFilterActive, filters.city, filters.community, citiesParam, communitiesParam]);
+
+  useEffect(() => {
+    return () => {
+      if (boundsApplyTimer.current) clearTimeout(boundsApplyTimer.current);
+    };
+  }, []);
 
   const searchBarQuery =
     filters.community.trim() ||
@@ -325,14 +344,16 @@ export function SearchExperience() {
       : appliedBounds;
     // City / multi-city / community search must not be AND'd with the map
     // viewport — the first map frame is often the wrong city and returns 0.
-    // Bounds apply for "Search this area", draw-polygon, or no place filter.
+    // Bounds apply for map pan auto-search, draw-polygon, or no place filter.
     if (box && (polygon || !placeFilterActive)) {
       params.set("west", String(box.west));
       params.set("south", String(box.south));
       params.set("east", String(box.east));
       params.set("north", String(box.north));
     }
-    params.set("limit", "60");
+    // Map views need denser pins; card list stays lighter.
+    const densePins = view === "map" || view === "split";
+    params.set("limit", densePins ? "500" : "60");
     return params.toString();
   }, [
     filters,
@@ -342,6 +363,7 @@ export function SearchExperience() {
     polygon,
     qParam,
     placeFilterActive,
+    view,
   ]);
 
   const load = useCallback(async () => {
@@ -441,37 +463,45 @@ export function SearchExperience() {
   }
 
   function onMapBoundsChange(next: Bounds) {
-    setMapBounds(next);
-    if (!appliedBounds) {
-      setAppliedBounds(next);
-      setAreaDirty(false);
+    // Draw-polygon mode owns the search area until cleared.
+    if (polygon) return;
+
+    const prev = appliedBoundsRef.current;
+    if (
+      prev &&
+      Math.abs(next.west - prev.west) < 0.0008 &&
+      Math.abs(next.south - prev.south) < 0.0008 &&
+      Math.abs(next.east - prev.east) < 0.0008 &&
+      Math.abs(next.north - prev.north) < 0.0008
+    ) {
       return;
     }
-    const moved =
-      Math.abs(next.west - appliedBounds.west) > 0.0008 ||
-      Math.abs(next.south - appliedBounds.south) > 0.0008 ||
-      Math.abs(next.east - appliedBounds.east) > 0.0008 ||
-      Math.abs(next.north - appliedBounds.north) > 0.0008;
-    setAreaDirty(moved && !polygon);
-  }
 
-  function onSearchThisArea() {
-    if (!mapBounds) return;
-    setAppliedBounds(mapBounds);
-    setAreaDirty(false);
-    setPolygon(null);
-    // Map-area mode: drop place filters so bounds are the search criteria.
-    if (placeFilterActive) {
-      const next = { ...filters, city: "", community: "" };
-      setFilters(next);
-      syncUrl(next, view, { clearMultiPlace: true });
-    }
+    if (boundsApplyTimer.current) clearTimeout(boundsApplyTimer.current);
+    // Debounce so continuous pan/zoom doesn't hammer the API.
+    boundsApplyTimer.current = setTimeout(() => {
+      if (prev) setMapMoved(true);
+      setAppliedBounds(next);
+      // Viewport owns search after the user moves the map — drop place filters.
+      setFilters((f) => {
+        const hadPlace = Boolean(
+          f.city.trim() ||
+            f.community.trim() ||
+            citiesParam.trim() ||
+            communitiesParam.trim(),
+        );
+        if (!hadPlace) return f;
+        const cleared = { ...f, city: "", community: "" };
+        syncUrl(cleared, view, { clearMultiPlace: true });
+        return cleared;
+      });
+    }, prev ? 400 : 0);
   }
 
   function onPolygonChange(ring: LngLat[] | null) {
     setPolygon(ring);
-    setAreaDirty(false);
     if (ring && ring.length >= 3) {
+      if (boundsApplyTimer.current) clearTimeout(boundsApplyTimer.current);
       setAppliedBounds(polygonBBox(ring));
     }
   }
@@ -491,6 +521,19 @@ export function SearchExperience() {
   const activeFilterCount = countActiveSearchFilters(filters);
   const activeListing = items.find((i) => i.mlsNumber === activeMls) ?? null;
   const detailListing = items.find((i) => i.mlsNumber === detailMls) ?? null;
+  const coachFilterIntentKey = [
+    filters.city,
+    filters.community,
+    filters.minPrice,
+    filters.maxPrice,
+    filters.minBeds,
+    filters.minBaths,
+    filters.propertyTypes.join(","),
+    filters.statuses.join(","),
+    filters.openHouseOnly ? "1" : "0",
+    citiesParam,
+    communitiesParam,
+  ].join("|");
 
   function openListingDetail(mlsNumber: string) {
     setActiveMls(mlsNumber);
@@ -508,6 +551,29 @@ export function SearchExperience() {
       : isLease
         ? "rentals"
         : "homes";
+
+  const filterPreviewExtras = useMemo(
+    () => ({
+      cities: citiesParam || undefined,
+      communities: communitiesParam || undefined,
+      q: qParam || undefined,
+      ...(appliedBounds && !placeFilterActive
+        ? {
+            west: appliedBounds.west,
+            south: appliedBounds.south,
+            east: appliedBounds.east,
+            north: appliedBounds.north,
+          }
+        : {}),
+    }),
+    [
+      citiesParam,
+      communitiesParam,
+      qParam,
+      appliedBounds,
+      placeFilterActive,
+    ],
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -574,7 +640,10 @@ export function SearchExperience() {
                 ) : null}
               </button>
             ) : null}
-            <div className="flex rounded-full border border-line bg-mist p-0.5">
+            <div
+              ref={viewToggleRef}
+              className="flex rounded-full border border-line bg-mist p-0.5"
+            >
               {(
                 [
                   ["map", MapIcon, "Map"],
@@ -611,7 +680,14 @@ export function SearchExperience() {
           )}
         >
           {!isNarrow ? (
-            <SearchFilterChips filters={filters} onChange={updateFilters} />
+            <SearchFiltersMenu
+              filters={filters}
+              onChange={updateFilters}
+              resultCount={total}
+              resultNoun={noun}
+              signedIn={signedIn}
+              previewExtras={filterPreviewExtras}
+            />
           ) : null}
           <div className="flex flex-wrap items-center gap-2 text-xs text-ink/50">
             <span className="inline-flex items-center gap-1.5 font-medium text-ink/65">
@@ -621,32 +697,66 @@ export function SearchExperience() {
               {pending ? "Updating…" : `${total.toLocaleString("en-CA")} ${noun}`}
               {provider === "mock" ? " · demo" : ""}
             </span>
-            <SaveSearchButton
-              signedIn={signedIn}
-              query={{
-                segment:
-                  filters.segment !== "RESIDENTIAL"
-                    ? filters.segment
+            <label className="group relative inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 shadow-sm transition hover:border-canopy/40">
+              <ArrowUpDown
+                className="size-3.5 shrink-0 text-canopy"
+                aria-hidden
+              />
+              <span className="text-xs font-semibold text-ink">
+                {filters.sort === "newest"
+                  ? "Newest"
+                  : filters.sort === "price_desc"
+                    ? "Price ↓"
+                    : "Price ↑"}
+              </span>
+              <ChevronDown
+                className="size-3.5 shrink-0 text-ink/35 group-hover:text-ink/55"
+                aria-hidden
+              />
+              <select
+                aria-label="Sort listings"
+                value={filters.sort}
+                onChange={(e) =>
+                  updateFilters({
+                    ...filters,
+                    sort: e.target.value as SearchFilters["sort"],
+                  })
+                }
+                className="absolute inset-0 cursor-pointer opacity-0"
+              >
+                <option value="newest">Newest</option>
+                <option value="price_asc">Price: low to high</option>
+                <option value="price_desc">Price: high to low</option>
+              </select>
+            </label>
+            <div ref={saveSearchRef} className="inline-flex">
+              <SaveSearchButton
+                signedIn={signedIn}
+                query={{
+                  segment:
+                    filters.segment !== "RESIDENTIAL"
+                      ? filters.segment
+                      : undefined,
+                  transactionType:
+                    filters.transactionType !== "ALL"
+                      ? filters.transactionType
+                      : undefined,
+                  dataSource: filters.dataSource || undefined,
+                  city: filters.city || undefined,
+                  community: filters.community || undefined,
+                  propertyTypes: filters.propertyTypes.length
+                    ? filters.propertyTypes.join(",")
                     : undefined,
-                transactionType:
-                  filters.transactionType !== "ALL"
-                    ? filters.transactionType
-                    : undefined,
-                dataSource: filters.dataSource || undefined,
-                city: filters.city || undefined,
-                community: filters.community || undefined,
-                propertyTypes: filters.propertyTypes.length
-                  ? filters.propertyTypes.join(",")
-                  : undefined,
-                minPrice: filters.minPrice || undefined,
-                maxPrice: filters.maxPrice || undefined,
-                minBeds: filters.minBeds || undefined,
-                minBaths: filters.minBaths || undefined,
-                openHouseOnly: filters.openHouseOnly ? "1" : undefined,
-                status: statusesQueryValue(filters.statuses) ?? undefined,
-                sort: filters.sort !== "newest" ? filters.sort : undefined,
-              }}
-            />
+                  minPrice: filters.minPrice || undefined,
+                  maxPrice: filters.maxPrice || undefined,
+                  minBeds: filters.minBeds || undefined,
+                  minBaths: filters.minBaths || undefined,
+                  openHouseOnly: filters.openHouseOnly ? "1" : undefined,
+                  status: statusesQueryValue(filters.statuses) ?? undefined,
+                  sort: filters.sort !== "newest" ? filters.sort : undefined,
+                }}
+              />
+            </div>
             <WatchAreaButton
               signedIn={signedIn}
               city={filters.city}
@@ -698,8 +808,6 @@ export function SearchExperience() {
               onBoundsChange={onMapBoundsChange}
               polygon={polygon}
               onPolygonChange={onPolygonChange}
-              areaDirty={areaDirty}
-              onSearchThisArea={onSearchThisArea}
               status={filters.statuses}
               isLease={isLease}
               onStatusToggle={(value) => {
@@ -758,6 +866,7 @@ export function SearchExperience() {
           resultCount={total}
           pending={pending}
           resultNoun={noun}
+          signedIn={signedIn}
         />
       ) : null}
 
@@ -767,6 +876,14 @@ export function SearchExperience() {
           onClose={() => setDetailMls(null)}
         />
       ) : null}
+
+      <MapSearchCoachMarks
+        enabled={view === "map"}
+        viewToggleRef={viewToggleRef}
+        saveSearchRef={saveSearchRef}
+        mapMoved={mapMoved}
+        filterIntentKey={coachFilterIntentKey}
+      />
     </div>
   );
 }
