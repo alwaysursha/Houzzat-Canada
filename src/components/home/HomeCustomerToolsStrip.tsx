@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Route, X } from "lucide-react";
+import { MoreHorizontal, X } from "lucide-react";
 import {
   NotesMenuButton,
   SavedHomesMenuButton,
@@ -13,6 +13,7 @@ import { SavedSearchesMenuButton } from "@/components/account/SavedSearchesMenuB
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { PersonalizeHomepageButton } from "@/components/home/PersonalizeHomepageButton";
 import { PersonalizeHomepageModal } from "@/components/home/PersonalizeHomepageModal";
+import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { Input } from "@/components/ui/input";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
 import { parseHomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
@@ -398,7 +399,7 @@ export function HomeCustomerToolsStrip({
                     href="/route-planner"
                     className="inline-flex items-center gap-1.5 rounded-lg border border-canopy/30 bg-surface px-3 py-2 text-xs font-semibold text-canopy-deep transition hover:border-canopy/50 hover:bg-canopy/5"
                   >
-                    <Route className="size-3.5" strokeWidth={2.25} />
+                    <RouteStartIcon className="size-4" />
                     Route Planner
                     {(routePlanner?.count ?? 0) > 0 ? (
                       <span className="rounded-md bg-canopy/15 px-1.5 py-0.5 text-[10px] font-bold text-canopy">

@@ -17,9 +17,9 @@ const dictionaries = {
     admin: "Admin",
     hero_cta_search: "Search homes",
     ask_about_home: "Ask about this home",
-    grounded_qa_title: "Ask the Expert",
+    grounded_qa_title: "Quick question?",
     grounded_qa_hint:
-      "Message a Houzzat agent on WhatsApp — we include this listing’s MLS® and address for you.",
+      "Message the agent directly on WhatsApp — MLS® and address is already included.",
     partners_title: "Referral partners",
     partners_subtitle:
       "Mortgage, legal, and inspection partners Houzzat agents can introduce you to — tracked handoffs, no surprise spam.",

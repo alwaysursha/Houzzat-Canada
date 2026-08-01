@@ -1,25 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ChevronUp } from "lucide-react";
+import {
+  SCROLL_FAB_FADE_TRANSITION,
+  scrollFabFadeClass,
+  useScrollFabVisible,
+} from "@/hooks/use-scroll-fab-visible";
 import { cn } from "@/lib/utils";
-
-const SHOW_AFTER_PX = 360;
 
 export function ScrollToTopButton() {
   const pathname = usePathname();
-  const [visible, setVisible] = useState(false);
+  const visible = useScrollFabVisible();
   const aboveListingBar = pathname.startsWith("/listing/");
-
-  useEffect(() => {
-    function onScroll() {
-      setVisible(window.scrollY > SHOW_AFTER_PX);
-    }
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   function scrollToTop() {
     const reduceMotion = window.matchMedia(
@@ -38,13 +31,12 @@ export function ScrollToTopButton() {
       aria-label="Scroll to top"
       tabIndex={visible ? 0 : -1}
       className={cn(
-        "fixed right-4 z-40 flex size-10 items-center justify-center rounded-md border border-canopy/20 bg-canopy text-white shadow-md transition-[opacity,transform] duration-200 ease-out hover:bg-canopy-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canopy/40 focus-visible:ring-offset-2 focus-visible:ring-offset-mist sm:right-6",
+        "fixed right-4 z-40 flex size-10 items-center justify-center rounded-md border border-canopy/20 bg-canopy text-white shadow-md hover:bg-canopy-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canopy/40 focus-visible:ring-offset-2 focus-visible:ring-offset-mist sm:right-6",
+        SCROLL_FAB_FADE_TRANSITION,
         aboveListingBar
           ? "bottom-[4.75rem] md:bottom-6"
           : "bottom-5 sm:bottom-6",
-        visible
-          ? "pointer-events-auto translate-y-0 opacity-100"
-          : "pointer-events-none translate-y-2 opacity-0",
+        scrollFabFadeClass(visible),
       )}
     >
       <ChevronUp className="size-5" strokeWidth={2.25} aria-hidden />

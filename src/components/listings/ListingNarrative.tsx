@@ -1,12 +1,18 @@
 "use client";
 
 import { ExpandableDescription } from "@/components/listings/ExpandableDescription";
+import { ListingSection } from "@/components/listings/ListingSection";
+import { stripApproxPinNote } from "@/lib/listings/facts";
 
 export function ListingNarrative({ body }: { body: string }) {
+  const cleaned = stripApproxPinNote(body);
   return (
-    <section className="space-y-2 rounded-2xl border border-line bg-surface p-5">
-      <h2 className="font-display text-2xl text-ink">Listing Description</h2>
-      <ExpandableDescription text={body} className="text-ink/75" />
-    </section>
+    <ListingSection
+      eyebrow="About this home"
+      title="Listing description"
+      hint="Broker remarks from the listing."
+    >
+      <ExpandableDescription text={cleaned} className="text-ink/75" />
+    </ListingSection>
   );
 }

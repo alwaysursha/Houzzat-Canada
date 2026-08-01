@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ListingSection } from "@/components/listings/ListingSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useExpertWhatsAppNumber } from "@/components/whatsapp/useExpertWhatsAppNumber";
@@ -39,12 +40,7 @@ export function ListingQaPanel({
   }
 
   return (
-    <section className="space-y-3 rounded-2xl border border-line bg-surface p-5">
-      <div>
-        <h2 className="font-display text-2xl text-ink">{title}</h2>
-        <p className="mt-1 text-xs text-ink/50">{hint}</p>
-      </div>
-
+    <ListingSection title={title || "Quick question?"} hint={hint}>
       {!ready ? (
         <p className="text-sm text-ink/50">Loading WhatsApp…</p>
       ) : !phoneDigits ? (
@@ -62,12 +58,13 @@ export function ListingQaPanel({
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             aria-label="Your question for the expert"
+            className="bg-mist/40"
           />
           <Button type="submit" className="shrink-0 sm:min-w-[10.5rem]">
             Message on WhatsApp
           </Button>
         </form>
       )}
-    </section>
+    </ListingSection>
   );
 }

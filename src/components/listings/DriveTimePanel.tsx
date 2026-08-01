@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Car } from "lucide-react";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
+import { ListingSection } from "@/components/listings/ListingSection";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 
 function formatDriveDistance(meters: number) {
@@ -92,20 +93,16 @@ export function DriveTimePanel({
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-line bg-surface p-5">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 rounded-lg bg-mist p-2 text-canopy">
+    <ListingSection
+      eyebrow="Commute"
+      title="Drive time"
+      hint="Typical drive distance and time from this home to work, school, or anywhere you go."
+      action={
+        <span className="flex size-10 items-center justify-center rounded-xl bg-canopy/10 text-canopy">
           <Car className="size-5" aria-hidden />
-        </div>
-        <div>
-          <h2 className="font-display text-2xl text-ink">Drive time</h2>
-          <p className="mt-1 text-sm text-ink/60">
-            Check driving distance and typical travel time from this home to
-            work, school etc.
-          </p>
-        </div>
-      </div>
-
+        </span>
+      }
+    >
       <AddressAutocomplete
         source="google"
         fillOnly
@@ -121,21 +118,25 @@ export function DriveTimePanel({
       />
 
       {loading ? (
-        <p className="text-sm text-ink/55">Calculating drive time…</p>
+        <p className="mt-3 text-sm text-ink/55">Calculating drive time…</p>
       ) : null}
 
-      {error ? <p className="text-sm text-signal">{error}</p> : null}
+      {error ? <p className="mt-3 text-sm text-signal">{error}</p> : null}
 
       {result && !loading ? (
-        <div className="rounded-xl border border-line bg-mist/50 px-4 py-3">
+        <div className="mt-4 rounded-xl border border-canopy/20 bg-canopy/5 px-4 py-3">
           <p className="text-sm text-ink/55">
             To{" "}
             <span className="font-medium text-ink/80">{result.label}</span>
           </p>
-          <p className="mt-1 text-lg font-semibold text-ink">
+          <p className="mt-1 font-display text-2xl text-ink">
             {formatDriveDistance(result.distanceMeters)}
-            <span className="mx-2 text-ink/30">·</span>
-            about {formatDriveDuration(result.durationSeconds)} drive
+            <span className="mx-2 text-base font-sans font-medium text-ink/30">
+              ·
+            </span>
+            <span className="text-canopy">
+              about {formatDriveDuration(result.durationSeconds)}
+            </span>
           </p>
           <p className="mt-1 text-xs text-ink/45">
             Typical drive time without live traffic. Actual times vary.
@@ -144,10 +145,10 @@ export function DriveTimePanel({
       ) : null}
 
       {!result && !loading && !error && destination === null ? (
-        <p className="text-xs text-ink/45">
+        <p className="mt-3 text-xs text-ink/45">
           Pick an address from the suggestions to see distance and drive time.
         </p>
       ) : null}
-    </section>
+    </ListingSection>
   );
 }

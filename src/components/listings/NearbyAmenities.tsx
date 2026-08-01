@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ListingSection } from "@/components/listings/ListingSection";
 import { NearbyMap } from "@/components/listings/NearbyMap";
 import type { NearbyPoi } from "@/lib/poi/nearby";
+import { cn } from "@/lib/utils";
 
 const LAYERS = [
   { type: "SCHOOL", label: "Schools" },
@@ -49,16 +51,14 @@ export function NearbyAmenities({
   }
 
   return (
-    <section className="space-y-4">
-      <div>
-        <h2 className="font-display text-2xl text-ink">Nearby</h2>
-        <p className="mt-1 text-sm text-ink/60">
-          Schools, parks, transit, and grocery within ~2 km.
-        </p>
-        <p className="mt-1 text-xs text-ink/40">
-          Sources: Toronto open data, GTFS transit feeds, and OpenStreetMap.
-        </p>
-      </div>
+    <ListingSection
+      eyebrow="Neighbourhood"
+      title="Nearby"
+      hint="Schools, parks, transit, and grocery within ~2 km."
+    >
+      <p className="-mt-2 mb-4 text-xs text-ink/40">
+        Sources: Toronto open data, GTFS transit feeds, and OpenStreetMap.
+      </p>
 
       <div className="flex flex-wrap gap-2">
         {LAYERS.map((layer) => {
@@ -68,11 +68,12 @@ export function NearbyAmenities({
               key={layer.type}
               type="button"
               onClick={() => toggle(layer.type)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+              className={cn(
+                "rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
                 on
-                  ? "bg-canopy text-white"
-                  : "border border-line bg-surface text-ink/65"
-              }`}
+                  ? "bg-canopy text-white shadow-sm"
+                  : "border border-line bg-mist/50 text-ink/65 hover:border-canopy/30",
+              )}
             >
               {layer.label}
             </button>
@@ -80,14 +81,16 @@ export function NearbyAmenities({
         })}
       </div>
 
-      <NearbyMap lat={lat} lng={lng} pois={pois} types={active} />
+      <div className="mt-4 overflow-hidden rounded-xl border border-line/70">
+        <NearbyMap lat={lat} lng={lng} pois={pois} types={active} />
+      </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-ink/55">
+        <p className="mt-4 text-sm text-ink/55">
           No amenities in the selected layers for this pin yet.
         </p>
       ) : (
-        <ul className="divide-y divide-line rounded-2xl border border-line bg-surface">
+        <ul className="mt-4 divide-y divide-line/70 overflow-hidden rounded-xl border border-line/70 bg-mist/30">
           {filtered.slice(0, 12).map((poi) => (
             <li
               key={poi.id}
@@ -100,11 +103,13 @@ export function NearbyAmenities({
                   · {TYPE_LABEL[poi.type] ?? poi.type}
                 </span>
               </span>
-              <span className="text-ink/55">{formatDistance(poi.distanceKm)}</span>
+              <span className="text-xs font-semibold text-canopy">
+                {formatDistance(poi.distanceKm)}
+              </span>
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </ListingSection>
   );
 }

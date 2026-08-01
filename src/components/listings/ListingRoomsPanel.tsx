@@ -1,3 +1,5 @@
+import { ListingSection } from "@/components/listings/ListingSection";
+
 type RoomRow = {
   id: string;
   roomType: string;
@@ -38,23 +40,26 @@ export function ListingRoomsPanel({ rooms }: { rooms: RoomRow[] }) {
   });
 
   return (
-    <section className="space-y-4" aria-label="Rooms">
-      <h2 className="text-lg font-semibold text-ink">Rooms</h2>
-      <div className="overflow-hidden rounded-2xl border border-line bg-surface">
-        <div className="hidden grid-cols-[1.1fr_0.8fr_1fr_1.2fr] gap-3 border-b border-line bg-mist/60 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink/45 sm:grid">
+    <ListingSection
+      eyebrow="Floor plan"
+      title="Rooms"
+      hint="Dimensions and features by level when provided on the listing."
+    >
+      <div className="overflow-hidden rounded-xl border border-line/70">
+        <div className="hidden grid-cols-[1.1fr_0.8fr_1fr_1.2fr] gap-3 border-b border-line/70 bg-mist/60 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-ink/45 sm:grid">
           <span>Room</span>
           <span>Level</span>
           <span>Size</span>
           <span>Features</span>
         </div>
-        <ul className="divide-y divide-line">
+        <ul className="divide-y divide-line/70">
           {levels.flatMap((level) =>
             (byLevel.get(level) ?? []).map((room) => {
               const size = formatSize(room);
               return (
                 <li
                   key={room.id}
-                  className="grid gap-1 px-4 py-3 text-sm sm:grid-cols-[1.1fr_0.8fr_1fr_1.2fr] sm:items-center sm:gap-3"
+                  className="grid gap-1 bg-surface px-4 py-3 text-sm sm:grid-cols-[1.1fr_0.8fr_1fr_1.2fr] sm:items-center sm:gap-3"
                 >
                   <p className="font-semibold text-ink">{room.roomType}</p>
                   <p className="text-ink/65">
@@ -75,6 +80,6 @@ export function ListingRoomsPanel({ rooms }: { rooms: RoomRow[] }) {
           )}
         </ul>
       </div>
-    </section>
+    </ListingSection>
   );
 }

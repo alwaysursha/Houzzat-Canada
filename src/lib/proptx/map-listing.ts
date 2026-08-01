@@ -9,7 +9,10 @@ import {
   DEFAULT_GTA_CENTROID,
   lookupCityCentroid,
 } from "@/lib/geo/city-centroids";
-import type { ListingFacts } from "@/lib/listings/facts";
+import {
+  stripApproxPinNote,
+  type ListingFacts,
+} from "@/lib/listings/facts";
 
 /** Loose RESO / PropTx Property row — fields vary by agreement. */
 export type PropTxProperty = Record<string, unknown>;
@@ -376,6 +379,10 @@ export function mapListingFacts(row: PropTxProperty): ListingFacts | undefined {
     kitchensTotal: num(row, "KitchensTotal", "NumberOfKitchens"),
     bedroomsAboveGrade: num(row, "BedroomsAboveGrade"),
     bedroomsBelowGrade: num(row, "BedroomsBelowGrade"),
+    taxYear: (() => {
+      const y = num(row, "TaxYear", "TaxesYear");
+      return y != null && y >= 1900 && y <= 2100 ? Math.round(y) : null;
+    })(),
     livingAreaRange: str(row, "LivingAreaRange"),
     approximateAge: str(row, "ApproximateAge"),
     associationFeeIncludes: strList(row, "AssociationFeeIncludes"),
@@ -479,12 +486,7 @@ function mapBaths(row: PropTxProperty): number {
 export const APPROX_PIN_NOTE =
   "[Map pin approximate — coordinates missing from feed.]";
 
-export function stripApproxPinNote(description: string): string {
-  return description
-    .replace(/\n*\s*\[Map pin approximate[^\]]*\]\s*/gi, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
+export { stripApproxPinNote };
 
 export type MapPropertyResult =
   | {
@@ -597,7 +599,6 @@ export function mapPropertyToListingResult(
       "BrokerageName",
     ) ?? "MLS® Brokerage";
 
-  const approxNote = coords.approximate ? `\n\n${APPROX_PIN_NOTE}` : "";
   const facts = mapListingFacts(row);
 
   return {
@@ -628,7 +629,8 @@ export function mapPropertyToListingResult(
       province: province.slice(0, 2).toUpperCase() === "ON" ? "ON" : province,
       lat: coords.lat,
       lng: coords.lng,
-      description: `${description}${approxNote}`.trim(),
+      // Never append approximate-pin notes into public remarks.
+      description,
       brokerageName,
       facts: facts ?? undefined,
       listedAt,

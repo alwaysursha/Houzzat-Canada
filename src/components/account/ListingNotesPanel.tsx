@@ -3,15 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { ListingSection } from "@/components/listings/ListingSection";
+import { cn } from "@/lib/utils";
 
 export function ListingNotesPanel({
   mlsNumber,
   signedIn,
   initialBody = "",
+  className,
+  embedded = false,
 }: {
   mlsNumber: string;
   signedIn: boolean;
   initialBody?: string;
+  className?: string;
+  /** Skip outer section chrome (for mobile drawer). */
+  embedded?: boolean;
 }) {
   const { openAuth } = useAuthModal();
   const [body, setBody] = useState(initialBody);
@@ -55,56 +62,73 @@ export function ListingNotesPanel({
     }, 600);
   }
 
+  const statusLabel =
+    status === "saving"
+      ? "Saving…"
+      : status === "saved"
+        ? "Saved"
+        : status === "error"
+          ? "Couldn’t save"
+          : "Private";
+
   if (!signedIn) {
+    const signIn = (
+      <button
+        type="button"
+        className="rounded-lg bg-canopy/10 px-3 py-2 text-sm font-semibold text-canopy transition hover:bg-canopy/15"
+        onClick={() =>
+          openAuth({
+            mode: "sign-in",
+            callbackUrl: `/listing/${mlsNumber}`,
+          })
+        }
+      >
+        Sign in to take notes →
+      </button>
+    );
+
+    if (embedded) {
+      return (
+        <div className={cn("space-y-3", className)}>
+          <p className="text-sm text-ink/55">
+            Sign in to keep private notes on this home.
+          </p>
+          {signIn}
+        </div>
+      );
+    }
+
     return (
-      <section className="rounded-2xl border border-line bg-surface p-5">
-        <h2 className="font-display text-2xl text-ink">Your notes</h2>
-        <p className="mt-2 text-sm text-ink/60">
-          Sign in to keep private notes on this home. You can view all of them
-          anytime in your dashboard.
-        </p>
-        <button
-          type="button"
-          className="mt-4 text-sm font-semibold text-canopy"
-          onClick={() =>
-            openAuth({
-              mode: "sign-in",
-              callbackUrl: `/listing/${mlsNumber}`,
-            })
-          }
-        >
-          Sign in to take notes →
-        </button>
-      </section>
+      <ListingSection
+        eyebrow="Private"
+        title="Your notes"
+        hint="Sign in to keep private notes on this home. View them anytime in your dashboard."
+        className={className}
+      >
+        {signIn}
+      </ListingSection>
     );
   }
 
-  return (
-    <section className="rounded-2xl border border-line bg-surface p-5">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="font-display text-2xl text-ink">Your notes</h2>
-        <span className="text-xs text-ink/45">
-          {status === "saving"
-            ? "Saving…"
-            : status === "saved"
-              ? "Saved"
-              : status === "error"
-                ? "Couldn’t save"
-                : "Private"}
-        </span>
-      </div>
-      <p className="mt-2 text-sm text-ink/60">
-        View all your notes in your{" "}
-        <Link
-          href="/account/notes"
-          className="font-semibold text-canopy hover:underline"
-        >
-          dashboard
-        </Link>
-        .
-      </p>
+  const editor = (
+    <>
+      {embedded ? (
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-xs text-ink/50">
+            View all in your{" "}
+            <Link
+              href="/account/notes"
+              className="font-semibold text-canopy hover:underline"
+            >
+              dashboard
+            </Link>
+            .
+          </p>
+          <span className="text-xs font-medium text-ink/45">{statusLabel}</span>
+        </div>
+      ) : null}
       <textarea
-        className="mt-3 min-h-32 w-full rounded-xl border border-line bg-mist/40 px-3 py-2 text-sm text-ink outline-none focus:border-canopy/50"
+        className="min-h-32 w-full rounded-xl border border-line/70 bg-mist/40 px-3 py-2.5 text-sm text-ink outline-none transition focus:border-canopy/50"
         placeholder="Showing notes, offer ideas, questions for your agent…"
         value={body}
         onChange={(e) => {
@@ -115,6 +139,35 @@ export function ListingNotesPanel({
           }
         }}
       />
-    </section>
+    </>
+  );
+
+  if (embedded) {
+    return <div className={cn(className)}>{editor}</div>;
+  }
+
+  return (
+    <ListingSection
+      eyebrow="Private"
+      title="Your notes"
+      className={cn(className)}
+      hint={
+        <>
+          View all your notes in your{" "}
+          <Link
+            href="/account/notes"
+            className="font-semibold text-canopy hover:underline"
+          >
+            dashboard
+          </Link>
+          .
+        </>
+      }
+      action={
+        <span className="text-xs font-medium text-ink/45">{statusLabel}</span>
+      }
+    >
+      {editor}
+    </ListingSection>
   );
 }

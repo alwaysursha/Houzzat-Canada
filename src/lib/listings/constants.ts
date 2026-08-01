@@ -15,6 +15,23 @@ export function formatPrice(amount: number) {
   }).format(amount);
 }
 
+/** Compact CAD for tight mobile UI — e.g. $899K, $1.2M */
+export function formatPriceCompact(amount: number) {
+  const abs = Math.abs(amount);
+  if (abs >= 1_000_000) {
+    const millions = amount / 1_000_000;
+    const text =
+      Math.abs(millions - Math.round(millions)) < 0.05
+        ? Math.round(millions).toString()
+        : millions.toFixed(1).replace(/\.0$/, "");
+    return `$${text}M`;
+  }
+  if (abs >= 1_000) {
+    return `$${Math.round(amount / 1_000).toLocaleString("en-CA")}K`;
+  }
+  return formatPrice(amount);
+}
+
 /** Sale = CAD total; Lease = CAD per month. */
 export function formatListPrice(
   amount: number,

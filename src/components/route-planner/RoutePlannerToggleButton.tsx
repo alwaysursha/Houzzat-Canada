@@ -2,8 +2,8 @@
 
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useRef } from "react";
-import { Route } from "lucide-react";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
+import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
 import { flyRouteToPlanner } from "@/lib/fly-to-route-planner";
 import { SITE_MESSAGES } from "@/lib/site-messages";
@@ -76,7 +76,7 @@ export function RoutePlannerToggleButton({
           className,
         )}
       >
-        <Route className="size-4" strokeWidth={2.25} />
+        <RouteStartIcon />
         {onTour ? "On your route ✓" : "Add to Route Planner"}
       </button>
     );
@@ -96,10 +96,7 @@ export function RoutePlannerToggleButton({
         className,
       )}
     >
-      <Route
-        className={cn("size-4", onTour && "text-canopy")}
-        strokeWidth={2.25}
-      />
+      <RouteStartIcon />
     </button>
   );
 }

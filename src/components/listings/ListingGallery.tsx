@@ -20,7 +20,7 @@ import { ListingGalleryMapSlide } from "@/components/listings/ListingGalleryMapS
 import { ListingLockedGateOverlay } from "@/components/listings/ListingLockedGateOverlay";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { cn } from "@/lib/utils";
-import { Images, MapPinned } from "lucide-react";
+import { Images, MapPinned, Video } from "lucide-react";
 
 export type GalleryPhoto = {
   id: string;
@@ -42,6 +42,59 @@ function useIsMobileGallery() {
   return isMobile;
 }
 
+/** Compact glass controls on listing cover (Map view / Virtual tour). */
+const COVER_CONTROL_CLASS =
+  "group inline-flex items-center gap-1.5 rounded-md border border-white/50 bg-white/55 px-2.5 py-1.5 text-xs font-semibold text-ink shadow-md backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/75 hover:shadow-lg";
+
+const COVER_CONTROL_ICON_WRAP =
+  "flex size-5 items-center justify-center rounded-full bg-canopy text-white shadow-sm transition group-hover:scale-105";
+
+function VirtualTourCoverButton({
+  href,
+  className,
+}: {
+  href: string;
+  className?: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(event) => event.stopPropagation()}
+      className={cn(COVER_CONTROL_CLASS, className)}
+    >
+      <span className={COVER_CONTROL_ICON_WRAP}>
+        <Video className="size-3" aria-hidden />
+      </span>
+      Virtual tour
+    </a>
+  );
+}
+
+function CoverSegmentTag({
+  segmentTag,
+}: {
+  segmentTag: {
+    label: string;
+    tone: "residential" | "commercial" | "preconstruction";
+  };
+}) {
+  return (
+    <span
+      className={cn(
+        "rounded-md px-2.5 py-1 text-[11px] font-bold tracking-wide shadow-md sm:text-xs",
+        segmentTag.tone === "commercial" && "bg-ink text-white",
+        segmentTag.tone === "preconstruction" && "bg-signal text-white",
+        segmentTag.tone === "residential" &&
+          "bg-mist text-ink ring-1 ring-line",
+      )}
+    >
+      {segmentTag.label}
+    </span>
+  );
+}
+
 export function ListingGallery({
   photos,
   addressLabel,
@@ -50,6 +103,7 @@ export function ListingGallery({
   coverTag,
   coverTagClassName,
   segmentTag,
+  virtualTourUrl,
   mapSubject,
   allowBooking = true,
   detailsLocked = false,
@@ -67,6 +121,8 @@ export function ListingGallery({
     label: string;
     tone: "residential" | "commercial" | "preconstruction";
   };
+  /** PropTx virtual tour URL — cover CTA when present. */
+  virtualTourUrl?: string | null;
   /** When set, shows Map view on the cover (top-left). */
   mapSubject?: ListingMapSubject;
   /** Hide book-a-viewing on inactive (sold/leased) listings. */
@@ -74,6 +130,7 @@ export function ListingGallery({
   /** Guest lock: blur photos + login overlay (status badge stays visible). */
   detailsLocked?: boolean;
 }) {
+  const tourUrl = virtualTourUrl?.trim() || null;
   const lockCallback = `/listing/${mlsNumber}`;
   const labelId = useId();
   const isMobile = useIsMobileGallery();
@@ -381,10 +438,10 @@ export function ListingGallery({
                 <button
                   type="button"
                   onClick={() => goToMobileSlide(Math.max(0, count - 1))}
-                  className="group inline-flex items-center gap-2 rounded-md border border-white/50 bg-white/55 px-3.5 py-2 text-sm font-semibold text-ink shadow-lg backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/75 hover:shadow-xl"
+                  className={COVER_CONTROL_CLASS}
                 >
-                  <span className="flex size-7 items-center justify-center rounded-full bg-canopy text-white shadow-sm transition group-hover:scale-105">
-                    <Images className="size-3.5" aria-hidden />
+                  <span className={COVER_CONTROL_ICON_WRAP}>
+                    <Images className="size-3" aria-hidden />
                   </span>
                   Back to photos
                 </button>
@@ -392,10 +449,10 @@ export function ListingGallery({
                 <button
                   type="button"
                   onClick={() => goToMobileSlide(mapSlideIndex)}
-                  className="group inline-flex items-center gap-2 rounded-md border border-white/50 bg-white/55 px-3.5 py-2 text-sm font-semibold text-ink shadow-lg backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/75 hover:shadow-xl"
+                  className={COVER_CONTROL_CLASS}
                 >
-                  <span className="flex size-7 items-center justify-center rounded-full bg-canopy text-white shadow-sm transition group-hover:scale-105">
-                    <MapPinned className="size-3.5" aria-hidden />
+                  <span className={COVER_CONTROL_ICON_WRAP}>
+                    <MapPinned className="size-3" aria-hidden />
                   </span>
                   Map view
                 </button>
@@ -411,16 +468,24 @@ export function ListingGallery({
         {detailsLocked ? (
           <ListingLockedGateOverlay callbackUrl={lockCallback} />
         ) : null}
-        {detailsLocked && coverTag ? (
-          <div className="pointer-events-none absolute bottom-3 left-3 z-30">
-            <span
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-bold tracking-wide text-white shadow-md",
-                coverTagClassName ?? "bg-canopy",
-              )}
-            >
-              {coverTag}
-            </span>
+        {(coverTag || segmentTag || (tourUrl && !detailsLocked)) ? (
+          <div className="pointer-events-none absolute bottom-3 left-3 z-30 flex flex-wrap items-center gap-1.5">
+            {segmentTag ? <CoverSegmentTag segmentTag={segmentTag} /> : null}
+            {coverTag ? (
+              <span
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-[11px] font-bold tracking-wide text-white shadow-md sm:text-xs",
+                  coverTagClassName ?? "bg-canopy",
+                )}
+              >
+                {coverTag}
+              </span>
+            ) : null}
+            {tourUrl && !detailsLocked ? (
+              <div className="pointer-events-auto">
+                <VirtualTourCoverButton href={tourUrl} />
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -463,34 +528,6 @@ export function ListingGallery({
               sizes="(max-width: 768px) 100vw, 50vw"
             />
             <span className="absolute inset-0 bg-gradient-to-t from-ink/40 via-transparent to-transparent opacity-90" />
-            {coverTag || segmentTag ? (
-              <div className="absolute bottom-3 left-3 z-10 flex flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
-                {segmentTag ? (
-                  <span
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-bold tracking-wide shadow-md sm:text-sm",
-                      segmentTag.tone === "commercial" && "bg-ink text-white",
-                      segmentTag.tone === "preconstruction" &&
-                        "bg-signal text-white",
-                      segmentTag.tone === "residential" &&
-                        "bg-mist text-ink ring-1 ring-line",
-                    )}
-                  >
-                    {segmentTag.label}
-                  </span>
-                ) : null}
-                {coverTag ? (
-                  <span
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-bold tracking-wide text-white shadow-md sm:text-sm",
-                      coverTagClassName ?? "bg-canopy",
-                    )}
-                  >
-                    {coverTag}
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
           </button>
 
           {side.map((photo, i) => {
@@ -554,16 +591,23 @@ export function ListingGallery({
         {detailsLocked ? (
           <ListingLockedGateOverlay callbackUrl={lockCallback} />
         ) : null}
-        {detailsLocked && coverTag ? (
-          <div className="pointer-events-none absolute bottom-3 left-3 z-30 sm:bottom-4 sm:left-4">
-            <span
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-bold tracking-wide text-white shadow-md sm:text-sm",
-                coverTagClassName ?? "bg-canopy",
-              )}
-            >
-              {coverTag}
-            </span>
+
+        {(coverTag || segmentTag || (tourUrl && !detailsLocked)) ? (
+          <div className="absolute bottom-3 left-3 z-20 flex flex-wrap items-center gap-1.5 sm:bottom-4 sm:left-4">
+            {segmentTag ? <CoverSegmentTag segmentTag={segmentTag} /> : null}
+            {coverTag ? (
+              <span
+                className={cn(
+                  "pointer-events-none rounded-md px-2.5 py-1 text-[11px] font-bold tracking-wide text-white shadow-md sm:text-xs",
+                  coverTagClassName ?? "bg-canopy",
+                )}
+              >
+                {coverTag}
+              </span>
+            ) : null}
+            {tourUrl && !detailsLocked ? (
+              <VirtualTourCoverButton href={tourUrl} />
+            ) : null}
           </div>
         ) : null}
       </div>

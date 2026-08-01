@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Route } from "lucide-react";
+import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +33,7 @@ export function RoutePlannerFloatingChip() {
           : "pointer-events-none translate-y-2 opacity-0",
       )}
     >
-      <Route className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+      <RouteStartIcon />
       <span className="relative z-[1]">Route Planner · {count}</span>
     </Link>
   );

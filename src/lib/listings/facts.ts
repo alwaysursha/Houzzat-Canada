@@ -33,6 +33,8 @@ export type ListingFacts = {
   kitchensTotal?: number | null;
   bedroomsAboveGrade?: number | null;
   bedroomsBelowGrade?: number | null;
+  /** PropTx TaxYear — year the annual tax amount applies to. */
+  taxYear?: number | null;
   livingAreaRange?: string | null;
   approximateAge?: string | null;
   associationFeeIncludes?: string[] | null;
@@ -83,6 +85,22 @@ function pushRow(
   rows.push({ label, value: v });
 }
 
+/** e.g. above 2 + below 1 → "2 + 1" */
+export function formatBedsPlusLabel(
+  beds: number | null | undefined,
+  facts?: ListingFacts | null,
+): string | null {
+  if (beds == null && facts?.bedroomsAboveGrade == null) return null;
+  const above = facts?.bedroomsAboveGrade;
+  const below = facts?.bedroomsBelowGrade;
+  if (above != null && below != null && below > 0) {
+    return `${above} + ${below}`;
+  }
+  if (above != null) return String(above);
+  if (beds != null) return String(beds);
+  return null;
+}
+
 /** Build display sections from Listing.facts (+ a few core columns). */
 export function buildListingFactSections(input: {
   facts?: ListingFacts | null;
@@ -103,6 +121,9 @@ export function buildListingFactSections(input: {
   const f = input.facts ?? {};
   const sections: ListingFactSection[] = [];
 
+  const possessionValue =
+    f.possessionType?.trim() || f.possessionDetails?.trim() || null;
+
   const overview: ListingFactRow[] = [];
   pushRow(overview, "Property type", input.propertyTypeLabel);
   pushRow(overview, "MLS®", input.mlsNumber);
@@ -116,32 +137,17 @@ export function buildListingFactSections(input: {
     input.yearBuilt != null ? String(input.yearBuilt) : null,
   );
   pushRow(overview, "Living area", f.livingAreaRange ?? input.sqftLabel);
-  pushRow(
-    overview,
-    "Bedrooms",
-    input.beds != null
-      ? (() => {
-          const above = f.bedroomsAboveGrade;
-          const below = f.bedroomsBelowGrade;
-          if (above != null || below != null) {
-            const parts = [
-              above != null ? `${above} above` : null,
-              below != null && below > 0 ? `${below} below` : null,
-            ].filter(Boolean);
-            return parts.length
-              ? `${input.beds} (${parts.join(", ")})`
-              : String(input.beds);
-          }
-          return String(input.beds);
-        })()
-      : null,
-  );
+  pushRow(overview, "Bedrooms", formatBedsPlusLabel(input.beds, f));
   pushRow(
     overview,
     "Bathrooms",
     input.baths != null ? String(input.baths) : null,
   );
   pushRow(overview, "Kitchens", numLabel(f.kitchensTotal));
+  pushRow(overview, "Lot front", numLabel(f.frontageLength));
+  pushRow(overview, "Lot depth", numLabel(f.lotDepth));
+  pushRow(overview, "Cross St.", f.crossStreet);
+  pushRow(overview, "Possession", possessionValue);
   pushRow(
     overview,
     "Days on market",
@@ -185,14 +191,9 @@ export function buildListingFactSections(input: {
       ? `${numLabel(f.lotSizeArea)}${f.lotSizeUnits ? ` ${f.lotSizeUnits}` : ""}`
       : null;
   pushRow(lot, "Lot size", lotSize);
-  pushRow(lot, "Lot depth", numLabel(f.lotDepth));
-  pushRow(lot, "Frontage", numLabel(f.frontageLength));
   pushRow(lot, "Lot source", f.lotSizeSource);
-  pushRow(lot, "Sewer", joinList(f.sewer));
-  pushRow(lot, "Cross street", f.crossStreet);
-  pushRow(lot, "Directions", f.directions);
   if (lot.length) {
-    sections.push({ id: "lot", title: "Lot & location", rows: lot });
+    sections.push({ id: "lot", title: "Lot", rows: lot });
   }
 
   const parking: ListingFactRow[] = [];
@@ -206,14 +207,6 @@ export function buildListingFactSections(input: {
   pushRow(parking, "Parking features", joinList(f.parkingFeatures));
   if (parking.length) {
     sections.push({ id: "parking", title: "Parking", rows: parking });
-  }
-
-  const possession: ListingFactRow[] = [];
-  pushRow(possession, "Possession", f.possessionType);
-  pushRow(possession, "Possession date", f.possessionDate);
-  pushRow(possession, "Possession details", f.possessionDetails);
-  if (possession.length) {
-    sections.push({ id: "possession", title: "Possession", rows: possession });
   }
 
   const extras: ListingFactRow[] = [];
@@ -230,4 +223,12 @@ export function buildListingFactSections(input: {
 export function parseListingFacts(raw: unknown): ListingFacts | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   return raw as ListingFacts;
+}
+
+/** Strip legacy approximate-pin footnotes from public remarks. */
+export function stripApproxPinNote(description: string): string {
+  return description
+    .replace(/\n*\s*\[Map pin approximate[^\]]*\]\s*/gi, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }

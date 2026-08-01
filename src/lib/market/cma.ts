@@ -14,6 +14,7 @@ export type CmaComp = {
   sqft: number | null;
   distanceKm: number;
   daysOnMarket: number;
+  soldAt: Date | null;
 };
 
 export async function findComps(opts: {
@@ -24,28 +25,48 @@ export async function findComps(opts: {
   city?: string | null;
   limit?: number;
   includeSold: boolean;
+  /** When set, only return solds. */
+  soldOnly?: boolean;
+  /**
+   * Max distance in km. Pass `null` for no distance cap (still sorted by
+   * distance / recency). Default 8 for agent CMA callers.
+   */
+  maxDistanceKm?: number | null;
+  /** Prefer recent solds when comparing sold inventory. */
+  preferRecentSold?: boolean;
 }): Promise<CmaComp[]> {
   const limit = opts.limit ?? 8;
-  const statuses = opts.includeSold
-    ? (["ACTIVE", "SOLD"] as const)
-    : (["ACTIVE"] as const);
+  const statuses = opts.soldOnly
+    ? (["SOLD"] as const)
+    : opts.includeSold
+      ? (["ACTIVE", "SOLD"] as const)
+      : (["ACTIVE"] as const);
+  const maxDistanceKm =
+    opts.maxDistanceKm === undefined ? 8 : opts.maxDistanceKm;
 
   const rows = await prisma.listing.findMany({
     where: {
       status: { in: [...statuses] },
       transactionType: "SALE",
       segment: { in: ["RESIDENTIAL", "COMMERCIAL"] },
+      ...(opts.soldOnly ? { soldPrice: { not: null } } : {}),
       ...(opts.city
         ? { city: { equals: opts.city, mode: "insensitive" } }
         : {}),
       ...(opts.beds != null
         ? { beds: { gte: Math.max(opts.beds - 1, 0), lte: opts.beds + 1 } }
         : {}),
+      ...(opts.propertyType
+        ? { propertyType: opts.propertyType as never }
+        : {}),
     },
-    take: 80,
+    take: opts.preferRecentSold || opts.soldOnly ? 200 : 80,
+    orderBy: opts.soldOnly
+      ? [{ soldAt: "desc" }, { updatedAtMls: "desc" }]
+      : undefined,
   });
 
-  return rows
+  const mapped = rows
     .map((r) => ({
       mlsNumber: r.mlsNumber,
       addressLine: r.addressLine,
@@ -59,8 +80,24 @@ export async function findComps(opts: {
       sqft: r.sqft,
       distanceKm: haversineKm(opts.lat, opts.lng, r.lat, r.lng),
       daysOnMarket: r.daysOnMarket,
+      soldAt: r.soldAt,
     }))
-    .filter((r) => r.distanceKm <= 8)
+    .filter((r) =>
+      maxDistanceKm == null ? true : r.distanceKm <= maxDistanceKm,
+    );
+
+  if (opts.preferRecentSold || opts.soldOnly) {
+    return mapped
+      .sort((a, b) => {
+        const aMs = a.soldAt?.getTime() ?? 0;
+        const bMs = b.soldAt?.getTime() ?? 0;
+        if (bMs !== aMs) return bMs - aMs;
+        return a.distanceKm - b.distanceKm;
+      })
+      .slice(0, limit);
+  }
+
+  return mapped
     .sort((a, b) => a.distanceKm - b.distanceKm)
     .slice(0, limit);
 }

@@ -7,6 +7,7 @@ import { ListingNotesPanel } from "@/components/account/ListingNotesPanel";
 import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
 import { VowAcceptCard } from "@/components/account/VowAcceptCard";
 import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
+import { FitSingleLineText } from "@/components/listings/FitSingleLineText";
 import { ListingFactsPanel } from "@/components/listings/ListingFactsPanel";
 import { ListingGallery } from "@/components/listings/ListingGallery";
 import { ListingRoomsPanel } from "@/components/listings/ListingRoomsPanel";
@@ -19,8 +20,9 @@ import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
 import { ListingRelatedSection } from "@/components/listings/ListingRelatedSection";
 import { ListingMobileSideMenu } from "@/components/listings/ListingMobileSideMenu";
 import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
+import { ListingMobileNotes } from "@/components/listings/ListingMobileNotes";
 import { RecordRecentView } from "@/components/listings/RecordRecentView";
-import { MarketPulseCard } from "@/components/market/MarketPulseCard";
+import { HouzzatInsights } from "@/components/listings/insights/HouzzatInsights";
 import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import { slugifyPlace } from "@/lib/geo/distance";
@@ -38,9 +40,14 @@ import {
   propertyTypeLabel,
   segmentLabel,
 } from "@/lib/listings/constants";
+import {
+  formatBedsPlusLabel,
+  parseListingFacts,
+} from "@/lib/listings/facts";
 import { getListingProvider } from "@/lib/listings/provider";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
 import { getPopularCities } from "@/lib/listings/popular-cities";
+import { buildListingInsights } from "@/lib/market/listing-insights";
 import { getMarketPulse } from "@/lib/market/pulse";
 import { auth } from "@/lib/auth";
 import { t } from "@/lib/i18n/dictionaries";
@@ -214,6 +221,12 @@ export default async function ListingDetailPage({ params }: Params) {
     }),
     getPopularCities(12),
   ]);
+  const insights = await buildListingInsights({
+    listing,
+    pulse,
+    pois: nearby,
+    signedIn: vowOk,
+  });
   const personalizationCities = popularCities.map((row) => row.city);
   const upcomingOpenHouses = listing.openHouses.filter(
     (oh) => oh.endsAt.getTime() >= Date.now(),
@@ -248,6 +261,13 @@ export default async function ListingDetailPage({ params }: Params) {
   const addressLabel = formatListingAddressOneLine(listing);
   const daysOnMarket = daysOnMarketFromListedAt(listing);
   const timingLabel = formatListingTiming(listing);
+  const listingFacts = parseListingFacts(listing.facts);
+  const bedsPlusLabel = formatBedsPlusLabel(listing.beds, listingFacts);
+  const taxesLabel = listing.taxes
+    ? listingFacts?.taxYear
+      ? `${formatPrice(listing.taxes)} / ${listingFacts.taxYear}`
+      : formatPrice(listing.taxes)
+    : null;
   const crumbs: { label: string; href?: string }[] = [
     { label: province, href: "/search" },
     {
@@ -347,7 +367,7 @@ export default async function ListingDetailPage({ params }: Params) {
             : undefined
         }
       />
-      <div className="w-full min-w-0 space-y-8 px-4 pb-[calc(2rem+4.25rem+env(safe-area-inset-bottom,0px))] pt-3 sm:px-6 md:pb-8 md:pt-6 lg:px-10">
+      <div className="w-full min-w-0 space-y-8 bg-[linear-gradient(180deg,rgb(244_247_245)_0%,rgb(255_255_255)_28%,rgb(255_255_255)_100%)] px-4 pb-[calc(2rem+4.25rem+env(safe-area-inset-bottom,0px))] pt-3 sm:px-6 md:pb-8 md:pt-6 lg:px-10">
         {/*
           Sticky bar must be a descendant of this tall page section (including the
           grid below), not a short breadcrumbs+gallery wrapper — otherwise sticky
@@ -382,6 +402,7 @@ export default async function ListingDetailPage({ params }: Params) {
             coverTag={coverTagLabel}
             coverTagClassName={listingStatusBadgeClass(listing.status)}
             segmentTag={segmentTagMeta}
+            virtualTourUrl={listingFacts?.virtualTourUrl}
             allowBooking={!isInactive}
             detailsLocked={detailsLocked}
             mapSubject={
@@ -420,9 +441,9 @@ export default async function ListingDetailPage({ params }: Params) {
           />
         </div>
 
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-        <div className="min-w-0 space-y-6">
-          <div className="flex flex-col gap-5 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-x-8 md:gap-y-5">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-10">
+        <div className="min-w-0 space-y-5 sm:space-y-6">
+          <div className="flex flex-col gap-5 rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-x-8 md:gap-y-5">
             <div className="min-w-0 w-full md:flex-1">
               {(coverTagLabel || segmentTagMeta) ? (
                 <div className="mb-2.5 flex items-center justify-between gap-3 md:hidden">
@@ -470,8 +491,8 @@ export default async function ListingDetailPage({ params }: Params) {
                       size="lg"
                     />
                   ) : detailsLocked ? (
-                    <p className="text-3xl font-bold tracking-tight text-ink/55 sm:text-4xl">
-                      <span className="mr-2 text-base font-semibold text-ink/45 sm:text-lg">
+                    <p className="font-display text-3xl tracking-tight text-ink/55 sm:text-4xl">
+                      <span className="mr-2 font-sans text-base font-semibold text-ink/45 sm:text-lg">
                         {listing.transactionType === "LEASE"
                           ? "Rent:"
                           : "Listed:"}
@@ -480,7 +501,7 @@ export default async function ListingDetailPage({ params }: Params) {
                     </p>
                   ) : (
                     <>
-                      <p className="text-3xl font-bold tracking-tight text-canopy sm:text-4xl">
+                      <p className="font-display text-3xl tracking-tight text-canopy sm:text-4xl">
                         {formatListPrice(
                           listing.listPrice,
                           listing.transactionType,
@@ -512,13 +533,17 @@ export default async function ListingDetailPage({ params }: Params) {
                   )}
                 </div>
               </div>
-              <h1 className="mt-1.5 text-base font-medium text-ink/70 sm:text-lg">
+              <FitSingleLineText
+                className="mt-2 font-display leading-tight text-ink"
+                minPx={12}
+                maxPx={24}
+              >
                 {detailsLocked ? (
                   <span className="select-none blur-[5px]">{addressLabel}</span>
                 ) : (
                   addressLabel
                 )}
-              </h1>
+              </FitSingleLineText>
               {detailsLocked ? (
                 <p className="mt-1 text-sm text-ink/55">
                   {propertyTypeLabel(listing.propertyType)}
@@ -560,53 +585,57 @@ export default async function ListingDetailPage({ params }: Params) {
               <div
                 className={
                   listing.segment !== "COMMERCIAL"
-                    ? `grid w-full grid-cols-4 gap-2 md:flex md:w-auto md:items-start md:gap-10 ${detailsLocked ? "select-none blur-[5px]" : ""}`
-                    : `grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:items-start md:gap-10 ${detailsLocked ? "select-none blur-[5px]" : ""}`
+                    ? `grid w-full grid-cols-4 gap-2 md:flex md:w-auto md:items-start md:gap-3 ${detailsLocked ? "select-none blur-[5px]" : ""}`
+                    : `grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:items-start md:gap-3 ${detailsLocked ? "select-none blur-[5px]" : ""}`
                 }
               >
                 {listing.segment !== "COMMERCIAL" ? (
                   <>
-                    <div className="flex min-w-0 flex-col items-center gap-1.5 text-center md:min-w-[5rem] md:gap-2">
+                    <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/60 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
                       <Bed
-                        className="size-6 text-ink md:size-8"
+                        className="size-5 text-canopy md:size-6"
                         strokeWidth={1.75}
                         aria-hidden
                       />
-                      <span className="text-base font-semibold leading-tight text-ink">
-                        {listing.beds} {listing.beds === 1 ? "Bed" : "Beds"}
+                      <span className="text-sm font-semibold leading-tight text-ink">
+                        {bedsPlusLabel
+                          ? bedsPlusLabel.includes("+")
+                            ? bedsPlusLabel
+                            : `${bedsPlusLabel} ${bedsPlusLabel === "1" ? "Bed" : "Beds"}`
+                          : `${listing.beds} ${listing.beds === 1 ? "Bed" : "Beds"}`}
                       </span>
                     </div>
-                    <div className="flex min-w-0 flex-col items-center gap-1.5 text-center md:min-w-[5rem] md:gap-2">
+                    <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/60 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
                       <Bath
-                        className="size-6 text-ink md:size-8"
+                        className="size-5 text-canopy md:size-6"
                         strokeWidth={1.75}
                         aria-hidden
                       />
-                      <span className="text-base font-semibold leading-tight text-ink">
+                      <span className="text-sm font-semibold leading-tight text-ink">
                         {listing.baths} {listing.baths === 1 ? "Bath" : "Baths"}
                       </span>
                     </div>
                   </>
                 ) : null}
-                <div className="flex min-w-0 flex-col items-center gap-1.5 text-center md:min-w-[5rem] md:gap-2">
+                <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/60 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
                   <Maximize2
-                    className="size-6 text-ink md:size-8"
+                    className="size-5 text-canopy md:size-6"
                     strokeWidth={1.75}
                     aria-hidden
                   />
-                  <span className="text-base font-semibold leading-tight text-ink">
+                  <span className="text-sm font-semibold leading-tight text-ink">
                     {listing.sqft
                       ? `${listing.sqft.toLocaleString()} SqFt`
                       : "n/a SqFt"}
                   </span>
                 </div>
-                <div className="flex min-w-0 flex-col items-center gap-1.5 text-center md:min-w-[5rem] md:gap-2">
+                <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/60 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
                   <Car
-                    className="size-6 text-ink md:size-8"
+                    className="size-5 text-canopy md:size-6"
                     strokeWidth={1.75}
                     aria-hidden
                   />
-                  <span className="text-base font-semibold leading-tight text-ink">
+                  <span className="text-sm font-semibold leading-tight text-ink">
                     {listing.parkingSpaces}{" "}
                     {listing.parkingSpaces === 1 ? "Parking" : "Parkings"}
                   </span>
@@ -634,7 +663,7 @@ export default async function ListingDetailPage({ params }: Params) {
             mlsNumber={listing.mlsNumber}
             community={listing.community}
             postalCode={listing.postalCode}
-            taxesLabel={listing.taxes ? formatPrice(listing.taxes) : null}
+            taxesLabel={taxesLabel}
             maintenanceLabel={
               listing.maintenanceFee
                 ? `${formatPrice(listing.maintenanceFee)}/mo`
@@ -675,9 +704,9 @@ export default async function ListingDetailPage({ params }: Params) {
             })}
           />
 
-          <MarketPulseCard
-            pulse={pulse}
-            vowCallbackPath={`/listing/${listing.mlsNumber}`}
+          <HouzzatInsights
+            insights={insights}
+            callbackPath={`/listing/${listing.mlsNumber}`}
           />
 
           <ListingRelatedSection
@@ -701,13 +730,18 @@ export default async function ListingDetailPage({ params }: Params) {
           />
 
           {upcomingOpenHouses.length > 0 ? (
-            <section className="space-y-3">
-              <h2 className="font-display text-2xl text-ink">Open houses</h2>
-              <ul className="space-y-2">
+            <section className="rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
+                Showings
+              </p>
+              <h2 className="mt-1 font-display text-xl text-ink sm:text-2xl">
+                Open houses
+              </h2>
+              <ul className="mt-4 space-y-2">
                 {upcomingOpenHouses.map((oh) => (
                   <li
                     key={oh.id}
-                    className="rounded-xl border border-signal/20 bg-signal/5 px-4 py-3 text-sm"
+                    className="rounded-xl border border-signal/20 bg-signal/5 px-4 py-3 text-sm font-medium text-ink/80"
                   >
                     {oh.startsAt.toLocaleString("en-CA", {
                       weekday: "short",
@@ -729,11 +763,17 @@ export default async function ListingDetailPage({ params }: Params) {
           ) : null}
         </div>
 
-        <aside className="min-w-0 space-y-6">
+        <aside className="min-w-0 space-y-5 sm:space-y-6">
           {detailsLocked ? (
             <VowAcceptCard callbackPath={`/listing/${listing.mlsNumber}`} />
           ) : null}
           <ListingNotesPanel
+            mlsNumber={listing.mlsNumber}
+            signedIn={Boolean(user)}
+            initialBody={notePreview?.body ?? ""}
+            className="hidden md:block"
+          />
+          <ListingMobileNotes
             mlsNumber={listing.mlsNumber}
             signedIn={Boolean(user)}
             initialBody={notePreview?.body ?? ""}

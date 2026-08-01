@@ -558,12 +558,12 @@ export function ListingMapViewButton({
           setOpen(true);
         }}
         className={cn(
-          "group inline-flex items-center gap-2 rounded-md border border-white/50 bg-white/55 px-3.5 py-2 text-sm font-semibold text-ink shadow-lg backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/75 hover:shadow-xl",
+          "group inline-flex items-center gap-1.5 rounded-md border border-white/50 bg-white/55 px-2.5 py-1.5 text-xs font-semibold text-ink shadow-md backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/75 hover:shadow-lg",
           className,
         )}
       >
-        <span className="flex size-7 items-center justify-center rounded-full bg-canopy text-white shadow-sm transition group-hover:scale-105">
-          <MapPinned className="size-3.5" aria-hidden />
+        <span className="flex size-5 items-center justify-center rounded-full bg-canopy text-white shadow-sm transition group-hover:scale-105">
+          <MapPinned className="size-3" aria-hidden />
         </span>
         Map view
       </button>

@@ -14,7 +14,6 @@ import {
   preferListingPhotos,
 } from "@/lib/proptx/listing-photos";
 import {
-  APPROX_PIN_NOTE,
   mapHistoryRow,
   mapMediaRow,
   mapMlsNumber,
@@ -642,15 +641,11 @@ async function upsertPropertyRow(
       }
 
       if (approximateCoords) {
-        const baseDescription = stripApproxPinNote(
-          String(data.description ?? ""),
-        );
-        const withNote = `${baseDescription}\n\n${APPROX_PIN_NOTE}`.trim();
         data = {
           ...data,
           lat: existing?.lat ?? data.lat,
           lng: existing?.lng ?? data.lng,
-          description: withNote,
+          description: stripApproxPinNote(String(data.description ?? "")),
         };
       }
     }

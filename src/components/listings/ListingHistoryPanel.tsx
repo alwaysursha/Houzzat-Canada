@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { PropertyType } from "@prisma/client";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { ListingSection } from "@/components/listings/ListingSection";
 import {
   formatListPrice,
   propertyTypeLabel,
@@ -92,8 +93,17 @@ export function ListingHistoryPanel({
   const propertyLabel = propertyTypeLabel(propertyType as PropertyType);
 
   return (
-    <section className="space-y-4 rounded-2xl border border-line bg-surface p-5">
-      <div className="flex gap-6 border-b border-line">
+    <ListingSection
+      eyebrow="Record"
+      title="Listing history"
+      hint={
+        tab === "prices"
+          ? `Price changes for ${addressLabel} (${propertyLabel})`
+          : `${transactionType === "LEASE" ? "Lease" : "Buy/sell"} history for ${addressLabel} (${propertyLabel})`
+      }
+      headerClassName="mb-3"
+    >
+      <div className="mb-4 flex gap-6 border-b border-line/70">
         {(
           [
             ["history", "Listing History"],
@@ -120,14 +130,8 @@ export function ListingHistoryPanel({
         ))}
       </div>
 
-      <p className="text-sm text-ink/55">
-        {tab === "prices"
-          ? `Price changes for ${addressLabel} (${propertyLabel})`
-          : `${transactionType === "LEASE" ? "Lease" : "Buy/sell"} history for ${addressLabel} (${propertyLabel})`}
-      </p>
-
       {pricesLocked ? (
-        <div className="rounded-xl border border-line bg-mist/50 px-4 py-6 text-center">
+        <div className="rounded-xl border border-canopy/20 bg-canopy/5 px-4 py-6 text-center">
           <p className="text-sm text-ink/65">
             Sign in to view price changes for this home. Original and new prices
             come from the PropTx VOW feed once live.
@@ -143,14 +147,14 @@ export function ListingHistoryPanel({
           </button>
         </div>
       ) : tab === "prices" && priceRows.length === 0 ? (
-        <p className="rounded-xl border border-line bg-mist/40 px-4 py-5 text-center text-sm text-ink/55">
+        <p className="rounded-xl border border-line/70 bg-mist/40 px-4 py-5 text-center text-sm text-ink/55">
           No price changes on record for this listing.
         </p>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-xl border border-line">
+          <div className="overflow-x-auto rounded-xl border border-line/70">
             <table className="w-full min-w-[36rem] text-left text-sm">
-              <thead className="bg-mist text-ink/60">
+              <thead className="bg-mist/80 text-[11px] uppercase tracking-wide text-ink/50">
                 <tr>
                   <th className="px-3 py-2.5 font-semibold">Contract Date</th>
                   <th className="px-3 py-2.5 font-semibold">Last Update</th>
@@ -177,8 +181,8 @@ export function ListingHistoryPanel({
                     <tr
                       key={row.id}
                       className={cn(
-                        "border-t border-line",
-                        index % 2 === 1 ? "bg-mist/50" : "bg-surface",
+                        "border-t border-line/70",
+                        index % 2 === 1 ? "bg-mist/40" : "bg-surface",
                       )}
                     >
                       <td className="px-3 py-3 text-ink/80">
@@ -240,7 +244,7 @@ export function ListingHistoryPanel({
           {tab === "history" &&
           !canSeeRestricted &&
           rows.some((row) => !row.public) ? (
-            <p className="text-xs text-ink/50">
+            <p className="mt-3 text-xs text-ink/50">
               Past sold, leased, and expired prices and listing IDs are
               restricted under TRREB VOW rules.{" "}
               <Link
@@ -254,7 +258,7 @@ export function ListingHistoryPanel({
           ) : null}
 
           {tab === "prices" ? (
-            <p className="text-xs text-ink/45">
+            <p className="mt-3 text-xs text-ink/45">
               Original and new prices will sync from the PropTx VOW feed when
               credentials are live.
             </p>
@@ -264,7 +268,7 @@ export function ListingHistoryPanel({
             <button
               type="button"
               onClick={() => setExpanded((value) => !value)}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-canopy bg-mist px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-canopy/5"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-canopy/30 bg-canopy/5 px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-canopy/10"
             >
               {expanded
                 ? tab === "prices"
@@ -282,6 +286,6 @@ export function ListingHistoryPanel({
           ) : null}
         </>
       )}
-    </section>
+    </ListingSection>
   );
 }

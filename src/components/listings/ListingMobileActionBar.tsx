@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, CalendarDays, Route, Search } from "lucide-react";
+import { Bell, CalendarDays, Search } from "lucide-react";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
+import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import {
   ViewingBookingModal,
   type ViewingContactDefaults,
@@ -148,7 +149,7 @@ export function ListingMobileActionBar({
                 disabled={pending}
                 onClick={() => void onWatchProperty()}
                 className={cn(
-                  "h-12 min-w-0 flex-1 gap-1.5 px-2.5 text-sm",
+                  "h-12 min-w-0 flex-1 gap-1.5 px-2 text-sm",
                   watching && "border-signal text-signal",
                 )}
               >
@@ -158,8 +159,8 @@ export function ListingMobileActionBar({
                     watching && "fill-signal text-signal",
                   )}
                 />
-                <span className="truncate">
-                  {watching ? "Watching" : "Add to Watchlist"}
+                <span className="whitespace-nowrap">
+                  {watching ? "Watching" : "Watchlist"}
                 </span>
               </Button>
               <Button
@@ -168,8 +169,8 @@ export function ListingMobileActionBar({
                 variant="secondary"
                 size="lg"
                 className={cn(
-                  "h-12 shrink-0 gap-1.5 px-3 text-sm",
-                  onTour && "border-canopy text-canopy",
+                  "h-12 shrink-0 gap-1.5 px-3 text-sm text-canopy",
+                  onTour && "border-canopy",
                 )}
                 onClick={() => {
                   void (async () => {
@@ -200,9 +201,7 @@ export function ListingMobileActionBar({
                   onTour ? "Remove from Route Planner" : "Add to Route Planner"
                 }
               >
-                <Route
-                  className={cn("size-4 shrink-0", onTour && "text-canopy")}
-                />
+                <RouteStartIcon />
                 <span className="sr-only sm:not-sr-only sm:inline">Route</span>
               </Button>
               <Button

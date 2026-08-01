@@ -49,14 +49,19 @@ export function ViewingRequestPanel({
   const shellClass = cn(
     // Parent column must be the tall grid aside — do not wrap this in a short
     // div, or sticky has no room to travel.
-    "sticky top-[calc(4rem+var(--listing-sticky-bar-height,5.5rem)+0.5rem)] z-10 rounded-2xl border border-line bg-surface p-5 shadow-sm",
+    "sticky top-[calc(4rem+var(--listing-sticky-bar-height,5.5rem)+0.5rem)] z-10 rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6",
     className,
   );
 
   if (inactive) {
     return (
       <div className={shellClass}>
-        <h2 className="font-semibold text-ink">Ask about this home</h2>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
+          Next step
+        </p>
+        <h2 className="mt-1 font-display text-xl text-ink sm:text-2xl">
+          Ask about this home
+        </h2>
         <p className="mt-1.5 text-sm text-ink/60">
           This listing is no longer active. Send an inquiry and we’ll help with
           details or similar homes nearby.
@@ -111,14 +116,19 @@ export function ViewingRequestPanel({
           size="button"
         />
       </div>
-      <h2 className="font-semibold text-ink">Book a viewing</h2>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
+        Next step
+      </p>
+      <h2 className="mt-1 font-display text-xl text-ink sm:text-2xl">
+        Book a viewing
+      </h2>
       <div className="mt-3 flex gap-2">
         <button
           type="button"
-          className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+          className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
             mode === "showing"
-              ? "bg-canopy text-white"
-              : "border border-line text-ink/70"
+              ? "bg-canopy text-white shadow-sm"
+              : "border border-line/70 bg-mist/40 text-ink/70"
           }`}
           onClick={() => setMode("showing")}
         >
@@ -126,10 +136,10 @@ export function ViewingRequestPanel({
         </button>
         <button
           type="button"
-          className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+          className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
             mode === "virtual_viewing"
-              ? "bg-signal text-white"
-              : "border border-line text-ink/70"
+              ? "bg-signal text-white shadow-sm"
+              : "border border-line/70 bg-mist/40 text-ink/70"
           }`}
           onClick={() => setMode("virtual_viewing")}
         >
