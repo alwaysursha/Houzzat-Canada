@@ -96,12 +96,17 @@ model User {
   emailAlertsEnabled Boolean @default(true)
   smsAlertsEnabled   Boolean @default(false)
   relatedListingsMode RelatedListingsMode @default(SAME_AREA)
+  /** Soft-suspend: blocked from signing in / using the product. */
+  disabledAt    DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   accounts      Account[]
   sessions      Session[]
   agentProfile  AgentProfile?
+  siteVisitors  SiteVisitor[]
+  activityEvents ActivityEvent[]
+  auditLogs     AuditLog[]       @relation("AuditActor")
   leads         Lead[]            @relation("CustomerLeads")
   assignedLeads Lead[]            @relation("AssignedLeads")
   activities    LeadActivity[]
@@ -976,4 +981,116 @@ model ReferralHandoff {
 
   @@index([partnerId, status])
   @@index([agentId, createdAt])
+}
+
+/** Anonymous or identified browser identity for site analytics. */
+model SiteVisitor {
+  id           String    @id @default(cuid())
+  /** Stable key in localStorage (not PII). */
+  visitorKey   String    @unique
+  userId       String?
+  firstSeenAt  DateTime  @default(now())
+  lastSeenAt   DateTime  @default(now())
+  userAgent    String?   @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user     User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessions SiteSession[]
+  events   ActivityEvent[]
+
+  @@index([userId])
+  @@index([lastSeenAt])
+}
+
+/** One browsing session (tab lifetime / sessionStorage key). */
+model SiteSession {
+  id              String    @id @default(cuid())
+  sessionKey      String    @unique
+  visitorId       String
+  startedAt       DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
+  endedAt         DateTime?
+  landingPath     String?
+  landingReferrer String?   @db.Text
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  utmContent      String?
+  utmTerm         String?
+  pageCount       Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  visitor SiteVisitor     @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  events  ActivityEvent[]
+
+  @@index([visitorId, lastSeenAt])
+  @@index([lastSeenAt])
+}
+
+enum ActivityEventType {
+  PAGE_VIEW
+  HEARTBEAT
+  LISTING_VIEW
+  SEARCH
+  SAVE_LISTING
+  UNSAVE_LISTING
+  SAVE_SEARCH
+  WATCH_PROPERTY
+  WATCH_AREA
+  NOTE
+  LEAD
+  SIGN_IN
+  SIGN_UP
+  ROUTE_PLANNER
+  LANDING_VIEW
+  OTHER
+}
+
+/** Full journey timeline events (visitors + signed-in users). */
+model ActivityEvent {
+  id          String            @id @default(cuid())
+  type        ActivityEventType
+  visitorId   String?
+  sessionId   String?
+  userId      String?
+  path        String?
+  title       String?
+  mlsNumber   String?
+  referrer    String?           @db.Text
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  meta        Json?
+  createdAt   DateTime          @default(now())
+
+  visitor SiteVisitor? @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+  session SiteSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  user    User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([visitorId, createdAt])
+  @@index([sessionId, createdAt])
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@index([mlsNumber, createdAt])
+}
+
+/** Admin action audit trail. */
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  summary    String
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
 }

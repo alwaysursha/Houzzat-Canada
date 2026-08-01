@@ -39,10 +39,15 @@ const providers: Provider[] = [
             isSeller: true,
             activeMode: true,
             password: true,
+            disabledAt: true,
           },
         });
 
         if (!user?.password) {
+          return null;
+        }
+
+        if (user.disabledAt) {
           return null;
         }
 

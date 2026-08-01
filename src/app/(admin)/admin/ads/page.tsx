@@ -14,9 +14,10 @@ export default async function AdminAdsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-4xl text-ink">Ad Studio</h1>
-          <p className="mt-2 text-sm text-ink/60">
-            Generate Meta + Google copy packs, UTMs, and exports. Draft publish
-            APIs stay stubbed until ad accounts are connected.
+          <p className="mt-2 max-w-2xl text-sm text-ink/60">
+            Brand-grade Meta + Google creative packs, tracked UTMs, and export
+            kits. Live ad-account publish comes after creative quality is locked
+            — export-first keeps Houzzat looking premium.
           </p>
         </div>
         <Link

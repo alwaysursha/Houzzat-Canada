@@ -445,39 +445,6 @@ export default async function ListingDetailPage({ params }: Params) {
         <div className="min-w-0 space-y-5 sm:space-y-6">
           <div className="flex flex-col gap-5 rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-x-8 md:gap-y-5">
             <div className="min-w-0 w-full md:flex-1">
-              {(coverTagLabel || segmentTagMeta) ? (
-                <div className="mb-2.5 flex items-center justify-between gap-3 md:hidden">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    {coverTagLabel ? (
-                      <span
-                        className={`rounded-md px-3 py-1.5 text-xs font-bold tracking-wide ${listingStatusBadgeClass(listing.status)}`}
-                      >
-                        {coverTagLabel}
-                      </span>
-                    ) : null}
-                    {segmentTagMeta ? (
-                      <span
-                        className={
-                          segmentTagMeta.tone === "commercial"
-                            ? "rounded-md bg-ink px-3 py-1.5 text-xs font-bold tracking-wide text-white"
-                            : segmentTagMeta.tone === "preconstruction"
-                              ? "rounded-md bg-signal px-3 py-1.5 text-xs font-bold tracking-wide text-white"
-                              : "rounded-md bg-mist px-3 py-1.5 text-xs font-bold tracking-wide text-ink ring-1 ring-line"
-                        }
-                      >
-                        {segmentTagMeta.label}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="shrink-0 text-right text-sm font-medium leading-snug text-ink/55">
-                    {timingLabel}
-                  </p>
-                </div>
-              ) : (
-                <p className="mb-2.5 text-right text-sm font-medium leading-snug text-ink/55 md:hidden">
-                  {timingLabel}
-                </p>
-              )}
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-3">
                   {showClosedPrice ? (
@@ -532,6 +499,9 @@ export default async function ListingDetailPage({ params }: Params) {
                     </>
                   )}
                 </div>
+                <p className="shrink-0 pt-1.5 text-right text-sm font-medium leading-snug text-ink/55 md:hidden">
+                  {timingLabel}
+                </p>
               </div>
               <FitSingleLineText
                 className="mt-2 font-display leading-tight text-ink"
