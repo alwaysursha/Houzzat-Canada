@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const SHOW_AFTER_PX = 360;
+export const SHOW_AFTER_PX = 360;
 
 /** Shared visibility for scroll-to-top + listing notes FAB. */
 export function useScrollFabVisible() {

@@ -106,6 +106,7 @@ export function ListingMobileNotes({
 
       <button
         type="button"
+        data-houzzat-listing-coach="notes"
         onClick={() => setOpen((value) => !value)}
         aria-label={open ? "Close notes" : "Open notes"}
         aria-expanded={open}

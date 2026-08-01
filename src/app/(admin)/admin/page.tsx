@@ -30,7 +30,7 @@ function StatCard({
     return (
       <Link
         href={href}
-        className="rounded-2xl border border-line/80 bg-surface/90 p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] transition hover:border-canopy/35"
+        className="block rounded-2xl border border-line/80 bg-surface/90 p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] transition hover:border-canopy/35"
       >
         {inner}
       </Link>

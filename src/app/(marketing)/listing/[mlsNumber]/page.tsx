@@ -19,6 +19,7 @@ import { NearbyAmenities } from "@/components/listings/NearbyAmenities";
 import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
 import { ListingRelatedSection } from "@/components/listings/ListingRelatedSection";
 import { ListingMobileSideMenu } from "@/components/listings/ListingMobileSideMenu";
+import { ListingDetailCoachMarks } from "@/components/listings/ListingDetailCoachMarks";
 import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
 import { ListingMobileNotes } from "@/components/listings/ListingMobileNotes";
 import { RecordRecentView } from "@/components/listings/RecordRecentView";
@@ -331,6 +332,7 @@ export default async function ListingDetailPage({ params }: Params) {
   return (
     <>
       <RecordRecentView mlsNumber={listing.mlsNumber} />
+      <ListingDetailCoachMarks />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

@@ -65,6 +65,7 @@ export function RoutePlannerToggleButton({
       <button
         ref={buttonRef}
         type="button"
+        data-houzzat-listing-coach="route"
         onClick={(e) => void onClick(e)}
         disabled={inactive}
         className={cn(
@@ -86,6 +87,7 @@ export function RoutePlannerToggleButton({
     <button
       ref={buttonRef}
       type="button"
+      data-houzzat-listing-coach="route"
       aria-label={onTour ? "Remove from Route Planner" : "Add to Route Planner"}
       disabled={inactive}
       onClick={(e) => void onClick(e)}

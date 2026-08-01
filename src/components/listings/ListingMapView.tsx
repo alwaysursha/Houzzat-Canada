@@ -552,6 +552,7 @@ export function ListingMapViewButton({
     <>
       <button
         type="button"
+        data-houzzat-listing-coach="map"
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();

@@ -49,6 +49,9 @@ const COVER_CONTROL_CLASS =
 const COVER_CONTROL_ICON_WRAP =
   "flex size-5 items-center justify-center rounded-full bg-canopy text-white shadow-sm transition group-hover:scale-105";
 
+const COVER_STATUS_TAG_CLASS =
+  "rounded-lg px-3 py-1.5 text-xs font-bold tracking-wide shadow-md sm:px-3.5 sm:py-2 sm:text-sm";
+
 function VirtualTourCoverButton({
   href,
   className,
@@ -83,7 +86,7 @@ function CoverSegmentTag({
   return (
     <span
       className={cn(
-        "rounded-md px-2.5 py-1 text-[11px] font-bold tracking-wide shadow-md sm:text-xs",
+        COVER_STATUS_TAG_CLASS,
         segmentTag.tone === "commercial" && "bg-ink text-white",
         segmentTag.tone === "preconstruction" && "bg-signal text-white",
         segmentTag.tone === "residential" &&
@@ -448,6 +451,7 @@ export function ListingGallery({
               ) : (
                 <button
                   type="button"
+                  data-houzzat-listing-coach="map"
                   onClick={() => goToMobileSlide(mapSlideIndex)}
                   className={COVER_CONTROL_CLASS}
                 >
@@ -470,17 +474,18 @@ export function ListingGallery({
         ) : null}
         {(coverTag || segmentTag || (tourUrl && !detailsLocked)) ? (
           <div className="pointer-events-none absolute bottom-3 left-3 z-30 flex flex-wrap items-center gap-1.5">
-            {segmentTag ? <CoverSegmentTag segmentTag={segmentTag} /> : null}
             {coverTag ? (
               <span
                 className={cn(
-                  "rounded-md px-2.5 py-1 text-[11px] font-bold tracking-wide text-white shadow-md sm:text-xs",
+                  COVER_STATUS_TAG_CLASS,
+                  "text-white",
                   coverTagClassName ?? "bg-canopy",
                 )}
               >
                 {coverTag}
               </span>
             ) : null}
+            {segmentTag ? <CoverSegmentTag segmentTag={segmentTag} /> : null}
             {tourUrl && !detailsLocked ? (
               <div className="pointer-events-auto">
                 <VirtualTourCoverButton href={tourUrl} />
@@ -594,17 +599,18 @@ export function ListingGallery({
 
         {(coverTag || segmentTag || (tourUrl && !detailsLocked)) ? (
           <div className="absolute bottom-3 left-3 z-20 flex flex-wrap items-center gap-1.5 sm:bottom-4 sm:left-4">
-            {segmentTag ? <CoverSegmentTag segmentTag={segmentTag} /> : null}
             {coverTag ? (
               <span
                 className={cn(
-                  "pointer-events-none rounded-md px-2.5 py-1 text-[11px] font-bold tracking-wide text-white shadow-md sm:text-xs",
+                  COVER_STATUS_TAG_CLASS,
+                  "pointer-events-none text-white",
                   coverTagClassName ?? "bg-canopy",
                 )}
               >
                 {coverTag}
               </span>
             ) : null}
+            {segmentTag ? <CoverSegmentTag segmentTag={segmentTag} /> : null}
             {tourUrl && !detailsLocked ? (
               <VirtualTourCoverButton href={tourUrl} />
             ) : null}

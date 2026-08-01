@@ -147,6 +147,7 @@ export function ListingMobileActionBar({
                 variant="secondary"
                 size="lg"
                 disabled={pending}
+                data-houzzat-listing-coach="watchlist"
                 onClick={() => void onWatchProperty()}
                 className={cn(
                   "h-12 min-w-0 flex-1 gap-1.5 px-2 text-sm",
@@ -168,6 +169,7 @@ export function ListingMobileActionBar({
                 type="button"
                 variant="secondary"
                 size="lg"
+                data-houzzat-listing-coach="route"
                 className={cn(
                   "h-12 shrink-0 gap-1.5 px-3 text-sm text-canopy",
                   onTour && "border-canopy",
