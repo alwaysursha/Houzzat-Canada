@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { decodeGooglePolyline } from "@/lib/maps/decode-polyline";
-import { OSM_STYLE } from "@/lib/maps/osm-style";
+import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
 
 type MapPoint = { lat: number; lng: number; label: string };
 
@@ -146,6 +146,8 @@ export function RoutePlannerMap({
       style: OSM_STYLE,
       center: [-79.3832, 43.6532],
       zoom: 10,
+      minZoom: MAP_MIN_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
     });
     map.addControl(
       new maplibregl.NavigationControl({ showCompass: false }),

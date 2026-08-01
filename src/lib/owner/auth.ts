@@ -1,5 +1,6 @@
-import type { Prisma, Role } from "@prisma/client";
+import type { ActiveMode, Prisma, Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
+import { canAccessSellerTools } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 
 const ownerUserSelect = {
@@ -9,6 +10,9 @@ const ownerUserSelect = {
   image: true,
   phone: true,
   role: true,
+  isBuyer: true,
+  isSeller: true,
+  activeMode: true,
 } satisfies Prisma.UserSelect;
 
 export type OwnerUser = {
@@ -18,6 +22,9 @@ export type OwnerUser = {
   image: string | null;
   phone: string | null;
   role: Role;
+  isBuyer: boolean;
+  isSeller: boolean;
+  activeMode: ActiveMode;
 };
 
 export async function requireOwnerUser(): Promise<OwnerUser | null> {
@@ -28,7 +35,14 @@ export async function requireOwnerUser(): Promise<OwnerUser | null> {
     select: ownerUserSelect,
   });
   if (!user) return null;
-  if (user.role === "AGENT") return null;
+  if (
+    !canAccessSellerTools({
+      role: user.role,
+      isSeller: user.isSeller,
+    })
+  ) {
+    return null;
+  }
   return user;
 }
 

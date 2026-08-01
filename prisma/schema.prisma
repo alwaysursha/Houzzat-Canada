@@ -9,9 +9,16 @@ datasource db {
 }
 
 enum Role {
-  CUSTOMER
+  BUYER
+  SELLER
   AGENT
   ADMIN
+}
+
+/** Active consumer dashboard mode (ignored for ADMIN / AGENT). */
+enum ActiveMode {
+  BUYER
+  SELLER
 }
 
 enum RelatedListingsMode {
@@ -69,7 +76,13 @@ model User {
   emailVerified DateTime?
   password      String?
   image         String?
-  role          Role      @default(CUSTOMER)
+  role          Role      @default(BUYER)
+  /** Consumer can use buyer dashboard / buyer search prefs. */
+  isBuyer       Boolean   @default(true)
+  /** Consumer can use seller dashboard (/owner) / seller search prefs. */
+  isSeller      Boolean   @default(false)
+  /** Which consumer dashboard + search context is active. */
+  activeMode    ActiveMode @default(BUYER)
   phone         String?
   /** Client home / location address — used as Route Planner start + admin CRM. */
   homeAddress   String?

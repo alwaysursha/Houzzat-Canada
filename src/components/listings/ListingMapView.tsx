@@ -16,7 +16,7 @@ import {
   propertyTypeLabel,
 } from "@/lib/listings/constants";
 import type { ListingCard } from "@/lib/listings/types";
-import { OSM_STYLE } from "@/lib/maps/osm-style";
+import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
 import { cn } from "@/lib/utils";
 import type { PropertyType } from "@prisma/client";
 
@@ -328,6 +328,8 @@ export function ListingMapViewModal({
       style: OSM_STYLE,
       center: [subject.lng, subject.lat],
       zoom: 13,
+      minZoom: MAP_MIN_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
     });
     map.addControl(
       new maplibregl.NavigationControl({ showCompass: false }),

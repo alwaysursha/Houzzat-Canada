@@ -5,26 +5,11 @@ import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import type { Adapter } from "next-auth/adapters";
 import type { Provider } from "next-auth/providers";
+import type { ActiveMode } from "@prisma/client";
 import { Role } from "@prisma/client";
 import { authConfig } from "@/lib/auth.config";
-import { isAdminRole, isAgentRole } from "@/lib/constants";
+import { isAdminRole, isAgentRole, resolveActiveMode } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
-
-declare module "next-auth" {
-  interface Session {
-    user: {
-      id: string;
-      email: string;
-      name?: string | null;
-      image?: string | null;
-      role: Role;
-    };
-  }
-
-  interface User {
-    role: Role;
-  }
-}
 
 const providers: Provider[] = [
   Credentials({
@@ -42,8 +27,6 @@ const providers: Provider[] = [
       }
 
       try {
-        // Select only auth fields so missing optional User columns
-        // (e.g. termsAcceptedAt before schema push) cannot break sign-in.
         const user = await prisma.user.findUnique({
           where: { email },
           select: {
@@ -52,6 +35,9 @@ const providers: Provider[] = [
             name: true,
             image: true,
             role: true,
+            isBuyer: true,
+            isSeller: true,
+            activeMode: true,
             password: true,
           },
         });
@@ -71,6 +57,9 @@ const providers: Provider[] = [
           name: user.name,
           image: user.image,
           role: user.role,
+          isBuyer: user.isBuyer,
+          isSeller: user.isSeller,
+          activeMode: user.activeMode,
         };
       } catch (error) {
         console.error("[auth] authorize failed", error);
@@ -99,9 +88,51 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   }
 }
 
+const profileSelect = {
+  id: true,
+  role: true,
+  name: true,
+  isBuyer: true,
+  isSeller: true,
+  activeMode: true,
+} as const;
+
+function applyProfileToToken(
+  token: {
+    sub?: string;
+    email?: string | null;
+    name?: string | null;
+    role?: Role;
+    isBuyer?: boolean;
+    isSeller?: boolean;
+    activeMode?: ActiveMode;
+    subVerifiedAt?: number;
+  },
+  dbUser: {
+    id: string;
+    role: Role;
+    name: string | null;
+    isBuyer: boolean;
+    isSeller: boolean;
+    activeMode: ActiveMode;
+  },
+  email: string,
+) {
+  token.sub = dbUser.id;
+  token.email = email;
+  token.role = dbUser.role;
+  token.isBuyer = dbUser.isBuyer;
+  token.isSeller = dbUser.isSeller;
+  token.activeMode = resolveActiveMode(dbUser);
+  if (dbUser.name) token.name = dbUser.name;
+}
+
+function isConsumerRoleSafe(role: Role) {
+  return role === "BUYER" || role === "SELLER";
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  // Dual @auth/core versions from next-auth / prisma-adapter need a cast.
   adapter: PrismaAdapter(prisma) as Adapter,
   providers,
   callbacks: {
@@ -122,7 +153,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return baseUrl;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       const emailFromUser =
         typeof user?.email === "string"
           ? user.email.trim().toLowerCase()
@@ -133,29 +164,63 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           : null;
       const email = emailFromUser ?? emailFromToken;
 
-      // Always bind identity from DB by email at sign-in (source of truth).
+      if (trigger === "update" && session && typeof session === "object") {
+        const nextMode =
+          "activeMode" in session && session.activeMode === "SELLER"
+            ? "SELLER"
+            : "activeMode" in session && session.activeMode === "BUYER"
+              ? "BUYER"
+              : null;
+        if (nextMode && email) {
+          try {
+            const dbUser = await prisma.user.findUnique({
+              where: { email },
+              select: profileSelect,
+            });
+            if (dbUser) {
+              const allowed =
+                nextMode === "SELLER"
+                  ? dbUser.isSeller || dbUser.role === "ADMIN"
+                  : dbUser.isBuyer || isConsumerRoleSafe(dbUser.role);
+              if (allowed) {
+                await prisma.user.update({
+                  where: { id: dbUser.id },
+                  data: { activeMode: nextMode },
+                });
+                token.activeMode = nextMode;
+              }
+            }
+          } catch (error) {
+            console.error("[auth] activeMode update failed", error);
+          }
+        }
+      }
+
       if (user && email) {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { email },
-            select: { id: true, role: true, name: true },
+            select: profileSelect,
           });
           if (dbUser) {
-            token.sub = dbUser.id;
-            token.email = email;
-            token.role = dbUser.role;
-            if (dbUser.name) token.name = dbUser.name;
+            applyProfileToToken(token, dbUser, email);
           } else {
             token.sub = user.id;
             token.email = email;
-            token.role = user.role ?? Role.CUSTOMER;
+            token.role = user.role ?? Role.BUYER;
+            token.isBuyer = user.isBuyer ?? true;
+            token.isSeller = user.isSeller ?? false;
+            token.activeMode = user.activeMode ?? "BUYER";
             if (user.name) token.name = user.name;
           }
         } catch (error) {
           console.error("[auth] jwt sign-in reconcile failed", error);
           token.sub = user.id;
           token.email = email;
-          token.role = user.role ?? Role.CUSTOMER;
+          token.role = user.role ?? Role.BUYER;
+          token.isBuyer = user.isBuyer ?? true;
+          token.isSeller = user.isSeller ?? false;
+          token.activeMode = user.activeMode ?? "BUYER";
         }
         token.subVerifiedAt = Date.now();
         return token;
@@ -163,7 +228,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       if (user) {
         token.sub = user.id;
-        token.role = user.role ?? Role.CUSTOMER;
+        token.role = user.role ?? Role.BUYER;
+        token.isBuyer = user.isBuyer ?? true;
+        token.isSeller = user.isSeller ?? false;
+        token.activeMode = user.activeMode ?? "BUYER";
         if (user.name) token.name = user.name;
         token.subVerifiedAt = Date.now();
         return token;
@@ -173,13 +241,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return token;
       }
 
-      // Re-heal periodically. Old cookies only had a one-shot `idVerified` flag,
-      // so missing `subVerifiedAt` forces an immediate check after deploy.
       const verifiedAt =
         typeof token.subVerifiedAt === "number" ? token.subVerifiedAt : 0;
       const RECHECK_MS = 5 * 60 * 1000;
       const needsRecheck =
-        !token.sub || Date.now() - verifiedAt > RECHECK_MS;
+        !token.sub ||
+        token.isBuyer == null ||
+        token.isSeller == null ||
+        !token.activeMode ||
+        Date.now() - verifiedAt > RECHECK_MS;
 
       if (!needsRecheck) {
         return token;
@@ -188,11 +258,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       try {
         const dbUser = await prisma.user.findUnique({
           where: { email },
-          select: { id: true, role: true, name: true },
+          select: profileSelect,
         });
         if (!dbUser) {
-          // Email no longer exists (DB rebuild) — drop identity so UI stops
-          // treating this cookie as signed-in.
           console.warn("[auth] JWT email missing in DB; clearing session", email);
           return null;
         }
@@ -203,10 +271,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             to: dbUser.id,
           });
         }
-        token.sub = dbUser.id;
-        token.email = email;
-        token.role = dbUser.role;
-        if (dbUser.name) token.name = dbUser.name;
+        applyProfileToToken(token, dbUser, email);
         token.subVerifiedAt = Date.now();
       } catch (error) {
         console.error("[auth] jwt reconcile failed", error);
@@ -217,7 +282,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub as string;
-        session.user.role = (token.role as Role) ?? Role.CUSTOMER;
+        session.user.role = (token.role as Role) ?? Role.BUYER;
+        session.user.isBuyer = Boolean(token.isBuyer ?? true);
+        session.user.isSeller = Boolean(token.isSeller ?? false);
+        session.user.activeMode =
+          token.activeMode === "SELLER" ? "SELLER" : "BUYER";
         if (typeof token.email === "string" && token.email) {
           session.user.email = token.email;
         }

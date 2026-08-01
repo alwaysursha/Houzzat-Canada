@@ -1,17 +1,17 @@
 name: MLS Geocode Approximate Pins
 
 # Repair city-centroid map pins so Map Search + Near Me work.
-# Street → neighbourhood → city via Google Places (Nominatim fallback).
+# Street-accurate only (Google Places → Nominatim). City hits are rejected.
 on:
   schedule:
-    # Hourly — ~1–2k pins/hour until the approx backlog is gone.
-    - cron: "20 * * * *"
+    # Every 10 minutes — drain approximate ACTIVE pins as inventory churns.
+    - cron: "2,12,22,32,42,52 * * * *"
   workflow_dispatch:
     inputs:
       limit:
         description: "Max listings to geocode this run"
         required: false
-        default: "1500"
+        default: "4000"
 
 concurrency:
   group: mls-geocode
@@ -50,11 +50,12 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-          LIMIT: ${{ github.event.inputs.limit || '1500' }}
+          LIMIT: ${{ github.event.inputs.limit || '4000' }}
+          GEOCODE_CONCURRENCY: "4"
         run: |
           set -euo pipefail
           if [[ -z "${GOOGLE_MAPS_API_KEY:-}" ]]; then
-            echo "Missing GOOGLE_MAPS_API_KEY — geocode will be slow/unreliable via Nominatim only"
+            echo "Missing GOOGLE_MAPS_API_KEY — using Photon + rate-limited Nominatim"
           fi
           echo "Running pnpm mls:geocode ${LIMIT}"
           pnpm mls:geocode "${LIMIT}"

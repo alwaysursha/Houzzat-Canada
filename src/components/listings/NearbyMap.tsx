@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { OSM_STYLE } from "@/lib/maps/osm-style";
+import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
 import type { NearbyPoi } from "@/lib/poi/nearby";
 
 const TYPE_COLOR: Record<string, string> = {
@@ -36,6 +36,8 @@ export function NearbyMap({
       style: OSM_STYLE,
       center: [lng, lat],
       zoom: 13.2,
+      minZoom: MAP_MIN_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     mapRef.current = map;

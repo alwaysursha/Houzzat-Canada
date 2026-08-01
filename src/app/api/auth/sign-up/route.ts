@@ -60,7 +60,10 @@ export async function POST(request: Request) {
         name: parsed.data.name,
         email,
         password,
-        role: "CUSTOMER",
+        role: "BUYER",
+        isBuyer: true,
+        isSeller: false,
+        activeMode: "BUYER",
         termsAcceptedAt: now,
         termsVersion: TERMS_VERSION,
         // Registration still establishes client / VOW access for sold data.

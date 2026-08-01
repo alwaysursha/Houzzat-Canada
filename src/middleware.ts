@@ -1,6 +1,11 @@
 import { auth } from "@/auth.edge";
 import { isComingSoonEnabled } from "@/lib/coming-soon";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
+import {
+  canAccessSellerTools,
+  isAdminRole,
+  isAgentRole,
+} from "@/lib/roles";
 import { NextResponse, type NextRequest } from "next/server";
 
 function redirectToSignIn(request: NextRequest, callbackPath: string) {
@@ -60,7 +65,7 @@ export default auth((request) => {
     if (!session?.user) {
       return redirectToSignIn(request, pathname);
     }
-    if (session.user.role !== "ADMIN") {
+    if (!isAdminRole(session.user.role)) {
       return redirectToPath(request, "/account");
     }
   }
@@ -69,7 +74,7 @@ export default auth((request) => {
     if (!session?.user) {
       return redirectToSignIn(request, pathname);
     }
-    if (session.user.role !== "AGENT" && session.user.role !== "ADMIN") {
+    if (!isAgentRole(session.user.role)) {
       return redirectToPath(request, "/account");
     }
   }
@@ -92,6 +97,14 @@ export default auth((request) => {
     }
     if (session.user.role === "AGENT") {
       return redirectToPath(request, "/agent");
+    }
+    if (
+      !canAccessSellerTools({
+        role: session.user.role,
+        isSeller: session.user.isSeller,
+      })
+    ) {
+      return redirectToPath(request, "/account");
     }
   }
 

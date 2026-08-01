@@ -96,8 +96,8 @@ function requestClientMeta(request: Request) {
 }
 
 /**
- * Ensure a CUSTOMER account exists for this seller lead.
- * CUSTOMER role unlocks the /owner desk (Owner portal) used for FSBO later.
+ * Ensure a seller (and buyer) consumer account exists for this valuation lead.
+ * Grants the Seller profile so /owner desk is available; Buyer stays enabled too.
  */
 async function ensureOwnerCustomer(opts: {
   email: string;
@@ -113,7 +113,7 @@ async function ensureOwnerCustomer(opts: {
   const email = opts.email.toLowerCase();
   const existing = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, role: true },
+    select: { id: true, role: true, isBuyer: true, isSeller: true },
   });
 
   if (existing) {
@@ -129,6 +129,13 @@ async function ensureOwnerCustomer(opts: {
           ? { homeLat: opts.lat, homeLng: opts.lng }
           : {}),
         ...(opts.marketingOptIn ? { emailAlertsEnabled: true } : {}),
+        ...(existing.role === "ADMIN"
+          ? {}
+          : {
+              isSeller: true,
+              isBuyer: true,
+              activeMode: "SELLER",
+            }),
       },
     });
     return { userId: existing.id, accountCreated: false };
@@ -144,7 +151,10 @@ async function ensureOwnerCustomer(opts: {
       name: opts.name,
       email,
       password,
-      role: "CUSTOMER",
+      role: "SELLER",
+      isBuyer: true,
+      isSeller: true,
+      activeMode: "SELLER",
       phone: opts.phone || null,
       homeAddress: opts.address,
       homeLat: opts.lat ?? null,
@@ -343,7 +353,7 @@ export async function POST(request: Request) {
             ? `Community avg sold: $${estimate.communityAvgSold.toLocaleString()} (n=${estimate.communitySoldCount})`
             : null,
           `Intent: ${data.intent}`,
-          accountCreated ? "Owner account created (CUSTOMER / owner desk)" : null,
+          accountCreated ? "Seller profile created (buyer+seller, owner desk)" : null,
           isQuick ? "Captured from homepage Sell a Home → Get Estimate" : null,
           `Indicative range: $${estimate.low.toLocaleString()} – $${estimate.high.toLocaleString()} (mid $${estimate.mid.toLocaleString()})`,
           `Method: ${methodLabel}; sample=${estimate.sampleSize}; sold=${estimate.soldCount}; active=${estimate.activeCount}`,

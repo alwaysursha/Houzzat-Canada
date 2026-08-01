@@ -1,5 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
-import type { Role } from "@prisma/client";
+import type { ActiveMode, Role } from "@prisma/client";
+import { canAccessSellerTools, isAgentRole } from "@/lib/roles";
 
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
@@ -52,6 +53,7 @@ export const authConfig = {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
+        maxAge: SESSION_MAX_AGE_SECONDS,
         secure: process.env.NODE_ENV === "production",
       },
     },
@@ -61,13 +63,14 @@ export const authConfig = {
       const { pathname } = request.nextUrl;
       const isLoggedIn = !!auth?.user;
       const role = auth?.user?.role as Role | undefined;
+      const isSeller = Boolean(auth?.user?.isSeller);
 
       if (pathname.startsWith("/admin")) {
         return isLoggedIn && role === "ADMIN";
       }
 
       if (pathname.startsWith("/agent")) {
-        return isLoggedIn && (role === "AGENT" || role === "ADMIN");
+        return isLoggedIn && isAgentRole(role);
       }
 
       if (pathname.startsWith("/account")) {
@@ -75,7 +78,9 @@ export const authConfig = {
       }
 
       if (pathname.startsWith("/owner")) {
-        return isLoggedIn;
+        if (!isLoggedIn || !role) return false;
+        if (role === "AGENT") return false;
+        return canAccessSellerTools({ role, isSeller });
       }
 
       return true;
@@ -83,13 +88,20 @@ export const authConfig = {
     async jwt({ token, user }) {
       if (user) {
         token.role = user.role;
+        token.isBuyer = user.isBuyer ?? true;
+        token.isSeller = user.isSeller ?? false;
+        token.activeMode = user.activeMode ?? "BUYER";
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub as string;
-        session.user.role = (token.role as Role) ?? "CUSTOMER";
+        session.user.role = (token.role as Role) ?? "BUYER";
+        session.user.isBuyer = Boolean(token.isBuyer ?? true);
+        session.user.isSeller = Boolean(token.isSeller ?? false);
+        session.user.activeMode =
+          (token.activeMode as ActiveMode) === "SELLER" ? "SELLER" : "BUYER";
       }
       return session;
     },

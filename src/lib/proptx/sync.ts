@@ -8,11 +8,13 @@ import {
 import { PropTxError, proptxJson, proptxPages } from "@/lib/proptx/client";
 import type { PropTxConfig } from "@/lib/proptx/config";
 import { geocodeListing } from "@/lib/geo/geocode";
+import { isKnownCityCentroid } from "@/lib/geo/city-centroids";
 import {
   fetchRawPropertyMedia,
   preferListingPhotos,
 } from "@/lib/proptx/listing-photos";
 import {
+  APPROX_PIN_NOTE,
   mapHistoryRow,
   mapMediaRow,
   mapMlsNumber,
@@ -34,10 +36,17 @@ export type MlsSyncStats = {
   roomsUpserted: number;
   openHousesUpserted: number;
   historyUpserted: number;
+  /** Street-geocode attempts during this sync (approximate pins only). */
+  geocodeAttempted: number;
+  /** Approximate pins upgraded to street-level during this sync. */
+  geocodeFixed: number;
   pages: number;
   errors: string[];
   skipReasons?: Record<string, number>;
 };
+
+/** Cap inline geocode so property sync stays within the 5-minute cron window. */
+const SYNC_GEOCODE_BUDGET = 250;
 
 export type MlsSyncResult = {
   ok: boolean;
@@ -568,56 +577,82 @@ async function upsertPropertyRow(
 
   let data = mapped.data;
   let approximateCoords = mapped.approximateCoords;
-  if (options.fetchNested && approximateCoords) {
-    try {
-      const geo = await geocodeListing({
-        addressLine: String(data.addressLine),
-        unitNumber:
-          typeof data.unitNumber === "string" ? data.unitNumber : null,
-        city: String(data.city),
-        community:
-          typeof data.community === "string" ? data.community : null,
-        province: typeof data.province === "string" ? data.province : "ON",
-        postalCode:
-          typeof data.postalCode === "string" ? data.postalCode : null,
-      });
-      if (geo) {
-        data = {
-          ...data,
-          lat: geo.lat,
-          lng: geo.lng,
-          description: stripApproxPinNote(String(data.description ?? "")),
-        };
-        approximateCoords = false;
-      }
-    } catch (err) {
-      options.stats.errors.push(
-        `geocode ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
-      );
-    }
-  }
 
-  // Feed often omits lat/lng → we fall back to city centroids. Never overwrite a
-  // previously geocoded (or otherwise stored) pin with that centroid on update.
+  // Feed often omits lat/lng → city centroids. Preserve a prior street pin;
+  // otherwise street-geocode (new + approximate updates) within a per-run budget.
+  // Remaining backlog is drained by `pnpm mls:geocode` / the geocode cron.
   if (approximateCoords) {
     const existing = await prisma.listing.findUnique({
       where: { mlsNumber: String(data.mlsNumber) },
       select: { lat: true, lng: true, description: true },
     });
-    if (existing) {
-      const existingWasApprox =
-        typeof existing.description === "string" &&
-        /Map pin approximate|coordinates missing from feed/i.test(
-          existing.description,
-        );
+
+    const existingWasApprox =
+      existing != null &&
+      typeof existing.description === "string" &&
+      /Map pin approximate|coordinates missing from feed/i.test(
+        existing.description,
+      );
+    const existingIsStreet =
+      existing != null &&
+      !existingWasApprox &&
+      !isKnownCityCentroid(existing.lat, existing.lng);
+
+    if (existingIsStreet && existing) {
       data = {
         ...data,
         lat: existing.lat,
         lng: existing.lng,
-        description: existingWasApprox
-          ? String(data.description ?? "")
-          : stripApproxPinNote(String(data.description ?? "")),
+        description: stripApproxPinNote(String(data.description ?? "")),
       };
+      approximateCoords = false;
+    } else {
+      const underBudget =
+        options.stats.geocodeAttempted < SYNC_GEOCODE_BUDGET;
+      if (underBudget) {
+        options.stats.geocodeAttempted += 1;
+        try {
+          const geo = await geocodeListing({
+            addressLine: String(data.addressLine),
+            unitNumber:
+              typeof data.unitNumber === "string" ? data.unitNumber : null,
+            city: String(data.city),
+            community:
+              typeof data.community === "string" ? data.community : null,
+            province: typeof data.province === "string" ? data.province : "ON",
+            postalCode:
+              typeof data.postalCode === "string" ? data.postalCode : null,
+          });
+          if (geo && geo.precision === "street") {
+            data = {
+              ...data,
+              lat: geo.lat,
+              lng: geo.lng,
+              description: stripApproxPinNote(String(data.description ?? "")),
+            };
+            approximateCoords = false;
+            options.stats.geocodeFixed += 1;
+          }
+        } catch (err) {
+          pushSyncError(
+            options.stats,
+            `geocode ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
+          );
+        }
+      }
+
+      if (approximateCoords) {
+        const baseDescription = stripApproxPinNote(
+          String(data.description ?? ""),
+        );
+        const withNote = `${baseDescription}\n\n${APPROX_PIN_NOTE}`.trim();
+        data = {
+          ...data,
+          lat: existing?.lat ?? data.lat,
+          lng: existing?.lng ?? data.lng,
+          description: withNote,
+        };
+      }
     }
   }
 
@@ -1578,7 +1613,7 @@ export async function runPropTxMlsSync(options?: {
       }
     }
 
-    const message = `Synced properties=${stats.propertyUpserted} media=${stats.mediaUpserted} rooms=${stats.roomsUpserted} openHouses=${stats.openHousesUpserted} history=${stats.historyUpserted} skipped=${stats.propertySkipped}`;
+    const message = `Synced properties=${stats.propertyUpserted} media=${stats.mediaUpserted} rooms=${stats.roomsUpserted} openHouses=${stats.openHousesUpserted} history=${stats.historyUpserted} geocode=${stats.geocodeFixed}/${stats.geocodeAttempted} skipped=${stats.propertySkipped}`;
     try {
       await prisma.mlsSyncRun.update({
         where: { id: run.id },
@@ -1640,6 +1675,8 @@ function emptyStats(): MlsSyncStats {
     roomsUpserted: 0,
     openHousesUpserted: 0,
     historyUpserted: 0,
+    geocodeAttempted: 0,
+    geocodeFixed: 0,
     pages: 0,
     errors: [],
     skipReasons: {},

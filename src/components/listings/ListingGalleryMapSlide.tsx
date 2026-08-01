@@ -25,7 +25,7 @@ import {
   propertyTypeLabel,
 } from "@/lib/listings/constants";
 import type { ListingCard } from "@/lib/listings/types";
-import { OSM_STYLE } from "@/lib/maps/osm-style";
+import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
 import { cn } from "@/lib/utils";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
 
@@ -420,6 +420,8 @@ export function ListingGalleryMapSlide({
       style: OSM_STYLE,
       center: [lng, lat],
       zoom: 16.5,
+      minZoom: MAP_MIN_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
       attributionControl: { compact: true },
     });
     map.addControl(

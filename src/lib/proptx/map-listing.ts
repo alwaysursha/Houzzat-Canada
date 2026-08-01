@@ -5,6 +5,10 @@ import type {
   PropertyType,
   Prisma,
 } from "@prisma/client";
+import {
+  DEFAULT_GTA_CENTROID,
+  lookupCityCentroid,
+} from "@/lib/geo/city-centroids";
 import type { ListingFacts } from "@/lib/listings/facts";
 
 /** Loose RESO / PropTx Property row — fields vary by agreement. */
@@ -240,23 +244,6 @@ function buildAddressLine(row: PropTxProperty): string {
   return str(row, "Address", "StreetAddress") ?? "Address pending";
 }
 
-const CITY_CENTROIDS: Record<string, { lat: number; lng: number }> = {
-  toronto: { lat: 43.6532, lng: -79.3832 },
-  mississauga: { lat: 43.589, lng: -79.6441 },
-  brampton: { lat: 43.7315, lng: -79.7624 },
-  markham: { lat: 43.8561, lng: -79.337 },
-  vaughan: { lat: 43.8361, lng: -79.4983 },
-  oakville: { lat: 43.4675, lng: -79.6877 },
-  burlington: { lat: 43.3255, lng: -79.799 },
-  "richmond hill": { lat: 43.8828, lng: -79.4403 },
-  pickering: { lat: 43.8384, lng: -79.0868 },
-  ajax: { lat: 43.8509, lng: -79.0204 },
-  whitby: { lat: 43.8971, lng: -78.9429 },
-  oshawa: { lat: 43.8971, lng: -78.8658 },
-  milton: { lat: 43.5183, lng: -79.8774 },
-  ottawa: { lat: 45.4215, lng: -75.6972 },
-};
-
 function resolveCoordinates(row: PropTxProperty): {
   lat: number;
   lng: number;
@@ -296,6 +283,7 @@ function resolveCoordinates(row: PropTxProperty): {
     ) {
       const [a, b] = g.coordinates as unknown[];
       if (typeof a === "number" && typeof b === "number") {
+        // GeoJSON is [lng, lat]
         lng = a;
         lat = b;
       }
@@ -309,16 +297,18 @@ function resolveCoordinates(row: PropTxProperty): {
     Number.isFinite(lng) &&
     !(Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01)
   ) {
+    // Guard against swapped lat/lng from the feed (GTA lat ~43, lng ~-79).
+    if (Math.abs(lat) > 60 && Math.abs(lng) < 60) {
+      return { lat: lng, lng: lat, approximate: false };
+    }
     return { lat, lng, approximate: false };
   }
 
-  const city = (
-    str(row, "City", "CityRegion", "Municipality") ?? ""
-  ).toLowerCase();
-  const hit = CITY_CENTROIDS[city];
+  const city = str(row, "City", "CityRegion", "Municipality") ?? "";
+  const hit = lookupCityCentroid(city);
   if (hit) return { ...hit, approximate: true };
 
-  return { lat: 43.7, lng: -79.4, approximate: true };
+  return { ...DEFAULT_GTA_CENTROID, approximate: true };
 }
 
 function strList(row: PropTxProperty, ...keys: string[]): string[] | null {

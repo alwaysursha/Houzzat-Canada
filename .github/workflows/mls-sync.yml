@@ -86,3 +86,14 @@ jobs:
           fi
           echo "Running pnpm mls:sync ${MAX_PAGES} ${BACKFILL_DAYS} ${RESOURCES} (prefer VOW Token when set; VOW=$([ -n "${PROPTX_VOW_TOKEN_ID:-}" ] && echo yes || echo no))"
           pnpm mls:sync "${MAX_PAGES}" "${BACKFILL_DAYS}" "${RESOURCES}"
+
+      - name: Geocode new approximate pins
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          GEOCODE_SKIP_NOMINATIM: "1"
+        run: |
+          set -euo pipefail
+          # Catch anything the inline sync geocode missed (rate limits / misses).
+          pnpm mls:geocode 1200

@@ -6,7 +6,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Check, ListFilter, Pencil, Trash2, X } from "lucide-react";
 import type { ListingCard } from "@/lib/listings/types";
 import { formatListPrice } from "@/lib/listings/constants";
-import { OSM_STYLE } from "@/lib/maps/osm-style";
+import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
 import { SearchMapPopupCard } from "@/components/listings/SearchMapPopupCard";
 import { cn } from "@/lib/utils";
 
@@ -189,6 +189,8 @@ export function SearchMap({
       style: OSM_STYLE,
       center: [-79.4, 43.7],
       zoom: 9.4,
+      minZoom: MAP_MIN_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
     });
 
     map.addControl(
@@ -408,7 +410,7 @@ export function SearchMap({
     skipBoundsNotify.current = true;
     mapRef.current.flyTo({
       center: [focus.lng, focus.lat],
-      zoom: focus.zoom ?? 12,
+      zoom: Math.min(focus.zoom ?? 12, MAP_MAX_ZOOM),
       essential: true,
     });
   }, [focus]);
