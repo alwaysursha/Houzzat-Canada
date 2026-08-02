@@ -69,8 +69,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await request.json();
-  if (body?.action === "reassign") {
+  const body: unknown = await request.json();
+  const action =
+    typeof body === "object" &&
+    body !== null &&
+    "action" in body &&
+    (body as { action?: unknown }).action === "reassign"
+      ? "reassign"
+      : null;
+
+  if (action === "reassign") {
     const parsed = reassignSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid" }, { status: 400 });
