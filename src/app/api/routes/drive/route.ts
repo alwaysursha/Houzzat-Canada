@@ -11,11 +11,14 @@ function parseCoord(value: unknown): number | null {
 }
 
 export async function POST(request: Request) {
-  if (!process.env.GOOGLE_MAPS_API_KEY?.trim()) {
+  if (
+    process.env.GOOGLE_MAPS_BILLING_ENABLED !== "1" ||
+    !process.env.GOOGLE_MAPS_API_KEY?.trim()
+  ) {
     return NextResponse.json(
       {
         error:
-          "Drive time is not configured. Set GOOGLE_MAPS_API_KEY and enable the Routes API.",
+          "Drive time is disabled (Google billing kill-switch). Set GOOGLE_MAPS_BILLING_ENABLED=1 only if you accept Routes API charges.",
       },
       { status: 503 },
     );

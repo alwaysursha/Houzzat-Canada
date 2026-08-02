@@ -1,11 +1,12 @@
 name: MLS Geocode Approximate Pins
 
 # Repair city-centroid map pins so Map Search + Near Me work.
-# Street-accurate only (Google Places → Nominatim). City hits are rejected.
+# Photon + Nominatim only by default — Google is hard-off to avoid Cloud bills.
 on:
-  schedule:
-    # Every 10 minutes — drain approximate ACTIVE pins as inventory churns.
-    - cron: "2,12,22,32,42,52 * * * *"
+  # Scheduled Google-backed runs paused after unexpected Maps Platform charges.
+  # Re-enable cron only with GOOGLE_MAPS_BILLING_ENABLED=1 + GCP quotas/budget.
+  # schedule:
+  #   - cron: "2,12,22,32,42,52 * * * *"
   workflow_dispatch:
     inputs:
       limit:
@@ -49,13 +50,12 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          # Do not inject GOOGLE_MAPS_API_KEY — keep CI on free Photon/Nominatim.
+          GOOGLE_MAPS_BILLING_ENABLED: "0"
+          GEOCODE_SKIP_GOOGLE: "1"
           LIMIT: ${{ github.event.inputs.limit || '4000' }}
           GEOCODE_CONCURRENCY: "4"
         run: |
           set -euo pipefail
-          if [[ -z "${GOOGLE_MAPS_API_KEY:-}" ]]; then
-            echo "Missing GOOGLE_MAPS_API_KEY — using Photon + rate-limited Nominatim"
-          fi
-          echo "Running pnpm mls:geocode ${LIMIT}"
+          echo "Running pnpm mls:geocode ${LIMIT} (Google billing kill-switch ON)"
           pnpm mls:geocode "${LIMIT}"

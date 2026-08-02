@@ -16,6 +16,7 @@ async function reverseGoogle(
   lat: number,
   lng: number,
 ): Promise<string | null> {
+  if (process.env.GOOGLE_MAPS_BILLING_ENABLED !== "1") return null;
   if (process.env.GEOCODE_SKIP_GOOGLE === "1") return null;
   const key =
     process.env.GOOGLE_MAPS_GEOCODING_API_KEY ||

@@ -10,9 +10,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "placeId is required" }, { status: 400 });
   }
 
-  if (!process.env.GOOGLE_MAPS_API_KEY?.trim()) {
+  if (
+    process.env.GOOGLE_MAPS_BILLING_ENABLED !== "1" ||
+    process.env.GOOGLE_PLACES_AUTOCOMPLETE !== "1" ||
+    !process.env.GOOGLE_MAPS_API_KEY?.trim()
+  ) {
     return NextResponse.json(
-      { error: "Google Places is not configured. Set GOOGLE_MAPS_API_KEY." },
+      {
+        error:
+          "Google Places details are disabled (billing kill-switch). Set GOOGLE_MAPS_BILLING_ENABLED=1 and GOOGLE_PLACES_AUTOCOMPLETE=1 only if you accept Google Cloud charges.",
+      },
       { status: 503 },
     );
   }

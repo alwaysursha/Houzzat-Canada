@@ -1,3 +1,5 @@
+import { assertGoogleMapsBillingEnabled } from "@/lib/google/billing-guard";
+
 export type GooglePlaceSuggestion = {
   type: "place";
   placeId: string;
@@ -35,6 +37,7 @@ type PlaceDetailsResponse = {
 };
 
 function getApiKey() {
+  assertGoogleMapsBillingEnabled("Places");
   const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
   if (!key) {
     throw new Error("GOOGLE_MAPS_API_KEY is not configured");

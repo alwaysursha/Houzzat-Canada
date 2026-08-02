@@ -227,6 +227,8 @@ async function geocodePhoton(query: string): Promise<GeocodeResult | null> {
 async function geocodeGoogleGeocoding(
   query: string,
 ): Promise<GeocodeResult | null> {
+  // Hard billing kill-switch — never call Google unless explicitly re-enabled.
+  if (process.env.GOOGLE_MAPS_BILLING_ENABLED !== "1") return null;
   if (Date.now() < googleGeocodingExhaustedUntil) return null;
 
   const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
@@ -290,6 +292,7 @@ async function geocodeGoogleGeocoding(
 async function geocodeGooglePlaces(
   query: string,
 ): Promise<GeocodeResult | null> {
+  if (process.env.GOOGLE_MAPS_BILLING_ENABLED !== "1") return null;
   if (Date.now() < googlePlacesExhaustedUntil) return null;
 
   const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
@@ -438,7 +441,11 @@ export async function geocodeAddress(
     }
   }
 
-  if (!result && process.env.GEOCODE_SKIP_GOOGLE !== "1") {
+  const googleAllowed =
+    process.env.GOOGLE_MAPS_BILLING_ENABLED === "1" &&
+    process.env.GEOCODE_SKIP_GOOGLE !== "1";
+
+  if (!result && googleAllowed) {
     try {
       result = accept(await geocodeGoogleGeocoding(variants[0]!));
     } catch {
@@ -446,7 +453,7 @@ export async function geocodeAddress(
     }
   }
 
-  if (!result && process.env.GEOCODE_SKIP_GOOGLE !== "1") {
+  if (!result && googleAllowed) {
     try {
       result = accept(await geocodeGooglePlaces(variants[0]!));
     } catch {

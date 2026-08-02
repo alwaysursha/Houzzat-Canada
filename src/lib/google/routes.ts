@@ -1,6 +1,9 @@
 /** Google Routes API — Compute Routes (Essentials: drive distance + duration). */
 
+import { assertGoogleMapsBillingEnabled } from "@/lib/google/billing-guard";
+
 function getApiKey() {
+  assertGoogleMapsBillingEnabled("Routes");
   const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
   if (!key) {
     throw new Error("GOOGLE_MAPS_API_KEY is not configured");

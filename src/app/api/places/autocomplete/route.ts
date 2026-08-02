@@ -11,30 +11,45 @@ export async function GET(request: Request) {
     return NextResponse.json({ suggestions: [] });
   }
 
-  // Prefer Google Places when the key works; fall back to Photon so Sell a Home
-  // still shows address hints if billing / Places API permission is missing.
-  if (process.env.GOOGLE_MAPS_API_KEY?.trim()) {
-    try {
-      const suggestions = await googlePlacesAutocomplete(q, { sessionToken });
-      if (suggestions.length > 0) {
-        return NextResponse.json({ suggestions, provider: "google" });
-      }
-    } catch (error) {
-      console.error("[places/autocomplete] google", error);
-    }
-  }
+  // Photon first (free). Google requires BOTH billing kill-switch + Places opt-in.
+  const googleEnabled =
+    process.env.GOOGLE_MAPS_BILLING_ENABLED === "1" &&
+    process.env.GOOGLE_PLACES_AUTOCOMPLETE === "1" &&
+    Boolean(process.env.GOOGLE_MAPS_API_KEY?.trim());
 
   try {
     const suggestions = await photonAddressAutocomplete(q);
-    return NextResponse.json({ suggestions, provider: "photon" });
+    if (suggestions.length > 0 || !googleEnabled) {
+      return NextResponse.json({ suggestions, provider: "photon" });
+    }
   } catch (error) {
     console.error("[places/autocomplete] photon", error);
-    return NextResponse.json(
-      {
-        error: "Could not fetch address suggestions.",
-        suggestions: [],
-      },
-      { status: 502 },
-    );
+    if (!googleEnabled) {
+      return NextResponse.json(
+        {
+          error: "Could not fetch address suggestions.",
+          suggestions: [],
+        },
+        { status: 502 },
+      );
+    }
   }
+
+  if (googleEnabled) {
+    try {
+      const suggestions = await googlePlacesAutocomplete(q, { sessionToken });
+      return NextResponse.json({ suggestions, provider: "google" });
+    } catch (error) {
+      console.error("[places/autocomplete] google", error);
+      return NextResponse.json(
+        {
+          error: "Could not fetch address suggestions.",
+          suggestions: [],
+        },
+        { status: 502 },
+      );
+    }
+  }
+
+  return NextResponse.json({ suggestions: [], provider: "photon" });
 }

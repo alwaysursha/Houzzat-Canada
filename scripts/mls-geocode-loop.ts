@@ -24,8 +24,11 @@ function runGeocode(limit: number): Promise<{
         cwd: process.cwd(),
         env: {
           ...process.env,
-          // Prefer Photon + Google Geocoding. Nominatim stays on (rate-limited
-          // in geocode.ts) so pins still repair when Photon is down.
+          // Default OFF for paid Google — bulk loops burned ~$50/day when
+          // Photon misses fell through to Geocoding + Places Text Search.
+          // Opt in only with GEOCODE_USE_GOOGLE=1.
+          GEOCODE_SKIP_GOOGLE:
+            process.env.GEOCODE_USE_GOOGLE === "1" ? "0" : "1",
         },
         stdio: ["ignore", "pipe", "pipe"],
       },
