@@ -5,7 +5,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
-import { pickAssigneeAgentId } from "@/lib/agent";
+import { resolvePublicLeadDesk } from "@/lib/agent";
 import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
 import { estimateHomeValue } from "@/lib/market/home-value-estimate";
 import { sendNotification } from "@/lib/notifications";
@@ -308,13 +308,19 @@ export async function POST(request: Request) {
       accountCreated = ensured.accountCreated;
     }
 
-    const assigneeId = await pickAssigneeAgentId();
-    const assignee = assigneeId
-      ? await prisma.user.findUnique({
-          where: { id: assigneeId },
-          select: { email: true, phone: true },
+    const desk = await resolvePublicLeadDesk();
+    const organizationId = desk.organizationId;
+    const deskNotifiers = organizationId
+      ? await prisma.organizationMembership.findMany({
+          where: {
+            organizationId,
+            role: { in: ["OWNER", "ADMIN"] },
+            user: { disabledAt: null },
+          },
+          select: { user: { select: { email: true, phone: true } } },
+          take: 8,
         })
-      : null;
+      : [];
 
     const utm = pickUtm(data);
     const adCampaignId = await resolveAdCampaignId(utm);
@@ -331,10 +337,11 @@ export async function POST(request: Request) {
     const lead = await prisma.lead.create({
       data: {
         source: "HOME_VALUATION",
-        status: "NEW",
+        status: "NEW_LEAD",
         score: data.intent === "sell" ? 72 : data.intent === "buy" ? 40 : 45,
         customerId,
-        assignedAgentId: assigneeId,
+        assignedAgentId: null,
+        organizationId: organizationId ?? undefined,
         ...utmLeadFields(utm, adCampaignId),
         notes: [
           `Home valuation for ${data.address}`,
@@ -391,17 +398,18 @@ export async function POST(request: Request) {
                 type: "VALUATION_CALL",
                 status: "REQUESTED",
                 customerId,
-                agentId: assigneeId,
+                agentId: null,
                 notes: `Valuation follow-up for ${data.address}`,
               },
             },
       },
     });
 
-    if (assignee?.email) {
+    for (const row of deskNotifiers) {
+      if (!row.user.email) continue;
       void sendNotification({
-        toEmail: assignee.email,
-        toPhone: assignee.phone,
+        toEmail: row.user.email,
+        toPhone: row.user.phone,
         subject: isQuick
           ? "New homepage sell estimate lead"
           : "New home valuation / seller lead",

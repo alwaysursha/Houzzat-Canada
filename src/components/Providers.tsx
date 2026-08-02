@@ -2,6 +2,7 @@
 
 import { Suspense } from "react";
 import { SessionProvider } from "next-auth/react";
+import { ContactUpdateReminder } from "@/components/account/ContactUpdateReminder";
 import { RecentViewsSync } from "@/components/account/RecentViewsSync";
 import { SavedListingsProvider } from "@/components/account/SavedListingsProvider";
 import { ActivityBeacon } from "@/components/analytics/ActivityBeacon";
@@ -20,6 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               <Suspense fallback={null}>
                 <ActivityBeacon />
               </Suspense>
+              <ContactUpdateReminder />
               {children}
             </AuthModalProvider>
           </SiteAlertProvider>

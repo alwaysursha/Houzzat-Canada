@@ -1,0 +1,399 @@
+import type { ActivityEventType } from "@prisma/client";
+import { listingPhotoSrc } from "@/lib/listings/photo-src";
+import { prisma } from "@/lib/prisma";
+
+export type TimelineItem = {
+  id: string;
+  source: "activity" | "lead" | "domain" | "email" | "note" | "task";
+  type: string;
+  title: string;
+  body: string | null;
+  mlsNumber: string | null;
+  path: string | null;
+  /** Primary listing cover when the row is MLS-linked. */
+  imageUrl: string | null;
+  createdAt: Date;
+};
+
+function formatListingAddress(listing: {
+  addressLine: string;
+  unitNumber: string | null;
+  city: string;
+  province: string;
+  postalCode: string | null;
+}) {
+  const street = listing.unitNumber
+    ? `${listing.addressLine} #${listing.unitNumber}`
+    : listing.addressLine;
+  const postal = listing.postalCode ? ` ${listing.postalCode}` : "";
+  return `${street}, ${listing.city}, ${listing.province}${postal}`;
+}
+
+function pickCoverUrl(
+  media: Array<{ url: string; isPrimary: boolean; sortOrder: number }>,
+): string | null {
+  if (!media.length) return null;
+  const primary = media.find((m) => m.isPrimary) ?? media[0];
+  return listingPhotoSrc(primary.url) ?? primary.url;
+}
+
+const GENERIC_LISTING_TITLES = new Set([
+  "property view",
+  "saved listing",
+  "property watch",
+  "listing note",
+  "listing view",
+  "page view",
+]);
+
+async function enrichWithListingCovers(
+  items: TimelineItem[],
+): Promise<TimelineItem[]> {
+  const mlsNumbers = [
+    ...new Set(
+      items
+        .map((item) => item.mlsNumber)
+        .filter((mls): mls is string => Boolean(mls)),
+    ),
+  ];
+  if (!mlsNumbers.length) return items;
+
+  const listings = await prisma.listing.findMany({
+    where: { mlsNumber: { in: mlsNumbers } },
+    select: {
+      mlsNumber: true,
+      addressLine: true,
+      unitNumber: true,
+      city: true,
+      province: true,
+      postalCode: true,
+      media: {
+        orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
+        take: 1,
+        select: { url: true, isPrimary: true, sortOrder: true },
+      },
+    },
+  });
+
+  const byMls = new Map(
+    listings.map((listing) => [
+      listing.mlsNumber,
+      {
+        address: formatListingAddress(listing),
+        imageUrl: pickCoverUrl(listing.media),
+      },
+    ]),
+  );
+
+  return items.map((item) => {
+    if (!item.mlsNumber) return item;
+    const listing = byMls.get(item.mlsNumber);
+    if (!listing) return item;
+    const titleIsGeneric =
+      !item.title?.trim() ||
+      GENERIC_LISTING_TITLES.has(item.title.trim().toLowerCase());
+    return {
+      ...item,
+      title: titleIsGeneric ? listing.address : item.title,
+      imageUrl: listing.imageUrl,
+    };
+  });
+}
+
+function labelActivity(type: ActivityEventType | string) {
+  switch (type) {
+    case "contact_update_request":
+      return "Contact update requested";
+    case "contact_updated_by_customer":
+      return "Contact updated by customer";
+    case "contact_update":
+      return "Contact updated";
+    default:
+      return String(type).replaceAll("_", " ");
+  }
+}
+
+/** Merged second-by-second customer journey for agent CRM. */
+export async function loadCustomerTimeline(input: {
+  leadId: string;
+  customerId: string | null;
+  take?: number;
+}): Promise<TimelineItem[]> {
+  const take = input.take ?? 120;
+  const items: TimelineItem[] = [];
+
+  const [leadActs, notes, emails, tasks] = await Promise.all([
+    prisma.leadActivity.findMany({
+      where: { leadId: input.leadId },
+      orderBy: { createdAt: "desc" },
+      take,
+    }),
+    prisma.leadNote.findMany({
+      where: { leadId: input.leadId },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+      include: { author: { select: { name: true, email: true } } },
+    }),
+    prisma.leadEmailLog.findMany({
+      where: { leadId: input.leadId },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+    }),
+    prisma.agentTask.findMany({
+      where: { leadId: input.leadId },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+    }),
+  ]);
+
+  for (const a of leadActs) {
+    items.push({
+      id: `la-${a.id}`,
+      source: "lead",
+      type: a.type,
+      title: labelActivity(a.type),
+      body: a.body,
+      mlsNumber: null,
+      path: null,
+      imageUrl: null,
+      createdAt: a.createdAt,
+    });
+  }
+  for (const n of notes) {
+    items.push({
+      id: `note-${n.id}`,
+      source: "note",
+      type: "NOTE",
+      title: `Note · ${n.author.name || n.author.email}`,
+      body: n.body,
+      mlsNumber: null,
+      path: null,
+      imageUrl: null,
+      createdAt: n.createdAt,
+    });
+  }
+  for (const e of emails) {
+    items.push({
+      id: `email-${e.id}`,
+      source: "email",
+      type: "EMAIL",
+      title: e.subject,
+      body: e.body.slice(0, 280),
+      mlsNumber: null,
+      path: null,
+      imageUrl: null,
+      createdAt: e.createdAt,
+    });
+  }
+  for (const t of tasks) {
+    items.push({
+      id: `task-${t.id}`,
+      source: "task",
+      type: t.type,
+      title: `${t.status === "DONE" ? "Done" : "Task"} · ${t.title}`,
+      body: t.body,
+      mlsNumber: null,
+      path: null,
+      imageUrl: null,
+      createdAt: t.completedAt ?? t.createdAt,
+    });
+  }
+
+  if (input.customerId) {
+    const [
+      events,
+      views,
+      saves,
+      searches,
+      monitors,
+      listingNotes,
+      tours,
+    ] = await Promise.all([
+      prisma.activityEvent.findMany({
+        where: {
+          userId: input.customerId,
+          type: { not: "HEARTBEAT" },
+        },
+        orderBy: { createdAt: "desc" },
+        take,
+      }),
+      prisma.listingView.findMany({
+        where: { userId: input.customerId },
+        orderBy: { createdAt: "desc" },
+        take: 40,
+      }),
+      prisma.savedListing.findMany({
+        where: { userId: input.customerId },
+        orderBy: { createdAt: "desc" },
+        take: 40,
+      }),
+      prisma.savedSearch.findMany({
+        where: { userId: input.customerId },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      prisma.propertyMonitor.findMany({
+        where: { userId: input.customerId },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+      }),
+      prisma.listingNote.findMany({
+        where: { userId: input.customerId },
+        orderBy: { updatedAt: "desc" },
+        take: 30,
+      }),
+      prisma.viewingTour.findMany({
+        where: { userId: input.customerId },
+        orderBy: { updatedAt: "desc" },
+        take: 15,
+        include: { stops: { select: { mlsNumber: true } } },
+      }),
+    ]);
+
+    for (const e of events) {
+      items.push({
+        id: `ae-${e.id}`,
+        source: "activity",
+        type: e.type,
+        title: e.title || labelActivity(e.type),
+        body: e.path,
+        mlsNumber: e.mlsNumber,
+        path: e.path,
+        imageUrl: null,
+        createdAt: e.createdAt,
+      });
+    }
+    for (const v of views) {
+      items.push({
+        id: `view-${v.id}`,
+        source: "domain",
+        type: "LISTING_VIEW",
+        title: "Property view",
+        body: null,
+        mlsNumber: v.mlsNumber,
+        path: `/listing/${v.mlsNumber}`,
+        imageUrl: null,
+        createdAt: v.createdAt,
+      });
+    }
+    for (const s of saves) {
+      items.push({
+        id: `save-${s.id}`,
+        source: "domain",
+        type: "SAVE_LISTING",
+        title: "Saved listing",
+        body: null,
+        mlsNumber: s.mlsNumber,
+        path: `/listing/${s.mlsNumber}`,
+        imageUrl: null,
+        createdAt: s.createdAt,
+      });
+    }
+    for (const s of searches) {
+      items.push({
+        id: `search-${s.id}`,
+        source: "domain",
+        type: "SAVE_SEARCH",
+        title: s.name || "Saved search",
+        body: s.emailAlerts ? "Email alerts on" : "Alerts off",
+        mlsNumber: null,
+        path: "/account/searches",
+        imageUrl: null,
+        createdAt: s.createdAt,
+      });
+    }
+    for (const m of monitors) {
+      items.push({
+        id: `mon-${m.id}`,
+        source: "domain",
+        type: "WATCH_PROPERTY",
+        title: "Property watch",
+        body: null,
+        mlsNumber: m.mlsNumber,
+        path: `/listing/${m.mlsNumber}`,
+        imageUrl: null,
+        createdAt: m.createdAt,
+      });
+    }
+    for (const n of listingNotes) {
+      items.push({
+        id: `ln-${n.id}`,
+        source: "domain",
+        type: "NOTE",
+        title: "Listing note",
+        body: n.body.slice(0, 200),
+        mlsNumber: n.mlsNumber,
+        path: `/listing/${n.mlsNumber}`,
+        imageUrl: null,
+        createdAt: n.updatedAt,
+      });
+    }
+    for (const t of tours) {
+      items.push({
+        id: `tour-${t.id}`,
+        source: "domain",
+        type: "ROUTE_PLANNER",
+        title: t.name || "Viewing route",
+        body: `${t.stops.length} stops · ${t.status}`,
+        mlsNumber: t.stops[0]?.mlsNumber ?? null,
+        path: "/route-planner",
+        imageUrl: null,
+        createdAt: t.updatedAt,
+      });
+    }
+  }
+
+  items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const deduped = dedupeNearDuplicateListingViews(items);
+  const trimmed = deduped.slice(0, take);
+  return enrichWithListingCovers(trimmed);
+}
+
+/**
+ * Listing pages write both ActivityEvent (beacon) and ListingView (server).
+ * Collapse same-MLS LISTING_VIEW rows within a short window into one,
+ * preferring the richer activity-event title when present.
+ */
+function dedupeNearDuplicateListingViews(items: TimelineItem[]): TimelineItem[] {
+  const WINDOW_MS = 60_000;
+  const kept: TimelineItem[] = [];
+
+  for (const item of items) {
+    if (item.type !== "LISTING_VIEW" || !item.mlsNumber) {
+      kept.push(item);
+      continue;
+    }
+
+    const existingIdx = kept.findIndex((other) => {
+      if (other.type !== "LISTING_VIEW" || other.mlsNumber !== item.mlsNumber) {
+        return false;
+      }
+      return (
+        Math.abs(other.createdAt.getTime() - item.createdAt.getTime()) <=
+        WINDOW_MS
+      );
+    });
+
+    if (existingIdx < 0) {
+      kept.push(item);
+      continue;
+    }
+
+    const existing = kept[existingIdx]!;
+    // Prefer activity-source rows (page title) over generic "Property view".
+    const itemIsGeneric = /^property view$/i.test(item.title.trim());
+    const existingIsGeneric = /^property view$/i.test(existing.title.trim());
+    const preferItem =
+      (item.source === "activity" && existing.source !== "activity") ||
+      (!itemIsGeneric && existingIsGeneric) ||
+      (item.source === existing.source &&
+        !itemIsGeneric &&
+        item.title.length > existing.title.length);
+
+    if (preferItem) {
+      kept[existingIdx] = item;
+    }
+  }
+
+  return kept;
+}

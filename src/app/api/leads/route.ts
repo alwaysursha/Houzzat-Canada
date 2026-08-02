@@ -3,7 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
-import { pickAssigneeAgentId } from "@/lib/agent";
+import { resolvePublicLeadDesk } from "@/lib/agent";
 import {
   AGENT_CONTACT_CONSENT_KIND,
   AGENT_CONTACT_CONSENT_VERSION,
@@ -74,13 +74,21 @@ export async function POST(request: Request) {
     const score =
       data.kind === "virtual_viewing" ? 55 : data.kind === "showing" ? 40 : 25;
 
-    const assigneeId = await pickAssigneeAgentId();
-    const assignee = assigneeId
-      ? await prisma.user.findUnique({
-          where: { id: assigneeId },
-          select: { email: true, phone: true, name: true },
+    const desk = await resolvePublicLeadDesk();
+    const organizationId = desk.organizationId;
+    const deskNotifiers = organizationId
+      ? await prisma.organizationMembership.findMany({
+          where: {
+            organizationId,
+            role: { in: ["OWNER", "ADMIN"] },
+            user: { disabledAt: null },
+          },
+          select: {
+            user: { select: { email: true, phone: true, name: true } },
+          },
+          take: 8,
         })
-      : null;
+      : [];
 
     const utm = pickUtm(data);
     const adCampaignId = await resolveAdCampaignId(utm);
@@ -93,11 +101,12 @@ export async function POST(request: Request) {
       const created = await tx.lead.create({
         data: {
           source,
-          status: "NEW",
+          status: "NEW_LEAD",
           score,
           listingMls: listing.mlsNumber,
           customerId: session?.user?.id,
-          assignedAgentId: assigneeId,
+          assignedAgentId: null,
+          organizationId: organizationId ?? undefined,
           contactConsentAt: consentAt,
           ...utmLeadFields(utm, adCampaignId),
           notes: [
@@ -145,7 +154,7 @@ export async function POST(request: Request) {
                     status: "REQUESTED",
                     listingMls: listing.mlsNumber,
                     customerId: session?.user?.id,
-                    agentId: assigneeId,
+                    agentId: null,
                     notes: data.preferredTimes ?? data.message ?? null,
                     focusNotes: data.focusNotes,
                   },
@@ -180,12 +189,13 @@ export async function POST(request: Request) {
       return created;
     });
 
-    if (assignee?.email) {
+    for (const row of deskNotifiers) {
+      if (!row.user.email) continue;
       void sendNotification({
-        toEmail: assignee.email,
-        toPhone: assignee.phone,
+        toEmail: row.user.email,
+        toPhone: row.user.phone,
         subject: `New Houzzat lead: ${source.replaceAll("_", " ")}`,
-        text: `New lead for ${listing.addressLine}, ${listing.city} (${listing.mlsNumber}).\nContact: ${data.name} <${data.email}>\n${data.phone ? `Phone: ${data.phone}\n` : ""}Consent: agent contact accepted\nOpen agent desk: /agent/leads/${lead.id}`,
+        text: `New unassigned lead for ${listing.addressLine}, ${listing.city} (${listing.mlsNumber}).\nContact: ${data.name} <${data.email}>\n${data.phone ? `Phone: ${data.phone}\n` : ""}Consent: agent contact accepted\nClaim or assign: /agent/leads/${lead.id}`,
         smsText: `Houzzat lead: ${listing.addressLine} — ${data.name}. Check agent desk.`,
         whatsappText:
           data.kind === "virtual_viewing" || data.kind === "showing"

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
+import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { prisma } from "@/lib/prisma";
 import {
   ROUTE_PLANNER_MAX_STOPS,
@@ -67,6 +68,15 @@ export async function POST(request: Request) {
       mlsNumber: listing.mlsNumber,
       sortOrder: tour.stops.length,
     },
+  });
+
+  void recordActivityEvent({
+    type: "ROUTE_PLANNER",
+    userId: user.id,
+    mlsNumber: listing.mlsNumber,
+    path: "/route-planner",
+    title: `Added ${listing.mlsNumber} to route`,
+    meta: { tourId: tour.id },
   });
 
   const refreshed = await getOrCreateActiveTour(user.id);

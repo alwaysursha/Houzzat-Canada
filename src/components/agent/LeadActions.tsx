@@ -3,67 +3,69 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { LeadStatus } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-
-const STATUSES: LeadStatus[] = [
-  "NEW",
-  "CONTACTED",
-  "QUALIFIED",
-  "ACTIVE_BUYER",
-  "SHOWING",
-  "OFFER",
-  "CLIENT",
-  "NURTURE",
-  "LOST",
-];
+import { PipelineStatusMenu } from "@/components/agent/PipelineStatusMenu";
 
 export function LeadActions({
   leadId,
   status,
   canClaim,
+  statusChangedAt,
+  createdAt,
+  showStatus = false,
+  onUpdated,
 }: {
   leadId: string;
   status: LeadStatus;
   canClaim: boolean;
+  statusChangedAt?: string | Date | null;
+  createdAt?: string | Date;
+  /** When true, render compact pipeline menu (kanban / non-profile). */
+  showStatus?: boolean;
+  onUpdated?: () => void;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
-  async function patch(body: Record<string, unknown>) {
+  async function claim() {
     setPending(true);
-    await fetch("/api/agent/leads", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ leadId, ...body }),
-    });
-    setPending(false);
-    router.refresh();
+    try {
+      const res = await fetch("/api/agent/leads", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId, claim: true }),
+      });
+      if (res.ok) {
+        router.refresh();
+        onUpdated?.();
+      }
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       {canClaim ? (
-        <Button
+        <button
           type="button"
-          size="sm"
           disabled={pending}
-          onClick={() => patch({ claim: true, status: "CONTACTED" })}
+          onClick={() => claim()}
+          className="rounded-lg bg-canopy px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-canopy-deep disabled:opacity-50"
         >
           Claim
-        </Button>
+        </button>
       ) : null}
-      <select
-        className="h-9 rounded-lg border border-line bg-surface px-2 text-sm"
-        value={status}
-        disabled={pending}
-        onChange={(e) => patch({ status: e.target.value })}
-      >
-        {STATUSES.map((s) => (
-          <option key={s} value={s}>
-            {s.replaceAll("_", " ")}
-          </option>
-        ))}
-      </select>
+      {showStatus && createdAt ? (
+        <PipelineStatusMenu
+          leadId={leadId}
+          status={status}
+          statusChangedAt={statusChangedAt}
+          createdAt={createdAt}
+          variant="compact"
+          onUpdated={onUpdated}
+          className="min-w-[160px]"
+        />
+      ) : null}
     </div>
   );
 }

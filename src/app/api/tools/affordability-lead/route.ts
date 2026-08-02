@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
-import { pickAssigneeAgentId } from "@/lib/agent";
+import { resolvePublicLeadDesk } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -23,14 +23,15 @@ export async function POST(request: Request) {
   }
   const utm = pickUtm(parsed.data);
   const adCampaignId = await resolveAdCampaignId(utm);
-  const assigneeId = await pickAssigneeAgentId();
+  const desk = await resolvePublicLeadDesk();
 
   const lead = await prisma.lead.create({
     data: {
       source: "AFFORDABILITY",
-      status: "NEW",
+      status: "NEW_LEAD",
       score: 30,
-      assignedAgentId: assigneeId,
+      assignedAgentId: null,
+      organizationId: desk.organizationId ?? undefined,
       ...utmLeadFields(utm, adCampaignId),
       notes: [
         `Affordability lead: ${parsed.data.name} <${parsed.data.email}>`,

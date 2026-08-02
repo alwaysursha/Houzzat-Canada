@@ -2,7 +2,8 @@ import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
-import { pickAssigneeAgentId } from "@/lib/agent";
+import { resolvePublicLeadDesk } from "@/lib/agent";
+import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import {
   AGENT_CONTACT_CONSENT_KIND,
   AGENT_CONTACT_CONSENT_VERSION,
@@ -97,13 +98,21 @@ export async function POST(request: Request) {
     .filter(Boolean)
     .join("\n");
 
-  const assigneeId = await pickAssigneeAgentId();
-  const assignee = assigneeId
-    ? await prisma.user.findUnique({
-        where: { id: assigneeId },
-        select: { email: true, phone: true, name: true },
+  const desk = await resolvePublicLeadDesk();
+  const organizationId = desk.organizationId;
+  const deskNotifiers = organizationId
+    ? await prisma.organizationMembership.findMany({
+        where: {
+          organizationId,
+          role: { in: ["OWNER", "ADMIN"] },
+          user: { disabledAt: null },
+        },
+        select: {
+          user: { select: { email: true, phone: true, name: true } },
+        },
+        take: 8,
       })
-    : null;
+    : [];
 
   const consentAt = new Date();
   const firstMls = tour.stops[0]!.mlsNumber;
@@ -115,11 +124,12 @@ export async function POST(request: Request) {
     const lead = await tx.lead.create({
       data: {
         source: "SHOWING_REQUEST",
-        status: "SHOWING",
+        status: "APPT_SET",
         score: 60,
         listingMls: firstMls,
         customerId: user.id,
-        assignedAgentId: assigneeId,
+        assignedAgentId: null,
+        organizationId: organizationId ?? undefined,
         contactConsentAt: consentAt,
         notes: itineraryText,
         activities: {
@@ -154,7 +164,7 @@ export async function POST(request: Request) {
           endsAt: stop.suggestedLeaveAt,
           notes: itineraryText,
           customerId: user.id,
-          agentId: assigneeId,
+          agentId: null,
           leadId: lead.id,
         },
       });
@@ -178,12 +188,22 @@ export async function POST(request: Request) {
     return { leadId: lead.id, shareToken: token };
   });
 
-  if (assignee?.email) {
+  void recordActivityEvent({
+    type: "ROUTE_PLANNER",
+    userId: user.id,
+    path: "/route-planner",
+    title: `Requested tour · ${tour.stops.length} homes`,
+    mlsNumber: firstMls,
+    meta: { leadId, tourId: tour.id },
+  });
+
+  for (const row of deskNotifiers) {
+    if (!row.user.email) continue;
     void sendNotification({
-      toEmail: assignee.email,
-      toPhone: assignee.phone,
+      toEmail: row.user.email,
+      toPhone: row.user.phone,
       subject: `Route Planner request · ${tour.stops.length} homes`,
-      text: `${itineraryText}\n\nOpen agent desk: /agent/leads/${leadId}`,
+      text: `${itineraryText}\n\nClaim or assign: /agent/leads/${leadId}`,
       smsText: `Houzzat Route Planner: ${tour.stops.length} homes — check agent desk.`,
       whatsappText: `Route Planner request (${tour.stops.length} homes). /agent/leads/${leadId}`,
       preferWhatsApp: true,

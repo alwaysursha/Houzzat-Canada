@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
+import { logContactActivityForCustomer } from "@/lib/agent/log-contact-activity";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -22,12 +23,25 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Invalid preferences." }, { status: 400 });
   }
 
+  const phoneProvided = parsed.data.phone !== undefined;
+  const phoneValue = phoneProvided
+    ? parsed.data.phone?.trim() || null
+    : undefined;
+  const phoneChanged =
+    phoneValue !== undefined && phoneValue !== (user.phone ?? null);
+
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
       emailAlertsEnabled: parsed.data.emailAlertsEnabled,
       smsAlertsEnabled: parsed.data.smsAlertsEnabled,
-      phone: parsed.data.phone,
+      ...(phoneValue !== undefined
+        ? {
+            phone: phoneValue,
+            phoneUpdateRequestedAt: null,
+            ...(phoneChanged ? { phoneVerifiedAt: null } : {}),
+          }
+        : {}),
       relatedListingsMode: parsed.data.relatedListingsMode,
       caslConsentAt:
         parsed.data.emailAlertsEnabled || parsed.data.smsAlertsEnabled
@@ -43,6 +57,18 @@ export async function PATCH(request: Request) {
       vowVersion: true,
     },
   });
+
+  if (phoneChanged) {
+    await logContactActivityForCustomer({
+      customerId: user.id,
+      type: "contact_updated_by_customer",
+      body: phoneValue
+        ? `Customer updated contact: phone → ${phoneValue}`
+        : "Customer updated contact: phone cleared",
+      actorUserId: user.id,
+      meta: { phone: phoneValue, source: "preferences" },
+    });
+  }
 
   return NextResponse.json({ ok: true, preferences: updated });
 }

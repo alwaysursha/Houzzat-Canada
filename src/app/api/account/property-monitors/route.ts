@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
+import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
@@ -93,6 +94,14 @@ export async function POST(request: Request) {
       lastKnownStatus: listing.status,
       lastKnownOwnerStatus: listing.ownerStatus,
     },
+  });
+
+  void recordActivityEvent({
+    type: "WATCH_PROPERTY",
+    userId: user.id,
+    mlsNumber: listing.mlsNumber,
+    path: `/listing/${listing.mlsNumber}`,
+    title: `Watching ${listing.mlsNumber}`,
   });
 
   return NextResponse.json({ ok: true, item });

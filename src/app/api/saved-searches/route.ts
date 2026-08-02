@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
+import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -69,6 +70,14 @@ export async function POST(request: Request) {
         isPrimary: asPrimary,
       },
     });
+  });
+
+  void recordActivityEvent({
+    type: "SAVE_SEARCH",
+    userId: user.id,
+    path: "/account/searches",
+    title: `Saved search: ${item.name}`,
+    meta: { searchId: item.id },
   });
 
   return NextResponse.json({ ok: true, item });

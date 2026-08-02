@@ -30,18 +30,17 @@ export default async function AdminAnalyticsPage() {
       _count: { _all: true },
       orderBy: { _count: { source: "desc" } },
     }),
-    prisma.lead.count({ where: { status: "NEW" } }),
+    prisma.lead.count({ where: { status: "NEW_LEAD" } }),
     prisma.lead.count({
       where: {
         status: {
           in: [
+            "ATTEMPTED_CONTACT",
             "CONTACTED",
-            "QUALIFIED",
-            "ACTIVE_BUYER",
-            "ACTIVE_SELLER",
-            "SHOWING",
-            "OFFER",
-            "CLIENT",
+            "APPT_SET",
+            "APPT_MET",
+            "ACTIVE_CLIENT",
+            "PENDING_CLIENT",
           ],
         },
       },

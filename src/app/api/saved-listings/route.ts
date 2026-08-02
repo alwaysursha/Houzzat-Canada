@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
+import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
@@ -96,6 +97,14 @@ export async function POST(request: Request) {
     },
   });
 
+  void recordActivityEvent({
+    type: "SAVE_LISTING",
+    userId: user.id,
+    mlsNumber: listing.mlsNumber,
+    path: `/listing/${listing.mlsNumber}`,
+    title: `Saved ${listing.mlsNumber}`,
+  });
+
   return NextResponse.json({ ok: true, item });
 }
 
@@ -117,6 +126,14 @@ export async function DELETE(request: Request) {
 
   await prisma.savedListing.deleteMany({
     where: { userId: user.id, mlsNumber: parsed.data.mlsNumber },
+  });
+
+  void recordActivityEvent({
+    type: "UNSAVE_LISTING",
+    userId: user.id,
+    mlsNumber: parsed.data.mlsNumber,
+    path: `/listing/${parsed.data.mlsNumber}`,
+    title: `Unsaved ${parsed.data.mlsNumber}`,
   });
 
   return NextResponse.json({ ok: true });

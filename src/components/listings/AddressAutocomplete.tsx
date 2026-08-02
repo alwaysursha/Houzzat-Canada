@@ -37,6 +37,7 @@ import type {
   AutocompleteSuggestion,
   AutocompleteSuggestionGroup,
 } from "@/lib/listings/types";
+import { persistHomeLocationIfEmpty } from "@/lib/account/persist-home-location";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -575,9 +576,12 @@ export function AddressAutocomplete({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLoading(false);
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        void persistHomeLocationIfEmpty({ lat, lng });
         const params = new URLSearchParams({
-          lat: String(pos.coords.latitude),
-          lng: String(pos.coords.longitude),
+          lat: String(lat),
+          lng: String(lng),
         });
         if (transactionType) params.set("transactionType", transactionType);
         const href = `/search?${params.toString()}`;
@@ -588,8 +592,8 @@ export function AddressAutocomplete({
             type: "action",
             action: "near_me",
             label: "Near me",
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
+            lat,
+            lng,
             href,
           });
           return;

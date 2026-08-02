@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
-import { pickAssigneeAgentId } from "@/lib/agent";
+import { resolvePublicLeadDesk } from "@/lib/agent";
 import { sendNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
@@ -35,11 +35,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const assigneeId = await pickAssigneeAgentId();
-  const assignee = assigneeId
-    ? await prisma.user.findUnique({
-        where: { id: assigneeId },
-        select: { email: true, phone: true },
+  const desk = await resolvePublicLeadDesk();
+  const organizationId = desk.organizationId;
+  const assignee = organizationId
+    ? await prisma.organizationMembership.findFirst({
+        where: {
+          organizationId,
+          role: { in: ["OWNER", "ADMIN"] },
+          user: { disabledAt: null },
+        },
+        select: { user: { select: { email: true, phone: true } } },
       })
     : null;
 
@@ -49,10 +54,11 @@ export async function POST(request: Request) {
   const lead = await prisma.lead.create({
     data: {
       source: "PROPERTY_INQUIRY",
-      status: "NEW",
+      status: "NEW_LEAD",
       score: 45,
       listingMls: listing.mlsNumber,
-      assignedAgentId: assigneeId,
+      assignedAgentId: null,
+      organizationId: organizationId ?? undefined,
       ...utmLeadFields(utm, adCampaignId),
       notes: [
         `Pre-construction inquiry: ${listing.addressLine}, ${listing.city}`,
@@ -75,10 +81,10 @@ export async function POST(request: Request) {
     },
   });
 
-  if (assignee?.email) {
+  if (assignee?.user.email) {
     void sendNotification({
-      toEmail: assignee.email,
-      toPhone: assignee.phone,
+      toEmail: assignee.user.email,
+      toPhone: assignee.user.phone,
       subject: "Pre-construction inquiry",
       text: `${listing.addressLine} — ${parsed.data.name} <${parsed.data.email}>`,
       smsText: `Houzzat pre-con lead: ${listing.addressLine}`,

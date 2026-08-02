@@ -27,16 +27,14 @@ enum RelatedListingsMode {
 }
 
 enum LeadStatus {
-  NEW
+  NEW_LEAD
+  ATTEMPTED_CONTACT
   CONTACTED
-  QUALIFIED
-  ACTIVE_BUYER
-  ACTIVE_SELLER
-  SHOWING
-  OFFER
-  CLIENT
-  NURTURE
-  LOST
+  APPT_SET
+  APPT_MET
+  ACTIVE_CLIENT
+  PENDING_CLIENT
+  PAST_CLIENT
 }
 
 enum LeadSource {
@@ -54,6 +52,14 @@ enum LeadSource {
   OTHER
 }
 
+/** Agent-classified inquiry type on Contact Requested (Launchpad). */
+enum InquiryTag {
+  VIEWING
+  HOME_VALUE
+  PROPERTY_DETAILS
+  GENERAL
+}
+
 enum AppointmentType {
   SHOWING
   VIRTUAL_VIEWING
@@ -67,6 +73,74 @@ enum AppointmentStatus {
   RESCHEDULED
   COMPLETED
   CANCELLED
+}
+
+/** Seat role inside a selling Organization (team / brokerage). Not platform ADMIN. */
+enum OrgMembershipRole {
+  OWNER
+  ADMIN
+  AGENT
+}
+
+enum AgentTaskType {
+  CALL
+  EMAIL
+  TODO
+}
+
+enum AgentTaskStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  /** Soft seat cap for future billing. */
+  seatLimit Int      @default(5)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships OrganizationMembership[]
+  invites     OrganizationInvite[]
+  leads       Lead[]
+  tasks       AgentTask[]
+  leadNotes   LeadNote[]
+  emailLogs   LeadEmailLog[]
+}
+
+model OrganizationMembership {
+  id             String            @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrgMembershipRole @default(AGENT)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+model OrganizationInvite {
+  id             String            @id @default(cuid())
+  organizationId String
+  email          String
+  role           OrgMembershipRole @default(AGENT)
+  token          String            @unique @default(cuid())
+  invitedById    String?
+  acceptedAt     DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime          @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, email])
+  @@index([token])
 }
 
 model User {
@@ -84,6 +158,12 @@ model User {
   /** Which consumer dashboard + search context is active. */
   activeMode    ActiveMode @default(BUYER)
   phone         String?
+  /** Agent-confirmed phone on CRM lead desk (not SMS OTP). */
+  phoneVerifiedAt DateTime?
+  /** Agent requested customer to update email on next visit. */
+  emailUpdateRequestedAt DateTime?
+  /** Agent requested customer to update phone on next visit. */
+  phoneUpdateRequestedAt DateTime?
   /** Client home / location address — used as Route Planner start + admin CRM. */
   homeAddress   String?
   homeLat       Float?
@@ -107,6 +187,7 @@ model User {
   siteVisitors  SiteVisitor[]
   activityEvents ActivityEvent[]
   auditLogs     AuditLog[]       @relation("AuditActor")
+  orgMemberships OrganizationMembership[]
   leads         Lead[]            @relation("CustomerLeads")
   assignedLeads Lead[]            @relation("AssignedLeads")
   activities    LeadActivity[]
@@ -130,6 +211,10 @@ model User {
   waivedOwnerOrders OwnerListingOrder[] @relation("OwnerOrderAdmin")
   ownerConsents OwnerListingConsent[]
   viewingTours  ViewingTour[]
+  assignedTasks AgentTask[]       @relation("TaskAssignee")
+  createdTasks  AgentTask[]       @relation("TaskCreator")
+  leadNotesAuthored LeadNote[]    @relation("LeadNoteAuthor")
+  leadEmailsSent LeadEmailLog[]   @relation("LeadEmailSender")
 }
 
 model Account {
@@ -182,13 +267,15 @@ model AgentProfile {
 
 model Lead {
   id              String     @id @default(cuid())
-  status          LeadStatus @default(NEW)
+  status          LeadStatus @default(NEW_LEAD)
   source          LeadSource @default(OTHER)
   score           Int        @default(0)
   notes           String?    @db.Text
   listingMls      String?
   customerId      String?
   assignedAgentId String?
+  /** Tenant boundary for team / solo agent CRM. */
+  organizationId  String?
   landingPageId   String?
   utmSource       String?
   utmMedium       String?
@@ -197,20 +284,94 @@ model Lead {
   adCampaignId    String?
   /** CASL-style consent to be contacted by a Houzzat agent about this request. */
   contactConsentAt DateTime?
+  /** First agent touch (claim, note, call task, email) — SLA clock. */
+  firstRespondedAt DateTime?
+  /** When pipeline status last changed (banner date). */
+  statusChangedAt  DateTime   @default(now())
+  /** Agent-set inquiry classification (Viewing / Home Value / etc.). */
+  inquiryTag       InquiryTag?
+  lostReason       String?
+  winReason        String?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
   customer      User?          @relation("CustomerLeads", fields: [customerId], references: [id], onDelete: SetNull)
   assignedAgent User?          @relation("AssignedLeads", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  organization  Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   landingPage   LandingPage?   @relation(fields: [landingPageId], references: [id], onDelete: SetNull)
   adCampaign    AdCampaign?    @relation(fields: [adCampaignId], references: [id], onDelete: SetNull)
   activities    LeadActivity[]
   appointments  Appointment[]
+  tasks         AgentTask[]
+  leadNotes     LeadNote[]
+  emailLogs     LeadEmailLog[]
 
   @@index([status, assignedAgentId])
+  @@index([organizationId, status])
+  @@index([organizationId, assignedAgentId])
   @@index([source])
   @@index([utmCampaign])
   @@index([adCampaignId])
+}
+
+model AgentTask {
+  id             String          @id @default(cuid())
+  organizationId String
+  leadId         String?
+  assigneeId     String
+  createdById    String?
+  type           AgentTaskType   @default(TODO)
+  status         AgentTaskStatus @default(OPEN)
+  title          String
+  body           String?         @db.Text
+  dueAt          DateTime
+  completedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignee     User         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([assigneeId, status, dueAt])
+  @@index([organizationId, status, dueAt])
+  @@index([leadId, status])
+}
+
+model LeadNote {
+  id             String   @id @default(cuid())
+  organizationId String
+  leadId         String
+  authorId       String
+  body           String   @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author       User         @relation("LeadNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@index([organizationId, createdAt])
+}
+
+model LeadEmailLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  leadId         String
+  sentById       String
+  toEmail        String
+  subject        String
+  body           String   @db.Text
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sentBy       User         @relation("LeadEmailSender", fields: [sentById], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@index([organizationId, createdAt])
 }
 
 model LeadActivity {

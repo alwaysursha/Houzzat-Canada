@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
 import { ListingCard } from "@/components/listings/ListingCard";
+import { persistHomeLocationIfEmpty } from "@/lib/account/persist-home-location";
 import {
   appendPersonalizationToUrlSearchParams,
   personalizationToSearchHref,
@@ -123,26 +124,23 @@ export function HomeNearMeRail({
     setStatus("locating");
     try {
       const position = await readPosition();
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      void persistHomeLocationIfEmpty({ lat, lng });
       try {
         sessionStorage.setItem(
           "houzzat-region-geo",
-          JSON.stringify({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          }),
+          JSON.stringify({ lat, lng }),
         );
       } catch {
         // ignore
       }
       window.dispatchEvent(
         new CustomEvent("houzzat:geo", {
-          detail: {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          },
+          detail: { lat, lng },
         }),
       );
-      await loadNearby(position.coords.latitude, position.coords.longitude);
+      await loadNearby(lat, lng);
     } catch (error) {
       commitStatus("hidden");
       const code =
