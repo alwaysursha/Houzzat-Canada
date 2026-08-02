@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireCustomerUser } from "@/lib/account";
+import { needsEmailVerification } from "@/lib/account-access";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -34,5 +35,7 @@ export async function GET() {
     needEmail,
     phoneRequested,
     emailRequested,
+    needsEmailVerification: needsEmailVerification(user),
+    emailVerified: Boolean(user.emailVerified),
   });
 }

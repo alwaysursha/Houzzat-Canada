@@ -1,4 +1,6 @@
 import type { Prisma, Role } from "@prisma/client";
+import { NextResponse } from "next/server";
+import { needsEmailVerification } from "@/lib/account-access";
 import { auth } from "@/lib/auth";
 import { DatabaseUnavailableError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +16,8 @@ export const customerUserSelect = {
   homeLat: true,
   homeLng: true,
   role: true,
+  emailVerified: true,
+  createdAt: true,
   caslConsentAt: true,
   vowAcceptedAt: true,
   vowVersion: true,
@@ -34,6 +38,8 @@ export type CustomerUser = {
   homeLat: number | null;
   homeLng: number | null;
   role: Role;
+  emailVerified: Date | null;
+  createdAt: Date;
   caslConsentAt: Date | null;
   vowAcceptedAt: Date | null;
   vowVersion: string | null;
@@ -86,6 +92,8 @@ async function findCustomerUser(
         homeAddress: null,
         homeLat: null,
         homeLng: null,
+        emailVerified: null,
+        createdAt: new Date(0),
         caslConsentAt: null,
         vowAcceptedAt: null,
         vowVersion: null,
@@ -130,4 +138,42 @@ export async function requireCustomerUser(): Promise<CustomerUser | null> {
   }
 
   return null;
+}
+
+/**
+ * Gate for product APIs: guest → sign in; locked → email verification.
+ * Returns a response to send, or null when the user has full access.
+ */
+export function denyUnlessFullCustomerAccess(
+  user: CustomerUser | null,
+): NextResponse | null {
+  if (!user) {
+    return NextResponse.json(
+      { error: "Sign in required.", requiresAuth: true },
+      { status: 401 },
+    );
+  }
+  if (needsEmailVerification(user)) {
+    return NextResponse.json(
+      {
+        error: "Email verification required.",
+        requiresEmailVerification: true,
+      },
+      { status: 403 },
+    );
+  }
+  return null;
+}
+
+/**
+ * Load customer and enforce full access in one step.
+ * Prefer this over `requireCustomerUser` for gated product APIs.
+ */
+export async function requireFullCustomerUser(): Promise<
+  { user: CustomerUser; denied: null } | { user: null; denied: NextResponse }
+> {
+  const user = await requireCustomerUser();
+  const denied = denyUnlessFullCustomerAccess(user);
+  if (denied) return { user: null, denied };
+  return { user: user!, denied: null };
 }

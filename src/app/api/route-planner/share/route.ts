@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
-import { requireCustomerUser } from "@/lib/account";
+import { requireFullCustomerUser } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
 import {
   enrichTourStops,
@@ -10,10 +10,9 @@ import {
 
 /** Ensure a share token exists and return public share URL payload. */
 export async function POST() {
-  const user = await requireCustomerUser();
-  if (!user) {
-    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  }
+  const access = await requireFullCustomerUser();
+  if (access.denied) return access.denied;
+  const user = access.user;
 
   const tour = await getOrCreateActiveTour(user.id);
   if (tour.stops.length === 0) {

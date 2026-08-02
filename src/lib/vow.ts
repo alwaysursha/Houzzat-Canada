@@ -1,3 +1,8 @@
+import {
+  hasFullClientAccess,
+  type AccessUser,
+} from "@/lib/account-access";
+
 export const VOW_VERSION = "2026-07-1";
 
 export const VOW_SUMMARY =
@@ -8,18 +13,23 @@ export const VOW_PUBLIC_NOTE =
   "Sold and leased prices and listing history are restricted under TRREB Virtual Office Website (VOW) rules. Canadian privacy law and board policy require this information to be shown only to registered brokerage clients — not to guests browsing the public site.";
 
 /**
- * Anyone with a Houzzat account (registered client) may view sold prices
- * and listing history. Guests see IDX-level public fields only.
+ * Registered Houzzat clients with verified email (or within the 7-day grace)
+ * may view sold prices and listing history. Guests and locked accounts see
+ * IDX-level public fields only.
  */
-export function hasClientAccess(
-  user: { id: string } | null | undefined,
-): boolean {
-  return Boolean(user?.id);
+export function hasClientAccess(user: AccessUser | null | undefined): boolean {
+  return hasFullClientAccess(user);
 }
 
 /** @deprecated Prefer hasClientAccess — kept as alias during migration. */
 export function hasVowAccess(
-  user: { id: string; vowAcceptedAt?: Date | null; vowVersion?: string | null } | null | undefined,
+  user:
+    | (AccessUser & {
+        vowAcceptedAt?: Date | null;
+        vowVersion?: string | null;
+      })
+    | null
+    | undefined,
 ) {
   return hasClientAccess(user);
 }

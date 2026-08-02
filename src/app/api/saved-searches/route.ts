@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { requireCustomerUser } from "@/lib/account";
+import { requireFullCustomerUser } from "@/lib/account";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const user = await requireCustomerUser();
-  if (!user) {
-    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  }
+  const access = await requireFullCustomerUser();
+  if (access.denied) return access.denied;
+  const user = access.user;
 
   const items = await prisma.savedSearch.findMany({
     where: { userId: user.id },
@@ -33,10 +32,9 @@ const postSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const user = await requireCustomerUser();
-  if (!user) {
-    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  }
+  const access = await requireFullCustomerUser();
+  if (access.denied) return access.denied;
+  const user = access.user;
 
   const body = await request.json();
   const parsed = postSchema.safeParse(body);
@@ -94,10 +92,9 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(request: Request) {
-  const user = await requireCustomerUser();
-  if (!user) {
-    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  }
+  const access = await requireFullCustomerUser();
+  if (access.denied) return access.denied;
+  const user = access.user;
 
   const parsed = patchSchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -153,10 +150,9 @@ const deleteSchema = z.object({
 });
 
 export async function DELETE(request: Request) {
-  const user = await requireCustomerUser();
-  if (!user) {
-    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  }
+  const access = await requireFullCustomerUser();
+  if (access.denied) return access.denied;
+  const user = access.user;
 
   const body = await request.json();
   const parsed = deleteSchema.safeParse(body);

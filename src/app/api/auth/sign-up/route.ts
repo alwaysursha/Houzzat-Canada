@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { sendEmailVerification } from "@/lib/auth/email-verification";
 import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
 import { prisma } from "@/lib/prisma";
 import { VOW_VERSION } from "@/lib/vow";
@@ -89,6 +90,15 @@ export async function POST(request: Request) {
           ],
         },
       },
+    });
+
+    // Best-effort — signup must succeed even if email is not configured yet.
+    void sendEmailVerification({
+      email,
+      name: parsed.data.name,
+      callbackUrl: "/account",
+    }).catch((err) => {
+      console.error("[sign-up] verification email failed", err);
     });
 
     return NextResponse.json({ ok: true, userId: user.id });

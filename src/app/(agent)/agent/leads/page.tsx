@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LeadActions } from "@/components/agent/LeadActions";
+import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
 import {
   LeadsTableClient,
   type LeadRow,
@@ -235,14 +236,23 @@ export default async function AgentLeadsPage({
                       key={lead.id}
                       className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-sm"
                     >
-                      <Link
-                        href={`/agent/leads/${lead.id}`}
-                        className="font-semibold text-[#2563eb] hover:underline"
-                      >
-                        {lead.customer?.name ||
-                          lead.customer?.email ||
-                          lead.source.replaceAll("_", " ")}
-                      </Link>
+                      <div className="flex items-center gap-1">
+                        <Link
+                          href={`/agent/leads/${lead.id}`}
+                          className="font-semibold text-[#2563eb] hover:underline"
+                        >
+                          {lead.customer?.name ||
+                            lead.customer?.email ||
+                            lead.source.replaceAll("_", " ")}
+                        </Link>
+                        {lead.customer ? (
+                          <LeadAccountVerifyMenu
+                            compact
+                            leadId={lead.id}
+                            emailVerified={Boolean(lead.customer.emailVerified)}
+                          />
+                        ) : null}
+                      </div>
                       <p className="mt-1 text-xs text-[#64748b]">
                         Hot {hotMap.get(lead.id)?.hotness ?? lead.score}
                         {lead.listingMls ? ` · ${lead.listingMls}` : ""}

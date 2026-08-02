@@ -107,9 +107,11 @@ function DeltaChip({ value }: { value: number | null }) {
 export function HouzzatInsights({
   insights,
   callbackPath,
+  needsEmailVerification = false,
 }: {
   insights: ListingInsightsPayload;
   callbackPath: string;
+  needsEmailVerification?: boolean;
 }) {
   const {
     placeLabel,
@@ -242,9 +244,18 @@ export function HouzzatInsights({
           {valuation.restricted ? (
             <InsightGate
               className="min-h-[200px]"
-              title="See Houzzat Estimated Value"
-              body="Register as a Houzzat client to unlock the low–mid–high estimate built from nearby solds and actives (VOW)."
+              title={
+                needsEmailVerification
+                  ? "Email verification required"
+                  : "See Houzzat Estimated Value"
+              }
+              body={
+                needsEmailVerification
+                  ? "Verify your email to unlock the low–mid–high estimate built from nearby solds and actives."
+                  : "Register as a Houzzat client to unlock the low–mid–high estimate built from nearby solds and actives (VOW)."
+              }
               callbackPath={callbackPath}
+              needsEmailVerification={needsEmailVerification}
             >
               <div className="flex h-40 flex-col items-center justify-end gap-3 px-6 pb-5">
                 <p className="font-display text-3xl text-canopy/40">$—,———,———</p>
@@ -435,9 +446,18 @@ export function HouzzatInsights({
           {comps.restricted ? (
             <InsightGate
               className="min-h-[220px]"
-              title="Sold comps for registered clients"
-              body={VOW_PUBLIC_NOTE}
+              title={
+                needsEmailVerification
+                  ? "Email verification required"
+                  : "Sold comps for registered clients"
+              }
+              body={
+                needsEmailVerification
+                  ? "Verify your email to unlock nearby sold comparable homes."
+                  : VOW_PUBLIC_NOTE
+              }
               callbackPath={callbackPath}
+              needsEmailVerification={needsEmailVerification}
             >
               <div className="grid gap-3 sm:grid-cols-3">
                 {[1, 2, 3].map((i) => (

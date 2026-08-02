@@ -32,6 +32,7 @@ export type LeadSummary = {
       phone: string | null;
       isBuyer: boolean;
       isSeller: boolean;
+      emailVerified: string | null;
       caslConsentAt: string | null;
       homeAddress: string | null;
       emailUpdateRequestedAt: string | null;
@@ -105,6 +106,10 @@ export type LeadSummary = {
     path: string | null;
     imageUrl: string | null;
     createdAt: string;
+    noteId?: string | null;
+    noteCategory?: "GENERAL" | "CALL" | null;
+    pinned?: boolean;
+    pinnedAt?: string | null;
   }>;
   tasks: Array<{
     id: string;
@@ -134,6 +139,9 @@ export type LeadSummary = {
   notes: Array<{
     id: string;
     body: string;
+    category: "GENERAL" | "CALL";
+    pinned: boolean;
+    pinnedAt: string | null;
     createdAt: string;
     author: { name: string | null; email: string };
   }>;
@@ -171,6 +179,7 @@ export async function loadLeadSummary(
           phone: true,
           isBuyer: true,
           isSeller: true,
+          emailVerified: true,
           caslConsentAt: true,
           homeAddress: true,
           emailUpdateRequestedAt: true,
@@ -192,7 +201,11 @@ export async function loadLeadSummary(
         },
       },
       leadNotes: {
-        orderBy: { createdAt: "desc" },
+        orderBy: [
+          { pinned: "desc" },
+          { pinnedAt: "desc" },
+          { createdAt: "desc" },
+        ],
         take: 30,
         include: {
           author: { select: { name: true, email: true } },
@@ -391,6 +404,7 @@ export async function loadLeadSummary(
       customer: lead.customer
         ? {
             ...lead.customer,
+            emailVerified: lead.customer.emailVerified?.toISOString() ?? null,
             caslConsentAt: lead.customer.caslConsentAt?.toISOString() ?? null,
             emailUpdateRequestedAt:
               lead.customer.emailUpdateRequestedAt?.toISOString() ?? null,
@@ -434,6 +448,7 @@ export async function loadLeadSummary(
     timeline: timeline.map((item) => ({
       ...item,
       createdAt: item.createdAt.toISOString(),
+      pinnedAt: item.pinnedAt?.toISOString() ?? null,
     })),
     tasks: lead.tasks.map((t) => ({
       ...t,
@@ -451,6 +466,9 @@ export async function loadLeadSummary(
     notes: lead.leadNotes.map((n) => ({
       id: n.id,
       body: n.body,
+      category: n.category,
+      pinned: n.pinned,
+      pinnedAt: n.pinnedAt?.toISOString() ?? null,
       createdAt: n.createdAt.toISOString(),
       author: n.author,
     })),

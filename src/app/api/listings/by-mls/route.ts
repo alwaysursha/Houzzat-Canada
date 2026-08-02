@@ -29,9 +29,13 @@ export async function GET(request: Request) {
   }
 
   const session = await auth();
-  const canSeeSold = hasClientAccess(
-    session?.user?.id ? { id: session.user.id } : null,
-  );
+  const accessUser = session?.user?.email
+    ? await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true, emailVerified: true, createdAt: true },
+      })
+    : null;
+  const canSeeSold = hasClientAccess(accessUser);
 
   const listings = await prisma.listing.findMany({
     where: { mlsNumber: { in: mlsNumbers } },

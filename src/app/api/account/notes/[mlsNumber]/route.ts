@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireCustomerUser } from "@/lib/account";
+import { requireFullCustomerUser } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
 export async function GET(_request: Request, { params }: Params) {
-  const user = await requireCustomerUser();
-  if (!user) {
-    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  }
+  const access = await requireFullCustomerUser();
+  if (access.denied) return access.denied;
+  const user = access.user;
 
   const { mlsNumber } = await params;
   const note = await prisma.listingNote.findUnique({
@@ -29,10 +28,9 @@ const putSchema = z.object({
 });
 
 export async function PUT(request: Request, { params }: Params) {
-  const user = await requireCustomerUser();
-  if (!user) {
-    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  }
+  const access = await requireFullCustomerUser();
+  if (access.denied) return access.denied;
+  const user = access.user;
 
   const { mlsNumber } = await params;
   const parsed = putSchema.safeParse(await request.json());

@@ -28,6 +28,7 @@ import {
 import type { LeadStatus } from "@prisma/client";
 import { LeadQuickPopup } from "@/components/agent/LeadQuickPopup";
 import { MassEmailForm } from "@/components/agent/LeadEmailForm";
+import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
 import {
   PIPELINE_STATUSES,
   PIPELINE_STATUS_ORDER,
@@ -744,13 +745,34 @@ export function LeadsTableClient({
                     </td>
 
                     <td className="px-2 py-3">
-                      <button
-                        type="button"
-                        onClick={() => setOpenLeadId(lead.id)}
-                        className="text-left text-[13px] font-bold text-[#4a6f94] hover:underline"
-                      >
-                        {name}
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setOpenLeadId(lead.id)}
+                          className="text-left text-[13px] font-bold text-[#4a6f94] hover:underline"
+                        >
+                          {name}
+                        </button>
+                        {lead.customer ? (
+                          <LeadAccountVerifyMenu
+                            compact
+                            leadId={lead.id}
+                            emailVerified={contactVerified(lead, "email")}
+                            onVerifiedChange={(verified) => {
+                              setVerifyState((prev) => ({
+                                ...prev,
+                                [lead.id]: {
+                                  emailVerified: verified,
+                                  phoneVerified:
+                                    prev[lead.id]?.phoneVerified ??
+                                    lead.customer?.phoneVerified ??
+                                    false,
+                                },
+                              }));
+                            }}
+                          />
+                        ) : null}
+                      </div>
                       <div className="mt-1 space-y-1">
                         <div className="relative flex items-center gap-1.5 text-[11px] text-[#6b8499]">
                           <button

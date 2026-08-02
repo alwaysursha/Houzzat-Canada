@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Megaphone, UserRound } from "lucide-react";
+import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
 import { LeadQuickPopup } from "@/components/agent/LeadQuickPopup";
 import {
   INQUIRY_TAGS,
@@ -26,6 +27,7 @@ export type ContactRequestedLead = {
     email: string;
     isBuyer: boolean;
     isSeller: boolean;
+    emailVerified?: boolean;
   } | null;
   isOnline?: boolean;
   binge?: boolean;
@@ -271,15 +273,24 @@ export function ContactRequestedPanel({
                   {initials || <UserRound className="size-4" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setOpenLeadId(lead.id)}
-                      className="text-left text-[13px] font-semibold text-[#2b6cb0] hover:underline"
-                    >
-                      {name}
-                    </button>
-                    <time className="text-[11px] text-[#94a3b8]">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setOpenLeadId(lead.id)}
+                        className="truncate text-left text-[13px] font-semibold text-[#2b6cb0] hover:underline"
+                      >
+                        {name}
+                      </button>
+                      {lead.customer ? (
+                        <LeadAccountVerifyMenu
+                          compact
+                          leadId={lead.id}
+                          emailVerified={Boolean(lead.customer.emailVerified)}
+                        />
+                      ) : null}
+                    </div>
+                    <time className="shrink-0 text-[11px] text-[#94a3b8]">
                       {new Date(lead.createdAt).toLocaleString("en-CA", {
                         month: "short",
                         day: "numeric",

@@ -2,13 +2,14 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
+import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { Button } from "@/components/ui/button";
 import { VOW_SUMMARY } from "@/lib/vow";
 
-/** Shown to guests when sold / history is locked. Registered clients already have access. */
+/** Shown when sold / history is locked for guests or unverified accounts. */
 export function VowAcceptCard({
   callbackPath,
 }: {
@@ -18,11 +19,38 @@ export function VowAcceptCard({
   const router = useRouter();
   const { openAuth } = useAuthModal();
   const [pending, setPending] = useState(false);
+  const [needsVerify, setNeedsVerify] = useState(false);
 
   const callback = callbackPath ?? "/account";
 
+  useEffect(() => {
+    if (status !== "authenticated") {
+      setNeedsVerify(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/account/contact-status");
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          needsEmailVerification?: boolean;
+        };
+        if (!cancelled) {
+          setNeedsVerify(Boolean(data.needsEmailVerification));
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
+
   async function ensureClientAccess() {
     if (status === "authenticated") {
+      if (needsVerify) return;
       setPending(true);
       await fetch("/api/vow/accept", { method: "POST" });
       setPending(false);
@@ -38,7 +66,15 @@ export function VowAcceptCard({
         Sold prices & history for Houzzat clients
       </h3>
       <p className="mt-2 text-sm text-ink/70">{VOW_SUMMARY}</p>
-      {status === "authenticated" ? (
+      {status === "authenticated" && needsVerify ? (
+        <div className="mt-4 rounded-xl border border-line bg-white p-4">
+          <EmailVerificationRequired
+            callbackUrl={callback}
+            title="Email verification required"
+            body="Verify your email to unlock sold prices and listing history."
+          />
+        </div>
+      ) : status === "authenticated" ? (
         <Button
           className="mt-4"
           onClick={() => void ensureClientAccess()}

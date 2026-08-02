@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireCustomerUser } from "@/lib/account";
+import { requireFullCustomerUser } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const user = await requireCustomerUser();
-  if (!user) {
-    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  }
+  const access = await requireFullCustomerUser();
+  if (access.denied) return access.denied;
+  const user = access.user;
 
   const notes = await prisma.listingNote.findMany({
     where: { userId: user.id },

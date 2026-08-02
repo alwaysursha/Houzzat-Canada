@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Pin } from "lucide-react";
 import type { TimelineItem } from "@/lib/agent/customer-timeline";
 import { cn } from "@/lib/utils";
 
@@ -8,6 +9,7 @@ function tone(type: string) {
   if (t.includes("CONTACT_UPDATE") || t.includes("CONTACT_UPDATE"))
     return "bg-amber-100 text-amber-900";
   if (t.includes("EMAIL") || t === "EMAIL") return "bg-canopy/12 text-canopy-deep";
+  if (t === "CALL_NOTE") return "bg-sky-100 text-sky-900";
   if (t.includes("NOTE") || t === "NOTE") return "bg-mist text-ink/70";
   if (t.includes("SAVE") || t.includes("WATCH") || t.includes("ROUTE"))
     return "bg-signal/15 text-signal";
@@ -15,6 +17,18 @@ function tone(type: string) {
   if (t.includes("LEAD") || t.includes("CLAIM") || t.includes("STATUS"))
     return "bg-ink/10 text-ink";
   return "bg-mist/80 text-ink/60";
+}
+
+function typeLabel(item: TimelineItem) {
+  if (item.source === "note") {
+    return item.noteCategory === "CALL" ? "Call note" : "General note";
+  }
+  if (item.type === "contact_update_request") return "Contact update requested";
+  if (item.type === "contact_updated_by_customer")
+    return "Contact updated by customer";
+  if (item.type === "contact_update") return "Contact updated";
+  if (item.type === "note_pin") return "Note pin";
+  return item.type.replaceAll("_", " ");
 }
 
 function isListingRow(item: TimelineItem) {
@@ -45,27 +59,37 @@ export function CrmTimeline({
         const showListingCard = isListingRow(item);
 
         return (
-          <li key={item.id} className="relative pb-5 last:pb-0">
+          <li
+            key={item.id}
+            className={cn(
+              "relative pb-5 last:pb-0",
+              item.pinned && "rounded-r-lg bg-amber-50/90 py-2 pr-2 pl-1",
+            )}
+          >
             <span
               className={cn(
                 "absolute -left-[1.4rem] top-1 size-2.5 rounded-full ring-4 ring-surface",
-                index === 0 ? "bg-canopy" : "bg-ink/25",
+                item.pinned
+                  ? "bg-amber-500"
+                  : index === 0
+                    ? "bg-canopy"
+                    : "bg-ink/25",
               )}
             />
             <div className="flex flex-wrap items-center gap-2">
+              {item.pinned ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                  <Pin className="size-3 fill-amber-500" />
+                  Pinned
+                </span>
+              ) : null}
               <span
                 className={cn(
                   "rounded-md px-2 py-0.5 text-[11px] font-semibold",
                   tone(item.type),
                 )}
               >
-                {item.type === "contact_update_request"
-                  ? "Contact update requested"
-                  : item.type === "contact_updated_by_customer"
-                    ? "Contact updated by customer"
-                    : item.type === "contact_update"
-                      ? "Contact updated"
-                      : item.type.replaceAll("_", " ")}
+                {typeLabel(item)}
               </span>
               <time className="text-xs text-ink/45">
                 {item.createdAt.toLocaleString("en-CA", {

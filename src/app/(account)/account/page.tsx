@@ -2,7 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AlertPreferencesForm } from "@/components/account/AlertPreferencesForm";
 import { VowAcceptCard } from "@/components/account/VowAcceptCard";
+import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { requireCustomerUser } from "@/lib/account";
+import { needsEmailVerification } from "@/lib/account-access";
 import { prisma } from "@/lib/prisma";
 import { hasVowAccess } from "@/lib/vow";
 
@@ -139,6 +141,7 @@ export default async function AccountPage() {
   }
 
   const vowOk = hasVowAccess(user);
+  const verifyLocked = needsEmailVerification(user);
 
   return (
     <div className="space-y-8">
@@ -148,6 +151,16 @@ export default async function AccountPage() {
           Saved homes, notes, searches, and watchlist — signed in as {user.email}
         </p>
       </div>
+
+      {verifyLocked ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-5">
+          <EmailVerificationRequired
+            callbackUrl="/account"
+            title="Email verification required"
+            body="Your 7-day grace period has ended. Verify your email to restore saved homes, sold prices, Route Planner, and other client tools."
+          />
+        </div>
+      ) : null}
 
       {loadError ? (
         <div className="rounded-2xl border border-signal/30 bg-signal/5 px-4 py-3 text-sm text-ink">

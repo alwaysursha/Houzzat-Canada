@@ -147,7 +147,13 @@ export default async function AgentLaunchpadPage() {
       take: 24,
       include: {
         customer: {
-          select: { name: true, email: true, isBuyer: true, isSeller: true },
+          select: {
+            name: true,
+            email: true,
+            isBuyer: true,
+            isSeller: true,
+            emailVerified: true,
+          },
         },
       },
     }),
@@ -332,7 +338,15 @@ export default async function AgentLaunchpadPage() {
                 listingMls: lead.listingMls,
                 inquiryTag: lead.inquiryTag,
                 createdAt: lead.createdAt.toISOString(),
-                customer: lead.customer,
+                customer: lead.customer
+                  ? {
+                      name: lead.customer.name,
+                      email: lead.customer.email,
+                      isBuyer: lead.customer.isBuyer,
+                      isSeller: lead.customer.isSeller,
+                      emailVerified: Boolean(lead.customer.emailVerified),
+                    }
+                  : null,
                 isOnline: hot?.isOnline,
                 binge: hot?.binge,
               };

@@ -60,6 +60,12 @@ enum InquiryTag {
   GENERAL
 }
 
+/** Agent CRM follow-up note category. */
+enum LeadNoteCategory {
+  GENERAL
+  CALL
+}
+
 enum AppointmentType {
   SHOWING
   VIRTUAL_VIEWING
@@ -340,19 +346,23 @@ model AgentTask {
 }
 
 model LeadNote {
-  id             String   @id @default(cuid())
+  id             String           @id @default(cuid())
   organizationId String
   leadId         String
   authorId       String
-  body           String   @db.Text
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  body           String           @db.Text
+  category       LeadNoteCategory @default(GENERAL)
+  pinned         Boolean          @default(false)
+  pinnedAt       DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
   author       User         @relation("LeadNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([leadId, createdAt])
+  @@index([leadId, pinned, pinnedAt])
   @@index([organizationId, createdAt])
 }
 

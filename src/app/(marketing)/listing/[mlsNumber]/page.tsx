@@ -57,6 +57,7 @@ import { findNearbyPois } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { lookupAndUpsertOnDemand } from "@/lib/proptx/on-demand-lookup";
+import { needsEmailVerification } from "@/lib/account-access";
 import { hasVowAccess } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import { getExpertWhatsAppNumber } from "@/lib/whatsapp";
@@ -119,9 +120,6 @@ export default async function ListingDetailPage({ params }: Params) {
   }
   if (!listing) notFound();
 
-  // Full gallery from PropTx MediaURLs (DB only keeps cover for search/cards).
-  const galleryPhotos = await resolveListingGalleryPhotos(listing);
-
   const session = await auth();
   const locale = await getLocale();
   const user = session?.user?.email
@@ -137,6 +135,8 @@ export default async function ListingDetailPage({ params }: Params) {
               phone: true,
               role: true,
               relatedListingsMode: true,
+              emailVerified: true,
+              createdAt: true,
             },
           });
         } catch {
@@ -149,6 +149,8 @@ export default async function ListingDetailPage({ params }: Params) {
               email: true,
               phone: true,
               role: true,
+              emailVerified: true,
+              createdAt: true,
             },
           });
           return base
@@ -164,12 +166,29 @@ export default async function ListingDetailPage({ params }: Params) {
     listing.dataSource !== "fsbo" &&
     !hasVowAccess(user)
   ) {
+    if (needsEmailVerification(user)) {
+      redirect(
+        `/auth/verify-email?callbackUrl=${encodeURIComponent(`/listing/${listing.mlsNumber}`)}`,
+      );
+    }
     redirect(
       `/auth/sign-in?callbackUrl=${encodeURIComponent(`/listing/${listing.mlsNumber}`)}`,
     );
   }
 
   const vowOk = hasVowAccess(user);
+  const verifyLocked = needsEmailVerification(user);
+
+  // Full gallery from PropTx MediaURLs (DB only keeps cover for search/cards).
+  // Locked accounts only receive the first 5 photos.
+  const galleryPhotosAll = await resolveListingGalleryPhotos(listing);
+  const galleryPhotos = verifyLocked
+    ? galleryPhotosAll.slice(0, 5)
+    : galleryPhotosAll;
+  const galleryPhotoCap =
+    verifyLocked && galleryPhotosAll.length > 5
+      ? galleryPhotosAll.length
+      : null;
   const saved = user
     ? Boolean(
         await prisma.savedListing.findUnique({
@@ -407,6 +426,12 @@ export default async function ListingDetailPage({ params }: Params) {
             virtualTourUrl={listingFacts?.virtualTourUrl}
             allowBooking={!isInactive}
             detailsLocked={detailsLocked}
+            needsEmailVerification={verifyLocked}
+            hiddenPhotoCount={
+              galleryPhotoCap != null
+                ? galleryPhotoCap - galleryPhotos.length
+                : 0
+            }
             mapSubject={
               Number.isFinite(listing.lat) && Number.isFinite(listing.lng)
                 ? {
@@ -663,6 +688,7 @@ export default async function ListingDetailPage({ params }: Params) {
             callbackPath={`/listing/${listing.mlsNumber}`}
             canSeeRestricted={canSeeRestricted}
             signedIn={Boolean(user)}
+            needsEmailVerification={verifyLocked}
             rows={buildListingHistoryRows({
               mlsNumber: listing.mlsNumber,
               listPrice: listing.listPrice,
@@ -679,6 +705,7 @@ export default async function ListingDetailPage({ params }: Params) {
           <HouzzatInsights
             insights={insights}
             callbackPath={`/listing/${listing.mlsNumber}`}
+            needsEmailVerification={verifyLocked}
           />
 
           <ListingRelatedSection

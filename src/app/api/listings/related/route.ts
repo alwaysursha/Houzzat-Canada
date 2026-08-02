@@ -52,7 +52,7 @@ export async function GET(request: Request) {
   const user = session?.user?.email
     ? await prisma.user.findUnique({
         where: { email: session.user.email },
-        select: { id: true },
+        select: { id: true, emailVerified: true, createdAt: true },
       })
     : null;
   const isClient = hasClientAccess(user);

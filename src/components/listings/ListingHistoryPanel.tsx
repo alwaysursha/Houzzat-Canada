@@ -52,6 +52,7 @@ export function ListingHistoryPanel({
   callbackPath,
   canSeeRestricted,
   signedIn,
+  needsEmailVerification = false,
   rows,
 }: {
   addressLabel: string;
@@ -60,6 +61,7 @@ export function ListingHistoryPanel({
   callbackPath: string;
   canSeeRestricted: boolean;
   signedIn: boolean;
+  needsEmailVerification?: boolean;
   rows: HistoryRow[];
 }) {
   const { openAuth } = useAuthModal();
@@ -225,8 +227,16 @@ export function ListingHistoryPanel({
                         {tab === "history" && locked ? (
                           <span
                             className="inline-block select-none blur-[5px]"
-                            title="Sign in required"
-                            aria-label="Listing ID hidden — sign in required"
+                            title={
+                              needsEmailVerification
+                                ? "Email verification required"
+                                : "Sign in required"
+                            }
+                            aria-label={
+                              needsEmailVerification
+                                ? "Listing ID hidden — email verification required"
+                                : "Listing ID hidden — sign in required"
+                            }
                           >
                             {row.listingId}
                           </span>
@@ -247,13 +257,27 @@ export function ListingHistoryPanel({
             <p className="mt-3 text-xs text-ink/50">
               Past sold, leased, and expired prices and listing IDs are
               restricted under TRREB VOW rules.{" "}
-              <Link
-                href={`/auth/sign-in?callbackUrl=${encodeURIComponent(callbackPath)}`}
-                className="font-semibold text-canopy hover:underline"
-              >
-                Sign in
-              </Link>{" "}
-              as a Houzzat client to unlock full history.
+              {needsEmailVerification ? (
+                <>
+                  <Link
+                    href={`/auth/verify-email?callbackUrl=${encodeURIComponent(callbackPath)}`}
+                    className="font-semibold text-canopy hover:underline"
+                  >
+                    Verify your email
+                  </Link>{" "}
+                  to unlock full history.
+                </>
+              ) : (
+                <>
+                  <Link
+                    href={`/auth/sign-in?callbackUrl=${encodeURIComponent(callbackPath)}`}
+                    className="font-semibold text-canopy hover:underline"
+                  >
+                    Sign in
+                  </Link>{" "}
+                  as a Houzzat client to unlock full history.
+                </>
+              )}
             </p>
           ) : null}
 

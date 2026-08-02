@@ -68,19 +68,23 @@ export async function GET(request: Request) {
   const user = session?.user?.email
     ? await prisma.user.findUnique({
         where: { email: session.user.email },
-        select: { id: true },
+        select: { id: true, emailVerified: true, createdAt: true },
       })
     : null;
   const isClient = hasClientAccess(user);
 
   if (restrictedStatus && !isClient) {
+    const locked = Boolean(user?.id);
     return NextResponse.json(
       {
-        error: "Sign in required to view sold and unlisted listings.",
+        error: locked
+          ? "Email verification required to view sold and unlisted listings."
+          : "Sign in required to view sold and unlisted listings.",
         items: [],
-        requiresAuth: true,
+        requiresAuth: !locked,
+        requiresEmailVerification: locked,
       },
-      { status: 401 },
+      { status: locked ? 403 : 401 },
     );
   }
 

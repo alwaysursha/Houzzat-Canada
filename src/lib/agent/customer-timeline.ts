@@ -13,6 +13,11 @@ export type TimelineItem = {
   /** Primary listing cover when the row is MLS-linked. */
   imageUrl: string | null;
   createdAt: Date;
+  /** LeadNote fields when source is note. */
+  noteId?: string | null;
+  noteCategory?: "GENERAL" | "CALL" | null;
+  pinned?: boolean;
+  pinnedAt?: Date | null;
 };
 
 function formatListingAddress(listing: {
@@ -147,6 +152,8 @@ export async function loadCustomerTimeline(input: {
   ]);
 
   for (const a of leadActs) {
+    // LeadNote rows are the source of truth for notes (category / pin).
+    if (a.type === "note") continue;
     items.push({
       id: `la-${a.id}`,
       source: "lead",
@@ -160,16 +167,21 @@ export async function loadCustomerTimeline(input: {
     });
   }
   for (const n of notes) {
+    const kind = n.category === "CALL" ? "Call" : "General";
     items.push({
       id: `note-${n.id}`,
       source: "note",
-      type: "NOTE",
-      title: `Note · ${n.author.name || n.author.email}`,
+      type: n.category === "CALL" ? "CALL_NOTE" : "NOTE",
+      title: `${kind} note · ${n.author.name || n.author.email}`,
       body: n.body,
       mlsNumber: null,
       path: null,
       imageUrl: null,
       createdAt: n.createdAt,
+      noteId: n.id,
+      noteCategory: n.category,
+      pinned: n.pinned,
+      pinnedAt: n.pinnedAt,
     });
   }
   for (const e of emails) {
@@ -343,9 +355,22 @@ export async function loadCustomerTimeline(input: {
     }
   }
 
-  items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  items.sort((a, b) => {
+    const aPinned = Boolean(a.pinned);
+    const bPinned = Boolean(b.pinned);
+    if (aPinned !== bPinned) return aPinned ? -1 : 1;
+    if (aPinned && bPinned) {
+      const aPin = a.pinnedAt?.getTime() ?? a.createdAt.getTime();
+      const bPin = b.pinnedAt?.getTime() ?? b.createdAt.getTime();
+      if (aPin !== bPin) return bPin - aPin;
+    }
+    return b.createdAt.getTime() - a.createdAt.getTime();
+  });
   const deduped = dedupeNearDuplicateListingViews(items);
-  const trimmed = deduped.slice(0, take);
+  // Keep all pinned notes even if they would fall outside the take window.
+  const pinned = deduped.filter((item) => item.pinned);
+  const unpinned = deduped.filter((item) => !item.pinned);
+  const trimmed = [...pinned, ...unpinned.slice(0, Math.max(0, take - pinned.length))];
   return enrichWithListingCovers(trimmed);
 }
 

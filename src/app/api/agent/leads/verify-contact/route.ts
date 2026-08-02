@@ -54,10 +54,16 @@ export async function POST(request: Request) {
       leadId: lead.id,
       userId: ctx.user.id,
       type: "contact_verify",
-      body: `${parsed.data.channel} ${parsed.data.verified ? "verified" : "unverified"} by agent`,
+      body:
+        parsed.data.channel === "email"
+          ? parsed.data.verified
+            ? "Account set to Verified Unlocked by agent"
+            : "Account set to Unverified Locked by agent"
+          : `phone ${parsed.data.verified ? "verified" : "unverified"} by agent`,
       meta: {
         channel: parsed.data.channel,
         verified: parsed.data.verified,
+        accountLock: parsed.data.channel === "email",
       },
     },
   });

@@ -1,7 +1,7 @@
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireCustomerUser } from "@/lib/account";
+import { requireFullCustomerUser } from "@/lib/account";
 import { resolvePublicLeadDesk } from "@/lib/agent";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import {
@@ -33,10 +33,9 @@ function formatTime(iso: string | null | undefined) {
 }
 
 export async function POST(request: Request) {
-  const user = await requireCustomerUser();
-  if (!user) {
-    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  }
+  const access = await requireFullCustomerUser();
+  if (access.denied) return access.denied;
+  const user = access.user;
 
   let body: unknown;
   try {
