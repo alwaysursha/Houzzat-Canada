@@ -3,9 +3,9 @@ name: MLS Media Backfill
 # Continuous photo gap-fill so missing images catch up without manual runs.
 # Complements mls-sync.yml (which also backfills a batch after each property pass).
 on:
-  schedule:
-    # Hourly — jobs take ~10–20m; every-15m + cancel-in-progress was killing runs mid-batch.
-    - cron: "22 * * * *"
+  # PAUSED — hourly photo backfill (~10–20m each) drove Actions spend.
+  # schedule:
+  #   - cron: "22 * * * *"
   workflow_dispatch:
     inputs:
       maxPages:

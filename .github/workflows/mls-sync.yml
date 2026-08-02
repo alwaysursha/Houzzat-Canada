@@ -7,9 +7,10 @@ name: MLS Sync
 #   PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID  (IDX Token — visitor listings)
 # Optional: PROPTX_VOW_BEARER_TOKEN, PROPTX_VOW_TOKEN_ID (sold enrichment for clients)
 on:
-  schedule:
-    # Just-listed + status changes every 5 minutes (GitHub cron can drift).
-    - cron: "*/5 * * * *"
+  # PAUSED — every-5m sync burned ~$8–12/day in GitHub Actions minutes.
+  # Re-enable with a slower cron (e.g. hourly) when budget allows.
+  # schedule:
+  #   - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       maxPages:

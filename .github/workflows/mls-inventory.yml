@@ -3,8 +3,9 @@ name: MLS Active Inventory
 # Nightly city-by-city Active book fill (heavy). Incremental status/just-listed
 # runs every 5 minutes in mls-sync.yml without this pass.
 on:
-  schedule:
-    - cron: "30 6 * * *"
+  # PAUSED — heavy nightly inventory fill. Run manually via workflow_dispatch.
+  # schedule:
+  #   - cron: "30 6 * * *"
   workflow_dispatch:
     inputs:
       maxPages:
