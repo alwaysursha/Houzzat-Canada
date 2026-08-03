@@ -1,5 +1,6 @@
 import type { OrgMembershipRole, Prisma, Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
+import { ensureBrokerageOrganization } from "@/lib/agent/brokerage";
 import { isAdminRole, isAgentRole } from "@/lib/constants";
 import { prisma } from "@/lib/prisma";
 
@@ -23,27 +24,17 @@ export type AgentUser = {
 
 export type AgentOrgContext = {
   user: AgentUser;
-  /** Primary desk org (prefer shared brokerage when present). */
+  /** Brokerage desk org (single team under the Team Leader). */
   organizationId: string;
   organizationName: string;
-  /** Every org this user belongs to — used for lead visibility. */
+  /** Desk org ids used for lead visibility (single-team model → one id). */
   organizationIds: string[];
   membershipRole: OrgMembershipRole;
-  /** OWNER / org ADMIN see all team leads. */
+  /** Team Leader (platform ADMIN or org OWNER/ADMIN) sees all team leads. */
   canSeeTeamLeads: boolean;
-  /** Platform Houzzat ADMIN — ops override, not a team seat. */
+  /** Platform Houzzat ADMIN — Team Leader / ops. */
   isPlatformAdmin: boolean;
 };
-
-function slugify(input: string) {
-  return (
-    input
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 48) || "team"
-  );
-}
 
 export async function requireAgentUser(): Promise<AgentUser | null> {
   const session = await auth();
@@ -68,108 +59,57 @@ export async function requireAgentUser(): Promise<AgentUser | null> {
 }
 
 /**
- * Ensure the agent has a home Organization (solo = org of one).
- * Returns full CRM context for scoping queries.
+ * CRM context: one brokerage team. Admin = Team Leader; agents are members.
+ * Personal “My team” orgs are not used for the desk.
  */
 export async function requireAgentContext(): Promise<AgentOrgContext | null> {
   const user = await requireAgentUser();
   if (!user) return null;
 
   const isPlatformAdmin = isAdminRole(user.role);
+  const brokerage = await ensureBrokerageOrganization();
 
-  // Join shared brokerage desk so agents see the same pond as admin.
-  const sharedOrgId = await resolveDefaultOrganizationId();
-  if (sharedOrgId && user.role === "AGENT") {
-    await prisma.organizationMembership.upsert({
-      where: {
-        organizationId_userId: {
-          organizationId: sharedOrgId,
-          userId: user.id,
-        },
-      },
-      create: {
-        organizationId: sharedOrgId,
+  const membershipRole: OrgMembershipRole = isPlatformAdmin ? "OWNER" : "AGENT";
+
+  await prisma.organizationMembership.upsert({
+    where: {
+      organizationId_userId: {
+        organizationId: brokerage.id,
         userId: user.id,
-        role: "AGENT",
       },
-      update: {},
-    });
-  }
-
-  let memberships = await prisma.organizationMembership.findMany({
-    where: { userId: user.id },
-    include: { organization: { select: { id: true, name: true } } },
-    orderBy: { createdAt: "asc" },
+    },
+    create: {
+      organizationId: brokerage.id,
+      userId: user.id,
+      role: membershipRole,
+    },
+    update: isPlatformAdmin ? { role: "OWNER" } : {},
   });
 
-  if (!memberships.length) {
-    const created = await ensurePersonalOrganization(user);
-    memberships = [created];
-  }
+  const membership = await prisma.organizationMembership.findUnique({
+    where: {
+      organizationId_userId: {
+        organizationId: brokerage.id,
+        userId: user.id,
+      },
+    },
+    select: { role: true },
+  });
 
-  const sharedMembership = sharedOrgId
-    ? memberships.find((m) => m.organizationId === sharedOrgId)
-    : null;
-  const primary = sharedMembership ?? memberships[0]!;
-  const membershipRole = primary.role;
   const canSeeTeamLeads =
     isPlatformAdmin ||
-    memberships.some((m) => m.role === "OWNER" || m.role === "ADMIN");
+    membership?.role === "OWNER" ||
+    membership?.role === "ADMIN";
 
   return {
     user,
-    organizationId: primary.organization.id,
-    organizationName: primary.organization.name,
-    organizationIds: memberships.map((m) => m.organizationId),
-    membershipRole,
+    organizationId: brokerage.id,
+    organizationName: brokerage.name,
+    organizationIds: [brokerage.id],
+    membershipRole: membership?.role ?? membershipRole,
     canSeeTeamLeads,
     isPlatformAdmin,
   };
-}
-
-async function ensurePersonalOrganization(user: AgentUser) {
-  const base = slugify(user.name || user.email.split("@")[0] || "agent");
-  let slug = base;
-  let n = 0;
-  while (await prisma.organization.findUnique({ where: { slug } })) {
-    n += 1;
-    slug = `${base}-${n}`;
-  }
-
-  const org = await prisma.organization.create({
-    data: {
-      name: user.name ? `${user.name}'s team` : "My team",
-      slug,
-      memberships: {
-        create: {
-          userId: user.id,
-          role: "OWNER",
-        },
-      },
-    },
-    select: { id: true, name: true },
-  });
-
-  // Attach orphan leads assigned to this agent.
-  await prisma.lead.updateMany({
-    where: {
-      assignedAgentId: user.id,
-      organizationId: null,
-    },
-    data: { organizationId: org.id },
-  });
-
-  const membership = await prisma.organizationMembership.findUniqueOrThrow({
-    where: {
-      organizationId_userId: {
-        organizationId: org.id,
-        userId: user.id,
-      },
-    },
-    include: { organization: { select: { id: true, name: true } } },
-  });
-
-  return membership;
 }
 
 /** Lead visibility for list/detail queries. */
@@ -177,19 +117,7 @@ export function leadScopeWhere(
   ctx: AgentOrgContext,
   view: "mine" | "pond" | "team" = "mine",
 ): Prisma.LeadWhereInput {
-  // Platform Houzzat ADMIN can survey the whole desk when needed.
-  if (ctx.isPlatformAdmin) {
-    if (view === "pond") return { assignedAgentId: null };
-    if (view === "team") return {};
-    return {
-      OR: [{ assignedAgentId: ctx.user.id }, { assignedAgentId: null }],
-    };
-  }
-
-  const orgIds = ctx.organizationIds.length
-    ? ctx.organizationIds
-    : [ctx.organizationId];
-  const org = { organizationId: { in: orgIds } };
+  const org = { organizationId: { in: ctx.organizationIds } };
 
   if (view === "pond") {
     return { ...org, assignedAgentId: null };
@@ -199,7 +127,7 @@ export function leadScopeWhere(
     return org;
   }
 
-  // Default: my leads + pond (claimable)
+  // Default: my leads + claimable pond in the brokerage.
   return {
     ...org,
     OR: [{ assignedAgentId: ctx.user.id }, { assignedAgentId: null }],
@@ -210,20 +138,19 @@ export function canAccessLead(
   ctx: AgentOrgContext,
   lead: { organizationId: string | null; assignedAgentId: string | null },
 ): boolean {
-  if (ctx.isPlatformAdmin) return true;
-  const orgIds = ctx.organizationIds.length
-    ? ctx.organizationIds
-    : [ctx.organizationId];
-  if (lead.organizationId && !orgIds.includes(lead.organizationId)) {
+  if (ctx.isPlatformAdmin || ctx.canSeeTeamLeads) return true;
+  if (
+    lead.organizationId &&
+    !ctx.organizationIds.includes(lead.organizationId)
+  ) {
     return false;
   }
-  if (ctx.canSeeTeamLeads) return true;
   if (!lead.assignedAgentId) return true;
   return lead.assignedAgentId === ctx.user.id;
 }
 
 /**
- * Prefer round-robin inside the default / first org that has active agents.
+ * Prefer round-robin inside the brokerage.
  * Falls back to any active agent (legacy).
  */
 export async function pickAssigneeAgentId(organizationId?: string | null) {
@@ -255,40 +182,15 @@ export async function pickAssigneeAgentId(organizationId?: string | null) {
   return agent?.id ?? null;
 }
 
-/** Shared brokerage / default desk for public inbound leads. */
+/** Shared brokerage desk for public inbound leads. */
 export async function resolveDefaultOrganizationId(): Promise<string | null> {
-  const fromEnv = process.env.DEFAULT_ORGANIZATION_ID?.trim();
-  if (fromEnv) {
-    const exists = await prisma.organization.findUnique({
-      where: { id: fromEnv },
-      select: { id: true },
-    });
-    if (exists) return exists.id;
-  }
-
-  const withAgents = await prisma.organizationMembership.findFirst({
-    where: {
-      user: {
-        role: "AGENT",
-        disabledAt: null,
-        agentProfile: { active: true },
-      },
-    },
-    orderBy: { createdAt: "asc" },
-    select: { organizationId: true },
-  });
-  if (withAgents) return withAgents.organizationId;
-
-  const any = await prisma.organization.findFirst({
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-  return any?.id ?? null;
+  const brokerage = await ensureBrokerageOrganization();
+  return brokerage.id;
 }
 
 /**
  * Public inquiries land in the shared Pond (unassigned) so any agent can claim
- * and admins can assign from the desk.
+ * and the Team Leader can assign from the desk.
  */
 export async function resolvePublicLeadDesk(): Promise<{
   assignedAgentId: null;
@@ -296,7 +198,6 @@ export async function resolvePublicLeadDesk(): Promise<{
 }> {
   const organizationId = await resolveDefaultOrganizationId();
   if (organizationId) {
-    // Attach orphan desk leads so agents on the shared org can see them.
     await prisma.lead.updateMany({
       where: { organizationId: null },
       data: { organizationId },
@@ -308,40 +209,11 @@ export async function resolvePublicLeadDesk(): Promise<{
   };
 }
 
-/** Resolve org for a new lead from assignee membership. */
+/** Resolve org for a new lead from assignee — always the brokerage desk. */
 export async function resolveOrganizationIdForAssignee(
-  assigneeId: string | null | undefined,
+  _assigneeId: string | null | undefined,
 ): Promise<string | null> {
-  if (!assigneeId) return resolveDefaultOrganizationId();
-
-  const sharedOrgId = await resolveDefaultOrganizationId();
-  if (sharedOrgId) {
-    const onShared = await prisma.organizationMembership.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId: sharedOrgId,
-          userId: assigneeId,
-        },
-      },
-      select: { organizationId: true },
-    });
-    if (onShared) return sharedOrgId;
-  }
-
-  const membership = await prisma.organizationMembership.findFirst({
-    where: { userId: assigneeId },
-    orderBy: { createdAt: "asc" },
-    select: { organizationId: true },
-  });
-  if (membership) return membership.organizationId;
-
-  const user = await prisma.user.findUnique({
-    where: { id: assigneeId },
-    select: agentUserSelect,
-  });
-  if (!user || !isAgentRole(user.role)) return null;
-  const created = await ensurePersonalOrganization(user);
-  return created.organizationId;
+  return resolveDefaultOrganizationId();
 }
 
 /** @deprecated Prefer canSeeTeamLeads from requireAgentContext */

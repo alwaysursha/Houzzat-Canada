@@ -6,6 +6,7 @@ import {
   markLeadFirstResponse,
   requireAgentContext,
 } from "@/lib/agent";
+import { createCallNewLeadTask, onLeadAttemptedContact, CALL_NEW_LEAD_TASK_TITLE } from "@/lib/agent/lead-intake";
 import { LEAD_STATUS_ZOD } from "@/lib/agent/pipeline";
 import { prisma } from "@/lib/prisma";
 
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
     data: {
       status: "NEW_LEAD",
       source: "OTHER",
+      intent: "BUYER",
       score: 10,
       customerId: customer.id,
       assignedAgentId: ctx.user.id,
@@ -78,6 +80,13 @@ export async function POST(request: Request) {
         },
       },
     },
+  });
+
+  await createCallNewLeadTask({
+    leadId: lead.id,
+    assigneeId: ctx.user.id,
+    organizationId: ctx.organizationId,
+    createdById: ctx.user.id,
   });
 
   return NextResponse.json({ ok: true, leadId: lead.id });
@@ -172,6 +181,63 @@ export async function PATCH(request: Request) {
 
   if (isTouch) {
     await markLeadFirstResponse(lead.id, ctx.user.id);
+  }
+
+  const nextAssignee =
+    data.assignedAgentId !== undefined
+      ? data.assignedAgentId
+      : lead.assignedAgentId;
+  const organizationId =
+    data.organizationId ?? lead.organizationId ?? ctx.organizationId;
+
+  if (
+    nextAssignee &&
+    (parsed.data.claim || parsed.data.assignedAgentId !== undefined) &&
+    nextAssignee !== lead.assignedAgentId
+  ) {
+    await createCallNewLeadTask({
+      leadId: lead.id,
+      assigneeId: nextAssignee,
+      organizationId,
+      createdById: ctx.user.id,
+    });
+  }
+
+  // Attempted Contact → leave Call New Leads, create 24h follow-up reminder.
+  if (
+    parsed.data.status === "ATTEMPTED_CONTACT" &&
+    lead.status !== "ATTEMPTED_CONTACT"
+  ) {
+    const reminderAssignee = nextAssignee ?? ctx.user.id;
+    if (reminderAssignee && organizationId) {
+      await onLeadAttemptedContact({
+        leadId: lead.id,
+        assigneeId: reminderAssignee,
+        organizationId,
+        createdById: ctx.user.id,
+      });
+      // Keep ownership on the agent who attempted contact.
+      if (!lead.assignedAgentId && !data.assignedAgentId) {
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { assignedAgentId: reminderAssignee },
+        });
+      }
+    }
+  } else if (
+    parsed.data.status &&
+    parsed.data.status !== "NEW_LEAD" &&
+    lead.status === "NEW_LEAD"
+  ) {
+    // Any other exit from New Lead cancels the call-new task.
+    await prisma.agentTask.updateMany({
+      where: {
+        leadId: lead.id,
+        status: "OPEN",
+        title: CALL_NEW_LEAD_TASK_TITLE,
+      },
+      data: { status: "CANCELLED" },
+    });
   }
 
   return NextResponse.json({ ok: true, lead: updated });

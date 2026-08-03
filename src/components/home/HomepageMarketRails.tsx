@@ -66,10 +66,12 @@ async function fetchSearch(
 
 export function HomepageMarketRails({
   isClient,
+  needsEmailVerification = false,
   vowOnlyGuest,
   personalization,
 }: {
   isClient: boolean;
+  needsEmailVerification?: boolean;
   vowOnlyGuest: boolean;
   personalization: HomepagePersonalizationQuery | null;
 }) {
@@ -311,6 +313,7 @@ export function HomepageMarketRails({
       <HomeSoldRail
         items={sold}
         isClient={isClient}
+        needsEmailVerification={needsEmailVerification}
         seeAllHref={seeAll({ status: "SOLD", sort: "newest" })}
         emptyLabel={
           ready

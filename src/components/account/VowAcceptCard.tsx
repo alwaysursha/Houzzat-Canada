@@ -67,8 +67,11 @@ export function VowAcceptCard({
       </h3>
       <p className="mt-2 text-sm text-ink/70">{VOW_SUMMARY}</p>
       {status === "authenticated" && needsVerify ? (
-        <div className="mt-4 rounded-xl border border-line bg-white p-4">
+        <div className="mt-5 rounded-3xl border border-white/70 bg-white p-6 shadow-[0_20px_50px_-28px_rgba(15,61,46,0.3)] sm:p-8">
           <EmailVerificationRequired
+            variant="featured"
+            icon="mail"
+            eyebrow="Sold & history"
             callbackUrl={callback}
             title="Email verification required"
             body="Verify your email to unlock sold prices and listing history."

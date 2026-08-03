@@ -180,10 +180,10 @@ export default async function ListingDetailPage({ params }: Params) {
   const verifyLocked = needsEmailVerification(user);
 
   // Full gallery from PropTx MediaURLs (DB only keeps cover for search/cards).
-  // Locked accounts only receive the first 5 photos.
+  // Locked accounts get 5 free photos + a 6th locked "verify" slide.
   const galleryPhotosAll = await resolveListingGalleryPhotos(listing);
   const galleryPhotos = verifyLocked
-    ? galleryPhotosAll.slice(0, 5)
+    ? galleryPhotosAll.slice(0, 6)
     : galleryPhotosAll;
   const galleryPhotoCap =
     verifyLocked && galleryPhotosAll.length > 5
@@ -428,9 +428,7 @@ export default async function ListingDetailPage({ params }: Params) {
             detailsLocked={detailsLocked}
             needsEmailVerification={verifyLocked}
             hiddenPhotoCount={
-              galleryPhotoCap != null
-                ? galleryPhotoCap - galleryPhotos.length
-                : 0
+              galleryPhotoCap != null ? Math.max(0, galleryPhotoCap - 5) : 0
             }
             mapSubject={
               Number.isFinite(listing.lat) && Number.isFinite(listing.lng)

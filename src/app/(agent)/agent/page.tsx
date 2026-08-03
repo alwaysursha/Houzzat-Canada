@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
+import type { LeadStatus } from "@prisma/client";
 import {
   Bell,
   CheckCircle2,
@@ -15,6 +16,7 @@ import {
 import { ContactRequestedPanel } from "@/components/agent/ContactRequestedPanel";
 import { TaskCompleteButton } from "@/components/agent/TaskForm";
 import { leadScopeWhere, requireAgentContext } from "@/lib/agent";
+import { resolveDeskView } from "@/lib/agent/brokerage";
 import {
   INQUIRY_TAG_LABEL,
   INQUIRY_TAG_STYLE,
@@ -73,11 +75,64 @@ export default async function AgentLaunchpadPage() {
   const endOfDay = new Date();
   endOfDay.setHours(23, 59, 59, 999);
 
+  const desk = await resolveDeskView(ctx);
   const scopeMine = leadScopeWhere(ctx, "mine");
   const scopeTeam = leadScopeWhere(ctx, ctx.canSeeTeamLeads ? "team" : "mine");
-  const assigneeFilter = ctx.canSeeTeamLeads
-    ? {}
-    : { assigneeId: ctx.user.id };
+  const deskView = ctx.canSeeTeamLeads ? "team" : "mine";
+
+  // Team Leader viewing a specific agent → that agent's desk numbers.
+  // Team overview → whole brokerage. Field agent → own desk.
+  const focusAgentId = desk.deskAgentId;
+  const followUpStatuses = [
+    "ATTEMPTED_CONTACT",
+    "CONTACTED",
+    "PENDING_CLIENT",
+  ] as LeadStatus[];
+  const contactRequestedStatuses = [
+    "NEW_LEAD",
+    "ATTEMPTED_CONTACT",
+    "CONTACTED",
+  ] as LeadStatus[];
+  const callNewLeadsWhere = focusAgentId
+    ? {
+        organizationId: ctx.organizationId,
+        assignedAgentId: focusAgentId,
+        status: "NEW_LEAD" as const,
+      }
+    : ctx.canSeeTeamLeads
+      ? { ...scopeTeam, status: "NEW_LEAD" as const }
+      : {
+          ...scopeMine,
+          status: "NEW_LEAD" as const,
+          assignedAgentId: ctx.user.id,
+        };
+  const followUpLeadsWhere = focusAgentId
+    ? {
+        organizationId: ctx.organizationId,
+        assignedAgentId: focusAgentId,
+        status: { in: followUpStatuses },
+      }
+    : ctx.canSeeTeamLeads
+      ? {
+          ...scopeTeam,
+          status: { in: followUpStatuses },
+        }
+      : {
+          ...scopeMine,
+          assignedAgentId: ctx.user.id,
+          status: { in: followUpStatuses },
+        };
+  const assigneeFilter = focusAgentId
+    ? { assigneeId: focusAgentId }
+    : ctx.canSeeTeamLeads
+      ? {}
+      : { assigneeId: ctx.user.id };
+  const contactRequestedWhere = {
+    ...scopeTeam,
+    status: { in: contactRequestedStatuses },
+    inquiryTag: null,
+    ...(focusAgentId ? { assignedAgentId: focusAgentId } : {}),
+  };
 
   const [
     dueTodayTasks,
@@ -127,22 +182,10 @@ export default async function AgentLaunchpadPage() {
         ...assigneeFilter,
       },
     }),
-    prisma.lead.count({ where: { ...scopeMine, status: "NEW_LEAD" } }),
-    prisma.lead.count({
-      where: {
-        ...scopeMine,
-        status: {
-          in: ["ATTEMPTED_CONTACT", "CONTACTED", "PENDING_CLIENT"],
-        },
-      },
-    }),
+    prisma.lead.count({ where: callNewLeadsWhere }),
+    prisma.lead.count({ where: followUpLeadsWhere }),
     prisma.lead.findMany({
-      where: {
-        ...scopeTeam,
-        status: { in: ["NEW_LEAD", "ATTEMPTED_CONTACT", "CONTACTED"] },
-        /** Tagged leads leave Contact Requested once handled. */
-        inquiryTag: null,
-      },
+      where: contactRequestedWhere,
       orderBy: { createdAt: "desc" },
       take: 24,
       include: {
@@ -153,6 +196,7 @@ export default async function AgentLaunchpadPage() {
             isBuyer: true,
             isSeller: true,
             emailVerified: true,
+            createdAt: true,
           },
         },
       },
@@ -345,6 +389,7 @@ export default async function AgentLaunchpadPage() {
                       isBuyer: lead.customer.isBuyer,
                       isSeller: lead.customer.isSeller,
                       emailVerified: Boolean(lead.customer.emailVerified),
+                      createdAt: lead.customer.createdAt.toISOString(),
                     }
                   : null,
                 isOnline: hot?.isOnline,
@@ -372,14 +417,14 @@ export default async function AgentLaunchpadPage() {
 
           <div className="space-y-2.5">
             <ModuleCard
-              href="/agent/leads?view=mine"
+              href={`/agent/leads?view=${deskView}&pipeline=NEW_LEAD`}
               title="Call New Leads"
               subtitle={`${newLeadCount} new leads to call`}
               tone="danger"
               icon={Phone}
             />
             <ModuleCard
-              href="/agent/leads?view=mine"
+              href={`/agent/leads?view=${deskView}&pipeline=FOLLOW_UP`}
               title="Contacted Leads"
               subtitle={`${contactedCount} clients to follow up with`}
               tone="danger"

@@ -28,6 +28,7 @@ export type ContactRequestedLead = {
     isBuyer: boolean;
     isSeller: boolean;
     emailVerified?: boolean;
+    createdAt?: string | null;
   } | null;
   isOnline?: boolean;
   binge?: boolean;
@@ -287,6 +288,7 @@ export function ContactRequestedPanel({
                           compact
                           leadId={lead.id}
                           emailVerified={Boolean(lead.customer.emailVerified)}
+                          accountCreatedAt={lead.customer.createdAt}
                         />
                       ) : null}
                     </div>

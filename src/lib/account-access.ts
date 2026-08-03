@@ -39,3 +39,38 @@ export function needsEmailVerification(
 ): boolean {
   return Boolean(user?.id) && !hasFullClientAccess(user);
 }
+
+/** CRM / agent badge for account email lock state. */
+export type AccountAccessStatus =
+  | "verified_unlocked"
+  | "unverified_unlocked"
+  | "unverified_locked";
+
+export function getAccountAccessStatus(user: {
+  emailVerified?: Date | string | null;
+  createdAt?: Date | string | null;
+}): AccountAccessStatus {
+  if (Boolean(asDate(user.emailVerified ?? null))) return "verified_unlocked";
+  const created = asDate(user.createdAt ?? null);
+  if (created && Date.now() - created.getTime() < EMAIL_VERIFY_GRACE_MS) {
+    return "unverified_unlocked";
+  }
+  return "unverified_locked";
+}
+
+export function accountAccessStatusLabel(
+  status: AccountAccessStatus,
+): string {
+  switch (status) {
+    case "verified_unlocked":
+      return "Verified Unlocked";
+    case "unverified_unlocked":
+      return "Unverified Unlocked";
+    case "unverified_locked":
+      return "Unverified Locked";
+    default: {
+      const _exhaustive: never = status;
+      return _exhaustive;
+    }
+  }
+}

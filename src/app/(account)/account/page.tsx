@@ -153,8 +153,11 @@ export default async function AccountPage() {
       </div>
 
       {verifyLocked ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-5">
+        <div className="rounded-3xl border border-canopy/15 bg-white p-7 shadow-[0_20px_50px_-28px_rgba(15,61,46,0.35)] sm:p-9">
           <EmailVerificationRequired
+            variant="featured"
+            icon="mail"
+            eyebrow="Account locked"
             callbackUrl="/account"
             title="Email verification required"
             body="Your 7-day grace period has ended. Verify your email to restore saved homes, sold prices, Route Planner, and other client tools."

@@ -33,6 +33,7 @@ export type LeadSummary = {
       isBuyer: boolean;
       isSeller: boolean;
       emailVerified: string | null;
+      createdAt: string;
       caslConsentAt: string | null;
       homeAddress: string | null;
       emailUpdateRequestedAt: string | null;
@@ -180,6 +181,7 @@ export async function loadLeadSummary(
           isBuyer: true,
           isSeller: true,
           emailVerified: true,
+          createdAt: true,
           caslConsentAt: true,
           homeAddress: true,
           emailUpdateRequestedAt: true,
@@ -405,6 +407,7 @@ export async function loadLeadSummary(
         ? {
             ...lead.customer,
             emailVerified: lead.customer.emailVerified?.toISOString() ?? null,
+            createdAt: lead.customer.createdAt.toISOString(),
             caslConsentAt: lead.customer.caslConsentAt?.toISOString() ?? null,
             emailUpdateRequestedAt:
               lead.customer.emailUpdateRequestedAt?.toISOString() ?? null,

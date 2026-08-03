@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { AgentShell } from "@/components/agent/AgentShell";
+import { TeamLeaderDeskBanner } from "@/components/agent/TeamLeaderDeskBanner";
 import { requireAgentContext } from "@/lib/agent";
+import { resolveDeskView } from "@/lib/agent/brokerage";
 
 export default async function AgentLayout({
   children,
@@ -12,12 +14,18 @@ export default async function AgentLayout({
     redirect("/auth/sign-in?callbackUrl=/agent");
   }
 
+  const desk = await resolveDeskView(ctx);
+  const showLeaderBanner = ctx.isPlatformAdmin;
+
   return (
     <AgentShell
       email={ctx.user.email}
       orgName={ctx.organizationName}
       membershipRole={ctx.membershipRole}
     >
+      {showLeaderBanner ? (
+        <TeamLeaderDeskBanner deskLabel={desk.deskLabel} />
+      ) : null}
       {children}
     </AgentShell>
   );

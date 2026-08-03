@@ -3,6 +3,10 @@ import { z } from "zod";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
 import { resolvePublicLeadDesk } from "@/lib/agent";
+import {
+  createCallNewLeadTask,
+  resolveLeadDeskAssignment,
+} from "@/lib/agent/lead-intake";
 import { sendNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
@@ -36,17 +40,19 @@ export async function POST(request: Request) {
   }
 
   const desk = await resolvePublicLeadDesk();
-  const organizationId = desk.organizationId;
-  const assignee = organizationId
-    ? await prisma.organizationMembership.findFirst({
-        where: {
-          organizationId,
-          role: { in: ["OWNER", "ADMIN"] },
-          user: { disabledAt: null },
-        },
-        select: { user: { select: { email: true, phone: true } } },
-      })
-    : null;
+  const routed = await resolveLeadDeskAssignment("BUYER");
+  const organizationId = routed.organizationId ?? desk.organizationId;
+  const assignedAgentId = routed.assigneeId;
+  const deskNotifiers = organizationId
+      ? await prisma.organizationMembership.findMany({
+          where: {
+            organizationId,
+            role: { in: ["OWNER", "ADMIN"] },
+            user: { disabledAt: null },
+          },
+          select: { user: { select: { email: true, phone: true } } },
+        })
+      : [];
 
   const utm = pickUtm(parsed.data);
   const adCampaignId = await resolveAdCampaignId(utm);
@@ -55,9 +61,10 @@ export async function POST(request: Request) {
     data: {
       source: "PROPERTY_INQUIRY",
       status: "NEW_LEAD",
+      intent: "BUYER",
       score: 45,
       listingMls: listing.mlsNumber,
-      assignedAgentId: null,
+      assignedAgentId,
       organizationId: organizationId ?? undefined,
       ...utmLeadFields(utm, adCampaignId),
       notes: [
@@ -81,10 +88,27 @@ export async function POST(request: Request) {
     },
   });
 
-  if (assignee?.user.email) {
+  if (assignedAgentId && organizationId) {
+    await createCallNewLeadTask({
+      leadId: lead.id,
+      assigneeId: assignedAgentId,
+      organizationId,
+    });
+  }
+
+  if (assignedAgentId && organizationId) {
+    await createCallNewLeadTask({
+      leadId: lead.id,
+      assigneeId: assignedAgentId,
+      organizationId,
+    });
+  }
+
+  for (const row of deskNotifiers) {
+    if (!row.user.email) continue;
     void sendNotification({
-      toEmail: assignee.user.email,
-      toPhone: assignee.user.phone,
+      toEmail: row.user.email,
+      toPhone: row.user.phone,
       subject: "Pre-construction inquiry",
       text: `${listing.addressLine} — ${parsed.data.name} <${parsed.data.email}>`,
       smsText: `Houzzat pre-con lead: ${listing.addressLine}`,

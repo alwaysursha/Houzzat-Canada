@@ -58,7 +58,7 @@ export async function POST(request: Request) {
         parsed.data.channel === "email"
           ? parsed.data.verified
             ? "Account set to Verified Unlocked by agent"
-            : "Account set to Unverified Locked by agent"
+            : "Account set to Unverified by agent"
           : `phone ${parsed.data.verified ? "verified" : "unverified"} by agent`,
       meta: {
         channel: parsed.data.channel,

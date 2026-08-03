@@ -3,7 +3,12 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, Lock } from "lucide-react";
+import { Check, ChevronDown, Lock, Unlock } from "lucide-react";
+import {
+  accountAccessStatusLabel,
+  getAccountAccessStatus,
+  type AccountAccessStatus,
+} from "@/lib/account-access";
 import { cn } from "@/lib/utils";
 
 function VerifiedIcon({ className }: { className?: string }) {
@@ -20,15 +25,51 @@ function VerifiedIcon({ className }: { className?: string }) {
   );
 }
 
+function StatusIcon({
+  status,
+  className,
+}: {
+  status: AccountAccessStatus;
+  className?: string;
+}) {
+  switch (status) {
+    case "verified_unlocked":
+      return <VerifiedIcon className={className} />;
+    case "unverified_unlocked":
+      return (
+        <Unlock
+          className={cn("text-[#ca8a04]", className)}
+          strokeWidth={2.25}
+          aria-hidden
+        />
+      );
+    case "unverified_locked":
+      return (
+        <Lock
+          className={cn("text-[#94a3b8]", className)}
+          strokeWidth={2}
+          aria-hidden
+        />
+      );
+    default: {
+      const _exhaustive: never = status;
+      return _exhaustive;
+    }
+  }
+}
+
 export function LeadAccountVerifyMenu({
   leadId,
   emailVerified,
+  accountCreatedAt,
   onUpdated,
   onVerifiedChange,
   compact = false,
 }: {
   leadId: string;
   emailVerified: boolean;
+  /** Customer account createdAt — used for 7-day grace (Unverified Unlocked). */
+  accountCreatedAt?: string | Date | null;
   onUpdated?: () => void;
   /** Optimistic local sync (leads table). */
   onVerifiedChange?: (verified: boolean) => void;
@@ -45,6 +86,12 @@ export function LeadAccountVerifyMenu({
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(
     null,
   );
+
+  const status = getAccountAccessStatus({
+    emailVerified: emailVerified ? new Date() : null,
+    createdAt: accountCreatedAt ?? null,
+  });
+  const statusLabel = accountAccessStatusLabel(status);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -64,7 +111,7 @@ export function LeadAccountVerifyMenu({
         Math.min(left, window.innerWidth - menuWidth - padding),
       );
       let top = rect.bottom + gap;
-      const menuHeight = menuRef.current?.offsetHeight ?? 96;
+      const menuHeight = menuRef.current?.offsetHeight ?? 140;
       if (top + menuHeight > window.innerHeight - padding) {
         top = Math.max(padding, rect.top - gap - menuHeight);
       }
@@ -105,7 +152,11 @@ export function LeadAccountVerifyMenu({
   }, [toast]);
 
   async function setVerified(next: boolean) {
-    if (pending || next === emailVerified) {
+    const nextStatus = getAccountAccessStatus({
+      emailVerified: next ? new Date() : null,
+      createdAt: accountCreatedAt ?? null,
+    });
+    if (pending || nextStatus === status) {
       setOpen(false);
       return;
     }
@@ -131,6 +182,24 @@ export function LeadAccountVerifyMenu({
     }
   }
 
+  const menuOptions: {
+    status: AccountAccessStatus;
+    verified: boolean | null;
+    hint?: string;
+  }[] = [
+    { status: "verified_unlocked", verified: true },
+    {
+      status: "unverified_unlocked",
+      verified: false,
+      hint: "Within 7-day grace",
+    },
+    {
+      status: "unverified_locked",
+      verified: false,
+      hint: "Past grace / limited access",
+    },
+  ];
+
   const menu =
     open && menuPos && typeof document !== "undefined"
       ? createPortal(
@@ -141,37 +210,55 @@ export function LeadAccountVerifyMenu({
             style={{ top: menuPos.top, left: menuPos.left }}
             className="fixed z-[200] w-[220px] border border-[#cbd5e1] bg-white py-1 shadow-[0_8px_24px_rgba(15,23,42,0.12)]"
           >
-            <li role="option" aria-selected={emailVerified}>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void setVerified(true)}
-                className={cn(
-                  "flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-medium text-[#0f172a] hover:bg-[#f1f5f9] disabled:opacity-50",
-                  emailVerified && "bg-[#f8fafc]",
-                )}
-              >
-                <VerifiedIcon className="size-4 shrink-0" />
-                Verified Unlocked
-              </button>
-            </li>
-            <li role="option" aria-selected={!emailVerified}>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void setVerified(false)}
-                className={cn(
-                  "flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-medium text-[#0f172a] hover:bg-[#f1f5f9] disabled:opacity-50",
-                  !emailVerified && "bg-[#f8fafc]",
-                )}
-              >
-                <Lock
-                  className="size-4 shrink-0 text-[#94a3b8]"
-                  strokeWidth={2}
-                />
-                Unverified Locked
-              </button>
-            </li>
+            {menuOptions.map((option) => {
+              const selected = option.status === status;
+              const canSelect =
+                option.status === "verified_unlocked" ||
+                // Clearing verification: only offer the row that matches what
+                // clearing would produce (grace → unlocked, else locked).
+                (option.verified === false &&
+                  getAccountAccessStatus({
+                    emailVerified: null,
+                    createdAt: accountCreatedAt ?? null,
+                  }) === option.status);
+
+              return (
+                <li
+                  key={option.status}
+                  role="option"
+                  aria-selected={selected}
+                >
+                  <button
+                    type="button"
+                    disabled={pending || !canSelect}
+                    onClick={() => {
+                      if (option.verified == null) return;
+                      void setVerified(option.verified);
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 px-3 py-2.5 text-left disabled:opacity-45",
+                      selected ? "bg-[#f8fafc]" : "hover:bg-[#f1f5f9]",
+                      !canSelect && "cursor-default hover:bg-transparent",
+                    )}
+                  >
+                    <StatusIcon
+                      status={option.status}
+                      className="size-4 shrink-0"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-medium text-[#0f172a]">
+                        {accountAccessStatusLabel(option.status)}
+                      </span>
+                      {option.hint ? (
+                        <span className="block text-[11px] font-medium text-[#94a3b8]">
+                          {option.hint}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>,
           document.body,
         )
@@ -186,26 +273,23 @@ export function LeadAccountVerifyMenu({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={menuId}
-        aria-label={
-          emailVerified ? "Verified Unlocked" : "Unverified Locked"
-        }
+        aria-label={statusLabel}
+        title={statusLabel}
         onClick={(e) => {
           e.stopPropagation();
           setOpen((v) => !v);
         }}
         className={cn(
           "inline-flex items-center gap-0.5 rounded-md p-0.5 transition hover:bg-[#f1f5f9] disabled:opacity-50",
-          emailVerified ? "text-[#6b9fd4]" : "text-[#a8b4c0]",
+          status === "verified_unlocked" && "text-[#6b9fd4]",
+          status === "unverified_unlocked" && "text-[#ca8a04]",
+          status === "unverified_locked" && "text-[#a8b4c0]",
         )}
       >
-        {emailVerified ? (
-          <VerifiedIcon className={compact ? "size-3.5" : "size-4"} />
-        ) : (
-          <Lock
-            className={compact ? "size-3.5" : "size-[18px]"}
-            strokeWidth={2}
-          />
-        )}
+        <StatusIcon
+          status={status}
+          className={compact ? "size-3.5" : "size-4"}
+        />
         <ChevronDown
           className={cn(
             "opacity-60 transition",

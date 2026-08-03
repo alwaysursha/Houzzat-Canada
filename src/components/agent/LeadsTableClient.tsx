@@ -58,6 +58,7 @@ export type LeadRow = {
     isSeller: boolean;
     emailVerified: boolean;
     phoneVerified: boolean;
+    createdAt: string;
   } | null;
   assignedAgent: { name: string | null; email: string } | null;
   nextReminder: string | null;
@@ -758,6 +759,7 @@ export function LeadsTableClient({
                             compact
                             leadId={lead.id}
                             emailVerified={contactVerified(lead, "email")}
+                            accountCreatedAt={lead.customer.createdAt}
                             onVerifiedChange={(verified) => {
                               setVerifyState((prev) => ({
                                 ...prev,

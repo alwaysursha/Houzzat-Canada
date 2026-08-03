@@ -55,17 +55,27 @@ function VerifyEmailInner() {
   }, [token, router, safeCallback]);
 
   return (
-    <div className="mx-auto w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-sm">
+    <div className="mx-auto w-full max-w-lg rounded-3xl border border-line bg-white p-7 shadow-[0_24px_55px_-28px_rgba(15,40,30,0.35)] sm:p-9">
       {status === "working" ? (
-        <div className="space-y-2 text-center">
-          <h1 className="text-xl font-bold text-ink">Verifying email…</h1>
+        <div className="space-y-2.5 text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-canopy">
+            Almost there
+          </p>
+          <h1 className="font-display text-2xl text-ink sm:text-3xl">
+            Verifying email…
+          </h1>
           <p className="text-sm text-ink/60">Please wait a moment.</p>
         </div>
       ) : null}
 
       {status === "ok" ? (
-        <div className="space-y-3 text-center">
-          <h1 className="text-xl font-bold text-ink">Email verified</h1>
+        <div className="space-y-4 text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-canopy">
+            Success
+          </p>
+          <h1 className="font-display text-2xl text-ink sm:text-3xl">
+            Email verified
+          </h1>
           <p className="text-sm text-ink/60">
             Your account is unlocked. Redirecting…
           </p>
@@ -76,25 +86,36 @@ function VerifyEmailInner() {
       ) : null}
 
       {status === "error" ? (
-        <div className="space-y-4">
-          <div className="space-y-2 text-center">
-            <h1 className="text-xl font-bold text-ink">Verification failed</h1>
+        <div className="space-y-6">
+          <div className="space-y-2.5 text-center">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-canopy">
+              Try again
+            </p>
+            <h1 className="font-display text-2xl text-ink sm:text-3xl">
+              Verification failed
+            </h1>
             <p className="text-sm text-ink/60">{error}</p>
           </div>
-          <EmailVerificationRequired callbackUrl={safeCallback} />
+          <EmailVerificationRequired
+            variant="featured"
+            icon="mail"
+            eyebrow="New link"
+            callbackUrl={safeCallback}
+            title="Request a fresh email"
+            body="We’ll send a new verification link so you can unlock full client access."
+          />
         </div>
       ) : null}
 
       {status === "idle" ? (
-        <div className="space-y-4">
-          <div className="space-y-2 text-center">
-            <h1 className="text-xl font-bold text-ink">Verify your email</h1>
-            <p className="text-sm text-ink/60">
-              Request a new verification link to unlock full client access.
-            </p>
-          </div>
-          <EmailVerificationRequired callbackUrl={safeCallback} />
-        </div>
+        <EmailVerificationRequired
+          variant="featured"
+          icon="mail"
+          eyebrow="Client access"
+          callbackUrl={safeCallback}
+          title="Verify your email"
+          body="Request a new verification link to unlock full client access."
+        />
       ) : null}
     </div>
   );

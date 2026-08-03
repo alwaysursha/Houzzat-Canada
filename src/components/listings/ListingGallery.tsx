@@ -21,7 +21,7 @@ import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRe
 import { ListingLockedGateOverlay } from "@/components/listings/ListingLockedGateOverlay";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { cn } from "@/lib/utils";
-import { Images, MapPinned, Video } from "lucide-react";
+import { Images, Lock, MapPinned, Video } from "lucide-react";
 
 export type GalleryPhoto = {
   id: string;
@@ -149,7 +149,6 @@ export function ListingGallery({
   const [index, setIndex] = useState(0);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [thumbsVisible, setThumbsVisible] = useState(false);
-  const [verifyPhotosOpen, setVerifyPhotosOpen] = useState(false);
   const dragRef = useRef<{
     id: number;
     startX: number;
@@ -161,9 +160,14 @@ export function ListingGallery({
   const count = photos.length;
   const hero = photos[0];
   const side = photos.slice(1, 5);
-  const remaining = Math.max(0, count - 5) + Math.max(0, hiddenPhotoCount);
-  const photoVerifyGate =
-    needsEmailVerification && !detailsLocked && hiddenPhotoCount > 0;
+  /** 6th photo (0-based index 5) is the verify lock slide when gated. */
+  const verifyGateIndex =
+    needsEmailVerification && !detailsLocked && count > 5 ? 5 : null;
+  // Cover "+N more" = photos beyond the 5 grid tiles (or withheld until verify).
+  const remaining =
+    hiddenPhotoCount > 0
+      ? hiddenPhotoCount
+      : Math.max(0, count - 5);
   const mobileScrollerRef = useRef<HTMLDivElement>(null);
   const mobileScrollAnimatingRef = useRef(false);
   const mobileScrollFinishTimerRef = useRef<number | null>(null);
@@ -181,12 +185,19 @@ export function ListingGallery({
     setStackOpen(true);
   }, []);
 
-  const openViewerAt = useCallback((i: number) => {
-    setIndex(i);
-    setViewerOpen(true);
-    setDragX(0);
-    setThumbsVisible(false);
-  }, []);
+  const openViewerAt = useCallback(
+    (i: number) => {
+      let next = Math.min(count - 1, Math.max(0, i));
+      if (verifyGateIndex != null && next > verifyGateIndex) {
+        next = verifyGateIndex;
+      }
+      setIndex(next);
+      setViewerOpen(true);
+      setDragX(0);
+      setThumbsVisible(false);
+    },
+    [count, verifyGateIndex],
+  );
 
   const openFromCover = useCallback(
     (i: number) => {
@@ -203,19 +214,35 @@ export function ListingGallery({
     if (mobileScrollAnimatingRef.current) return;
     const el = mobileScrollerRef.current;
     if (!el || el.clientWidth <= 0) return;
-    const next = Math.round(el.scrollLeft / el.clientWidth);
+    let next = Math.round(el.scrollLeft / el.clientWidth);
+    // Allow the map slide past the gate; block other photos beyond it.
+    if (
+      verifyGateIndex != null &&
+      next > verifyGateIndex &&
+      next !== mapSlideIndex
+    ) {
+      next = verifyGateIndex;
+      el.scrollLeft = next * el.clientWidth;
+    }
     setMobileSlide(Math.min(mobileSlideCount - 1, Math.max(0, next)));
-  }, [mobileSlideCount]);
+  }, [mapSlideIndex, mobileSlideCount, verifyGateIndex]);
 
   const goToMobileSlide = useCallback(
     (slideIndex: number) => {
       const el = mobileScrollerRef.current;
       if (!el || el.clientWidth <= 0) return;
 
-      const clamped = Math.min(
+      let clamped = Math.min(
         mobileSlideCount - 1,
         Math.max(0, slideIndex),
       );
+      if (
+        verifyGateIndex != null &&
+        clamped > verifyGateIndex &&
+        clamped !== mapSlideIndex
+      ) {
+        clamped = verifyGateIndex;
+      }
       const width = el.clientWidth;
       const targetLeft = clamped * width;
 
@@ -256,7 +283,7 @@ export function ListingGallery({
       // Safari / older WebKit may not fire scrollend.
       mobileScrollFinishTimerRef.current = window.setTimeout(finish, 480);
     },
-    [mobileSlideCount],
+    [mapSlideIndex, mobileSlideCount, verifyGateIndex],
   );
 
   const lockMobileCarousel = useCallback(() => {
@@ -302,10 +329,18 @@ export function ListingGallery({
   const step = useCallback(
     (delta: number) => {
       if (count === 0) return;
-      setIndex((current) => (current + delta + count) % count);
+      setIndex((current) => {
+        if (verifyGateIndex == null) {
+          return (current + delta + count) % count;
+        }
+        const next = current + delta;
+        if (next > verifyGateIndex) return current;
+        if (next < 0) return 0;
+        return next;
+      });
       setDragX(0);
     },
-    [count],
+    [count, verifyGateIndex],
   );
 
   useEffect(() => {
@@ -407,27 +442,59 @@ export function ListingGallery({
           style={{ WebkitOverflowScrolling: "touch" }}
           aria-label={`${addressLabel} photos`}
         >
-          {photos.map((photo, i) => (
+          {photos.map((photo, i) => {
+            const isVerifySlide = verifyGateIndex != null && i === verifyGateIndex;
+            return (
             <button
               key={photo.id}
               type="button"
               onClick={() => {
                 if (detailsLocked) return;
+                if (isVerifySlide) {
+                  openViewerAt(i);
+                  return;
+                }
                 openStack();
               }}
               className="relative min-h-[52vh] w-full min-w-full shrink-0 snap-center snap-always overflow-hidden bg-mist text-left"
-              aria-label={`Photo ${i + 1} of ${count}. Open gallery.`}
+              aria-label={
+                isVerifySlide
+                  ? "Verify email to see more photos"
+                  : `Photo ${i + 1} of ${count}. Open gallery.`
+              }
             >
               <ListingPhoto
                 src={photo.url}
                 alt={photo.alt ?? `${addressLabel} photo ${i + 1}`}
                 fill
                 priority={i === 0}
-                className="object-cover"
+                className={cn(
+                  "object-cover",
+                  isVerifySlide && "blur-[6px] saturate-75",
+                )}
                 sizes="100vw"
               />
+              {isVerifySlide ? (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-ink/50 px-4 backdrop-blur-[2px]">
+                  <div
+                    className="w-full max-w-[22rem] rounded-3xl border border-white/60 bg-white p-7 shadow-[0_28px_60px_-24px_rgba(0,0,0,0.55)] sm:max-w-md sm:p-9"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
+                    <EmailVerificationRequired
+                      variant="featured"
+                      icon="lock"
+                      eyebrow="Restricted photos"
+                      callbackUrl={lockCallback}
+                      title="Verify email first"
+                      body="Confirm your email to unlock the rest of this gallery."
+                    />
+                  </div>
+                </div>
+              ) : null}
             </button>
-          ))}
+            );
+          })}
 
           {hasMapSlide && mapSubject ? (
             <ListingGalleryMapSlide
@@ -557,10 +624,6 @@ export function ListingGallery({
                 type="button"
                 onClick={() => {
                   if (detailsLocked) return;
-                  if (isLastTile && photoVerifyGate) {
-                    setVerifyPhotosOpen(true);
-                    return;
-                  }
                   openFromCover(photoIndex);
                 }}
                 className={cn(
@@ -569,9 +632,7 @@ export function ListingGallery({
                 )}
                 aria-label={
                   isLastTile
-                    ? photoVerifyGate
-                      ? `Verify email to view ${remaining} more photos`
-                      : `View all ${count + hiddenPhotoCount} photos`
+                    ? `View all ${count + Math.max(0, hiddenPhotoCount - Math.max(0, count - 5))} photos`
                     : `View photo ${photoIndex + 1} of ${count}`
                 }
               >
@@ -585,9 +646,7 @@ export function ListingGallery({
                 {isLastTile ? (
                   <span className="absolute inset-0 flex items-end justify-end bg-ink/35 p-4">
                     <span className="rounded-lg bg-white/95 px-3 py-2 text-sm font-semibold text-ink shadow-sm">
-                      {photoVerifyGate
-                        ? `+${remaining} · verify email`
-                        : `+${remaining} more`}
+                      +{remaining} more
                     </span>
                   </span>
                 ) : (
@@ -607,17 +666,11 @@ export function ListingGallery({
         {!detailsLocked ? (
           <button
             type="button"
-            onClick={() => {
-              if (photoVerifyGate) {
-                setVerifyPhotosOpen(true);
-                return;
-              }
-              openViewerAt(0);
-            }}
+            onClick={() => openViewerAt(0)}
             className="absolute bottom-4 right-4 z-10 rounded-lg bg-white/95 px-4 py-2.5 text-sm font-semibold text-ink shadow-md backdrop-blur-sm transition hover:bg-white"
           >
-            {photoVerifyGate
-              ? `Show all photos · verify for +${hiddenPhotoCount}`
+            {verifyGateIndex != null
+              ? "Show all photos"
               : `Show all ${count} photos`}
           </button>
         ) : null}
@@ -679,24 +732,43 @@ export function ListingGallery({
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <ul className="divide-y divide-line/40">
-              {photos.map((photo, i) => (
+              {photos.map((photo, i) => {
+                const isVerifySlide =
+                  verifyGateIndex != null && i === verifyGateIndex;
+                return (
                 <li key={photo.id}>
                   <button
                     type="button"
                     onClick={() => openViewerAt(i)}
                     className="relative block w-full bg-ink text-left"
-                    aria-label={`Open photo ${i + 1} of ${count} full screen`}
+                    aria-label={
+                      isVerifySlide
+                        ? "Verify email to see more photos"
+                        : `Open photo ${i + 1} of ${count} full screen`
+                    }
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element -- full-bleed natural height stack */}
                     <img
                       src={photo.url}
                       alt={photo.alt ?? `${addressLabel} photo ${i + 1}`}
-                      className="block h-auto w-full"
+                      className={cn(
+                        "block h-auto w-full",
+                        isVerifySlide && "blur-[6px] saturate-75",
+                      )}
                       loading={i < 2 ? "eager" : "lazy"}
                     />
+                    {isVerifySlide ? (
+                      <span className="absolute inset-0 flex items-center justify-center bg-ink/40 px-6">
+                        <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink shadow-md">
+                          <Lock className="size-4 text-canopy" aria-hidden />
+                          Verify email first
+                        </span>
+                      </span>
+                    ) : null}
                   </button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </div>
         </div>
@@ -749,7 +821,8 @@ export function ListingGallery({
                 <button
                   type="button"
                   onClick={() => step(-1)}
-                  className="absolute left-3 z-10 hidden rounded-full bg-white/10 px-3 py-3 text-lg text-white hover:bg-white/20 md:block"
+                  disabled={verifyGateIndex != null && index <= 0}
+                  className="absolute left-3 z-10 hidden rounded-full bg-white/10 px-3 py-3 text-lg text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30 md:block"
                   aria-label="Previous photo"
                 >
                   ←
@@ -757,7 +830,10 @@ export function ListingGallery({
                 <button
                   type="button"
                   onClick={() => step(1)}
-                  className="absolute right-3 z-10 hidden rounded-full bg-white/10 px-3 py-3 text-lg text-white hover:bg-white/20 md:block"
+                  disabled={
+                    verifyGateIndex != null && index >= verifyGateIndex
+                  }
+                  className="absolute right-3 z-10 hidden rounded-full bg-white/10 px-3 py-3 text-lg text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30 md:block"
                   aria-label="Next photo"
                 >
                   →
@@ -767,7 +843,7 @@ export function ListingGallery({
 
             <div
               className={cn(
-                "flex h-full w-full items-center justify-center",
+                "relative flex h-full w-full items-center justify-center",
                 dragX === 0 && "transition-transform duration-200 ease-out",
               )}
               style={{ transform: `translate3d(${dragX}px, 0, 0)` }}
@@ -781,11 +857,34 @@ export function ListingGallery({
                 width={2400}
                 height={1600}
                 quality={90}
-                className="h-full max-h-full w-full max-w-full object-contain"
+                className={cn(
+                  "h-full max-h-full w-full max-w-full object-contain",
+                  verifyGateIndex != null &&
+                    index === verifyGateIndex &&
+                    "blur-[6px] saturate-75",
+                )}
                 sizes="100vw"
                 priority
                 draggable={false}
               />
+              {verifyGateIndex != null && index === verifyGateIndex ? (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-ink/55 px-4 backdrop-blur-[2px] sm:px-8">
+                  <div className="w-full max-w-md rounded-3xl border border-white/50 bg-white p-8 shadow-[0_32px_70px_-28px_rgba(0,0,0,0.65)] sm:max-w-lg sm:p-10">
+                    <EmailVerificationRequired
+                      variant="featured"
+                      icon="lock"
+                      eyebrow="Restricted photos"
+                      callbackUrl={lockCallback}
+                      title="Verify email first"
+                      body={
+                        hiddenPhotoCount > 0
+                          ? `Confirm your email to unlock ${hiddenPhotoCount} more photo${hiddenPhotoCount === 1 ? "" : "s"} of this home.`
+                          : "Confirm your email to unlock the rest of this gallery."
+                      }
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -839,7 +938,10 @@ export function ListingGallery({
                   )}
                 >
                   <div className="flex justify-center gap-2 overflow-x-auto">
-                    {photos.map((photo, i) => (
+                    {photos.map((photo, i) => {
+                      const isVerifySlide =
+                        verifyGateIndex != null && i === verifyGateIndex;
+                      return (
                       <button
                         key={photo.id}
                         type="button"
@@ -853,18 +955,31 @@ export function ListingGallery({
                             ? "ring-white"
                             : "ring-transparent opacity-70 hover:opacity-100",
                         )}
-                        aria-label={`Go to photo ${i + 1}`}
+                        aria-label={
+                          isVerifySlide
+                            ? "Verify email to unlock more photos"
+                            : `Go to photo ${i + 1}`
+                        }
                         aria-current={i === index}
                       >
                         <ListingPhoto
                           src={photo.url}
                           alt=""
                           fill
-                          className="rounded-xl object-cover"
+                          className={cn(
+                            "rounded-xl object-cover",
+                            isVerifySlide && "blur-[3px]",
+                          )}
                           sizes="96px"
                         />
+                        {isVerifySlide ? (
+                          <span className="absolute inset-0 flex items-center justify-center bg-ink/45">
+                            <Lock className="size-4 text-white" aria-hidden />
+                          </span>
+                        ) : null}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -880,31 +995,6 @@ export function ListingGallery({
           mlsNumber={mlsNumber}
           contact={contact}
         />
-      ) : null}
-
-      {verifyPhotosOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm">
-          <button
-            type="button"
-            className="absolute inset-0 cursor-default"
-            aria-label="Close"
-            onClick={() => setVerifyPhotosOpen(false)}
-          />
-          <div className="relative z-10 w-full max-w-sm rounded-2xl border border-line bg-white p-5 shadow-xl">
-            <EmailVerificationRequired
-              callbackUrl={lockCallback}
-              title="Email verification required"
-              body={`Verify your email to view the remaining ${hiddenPhotoCount} photo${hiddenPhotoCount === 1 ? "" : "s"} of this home.`}
-            />
-            <button
-              type="button"
-              onClick={() => setVerifyPhotosOpen(false)}
-              className="mt-3 w-full text-center text-xs font-semibold text-ink/50 hover:text-ink"
-            >
-              Close
-            </button>
-          </div>
-        </div>
       ) : null}
     </>
   );

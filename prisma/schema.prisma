@@ -49,7 +49,25 @@ enum LeadSource {
   PAID_AD
   AFFORDABILITY
   SELLER_READINESS
+  SIGNUP
   OTHER
+}
+
+/** Buyer vs seller desk routing (buyer+seller → SELLER). */
+enum LeadIntent {
+  BUYER
+  SELLER
+}
+
+/** How seller leads are auto-assigned. */
+enum SellerLeadAssignMode {
+  LISTING_AGENT
+  PERCENTAGE
+}
+
+enum LeadRoutingLane {
+  BUYER
+  SELLER
 }
 
 /** Agent-classified inquiry type on Contact Requested (Launchpad). */
@@ -221,6 +239,8 @@ model User {
   createdTasks  AgentTask[]       @relation("TaskCreator")
   leadNotesAuthored LeadNote[]    @relation("LeadNoteAuthor")
   leadEmailsSent LeadEmailLog[]   @relation("LeadEmailSender")
+  listingAgentFor CrmRoutingSettings[] @relation("ListingAgentSettings")
+  routingWeights  CrmRoutingWeight[]
 }
 
 model Account {
@@ -275,6 +295,8 @@ model Lead {
   id              String     @id @default(cuid())
   status          LeadStatus @default(NEW_LEAD)
   source          LeadSource @default(OTHER)
+  /** Buyer desk vs seller desk (buyer+seller treated as SELLER). */
+  intent          LeadIntent @default(BUYER)
   score           Int        @default(0)
   notes           String?    @db.Text
   listingMls      String?
@@ -316,8 +338,36 @@ model Lead {
   @@index([organizationId, status])
   @@index([organizationId, assignedAgentId])
   @@index([source])
+  @@index([intent, status])
   @@index([utmCampaign])
   @@index([adCampaignId])
+}
+
+/** Singleton CRM routing config (id = "default"). */
+model CrmRoutingSettings {
+  id               String               @id @default("default")
+  listingAgentId   String?
+  sellerAssignMode SellerLeadAssignMode @default(LISTING_AGENT)
+  updatedAt        DateTime             @updatedAt
+
+  listingAgent User?              @relation("ListingAgentSettings", fields: [listingAgentId], references: [id], onDelete: SetNull)
+  weights      CrmRoutingWeight[]
+}
+
+model CrmRoutingWeight {
+  id            String          @id @default(cuid())
+  settingsId    String          @default("default")
+  agentId       String
+  lane          LeadRoutingLane
+  percent       Int             @default(0)
+  /** Deficit round-robin counter for fair weighted assignment. */
+  assignedCount Int             @default(0)
+
+  settings CrmRoutingSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  agent    User               @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([settingsId, agentId, lane])
+  @@index([settingsId, lane])
 }
 
 model AgentTask {

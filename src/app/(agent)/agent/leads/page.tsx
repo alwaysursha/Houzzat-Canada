@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { LeadStatus } from "@prisma/client";
 import { LeadActions } from "@/components/agent/LeadActions";
 import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
 import {
@@ -7,6 +8,7 @@ import {
   type LeadRow,
 } from "@/components/agent/LeadsTableClient";
 import { leadScopeWhere, requireAgentContext } from "@/lib/agent";
+import { resolveDeskView } from "@/lib/agent/brokerage";
 import { computeHotnessMap } from "@/lib/agent/hotness";
 import { loadLeadsDashboardEngagement } from "@/lib/agent/leads-dashboard";
 import { prisma } from "@/lib/prisma";
@@ -20,7 +22,7 @@ const COLUMNS = PIPELINE_STATUSES;
 export default async function AgentLeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; layout?: string }>;
+  searchParams: Promise<{ view?: string; layout?: string; pipeline?: string }>;
 }) {
   const ctx = await requireAgentContext();
   if (!ctx) redirect("/auth/sign-in?callbackUrl=/agent/leads");
@@ -34,8 +36,42 @@ export default async function AgentLeadsPage({
         ? "team"
         : "mine";
   const layout = params.layout === "kanban" ? "kanban" : "table";
+  const pipelineParam = params.pipeline?.trim() || null;
+  const pipeline =
+    pipelineParam &&
+    PIPELINE_STATUSES.includes(
+      pipelineParam as (typeof PIPELINE_STATUSES)[number],
+    )
+      ? (pipelineParam as (typeof PIPELINE_STATUSES)[number])
+      : null;
+  const followUpPipeline = pipelineParam === "FOLLOW_UP";
+  const desk = await resolveDeskView(ctx);
+  const focusAgentId = desk.deskAgentId;
+  const followUpStatuses: LeadStatus[] = [
+    "ATTEMPTED_CONTACT",
+    "CONTACTED",
+    "PENDING_CLIENT",
+  ];
 
-  const where = leadScopeWhere(ctx, view);
+  const where = {
+    ...leadScopeWhere(ctx, view),
+    ...(pipeline ? { status: pipeline } : {}),
+    ...(followUpPipeline
+      ? {
+          status: {
+            in: followUpStatuses,
+          },
+        }
+      : {}),
+    ...(focusAgentId ? { assignedAgentId: focusAgentId } : {}),
+    // Field agents: Call New Leads = assigned to me.
+    ...(pipeline === "NEW_LEAD" &&
+    view === "mine" &&
+    !ctx.canSeeTeamLeads &&
+    !focusAgentId
+      ? { assignedAgentId: ctx.user.id }
+      : {}),
+  };
 
   const leads = await prisma.lead.findMany({
     where,
@@ -52,6 +88,7 @@ export default async function AgentLeadsPage({
           isSeller: true,
           emailVerified: true,
           phoneVerifiedAt: true,
+          createdAt: true,
         },
       },
       assignedAgent: { select: { name: true, email: true } },
@@ -107,6 +144,7 @@ export default async function AgentLeadsPage({
               isSeller: l.customer.isSeller,
               emailVerified: Boolean(l.customer.emailVerified),
               phoneVerified: Boolean(l.customer.phoneVerifiedAt),
+              createdAt: l.customer.createdAt.toISOString(),
             }
           : null,
         assignedAgent: l.assignedAgent,
@@ -165,16 +203,29 @@ export default async function AgentLeadsPage({
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#1e2a38]">Leads</h1>
+          <h1 className="text-2xl font-bold text-[#1e2a38]">
+            {pipeline === "NEW_LEAD"
+              ? "Call New Leads"
+              : followUpPipeline
+                ? "Contacted Leads"
+                : "Leads"}
+          </h1>
           <p className="mt-1 text-sm text-[#64748b]">
-            {rows.length} in view
+            {pipeline === "NEW_LEAD"
+              ? `${rows.length} new lead${rows.length === 1 ? "" : "s"} waiting for first contact`
+              : followUpPipeline
+                ? `${rows.length} lead${rows.length === 1 ? "" : "s"} in follow-up`
+                : `${rows.length} in view`}
+            {pipeline && pipeline !== "NEW_LEAD"
+              ? ` · ${pipelineLabel(pipeline)}`
+              : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {views.map((v) => (
             <Link
               key={v.id}
-              href={`/agent/leads?view=${v.id}&layout=${layout}`}
+              href={`/agent/leads?view=${v.id}&layout=${layout}${pipelineParam ? `&pipeline=${pipelineParam}` : ""}`}
               className={cn(
                 "rounded-md px-3 py-1.5 text-xs font-semibold transition",
                 view === v.id
@@ -186,7 +237,7 @@ export default async function AgentLeadsPage({
             </Link>
           ))}
           <Link
-            href={`/agent/leads?view=${view}&layout=table`}
+            href={`/agent/leads?view=${view}&layout=table${pipelineParam ? `&pipeline=${pipelineParam}` : ""}`}
             className={cn(
               "rounded-md px-3 py-1.5 text-xs font-semibold",
               layout === "table"
@@ -197,7 +248,7 @@ export default async function AgentLeadsPage({
             Table
           </Link>
           <Link
-            href={`/agent/leads?view=${view}&layout=kanban`}
+            href={`/agent/leads?view=${view}&layout=kanban${pipelineParam ? `&pipeline=${pipelineParam}` : ""}`}
             className={cn(
               "rounded-md px-3 py-1.5 text-xs font-semibold",
               layout === "kanban"
@@ -207,6 +258,14 @@ export default async function AgentLeadsPage({
           >
             Board
           </Link>
+          {pipelineParam ? (
+            <Link
+              href={`/agent/leads?view=${view}&layout=${layout}`}
+              className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#2b6cb0] ring-1 ring-[#e2e8f0] hover:bg-[#f8fafc]"
+            >
+              Clear filter
+            </Link>
+          ) : null}
         </div>
       </div>
 
@@ -250,6 +309,7 @@ export default async function AgentLeadsPage({
                             compact
                             leadId={lead.id}
                             emailVerified={Boolean(lead.customer.emailVerified)}
+                            accountCreatedAt={lead.customer.createdAt}
                           />
                         ) : null}
                       </div>

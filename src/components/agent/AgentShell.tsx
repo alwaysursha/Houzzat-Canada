@@ -1,5 +1,8 @@
 "use client";
 
+import { SignOutButton } from "@/components/auth/SignOutButton";
+import { SITE_NAME } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -15,9 +18,6 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useState } from "react";
-import { SignOutButton } from "@/components/auth/SignOutButton";
-import { SITE_NAME } from "@/lib/constants";
-import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/agent", label: "Launchpad", icon: LayoutDashboard, exact: true },

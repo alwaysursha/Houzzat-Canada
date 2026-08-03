@@ -21,6 +21,7 @@ import { getListingProvider, toCard } from "@/lib/listings/provider";
 import { getPopularCities } from "@/lib/listings/popular-cities";
 import { prisma } from "@/lib/prisma";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
+import { needsEmailVerification as userNeedsEmailVerification } from "@/lib/account-access";
 import { hasClientAccess } from "@/lib/vow";
 import type { ListingSegment, PropertyType } from "@prisma/client";
 
@@ -30,11 +31,17 @@ export default async function HomePage() {
     ? await prisma.user
         .findUnique({
           where: { email: session.user.email },
-          select: { id: true, role: true },
+          select: {
+            id: true,
+            role: true,
+            emailVerified: true,
+            createdAt: true,
+          },
         })
         .catch(() => null)
     : null;
   const isClient = hasClientAccess(user);
+  const needsEmailVerification = userNeedsEmailVerification(user);
   const isCustomer = Boolean(
     user && user.role !== "ADMIN" && user.role !== "AGENT",
   );
@@ -357,6 +364,7 @@ export default async function HomePage() {
               node: (
                 <HomepageMarketRails
                   isClient={isClient}
+                  needsEmailVerification={needsEmailVerification}
                   vowOnlyGuest={vowOnlyGuest}
                   personalization={personalization}
                 />

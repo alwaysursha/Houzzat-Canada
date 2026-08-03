@@ -3,6 +3,10 @@ import { z } from "zod";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
 import { resolvePublicLeadDesk } from "@/lib/agent";
+import {
+  createCallNewLeadTask,
+  resolveLeadDeskAssignment,
+} from "@/lib/agent/lead-intake";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -24,14 +28,18 @@ export async function POST(request: Request) {
   const utm = pickUtm(parsed.data);
   const adCampaignId = await resolveAdCampaignId(utm);
   const desk = await resolvePublicLeadDesk();
+  const routed = await resolveLeadDeskAssignment("BUYER");
+  const organizationId = routed.organizationId ?? desk.organizationId;
+  const assignedAgentId = routed.assigneeId;
 
   const lead = await prisma.lead.create({
     data: {
       source: "AFFORDABILITY",
       status: "NEW_LEAD",
+      intent: "BUYER",
       score: 30,
-      assignedAgentId: null,
-      organizationId: desk.organizationId ?? undefined,
+      assignedAgentId,
+      organizationId: organizationId ?? undefined,
       ...utmLeadFields(utm, adCampaignId),
       notes: [
         `Affordability lead: ${parsed.data.name} <${parsed.data.email}>`,
@@ -51,6 +59,14 @@ export async function POST(request: Request) {
       },
     },
   });
+
+  if (assignedAgentId && organizationId) {
+    await createCallNewLeadTask({
+      leadId: lead.id,
+      assigneeId: assignedAgentId,
+      organizationId,
+    });
+  }
 
   return NextResponse.json({ ok: true, leadId: lead.id });
 }

@@ -755,6 +755,7 @@ export function CustomerProfile({
                     <LeadAccountVerifyMenu
                       leadId={leadId}
                       emailVerified={Boolean(data.lead.customer.emailVerified)}
+                      accountCreatedAt={data.lead.customer.createdAt}
                       onUpdated={onUpdated}
                     />
                   ) : null}

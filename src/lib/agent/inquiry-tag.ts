@@ -106,6 +106,7 @@ export function inferInquiryTag(source: LeadSource): InquiryTagValue {
     case "LANDING_PAGE":
     case "PAID_AD":
     case "AFFORDABILITY":
+    case "SIGNUP":
     case "OTHER":
       return "GENERAL";
     default: {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { TaskCompleteButton, TaskForm } from "@/components/agent/TaskForm";
 import { requireAgentContext } from "@/lib/agent";
+import { resolveDeskView } from "@/lib/agent/brokerage";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Tasks · Agent CRM" };
@@ -10,12 +11,20 @@ export default async function AgentTasksPage() {
   const ctx = await requireAgentContext();
   if (!ctx) redirect("/auth/sign-in?callbackUrl=/agent/tasks");
 
+  const desk = await resolveDeskView(ctx);
+  const focusAgentId = desk.deskAgentId;
+  const assigneeFilter = focusAgentId
+    ? { assigneeId: focusAgentId }
+    : ctx.canSeeTeamLeads
+      ? {}
+      : { assigneeId: ctx.user.id };
+
   const now = new Date();
   const tasks = await prisma.agentTask.findMany({
     where: {
       organizationId: ctx.organizationId,
       status: "OPEN",
-      ...(ctx.canSeeTeamLeads ? {} : { assigneeId: ctx.user.id }),
+      ...assigneeFilter,
     },
     orderBy: { dueAt: "asc" },
     take: 100,

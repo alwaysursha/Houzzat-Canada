@@ -13,11 +13,13 @@ import {
   Megaphone,
   PanelLeftClose,
   PanelLeftOpen,
+  Percent,
   Search,
   Users,
   Eye,
 } from "lucide-react";
 import { useState } from "react";
+import { AdminDeskPicker } from "@/components/admin/AdminDeskPicker";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { SITE_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -25,6 +27,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
   { href: "/admin/people", label: "People", icon: Users },
+  { href: "/admin/lead-routing", label: "Lead routing", icon: Percent },
   { href: "/admin/visitors", label: "Visitors", icon: Eye },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/ads", label: "Ad Studio", icon: Megaphone },
@@ -36,11 +39,17 @@ const NAV = [
   { href: "/search", label: "Search", icon: Search },
 ] as const;
 
+type DeskAgent = { id: string; name: string | null; email: string };
+
 export function AdminShell({
   email,
+  deskAgents = [],
+  deskAgentId = null,
   children,
 }: {
   email: string;
+  deskAgents?: DeskAgent[];
+  deskAgentId?: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -87,6 +96,22 @@ export function AdminShell({
               )}
             </button>
           </div>
+
+          {deskAgents.length > 0 ? (
+            <div
+              className={cn(
+                "border-b border-line/70",
+                collapsed ? "px-1.5 py-2" : "px-3 py-3",
+              )}
+            >
+              <AdminDeskPicker
+                key={deskAgentId ?? "all"}
+                agents={deskAgents}
+                selectedAgentId={deskAgentId}
+                compact={collapsed}
+              />
+            </div>
+          ) : null}
 
           <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
             {NAV.map((item) => {

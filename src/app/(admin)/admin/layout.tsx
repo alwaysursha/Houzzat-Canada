@@ -1,6 +1,11 @@
 import { redirect } from "next/navigation";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { auth } from "@/lib/auth";
+import {
+  ensureBrokerageOrganization,
+  listTeamAgents,
+  resolveDeskView,
+} from "@/lib/agent/brokerage";
 
 export default async function AdminLayout({
   children,
@@ -15,8 +20,21 @@ export default async function AdminLayout({
     redirect(session.user.role === "AGENT" ? "/agent" : "/account");
   }
 
+  const brokerage = await ensureBrokerageOrganization();
+  const teamAgents = await listTeamAgents(brokerage.id);
+  const fieldAgents = teamAgents.filter((a) => a.role === "AGENT");
+  const desk = await resolveDeskView({
+    user: { id: session.user.id ?? "" },
+    organizationId: brokerage.id,
+    canSeeTeamLeads: true,
+  });
+
   return (
-    <AdminShell email={session.user.email ?? "admin"}>
+    <AdminShell
+      email={session.user.email ?? "admin"}
+      deskAgents={fieldAgents}
+      deskAgentId={desk.deskAgentId}
+    >
       {children}
     </AdminShell>
   );

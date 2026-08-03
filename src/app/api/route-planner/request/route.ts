@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireFullCustomerUser } from "@/lib/account";
 import { resolvePublicLeadDesk } from "@/lib/agent";
+import {
+  createCallNewLeadTask,
+  resolveLeadDeskAssignment,
+  resolveLeadIntent,
+} from "@/lib/agent/lead-intake";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import {
   AGENT_CONTACT_CONSENT_KIND,
@@ -98,7 +103,17 @@ export async function POST(request: Request) {
     .join("\n");
 
   const desk = await resolvePublicLeadDesk();
-  const organizationId = desk.organizationId;
+  const customerFlags = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { isBuyer: true, isSeller: true },
+  });
+  const intent = resolveLeadIntent({
+    isBuyer: customerFlags?.isBuyer ?? true,
+    isSeller: customerFlags?.isSeller ?? false,
+  });
+  const routed = await resolveLeadDeskAssignment(intent);
+  const organizationId = routed.organizationId ?? desk.organizationId;
+  const assignedAgentId = routed.assigneeId;
   const deskNotifiers = organizationId
     ? await prisma.organizationMembership.findMany({
         where: {
@@ -124,10 +139,11 @@ export async function POST(request: Request) {
       data: {
         source: "SHOWING_REQUEST",
         status: "APPT_SET",
+        intent,
         score: 60,
         listingMls: firstMls,
         customerId: user.id,
-        assignedAgentId: null,
+        assignedAgentId,
         organizationId: organizationId ?? undefined,
         contactConsentAt: consentAt,
         notes: itineraryText,
@@ -186,6 +202,14 @@ export async function POST(request: Request) {
 
     return { leadId: lead.id, shareToken: token };
   });
+
+  if (assignedAgentId && organizationId) {
+    await createCallNewLeadTask({
+      leadId,
+      assigneeId: assignedAgentId,
+      organizationId,
+    });
+  }
 
   void recordActivityEvent({
     type: "ROUTE_PLANNER",

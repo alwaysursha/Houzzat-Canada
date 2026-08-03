@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useState } from "react";
 import { Lock, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
+import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
 import { ListingCard } from "@/components/listings/ListingCard";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
@@ -12,9 +13,11 @@ import { VOW_PUBLIC_NOTE } from "@/lib/vow";
 function WhyHiddenPopup({
   open,
   onClose,
+  needsEmailVerification,
 }: {
   open: boolean;
   onClose: () => void;
+  needsEmailVerification: boolean;
 }) {
   const titleId = useId();
 
@@ -64,42 +67,69 @@ function WhyHiddenPopup({
         <p className="mt-4 text-sm leading-relaxed text-ink/75">
           {VOW_PUBLIC_NOTE}
         </p>
-        <p className="mt-3 text-sm leading-relaxed text-ink/75">
-          By registering, you become a Houzzat client and agree to VOW display
-          terms.{" "}
-          <AuthOpenButton
-            mode="sign-up"
-            callbackUrl="/#recently-sold"
-            className="font-semibold text-canopy hover:underline"
-            onClick={onClose}
-          >
-            Create a free account
-          </AuthOpenButton>
-          .
-        </p>
+        {needsEmailVerification ? (
+          <p className="mt-3 text-sm leading-relaxed text-ink/75">
+            You&apos;re signed in — verify your email to unlock sold and leased
+            details.
+          </p>
+        ) : (
+          <p className="mt-3 text-sm leading-relaxed text-ink/75">
+            By registering, you become a Houzzat client and agree to VOW display
+            terms.{" "}
+            <AuthOpenButton
+              mode="sign-up"
+              callbackUrl="/#recently-sold"
+              className="font-semibold text-canopy hover:underline"
+              onClick={onClose}
+            >
+              Create a free account
+            </AuthOpenButton>
+            .
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
-function LockedSoldCard({ listing }: { listing: ListingCardData }) {
+function LockedSoldCard({
+  listing,
+  needsEmailVerification,
+}: {
+  listing: ListingCardData;
+  needsEmailVerification: boolean;
+}) {
   const [whyOpen, setWhyOpen] = useState(false);
 
   return (
     <div className="relative overflow-hidden rounded-2xl">
       <ListingCard listing={listing} lockedPreview />
       <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
-        <div className="flex w-full max-w-[15rem] flex-col items-center gap-3 rounded-2xl border border-white/40 bg-white/55 px-5 py-5 shadow-lg backdrop-blur-md">
-          <span className="inline-flex size-12 items-center justify-center rounded-full bg-canopy text-white shadow-sm">
-            <Lock className="size-5" strokeWidth={2.5} aria-hidden />
-          </span>
-          <AuthOpenButton
-            mode="sign-in"
-            callbackUrl="/#recently-sold"
-            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-canopy px-4 text-sm font-semibold text-white transition hover:bg-canopy-deep"
-          >
-            Login Required
-          </AuthOpenButton>
+        <div className="flex w-full max-w-[17rem] flex-col items-center gap-3 rounded-3xl border border-white/50 bg-white/90 px-5 py-6 shadow-[0_20px_40px_-20px_rgba(0,0,0,0.45)] backdrop-blur-md">
+          {needsEmailVerification ? (
+            <EmailVerificationRequired
+              variant="featured"
+              compact
+              icon="lock"
+              eyebrow="Sold prices"
+              callbackUrl="/#recently-sold"
+              title="Verify email"
+              body="Confirm your email to view sold prices."
+            />
+          ) : (
+            <>
+              <span className="inline-flex size-12 items-center justify-center rounded-full bg-canopy text-white shadow-sm">
+                <Lock className="size-5" strokeWidth={2.5} aria-hidden />
+              </span>
+              <AuthOpenButton
+                mode="sign-in"
+                callbackUrl="/#recently-sold"
+                className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-canopy px-4 text-sm font-semibold text-white transition hover:bg-canopy-deep"
+              >
+                Login Required
+              </AuthOpenButton>
+            </>
+          )}
           <button
             type="button"
             onClick={() => setWhyOpen(true)}
@@ -109,7 +139,11 @@ function LockedSoldCard({ listing }: { listing: ListingCardData }) {
           </button>
         </div>
       </div>
-      <WhyHiddenPopup open={whyOpen} onClose={() => setWhyOpen(false)} />
+      <WhyHiddenPopup
+        open={whyOpen}
+        onClose={() => setWhyOpen(false)}
+        needsEmailVerification={needsEmailVerification}
+      />
     </div>
   );
 }
@@ -117,12 +151,14 @@ function LockedSoldCard({ listing }: { listing: ListingCardData }) {
 export function HomeSoldRail({
   items,
   isClient,
+  needsEmailVerification = false,
   emptyLabel,
   regionLabel,
   seeAllHref = "/search?status=SOLD",
 }: {
   items: ListingCardData[];
   isClient: boolean;
+  needsEmailVerification?: boolean;
   emptyLabel?: string;
   regionLabel?: string;
   seeAllHref?: string;
@@ -148,6 +184,10 @@ export function HomeSoldRail({
           >
             See sold search →
           </Link>
+        ) : needsEmailVerification ? (
+          <span className="text-sm font-semibold text-ink/55">
+            Verify email to unlock sold
+          </span>
         ) : (
           <AuthOpenButton
             mode="sign-up"
@@ -167,7 +207,11 @@ export function HomeSoldRail({
             isClient ? (
               <ListingCard key={listing.mlsNumber} listing={listing} />
             ) : (
-              <LockedSoldCard key={listing.mlsNumber} listing={listing} />
+              <LockedSoldCard
+                key={listing.mlsNumber}
+                listing={listing}
+                needsEmailVerification={needsEmailVerification}
+              />
             ),
           )}
         </FreeSwipeRail>

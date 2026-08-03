@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeAuditLog } from "@/lib/admin/audit";
 import {
-  resolveDefaultOrganizationId,
-  resolveOrganizationIdForAssignee,
-} from "@/lib/agent";
+  applyLeadAssignment,
+  captureWebsiteLead,
+  resolveLeadIntent,
+} from "@/lib/agent/lead-intake";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -17,6 +18,7 @@ const schema = z.object({
 /**
  * Assign CRM leads for this person to an agent (or Pond).
  * If they only signed up and have no Lead yet, create one first.
+ * Creates a 12h "Call new lead" task on assign.
  */
 export async function POST(
   request: Request,
@@ -42,6 +44,8 @@ export async function POST(
       name: true,
       phone: true,
       role: true,
+      isBuyer: true,
+      isSeller: true,
     },
   });
   if (!customer) {
@@ -67,63 +71,41 @@ export async function POST(
     select: { id: true },
   });
 
-  const organizationId =
-    (await resolveOrganizationIdForAssignee(parsed.data.assigneeId)) ??
-    (await resolveDefaultOrganizationId());
-
   let createdLead = false;
   if (!leads.length) {
-    const created = await prisma.lead.create({
-      data: {
-        source: "OTHER",
-        status: "NEW_LEAD",
-        score: 10,
-        customerId,
-        assignedAgentId: parsed.data.assigneeId,
-        organizationId: organizationId ?? undefined,
-        contactConsentAt: new Date(),
-        notes: [
-          `Contact: ${customer.name || "Customer"} <${customer.email}>`,
-          customer.phone ? `Phone: ${customer.phone}` : null,
-          "Lead created from People admin assignment",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        activities: {
-          create: {
-            type: "created",
-            userId: session.user.id,
-            body: parsed.data.assigneeId
-              ? "Created and assigned by admin from People"
-              : "Created in pond by admin from People",
-          },
-        },
-      },
-      select: { id: true },
+    const captured = await captureWebsiteLead({
+      source: "OTHER",
+      customerId,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      isBuyer: customer.isBuyer,
+      isSeller: customer.isSeller,
+      intent: resolveLeadIntent(customer),
+      score: 10,
+      actorId: session.user.id,
+      forceAssigneeId: parsed.data.assigneeId,
+      notes: [
+        `Contact: ${customer.name || "Customer"} <${customer.email}>`,
+        customer.phone ? `Phone: ${customer.phone}` : null,
+        "Lead created from People admin assignment",
+      ]
+        .filter(Boolean)
+        .join("\n"),
     });
-    leads = [created];
+    leads = [{ id: captured.lead.id }];
     createdLead = true;
   } else {
-    await prisma.$transaction(
-      leads.map((lead) =>
-        prisma.lead.update({
-          where: { id: lead.id },
-          data: {
-            assignedAgentId: parsed.data.assigneeId,
-            ...(organizationId ? { organizationId } : {}),
-            activities: {
-              create: {
-                type: "reassigned",
-                userId: session.user.id,
-                body: parsed.data.assigneeId
-                  ? `Assigned by admin to agent ${parsed.data.assigneeId}`
-                  : "Moved to pond by admin",
-              },
-            },
-          },
-        }),
-      ),
-    );
+    for (const lead of leads) {
+      await applyLeadAssignment({
+        leadId: lead.id,
+        assigneeId: parsed.data.assigneeId,
+        actorId: session.user.id,
+        activityBody: parsed.data.assigneeId
+          ? `Assigned by admin to agent ${parsed.data.assigneeId}`
+          : "Moved to pond by admin",
+      });
+    }
   }
 
   await writeAuditLog({

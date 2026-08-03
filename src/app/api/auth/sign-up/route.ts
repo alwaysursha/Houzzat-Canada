@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { captureWebsiteLead } from "@/lib/agent/lead-intake";
 import { sendEmailVerification } from "@/lib/auth/email-verification";
 import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
 import { prisma } from "@/lib/prisma";
@@ -11,6 +12,8 @@ const schema = z.object({
   email: z.string().trim().email().max(254),
   password: z.string().min(8).max(128),
   acceptTerms: z.literal(true),
+  /** buyer (default) | seller — seller signup / sell-a-home paths */
+  intent: z.enum(["buyer", "seller"]).optional(),
 });
 
 function requestClientMeta(request: Request) {
@@ -55,6 +58,7 @@ export async function POST(request: Request) {
     const password = await bcrypt.hash(parsed.data.password, 10);
     const now = new Date();
     const { ip, userAgent } = requestClientMeta(request);
+    const asSeller = parsed.data.intent === "seller";
 
     const user = await prisma.user.create({
       data: {
@@ -63,11 +67,10 @@ export async function POST(request: Request) {
         password,
         role: "BUYER",
         isBuyer: true,
-        isSeller: false,
-        activeMode: "BUYER",
+        isSeller: asSeller,
+        activeMode: asSeller ? "SELLER" : "BUYER",
         termsAcceptedAt: now,
         termsVersion: TERMS_VERSION,
-        // Registration still establishes client / VOW access for sold data.
         vowAcceptedAt: now,
         vowVersion: VOW_VERSION,
         caslConsentAt: now,
@@ -92,7 +95,20 @@ export async function POST(request: Request) {
       },
     });
 
-    // Best-effort — signup must succeed even if email is not configured yet.
+    try {
+      await captureWebsiteLead({
+        source: "SIGNUP",
+        customerId: user.id,
+        name: user.name,
+        email: user.email,
+        isBuyer: true,
+        isSeller: asSeller,
+        score: asSeller ? 40 : 20,
+      });
+    } catch (err) {
+      console.error("[sign-up] lead capture failed", err);
+    }
+
     void sendEmailVerification({
       email,
       name: parsed.data.name,

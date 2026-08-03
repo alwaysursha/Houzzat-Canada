@@ -6,6 +6,11 @@ import { auth } from "@/lib/auth";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
 import { resolvePublicLeadDesk } from "@/lib/agent";
+import {
+  createCallNewLeadTask,
+  resolveLeadDeskAssignment,
+  resolveLeadIntent,
+} from "@/lib/agent/lead-intake";
 import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
 import { estimateHomeValue } from "@/lib/market/home-value-estimate";
 import { sendNotification } from "@/lib/notifications";
@@ -309,7 +314,16 @@ export async function POST(request: Request) {
     }
 
     const desk = await resolvePublicLeadDesk();
-    const organizationId = desk.organizationId;
+    const intent = resolveLeadIntent({
+      isBuyer: data.intent !== "sell",
+      isSeller: data.intent === "sell",
+    });
+    // Home valuation / sell-a-home → seller desk when selling intent.
+    const routedIntent =
+      data.intent === "sell" || isQuick ? ("SELLER" as const) : intent;
+    const routed = await resolveLeadDeskAssignment(routedIntent);
+    const organizationId = routed.organizationId ?? desk.organizationId;
+    const assignedAgentId = routed.assigneeId;
     const deskNotifiers = organizationId
       ? await prisma.organizationMembership.findMany({
           where: {
@@ -338,9 +352,10 @@ export async function POST(request: Request) {
       data: {
         source: "HOME_VALUATION",
         status: "NEW_LEAD",
+        intent: routedIntent,
         score: data.intent === "sell" ? 72 : data.intent === "buy" ? 40 : 45,
         customerId,
-        assignedAgentId: null,
+        assignedAgentId,
         organizationId: organizationId ?? undefined,
         ...utmLeadFields(utm, adCampaignId),
         notes: [
@@ -398,12 +413,20 @@ export async function POST(request: Request) {
                 type: "VALUATION_CALL",
                 status: "REQUESTED",
                 customerId,
-                agentId: null,
+                agentId: assignedAgentId,
                 notes: `Valuation follow-up for ${data.address}`,
               },
             },
       },
     });
+
+    if (assignedAgentId && organizationId) {
+      await createCallNewLeadTask({
+        leadId: lead.id,
+        assigneeId: assignedAgentId,
+        organizationId,
+      });
+    }
 
     for (const row of deskNotifiers) {
       if (!row.user.email) continue;
