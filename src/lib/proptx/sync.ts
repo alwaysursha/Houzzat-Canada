@@ -829,6 +829,89 @@ export async function upsertPropTxPropertiesOnDemand(
 }
 
 /**
+ * Pull brand-new listings by list date (not ModificationTimestamp).
+ * Photo/price churn can bury just-listed homes in the "recent mods" stream;
+ * this pass keeps the website's "new on market" rails current while backlog fills.
+ */
+async function syncJustListedProperties(options: {
+  days: number;
+  maxPages: number;
+  stats: MlsSyncStats;
+  config?: PropTxConfig | null;
+}): Promise<void> {
+  const from = new Date();
+  from.setUTCDate(from.getUTCDate() - options.days);
+  const fromDate = from.toISOString().slice(0, 10);
+  const fromTs = toODataDate(from);
+
+  // Prefer contract / entry timestamps; fall back if the board rejects a field.
+  const attempts: Array<{ label: string; filter: string; orderby: string }> = [
+    {
+      label: "ListingContractDate",
+      filter: `(StandardStatus eq 'Active' or MlsStatus eq 'A') and ListingContractDate ge ${fromDate}`,
+      orderby: "ListingContractDate desc,ListingKey desc",
+    },
+    {
+      label: "OriginalEntryTimestamp",
+      filter: `(StandardStatus eq 'Active' or MlsStatus eq 'A') and OriginalEntryTimestamp ge ${fromTs}`,
+      orderby: "OriginalEntryTimestamp desc,ListingKey desc",
+    },
+    {
+      label: "OnMarketDate",
+      filter: `(StandardStatus eq 'Active' or MlsStatus eq 'A') and OnMarketDate ge ${fromDate}`,
+      orderby: "OnMarketDate desc,ListingKey desc",
+    },
+  ];
+
+  for (const attempt of attempts) {
+    const path = `Property?$filter=${encodeURIComponent(attempt.filter)}&$orderby=${encodeURIComponent(attempt.orderby)}&$top=100`;
+    console.log(
+      `[mls] Just-listed pass via ${attempt.label} (last ${options.days}d, maxPages=${options.maxPages}, feed=${options.config?.feed ?? "default"})`,
+    );
+    const skipReasons: Record<string, number> = {};
+    let pageNo = 0;
+    try {
+      for await (const page of proptxPages<PropTxProperty>(path, {
+        maxPages: options.maxPages,
+        config: options.config,
+      })) {
+        pageNo += 1;
+        options.stats.pages += 1;
+        console.log(
+          `[mls] Just-listed page ${pageNo}/${options.maxPages} (+${page.length} rows, upserted=${options.stats.propertyUpserted}, skipped=${options.stats.propertySkipped})`,
+        );
+        for (const row of page) {
+          await upsertPropertyRow(row, {
+            stats: options.stats,
+            skipReasons,
+            fetchNested: false,
+          });
+        }
+      }
+      options.stats.skipReasons = {
+        ...(options.stats.skipReasons ?? {}),
+        ...Object.fromEntries(
+          Object.entries(skipReasons).map(([k, v]) => [
+            `justListed:${attempt.label}:${k}`,
+            v,
+          ]),
+        ),
+      };
+      return;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[mls] Just-listed via ${attempt.label} failed, trying next: ${msg}`,
+      );
+      pushSyncError(
+        options.stats,
+        `Just-listed ${attempt.label}: ${msg.slice(0, 160)}`,
+      );
+    }
+  }
+}
+
+/**
  * Pull newest MLS changes first (just-listed / recent mods).
  * Does not advance the Property cursor — backlog catch-up stays ascending.
  */
@@ -1463,26 +1546,81 @@ export async function runPropTxMlsSync(options?: {
     });
 
     if (resources.includes("property")) {
-      // 1) Newest mods first — just-listed + status flips (sold/terminated).
-      // Cap recent pages so a large maxPages (e.g. 200) doesn't double the work.
-      const recentDays = Math.min(3, Math.max(1, fullBackfillDays));
-      const recentPages = Math.min(25, Math.max(10, Math.ceil(maxPages / 2)));
+      // Page budget: always pull fresh inventory first, then advance history/cursor.
+      // maxPages≤40 stays lean (short CI ticks); Mac launchd uses higher defaults.
+      const lean = maxPages <= 40;
+      const envInt = (key: string, fallback: number) => {
+        const raw = process.env[key]?.trim();
+        if (!raw) return fallback;
+        const n = Number(raw);
+        return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
+      };
+
+      const justListedDays = envInt(
+        "MLS_SYNC_JUST_LISTED_DAYS",
+        Math.min(2, Math.max(1, fullBackfillDays)),
+      );
+      const justListedPages = envInt(
+        "MLS_SYNC_JUST_LISTED_PAGES",
+        lean ? Math.min(15, Math.max(8, maxPages)) : Math.min(25, Math.ceil(maxPages / 3)),
+      );
+      const recentDays = envInt(
+        "MLS_SYNC_RECENT_DAYS",
+        Math.min(3, Math.max(1, fullBackfillDays)),
+      );
+      const recentPages = envInt(
+        "MLS_SYNC_RECENT_PAGES",
+        lean
+          ? Math.min(10, Math.max(5, Math.ceil(maxPages / 2)))
+          : Math.min(25, Math.max(10, Math.ceil(maxPages / 2))),
+      );
+      const backlogPages = envInt(
+        "MLS_SYNC_BACKLOG_PAGES",
+        lean ? Math.min(12, maxPages) : maxPages,
+      );
+      const mediaCap = envInt(
+        "MLS_SYNC_MEDIA_CAP",
+        lean
+          ? Math.min(80, Math.max(30, maxPages * 3))
+          : Math.min(Math.max(maxPages * 25, 400), 1500),
+      );
+      const soldCap = envInt(
+        "MLS_SYNC_SOLD_CAP",
+        lean
+          ? Math.min(60, Math.max(20, maxPages * 2))
+          : Math.min(Math.max(maxPages * 5, 150), 800),
+      );
+
+      console.log(
+        `[mls] Budget justListed=${justListedPages}p/${justListedDays}d recent=${recentPages}p/${recentDays}d backlog=${backlogPages}p media=${mediaCap} sold=${soldCap} lean=${lean}`,
+      );
+
+      // 1) Brand-new on market (list date) — keeps "within 1h / 24h" rails alive.
+      await syncJustListedProperties({
+        days: justListedDays,
+        maxPages: justListedPages,
+        stats,
+        config,
+      });
+
+      // 2) Newest mods — status flips, price changes, photo churn.
       await syncRecentProperties({
         days: recentDays,
         maxPages: recentPages,
         stats,
         config,
       });
-      // 2) Ascending cursor backlog — keeps catching sold/off-market changes.
+
+      // 3) Ascending cursor backlog — history / sold / off-market catch-up.
       await syncProperties({
-        maxPages,
+        maxPages: backlogPages,
         fullBackfillDays,
         stats,
         fetchNested: false,
         config,
       });
 
-      // 2b) Optional extra VOW pass when primary sync is IDX-only.
+      // 3b) Optional extra VOW pass when primary sync is IDX-only.
       const vowConfig = getPropTxSoldSyncConfig();
       if (vowConfig && config.feed === "idx") {
         const vowPages = Math.min(15, Math.max(5, Math.ceil(recentPages / 2)));
@@ -1497,13 +1635,12 @@ export async function runPropTxMlsSync(options?: {
         });
       }
 
-      // 2c) Fill firm sold dates missing from earlier IDX-only syncs.
+      // 3c) Fill firm sold dates missing from earlier IDX-only syncs.
       try {
-        const soldCap = Math.min(Math.max(maxPages * 5, 150), 800);
         await syncSoldAtBackfill({
           maxListings: soldCap,
           stats,
-          concurrency: 6,
+          concurrency: lean ? 4 : 6,
         });
       } catch (err) {
         stats.errors.push(
@@ -1511,14 +1648,12 @@ export async function runPropTxMlsSync(options?: {
         );
       }
 
-      // 3) Small photo gap-fill only — bulk photos belong in mls-media.yml.
-      // (maxPages*150 on a 200-page run → 30k PropTx calls and looks "stuck".)
+      // 4) Small photo gap-fill — bulk photos belong in mls-media / Mac media job.
       try {
-        const mediaCap = Math.min(Math.max(maxPages * 25, 400), 1500);
         await syncMediaBackfill({
           maxListings: mediaCap,
           stats,
-          concurrency: 8,
+          concurrency: lean ? 6 : 8,
         });
       } catch (err) {
         stats.errors.push(

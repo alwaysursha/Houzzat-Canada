@@ -10,7 +10,7 @@
       <string>/Users/Ali/Houzzat-Canada/scripts/mac-mls-sync.sh</string>
     </array>
     <key>StartInterval</key>
-    <integer>900</integer>
+    <integer>3600</integer>
     <key>RunAtLoad</key>
     <true/>
     <key>WorkingDirectory</key>
@@ -21,6 +21,24 @@
       <string>0</string>
       <key>GEOCODE_SKIP_GOOGLE</key>
       <string>1</string>
+      <key>MLS_SYNC_MAX_PAGES</key>
+      <string>30</string>
+      <key>MLS_SYNC_BACKFILL_DAYS</key>
+      <string>7</string>
+      <key>MLS_SYNC_JUST_LISTED_DAYS</key>
+      <string>7</string>
+      <key>MLS_SYNC_JUST_LISTED_PAGES</key>
+      <string>30</string>
+      <key>MLS_SYNC_RECENT_DAYS</key>
+      <string>7</string>
+      <key>MLS_SYNC_RECENT_PAGES</key>
+      <string>25</string>
+      <key>MLS_SYNC_BACKLOG_PAGES</key>
+      <string>30</string>
+      <key>MLS_SYNC_MEDIA_CAP</key>
+      <string>80</string>
+      <key>MLS_SYNC_SOLD_CAP</key>
+      <string>200</string>
       <key>HOME</key>
       <string>/Users/Ali</string>
       <key>PATH</key>

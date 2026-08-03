@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Houzzat MLS sync for a dedicated Mac (launchd / manual).
+# Hourly: pull just-listed + recent mods first, then advance history/cursor.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -36,10 +37,20 @@ if ! command -v pnpm >/dev/null 2>&1; then
   exit 1
 fi
 
-MAX_PAGES="${MLS_SYNC_MAX_PAGES:-20}"
-BACKFILL_DAYS="${MLS_SYNC_BACKFILL_DAYS:-3}"
+# Mac hourly tick: larger pulls; just-listed / recent first, then history.
+MAX_PAGES="${MLS_SYNC_MAX_PAGES:-30}"
+BACKFILL_DAYS="${MLS_SYNC_BACKFILL_DAYS:-7}"
 RESOURCES="${MLS_SYNC_RESOURCES:-property,openHouse}"
 
+export MLS_SYNC_JUST_LISTED_DAYS="${MLS_SYNC_JUST_LISTED_DAYS:-7}"
+export MLS_SYNC_JUST_LISTED_PAGES="${MLS_SYNC_JUST_LISTED_PAGES:-30}"
+export MLS_SYNC_RECENT_DAYS="${MLS_SYNC_RECENT_DAYS:-7}"
+export MLS_SYNC_RECENT_PAGES="${MLS_SYNC_RECENT_PAGES:-25}"
+export MLS_SYNC_BACKLOG_PAGES="${MLS_SYNC_BACKLOG_PAGES:-30}"
+export MLS_SYNC_MEDIA_CAP="${MLS_SYNC_MEDIA_CAP:-80}"
+export MLS_SYNC_SOLD_CAP="${MLS_SYNC_SOLD_CAP:-200}"
+
 echo "Running: pnpm mls:sync ${MAX_PAGES} ${BACKFILL_DAYS} ${RESOURCES}"
+echo "Budgets: justListed=${MLS_SYNC_JUST_LISTED_PAGES}p/${MLS_SYNC_JUST_LISTED_DAYS}d recent=${MLS_SYNC_RECENT_PAGES}p/${MLS_SYNC_RECENT_DAYS}d backlog=${MLS_SYNC_BACKLOG_PAGES}p media=${MLS_SYNC_MEDIA_CAP} sold=${MLS_SYNC_SOLD_CAP}"
 pnpm mls:sync "$MAX_PAGES" "$BACKFILL_DAYS" "$RESOURCES"
 echo "======== $(date '+%Y-%m-%d %H:%M:%S %Z') mls-sync done ========"

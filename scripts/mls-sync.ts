@@ -5,7 +5,14 @@
  * resources (optional, comma-separated):
  *   property,media,rooms,openHouse,syntheticHistory,history
  * Default resources: property,openHouse
- * Property always runs: recent → per-city Active inventory → cursor backlog → photo gap-fill.
+ *
+ * Property pass order (every run):
+ *   1) just-listed (ListingContractDate / entry time, newest first)
+ *   2) recent ModificationTimestamp (newest first)
+ *   3) ascending cursor backlog (history / sold catch-up)
+ *   4) small sold-date + photo gap-fill
+ *
+ * Mac 15m ticks set MLS_SYNC_*_PAGES / MEDIA_CAP / SOLD_CAP for a lean split.
  *
  * Examples:
  *   pnpm mls:sync 40 14
