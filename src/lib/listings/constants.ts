@@ -195,7 +195,7 @@ export function closedPriceLabel(
 
 /**
  * Site-wide listing timing label:
- * - Active → "Added … ago" from MLS listedAt (ListingContractDate)
+ * - Active → "Added … ago" from MLS list time (`listedAt`)
  * - Sold/Leased → "Sold on …" / "Leased on …"
  */
 export function formatListingTiming(listing: {

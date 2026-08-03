@@ -524,8 +524,10 @@ export function mapPropertyToListingResult(
       ? Math.round(soldPriceRaw)
       : null;
 
+  // MLS list time for "Added … ago". Prefer OriginalEntryTimestamp (has clock time);
+  // ListingContractDate / OnMarketDate are often date-only (midnight UTC).
   const listedAt =
-    date(row, "ListingContractDate", "OriginalEntryTimestamp", "OnMarketDate") ??
+    date(row, "OriginalEntryTimestamp", "OnMarketDate", "ListingContractDate") ??
     date(row, "ModificationTimestamp") ??
     new Date();
   const updatedAtMls =
@@ -858,7 +860,7 @@ export function mapSyntheticHistoryFromProperty(
   const listPrice =
     listPriceRaw != null ? Math.round(listPriceRaw) : null;
   const listedAt =
-    date(row, "ListingContractDate", "OriginalEntryTimestamp", "OnMarketDate") ??
+    date(row, "OriginalEntryTimestamp", "OnMarketDate", "ListingContractDate") ??
     date(row, "ModificationTimestamp");
   const modAt = date(row, "ModificationTimestamp");
 
