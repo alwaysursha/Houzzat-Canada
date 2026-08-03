@@ -94,7 +94,7 @@ export default async function AgentAppointmentsPage({
                       <>
                         {" · "}
                         <Link
-                          href={`/agent/leads/${a.lead.id}`}
+                          href={`/agent/leads?lead=${a.lead.id}`}
                           className="text-canopy"
                         >
                           Lead

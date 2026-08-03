@@ -26,9 +26,9 @@ import {
   UserPlus,
 } from "lucide-react";
 import type { LeadStatus } from "@prisma/client";
-import { LeadQuickPopup } from "@/components/agent/LeadQuickPopup";
 import { MassEmailForm } from "@/components/agent/LeadEmailForm";
 import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
+import { openLeadProfileHref, rememberLeadNavIds } from "@/components/agent/LeadQueryPopup";
 import {
   PIPELINE_STATUSES,
   PIPELINE_STATUS_ORDER,
@@ -202,7 +202,6 @@ export function LeadsTableClient({
   const [assignOpen, setAssignOpen] = useState(false);
   const [showMassEmail, setShowMassEmail] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [openLeadId, setOpenLeadId] = useState<string | null>(null);
   const [pipelineOpenId, setPipelineOpenId] = useState<string | null>(null);
   const [phoneMenuId, setPhoneMenuId] = useState<string | null>(null);
   const [verifyState, setVerifyState] = useState<
@@ -244,6 +243,11 @@ export function LeadsTableClient({
     });
     return list;
   }, [leads, q, sortKey, sortDir]);
+
+  function openLead(leadId: string) {
+    rememberLeadNavIds(filtered.map((l) => l.id));
+    router.push(openLeadProfileHref(leadId, { view }), { scroll: false });
+  }
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount - 1);
@@ -490,7 +494,7 @@ export function LeadsTableClient({
       setAddEmail("");
       setAddPhone("");
       router.refresh();
-      if (json.leadId) setOpenLeadId(json.leadId);
+      if (json.leadId) openLead(json.leadId);
     } finally {
       setPending(false);
     }
@@ -695,7 +699,164 @@ export function LeadsTableClient({
         <MassEmailForm leadIds={selected} />
       ) : null}
 
-      <div className="overflow-x-auto rounded border border-[#d8dee6] bg-white">
+      {/* Mobile lead cards */}
+      <div className="space-y-2.5 lg:hidden">
+        {pageRows.length === 0 ? (
+          <p className="rounded-xl border border-[#d8dee6] bg-white px-4 py-12 text-center text-sm text-[#94a3b8]">
+            No leads in this view.
+          </p>
+        ) : (
+          pageRows.map((lead) => {
+            const name =
+              lead.customer?.name ||
+              lead.customer?.email ||
+              lead.source.replaceAll("_", " ");
+            const phone = lead.customer?.phone;
+            const email = lead.customer?.email;
+            const StatusIcon = pipelineIcon(lead.status as LeadStatus);
+            return (
+              <article
+                key={lead.id}
+                className="rounded-xl border border-[#d8dee6] bg-white p-3.5 shadow-[0_1px_2px_rgb(15_23_42/0.04)]"
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(lead.id)}
+                    onChange={() => toggle(lead.id)}
+                    className="mt-1 size-4 shrink-0"
+                    aria-label={`Select ${name}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openLead(lead.id)}
+                        className="min-w-0 text-left text-[16px] font-bold leading-snug text-[#1e2a38] active:text-[#2b6cb0]"
+                      >
+                        {name}
+                      </button>
+                      {lead.isOnline ? (
+                        <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                          ONLINE
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold",
+                          pipelinePillClass(lead.status as LeadStatus),
+                        )}
+                      >
+                        <StatusIcon className="size-3" />
+                        {pipelineShortLabel(lead.status as LeadStatus)}
+                      </span>
+                      {lead.customer?.isBuyer ? (
+                        <span className="rounded bg-[#64748b] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          Buyer
+                        </span>
+                      ) : null}
+                      {lead.customer?.isSeller ? (
+                        <span className="rounded bg-[#5a9a6e] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          Seller
+                        </span>
+                      ) : null}
+                      <span className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[#475569]">
+                        <Star
+                          className="size-3.5 fill-[#334155] text-[#334155]"
+                          strokeWidth={0}
+                        />
+                        {lead.hotness}
+                      </span>
+                      {lead.binge ? (
+                        <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
+                          <Flame className="size-3" />
+                          Binge
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-2.5 space-y-1 text-[13px] text-[#475569]">
+                      {phone ? (
+                        <a
+                          href={`tel:${phone}`}
+                          className="flex items-center gap-2 font-semibold text-[#2b6cb0]"
+                        >
+                          <Phone className="size-3.5 shrink-0" />
+                          {phone}
+                        </a>
+                      ) : null}
+                      {email ? (
+                        <a
+                          href={`mailto:${email}`}
+                          className="flex items-center gap-2 truncate"
+                        >
+                          <Mail className="size-3.5 shrink-0" />
+                          <span className="truncate">{email}</span>
+                        </a>
+                      ) : null}
+                      {lead.priceCity || lead.listingMls ? (
+                        <p className="truncate text-[12px]">
+                          {lead.priceCity || `MLS® ${lead.listingMls}`}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-[#eef2f6] pt-2.5 text-[11px] text-[#64748b]">
+                      <span className="inline-flex items-center gap-1">
+                        <Eye className="size-3" />
+                        {lead.views24h} views
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Heart className="size-3" />
+                        {lead.saves} saves
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Search className="size-3" />
+                        {lead.searches} searches
+                      </span>
+                      {lead.nextReminder ? (
+                        <span className="font-semibold text-[#d97706]">
+                          Reminder{" "}
+                          {new Date(lead.nextReminder).toLocaleString("en-CA", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openLead(lead.id)}
+                        className="flex-1 rounded-lg bg-[#2b6cb0] px-3 py-2.5 text-[13px] font-semibold text-white active:bg-[#245a96]"
+                      >
+                        Open profile
+                      </button>
+                      {phone ? (
+                        <a
+                          href={`tel:${phone}`}
+                          className="inline-flex items-center justify-center rounded-lg border border-[#d8dee6] px-3 py-2.5 text-[#1e2a38] active:bg-[#f8fafc]"
+                          aria-label={`Call ${name}`}
+                        >
+                          <Phone className="size-4" />
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </article>
+            );
+          })
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded border border-[#d8dee6] bg-white lg:block">
         <table className="min-w-[1200px] w-full border-collapse text-left">
           <thead>
             <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-[10px] font-bold">
@@ -749,7 +910,7 @@ export function LeadsTableClient({
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => setOpenLeadId(lead.id)}
+                          onClick={() => openLead(lead.id)}
                           className="text-left text-[13px] font-bold text-[#4a6f94] hover:underline"
                         >
                           {name}
@@ -1080,7 +1241,7 @@ export function LeadsTableClient({
 
                     <td className="px-2 py-3 text-[12px]">
                       <Link
-                        href={`/agent/leads/${lead.id}`}
+                        href={openLeadProfileHref(lead.id, { view })}
                         className="font-semibold text-[#5a7fa3] hover:underline"
                       >
                         {lead.nextReminder
@@ -1150,9 +1311,11 @@ export function LeadsTableClient({
                           ))}
                         </select>
                       ) : (
-                        lead.assignedAgent?.name ||
-                        lead.assignedAgent?.email ||
-                        "Unassigned"
+                        <span className="text-[12px] text-[#334155]">
+                          {lead.assignedAgent?.name ||
+                            lead.assignedAgent?.email ||
+                            "Unassigned"}
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -1162,13 +1325,6 @@ export function LeadsTableClient({
           </tbody>
         </table>
       </div>
-
-      {openLeadId ? (
-        <LeadQuickPopup
-          leadId={openLeadId}
-          onClose={() => setOpenLeadId(null)}
-        />
-      ) : null}
 
       {addOpen ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">

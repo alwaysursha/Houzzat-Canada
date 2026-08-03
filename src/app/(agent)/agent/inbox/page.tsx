@@ -54,7 +54,7 @@ export default async function AgentInboxPage() {
             <li key={e.id} className="px-4 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <Link
-                  href={`/agent/leads/${e.lead.id}`}
+                  href={`/agent/leads?lead=${e.lead.id}`}
                   className="font-semibold text-ink hover:text-canopy"
                 >
                   {e.subject}

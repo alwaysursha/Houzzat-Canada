@@ -45,7 +45,7 @@ export default async function AgentTasksPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-4xl text-ink">Tasks & reminders</h1>
+        <h1 className="font-display text-3xl text-ink sm:text-4xl">Tasks & reminders</h1>
         <p className="mt-2 text-sm text-ink/60">
           Call, email, and to-dos across your book.
         </p>
@@ -86,7 +86,7 @@ export default async function AgentTasksPage() {
                         <>
                           {" · "}
                           <Link
-                            href={`/agent/leads/${task.lead.id}`}
+                            href={`/agent/leads?lead=${task.lead.id}`}
                             className="text-canopy"
                           >
                             {task.lead.customer?.name ||

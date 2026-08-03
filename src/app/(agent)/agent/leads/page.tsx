@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { LeadStatus } from "@prisma/client";
 import { LeadActions } from "@/components/agent/LeadActions";
 import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
+import { LeadQueryPopup } from "@/components/agent/LeadQueryPopup";
 import {
   LeadsTableClient,
   type LeadRow,
@@ -14,6 +15,7 @@ import { loadLeadsDashboardEngagement } from "@/lib/agent/leads-dashboard";
 import { prisma } from "@/lib/prisma";
 import { PIPELINE_STATUSES, pipelineLabel } from "@/lib/agent/pipeline";
 import { cn } from "@/lib/utils";
+import { Suspense } from "react";
 
 export const metadata = { title: "Leads · Agent CRM" };
 
@@ -22,7 +24,12 @@ const COLUMNS = PIPELINE_STATUSES;
 export default async function AgentLeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; layout?: string; pipeline?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    layout?: string;
+    pipeline?: string;
+    lead?: string;
+  }>;
 }) {
   const ctx = await requireAgentContext();
   if (!ctx) redirect("/auth/sign-in?callbackUrl=/agent/leads");
@@ -37,6 +44,7 @@ export default async function AgentLeadsPage({
         : "mine";
   const layout = params.layout === "kanban" ? "kanban" : "table";
   const pipelineParam = params.pipeline?.trim() || null;
+  const openLeadId = params.lead?.trim() || null;
   const pipeline =
     pipelineParam &&
     PIPELINE_STATUSES.includes(
@@ -203,14 +211,14 @@ export default async function AgentLeadsPage({
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#1e2a38]">
+          <h1 className="text-xl font-bold text-[#1e2a38] sm:text-2xl">
             {pipeline === "NEW_LEAD"
               ? "Call New Leads"
               : followUpPipeline
                 ? "Contacted Leads"
                 : "Leads"}
           </h1>
-          <p className="mt-1 text-sm text-[#64748b]">
+          <p className="mt-1 text-[13px] font-medium text-[#64748b] sm:text-sm sm:font-normal">
             {pipeline === "NEW_LEAD"
               ? `${rows.length} new lead${rows.length === 1 ? "" : "s"} waiting for first contact`
               : followUpPipeline
@@ -273,7 +281,7 @@ export default async function AgentLeadsPage({
         <LeadsTableClient
           leads={rows}
           canClaimPond
-          canAssign={ctx.canSeeTeamLeads}
+          canAssign={ctx.isPlatformAdmin}
           teamMembers={assignableAgents}
           view={view}
         />
@@ -297,7 +305,7 @@ export default async function AgentLeadsPage({
                     >
                       <div className="flex items-center gap-1">
                         <Link
-                          href={`/agent/leads/${lead.id}`}
+                          href={`/agent/leads?view=${view}&layout=kanban&lead=${lead.id}${pipelineParam ? `&pipeline=${pipelineParam}` : ""}`}
                           className="font-semibold text-[#2563eb] hover:underline"
                         >
                           {lead.customer?.name ||
@@ -335,6 +343,13 @@ export default async function AgentLeadsPage({
           })}
         </div>
       )}
+
+      <Suspense fallback={null}>
+        <LeadQueryPopup
+          leadId={openLeadId}
+          fallbackLeadIds={rows.map((r) => r.id)}
+        />
+      </Suspense>
     </div>
   );
 }

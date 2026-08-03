@@ -79,6 +79,9 @@ export async function POST(request: Request) {
       : null;
 
   if (action === "reassign") {
+    if (!ctx.isPlatformAdmin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const parsed = reassignSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid" }, { status: 400 });

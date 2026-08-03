@@ -103,7 +103,7 @@ export function CrmTimeline({
             </div>
 
             {showListingCard ? (
-              <div className="mt-2 overflow-hidden rounded-xl border border-line/90 bg-gradient-to-br from-mist/40 via-surface to-surface shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+              <div className="relative z-0 mt-2 overflow-hidden rounded-xl border border-line/90 bg-gradient-to-br from-mist/40 via-surface to-surface shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                 {listingHref ? (
                   <Link
                     href={listingHref}
@@ -111,7 +111,7 @@ export function CrmTimeline({
                   >
                     <ListingCover imageUrl={item.imageUrl} title={item.title} />
                     <div className="min-w-0 flex-1 self-center py-0.5">
-                      <p className="text-sm font-semibold leading-snug text-ink group-hover:text-canopy-deep">
+                      <p className="relative z-0 text-sm font-semibold leading-snug text-ink group-hover:text-canopy-deep">
                         {item.title}
                       </p>
                       {item.path ? (

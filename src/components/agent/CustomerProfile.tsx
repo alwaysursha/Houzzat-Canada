@@ -12,8 +12,9 @@ import {
 import {
   BellRing,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Eye,
-  ExternalLink,
   Heart,
   Mail,
   MapPin,
@@ -82,18 +83,18 @@ function RingStat({
 }) {
   const pct = Math.min(100, Math.max(0, Math.round(value)));
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
       <div
-        className="relative flex size-16 items-center justify-center rounded-full"
+        className="relative flex size-14 shrink-0 items-center justify-center rounded-full sm:size-16"
         style={{
           background: `conic-gradient(${tone} ${pct * 3.6}deg, #dbeafe 0deg)`,
         }}
       >
-        <div className="flex size-12 items-center justify-center rounded-full bg-[#e0f2fe] text-[12px] font-bold text-[#0c4a6e]">
+        <div className="flex size-10 items-center justify-center rounded-full bg-[#e0f2fe] text-[11px] font-bold tabular-nums text-[#0c4a6e] sm:size-12 sm:text-[12px]">
           {pct}%
         </div>
       </div>
-      <p className="max-w-[72px] text-center text-[10px] font-semibold leading-tight text-[#0369a1]">
+      <p className="max-w-[4.5rem] text-center text-[10px] font-semibold leading-tight text-[#0369a1]">
         {label}
       </p>
     </div>
@@ -128,20 +129,21 @@ function ContactDisplayRow({
   multiline?: boolean;
 }) {
   const valueClass = multiline
-    ? "min-w-0 break-words text-center leading-snug"
+    ? "min-w-0 break-words leading-snug"
     : "min-w-0 truncate";
 
   return (
-    <div className="flex w-full min-w-0 flex-col items-center gap-1">
-      <div className="flex w-full min-w-0 items-start justify-center gap-1.5">
+    <div className="w-full min-w-0">
+      <div className="flex w-full min-w-0 items-center gap-1.5">
         {href && value ? (
           <a
             href={href}
             target={multiline ? "_blank" : undefined}
             rel={multiline ? "noopener noreferrer" : undefined}
             className={cn(
-              "flex min-w-0 flex-1 text-[13px] text-[#2b6cb0] hover:underline",
+              "flex min-w-0 text-[13px] text-[#2b6cb0] hover:underline",
               multiline ? "items-start gap-1.5" : "items-center gap-1.5",
+              updateRequested ? "max-w-[40%]" : "flex-1",
             )}
           >
             <Icon className="mt-0.5 size-3.5 shrink-0" />
@@ -150,20 +152,26 @@ function ContactDisplayRow({
         ) : (
           <span
             className={cn(
-              "flex min-w-0 flex-1 text-[13px] text-[#94a3b8]",
+              "flex min-w-0 text-[13px] text-[#94a3b8]",
               multiline ? "items-start gap-1.5" : "items-center gap-1.5",
+              updateRequested ? "shrink-0" : "flex-1",
             )}
           >
             <Icon className="mt-0.5 size-3.5 shrink-0" />
             <span className={valueClass}>{value || "N/A"}</span>
           </span>
         )}
+        {updateRequested ? (
+          <span className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-wide text-amber-800">
+            Update requested
+          </span>
+        ) : null}
         {canEdit ? (
           <button
             type="button"
             onClick={onEdit}
             aria-label={editLabel}
-            className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-[#64748b] transition hover:bg-[#f1f5f9] hover:text-[#1e2a38]"
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-[#64748b] transition hover:bg-[#f1f5f9] hover:text-[#1e2a38]"
           >
             <Pencil className="size-3.5" />
           </button>
@@ -174,23 +182,25 @@ function ContactDisplayRow({
             onClick={onRequestUpdate}
             disabled={requestPending}
             aria-label={requestLabel ?? "Request update"}
-            title={requestLabel ?? "Request update"}
+            title={
+              updateRequested
+                ? "Update already requested"
+                : (requestLabel ?? "Request update")
+            }
             className={cn(
-              "inline-flex size-6 shrink-0 items-center justify-center rounded-md transition disabled:opacity-50",
+              "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition disabled:opacity-50",
               updateRequested
                 ? "bg-amber-100 text-amber-800"
                 : "text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#1e2a38]",
             )}
           >
             <BellRing className="size-3.5" />
+            {updateRequested ? (
+              <span className="sr-only">Update requested</span>
+            ) : null}
           </button>
         ) : null}
       </div>
-      {updateRequested ? (
-        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
-          Update requested
-        </span>
-      ) : null}
     </div>
   );
 }
@@ -314,11 +324,16 @@ export function CustomerProfile({
   leadId,
   variant = "page",
   onClose,
+  onNavigateLead,
+  leadIds,
   initialData,
 }: {
   leadId: string;
   variant?: "page" | "modal";
   onClose?: () => void;
+  /** Jump to another lead in the current list (popup). */
+  onNavigateLead?: (leadId: string) => void;
+  leadIds?: string[];
   initialData?: LeadSummary | null;
 }) {
   const [data, setData] = useState<LeadSummary | null>(initialData ?? null);
@@ -618,10 +633,9 @@ export function CustomerProfile({
     },
     {
       icon: MoreHorizontal,
-      href: variant === "modal" ? `/agent/leads/${leadId}` : undefined,
       className: "bg-[#64748b]",
       label: "More",
-      onClick: variant === "page" ? () => setTab("conversations") : undefined,
+      onClick: () => setTab("conversations"),
     },
   ];
 
@@ -682,15 +696,27 @@ export function CustomerProfile({
 
   const shellClass =
     variant === "modal"
-      ? "flex h-full max-h-[min(960px,96vh)] w-full max-w-[1280px] flex-col overflow-hidden rounded-xl border border-[#c9d2dc] bg-white shadow-[0_24px_70px_rgb(15_23_42/0.35)]"
+      ? "flex h-full max-h-none w-full max-w-[1280px] flex-col overflow-hidden rounded-none border-0 bg-white shadow-none sm:max-h-[min(960px,96vh)] sm:rounded-xl sm:border sm:border-[#c9d2dc] sm:shadow-[0_24px_70px_rgb(15_23_42/0.35)]"
       : "flex h-full min-h-0 w-full flex-col overflow-hidden bg-white";
+
+  const navIndex =
+    leadIds && leadIds.length > 1 ? leadIds.indexOf(leadId) : -1;
+  const prevLeadId =
+    navIndex > 0 ? leadIds![navIndex - 1]! : null;
+  const nextLeadId =
+    navIndex >= 0 && navIndex < (leadIds?.length ?? 0) - 1
+      ? leadIds![navIndex + 1]!
+      : null;
+  const showLeadNav =
+    Boolean(onNavigateLead) && navIndex >= 0 && (leadIds?.length ?? 0) > 1;
 
   return (
     <div
       className={cn(
         "relative w-full",
         variant === "modal" && "flex h-full items-stretch",
-        variant === "page" && "h-dvh",
+        variant === "page" &&
+          "h-[calc(100dvh-7.25rem-env(safe-area-inset-bottom))] lg:h-dvh",
       )}
     >
       {variant === "modal" ? (
@@ -701,7 +727,7 @@ export function CustomerProfile({
 
       <div role="region" aria-label={name} className={shellClass}>
         {variant === "modal" ? (
-          <div className="flex shrink-0 items-center justify-between border-b border-[#e8edf2] px-3 py-2 sm:px-4">
+          <div className="flex shrink-0 items-center gap-2 border-b border-[#e8edf2] px-2 py-2 sm:px-4">
             {onClose ? (
               <button
                 type="button"
@@ -712,15 +738,37 @@ export function CustomerProfile({
                 <X className="size-4" />
               </button>
             ) : (
-              <span />
+              <span className="size-8" />
             )}
-            <Link
-              href={`/agent/leads/${leadId}`}
-              className="inline-flex items-center gap-1 rounded-md border border-[#d8dee6] px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[#1e2a38] hover:bg-[#f8fafc]"
-            >
-              Open page
-              <ExternalLink className="size-3" />
-            </Link>
+
+            <p className="min-w-0 flex-1 truncate text-[11px] font-bold uppercase tracking-wide text-[#94a3b8]">
+              Lead profile
+            </p>
+
+            {showLeadNav ? (
+              <div className="flex shrink-0 items-center">
+                <button
+                  type="button"
+                  disabled={!prevLeadId}
+                  onClick={() => prevLeadId && onNavigateLead?.(prevLeadId)}
+                  className="rounded-md p-1.5 text-[#1e2a38] transition hover:bg-[#f1f5f9] disabled:cursor-not-allowed disabled:opacity-30"
+                  aria-label="Previous lead"
+                >
+                  <ChevronLeft className="size-6" strokeWidth={2.25} />
+                </button>
+                <button
+                  type="button"
+                  disabled={!nextLeadId}
+                  onClick={() => nextLeadId && onNavigateLead?.(nextLeadId)}
+                  className="rounded-md p-1.5 text-[#1e2a38] transition hover:bg-[#f1f5f9] disabled:cursor-not-allowed disabled:opacity-30"
+                  aria-label="Next lead"
+                >
+                  <ChevronRight className="size-6" strokeWidth={2.25} />
+                </button>
+              </div>
+            ) : (
+              <span className="size-8 shrink-0" aria-hidden />
+            )}
           </div>
         ) : null}
 
@@ -733,8 +781,8 @@ export function CustomerProfile({
             Loading profile…
           </p>
         ) : (
-          <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)]">
-            <aside className="min-h-0 overflow-y-auto border-b border-[#e8edf2] bg-white px-4 py-3 lg:border-b-0 lg:border-r lg:px-5 lg:py-4">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[380px_minmax(0,1fr)]">
+            <aside className="shrink-0 border-b border-[#e8edf2] bg-white px-4 py-3 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-5 lg:py-4">
               {variant === "page" ? (
                 <Link
                   href="/agent/leads"
@@ -743,12 +791,12 @@ export function CustomerProfile({
                   ← Leads
                 </Link>
               ) : null}
-              <div className="flex flex-col items-center text-center">
-                <div className="flex size-[72px] items-center justify-center rounded-full bg-[#334155] text-xl font-bold text-white">
+              <div className="flex flex-col items-stretch text-left lg:items-center lg:text-center">
+                <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[#334155] text-xl font-bold text-white sm:size-[72px]">
                   {initials || "?"}
                 </div>
                 <div className="relative z-10 mt-3 flex max-w-full items-center justify-center gap-1.5 px-1">
-                  <h2 className="min-w-0 break-words text-[26px] font-bold leading-tight text-[#1e2a38]">
+                  <h2 className="min-w-0 break-words text-center text-[22px] font-bold leading-tight text-[#1e2a38] sm:text-[26px]">
                     {name}
                   </h2>
                   {data.lead.customer ? (
@@ -760,17 +808,19 @@ export function CustomerProfile({
                     />
                   ) : null}
                 </div>
-                {data.hot.isOnline ? (
-                  <span className="mt-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
-                    ONLINE
-                  </span>
-                ) : null}
-                {data.hot.binge ? (
-                  <span className="mt-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
-                    BINGE · {data.hot.distinctListings24h} homes
-                  </span>
-                ) : null}
-                <div className="mt-2 flex w-full min-w-0 flex-col items-stretch gap-1.5 px-1">
+                <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5">
+                  {data.hot.isOnline ? (
+                    <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                      ONLINE
+                    </span>
+                  ) : null}
+                  {data.hot.binge ? (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
+                      BINGE · {data.hot.distinctListings24h} homes
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-2 flex w-full min-w-0 flex-col items-stretch gap-2.5 px-0">
                   {editingContact === "phone" ? (
                     <ContactEditRow
                       type="tel"
@@ -865,7 +915,7 @@ export function CustomerProfile({
                 </div>
               ) : null}
 
-              <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[13px] font-medium text-[#1e2a38]">
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[13px] font-medium text-[#1e2a38]">
                 <button
                   type="button"
                   disabled={!data.lead.customer || profileFlagPending !== null}
@@ -881,16 +931,20 @@ export function CustomerProfile({
                       : "Buyer profile inactive — click to activate"
                   }
                   onClick={() => void toggleProfileFlag("buyer")}
-                  className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition hover:bg-[#f1f5f9] disabled:cursor-default disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-md px-1.5 py-1 transition hover:bg-[#f1f5f9] disabled:cursor-default disabled:opacity-50"
                 >
                   <span
                     className={cn(
-                      "flex size-3.5 items-center justify-center rounded-full border-2",
+                      "inline-flex size-4 shrink-0 items-center justify-center rounded-full border-2",
                       data.lead.customer?.isBuyer
-                        ? "border-[#0d9488] bg-[#0d9488]"
+                        ? "border-[#0d9488] bg-white"
                         : "border-[#cbd5e1] bg-white",
                     )}
-                  />
+                  >
+                    {data.lead.customer?.isBuyer ? (
+                      <span className="size-2 rounded-full bg-[#0d9488]" />
+                    ) : null}
+                  </span>
                   Buyer
                 </button>
                 <button
@@ -908,16 +962,20 @@ export function CustomerProfile({
                       : "Seller profile inactive — click to activate"
                   }
                   onClick={() => void toggleProfileFlag("seller")}
-                  className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition hover:bg-[#f1f5f9] disabled:cursor-default disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-md px-1.5 py-1 transition hover:bg-[#f1f5f9] disabled:cursor-default disabled:opacity-50"
                 >
                   <span
                     className={cn(
-                      "flex size-3.5 items-center justify-center rounded-full border-2",
+                      "inline-flex size-4 shrink-0 items-center justify-center rounded-full border-2",
                       data.lead.customer?.isSeller
-                        ? "border-[#0d9488] bg-[#0d9488]"
+                        ? "border-[#0d9488] bg-white"
                         : "border-[#cbd5e1] bg-white",
                     )}
-                  />
+                  >
+                    {data.lead.customer?.isSeller ? (
+                      <span className="size-2 rounded-full bg-[#0d9488]" />
+                    ) : null}
+                  </span>
                   Seller
                 </button>
               </div>
@@ -979,9 +1037,9 @@ export function CustomerProfile({
                 </div>
               ) : null}
 
-              {data.permissions.canSeeTeamLeads ? (
-                <div className="mt-3 flex items-center justify-center gap-2 text-[12px] text-[#64748b]">
-                  <span>Assign</span>
+              {data.permissions.canAssignLeads ? (
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-[12px] text-[#64748b]">
+                  <span className="font-semibold text-[#475569]">Assign</span>
                   <ReassignSelect
                     leadId={leadId}
                     members={data.teamMembers}
@@ -989,7 +1047,16 @@ export function CustomerProfile({
                     onUpdated={onUpdated}
                   />
                 </div>
-              ) : null}
+              ) : (
+                <p className="mt-3 text-center text-[13px] font-medium text-[#1e2a38]">
+                  Assigned to:{" "}
+                  <span className="font-semibold">
+                    {data.lead.assignedAgent?.name ||
+                      data.lead.assignedAgent?.email ||
+                      "Unassigned"}
+                  </span>
+                </p>
+              )}
 
               {data.nextReminder ? (
                 <div className="mt-3 rounded-md border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-left text-[12px]">
@@ -1014,7 +1081,7 @@ export function CustomerProfile({
                     {data.hot.isOnline ? " · Online" : ""}
                   </span>
                 </div>
-                <div className="grid grid-cols-4 gap-2 text-center">
+                <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
                   {[
                     ["Views", data.hot.views24h],
                     ["Saves", data.stats.saves],
@@ -1031,11 +1098,11 @@ export function CustomerProfile({
                 </div>
               </div>
 
-              <div className="mt-3 rounded-md bg-[#e0f2fe] px-3 py-4">
+              <div className="mt-3 isolate rounded-md bg-[#e0f2fe] px-3 py-4">
                 <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-[#0369a1]">
                   Email information
                 </p>
-                <div className="flex justify-around">
+                <div className="flex items-start justify-between gap-2">
                   <RingStat label="Email Clicks" value={clickRate} tone="#0ea5e9" />
                   <RingStat label="Email Opens" value={openRate} tone="#0284c7" />
                   <RingStat label="Alert Opens" value={alertRate} tone="#0369a1" />
@@ -1043,7 +1110,7 @@ export function CustomerProfile({
               </div>
             </aside>
 
-            <section className="flex min-h-0 min-w-0 flex-col bg-[#f7f9fb]">
+            <section className="flex min-w-0 flex-col bg-[#f7f9fb] lg:min-h-0 lg:overflow-hidden">
               <form
                 onSubmit={submitNote}
                 className="shrink-0 border-b border-[#e8edf2] bg-white px-4 py-2.5"
@@ -1122,15 +1189,15 @@ export function CustomerProfile({
                 ) : null}
               </form>
 
-              <div className="shrink-0 overflow-x-auto border-b border-[#e8edf2] bg-white px-2">
-                <div className="flex min-w-max gap-0.5">
+              <div className="shrink-0 border-b border-[#e8edf2] bg-white">
+                <div className="flex gap-0.5 overflow-x-auto overscroll-x-contain px-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {TABS.map((item) => (
                     <button
                       key={item.id}
                       type="button"
                       onClick={() => setTab(item.id)}
                       className={cn(
-                        "relative px-3 py-2.5 text-[12px] font-semibold transition sm:px-3.5",
+                        "relative shrink-0 px-3 py-2.5 text-[12px] font-semibold transition sm:px-3.5",
                         tab === item.id
                           ? "text-[#2b6cb0]"
                           : "text-[#64748b] hover:text-[#1e2a38]",
@@ -1145,7 +1212,7 @@ export function CustomerProfile({
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+              <div className="min-h-0 space-y-4 px-4 py-4 sm:px-5 lg:flex-1 lg:overflow-y-auto">
                 {tab === "activity" ? (
                   <Panel title="Activity timeline">
                     <p className="mb-3 text-[11px] text-[#94a3b8]">

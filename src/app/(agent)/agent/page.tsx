@@ -51,14 +51,18 @@ function ModuleCard({
     <Link
       href={href}
       className={cn(
-        "flex items-center gap-3 rounded-md border border-[#d8dee6] border-l-4 bg-white px-3 py-3 shadow-[0_1px_2px_rgb(15_23_42/0.04)] transition hover:bg-[#f8fafc]",
+        "flex items-center gap-3 rounded-xl border border-[#d8dee6] border-l-4 bg-white px-3.5 py-3.5 shadow-[0_1px_2px_rgb(15_23_42/0.04)] transition active:scale-[0.99] hover:bg-[#f8fafc] sm:rounded-md sm:px-3 sm:py-3",
         tones[tone],
       )}
     >
-      <Icon className="size-5 shrink-0" strokeWidth={1.9} />
+      <Icon className="size-5 shrink-0 sm:size-5" strokeWidth={1.9} />
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold text-[#1e2a38]">{title}</p>
-        <p className="text-[12px] text-[#5b6775]">{subtitle}</p>
+        <p className="text-[14px] font-semibold text-[#1e2a38] sm:text-[13px]">
+          {title}
+        </p>
+        <p className="text-[13px] font-medium text-[#5b6775] sm:text-[12px] sm:font-normal">
+          {subtitle}
+        </p>
       </div>
       <ChevronRight className="size-4 shrink-0 text-[#94a3b8]" />
     </Link>
@@ -268,30 +272,144 @@ export default async function AgentLaunchpadPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-[#1e2a38]">
+        <h1 className="text-[22px] font-bold leading-tight tracking-tight text-[#1e2a38] sm:text-[28px]">
           {dateLabel}
         </h1>
-        <p className="mt-1 text-[13px] font-medium text-[#2b6cb0]">
-          Today you have {dueTodayCount} Reminders Due and {dueTodayCount} Tasks
-          Due.
+        <p className="mt-1 text-[13px] font-semibold text-[#2b6cb0] sm:font-medium">
+          Today you have{" "}
+          <span className="tabular-nums">{dueTodayCount}</span> Reminders Due
+          and <span className="tabular-nums">{dueTodayCount}</span> Tasks Due.
         </p>
       </div>
 
+      {/* Mobile priority strip — critical counts always visible */}
+      <div className="grid grid-cols-2 gap-2 xl:hidden">
+        <Link
+          href={`/agent/leads?view=${deskView}&pipeline=NEW_LEAD`}
+          className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-3 py-3 active:scale-[0.99]"
+        >
+          <p className="text-[11px] font-bold uppercase tracking-wide text-[#e11d48]">
+            Call new
+          </p>
+          <p className="mt-1 text-[28px] font-bold leading-none tabular-nums text-[#9f1239]">
+            {newLeadCount}
+          </p>
+        </Link>
+        <Link
+          href="/agent/tasks"
+          className="rounded-xl border border-[#fde68a] bg-[#fffbeb] px-3 py-3 active:scale-[0.99]"
+        >
+          <p className="text-[11px] font-bold uppercase tracking-wide text-[#d97706]">
+            Due today
+          </p>
+          <p className="mt-1 text-[28px] font-bold leading-none tabular-nums text-[#92400e]">
+            {dueTodayCount}
+          </p>
+        </Link>
+        <Link
+          href={`/agent/leads?view=${deskView}&pipeline=FOLLOW_UP`}
+          className="rounded-xl border border-[#e2e8f0] bg-white px-3 py-3 active:scale-[0.99]"
+        >
+          <p className="text-[11px] font-bold uppercase tracking-wide text-[#64748b]">
+            Follow up
+          </p>
+          <p className="mt-1 text-[28px] font-bold leading-none tabular-nums text-[#1e2a38]">
+            {contactedCount}
+          </p>
+        </Link>
+        <Link
+          href="/agent/leads?view=mine"
+          className="rounded-xl border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-3 active:scale-[0.99]"
+        >
+          <p className="text-[11px] font-bold uppercase tracking-wide text-canopy">
+            Hot now
+          </p>
+          <p className="mt-1 text-[28px] font-bold leading-none tabular-nums text-canopy-deep">
+            {
+              recentLeads.filter((l) => (hotMap.get(l.id)?.hotness ?? 0) >= 60)
+                .length
+            }
+          </p>
+        </Link>
+      </div>
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-4">
+        {/* Quick Modules — first on mobile so actions stay above the fold */}
+        <aside className="order-1 space-y-3 xl:order-2">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-[15px] font-semibold text-[#1e2a38]">
+              Quick Modules
+            </h2>
+            <div className="flex gap-2 text-[11px] font-bold uppercase tracking-wide">
+              <Link href="/agent" className="text-canopy hover:underline">
+                Refresh
+              </Link>
+              <Link href="/agent/leads" className="text-[#2b6cb0] hover:underline">
+                Edit
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-1">
+            <ModuleCard
+              href={`/agent/leads?view=${deskView}&pipeline=NEW_LEAD`}
+              title="Call New Leads"
+              subtitle={`${newLeadCount} new leads to call`}
+              tone="danger"
+              icon={Phone}
+            />
+            <ModuleCard
+              href={`/agent/leads?view=${deskView}&pipeline=FOLLOW_UP`}
+              title="Contacted Leads"
+              subtitle={`${contactedCount} clients to follow up with`}
+              tone="danger"
+              icon={UserRound}
+            />
+            <ModuleCard
+              href="/agent/tasks"
+              title="Due Reminders"
+              subtitle={`${overdueTaskCount} Overdue | ${dueTodayCount} Due Today`}
+              tone="warn"
+              icon={Bell}
+            />
+            <ModuleCard
+              href="/agent/tasks"
+              title="Due Tasks"
+              subtitle={`${overdueTaskCount} Overdue | ${dueTodayCount} Due Today`}
+              tone="warn"
+              icon={CheckCircle2}
+            />
+            <ModuleCard
+              href="/agent/leads"
+              title="Statistics"
+              subtitle={`Response Time · ${avgResponseMins} mins`}
+              tone="info"
+              icon={Timer}
+            />
+            <ModuleCard
+              href="/agent/leads?view=mine"
+              title="Hot pipeline"
+              subtitle={`${recentLeads.filter((l) => (hotMap.get(l.id)?.hotness ?? 0) >= 60).length} leads scoring hot right now`}
+              tone="ok"
+              icon={TrendingUp}
+            />
+          </div>
+        </aside>
+
+        <div className="order-2 space-y-4 xl:order-1">
           {/* To Do */}
-          <section className="overflow-hidden rounded-md border border-[#d8dee6] border-t-[3px] border-t-[#f59e0b] bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)]">
+          <section className="overflow-hidden rounded-xl border border-[#d8dee6] border-t-[3px] border-t-[#f59e0b] bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)] sm:rounded-md">
             <div className="flex items-center justify-between gap-3 border-b border-[#e8edf2] px-4 py-3">
-              <div className="flex items-center gap-2">
-                <ClipboardList className="size-4 text-[#5b6775]" />
+              <div className="flex min-w-0 items-center gap-2">
+                <ClipboardList className="size-4 shrink-0 text-[#5b6775]" />
                 <h2 className="text-[15px] font-semibold text-[#1e2a38]">To Do</h2>
-                <span className="text-[12px] text-[#94a3b8]">
+                <span className="truncate text-[12px] text-[#94a3b8]">
                   Showing {todoRows.length} of {openTasks.length}
                 </span>
               </div>
               <Link
                 href="/agent/tasks"
-                className="rounded border border-[#c7d2e0] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-[#2b6cb0] hover:bg-[#f1f5f9]"
+                className="shrink-0 rounded border border-[#c7d2e0] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-[#2b6cb0] hover:bg-[#f1f5f9]"
               >
                 See all
               </Link>
@@ -313,13 +431,13 @@ export default async function AgentLaunchpadPage() {
                       <div className="min-w-0 flex-1">
                         {task.lead ? (
                           <Link
-                            href={`/agent/leads/${task.lead.id}`}
-                            className="text-[13px] font-semibold text-[#2b6cb0] hover:underline"
+                            href={`/agent/leads?lead=${task.lead.id}`}
+                            className="text-[14px] font-semibold text-[#2b6cb0] hover:underline sm:text-[13px]"
                           >
                             {task.title}
                           </Link>
                         ) : (
-                          <p className="text-[13px] font-semibold text-[#1e2a38]">
+                          <p className="text-[14px] font-semibold text-[#1e2a38] sm:text-[13px]">
                             {task.title}
                           </p>
                         )}
@@ -350,7 +468,7 @@ export default async function AgentLaunchpadPage() {
                         ) : null}
                         <p
                           className={cn(
-                            "mt-1 text-[12px] font-medium",
+                            "mt-1 text-[12px] font-semibold sm:font-medium",
                             overdue ? "text-[#e11d48]" : "text-[#64748b]",
                           )}
                         >
@@ -398,68 +516,6 @@ export default async function AgentLaunchpadPage() {
             })}
           />
         </div>
-
-        {/* Quick Modules */}
-        <aside className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-[15px] font-semibold text-[#1e2a38]">
-              Quick Modules
-            </h2>
-            <div className="flex gap-2 text-[11px] font-bold uppercase tracking-wide">
-              <Link href="/agent" className="text-canopy hover:underline">
-                Refresh
-              </Link>
-              <Link href="/agent/leads" className="text-[#2b6cb0] hover:underline">
-                Edit
-              </Link>
-            </div>
-          </div>
-
-          <div className="space-y-2.5">
-            <ModuleCard
-              href={`/agent/leads?view=${deskView}&pipeline=NEW_LEAD`}
-              title="Call New Leads"
-              subtitle={`${newLeadCount} new leads to call`}
-              tone="danger"
-              icon={Phone}
-            />
-            <ModuleCard
-              href={`/agent/leads?view=${deskView}&pipeline=FOLLOW_UP`}
-              title="Contacted Leads"
-              subtitle={`${contactedCount} clients to follow up with`}
-              tone="danger"
-              icon={UserRound}
-            />
-            <ModuleCard
-              href="/agent/tasks"
-              title="Due Reminders"
-              subtitle={`${overdueTaskCount} Overdue | ${dueTodayCount} Due Today`}
-              tone="warn"
-              icon={Bell}
-            />
-            <ModuleCard
-              href="/agent/tasks"
-              title="Due Tasks"
-              subtitle={`${overdueTaskCount} Overdue | ${dueTodayCount} Due Today`}
-              tone="warn"
-              icon={CheckCircle2}
-            />
-            <ModuleCard
-              href="/agent/leads"
-              title="Statistics"
-              subtitle={`Response Time · ${avgResponseMins} mins`}
-              tone="info"
-              icon={Timer}
-            />
-            <ModuleCard
-              href="/agent/leads?view=mine"
-              title="Hot pipeline"
-              subtitle={`${recentLeads.filter((l) => (hotMap.get(l.id)?.hotness ?? 0) >= 60).length} leads scoring hot right now`}
-              tone="ok"
-              icon={TrendingUp}
-            />
-          </div>
-        </aside>
       </div>
     </div>
   );

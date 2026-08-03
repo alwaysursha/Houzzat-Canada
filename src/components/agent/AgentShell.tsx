@@ -11,24 +11,85 @@ import {
   Inbox,
   LayoutDashboard,
   LineChart,
+  Menu,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
   Users,
   UsersRound,
+  X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const NAV = [
   { href: "/agent", label: "Launchpad", icon: LayoutDashboard, exact: true },
   { href: "/agent/leads", label: "Leads", icon: Users },
   { href: "/agent/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/agent/appointments", label: "Calendar", icon: CalendarDays },
-  { href: "/agent/inbox", label: "Communications", icon: Inbox },
+  { href: "/agent/inbox", label: "Comms", icon: Inbox, fullLabel: "Communications" },
   { href: "/agent/cma", label: "CMA", icon: LineChart },
   { href: "/agent/team", label: "Team", icon: UsersRound },
   { href: "/search", label: "Properties", icon: Search },
 ] as const;
+
+const MOBILE_TABS = [
+  NAV[0],
+  NAV[1],
+  NAV[2],
+  NAV[3],
+] as const;
+
+function navActive(pathname: string, href: string, exact?: boolean) {
+  if (exact) return pathname === href;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function NavLinks({
+  pathname,
+  collapsed,
+  onNavigate,
+  compactLabels = false,
+}: {
+  pathname: string;
+  collapsed?: boolean;
+  onNavigate?: () => void;
+  compactLabels?: boolean;
+}) {
+  return (
+    <>
+      {NAV.map((item) => {
+        const exact = "exact" in item && item.exact;
+        const active = navActive(pathname, item.href, exact);
+        const Icon = item.icon;
+        const label =
+          compactLabels && "fullLabel" in item && item.fullLabel
+            ? item.fullLabel
+            : item.label;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            title={label}
+            onClick={onNavigate}
+            className={cn(
+              "relative flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-[13px] font-medium transition",
+              active
+                ? "bg-[#2b6cb0] text-white"
+                : "text-white/70 hover:bg-white/8 hover:text-white",
+              collapsed && "justify-center px-2",
+            )}
+          >
+            {active ? (
+              <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-[#7dd3fc]" />
+            ) : null}
+            <Icon className="size-4 shrink-0" strokeWidth={1.85} />
+            {!collapsed ? <span>{label}</span> : null}
+          </Link>
+        );
+      })}
+    </>
+  );
+}
 
 export function AgentShell({
   email,
@@ -43,13 +104,31 @@ export function AgentShell({
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const isProfilePage = /^\/agent\/leads\/[^/]+$/.test(pathname);
+  const moreActive = NAV.slice(4).some((item) =>
+    navActive(pathname, item.href),
+  );
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileOpen]);
 
   return (
     <div className="flex min-h-dvh bg-[#eef1f4] text-ink">
+      {/* Desktop sidebar */}
       <aside
         className={cn(
-          "sticky top-0 flex h-dvh shrink-0 flex-col bg-[#1e2a38] text-white transition-[width] duration-200",
+          "sticky top-0 z-40 hidden h-dvh shrink-0 flex-col bg-[#1e2a38] text-white transition-[width] duration-200 lg:flex",
           collapsed ? "w-[4.25rem]" : "w-[13.5rem]",
         )}
       >
@@ -87,34 +166,7 @@ export function AgentShell({
         </div>
 
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
-          {NAV.map((item) => {
-            const exact = "exact" in item && item.exact;
-            const active = exact
-              ? pathname === item.href
-              : pathname === item.href ||
-                pathname.startsWith(`${item.href}/`);
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={item.label}
-                className={cn(
-                  "relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition",
-                  active
-                    ? "bg-[#2b6cb0] text-white"
-                    : "text-white/70 hover:bg-white/8 hover:text-white",
-                  collapsed && "justify-center px-2",
-                )}
-              >
-                {active ? (
-                  <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-[#7dd3fc]" />
-                ) : null}
-                <Icon className="size-4 shrink-0" strokeWidth={1.85} />
-                {!collapsed ? <span>{item.label}</span> : null}
-              </Link>
-            );
-          })}
+          <NavLinks pathname={pathname} collapsed={collapsed} />
         </nav>
 
         <div className="border-t border-white/10 p-3">
@@ -127,16 +179,159 @@ export function AgentShell({
         </div>
       </aside>
 
-      <main
+      {/* Mobile drawer */}
+      <div
         className={cn(
-          "min-w-0 flex-1",
-          isProfilePage
-            ? "overflow-hidden p-0"
-            : "px-3 py-4 sm:px-5 sm:py-5 lg:px-6",
+          "fixed inset-0 z-[70] lg:hidden",
+          mobileOpen ? "pointer-events-auto" : "pointer-events-none",
         )}
+        aria-hidden={!mobileOpen}
       >
-        {children}
-      </main>
+        <button
+          type="button"
+          className={cn(
+            "absolute inset-0 bg-[#0b1220]/55 backdrop-blur-[2px] transition-opacity duration-200",
+            mobileOpen ? "opacity-100" : "opacity-0",
+          )}
+          aria-label="Close menu"
+          onClick={() => setMobileOpen(false)}
+        />
+        <aside
+          className={cn(
+            "absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col bg-[#1e2a38] text-white shadow-[8px_0_40px_rgb(0_0_0/0.35)] transition-transform duration-300 ease-out",
+            mobileOpen ? "translate-x-0" : "-translate-x-full",
+          )}
+        >
+          <div className="flex items-center gap-2 border-b border-white/10 px-4 py-4">
+            <Link
+              href="/agent"
+              className="min-w-0 flex-1"
+              onClick={() => setMobileOpen(false)}
+            >
+              <p className="truncate font-display text-lg tracking-tight text-white">
+                {SITE_NAME}
+              </p>
+              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
+                {orgName}
+              </p>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              className="rounded-md p-2 text-white/60 hover:bg-white/10 hover:text-white"
+              aria-label="Close menu"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
+          <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
+            <NavLinks
+              pathname={pathname}
+              onNavigate={() => setMobileOpen(false)}
+              compactLabels
+            />
+          </nav>
+          <div className="border-t border-white/10 p-4">
+            <p className="mb-2 truncate text-[11px] text-white/45">
+              {membershipRole} · {email}
+            </p>
+            <SignOutButton className="text-xs text-white/70 hover:text-white" />
+          </div>
+        </aside>
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile top bar */}
+        <header className="sticky top-0 z-50 flex items-center gap-3 border-b border-[#d8dee6] bg-[#1e2a38] px-3 py-2.5 text-white lg:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="rounded-lg p-2 text-white/80 transition active:bg-white/10"
+            aria-label="Open menu"
+          >
+            <Menu className="size-5" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-display text-base tracking-tight">
+              {SITE_NAME}
+            </p>
+            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-white/45">
+              {orgName}
+            </p>
+          </div>
+          <Link
+            href="/agent/leads?view=mine&pipeline=NEW_LEAD"
+            className="rounded-lg bg-[#e11d48] px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm active:scale-[0.98]"
+          >
+            Call new
+          </Link>
+        </header>
+
+        <main
+          className={cn(
+            "min-w-0 flex-1",
+            isProfilePage
+              ? "overflow-hidden p-0"
+              : "px-3 py-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-5 lg:px-6 lg:pb-5",
+            isProfilePage &&
+              "pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0",
+          )}
+        >
+          {children}
+        </main>
+
+        {/* Mobile bottom tabs */}
+        <nav
+          className="fixed inset-x-0 bottom-0 z-50 border-t border-[#d8dee6] bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+          aria-label="Primary"
+        >
+          <div className="grid grid-cols-5">
+            {MOBILE_TABS.map((item) => {
+              const exact = "exact" in item && item.exact;
+              const active = navActive(pathname, item.href, exact);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition",
+                    active ? "text-[#2b6cb0]" : "text-[#64748b]",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex size-8 items-center justify-center rounded-xl transition",
+                      active ? "bg-[#2b6cb0]/12" : "bg-transparent",
+                    )}
+                  >
+                    <Icon className="size-[18px]" strokeWidth={active ? 2.2 : 1.85} />
+                  </span>
+                  {item.label}
+                </Link>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className={cn(
+                "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition",
+                moreActive || mobileOpen ? "text-[#2b6cb0]" : "text-[#64748b]",
+              )}
+            >
+              <span
+                className={cn(
+                  "flex size-8 items-center justify-center rounded-xl transition",
+                  moreActive || mobileOpen ? "bg-[#2b6cb0]/12" : "bg-transparent",
+                )}
+              >
+                <Menu className="size-[18px]" strokeWidth={moreActive ? 2.2 : 1.85} />
+              </span>
+              More
+            </button>
+          </div>
+        </nav>
+      </div>
     </div>
   );
 }

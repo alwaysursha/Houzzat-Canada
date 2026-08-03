@@ -131,7 +131,7 @@ export async function PATCH(request: Request) {
     data.organizationId = lead.organizationId ?? ctx.organizationId;
   }
   if (parsed.data.assignedAgentId !== undefined) {
-    if (!ctx.canSeeTeamLeads) {
+    if (!ctx.isPlatformAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     data.assignedAgentId = parsed.data.assignedAgentId;

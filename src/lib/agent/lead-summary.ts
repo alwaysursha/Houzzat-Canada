@@ -60,6 +60,8 @@ export type LeadSummary = {
   };
   permissions: {
     canSeeTeamLeads: boolean;
+    /** Platform Admin only — assign / unassign / pond. */
+    canAssignLeads: boolean;
     canClaim: boolean;
     consented: boolean;
   };
@@ -436,6 +438,7 @@ export async function loadLeadSummary(
     },
     permissions: {
       canSeeTeamLeads: ctx.canSeeTeamLeads,
+      canAssignLeads: ctx.isPlatformAdmin,
       canClaim: !lead.assignedAgentId,
       consented,
     },

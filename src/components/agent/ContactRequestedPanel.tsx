@@ -217,7 +217,7 @@ export function ContactRequestedPanel({
   return (
     <section
       ref={rootRef}
-      className="rounded-md border border-[#d8dee6] bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)]"
+      className="rounded-xl border border-[#d8dee6] bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)] sm:rounded-md"
     >
       <div className="relative z-20 flex flex-wrap items-center justify-between gap-3 border-b border-[#e8edf2] px-4 py-3">
         <div className="flex items-center gap-2">
@@ -352,7 +352,9 @@ export function ContactRequestedPanel({
       {openLeadId ? (
         <LeadQuickPopup
           leadId={openLeadId}
+          leadIds={filtered.map((l) => l.id)}
           onClose={() => setOpenLeadId(null)}
+          onNavigate={setOpenLeadId}
         />
       ) : null}
     </section>
