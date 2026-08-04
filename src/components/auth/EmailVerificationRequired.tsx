@@ -45,7 +45,8 @@ export function EmailVerificationRequired({
     let cancelled = false;
     void fetch("/api/account/access")
       .then((res) => res.json())
-      .then((json: { email?: string | null }) => {
+      .then((data: unknown) => {
+        const json = data as { email?: string | null };
         if (!cancelled && json.email) setEmail(json.email);
       })
       .catch(() => undefined);
