@@ -56,7 +56,7 @@ function AuthModalPanel() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="auth-modal-title"
-        className="relative z-10 flex h-[min(78vh,38rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
+        className="relative z-10 flex max-h-[min(78vh,38rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
       >
         <h2 id="auth-modal-title" className="sr-only">
           {mode === "sign-in" ? "Sign in" : "Sign up"}
@@ -114,10 +114,6 @@ function AuthModalPanel() {
               onSwitchMode={() => setMode("sign-in")}
             />
           )}
-          <p className="mt-5 text-xs text-ink/45">
-            Demo: admin@houzzat.ca / agent@houzzat.ca / customer@houzzat.ca —
-            password123
-          </p>
         </div>
       </div>
     </div>

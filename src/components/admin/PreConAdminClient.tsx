@@ -84,8 +84,8 @@ export function PreConAdminClient() {
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-2">
-      <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
+    <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
+      <div className="space-y-3 rounded-2xl border border-line bg-surface p-4 sm:p-5">
         <h2 className="font-semibold">
           {editId ? "Edit project" : "Add pre-construction project"}
         </h2>

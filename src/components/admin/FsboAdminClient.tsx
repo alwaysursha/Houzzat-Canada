@@ -122,7 +122,7 @@ export function FsboAdminClient() {
 
   return (
     <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-      <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
+      <div className="space-y-3 rounded-2xl border border-line bg-surface p-4 sm:p-5">
         <h2 className="font-semibold">Create free owner listing</h2>
         <p className="text-xs text-ink/55">
           Waives payment and can publish immediately without Stripe.

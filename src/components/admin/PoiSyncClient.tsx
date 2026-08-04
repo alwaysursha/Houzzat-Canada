@@ -36,7 +36,7 @@ export function PoiSyncClient() {
   }
 
   return (
-    <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+    <div className="space-y-4 rounded-2xl border border-line bg-surface p-4 sm:p-5">
       <div>
         <h2 className="font-semibold text-ink">POI catalogue</h2>
         <p className="mt-1 text-sm text-ink/60">

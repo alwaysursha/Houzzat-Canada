@@ -76,7 +76,9 @@ export function AdCampaignDetailClient({
           <Link href="/admin/ads" className="text-sm font-medium text-canopy">
             ← Ad Studio
           </Link>
-          <h1 className="mt-2 font-display text-4xl text-ink">{campaign.name}</h1>
+          <h1 className="mt-2 font-display text-3xl tracking-tight text-ink sm:text-4xl">
+            {campaign.name}
+          </h1>
           <p className="mt-1 text-sm text-ink/55">
             {campaign.goal} · {campaign.platform} · {campaign.status} ·{" "}
             {campaign._count.leads} attributed leads

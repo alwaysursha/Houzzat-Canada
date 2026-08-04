@@ -49,7 +49,9 @@ export default async function AdminVisitorsPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-4xl text-ink">Visitors</h1>
+          <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">
+            Visitors
+          </h1>
           <p className="mt-2 text-sm text-ink/60">
             Who’s online now, plus the full site journey timeline.
           </p>
@@ -121,7 +123,7 @@ export default async function AdminVisitorsPage() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-line/80 bg-surface p-5">
+        <section className="rounded-2xl border border-line/80 bg-surface p-4 sm:p-5">
           <h2 className="font-display text-xl text-ink">Recent sessions</h2>
           <ul className="mt-4 divide-y divide-line/70">
             {recentSessions.map((s) => (
@@ -150,7 +152,7 @@ export default async function AdminVisitorsPage() {
           </ul>
         </section>
 
-        <section className="rounded-2xl border border-line/80 bg-surface p-5">
+        <section className="rounded-2xl border border-line/80 bg-surface p-4 sm:p-5">
           <h2 className="font-display text-xl text-ink">Site journey feed</h2>
           <p className="mt-1 text-sm text-ink/50">
             Latest events across all visitors.

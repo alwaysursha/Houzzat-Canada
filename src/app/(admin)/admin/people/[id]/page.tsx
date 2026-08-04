@@ -56,7 +56,7 @@ export default async function AdminPersonDetailPage({
         >
           ← People
         </Link>
-        <h1 className="mt-2 font-display text-4xl text-ink">
+        <h1 className="mt-2 font-display text-3xl tracking-tight text-ink sm:text-4xl">
           {user.name || user.email}
         </h1>
         <p className="mt-1 text-sm text-ink/55">{user.email}</p>

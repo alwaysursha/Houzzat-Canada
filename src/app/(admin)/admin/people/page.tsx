@@ -70,7 +70,9 @@ export default async function AdminPeoplePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-4xl text-ink">People</h1>
+        <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">
+          People
+        </h1>
         <p className="mt-2 text-sm text-ink/60">
           Buyers, sellers, agents, and admins — roles, lead assignment,
           suspension, and journeys.

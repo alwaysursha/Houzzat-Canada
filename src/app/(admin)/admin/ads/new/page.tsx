@@ -32,7 +32,7 @@ export default async function AdminAdsNewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-4xl text-ink">New campaign</h1>
+        <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">New campaign</h1>
         <p className="mt-2 text-sm text-ink/60">
           Pick a source and goal — we’ll generate platform copy, image crop
           hints, and a tracked destination URL.

@@ -980,15 +980,6 @@ export function CustomerProfile({
                 </button>
               </div>
 
-              {data.savedSearchLabel || data.lead.listingMls ? (
-                <p className="mt-3 text-center text-[12px] leading-relaxed text-[#5b6775]">
-                  {data.savedSearchLabel}
-                  {data.lead.listingMls
-                    ? `${data.savedSearchLabel ? " · " : ""}MLS ${data.lead.listingMls}`
-                    : ""}
-                </p>
-              ) : null}
-
               {data.lead.inquiryTag ? (
                 <div className="mt-3 flex justify-center">
                   <span
@@ -1057,6 +1048,57 @@ export function CustomerProfile({
                   </span>
                 </p>
               )}
+
+              {data.buyerIntent ? (
+                <div className="mt-3 overflow-hidden rounded-xl border border-[#c7e0d4] bg-[linear-gradient(165deg,#f3faf6_0%,#ffffff_55%)] text-left shadow-[0_1px_0_rgb(15_118_90/0.06)]">
+                  <div className="flex items-start justify-between gap-2 border-b border-[#d8ebe2] px-3.5 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#0f766e]">
+                        Looking for
+                      </p>
+                      {data.buyerIntent.headline ? (
+                        <p className="mt-0.5 truncate text-[13px] font-semibold text-[#134e4a]">
+                          {data.buyerIntent.headline}
+                        </p>
+                      ) : null}
+                    </div>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                        data.buyerIntent.source === "saved"
+                          ? "bg-[#0f766e]/12 text-[#0f766e]"
+                          : data.buyerIntent.source === "thin"
+                            ? "bg-[#f1f5f9] text-[#64748b]"
+                            : "bg-[#ecfdf5] text-[#047857]",
+                      )}
+                    >
+                      {data.buyerIntent.sourceLabel}
+                    </span>
+                  </div>
+                  <div className="px-3.5 py-3">
+                    <p className="text-[12.5px] leading-relaxed text-[#334155]">
+                      {data.buyerIntent.summary}
+                    </p>
+                    {data.buyerIntent.chips.length > 0 ? (
+                      <div className="mt-2.5 flex flex-wrap gap-1.5">
+                        {data.buyerIntent.chips.map((chip) => (
+                          <span
+                            key={chip}
+                            className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#0f766e] ring-1 ring-[#c7e0d4]"
+                          >
+                            {chip}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {data.lead.listingMls ? (
+                      <p className="mt-2 text-[11px] font-medium text-[#64748b]">
+                        Inquiry listing · MLS {data.lead.listingMls}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
 
               {data.nextReminder ? (
                 <div className="mt-3 rounded-md border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-left text-[12px]">

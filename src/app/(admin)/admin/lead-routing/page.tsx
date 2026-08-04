@@ -15,7 +15,7 @@ export default async function AdminLeadRoutingPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-4xl text-ink">Lead routing</h1>
+        <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">Lead routing</h1>
         <p className="mt-2 max-w-2xl text-sm text-ink/60">
           Auto-assign new buyer and seller leads. With one agent, every lead
           goes to them. With multiple agents, set percentage weights. Seller

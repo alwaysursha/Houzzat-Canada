@@ -122,7 +122,7 @@ export function LeadRoutingAdminClient({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-line bg-white p-5 shadow-sm">
+      <section className="rounded-2xl border border-line bg-white p-4 shadow-sm sm:p-5">
         <h2 className="font-display text-xl text-ink">Listing agent</h2>
         <p className="mt-1 text-sm text-ink/60">
           Default assignee for seller leads when seller mode is “Listing
@@ -144,7 +144,7 @@ export function LeadRoutingAdminClient({
         </select>
       </section>
 
-      <section className="rounded-2xl border border-line bg-white p-5 shadow-sm">
+      <section className="rounded-2xl border border-line bg-white p-4 shadow-sm sm:p-5">
         <h2 className="font-display text-xl text-ink">Seller lead assignment</h2>
         <p className="mt-1 text-sm text-ink/60">
           Choose listing-agent routing, or percentage routing like buyers.
@@ -207,15 +207,17 @@ export function LeadRoutingAdminClient({
         }
       />
 
-      <div className="flex justify-end">
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => void save()}
-          className="rounded-lg bg-canopy px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-canopy-deep disabled:opacity-60"
-        >
-          {pending ? "Saving…" : "Save routing"}
-        </button>
+      <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-10 -mx-3 border-t border-line/70 bg-surface/95 px-3 py-3 backdrop-blur-md sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none lg:bottom-auto">
+        <div className="flex justify-stretch sm:justify-end">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => void save()}
+            className="w-full rounded-xl bg-canopy px-5 py-3 text-sm font-semibold text-white transition hover:bg-canopy-deep disabled:opacity-60 sm:w-auto sm:rounded-lg sm:py-2.5"
+          >
+            {pending ? "Saving…" : "Save routing"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -243,11 +245,11 @@ function WeightEditor({
   return (
     <section
       className={cn(
-        "rounded-2xl border border-line bg-white p-5 shadow-sm",
+        "rounded-2xl border border-line bg-white p-4 shadow-sm sm:p-5",
         disabled && "opacity-60",
       )}
     >
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div>
           <h2 className="font-display text-xl text-ink">{title}</h2>
           <p className="mt-1 text-sm text-ink/60">{hint}</p>

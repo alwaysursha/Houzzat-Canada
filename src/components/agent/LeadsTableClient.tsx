@@ -865,7 +865,7 @@ export function LeadsTableClient({
               <th className="w-10 px-1 py-2.5" />
               <SortHeader label="Pipeline" column="pipeline" />
               <SortHeader label="Registered" column="registered" />
-              <SortHeader label="Price/City" column="priceCity" />
+              <SortHeader label="City" column="priceCity" />
               <SortHeader label="Timeframe" column="timeframe" />
               <SortHeader label="Last Login" column="lastLogin" />
               <SortHeader label="Last Touch" column="lastTouch" />

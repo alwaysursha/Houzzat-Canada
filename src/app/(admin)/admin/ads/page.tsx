@@ -11,9 +11,11 @@ export default async function AdminAdsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-display text-4xl text-ink">Ad Studio</h1>
+          <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">
+            Ad Studio
+          </h1>
           <p className="mt-2 max-w-2xl text-sm text-ink/60">
             Brand-grade Meta + Google creative packs, tracked UTMs, and export
             kits. Live ad-account publish comes after creative quality is locked
@@ -22,7 +24,7 @@ export default async function AdminAdsPage() {
         </div>
         <Link
           href="/admin/ads/new"
-          className="rounded-lg bg-canopy px-4 py-2 text-sm font-semibold text-white hover:bg-canopy-deep"
+          className="inline-flex items-center justify-center rounded-xl bg-canopy px-4 py-2.5 text-sm font-semibold text-white hover:bg-canopy-deep sm:shrink-0"
         >
           New campaign
         </Link>
@@ -39,7 +41,7 @@ export default async function AdminAdsPage() {
             <li key={c.id}>
               <Link
                 href={`/admin/ads/${c.id}`}
-                className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 transition hover:bg-mist/60"
+                className="flex flex-col gap-2 px-4 py-4 transition hover:bg-mist/60 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:px-5"
               >
                 <div>
                   <p className="font-semibold text-ink">{c.name}</p>

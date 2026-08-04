@@ -30,14 +30,14 @@ function StatCard({
     return (
       <Link
         href={href}
-        className="block rounded-2xl border border-line/80 bg-surface/90 p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] transition hover:border-canopy/35"
+        className="block rounded-2xl border border-line/80 bg-surface/90 p-4 shadow-[0_1px_0_rgb(20_32_28/0.03)] transition hover:border-canopy/35 sm:p-5"
       >
         {inner}
       </Link>
     );
   }
   return (
-    <div className="rounded-2xl border border-line/80 bg-surface/90 p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)]">
+    <div className="rounded-2xl border border-line/80 bg-surface/90 p-4 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-5">
       {inner}
     </div>
   );
@@ -89,13 +89,15 @@ export default async function AdminPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-4xl text-ink">Command center</h1>
+        <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">
+          Command center
+        </h1>
         <p className="mt-2 max-w-2xl text-sm text-ink/60">
           Live pulse across people, visitors, leads, and growth systems.
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
         <StatCard
           label="Online now"
           value={liveVisitors}
@@ -123,8 +125,8 @@ export default async function AdminPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-line/80 bg-surface/90 p-5 lg:col-span-2">
-          <div className="flex items-center justify-between gap-3">
+        <div className="rounded-2xl border border-line/80 bg-surface/90 p-4 sm:p-5 lg:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-xl text-ink">Live journey feed</h2>
             <Link
               href="/admin/visitors"

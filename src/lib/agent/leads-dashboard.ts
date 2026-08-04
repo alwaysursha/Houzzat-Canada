@@ -38,7 +38,17 @@ export async function loadLeadsDashboardEngagement(
     return { byCustomer, taskCountByLead };
   }
 
-  const [saves, searches, inquiries, logins, phones] = await Promise.all([
+  const since = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+
+  const [
+    saves,
+    searches,
+    inquiries,
+    logins,
+    phones,
+    searchEvents,
+    listingViews,
+  ] = await Promise.all([
     prisma.savedListing.groupBy({
       by: ["userId"],
       where: { userId: { in: uniqueCustomers } },
@@ -80,6 +90,25 @@ export async function loadLeadsDashboardEngagement(
         caslConsentAt: true,
       },
     }),
+    prisma.activityEvent.findMany({
+      where: {
+        userId: { in: uniqueCustomers },
+        type: "SEARCH",
+        createdAt: { gte: since },
+      },
+      orderBy: { createdAt: "desc" },
+      take: Math.min(uniqueCustomers.length * 8, 400),
+      select: { userId: true, path: true },
+    }),
+    prisma.listingView.findMany({
+      where: {
+        userId: { in: uniqueCustomers },
+        createdAt: { gte: since },
+      },
+      orderBy: { createdAt: "desc" },
+      take: Math.min(uniqueCustomers.length * 10, 500),
+      select: { userId: true, mlsNumber: true },
+    }),
   ]);
 
   const saveMap = new Map(saves.map((s) => [s.userId, s._count._all]));
@@ -107,6 +136,52 @@ export async function loadLeadsDashboardEngagement(
     }
   }
 
+  // Fill gaps from SEARCH URL filters (most buyers never click Save Search).
+  for (const ev of searchEvents) {
+    if (!ev.userId) continue;
+    if (priceCity.get(ev.userId)) continue;
+    const label = formatPriceCityFromSearchPath(ev.path);
+    if (label) priceCity.set(ev.userId, label);
+  }
+
+  // Last resort: city/price from homes they actually opened.
+  const missingForViews = uniqueCustomers.filter((id) => !priceCity.get(id));
+  if (missingForViews.length > 0 && listingViews.length > 0) {
+    const missingSet = new Set(missingForViews);
+    const mlsByUser = new Map<string, string[]>();
+    for (const row of listingViews) {
+      if (!row.userId || !missingSet.has(row.userId)) continue;
+      const list = mlsByUser.get(row.userId) ?? [];
+      if (list.length >= 8) continue;
+      if (!list.includes(row.mlsNumber)) list.push(row.mlsNumber);
+      mlsByUser.set(row.userId, list);
+    }
+    const allMls = [...new Set([...mlsByUser.values()].flat())];
+    if (allMls.length > 0) {
+      const listings = await prisma.listing.findMany({
+        where: { mlsNumber: { in: allMls } },
+        select: {
+          mlsNumber: true,
+          city: true,
+          community: true,
+        },
+      });
+      const byMls = new Map(listings.map((l) => [l.mlsNumber, l]));
+      for (const [userId, mlsList] of mlsByUser) {
+        if (priceCity.get(userId)) continue;
+        const cities: string[] = [];
+        for (const mls of mlsList) {
+          const listing = byMls.get(mls);
+          if (!listing) continue;
+          if (listing.city) cities.push(listing.city);
+          else if (listing.community) cities.push(listing.community);
+        }
+        const place = modeString(cities);
+        if (place) priceCity.set(userId, place);
+      }
+    }
+  }
+
   for (const id of uniqueCustomers) {
     const contact = phoneMap.get(id);
     byCustomer.set(id, {
@@ -124,34 +199,88 @@ export async function loadLeadsDashboardEngagement(
   return { byCustomer, taskCountByLead };
 }
 
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.round(value);
+  }
+  if (typeof value === "string") {
+    const n = Number(value.replace(/[^0-9.]/g, ""));
+    if (Number.isFinite(n) && n > 0) return Math.round(n);
+  }
+  return null;
+}
+
+function asPlace(query: Record<string, unknown>): string | null {
+  const city = typeof query.city === "string" ? query.city.trim() : "";
+  if (city) return city;
+  const cities =
+    typeof query.cities === "string"
+      ? query.cities
+          .split(",")
+          .map((c) => c.trim())
+          .filter(Boolean)
+      : [];
+  if (cities[0]) return cities[0];
+  const community =
+    typeof query.community === "string" ? query.community.trim() : "";
+  return community || null;
+}
+
+function formatPriceCityParts(
+  place: string | null,
+  _min: number | null,
+  _max: number | null,
+): string | null {
+  // Leads table shows place only — budget/beds live on the profile "Looking for" card.
+  return place;
+}
+
 function formatPriceCity(query: unknown): string | null {
   const q = query as Record<string, unknown> | null;
   if (!q || typeof q !== "object") return null;
-  const city = typeof q.city === "string" ? q.city : null;
-  const min =
-    typeof q.priceMin === "number"
-      ? q.priceMin
-      : typeof q.minPrice === "number"
-        ? q.minPrice
-        : null;
-  const max =
-    typeof q.priceMax === "number"
-      ? q.priceMax
-      : typeof q.maxPrice === "number"
-        ? q.maxPrice
-        : null;
+  return formatPriceCityParts(
+    asPlace(q),
+    asNumber(q.priceMin ?? q.minPrice),
+    asNumber(q.priceMax ?? q.maxPrice),
+  );
+}
 
-  const price =
-    min != null && max != null
-      ? `$ ${Math.round(min / 1000)}k - ${Math.round(max / 1000)}k`
-      : max != null
-        ? `$ ${Math.round(max / 1000)}k`
-        : min != null
-          ? `$ ${Math.round(min / 1000)}k+`
-          : null;
+function formatPriceCityFromSearchPath(path: string | null): string | null {
+  if (!path || !path.startsWith("/search")) return null;
+  try {
+    const url = new URL(path, "https://houzzat.local");
+    const p = url.searchParams;
+    const place =
+      p.get("city")?.trim() ||
+      p.get("cities")?.split(",")[0]?.trim() ||
+      p.get("community")?.trim() ||
+      p.get("communities")?.split(",")[0]?.trim() ||
+      p.get("q")?.trim() ||
+      null;
+    return formatPriceCityParts(
+      place,
+      asNumber(p.get("minPrice")),
+      asNumber(p.get("maxPrice")),
+    );
+  } catch {
+    return null;
+  }
+}
 
-  if (price && city) return `${price} ${city}`;
-  if (price) return price;
-  if (city) return city;
-  return null;
+function modeString(values: string[]): string | null {
+  const counts = new Map<string, number>();
+  for (const v of values) {
+    const key = v.trim();
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestN = 0;
+  for (const [k, n] of counts) {
+    if (n > bestN) {
+      best = k;
+      bestN = n;
+    }
+  }
+  return best;
 }

@@ -75,7 +75,9 @@ export default async function AdminAnalyticsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-4xl text-ink">Analytics</h1>
+        <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">
+          Analytics
+        </h1>
         <p className="mt-2 text-sm text-ink/60">
           Funnel + journey telemetry. SLA remains directional until first-touch
           timestamps are stored on every lead.

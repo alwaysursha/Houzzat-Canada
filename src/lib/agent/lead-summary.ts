@@ -1,10 +1,12 @@
 import type { LeadStatus } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
 import { canAccessLead } from "@/lib/agent";
+import { loadBuyerIntent } from "@/lib/agent/buyer-intent";
 import { loadCustomerTimeline } from "@/lib/agent/customer-timeline";
 import { computeHotness } from "@/lib/agent/hotness";
 import type { InquiryTagValue } from "@/lib/agent/inquiry-tag";
 import { prisma } from "@/lib/prisma";
+import type { BuyerIntentSnapshot } from "@/lib/agent/buyer-intent";
 
 export type LeadSummary = {
   lead: {
@@ -69,6 +71,8 @@ export type LeadSummary = {
     user: { id: string; name: string | null; email: string };
   }>;
   savedSearchLabel: string | null;
+  /** Inferred or saved “what they’re looking for” for agents. */
+  buyerIntent: BuyerIntentSnapshot;
   savedListings: Array<{ id: string; mlsNumber: string }>;
   savedSearches: Array<{
     id: string;
@@ -378,6 +382,12 @@ export async function loadLeadSummary(
     if (primarySearch) savedSearchLabel = searchLabel(primarySearch);
   }
 
+  const buyerIntent = await loadBuyerIntent({
+    customerId: lead.customerId,
+    customerName: lead.customer?.name ?? null,
+    savedSearches,
+  });
+
   const openTasks = lead.tasks.filter((t) => t.status === "OPEN");
   const lastTouch = lead.firstRespondedAt || lead.updatedAt;
   const consented = Boolean(
@@ -444,6 +454,7 @@ export async function loadLeadSummary(
     },
     teamMembers: teamMembers.map((m) => ({ user: m.user })),
     savedSearchLabel,
+    buyerIntent,
     savedListings,
     savedSearches,
     propertyMonitors,
