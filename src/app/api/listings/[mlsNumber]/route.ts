@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  buildAddressListingHistoryRows,
+  findSiblingListingsAtAddress,
+} from "@/lib/listings/address-history";
 import { getListingProvider } from "@/lib/listings/provider";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
 
@@ -13,7 +17,10 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
   }
 
-  const gallery = await resolveListingGalleryPhotos(listing);
+  const [gallery, addressSiblings] = await Promise.all([
+    resolveListingGalleryPhotos(listing),
+    findSiblingListingsAtAddress(listing),
+  ]);
   const media =
     gallery.length > 0
       ? gallery.map((photo, index) => ({
@@ -25,8 +32,22 @@ export async function GET(_request: Request, { params }: Params) {
         }))
       : listing.media;
 
+  const historyRows = buildAddressListingHistoryRows({
+    mlsNumber: listing.mlsNumber,
+    listPrice: listing.listPrice,
+    listedAt: listing.listedAt,
+    updatedAtMls: listing.updatedAtMls,
+    soldAt: listing.soldAt,
+    soldPrice: listing.soldPrice,
+    status: listing.status,
+    transactionType: listing.transactionType,
+    history: listing.history,
+    siblings: addressSiblings,
+  });
+
   return NextResponse.json({
     listing: { ...listing, media },
+    historyRows,
     provider: provider.name,
   });
 }

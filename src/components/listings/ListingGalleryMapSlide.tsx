@@ -11,7 +11,6 @@ import {
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Bath, Bed, Maximize2, X } from "lucide-react";
@@ -28,6 +27,7 @@ import type { ListingCard } from "@/lib/listings/types";
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
 import { cn } from "@/lib/utils";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
+import { useClientAccess } from "@/hooks/use-client-access";
 
 type MapFilter = "sold" | "unlisted";
 type NearbyPin = ListingCard & { distanceKm: number; filter: MapFilter };
@@ -329,7 +329,7 @@ export function ListingGalleryMapSlide({
   onMapGestureStart?: () => void;
   onMapGestureEnd?: () => void;
 }) {
-  const { status: sessionStatus } = useSession();
+  const access = useClientAccess();
   const { openAuth } = useAuthModal();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -353,7 +353,8 @@ export function ListingGalleryMapSlide({
   const closedStatus = isLease ? "LEASED" : "SOLD";
   const closedTxn: "SALE" | "LEASE" = isLease ? "LEASE" : "SALE";
   const closedLabel = isLease ? "Nearby leased" : "Nearby sold";
-  const signedIn = sessionStatus === "authenticated";
+  const hasClientAccess = access.hasClientAccess;
+  const needsEmailVerification = access.needsEmailVerification;
   const loading = loadingSold || loadingUnlisted;
 
   useEffect(() => {
@@ -361,12 +362,12 @@ export function ListingGalleryMapSlide({
   }, []);
 
   useEffect(() => {
-    if (signedIn) return;
+    if (hasClientAccess) return;
     setShowSold(false);
     setShowUnlisted(false);
     setPins([]);
     setHover(null);
-  }, [signedIn]);
+  }, [hasClientAccess]);
 
   const clearFilterMarkers = useCallback(() => {
     filterMarkersRef.current.forEach((marker) => marker.remove());
@@ -381,16 +382,23 @@ export function ListingGalleryMapSlide({
     showHoverRef.current = showHover;
   }, [showHover]);
 
+  function gateCallbackUrl() {
+    return typeof window !== "undefined" ? window.location.pathname : "/";
+  }
+
   function requireClientOrToggle(
     filter: MapFilter,
     currentlyOn: boolean,
     setOn: (next: boolean) => void,
   ) {
-    if (!signedIn) {
+    if (needsEmailVerification) {
+      window.location.href = `/auth/verify-email?callbackUrl=${encodeURIComponent(gateCallbackUrl())}`;
+      return;
+    }
+    if (!hasClientAccess) {
       openAuth({
-        mode: "sign-up",
-        callbackUrl:
-          typeof window !== "undefined" ? window.location.pathname : null,
+        mode: "sign-in",
+        callbackUrl: gateCallbackUrl(),
       });
       return;
     }
@@ -475,7 +483,7 @@ export function ListingGalleryMapSlide({
 
   // Fetch sold / leased nearby when toggled on.
   useEffect(() => {
-    if (!signedIn || !showSold) {
+    if (!hasClientAccess || !showSold) {
       if (!showSold) setLoadingSold(false);
       return;
     }
@@ -497,14 +505,19 @@ export function ListingGalleryMapSlide({
         const data = (await res.json()) as {
           items?: ListingCard[];
           requiresAuth?: boolean;
+          requiresEmailVerification?: boolean;
         };
         if (cancelled) return;
+        if (res.status === 403 || data.requiresEmailVerification) {
+          setShowSold(false);
+          window.location.href = `/auth/verify-email?callbackUrl=${encodeURIComponent(gateCallbackUrl())}`;
+          return;
+        }
         if (res.status === 401 || data.requiresAuth) {
           setShowSold(false);
           openAuth({
-            mode: "sign-up",
-            callbackUrl:
-              typeof window !== "undefined" ? window.location.pathname : null,
+            mode: "sign-in",
+            callbackUrl: gateCallbackUrl(),
           });
           return;
         }
@@ -530,7 +543,7 @@ export function ListingGalleryMapSlide({
       cancelled = true;
     };
   }, [
-    signedIn,
+    hasClientAccess,
     showSold,
     lat,
     lng,
@@ -542,7 +555,7 @@ export function ListingGalleryMapSlide({
 
   // Unlisted = previously for-sale, now unavailable (SALE + Sus/Ter/Exp).
   useEffect(() => {
-    if (!signedIn || !showUnlisted) {
+    if (!hasClientAccess || !showUnlisted) {
       if (!showUnlisted) setLoadingUnlisted(false);
       return;
     }
@@ -564,14 +577,19 @@ export function ListingGalleryMapSlide({
         const data = (await res.json()) as {
           items?: ListingCard[];
           requiresAuth?: boolean;
+          requiresEmailVerification?: boolean;
         };
         if (cancelled) return;
+        if (res.status === 403 || data.requiresEmailVerification) {
+          setShowUnlisted(false);
+          window.location.href = `/auth/verify-email?callbackUrl=${encodeURIComponent(gateCallbackUrl())}`;
+          return;
+        }
         if (res.status === 401 || data.requiresAuth) {
           setShowUnlisted(false);
           openAuth({
-            mode: "sign-up",
-            callbackUrl:
-              typeof window !== "undefined" ? window.location.pathname : null,
+            mode: "sign-in",
+            callbackUrl: gateCallbackUrl(),
           });
           return;
         }
@@ -596,7 +614,7 @@ export function ListingGalleryMapSlide({
     return () => {
       cancelled = true;
     };
-  }, [signedIn, showUnlisted, lat, lng, mlsNumber, openAuth]);
+  }, [hasClientAccess, showUnlisted, lat, lng, mlsNumber, openAuth]);
 
   // Sync filter markers + fit bounds.
   useEffect(() => {

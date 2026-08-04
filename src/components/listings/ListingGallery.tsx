@@ -444,25 +444,9 @@ export function ListingGallery({
         >
           {photos.map((photo, i) => {
             const isVerifySlide = verifyGateIndex != null && i === verifyGateIndex;
-            return (
-            <button
-              key={photo.id}
-              type="button"
-              onClick={() => {
-                if (detailsLocked) return;
-                if (isVerifySlide) {
-                  openViewerAt(i);
-                  return;
-                }
-                openStack();
-              }}
-              className="relative min-h-[52vh] w-full min-w-full shrink-0 snap-center snap-always overflow-hidden bg-mist text-left"
-              aria-label={
-                isVerifySlide
-                  ? "Verify email to see more photos"
-                  : `Photo ${i + 1} of ${count}. Open gallery.`
-              }
-            >
+            const slideClassName =
+              "relative min-h-[52vh] w-full min-w-full shrink-0 snap-center snap-always overflow-hidden bg-mist text-left";
+            const photoEl = (
               <ListingPhoto
                 src={photo.url}
                 alt={photo.alt ?? `${addressLabel} photo ${i + 1}`}
@@ -474,25 +458,44 @@ export function ListingGallery({
                 )}
                 sizes="100vw"
               />
-              {isVerifySlide ? (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-ink/50 px-4 backdrop-blur-[2px]">
-                  <div
-                    className="w-full max-w-[22rem] rounded-3xl border border-white/60 bg-white p-7 shadow-[0_28px_60px_-24px_rgba(0,0,0,0.55)] sm:max-w-md sm:p-9"
-                    onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => event.stopPropagation()}
-                  >
-                    <EmailVerificationRequired
-                      variant="featured"
-                      icon="lock"
-                      eyebrow="Restricted photos"
-                      callbackUrl={lockCallback}
-                      title="Verify email first"
-                      body="Confirm your email to unlock the rest of this gallery."
-                    />
+            );
+            // Verify slide hosts EmailVerificationRequired (buttons) — cannot nest in <button>.
+            if (isVerifySlide) {
+              return (
+                <div
+                  key={photo.id}
+                  className={slideClassName}
+                  aria-label="Email verification required to see more photos"
+                >
+                  {photoEl}
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-ink/50 px-4 backdrop-blur-[2px]">
+                    <div className="w-full max-w-[22rem] rounded-3xl border border-white/60 bg-white p-7 shadow-[0_28px_60px_-24px_rgba(0,0,0,0.55)] sm:max-w-md sm:p-9">
+                      <EmailVerificationRequired
+                        variant="featured"
+                        icon="lock"
+                        eyebrow="Restricted photos"
+                        callbackUrl={lockCallback}
+                        title="Email verification required"
+                        body="Verify your email to unlock the rest of this gallery."
+                      />
+                    </div>
                   </div>
                 </div>
-              ) : null}
-            </button>
+              );
+            }
+            return (
+              <button
+                key={photo.id}
+                type="button"
+                onClick={() => {
+                  if (detailsLocked) return;
+                  openStack();
+                }}
+                className={slideClassName}
+                aria-label={`Photo ${i + 1} of ${count}. Open gallery.`}
+              >
+                {photoEl}
+              </button>
             );
           })}
 

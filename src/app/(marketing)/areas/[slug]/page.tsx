@@ -10,7 +10,7 @@ import { formatPrice } from "@/lib/listings/constants";
 import { getMarketPulse } from "@/lib/market/pulse";
 import { findNearbyPois, summarizePoiCounts } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
-import { hasVowAccess } from "@/lib/vow";
+import { resolveClientAccess } from "@/lib/account-access";
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -49,10 +49,11 @@ export default async function AreaPage({ params }: Params) {
   const user = session?.user?.email
     ? await prisma.user.findUnique({
         where: { email: session.user.email },
-        select: { id: true },
+        select: { id: true, emailVerified: true, createdAt: true },
       })
     : null;
-  const vowOk = hasVowAccess(user);
+  const access = resolveClientAccess(user);
+  const vowOk = access.hasClientAccess;
 
   const [nearby, narrative, pulse] = await Promise.all([
     findNearbyPois({ lat, lng, radiusKm: 3, limitPerType: 10 }),
@@ -119,6 +120,7 @@ export default async function AreaPage({ params }: Params) {
       <MarketPulseCard
         pulse={pulse}
         vowCallbackPath={`/areas/${place.slug}`}
+        needsEmailVerification={access.needsEmailVerification}
       />
 
       <NearbyAmenities lat={lat} lng={lng} pois={nearby} />

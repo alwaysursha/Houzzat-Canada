@@ -40,6 +40,123 @@ export function needsEmailVerification(
   return Boolean(user?.id) && !hasFullClientAccess(user);
 }
 
+/**
+ * Product access kind for marketing / search / listing gates.
+ * Keep visitor “Sign in required” separate from locked “Email verification required”.
+ */
+export type ClientAccessKind =
+  | "visitor"
+  | "unverified_unlocked"
+  | "unverified_locked"
+  | "verified_unlocked";
+
+export type ResolvedClientAccess = {
+  kind: ClientAccessKind;
+  /** Has a customer session (any of the three signed-in kinds). */
+  isSignedIn: boolean;
+  /** May view VOW / sold / full client data. */
+  hasClientAccess: boolean;
+  /** Signed in, past grace, still unverified — show verify gates only. */
+  needsEmailVerification: boolean;
+};
+
+export function resolveClientAccess(
+  user: AccessUser | null | undefined,
+): ResolvedClientAccess {
+  if (!user?.id) {
+    return {
+      kind: "visitor",
+      isSignedIn: false,
+      hasClientAccess: false,
+      needsEmailVerification: false,
+    };
+  }
+  if (isEmailVerified(user)) {
+    return {
+      kind: "verified_unlocked",
+      isSignedIn: true,
+      hasClientAccess: true,
+      needsEmailVerification: false,
+    };
+  }
+  if (hasVerifyGrace(user)) {
+    return {
+      kind: "unverified_unlocked",
+      isSignedIn: true,
+      hasClientAccess: true,
+      needsEmailVerification: false,
+    };
+  }
+  return {
+    kind: "unverified_locked",
+    isSignedIn: true,
+    hasClientAccess: false,
+    needsEmailVerification: true,
+  };
+}
+
+export type AccessGateSurface =
+  | "sold"
+  | "details"
+  | "insights"
+  | "photos"
+  | "history"
+  | "search"
+  | "generic";
+
+export type AccessGateCopy = {
+  /** Short title for overlays / chips */
+  title: string;
+  body: string;
+  /** Locked CTA intent — never mix visitor with verify. */
+  cta: "sign-in" | "verify";
+  /** Short chip / button label */
+  ctaLabel: string;
+};
+
+/** Site-wide gate copy. Visitor ≠ unverified locked. */
+export function accessGateCopy(
+  kind: ClientAccessKind | ResolvedClientAccess,
+  surface: AccessGateSurface = "generic",
+): AccessGateCopy {
+  const resolved = typeof kind === "string" ? kind : kind.kind;
+
+  if (resolved === "unverified_locked") {
+    const bodies: Record<AccessGateSurface, string> = {
+      sold: "Verify your email to unlock sold and leased prices.",
+      details: "Verify your email to unlock full listing details.",
+      insights: "Verify your email to unlock market insights and estimates.",
+      photos: "Verify your email to unlock the full photo gallery.",
+      history: "Verify your email to unlock listing history.",
+      search: "Verify your email to unlock sold and restricted search results.",
+      generic: "Verify your email to restore full client access.",
+    };
+    return {
+      title: "Email verification required",
+      body: bodies[surface],
+      cta: "verify",
+      ctaLabel: "Verify email",
+    };
+  }
+
+  // Visitor (and any non-client fallback that isn't verify-locked)
+  const bodies: Record<AccessGateSurface, string> = {
+    sold: "Sign in as a Houzzat client to view sold and leased prices.",
+    details: "Sign in as a Houzzat client to view full listing details.",
+    insights: "Sign in as a Houzzat client to unlock market insights.",
+    photos: "Sign in as a Houzzat client to view the full gallery.",
+    history: "Sign in as a Houzzat client to view listing history.",
+    search: "Sign in as a Houzzat client to view sold and restricted results.",
+    generic: "Sign in as a Houzzat client to unlock this information.",
+  };
+  return {
+    title: "Sign in required",
+    body: bodies[surface],
+    cta: "sign-in",
+    ctaLabel: "Sign in",
+  };
+}
+
 /** CRM / agent badge for account email lock state. */
 export type AccountAccessStatus =
   | "verified_unlocked"

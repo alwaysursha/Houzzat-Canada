@@ -39,6 +39,7 @@ import type {
 } from "@/lib/listings/types";
 import { persistHomeLocationIfEmpty } from "@/lib/account/persist-home-location";
 import { Input } from "@/components/ui/input";
+import { useClientAccess } from "@/hooks/use-client-access";
 import { cn } from "@/lib/utils";
 
 /** Listings always above Google addresses / around-area. */
@@ -172,6 +173,7 @@ export function AddressAutocomplete({
 }) {
   const router = useRouter();
   const isMobile = useIsMobileSearch();
+  const access = useClientAccess();
   const sessionToken = useId().replace(/:/g, "");
   const listboxId = useId();
   const [query, setQuery] = useState(initialQuery);
@@ -181,8 +183,17 @@ export function AddressAutocomplete({
   const [sheetEntered, setSheetEntered] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [suggestions, setSuggestions] = useState<AutocompleteSuggestion[]>([]);
+  /** From autocomplete API — preferred over client hook for locked row copy. */
+  const [apiNeedsEmailVerification, setApiNeedsEmailVerification] = useState<
+    boolean | null
+  >(null);
   const [recent, setRecent] = useState<LocalRecentSearch[]>([]);
   const [loading, setLoading] = useState(false);
+  /** Inactive listing teasers — visitor vs verify-locked stay separate. */
+  const restrictedListingLabel =
+    (apiNeedsEmailVerification ?? access.needsEmailVerification)
+      ? "Email verification required"
+      : "Sign in required";
   const [geoError, setGeoError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [resolvedNearHref, setResolvedNearHref] = useState<string | null>(null);
@@ -369,6 +380,7 @@ export function AddressAutocomplete({
 
         const listingData = (await listingRes.json()) as {
           suggestions: AutocompleteSuggestion[];
+          needsEmailVerification?: boolean;
         };
         const inventory = listingData.suggestions ?? [];
         const invCount = inventoryHitCount(inventory);
@@ -385,6 +397,9 @@ export function AddressAutocomplete({
           return;
         }
 
+        if (typeof listingData.needsEmailVerification === "boolean") {
+          setApiNeedsEmailVerification(listingData.needsEmailVerification);
+        }
         setSuggestions(listingRows);
         setActiveIndex(-1);
 
@@ -553,7 +568,11 @@ export function AddressAutocomplete({
       const res = await fetch(`/api/listings/autocomplete?${params}`);
       const data = (await res.json()) as {
         suggestions: AutocompleteSuggestion[];
+        needsEmailVerification?: boolean;
       };
+      if (typeof data.needsEmailVerification === "boolean") {
+        setApiNeedsEmailVerification(data.needsEmailVerification);
+      }
       setSuggestions(data.suggestions ?? []);
       setOpen(true);
       setActiveIndex(-1);
@@ -989,6 +1008,7 @@ export function AddressAutocomplete({
                         <SuggestionListingRow
                           suggestion={suggestion}
                           large={large}
+                          restrictedLabel={restrictedListingLabel}
                         />
                       ) : (
                         <SuggestionSimpleRow
@@ -1302,9 +1322,12 @@ function SuggestionSimpleRow({
 function SuggestionListingRow({
   suggestion,
   large = false,
+  restrictedLabel = "Sign in required",
 }: {
   suggestion: AutocompleteSuggestion;
   large?: boolean;
+  /** Visitor: Sign in required. Verify-locked: Email verification required. */
+  restrictedLabel?: string;
 }) {
   const statusLabel = suggestion.status
     ? listingStatusLabel(
@@ -1312,7 +1335,7 @@ function SuggestionListingRow({
         suggestion.transactionType ?? "SALE",
       )
     : null;
-  const lockedGuest =
+  const detailsLocked =
     suggestion.status &&
     suggestion.status !== "ACTIVE" &&
     suggestion.listPrice == null;
@@ -1344,14 +1367,14 @@ function SuggestionListingRow({
       <span className="min-w-0 flex-1">
         <span className="flex items-start justify-between gap-3">
           <span className="min-w-0">
-            {lockedGuest ? (
+            {detailsLocked ? (
               <span
                 className={cn(
                   "block font-semibold text-ink/55",
                   large ? "text-lg" : "text-[15px]",
                 )}
               >
-                Sign in for details
+                {restrictedLabel}
               </span>
             ) : suggestion.listPrice != null ? (
               <span

@@ -12,6 +12,8 @@ export function SearchResultsPane({
   onFocus,
   onOpenListing,
   signedIn,
+  hasClientAccess = signedIn,
+  needsEmailVerification = false,
   pending,
   view,
   emptyHint,
@@ -20,11 +22,17 @@ export function SearchResultsPane({
   activeMls: string | null;
   onFocus: (mls: string) => void;
   onOpenListing?: (mls: string) => void;
+  /** Session present (save / account CTAs). */
   signedIn: boolean;
+  /** VOW unlock — false for visitors and verify-locked. */
+  hasClientAccess?: boolean;
+  /** Past grace, unverified — sold gates say verify, not sign-in. */
+  needsEmailVerification?: boolean;
   pending: boolean;
   view: SearchViewMode;
   emptyHint: string;
 }) {
+  const lockReason = needsEmailVerification ? "verify" : "sign-in";
   const grid = view === "cards";
   const compact = view === "split";
 
@@ -51,6 +59,7 @@ export function SearchResultsPane({
                   ? () => onOpenListing(listing.mlsNumber)
                   : undefined
               }
+              lockReason={lockReason}
             />
           ) : (
             <ListingCard
@@ -64,8 +73,9 @@ export function SearchResultsPane({
                   : undefined
               }
               lockedPreview={
-                !signedIn && listing.status !== "ACTIVE" ? "link" : false
+                !hasClientAccess && listing.status !== "ACTIVE" ? "link" : false
               }
+              lockReason={lockReason}
             />
           ),
         )}

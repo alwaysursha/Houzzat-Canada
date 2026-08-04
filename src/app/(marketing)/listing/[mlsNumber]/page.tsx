@@ -27,7 +27,11 @@ import { HouzzatInsights } from "@/components/listings/insights/HouzzatInsights"
 import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import { slugifyPlace } from "@/lib/geo/distance";
-import { buildListingHistoryRows, getLatestListPriceChange } from "@/lib/listings/history-rows";
+import {
+  buildAddressListingHistoryRows,
+  findSiblingListingsAtAddress,
+} from "@/lib/listings/address-history";
+import { getLatestListPriceChange } from "@/lib/listings/history-rows";
 import {
   formatListingTiming,
   formatListPrice,
@@ -57,7 +61,11 @@ import { findNearbyPois } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { lookupAndUpsertOnDemand } from "@/lib/proptx/on-demand-lookup";
-import { needsEmailVerification } from "@/lib/account-access";
+import {
+  accessGateCopy,
+  needsEmailVerification,
+  resolveClientAccess,
+} from "@/lib/account-access";
 import { hasVowAccess } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import { getExpertWhatsAppNumber } from "@/lib/whatsapp";
@@ -176,8 +184,11 @@ export default async function ListingDetailPage({ params }: Params) {
     );
   }
 
-  const vowOk = hasVowAccess(user);
-  const verifyLocked = needsEmailVerification(user);
+  const access = resolveClientAccess(user);
+  const vowOk = access.hasClientAccess;
+  const verifyLocked = access.needsEmailVerification;
+  const gateDetails = accessGateCopy(access, "details");
+  const gateSold = accessGateCopy(access, "sold");
 
   // Full gallery from PropTx MediaURLs (DB only keeps cover for search/cards).
   // Locked accounts get 5 free photos + a 6th locked "verify" slide.
@@ -227,7 +238,7 @@ export default async function ListingDetailPage({ params }: Params) {
     // Non-blocking analytics — never fail the listing page.
   }
 
-  const [nearby, pulse, popularCities] = await Promise.all([
+  const [nearby, pulse, popularCities, addressSiblings] = await Promise.all([
     findNearbyPois({
       lat: listing.lat,
       lng: listing.lng,
@@ -240,6 +251,7 @@ export default async function ListingDetailPage({ params }: Params) {
       includeSold: vowOk,
     }),
     getPopularCities(12),
+    findSiblingListingsAtAddress(listing),
   ]);
   const insights = await buildListingInsights({
     listing,
@@ -251,6 +263,18 @@ export default async function ListingDetailPage({ params }: Params) {
   const upcomingOpenHouses = listing.openHouses.filter(
     (oh) => oh.endsAt.getTime() >= Date.now(),
   );
+  const listingHistoryRows = buildAddressListingHistoryRows({
+    mlsNumber: listing.mlsNumber,
+    listPrice: listing.listPrice,
+    listedAt: listing.listedAt,
+    updatedAtMls: listing.updatedAtMls,
+    soldAt: listing.soldAt,
+    soldPrice: listing.soldPrice,
+    status: listing.status,
+    transactionType: listing.transactionType,
+    history: listing.history,
+    siblings: addressSiblings,
+  });
 
   const showClosedPrice =
     isClosedListingStatus(listing.status) && listing.soldPrice != null;
@@ -480,6 +504,7 @@ export default async function ListingDetailPage({ params }: Params) {
                       transactionType={listing.transactionType}
                       tone="light"
                       locked={!canSeeRestricted}
+                      lockReason={verifyLocked ? "verify" : "sign-in"}
                       size="lg"
                     />
                   ) : detailsLocked ? (
@@ -489,7 +514,7 @@ export default async function ListingDetailPage({ params }: Params) {
                           ? "Rent:"
                           : "Listed:"}
                       </span>
-                      Sign in to see price
+                      {gateSold.title}
                     </p>
                   ) : (
                     <>
@@ -545,7 +570,7 @@ export default async function ListingDetailPage({ params }: Params) {
                   {" · "}
                   {listing.city}
                   {" · "}
-                  Sign in for full details
+                  {gateDetails.title}
                 </p>
               ) : listing.community ? (
                 <p className="mt-1 text-sm text-ink/55">
@@ -687,17 +712,7 @@ export default async function ListingDetailPage({ params }: Params) {
             canSeeRestricted={canSeeRestricted}
             signedIn={Boolean(user)}
             needsEmailVerification={verifyLocked}
-            rows={buildListingHistoryRows({
-              mlsNumber: listing.mlsNumber,
-              listPrice: listing.listPrice,
-              listedAt: listing.listedAt,
-              updatedAtMls: listing.updatedAtMls,
-              soldAt: listing.soldAt,
-              soldPrice: listing.soldPrice,
-              status: listing.status,
-              transactionType: listing.transactionType,
-              history: listing.history,
-            })}
+            rows={listingHistoryRows}
           />
 
           <HouzzatInsights

@@ -3,7 +3,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
 import {
   ArrowLeft,
   Bath,
@@ -13,6 +12,7 @@ import {
   Maximize2,
   X,
 } from "lucide-react";
+import { useClientAccess } from "@/hooks/use-client-access";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { ListingCardActions } from "@/components/listings/ListingCardActions";
 import { ListingFactsPanel } from "@/components/listings/ListingFactsPanel";
@@ -37,6 +37,7 @@ import {
   propertyTypeLabel,
   segmentLabel,
 } from "@/lib/listings/constants";
+import type { HistoryRow } from "@/lib/listings/history-rows";
 import {
   buildListingHistoryRows,
   getLatestListPriceChange,
@@ -102,11 +103,16 @@ export function SearchMapListingOverlay({
   onClose: () => void;
 }) {
   const titleId = useId();
-  const { data: session, status: sessionStatus } = useSession();
-  const signedIn = sessionStatus === "authenticated";
+  const access = useClientAccess();
+  const signedIn = access.isSignedIn;
+  const hasClientAccess = access.hasClientAccess;
+  const lockReason = access.needsEmailVerification ? "verify" : "sign-in";
   const [entered, setEntered] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [detail, setDetail] = useState<OverlayListing | null>(null);
+  const [addressHistoryRows, setAddressHistoryRows] = useState<
+    HistoryRow[] | null
+  >(null);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
@@ -136,15 +142,25 @@ export function SearchMapListingOverlay({
   useEffect(() => {
     let cancelled = false;
     setDetail(null);
+    setAddressHistoryRows(null);
     setLoadError(false);
 
     void (async () => {
       try {
         const res = await fetch(`/api/listings/${card.mlsNumber}`);
         if (!res.ok) throw new Error("not found");
-        const data = (await res.json()) as { listing?: OverlayListing };
-        if (!cancelled && data.listing) setDetail(data.listing);
-        else if (!cancelled) setLoadError(true);
+        const data = (await res.json()) as {
+          listing?: OverlayListing;
+          historyRows?: HistoryRow[];
+        };
+        if (!cancelled && data.listing) {
+          setDetail(data.listing);
+          setAddressHistoryRows(
+            Array.isArray(data.historyRows) ? data.historyRows : null,
+          );
+        } else if (!cancelled) {
+          setLoadError(true);
+        }
       } catch {
         if (!cancelled) setLoadError(true);
       }
@@ -160,7 +176,7 @@ export function SearchMapListingOverlay({
     listing?.status ?? card.status,
   );
   const isInactive = (listing?.status ?? card.status) !== "ACTIVE";
-  const detailsLocked = isInactive && !signedIn;
+  const detailsLocked = isInactive && !hasClientAccess;
   const isCommercial =
     (listing?.segment ?? card.segment) === "COMMERCIAL";
   const addressLabel = formatListingAddressOneLine(listing ?? card);
@@ -183,11 +199,12 @@ export function SearchMapListingOverlay({
   const latestPriceChange = useMemo(() => {
     if (!listing) return null;
     return getLatestListPriceChange(listing.history, listing.mlsNumber, {
-      includeRestricted: signedIn,
+      includeRestricted: hasClientAccess,
     });
-  }, [listing, signedIn]);
+  }, [listing, hasClientAccess]);
 
   const historyRows = useMemo(() => {
+    if (addressHistoryRows) return addressHistoryRows;
     if (!listing) return [];
     return buildListingHistoryRows({
       mlsNumber: listing.mlsNumber,
@@ -200,7 +217,7 @@ export function SearchMapListingOverlay({
       transactionType: listing.transactionType,
       history: listing.history,
     });
-  }, [listing]);
+  }, [addressHistoryRows, listing]);
 
   const upcomingOpenHouses = useMemo(() => {
     if (!listing) return [];
@@ -371,11 +388,14 @@ export function SearchMapListingOverlay({
                             transactionType={listing.transactionType}
                             tone="light"
                             locked={detailsLocked}
+                            lockReason={lockReason}
                             size="lg"
                           />
                         ) : detailsLocked ? (
                           <p className="text-3xl font-bold tracking-tight text-ink/55">
-                            Sign in to see price
+                            {lockReason === "verify"
+                              ? "Email verification required"
+                              : "Sign in required"}
                           </p>
                         ) : (
                           <p className="text-3xl font-bold tracking-tight text-canopy sm:text-4xl">
@@ -484,7 +504,7 @@ export function SearchMapListingOverlay({
                     propertyType={listing.propertyType}
                     transactionType={listing.transactionType}
                     callbackPath={`/listing/${listing.mlsNumber}`}
-                    canSeeRestricted={signedIn}
+                    canSeeRestricted={hasClientAccess}
                     signedIn={signedIn}
                     rows={historyRows}
                   />
@@ -573,10 +593,10 @@ export function SearchMapListingOverlay({
                     segment={listing.segment}
                     signedIn={signedIn}
                     contact={
-                      session?.user
+                      access.email
                         ? {
-                            name: session.user.name,
-                            email: session.user.email,
+                            name: null,
+                            email: access.email,
                           }
                         : undefined
                     }

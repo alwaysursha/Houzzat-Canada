@@ -32,6 +32,7 @@ export function ListingCard({
   onFocus,
   onOpen,
   lockedPreview = false,
+  lockReason = "sign-in",
   distanceKm,
 }: {
   listing: ListingCardData;
@@ -45,6 +46,8 @@ export function ListingCard({
    * `"link"` — still navigates to the listing (search teasers).
    */
   lockedPreview?: boolean | "link";
+  /** Visitor vs verify-locked sold price gate copy. */
+  lockReason?: "sign-in" | "verify";
   /** Only pass for near-me rails — hidden everywhere else. */
   distanceKm?: number;
 }) {
@@ -132,6 +135,7 @@ export function ListingCard({
               transactionType={listing.transactionType}
               tone="light"
               locked={!showClosedPrice}
+              lockReason={lockReason}
               size="md"
             />
           ) : (

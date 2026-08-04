@@ -49,11 +49,11 @@ export function ListingLockedGateOverlay({
                 Client login
               </p>
               <p className="font-display text-2xl leading-tight text-ink sm:text-3xl">
-                Login required to view details
+                Sign in required
               </p>
               <p className="mx-auto max-w-sm text-sm leading-relaxed text-ink/60 sm:text-[15px]">
-                Local real estate board rules require a registered client login
-                to see sold, leased, and unlisted property details.
+                Sign in as a Houzzat client to view sold, leased, and unlisted
+                property details.
               </p>
             </div>
             <div className="flex flex-col gap-3">

@@ -48,6 +48,7 @@ export function CompactPropertyCard({
   active,
   onFocus,
   onOpen,
+  lockReason = "sign-in",
 }: {
   listing: ListingCardData;
   className?: string;
@@ -55,6 +56,8 @@ export function CompactPropertyCard({
   onFocus?: () => void;
   /** When set, card opens this instead of navigating to the listing page. */
   onOpen?: () => void;
+  /** Visitor vs verify-locked sold price gate copy. */
+  lockReason?: "sign-in" | "verify";
 }) {
   const isClosed = isClosedListingStatus(listing.status);
   const showClosedPrice = isClosed && listing.soldPrice != null;
@@ -140,6 +143,7 @@ export function CompactPropertyCard({
                 transactionType={listing.transactionType}
                 tone="dark"
                 locked={!showClosedPrice}
+                lockReason={lockReason}
                 size="md"
               />
             ) : (

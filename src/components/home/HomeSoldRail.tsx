@@ -113,20 +113,21 @@ function LockedSoldCard({
               icon="lock"
               eyebrow="Sold prices"
               callbackUrl="/#recently-sold"
-              title="Verify email"
-              body="Confirm your email to view sold prices."
+              title="Email verification required"
+              body="Verify your email to view sold prices."
             />
           ) : (
             <>
               <span className="inline-flex size-12 items-center justify-center rounded-full bg-canopy text-white shadow-sm">
                 <Lock className="size-5" strokeWidth={2.5} aria-hidden />
               </span>
+              <p className="font-display text-lg text-ink">Sign in required</p>
               <AuthOpenButton
                 mode="sign-in"
                 callbackUrl="/#recently-sold"
                 className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-canopy px-4 text-sm font-semibold text-white transition hover:bg-canopy-deep"
               >
-                Login Required
+                Sign in
               </AuthOpenButton>
             </>
           )}
@@ -186,15 +187,15 @@ export function HomeSoldRail({
           </Link>
         ) : needsEmailVerification ? (
           <span className="text-sm font-semibold text-ink/55">
-            Verify email to unlock sold
+            Email verification required
           </span>
         ) : (
           <AuthOpenButton
-            mode="sign-up"
+            mode="sign-in"
             callbackUrl="/#recently-sold"
             className="text-sm font-semibold text-canopy"
           >
-            Become a client →
+            Sign in required →
           </AuthOpenButton>
         )}
       </div>

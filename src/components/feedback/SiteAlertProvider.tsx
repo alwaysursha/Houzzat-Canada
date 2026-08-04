@@ -158,7 +158,7 @@ function SiteToastStack({
           key={item.id}
           role="status"
           className={cn(
-            "pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border px-3.5 py-3 shadow-lg backdrop-blur-md transition",
+            "pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-xl border px-3.5 py-3 shadow-lg backdrop-blur-md transition",
             item.tone === "success" &&
               "border-canopy/35 bg-surface text-canopy-deep",
             item.tone === "error" &&
@@ -174,7 +174,7 @@ function SiteToastStack({
             ) : null}
             <p
               className={cn(
-                "text-sm font-medium leading-snug",
+                "break-words text-sm font-medium leading-snug",
                 item.title && "mt-0.5",
               )}
             >

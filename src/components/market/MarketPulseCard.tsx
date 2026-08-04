@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatPrice } from "@/lib/listings/constants";
 import type { MarketPulse } from "@/lib/market/pulse";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
@@ -5,9 +6,12 @@ import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 export function MarketPulseCard({
   pulse,
   vowCallbackPath,
+  needsEmailVerification = false,
 }: {
   pulse: MarketPulse;
   vowCallbackPath?: string;
+  /** Signed-in, past grace, unverified — never show visitor “Sign in” copy. */
+  needsEmailVerification?: boolean;
 }) {
   const title = pulse.community
     ? `${pulse.community} market pulse`
@@ -64,14 +68,32 @@ export function MarketPulseCard({
       </dl>
       {pulse.soldRestricted && vowCallbackPath ? (
         <p className="text-sm text-ink/60">
-          <AuthOpenButton
-            mode="sign-up"
-            callbackUrl={vowCallbackPath}
-            className="font-medium text-canopy hover:underline"
-          >
-            Register free
-          </AuthOpenButton>{" "}
-          to unlock sold medians for this area.
+          {needsEmailVerification ? (
+            <>
+              <span className="font-medium text-ink">
+                Email verification required.
+              </span>{" "}
+              <Link
+                href={`/auth/verify-email?callbackUrl=${encodeURIComponent(vowCallbackPath)}`}
+                className="font-medium text-canopy hover:underline"
+              >
+                Verify email
+              </Link>{" "}
+              to unlock sold medians for this area.
+            </>
+          ) : (
+            <>
+              <span className="font-medium text-ink">Sign in required.</span>{" "}
+              <AuthOpenButton
+                mode="sign-in"
+                callbackUrl={vowCallbackPath}
+                className="font-medium text-canopy hover:underline"
+              >
+                Sign in
+              </AuthOpenButton>{" "}
+              to unlock sold medians for this area.
+            </>
+          )}
         </p>
       ) : null}
     </section>

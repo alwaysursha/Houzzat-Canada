@@ -10,8 +10,8 @@ import {
 } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
 import type { PropertyType } from "@prisma/client";
+import { useClientAccess } from "@/hooks/use-client-access";
 import {
   ArrowUpDown,
   ChevronDown,
@@ -125,8 +125,12 @@ export function SearchExperience() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { status } = useSession();
-  const signedIn = status === "authenticated";
+  const access = useClientAccess();
+  /** Session present — for save/watch CTAs. */
+  const signedIn = access.isSignedIn;
+  /** VOW / sold unlock — never treat verify-locked as unlocked. */
+  const hasClientAccess = access.hasClientAccess;
+  const needsEmailVerification = access.needsEmailVerification;
   const [pending, startTransition] = useTransition();
   const [items, setItems] = useState<ListingCardData[]>([]);
   const [total, setTotal] = useState(0);
@@ -845,6 +849,8 @@ export function SearchExperience() {
               onFocus={setActiveMls}
               onOpenListing={!isNarrow ? openListingDetail : undefined}
               signedIn={signedIn}
+              hasClientAccess={hasClientAccess}
+              needsEmailVerification={needsEmailVerification}
               pending={pending}
               view={view}
               emptyHint={

@@ -13,8 +13,13 @@ type SoldForPriceProps = {
   transactionType: ListingTransactionType | string;
   /** Dark photo overlays vs light cards / detail pages. */
   tone?: "dark" | "light";
-  /** Locked for guests — show register hint instead of sold price. */
+  /** Locked for guests / verify-locked — show gate hint instead of sold price. */
   locked?: boolean;
+  /**
+   * Why the price is locked.
+   * sign-in → “Sign in required”; verify → “Email verification required”.
+   */
+  lockReason?: "sign-in" | "verify";
   className?: string;
   size?: "sm" | "md" | "lg";
 };
@@ -30,6 +35,7 @@ export function SoldForPrice({
   transactionType,
   tone = "light",
   locked = false,
+  lockReason = "sign-in",
   className,
   size = "md",
 }: SoldForPriceProps) {
@@ -38,6 +44,10 @@ export function SoldForPrice({
   const forLabel = isLease ? "Leased For" : "Sold For";
   const askingLabel = isLease ? "Asking rent" : "Asking";
   const soldAccent = closedPriceAccentClass(status, transactionType, tone);
+  const lockedHint =
+    lockReason === "verify"
+      ? "Email verification required"
+      : "Sign in required";
 
   const askingClass =
     size === "lg"
@@ -70,7 +80,7 @@ export function SoldForPrice({
         {locked || soldPrice == null ? (
           <p className={cn("font-semibold", soldLabelClass, soldAccent)}>
             {forLabel}:{" "}
-            <span className="text-white/70">Register to unlock</span>
+            <span className="text-white/70">{lockedHint}</span>
           </p>
         ) : (
           <p className="leading-none">
@@ -109,7 +119,7 @@ export function SoldForPrice({
       {locked || soldPrice == null ? (
         <p className={cn("font-semibold text-ink/55", soldLabelClass)}>
           {forLabel}:{" "}
-          <span className="text-ink/40">Register to unlock</span>
+          <span className="text-ink/40">{lockedHint}</span>
         </p>
       ) : (
         <p className="leading-none">

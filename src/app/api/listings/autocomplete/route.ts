@@ -9,7 +9,7 @@ import {
   lookupAndUpsertOnDemand,
 } from "@/lib/proptx/on-demand-lookup";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
-import { hasClientAccess } from "@/lib/vow";
+import { resolveClientAccess } from "@/lib/account-access";
 
 export async function GET(request: Request) {
   const gated = await mlsClientGate();
@@ -28,10 +28,11 @@ export async function GET(request: Request) {
   const user = session?.user?.email
     ? await prisma.user.findUnique({
         where: { email: session.user.email },
-        select: { id: true },
+        select: { id: true, emailVerified: true, createdAt: true },
       })
     : null;
-  const isClient = hasClientAccess(user);
+  const access = resolveClientAccess(user);
+  const isClient = access.hasClientAccess;
 
   const provider = getListingProvider();
   let suggestions = await provider.autocomplete(q, {
@@ -79,5 +80,7 @@ export async function GET(request: Request) {
     suggestions,
     groups,
     provider: provider.name,
+    hasClientAccess: access.hasClientAccess,
+    needsEmailVerification: access.needsEmailVerification,
   });
 }

@@ -21,7 +21,6 @@ import { InsightGate } from "@/components/listings/insights/InsightGate";
 import { ListingSection } from "@/components/listings/ListingSection";
 import { formatPrice, formatPriceCompact } from "@/lib/listings/constants";
 import type { ListingInsightsPayload } from "@/lib/market/listing-insights";
-import { VOW_PUBLIC_NOTE } from "@/lib/vow";
 import { cn } from "@/lib/utils";
 
 function ResponsivePrice({
@@ -165,16 +164,24 @@ export function HouzzatInsights({
               guides, not appraisals.
             </p>
           </div>
-          {!signedIn ? (
+          {needsEmailVerification ? (
             <p className="max-w-xs rounded-xl border border-canopy/20 bg-canopy/5 px-3 py-2 text-xs leading-relaxed text-ink/65">
-              Sold prices & valuation are for registered clients.{" "}
+              <span className="font-semibold text-ink">
+                Email verification required.
+              </span>{" "}
+              Verify your email to unlock sold prices & valuation.
+            </p>
+          ) : !signedIn ? (
+            <p className="max-w-xs rounded-xl border border-canopy/20 bg-canopy/5 px-3 py-2 text-xs leading-relaxed text-ink/65">
+              <span className="font-semibold text-ink">Sign in required.</span>{" "}
               <AuthOpenButton
-                mode="sign-up"
+                mode="sign-in"
                 callbackUrl={callbackPath}
                 className="font-semibold text-canopy hover:underline"
               >
-                Join free
-              </AuthOpenButton>
+                Sign in
+              </AuthOpenButton>{" "}
+              to unlock sold prices & valuation.
             </p>
           ) : null}
         </div>
@@ -243,16 +250,15 @@ export function HouzzatInsights({
           />
           {valuation.restricted ? (
             <InsightGate
-              className="min-h-[200px]"
               title={
                 needsEmailVerification
                   ? "Email verification required"
-                  : "See Houzzat Estimated Value"
+                  : "Sign in required"
               }
               body={
                 needsEmailVerification
                   ? "Verify your email to unlock the low–mid–high estimate built from nearby solds and actives."
-                  : "Register as a Houzzat client to unlock the low–mid–high estimate built from nearby solds and actives (VOW)."
+                  : "Sign in as a Houzzat client to unlock the low–mid–high estimate built from nearby solds and actives."
               }
               callbackPath={callbackPath}
               needsEmailVerification={needsEmailVerification}
@@ -376,7 +382,9 @@ export function HouzzatInsights({
                 <dd className="font-semibold text-ink">
                   {pricePosition.soldRestricted ? (
                     <span className="text-sm font-medium text-ink/40">
-                      Clients only
+                      {needsEmailVerification
+                        ? "Email verification required"
+                        : "Sign in required"}
                     </span>
                   ) : pricePosition.medianSold != null ? (
                     formatPrice(pricePosition.medianSold)
@@ -388,14 +396,28 @@ export function HouzzatInsights({
             </dl>
             {pricePosition.soldRestricted ? (
               <p className="mt-3 text-xs text-ink/50">
-                <AuthOpenButton
-                  mode="sign-in"
-                  callbackUrl={callbackPath}
-                  className="font-semibold text-canopy hover:underline"
-                >
-                  Sign in
-                </AuthOpenButton>{" "}
-                to unlock sold medians under VOW client access.
+                {needsEmailVerification ? (
+                  <>
+                    <span className="font-semibold text-ink">
+                      Email verification required.
+                    </span>{" "}
+                    Verify your email to unlock sold medians.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold text-ink">
+                      Sign in required.
+                    </span>{" "}
+                    <AuthOpenButton
+                      mode="sign-in"
+                      callbackUrl={callbackPath}
+                      className="font-semibold text-canopy hover:underline"
+                    >
+                      Sign in
+                    </AuthOpenButton>{" "}
+                    to unlock sold medians.
+                  </>
+                )}
               </p>
             ) : pricePosition.vsSoldPct != null ? (
               <p className="mt-3 text-xs text-ink/55">
@@ -420,15 +442,22 @@ export function HouzzatInsights({
               hint="List updates from this listing’s history."
             />
             <PriceTimelineChart points={timeline} signedIn={signedIn} />
-            {!signedIn ? (
+            {needsEmailVerification ? (
               <p className="mt-3 text-xs text-ink/50">
-                Closed prices stay private for guests.{" "}
+                <span className="font-semibold text-ink">
+                  Email verification required.
+                </span>{" "}
+                Verify your email to see full sold/leased points.
+              </p>
+            ) : !signedIn ? (
+              <p className="mt-3 text-xs text-ink/50">
+                <span className="font-semibold text-ink">Sign in required.</span>{" "}
                 <AuthOpenButton
-                  mode="sign-up"
+                  mode="sign-in"
                   callbackUrl={callbackPath}
                   className="font-semibold text-canopy hover:underline"
                 >
-                  Register
+                  Sign in
                 </AuthOpenButton>{" "}
                 to see full sold/leased points.
               </p>
@@ -445,16 +474,15 @@ export function HouzzatInsights({
           />
           {comps.restricted ? (
             <InsightGate
-              className="min-h-[220px]"
               title={
                 needsEmailVerification
                   ? "Email verification required"
-                  : "Sold comps for registered clients"
+                  : "Sign in required"
               }
               body={
                 needsEmailVerification
                   ? "Verify your email to unlock nearby sold comparable homes."
-                  : VOW_PUBLIC_NOTE
+                  : "Sign in as a Houzzat client to unlock nearby sold comparable homes."
               }
               callbackPath={callbackPath}
               needsEmailVerification={needsEmailVerification}
