@@ -127,7 +127,7 @@ export async function loadCustomerTimeline(input: {
   const take = input.take ?? 120;
   const items: TimelineItem[] = [];
 
-  const [leadActs, notes, emails, tasks] = await Promise.all([
+  const [leadActs, notes, emails, tasks, appointments] = await Promise.all([
     prisma.leadActivity.findMany({
       where: { leadId: input.leadId },
       orderBy: { createdAt: "desc" },
@@ -145,6 +145,11 @@ export async function loadCustomerTimeline(input: {
       take: 40,
     }),
     prisma.agentTask.findMany({
+      where: { leadId: input.leadId },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+    }),
+    prisma.appointment.findMany({
       where: { leadId: input.leadId },
       orderBy: { createdAt: "desc" },
       take: 40,
@@ -210,6 +215,27 @@ export async function loadCustomerTimeline(input: {
       createdAt: t.completedAt ?? t.createdAt,
     });
   }
+  for (const a of appointments) {
+    const when = a.startsAt
+      ? a.startsAt.toLocaleString("en-CA", {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : "Unscheduled";
+    items.push({
+      id: `appt-${a.id}`,
+      source: "domain",
+      type: "APPOINTMENT",
+      title: `${a.type.replaceAll("_", " ")} · ${a.status}`,
+      body: `${when}${a.listingMls ? ` · MLS ${a.listingMls}` : ""}${a.notes ? ` · ${a.notes.slice(0, 120)}` : ""}`,
+      mlsNumber: a.listingMls,
+      path: a.listingMls ? `/listing/${a.listingMls}` : null,
+      imageUrl: null,
+      createdAt: a.createdAt,
+    });
+  }
 
   if (input.customerId) {
     const [
@@ -218,8 +244,10 @@ export async function loadCustomerTimeline(input: {
       saves,
       searches,
       monitors,
+      areaMonitors,
       listingNotes,
       tours,
+      alerts,
     ] = await Promise.all([
       prisma.activityEvent.findMany({
         where: {
@@ -249,6 +277,11 @@ export async function loadCustomerTimeline(input: {
         orderBy: { createdAt: "desc" },
         take: 30,
       }),
+      prisma.areaMonitor.findMany({
+        where: { userId: input.customerId },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
       prisma.listingNote.findMany({
         where: { userId: input.customerId },
         orderBy: { updatedAt: "desc" },
@@ -259,6 +292,11 @@ export async function loadCustomerTimeline(input: {
         orderBy: { updatedAt: "desc" },
         take: 15,
         include: { stops: { select: { mlsNumber: true } } },
+      }),
+      prisma.customerAlert.findMany({
+        where: { userId: input.customerId },
+        orderBy: { createdAt: "desc" },
+        take: 40,
       }),
     ]);
 
@@ -293,7 +331,7 @@ export async function loadCustomerTimeline(input: {
         id: `save-${s.id}`,
         source: "domain",
         type: "SAVE_LISTING",
-        title: "Saved listing",
+        title: "Favorite",
         body: null,
         mlsNumber: s.mlsNumber,
         path: `/listing/${s.mlsNumber}`,
@@ -319,12 +357,38 @@ export async function loadCustomerTimeline(input: {
         id: `mon-${m.id}`,
         source: "domain",
         type: "WATCH_PROPERTY",
-        title: "Property watch",
+        title: "Property alert",
         body: null,
         mlsNumber: m.mlsNumber,
         path: `/listing/${m.mlsNumber}`,
         imageUrl: null,
         createdAt: m.createdAt,
+      });
+    }
+    for (const a of areaMonitors) {
+      items.push({
+        id: `area-${a.id}`,
+        source: "domain",
+        type: "WATCH_AREA",
+        title: a.name || a.city || "Area alert",
+        body: [a.city, a.community].filter(Boolean).join(" · ") || null,
+        mlsNumber: null,
+        path: "/account",
+        imageUrl: null,
+        createdAt: a.createdAt,
+      });
+    }
+    for (const alert of alerts) {
+      items.push({
+        id: `alert-${alert.id}`,
+        source: "domain",
+        type: "PROPERTY_ALERT",
+        title: alert.title || alert.kind.replaceAll("_", " "),
+        body: alert.body.slice(0, 200),
+        mlsNumber: alert.mlsNumber,
+        path: alert.mlsNumber ? `/listing/${alert.mlsNumber}` : null,
+        imageUrl: null,
+        createdAt: alert.createdAt,
       });
     }
     for (const n of listingNotes) {

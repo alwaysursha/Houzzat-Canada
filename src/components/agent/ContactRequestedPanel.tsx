@@ -2,9 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Megaphone, UserRound } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Megaphone,
+  UserRound,
+} from "lucide-react";
 import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
 import { LeadQuickPopup } from "@/components/agent/LeadQuickPopup";
+import { useCarouselSwipe } from "@/components/agent/use-carousel-swipe";
 import {
   INQUIRY_TAGS,
   INQUIRY_TAG_LABEL,
@@ -64,7 +71,7 @@ function TypeFilter({
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "inline-flex items-center gap-1.5 rounded border bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#1e2a38]",
+          "inline-flex items-center gap-1.5 rounded border bg-white px-2.5 py-1.5 text-[13px] font-medium text-[#1e2a38]",
           open
             ? "border-[#2b6cb0] ring-1 ring-[#2b6cb0]/30"
             : "border-[#d8dee6]",
@@ -77,11 +84,11 @@ function TypeFilter({
         <>
           <button
             type="button"
-            className="fixed inset-0 z-30 cursor-default"
+            className="fixed inset-0 z-[70] cursor-default"
             aria-label="Close type filter"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-md border border-[#d8dee6] bg-white py-1 shadow-lg">
+          <div className="absolute left-0 top-full z-[80] mt-1 min-w-[220px] rounded-md border border-[#d8dee6] bg-white py-1 shadow-lg">
             {INQUIRY_TAGS.map((tag) => (
               <label
                 key={tag}
@@ -135,7 +142,7 @@ export function ContactRequestedPanel({
   const [message, setMessage] = useState<string | null>(null);
   const [messageVisible, setMessageVisible] = useState(false);
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
   const fadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -169,6 +176,33 @@ export function ContactRequestedPanel({
       return typeFilter.includes(tag);
     });
   }, [leads, typeFilter, statusFilter, dismissed]);
+
+  const count = filtered.length;
+
+  useEffect(() => {
+    setIndex(0);
+  }, [typeFilter, statusFilter]);
+
+  useEffect(() => {
+    setIndex((i) => (count === 0 ? 0 : Math.min(i, count - 1)));
+  }, [count]);
+
+  const safeIndex = count === 0 ? 0 : Math.min(index, count - 1);
+  const lead = count > 0 ? filtered[safeIndex]! : null;
+
+  function goPrev() {
+    setIndex((i) => (count <= 1 ? 0 : (i - 1 + count) % count));
+  }
+
+  function goNext() {
+    setIndex((i) => (count <= 1 ? 0 : (i + 1) % count));
+  }
+
+  const swipe = useCarouselSwipe({
+    enabled: count > 1,
+    onPrev: goPrev,
+    onNext: goNext,
+  });
 
   async function tagLead(leadId: string, inquiryTag: InquiryTagValue) {
     setPendingId(leadId);
@@ -214,26 +248,39 @@ export function ContactRequestedPanel({
     }
   }
 
+  const name = lead
+    ? lead.customer?.name ||
+      lead.customer?.email ||
+      lead.source.replaceAll("_", " ")
+    : "";
+  const initials = name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+
   return (
-    <section
-      ref={rootRef}
-      className="rounded-xl border border-[#d8dee6] bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)] sm:rounded-md"
-    >
-      <div className="relative z-20 flex flex-wrap items-center justify-between gap-3 border-b border-[#e8edf2] px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Megaphone className="size-4 text-[#5b6775]" />
-          <h2 className="text-[15px] font-semibold text-[#1e2a38]">
+    <section className="relative z-20 rounded-xl border border-[#d8dee6] bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)] sm:rounded-md">
+      <div className="relative z-40 flex flex-wrap items-center justify-between gap-3 border-b border-[#e8edf2] px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Megaphone className="size-5 shrink-0 text-[#5b6775]" />
+          <h2 className="text-[17px] font-semibold text-[#1e2a38]">
             Contact Requested
           </h2>
+          {count > 0 ? (
+            <span className="truncate text-[13px] text-[#94a3b8]">
+              {safeIndex + 1} of {count}
+            </span>
+          ) : null}
         </div>
-        <div className="relative z-30 flex flex-wrap items-center gap-2">
+        <div className="relative z-50 flex flex-wrap items-center gap-2">
           <TypeFilter selected={typeFilter} onChange={setTypeFilter} />
           <select
             value={statusFilter}
             onChange={(e) =>
               setStatusFilter(e.target.value as "ALL" | "NEW_LEAD")
             }
-            className="rounded border border-[#d8dee6] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#1e2a38]"
+            className="rounded border border-[#d8dee6] bg-white px-2.5 py-1.5 text-[13px] font-medium text-[#1e2a38]"
           >
             <option value="NEW_LEAD">Status: New Lead</option>
             <option value="ALL">Status: All</option>
@@ -244,7 +291,7 @@ export function ContactRequestedPanel({
       {message ? (
         <p
           className={cn(
-            "border-b border-[#e8edf2] bg-[#f0fdf4] px-4 py-2 text-[12px] font-medium text-canopy-deep transition-opacity duration-500",
+            "border-b border-[#e8edf2] bg-[#f0fdf4] px-4 py-2 text-[13px] font-medium text-canopy-deep transition-opacity duration-500",
             messageVisible ? "opacity-100" : "opacity-0",
           )}
         >
@@ -252,102 +299,132 @@ export function ContactRequestedPanel({
         </p>
       ) : null}
 
-      {filtered.length === 0 ? (
-        <p className="px-4 py-8 text-center text-[13px] text-[#94a3b8]">
-          No open contact requests. Tagged leads live in To Do.
-        </p>
-      ) : (
-        <ul className="divide-y divide-[#eef2f6]">
-          {filtered.map((lead) => {
-            const name =
-              lead.customer?.name ||
-              lead.customer?.email ||
-              lead.source.replaceAll("_", " ");
-            const initials = name
-              .split(/\s+/)
-              .slice(0, 2)
-              .map((p) => p[0]?.toUpperCase() ?? "")
-              .join("");
-            return (
-              <li key={lead.id} className="flex gap-3 px-4 py-3.5">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#e8eef5] text-[11px] font-bold text-[#2b6cb0]">
-                  {initials || <UserRound className="size-4" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setOpenLeadId(lead.id)}
-                        className="truncate text-left text-[13px] font-semibold text-[#2b6cb0] hover:underline"
-                      >
-                        {name}
-                      </button>
-                      {lead.customer ? (
-                        <LeadAccountVerifyMenu
-                          compact
-                          leadId={lead.id}
-                          emailVerified={Boolean(lead.customer.emailVerified)}
-                          accountCreatedAt={lead.customer.createdAt}
-                        />
-                      ) : null}
+      <div
+        className="h-[16rem] overflow-y-auto overscroll-contain px-4 py-4"
+        {...swipe}
+      >
+        {lead == null ? (
+          <p className="flex h-full items-center justify-center text-center text-[15px] text-[#94a3b8]">
+            No open contact requests. Tagged leads live in To Do.
+          </p>
+        ) : (
+          <div className="flex gap-3.5">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#e8eef5] text-[13px] font-bold text-[#2b6cb0]">
+              {initials || <UserRound className="size-5" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setOpenLeadId(lead.id)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="truncate text-left text-[17px] font-semibold text-[#2b6cb0] hover:underline"
+                  >
+                    {name}
+                  </button>
+                  {lead.customer ? (
+                    <div onPointerDown={(e) => e.stopPropagation()}>
+                      <LeadAccountVerifyMenu
+                        compact
+                        leadId={lead.id}
+                        emailVerified={Boolean(lead.customer.emailVerified)}
+                        accountCreatedAt={lead.customer.createdAt}
+                      />
                     </div>
-                    <time className="shrink-0 text-[11px] text-[#94a3b8]">
-                      {new Date(lead.createdAt).toLocaleString("en-CA", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </time>
-                  </div>
-                  <p className="mt-0.5 text-[12px] font-medium text-[#1e2a38]">
-                    {lead.source.replaceAll("_", " ")}
-                    {lead.isOnline ? " · Online now" : ""}
-                    {lead.binge ? " · Multi-property binge" : ""}
-                  </p>
-                  <div className="mt-2 rounded border border-[#e8edf2] bg-[#f8fafc] px-3 py-2 text-[12px] text-[#475569]">
-                    {(lead.notes || "New lead — reach out soon.")
-                      .split("\n")
-                      .slice(0, 2)
-                      .join(" · ")
-                      .slice(0, 160)}
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">
-                      Tag
-                    </span>
-                    {INQUIRY_TAGS.map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        disabled={pendingId === lead.id}
-                        onClick={() => tagLead(lead.id, tag)}
-                        className={cn(
-                          "rounded-full border px-2.5 py-0.5 text-[11px] font-bold transition disabled:opacity-50",
-                          INQUIRY_TAG_STYLE[tag].idle,
-                        )}
-                      >
-                        {INQUIRY_TAG_LABEL[tag]}
-                      </button>
-                    ))}
-                    {lead.customer?.isBuyer ? (
-                      <span className="rounded bg-[#dbeafe] px-1.5 py-0.5 text-[10px] font-bold text-[#1d4ed8]">
-                        BUYER
-                      </span>
-                    ) : null}
-                    {lead.customer?.isSeller ? (
-                      <span className="rounded bg-[#ffedd5] px-1.5 py-0.5 text-[10px] font-bold text-[#c2410c]">
-                        SELLER
-                      </span>
-                    ) : null}
-                  </div>
+                  ) : null}
                 </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                <time className="shrink-0 text-[13px] text-[#94a3b8]">
+                  {new Date(lead.createdAt).toLocaleString("en-CA", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </time>
+              </div>
+              <p className="mt-1 truncate text-[14px] font-medium text-[#1e2a38]">
+                {lead.source.replaceAll("_", " ")}
+                {lead.isOnline ? " · Online now" : ""}
+                {lead.binge ? " · Multi-property binge" : ""}
+              </p>
+              <div className="mt-2.5 line-clamp-3 rounded-lg border border-[#e8edf2] bg-[#f8fafc] px-3.5 py-2.5 text-[14px] leading-relaxed text-[#475569]">
+                {(lead.notes || "New lead — reach out soon.")
+                  .split("\n")
+                  .slice(0, 3)
+                  .join(" · ")
+                  .slice(0, 220)}
+              </div>
+              <div
+                className="mt-3 flex flex-wrap items-center gap-2"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <span className="mr-0.5 text-[12px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+                  Tag
+                </span>
+                {INQUIRY_TAGS.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    disabled={pendingId === lead.id}
+                    onClick={() => tagLead(lead.id, tag)}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-[12px] font-bold transition disabled:opacity-50",
+                      INQUIRY_TAG_STYLE[tag].idle,
+                    )}
+                  >
+                    {INQUIRY_TAG_LABEL[tag]}
+                  </button>
+                ))}
+                {lead.customer?.isBuyer ? (
+                  <span className="rounded bg-[#dbeafe] px-1.5 py-0.5 text-[11px] font-bold text-[#1d4ed8]">
+                    BUYER
+                  </span>
+                ) : null}
+                {lead.customer?.isSeller ? (
+                  <span className="rounded bg-[#ffedd5] px-1.5 py-0.5 text-[11px] font-bold text-[#c2410c]">
+                    SELLER
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 border-t border-[#e8edf2] px-4 py-2.5">
+        <button
+          type="button"
+          onClick={goPrev}
+          disabled={count <= 1}
+          className="inline-flex items-center gap-1 rounded-lg border border-[#d8dee6] px-3 py-2 text-[13px] font-semibold text-[#1e2a38] transition hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-35"
+          aria-label="Previous contact request"
+        >
+          <ChevronLeft className="size-4" />
+          Prev
+        </button>
+        <div className="flex items-center gap-1.5" aria-hidden>
+          {filtered.map((item, i) => (
+            <span
+              key={item.id}
+              className={cn(
+                "size-1.5 rounded-full transition",
+                i === safeIndex ? "bg-[#2b6cb0]" : "bg-[#d8dee6]",
+              )}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={goNext}
+          disabled={count <= 1}
+          className="inline-flex items-center gap-1 rounded-lg bg-[#2b6cb0] px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-[#245a96] disabled:cursor-not-allowed disabled:opacity-35"
+          aria-label="Next contact request"
+        >
+          Next
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
 
       {openLeadId ? (
         <LeadQuickPopup

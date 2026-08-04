@@ -32,9 +32,21 @@ import { HandoffClient } from "@/components/agent/HandoffClient";
 import { LeadActions } from "@/components/agent/LeadActions";
 import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
 import { PipelineStatusMenu } from "@/components/agent/PipelineStatusMenu";
+import { EngagementMatchboard } from "@/components/agent/EngagementMatchboard";
+import { ActivityFilters } from "@/components/agent/ActivityFilters";
 import { LeadEmailForm } from "@/components/agent/LeadEmailForm";
 import { SavedSearchEditor } from "@/components/agent/SavedSearchEditor";
 import { TaskForm } from "@/components/agent/TaskForm";
+import {
+  buyerIntentToSearchHref,
+  hasUsableSearchCriteria,
+} from "@/lib/agent/intent-to-search";
+import {
+  ALL_ACTIVITY_FILTER_IDS,
+  DEFAULT_ACTIVITY_FILTER_IDS,
+  filterIdsForTimelineType,
+  timelineItemMatchesFilters,
+} from "@/lib/agent/activity-filters";
 import { ReassignSelect } from "@/components/agent/TeamAdminClient";
 import type { TimelineItem } from "@/lib/agent/customer-timeline";
 import {
@@ -360,6 +372,9 @@ export function CustomerProfile({
   const [profileFlagPending, setProfileFlagPending] = useState<
     "buyer" | "seller" | null
   >(null);
+  const [activityFilters, setActivityFilters] = useState(
+    () => new Set(DEFAULT_ACTIVITY_FILTER_IDS),
+  );
 
   const reload = useCallback(async () => {
     const res = await fetch(`/api/agent/leads/${leadId}/summary`);
@@ -450,6 +465,25 @@ export function CustomerProfile({
         }),
       ),
     [data?.timeline],
+  );
+
+  const activityFilterCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const id of ALL_ACTIVITY_FILTER_IDS) counts[id] = 0;
+    for (const item of timelineItems) {
+      for (const id of filterIdsForTimelineType(item.type)) {
+        counts[id] = (counts[id] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [timelineItems]);
+
+  const filteredTimelineItems = useMemo(
+    () =>
+      timelineItems.filter((item) =>
+        timelineItemMatchesFilters(item.type, activityFilters),
+      ),
+    [timelineItems, activityFilters],
   );
 
   function startEditContact(field: "phone" | "email" | "address") {
@@ -1096,6 +1130,25 @@ export function CustomerProfile({
                         Inquiry listing · MLS {data.lead.listingMls}
                       </p>
                     ) : null}
+                    {hasUsableSearchCriteria(data.buyerIntent.criteria) ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Link
+                          href={buyerIntentToSearchHref(data.buyerIntent.criteria)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#0d9488]"
+                        >
+                          View matching homes
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => setTab("engagement")}
+                          className="rounded-lg border border-[#c7e0d4] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#0f766e] hover:bg-[#f0fdf4]"
+                        >
+                          Shortlist & email
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -1257,11 +1310,25 @@ export function CustomerProfile({
               <div className="min-h-0 space-y-4 px-4 py-4 sm:px-5 lg:flex-1 lg:overflow-y-auto">
                 {tab === "activity" ? (
                   <Panel title="Activity timeline">
-                    <p className="mb-3 text-[11px] text-[#94a3b8]">
-                      Views, saves, searches, route planner, notes, emails —
-                      second precision.
-                    </p>
-                    <CrmTimeline items={timelineItems} />
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] text-[#94a3b8]">
+                        Views, saves, searches, emails, calls, appointments —
+                        filter by type.
+                      </p>
+                      <ActivityFilters
+                        selected={activityFilters}
+                        onChange={setActivityFilters}
+                        counts={activityFilterCounts}
+                      />
+                    </div>
+                    <CrmTimeline
+                      items={filteredTimelineItems}
+                      empty={
+                        timelineItems.length === 0
+                          ? "No activity yet."
+                          : "No activity matches these filters. Adjust Filters to see more."
+                      }
+                    />
                   </Panel>
                 ) : null}
 
@@ -1649,10 +1716,24 @@ export function CustomerProfile({
                       ))}
                     </div>
 
+                    {data.buyerIntent ? (
+                      <Panel title="Criteria · matches · shortlist">
+                        <EngagementMatchboard
+                          leadId={leadId}
+                          buyerIntent={data.buyerIntent}
+                          savedSearches={data.savedSearches}
+                          consented={data.permissions.consented}
+                          customerEmail={data.lead.customer?.email}
+                          onUpdated={onUpdated}
+                        />
+                      </Panel>
+                    ) : null}
+
                     <Panel title="Saved searches / alerts">
                       {data.savedSearches.length === 0 ? (
                         <p className="text-[13px] text-[#94a3b8]">
-                          No saved searches.
+                          No saved searches yet — use “Save as search” above to
+                          create one from Looking for.
                         </p>
                       ) : (
                         <div className="space-y-3">

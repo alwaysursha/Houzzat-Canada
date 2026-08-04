@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
-import { logContactActivityForCustomer } from "@/lib/agent/log-contact-activity";
+import {
+  logContactActivityForCustomer,
+  logLeadActivityForCustomer,
+} from "@/lib/agent/log-contact-activity";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -57,6 +60,43 @@ export async function PATCH(request: Request) {
       vowVersion: true,
     },
   });
+
+  if (
+    parsed.data.emailAlertsEnabled === false &&
+    user.emailAlertsEnabled !== false
+  ) {
+    await logLeadActivityForCustomer({
+      customerId: user.id,
+      type: "unsubscribe",
+      body: "Customer turned off email alerts",
+      actorUserId: user.id,
+      meta: { channel: "email" },
+    });
+  } else if (
+    parsed.data.emailAlertsEnabled === true &&
+    user.emailAlertsEnabled === false
+  ) {
+    await logLeadActivityForCustomer({
+      customerId: user.id,
+      type: "contact_updated_by_customer",
+      body: "Customer re-enabled email alerts",
+      actorUserId: user.id,
+      meta: { channel: "email", source: "preferences" },
+    });
+  }
+
+  if (
+    parsed.data.smsAlertsEnabled === false &&
+    user.smsAlertsEnabled !== false
+  ) {
+    await logLeadActivityForCustomer({
+      customerId: user.id,
+      type: "unsubscribe",
+      body: "Customer turned off SMS alerts",
+      actorUserId: user.id,
+      meta: { channel: "sms" },
+    });
+  }
 
   if (phoneChanged) {
     await logContactActivityForCustomer({

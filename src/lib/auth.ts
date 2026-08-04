@@ -8,6 +8,7 @@ import type { Provider } from "next-auth/providers";
 import type { ActiveMode } from "@prisma/client";
 import { Role } from "@prisma/client";
 import { authConfig } from "@/lib/auth.config";
+import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { isAdminRole, isAgentRole, resolveActiveMode } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 
@@ -209,6 +210,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           });
           if (dbUser) {
             applyProfileToToken(token, dbUser, email);
+            void recordActivityEvent({
+              type: "SIGN_IN",
+              userId: dbUser.id,
+              path: "/auth/sign-in",
+              title: "Signed in",
+            });
           } else {
             token.sub = user.id;
             token.email = email;

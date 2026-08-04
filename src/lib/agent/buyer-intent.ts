@@ -138,32 +138,33 @@ function queryFromSaved(query: unknown): {
   transactionType: "SALE" | "LEASE" | null;
 } {
   const q = (query ?? {}) as Record<string, unknown>;
-  const cities = [
-    typeof q.city === "string" ? q.city : null,
-    typeof q.cities === "string" ? q.cities : null,
-  ]
-    .filter(Boolean)
-    .flatMap((v) => String(v).split(","))
-    .map((s) => s.trim())
-    .filter(Boolean);
+
+  const splitList = (raw: unknown): string[] => {
+    if (Array.isArray(raw)) {
+      return raw
+        .filter((v): v is string => typeof v === "string")
+        .flatMap((v) => v.split(/[,|]/))
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    if (typeof raw === "string" && raw.trim()) {
+      return raw
+        .split(/[,|]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
+  const cities = [...splitList(q.cities), ...splitList(q.city)];
   const communities = [
-    typeof q.community === "string" ? q.community : null,
-    typeof q.communities === "string" ? q.communities : null,
-  ]
-    .filter(Boolean)
-    .flatMap((v) => String(v).split(","))
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const propertyTypes = (
-    typeof q.propertyTypes === "string"
-      ? q.propertyTypes
-      : typeof q.propertyType === "string"
-        ? q.propertyType
-        : ""
-  )
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
+    ...splitList(q.communities),
+    ...splitList(q.community),
+  ];
+  const propertyTypes = [
+    ...splitList(q.propertyTypes),
+    ...splitList(q.propertyType),
+  ];
   const minBeds =
     typeof q.minBeds === "number"
       ? q.minBeds
@@ -189,10 +190,13 @@ function queryFromSaved(query: unknown): {
   const txn =
     typeof q.transactionType === "string" ? q.transactionType : null;
   return {
-    cities,
-    communities,
-    propertyTypes,
-    minBeds: Number.isFinite(minBeds) && (minBeds as number) > 0 ? Number(minBeds) : null,
+    cities: [...new Set(cities)],
+    communities: [...new Set(communities)],
+    propertyTypes: [...new Set(propertyTypes)],
+    minBeds:
+      Number.isFinite(minBeds) && (minBeds as number) > 0
+        ? Number(minBeds)
+        : null,
     minPrice,
     maxPrice,
     transactionType:
@@ -392,35 +396,47 @@ export async function loadBuyerIntent(input: {
   ]);
 
   const saved = input.savedSearches ?? [];
-  const cities: string[] = [];
-  const communities: string[] = [];
-  const propertyTypes: string[] = [];
-  const beds: number[] = [];
-  const prices: number[] = [];
-  let transactionType: "SALE" | "LEASE" | null = null;
+  const savedCities: string[] = [];
+  const savedCommunities: string[] = [];
+  const savedPropertyTypes: string[] = [];
+  const savedBeds: number[] = [];
+  const savedFilterMins: number[] = [];
+  const savedFilterMaxes: number[] = [];
+  let savedTxn: "SALE" | "LEASE" | null = null;
   let fromSaved = false;
-  let fromBrowse = false;
 
+  // Prefer the newest usable saved search (callers pass updatedAt desc).
+  // Mixing every historical search with browse is what made Looking for lag behind agent edits.
   for (const s of saved) {
     const parsed = queryFromSaved(s.query);
-    if (
-      parsed.cities.length ||
-      parsed.communities.length ||
+    const usable =
+      parsed.cities.length > 0 ||
+      parsed.communities.length > 0 ||
       parsed.minPrice != null ||
       parsed.maxPrice != null ||
       parsed.minBeds != null ||
-      parsed.propertyTypes.length
-    ) {
-      fromSaved = true;
-    }
-    cities.push(...parsed.cities);
-    communities.push(...parsed.communities);
-    propertyTypes.push(...parsed.propertyTypes);
-    if (parsed.minBeds != null) beds.push(parsed.minBeds);
-    if (parsed.minPrice != null) prices.push(parsed.minPrice);
-    if (parsed.maxPrice != null) prices.push(parsed.maxPrice);
-    if (parsed.transactionType) transactionType = parsed.transactionType;
+      parsed.propertyTypes.length > 0;
+    if (!usable) continue;
+    fromSaved = true;
+    savedCities.push(...parsed.cities);
+    savedCommunities.push(...parsed.communities);
+    savedPropertyTypes.push(...parsed.propertyTypes);
+    if (parsed.minBeds != null) savedBeds.push(parsed.minBeds);
+    if (parsed.minPrice != null) savedFilterMins.push(parsed.minPrice);
+    if (parsed.maxPrice != null) savedFilterMaxes.push(parsed.maxPrice);
+    if (parsed.transactionType) savedTxn = parsed.transactionType;
+    break;
   }
+
+  const browseCities: string[] = [];
+  const browseCommunities: string[] = [];
+  const browsePropertyTypes: string[] = [];
+  const browseBeds: number[] = [];
+  const browseFilterMins: number[] = [];
+  const browseFilterMaxes: number[] = [];
+  const browseViewPrices: number[] = [];
+  let browseTxn: "SALE" | "LEASE" | null = null;
+  let fromBrowse = false;
 
   for (const ev of searchEvents) {
     const parsed = parseSearchPath(ev.path);
@@ -435,19 +451,21 @@ export async function loadBuyerIntent(input: {
       Boolean(parsed.q);
     if (!meaningful) continue;
     fromBrowse = true;
-    cities.push(...parsed.cities);
-    communities.push(...parsed.communities);
-    propertyTypes.push(...parsed.propertyTypes);
-    if (parsed.minBeds != null) beds.push(parsed.minBeds);
-    if (parsed.minPrice != null) prices.push(parsed.minPrice);
-    if (parsed.maxPrice != null) prices.push(parsed.maxPrice);
+    browseCities.push(...parsed.cities);
+    browseCommunities.push(...parsed.communities);
+    browsePropertyTypes.push(...parsed.propertyTypes);
+    if (parsed.minBeds != null) browseBeds.push(parsed.minBeds);
+    if (parsed.minPrice != null) browseFilterMins.push(parsed.minPrice);
+    if (parsed.maxPrice != null) browseFilterMaxes.push(parsed.maxPrice);
     if (parsed.q) {
-      // Free-text often is a city/neighbourhood
-      if (!cities.includes(parsed.q) && !communities.includes(parsed.q)) {
-        cities.push(parsed.q);
+      if (
+        !browseCities.includes(parsed.q) &&
+        !browseCommunities.includes(parsed.q)
+      ) {
+        browseCities.push(parsed.q);
       }
     }
-    if (parsed.transactionType) transactionType = parsed.transactionType;
+    if (parsed.transactionType) browseTxn = parsed.transactionType;
   }
 
   const mlsSet = [
@@ -473,61 +491,74 @@ export async function loadBuyerIntent(input: {
     });
     if (listings.length > 0) fromBrowse = true;
     for (const row of listings) {
-      if (row.city) cities.push(row.city);
-      if (row.community) communities.push(row.community);
-      propertyTypes.push(row.propertyType);
-      if (row.beds > 0) beds.push(row.beds);
-      if (row.listPrice > 0) prices.push(row.listPrice);
-      if (!transactionType) {
-        transactionType = row.transactionType === "LEASE" ? "LEASE" : "SALE";
+      if (row.city) browseCities.push(row.city);
+      if (row.community) browseCommunities.push(row.community);
+      browsePropertyTypes.push(row.propertyType);
+      if (row.beds > 0) browseBeds.push(row.beds);
+      if (row.listPrice > 0) browseViewPrices.push(row.listPrice);
+      if (!browseTxn) {
+        browseTxn = row.transactionType === "LEASE" ? "LEASE" : "SALE";
       }
     }
   }
 
-  const sortedPrices = [...prices].sort((a, b) => a - b);
-  // Prefer filter max when present; else use view band (p20–p80)
-  const filterMaxes = saved
-    .map((s) => queryFromSaved(s.query).maxPrice)
-    .concat(
-      searchEvents
-        .map((e) => parseSearchPath(e.path)?.maxPrice ?? null)
-        .filter((n): n is number => n != null),
-    )
-    .filter((n): n is number => n != null);
-  const filterMins = saved
-    .map((s) => queryFromSaved(s.query).minPrice)
-    .concat(
-      searchEvents
-        .map((e) => parseSearchPath(e.path)?.minPrice ?? null)
-        .filter((n): n is number => n != null),
-    )
-    .filter((n): n is number => n != null);
+  // Agent/customer saved search is source of truth when present.
+  // Browse only fills gaps so Looking for matches what agents edit.
+  const useSavedPlaces =
+    savedCities.length > 0 || savedCommunities.length > 0;
+  const useSavedTypes = savedPropertyTypes.length > 0;
+  const useSavedBeds = savedBeds.length > 0;
+  const useSavedPrice =
+    savedFilterMins.length > 0 || savedFilterMaxes.length > 0;
+
+  const sortedViewPrices = [...browseViewPrices].sort((a, b) => a - b);
 
   const criteria: BuyerIntentCriteria = {
-    cities: modeStrings(cities, 3),
-    communities: modeStrings(communities, 3),
-    propertyTypes: modeStrings(propertyTypes, 3),
-    minBeds: beds.length
-      ? Math.min(...beds.filter((b) => b > 0))
-      : null,
-    maxBeds: beds.length ? Math.max(...beds) : null,
-    minPrice:
-      filterMins.length > 0
-        ? Math.min(...filterMins)
-        : percentile(sortedPrices, 0.2),
-    maxPrice:
-      filterMaxes.length > 0
-        ? Math.max(...filterMaxes)
-        : percentile(sortedPrices, 0.8),
-    transactionType,
+    cities: modeStrings(
+      useSavedPlaces ? savedCities : browseCities,
+      3,
+    ),
+    communities: modeStrings(
+      useSavedPlaces ? savedCommunities : browseCommunities,
+      3,
+    ),
+    propertyTypes: modeStrings(
+      useSavedTypes ? savedPropertyTypes : browsePropertyTypes,
+      3,
+    ),
+    minBeds: useSavedBeds
+      ? Math.min(...savedBeds)
+      : browseBeds.length
+        ? Math.min(...browseBeds.filter((b) => b > 0))
+        : null,
+    // Don't invent a max bed range from listing views when a saved search exists
+    maxBeds: useSavedBeds
+      ? null
+      : browseBeds.length
+        ? Math.max(...browseBeds)
+        : null,
+    minPrice: useSavedPrice
+      ? savedFilterMins.length
+        ? Math.min(...savedFilterMins)
+        : null
+      : browseFilterMins.length > 0
+        ? Math.min(...browseFilterMins)
+        : percentile(sortedViewPrices, 0.2),
+    maxPrice: useSavedPrice
+      ? savedFilterMaxes.length
+        ? Math.max(...savedFilterMaxes)
+        : null
+      : browseFilterMaxes.length > 0
+        ? Math.max(...browseFilterMaxes)
+        : percentile(sortedViewPrices, 0.8),
+    transactionType: savedTxn ?? browseTxn,
     searchCount: searchEvents.filter((e) => parseSearchPath(e.path)).length,
     listingViewCount: sampleMls.length,
     sampleMls: sampleMls.slice(0, 5),
   };
 
-  // Soften beds from views-only: use mode-ish floor
-  if (!fromSaved && filterMaxes.length === 0 && beds.length >= 3) {
-    const bedModes = modeStrings(beds.map(String), 1);
+  if (!fromSaved && !useSavedBeds && browseBeds.length >= 3) {
+    const bedModes = modeStrings(browseBeds.map(String), 1);
     const modeBed = bedModes[0] ? Number(bedModes[0]) : null;
     if (modeBed && modeBed > 0) {
       criteria.minBeds = modeBed;

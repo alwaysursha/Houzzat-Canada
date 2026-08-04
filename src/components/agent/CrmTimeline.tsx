@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Pin } from "lucide-react";
 import type { TimelineItem } from "@/lib/agent/customer-timeline";
+import { friendlyActivityTypeLabel } from "@/lib/agent/activity-filters";
 import { cn } from "@/lib/utils";
 
 function tone(type: string) {
@@ -28,7 +29,7 @@ function typeLabel(item: TimelineItem) {
     return "Contact updated by customer";
   if (item.type === "contact_update") return "Contact updated";
   if (item.type === "note_pin") return "Note pin";
-  return item.type.replaceAll("_", " ");
+  return friendlyActivityTypeLabel(item.type);
 }
 
 function isListingRow(item: TimelineItem) {

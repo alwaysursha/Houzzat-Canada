@@ -2,9 +2,9 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 /** Write a leadActivity on every CRM lead for this customer (Activity tab). */
-export async function logContactActivityForCustomer(input: {
+export async function logLeadActivityForCustomer(input: {
   customerId: string;
-  type: "contact_update_request" | "contact_updated_by_customer";
+  type: string;
   body: string;
   meta?: Prisma.InputJsonValue;
   actorUserId?: string | null;
@@ -28,4 +28,14 @@ export async function logContactActivityForCustomer(input: {
   });
 
   return { written: leads.length };
+}
+
+export async function logContactActivityForCustomer(input: {
+  customerId: string;
+  type: "contact_update_request" | "contact_updated_by_customer";
+  body: string;
+  meta?: Prisma.InputJsonValue;
+  actorUserId?: string | null;
+}) {
+  return logLeadActivityForCustomer(input);
 }

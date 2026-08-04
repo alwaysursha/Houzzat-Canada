@@ -6,21 +6,15 @@ import {
   Bell,
   CheckCircle2,
   ChevronRight,
-  Circle,
-  ClipboardList,
   Phone,
   Timer,
   TrendingUp,
   UserRound,
 } from "lucide-react";
 import { ContactRequestedPanel } from "@/components/agent/ContactRequestedPanel";
-import { TaskCompleteButton } from "@/components/agent/TaskForm";
+import { LaunchpadTodoCarousel } from "@/components/agent/LaunchpadTodoCarousel";
 import { leadScopeWhere, requireAgentContext } from "@/lib/agent";
 import { resolveDeskView } from "@/lib/agent/brokerage";
-import {
-  INQUIRY_TAG_LABEL,
-  INQUIRY_TAG_STYLE,
-} from "@/lib/agent/inquiry-tag";
 import { computeHotnessMap } from "@/lib/agent/hotness";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
@@ -397,97 +391,25 @@ export default async function AgentLaunchpadPage() {
         </aside>
 
         <div className="order-2 space-y-4 xl:order-1">
-          {/* To Do */}
-          <section className="overflow-hidden rounded-xl border border-[#d8dee6] border-t-[3px] border-t-[#f59e0b] bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)] sm:rounded-md">
-            <div className="flex items-center justify-between gap-3 border-b border-[#e8edf2] px-4 py-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <ClipboardList className="size-4 shrink-0 text-[#5b6775]" />
-                <h2 className="text-[15px] font-semibold text-[#1e2a38]">To Do</h2>
-                <span className="truncate text-[12px] text-[#94a3b8]">
-                  Showing {todoRows.length} of {openTasks.length}
-                </span>
-              </div>
-              <Link
-                href="/agent/tasks"
-                className="shrink-0 rounded border border-[#c7d2e0] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-[#2b6cb0] hover:bg-[#f1f5f9]"
-              >
-                See all
-              </Link>
-            </div>
-            {todoRows.length === 0 ? (
-              <p className="px-4 py-8 text-center text-[13px] text-[#94a3b8]">
-                No reminders or tasks found.
-              </p>
-            ) : (
-              <ul className="divide-y divide-[#eef2f6]">
-                {todoRows.map((task) => {
-                  const overdue = task.dueAt < now;
-                  return (
-                    <li
-                      key={task.id}
-                      className="flex items-start gap-3 px-4 py-3.5"
-                    >
-                      <Circle className="mt-0.5 size-4 shrink-0 text-[#94a3b8]" />
-                      <div className="min-w-0 flex-1">
-                        {task.lead ? (
-                          <Link
-                            href={`/agent/leads?lead=${task.lead.id}`}
-                            className="text-[14px] font-semibold text-[#2b6cb0] hover:underline sm:text-[13px]"
-                          >
-                            {task.title}
-                          </Link>
-                        ) : (
-                          <p className="text-[14px] font-semibold text-[#1e2a38] sm:text-[13px]">
-                            {task.title}
-                          </p>
-                        )}
-                        <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-[#5b6775]">
-                          <span>
-                            {task.lead?.customer?.name ||
-                              task.lead?.customer?.email ||
-                              task.type}
-                            {task.lead?.listingMls
-                              ? ` · ${task.lead.listingMls}`
-                              : ""}
-                          </span>
-                          {task.lead?.inquiryTag ? (
-                            <span
-                              className={cn(
-                                "rounded-full px-2 py-0.5 text-[10px] font-bold",
-                                INQUIRY_TAG_STYLE[task.lead.inquiryTag].soft,
-                              )}
-                            >
-                              {INQUIRY_TAG_LABEL[task.lead.inquiryTag]}
-                            </span>
-                          ) : null}
-                        </p>
-                        {task.body || task.lead?.notes ? (
-                          <p className="mt-1 line-clamp-2 text-[12px] text-[#64748b]">
-                            {task.body || task.lead?.notes}
-                          </p>
-                        ) : null}
-                        <p
-                          className={cn(
-                            "mt-1 text-[12px] font-semibold sm:font-medium",
-                            overdue ? "text-[#e11d48]" : "text-[#64748b]",
-                          )}
-                        >
-                          {task.dueAt.toLocaleString("en-CA", {
-                            month: "long",
-                            day: "numeric",
-                            year: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                      <TaskCompleteButton taskId={task.id} />
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+          <LaunchpadTodoCarousel
+            totalOpen={openTasks.length}
+            tasks={todoRows.map((task) => ({
+              id: task.id,
+              title: task.title,
+              body: task.body,
+              type: task.type,
+              dueAt: task.dueAt.toISOString(),
+              lead: task.lead
+                ? {
+                    id: task.lead.id,
+                    listingMls: task.lead.listingMls,
+                    notes: task.lead.notes,
+                    inquiryTag: task.lead.inquiryTag,
+                    customer: task.lead.customer,
+                  }
+                : null,
+            }))}
+          />
 
           <ContactRequestedPanel
             leads={contactRequested.map((lead) => {

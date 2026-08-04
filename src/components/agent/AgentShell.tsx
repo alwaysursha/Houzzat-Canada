@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  ChartColumn,
   CheckSquare,
   Inbox,
   LayoutDashboard,
@@ -26,6 +27,7 @@ const NAV = [
   { href: "/agent/leads", label: "Leads", icon: Users },
   { href: "/agent/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/agent/appointments", label: "Calendar", icon: CalendarDays },
+  { href: "/agent/statistics", label: "Statistics", icon: ChartColumn },
   { href: "/agent/inbox", label: "Comms", icon: Inbox, fullLabel: "Communications" },
   { href: "/agent/cma", label: "CMA", icon: LineChart },
   { href: "/agent/team", label: "Team", icon: UsersRound },
@@ -35,7 +37,7 @@ const NAV = [
 const MOBILE_TABS = [
   NAV[0],
   NAV[1],
-  NAV[2],
+  NAV[4],
   NAV[3],
 ] as const;
 
@@ -106,8 +108,10 @@ export function AgentShell({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const isProfilePage = /^\/agent\/leads\/[^/]+$/.test(pathname);
-  const moreActive = NAV.slice(4).some((item) =>
-    navActive(pathname, item.href),
+  const mobileTabHrefs = new Set<string>(MOBILE_TABS.map((t) => t.href));
+  const moreActive = NAV.some(
+    (item) =>
+      !mobileTabHrefs.has(item.href) && navActive(pathname, item.href),
   );
 
   useEffect(() => {
