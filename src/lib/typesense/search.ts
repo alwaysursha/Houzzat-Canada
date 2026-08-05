@@ -4,6 +4,7 @@ import type {
   PropertyType,
 } from "@prisma/client";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
+import { resolveListingAddedAt } from "@/lib/listings/constants";
 import type {
   ListingCard,
   ListingSearchParams,
@@ -132,22 +133,29 @@ function buildFilterBy(params: ListingSearchParams): string | undefined {
   return parts.length ? parts.join(" && ") : undefined;
 }
 
+function isSoldNewestSort(params: ListingSearchParams): boolean {
+  return (
+    params.sort === "newest" &&
+    (params.status === "SOLD" || Boolean(params.statuses?.includes("SOLD")))
+  );
+}
+
 function buildSortBy(params: ListingSearchParams): string {
   const hasText = Boolean(params.q?.trim());
-  const soldNewest =
-    params.sort === "newest" &&
-    (params.status === "SOLD" || params.statuses?.includes("SOLD"));
 
   if (params.sort === "price_desc") {
     return hasText ? "_text_match:desc,listPrice:desc" : "listPrice:desc";
   }
   if (params.sort === "newest") {
-    if (soldNewest) {
+    if (isSoldNewestSort(params)) {
       return hasText
-        ? "_text_match:desc,updatedAtMls:desc"
-        : "updatedAtMls:desc";
+        ? "_text_match:desc,updatedAtMls:desc,listedAt:desc"
+        : "updatedAtMls:desc,listedAt:desc";
     }
-    return hasText ? "_text_match:desc,listedAt:desc" : "listedAt:desc";
+    // Match Neon: listedAt first, then MLS mod time (date-only listedAt ties).
+    return hasText
+      ? "_text_match:desc,listedAt:desc,updatedAtMls:desc"
+      : "listedAt:desc,updatedAtMls:desc";
   }
   // price / price_asc / default
   return hasText ? "_text_match:desc,listPrice:asc" : "listPrice:asc";
@@ -229,6 +237,15 @@ export async function typesenseSearch(
     const limit = Math.min(params.limit ?? 40, 500);
     const page = parsePageCursor(params.cursor);
     const q = params.q?.trim() || "*";
+    // Date-only listedAt ties hide same-day "Added 7h ago" behind "1 day ago"
+    // unless we over-fetch and rank by resolveListingAddedAt.
+    const rankByAddedAt =
+      params.sort === "newest" &&
+      !isSoldNewestSort(params) &&
+      !params.cursor;
+    const perPage = rankByAddedAt
+      ? Math.min(Math.max(limit * 5, 60), 200)
+      : limit;
 
     const result = await client
       .collections(collection)
@@ -240,7 +257,7 @@ export async function typesenseSearch(
         query_by_weights: "4,3,2,2,2,1",
         filter_by: buildFilterBy(params),
         sort_by: buildSortBy(params),
-        per_page: limit,
+        per_page: perPage,
         page,
         prefix: true,
         num_typos: q === "*" ? 0 : 1,
@@ -248,7 +265,19 @@ export async function typesenseSearch(
       });
 
     const hits = (result.hits ?? []) as Array<{ document: TypesenseListingDoc }>;
-    const items = hits.map((h) => docToCard(h.document));
+    let items = hits.map((h) => docToCard(h.document));
+
+    if (rankByAddedAt) {
+      items = [...items]
+        .sort((a, b) => {
+          const aAt = resolveListingAddedAt(a)?.getTime() ?? 0;
+          const bAt = resolveListingAddedAt(b)?.getTime() ?? 0;
+          if (bAt !== aAt) return bAt - aAt;
+          return b.mlsNumber.localeCompare(a.mlsNumber);
+        })
+        .slice(0, limit);
+    }
+
     const found = result.found ?? items.length;
     const hasMore = page * limit < found;
 

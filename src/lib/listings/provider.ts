@@ -24,8 +24,18 @@ import {
   getPropTxSyncHealth,
 } from "@/lib/proptx/sync";
 import { isPropTxConfigured } from "@/lib/proptx/config";
+import { resolveListingAddedAt } from "@/lib/listings/constants";
 import { typesenseAutocomplete } from "@/lib/typesense/autocomplete";
 import { typesenseSearch } from "@/lib/typesense/search";
+
+function sortCardsByAddedAtDesc<T extends ListingCard>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const aAt = resolveListingAddedAt(a)?.getTime() ?? 0;
+    const bAt = resolveListingAddedAt(b)?.getTime() ?? 0;
+    if (bAt !== aAt) return bAt - aAt;
+    return b.mlsNumber.localeCompare(a.mlsNumber);
+  });
+}
 
 export function toCard(
   listing: Prisma.ListingGetPayload<{
@@ -151,6 +161,12 @@ export class DbListingProvider implements ListingProvider {
       fromTypesense &&
       !(fromTypesense.items.length === 0 && params.q?.trim())
     ) {
+      if (params.sort === "newest" && params.status !== "SOLD") {
+        return {
+          ...fromTypesense,
+          items: sortCardsByAddedAtDesc(fromTypesense.items),
+        };
+      }
       return fromTypesense;
     }
 
@@ -272,6 +288,15 @@ export class DbListingProvider implements ListingProvider {
           ? ([{ listPrice: "desc" }, { mlsNumber: "desc" }] as const)
           : ([{ listPrice: "asc" }, { mlsNumber: "asc" }] as const);
 
+    const rankByAddedAt =
+      params.sort === "newest" &&
+      params.status !== "SOLD" &&
+      !params.statuses?.includes("SOLD") &&
+      !params.cursor;
+    const fetchTake = rankByAddedAt
+      ? Math.min(Math.max(limit * 5, 60), 200)
+      : limit + 1;
+
     const [total, rows] = await Promise.all([
       prisma.listing.count({ where }),
       prisma.listing.findMany({
@@ -281,7 +306,7 @@ export class DbListingProvider implements ListingProvider {
           openHouses: { orderBy: { startsAt: "asc" } },
         },
         orderBy: [...orderBy],
-        take: limit + 1,
+        take: fetchTake,
         ...(params.cursor
           ? {
               skip: 1,
@@ -291,12 +316,21 @@ export class DbListingProvider implements ListingProvider {
       }),
     ]);
 
-    const hasMore = rows.length > limit;
-    const page = hasMore ? rows.slice(0, limit) : rows;
+    let items = rows.map(toCard);
+    if (rankByAddedAt) {
+      items = sortCardsByAddedAtDesc(items).slice(0, limit);
+    } else if (items.length > limit) {
+      items = items.slice(0, limit);
+    }
+    const hasMore = rankByAddedAt
+      ? total > limit
+      : rows.length > limit;
 
     return {
-      items: page.map(toCard),
-      nextCursor: hasMore ? page[page.length - 1]?.mlsNumber ?? null : null,
+      items,
+      nextCursor: hasMore
+        ? items[items.length - 1]?.mlsNumber ?? null
+        : null,
       total,
       provider: this.name,
     };
