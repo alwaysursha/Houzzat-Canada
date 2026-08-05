@@ -14,7 +14,7 @@ import { ListingHistoryPanel } from "@/components/listings/ListingHistoryPanel";
 import { ListingNarrative } from "@/components/listings/ListingNarrative";
 import { ListingQaPanel } from "@/components/listings/ListingQaPanel";
 import { ListingStickyBar } from "@/components/listings/ListingStickyBar";
-import { NearbyAmenities } from "@/components/listings/NearbyAmenities";
+import { NearbyAmenitiesDeferred } from "@/components/listings/NearbyAmenitiesDeferred";
 import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
 import { ListingRelatedSection } from "@/components/listings/ListingRelatedSection";
 import { ListingMobileSideMenu } from "@/components/listings/ListingMobileSideMenu";
@@ -23,7 +23,7 @@ import { ListingDetailSectionNav } from "@/components/listings/ListingDetailSect
 import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
 import { ListingMobileNotes } from "@/components/listings/ListingMobileNotes";
 import { RecordRecentView } from "@/components/listings/RecordRecentView";
-import { HouzzatInsights } from "@/components/listings/insights/HouzzatInsights";
+import { ListingInsightsDeferred } from "@/components/listings/insights/ListingInsightsDeferred";
 import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import { slugifyPlace } from "@/lib/geo/distance";
@@ -52,12 +52,9 @@ import {
 import { getListingProvider } from "@/lib/listings/provider";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
 import { getPopularCities } from "@/lib/listings/popular-cities";
-import { buildListingInsights } from "@/lib/market/listing-insights";
-import { getMarketPulse } from "@/lib/market/pulse";
 import { auth } from "@/lib/auth";
 import { t } from "@/lib/i18n/dictionaries";
 import { getLocale } from "@/lib/i18n/locale";
-import { findNearbyPois } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { lookupAndUpsertOnDemand } from "@/lib/proptx/on-demand-lookup";
@@ -281,27 +278,12 @@ export default async function ListingDetailPage({ params }: Params) {
     // Non-blocking analytics — never fail the listing page.
   }
 
-  const [nearby, pulse, popularCities, addressSiblings] = await Promise.all([
-    findNearbyPois({
-      lat: listing.lat,
-      lng: listing.lng,
-      radiusKm: 2,
-      limitPerType: 8,
-    }),
-    getMarketPulse({
-      city: listing.city,
-      community: listing.community,
-      includeSold: vowOk,
-    }),
-    getPopularCities(12),
-    findSiblingListingsAtAddress(listing),
+  // Heavy Insights / comps / amenities load client-side after first paint so
+  // fast listing↔listing navigation doesn't stall or trip the error boundary.
+  const [popularCities, addressSiblings] = await Promise.all([
+    getPopularCities(12).catch(() => [] as Awaited<ReturnType<typeof getPopularCities>>),
+    findSiblingListingsAtAddress(listing).catch(() => []),
   ]);
-  const insights = await buildListingInsights({
-    listing,
-    pulse,
-    pois: nearby,
-    signedIn: vowOk,
-  });
   const personalizationCities = popularCities.map((row) => row.city);
   const upcomingOpenHouses = listing.openHouses.filter(
     (oh) => oh.endsAt.getTime() >= Date.now(),
@@ -795,8 +777,8 @@ export default async function ListingDetailPage({ params }: Params) {
             rows={listingHistoryRows}
           />
 
-          <HouzzatInsights
-            insights={insights}
+          <ListingInsightsDeferred
+            mlsNumber={listing.mlsNumber}
             callbackPath={canonicalPath}
             needsEmailVerification={verifyLocked}
           />
@@ -815,11 +797,7 @@ export default async function ListingDetailPage({ params }: Params) {
             signedIn={Boolean(user)}
           />
 
-          <NearbyAmenities
-            lat={listing.lat}
-            lng={listing.lng}
-            pois={nearby}
-          />
+          <NearbyAmenitiesDeferred lat={listing.lat} lng={listing.lng} />
 
           {upcomingOpenHouses.length > 0 ? (
             <section

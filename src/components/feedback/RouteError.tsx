@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { SITE_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -13,15 +13,32 @@ type RouteErrorProps = {
   className?: string;
 };
 
+function isRecoverableRouteError(error: Error) {
+  const message = `${error.name} ${error.message}`;
+  return /ChunkLoadError|Loading chunk|Failed to fetch|NetworkError|fetch failed|aborted|AbortError|dynamically imported module/i.test(
+    message,
+  );
+}
+
 export function RouteError({
   error,
   reset,
   title = "Something went wrong",
   className,
 }: RouteErrorProps) {
+  const autoRetried = useRef(false);
+
   useEffect(() => {
     console.error("[route-error]", error.digest ?? error.message, error);
   }, [error]);
+
+  useEffect(() => {
+    if (autoRetried.current || !isRecoverableRouteError(error)) return;
+    autoRetried.current = true;
+    // Soft reset first (keeps SPA shell). Hard reload is a last resort via UI.
+    const t = window.setTimeout(() => reset(), 120);
+    return () => window.clearTimeout(t);
+  }, [error, reset]);
 
   return (
     <div

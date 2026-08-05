@@ -7,6 +7,7 @@ import { RecentViewsSync } from "@/components/account/RecentViewsSync";
 import { SavedListingsProvider } from "@/components/account/SavedListingsProvider";
 import { ActivityBeacon } from "@/components/analytics/ActivityBeacon";
 import { AuthModalProvider } from "@/components/auth/AuthModalProvider";
+import { NavigationRecovery } from "@/components/feedback/NavigationRecovery";
 import { SiteAlertProvider } from "@/components/feedback/SiteAlertProvider";
 import { RoutePlannerProvider } from "@/components/route-planner/RoutePlannerProvider";
 
@@ -17,6 +18,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <RoutePlannerProvider>
           <SiteAlertProvider>
             <AuthModalProvider>
+              <NavigationRecovery />
               <RecentViewsSync />
               <Suspense fallback={null}>
                 <ActivityBeacon />
