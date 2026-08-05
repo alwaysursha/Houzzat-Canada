@@ -37,6 +37,8 @@ export type ListingCard = {
   openHouses: { startsAt: string; endsAt: string }[];
   daysOnMarket: number;
   listedAt: string;
+  /** PropTx ModificationTimestamp — used when listedAt is date-only. */
+  updatedAtMls?: string | null;
   soldAt: string | null;
   isMock: boolean;
   dataSource?: string;

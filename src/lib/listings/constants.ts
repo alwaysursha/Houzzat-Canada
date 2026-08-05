@@ -197,11 +197,46 @@ export function closedPriceLabel(
  * Site-wide listing timing label:
  * - Active → "Added … ago" from MLS list time (`listedAt`)
  * - Sold/Leased → "Sold on …" / "Leased on …"
+ *
+ * When `listedAt` is date-only (midnight UTC), prefer same-day `updatedAtMls`
+ * so same-day listings don't all read as "1 day ago" after 8pm ET.
  */
+export function resolveListingAddedAt(listing: {
+  listedAt?: Date | string | null;
+  updatedAtMls?: Date | string | null;
+}): Date | null {
+  if (!listing.listedAt) return null;
+  const listed =
+    typeof listing.listedAt === "string"
+      ? new Date(listing.listedAt)
+      : listing.listedAt;
+  if (Number.isNaN(listed.getTime())) return null;
+
+  const isMidnightUtc =
+    listed.getUTCHours() === 0 &&
+    listed.getUTCMinutes() === 0 &&
+    listed.getUTCSeconds() === 0 &&
+    listed.getUTCMilliseconds() === 0;
+  if (!isMidnightUtc || !listing.updatedAtMls) return listed;
+
+  const updated =
+    typeof listing.updatedAtMls === "string"
+      ? new Date(listing.updatedAtMls)
+      : listing.updatedAtMls;
+  if (Number.isNaN(updated.getTime())) return listed;
+
+  const sameDay =
+    listed.getUTCFullYear() === updated.getUTCFullYear() &&
+    listed.getUTCMonth() === updated.getUTCMonth() &&
+    listed.getUTCDate() === updated.getUTCDate();
+  return sameDay ? updated : listed;
+}
+
 export function formatListingTiming(listing: {
   status: ListingStatus;
   transactionType: ListingTransactionType | string;
   listedAt?: Date | string | null;
+  updatedAtMls?: Date | string | null;
   soldAt?: Date | string | null;
   daysOnMarket?: number | null;
 }) {
@@ -228,8 +263,9 @@ export function formatListingTiming(listing: {
     return verb;
   }
 
-  if (listing.listedAt) {
-    const age = formatRelativeAge(listing.listedAt);
+  const addedAt = resolveListingAddedAt(listing);
+  if (addedAt) {
+    const age = formatRelativeAge(addedAt);
     if (age) return age === "just now" ? "Added just now" : `Added ${age}`;
   }
 

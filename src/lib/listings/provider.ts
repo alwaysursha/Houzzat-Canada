@@ -90,6 +90,9 @@ export function toCard(
     })),
     daysOnMarket: listing.daysOnMarket,
     listedAt: listing.listedAt.toISOString(),
+    updatedAtMls: listing.updatedAtMls
+      ? listing.updatedAtMls.toISOString()
+      : null,
     soldAt: (() => {
       if (!listing.soldAt) return null;
       // CloseDate was historically stored as soldAt; ignore future closings.
@@ -253,7 +256,7 @@ export class DbListingProvider implements ListingProvider {
               { listedAt: "desc" },
               { mlsNumber: "desc" },
             ] as const)
-          : ([{ listedAt: "desc" }, { mlsNumber: "desc" }] as const)
+          : ([{ listedAt: "desc" }, { updatedAtMls: "desc" }, { mlsNumber: "desc" }] as const)
         : params.sort === "price_desc"
           ? ([{ listPrice: "desc" }, { mlsNumber: "desc" }] as const)
           : ([{ listPrice: "asc" }, { mlsNumber: "asc" }] as const);

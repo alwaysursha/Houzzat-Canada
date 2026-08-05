@@ -60,6 +60,72 @@ function date(row: PropTxProperty, ...keys: string[]): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function isUtcMidnight(d: Date): boolean {
+  return (
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0 &&
+    d.getUTCMilliseconds() === 0
+  );
+}
+
+function isDateOnlyString(raw: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw.trim());
+}
+
+function sameUtcCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getUTCFullYear() === b.getUTCFullYear() &&
+    a.getUTCMonth() === b.getUTCMonth() &&
+    a.getUTCDate() === b.getUTCDate()
+  );
+}
+
+function dateField(
+  row: PropTxProperty,
+  key: string,
+): { date: Date; dateOnly: boolean } | null {
+  const raw = str(row, key);
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return {
+    date: d,
+    dateOnly: isDateOnlyString(raw) || isUtcMidnight(d),
+  };
+}
+
+/**
+ * Prefer a real clock time for "Added … ago" / newest sort.
+ * ListingContractDate / OnMarketDate are often date-only (midnight UTC), which
+ * makes same-day listings look like "1 day ago" after 8pm ET.
+ */
+function pickListedAt(row: PropTxProperty): Date {
+  const entry = dateField(row, "OriginalEntryTimestamp");
+  if (entry && !entry.dateOnly) return entry.date;
+
+  const contract =
+    dateField(row, "ListingContractDate") ?? dateField(row, "OnMarketDate");
+  const mod = dateField(row, "ModificationTimestamp");
+
+  if (entry) {
+    if (mod && !mod.dateOnly && sameUtcCalendarDay(entry.date, mod.date)) {
+      return mod.date;
+    }
+    return entry.date;
+  }
+
+  if (contract) {
+    if (mod && !mod.dateOnly && sameUtcCalendarDay(contract.date, mod.date)) {
+      return mod.date;
+    }
+    return contract.date;
+  }
+
+  if (mod) return mod.date;
+  return new Date();
+}
+
 /**
  * Date shown as "Sold on …" / used for recently-sold sort.
  * Prefer PurchaseContractDate (TRREB "Sold Date") over CloseDate — CloseDate is
@@ -524,12 +590,9 @@ export function mapPropertyToListingResult(
       ? Math.round(soldPriceRaw)
       : null;
 
-  // MLS list time for "Added … ago". Prefer OriginalEntryTimestamp (has clock time);
-  // ListingContractDate / OnMarketDate are often date-only (midnight UTC).
-  const listedAt =
-    date(row, "OriginalEntryTimestamp", "OnMarketDate", "ListingContractDate") ??
-    date(row, "ModificationTimestamp") ??
-    new Date();
+  // MLS list time for "Added … ago". Prefer OriginalEntryTimestamp (clock);
+  // date-only contract fields are upgraded with same-day ModificationTimestamp.
+  const listedAt = pickListedAt(row);
   const updatedAtMls =
     date(row, "ModificationTimestamp", "PhotosChangeTimestamp") ?? listedAt;
   const soldAt = mapSoldAt(row);

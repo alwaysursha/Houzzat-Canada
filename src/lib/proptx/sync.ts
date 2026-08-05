@@ -708,7 +708,9 @@ async function upsertPropertyRow(
       );
     }
 
-    if (options.fetchNested && data.listingKey) {
+    // Always attach a cover when Neon has none — cards/rails use stored media only.
+    // Full gallery still loads live from PropTx on detail pages.
+    if (data.listingKey) {
       const mediaCount = await prisma.listingMedia.count({
         where: { listingId: listing.id },
       });
@@ -718,14 +720,18 @@ async function upsertPropertyRow(
             data.listingKey,
             listing.id,
             options.stats,
+            { maxPhotos: 1 },
           );
         } catch (err) {
           options.stats.errors.push(
             `media ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
           );
+          if (isNeonSizeLimitError(err)) throw err;
         }
       }
+    }
 
+    if (options.fetchNested && data.listingKey) {
       const roomCount = await prisma.listingRoom.count({
         where: { listingId: listing.id },
       });
@@ -844,17 +850,18 @@ async function syncJustListedProperties(options: {
   const fromDate = from.toISOString().slice(0, 10);
   const fromTs = toODataDate(from);
 
-  // Prefer contract / entry timestamps; fall back if the board rejects a field.
+  // Prefer entry timestamp (has clock). ListingContractDate succeeds board-wide
+  // but is date-only — using it first buried true "just listed" ordering.
   const attempts: Array<{ label: string; filter: string; orderby: string }> = [
-    {
-      label: "ListingContractDate",
-      filter: `(StandardStatus eq 'Active' or MlsStatus eq 'A') and ListingContractDate ge ${fromDate}`,
-      orderby: "ListingContractDate desc,ListingKey desc",
-    },
     {
       label: "OriginalEntryTimestamp",
       filter: `(StandardStatus eq 'Active' or MlsStatus eq 'A') and OriginalEntryTimestamp ge ${fromTs}`,
       orderby: "OriginalEntryTimestamp desc,ListingKey desc",
+    },
+    {
+      label: "ListingContractDate",
+      filter: `(StandardStatus eq 'Active' or MlsStatus eq 'A') and ListingContractDate ge ${fromDate}`,
+      orderby: "ListingContractDate desc,ListingKey desc",
     },
     {
       label: "OnMarketDate",
@@ -1122,7 +1129,8 @@ async function syncMediaBackfill(options: {
     media: { none: {} },
   };
 
-  // Newest ACTIVE without photos first (what visitors see), then LEASED/SOLD.
+  // Newest ACTIVE without photos first (what visitors see), then closed,
+  // then terminated/expired/suspended so every status gets a cover over time.
   const active = await prisma.listing.findMany({
     where: { ...baseWhere, status: "ACTIVE" },
     select: {
@@ -1138,7 +1146,7 @@ async function syncMediaBackfill(options: {
 
   let listings = active;
   if (active.length < take) {
-    const rest = await prisma.listing.findMany({
+    const closed = await prisma.listing.findMany({
       where: {
         ...baseWhere,
         status: { in: ["LEASED", "SOLD"] },
@@ -1153,7 +1161,25 @@ async function syncMediaBackfill(options: {
       take: take - active.length,
       orderBy: [{ listedAt: "desc" }, { updatedAt: "desc" }],
     });
-    listings = [...active, ...rest];
+    listings = [...active, ...closed];
+  }
+  if (listings.length < take) {
+    const inactive = await prisma.listing.findMany({
+      where: {
+        ...baseWhere,
+        status: { in: ["TERMINATED", "EXPIRED", "SUSPENDED"] },
+      },
+      select: {
+        id: true,
+        listingKey: true,
+        mlsNumber: true,
+        status: true,
+        listedAt: true,
+      },
+      take: take - listings.length,
+      orderBy: [{ listedAt: "desc" }, { updatedAt: "desc" }],
+    });
+    listings = [...listings, ...inactive];
   }
 
   console.log(
@@ -1648,7 +1674,8 @@ export async function runPropTxMlsSync(options?: {
         );
       }
 
-      // 4) Small photo gap-fill — bulk photos belong in mls-media / Mac media job.
+      // 4) Photo gap-fill (ACTIVE → SOLD/LEASED → TERMINATED/EXPIRED/SUSPENDED).
+      // New/updated listings also get a cover in upsertPropertyRow when media is empty.
       try {
         await syncMediaBackfill({
           maxListings: mediaCap,
