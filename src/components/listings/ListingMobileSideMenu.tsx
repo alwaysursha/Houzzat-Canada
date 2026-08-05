@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
  */
 export function ListingMobileSideMenu({
   mlsNumber,
+  callbackPath,
   initiallySaved,
   initiallyWatching,
   signedIn,
@@ -24,6 +25,8 @@ export function ListingMobileSideMenu({
   similarHomesHref,
 }: {
   mlsNumber: string;
+  /** Canonical SEO path for auth redirects. */
+  callbackPath?: string;
   initiallySaved: boolean;
   initiallyWatching: boolean;
   signedIn: boolean;
@@ -34,6 +37,7 @@ export function ListingMobileSideMenu({
   inactive?: boolean;
   similarHomesHref?: string;
 }) {
+  const authCallbackUrl = callbackPath ?? `/listing/${mlsNumber}`;
   const [open, setOpen] = useState(false);
   const [nudge, setNudge] = useState(false);
   const titleId = useId();
@@ -170,6 +174,7 @@ export function ListingMobileSideMenu({
                 mlsNumber={mlsNumber}
                 initiallySaved={initiallySaved}
                 signedIn={signedIn}
+                authCallbackUrl={authCallbackUrl}
               />
             </li>
             {inactive ? (
@@ -182,7 +187,7 @@ export function ListingMobileSideMenu({
                     segment={watchSegment}
                     signedIn={signedIn}
                     idleLabel="Watch this area"
-                    authCallbackUrl={`/listing/${mlsNumber}`}
+                    authCallbackUrl={authCallbackUrl}
                   />
                 </li>
                 {similarHomesHref ? (
@@ -207,6 +212,7 @@ export function ListingMobileSideMenu({
                     signedIn={signedIn}
                     idleLabel="Watch property"
                     activeLabel="Watching"
+                    authCallbackUrl={authCallbackUrl}
                   />
                 </li>
                 <li className="[&_button]:h-11 [&_button]:w-full [&_button]:justify-start [&_button]:px-3 [&_button]:text-sm">
@@ -217,7 +223,7 @@ export function ListingMobileSideMenu({
                     segment={watchSegment}
                     signedIn={signedIn}
                     idleLabel="Watch area"
-                    authCallbackUrl={`/listing/${mlsNumber}`}
+                    authCallbackUrl={authCallbackUrl}
                   />
                 </li>
               </>

@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { formatListPrice } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import { useFlyoutFixedStyle } from "@/lib/use-flyout-fixed-style";
 import { cn } from "@/lib/utils";
 
@@ -253,7 +254,15 @@ export function SavedHomesMenuButton() {
     };
     return (json.items ?? []).map((item) => ({
       id: item.mlsNumber,
-      href: `/listing/${item.mlsNumber}`,
+      href:
+        item.addressLine && item.city
+          ? listingPath({
+              mlsNumber: item.mlsNumber,
+              addressLine: item.addressLine,
+              unitNumber: item.unitNumber,
+              city: item.city,
+            })
+          : `/listing/${item.mlsNumber}`,
       title:
         item.addressLine && item.city
           ? formatAddress({
@@ -299,7 +308,15 @@ export function NotesMenuButton() {
     };
     return (json.items ?? []).map((item) => ({
       id: item.mlsNumber,
-      href: `/listing/${item.mlsNumber}`,
+      href:
+        item.addressLine && item.city
+          ? listingPath({
+              mlsNumber: item.mlsNumber,
+              addressLine: item.addressLine,
+              unitNumber: item.unitNumber,
+              city: item.city,
+            })
+          : `/listing/${item.mlsNumber}`,
       title:
         item.addressLine && item.city
           ? formatAddress({
@@ -362,7 +379,15 @@ export function WatchlistMenuButton() {
         };
         nextHomes = (json.items ?? []).map((item) => ({
           id: item.id,
-          href: `/listing/${item.mlsNumber}`,
+          href:
+            item.addressLine && item.city
+              ? listingPath({
+                  mlsNumber: item.mlsNumber,
+                  addressLine: item.addressLine,
+                  unitNumber: item.unitNumber,
+                  city: item.city,
+                })
+              : `/listing/${item.mlsNumber}`,
           title:
             item.addressLine && item.city
               ? formatAddress({

@@ -103,6 +103,7 @@ export function ListingGallery({
   photos,
   addressLabel,
   mlsNumber,
+  callbackPath,
   contact,
   coverTag,
   coverTagClassName,
@@ -117,6 +118,8 @@ export function ListingGallery({
   photos: GalleryPhoto[];
   addressLabel: string;
   mlsNumber: string;
+  /** Canonical SEO path for auth redirects (`/listing/slug/MLS`). */
+  callbackPath?: string;
   contact?: ViewingContactDefaults;
   /** Bottom-left hero badge: For Sale / For Lease / Sold / etc. */
   coverTag?: string;
@@ -141,7 +144,7 @@ export function ListingGallery({
   hiddenPhotoCount?: number;
 }) {
   const tourUrl = virtualTourUrl?.trim() || null;
-  const lockCallback = `/listing/${mlsNumber}`;
+  const lockCallback = callbackPath ?? `/listing/${mlsNumber}`;
   const labelId = useId();
   const isMobile = useIsMobileGallery();
   const [stackOpen, setStackOpen] = useState(false);

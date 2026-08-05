@@ -15,12 +15,14 @@ export function WatchListingButton({
   signedIn,
   idleLabel = "Watch",
   activeLabel = "Watching",
+  authCallbackUrl,
 }: {
   mlsNumber: string;
   initiallyWatching: boolean;
   signedIn: boolean;
   idleLabel?: string;
   activeLabel?: string;
+  authCallbackUrl?: string;
 }) {
   const router = useRouter();
   const { openAuth } = useAuthModal();
@@ -32,7 +34,7 @@ export function WatchListingButton({
     if (!signedIn) {
       openAuth({
         mode: "sign-in",
-        callbackUrl: `/listing/${mlsNumber}`,
+        callbackUrl: authCallbackUrl ?? `/listing/${mlsNumber}`,
       });
       return;
     }

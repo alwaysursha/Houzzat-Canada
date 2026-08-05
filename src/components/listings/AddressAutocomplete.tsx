@@ -966,7 +966,7 @@ export function AddressAutocomplete({
                 </button>
               ) : null}
             </div>
-            <ul>
+            <ul className="divide-y divide-line/70">
               {section.items.map((suggestion) => {
                 if (suggestion.action === "listings_empty") {
                   return (
@@ -998,7 +998,7 @@ export function AddressAutocomplete({
                       role="option"
                       aria-selected={active}
                       className={cn(
-                        "flex w-full items-stretch gap-3 px-4 text-left transition hover:bg-mist/80",
+                        "flex w-full items-stretch gap-3.5 px-4 text-left transition hover:bg-mist/80",
                         large ? "py-3.5" : "py-3",
                         active && "bg-mist/80",
                       )}
@@ -1352,8 +1352,8 @@ function SuggestionListingRow({
     <>
       <span
         className={cn(
-          "relative shrink-0 overflow-hidden rounded bg-mist",
-          large ? "size-[4.5rem]" : "size-14 sm:size-16",
+          "relative shrink-0 overflow-hidden rounded-md bg-mist",
+          large ? "size-[5.5rem]" : "size-[4.25rem] sm:size-[4.75rem]",
         )}
       >
         {suggestion.imageUrl ? (

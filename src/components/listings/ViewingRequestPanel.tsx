@@ -18,6 +18,7 @@ function defaultInquiryMessage(mlsNumber: string) {
 
 export function ViewingRequestPanel({
   mlsNumber,
+  callbackPath,
   contact,
   inactive = false,
   similarHomesHref,
@@ -29,6 +30,8 @@ export function ViewingRequestPanel({
   className,
 }: {
   mlsNumber: string;
+  /** Canonical SEO path for auth redirects. */
+  callbackPath?: string;
   contact?: ViewingContactDefaults;
   inactive?: boolean;
   similarHomesHref?: string;
@@ -45,6 +48,7 @@ export function ViewingRequestPanel({
   const similarHref =
     similarHomesHref ??
     `/search?status=ACTIVE&city=${encodeURIComponent(city ?? "")}`;
+  const authCallbackUrl = callbackPath ?? `/listing/${mlsNumber}`;
 
   const shellClass = cn(
     // Parent column must be the tall grid aside — do not wrap this in a short
@@ -91,7 +95,7 @@ export function ViewingRequestPanel({
                 segment={watchSegment}
                 signedIn={signedIn}
                 idleLabel="Watch this area"
-                authCallbackUrl={`/listing/${mlsNumber}`}
+                authCallbackUrl={authCallbackUrl}
               />
             </div>
           ) : null}

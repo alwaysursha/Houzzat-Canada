@@ -7,6 +7,7 @@ import { MarketPulseCard } from "@/components/market/MarketPulseCard";
 import { getCommunityNarrative } from "@/lib/ai/narratives";
 import { auth } from "@/lib/auth";
 import { formatPrice } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import { getMarketPulse } from "@/lib/market/pulse";
 import { findNearbyPois, summarizePoiCounts } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
@@ -148,7 +149,7 @@ export default async function AreaPage({ params }: Params) {
               return (
                 <Link
                   key={listing.id}
-                  href={`/listing/${listing.mlsNumber}`}
+                  href={listingPath(listing)}
                   className="overflow-hidden rounded-2xl border border-line bg-surface transition hover:border-canopy/40"
                 >
                   <div className="relative aspect-[16/10] bg-mist">

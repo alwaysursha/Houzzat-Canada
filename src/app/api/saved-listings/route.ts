@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireFullCustomerUser } from "@/lib/account";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
+import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
@@ -75,7 +76,12 @@ export async function POST(request: Request) {
 
   const listing = await prisma.listing.findUnique({
     where: { mlsNumber: parsed.data.mlsNumber },
-    select: { mlsNumber: true },
+    select: {
+      mlsNumber: true,
+      addressLine: true,
+      unitNumber: true,
+      city: true,
+    },
   });
   if (!listing) {
     return NextResponse.json({ error: "Listing not found." }, { status: 404 });
@@ -99,7 +105,7 @@ export async function POST(request: Request) {
     type: "SAVE_LISTING",
     userId: user.id,
     mlsNumber: listing.mlsNumber,
-    path: `/listing/${listing.mlsNumber}`,
+    path: listingPath(listing),
     title: `Saved ${listing.mlsNumber}`,
   });
 

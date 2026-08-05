@@ -12,6 +12,7 @@ import {
   propertyTypeLabel,
   formatListPrice,
 } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import { cn } from "@/lib/utils";
 
@@ -78,7 +79,7 @@ export function CompactPropertyCard({
       )}
     >
       <Link
-        href={`/listing/${listing.mlsNumber}`}
+        href={listingPath(listing)}
         className="absolute inset-0 block"
         aria-label={`${street}, ${place}`}
         onMouseEnter={onFocus}

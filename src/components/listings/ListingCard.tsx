@@ -15,6 +15,7 @@ import {
   listingStatusLabel,
   propertyTypeLabel,
 } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import { cn } from "@/lib/utils";
 
 function formatStat(value: number) {
@@ -241,7 +242,7 @@ export function ListingCard({
         <div className="flex flex-col">{body}</div>
       ) : (
         <Link
-          href={`/listing/${listing.mlsNumber}`}
+          href={listingPath(listing)}
           onMouseEnter={onFocus}
           onFocus={onFocus}
           onClick={
@@ -274,6 +275,7 @@ export function ListingCard({
             mlsNumber={listing.mlsNumber}
             title={shareTitle}
             listingStatus={listing.status}
+            path={listingPath(listing)}
           />
         )}
         <p className="min-w-0 truncate text-right text-xs font-semibold uppercase tracking-wide text-ink/55">

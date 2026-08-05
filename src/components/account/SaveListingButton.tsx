@@ -13,10 +13,12 @@ export function SaveListingButton({
   mlsNumber,
   initiallySaved,
   signedIn,
+  authCallbackUrl,
 }: {
   mlsNumber: string;
   initiallySaved: boolean;
   signedIn: boolean;
+  authCallbackUrl?: string;
 }) {
   const router = useRouter();
   const { openAuth } = useAuthModal();
@@ -28,7 +30,7 @@ export function SaveListingButton({
     if (!signedIn) {
       openAuth({
         mode: "sign-in",
-        callbackUrl: `/listing/${mlsNumber}`,
+        callbackUrl: authCallbackUrl ?? `/listing/${mlsNumber}`,
       });
       return;
     }

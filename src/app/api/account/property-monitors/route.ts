@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireFullCustomerUser } from "@/lib/account";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
+import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
@@ -62,6 +63,9 @@ export async function POST(request: Request) {
     where: { mlsNumber: parsed.data.mlsNumber },
     select: {
       mlsNumber: true,
+      addressLine: true,
+      unitNumber: true,
+      city: true,
       listPrice: true,
       status: true,
       ownerStatus: true,
@@ -98,7 +102,7 @@ export async function POST(request: Request) {
     type: "WATCH_PROPERTY",
     userId: user.id,
     mlsNumber: listing.mlsNumber,
-    path: `/listing/${listing.mlsNumber}`,
+    path: listingPath(listing),
     title: `Watching ${listing.mlsNumber}`,
   });
 

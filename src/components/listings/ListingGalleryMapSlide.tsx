@@ -24,6 +24,7 @@ import {
   propertyTypeLabel,
 } from "@/lib/listings/constants";
 import type { ListingCard } from "@/lib/listings/types";
+import { listingPath } from "@/lib/listings/listing-path";
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
 import { cn } from "@/lib/utils";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
@@ -121,7 +122,7 @@ function CompactNearbyCard({ listing }: { listing: NearbyPin }) {
 
   return (
     <Link
-      href={`/listing/${listing.mlsNumber}`}
+      href={listingPath(listing)}
       className="block w-[17.5rem] overflow-hidden rounded-md border border-line bg-surface shadow-xl transition hover:border-canopy/40"
     >
       <div className="relative h-36 bg-mist">

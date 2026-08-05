@@ -8,6 +8,7 @@ import type {
   AutocompleteOptions,
   AutocompleteSuggestion,
 } from "@/lib/listings/types";
+import { listingPath } from "@/lib/listings/listing-path";
 import {
   getTypesenseCollectionName,
   getTypesenseSearchClient,
@@ -76,7 +77,12 @@ function hitToSuggestion(
     unitNumber: doc.unitNumber ?? null,
     lat,
     lng,
-    href: `/listing/${doc.mlsNumber}`,
+    href: listingPath({
+      mlsNumber: doc.mlsNumber,
+      addressLine: doc.addressLine,
+      unitNumber: doc.unitNumber,
+      city: doc.city,
+    }),
     listPrice: doc.listPrice,
     beds: doc.beds,
     baths: doc.baths,

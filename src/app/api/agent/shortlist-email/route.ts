@@ -11,6 +11,7 @@ import {
   formatListPrice,
   formatListingAddressOneLine,
 } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import { toCard } from "@/lib/listings/provider";
 import { sendNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
   const listingLines = cards.map((c, i) => {
     const addr = formatListingAddressOneLine(c);
     const price = formatListPrice(c.listPrice, c.transactionType);
-    return `${i + 1}. ${addr} — ${price} (${c.beds} bed · MLS ${c.mlsNumber})\n   ${SITE_URL}/listing/${c.mlsNumber}`;
+    return `${i + 1}. ${addr} — ${price} (${c.beds} bed · MLS ${c.mlsNumber})\n   ${SITE_URL}${listingPath(c)}`;
   });
 
   const noteBlock = note ? `\n${note}\n` : "";

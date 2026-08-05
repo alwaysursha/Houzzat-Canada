@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatListPrice, formatPrice } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 
 type OwnerOrder = {
   id: string;
@@ -277,7 +278,7 @@ export function FsboAdminClient() {
                   ) : null}
                 </div>
                 <Link
-                  href={`/listing/${listing.mlsNumber}`}
+                  href={listingPath(listing)}
                   className="text-sm font-semibold text-canopy"
                 >
                   Public page

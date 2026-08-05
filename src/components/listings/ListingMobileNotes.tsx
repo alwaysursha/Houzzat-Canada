@@ -18,10 +18,12 @@ export function ListingMobileNotes({
   mlsNumber,
   signedIn,
   initialBody = "",
+  authCallbackUrl,
 }: {
   mlsNumber: string;
   signedIn: boolean;
   initialBody?: string;
+  authCallbackUrl?: string;
 }) {
   const titleId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -98,6 +100,7 @@ export function ListingMobileNotes({
               mlsNumber={mlsNumber}
               signedIn={signedIn}
               initialBody={initialBody}
+              authCallbackUrl={authCallbackUrl}
               embedded
             />
           </div>

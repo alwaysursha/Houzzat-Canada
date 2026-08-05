@@ -465,7 +465,12 @@ export class DbListingProvider implements ListingProvider {
         unitNumber: l.unitNumber,
         lat: l.lat,
         lng: l.lng,
-        href: `/listing/${l.mlsNumber}`,
+        href: listingPath({
+          mlsNumber: l.mlsNumber,
+          addressLine: l.addressLine,
+          unitNumber: l.unitNumber,
+          city: l.city,
+        }),
         listPrice: l.listPrice,
         beds: l.beds,
         baths: l.baths,

@@ -6,6 +6,7 @@ import {
 } from "@/lib/ads/generate";
 import { requireAgentUser } from "@/lib/agent";
 import { isAdminRole } from "@/lib/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
 
 async function requireAdmin() {
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
     if (!listing) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }
-    destinationPath = `/listing/${listing.mlsNumber}`;
+    destinationPath = listingPath(listing);
     city = listing.city;
     community = listing.community;
     addressLine = listing.addressLine;

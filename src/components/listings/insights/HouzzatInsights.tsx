@@ -20,6 +20,7 @@ import {
 import { InsightGate } from "@/components/listings/insights/InsightGate";
 import { ListingSection } from "@/components/listings/ListingSection";
 import { formatPrice, formatPriceCompact } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import type { ListingInsightsPayload } from "@/lib/market/listing-insights";
 import { cn } from "@/lib/utils";
 
@@ -523,7 +524,7 @@ export function HouzzatInsights({
                 {comps.items.map((c) => (
                   <li key={c.mlsNumber}>
                     <Link
-                      href={`/listing/${c.mlsNumber}`}
+                      href={listingPath(c)}
                       className="block h-full rounded-xl border border-line bg-mist/40 p-3.5 transition hover:border-canopy/35 hover:bg-surface"
                     >
                       <p className="truncate text-sm font-semibold text-ink">

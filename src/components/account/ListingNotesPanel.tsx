@@ -12,6 +12,7 @@ export function ListingNotesPanel({
   initialBody = "",
   className,
   embedded = false,
+  authCallbackUrl,
 }: {
   mlsNumber: string;
   signedIn: boolean;
@@ -19,6 +20,7 @@ export function ListingNotesPanel({
   className?: string;
   /** Skip outer section chrome (for mobile drawer). */
   embedded?: boolean;
+  authCallbackUrl?: string;
 }) {
   const { openAuth } = useAuthModal();
   const [body, setBody] = useState(initialBody);
@@ -27,6 +29,7 @@ export function ListingNotesPanel({
   );
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydrated = useRef(false);
+  const callbackUrl = authCallbackUrl ?? `/listing/${mlsNumber}`;
 
   useEffect(() => {
     if (!signedIn) return;
@@ -79,7 +82,7 @@ export function ListingNotesPanel({
         onClick={() =>
           openAuth({
             mode: "sign-in",
-            callbackUrl: `/listing/${mlsNumber}`,
+            callbackUrl,
           })
         }
       >

@@ -21,6 +21,7 @@ import {
   listingStatusLabel,
   propertyTypeLabel,
 } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import { cn } from "@/lib/utils";
@@ -235,7 +236,7 @@ export function SearchMapPopupCard({
   const isClosed = isClosedListingStatus(listing.status);
   const isCommercial = listing.segment === "COMMERCIAL";
   const urls = listingImageUrls(listing);
-  const href = `/listing/${listing.mlsNumber}`;
+  const href = listingPath(listing);
   const router = useRouter();
 
   const statusBadge = (

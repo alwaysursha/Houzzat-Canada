@@ -69,7 +69,10 @@ export function HomeHeroSearch({
       return;
     }
     if (suggestion.mlsNumber) {
-      goHref(`/listing/${suggestion.mlsNumber}`, suggestion.label);
+      goHref(
+        suggestion.href ?? `/listing/${suggestion.mlsNumber}`,
+        suggestion.label,
+      );
       return;
     }
     if (suggestion.href) {
@@ -104,7 +107,10 @@ export function HomeHeroSearch({
       return;
     }
     if (selected?.mlsNumber && !rawQuery) {
-      goHref(`/listing/${selected.mlsNumber}`, selected.label);
+      goHref(
+        selected.href ?? `/listing/${selected.mlsNumber}`,
+        selected.label,
+      );
       return;
     }
     if (selected?.href && !rawQuery) {

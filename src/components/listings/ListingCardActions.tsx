@@ -13,22 +13,26 @@ import { flyHeartToSaved } from "@/lib/fly-to-saved";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
-function listingUrl(mlsNumber: string) {
+function listingUrl(mlsNumber: string, path?: string) {
+  const relative = path ?? `/listing/${mlsNumber}`;
   if (typeof window !== "undefined") {
-    return `${window.location.origin}/listing/${mlsNumber}`;
+    return `${window.location.origin}${relative}`;
   }
-  return `/listing/${mlsNumber}`;
+  return relative;
 }
 
 export function ListingCardActions({
   mlsNumber,
   title,
   listingStatus,
+  path,
   className,
 }: {
   mlsNumber: string;
   title: string;
   listingStatus?: string;
+  /** Canonical SEO path when known (`/listing/slug/MLS`). */
+  path?: string;
   className?: string;
 }) {
   const { status } = useSession();
@@ -71,7 +75,7 @@ export function ListingCardActions({
     if (status !== "authenticated") {
       openAuth({
         mode: "sign-in",
-        callbackUrl: `/listing/${mlsNumber}`,
+        callbackUrl: path ?? `/listing/${mlsNumber}`,
       });
       return;
     }
@@ -104,7 +108,7 @@ export function ListingCardActions({
     event.preventDefault();
     event.stopPropagation();
 
-    const shareUrl = listingUrl(mlsNumber);
+    const shareUrl = listingUrl(mlsNumber, path);
     const shareData = {
       title: `${title} | ${SITE_NAME}`,
       text: `Check out this property on ${SITE_NAME}`,
@@ -125,7 +129,7 @@ export function ListingCardActions({
   async function copyLink(event: ReactMouseEvent) {
     event.preventDefault();
     event.stopPropagation();
-    const shareUrl = listingUrl(mlsNumber);
+    const shareUrl = listingUrl(mlsNumber, path);
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
@@ -142,7 +146,7 @@ export function ListingCardActions({
     setShareOpen(false);
   }
 
-  const url = listingUrl(mlsNumber);
+  const url = listingUrl(mlsNumber, path);
   const encoded = encodeURIComponent(url);
   const encodedTitle = encodeURIComponent(`${title} | ${SITE_NAME}`);
 

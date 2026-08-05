@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { OwnerListingStatus } from "@prisma/client";
 import { formatListPrice, formatPrice } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import { requireOwnerUser } from "@/lib/owner/auth";
 import { ownerListingTag } from "@/lib/owner/pricing";
 import { prisma } from "@/lib/prisma";
@@ -125,7 +126,7 @@ export default async function OwnerHomePage() {
                 ) : null}
                 {listing.ownerStatus === "ACTIVE" ? (
                   <Link
-                    href={`/listing/${listing.mlsNumber}`}
+                    href={listingPath(listing)}
                     className="text-canopy hover:underline"
                   >
                     View public page →

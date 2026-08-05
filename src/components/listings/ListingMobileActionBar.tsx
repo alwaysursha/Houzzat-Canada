@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
  */
 export function ListingMobileActionBar({
   mlsNumber,
+  callbackPath,
   initiallyWatching,
   signedIn,
   contact,
@@ -36,6 +37,8 @@ export function ListingMobileActionBar({
   segment,
 }: {
   mlsNumber: string;
+  /** Canonical SEO path for auth redirects. */
+  callbackPath?: string;
   initiallyWatching: boolean;
   signedIn: boolean;
   contact?: ViewingContactDefaults;
@@ -55,6 +58,7 @@ export function ListingMobileActionBar({
   const [watching, setWatching] = useState(initiallyWatching);
   const [pending, setPending] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const authCallbackUrl = callbackPath ?? `/listing/${mlsNumber}`;
 
   useEffect(() => {
     setWatching(initiallyWatching);
@@ -64,7 +68,7 @@ export function ListingMobileActionBar({
     if (!signedIn) {
       openAuth({
         mode: "sign-in",
-        callbackUrl: `/listing/${mlsNumber}`,
+        callbackUrl: authCallbackUrl,
       });
       return;
     }
@@ -128,7 +132,7 @@ export function ListingMobileActionBar({
                   signedIn={signedIn}
                   idleLabel="Watch this area"
                   activeLabel="Area watched"
-                  authCallbackUrl={`/listing/${mlsNumber}`}
+                  authCallbackUrl={authCallbackUrl}
                   className="h-12 min-w-0 flex-1 gap-1.5 px-2.5 text-sm"
                 />
               ) : null}
@@ -214,7 +218,7 @@ export function ListingMobileActionBar({
                   if (!signedIn) {
                     openAuth({
                       mode: "sign-in",
-                      callbackUrl: `/listing/${mlsNumber}`,
+                      callbackUrl: authCallbackUrl,
                     });
                     return;
                   }

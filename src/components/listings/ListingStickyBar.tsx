@@ -69,6 +69,7 @@ function ListingBreadcrumbs({
 export function ListingStickyBar({
   crumbs,
   mlsNumber,
+  callbackPath,
   initiallySaved,
   initiallyWatching,
   signedIn,
@@ -81,6 +82,8 @@ export function ListingStickyBar({
 }: {
   crumbs: Crumb[];
   mlsNumber: string;
+  /** Canonical SEO path for auth redirects. */
+  callbackPath?: string;
   initiallySaved: boolean;
   initiallyWatching: boolean;
   signedIn: boolean;
@@ -91,6 +94,7 @@ export function ListingStickyBar({
   inactive?: boolean;
   similarHomesHref?: string;
 }) {
+  const authCallbackUrl = callbackPath ?? `/listing/${mlsNumber}`;
   const sentinelRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(false);
@@ -173,6 +177,7 @@ export function ListingStickyBar({
                     mlsNumber={mlsNumber}
                     initiallySaved={initiallySaved}
                     signedIn={signedIn}
+                    authCallbackUrl={authCallbackUrl}
                   />
                   {inactive ? (
                     <>
@@ -183,7 +188,7 @@ export function ListingStickyBar({
                         segment={watchSegment}
                         signedIn={signedIn}
                         idleLabel="Watch this area"
-                        authCallbackUrl={`/listing/${mlsNumber}`}
+                        authCallbackUrl={authCallbackUrl}
                       />
                       {similarHomesHref ? (
                         <Link
@@ -203,6 +208,7 @@ export function ListingStickyBar({
                         signedIn={signedIn}
                         idleLabel="Watch property"
                         activeLabel="Watching"
+                        authCallbackUrl={authCallbackUrl}
                       />
                       <WatchAreaButton
                         city={city}
@@ -211,7 +217,7 @@ export function ListingStickyBar({
                         segment={watchSegment}
                         signedIn={signedIn}
                         idleLabel="Watch area"
-                        authCallbackUrl={`/listing/${mlsNumber}`}
+                        authCallbackUrl={authCallbackUrl}
                       />
                     </>
                   )}

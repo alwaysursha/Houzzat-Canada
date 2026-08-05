@@ -425,7 +425,7 @@ export function SearchExperience() {
       return;
     }
     if (suggestion.mlsNumber) {
-      router.push(`/listing/${suggestion.mlsNumber}`);
+      router.push(suggestion.href ?? `/listing/${suggestion.mlsNumber}`);
       return;
     }
     if (suggestion.href?.startsWith("/search")) {

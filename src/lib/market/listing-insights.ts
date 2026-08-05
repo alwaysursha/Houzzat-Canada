@@ -39,6 +39,8 @@ export type InsightTimelinePoint = {
 export type InsightComp = {
   mlsNumber: string;
   addressLine: string;
+  city: string;
+  unitNumber?: string | null;
   distanceKm: number;
   beds: number;
   baths: number;
@@ -507,6 +509,7 @@ export async function buildListingInsights(opts: {
     (c) => ({
       mlsNumber: c.mlsNumber,
       addressLine: c.addressLine,
+      city: c.city,
       distanceKm: Math.round(c.distanceKm * 10) / 10,
       beds: c.beds,
       baths: c.baths,

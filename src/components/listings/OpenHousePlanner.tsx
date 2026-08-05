@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ListingCard } from "@/components/listings/ListingCard";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import { formatOpenHouseChip } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import { Button } from "@/components/ui/button";
 
 function isWeekend(iso: string) {
@@ -85,7 +86,7 @@ export function OpenHousePlanner({
               .map((item) => (
                 <li key={item.mlsNumber}>
                   <Link
-                    href={`/listing/${item.mlsNumber}`}
+                    href={listingPath(item)}
                     className="font-medium text-canopy"
                   >
                     {item.addressLine}

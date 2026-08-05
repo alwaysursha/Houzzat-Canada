@@ -25,6 +25,7 @@ import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
 import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
+import { listingPath } from "@/lib/listings/listing-path";
 import {
   formatListPrice,
   formatListingAddressOneLine,
@@ -301,6 +302,7 @@ export function SearchMapListingOverlay({
             mlsNumber={card.mlsNumber}
             title={shareTitle}
             listingStatus={card.status}
+            path={listingPath(card)}
           />
           <button
             type="button"
@@ -317,6 +319,7 @@ export function SearchMapListingOverlay({
             <ListingGallery
               addressLabel={addressLabel}
               mlsNumber={card.mlsNumber}
+              callbackPath={listingPath(card)}
               coverTag={coverTagLabel}
               coverTagClassName={listingStatusBadgeClass(
                 listing?.status ?? card.status,
@@ -366,7 +369,7 @@ export function SearchMapListingOverlay({
               <div className="rounded-2xl border border-dashed border-line bg-surface p-6 text-center text-sm text-ink/60">
                 Couldn’t load full details.{" "}
                 <Link
-                  href={`/listing/${card.mlsNumber}`}
+                  href={listingPath(card)}
                   className="font-semibold text-canopy hover:underline"
                 >
                   Open listing page
@@ -503,7 +506,7 @@ export function SearchMapListingOverlay({
                     addressLabel={`${addressLabel}, ${listing.city}`}
                     propertyType={listing.propertyType}
                     transactionType={listing.transactionType}
-                    callbackPath={`/listing/${listing.mlsNumber}`}
+                    callbackPath={listingPath(listing)}
                     canSeeRestricted={hasClientAccess}
                     signedIn={signedIn}
                     rows={historyRows}
@@ -585,6 +588,7 @@ export function SearchMapListingOverlay({
                 <aside className="min-w-0 space-y-6 lg:sticky lg:top-0 lg:self-start">
                   <ViewingRequestPanel
                     mlsNumber={listing.mlsNumber}
+                    callbackPath={listingPath(listing)}
                     inactive={isInactive}
                     similarHomesHref={similarHomesHref}
                     city={listing.city}

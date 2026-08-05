@@ -25,6 +25,7 @@ import {
 } from "@/components/route-planner/RoutePlannerProvider";
 import { useExpertWhatsAppNumber } from "@/components/whatsapp/useExpertWhatsAppNumber";
 import { formatListPrice } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import {
   loadLocalRoutePlanner,
   saveLocalRoutePlanner,
@@ -817,7 +818,11 @@ export function RoutePlannerClient({
               )}
               <div className="min-w-0 flex-1 py-0.5">
                 <Link
-                  href={`/listing/${stop.mlsNumber}`}
+                  href={
+                    stop.listing
+                      ? listingPath(stop.listing)
+                      : `/listing/${stop.mlsNumber}`
+                  }
                   className="font-medium text-ink transition hover:text-canopy"
                 >
                   {stop.listing

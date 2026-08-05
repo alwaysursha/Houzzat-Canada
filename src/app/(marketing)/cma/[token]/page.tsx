@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { formatPrice } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import type { CmaComp } from "@/lib/market/cma";
 import { prisma } from "@/lib/prisma";
 
@@ -56,7 +57,7 @@ export default async function PublicCmaPage({ params }: Params) {
             >
               <div>
                 <Link
-                  href={`/listing/${c.mlsNumber}`}
+                  href={listingPath(c)}
                   className="font-medium text-canopy"
                 >
                   {c.addressLine}
