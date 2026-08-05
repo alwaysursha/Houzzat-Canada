@@ -11,6 +11,7 @@ import {
   listingQueryCandidateWhere,
 } from "@/lib/listings/search-match";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
+import { listingPath } from "@/lib/listings/listing-path";
 import type {
   AutocompleteSuggestion,
   ListingCard,
