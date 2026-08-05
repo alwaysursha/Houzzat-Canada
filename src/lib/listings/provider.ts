@@ -26,7 +26,10 @@ import {
 import { isPropTxConfigured } from "@/lib/proptx/config";
 import { resolveListingAddedAt } from "@/lib/listings/constants";
 import { typesenseAutocomplete } from "@/lib/typesense/autocomplete";
-import { typesenseSearch } from "@/lib/typesense/search";
+import {
+  typesenseOpenHouses,
+  typesenseSearch,
+} from "@/lib/typesense/search";
 
 function sortCardsByAddedAtDesc<T extends ListingCard>(items: T[]): T[] {
   return [...items].sort((a, b) => {
@@ -294,7 +297,7 @@ export class DbListingProvider implements ListingProvider {
       !params.statuses?.includes("SOLD") &&
       !params.cursor;
     const fetchTake = rankByAddedAt
-      ? Math.min(Math.max(limit * 5, 60), 200)
+      ? Math.min(Math.max(limit * 3, 36), 120)
       : limit + 1;
 
     const [total, rows] = await Promise.all([
@@ -681,6 +684,21 @@ export class DbListingProvider implements ListingProvider {
     from?: Date;
     to?: Date;
   }): Promise<ListingCard[]> {
+    // Default window (now → +90d) is what Typesense indexes — use it when possible.
+    if (!params.from && !params.to) {
+      const fromTypesense = await typesenseOpenHouses({
+        city: params.city,
+        cities: params.cities,
+        community: params.community,
+        communities: params.communities,
+        propertyTypes: params.propertyTypes,
+        minPrice: params.minPrice,
+        maxPrice: params.maxPrice,
+        limit: 80,
+      });
+      if (fromTypesense) return fromTypesense;
+    }
+
     const from = params.from ?? new Date();
     const to =
       params.to ?? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);

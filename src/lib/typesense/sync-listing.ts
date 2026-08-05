@@ -13,7 +13,6 @@ function isTypesenseSyncEnabled(): boolean {
     typesenseEnv("TYPESENSE_HOST") && typesenseEnv("TYPESENSE_ADMIN_API_KEY"),
   );
   if (flag === "1" || flag === "true") return hasCreds;
-  // Auto-on when search/autocomplete is enabled and admin credentials exist.
   return (
     hasCreds &&
     (typesenseFlagEnabled("TYPESENSE_SEARCH") ||
@@ -30,6 +29,7 @@ export async function syncListingToTypesense(
   if (!isTypesenseSyncEnabled()) return false;
 
   try {
+    const now = new Date();
     const listing = await prisma.listing.findUnique({
       where: { id: listingId },
       select: {
@@ -62,6 +62,12 @@ export async function syncListingToTypesense(
           orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
           take: 1,
         },
+        openHouses: {
+          where: { endsAt: { gte: now } },
+          orderBy: { startsAt: "asc" },
+          take: 8,
+          select: { startsAt: true, endsAt: true },
+        },
       },
     });
     if (!listing || listing.isMock) return false;
@@ -90,7 +96,6 @@ export async function deleteListingFromTypesense(
       .documents(mlsNumber.trim())
       .delete();
   } catch (error) {
-    // 404 = already gone
     const msg = error instanceof Error ? error.message : String(error);
     if (!/404|Not Found/i.test(msg)) {
       console.error("[typesense/delete]", mlsNumber, error);

@@ -40,6 +40,9 @@ type TypesenseListingDoc = {
   brokerageName?: string;
   coverImageUrl?: string;
   location?: [number, number];
+  openHouseStartsAt?: number[];
+  openHouseEndsAt?: number[];
+  nextOpenHouseStartsAt?: number;
 };
 
 function expandStatuses(
@@ -182,6 +185,13 @@ function docToCard(doc: TypesenseListingDoc): ListingCard {
       ? new Date(doc.updatedAtMls * 1000).toISOString()
       : null;
 
+  const starts = doc.openHouseStartsAt ?? [];
+  const ends = doc.openHouseEndsAt ?? [];
+  const openHouses = starts.map((start, i) => ({
+    startsAt: new Date(start * 1000).toISOString(),
+    endsAt: new Date((ends[i] ?? start) * 1000).toISOString(),
+  }));
+
   return {
     mlsNumber: doc.mlsNumber,
     status: doc.status as ListingStatus,
@@ -205,7 +215,7 @@ function docToCard(doc: TypesenseListingDoc): ListingCard {
     lng,
     primaryImageUrl: cover,
     imageUrls: cover ? [cover] : [],
-    openHouses: [],
+    openHouses,
     daysOnMarket: doc.daysOnMarket ?? 0,
     listedAt,
     updatedAtMls,
@@ -244,7 +254,7 @@ export async function typesenseSearch(
       !isSoldNewestSort(params) &&
       !params.cursor;
     const perPage = rankByAddedAt
-      ? Math.min(Math.max(limit * 5, 60), 200)
+      ? Math.min(Math.max(limit * 3, 36), 120)
       : limit;
 
     const result = await client
@@ -289,6 +299,208 @@ export async function typesenseSearch(
     };
   } catch (error) {
     console.error("[typesense/search]", error);
+    return null;
+  }
+}
+
+function rankCardsByAddedAt(items: ListingCard[], limit: number): ListingCard[] {
+  return [...items]
+    .sort((a, b) => {
+      const aAt = resolveListingAddedAt(a)?.getTime() ?? 0;
+      const bAt = resolveListingAddedAt(b)?.getTime() ?? 0;
+      if (bAt !== aAt) return bAt - aAt;
+      return b.mlsNumber.localeCompare(a.mlsNumber);
+    })
+    .slice(0, limit);
+}
+
+export type HomeRailsPayload = {
+  newListings: ListingCard[];
+  openHouses: ListingCard[];
+  sold: ListingCard[];
+  forLease: ListingCard[];
+  commercial: ListingCard[];
+};
+
+function openHouseFilterBy(
+  params: Pick<
+    ListingSearchParams,
+    "cities" | "minPrice" | "maxPrice" | "propertyTypes" | "communities"
+  >,
+): string {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const toSec = nowSec + 90 * 24 * 60 * 60;
+  const base = buildFilterBy({
+    ...params,
+    status: "ACTIVE",
+    segment: "RESIDENTIAL",
+    transactionType: "SALE",
+  });
+  const oh = `nextOpenHouseStartsAt:>=${nowSec} && nextOpenHouseStartsAt:<=${toSec}`;
+  return base ? `${base} && ${oh}` : oh;
+}
+
+/**
+ * One Typesense multi-search for homepage market rails (5 queries, 1 round-trip).
+ */
+export async function typesenseHomeRails(options: {
+  cities?: string[];
+  limit?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  propertyTypes?: PropertyType[];
+  communities?: string[];
+}): Promise<HomeRailsPayload | null> {
+  if (!typesenseFlagEnabled("TYPESENSE_SEARCH")) return null;
+
+  const limit = Math.min(options.limit ?? 12, 24);
+  const overFetch = Math.min(Math.max(limit * 3, 36), 72);
+  const openHouseLimit = 80;
+  const collection = getTypesenseCollectionName();
+  const shared: Pick<
+    ListingSearchParams,
+    "cities" | "minPrice" | "maxPrice" | "propertyTypes" | "communities" | "sort"
+  > = {
+    cities: options.cities,
+    minPrice: options.minPrice,
+    maxPrice: options.maxPrice,
+    propertyTypes: options.propertyTypes,
+    communities: options.communities,
+    sort: "newest",
+  };
+
+  const specs: ListingSearchParams[] = [
+    {
+      ...shared,
+      status: "ACTIVE",
+      segment: "RESIDENTIAL",
+      transactionType: "SALE",
+      limit: overFetch,
+    },
+    {
+      ...shared,
+      status: "SOLD",
+      segment: "ALL",
+      transactionType: "SALE",
+      limit,
+    },
+    {
+      ...shared,
+      status: "ACTIVE",
+      segment: "ALL",
+      transactionType: "LEASE",
+      limit: overFetch,
+    },
+    {
+      ...shared,
+      status: "ACTIVE",
+      segment: "COMMERCIAL",
+      transactionType: "SALE",
+      limit: overFetch,
+    },
+  ];
+
+  try {
+    const client = getTypesenseSearchClient();
+    const result = await client.multiSearch.perform(
+      {
+        searches: [
+          ...specs.map((params) => ({
+            collection,
+            q: "*",
+            query_by: "mlsNumber,addressLine,city",
+            filter_by: buildFilterBy(params),
+            sort_by: buildSortBy(params),
+            per_page: params.limit ?? limit,
+            page: 1,
+            num_typos: 0,
+          })),
+          {
+            collection,
+            q: "*",
+            query_by: "mlsNumber,addressLine,city",
+            filter_by: openHouseFilterBy(shared),
+            sort_by: "nextOpenHouseStartsAt:asc",
+            per_page: openHouseLimit,
+            page: 1,
+            num_typos: 0,
+          },
+        ],
+      },
+      {},
+    );
+
+    const results = (result.results ?? []) as Array<{
+      hits?: Array<{ document: TypesenseListingDoc }>;
+    }>;
+
+    const toItems = (index: number, rankNewest: boolean, take = limit) => {
+      const hits = results[index]?.hits ?? [];
+      const cards = hits.map((h) => docToCard(h.document));
+      return rankNewest
+        ? rankCardsByAddedAt(cards, take)
+        : cards.slice(0, take);
+    };
+
+    return {
+      newListings: toItems(0, true),
+      sold: toItems(1, false),
+      forLease: toItems(2, true),
+      commercial: toItems(3, true),
+      openHouses: toItems(4, false, openHouseLimit),
+    };
+  } catch (error) {
+    console.error("[typesense/home-rails]", error);
+    return null;
+  }
+}
+
+/** Standalone open-house search (Typesense). Null → Neon fallback. */
+export async function typesenseOpenHouses(options: {
+  cities?: string[];
+  city?: string;
+  communities?: string[];
+  community?: string;
+  propertyTypes?: PropertyType[];
+  minPrice?: number;
+  maxPrice?: number;
+  limit?: number;
+}): Promise<ListingCard[] | null> {
+  if (!typesenseFlagEnabled("TYPESENSE_SEARCH")) return null;
+
+  try {
+    const client = getTypesenseSearchClient();
+    const collection = getTypesenseCollectionName();
+    const limit = Math.min(options.limit ?? 80, 80);
+    const cities =
+      options.cities ?? (options.city ? [options.city] : undefined);
+    const communities =
+      options.communities ??
+      (options.community ? [options.community] : undefined);
+
+    const result = await client
+      .collections(collection)
+      .documents()
+      .search({
+        q: "*",
+        query_by: "mlsNumber,addressLine,city",
+        filter_by: openHouseFilterBy({
+          cities,
+          communities,
+          propertyTypes: options.propertyTypes,
+          minPrice: options.minPrice,
+          maxPrice: options.maxPrice,
+        }),
+        sort_by: "nextOpenHouseStartsAt:asc",
+        per_page: limit,
+        page: 1,
+        num_typos: 0,
+      });
+
+    const hits = (result.hits ?? []) as Array<{ document: TypesenseListingDoc }>;
+    return hits.map((h) => docToCard(h.document));
+  } catch (error) {
+    console.error("[typesense/open-houses]", error);
     return null;
   }
 }

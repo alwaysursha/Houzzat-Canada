@@ -23,6 +23,8 @@ export type ListingForTypesense = {
   lat: number;
   lng: number;
   media: Array<{ url: string; isPrimary: boolean; sortOrder: number }>;
+  /** Upcoming open houses (already filtered to endsAt >= now). */
+  openHouses?: Array<{ startsAt: Date; endsAt: Date }>;
 };
 
 /** Document shape matching the Typesense `listings` collection schema. */
@@ -51,6 +53,11 @@ export type TypesenseListingDocument = {
   brokerageName?: string;
   coverImageUrl?: string;
   location: [number, number];
+  /** Upcoming OH start times (unix seconds). Empty when none. */
+  openHouseStartsAt: number[];
+  openHouseEndsAt: number[];
+  /** Soonest upcoming start; 0 when none (excluded by filters). */
+  nextOpenHouseStartsAt: number;
 };
 
 function toUnixSeconds(date: Date): number {
@@ -66,10 +73,20 @@ function pickCoverImageUrl(
   return url || undefined;
 }
 
+const MAX_OPEN_HOUSES = 8;
+
 export function listingToTypesenseDocument(
   listing: ListingForTypesense,
 ): TypesenseListingDocument {
   const coverImageUrl = pickCoverImageUrl(listing.media);
+  const nowSec = Math.floor(Date.now() / 1000);
+  const upcoming = (listing.openHouses ?? [])
+    .filter((oh) => toUnixSeconds(oh.endsAt) >= nowSec)
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+    .slice(0, MAX_OPEN_HOUSES);
+  const openHouseStartsAt = upcoming.map((oh) => toUnixSeconds(oh.startsAt));
+  const openHouseEndsAt = upcoming.map((oh) => toUnixSeconds(oh.endsAt));
+
   const doc: TypesenseListingDocument = {
     id: listing.mlsNumber,
     mlsNumber: listing.mlsNumber,
@@ -88,6 +105,9 @@ export function listingToTypesenseDocument(
     updatedAtMls: toUnixSeconds(listing.updatedAtMls),
     daysOnMarket: listing.daysOnMarket,
     location: [listing.lat, listing.lng],
+    openHouseStartsAt,
+    openHouseEndsAt,
+    nextOpenHouseStartsAt: openHouseStartsAt[0] ?? 0,
   };
 
   if (listing.unitNumber) doc.unitNumber = listing.unitNumber;

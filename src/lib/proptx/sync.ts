@@ -1433,6 +1433,7 @@ async function syncOpenHouses(options: {
           });
         }
         options.stats.openHousesUpserted += 1;
+        await syncListingToTypesense(listingId);
       } catch (err) {
         options.stats.errors.push(
           `openHouse: ${err instanceof Error ? err.message : "failed"}`,

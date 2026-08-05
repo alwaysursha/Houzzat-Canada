@@ -21,6 +21,8 @@
     "mls:rooms": "node --import tsx scripts/mls-rooms-backfill.ts",
     "mls:history": "node --import tsx scripts/mls-history-backfill.ts",
     "typesense:import": "node --import tsx scripts/typesense-import-listings.ts",
+    "typesense:oh-fields": "node --import tsx scripts/typesense-ensure-open-house-fields.ts",
+    "typesense:oh-backfill": "node --import tsx scripts/typesense-backfill-open-houses.ts",
     "poi:sync": "node --import tsx scripts/poi-sync.ts",
     "roles:migrate": "node --import tsx scripts/migrate-roles.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",

@@ -16,30 +16,13 @@ import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 const GEO_REGION_KEY = "houzzat-region-geo";
 const RAIL_LIMIT = 12;
 
-type SearchPayload = {
-  items?: ListingCardData[];
+type HomeRailsPayload = {
+  newListings?: ListingCardData[];
+  openHouses?: ListingCardData[];
+  sold?: ListingCardData[];
+  forLease?: ListingCardData[];
+  commercial?: ListingCardData[];
 };
-
-function searchUrl(params: Record<string, string | undefined>) {
-  const q = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value != null && value !== "") q.set(key, value);
-  }
-  return `/api/listings/search?${q.toString()}`;
-}
-
-function openHousesUrl(
-  cities: string[],
-  extras: Record<string, string | undefined>,
-) {
-  const q = new URLSearchParams({
-    cities: citiesQueryParam(cities),
-  });
-  for (const [key, value] of Object.entries(extras)) {
-    if (value) q.set(key, value);
-  }
-  return `/api/listings/open-houses?${q.toString()}`;
-}
 
 function personalizationQuery(
   personalization: HomepagePersonalizationQuery | null,
@@ -55,13 +38,18 @@ function personalizationQuery(
   };
 }
 
-async function fetchSearch(
-  params: Record<string, string | undefined>,
-): Promise<ListingCardData[]> {
-  const res = await fetch(searchUrl(params), { cache: "no-store" });
-  if (!res.ok) return [];
-  const data = (await res.json()) as SearchPayload;
-  return data.items ?? [];
+function homeRailsUrl(
+  cities: string,
+  extras: Record<string, string | undefined>,
+) {
+  const q = new URLSearchParams({
+    cities,
+    limit: String(RAIL_LIMIT),
+  });
+  for (const [key, value] of Object.entries(extras)) {
+    if (value) q.set(key, value);
+  }
+  return `/api/listings/home-rails?${q.toString()}`;
 }
 
 export function HomepageMarketRails({
@@ -106,10 +94,7 @@ export function HomepageMarketRails({
             : null;
         if (cached) {
           const parsed = JSON.parse(cached) as { lat: number; lng: number };
-          if (
-            Number.isFinite(parsed.lat) &&
-            Number.isFinite(parsed.lng)
-          ) {
+          if (Number.isFinite(parsed.lat) && Number.isFinite(parsed.lng)) {
             return resolveRegionFromCoords(parsed.lat, parsed.lng).region;
           }
         }
@@ -117,8 +102,6 @@ export function HomepageMarketRails({
         // ignore cache parse
       }
 
-      // Never block first rail paint on geolocation — default region first;
-      // Near Me / granted geo upgrades via houzzat:geo.
       return resolveRegionFromCity(null).region;
     }
 
@@ -129,64 +112,30 @@ export function HomepageMarketRails({
       const cities = citiesQueryParam(nextRegion.cities);
       const extras = personalizationQuery(personalization);
 
-      const [fresh, oh, soldRows, leaseRows, commercialRows] =
-        await Promise.all([
-          fetchSearch({
-            status: "ACTIVE",
-            segment: "RESIDENTIAL",
-            transactionType: "SALE",
-            sort: "newest",
-            limit: String(RAIL_LIMIT),
-            cities,
-            ...extras,
-          }),
-          fetch(openHousesUrl(nextRegion.cities, extras), { cache: "no-store" })
-            .then(async (res) => {
-              if (!res.ok) return [] as ListingCardData[];
-              const data = (await res.json()) as SearchPayload;
-              return data.items ?? [];
-            })
-            .catch(() => [] as ListingCardData[]),
-          fetchSearch({
-            status: "SOLD",
-            segment: "ALL",
-            transactionType: "SALE",
-            sort: "newest",
-            limit: String(RAIL_LIMIT),
-            cities,
-            ...extras,
-          }),
-          fetchSearch({
-            status: "ACTIVE",
-            segment: "ALL",
-            transactionType: "LEASE",
-            sort: "newest",
-            limit: String(RAIL_LIMIT),
-            cities,
-            ...extras,
-          }),
-          fetchSearch({
-            status: "ACTIVE",
-            segment: "COMMERCIAL",
-            transactionType: "SALE",
-            sort: "newest",
-            limit: String(RAIL_LIMIT),
-            cities,
-            ...extras,
-          }),
-        ]);
+      try {
+        const res = await fetch(homeRailsUrl(cities, extras), {
+          cache: "default",
+        });
+        if (!res.ok) throw new Error(`home-rails ${res.status}`);
+        const data = (await res.json()) as HomeRailsPayload;
+        if (cancelled) return;
 
-      if (cancelled) return;
-      setNewListings(fresh);
-      setOpenHouses(oh);
-      setSold(
-        isClient
-          ? soldRows
-          : soldRows.map((item) => ({ ...item, soldPrice: null })),
-      );
-      setForLease(leaseRows);
-      setCommercial(commercialRows);
-      setReady(true);
+        // Paint rails as soon as the batch arrives (one round-trip).
+        setNewListings(data.newListings ?? []);
+        setOpenHouses(data.openHouses ?? []);
+        setSold(data.sold ?? []);
+        setForLease(data.forLease ?? []);
+        setCommercial(data.commercial ?? []);
+        setReady(true);
+      } catch {
+        if (cancelled) return;
+        setNewListings([]);
+        setOpenHouses([]);
+        setSold([]);
+        setForLease([]);
+        setCommercial([]);
+        setReady(true);
+      }
     }
 
     async function load() {
@@ -205,7 +154,6 @@ export function HomepageMarketRails({
       const nextRegion = await resolveBrowseRegion();
       await loadForRegion(nextRegion);
 
-      // Soft-upgrade region from live geo without delaying the first paint.
       if (personalization?.city || cancelled) return;
       if (typeof navigator === "undefined" || !navigator.geolocation) return;
       try {

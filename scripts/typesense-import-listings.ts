@@ -84,6 +84,12 @@ async function main() {
           orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
           take: 1,
         },
+        openHouses: {
+          where: { endsAt: { gte: new Date() } },
+          orderBy: { startsAt: "asc" },
+          take: 8,
+          select: { startsAt: true, endsAt: true },
+        },
       },
     });
 
