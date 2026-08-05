@@ -5,6 +5,7 @@ import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
+  formatListingBedsLabel,
   formatListingTiming,
   formatListPrice,
   formatListingAddress,
@@ -190,7 +191,7 @@ export function ListingCard({
                   className="size-[18px] stroke-[2.25] text-canopy"
                   aria-hidden
                 />
-                <span>{formatStat(listing.beds)}</span>
+                <span>{formatListingBedsLabel(listing)}</span>
                 <span className="sr-only">bedrooms</span>
               </li>
               <li className="flex items-center gap-1.5">

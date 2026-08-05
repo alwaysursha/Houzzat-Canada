@@ -1,5 +1,5 @@
 import type { ListingFacts } from "@/lib/listings/facts";
-import { parseListingFacts } from "@/lib/listings/facts";
+import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
 import {
   buildListingHistoryRows,
   historyRowRecencyMs,
@@ -43,6 +43,7 @@ export type InsightComp = {
   unitNumber?: string | null;
   distanceKm: number;
   beds: number;
+  bedsLabel?: string | null;
   baths: number;
   soldPrice: number | null;
   listPrice: number;
@@ -94,6 +95,7 @@ export type ListingInsightsPayload = {
   };
   space: {
     beds: number;
+    bedsLabel: string | null;
     baths: number;
     sqft: number | null;
     bedroomsAboveGrade: number | null;
@@ -513,6 +515,7 @@ export async function buildListingInsights(opts: {
       unitNumber: c.unitNumber,
       distanceKm: Math.round(c.distanceKm * 10) / 10,
       beds: c.beds,
+      bedsLabel: c.bedsLabel,
       baths: c.baths,
       soldPrice: signedIn ? c.soldPrice : null,
       listPrice: c.listPrice,
@@ -607,6 +610,7 @@ export async function buildListingInsights(opts: {
     lifestyle,
     space: {
       beds: listing.beds,
+      bedsLabel: formatBedsPlusLabel(listing.beds, facts),
       baths: listing.baths,
       sqft: listing.sqft,
       bedroomsAboveGrade: facts.bedroomsAboveGrade ?? null,

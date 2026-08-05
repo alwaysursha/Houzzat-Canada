@@ -129,6 +129,7 @@ export function serializeTour(
               status: card.status,
               primaryImageUrl: card.primaryImageUrl,
               beds: card.beds,
+              bedsLabel: card.bedsLabel ?? null,
               baths: card.baths,
               lat: card.lat,
               lng: card.lng,

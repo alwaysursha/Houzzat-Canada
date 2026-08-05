@@ -6,6 +6,23 @@ import {
 import { typesenseEnv, typesenseFlagEnabled } from "@/lib/typesense/env";
 import { listingToTypesenseDocument } from "@/lib/typesense/listing-document";
 
+let bedsLabelFieldEnsured = false;
+
+async function ensureBedsLabelField(): Promise<void> {
+  if (bedsLabelFieldEnsured) return;
+  try {
+    const client = getTypesenseAdminClient();
+    const collection = getTypesenseCollectionName();
+    await client.collections(collection).update({
+      fields: [{ name: "bedsLabel", type: "string", optional: true }],
+    });
+  } catch (error) {
+    // Already exists / permission — keep syncing; upserts still work once present.
+    console.warn("[typesense/sync] bedsLabel field ensure:", error);
+  }
+  bedsLabelFieldEnsured = true;
+}
+
 function isTypesenseSyncEnabled(): boolean {
   const flag = typesenseEnv("TYPESENSE_SYNC");
   if (flag === "0" || flag === "false") return false;
@@ -56,6 +73,7 @@ export async function syncListingToTypesense(
         brokerageName: true,
         lat: true,
         lng: true,
+        facts: true,
         isMock: true,
         media: {
           select: { url: true, isPrimary: true, sortOrder: true },
@@ -72,6 +90,7 @@ export async function syncListingToTypesense(
     });
     if (!listing || listing.isMock) return false;
 
+    await ensureBedsLabelField();
     const client = getTypesenseAdminClient();
     const collection = getTypesenseCollectionName();
     const document = listingToTypesenseDocument(listing);

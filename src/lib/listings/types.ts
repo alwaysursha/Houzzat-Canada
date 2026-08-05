@@ -18,6 +18,8 @@ export type ListingCard = {
   listPrice: number;
   soldPrice: number | null;
   beds: number;
+  /** Display beds, e.g. "3+3" when above/below grade differ from total. */
+  bedsLabel?: string | null;
   baths: number;
   sqft: number | null;
   parkingSpaces: number;
@@ -138,6 +140,8 @@ export type AutocompleteSuggestion = {
   /** Rich listing row fields */
   listPrice?: number;
   beds?: number;
+  /** PropTx above+below display, e.g. "3+3". */
+  bedsLabel?: string | null;
   baths?: number;
   parkingSpaces?: number;
   status?: ListingStatus;

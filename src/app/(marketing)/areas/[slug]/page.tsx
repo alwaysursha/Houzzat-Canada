@@ -6,7 +6,8 @@ import { NearbyAmenities } from "@/components/listings/NearbyAmenities";
 import { MarketPulseCard } from "@/components/market/MarketPulseCard";
 import { getCommunityNarrative } from "@/lib/ai/narratives";
 import { auth } from "@/lib/auth";
-import { formatPrice } from "@/lib/listings/constants";
+import { formatListingBedsLabel, formatPrice } from "@/lib/listings/constants";
+import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
 import { listingPath } from "@/lib/listings/listing-path";
 import { getMarketPulse } from "@/lib/market/pulse";
 import { findNearbyPois, summarizePoiCounts } from "@/lib/poi/nearby";
@@ -169,7 +170,14 @@ export default async function AreaPage({ params }: Params) {
                     </p>
                     <p className="text-sm text-ink/80">{listing.addressLine}</p>
                     <p className="text-xs text-ink/50">
-                      {listing.beds} bd · {listing.baths} ba
+                      {formatListingBedsLabel({
+                        beds: listing.beds,
+                        bedsLabel: formatBedsPlusLabel(
+                          listing.beds,
+                          parseListingFacts(listing.facts),
+                        ),
+                      })}{" "}
+                      bd · {listing.baths} ba
                     </p>
                   </div>
                 </Link>

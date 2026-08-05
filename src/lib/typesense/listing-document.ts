@@ -1,3 +1,5 @@
+import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
+
 export type ListingForTypesense = {
   mlsNumber: string;
   addressLine: string;
@@ -22,6 +24,7 @@ export type ListingForTypesense = {
   brokerageName: string;
   lat: number;
   lng: number;
+  facts?: unknown;
   media: Array<{ url: string; isPrimary: boolean; sortOrder: number }>;
   /** Upcoming open houses (already filtered to endsAt >= now). */
   openHouses?: Array<{ startsAt: Date; endsAt: Date }>;
@@ -44,6 +47,8 @@ export type TypesenseListingDocument = {
   listPrice: number;
   soldPrice?: number;
   beds: number;
+  /** Display beds e.g. "3+3"; optional until collection schema is patched. */
+  bedsLabel?: string;
   baths: number;
   sqft?: number;
   parkingSpaces: number;
@@ -117,6 +122,12 @@ export function listingToTypesenseDocument(
   if (listing.sqft != null) doc.sqft = listing.sqft;
   if (listing.brokerageName) doc.brokerageName = listing.brokerageName;
   if (coverImageUrl) doc.coverImageUrl = coverImageUrl;
+
+  const bedsLabel = formatBedsPlusLabel(
+    listing.beds,
+    parseListingFacts(listing.facts),
+  );
+  if (bedsLabel) doc.bedsLabel = bedsLabel;
 
   return doc;
 }

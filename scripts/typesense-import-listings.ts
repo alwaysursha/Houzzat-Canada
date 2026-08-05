@@ -79,6 +79,7 @@ async function main() {
         brokerageName: true,
         lat: true,
         lng: true,
+        facts: true,
         media: {
           select: { url: true, isPrimary: true, sortOrder: true },
           orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],

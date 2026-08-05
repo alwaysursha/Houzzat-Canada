@@ -10,6 +10,7 @@ import { Bath, Bed, MapPinned, Maximize2, X } from "lucide-react";
 import {
   formatListPrice,
   formatListingAddress,
+  formatListingBedsLabel,
   formatPrice,
   isClosedListingStatus,
   listingStatusLabel,
@@ -32,6 +33,7 @@ export type ListingMapSubject = {
   status: string;
   propertyType?: string;
   beds?: number;
+  bedsLabel?: string | null;
   baths?: number;
   sqft?: number | null;
   primaryImageUrl?: string | null;
@@ -93,7 +95,10 @@ function CompactMapCard({
               {subject.beds != null ? (
                 <span className="inline-flex items-center gap-1">
                   <Bed className="size-3" aria-hidden />
-                  {subject.beds}
+                  {formatListingBedsLabel({
+                    beds: subject.beds,
+                    bedsLabel: subject.bedsLabel,
+                  })}
                 </span>
               ) : null}
               {subject.baths != null ? (
@@ -172,7 +177,7 @@ function CompactMapCard({
         <p className="flex items-center gap-2 text-xs text-ink/60">
           <span className="inline-flex items-center gap-1">
             <Bed className="size-3" aria-hidden />
-            {listing.beds}
+            {formatListingBedsLabel(listing)}
           </span>
           <span className="inline-flex items-center gap-1">
             <Bath className="size-3" aria-hidden />

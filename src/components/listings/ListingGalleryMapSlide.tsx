@@ -18,6 +18,7 @@ import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import {
   formatListPrice,
   formatListingAddress,
+  formatListingBedsLabel,
   formatPrice,
   isClosedListingStatus,
   listingStatusLabel,
@@ -168,7 +169,7 @@ function CompactNearbyCard({ listing }: { listing: NearbyPin }) {
         <p className="flex items-center gap-2 text-xs text-ink/60">
           <span className="inline-flex items-center gap-1">
             <Bed className="size-3" aria-hidden />
-            {listing.beds}
+            {formatListingBedsLabel(listing)}
           </span>
           <span className="inline-flex items-center gap-1">
             <Bath className="size-3" aria-hidden />

@@ -19,7 +19,12 @@ import {
 } from "@/components/listings/insights/InsightCharts";
 import { InsightGate } from "@/components/listings/insights/InsightGate";
 import { ListingSection } from "@/components/listings/ListingSection";
-import { formatPrice, formatPriceCompact, formatListingAddressSearchParts } from "@/lib/listings/constants";
+import {
+  formatListingBedsLabel,
+  formatPrice,
+  formatPriceCompact,
+  formatListingAddressSearchParts,
+} from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
 import type { ListingInsightsPayload } from "@/lib/market/listing-insights";
 import { cn } from "@/lib/utils";
@@ -550,7 +555,8 @@ export function HouzzatInsights({
                         {c.soldPrice != null ? formatPrice(c.soldPrice) : "—"}
                       </p>
                       <p className="mt-1 truncate text-xs text-ink/50">
-                        {c.beds} bd · {c.baths} ba · {c.distanceKm} km
+                        {formatListingBedsLabel(c)} bd · {c.baths} ba ·{" "}
+                        {c.distanceKm} km
                         {c.pricePerSqft != null
                           ? ` · $${c.pricePerSqft.toLocaleString("en-CA")}/sqft`
                           : ""}
@@ -636,7 +642,7 @@ export function HouzzatInsights({
             <div className="flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-mist px-3 py-1.5 text-xs font-semibold text-ink">
                 <Home className="size-3.5 text-canopy" aria-hidden />
-                {space.beds} beds · {space.baths} baths
+                {formatListingBedsLabel(space)} beds · {space.baths} baths
               </span>
               {space.sqft ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-mist px-3 py-1.5 text-xs font-semibold text-ink">

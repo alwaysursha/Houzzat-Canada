@@ -18,6 +18,7 @@ type SubjectSummary = {
   community: string | null;
   propertyType: PropertyType;
   beds: number;
+  bedsLabel?: string | null;
   transactionType: "SALE" | "LEASE";
   segment: string;
 };
@@ -90,9 +91,12 @@ export function ListingRelatedSection({
   const areaLabel = subject.community
     ? `${subject.community}, ${subject.city}`
     : subject.city;
-  const featuresLabel = `${propertyTypeLabel(subject.propertyType)} · ${
-    Number.isInteger(subject.beds) ? subject.beds : subject.beds.toFixed(1)
-  } ${subject.beds === 1 ? "bed" : "beds"}`;
+  const bedsText =
+    subject.bedsLabel?.trim() ||
+    (Number.isInteger(subject.beds) ? String(subject.beds) : subject.beds.toFixed(1));
+  const featuresLabel = `${propertyTypeLabel(subject.propertyType)} · ${bedsText} ${
+    bedsText === "1" ? "bed" : "beds"
+  }`;
 
   const seeAllHref = (() => {
     const params = new URLSearchParams();
@@ -212,8 +216,7 @@ export function ListingRelatedSection({
             {propertyTypeLabel(subject.propertyType)}
           </span>
           <span className="rounded-full border border-canopy/20 bg-canopy/5 px-2.5 py-1 text-[11px] font-semibold text-canopy-deep">
-            {Math.floor(subject.beds)}{" "}
-            {Math.floor(subject.beds) === 1 ? "bed" : "beds"}
+            {bedsText} {bedsText === "1" ? "bed" : "beds"}
           </span>
           <span className="rounded-full border border-line bg-mist/80 px-2.5 py-1 text-[11px] font-semibold text-ink/60">
             {areaLabel}

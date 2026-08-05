@@ -12,6 +12,7 @@ export type AdGenerateInput = {
   addressLine?: string | null;
   listPrice?: number | null;
   beds?: number | null;
+  bedsLabel?: string | null;
   baths?: number | null;
   propertyType?: string | null;
   headlineHint?: string | null;
@@ -84,9 +85,12 @@ export function generateCreativePack(
   const area =
     [input.community, input.city].filter(Boolean).join(", ") || "the GTA";
   const price = money(input.listPrice);
+  const bedsText =
+    input.bedsLabel?.trim() ||
+    (input.beds != null ? String(input.beds) : null);
   const bedsBaths =
-    input.beds != null && input.baths != null
-      ? `${input.beds} bed · ${input.baths} bath`
+    bedsText != null && input.baths != null
+      ? `${bedsText} bed · ${input.baths} bath`
       : null;
 
   const campaignSlug = slugCampaign([

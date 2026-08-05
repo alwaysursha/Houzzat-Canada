@@ -29,6 +29,7 @@ import { listingPath } from "@/lib/listings/listing-path";
 import {
   formatListPrice,
   formatListingAddressOneLine,
+  formatListingBedsLabel,
   formatListingTiming,
   formatPrice,
   daysOnMarketFromListedAt,
@@ -38,6 +39,7 @@ import {
   propertyTypeLabel,
   segmentLabel,
 } from "@/lib/listings/constants";
+import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
 import type { HistoryRow } from "@/lib/listings/history-rows";
 import {
   buildListingHistoryRows,
@@ -181,6 +183,10 @@ export function SearchMapListingOverlay({
   const isCommercial =
     (listing?.segment ?? card.segment) === "COMMERCIAL";
   const addressLabel = formatListingAddressOneLine(listing ?? card);
+  const bedsLabel =
+    (listing
+      ? formatBedsPlusLabel(listing.beds, parseListingFacts(listing.facts))
+      : null) ?? formatListingBedsLabel(card);
 
   const coverTagLabel = listingStatusLabel(
     listing?.status ?? card.status,
@@ -342,6 +348,13 @@ export function SearchMapListingOverlay({
                       propertyType:
                         listing?.propertyType ?? card.propertyType,
                       beds: listing?.beds ?? card.beds,
+                      bedsLabel:
+                        listing != null
+                          ? formatBedsPlusLabel(
+                              listing.beds,
+                              parseListingFacts(listing.facts),
+                            )
+                          : (card.bedsLabel ?? null),
                       baths: listing?.baths ?? card.baths,
                       sqft: listing?.sqft ?? card.sqft,
                       primaryImageUrl:
@@ -454,8 +467,9 @@ export function SearchMapListingOverlay({
                           <div className="flex flex-col items-center gap-1.5 text-center">
                             <Bed className="size-6 text-ink" aria-hidden />
                             <span className="text-sm font-semibold">
-                              {listing.beds}{" "}
-                              {listing.beds === 1 ? "Bed" : "Beds"}
+                              {bedsLabel.includes("+")
+                                ? bedsLabel
+                                : `${bedsLabel} ${bedsLabel === "1" ? "Bed" : "Beds"}`}
                             </span>
                           </div>
                           <div className="flex flex-col items-center gap-1.5 text-center">
@@ -546,6 +560,7 @@ export function SearchMapListingOverlay({
                       community: listing.community,
                       propertyType: listing.propertyType,
                       beds: listing.beds,
+                      bedsLabel: bedsLabel,
                       transactionType: listing.transactionType,
                       segment: listing.segment ?? "RESIDENTIAL",
                     }}

@@ -7,6 +7,7 @@ import {
 } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
 import { propertyTypeLabel } from "@/lib/listings/constants";
+import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
 
 function hashPayload(parts: unknown[]): string {
   return createHash("sha256").update(JSON.stringify(parts)).digest("hex");
@@ -29,6 +30,7 @@ function templateListingNarrative(
     | "propertyType"
     | "yearBuilt"
     | "listPrice"
+    | "facts"
   >,
   pois: NearbyPoi[],
 ): string {
@@ -41,8 +43,11 @@ function templateListingNarrative(
     ? `${listing.community} in ${listing.city}`
     : listing.city;
 
+  const bedsText =
+    formatBedsPlusLabel(listing.beds, parseListingFacts(listing.facts)) ??
+    String(listing.beds);
   const facts = [
-    `${propertyTypeLabel(listing.propertyType)} with ${listing.beds} bed${listing.beds === 1 ? "" : "s"} and ${listing.baths} bath${listing.baths === 1 ? "" : "s"}`,
+    `${propertyTypeLabel(listing.propertyType)} with ${bedsText} bed${bedsText === "1" ? "" : "s"} and ${listing.baths} bath${listing.baths === 1 ? "" : "s"}`,
     listing.sqft ? `${listing.sqft.toLocaleString()} sqft` : null,
     listing.yearBuilt ? `built around ${listing.yearBuilt}` : null,
   ]
@@ -170,6 +175,7 @@ export async function getListingNarrative(
     listing.city,
     listing.community,
     listing.beds,
+    formatBedsPlusLabel(listing.beds, parseListingFacts(listing.facts)),
     listing.baths,
     listing.sqft,
     listing.propertyType,

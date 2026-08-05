@@ -64,8 +64,9 @@ export default async function PublicCmaPage({ params }: Params) {
                 </Link>
                 <p className="text-ink/50">
                   {c.city}
-                  {c.community ? ` · ${c.community}` : ""} · {c.beds}bd ·{" "}
-                  {c.distanceKm.toFixed(1)} km · {c.status}
+                  {c.community ? ` · ${c.community}` : ""} ·{" "}
+                  {c.bedsLabel ?? c.beds} bd · {c.distanceKm.toFixed(1)} km ·{" "}
+                  {c.status}
                 </p>
               </div>
               <div className="text-right font-medium">

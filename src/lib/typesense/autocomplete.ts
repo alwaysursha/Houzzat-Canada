@@ -28,6 +28,7 @@ type TypesenseHit = {
     transactionType?: string;
     listPrice?: number;
     beds?: number;
+    bedsLabel?: string;
     baths?: number;
     parkingSpaces?: number;
     status?: string;
@@ -96,6 +97,7 @@ function hitToSuggestion(
     }),
     listPrice: doc.listPrice,
     beds: doc.beds,
+    bedsLabel: doc.bedsLabel ?? null,
     baths: doc.baths,
     parkingSpaces: doc.parkingSpaces,
     status: doc.status as ListingStatus | undefined,
@@ -147,7 +149,7 @@ export async function typesenseAutocomplete(
         filter_by: filterParts.length ? filterParts.join(" && ") : undefined,
         sort_by: "_text_match:desc,listedAt:desc",
         include_fields:
-          "mlsNumber,addressLine,unitNumber,city,community,province,postalCode,transactionType,listPrice,beds,baths,parkingSpaces,status,propertyType,brokerageName,listedAt,updatedAtMls,daysOnMarket,coverImageUrl,location",
+          "mlsNumber,addressLine,unitNumber,city,community,province,postalCode,transactionType,listPrice,beds,bedsLabel,baths,parkingSpaces,status,propertyType,brokerageName,listedAt,updatedAtMls,daysOnMarket,coverImageUrl,location",
         facet_by: "city,community",
         max_facet_values: 8,
         exhaustive_search: false,

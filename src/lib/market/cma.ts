@@ -1,4 +1,5 @@
 import { haversineKm } from "@/lib/geo/distance";
+import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
 import { prisma } from "@/lib/prisma";
 
 export type CmaComp = {
@@ -11,6 +12,7 @@ export type CmaComp = {
   listPrice: number;
   soldPrice: number | null;
   beds: number;
+  bedsLabel: string | null;
   baths: number;
   sqft: number | null;
   distanceKm: number;
@@ -78,6 +80,7 @@ export async function findComps(opts: {
       listPrice: r.listPrice,
       soldPrice: r.soldPrice,
       beds: r.beds,
+      bedsLabel: formatBedsPlusLabel(r.beds, parseListingFacts(r.facts)),
       baths: r.baths,
       sqft: r.sqft,
       distanceKm: haversineKm(opts.lat, opts.lng, r.lat, r.lng),

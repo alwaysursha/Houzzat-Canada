@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Bath, Bed, Car, History, MapPin, Search, X } from "lucide-react";
 import {
   formatListPrice,
+  formatListingBedsLabel,
   formatRelativeAge,
   listingStatusLabel,
   propertyTypeLabel,
@@ -1523,7 +1524,10 @@ function SuggestionListingRow({
                     )}
                     aria-hidden
                   />
-                  {suggestion.beds}
+                  {formatListingBedsLabel({
+                    beds: suggestion.beds,
+                    bedsLabel: suggestion.bedsLabel,
+                  })}
                 </span>
               ) : null}
               {suggestion.baths != null ? (

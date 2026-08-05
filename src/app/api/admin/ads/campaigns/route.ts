@@ -6,6 +6,7 @@ import {
 } from "@/lib/ads/generate";
 import { requireAgentUser } from "@/lib/agent";
 import { isAdminRole } from "@/lib/constants";
+import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
 
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
   let addressLine: string | null = null;
   let listPrice: number | null = null;
   let beds: number | null = null;
+  let bedsLabel: string | null = null;
   let baths: number | null = null;
   let propertyType: string | null = null;
   let headlineHint: string | null = null;
@@ -88,6 +90,10 @@ export async function POST(request: Request) {
     addressLine = listing.addressLine;
     listPrice = listing.listPrice;
     beds = listing.beds;
+    bedsLabel = formatBedsPlusLabel(
+      listing.beds,
+      parseListingFacts(listing.facts),
+    );
     baths = listing.baths;
     propertyType = listing.propertyType;
     imageUrls = listing.media.map((m) => m.url);
@@ -143,6 +149,7 @@ export async function POST(request: Request) {
     addressLine,
     listPrice,
     beds,
+    bedsLabel,
     baths,
     propertyType,
     headlineHint,

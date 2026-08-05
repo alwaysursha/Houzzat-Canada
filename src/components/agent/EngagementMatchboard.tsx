@@ -29,6 +29,7 @@ import {
 import {
   formatListPrice,
   formatListingAddressOneLine,
+  formatListingBedsLabel,
 } from "@/lib/listings/constants";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import { cn } from "@/lib/utils";
@@ -538,8 +539,8 @@ export function EngagementMatchboard({
                     {formatListPrice(listing.listPrice, listing.transactionType)}
                   </p>
                   <p className="mt-0.5 text-[11px] text-[#64748b]">
-                    {listing.beds} bed · {listing.baths} bath · MLS{" "}
-                    {listing.mlsNumber}
+                    {formatListingBedsLabel(listing)} bed · {listing.baths}{" "}
+                    bath · MLS {listing.mlsNumber}
                   </p>
                 </div>
               </button>

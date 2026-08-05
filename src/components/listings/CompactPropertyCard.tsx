@@ -5,6 +5,7 @@ import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
   formatListingAddress,
+  formatListingBedsLabel,
   formatListingTiming,
   isClosedListingStatus,
   listingStatusBadgeClass,
@@ -26,7 +27,7 @@ function buildStatsLine(listing: ListingCardData) {
 
   if (!isCommercial) {
     parts.push(
-      `${formatStat(listing.beds)} bd`,
+      `${formatListingBedsLabel(listing)} bd`,
       `${formatStat(listing.baths)} ba`,
     );
   }

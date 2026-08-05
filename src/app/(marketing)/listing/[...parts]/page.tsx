@@ -500,6 +500,7 @@ export default async function ListingDetailPage({ params }: Params) {
                     status: listing.status,
                     propertyType: listing.propertyType,
                     beds: listing.beds,
+                    bedsLabel: bedsPlusLabel,
                     baths: listing.baths,
                     sqft: listing.sqft,
                     primaryImageUrl: listing.media[0]?.url ?? null,
@@ -723,14 +724,14 @@ export default async function ListingDetailPage({ params }: Params) {
             items={[
               { id: "listing-about", label: "About" },
               { id: "listing-details", label: "Details" },
-              { id: "listing-insights", label: "Insights" },
-              { id: "listing-estimated-value", label: "Estimated Value" },
-              { id: "listing-history", label: "History" },
-              { id: "listing-related", label: "Similar" },
-              { id: "listing-nearby", label: "Amenities" },
               ...(listing.rooms.length > 0
                 ? [{ id: "listing-rooms", label: "Rooms" }]
                 : []),
+              { id: "listing-history", label: "History" },
+              { id: "listing-insights", label: "Insights" },
+              { id: "listing-estimated-value", label: "Estimated Value" },
+              { id: "listing-related", label: "Similar" },
+              { id: "listing-nearby", label: "Amenities" },
               ...(upcomingOpenHouses.length > 0
                 ? [{ id: "listing-open-houses", label: "Open houses" }]
                 : []),
@@ -790,6 +791,7 @@ export default async function ListingDetailPage({ params }: Params) {
               community: listing.community,
               propertyType: listing.propertyType,
               beds: listing.beds,
+              bedsLabel: bedsPlusLabel,
               transactionType: listing.transactionType,
               segment: listing.segment,
             }}

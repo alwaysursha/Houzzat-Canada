@@ -85,7 +85,10 @@ function pushRow(
   rows.push({ label, value: v });
 }
 
-/** e.g. above 2 + below 1 → "2 + 1" */
+/**
+ * PropTx: BedroomsAboveGrade + BedroomsBelowGrade → "3+3".
+ * Falls back to BedsTotal when grade split is missing.
+ */
 export function formatBedsPlusLabel(
   beds: number | null | undefined,
   facts?: ListingFacts | null,
@@ -94,11 +97,22 @@ export function formatBedsPlusLabel(
   const above = facts?.bedroomsAboveGrade;
   const below = facts?.bedroomsBelowGrade;
   if (above != null && below != null && below > 0) {
-    return `${above} + ${below}`;
+    return `${formatBedCount(above)}+${formatBedCount(below)}`;
   }
-  if (above != null) return String(above);
-  if (beds != null) return String(beds);
+  // Infer +beds when total > above and below-grade wasn't populated.
+  if (above != null && beds != null && beds > above) {
+    const inferred = beds - above;
+    if (inferred > 0) {
+      return `${formatBedCount(above)}+${formatBedCount(inferred)}`;
+    }
+  }
+  if (above != null) return formatBedCount(above);
+  if (beds != null) return formatBedCount(beds);
   return null;
+}
+
+function formatBedCount(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 /** Build display sections from Listing.facts (+ a few core columns). */

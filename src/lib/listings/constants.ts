@@ -47,6 +47,18 @@ export function formatBedsBaths(beds: number, baths: number) {
   return `${bedLabel} bed · ${bathLabel} bath`;
 }
 
+/** Card/map beds text — prefers "3+3" when above/below grade is known. */
+export function formatListingBedsLabel(listing: {
+  beds: number;
+  bedsLabel?: string | null;
+}): string {
+  const label = listing.bedsLabel?.trim();
+  if (label) return label;
+  return Number.isInteger(listing.beds)
+    ? String(listing.beds)
+    : listing.beds.toFixed(1);
+}
+
 /** Relative age from a timestamp (prefer over raw days-on-market). */
 export function formatRelativeAge(from: Date | string) {
   const start = typeof from === "string" ? new Date(from) : from;

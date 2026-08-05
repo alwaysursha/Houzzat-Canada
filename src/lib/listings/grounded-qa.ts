@@ -2,6 +2,7 @@ import type { Listing } from "@prisma/client";
 import { findNearbyPois } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
 import { propertyTypeLabel, formatListPrice, formatPrice } from "@/lib/listings/constants";
+import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
 
 export type GroundedAnswer = {
   answer: string;
@@ -71,8 +72,11 @@ export async function answerListingQuestion(
   }
 
   if (/\b(bed|bath|size|sqft|square|room)\b/.test(q)) {
+    const bedsText =
+      formatBedsPlusLabel(listing.beds, parseListingFacts(listing.facts)) ??
+      String(listing.beds);
     facts.push(
-      `${listing.beds} bed · ${listing.baths} bath${listing.sqft ? ` · ${listing.sqft.toLocaleString()} sqft` : ""}.`,
+      `${bedsText} bed · ${listing.baths} bath${listing.sqft ? ` · ${listing.sqft.toLocaleString()} sqft` : ""}.`,
     );
     citations.push("listing.beds/baths/sqft");
   }

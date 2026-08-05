@@ -15,6 +15,7 @@ import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
   formatListPrice,
   formatListingAddress,
+  formatListingBedsLabel,
   formatListingTiming,
   isClosedListingStatus,
   listingStatusBadgeClass,
@@ -273,7 +274,7 @@ export function SearchMapPopupCard({
           <>
             <span className="inline-flex items-center gap-1">
               <Bed className="size-3" aria-hidden />
-              {listing.beds}
+              {formatListingBedsLabel(listing)}
             </span>
             <span className="inline-flex items-center gap-1">
               <Bath className="size-3" aria-hidden />

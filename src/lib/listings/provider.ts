@@ -29,6 +29,7 @@ import {
   formatListingAddressSearchLine,
   resolveListingAddedAt,
 } from "@/lib/listings/constants";
+import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
 import { typesenseAutocomplete } from "@/lib/typesense/autocomplete";
 import {
   typesenseOpenHouses,
@@ -77,6 +78,8 @@ export function toCard(
     .slice(0, 2);
 
   const isOwner = listing.dataSource === "fsbo";
+  const facts = parseListingFacts(listing.facts);
+  const bedsLabel = formatBedsPlusLabel(listing.beds, facts);
 
   return {
     mlsNumber: listing.mlsNumber,
@@ -87,6 +90,7 @@ export function toCard(
     listPrice: listing.listPrice,
     soldPrice: listing.soldPrice,
     beds: listing.beds,
+    bedsLabel,
     baths: listing.baths,
     sqft: listing.sqft,
     parkingSpaces: listing.parkingSpaces,
@@ -432,6 +436,7 @@ export class DbListingProvider implements ListingProvider {
         listedAt: true,
         updatedAtMls: true,
         daysOnMarket: true,
+        facts: true,
         media: {
           orderBy: { sortOrder: "asc" },
           take: 1,
@@ -482,6 +487,7 @@ export class DbListingProvider implements ListingProvider {
         }),
         listPrice: l.listPrice,
         beds: l.beds,
+        bedsLabel: formatBedsPlusLabel(l.beds, parseListingFacts(l.facts)),
         baths: l.baths,
         parkingSpaces: l.parkingSpaces,
         status: l.status,

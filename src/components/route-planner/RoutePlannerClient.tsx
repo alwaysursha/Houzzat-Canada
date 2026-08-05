@@ -24,7 +24,10 @@ import {
   useRoutePlanner,
 } from "@/components/route-planner/RoutePlannerProvider";
 import { useExpertWhatsAppNumber } from "@/components/whatsapp/useExpertWhatsAppNumber";
-import { formatListPrice } from "@/lib/listings/constants";
+import {
+  formatListPrice,
+  formatListingBedsLabel,
+} from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
 import {
   loadLocalRoutePlanner,
@@ -53,6 +56,7 @@ type TourStop = {
     status: string;
     primaryImageUrl: string | null;
     beds: number;
+    bedsLabel?: string | null;
     baths: number;
     lat: number;
     lng: number;
@@ -187,6 +191,7 @@ export function RoutePlannerClient({
             status: string;
             primaryImageUrl: string | null;
             beds: number;
+            bedsLabel?: string | null;
             baths: number;
             lat: number;
             lng: number;
@@ -836,7 +841,7 @@ export function RoutePlannerClient({
                 </Link>
                 <p className="mt-0.5 text-sm text-ink/55">
                   {stop.listing
-                    ? `${formatListPrice(stop.listing.listPrice)} · ${stop.listing.beds} bd · ${stop.listing.baths} ba`
+                    ? `${formatListPrice(stop.listing.listPrice)} · ${formatListingBedsLabel(stop.listing)} bd · ${stop.listing.baths} ba`
                     : null}
                 </p>
                 {routeIsBuilt ? (
