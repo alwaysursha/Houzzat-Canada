@@ -393,17 +393,7 @@ export function ContactRequestedPanel({
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-[#e8edf2] px-4 py-2.5">
-        <button
-          type="button"
-          onClick={goPrev}
-          disabled={count <= 1}
-          className="inline-flex items-center gap-1 rounded-lg border border-[#d8dee6] px-3 py-2 text-[13px] font-semibold text-[#1e2a38] transition hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-35"
-          aria-label="Previous contact request"
-        >
-          <ChevronLeft className="size-4" />
-          Prev
-        </button>
-        <div className="flex items-center gap-1.5" aria-hidden>
+        <div className="flex min-w-0 flex-1 items-center gap-1.5" aria-hidden>
           {filtered.map((item, i) => (
             <span
               key={item.id}
@@ -414,16 +404,28 @@ export function ContactRequestedPanel({
             />
           ))}
         </div>
-        <button
-          type="button"
-          onClick={goNext}
-          disabled={count <= 1}
-          className="inline-flex items-center gap-1 rounded-lg bg-[#2b6cb0] px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-[#245a96] disabled:cursor-not-allowed disabled:opacity-35"
-          aria-label="Next contact request"
-        >
-          Next
-          <ChevronRight className="size-4" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={goPrev}
+            disabled={count <= 1}
+            className="inline-flex items-center gap-1 rounded-lg border border-[#d8dee6] px-3 py-2 text-[13px] font-semibold text-[#1e2a38] transition hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-35"
+            aria-label="Previous contact request"
+          >
+            <ChevronLeft className="size-4" />
+            Prev
+          </button>
+          <button
+            type="button"
+            onClick={goNext}
+            disabled={count <= 1}
+            className="inline-flex items-center gap-1 rounded-lg bg-[#2b6cb0] px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-[#245a96] disabled:cursor-not-allowed disabled:opacity-35"
+            aria-label="Next contact request"
+          >
+            Next
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
       </div>
 
       {openLeadId ? (

@@ -12,9 +12,10 @@ import {
 } from "lucide-react";
 import { ContactRequestedPanel } from "@/components/agent/ContactRequestedPanel";
 import { LaunchpadTodoCarousel } from "@/components/agent/LaunchpadTodoCarousel";
+import { OnlineLeadsModule } from "@/components/agent/OnlineLeadsModule";
 import { leadScopeWhere, requireAgentContext } from "@/lib/agent";
 import { resolveDeskView } from "@/lib/agent/brokerage";
-import { computeHotnessMap } from "@/lib/agent/hotness";
+import { computeHotnessMap, findOnlineUserIds } from "@/lib/agent/hotness";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
 
@@ -271,6 +272,56 @@ export default async function AgentLaunchpadPage() {
           responseMins.reduce((sum, n) => sum + n, 0) / responseMins.length,
         );
 
+  const onlineUserIds = await findOnlineUserIds();
+  const onlineLeadsRaw =
+    onlineUserIds.length === 0
+      ? []
+      : await prisma.lead.findMany({
+          where: {
+            ...leadScopeWhere(ctx, deskView),
+            customerId: { in: onlineUserIds },
+            ...(focusAgentId ? { assignedAgentId: focusAgentId } : {}),
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 50,
+          select: {
+            id: true,
+            status: true,
+            customerId: true,
+            score: true,
+            createdAt: true,
+            firstRespondedAt: true,
+            customer: { select: { name: true, email: true } },
+          },
+        });
+  const onlineHotMap = await computeHotnessMap(
+    onlineLeadsRaw.map((l) => ({
+      id: l.id,
+      customerId: l.customerId,
+      status: l.status,
+      score: l.score,
+      createdAt: l.createdAt,
+      firstRespondedAt: l.firstRespondedAt,
+    })),
+  );
+  const onlineLeads = onlineLeadsRaw
+    .map((l) => {
+      const hot = onlineHotMap.get(l.id);
+      return {
+        id: l.id,
+        status: l.status,
+        customer: l.customer,
+        lastSeenAt: hot?.lastSeenAt?.toISOString() ?? null,
+        isOnline: hot?.isOnline ?? true,
+      };
+    })
+    .filter((l) => l.isOnline)
+    .sort((a, b) => {
+      const at = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
+      const bt = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
+      return bt - at;
+    });
+
   const dateLabel = now.toLocaleDateString("en-CA", {
     weekday: "long",
     month: "long",
@@ -400,6 +451,7 @@ export default async function AgentLaunchpadPage() {
               tone="info"
               icon={Timer}
             />
+            <OnlineLeadsModule leads={onlineLeads} deskView={deskView} />
             <ModuleCard
               href="/agent/leads?view=mine"
               title="Hot pipeline"

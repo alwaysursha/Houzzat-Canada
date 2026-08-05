@@ -10,7 +10,7 @@ import {
 } from "@/components/agent/LeadsTableClient";
 import { leadScopeWhere, requireAgentContext } from "@/lib/agent";
 import { resolveDeskView } from "@/lib/agent/brokerage";
-import { computeHotnessMap } from "@/lib/agent/hotness";
+import { computeHotnessMap, findOnlineUserIds } from "@/lib/agent/hotness";
 import { loadLeadsDashboardEngagement } from "@/lib/agent/leads-dashboard";
 import { prisma } from "@/lib/prisma";
 import { PIPELINE_STATUSES, pipelineLabel } from "@/lib/agent/pipeline";
@@ -29,6 +29,7 @@ export default async function AgentLeadsPage({
     layout?: string;
     pipeline?: string;
     lead?: string;
+    online?: string;
   }>;
 }) {
   const ctx = await requireAgentContext();
@@ -45,6 +46,8 @@ export default async function AgentLeadsPage({
   const layout = params.layout === "kanban" ? "kanban" : "table";
   const pipelineParam = params.pipeline?.trim() || null;
   const openLeadId = params.lead?.trim() || null;
+  const onlineOnly =
+    params.online === "1" || params.online === "true";
   const pipeline =
     pipelineParam &&
     PIPELINE_STATUSES.includes(
@@ -60,6 +63,8 @@ export default async function AgentLeadsPage({
     "CONTACTED",
     "PENDING_CLIENT",
   ];
+
+  const onlineUserIds = onlineOnly ? await findOnlineUserIds() : [];
 
   const where = {
     ...leadScopeWhere(ctx, view),
@@ -79,12 +84,16 @@ export default async function AgentLeadsPage({
     !focusAgentId
       ? { assignedAgentId: ctx.user.id }
       : {}),
+    ...(onlineOnly ? { customerId: { in: onlineUserIds } } : {}),
   };
 
   const leads = await prisma.lead.findMany({
-    where,
+    where:
+      onlineOnly && onlineUserIds.length === 0
+        ? { id: "__no_online_leads__" }
+        : where,
     orderBy: [{ score: "desc" }, { createdAt: "desc" }],
-    take: 100,
+    take: onlineOnly ? 200 : 100,
     include: {
       customer: {
         select: {
@@ -174,7 +183,22 @@ export default async function AgentLeadsPage({
         inquiryTag: l.inquiryTag,
       };
     })
-    .sort((a, b) => b.hotness - a.hotness);
+    .sort((a, b) => {
+      if (onlineOnly) {
+        const aSeen = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
+        const bSeen = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
+        if (bSeen !== aSeen) return bSeen - aSeen;
+      }
+      return b.hotness - a.hotness;
+    });
+
+  const filterQs = [
+    pipelineParam ? `pipeline=${encodeURIComponent(pipelineParam)}` : null,
+    onlineOnly ? "online=1" : null,
+  ]
+    .filter(Boolean)
+    .join("&");
+  const filterSuffix = filterQs ? `&${filterQs}` : "";
 
   const views = [
     { id: "mine", label: "My leads" },
@@ -214,19 +238,23 @@ export default async function AgentLeadsPage({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-[#1e2a38] sm:text-2xl">
-            {pipeline === "NEW_LEAD"
-              ? "Call New Leads"
-              : followUpPipeline
-                ? "Contacted Leads"
-                : "Leads"}
+            {onlineOnly
+              ? "Online Leads"
+              : pipeline === "NEW_LEAD"
+                ? "Call New Leads"
+                : followUpPipeline
+                  ? "Contacted Leads"
+                  : "Leads"}
           </h1>
           <p className="mt-1 text-[13px] font-medium text-[#64748b] sm:text-sm sm:font-normal">
-            {pipeline === "NEW_LEAD"
-              ? `${rows.length} new lead${rows.length === 1 ? "" : "s"} waiting for first contact`
-              : followUpPipeline
-                ? `${rows.length} lead${rows.length === 1 ? "" : "s"} in follow-up`
-                : `${rows.length} in view`}
-            {pipeline && pipeline !== "NEW_LEAD"
+            {onlineOnly
+              ? `${rows.length} lead${rows.length === 1 ? "" : "s"} active on the site (last 3 min)`
+              : pipeline === "NEW_LEAD"
+                ? `${rows.length} new lead${rows.length === 1 ? "" : "s"} waiting for first contact`
+                : followUpPipeline
+                  ? `${rows.length} lead${rows.length === 1 ? "" : "s"} in follow-up`
+                  : `${rows.length} in view`}
+            {!onlineOnly && pipeline && pipeline !== "NEW_LEAD"
               ? ` · ${pipelineLabel(pipeline)}`
               : ""}
           </p>
@@ -235,7 +263,7 @@ export default async function AgentLeadsPage({
           {views.map((v) => (
             <Link
               key={v.id}
-              href={`/agent/leads?view=${v.id}&layout=${layout}${pipelineParam ? `&pipeline=${pipelineParam}` : ""}`}
+              href={`/agent/leads?view=${v.id}&layout=${layout}${filterSuffix}`}
               className={cn(
                 "rounded-md px-3 py-1.5 text-xs font-semibold transition",
                 view === v.id
@@ -247,7 +275,7 @@ export default async function AgentLeadsPage({
             </Link>
           ))}
           <Link
-            href={`/agent/leads?view=${view}&layout=table${pipelineParam ? `&pipeline=${pipelineParam}` : ""}`}
+            href={`/agent/leads?view=${view}&layout=table${filterSuffix}`}
             className={cn(
               "rounded-md px-3 py-1.5 text-xs font-semibold",
               layout === "table"
@@ -258,7 +286,7 @@ export default async function AgentLeadsPage({
             Table
           </Link>
           <Link
-            href={`/agent/leads?view=${view}&layout=kanban${pipelineParam ? `&pipeline=${pipelineParam}` : ""}`}
+            href={`/agent/leads?view=${view}&layout=kanban${filterSuffix}`}
             className={cn(
               "rounded-md px-3 py-1.5 text-xs font-semibold",
               layout === "kanban"
@@ -268,7 +296,7 @@ export default async function AgentLeadsPage({
           >
             Board
           </Link>
-          {pipelineParam ? (
+          {pipelineParam || onlineOnly ? (
             <Link
               href={`/agent/leads?view=${view}&layout=${layout}`}
               className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#2b6cb0] ring-1 ring-[#e2e8f0] hover:bg-[#f8fafc]"

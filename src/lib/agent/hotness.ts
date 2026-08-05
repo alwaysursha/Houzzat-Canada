@@ -1,9 +1,33 @@
 import { prisma } from "@/lib/prisma";
 
-const ONLINE_MS = 3 * 60 * 1000;
+/** Presence window used for ONLINE badge + Online Leads desk. */
+export const ONLINE_MS = 3 * 60 * 1000;
 const HOT_VIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Look back for last non-heartbeat activity when batching. */
 const LAST_EVENT_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Signed-in users with a site session (or visitor) heartbeat in the ONLINE window.
+ * Heartbeats only fire on the consumer site (not /agent or /admin).
+ */
+export async function findOnlineUserIds(): Promise<string[]> {
+  const since = new Date(Date.now() - ONLINE_MS);
+  const visitors = await prisma.siteVisitor.findMany({
+    where: {
+      userId: { not: null },
+      lastSeenAt: { gte: since },
+    },
+    select: { userId: true },
+    take: 500,
+  });
+  return [
+    ...new Set(
+      visitors
+        .map((v) => v.userId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+}
 
 export type HotnessSnapshot = {
   hotness: number;
