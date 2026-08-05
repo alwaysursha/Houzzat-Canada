@@ -37,7 +37,7 @@ export function listingAddressSlug(listing: {
 
 /**
  * Canonical listing path: `/listing/161-eden-oak-trail-kitchener/X13637722`
- * MLS alone still works via redirect from `/listing/X13637722`.
+ * Legacy `/listing/X13637722` is handled by the catch-all listing page (301).
  */
 export function listingPath(listing: ListingPathInput): string {
   const slug = listingAddressSlug(listing) || "listing";

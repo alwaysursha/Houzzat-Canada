@@ -1,6 +1,6 @@
-import Link from "next/link";
-import type { Metadata } from "next";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
+import type { Metadata } from "next";
+import Link from "next/link";
 import { Bath, Bed, Car, Maximize2, ArrowDown, ArrowUp } from "lucide-react";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { ListingNotesPanel } from "@/components/account/ListingNotesPanel";
@@ -75,12 +75,48 @@ import {
   listingPath,
 } from "@/lib/listings/listing-path";
 
-type Params = { params: Promise<{ slug: string; mlsNumber: string }> };
+type Params = { params: Promise<{ parts: string[] }> };
+
+/**
+ * Single catch-all avoids OpenNext/Workerd route collisions from sibling
+ * dynamic segments (`/listing/[mls]` + `/listing/[slug]/[mls]`).
+ *
+ * - `/listing/X13637722` → 301 to canonical slug path
+ * - `/listing/161-eden-oak-trail-kitchener/X13637722` → detail page
+ */
+function parseListingParts(parts: string[] | undefined): {
+  slug: string | null;
+  mlsNumber: string;
+} {
+  if (!parts || parts.length === 0 || parts.length > 2) {
+    notFound();
+  }
+  if (parts.length === 1) {
+    return { slug: null, mlsNumber: parts[0]! };
+  }
+  return { slug: parts[0]!, mlsNumber: parts[1]! };
+}
+
+async function loadListingByMls(mlsNumber: string) {
+  const provider = getListingProvider();
+  let listing = await provider.getByMls(mlsNumber);
+  if (!listing) {
+    const pulled = await lookupAndUpsertOnDemand(mlsNumber);
+    if (pulled.mlsNumbers.length > 0) {
+      listing = await provider.getByMls(mlsNumber);
+    }
+  }
+  return listing;
+}
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const { mlsNumber, slug } = await params;
-  const listing = await getListingProvider().getByMls(mlsNumber);
+  const { parts } = await params;
+  const { mlsNumber, slug } = parseListingParts(parts);
+  const listing = await loadListingByMls(mlsNumber);
   if (!listing) return { title: "Listing" };
+
+  // Legacy MLS-only URL — metadata still points at the canonical SEO URL.
+  void slug;
 
   const cover =
     listing.media.find((media) => media.isPrimary) ?? listing.media[0] ?? null;
@@ -98,9 +134,6 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
         },
       ]
     : [];
-
-  // Soft signal for crawlers when slug is stale — page still redirects in render.
-  void slug;
 
   return {
     title: { absolute: title },
@@ -125,21 +158,16 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 }
 
 export default async function ListingDetailPage({ params }: Params) {
-  const { mlsNumber, slug } = await params;
-  const provider = getListingProvider();
-  let listing = await provider.getByMls(mlsNumber);
-  if (!listing) {
-    // On-demand PropTx pull when someone deep-links an MLS not yet in Neon
-    const pulled = await lookupAndUpsertOnDemand(mlsNumber);
-    if (pulled.mlsNumbers.length > 0) {
-      listing = await provider.getByMls(mlsNumber);
-    }
-  }
+  const { parts } = await params;
+  const { mlsNumber, slug } = parseListingParts(parts);
+  const listing = await loadListingByMls(mlsNumber);
   if (!listing) notFound();
 
   const canonicalPath = listingPath(listing);
   const expectedSlug = listingAddressSlug(listing) || "listing";
-  if (slug !== expectedSlug) {
+
+  // Legacy `/listing/MLS` or stale slug → permanent redirect to canonical.
+  if (slug == null || slug !== expectedSlug) {
     permanentRedirect(canonicalPath);
   }
 
