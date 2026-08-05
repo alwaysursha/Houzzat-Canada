@@ -40,7 +40,11 @@ export function ListingQaPanel({
   }
 
   return (
-    <ListingSection title={title || "Quick question?"} hint={hint}>
+    <ListingSection
+      id="listing-ask"
+      title={title || "Quick question?"}
+      hint={hint}
+    >
       {!ready ? (
         <p className="text-sm text-ink/50">Loading WhatsApp…</p>
       ) : !phoneDigits ? (

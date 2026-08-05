@@ -293,7 +293,7 @@ export function SiteHeaderClient({
           {/* Desktop only — search stays inside the header row */}
           <div
             className={cn(
-              "ml-3 hidden min-w-0 max-w-xl flex-1 transition-[max-width,opacity,transform] duration-300 ease-out md:block",
+              "ml-3 hidden min-w-0 max-w-2xl flex-1 transition-[max-width,opacity,transform] duration-300 ease-out md:block",
               visible
                 ? "translate-y-0 opacity-100"
                 : "pointer-events-none max-w-0 -translate-y-1 overflow-hidden opacity-0",

@@ -4,6 +4,7 @@ import type {
   PropertyType,
 } from "@prisma/client";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
+import { formatListingAddressSearchLine } from "@/lib/listings/constants";
 import type {
   AutocompleteOptions,
   AutocompleteSuggestion,
@@ -28,8 +29,13 @@ type TypesenseHit = {
     listPrice?: number;
     beds?: number;
     baths?: number;
+    parkingSpaces?: number;
     status?: string;
     propertyType?: string;
+    brokerageName?: string;
+    listedAt?: number;
+    updatedAtMls?: number;
+    daysOnMarket?: number;
     coverImageUrl?: string;
     location?: [number, number];
   };
@@ -46,17 +52,24 @@ function searchParamsBase(txn?: ListingTransactionType) {
   return params;
 }
 
+function unixToIso(seconds?: number): string | null {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return null;
+  return new Date(seconds * 1000).toISOString();
+}
+
 function hitToSuggestion(
   doc: TypesenseHit["document"],
   q: string,
   looksLikeMls: boolean,
 ): AutocompleteSuggestion {
-  const street = doc.unitNumber
-    ? `${doc.addressLine} Unit ${doc.unitNumber}`
-    : doc.addressLine;
-  const locality = [doc.city, doc.province || "ON", doc.postalCode]
-    .filter(Boolean)
-    .join(", ");
+  const street = formatListingAddressSearchLine({
+    addressLine: doc.addressLine,
+    unitNumber: doc.unitNumber,
+    city: doc.city,
+    community: doc.community,
+    province: doc.province || "ON",
+    postalCode: doc.postalCode,
+  });
   const mlsMatch = doc.mlsNumber.toLowerCase().includes(q.toLowerCase());
   const [lat, lng] = doc.location ?? [undefined, undefined];
   const imageUrl = doc.coverImageUrl
@@ -67,9 +80,7 @@ function hitToSuggestion(
     type: mlsMatch && looksLikeMls ? "mls" : "listing",
     group: mlsMatch && looksLikeMls ? "mls" : "listings",
     label: street,
-    subtitle: [locality, doc.community, `MLS® ${doc.mlsNumber}`]
-      .filter(Boolean)
-      .join(" · "),
+    subtitle: `MLS® ${doc.mlsNumber}`,
     mlsNumber: doc.mlsNumber,
     city: doc.city,
     community: doc.community ?? null,
@@ -86,10 +97,15 @@ function hitToSuggestion(
     listPrice: doc.listPrice,
     beds: doc.beds,
     baths: doc.baths,
+    parkingSpaces: doc.parkingSpaces,
     status: doc.status as ListingStatus | undefined,
     propertyType: doc.propertyType as PropertyType | undefined,
     imageUrl,
     transactionType: doc.transactionType as ListingTransactionType | undefined,
+    brokerageName: doc.brokerageName ?? null,
+    listedAt: unixToIso(doc.listedAt),
+    updatedAtMls: unixToIso(doc.updatedAtMls),
+    daysOnMarket: doc.daysOnMarket ?? null,
   };
 }
 
@@ -130,6 +146,8 @@ export async function typesenseAutocomplete(
         typo_tokens_threshold: 3,
         filter_by: filterParts.length ? filterParts.join(" && ") : undefined,
         sort_by: "_text_match:desc,listedAt:desc",
+        include_fields:
+          "mlsNumber,addressLine,unitNumber,city,community,province,postalCode,transactionType,listPrice,beds,baths,parkingSpaces,status,propertyType,brokerageName,listedAt,updatedAtMls,daysOnMarket,coverImageUrl,location",
         facet_by: "city,community",
         max_facet_values: 8,
         exhaustive_search: false,

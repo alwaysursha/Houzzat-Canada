@@ -363,6 +363,96 @@ export function formatListingAddressOneLine(listing: {
   return formatListingAddress(listing).join(", ");
 }
 
+const STREET_TYPE_ABBREVIATIONS: Array<[RegExp, string]> = [
+  [/\bBoulevard\b/gi, "Blvd"],
+  [/\bStreet\b/gi, "St"],
+  [/\bAvenue\b/gi, "Ave"],
+  [/\bRoad\b/gi, "Rd"],
+  [/\bDrive\b/gi, "Dr"],
+  [/\bCrescent\b/gi, "Cres"],
+  [/\bCourt\b/gi, "Ct"],
+  [/\bPlace\b/gi, "Pl"],
+  [/\bTerrace\b/gi, "Ter"],
+  [/\bLane\b/gi, "Ln"],
+  [/\bCircle\b/gi, "Cir"],
+  [/\bHighway\b/gi, "Hwy"],
+  [/\bParkway\b/gi, "Pkwy"],
+  [/\bSquare\b/gi, "Sq"],
+  [/\bGardens\b/gi, "Gdns"],
+];
+
+function abbreviateStreetTypes(street: string): string {
+  let next = street;
+  for (const [pattern, abbr] of STREET_TYPE_ABBREVIATIONS) {
+    next = next.replace(pattern, abbr);
+  }
+  return next.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Compact search/detail address parts:
+ * street: `PH7-2565 Erin Centre Blvd`
+ * locality: `Mississauga - Central Erin Mills`
+ */
+export function formatListingAddressSearchParts(listing: {
+  addressLine: string;
+  unitNumber?: string | null;
+  city: string;
+  community?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
+}): { street: string; locality: string | null } {
+  const city = listing.city.trim();
+  const community = listing.community?.trim() || null;
+  const unit = listing.unitNumber?.trim() || null;
+
+  // Reuse locality stripping, then drop a trailing unit token so we can prefix it.
+  let [street] = formatListingAddress({
+    ...listing,
+    unitNumber: null,
+  });
+
+  if (unit) {
+    street = street
+      .replace(
+        new RegExp(
+          `(?:,?\\s*)(?:unit\\s*)?${escapeRegExp(unit)}\\s*$`,
+          "i",
+        ),
+        "",
+      )
+      .replace(/,+\s*$/g, "")
+      .trim();
+  }
+
+  street = abbreviateStreetTypes(street);
+  if (!street) {
+    street = city || listing.addressLine.trim();
+  }
+
+  const withUnit = unit ? `${unit}-${street}` : street;
+  const locality =
+    city && community ? `${city} - ${community}` : city || community;
+
+  return { street: withUnit, locality };
+}
+
+/**
+ * Compact search/autocomplete address:
+ * `PH7-2565 Erin Centre Blvd, Mississauga - Central Erin Mills`
+ */
+export function formatListingAddressSearchLine(listing: {
+  addressLine: string;
+  unitNumber?: string | null;
+  city: string;
+  community?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
+}): string {
+  const { street, locality } = formatListingAddressSearchParts(listing);
+  return locality ? `${street}, ${locality}` : street;
+}
+
 export function propertyTypeLabel(type: PropertyType) {
   switch (type) {
     case "DETACHED":

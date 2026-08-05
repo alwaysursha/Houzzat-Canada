@@ -510,6 +510,7 @@ export async function buildListingInsights(opts: {
       mlsNumber: c.mlsNumber,
       addressLine: c.addressLine,
       city: c.city,
+      unitNumber: c.unitNumber,
       distanceKm: Math.round(c.distanceKm * 10) / 10,
       beds: c.beds,
       baths: c.baths,

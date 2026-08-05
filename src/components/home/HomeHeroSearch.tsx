@@ -198,7 +198,7 @@ export function HomeHeroSearch({
   const isInventory = mode === "buy" || mode === "rent";
 
   return (
-    <div className="relative z-50 w-full max-w-2xl">
+    <div className="relative z-50 w-full max-w-3xl">
       <div className="overflow-visible">
         <div className="flex gap-1 px-1 pb-2">
           {(

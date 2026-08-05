@@ -52,6 +52,7 @@ export function NearbyAmenities({
 
   return (
     <ListingSection
+      id="listing-nearby"
       eyebrow="Neighbourhood"
       title="Nearby"
       hint="Schools, parks, transit, and grocery within ~2 km."

@@ -19,10 +19,20 @@ import {
 } from "@/components/listings/insights/InsightCharts";
 import { InsightGate } from "@/components/listings/insights/InsightGate";
 import { ListingSection } from "@/components/listings/ListingSection";
-import { formatPrice, formatPriceCompact } from "@/lib/listings/constants";
+import { formatPrice, formatPriceCompact, formatListingAddressSearchParts } from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
 import type { ListingInsightsPayload } from "@/lib/market/listing-insights";
 import { cn } from "@/lib/utils";
+
+function formatCompAddress(comp: {
+  addressLine: string;
+  unitNumber?: string | null;
+  city: string;
+}) {
+  const { street } = formatListingAddressSearchParts(comp);
+  const city = comp.city.trim();
+  return city ? `${street}, ${city}` : street;
+}
 
 function ResponsivePrice({
   amount,
@@ -135,8 +145,9 @@ export function HouzzatInsights({
 
   return (
     <section
+      id="listing-insights"
       aria-labelledby="houzzat-insights-heading"
-      className="relative overflow-hidden rounded-[1.75rem] border border-line bg-[linear-gradient(165deg,rgb(244_247_245)_0%,rgb(255_255_255)_42%,rgb(238_244_241)_100%)]"
+      className="relative scroll-mt-[calc(var(--site-header-stack,4rem)+3.25rem)] overflow-hidden rounded-[1.75rem] border border-line bg-[linear-gradient(165deg,rgb(244_247_245)_0%,rgb(255_255_255)_42%,rgb(238_244_241)_100%)]"
     >
       <div
         className="pointer-events-none absolute -right-16 -top-20 size-64 rounded-full bg-canopy/[0.07] blur-3xl"
@@ -147,7 +158,7 @@ export function HouzzatInsights({
         aria-hidden
       />
 
-      <div className="relative space-y-5 p-4 sm:space-y-6 sm:p-6 lg:p-8">
+      <div className="relative min-w-0 space-y-5 p-4 sm:space-y-6 sm:p-6 lg:p-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-2xl">
             <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-canopy">
@@ -243,7 +254,7 @@ export function HouzzatInsights({
         </Panel>
 
         {/* Houzzat Estimated Value — above price timeline */}
-        <Panel>
+        <Panel id="listing-estimated-value">
           <PanelTitle
             eyebrow="Houzzat Estimated Value"
             title="What this home looks worth today"
@@ -520,20 +531,25 @@ export function HouzzatInsights({
                   ) : null}
                 </p>
               ) : null}
-              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {comps.items.map((c) => (
-                  <li key={c.mlsNumber}>
+              <ul className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {comps.items.map((c) => {
+                  const address = formatCompAddress(c);
+                  return (
+                  <li key={c.mlsNumber} className="min-w-0">
                     <Link
                       href={listingPath(c)}
-                      className="block h-full rounded-xl border border-line bg-mist/40 p-3.5 transition hover:border-canopy/35 hover:bg-surface"
+                      className="block h-full min-w-0 overflow-hidden rounded-xl border border-line bg-mist/40 p-3.5 transition hover:border-canopy/35 hover:bg-surface"
                     >
-                      <p className="truncate text-sm font-semibold text-ink">
-                        {c.addressLine}
+                      <p
+                        className="truncate text-sm font-medium text-ink"
+                        title={address}
+                      >
+                        {address}
                       </p>
-                      <p className="mt-1 font-display text-xl text-canopy">
+                      <p className="mt-1 truncate font-display text-xl text-canopy">
                         {c.soldPrice != null ? formatPrice(c.soldPrice) : "—"}
                       </p>
-                      <p className="mt-1 text-xs text-ink/50">
+                      <p className="mt-1 truncate text-xs text-ink/50">
                         {c.beds} bd · {c.baths} ba · {c.distanceKm} km
                         {c.pricePerSqft != null
                           ? ` · $${c.pricePerSqft.toLocaleString("en-CA")}/sqft`
@@ -542,7 +558,8 @@ export function HouzzatInsights({
                       </p>
                     </Link>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </>
           )}

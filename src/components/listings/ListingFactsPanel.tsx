@@ -61,6 +61,7 @@ export function ListingFactsPanel({
 
   return (
     <ListingSection
+      id="listing-details"
       eyebrow="Property sheet"
       title="Listing details"
       hint="Key facts from the MLS® sheet for this home."

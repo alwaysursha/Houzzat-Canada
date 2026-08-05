@@ -41,6 +41,7 @@ export function ListingRoomsPanel({ rooms }: { rooms: RoomRow[] }) {
 
   return (
     <ListingSection
+      id="listing-rooms"
       eyebrow="Floor plan"
       title="Rooms"
       hint="Dimensions and features by level when provided on the listing."

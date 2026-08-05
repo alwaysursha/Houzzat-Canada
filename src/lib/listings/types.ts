@@ -139,10 +139,15 @@ export type AutocompleteSuggestion = {
   listPrice?: number;
   beds?: number;
   baths?: number;
+  parkingSpaces?: number;
   status?: ListingStatus;
   propertyType?: PropertyType;
   imageUrl?: string | null;
   transactionType?: ListingTransactionType;
+  brokerageName?: string | null;
+  listedAt?: string | null;
+  updatedAtMls?: string | null;
+  daysOnMarket?: number | null;
   action?:
     | "near_me"
     | "search_for"

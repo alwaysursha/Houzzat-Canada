@@ -12,10 +12,13 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Bath, Bed, MapPin, Search, X } from "lucide-react";
+import { ArrowLeft, Bath, Bed, Car, History, MapPin, Search, X } from "lucide-react";
 import {
   formatListPrice,
+  formatRelativeAge,
   listingStatusLabel,
+  propertyTypeLabel,
+  resolveListingAddedAt,
 } from "@/lib/listings/constants";
 import {
   looksLikeStreetAddress,
@@ -240,7 +243,7 @@ export function AddressAutocomplete({
     return () => window.clearTimeout(timeout);
   }, [mobileSheetOpen, isMobile, mounted]);
 
-  /** Expand results to the full search bar shell when present (desktop). */
+  /** Expand results wider than the input on desktop for listing rows. */
   useLayoutEffect(() => {
     if (isMobile) {
       setPanelStyle(undefined);
@@ -250,16 +253,21 @@ export function AddressAutocomplete({
       const box = boxRef.current;
       if (!box) return;
       const shell = box.closest("[data-search-bar]") as HTMLElement | null;
-      if (!shell) {
-        setPanelStyle(undefined);
-        return;
-      }
       const boxRect = box.getBoundingClientRect();
-      const shellRect = shell.getBoundingClientRect();
-      setPanelStyle({
-        left: shellRect.left - boxRect.left,
-        width: shellRect.width,
-      });
+      const shellRect = (shell ?? box).getBoundingClientRect();
+      const viewportPad = 16;
+      const minWidth = Math.min(42 * 16, window.innerWidth - viewportPad * 2);
+      const width = Math.min(
+        Math.max(shellRect.width, minWidth),
+        window.innerWidth - viewportPad * 2,
+      );
+      let left = shellRect.left - boxRect.left;
+      const absoluteRight = shellRect.left + width;
+      const overflowRight = absoluteRight - (window.innerWidth - viewportPad);
+      if (overflowRight > 0) {
+        left -= overflowRight;
+      }
+      setPanelStyle({ left, width });
     }
     syncPanelWidth();
     window.addEventListener("resize", syncPanelWidth);
@@ -998,7 +1006,10 @@ export function AddressAutocomplete({
                       role="option"
                       aria-selected={active}
                       className={cn(
-                        "flex w-full items-stretch gap-3.5 px-4 text-left transition hover:bg-mist/80",
+                        "w-full px-4 text-left transition hover:bg-mist/80",
+                        isListingRich
+                          ? "block"
+                          : "flex items-stretch gap-3.5",
                         large ? "py-3.5" : "py-3",
                         active && "bg-mist/80",
                       )}
@@ -1281,20 +1292,22 @@ function SuggestionSimpleRow({
   large?: boolean;
 }) {
   const kind = suggestionKindLabel(suggestion);
+  const isRecent = suggestion.group === "recent";
+  const Icon = isRecent ? History : MapPin;
   return (
     <>
-      <MapPin
+      <Icon
         className={cn(
-          "mt-1 shrink-0 text-canopy",
-          large ? "size-6" : "size-5",
+          "mt-0.5 shrink-0 text-canopy",
+          large ? "size-5" : "size-4",
         )}
         aria-hidden
       />
       <span className="min-w-0 flex-1">
         <span
           className={cn(
-            "block font-semibold leading-snug text-ink",
-            large ? "text-lg" : "text-[15px]",
+            "block font-medium leading-snug text-ink",
+            large ? "text-base" : "text-sm",
           )}
         >
           {suggestion.label}
@@ -1302,8 +1315,8 @@ function SuggestionSimpleRow({
         {suggestion.subtitle ? (
           <span
             className={cn(
-              "mt-1 block leading-snug text-ink/60",
-              large ? "text-base" : "text-sm",
+              "mt-0.5 block leading-snug text-ink/55",
+              large ? "text-sm" : "text-xs",
             )}
           >
             {suggestion.subtitle}
@@ -1313,8 +1326,8 @@ function SuggestionSimpleRow({
       {kind ? (
         <span
           className={cn(
-            "shrink-0 self-center font-medium text-ink/45",
-            large ? "text-base" : "text-sm",
+            "shrink-0 self-center font-medium text-ink/40",
+            large ? "text-sm" : "text-xs",
           )}
         >
           {kind}
@@ -1322,6 +1335,43 @@ function SuggestionSimpleRow({
       ) : null}
     </>
   );
+}
+
+function suggestionListingAge(suggestion: AutocompleteSuggestion): string | null {
+  const addedAt = resolveListingAddedAt({
+    listedAt: suggestion.listedAt,
+    updatedAtMls: suggestion.updatedAtMls,
+  });
+  if (addedAt) {
+    return formatRelativeAge(addedAt);
+  }
+  if (suggestion.daysOnMarket != null) {
+    if (suggestion.daysOnMarket <= 0) return "just now";
+    if (suggestion.daysOnMarket === 1) return "1 day ago";
+    return `${suggestion.daysOnMarket} days ago`;
+  }
+  return null;
+}
+
+/** Street vs "City - Area" for mobile two-line address. */
+function suggestionAddressParts(suggestion: AutocompleteSuggestion): {
+  street: string;
+  locality: string | null;
+} {
+  const city = suggestion.city?.trim() || null;
+  const community = suggestion.community?.trim() || null;
+  const locality =
+    city && community ? `${city} - ${community}` : city || community;
+
+  let street = suggestion.label.trim();
+  if (locality) {
+    const suffix = `, ${locality}`;
+    if (street.toLowerCase().endsWith(suffix.toLowerCase())) {
+      street = street.slice(0, -suffix.length).trim();
+    }
+  }
+
+  return { street: street || suggestion.label, locality };
 }
 
 function SuggestionListingRow({
@@ -1344,39 +1394,45 @@ function SuggestionListingRow({
     suggestion.status &&
     suggestion.status !== "ACTIVE" &&
     suggestion.listPrice == null;
-  const locality = [suggestion.city, suggestion.province, suggestion.community]
+  const typeLabel = suggestion.propertyType
+    ? propertyTypeLabel(suggestion.propertyType)
+    : null;
+  const ageLabel = suggestionListingAge(suggestion);
+  const brokerage = suggestion.brokerageName?.trim() || null;
+  const metaLine = [ageLabel, suggestion.mlsNumber, brokerage]
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
+  const { street, locality } = suggestionAddressParts(suggestion);
 
   return (
-    <>
-      <span
-        className={cn(
-          "relative shrink-0 overflow-hidden rounded-md bg-mist",
-          large ? "size-[5.5rem]" : "size-[4.25rem] sm:size-[4.75rem]",
-        )}
-      >
-        {suggestion.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={suggestion.imageUrl}
-            alt=""
-            className="size-full object-cover"
-          />
-        ) : (
-          <span className="flex size-full items-center justify-center text-xs text-ink/35">
-            MLS
-          </span>
-        )}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-start justify-between gap-3">
-          <span className="min-w-0">
+    <span className="flex w-full min-w-0 flex-col gap-1.5">
+      <span className="flex w-full min-w-0 items-stretch gap-3.5">
+        <span
+          className={cn(
+            "relative shrink-0 overflow-hidden rounded-md bg-mist",
+            large ? "size-[5.5rem]" : "size-20",
+          )}
+        >
+          {suggestion.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={suggestion.imageUrl}
+              alt=""
+              className="size-full object-cover"
+            />
+          ) : (
+            <span className="flex size-full items-center justify-center text-xs text-ink/35">
+              MLS
+            </span>
+          )}
+        </span>
+        <span className="min-w-0 flex-1 space-y-1">
+          <span className="flex items-baseline justify-between gap-3">
             {detailsLocked ? (
               <span
                 className={cn(
-                  "block font-semibold text-ink/55",
-                  large ? "text-lg" : "text-[15px]",
+                  "font-semibold text-ink/55",
+                  large ? "text-lg" : "text-base",
                 )}
               >
                 {restrictedLabel}
@@ -1384,8 +1440,8 @@ function SuggestionListingRow({
             ) : suggestion.listPrice != null ? (
               <span
                 className={cn(
-                  "block font-bold tracking-tight text-canopy",
-                  large ? "text-xl" : "text-base",
+                  "font-bold tracking-tight text-canopy",
+                  large ? "text-xl" : "text-lg",
                 )}
               >
                 {formatListPrice(
@@ -1393,84 +1449,122 @@ function SuggestionListingRow({
                   suggestion.transactionType ?? "SALE",
                 )}
               </span>
+            ) : (
+              <span />
+            )}
+            {statusLabel ? (
+              <span
+                className={cn(
+                  "shrink-0 text-base font-bold",
+                  suggestion.status === "ACTIVE" ? "text-canopy" : "text-danger",
+                )}
+              >
+                {statusLabel}
+              </span>
             ) : null}
+          </span>
+
+          {locality ? (
+            <>
+              <span
+                className={cn(
+                  "space-y-0.5",
+                  large ? "block" : "block sm:hidden",
+                )}
+              >
+                <span
+                  className={cn(
+                    "block truncate font-medium leading-snug text-ink",
+                    large ? "text-[15px]" : "text-base",
+                  )}
+                >
+                  {street}
+                </span>
+                <span className="block truncate text-sm font-medium text-ink/70">
+                  {locality}
+                </span>
+              </span>
+              <span
+                className={cn(
+                  "truncate font-medium leading-snug text-ink",
+                  large ? "hidden" : "hidden sm:block text-base",
+                  large && "text-[15px]",
+                )}
+              >
+                {suggestion.label}
+              </span>
+            </>
+          ) : (
             <span
               className={cn(
-                "mt-0.5 block font-semibold leading-snug text-ink",
-                large ? "text-lg" : "text-[15px]",
+                "block truncate font-medium leading-snug text-ink",
+                large ? "text-[15px]" : "text-base",
               )}
             >
               {suggestion.label}
             </span>
-          </span>
-          {statusLabel ? (
-            <span
-              className={cn(
-                "shrink-0 pt-0.5 font-semibold",
-                large ? "text-base" : "text-sm",
-                suggestion.status === "ACTIVE" ? "text-canopy" : "text-danger",
-              )}
-            >
-              {statusLabel}
+          )}
+
+          <span className="flex items-center justify-between gap-3">
+            {typeLabel ? (
+              <span className="min-w-0 truncate text-sm font-bold text-ink">
+                {typeLabel}
+              </span>
+            ) : (
+              <span />
+            )}
+            <span className="inline-flex shrink-0 items-center gap-x-2.5 text-sm font-bold text-ink">
+              {suggestion.beds != null ? (
+                <span className="inline-flex items-center gap-1">
+                  <Bed
+                    className={cn(
+                      "text-canopy",
+                      large ? "size-3.5" : "size-4",
+                    )}
+                    aria-hidden
+                  />
+                  {suggestion.beds}
+                </span>
+              ) : null}
+              {suggestion.baths != null ? (
+                <span className="inline-flex items-center gap-1">
+                  <Bath
+                    className={cn(
+                      "text-canopy",
+                      large ? "size-3.5" : "size-4",
+                    )}
+                    aria-hidden
+                  />
+                  {suggestion.baths}
+                  <span className="sr-only">bathrooms</span>
+                </span>
+              ) : null}
+              <span className="inline-flex items-center gap-1">
+                <Car
+                  className={cn(
+                    "text-canopy",
+                    large ? "size-3.5" : "size-4",
+                  )}
+                  aria-hidden
+                />
+                {suggestion.parkingSpaces ?? 0}
+                <span className="sr-only">parking spaces</span>
+              </span>
             </span>
-          ) : null}
+          </span>
         </span>
+      </span>
+
+      {metaLine ? (
         <span
           className={cn(
-            "mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-ink/65",
-            large ? "text-base" : "text-sm",
+            "block w-full truncate font-medium text-ink/65",
+            large ? "text-[13px]" : "text-sm",
           )}
         >
-          {suggestion.beds != null ? (
-            <span className="inline-flex items-center gap-1 font-medium">
-              <Bed
-                className={cn(
-                  "text-canopy",
-                  large ? "size-4" : "size-3.5",
-                )}
-                aria-hidden
-              />
-              {suggestion.beds}
-            </span>
-          ) : null}
-          {suggestion.baths != null ? (
-            <span className="inline-flex items-center gap-1 font-medium">
-              <Bath
-                className={cn(
-                  "text-canopy",
-                  large ? "size-4" : "size-3.5",
-                )}
-                aria-hidden
-              />
-              {suggestion.baths}
-            </span>
-          ) : null}
-          {suggestion.mlsNumber ? (
-            <span className="font-medium text-ink/50">
-              MLS® {suggestion.mlsNumber}
-            </span>
-          ) : null}
+          {metaLine}
         </span>
-        {locality ? (
-          <span
-            className={cn(
-              "mt-1 block truncate text-ink/55",
-              large ? "text-base" : "text-sm",
-            )}
-          >
-            {locality}
-          </span>
-        ) : suggestion.subtitle ? (
-          <span
-            className={cn(
-              "mt-1 block truncate text-ink/55",
-              large ? "text-base" : "text-sm",
-            )}
-          >
-            {suggestion.subtitle}
-          </span>
-        ) : null}
-      </span>
-    </>
+      ) : null}
+    </span>
   );
 }

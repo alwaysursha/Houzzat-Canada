@@ -120,6 +120,7 @@ export function ListingRelatedSection({
 
   return (
     <ListingSection
+      id="listing-related"
       className="w-full min-w-0"
       eyebrow="Keep exploring"
       title="Related homes"

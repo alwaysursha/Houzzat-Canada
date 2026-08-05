@@ -28,7 +28,9 @@ export function ListingSection({
     <Tag
       id={id}
       className={cn(
-        "rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6",
+        "min-w-0 overflow-hidden rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6",
+        id &&
+          "scroll-mt-[calc(var(--site-header-stack,4rem)+3.25rem)]",
         className,
       )}
     >

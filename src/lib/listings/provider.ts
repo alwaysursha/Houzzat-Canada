@@ -25,7 +25,10 @@ import {
   getPropTxSyncHealth,
 } from "@/lib/proptx/sync";
 import { isPropTxConfigured } from "@/lib/proptx/config";
-import { resolveListingAddedAt } from "@/lib/listings/constants";
+import {
+  formatListingAddressSearchLine,
+  resolveListingAddedAt,
+} from "@/lib/listings/constants";
 import { typesenseAutocomplete } from "@/lib/typesense/autocomplete";
 import {
   typesenseOpenHouses,
@@ -422,8 +425,13 @@ export class DbListingProvider implements ListingProvider {
         listPrice: true,
         beds: true,
         baths: true,
+        parkingSpaces: true,
         status: true,
         propertyType: true,
+        brokerageName: true,
+        listedAt: true,
+        updatedAtMls: true,
+        daysOnMarket: true,
         media: {
           orderBy: { sortOrder: "asc" },
           take: 1,
@@ -445,20 +453,20 @@ export class DbListingProvider implements ListingProvider {
     for (const l of ranked) {
       const primary =
         l.media.find((m) => m.isPrimary) ?? l.media[0] ?? null;
-      const street = l.unitNumber
-        ? `${l.addressLine} Unit ${l.unitNumber}`
-        : l.addressLine;
-      const locality = [l.city, l.province || "ON", l.postalCode]
-        .filter(Boolean)
-        .join(", ");
+      const street = formatListingAddressSearchLine({
+        addressLine: l.addressLine,
+        unitNumber: l.unitNumber,
+        city: l.city,
+        community: l.community,
+        province: l.province || "ON",
+        postalCode: l.postalCode,
+      });
       const mlsMatch = l.mlsNumber.toLowerCase().includes(q.toLowerCase());
       const row: AutocompleteSuggestion = {
         type: mlsMatch && looksLikeMls ? "mls" : "listing",
         group: mlsMatch && looksLikeMls ? "mls" : "listings",
         label: street,
-        subtitle: [locality, l.community, `MLS® ${l.mlsNumber}`]
-          .filter(Boolean)
-          .join(" · "),
+        subtitle: `MLS® ${l.mlsNumber}`,
         mlsNumber: l.mlsNumber,
         city: l.city,
         community: l.community,
@@ -475,10 +483,15 @@ export class DbListingProvider implements ListingProvider {
         listPrice: l.listPrice,
         beds: l.beds,
         baths: l.baths,
+        parkingSpaces: l.parkingSpaces,
         status: l.status,
         propertyType: l.propertyType,
         imageUrl: primary?.url ?? null,
         transactionType: l.transactionType,
+        brokerageName: l.brokerageName,
+        listedAt: l.listedAt ? l.listedAt.toISOString() : null,
+        updatedAtMls: l.updatedAtMls ? l.updatedAtMls.toISOString() : null,
+        daysOnMarket: l.daysOnMarket,
       };
       if (mlsMatch && looksLikeMls) mlsHits.push(row);
       else listingHits.push(row);

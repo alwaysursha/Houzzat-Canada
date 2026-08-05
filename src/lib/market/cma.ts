@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 export type CmaComp = {
   mlsNumber: string;
   addressLine: string;
+  unitNumber: string | null;
   city: string;
   community: string | null;
   status: string;
@@ -70,6 +71,7 @@ export async function findComps(opts: {
     .map((r) => ({
       mlsNumber: r.mlsNumber,
       addressLine: r.addressLine,
+      unitNumber: r.unitNumber,
       city: r.city,
       community: r.community,
       status: r.status,

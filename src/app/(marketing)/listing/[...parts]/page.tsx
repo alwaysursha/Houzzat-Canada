@@ -7,7 +7,6 @@ import { ListingNotesPanel } from "@/components/account/ListingNotesPanel";
 import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
 import { VowAcceptCard } from "@/components/account/VowAcceptCard";
 import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
-import { FitSingleLineText } from "@/components/listings/FitSingleLineText";
 import { ListingFactsPanel } from "@/components/listings/ListingFactsPanel";
 import { ListingGallery } from "@/components/listings/ListingGallery";
 import { ListingRoomsPanel } from "@/components/listings/ListingRoomsPanel";
@@ -20,6 +19,7 @@ import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
 import { ListingRelatedSection } from "@/components/listings/ListingRelatedSection";
 import { ListingMobileSideMenu } from "@/components/listings/ListingMobileSideMenu";
 import { ListingDetailCoachMarks } from "@/components/listings/ListingDetailCoachMarks";
+import { ListingDetailSectionNav } from "@/components/listings/ListingDetailSectionNav";
 import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
 import { ListingMobileNotes } from "@/components/listings/ListingMobileNotes";
 import { RecordRecentView } from "@/components/listings/RecordRecentView";
@@ -36,7 +36,7 @@ import {
   formatListingTiming,
   formatListPrice,
   formatPrice,
-  formatListingAddress,
+  formatListingAddressSearchParts,
   formatListingAddressOneLine,
   daysOnMarketFromListedAt,
   isClosedListingStatus,
@@ -344,8 +344,12 @@ export default async function ListingDetailPage({ params }: Params) {
     ? slugifyPlace(listing.city, listing.community)
     : slugifyPlace(listing.city);
   const province = listing.province?.trim() || "ON";
-  const [streetLine] = formatListingAddress(listing);
+  const { street: streetLine, locality: addressLocality } =
+    formatListingAddressSearchParts(listing);
   const addressLabel = formatListingAddressOneLine(listing);
+  const addressSearchLabel = addressLocality
+    ? `${streetLine}, ${addressLocality}`
+    : streetLine;
   const daysOnMarket = daysOnMarketFromListedAt(listing);
   const timingLabel = formatListingTiming(listing);
   const listingFacts = parseListingFacts(listing.facts);
@@ -600,41 +604,52 @@ export default async function ListingDetailPage({ params }: Params) {
                   {timingLabel}
                 </p>
               </div>
-              <FitSingleLineText
-                className="mt-2 font-display leading-tight text-ink"
-                minPx={12}
-                maxPx={24}
-              >
+              <div className="mt-2 font-display leading-tight text-ink">
                 {detailsLocked ? (
-                  <span className="select-none blur-[5px]">{addressLabel}</span>
+                  <span className="select-none blur-[5px]">
+                    {addressSearchLabel}
+                  </span>
                 ) : (
-                  addressLabel
+                  <>
+                    <p className="text-xl font-normal md:text-2xl">
+                      {streetLine}
+                    </p>
+                    {addressLocality ? (
+                      <p className="mt-1 text-base font-normal text-ink/70 md:text-lg">
+                        {listing.community ? (
+                          <>
+                            {listing.city.trim()}
+                            {" - "}
+                            <Link
+                              href={`/areas/${areaSlug}`}
+                              className="text-canopy hover:underline"
+                            >
+                              {listing.community}
+                            </Link>
+                          </>
+                        ) : (
+                          addressLocality
+                        )}
+                      </p>
+                    ) : null}
+                  </>
                 )}
-              </FitSingleLineText>
+              </div>
               {detailsLocked ? (
                 <p className="mt-1 text-sm text-ink/55">
-                  {propertyTypeLabel(listing.propertyType)}
+                  <span className="font-bold text-ink">
+                    {propertyTypeLabel(listing.propertyType)}
+                  </span>
                   {" · "}
                   {listing.city}
                   {" · "}
                   {gateDetails.title}
                 </p>
-              ) : listing.community ? (
-                <p className="mt-1 text-sm text-ink/55">
-                  <Link
-                    href={`/areas/${areaSlug}`}
-                    className="text-canopy hover:underline"
-                  >
-                    {listing.community}
-                  </Link>
-                  {" · "}
-                  {propertyTypeLabel(listing.propertyType)}
-                  {" · "}
-                  MLS® {listing.mlsNumber}
-                </p>
               ) : (
                 <p className="mt-1 text-sm text-ink/55">
-                  {propertyTypeLabel(listing.propertyType)}
+                  <span className="font-bold text-ink">
+                    {propertyTypeLabel(listing.propertyType)}
+                  </span>
                   {" · "}
                   MLS® {listing.mlsNumber}
                 </p>
@@ -722,6 +737,24 @@ export default async function ListingDetailPage({ params }: Params) {
 
           <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
 
+          <ListingDetailSectionNav
+            items={[
+              { id: "listing-about", label: "About" },
+              { id: "listing-details", label: "Details" },
+              { id: "listing-insights", label: "Insights" },
+              { id: "listing-estimated-value", label: "Estimated Value" },
+              { id: "listing-history", label: "History" },
+              { id: "listing-related", label: "Similar" },
+              { id: "listing-nearby", label: "Amenities" },
+              ...(listing.rooms.length > 0
+                ? [{ id: "listing-rooms", label: "Rooms" }]
+                : []),
+              ...(upcomingOpenHouses.length > 0
+                ? [{ id: "listing-open-houses", label: "Open houses" }]
+                : []),
+            ]}
+          />
+
           <ListingNarrative body={listing.description} />
 
           <ListingFactsPanel
@@ -789,7 +822,10 @@ export default async function ListingDetailPage({ params }: Params) {
           />
 
           {upcomingOpenHouses.length > 0 ? (
-            <section className="rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6">
+            <section
+              id="listing-open-houses"
+              className="scroll-mt-[calc(var(--site-header-stack,4rem)+3.25rem)] rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6"
+            >
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
                 Showings
               </p>

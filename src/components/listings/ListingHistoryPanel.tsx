@@ -122,6 +122,7 @@ export function ListingHistoryPanel({
 
   return (
     <ListingSection
+      id="listing-history"
       eyebrow="Record"
       title="Listing history"
       hint={
