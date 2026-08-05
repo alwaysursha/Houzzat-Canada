@@ -43,25 +43,24 @@ export function useClientAccess(): ClientAccessState {
     setState((prev) => ({ ...prev, loading: true }));
     void fetch("/api/account/access")
       .then((res) => res.json())
-      .then(
-        (json: {
+      .then((data: unknown) => {
+        if (cancelled) return;
+        const json = data as {
           kind?: ClientAccessKind;
           isSignedIn?: boolean;
           hasClientAccess?: boolean;
           needsEmailVerification?: boolean;
           email?: string | null;
-        }) => {
-          if (cancelled) return;
-          setState({
-            kind: json.kind ?? "visitor",
-            isSignedIn: Boolean(json.isSignedIn),
-            hasClientAccess: Boolean(json.hasClientAccess),
-            needsEmailVerification: Boolean(json.needsEmailVerification),
-            email: json.email ?? null,
-            loading: false,
-          });
-        },
-      )
+        };
+        setState({
+          kind: json.kind ?? "visitor",
+          isSignedIn: Boolean(json.isSignedIn),
+          hasClientAccess: Boolean(json.hasClientAccess),
+          needsEmailVerification: Boolean(json.needsEmailVerification),
+          email: json.email ?? null,
+          loading: false,
+        });
+      })
       .catch(() => {
         if (cancelled) return;
         setState({
