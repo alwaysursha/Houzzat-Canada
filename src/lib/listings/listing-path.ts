@@ -2,7 +2,10 @@ import type {
   ListingStatus,
   ListingTransactionType,
 } from "@prisma/client";
-import { listingStatusLabel } from "@/lib/listings/constants";
+import {
+  formatListingAddress,
+  listingStatusLabel,
+} from "@/lib/listings/constants";
 import { SITE_NAME } from "@/lib/constants";
 
 export type ListingPathInput = {
@@ -10,26 +13,32 @@ export type ListingPathInput = {
   addressLine: string;
   unitNumber?: string | null;
   city: string;
+  province?: string | null;
+  postalCode?: string | null;
 };
+
+function slugifySegment(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 /** URL-safe address/city slug for listing detail pages. */
 export function listingAddressSlug(listing: {
   addressLine: string;
   unitNumber?: string | null;
   city: string;
+  province?: string | null;
+  postalCode?: string | null;
 }): string {
-  const parts = [listing.addressLine];
-  if (listing.unitNumber?.trim()) {
-    parts.push(`unit-${listing.unitNumber.trim()}`);
-  }
-  parts.push(listing.city);
-  return parts
-    .join(" ")
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/['’]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
+  const [street] = formatListingAddress(listing);
+  const city = listing.city.trim() || "listing";
+  return `${slugifySegment(street)}-${slugifySegment(city)}`
+    .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80)
     .replace(/-+$/g, "");
@@ -49,12 +58,13 @@ export function listingPageTitle(listing: {
   addressLine: string;
   unitNumber?: string | null;
   city: string;
+  province?: string | null;
+  postalCode?: string | null;
   status: ListingStatus;
   transactionType: ListingTransactionType | string;
 }): string {
   const tag = listingStatusLabel(listing.status, listing.transactionType);
-  const street = listing.unitNumber?.trim()
-    ? `${listing.addressLine} Unit ${listing.unitNumber.trim()}`
-    : listing.addressLine;
-  return `${tag}: ${street}, ${listing.city} | ${SITE_NAME}`;
+  const [street] = formatListingAddress(listing);
+  const city = listing.city.trim();
+  return `${tag}: ${street}, ${city} | ${SITE_NAME}`;
 }

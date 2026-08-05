@@ -27,8 +27,8 @@
     "roles:migrate": "node --import tsx scripts/migrate-roles.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "build:cloudflare": "opennextjs-cloudflare build",
-    "deploy": "pnpm build:cloudflare && opennextjs-cloudflare deploy",
-    "deploy:cf": "pnpm build:cloudflare && opennextjs-cloudflare deploy",
+    "deploy": "NEXT_PUBLIC_SITE_URL=https://houzzat.com NEXTAUTH_URL=https://houzzat.com pnpm build:cloudflare && opennextjs-cloudflare deploy",
+    "deploy:cf": "NEXT_PUBLIC_SITE_URL=https://houzzat.com NEXTAUTH_URL=https://houzzat.com pnpm build:cloudflare && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
