@@ -20,6 +20,7 @@
     "mls:refresh": "node --import tsx scripts/mls-refresh.ts",
     "mls:rooms": "node --import tsx scripts/mls-rooms-backfill.ts",
     "mls:history": "node --import tsx scripts/mls-history-backfill.ts",
+    "typesense:import": "node --import tsx scripts/typesense-import-listings.ts",
     "poi:sync": "node --import tsx scripts/poi-sync.ts",
     "roles:migrate": "node --import tsx scripts/migrate-roles.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
@@ -49,6 +50,7 @@
     "recharts": "2.15.4",
     "resend": "^6.14.0",
     "tailwind-merge": "^3.6.0",
+    "typesense": "^3.0.6",
     "zod": "^4.4.3"
   },
   "devDependencies": {

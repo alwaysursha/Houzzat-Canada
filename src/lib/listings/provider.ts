@@ -24,6 +24,8 @@ import {
   getPropTxSyncHealth,
 } from "@/lib/proptx/sync";
 import { isPropTxConfigured } from "@/lib/proptx/config";
+import { typesenseAutocomplete } from "@/lib/typesense/autocomplete";
+import { typesenseSearch } from "@/lib/typesense/search";
 
 export function toCard(
   listing: Prisma.ListingGetPayload<{
@@ -143,6 +145,15 @@ export class DbListingProvider implements ListingProvider {
   }
 
   async search(params: ListingSearchParams): Promise<ListingSearchResult> {
+    const fromTypesense = await typesenseSearch(params, this.name);
+    // Text miss with a query → Neon (on-demand PropTx warm-up in the API route).
+    if (
+      fromTypesense &&
+      !(fromTypesense.items.length === 0 && params.q?.trim())
+    ) {
+      return fromTypesense;
+    }
+
     // Map search needs a denser pin set; list pages stay lighter.
     const limit = Math.min(params.limit ?? 40, 500);
 
@@ -340,6 +351,9 @@ export class DbListingProvider implements ListingProvider {
 
     const q = query.trim();
     if (q.length < 1) return [];
+
+    const fromTypesense = await typesenseAutocomplete(q, options);
+    if (fromTypesense) return fromTypesense;
 
     const looksLikeMls = /^[A-Za-z]?\d[\w-]{2,}$/.test(q) || /^[A-Za-z]\d/i.test(q);
     const addressLike = /^\d+\s+\S+/.test(q) || /\d/.test(q);

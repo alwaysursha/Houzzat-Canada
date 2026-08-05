@@ -58,4 +58,13 @@ jobs:
           # Public wa.me number (safe to bake into the client bundle at build).
           NEXT_PUBLIC_WHATSAPP_EXPERT: "16472214949"
           COMING_SOON: "0"
+          # Typesense (runtime also via wrangler secrets/vars)
+          TYPESENSE_HOST: ${{ secrets.TYPESENSE_HOST }}
+          TYPESENSE_PORT: ${{ secrets.TYPESENSE_PORT }}
+          TYPESENSE_PROTOCOL: ${{ secrets.TYPESENSE_PROTOCOL }}
+          TYPESENSE_SEARCH_API_KEY: ${{ secrets.TYPESENSE_SEARCH_API_KEY }}
+          TYPESENSE_COLLECTION: ${{ secrets.TYPESENSE_COLLECTION }}
+          TYPESENSE_AUTOCOMPLETE: "1"
+          TYPESENSE_SEARCH: "1"
+          TYPESENSE_SYNC: "0"
         run: pnpm run deploy:cf

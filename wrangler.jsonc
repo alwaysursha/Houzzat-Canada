@@ -30,6 +30,14 @@
     // PropTx: IDX public browse + VOW for registered clients (sold/history)
     "LISTING_PROVIDER": "proptx",
     "PROPTX_FEED": "idx",
-    "PROPTX_ENDPOINT_URL": "https://query.ampre.ca/odata/"
+    "PROPTX_ENDPOINT_URL": "https://query.ampre.ca/odata/",
+    // Typesense search index (keys via `wrangler secret put`)
+    "TYPESENSE_PORT": "443",
+    "TYPESENSE_PROTOCOL": "https",
+    "TYPESENSE_COLLECTION": "listings",
+    "TYPESENSE_AUTOCOMPLETE": "1",
+    "TYPESENSE_SEARCH": "1",
+    // Worker does not upsert — sync Mac / Actions use ADMIN key locally
+    "TYPESENSE_SYNC": "0"
   }
 }

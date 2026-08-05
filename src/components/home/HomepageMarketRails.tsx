@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HomeListingRail } from "@/components/home/HomeListingRail";
 import { HomeOpenHousesRail } from "@/components/home/HomeOpenHousesRail";
 import { HomeSoldRail } from "@/components/home/HomeSoldRail";
@@ -84,6 +84,8 @@ export function HomepageMarketRails({
   const [sold, setSold] = useState<ListingCardData[]>([]);
   const [forLease, setForLease] = useState<ListingCardData[]>([]);
   const [commercial, setCommercial] = useState<ListingCardData[]>([]);
+  const regionIdRef = useRef(region.id);
+  regionIdRef.current = region.id;
 
   useEffect(() => {
     let cancelled = false;
@@ -115,50 +117,9 @@ export function HomepageMarketRails({
         // ignore cache parse
       }
 
-      // Prefer cached / already-granted geo. If still unknown, start with the
-      // default city set — Near Me (or a later grant) upgrades via houzzat:geo.
-      let permission: PermissionState | "unknown" = "unknown";
-      try {
-        if (navigator.permissions?.query) {
-          permission = (
-            await navigator.permissions.query({ name: "geolocation" })
-          ).state;
-        }
-      } catch {
-        permission = "unknown";
-      }
-
-      if (permission === "denied") {
-        return resolveRegionFromCity(null).region;
-      }
-
-      if (permission !== "granted") {
-        return resolveRegionFromCity(null).region;
-      }
-
-      try {
-        const position = await new Promise<GeolocationPosition>(
-          (resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: false,
-              timeout: 8000,
-              maximumAge: 300_000,
-            });
-          },
-        );
-        const { latitude: lat, longitude: lng } = position.coords;
-        try {
-          sessionStorage.setItem(
-            GEO_REGION_KEY,
-            JSON.stringify({ lat, lng }),
-          );
-        } catch {
-          // ignore
-        }
-        return resolveRegionFromCoords(lat, lng).region;
-      } catch {
-        return resolveRegionFromCity(null).region;
-      }
+      // Never block first rail paint on geolocation — default region first;
+      // Near Me / granted geo upgrades via houzzat:geo.
+      return resolveRegionFromCity(null).region;
     }
 
     async function loadForRegion(nextRegion: MarketRegion) {
@@ -243,6 +204,41 @@ export function HomepageMarketRails({
 
       const nextRegion = await resolveBrowseRegion();
       await loadForRegion(nextRegion);
+
+      // Soft-upgrade region from live geo without delaying the first paint.
+      if (personalization?.city || cancelled) return;
+      if (typeof navigator === "undefined" || !navigator.geolocation) return;
+      try {
+        const permission = navigator.permissions?.query
+          ? (await navigator.permissions.query({ name: "geolocation" })).state
+          : "unknown";
+        if (permission === "denied") return;
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            if (cancelled) return;
+            const { latitude: lat, longitude: lng } = position.coords;
+            try {
+              sessionStorage.setItem(
+                GEO_REGION_KEY,
+                JSON.stringify({ lat, lng }),
+              );
+            } catch {
+              // ignore
+            }
+            const upgraded = resolveRegionFromCoords(lat, lng).region;
+            if (upgraded.id === nextRegion.id) return;
+            void loadForRegion(upgraded);
+          },
+          () => undefined,
+          {
+            enableHighAccuracy: false,
+            timeout: 8000,
+            maximumAge: 300_000,
+          },
+        );
+      } catch {
+        // ignore geo upgrade failures
+      }
     }
 
     function onGeo(event: Event) {
@@ -256,6 +252,7 @@ export function HomepageMarketRails({
         return;
       }
       const next = resolveRegionFromCoords(detail.lat, detail.lng).region;
+      if (next.id === regionIdRef.current) return;
       void loadForRegion(next);
     }
 

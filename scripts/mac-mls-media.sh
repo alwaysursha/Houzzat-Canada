@@ -29,6 +29,7 @@ trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 export GOOGLE_MAPS_BILLING_ENABLED="${GOOGLE_MAPS_BILLING_ENABLED:-0}"
 export GEOCODE_SKIP_GOOGLE="${GEOCODE_SKIP_GOOGLE:-1}"
 export GOOGLE_PLACES_AUTOCOMPLETE="${GOOGLE_PLACES_AUTOCOMPLETE:-0}"
+export TYPESENSE_SYNC="${TYPESENSE_SYNC:-1}"
 export PATH="/usr/local/bin:/usr/local/Homebrew/bin:$HOME/.local/share/pnpm:/opt/homebrew/bin:$PATH"
 
 if ! command -v pnpm >/dev/null 2>&1; then

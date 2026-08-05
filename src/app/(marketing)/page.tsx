@@ -174,6 +174,8 @@ export default async function HomePage() {
           },
         },
         orderBy: { listedAt: "desc" },
+        // Cap for SSR speed — medians/covers don't need the full city inventory.
+        take: 250,
       });
 
       const prices = active.map((a) => a.listPrice).sort((a, b) => a - b);

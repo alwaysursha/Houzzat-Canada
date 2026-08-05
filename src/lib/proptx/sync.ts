@@ -27,6 +27,7 @@ import {
   type PropTxProperty,
 } from "@/lib/proptx/map-listing";
 import { cityAllowedForMlsSync, getMlsSyncCities, normalizeCityName } from "@/lib/proptx/sync-cities";
+import { syncListingToTypesense } from "@/lib/typesense/sync-listing";
 
 export type MlsSyncStats = {
   propertyUpserted: number;
@@ -750,6 +751,9 @@ async function upsertPropertyRow(
       }
     }
 
+    // Keep search index fresh (best-effort; never fails MLS upsert).
+    await syncListingToTypesense(listing.id);
+
     const updatedAtMls =
       data.updatedAtMls instanceof Date
         ? data.updatedAtMls
@@ -818,6 +822,9 @@ export async function upsertPropTxPropertiesOnDemand(
           }
         }
       }
+
+      // Re-sync after possible cover photo on the request path.
+      await syncListingToTypesense(listing.id);
 
       try {
         await upsertSyntheticHistoryFromProperty(listing.id, row, stats);
@@ -1203,6 +1210,7 @@ async function syncMediaBackfill(options: {
           options.stats,
           { maxPhotos: 1 },
         );
+        await syncListingToTypesense(current.id);
       } catch (err) {
         pushSyncError(
           options.stats,
@@ -1298,6 +1306,7 @@ async function syncSoldAtBackfill(options: {
             ...(soldPrice != null ? { soldPrice } : {}),
           },
         });
+        await syncListingToTypesense(current.id);
         filled += 1;
         options.stats.propertyUpserted += 1;
       } catch (err) {

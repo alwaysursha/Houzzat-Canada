@@ -370,12 +370,22 @@ export function AddressAutocomplete({
           listingParams.set("transactionType", transactionType);
         }
 
-        // Listings first (fast). Google Places is secondary and must not block
-        // the dropdown from showing inventory matches.
-        const listingRes = await fetch(
+        const fetchPlaces = trimmed.length >= 3;
+        const listingPromise = fetch(
           `/api/listings/autocomplete?${listingParams}`,
           { signal: ac.signal },
         );
+        const placesPromise = fetchPlaces
+          ? fetch(
+              `/api/places/autocomplete?${new URLSearchParams({
+                q: trimmed,
+                sessionToken,
+              })}`,
+              { signal: ac.signal },
+            ).catch(() => null)
+          : Promise.resolve(null);
+
+        const listingRes = await listingPromise;
         if (!isCurrent()) return;
 
         const listingData = (await listingRes.json()) as {
@@ -400,20 +410,13 @@ export function AddressAutocomplete({
         if (typeof listingData.needsEmailVerification === "boolean") {
           setApiNeedsEmailVerification(listingData.needsEmailVerification);
         }
+        // Paint MLS hits immediately — don't wait on Google Places.
         setSuggestions(listingRows);
         setActiveIndex(-1);
 
-        const fetchPlaces = trimmed.length >= 3;
         if (!fetchPlaces) return;
 
-        const placesRes = await fetch(
-          `/api/places/autocomplete?${new URLSearchParams({
-            q: trimmed,
-            sessionToken,
-          })}`,
-          { signal: ac.signal },
-        ).catch(() => null);
-
+        const placesRes = await placesPromise;
         if (!isCurrent() || !placesRes?.ok) return;
 
         const placesData = (await placesRes.json()) as {
@@ -985,7 +988,9 @@ export function AddressAutocomplete({
                   suggestion.type === "listing" || suggestion.type === "mls";
                 return (
                   <li
-                    key={`${suggestion.group}-${suggestion.label}-${suggestion.mlsNumber ?? suggestion.placeId ?? suggestion.href ?? suggestion.action}`}
+                    // Index is unique in the flattened list; labels alone collide
+                    // (e.g. two "Waterloo Court" address rows without mlsNumber).
+                    key={`${listboxId}-row-${index}`}
                   >
                     <button
                       type="button"
