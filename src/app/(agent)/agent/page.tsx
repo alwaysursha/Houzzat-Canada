@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import type { LeadStatus } from "@prisma/client";
 import {
-  Bell,
   CheckCircle2,
   ChevronRight,
   Phone,
@@ -141,6 +140,7 @@ export default async function AgentLaunchpadPage() {
     contactRequested,
     openTasks,
     recentLeads,
+    respondedLeads,
   ] = await Promise.all([
     prisma.agentTask.findMany({
       where: {
@@ -229,6 +229,20 @@ export default async function AgentLaunchpadPage() {
         },
       },
     }),
+    // Response time = avg(NEW_LEAD → ATTEMPTED_CONTACT) for this desk.
+    prisma.lead.findMany({
+      where: {
+        organizationId: ctx.organizationId,
+        firstRespondedAt: { not: null },
+        ...(focusAgentId
+          ? { assignedAgentId: focusAgentId }
+          : ctx.canSeeTeamLeads
+            ? { assignedAgentId: { not: null } }
+            : { assignedAgentId: ctx.user.id }),
+      },
+      select: { createdAt: true, firstRespondedAt: true },
+      take: 2000,
+    }),
   ]);
 
   const hotMap = await computeHotnessMap(
@@ -242,17 +256,19 @@ export default async function AgentLaunchpadPage() {
     })),
   );
 
-  const responded = recentLeads.filter((l) => l.firstRespondedAt);
+  const responseMins = respondedLeads
+    .map((l) => {
+      if (!l.firstRespondedAt) return null;
+      const mins =
+        (l.firstRespondedAt.getTime() - l.createdAt.getTime()) / 60_000;
+      return mins >= 0 ? mins : null;
+    })
+    .filter((n): n is number => n != null);
   const avgResponseMins =
-    responded.length === 0
+    responseMins.length === 0
       ? 0
       : Math.round(
-          responded.reduce((sum, l) => {
-            const mins =
-              (l.firstRespondedAt!.getTime() - l.createdAt.getTime()) /
-              60000;
-            return sum + Math.max(0, mins);
-          }, 0) / responded.length,
+          responseMins.reduce((sum, n) => sum + n, 0) / responseMins.length,
         );
 
   const dateLabel = now.toLocaleDateString("en-CA", {
@@ -271,8 +287,15 @@ export default async function AgentLaunchpadPage() {
         </h1>
         <p className="mt-1 text-[13px] font-semibold text-[#2b6cb0] sm:font-medium">
           Today you have{" "}
-          <span className="tabular-nums">{dueTodayCount}</span> Reminders Due
-          and <span className="tabular-nums">{dueTodayCount}</span> Tasks Due.
+          <span className="tabular-nums">{dueTodayCount}</span> task
+          {dueTodayCount === 1 ? "" : "s"} due
+          {overdueTaskCount > 0 ? (
+            <>
+              {" "}
+              · <span className="tabular-nums">{overdueTaskCount}</span> overdue
+            </>
+          ) : null}
+          .
         </p>
       </div>
 
@@ -361,22 +384,19 @@ export default async function AgentLaunchpadPage() {
             />
             <ModuleCard
               href="/agent/tasks"
-              title="Due Reminders"
-              subtitle={`${overdueTaskCount} Overdue | ${dueTodayCount} Due Today`}
-              tone="warn"
-              icon={Bell}
-            />
-            <ModuleCard
-              href="/agent/tasks"
               title="Due Tasks"
               subtitle={`${overdueTaskCount} Overdue | ${dueTodayCount} Due Today`}
               tone="warn"
               icon={CheckCircle2}
             />
             <ModuleCard
-              href="/agent/leads"
+              href="/agent/statistics"
               title="Statistics"
-              subtitle={`Response Time · ${avgResponseMins} mins`}
+              subtitle={
+                avgResponseMins > 0
+                  ? `Response Time · ${avgResponseMins} mins`
+                  : "Response Time · —"
+              }
               tone="info"
               icon={Timer}
             />

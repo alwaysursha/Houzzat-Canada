@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 
 const ONLINE_MS = 3 * 60 * 1000;
 const HOT_VIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** Look back for last non-heartbeat activity when batching. */
+const LAST_EVENT_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
 
 export type HotnessSnapshot = {
   hotness: number;
@@ -13,51 +15,31 @@ export type HotnessSnapshot = {
   slaHoursOpen: number | null;
 };
 
-/** Lead quality / urgency signals for Launchpad + table. */
-export async function computeHotness(input: {
+type HotLeadInput = {
   leadId: string;
   customerId: string | null;
   status: string;
   score: number;
   createdAt: Date;
   firstRespondedAt: Date | null;
-}): Promise<HotnessSnapshot> {
-  const since = new Date(Date.now() - HOT_VIEW_WINDOW_MS);
-  let views24h = 0;
-  let distinctListings24h = 0;
-  let lastSeenAt: Date | null = null;
-  let isOnline = false;
+};
 
-  if (input.customerId) {
-    const [views, lastEvent, lastSession] = await Promise.all([
-      prisma.listingView.findMany({
-        where: { userId: input.customerId, createdAt: { gte: since } },
-        select: { mlsNumber: true, createdAt: true },
-      }),
-      prisma.activityEvent.findFirst({
-        where: { userId: input.customerId, type: { not: "HEARTBEAT" } },
-        orderBy: { createdAt: "desc" },
-        select: { createdAt: true },
-      }),
-      prisma.siteSession.findFirst({
-        where: { visitor: { userId: input.customerId } },
-        orderBy: { lastSeenAt: "desc" },
-        select: { lastSeenAt: true },
-      }),
-    ]);
-
-    views24h = views.length;
-    distinctListings24h = new Set(views.map((v) => v.mlsNumber)).size;
-    lastSeenAt = lastSession?.lastSeenAt ?? lastEvent?.createdAt ?? null;
-    if (lastSeenAt && Date.now() - lastSeenAt.getTime() < ONLINE_MS) {
-      isOnline = true;
-    }
-  }
-
-  const binge = distinctListings24h >= 3;
+function scoreHotness(
+  input: HotLeadInput,
+  signals: {
+    views24h: number;
+    distinctListings24h: number;
+    lastSeenAt: Date | null;
+  },
+): HotnessSnapshot {
+  const isOnline = Boolean(
+    signals.lastSeenAt &&
+      Date.now() - signals.lastSeenAt.getTime() < ONLINE_MS,
+  );
+  const binge = signals.distinctListings24h >= 3;
   let hotness = input.score;
-  hotness += Math.min(40, views24h * 3);
-  hotness += Math.min(30, distinctListings24h * 8);
+  hotness += Math.min(40, signals.views24h * 3);
+  hotness += Math.min(30, signals.distinctListings24h * 8);
   if (isOnline) hotness += 25;
   if (binge) hotness += 20;
   if (input.status === "NEW_LEAD" && !input.firstRespondedAt) hotness += 15;
@@ -70,15 +52,42 @@ export async function computeHotness(input: {
 
   return {
     hotness: Math.round(hotness),
-    views24h,
-    distinctListings24h,
+    views24h: signals.views24h,
+    distinctListings24h: signals.distinctListings24h,
     isOnline,
-    lastSeenAt,
+    lastSeenAt: signals.lastSeenAt,
     binge,
     slaHoursOpen,
   };
 }
 
+/** Lead quality / urgency signals for a single lead (profile popup). */
+export async function computeHotness(
+  input: HotLeadInput,
+): Promise<HotnessSnapshot> {
+  const map = await computeHotnessMap([
+    {
+      id: input.leadId,
+      customerId: input.customerId,
+      status: input.status,
+      score: input.score,
+      createdAt: input.createdAt,
+      firstRespondedAt: input.firstRespondedAt,
+    },
+  ]);
+  return (
+    map.get(input.leadId) ??
+    scoreHotness(input, {
+      views24h: 0,
+      distinctListings24h: 0,
+      lastSeenAt: null,
+    })
+  );
+}
+
+/**
+ * Batch hotness for Launchpad / leads table — a few queries instead of 3×N.
+ */
 export async function computeHotnessMap(
   leads: Array<{
     id: string;
@@ -90,23 +99,108 @@ export async function computeHotnessMap(
   }>,
 ): Promise<Map<string, HotnessSnapshot>> {
   const map = new Map<string, HotnessSnapshot>();
-  // Bound concurrency for Launchpad/table batches.
-  const chunk = 12;
-  for (let i = 0; i < leads.length; i += chunk) {
-    const slice = leads.slice(i, i + chunk);
-    const rows = await Promise.all(
-      slice.map((l) =>
-        computeHotness({
-          leadId: l.id,
-          customerId: l.customerId,
-          status: l.status,
-          score: l.score,
-          createdAt: l.createdAt,
-          firstRespondedAt: l.firstRespondedAt,
-        }),
+  if (leads.length === 0) return map;
+
+  const customerIds = [
+    ...new Set(
+      leads
+        .map((l) => l.customerId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  const viewsByUser = new Map<string, { count: number; mls: Set<string> }>();
+  const lastEventByUser = new Map<string, Date>();
+  const lastSessionByUser = new Map<string, Date>();
+
+  if (customerIds.length > 0) {
+    const viewSince = new Date(Date.now() - HOT_VIEW_WINDOW_MS);
+    const eventSince = new Date(Date.now() - LAST_EVENT_WINDOW_MS);
+
+    const [views, events, visitors] = await Promise.all([
+      prisma.listingView.findMany({
+        where: { userId: { in: customerIds }, createdAt: { gte: viewSince } },
+        select: { userId: true, mlsNumber: true },
+      }),
+      prisma.activityEvent.findMany({
+        where: {
+          userId: { in: customerIds },
+          type: { not: "HEARTBEAT" },
+          createdAt: { gte: eventSince },
+        },
+        select: { userId: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+        take: Math.min(Math.max(customerIds.length * 8, 80), 4000),
+      }),
+      prisma.siteVisitor.findMany({
+        where: { userId: { in: customerIds } },
+        select: {
+          userId: true,
+          sessions: {
+            orderBy: { lastSeenAt: "desc" },
+            take: 1,
+            select: { lastSeenAt: true },
+          },
+        },
+      }),
+    ]);
+
+    for (const row of views) {
+      if (!row.userId) continue;
+      const bucket = viewsByUser.get(row.userId) ?? {
+        count: 0,
+        mls: new Set<string>(),
+      };
+      bucket.count += 1;
+      bucket.mls.add(row.mlsNumber);
+      viewsByUser.set(row.userId, bucket);
+    }
+
+    for (const row of events) {
+      if (!row.userId || lastEventByUser.has(row.userId)) continue;
+      lastEventByUser.set(row.userId, row.createdAt);
+    }
+
+    for (const visitor of visitors) {
+      if (!visitor.userId) continue;
+      const at = visitor.sessions[0]?.lastSeenAt;
+      if (!at) continue;
+      const prev = lastSessionByUser.get(visitor.userId);
+      if (!prev || at > prev) lastSessionByUser.set(visitor.userId, at);
+    }
+  }
+
+  for (const lead of leads) {
+    const cid = lead.customerId;
+    const viewBucket = cid ? viewsByUser.get(cid) : undefined;
+    const sessionAt = cid ? (lastSessionByUser.get(cid) ?? null) : null;
+    const eventAt = cid ? (lastEventByUser.get(cid) ?? null) : null;
+    const lastSeenAt =
+      sessionAt && eventAt
+        ? sessionAt > eventAt
+          ? sessionAt
+          : eventAt
+        : (sessionAt ?? eventAt);
+
+    map.set(
+      lead.id,
+      scoreHotness(
+        {
+          leadId: lead.id,
+          customerId: lead.customerId,
+          status: lead.status,
+          score: lead.score,
+          createdAt: lead.createdAt,
+          firstRespondedAt: lead.firstRespondedAt,
+        },
+        {
+          views24h: viewBucket?.count ?? 0,
+          distinctListings24h: viewBucket?.mls.size ?? 0,
+          lastSeenAt,
+        },
       ),
     );
-    slice.forEach((l, idx) => map.set(l.id, rows[idx]!));
   }
+
   return map;
 }

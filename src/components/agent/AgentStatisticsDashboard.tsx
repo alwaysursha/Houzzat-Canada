@@ -233,9 +233,9 @@ export function AgentStatisticsDashboard({ data }: { data: AgentStatistics }) {
           tone={kpis.responseRate >= 70 ? "ok" : kpis.responseRate >= 40 ? "warn" : "danger"}
         />
         <Kpi
-          label="Avg first touch"
+          label="Avg response time"
           value={formatResponseMins(kpis.avgResponseMins)}
-          hint={`Median ${formatResponseMins(kpis.medianResponseMins)}`}
+          hint={`New → Attempted · median ${formatResponseMins(kpis.medianResponseMins)}`}
           icon={Clock3}
           tone={
             kpis.avgResponseMins != null && kpis.avgResponseMins <= 60
@@ -280,7 +280,7 @@ export function AgentStatisticsDashboard({ data }: { data: AgentStatistics }) {
       <div className="grid gap-4 xl:grid-cols-5">
         <Card className="xl:col-span-3">
           <CardHeader
-            title="Lead intake & first responses"
+            title="Lead intake & attempted contact"
             subtitle="New leads vs agent first-touch volume by day"
           />
           <div className="h-[240px] px-2 py-3 sm:h-[280px] sm:px-4">
@@ -325,7 +325,7 @@ export function AgentStatisticsDashboard({ data }: { data: AgentStatistics }) {
                 <Area
                   type="monotone"
                   dataKey="responses"
-                  name="First responses"
+                  name="Attempted contact"
                   stroke={TEAL}
                   fill="url(#respFill)"
                   strokeWidth={2}
@@ -396,7 +396,7 @@ export function AgentStatisticsDashboard({ data }: { data: AgentStatistics }) {
         <Card>
           <CardHeader
             title="Response time distribution"
-            subtitle="How fast first touch happens"
+            subtitle="How fast New Lead → Attempted Contact"
           />
           <div className="h-[220px] px-2 py-3 sm:h-[240px] sm:px-4">
             <ResponsiveContainer width="100%" height="100%">

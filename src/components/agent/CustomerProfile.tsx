@@ -54,6 +54,11 @@ import {
   INQUIRY_TAG_STYLE,
 } from "@/lib/agent/inquiry-tag";
 import type { LeadSummary } from "@/lib/agent/lead-summary";
+import {
+  PURCHASE_TIMEFRAMES,
+  purchaseTimeframeLabel,
+  type PurchaseTimeframeValue,
+} from "@/lib/agent/timeframe";
 import { cn } from "@/lib/utils";
 
 type TabId =
@@ -370,7 +375,7 @@ export function CustomerProfile({
     "phone" | "email" | null
   >(null);
   const [profileFlagPending, setProfileFlagPending] = useState<
-    "buyer" | "seller" | null
+    "buyer" | "seller" | "timeframe" | null
   >(null);
   const [activityFilters, setActivityFilters] = useState(
     () => new Set(DEFAULT_ACTIVITY_FILTER_IDS),
@@ -440,6 +445,45 @@ export function CustomerProfile({
         body: JSON.stringify({
           leadId,
           ...(flag === "buyer" ? { isBuyer: next } : { isSeller: next }),
+        }),
+      });
+      if (!res.ok) {
+        await reload().catch(() => undefined);
+        return;
+      }
+      onUpdated();
+    } catch {
+      await reload().catch(() => undefined);
+    } finally {
+      setProfileFlagPending(null);
+    }
+  }
+
+  async function setPurchaseTimeframe(
+    next: PurchaseTimeframeValue | null,
+  ) {
+    if (!data?.lead.customer || profileFlagPending) return;
+    setProfileFlagPending("timeframe");
+    setData((prev) => {
+      if (!prev?.lead.customer) return prev;
+      return {
+        ...prev,
+        lead: {
+          ...prev.lead,
+          customer: {
+            ...prev.lead.customer,
+            purchaseTimeframe: next,
+          },
+        },
+      };
+    });
+    try {
+      const res = await fetch("/api/agent/leads/profile-flags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId,
+          purchaseTimeframe: next,
         }),
       });
       if (!res.ok) {
@@ -1376,6 +1420,38 @@ export function CustomerProfile({
                                   {data.lead.listingMls}
                                 </Link>
                               ) : null
+                            }
+                          />
+                          <InfoRow
+                            label="Timeframe"
+                            value={
+                              data.lead.customer ? (
+                                <select
+                                  className="w-full max-w-[11rem] rounded-md border border-[#d8dee6] bg-white px-2 py-1 text-[13px] font-medium text-[#1e2a38]"
+                                  value={
+                                    data.lead.customer.purchaseTimeframe ?? ""
+                                  }
+                                  disabled={profileFlagPending !== null}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    void setPurchaseTimeframe(
+                                      v === ""
+                                        ? null
+                                        : (v as PurchaseTimeframeValue),
+                                    );
+                                  }}
+                                  aria-label="Purchase timeframe"
+                                >
+                                  <option value="">Not set</option>
+                                  {PURCHASE_TIMEFRAMES.map((tf) => (
+                                    <option key={tf} value={tf}>
+                                      {purchaseTimeframeLabel(tf)}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                "—"
+                              )
                             }
                           />
                         </DetailColumn>

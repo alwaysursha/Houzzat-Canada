@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canAccessLead, requireAgentContext } from "@/lib/agent";
+import { PURCHASE_TIMEFRAMES } from "@/lib/agent/timeframe";
 import { prisma } from "@/lib/prisma";
 
 const schema = z
@@ -8,10 +9,20 @@ const schema = z
     leadId: z.string().min(1),
     isBuyer: z.boolean().optional(),
     isSeller: z.boolean().optional(),
+    purchaseTimeframe: z
+      .enum(PURCHASE_TIMEFRAMES)
+      .nullable()
+      .optional(),
   })
-  .refine((v) => v.isBuyer !== undefined || v.isSeller !== undefined, {
-    message: "Provide isBuyer and/or isSeller",
-  });
+  .refine(
+    (v) =>
+      v.isBuyer !== undefined ||
+      v.isSeller !== undefined ||
+      v.purchaseTimeframe !== undefined,
+    {
+      message: "Provide isBuyer, isSeller, and/or purchaseTimeframe",
+    },
+  );
 
 export async function POST(request: Request) {
   const ctx = await requireAgentContext();
@@ -33,7 +44,12 @@ export async function POST(request: Request) {
       assignedAgentId: true,
       customerId: true,
       customer: {
-        select: { id: true, isBuyer: true, isSeller: true },
+        select: {
+          id: true,
+          isBuyer: true,
+          isSeller: true,
+          purchaseTimeframe: true,
+        },
       },
     },
   });
@@ -50,12 +66,17 @@ export async function POST(request: Request) {
     parsed.data.isSeller !== undefined
       ? parsed.data.isSeller
       : lead.customer.isSeller;
+  const nextTimeframe =
+    parsed.data.purchaseTimeframe !== undefined
+      ? parsed.data.purchaseTimeframe
+      : lead.customer.purchaseTimeframe;
 
   await prisma.user.update({
     where: { id: lead.customer.id },
     data: {
       isBuyer: nextBuyer,
       isSeller: nextSeller,
+      purchaseTimeframe: nextTimeframe,
     },
   });
 
@@ -70,6 +91,13 @@ export async function POST(request: Request) {
       `Seller profile ${parsed.data.isSeller ? "activated" : "deactivated"}`,
     );
   }
+  if (parsed.data.purchaseTimeframe !== undefined) {
+    parts.push(
+      parsed.data.purchaseTimeframe
+        ? `Timeframe set to ${parsed.data.purchaseTimeframe}`
+        : "Timeframe cleared",
+    );
+  }
 
   await prisma.leadActivity.create({
     data: {
@@ -80,6 +108,7 @@ export async function POST(request: Request) {
       meta: {
         isBuyer: nextBuyer,
         isSeller: nextSeller,
+        purchaseTimeframe: nextTimeframe,
       },
     },
   });
@@ -88,5 +117,6 @@ export async function POST(request: Request) {
     ok: true,
     isBuyer: nextBuyer,
     isSeller: nextSeller,
+    purchaseTimeframe: nextTimeframe,
   });
 }

@@ -1,4 +1,5 @@
 import type { OrgMembershipRole, Prisma, Role } from "@prisma/client";
+import { cache } from "react";
 import { auth } from "@/lib/auth";
 import { ensureBrokerageOrganization } from "@/lib/agent/brokerage";
 import { isAdminRole, isAgentRole } from "@/lib/constants";
@@ -61,56 +62,69 @@ export async function requireAgentUser(): Promise<AgentUser | null> {
 /**
  * CRM context: one brokerage team. Admin = Team Leader; agents are members.
  * Personal “My team” orgs are not used for the desk.
+ * Cached per RSC request so layout + page share one auth/org round-trip.
  */
-export async function requireAgentContext(): Promise<AgentOrgContext | null> {
-  const user = await requireAgentUser();
-  if (!user) return null;
+export const requireAgentContext = cache(
+  async (): Promise<AgentOrgContext | null> => {
+    const user = await requireAgentUser();
+    if (!user) return null;
 
-  const isPlatformAdmin = isAdminRole(user.role);
-  const brokerage = await ensureBrokerageOrganization();
+    const isPlatformAdmin = isAdminRole(user.role);
+    const brokerage = await ensureBrokerageOrganization();
 
-  const membershipRole: OrgMembershipRole = isPlatformAdmin ? "OWNER" : "AGENT";
+    const membershipRole: OrgMembershipRole = isPlatformAdmin
+      ? "OWNER"
+      : "AGENT";
 
-  await prisma.organizationMembership.upsert({
-    where: {
-      organizationId_userId: {
-        organizationId: brokerage.id,
-        userId: user.id,
+    const existing = await prisma.organizationMembership.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId: brokerage.id,
+          userId: user.id,
+        },
       },
-    },
-    create: {
+      select: { role: true },
+    });
+
+    let membership = existing;
+    if (!existing) {
+      membership = await prisma.organizationMembership.create({
+        data: {
+          organizationId: brokerage.id,
+          userId: user.id,
+          role: membershipRole,
+        },
+        select: { role: true },
+      });
+    } else if (isPlatformAdmin && existing.role !== "OWNER") {
+      membership = await prisma.organizationMembership.update({
+        where: {
+          organizationId_userId: {
+            organizationId: brokerage.id,
+            userId: user.id,
+          },
+        },
+        data: { role: "OWNER" },
+        select: { role: true },
+      });
+    }
+
+    const canSeeTeamLeads =
+      isPlatformAdmin ||
+      membership?.role === "OWNER" ||
+      membership?.role === "ADMIN";
+
+    return {
+      user,
       organizationId: brokerage.id,
-      userId: user.id,
-      role: membershipRole,
-    },
-    update: isPlatformAdmin ? { role: "OWNER" } : {},
-  });
-
-  const membership = await prisma.organizationMembership.findUnique({
-    where: {
-      organizationId_userId: {
-        organizationId: brokerage.id,
-        userId: user.id,
-      },
-    },
-    select: { role: true },
-  });
-
-  const canSeeTeamLeads =
-    isPlatformAdmin ||
-    membership?.role === "OWNER" ||
-    membership?.role === "ADMIN";
-
-  return {
-    user,
-    organizationId: brokerage.id,
-    organizationName: brokerage.name,
-    organizationIds: [brokerage.id],
-    membershipRole: membership?.role ?? membershipRole,
-    canSeeTeamLeads,
-    isPlatformAdmin,
-  };
-}
+      organizationName: brokerage.name,
+      organizationIds: [brokerage.id],
+      membershipRole: membership?.role ?? membershipRole,
+      canSeeTeamLeads,
+      isPlatformAdmin,
+    };
+  },
+);
 
 /** Lead visibility for list/detail queries. */
 export function leadScopeWhere(
@@ -221,9 +235,17 @@ export function canManageAllLeads(role: string) {
   return isAdminRole(role);
 }
 
+/**
+ * Response SLA clock: only when pipeline moves NEW_LEAD → ATTEMPTED_CONTACT.
+ * Prefer setting firstRespondedAt in the status patch; this is a safe idempotent helper.
+ */
 export async function markLeadFirstResponse(leadId: string, agentId: string) {
   await prisma.lead.updateMany({
-    where: { id: leadId, firstRespondedAt: null },
+    where: {
+      id: leadId,
+      firstRespondedAt: null,
+      status: "ATTEMPTED_CONTACT",
+    },
     data: { firstRespondedAt: new Date() },
   });
   void agentId;

@@ -37,6 +37,10 @@ import {
   pipelinePillClass,
   pipelineShortLabel,
 } from "@/lib/agent/pipeline";
+import {
+  purchaseTimeframeLabel,
+  purchaseTimeframeSortKey,
+} from "@/lib/agent/timeframe";
 import { cn } from "@/lib/utils";
 
 export type LeadRow = {
@@ -56,6 +60,7 @@ export type LeadRow = {
     phone: string | null;
     isBuyer: boolean;
     isSeller: boolean;
+    purchaseTimeframe: string | null;
     emailVerified: boolean;
     phoneVerified: boolean;
     createdAt: string;
@@ -120,7 +125,10 @@ function compareLeads(a: LeadRow, b: LeadRow, key: SortKey): number {
         { sensitivity: "base" },
       );
     case "timeframe":
-      return 0;
+      return (
+        purchaseTimeframeSortKey(a.customer?.purchaseTimeframe) -
+        purchaseTimeframeSortKey(b.customer?.purchaseTimeframe)
+      );
     case "lastLogin":
       return (
         (a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0) -
@@ -802,6 +810,18 @@ export function LeadsTableClient({
                           {lead.priceCity || `MLS® ${lead.listingMls}`}
                         </p>
                       ) : null}
+                      {purchaseTimeframeLabel(
+                        lead.customer?.purchaseTimeframe,
+                      ) ? (
+                        <p className="text-[12px]">
+                          Timeframe:{" "}
+                          <span className="font-semibold text-[#334155]">
+                            {purchaseTimeframeLabel(
+                              lead.customer?.purchaseTimeframe,
+                            )}
+                          </span>
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-[#eef2f6] pt-2.5 text-[11px] text-[#64748b]">
@@ -1197,7 +1217,11 @@ export function LeadsTableClient({
                       </p>
                     </td>
 
-                    <td className="px-2 py-3 text-[12px] text-[#64748b]">n/a</td>
+                    <td className="px-2 py-3 text-[12px] text-[#64748b]">
+                      {purchaseTimeframeLabel(
+                        lead.customer?.purchaseTimeframe,
+                      ) ?? "—"}
+                    </td>
 
                     <td className="px-2 py-3 text-[12px] text-[#334155]">
                       <p className="font-semibold">

@@ -78,6 +78,14 @@ enum InquiryTag {
   GENERAL
 }
 
+/** When the customer expects to buy or sell. */
+enum PurchaseTimeframe {
+  NOW
+  ONE_TO_THREE_MONTHS
+  SIX_TO_TWELVE_MONTHS
+  TWELVE_PLUS_MONTHS
+}
+
 /** Agent CRM follow-up note category. */
 enum LeadNoteCategory {
   GENERAL
@@ -179,6 +187,8 @@ model User {
   isBuyer       Boolean   @default(true)
   /** Consumer can use seller dashboard (/owner) / seller search prefs. */
   isSeller      Boolean   @default(false)
+  /** Buy/sell horizon — set by customer popup or agent in CRM. */
+  purchaseTimeframe PurchaseTimeframe?
   /** Which consumer dashboard + search context is active. */
   activeMode    ActiveMode @default(BUYER)
   phone         String?
@@ -312,7 +322,7 @@ model Lead {
   adCampaignId    String?
   /** CASL-style consent to be contacted by a Houzzat agent about this request. */
   contactConsentAt DateTime?
-  /** First agent touch (claim, note, call task, email) — SLA clock. */
+  /** When agent first moved pipeline NEW_LEAD → ATTEMPTED_CONTACT (response SLA). */
   firstRespondedAt DateTime?
   /** When pipeline status last changed (banner date). */
   statusChangedAt  DateTime   @default(now())

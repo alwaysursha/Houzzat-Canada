@@ -34,6 +34,7 @@ export type LeadSummary = {
       phone: string | null;
       isBuyer: boolean;
       isSeller: boolean;
+      purchaseTimeframe: string | null;
       emailVerified: string | null;
       createdAt: string;
       caslConsentAt: string | null;
@@ -186,6 +187,7 @@ export async function loadLeadSummary(
           phone: true,
           isBuyer: true,
           isSeller: true,
+          purchaseTimeframe: true,
           emailVerified: true,
           createdAt: true,
           caslConsentAt: true,

@@ -140,18 +140,19 @@ export async function PATCH(request: Request) {
   if (parsed.data.lostReason) data.lostReason = parsed.data.lostReason;
   if (parsed.data.winReason) data.winReason = parsed.data.winReason;
 
-  const isTouch =
-    Boolean(parsed.data.claim) ||
-    Boolean(parsed.data.notes) ||
-    Boolean(parsed.data.status);
+  // Response time = NEW_LEAD → ATTEMPTED_CONTACT only (not claim/note/other status).
+  const movedToAttempted =
+    parsed.data.status === "ATTEMPTED_CONTACT" &&
+    lead.status === "NEW_LEAD" &&
+    !lead.firstRespondedAt;
+  if (movedToAttempted) {
+    data.firstRespondedAt = new Date();
+  }
 
   const updated = await prisma.lead.update({
     where: { id: lead.id },
     data: {
       ...data,
-      ...(isTouch && !lead.firstRespondedAt
-        ? { firstRespondedAt: new Date() }
-        : {}),
       activities: {
         create: {
           type: parsed.data.claim
@@ -179,7 +180,7 @@ export async function PATCH(request: Request) {
     },
   });
 
-  if (isTouch) {
+  if (movedToAttempted) {
     await markLeadFirstResponse(lead.id, ctx.user.id);
   }
 

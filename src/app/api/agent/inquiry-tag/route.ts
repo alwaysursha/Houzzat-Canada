@@ -49,7 +49,6 @@ export async function POST(request: Request) {
           inquiryTag: tag,
           organizationId: orgId,
           assignedAgentId: lead.assignedAgentId ?? ctx.user.id,
-          firstRespondedAt: lead.firstRespondedAt ?? new Date(),
         },
       }),
       prisma.leadActivity.create({

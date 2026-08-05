@@ -15,14 +15,26 @@ export type TeamAgentOption = {
   role: "AGENT" | "ADMIN";
 };
 
+let brokerageCache: { org: { id: string; name: string }; at: number } | null =
+  null;
+const BROKERAGE_CACHE_MS = 5 * 60 * 1000;
+
 /**
  * One brokerage org for the install: Team Leader (Admin) + Agents.
  * Migrates stray personal-org memberships/leads/tasks into this desk.
+ * Result is cached briefly — seat/migration sync does not need to run every request.
  */
 export async function ensureBrokerageOrganization(): Promise<{
   id: string;
   name: string;
 }> {
+  if (
+    brokerageCache &&
+    Date.now() - brokerageCache.at < BROKERAGE_CACHE_MS
+  ) {
+    return brokerageCache.org;
+  }
+
   const fromEnv = process.env.DEFAULT_ORGANIZATION_ID?.trim();
   let org = fromEnv
     ? await prisma.organization.findUnique({
@@ -130,6 +142,7 @@ export async function ensureBrokerageOrganization(): Promise<{
     data: { organizationId: brokerageId },
   });
 
+  brokerageCache = { org, at: Date.now() };
   return org;
 }
 

@@ -84,7 +84,7 @@ export default async function AgentLeadsPage({
   const leads = await prisma.lead.findMany({
     where,
     orderBy: [{ score: "desc" }, { createdAt: "desc" }],
-    take: 200,
+    take: 100,
     include: {
       customer: {
         select: {
@@ -94,6 +94,7 @@ export default async function AgentLeadsPage({
           phone: true,
           isBuyer: true,
           isSeller: true,
+          purchaseTimeframe: true,
           emailVerified: true,
           phoneVerifiedAt: true,
           createdAt: true,
@@ -150,6 +151,7 @@ export default async function AgentLeadsPage({
               phone: eng?.phone ?? l.customer.phone,
               isBuyer: l.customer.isBuyer,
               isSeller: l.customer.isSeller,
+              purchaseTimeframe: l.customer.purchaseTimeframe,
               emailVerified: Boolean(l.customer.emailVerified),
               phoneVerified: Boolean(l.customer.phoneVerifiedAt),
               createdAt: l.customer.createdAt.toISOString(),
