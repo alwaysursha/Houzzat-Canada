@@ -1,6 +1,8 @@
 import { randomBytes } from "crypto";
-import { SITE_NAME, SITE_URL } from "@/lib/constants";
-import { sendNotification } from "@/lib/notifications";
+import { SITE_URL } from "@/lib/constants";
+import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import { isResendConfigured } from "@/lib/email/config";
+import { renderVerifyEmail, renderWelcomeEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
 
 export const VERIFY_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -8,7 +10,7 @@ export const VERIFY_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const VERIFY_RESEND_COOLDOWN_MS = 60 * 1000;
 
 export function isEmailSendConfigured() {
-  return Boolean(process.env.RESEND_API_KEY?.trim());
+  return isResendConfigured();
 }
 
 export async function createEmailVerificationToken(email: string) {
@@ -48,6 +50,7 @@ export async function sendEmailVerification(input: {
   email: string;
   name?: string | null;
   callbackUrl?: string;
+  customerId?: string | null;
 }): Promise<"sent" | "skipped" | "failed"> {
   if (!isEmailSendConfigured()) {
     console.info("[verify-email:stub] RESEND_API_KEY missing", input.email);
@@ -56,24 +59,55 @@ export async function sendEmailVerification(input: {
 
   const { token, email } = await createEmailVerificationToken(input.email);
   const link = verificationLink(token, input.callbackUrl);
-  const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi,";
-
-  const result = await sendNotification({
-    toEmail: email,
-    subject: `Verify your email for ${SITE_NAME}`,
-    text: [
-      greet,
-      "",
-      `Please verify your email address to keep full access to ${SITE_NAME}.`,
-      "",
-      `Verify here (link valid for 7 days):`,
-      link,
-      "",
-      "If you did not create this account, you can ignore this email.",
-    ].join("\n"),
+  const rendered = renderVerifyEmail({
+    name: input.name,
+    verifyUrl: link,
   });
 
-  return result.email;
+  const user =
+    input.customerId
+      ? { id: input.customerId }
+      : await prisma.user.findUnique({
+          where: { email },
+          select: { id: true },
+        });
+
+  const result = await sendAndLogClientEmail({
+    to: email,
+    rendered,
+    stream: "notify",
+    customerId: user?.id,
+    logToCrm: true,
+  });
+
+  return result.status === "sent"
+    ? "sent"
+    : result.status === "skipped"
+      ? "skipped"
+      : "failed";
+}
+
+export async function sendWelcomeEmail(input: {
+  email: string;
+  name?: string | null;
+  customerId?: string | null;
+}): Promise<"sent" | "skipped" | "failed"> {
+  if (!isEmailSendConfigured()) return "skipped";
+
+  const rendered = renderWelcomeEmail({ name: input.name });
+  const result = await sendAndLogClientEmail({
+    to: input.email.trim().toLowerCase(),
+    rendered,
+    stream: "notify",
+    customerId: input.customerId,
+    logToCrm: true,
+  });
+
+  return result.status === "sent"
+    ? "sent"
+    : result.status === "skipped"
+      ? "skipped"
+      : "failed";
 }
 
 export async function consumeEmailVerificationToken(

@@ -210,6 +210,10 @@ model User {
   emailAlertsEnabled Boolean @default(true)
   smsAlertsEnabled   Boolean @default(false)
   relatedListingsMode RelatedListingsMode @default(SAME_AREA)
+  /** Last successful daily Saved Search Digest send. */
+  lastBuyerDigestAt  DateTime?
+  /** Last successful Neighborhood Weekly Report send. */
+  lastSellerReportAt DateTime?
   /** Soft-suspend: blocked from signing in / using the product. */
   disabledAt    DateTime?
   createdAt     DateTime  @default(now())
@@ -430,18 +434,26 @@ model LeadEmailLog {
   id             String   @id @default(cuid())
   organizationId String
   leadId         String
-  sentById       String
+  /** Null for automated system emails (alerts, welcome, etc.). */
+  sentById       String?
   toEmail        String
   subject        String
+  /** Plain-text body (and short CRM snippet). */
   body           String   @db.Text
+  /** Full HTML for Preview Email in CRM. */
+  htmlBody       String?  @db.Text
+  /** Template key: price_reduction, just_listed, shortlist, custom, … */
+  kind           String   @default("custom")
+  mlsNumber      String?
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  sentBy       User         @relation("LeadEmailSender", fields: [sentById], references: [id], onDelete: Cascade)
+  sentBy       User?        @relation("LeadEmailSender", fields: [sentById], references: [id], onDelete: SetNull)
 
   @@index([leadId, createdAt])
   @@index([organizationId, createdAt])
+  @@index([kind, createdAt])
 }
 
 model LeadActivity {

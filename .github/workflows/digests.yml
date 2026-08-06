@@ -1,0 +1,70 @@
+name: Digests
+
+# Daily Saved Search Digests + Monday Neighborhood Weekly Reports.
+# Hits the deployed app cron route (Workers/Pages) with DIGEST_CRON_SECRET.
+#
+# Required GitHub secrets:
+#   DIGEST_CRON_URL  — e.g. https://houzzat.com/api/cron/digests
+#   DIGEST_CRON_SECRET (or CRON_SECRET / MLS_SYNC_SECRET matching the app)
+on:
+  # Local Mac LaunchAgent is the primary scheduler (scripts/macos/).
+  # Keep workflow_dispatch only for optional remote runs.
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: "Dry run (1 = no emails)"
+        required: false
+        default: "0"
+      userId:
+        description: "Optional single user id"
+        required: false
+        default: ""
+      forceSeller:
+        description: "Force seller weekly (1 = yes)"
+        required: false
+        default: "0"
+
+concurrency:
+  group: digests-schedule
+  cancel-in-progress: false
+
+jobs:
+  digests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Run digest cron
+        env:
+          DIGEST_CRON_URL: ${{ secrets.DIGEST_CRON_URL }}
+          DIGEST_CRON_SECRET: ${{ secrets.DIGEST_CRON_SECRET }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          MLS_SYNC_SECRET: ${{ secrets.MLS_SYNC_SECRET }}
+          DRY_RUN: ${{ github.event.inputs.dryRun || '0' }}
+          USER_ID: ${{ github.event.inputs.userId || '' }}
+          FORCE_SELLER: ${{ github.event.inputs.forceSeller || '0' }}
+        run: |
+          set -euo pipefail
+          URL="${DIGEST_CRON_URL:-}"
+          SECRET="${DIGEST_CRON_SECRET:-${CRON_SECRET:-${MLS_SYNC_SECRET:-}}}"
+          if [[ -z "$URL" ]]; then
+            echo "Missing secret DIGEST_CRON_URL"
+            exit 1
+          fi
+          if [[ -z "$SECRET" ]]; then
+            echo "Missing DIGEST_CRON_SECRET (or CRON_SECRET / MLS_SYNC_SECRET)"
+            exit 1
+          fi
+          BODY='{}'
+          if [[ "$DRY_RUN" == "1" || -n "$USER_ID" || "$FORCE_SELLER" == "1" ]]; then
+            BODY=$(jq -n \
+              --argjson dryRun "$([[ "$DRY_RUN" == "1" ]] && echo true || echo false)" \
+              --arg userId "$USER_ID" \
+              --argjson forceSeller "$([[ "$FORCE_SELLER" == "1" ]] && echo true || echo false)" \
+              '{dryRun:$dryRun, forceSeller:$forceSeller} + (if $userId == "" then {} else {userId:$userId} end)')
+          fi
+          echo "POST $URL"
+          curl -fsS -X POST "$URL" \
+            -H "Authorization: Bearer ${SECRET}" \
+            -H "Content-Type: application/json" \
+            -d "$BODY"
+          echo

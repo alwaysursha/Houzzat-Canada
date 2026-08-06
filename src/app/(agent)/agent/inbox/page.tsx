@@ -66,7 +66,7 @@ export default async function AgentInboxPage() {
               <p className="mt-1 text-xs text-ink/50">
                 To {e.toEmail} ·{" "}
                 {e.lead.customer?.name || e.lead.customer?.email || "Lead"} ·
-                from {e.sentBy.name || e.sentBy.email}
+                from {e.sentBy?.name || e.sentBy?.email || "Houzzat"}
               </p>
               <p className="mt-1 line-clamp-2 text-sm text-ink/65">{e.body}</p>
             </li>

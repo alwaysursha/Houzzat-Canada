@@ -3,7 +3,15 @@ import type {
   OwnerListingStatus,
   Prisma,
 } from "@prisma/client";
-import { sendNotification } from "@/lib/notifications";
+import { SITE_URL } from "@/lib/constants";
+import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import { emailPreferencesUrl } from "@/lib/email/log";
+import {
+  renderJustListedEmail,
+  renderPriceReductionEmail,
+  renderPropertyUpdateEmail,
+  renderSoldAlertEmail,
+} from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
 
 function formatPrice(amount: number) {
@@ -12,6 +20,10 @@ function formatPrice(amount: number) {
     currency: "CAD",
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function listingUrl(mlsNumber: string) {
+  return `${SITE_URL}/listing/${mlsNumber}`;
 }
 
 async function createAlert(input: {
@@ -28,8 +40,42 @@ async function createAlert(input: {
   mlsNumber?: string;
   areaMonitorId?: string;
   email?: string | null;
+  name?: string | null;
   emailAlertsEnabled: boolean;
   monitorEmailAlerts: boolean;
+  /** Structured fields for HTML templates when available. */
+  template?:
+    | {
+        type: "price_reduction";
+        addressLine: string;
+        city: string;
+        mlsNumber: string;
+        oldPrice: number;
+        newPrice: number;
+      }
+    | {
+        type: "sold";
+        addressLine: string;
+        city: string;
+        mlsNumber: string;
+        statusLabel: string;
+        priceLabel: string;
+      }
+    | {
+        type: "just_listed";
+        areaName: string;
+        addressLine: string;
+        city: string;
+        mlsNumber: string;
+        price: number;
+      }
+    | {
+        type: "property_update";
+        addressLine: string;
+        city: string;
+        mlsNumber: string;
+        changes: string[];
+      };
 }) {
   await prisma.customerAlert.create({
     data: {
@@ -43,16 +89,94 @@ async function createAlert(input: {
   });
 
   if (
-    input.emailAlertsEnabled &&
-    input.monitorEmailAlerts &&
-    input.email
+    !input.emailAlertsEnabled ||
+    !input.monitorEmailAlerts ||
+    !input.email
   ) {
-    void sendNotification({
-      toEmail: input.email,
-      subject: input.title,
-      text: input.body,
-    });
+    return;
   }
+
+  const unsub = emailPreferencesUrl();
+  const rendered = (() => {
+    const t = input.template;
+    if (!t) return null;
+    if (t.type === "price_reduction") {
+      return renderPriceReductionEmail({
+        name: input.name,
+        addressLine: t.addressLine,
+        city: t.city,
+        mlsNumber: t.mlsNumber,
+        oldPrice: t.oldPrice,
+        newPrice: t.newPrice,
+        listingUrl: listingUrl(t.mlsNumber),
+        unsubscribeUrl: unsub,
+      });
+    }
+    if (t.type === "sold") {
+      return renderSoldAlertEmail({
+        name: input.name,
+        addressLine: t.addressLine,
+        city: t.city,
+        mlsNumber: t.mlsNumber,
+        statusLabel: t.statusLabel,
+        priceLabel: t.priceLabel,
+        listingUrl: listingUrl(t.mlsNumber),
+        unsubscribeUrl: unsub,
+      });
+    }
+    if (t.type === "just_listed") {
+      return renderJustListedEmail({
+        name: input.name,
+        areaName: t.areaName,
+        addressLine: t.addressLine,
+        city: t.city,
+        mlsNumber: t.mlsNumber,
+        price: t.price,
+        listingUrl: listingUrl(t.mlsNumber),
+        unsubscribeUrl: unsub,
+      });
+    }
+    return renderPropertyUpdateEmail({
+      name: input.name,
+      title: input.title,
+      addressLine: t.addressLine,
+      city: t.city,
+      mlsNumber: t.mlsNumber,
+      changes: t.changes,
+      listingUrl: listingUrl(t.mlsNumber),
+      unsubscribeUrl: unsub,
+    });
+  })();
+
+  if (!rendered) {
+    await sendAndLogClientEmail({
+      to: input.email,
+      stream: "alerts",
+      customerId: input.userId,
+      mlsNumber: input.mlsNumber,
+      rendered: renderPropertyUpdateEmail({
+        name: input.name,
+        title: input.title,
+        addressLine: input.mlsNumber ?? "Property",
+        city: "",
+        mlsNumber: input.mlsNumber ?? "",
+        changes: input.body.split("\n").filter(Boolean),
+        listingUrl: input.mlsNumber
+          ? listingUrl(input.mlsNumber)
+          : SITE_URL,
+        unsubscribeUrl: unsub,
+      }),
+    });
+    return;
+  }
+
+  await sendAndLogClientEmail({
+    to: input.email,
+    stream: "alerts",
+    customerId: input.userId,
+    mlsNumber: input.mlsNumber,
+    rendered,
+  });
 }
 
 export async function runPropertyMonitorChecks(userId?: string) {
@@ -63,6 +187,7 @@ export async function runPropertyMonitorChecks(userId?: string) {
         select: {
           id: true,
           email: true,
+          name: true,
           emailAlertsEnabled: true,
         },
       },
@@ -82,6 +207,7 @@ export async function runPropertyMonitorChecks(userId?: string) {
         status: true,
         ownerStatus: true,
         dataSource: true,
+        soldPrice: true,
       },
     });
     if (!listing) continue;
@@ -92,12 +218,21 @@ export async function runPropertyMonitorChecks(userId?: string) {
       | "STATUS_CHANGE"
       | "OWNER_STATUS_CHANGE"
       | null = null;
+    let priceDrop:
+      | { oldPrice: number; newPrice: number }
+      | null = null;
 
     if (listing.listPrice !== monitor.lastKnownPrice) {
       changes.push(
         `Price ${formatPrice(monitor.lastKnownPrice)} → ${formatPrice(listing.listPrice)}`,
       );
       kind = "PRICE_CHANGE";
+      if (listing.listPrice < monitor.lastKnownPrice) {
+        priceDrop = {
+          oldPrice: monitor.lastKnownPrice,
+          newPrice: listing.listPrice,
+        };
+      }
     }
     if (listing.status !== monitor.lastKnownStatus) {
       changes.push(`Status ${monitor.lastKnownStatus} → ${listing.status}`);
@@ -120,15 +255,49 @@ export async function runPropertyMonitorChecks(userId?: string) {
     const title = `Update · ${listing.addressLine}`;
     const body = `${listing.addressLine}, ${listing.city} (${listing.mlsNumber})\n${changes.join("\n")}`;
 
+    const soldLike =
+      listing.status !== monitor.lastKnownStatus &&
+      (listing.status === "SOLD" || listing.status === "LEASED");
+
     await createAlert({
       userId: monitor.userId,
       kind,
-      title,
+      title: soldLike
+        ? `${listing.status === "LEASED" ? "Leased" : "Sold"} · ${listing.addressLine}`
+        : priceDrop
+          ? `Price reduced · ${listing.addressLine}`
+          : title,
       body,
       mlsNumber: listing.mlsNumber,
       email: monitor.user.email,
+      name: monitor.user.name,
       emailAlertsEnabled: monitor.user.emailAlertsEnabled,
       monitorEmailAlerts: monitor.emailAlerts,
+      template: soldLike
+        ? {
+            type: "sold",
+            addressLine: listing.addressLine,
+            city: listing.city,
+            mlsNumber: listing.mlsNumber,
+            statusLabel: listing.status === "LEASED" ? "Leased" : "Sold",
+            priceLabel: formatPrice(listing.soldPrice ?? listing.listPrice),
+          }
+        : priceDrop
+          ? {
+              type: "price_reduction",
+              addressLine: listing.addressLine,
+              city: listing.city,
+              mlsNumber: listing.mlsNumber,
+              oldPrice: priceDrop.oldPrice,
+              newPrice: priceDrop.newPrice,
+            }
+          : {
+              type: "property_update",
+              addressLine: listing.addressLine,
+              city: listing.city,
+              mlsNumber: listing.mlsNumber,
+              changes,
+            },
     });
 
     await prisma.propertyMonitor.update({
@@ -154,6 +323,7 @@ export async function runAreaMonitorChecks(userId?: string) {
         select: {
           id: true,
           email: true,
+          name: true,
           emailAlertsEnabled: true,
         },
       },
@@ -216,8 +386,17 @@ export async function runAreaMonitorChecks(userId?: string) {
           mlsNumber: listing.mlsNumber,
           areaMonitorId: monitor.id,
           email: monitor.user.email,
+          name: monitor.user.name,
           emailAlertsEnabled: monitor.user.emailAlertsEnabled,
           monitorEmailAlerts: monitor.emailAlerts,
+          template: {
+            type: "just_listed",
+            areaName: monitor.name,
+            addressLine: listing.addressLine,
+            city: listing.city,
+            mlsNumber: listing.mlsNumber,
+            price: listing.listPrice,
+          },
         });
         alerts += 1;
       }
@@ -253,8 +432,17 @@ export async function runAreaMonitorChecks(userId?: string) {
           mlsNumber: listing.mlsNumber,
           areaMonitorId: monitor.id,
           email: monitor.user.email,
+          name: monitor.user.name,
           emailAlertsEnabled: monitor.user.emailAlertsEnabled,
           monitorEmailAlerts: monitor.emailAlerts,
+          template: {
+            type: "sold",
+            addressLine: listing.addressLine,
+            city: listing.city,
+            mlsNumber: listing.mlsNumber,
+            statusLabel: listing.status === "LEASED" ? "Leased" : "Sold",
+            priceLabel: formatPrice(price),
+          },
         });
         alerts += 1;
       }

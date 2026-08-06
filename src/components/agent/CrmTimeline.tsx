@@ -145,6 +145,16 @@ export function CrmTimeline({
                     </div>
                   </div>
                 )}
+                {item.emailPreviewPath ? (
+                  <div className="border-t border-line/70 px-2.5 py-2">
+                    <Link
+                      href={item.emailPreviewPath}
+                      className="text-xs font-semibold text-canopy hover:underline"
+                    >
+                      Preview email
+                    </Link>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <>
@@ -152,6 +162,21 @@ export function CrmTimeline({
                 {item.body ? (
                   <p className="mt-0.5 text-xs text-ink/55 line-clamp-3">
                     {item.body}
+                  </p>
+                ) : null}
+                {item.emailPreviewPath ? (
+                  <p className="mt-1.5">
+                    <Link
+                      href={item.emailPreviewPath}
+                      className="text-xs font-semibold text-canopy hover:underline"
+                    >
+                      Preview email
+                    </Link>
+                    {item.emailKind ? (
+                      <span className="ml-2 text-[11px] capitalize text-ink/40">
+                        {item.emailKind.replaceAll("_", " ")}
+                      </span>
+                    ) : null}
                   </p>
                 ) : null}
               </>

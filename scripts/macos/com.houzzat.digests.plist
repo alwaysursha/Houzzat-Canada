@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Houzzat daily digests — install as a LaunchAgent on your always-on Mac.
+
+  Install:
+    chmod +x /Users/ali/Projects/teamalisyedrealestate/scripts/run-digests-mac.sh
+    cp /Users/ali/Projects/teamalisyedrealestate/scripts/macos/com.houzzat.digests.plist ~/Library/LaunchAgents/
+    launchctl unload ~/Library/LaunchAgents/com.houzzat.digests.plist 2>/dev/null || true
+    launchctl load ~/Library/LaunchAgents/com.houzzat.digests.plist
+
+  Run once now:
+    launchctl start com.houzzat.digests
+
+  Logs:
+    /Users/ali/Projects/teamalisyedrealestate/logs/digests.log
+
+  Schedule uses the Mac's local timezone. Set System Settings → Date & Time
+  to America/Toronto so 6:00 = 6 AM Toronto.
+-->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.houzzat.digests</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/bash</string>
+      <string>/Users/ali/Projects/teamalisyedrealestate/scripts/run-digests-mac.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/ali/Projects/teamalisyedrealestate</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Hour</key>
+      <integer>6</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/ali/Projects/teamalisyedrealestate/logs/digests.launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/ali/Projects/teamalisyedrealestate/logs/digests.launchd.err.log</string>
+  </dict>
+</plist>

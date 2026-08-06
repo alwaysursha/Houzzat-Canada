@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  canAccessLead,
-  markLeadFirstResponse,
-  requireAgentContext,
-} from "@/lib/agent";
-import { sendNotification } from "@/lib/notifications";
+import { canAccessLead, requireAgentContext } from "@/lib/agent";
+import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import { renderAgentMessageEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
 
 const singleSchema = z.object({
@@ -45,6 +42,7 @@ export async function POST(request: Request) {
     include: {
       customer: {
         select: {
+          id: true,
           email: true,
           name: true,
           emailAlertsEnabled: true,
@@ -80,37 +78,28 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const result = await sendNotification({
-      toEmail,
+    const rendered = renderAgentMessageEmail({
+      name: lead.customer?.name,
       subject: parsed.data.subject,
-      text: parsed.data.body,
+      body: parsed.data.body,
     });
 
-    if (result.email === "failed") {
+    const result = await sendAndLogClientEmail({
+      to: toEmail,
+      rendered,
+      stream: "notify",
+      customerId: lead.customer?.id,
+      leadId: lead.id,
+      sentById: ctx.user.id,
+      organizationId: lead.organizationId ?? ctx.organizationId,
+      replyTo: ctx.user.email,
+    });
+
+    if (!result.ok) {
       errors.push(`${toEmail}: send failed`);
       continue;
     }
 
-    const orgId = lead.organizationId ?? ctx.organizationId;
-    await prisma.leadEmailLog.create({
-      data: {
-        organizationId: orgId,
-        leadId: lead.id,
-        sentById: ctx.user.id,
-        toEmail,
-        subject: parsed.data.subject,
-        body: parsed.data.body,
-      },
-    });
-    await prisma.leadActivity.create({
-      data: {
-        leadId: lead.id,
-        userId: ctx.user.id,
-        type: "email_sent",
-        body: parsed.data.subject,
-      },
-    });
-    await markLeadFirstResponse(lead.id, ctx.user.id);
     sent += 1;
   }
 

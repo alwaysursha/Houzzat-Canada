@@ -46,6 +46,7 @@ yarn-error.log*
 .neon
 skills-lock.json
 Houzzat Canada/
+logs/
 
 # vercel
 .vercel

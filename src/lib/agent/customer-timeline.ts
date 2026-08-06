@@ -18,6 +18,9 @@ export type TimelineItem = {
   noteCategory?: "GENERAL" | "CALL" | null;
   pinned?: boolean;
   pinnedAt?: Date | null;
+  /** CRM email preview path when source is email. */
+  emailPreviewPath?: string | null;
+  emailKind?: string | null;
 };
 
 function formatListingAddress(listing: {
@@ -196,10 +199,12 @@ export async function loadCustomerTimeline(input: {
       type: "EMAIL",
       title: e.subject,
       body: e.body.slice(0, 280),
-      mlsNumber: null,
+      mlsNumber: e.mlsNumber ?? null,
       path: null,
       imageUrl: null,
       createdAt: e.createdAt,
+      emailPreviewPath: `/agent/emails/${e.id}`,
+      emailKind: e.kind ?? "custom",
     });
   }
   for (const t of tasks) {

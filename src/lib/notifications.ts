@@ -1,8 +1,13 @@
+import { fromForStream, type EmailStream } from "@/lib/email/config";
+import { sendRenderedEmail } from "@/lib/email/send";
+
 type NotifyPayload = {
   toEmail?: string | null;
   toPhone?: string | null;
   subject: string;
   text: string;
+  html?: string;
+  stream?: EmailStream;
   smsText?: string;
   /** When set, also attempt WhatsApp via Twilio WhatsApp sender. */
   whatsappText?: string;
@@ -17,11 +22,31 @@ export async function sendNotification(payload: NotifyPayload) {
   };
 
   if (payload.toEmail) {
-    results.email = await sendEmail({
-      to: payload.toEmail,
-      subject: payload.subject,
-      text: payload.text,
-    });
+    if (payload.html) {
+      const sent = await sendRenderedEmail({
+        to: payload.toEmail,
+        stream: payload.stream ?? "notify",
+        rendered: {
+          subject: payload.subject,
+          text: payload.text,
+          html: payload.html,
+          kind: "notify",
+        },
+      });
+      results.email =
+        sent.status === "sent"
+          ? "sent"
+          : sent.status === "skipped"
+            ? "skipped"
+            : "failed";
+    } else {
+      results.email = await sendEmail({
+        to: payload.toEmail,
+        subject: payload.subject,
+        text: payload.text,
+        stream: payload.stream,
+      });
+    }
   }
 
   const phone = payload.toPhone;
@@ -51,9 +76,10 @@ async function sendEmail(input: {
   to: string;
   subject: string;
   text: string;
+  stream?: EmailStream;
 }): Promise<"sent" | "skipped" | "failed"> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? "Houzzat <noreply@houzzat.ca>";
+  const from = fromForStream(input.stream ?? "notify");
 
   if (!apiKey) {
     console.info("[notify:email:stub]", input.to, input.subject);

@@ -1,12 +1,10 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  canAccessLead,
-  markLeadFirstResponse,
-  requireAgentContext,
-} from "@/lib/agent";
+import { canAccessLead, requireAgentContext } from "@/lib/agent";
 import { SITE_URL } from "@/lib/constants";
+import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import { renderShortlistEmail } from "@/lib/email/templates";
 import {
   formatListPrice,
   formatListingAddressOneLine,
@@ -14,7 +12,6 @@ import {
 } from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
 import { toCard } from "@/lib/listings/provider";
-import { sendNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -116,8 +113,6 @@ export async function POST(request: Request) {
     .slice(0, 10);
 
   const shareUrl = `${SITE_URL}/share/homes/${token}`;
-  const firstName =
-    lead.customer?.name?.trim().split(/\s+/)[0] || "there";
 
   const listingLines = cards.map((c, i) => {
     const addr = formatListingAddressOneLine(c);
@@ -125,46 +120,32 @@ export async function POST(request: Request) {
     return `${i + 1}. ${addr} — ${price} (${formatListingBedsLabel(c)} bed · MLS ${c.mlsNumber})\n   ${SITE_URL}${listingPath(c)}`;
   });
 
-  const noteBlock = note ? `\n${note}\n` : "";
-  const subject =
-    parsed.data.subject ??
-    `${cards.length} home${cards.length === 1 ? "" : "s"} for you`;
+  const rendered = renderShortlistEmail({
+    name: lead.customer?.name,
+    agentName,
+    shareUrl,
+    note,
+    listingLines: listingLines.map((line) => line.replace(/\n\s+/g, " · ")),
+  });
+  if (parsed.data.subject?.trim()) {
+    rendered.subject = parsed.data.subject.trim();
+  }
 
-  const body = `Hi ${firstName},
-
-I put together a shortlist of ${cards.length} home${cards.length === 1 ? "" : "s"} that match what you've been looking at.
-${noteBlock}
-View all of them here:
-${shareUrl}
-
-${listingLines.join("\n\n")}
-
-Happy to book showings or refine the search anytime.
-
-— ${agentName}
-Houzzat`;
-
-  const result = await sendNotification({
-    toEmail,
-    subject,
-    text: body,
+  const result = await sendAndLogClientEmail({
+    to: toEmail,
+    rendered,
+    stream: "notify",
+    customerId: lead.customerId,
+    leadId: lead.id,
+    sentById: ctx.user.id,
+    organizationId: lead.organizationId ?? ctx.organizationId,
+    replyTo: ctx.user.email,
   });
 
-  if (result.email === "failed") {
+  if (!result.ok) {
     return NextResponse.json({ error: "Send failed" }, { status: 502 });
   }
 
-  const orgId = lead.organizationId ?? ctx.organizationId;
-  await prisma.leadEmailLog.create({
-    data: {
-      organizationId: orgId,
-      leadId: lead.id,
-      sentById: ctx.user.id,
-      toEmail,
-      subject,
-      body,
-    },
-  });
   await prisma.leadActivity.create({
     data: {
       leadId: lead.id,
@@ -173,12 +154,11 @@ Houzzat`;
       body: `Emailed shortlist (${cards.length} homes · ${fingerprint}) · ${shareUrl}`,
     },
   });
-  await markLeadFirstResponse(lead.id, ctx.user.id);
 
   return NextResponse.json({
     ok: true,
     shareUrl,
     count: cards.length,
-    stubbed: result.email === "skipped",
+    stubbed: result.status === "skipped",
   });
 }

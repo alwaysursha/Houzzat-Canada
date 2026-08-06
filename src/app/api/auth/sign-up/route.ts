@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { captureWebsiteLead } from "@/lib/agent/lead-intake";
-import { sendEmailVerification } from "@/lib/auth/email-verification";
+import {
+  sendEmailVerification,
+  sendWelcomeEmail,
+} from "@/lib/auth/email-verification";
 import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
 import { prisma } from "@/lib/prisma";
 import { VOW_VERSION } from "@/lib/vow";
@@ -109,13 +112,28 @@ export async function POST(request: Request) {
       console.error("[sign-up] lead capture failed", err);
     }
 
-    void sendEmailVerification({
-      email,
-      name: parsed.data.name,
-      callbackUrl: "/account",
-    }).catch((err) => {
-      console.error("[sign-up] verification email failed", err);
-    });
+    // Await sends — fire-and-forget after the response can be cancelled by
+    // Next.js once the request context ends, which silently drops Resend calls.
+    const [verifyStatus, welcomeStatus] = await Promise.all([
+      sendEmailVerification({
+        email,
+        name: parsed.data.name,
+        callbackUrl: "/account",
+        customerId: user.id,
+      }).catch((err) => {
+        console.error("[sign-up] verification email failed", err);
+        return "failed" as const;
+      }),
+      sendWelcomeEmail({
+        email,
+        name: parsed.data.name,
+        customerId: user.id,
+      }).catch((err) => {
+        console.error("[sign-up] welcome email failed", err);
+        return "failed" as const;
+      }),
+    ]);
+    console.info("[sign-up] emails", { email, verifyStatus, welcomeStatus });
 
     return NextResponse.json({ ok: true, userId: user.id });
   } catch (error) {
