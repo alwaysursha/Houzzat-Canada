@@ -47,6 +47,7 @@ function formatHistoryPrice(
 }
 
 export function ListingHistoryPanel({
+  mlsNumber,
   addressLabel,
   propertyType,
   transactionType,
@@ -54,8 +55,10 @@ export function ListingHistoryPanel({
   canSeeRestricted,
   signedIn: _signedIn,
   needsEmailVerification = false,
-  rows,
+  rows: initialRows,
+  enableAddressHistoryEnrich = false,
 }: {
+  mlsNumber?: string;
   addressLabel: string;
   propertyType: PropertyType | string;
   transactionType: "SALE" | "LEASE" | string;
@@ -65,17 +68,67 @@ export function ListingHistoryPanel({
   signedIn: boolean;
   needsEmailVerification?: boolean;
   rows: HistoryRow[];
+  /**
+   * When true, pull PropTx sibling cycles after paint for any visitor.
+   * Restricted prices/MLS#s still require canSeeRestricted to unblur.
+   */
+  enableAddressHistoryEnrich?: boolean;
 }) {
   const { openAuth } = useAuthModal();
   const [tab, setTab] = useState<Tab>("history");
   const [expanded, setExpanded] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
+  const [rows, setRows] = useState(initialRows);
+  const [enriching, setEnriching] = useState(false);
   const verifyTitleId = useId();
+
+  useEffect(() => {
+    setRows(initialRows);
+  }, [initialRows]);
 
   useEffect(() => {
     setPortalReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!enableAddressHistoryEnrich || !mlsNumber) {
+      return;
+    }
+    const mls = mlsNumber;
+    let cancelled = false;
+    const controller = new AbortController();
+
+    async function enrich() {
+      setEnriching(true);
+      try {
+        const res = await fetch(
+          `/api/listings/${encodeURIComponent(mls)}/address-history/enrich`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+            signal: controller.signal,
+          },
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { historyRows?: HistoryRow[] };
+        if (!cancelled && Array.isArray(data.historyRows) && data.historyRows.length) {
+          setRows(data.historyRows);
+        }
+      } catch {
+        // Non-blocking — keep Neon rows
+      } finally {
+        if (!cancelled) setEnriching(false);
+      }
+    }
+
+    void enrich();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [enableAddressHistoryEnrich, mlsNumber]);
 
   useEffect(() => {
     if (!verifyOpen) return;
@@ -116,9 +169,28 @@ export function ListingHistoryPanel({
     : "(Sign in required)";
   const hasRestrictedRows = activeRows.some((row) => !row.public);
 
-  if (rows.length === 0) return null;
+  if (rows.length === 0 && !enriching) return null;
 
   const propertyLabel = propertyTypeLabel(propertyType as PropertyType);
+
+  if (rows.length === 0 && enriching) {
+    return (
+      <ListingSection
+        id="listing-history"
+        eyebrow="Record"
+        title="Listing history"
+        hint={`${transactionType === "LEASE" ? "Lease" : "Buy/sell"} history for ${addressLabel} (${propertyLabel})`}
+        headerClassName="mb-3"
+        action={
+          <span className="text-xs font-medium text-ink/45">Updating history…</span>
+        }
+      >
+        <p className="rounded-xl border border-line/70 bg-mist/40 px-4 py-5 text-center text-sm text-ink/55">
+          Looking up prior listing cycles at this address…
+        </p>
+      </ListingSection>
+    );
+  }
 
   return (
     <ListingSection
@@ -131,6 +203,11 @@ export function ListingHistoryPanel({
           : `${transactionType === "LEASE" ? "Lease" : "Buy/sell"} history for ${addressLabel} (${propertyLabel})`
       }
       headerClassName="mb-3"
+      action={
+        enriching ? (
+          <span className="text-xs font-medium text-ink/45">Updating history…</span>
+        ) : null
+      }
     >
       <div className="mb-4 flex gap-6 border-b border-line/70">
         {(

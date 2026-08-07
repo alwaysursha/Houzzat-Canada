@@ -30,6 +30,45 @@ function lookupConfigs(): PropTxConfig[] {
   return out;
 }
 
+function lookupConfigsVowFirst(): PropTxConfig[] {
+  const idx = getPropTxIdxConfig();
+  const vow = getPropTxVowConfig();
+  const out: PropTxConfig[] = [];
+  if (vow) out.push(vow);
+  if (idx && idx.tokenId !== vow?.tokenId) out.push(idx);
+  return out;
+}
+
+async function tryFiltersCollect(
+  filters: string[],
+  top: number,
+  options?: { vowFirst?: boolean; timeoutMs?: number },
+): Promise<PropTxProperty[]> {
+  const configs = options?.vowFirst ? lookupConfigsVowFirst() : lookupConfigs();
+  if (configs.length === 0) return [];
+  const timeoutMs = options?.timeoutMs ?? LOOKUP_TIMEOUT_MS;
+
+  const work = async (): Promise<PropTxProperty[]> => {
+    const collected: PropTxProperty[] = [];
+    for (const config of configs) {
+      for (const filter of filters) {
+        try {
+          const rows = await queryPropertyFilter(filter, config, top);
+          if (rows.length) collected.push(...rows);
+        } catch {
+          // try next filter / credential
+        }
+      }
+      // Prefer first credential that returned rows (VOW when vowFirst).
+      if (collected.length > 0) break;
+    }
+    return dedupeProperties(collected);
+  };
+
+  return (await withTimeout(work(), timeoutMs)) ?? [];
+}
+
+
 type ODataList = { value?: PropTxProperty[] };
 
 async function withTimeout<T>(
@@ -244,6 +283,96 @@ export async function fetchPropertiesByExactAddress(
   // Ambiguous without a clear unique — refuse
   if (pool.length > 1 && !needleLower) return [];
   return [];
+}
+
+const ADDRESS_HISTORY_TOP = 25;
+const ADDRESS_HISTORY_TIMEOUT_MS = 8000;
+
+/**
+ * All Property cycles at an exact civic address (Active + off-market).
+ * Unlike fetchPropertiesByExactAddress, does NOT collapse to a single row.
+ */
+export async function fetchAllPropertiesAtExactAddress(
+  parsed: ParsedExactAddress,
+  options?: { max?: number },
+): Promise<PropTxProperty[]> {
+  const max = Math.max(
+    1,
+    Math.min(options?.max ?? ADDRESS_HISTORY_TOP, ADDRESS_HISTORY_TOP),
+  );
+  const name = streetNameCore(parsed.streetName);
+  const numLit = odataStringLiteral(parsed.streetNumber);
+  const nameLit = odataStringLiteral(name);
+  const city = cityClause(parsed.city);
+  const needle = odataStringLiteral(
+    unparsedNeedle({
+      streetNumber: parsed.streetNumber,
+      streetName: name,
+      streetType: parsed.streetType,
+    }),
+  );
+
+  const filters: string[] = [];
+  const baseNumName = `StreetNumber eq ${numLit} and contains(StreetName, ${nameLit})`;
+  filters.push(city ? `(${baseNumName}) and ${city}` : baseNumName);
+  filters.push(
+    city
+      ? `contains(UnparsedAddress, ${needle}) and ${city}`
+      : `contains(UnparsedAddress, ${needle})`,
+  );
+
+  const rows = await tryFiltersCollect(filters, Math.max(max, 25), {
+    vowFirst: true,
+    timeoutMs: ADDRESS_HISTORY_TIMEOUT_MS,
+  });
+  if (rows.length === 0) return [];
+
+  const streetNum = parsed.streetNumber.toLowerCase();
+  const nameLower = name.toLowerCase();
+
+  const matched = rows.filter((row) => {
+    const sn = String(row.StreetNumber ?? "").trim().toLowerCase();
+    if (sn && sn !== streetNum) return false;
+    const unparsed = String(
+      row.UnparsedAddress ??
+        [row.StreetNumber, row.StreetName, row.StreetSuffix]
+          .filter(Boolean)
+          .join(" "),
+    ).toLowerCase();
+    if (!unparsed.includes(streetNum)) return false;
+    if (!unparsed.includes(nameLower) && !String(row.StreetName ?? "")
+      .toLowerCase()
+      .includes(nameLower)) {
+      return false;
+    }
+    if (parsed.unit) {
+      const unit = parsed.unit.toLowerCase();
+      const unitNum = String(row.UnitNumber ?? row.ApartmentNumber ?? "")
+        .toLowerCase()
+        .trim();
+      const unparsedHasUnit =
+        unparsed.includes(` ${unit}`) ||
+        unparsed.includes(`#${unit}`) ||
+        unparsed.includes(`-${unit}`) ||
+        unparsed.endsWith(` ${unit}`);
+      if (unitNum) {
+        if (unitNum !== unit) return false;
+      } else if (!unparsedHasUnit) {
+        return false;
+      }
+    }
+    if (parsed.city) {
+      const cityLower = parsed.city.toLowerCase();
+      const rowCity = String(row.City ?? "").toLowerCase();
+      if (rowCity && !rowCity.includes(cityLower) && !cityLower.includes(rowCity)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // Newest modification first so upsert prioritizes fresh cycles.
+  return preferActiveThenNewest(matched).slice(0, max);
 }
 
 /** Street-only: up to 12 listings on that street (+ city when present). */

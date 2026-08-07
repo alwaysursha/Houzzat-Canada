@@ -20,6 +20,7 @@
     "mls:refresh": "node --import tsx scripts/mls-refresh.ts",
     "mls:rooms": "node --import tsx scripts/mls-rooms-backfill.ts",
     "mls:history": "node --import tsx scripts/mls-history-backfill.ts",
+    "mls:address-history": "node --import tsx scripts/mls-address-history-enrich.ts",
     "digests:run": "node --import tsx scripts/run-digests.ts",
     "typesense:import": "node --import tsx scripts/typesense-import-listings.ts",
     "typesense:oh-fields": "node --import tsx scripts/typesense-ensure-open-house-fields.ts",

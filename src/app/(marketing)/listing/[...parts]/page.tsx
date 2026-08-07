@@ -768,6 +768,7 @@ export default async function ListingDetailPage({ params }: Params) {
           <ListingRoomsPanel rooms={listing.rooms} />
 
           <ListingHistoryPanel
+            mlsNumber={listing.mlsNumber}
             addressLabel={addressLabel}
             propertyType={listing.propertyType}
             transactionType={listing.transactionType}
@@ -775,6 +776,7 @@ export default async function ListingDetailPage({ params }: Params) {
             canSeeRestricted={canSeeRestricted}
             signedIn={Boolean(user)}
             needsEmailVerification={verifyLocked}
+            enableAddressHistoryEnrich
             rows={listingHistoryRows}
           />
 

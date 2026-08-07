@@ -836,6 +836,11 @@ model Listing {
   /** PropTx VOW / RESO: ModificationTimestamp */
   updatedAtMls     DateTime
   daysOnMarket     Int                     @default(0)
+  /**
+   * Last successful PropTx address-history enrich (sibling MLS cycles).
+   * Used to skip repeat pulls within TTL.
+   */
+  addressHistoryEnrichedAt DateTime?
   isMock           Boolean                 @default(true)
   ownerUserId      String?
   ownerStatus      OwnerListingStatus?

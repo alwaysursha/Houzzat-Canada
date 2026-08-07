@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Nightly address-history enrich at 3:00 AM local time on the Sync Mac. -->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.houzzat.mls-address-history</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/bash</string>
+      <string>/Users/Ali/Houzzat-Canada/scripts/mac-mls-address-history.sh</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Hour</key>
+      <integer>3</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <key>WorkingDirectory</key>
+    <string>/Users/Ali/Houzzat-Canada</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>GOOGLE_MAPS_BILLING_ENABLED</key>
+      <string>0</string>
+      <key>GEOCODE_SKIP_GOOGLE</key>
+      <string>1</string>
+      <key>MLS_ADDRESS_HISTORY_LIMIT</key>
+      <string>300</string>
+      <key>HOME</key>
+      <string>/Users/Ali</string>
+      <key>PATH</key>
+      <string>/usr/local/bin:/usr/local/Homebrew/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/Ali/Library/Logs/houzzat/launchd-mls-address-history.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/Ali/Library/Logs/houzzat/launchd-mls-address-history.err.log</string>
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+  </dict>
+</plist>

@@ -517,12 +517,14 @@ export function SearchMapListingOverlay({
                   />
 
                   <ListingHistoryPanel
+                    mlsNumber={listing.mlsNumber}
                     addressLabel={`${addressLabel}, ${listing.city}`}
                     propertyType={listing.propertyType}
                     transactionType={listing.transactionType}
                     callbackPath={listingPath(listing)}
                     canSeeRestricted={hasClientAccess}
                     signedIn={signedIn}
+                    enableAddressHistoryEnrich
                     rows={historyRows}
                   />
 
