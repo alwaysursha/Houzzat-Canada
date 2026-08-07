@@ -1,25 +1,26 @@
 import { SITE_NAME } from "@/lib/constants";
+import { emailEnv } from "@/lib/email/env";
 
 /** Transactional: verify, welcome, password, 1:1, shortlist. */
 export function emailFromNotify() {
   return (
-    process.env.EMAIL_FROM_NOTIFY?.trim() ||
-    process.env.EMAIL_FROM?.trim() ||
-    `${SITE_NAME} <noreply@houzzat.com>`
+    emailEnv("EMAIL_FROM_NOTIFY") ||
+    emailEnv("EMAIL_FROM") ||
+    `${SITE_NAME} <notify@houzzat.com>`
   );
 }
 
 /** Marketing / alerts: property alerts, newsletters, mass. */
 export function emailFromAlerts() {
   return (
-    process.env.EMAIL_FROM_ALERTS?.trim() ||
-    process.env.EMAIL_FROM?.trim() ||
+    emailEnv("EMAIL_FROM_ALERTS") ||
+    emailEnv("EMAIL_FROM") ||
     `${SITE_NAME} Alerts <alerts@houzzat.com>`
   );
 }
 
 export function isResendConfigured() {
-  return Boolean(process.env.RESEND_API_KEY?.trim());
+  return Boolean(emailEnv("RESEND_API_KEY"));
 }
 
 export type EmailStream = "notify" | "alerts";

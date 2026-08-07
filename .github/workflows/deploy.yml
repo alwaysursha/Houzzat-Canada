@@ -51,6 +51,8 @@ jobs:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_FROM_NOTIFY: ${{ secrets.EMAIL_FROM_NOTIFY }}
+          EMAIL_FROM_ALERTS: ${{ secrets.EMAIL_FROM_ALERTS }}
           EMAIL_ADMIN_TO: ${{ secrets.EMAIL_ADMIN_TO }}
           # Canonical production domain
           NEXTAUTH_URL: https://houzzat.com

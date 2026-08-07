@@ -4,6 +4,7 @@ import {
   isResendConfigured,
   type EmailStream,
 } from "@/lib/email/config";
+import { emailEnv } from "@/lib/email/env";
 import type { RenderedEmail } from "@/lib/email/templates";
 
 export type SendEmailResult =
@@ -12,11 +13,16 @@ export type SendEmailResult =
   | { ok: false; status: "failed"; error: string };
 
 let resendClient: Resend | null = null;
+let resendClientKey: string | null = null;
 
 function getResend() {
-  const key = process.env.RESEND_API_KEY?.trim();
+  const key = emailEnv("RESEND_API_KEY");
   if (!key) return null;
-  if (!resendClient) resendClient = new Resend(key);
+  // Recreate if Worker binding key differs from a stale singleton.
+  if (!resendClient || resendClientKey !== key) {
+    resendClient = new Resend(key);
+    resendClientKey = key;
+  }
   return resendClient;
 }
 

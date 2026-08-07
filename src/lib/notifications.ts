@@ -1,4 +1,5 @@
 import { fromForStream, type EmailStream } from "@/lib/email/config";
+import { emailEnv } from "@/lib/email/env";
 import { sendRenderedEmail } from "@/lib/email/send";
 
 type NotifyPayload = {
@@ -78,7 +79,7 @@ async function sendEmail(input: {
   text: string;
   stream?: EmailStream;
 }): Promise<"sent" | "skipped" | "failed"> {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = emailEnv("RESEND_API_KEY");
   const from = fromForStream(input.stream ?? "notify");
 
   if (!apiKey) {

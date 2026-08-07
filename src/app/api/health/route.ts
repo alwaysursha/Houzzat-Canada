@@ -25,6 +25,9 @@ export async function GET() {
       error instanceof Error ? error.message : "Failed to read Cloudflare context";
   }
 
+  const hasResendBinding = bindingKeys.includes("RESEND_API_KEY");
+  const hasResendProcessEnv = Boolean(process.env.RESEND_API_KEY?.trim());
+
   return NextResponse.json({
     ok: true,
     hasProcessEnvDatabaseUrl: Boolean(process.env.DATABASE_URL),
@@ -33,6 +36,8 @@ export async function GET() {
     databaseUrlType,
     databaseUrlLength,
     hasAuthSecret: Boolean(process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET),
+    hasResendBinding,
+    hasResendProcessEnv,
     bindingKeys,
     contextError,
   });
