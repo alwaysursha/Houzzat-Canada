@@ -59,6 +59,29 @@ export default async function AgentEmailPreviewPage({
               ? ` · by ${email.sentBy.name || email.sentBy.email}`
               : " · automated"}
           </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {email.openedAt ? (
+              <span className="rounded-md bg-[#d1fae5] px-2 py-0.5 text-[11px] font-bold text-[#047857] ring-1 ring-[#6ee7b7]">
+                Opened
+                {email.openCount > 1 ? ` · ${email.openCount}×` : ""}
+                {" · "}
+                {email.openedAt.toLocaleString("en-CA")}
+              </span>
+            ) : (
+              <span className="rounded-md bg-[#f1f5f9] px-2 py-0.5 text-[11px] font-semibold text-[#94a3b8]">
+                Not opened yet
+              </span>
+            )}
+            {email.clickedAt ? (
+              <span className="rounded-md bg-[#fef3c7] px-2 py-0.5 text-[11px] font-bold text-[#b45309] ring-1 ring-[#fcd34d]">
+                Clicked
+                {email.clickCount > 1 ? ` · ${email.clickCount}×` : ""}
+                {email.lastClickedUrl
+                  ? ` · ${email.lastClickedUrl.slice(0, 60)}`
+                  : ""}
+              </span>
+            ) : null}
+          </div>
         </div>
         <Link
           href={`/agent/leads?view=mine&lead=${email.leadId}`}

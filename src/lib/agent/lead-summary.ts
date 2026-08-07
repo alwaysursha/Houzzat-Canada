@@ -120,6 +120,13 @@ export type LeadSummary = {
     noteCategory?: "GENERAL" | "CALL" | null;
     pinned?: boolean;
     pinnedAt?: string | null;
+    emailPreviewPath?: string | null;
+    emailKind?: string | null;
+    emailOpenedAt?: string | null;
+    emailClickedAt?: string | null;
+    emailOpenCount?: number;
+    emailClickCount?: number;
+    lastClickedUrl?: string | null;
   }>;
   tasks: Array<{
     id: string;
@@ -144,6 +151,12 @@ export type LeadSummary = {
     subject: string;
     body: string;
     toEmail: string;
+    kind: string | null;
+    openedAt: string | null;
+    clickedAt: string | null;
+    openCount: number;
+    clickCount: number;
+    lastClickedUrl: string | null;
     createdAt: string;
   }>;
   notes: Array<{
@@ -211,6 +224,12 @@ export async function loadLeadSummary(
           subject: true,
           body: true,
           toEmail: true,
+          kind: true,
+          openedAt: true,
+          clickedAt: true,
+          openCount: true,
+          clickCount: true,
+          lastClickedUrl: true,
           createdAt: true,
         },
       },
@@ -475,6 +494,8 @@ export async function loadLeadSummary(
       ...item,
       createdAt: item.createdAt.toISOString(),
       pinnedAt: item.pinnedAt?.toISOString() ?? null,
+      emailOpenedAt: item.emailOpenedAt?.toISOString() ?? null,
+      emailClickedAt: item.emailClickedAt?.toISOString() ?? null,
     })),
     tasks: lead.tasks.map((t) => ({
       ...t,
@@ -487,6 +508,8 @@ export async function loadLeadSummary(
     })),
     emails: lead.emailLogs.map((e) => ({
       ...e,
+      openedAt: e.openedAt?.toISOString() ?? null,
+      clickedAt: e.clickedAt?.toISOString() ?? null,
       createdAt: e.createdAt.toISOString(),
     })),
     notes: lead.leadNotes.map((n) => ({

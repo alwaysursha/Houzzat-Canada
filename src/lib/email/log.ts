@@ -15,6 +15,8 @@ export async function logClientEmail(input: {
   sentById?: string | null;
   mlsNumber?: string | null;
   organizationId?: string | null;
+  /** Resend message id for open/click webhooks. */
+  providerId?: string | null;
 }): Promise<{ emailLogId: string; leadId: string } | null> {
   let leadId = input.leadId ?? null;
   let organizationId = input.organizationId ?? null;
@@ -47,6 +49,7 @@ export async function logClientEmail(input: {
       htmlBody: input.rendered.html,
       kind: input.rendered.kind,
       mlsNumber: input.mlsNumber ?? null,
+      providerId: input.providerId ?? null,
     },
     select: { id: true },
   });
@@ -61,6 +64,7 @@ export async function logClientEmail(input: {
         emailLogId: row.id,
         kind: input.rendered.kind,
         mlsNumber: input.mlsNumber ?? null,
+        providerId: input.providerId ?? null,
         previewPath: `/agent/emails/${row.id}`,
       },
     },

@@ -445,6 +445,13 @@ model LeadEmailLog {
   /** Template key: price_reduction, just_listed, shortlist, custom, … */
   kind           String   @default("custom")
   mlsNumber      String?
+  /** Resend email id — used to match open/click webhooks. */
+  providerId     String?  @unique
+  openedAt       DateTime?
+  openCount      Int      @default(0)
+  clickedAt      DateTime?
+  clickCount     Int      @default(0)
+  lastClickedUrl String?
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

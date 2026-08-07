@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { mlsNumberFromListingPath } from "@/lib/listings/listing-path";
 
 const VISITOR_KEY = "houzzat:visitorKey";
 const SESSION_KEY = "houzzat:sessionKey";
@@ -42,11 +43,6 @@ function detectType(path: string): string {
   return "PAGE_VIEW";
 }
 
-function mlsFromPath(path: string) {
-  const m = path.match(/^\/listing\/([^/?#]+)/);
-  return m?.[1] ?? null;
-}
-
 async function sendBeacon(payload: Record<string, unknown>) {
   try {
     await fetch("/api/analytics/beacon", {
@@ -79,7 +75,7 @@ export function ActivityBeacon() {
     const path = query ? `${pathname}?${query}` : pathname;
     const utm = readUtm();
     const type = detectType(pathname);
-    const mlsNumber = mlsFromPath(pathname);
+    const mlsNumber = mlsNumberFromListingPath(pathname);
 
     if (lastPathRef.current === path) return;
     lastPathRef.current = path;

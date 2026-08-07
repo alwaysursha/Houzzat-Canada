@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { CrmTimeline } from "@/components/agent/CrmTimeline";
+import { EmailPreviewModal } from "@/components/agent/EmailPreviewModal";
 import { HandoffClient } from "@/components/agent/HandoffClient";
 import { LeadActions } from "@/components/agent/LeadActions";
 import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
@@ -72,7 +73,7 @@ type TabId =
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "activity", label: "Activity" },
   { id: "info", label: "Info" },
-  { id: "reminders", label: "Reminders+Plans" },
+  { id: "reminders", label: "Task & Reminders" },
   { id: "appointments", label: "Appointments" },
   { id: "conversations", label: "Conversations" },
   { id: "engagement", label: "Engagement" },
@@ -380,6 +381,7 @@ export function CustomerProfile({
   const [activityFilters, setActivityFilters] = useState(
     () => new Set(DEFAULT_ACTIVITY_FILTER_IDS),
   );
+  const [previewEmailId, setPreviewEmailId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const res = await fetch(`/api/agent/leads/${leadId}/summary`);
@@ -506,6 +508,12 @@ export function CustomerProfile({
           source: item.source as TimelineItem["source"],
           createdAt: new Date(item.createdAt),
           pinnedAt: item.pinnedAt ? new Date(item.pinnedAt) : null,
+          emailOpenedAt: item.emailOpenedAt
+            ? new Date(item.emailOpenedAt)
+            : null,
+          emailClickedAt: item.emailClickedAt
+            ? new Date(item.emailClickedAt)
+            : null,
         }),
       ),
     [data?.timeline],
@@ -1353,11 +1361,11 @@ export function CustomerProfile({
 
               <div className="min-h-0 space-y-4 px-4 py-4 sm:px-5 lg:flex-1 lg:overflow-y-auto">
                 {tab === "activity" ? (
-                  <Panel title="Activity timeline">
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-[11px] text-[#94a3b8]">
-                        Views, saves, searches, emails, calls, appointments —
-                        filter by type.
+                  <Panel title="Activity">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                      <p className="max-w-xl text-[12px] leading-relaxed text-[#64748b]">
+                        Day-by-day timeline of alerts, emails, views, and team
+                        touches — use chips to focus, Filters for detail.
                       </p>
                       <ActivityFilters
                         selected={activityFilters}
@@ -1781,10 +1789,43 @@ export function CustomerProfile({
                           </div>
                           <p className="mt-0.5 text-[12px] text-[#64748b]">
                             To {e.toEmail}
+                            {e.kind ? (
+                              <span className="ml-1.5 capitalize text-[#94a3b8]">
+                                · {e.kind.replaceAll("_", " ")}
+                              </span>
+                            ) : null}
                           </p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {e.openedAt ? (
+                              <span className="rounded-md bg-[#d1fae5] px-2 py-0.5 text-[11px] font-bold text-[#047857] ring-1 ring-[#6ee7b7]">
+                                Opened
+                                {e.openCount > 1 ? ` · ${e.openCount}×` : ""}
+                              </span>
+                            ) : (
+                              <span className="rounded-md bg-[#f1f5f9] px-2 py-0.5 text-[11px] font-semibold text-[#94a3b8]">
+                                Not opened yet
+                              </span>
+                            )}
+                            {e.clickedAt ? (
+                              <span className="rounded-md bg-[#fef3c7] px-2 py-0.5 text-[11px] font-bold text-[#b45309] ring-1 ring-[#fcd34d]">
+                                Clicked
+                                {e.clickCount > 1 ? ` · ${e.clickCount}×` : ""}
+                              </span>
+                            ) : null}
+                          </div>
                           <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[13px] text-[#475569]">
                             {e.body}
                           </p>
+                          <div className="mt-3">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewEmailId(e.id)}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f172a] px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#1e293b]"
+                            >
+                              <Eye className="size-3.5" />
+                              Preview
+                            </button>
+                          </div>
                         </div>
                       ))
                     )}
@@ -1950,6 +1991,10 @@ export function CustomerProfile({
           </div>
         )}
       </div>
+      <EmailPreviewModal
+        emailId={previewEmailId}
+        onClose={() => setPreviewEmailId(null)}
+      />
     </div>
   );
 }

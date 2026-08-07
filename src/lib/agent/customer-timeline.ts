@@ -1,4 +1,6 @@
 import type { ActivityEventType } from "@prisma/client";
+import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
+import { mlsNumberFromListingPath } from "@/lib/listings/listing-path";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { prisma } from "@/lib/prisma";
 
@@ -21,6 +23,11 @@ export type TimelineItem = {
   /** CRM email preview path when source is email. */
   emailPreviewPath?: string | null;
   emailKind?: string | null;
+  emailOpenedAt?: Date | null;
+  emailClickedAt?: Date | null;
+  emailOpenCount?: number;
+  emailClickCount?: number;
+  lastClickedUrl?: string | null;
 };
 
 function formatListingAddress(listing: {
@@ -162,16 +169,46 @@ export async function loadCustomerTimeline(input: {
   for (const a of leadActs) {
     // LeadNote rows are the source of truth for notes (category / pin).
     if (a.type === "note") continue;
+    // LeadEmailLog is the source of truth for sent mail (avoids duplicate rows).
+    if (a.type === "email_sent") continue;
+
+    const meta =
+      a.meta && typeof a.meta === "object" && !Array.isArray(a.meta)
+        ? (a.meta as Record<string, unknown>)
+        : null;
+    const previewPath =
+      typeof meta?.previewPath === "string" ? meta.previewPath : null;
+    const emailLogId =
+      typeof meta?.emailLogId === "string" ? meta.emailLogId : null;
+    const clickUrl = typeof meta?.url === "string" ? meta.url : null;
+
+    const engagementType =
+      a.type === "email_opened"
+        ? "EMAIL_OPENED"
+        : a.type === "email_clicked"
+          ? "EMAIL_CLICKED"
+          : a.type;
+
     items.push({
       id: `la-${a.id}`,
       source: "lead",
-      type: a.type,
-      title: labelActivity(a.type),
+      type: engagementType,
+      title:
+        a.type === "email_opened"
+          ? "Email opened"
+          : a.type === "email_clicked"
+            ? "Email link clicked"
+            : labelActivity(a.type),
       body: a.body,
-      mlsNumber: null,
+      mlsNumber:
+        typeof meta?.mlsNumber === "string" ? meta.mlsNumber : null,
       path: null,
       imageUrl: null,
       createdAt: a.createdAt,
+      emailPreviewPath:
+        previewPath ??
+        (emailLogId ? `/agent/emails/${emailLogId}` : null),
+      lastClickedUrl: clickUrl,
     });
   }
   for (const n of notes) {
@@ -193,10 +230,22 @@ export async function loadCustomerTimeline(input: {
     });
   }
   for (const e of emails) {
+    const kind = e.kind ?? "custom";
+    const isAlert = isPropertyAlertEmailKind(kind);
+    const isDigest =
+      kind === "saved_search_digest" || kind === "neighborhood_weekly";
     items.push({
       id: `email-${e.id}`,
       source: "email",
-      type: "EMAIL",
+      type: isDigest
+        ? "DIGEST_EMAIL"
+        : isAlert
+          ? "PROPERTY_ALERT_EMAIL"
+          : kind === "shortlist"
+            ? "SHORTLIST_EMAILED"
+            : kind === "agent_message"
+              ? "AGENT_MESSAGE"
+              : "EMAIL",
       title: e.subject,
       body: e.body.slice(0, 280),
       mlsNumber: e.mlsNumber ?? null,
@@ -204,7 +253,12 @@ export async function loadCustomerTimeline(input: {
       imageUrl: null,
       createdAt: e.createdAt,
       emailPreviewPath: `/agent/emails/${e.id}`,
-      emailKind: e.kind ?? "custom",
+      emailKind: kind,
+      emailOpenedAt: e.openedAt,
+      emailClickedAt: e.clickedAt,
+      emailOpenCount: e.openCount,
+      emailClickCount: e.clickCount,
+      lastClickedUrl: e.lastClickedUrl,
     });
   }
   for (const t of tasks) {
@@ -306,13 +360,15 @@ export async function loadCustomerTimeline(input: {
     ]);
 
     for (const e of events) {
+      const mlsNumber =
+        mlsNumberFromListingPath(e.path) ?? e.mlsNumber ?? null;
       items.push({
         id: `ae-${e.id}`,
         source: "activity",
         type: e.type,
         title: e.title || labelActivity(e.type),
         body: e.path,
-        mlsNumber: e.mlsNumber,
+        mlsNumber,
         path: e.path,
         imageUrl: null,
         createdAt: e.createdAt,

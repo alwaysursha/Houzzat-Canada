@@ -47,9 +47,19 @@ export const ACTIVITY_FILTER_GROUPS: ActivityFilterGroup[] = [
       {
         id: "emails",
         label: "Emails",
-        types: ["EMAIL", "email_sent", "shortlist_emailed"],
+        types: [
+          "EMAIL",
+          "email_sent",
+          "shortlist_emailed",
+          "SHORTLIST_EMAILED",
+          "AGENT_MESSAGE",
+          "EMAIL_OPENED",
+          "EMAIL_CLICKED",
+          "email_opened",
+          "email_clicked",
+        ],
       },
-  {
+      {
         id: "property_alerts",
         label: "Property Alerts",
         types: [
@@ -57,6 +67,8 @@ export const ACTIVITY_FILTER_GROUPS: ActivityFilterGroup[] = [
           "WATCH_AREA",
           "property_alert",
           "PROPERTY_ALERT",
+          "PROPERTY_ALERT_EMAIL",
+          "DIGEST_EMAIL",
         ],
       },
       {
@@ -255,8 +267,18 @@ export function friendlyActivityTypeLabel(type: string): string {
     case "EMAIL":
     case "EMAIL_SENT":
       return "Email";
+    case "EMAIL_OPENED":
+      return "Email opened";
+    case "EMAIL_CLICKED":
+      return "Link clicked";
+    case "PROPERTY_ALERT_EMAIL":
+      return "Property alert";
+    case "DIGEST_EMAIL":
+      return "Morning digest";
     case "SHORTLIST_EMAILED":
       return "Shortlist email";
+    case "AGENT_MESSAGE":
+      return "Agent email";
     case "CALL_NOTE":
       return "Call";
     case "CALL":

@@ -37,6 +37,9 @@ export async function sendAndLogClientEmail(input: {
 
   if (input.logToCrm === false) return result;
 
+  const providerId =
+    result.status === "sent" ? (result.providerId ?? null) : null;
+
   const logged = await logClientEmail({
     customerId: input.customerId,
     leadId: input.leadId,
@@ -45,6 +48,7 @@ export async function sendAndLogClientEmail(input: {
     sentById: input.sentById,
     mlsNumber: input.mlsNumber,
     organizationId: input.organizationId,
+    providerId,
   });
 
   return {

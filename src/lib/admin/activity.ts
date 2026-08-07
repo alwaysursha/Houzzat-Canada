@@ -1,4 +1,5 @@
 import type { ActivityEventType, Prisma } from "@prisma/client";
+import { mlsNumberFromListingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
 
 export const LIVE_VISITOR_WINDOW_MS = 3 * 60 * 1000;
@@ -61,7 +62,12 @@ export async function ingestActivityBeacon(
   const now = new Date();
   const path = payload.path?.slice(0, 500) || null;
   const title = payload.title?.slice(0, 300) || null;
-  const mlsNumber = payload.mlsNumber?.trim().slice(0, 40) || null;
+  const mlsNumber =
+    (
+      mlsNumberFromListingPath(path) ||
+      payload.mlsNumber?.trim() ||
+      null
+    )?.slice(0, 40) || null;
   const referrer = payload.referrer?.slice(0, 1000) || null;
 
   const visitor = await prisma.siteVisitor.upsert({

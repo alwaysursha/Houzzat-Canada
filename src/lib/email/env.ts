@@ -2,6 +2,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 type EmailBindings = {
   RESEND_API_KEY?: string;
+  RESEND_WEBHOOK_SECRET?: string;
   EMAIL_FROM?: string;
   EMAIL_FROM_NOTIFY?: string;
   EMAIL_FROM_ALERTS?: string;

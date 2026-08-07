@@ -53,6 +53,32 @@ export function listingPath(listing: ListingPathInput): string {
   return `/listing/${slug}/${listing.mlsNumber}`;
 }
 
+/**
+ * Extract MLS® # from a listing path.
+ * - `/listing/{slug}/{mls}` → mls
+ * - `/listing/{mls}` (legacy) → mls
+ */
+export function mlsNumberFromListingPath(
+  path: string | null | undefined,
+): string | null {
+  if (!path) return null;
+  const bare = path.split("?")[0]?.split("#")[0] ?? path;
+  if (!bare.startsWith("/listing/")) return null;
+  const parts = bare
+    .slice("/listing/".length)
+    .split("/")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+  const candidate =
+    parts.length >= 2 ? parts[parts.length - 1]! : parts[0]!;
+  try {
+    return decodeURIComponent(candidate) || null;
+  } catch {
+    return candidate || null;
+  }
+}
+
 /** Browser/SEO title: `For Sale: 161 Eden Oak Trail, Kitchener | Houzzat` */
 export function listingPageTitle(listing: {
   addressLine: string;
