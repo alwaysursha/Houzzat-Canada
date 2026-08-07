@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, X } from "lucide-react";
 import type { PropertyType } from "@prisma/client";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
+import { useLoginAgainLabel } from "@/components/auth/useLoginAgainLabel";
 import { ListingSection } from "@/components/listings/ListingSection";
 import {
   formatListPrice,
@@ -75,6 +76,7 @@ export function ListingHistoryPanel({
   enableAddressHistoryEnrich?: boolean;
 }) {
   const { openAuth } = useAuthModal();
+  const loginAgainLabel = useLoginAgainLabel("Sign in");
   const [tab, setTab] = useState<Tab>("history");
   const [expanded, setExpanded] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
@@ -166,7 +168,7 @@ export function ListingHistoryPanel({
   const needsToggle = activeRows.length > 4;
   const lockedHint = needsEmailVerification
     ? "(Email verification required)"
-    : "(Sign in required)";
+    : `(${loginAgainLabel} required)`;
   const hasRestrictedRows = activeRows.some((row) => !row.public);
 
   if (rows.length === 0 && !enriching) return null;
@@ -329,7 +331,7 @@ export function ListingHistoryPanel({
                             aria-label={
                               needsEmailVerification
                                 ? "Listing ID hidden — email verification required"
-                                : "Listing ID hidden — sign in required"
+                                : `Listing ID hidden — ${loginAgainLabel.toLowerCase()} required`
                             }
                           >
                             {row.listingId}
@@ -370,7 +372,7 @@ export function ListingHistoryPanel({
                       openAuth({ mode: "sign-in", callbackUrl: callbackPath })
                     }
                   >
-                    Sign in
+                    {loginAgainLabel}
                   </button>{" "}
                   as a Houzzat client to unlock{" "}
                   {tab === "prices" ? "prices" : "full history"}.

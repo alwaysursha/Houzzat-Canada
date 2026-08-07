@@ -1516,15 +1516,37 @@ export function CustomerProfile({
                             }
                           />
                           <InfoRow
-                            label="Consent"
+                            label="Terms accepted at"
                             value={
-                              data.permissions.consented
-                                ? data.lead.contactConsentAt
+                              data.lead.customer?.termsAcceptedAt
+                                ? new Date(
+                                    data.lead.customer.termsAcceptedAt,
+                                  ).toLocaleString("en-CA")
+                                : null
+                            }
+                          />
+                          <InfoRow
+                            label="PropTx agreement accepted at"
+                            value={
+                              data.lead.customer?.vowAcceptedAt
+                                ? new Date(
+                                    data.lead.customer.vowAcceptedAt,
+                                  ).toLocaleString("en-CA")
+                                : null
+                            }
+                          />
+                          <InfoRow
+                            label="Email & phone consent accepted at"
+                            value={
+                              data.lead.customer?.caslConsentAt
+                                ? new Date(
+                                    data.lead.customer.caslConsentAt,
+                                  ).toLocaleString("en-CA")
+                                : data.lead.contactConsentAt
                                   ? new Date(
                                       data.lead.contactConsentAt,
                                     ).toLocaleString("en-CA")
-                                  : "Yes"
-                                : "No"
+                                  : null
                             }
                           />
                           <InfoRow

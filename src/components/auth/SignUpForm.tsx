@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
 import { flyToAccountPortal } from "@/lib/fly-to-account";
 
 export function SignUpForm({
@@ -30,10 +31,16 @@ export function SignUpForm({
     setPending(true);
     setError(null);
 
+    const normalizedEmail = email.trim().toLowerCase();
     const response = await fetch("/api/auth/sign-up", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password, acceptTerms: true }),
+      body: JSON.stringify({
+        name,
+        email: normalizedEmail,
+        password,
+        acceptTerms: true,
+      }),
     });
 
     const data = (await response.json()) as { error?: string };
@@ -44,8 +51,13 @@ export function SignUpForm({
       return;
     }
 
+    await rememberLoginCredentials({
+      email: normalizedEmail,
+      password,
+    });
+
     const result = await signIn("credentials", {
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       password,
       redirect: false,
     });
@@ -61,12 +73,16 @@ export function SignUpForm({
     const fromRect = submitRef.current?.getBoundingClientRect() ?? null;
     onSuccess?.();
     router.refresh();
-    // Stay on the current page — fly to the header account / dashboard control.
     window.setTimeout(() => flyToAccountPortal(fromRect), 40);
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form
+      onSubmit={onSubmit}
+      className="space-y-4"
+      autoComplete="on"
+      name="houzzat-signup"
+    >
       <AuthBenefitsPanel />
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="auth-signup-name">
@@ -74,6 +90,8 @@ export function SignUpForm({
         </label>
         <Input
           id="auth-signup-name"
+          name="name"
+          autoComplete="name"
           required
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -85,6 +103,7 @@ export function SignUpForm({
         </label>
         <Input
           id="auth-signup-email"
+          name="email"
           type="email"
           autoComplete="email"
           required
@@ -98,6 +117,7 @@ export function SignUpForm({
         </label>
         <Input
           id="auth-signup-password"
+          name="new-password"
           type="password"
           autoComplete="new-password"
           minLength={8}
@@ -110,6 +130,11 @@ export function SignUpForm({
       <Button type="submit" className="w-full" disabled={pending} ref={submitRef}>
         {pending ? "Creating…" : "Create Houzzat client account"}
       </Button>
+      <p className="text-center text-[11px] leading-relaxed text-ink/50">
+        By creating an account you agree to our Terms, PropTx / VOW client
+        agreement, and to receive email alerts and phone contact from Houzzat
+        about your home search.
+      </p>
       {onSwitchMode ? (
         <p className="text-center text-sm text-ink/60">
           Already registered?{" "}

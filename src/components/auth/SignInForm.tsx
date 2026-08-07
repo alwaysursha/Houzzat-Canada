@@ -1,11 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  hadClientSession,
+  loadRememberedLogin,
+  rememberLoginCredentials,
+} from "@/lib/auth/remembered-login";
 import { flyToAccountPortal } from "@/lib/fly-to-account";
 
 export function SignInForm({
@@ -23,14 +28,33 @@ export function SignInForm({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [loginAgain, setLoginAgain] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const remembered = await loadRememberedLogin();
+      if (cancelled || !remembered) {
+        if (!cancelled) setLoginAgain(hadClientSession());
+        return;
+      }
+      setEmail(remembered.email);
+      if (remembered.password) setPassword(remembered.password);
+      setLoginAgain(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setPending(true);
     setError(null);
 
+    const normalizedEmail = email.trim().toLowerCase();
     const result = await signIn("credentials", {
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       password,
       redirect: false,
     });
@@ -45,17 +69,22 @@ export function SignInForm({
       return;
     }
 
+    await rememberLoginCredentials({ email: normalizedEmail, password });
     await getSession();
     const fromRect = submitRef.current?.getBoundingClientRect() ?? null;
     setPending(false);
     onSuccess?.();
     router.refresh();
-    // Stay on the current page — fly to the header account / dashboard control.
     window.setTimeout(() => flyToAccountPortal(fromRect), 40);
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form
+      onSubmit={onSubmit}
+      className="space-y-4"
+      autoComplete="on"
+      name="houzzat-signin"
+    >
       <AuthBenefitsPanel />
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="auth-signin-email">
@@ -63,8 +92,9 @@ export function SignInForm({
         </label>
         <Input
           id="auth-signin-email"
+          name="username"
           type="email"
-          autoComplete="email"
+          autoComplete="username"
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -76,6 +106,7 @@ export function SignInForm({
         </label>
         <Input
           id="auth-signin-password"
+          name="password"
           type="password"
           autoComplete="current-password"
           required
@@ -85,7 +116,7 @@ export function SignInForm({
       </div>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
       <Button type="submit" className="w-full" disabled={pending} ref={submitRef}>
-        {pending ? "Signing in…" : "Sign in"}
+        {pending ? "Signing in…" : loginAgain ? "Login again" : "Sign in"}
       </Button>
       {onSwitchMode ? (
         <p className="text-center text-sm text-ink/60">

@@ -1,3 +1,6 @@
+"use client";
+
+import { useLoginAgainLabel } from "@/components/auth/useLoginAgainLabel";
 import {
   closedPriceAccentClass,
   closedPriceLabel,
@@ -17,7 +20,7 @@ type SoldForPriceProps = {
   locked?: boolean;
   /**
    * Why the price is locked.
-   * sign-in → “Sign in required”; verify → “Email verification required”.
+   * sign-in → “Sign in required” / “Login again required”; verify → email verify.
    */
   lockReason?: "sign-in" | "verify";
   className?: string;
@@ -39,6 +42,7 @@ export function SoldForPrice({
   className,
   size = "md",
 }: SoldForPriceProps) {
+  const loginAgainLabel = useLoginAgainLabel("Sign in");
   const isLease = status === "LEASED" || transactionType === "LEASE";
   const closedLabel = closedPriceLabel(status, transactionType);
   const forLabel = isLease ? "Leased For" : "Sold For";
@@ -47,7 +51,7 @@ export function SoldForPrice({
   const lockedHint =
     lockReason === "verify"
       ? "Email verification required"
-      : "Sign in required";
+      : `${loginAgainLabel} required`;
 
   const askingClass =
     size === "lg"

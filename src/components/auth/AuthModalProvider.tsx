@@ -11,6 +11,7 @@ import {
 import { X } from "lucide-react";
 import { SignInForm } from "@/components/auth/SignInForm";
 import { SignUpForm } from "@/components/auth/SignUpForm";
+import { hadClientSession } from "@/lib/auth/remembered-login";
 import { cn } from "@/lib/utils";
 
 export type AuthMode = "sign-in" | "sign-up";
@@ -41,8 +42,16 @@ export function useAuthModal() {
 
 function AuthModalPanel() {
   const { open, mode, callbackUrl, closeAuth, setMode } = useAuthModal();
+  const [loginAgain, setLoginAgain] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoginAgain(hadClientSession());
+  }, [open]);
 
   if (!open) return null;
+
+  const signInLabel = loginAgain ? "Login again" : "Sign in";
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-8">
@@ -59,7 +68,7 @@ function AuthModalPanel() {
         className="relative z-10 flex max-h-[min(78vh,38rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
       >
         <h2 id="auth-modal-title" className="sr-only">
-          {mode === "sign-in" ? "Sign in" : "Sign up"}
+          {mode === "sign-in" ? signInLabel : "Sign up"}
         </h2>
         <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3.5 sm:px-5">
           <div
@@ -69,7 +78,7 @@ function AuthModalPanel() {
           >
             {(
               [
-                ["sign-in", "Sign in"],
+                ["sign-in", signInLabel],
                 ["sign-up", "Sign up"],
               ] as const
             ).map(([value, label]) => (

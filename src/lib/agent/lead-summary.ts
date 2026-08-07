@@ -38,6 +38,8 @@ export type LeadSummary = {
       emailVerified: string | null;
       createdAt: string;
       caslConsentAt: string | null;
+      termsAcceptedAt: string | null;
+      vowAcceptedAt: string | null;
       homeAddress: string | null;
       emailUpdateRequestedAt: string | null;
       phoneUpdateRequestedAt: string | null;
@@ -191,6 +193,8 @@ export async function loadLeadSummary(
           emailVerified: true,
           createdAt: true,
           caslConsentAt: true,
+          termsAcceptedAt: true,
+          vowAcceptedAt: true,
           homeAddress: true,
           emailUpdateRequestedAt: true,
           phoneUpdateRequestedAt: true,
@@ -423,6 +427,9 @@ export async function loadLeadSummary(
             emailVerified: lead.customer.emailVerified?.toISOString() ?? null,
             createdAt: lead.customer.createdAt.toISOString(),
             caslConsentAt: lead.customer.caslConsentAt?.toISOString() ?? null,
+            termsAcceptedAt:
+              lead.customer.termsAcceptedAt?.toISOString() ?? null,
+            vowAcceptedAt: lead.customer.vowAcceptedAt?.toISOString() ?? null,
             emailUpdateRequestedAt:
               lead.customer.emailUpdateRequestedAt?.toISOString() ?? null,
             phoneUpdateRequestedAt:

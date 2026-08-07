@@ -2,8 +2,10 @@ import type { NextAuthConfig } from "next-auth";
 import type { ActiveMode, Role } from "@prisma/client";
 import { canAccessSellerTools, isAgentRole } from "@/lib/roles";
 
-export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
-export const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
+/** VOW-friendly idle timeout: cookie dies after 48h without activity. */
+export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 48;
+/** Rolling refresh — active use extends the 48h window (at most hourly). */
+export const SESSION_UPDATE_AGE_SECONDS = 60 * 60;
 
 export const authConfig = {
   trustHost: true,

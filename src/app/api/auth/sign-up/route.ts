@@ -6,7 +6,12 @@ import {
   sendEmailVerification,
   sendWelcomeEmail,
 } from "@/lib/auth/email-verification";
-import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
+import {
+  COMMUNICATIONS_CONSENT_KIND,
+  COMMUNICATIONS_CONSENT_VERSION,
+  TERMS_ACCEPT_KIND,
+  TERMS_VERSION,
+} from "@/lib/consent";
 import { prisma } from "@/lib/prisma";
 import { VOW_VERSION } from "@/lib/vow";
 
@@ -14,6 +19,7 @@ const schema = z.object({
   name: z.string().trim().min(1).max(120),
   email: z.string().trim().email().max(254),
   password: z.string().min(8).max(128),
+  /** Always true from the client — Terms accepted by creating an account. */
   acceptTerms: z.literal(true),
   /** buyer (default) | seller — seller signup / sell-a-home paths */
   intent: z.enum(["buyer", "seller"]).optional(),
@@ -89,6 +95,13 @@ export async function POST(request: Request) {
             {
               kind: "vow_accept",
               version: VOW_VERSION,
+              email,
+              ip,
+              userAgent,
+            },
+            {
+              kind: COMMUNICATIONS_CONSENT_KIND,
+              version: COMMUNICATIONS_CONSENT_VERSION,
               email,
               ip,
               userAgent,

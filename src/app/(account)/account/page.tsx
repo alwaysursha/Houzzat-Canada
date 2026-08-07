@@ -254,6 +254,39 @@ export default async function AccountPage() {
 
       <p className="text-sm text-ink/55">Homes viewed: {viewCount}</p>
 
+      <section className="rounded-2xl border border-line bg-surface p-5">
+        <h2 className="font-display text-2xl text-ink">Info</h2>
+        <p className="mt-1 text-sm text-ink/55">
+          Consent recorded when you created your Houzzat client account.
+        </p>
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="text-ink/45">Terms accepted at</dt>
+            <dd className="mt-0.5 font-medium text-ink">
+              {user.termsAcceptedAt
+                ? user.termsAcceptedAt.toLocaleString("en-CA")
+                : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-ink/45">PropTx agreement accepted at</dt>
+            <dd className="mt-0.5 font-medium text-ink">
+              {user.vowAcceptedAt
+                ? user.vowAcceptedAt.toLocaleString("en-CA")
+                : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-ink/45">Email &amp; phone consent accepted at</dt>
+            <dd className="mt-0.5 font-medium text-ink">
+              {user.caslConsentAt
+                ? user.caslConsentAt.toLocaleString("en-CA")
+                : "—"}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
       {!vowOk ? (
         <VowAcceptCard callbackPath="/account" />
       ) : (
