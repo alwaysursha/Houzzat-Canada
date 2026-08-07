@@ -607,7 +607,7 @@ export function LeadsTableClient({
   return (
     <div className="space-y-3">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] bg-white px-1 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] bg-white px-3 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1 rounded border border-[#d8dee6] bg-white px-2 py-1.5">
             <input

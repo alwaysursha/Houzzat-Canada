@@ -14,7 +14,7 @@ type CloudflareBindings = {
 };
 
 /** Bump when Prisma schema fields change so local HMR drops a stale singleton. */
-const PRISMA_CLIENT_GENERATION = "sold-conditional-v1";
+const PRISMA_CLIENT_GENERATION = "email-tracking-v1";
 
 const globalForPrisma = globalThis as typeof globalThis & {
   __houzzatPrisma?: PrismaClient;
