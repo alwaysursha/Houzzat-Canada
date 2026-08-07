@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   if (!listing) {
     return NextResponse.json({ error: "Listing not found." }, { status: 404 });
   }
-  if (listing.status !== "ACTIVE") {
+  if (listing.status !== "ACTIVE" && listing.status !== "SOLD_CONDITIONAL") {
     return NextResponse.json(
       { error: "Only active listings can be added to your Route Planner." },
       { status: 400 },

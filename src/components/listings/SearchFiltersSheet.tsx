@@ -144,6 +144,7 @@ export function SearchFiltersSheet({
       ]
     : [
         { value: "ACTIVE", label: "For sale" },
+        { value: "SOLD_CONDITIONAL", label: "Sold conditional" },
         { value: "SOLD", label: "Sold" },
         { value: "UNLISTED", label: "Unlisted" },
       ];

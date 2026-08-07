@@ -740,6 +740,7 @@ model CustomerAlert {
 
 enum ListingStatus {
   ACTIVE
+  SOLD_CONDITIONAL
   SOLD
   LEASED
   SUSPENDED

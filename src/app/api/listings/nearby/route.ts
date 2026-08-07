@@ -50,6 +50,7 @@ export async function GET(request: Request) {
   const statusParam = searchParams.get("status");
   const status: ListingStatus | "UNLISTED" =
     statusParam === "SOLD" ||
+    statusParam === "SOLD_CONDITIONAL" ||
     statusParam === "LEASED" ||
     statusParam === "UNLISTED"
       ? statusParam

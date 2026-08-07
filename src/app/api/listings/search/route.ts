@@ -63,6 +63,7 @@ export async function GET(request: Request) {
     s: string,
   ): s is ListingStatus | "UNLISTED" | "ALL" =>
     s === "ACTIVE" ||
+    s === "SOLD_CONDITIONAL" ||
     s === "SOLD" ||
     s === "LEASED" ||
     s === "UNLISTED" ||

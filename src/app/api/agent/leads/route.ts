@@ -6,7 +6,11 @@ import {
   markLeadFirstResponse,
   requireAgentContext,
 } from "@/lib/agent";
-import { createCallNewLeadTask, onLeadAttemptedContact, CALL_NEW_LEAD_TASK_TITLE } from "@/lib/agent/lead-intake";
+import { createManualLead } from "@/lib/agent/create-manual-lead";
+import {
+  onLeadAttemptedContact,
+  CALL_NEW_LEAD_TASK_TITLE,
+} from "@/lib/agent/lead-intake";
 import { LEAD_STATUS_ZOD } from "@/lib/agent/pipeline";
 import { prisma } from "@/lib/prisma";
 
@@ -38,58 +42,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const email = parsed.data.email.toLowerCase();
-  let customer = await prisma.user.findUnique({ where: { email } });
-  if (!customer) {
-    customer = await prisma.user.create({
-      data: {
-        email,
-        name: parsed.data.name,
-        phone: parsed.data.phone || null,
-        role: "BUYER",
-        isBuyer: true,
-        caslConsentAt: new Date(),
-      },
-    });
-  } else {
-    customer = await prisma.user.update({
-      where: { id: customer.id },
-      data: {
-        name: customer.name || parsed.data.name,
-        phone: customer.phone || parsed.data.phone || null,
-      },
-    });
-  }
-
-  const lead = await prisma.lead.create({
-    data: {
-      status: "NEW_LEAD",
-      source: "OTHER",
-      intent: "BUYER",
-      score: 10,
-      customerId: customer.id,
-      assignedAgentId: ctx.user.id,
-      organizationId: ctx.organizationId,
-      contactConsentAt: new Date(),
-      statusChangedAt: new Date(),
-      activities: {
-        create: {
-          type: "created",
-          userId: ctx.user.id,
-          body: "Manual lead created",
-        },
-      },
-    },
-  });
-
-  await createCallNewLeadTask({
-    leadId: lead.id,
-    assigneeId: ctx.user.id,
+  const { leadId } = await createManualLead({
+    name: parsed.data.name,
+    email: parsed.data.email,
+    phone: parsed.data.phone,
     organizationId: ctx.organizationId,
-    createdById: ctx.user.id,
+    agentId: ctx.user.id,
   });
 
-  return NextResponse.json({ ok: true, leadId: lead.id });
+  return NextResponse.json({ ok: true, leadId });
 }
 
 export async function PATCH(request: Request) {

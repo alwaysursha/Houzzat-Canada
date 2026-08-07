@@ -187,8 +187,9 @@ function siblingCycleRow(sibling: AddressHistoryListing): HistoryRow {
       sibling.transactionType ?? "SALE",
     ),
     listingId: sibling.mlsNumber,
-    // Past / inactive cycles are VOW-restricted; active siblings stay public.
-    public: sibling.status === "ACTIVE",
+    // Past / inactive cycles are VOW-restricted; on-market siblings stay public.
+    public:
+      sibling.status === "ACTIVE" || sibling.status === "SOLD_CONDITIONAL",
   };
 }
 
@@ -235,7 +236,8 @@ function siblingHistoryRows(sibling: AddressHistoryListing): HistoryRow[] {
       if (
         row.listingId === sibling.mlsNumber &&
         /for sale|for lease|listed/i.test(row.event) &&
-        sibling.status === "ACTIVE"
+        sibling.status === "ACTIVE" ||
+        sibling.status === "SOLD_CONDITIONAL"
       ) {
         return false;
       }

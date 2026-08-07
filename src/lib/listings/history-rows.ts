@@ -129,9 +129,11 @@ export function buildListingHistoryRows(input: {
       ? "Sold"
       : input.status === "LEASED"
         ? "Leased"
-        : input.transactionType === "LEASE"
-          ? "For Lease"
-          : "For Sale";
+        : input.status === "SOLD_CONDITIONAL"
+          ? "Sold Conditional"
+          : input.transactionType === "LEASE"
+            ? "For Lease"
+            : "For Sale";
 
   const currentPrice =
     isClosed && input.soldPrice != null && input.soldPrice > 0

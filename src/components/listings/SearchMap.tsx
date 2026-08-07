@@ -24,11 +24,12 @@ const DRAW_FILL = "houzzat-draw-fill";
 const DRAW_LINE = "houzzat-draw-line";
 const DRAW_POINTS = "houzzat-draw-points";
 
-type MapStatus = "ACTIVE" | "SOLD" | "LEASED" | "UNLISTED";
+type MapStatus = "ACTIVE" | "SOLD_CONDITIONAL" | "SOLD" | "LEASED" | "UNLISTED";
 
 function pillToneFromListingStatus(
   listingStatus: string,
-): "canopy" | "danger" | "muted" {
+): "canopy" | "amber" | "danger" | "muted" {
+  if (listingStatus === "SOLD_CONDITIONAL") return "amber";
   if (listingStatus === "SOLD" || listingStatus === "LEASED") return "danger";
   if (
     listingStatus === "SUSPENDED" ||
@@ -42,7 +43,7 @@ function pillToneFromListingStatus(
 
 function pricePillClass(
   active: boolean,
-  tone: "canopy" | "danger" | "muted",
+  tone: "canopy" | "amber" | "danger" | "muted",
 ) {
   const base =
     "rounded-full border-2 border-white px-2.5 py-1 text-[11px] font-semibold shadow-md transition-colors ";
@@ -52,6 +53,14 @@ function pricePillClass(
       (active
         ? "bg-danger text-white ring-2 ring-danger/45"
         : "bg-danger/90 text-white hover:bg-danger")
+    );
+  }
+  if (tone === "amber") {
+    return (
+      base +
+      (active
+        ? "bg-amber text-white ring-2 ring-amber/45"
+        : "bg-amber/90 text-white hover:bg-amber")
     );
   }
   if (tone === "muted") {
@@ -573,6 +582,7 @@ export function SearchMap({
                 ] as const)
               : ([
                   ["ACTIVE", "For sale", "canopy"],
+                  ["SOLD_CONDITIONAL", "Sold cond.", "amber"],
                   ["SOLD", "Sold", "danger"],
                   ["UNLISTED", "Unlisted", "muted"],
                 ] as const)
@@ -593,6 +603,10 @@ export function SearchMap({
                       (selected
                         ? "bg-canopy text-white ring-2 ring-canopy/40 ring-offset-2 ring-offset-mist"
                         : "bg-canopy/35 text-white/80 hover:bg-canopy/55"),
+                    tone === "amber" &&
+                      (selected
+                        ? "bg-amber text-white ring-2 ring-amber/40 ring-offset-2 ring-offset-mist"
+                        : "bg-amber/35 text-white/80 hover:bg-amber/55"),
                     tone === "danger" &&
                       (selected
                         ? "bg-danger text-white ring-2 ring-danger/40 ring-offset-2 ring-offset-mist"

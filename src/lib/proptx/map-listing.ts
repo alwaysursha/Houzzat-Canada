@@ -215,15 +215,35 @@ export function mapListingStatus(
   row: PropTxProperty,
   transactionType: ListingTransactionType,
 ): ListingStatus {
+  const mls = (str(row, "MlsStatus") ?? "").toLowerCase();
+  const standard = (str(row, "StandardStatus") ?? "").toLowerCase();
+  const contract = (str(row, "ContractStatus") ?? "").toLowerCase();
   const raw = (
     str(row, "StandardStatus", "MlsStatus", "ContractStatus") ?? "Active"
   ).toLowerCase();
 
+  // Accepted offer, conditions not waived — still on market.
+  // Prefer MlsStatus; StandardStatus is often "Active Under Contract".
+  if (
+    transactionType !== "LEASE" &&
+    !mls.includes("leased") &&
+    (mls.includes("sold conditional") ||
+      mls.includes("sld cond") ||
+      (mls.includes("conditional") && mls.includes("sold")) ||
+      standard.includes("active under contract") ||
+      standard === "activeundercontract")
+  ) {
+    return "SOLD_CONDITIONAL";
+  }
+
   if (
     raw.includes("active") ||
     raw === "a" ||
+    mls === "a" ||
     raw.includes("available") ||
-    raw.includes("new")
+    raw.includes("new") ||
+    mls.includes("price change") ||
+    mls.includes("extension")
   ) {
     return "ACTIVE";
   }
@@ -231,10 +251,11 @@ export function mapListingStatus(
   if (raw.includes("expir")) return "EXPIRED";
   if (raw.includes("termin") || raw.includes("cancel") || raw.includes("withdr"))
     return "TERMINATED";
-  if (raw.includes("leased") || raw === "l") return "LEASED";
-  if (raw.includes("sold") || raw.includes("closed") || raw === "s") {
+  if (raw.includes("leased") || raw === "l" || mls === "l") return "LEASED";
+  if (raw.includes("sold") || raw.includes("closed") || raw === "s" || mls === "s") {
     return transactionType === "LEASE" ? "LEASED" : "SOLD";
   }
+  void contract;
   return "ACTIVE";
 }
 
@@ -966,7 +987,23 @@ export function mapSyntheticHistoryFromProperty(
   const closePrice =
     closePriceRaw != null ? Math.round(closePriceRaw) : null;
 
-  if (status === "SOLD") {
+  if (status === "SOLD_CONDITIONAL") {
+    const at =
+      date(row, "PurchaseContractDate", "PendingDate", "UnderContractDate") ??
+      modAt ??
+      listedAt;
+    if (at) {
+      events.push({
+        event: "Sold Conditional",
+        price: listPrice,
+        originalPrice: null,
+        contractDate: listedAt ?? at,
+        lastUpdatedAt: at,
+        visibility: "public",
+        note: `${SYNTHETIC_HISTORY_NOTE_PREFIX}Sold Conditional`,
+      });
+    }
+  } else if (status === "SOLD") {
     const at =
       mapSoldAt(row) ??
       date(row, "SoldEntryTimestamp") ??

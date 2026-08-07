@@ -34,6 +34,7 @@ import {
   formatPrice,
   daysOnMarketFromListedAt,
   isClosedListingStatus,
+  isOnMarketListingStatus,
   listingStatusBadgeClass,
   listingStatusLabel,
   propertyTypeLabel,
@@ -178,7 +179,7 @@ export function SearchMapListingOverlay({
   const isClosed = isClosedListingStatus(
     listing?.status ?? card.status,
   );
-  const isInactive = (listing?.status ?? card.status) !== "ACTIVE";
+  const isInactive = !isOnMarketListingStatus(listing?.status ?? card.status);
   const detailsLocked = isInactive && !hasClientAccess;
   const isCommercial =
     (listing?.segment ?? card.segment) === "COMMERCIAL";

@@ -105,6 +105,15 @@ function odataStringLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+/** Active + Sold Conditional* (accepted offer; includes Escape variants). */
+function onMarketStatusFilter(): string {
+  return (
+    "(StandardStatus eq 'Active' or MlsStatus eq 'A' or " +
+    "startswith(MlsStatus,'Sold Conditional') or " +
+    "StandardStatus eq 'Active Under Contract')"
+  );
+}
+
 /**
  * Prefer Large → Largest → any size.
  * One request when Large exists (typical for AMPRE).
@@ -862,17 +871,17 @@ async function syncJustListedProperties(options: {
   const attempts: Array<{ label: string; filter: string; orderby: string }> = [
     {
       label: "OriginalEntryTimestamp",
-      filter: `(StandardStatus eq 'Active' or MlsStatus eq 'A') and OriginalEntryTimestamp ge ${fromTs}`,
+      filter: `${onMarketStatusFilter()} and OriginalEntryTimestamp ge ${fromTs}`,
       orderby: "OriginalEntryTimestamp desc,ListingKey desc",
     },
     {
       label: "ListingContractDate",
-      filter: `(StandardStatus eq 'Active' or MlsStatus eq 'A') and ListingContractDate ge ${fromDate}`,
+      filter: `${onMarketStatusFilter()} and ListingContractDate ge ${fromDate}`,
       orderby: "ListingContractDate desc,ListingKey desc",
     },
     {
       label: "OnMarketDate",
-      filter: `(StandardStatus eq 'Active' or MlsStatus eq 'A') and OnMarketDate ge ${fromDate}`,
+      filter: `${onMarketStatusFilter()} and OnMarketDate ge ${fromDate}`,
       orderby: "OnMarketDate desc,ListingKey desc",
     },
   ];
@@ -1020,7 +1029,7 @@ async function syncActiveInventory(options: {
       normalizeCityName(city) === "toronto"
         ? "startswith(City,'Toronto')"
         : `City eq ${odataStringLiteral(city)}`;
-    const filter = `(StandardStatus eq 'Active' or MlsStatus eq 'A') and ${cityClause}`;
+    const filter = `${onMarketStatusFilter()} and ${cityClause}`;
     const path = `Property?$filter=${encodeURIComponent(filter)}&$orderby=${encodeURIComponent("ListingKey")}&$top=100`;
     const skipReasons: Record<string, number> = {};
     let pageNo = 0;

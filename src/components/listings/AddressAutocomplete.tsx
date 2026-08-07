@@ -1457,7 +1457,11 @@ function SuggestionListingRow({
               <span
                 className={cn(
                   "shrink-0 text-base font-bold",
-                  suggestion.status === "ACTIVE" ? "text-canopy" : "text-danger",
+                  suggestion.status === "ACTIVE"
+                    ? "text-canopy"
+                    : suggestion.status === "SOLD_CONDITIONAL"
+                      ? "text-amber"
+                      : "text-danger",
                 )}
               >
                 {statusLabel}

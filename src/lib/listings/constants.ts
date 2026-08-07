@@ -145,6 +145,8 @@ export function listingStatusLabel(
   switch (status) {
     case "ACTIVE":
       return transactionType === "LEASE" ? "For Lease" : "For Sale";
+    case "SOLD_CONDITIONAL":
+      return "Sold Conditional";
     case "SOLD":
       return transactionType === "LEASE" ? "Leased" : "Sold";
     case "LEASED":
@@ -162,6 +164,41 @@ export function listingStatusLabel(
   }
 }
 
+/** Still on market (includes accepted-offer / Sold Conditional). */
+export function isOnMarketListingStatus(status: ListingStatus | string) {
+  return status === "ACTIVE" || status === "SOLD_CONDITIONAL";
+}
+
+export const ON_MARKET_LISTING_STATUSES = [
+  "ACTIVE",
+  "SOLD_CONDITIONAL",
+] as const satisfies readonly ListingStatus[];
+
+/**
+ * When search asks for ACTIVE, also include Sold Conditional (still on market).
+ * Explicit SOLD_CONDITIONAL-only filters are left alone.
+ */
+export function expandOnMarketStatuses(
+  statuses: Array<ListingStatus | string>,
+): ListingStatus[] {
+  const out = new Set<ListingStatus>();
+  for (const s of statuses) {
+    if (
+      s === "ACTIVE" ||
+      s === "SOLD_CONDITIONAL" ||
+      s === "SOLD" ||
+      s === "LEASED" ||
+      s === "SUSPENDED" ||
+      s === "EXPIRED" ||
+      s === "TERMINATED"
+    ) {
+      out.add(s);
+    }
+  }
+  if (out.has("ACTIVE")) out.add("SOLD_CONDITIONAL");
+  return [...out];
+}
+
 export function isClosedListingStatus(status: ListingStatus) {
   return status === "SOLD" || status === "LEASED";
 }
@@ -172,6 +209,8 @@ export function listingStatusBadgeClass(status: ListingStatus) {
     case "SOLD":
     case "LEASED":
       return "bg-danger text-white";
+    case "SOLD_CONDITIONAL":
+      return "bg-amber text-white";
     case "ACTIVE":
       return "bg-canopy text-white";
     case "SUSPENDED":

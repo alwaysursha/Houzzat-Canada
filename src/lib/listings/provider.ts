@@ -3,6 +3,10 @@ import type {
   Prisma,
   PropertyType,
 } from "@prisma/client";
+import {
+  expandOnMarketStatuses,
+  ON_MARKET_LISTING_STATUSES,
+} from "@/lib/listings/constants";
 import { ownerListingTag } from "@/lib/owner/pricing";
 import { prisma } from "@/lib/prisma";
 import { getPopularCities } from "@/lib/listings/popular-cities";
@@ -197,15 +201,19 @@ export class DbListingProvider implements ListingProvider {
           prismaStatuses.push(s);
         }
       }
-      where.status = { in: [...new Set(prismaStatuses)] };
+      where.status = {
+        in: expandOnMarketStatuses(prismaStatuses),
+      };
     } else if (params.status === "UNLISTED") {
       where.status = { in: ["SUSPENDED", "TERMINATED", "EXPIRED"] };
     } else if (params.status === "ALL") {
       // No status filter — active + sold/leased/unlisted.
+    } else if (params.status === "ACTIVE") {
+      where.status = { in: [...ON_MARKET_LISTING_STATUSES] };
     } else if (params.status) {
       where.status = params.status;
     } else {
-      where.status = "ACTIVE";
+      where.status = { in: [...ON_MARKET_LISTING_STATUSES] };
     }
 
     (where.AND as Prisma.ListingWhereInput[]).push(

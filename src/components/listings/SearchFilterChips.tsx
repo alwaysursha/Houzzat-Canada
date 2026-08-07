@@ -12,7 +12,12 @@ import { cn } from "@/lib/utils";
 
 export type SearchViewMode = "split" | "map" | "cards";
 
-export type SearchStatusOption = "ACTIVE" | "SOLD" | "LEASED" | "UNLISTED";
+export type SearchStatusOption =
+  | "ACTIVE"
+  | "SOLD_CONDITIONAL"
+  | "SOLD"
+  | "LEASED"
+  | "UNLISTED";
 
 export type SearchFilters = {
   segment: "RESIDENTIAL" | "COMMERCIAL" | "ALL";
@@ -263,6 +268,7 @@ export function SearchFilterChips({
       ]
     : [
         { value: "ACTIVE", label: "For sale" },
+        { value: "SOLD_CONDITIONAL", label: "Sold conditional" },
         { value: "SOLD", label: "Sold" },
         { value: "UNLISTED", label: "Unlisted" },
       ];

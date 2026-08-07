@@ -4,7 +4,11 @@ import type {
   PropertyType,
 } from "@prisma/client";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
-import { resolveListingAddedAt } from "@/lib/listings/constants";
+import {
+  expandOnMarketStatuses,
+  ON_MARKET_LISTING_STATUSES,
+  resolveListingAddedAt,
+} from "@/lib/listings/constants";
 import type {
   ListingCard,
   ListingSearchParams,
@@ -58,14 +62,15 @@ function expandStatuses(
         out.push(s);
       }
     }
-    return [...new Set(out)];
+    return expandOnMarketStatuses(out);
   }
   if (params.status === "UNLISTED") {
     return ["SUSPENDED", "TERMINATED", "EXPIRED"];
   }
   if (params.status === "ALL") return null;
+  if (params.status === "ACTIVE") return [...ON_MARKET_LISTING_STATUSES];
   if (params.status) return [params.status];
-  return ["ACTIVE"];
+  return [...ON_MARKET_LISTING_STATUSES];
 }
 
 function quoteFilterValue(value: string): string {

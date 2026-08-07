@@ -40,6 +40,7 @@ import {
   formatListingAddressOneLine,
   daysOnMarketFromListedAt,
   isClosedListingStatus,
+  isOnMarketListingStatus,
   listingStatusBadgeClass,
   listingStatusLabel,
   propertyTypeLabel,
@@ -303,7 +304,7 @@ export default async function ListingDetailPage({ params }: Params) {
 
   const showClosedPrice =
     isClosedListingStatus(listing.status) && listing.soldPrice != null;
-  const isInactive = listing.status !== "ACTIVE";
+  const isInactive = !isOnMarketListingStatus(listing.status);
   const similarHomesHref = (() => {
     const params = new URLSearchParams();
     params.set("status", "ACTIVE");
