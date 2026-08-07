@@ -1,67 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
 import type { LeadStatus } from "@prisma/client";
-import {
-  CheckCircle2,
-  ChevronRight,
-  Phone,
-  Timer,
-  TrendingUp,
-  UserRound,
-} from "lucide-react";
 import { ContactRequestedPanel } from "@/components/agent/ContactRequestedPanel";
 import { LaunchpadTodoCarousel } from "@/components/agent/LaunchpadTodoCarousel";
-import { OnlineLeadsModule } from "@/components/agent/OnlineLeadsModule";
+import { QuickModulesPanel } from "@/components/agent/QuickModulesPanel";
 import { leadScopeWhere, requireAgentContext } from "@/lib/agent";
 import { resolveDeskView } from "@/lib/agent/brokerage";
 import { computeHotnessMap, findOnlineUserIds } from "@/lib/agent/hotness";
 import { prisma } from "@/lib/prisma";
-import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Launchpad · Agent CRM" };
-
-function ModuleCard({
-  href,
-  title,
-  subtitle,
-  tone,
-  icon: Icon,
-}: {
-  href: string;
-  title: string;
-  subtitle: string;
-  tone: "danger" | "warn" | "info" | "ok";
-  icon: LucideIcon;
-}) {
-  const tones = {
-    danger: "border-l-[#e11d48] text-[#e11d48]",
-    warn: "border-l-[#f59e0b] text-[#d97706]",
-    info: "border-l-[#2b6cb0] text-[#2b6cb0]",
-    ok: "border-l-canopy text-canopy-deep",
-  } as const;
-
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "flex items-center gap-3 rounded-xl border border-[#d8dee6] border-l-4 bg-white px-3.5 py-3.5 shadow-[0_1px_2px_rgb(15_23_42/0.04)] transition active:scale-[0.99] hover:bg-[#f8fafc] sm:rounded-md sm:px-3 sm:py-3",
-        tones[tone],
-      )}
-    >
-      <Icon className="size-5 shrink-0 sm:size-5" strokeWidth={1.9} />
-      <div className="min-w-0 flex-1">
-        <p className="text-[14px] font-semibold text-[#1e2a38] sm:text-[13px]">
-          {title}
-        </p>
-        <p className="text-[13px] font-medium text-[#5b6775] sm:text-[12px] sm:font-normal">
-          {subtitle}
-        </p>
-      </div>
-      <ChevronRight className="size-4 shrink-0 text-[#94a3b8]" />
-    </Link>
-  );
-}
 
 export default async function AgentLaunchpadPage() {
   const ctx = await requireAgentContext();
@@ -132,12 +80,20 @@ export default async function AgentLaunchpadPage() {
     ...(focusAgentId ? { assignedAgentId: focusAgentId } : {}),
   };
 
+  const leadPreviewSelect = {
+    id: true,
+    status: true,
+    customer: { select: { name: true, email: true } },
+  } as const;
+
   const [
     dueTodayTasks,
     overdueTaskCount,
     dueTodayCount,
     newLeadCount,
     contactedCount,
+    callNewLeadsRaw,
+    contactedLeadsRaw,
     contactRequested,
     openTasks,
     recentLeads,
@@ -183,6 +139,18 @@ export default async function AgentLaunchpadPage() {
     }),
     prisma.lead.count({ where: callNewLeadsWhere }),
     prisma.lead.count({ where: followUpLeadsWhere }),
+    prisma.lead.findMany({
+      where: callNewLeadsWhere,
+      orderBy: { createdAt: "desc" },
+      take: 40,
+      select: leadPreviewSelect,
+    }),
+    prisma.lead.findMany({
+      where: followUpLeadsWhere,
+      orderBy: { updatedAt: "desc" },
+      take: 40,
+      select: leadPreviewSelect,
+    }),
     prisma.lead.findMany({
       where: contactRequestedWhere,
       orderBy: { createdAt: "desc" },
@@ -330,6 +298,32 @@ export default async function AgentLaunchpadPage() {
 
   const todoRows = dueTodayTasks.length ? dueTodayTasks : openTasks.slice(0, 8);
 
+  const hotLeads = recentLeads
+    .filter((l) => (hotMap.get(l.id)?.hotness ?? 0) >= 60)
+    .slice(0, 40)
+    .map((l) => ({
+      id: l.id,
+      status: l.status,
+      customer: l.customer
+        ? { name: l.customer.name, email: l.customer.email }
+        : null,
+      meta: `Score ${hotMap.get(l.id)?.hotness ?? 0}`,
+    }));
+
+  const moduleTasks = openTasks.slice(0, 40).map((task) => ({
+    id: task.id,
+    title: task.title,
+    type: task.type,
+    dueAt: task.dueAt.toISOString(),
+    overdue: task.dueAt.getTime() < now.getTime(),
+    lead: task.lead
+      ? {
+          id: task.lead.id,
+          customer: task.lead.customer,
+        }
+      : null,
+  }));
+
   return (
     <div className="space-y-4">
       <div>
@@ -418,48 +412,20 @@ export default async function AgentLaunchpadPage() {
             </div>
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-1">
-            <ModuleCard
-              href={`/agent/leads?view=${deskView}&pipeline=NEW_LEAD`}
-              title="Call New Leads"
-              subtitle={`${newLeadCount} new leads to call`}
-              tone="danger"
-              icon={Phone}
-            />
-            <ModuleCard
-              href={`/agent/leads?view=${deskView}&pipeline=FOLLOW_UP`}
-              title="Contacted Leads"
-              subtitle={`${contactedCount} clients to follow up with`}
-              tone="danger"
-              icon={UserRound}
-            />
-            <ModuleCard
-              href="/agent/tasks"
-              title="Due Tasks"
-              subtitle={`${overdueTaskCount} Overdue | ${dueTodayCount} Due Today`}
-              tone="warn"
-              icon={CheckCircle2}
-            />
-            <ModuleCard
-              href="/agent/statistics"
-              title="Statistics"
-              subtitle={
-                avgResponseMins > 0
-                  ? `Response Time · ${avgResponseMins} mins`
-                  : "Response Time · —"
-              }
-              tone="info"
-              icon={Timer}
-            />
-            <OnlineLeadsModule leads={onlineLeads} deskView={deskView} />
-            <ModuleCard
-              href="/agent/leads?view=mine"
-              title="Hot pipeline"
-              subtitle={`${recentLeads.filter((l) => (hotMap.get(l.id)?.hotness ?? 0) >= 60).length} leads scoring hot right now`}
-              tone="ok"
-              icon={TrendingUp}
-            />
-          </div>
+          <QuickModulesPanel
+            deskView={deskView}
+            callNewCount={newLeadCount}
+            callNewLeads={callNewLeadsRaw}
+            contactedCount={contactedCount}
+            contactedLeads={contactedLeadsRaw}
+            overdueTaskCount={overdueTaskCount}
+            dueTodayCount={dueTodayCount}
+            tasks={moduleTasks}
+            avgResponseMins={avgResponseMins}
+            onlineLeads={onlineLeads}
+            hotCount={hotLeads.length}
+            hotLeads={hotLeads}
+          />
         </aside>
 
         <div className="order-2 space-y-4 xl:order-1">
