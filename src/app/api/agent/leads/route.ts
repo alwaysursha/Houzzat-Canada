@@ -8,6 +8,7 @@ import {
 } from "@/lib/agent";
 import { createManualLead } from "@/lib/agent/create-manual-lead";
 import {
+  createCallNewLeadTask,
   onLeadAttemptedContact,
   CALL_NEW_LEAD_TASK_TITLE,
 } from "@/lib/agent/lead-intake";
