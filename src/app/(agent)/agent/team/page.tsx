@@ -17,7 +17,13 @@ export default async function AgentTeamPage() {
       where: { organizationId: ctx.organizationId },
       include: {
         user: {
-          select: { id: true, name: true, email: true, role: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            agentProfile: { select: { active: true } },
+          },
         },
       },
       orderBy: { createdAt: "asc" },
@@ -46,10 +52,16 @@ export default async function AgentTeamPage() {
         canManage={ctx.canSeeTeamLeads}
         seatLimit={org.seatLimit}
         memberCount={members.length}
+        currentUserId={ctx.user.id}
         members={members.map((m) => ({
           id: m.id,
           role: m.role,
-          user: m.user,
+          user: {
+            id: m.user.id,
+            name: m.user.name,
+            email: m.user.email,
+            agentActive: m.user.agentProfile?.active ?? true,
+          },
         }))}
         invites={invites.map((i) => ({
           id: i.id,

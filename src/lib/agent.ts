@@ -56,6 +56,16 @@ export async function requireAgentUser(): Promise<AgentUser | null> {
   }
 
   if (!user || !isAgentRole(user.role)) return null;
+
+  // Soft-disabled agent seats cannot use CRM (platform admins still can).
+  if (!isAdminRole(user.role)) {
+    const profile = await prisma.agentProfile.findUnique({
+      where: { userId: user.id },
+      select: { active: true },
+    });
+    if (profile && !profile.active) return null;
+  }
+
   return user;
 }
 
@@ -113,6 +123,25 @@ export const requireAgentContext = cache(
       isPlatformAdmin ||
       membership?.role === "OWNER" ||
       membership?.role === "ADMIN";
+
+    // Heal accounts promoted to agent that still have consumer dashboards on.
+    if (!isPlatformAdmin) {
+      const flags = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { isBuyer: true, isSeller: true },
+      });
+      if (flags && (flags.isBuyer || flags.isSeller)) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { isBuyer: false, isSeller: false },
+        });
+      }
+      await prisma.agentProfile.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id, active: true },
+        update: {},
+      });
+    }
 
     return {
       user,

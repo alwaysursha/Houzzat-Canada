@@ -63,5 +63,6 @@ export async function POST(
     ok: true,
     userId: result.userId,
     createdAccount: result.createdAccount,
+    convertedConsumer: result.convertedConsumer,
   });
 }

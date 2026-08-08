@@ -120,6 +120,9 @@ export function renderTeamInviteEmail(input: {
   invitedByName?: string | null;
   /** When true, membership was already created (existing agent). */
   alreadyMember?: boolean;
+  /** Existing Houzzat buyer/seller account will convert to agent. */
+  convertsConsumerAccount?: boolean;
+  consumerLabels?: Array<"buyer" | "seller">;
   expiresAt?: Date | string | null;
 }): RenderedEmail {
   const roleLabel = orgRoleLabel(input.role);
@@ -134,6 +137,18 @@ export function renderTeamInviteEmail(input: {
         day: "numeric",
       })
     : null;
+  const labels = input.consumerLabels?.length
+    ? input.consumerLabels
+    : input.convertsConsumerAccount
+      ? (["buyer"] as Array<"buyer" | "seller">)
+      : [];
+  const consumerText = labels
+    .map((l) => (l === "seller" ? "seller (/owner)" : "buyer (/account)"))
+    .join(" and ");
+
+  const convertNotice = labels.length
+    ? `Important: accepting this invite disables your ${consumerText} profile and activates your agent CRM (/agent).`
+    : null;
 
   const text = input.alreadyMember
     ? [
@@ -143,6 +158,7 @@ export function renderTeamInviteEmail(input: {
       ].join("\n")
     : [
         `You’ve been invited to join ${input.orgName} as ${roleLabel}${inviter ? ` by ${inviter}` : ""}.`,
+        convertNotice ?? "",
         "",
         `Accept your invite (create an account or sign in):`,
         input.inviteUrl,
@@ -170,6 +186,11 @@ export function renderTeamInviteEmail(input: {
         <p style="margin:8px 0 0;font-size:14px;color:#115e59"><strong style="color:#064e3b">Role:</strong> ${escapeHtml(roleLabel)}</p>
         ${expireLabel && !input.alreadyMember ? `<p style="margin:8px 0 0;font-size:13px;color:#047857">Invite expires ${escapeHtml(expireLabel)}</p>` : ""}
       `)}
+      ${
+        convertNotice && !input.alreadyMember
+          ? `<p style="margin:0 0 16px;padding:12px 14px;background:#fff7ed;border:1px solid #fdba74;border-radius:10px;font-size:13px;line-height:1.45;color:#9a3412"><strong>Profile change:</strong> ${escapeHtml(convertNotice)}</p>`
+          : ""
+      }
       ${
         input.alreadyMember
           ? ctaButton(`${SITE_URL}/agent`, "Open CRM")

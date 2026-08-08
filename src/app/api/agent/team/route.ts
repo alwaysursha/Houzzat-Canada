@@ -4,6 +4,11 @@ import {
   requireAgentContext,
   resolveOrganizationIdForAssignee,
 } from "@/lib/agent";
+import {
+  deleteTeamMember,
+  disableTeamMember,
+  enableTeamMember,
+} from "@/lib/agent/team-member-admin";
 import { SITE_URL } from "@/lib/constants";
 import { sendRenderedEmail } from "@/lib/email/send";
 import { renderTeamInviteEmail } from "@/lib/email/templates";
@@ -24,6 +29,12 @@ const inviteActionSchema = z.object({
   inviteId: z.string().min(1),
 });
 
+const memberActionSchema = z.object({
+  action: z.enum(["disable_member", "enable_member", "delete_member"]),
+  membershipId: z.string().min(1),
+  transferToUserId: z.string().min(1).optional(),
+});
+
 const INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 async function sendTeamInviteEmail(input: {
@@ -34,6 +45,8 @@ async function sendTeamInviteEmail(input: {
   invitedByName: string | null;
   expiresAt: Date;
   alreadyMember?: boolean;
+  convertsConsumerAccount?: boolean;
+  consumerLabels?: Array<"buyer" | "seller">;
 }) {
   const rendered = renderTeamInviteEmail({
     orgName: input.orgName,
@@ -41,6 +54,8 @@ async function sendTeamInviteEmail(input: {
     inviteUrl: `${SITE_URL}/auth/invite/${input.token}`,
     invitedByName: input.invitedByName,
     alreadyMember: input.alreadyMember,
+    convertsConsumerAccount: input.convertsConsumerAccount,
+    consumerLabels: input.consumerLabels,
     expiresAt: input.expiresAt,
   });
   return sendRenderedEmail({
@@ -108,6 +123,53 @@ export async function POST(request: Request) {
       ? (body as { action?: unknown }).action
       : null;
 
+  if (
+    actionRaw === "disable_member" ||
+    actionRaw === "enable_member" ||
+    actionRaw === "delete_member"
+  ) {
+    const parsed = memberActionSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid member action" }, { status: 400 });
+    }
+
+    if (parsed.data.action === "disable_member") {
+      const result = await disableTeamMember(ctx, parsed.data.membershipId);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true, disabled: true });
+    }
+
+    if (parsed.data.action === "enable_member") {
+      const result = await enableTeamMember(ctx, parsed.data.membershipId);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true, enabled: true });
+    }
+
+    if (!parsed.data.transferToUserId) {
+      return NextResponse.json(
+        { error: "Choose a teammate to transfer data to." },
+        { status: 400 },
+      );
+    }
+    const result = await deleteTeamMember({
+      ctx,
+      membershipId: parsed.data.membershipId,
+      transferToUserId: parsed.data.transferToUserId,
+    });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+    return NextResponse.json({
+      ok: true,
+      deleted: true,
+      transferred: result.transferred,
+    });
+  }
+
   if (actionRaw === "resend_invite" || actionRaw === "cancel_invite") {
     const parsed = inviteActionSchema.safeParse(body);
     if (!parsed.success) {
@@ -143,12 +205,24 @@ export async function POST(request: Request) {
       data: { expiresAt },
     });
 
+    const existing = await prisma.user.findUnique({
+      where: { email: invite.email },
+      select: { role: true, isBuyer: true, isSeller: true },
+    });
+    const consumerLabels: Array<"buyer" | "seller"> = [];
+    if (existing) {
+      if (existing.isBuyer || existing.role === "BUYER") consumerLabels.push("buyer");
+      if (existing.isSeller) consumerLabels.push("seller");
+    }
+
     const sendResult = await sendTeamInviteEmail({
       to: invite.email,
       orgName: invite.organization.name,
       role: invite.role,
       token: invite.token,
       invitedByName: ctx.user.name || ctx.user.email,
+      convertsConsumerAccount: consumerLabels.length > 0,
+      consumerLabels,
       expiresAt,
     });
     if (!sendResult.ok) {
@@ -260,7 +334,7 @@ export async function POST(request: Request) {
   // Auto-accept if user already exists as AGENT / ADMIN.
   const existingUser = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, role: true },
+    select: { id: true, role: true, isBuyer: true, isSeller: true },
   });
   let alreadyMember = false;
   if (
@@ -288,6 +362,14 @@ export async function POST(request: Request) {
     alreadyMember = true;
   }
 
+  const consumerLabels: Array<"buyer" | "seller"> = [];
+  if (existingUser && !alreadyMember) {
+    if (existingUser.isBuyer || existingUser.role === "BUYER") {
+      consumerLabels.push("buyer");
+    }
+    if (existingUser.isSeller) consumerLabels.push("seller");
+  }
+
   const sendResult = await sendTeamInviteEmail({
     to: email,
     orgName: org.name,
@@ -295,6 +377,8 @@ export async function POST(request: Request) {
     token: invite.token,
     invitedByName: ctx.user.name || ctx.user.email,
     alreadyMember,
+    convertsConsumerAccount: consumerLabels.length > 0,
+    consumerLabels,
     expiresAt,
   });
   if (!sendResult.ok) {
@@ -305,6 +389,7 @@ export async function POST(request: Request) {
     ok: true,
     invite,
     alreadyMember,
+    convertsConsumerAccount: consumerLabels.length > 0,
     emailStatus: sendResult.status,
   });
 }

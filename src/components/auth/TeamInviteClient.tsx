@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
 import type { InvitePreview } from "@/lib/agent/accept-invite";
+import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
 
 function roleLabel(role: string) {
   if (role === "OWNER") return "Owner";
@@ -15,8 +15,15 @@ function roleLabel(role: string) {
   return "Agent";
 }
 
+function consumerLabelText(labels: Array<"buyer" | "seller">) {
+  return labels
+    .map((l) => (l === "seller" ? "seller (/owner)" : "buyer (/account)"))
+    .join(" and ");
+}
+
 export function TeamInviteClient({ token }: { token: string }) {
   const router = useRouter();
+  const { update } = useSession();
   const [invite, setInvite] = useState<InvitePreview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -83,6 +90,9 @@ export function TeamInviteClient({ token }: { token: string }) {
           setError("Account created — please sign in to open the CRM.");
           return;
         }
+      } else {
+        // Refresh JWT so role flips from BUYER → AGENT immediately.
+        await update({ refreshProfile: true });
       }
 
       setDone(true);
@@ -121,7 +131,11 @@ export function TeamInviteClient({ token }: { token: string }) {
       <div className="mx-auto max-w-md rounded-2xl border border-line bg-surface p-6 text-center">
         <h1 className="font-display text-2xl text-ink">You’re on the team</h1>
         <p className="mt-2 text-sm text-ink/60">
-          Open the CRM to get started with {invite.orgName}.
+          Your agent CRM is active
+          {invite.convertsConsumerAccount
+            ? "; buyer/seller dashboards are disabled for this account"
+            : ""}
+          . Open the CRM to get started with {invite.orgName}.
         </p>
         <Button className="mt-5" onClick={() => router.push("/agent")}>
           Open CRM
@@ -142,6 +156,13 @@ export function TeamInviteClient({ token }: { token: string }) {
   }
 
   const signInHref = `/auth/sign-in?callbackUrl=${encodeURIComponent(`/auth/invite/${token}`)}`;
+  const convertBanner = invite.convertsConsumerAccount ? (
+    <div className="mt-4 rounded-lg border border-[#fdba74] bg-[#fff7ed] px-3 py-2.5 text-[12px] leading-relaxed text-[#9a3412]">
+      <strong>Profile change:</strong> accepting this invite disables your{" "}
+      {consumerLabelText(invite.consumerLabels)} profile and activates your
+      agent CRM at <strong>/agent</strong>.
+    </div>
+  ) : null;
 
   return (
     <div className="mx-auto w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-sm">
@@ -166,12 +187,17 @@ export function TeamInviteClient({ token }: { token: string }) {
           day: "numeric",
         })}
       </p>
+      {convertBanner}
 
       {invite.accountExists ? (
         <div className="mt-6 space-y-3">
           <p className="text-sm text-ink/65">
             An account already exists for this email. Sign in, then accept the
-            invite.
+            invite
+            {invite.convertsConsumerAccount
+              ? " to switch this account to agent mode"
+              : ""}
+            .
           </p>
           <div className="flex flex-wrap gap-2">
             <Button

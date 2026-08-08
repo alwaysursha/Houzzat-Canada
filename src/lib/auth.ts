@@ -171,6 +171,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const email = emailFromUser ?? emailFromToken;
 
       if (trigger === "update" && session && typeof session === "object") {
+        // Force-reload role / buyer-seller flags (e.g. after team invite accept).
+        if (
+          "refreshProfile" in session &&
+          session.refreshProfile &&
+          email
+        ) {
+          try {
+            const dbUser = await prisma.user.findUnique({
+              where: { email },
+              select: profileSelect,
+            });
+            if (dbUser) {
+              applyProfileToToken(token, dbUser, email);
+              token.subVerifiedAt = Date.now();
+            }
+          } catch (error) {
+            console.error("[auth] refreshProfile failed", error);
+          }
+          return token;
+        }
+
         const nextMode =
           "activeMode" in session && session.activeMode === "SELLER"
             ? "SELLER"

@@ -19,6 +19,9 @@ export type InvitePreview = {
   expired: boolean;
   /** An account already exists for this invite email. */
   accountExists: boolean;
+  /** Existing account is a consumer (buyer and/or seller). */
+  convertsConsumerAccount: boolean;
+  consumerLabels: Array<"buyer" | "seller">;
 };
 
 export async function loadInvitePreview(
@@ -41,8 +44,19 @@ export async function loadInvitePreview(
 
   const existing = await prisma.user.findUnique({
     where: { email: invite.email },
-    select: { id: true },
+    select: {
+      id: true,
+      role: true,
+      isBuyer: true,
+      isSeller: true,
+    },
   });
+
+  const consumerLabels: Array<"buyer" | "seller"> = [];
+  if (existing) {
+    if (existing.isBuyer || existing.role === "BUYER") consumerLabels.push("buyer");
+    if (existing.isSeller) consumerLabels.push("seller");
+  }
 
   return {
     email: invite.email,
@@ -53,10 +67,13 @@ export async function loadInvitePreview(
     accepted: Boolean(invite.acceptedAt),
     expired: invite.expiresAt.getTime() < Date.now(),
     accountExists: Boolean(existing),
+    convertsConsumerAccount: consumerLabels.length > 0,
+    consumerLabels,
   };
 }
 
-async function ensureAgentSeat(userId: string) {
+/** Promote user to agent CRM seat and disable consumer dashboards. */
+export async function ensureAgentSeat(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { role: true },
@@ -69,6 +86,9 @@ async function ensureAgentSeat(userId: string) {
     where: { id: userId },
     data: {
       role: nextRole,
+      isBuyer: false,
+      isSeller: false,
+      activeMode: "BUYER",
       emailVerified: new Date(),
     },
   });
@@ -88,7 +108,12 @@ export async function acceptOrganizationInvite(input: {
   name?: string;
   password?: string;
 }): Promise<
-  | { ok: true; userId: string; createdAccount: boolean }
+  | {
+      ok: true;
+      userId: string;
+      createdAccount: boolean;
+      convertedConsumer: boolean;
+    }
   | { ok: false; error: string; code?: "NEED_SIGN_IN" | "WRONG_ACCOUNT" }
 > {
   const invite = await prisma.organizationInvite.findUnique({
@@ -118,7 +143,13 @@ export async function acceptOrganizationInvite(input: {
 
   const existing = await prisma.user.findUnique({
     where: { email: invite.email },
-    select: { id: true, email: true, role: true },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      isBuyer: true,
+      isSeller: true,
+    },
   });
 
   if (existing) {
@@ -136,6 +167,11 @@ export async function acceptOrganizationInvite(input: {
         code: "WRONG_ACCOUNT",
       };
     }
+
+    const convertedConsumer =
+      existing.isBuyer ||
+      existing.isSeller ||
+      existing.role === "BUYER";
 
     await ensureAgentSeat(existing.id);
     await prisma.organizationMembership.upsert({
@@ -156,7 +192,12 @@ export async function acceptOrganizationInvite(input: {
       where: { id: invite.id },
       data: { acceptedAt: new Date() },
     });
-    return { ok: true, userId: existing.id, createdAccount: false };
+    return {
+      ok: true,
+      userId: existing.id,
+      createdAccount: false,
+      convertedConsumer,
+    };
   }
 
   const name = input.name?.trim();
@@ -221,5 +262,10 @@ export async function acceptOrganizationInvite(input: {
     data: { acceptedAt: new Date() },
   });
 
-  return { ok: true, userId: user.id, createdAccount: true };
+  return {
+    ok: true,
+    userId: user.id,
+    createdAccount: true,
+    convertedConsumer: false,
+  };
 }
