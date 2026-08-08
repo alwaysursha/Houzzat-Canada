@@ -112,8 +112,13 @@ function templateCommunityNarrative(
     .map((p) => p.name)
     .join(", ");
 
+  const isCityPage =
+    displayName.trim().toLowerCase() === city.trim().toLowerCase();
+
   return [
-    `${displayName} is a ${city} neighbourhood tracked on Houzzat with ${listingCount} active listing${listingCount === 1 ? "" : "s"} in our current inventory.`,
+    isCityPage
+      ? `${displayName} is a Greater Toronto Area market tracked on Houzzat with ${listingCount} active listing${listingCount === 1 ? "" : "s"} in our current inventory.`
+      : `${displayName} is a ${city} neighbourhood tracked on Houzzat with ${listingCount} active listing${listingCount === 1 ? "" : "s"} in our current inventory.`,
     amenityLine
       ? `Mapped amenities nearby include ${amenityLine}.`
       : "Amenity import for this area is still warming up.",

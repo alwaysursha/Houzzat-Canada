@@ -1,9 +1,16 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { OpenHousePlanner } from "@/components/listings/OpenHousePlanner";
 import { getListingProvider } from "@/lib/listings/provider";
+import { publicPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Open houses" };
+export const metadata: Metadata = publicPageMetadata({
+  title: "Open Houses in the GTA",
+  description:
+    "Find this weekend’s open houses across Toronto and the GTA — filter by city and build a viewing itinerary.",
+  path: "/open-houses",
+});
 
 export default async function OpenHousesPage({
   searchParams,

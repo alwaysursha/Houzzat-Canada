@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { SITE_NAME } from "@/lib/constants";
 import { toCard } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
+import { noIndexMetadata } from "@/lib/seo";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -48,14 +50,13 @@ function decodeSharePayload(token: string): SharePayload | null {
   }
 }
 
-export async function generateMetadata({ params }: Params) {
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { token } = await params;
   const payload = decodeSharePayload(token);
-  return {
-    title: payload
-      ? `${payload.title ?? "Homes for you"} · ${SITE_NAME}`
-      : "Homes for you",
-  };
+  const title = payload
+    ? `${payload.title ?? "Homes for you"} · ${SITE_NAME}`
+    : "Homes for you";
+  return noIndexMetadata(title);
 }
 
 export default async function ListingSharePage({ params }: Params) {

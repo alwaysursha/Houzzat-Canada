@@ -9,7 +9,7 @@ import {
 } from "@/components/valuation/valuation-faqs";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 
-const title = "What's Your Home Worth? Free Home Value Estimate | Houzzat";
+const title = "What's Your Home Worth? Free Home Value Estimate";
 const description =
   "Enter your address for a free home value estimate based on Houzzat’s Ontario market data. See a personalized range, recent nearby sales context, and optional Market Pulse updates.";
 

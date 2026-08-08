@@ -1,8 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { noIndexMetadata } from "@/lib/seo";
 
 type Params = { params: Promise<{ token: string }> };
+
+export const metadata: Metadata = noIndexMetadata("Referral handoff");
 
 export default async function TrackedReferralPage({ params }: Params) {
   const { token } = await params;

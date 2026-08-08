@@ -6,6 +6,7 @@ import {
 } from "@/lib/ads/generate";
 import { requireAgentUser } from "@/lib/agent";
 import { isAdminRole } from "@/lib/constants";
+import { homesForSalePath } from "@/lib/geo/area-seo";
 import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
@@ -127,7 +128,10 @@ export async function POST(request: Request) {
     if (!place) {
       return NextResponse.json({ error: "Area not found" }, { status: 404 });
     }
-    destinationPath = `/areas/${place.slug}`;
+    destinationPath = homesForSalePath({
+      city: place.city,
+      community: place.community,
+    });
     city = place.city;
     community = place.community;
     headlineHint = place.displayName;

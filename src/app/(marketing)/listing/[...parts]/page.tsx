@@ -26,7 +26,6 @@ import { RecordRecentView } from "@/components/listings/RecordRecentView";
 import { ListingInsightsDeferred } from "@/components/listings/insights/ListingInsightsDeferred";
 import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
-import { slugifyPlace } from "@/lib/geo/distance";
 import {
   buildAddressListingHistoryRows,
   findSiblingListingsAtAddress,
@@ -67,6 +66,10 @@ import {
 import { hasVowAccess } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import { getExpertWhatsAppNumber } from "@/lib/whatsapp";
+import {
+  homesForSaleCityPath,
+  homesForSaleCommunityPath,
+} from "@/lib/geo/area-seo";
 import {
   listingAddressSlug,
   listingPageTitle,
@@ -323,9 +326,6 @@ export default async function ListingDetailPage({ params }: Params) {
     listing.mlsNumber,
     { includeRestricted: canSeeRestricted },
   );
-  const areaSlug = listing.community
-    ? slugifyPlace(listing.city, listing.community)
-    : slugifyPlace(listing.city);
   const province = listing.province?.trim() || "ON";
   const { street: streetLine, locality: addressLocality } =
     formatListingAddressSearchParts(listing);
@@ -346,13 +346,13 @@ export default async function ListingDetailPage({ params }: Params) {
     { label: province, href: "/search" },
     {
       label: listing.city,
-      href: `/search?city=${encodeURIComponent(listing.city)}`,
+      href: homesForSaleCityPath(listing.city),
     },
   ];
   if (listing.community) {
     crumbs.push({
       label: listing.community,
-      href: `/areas/${areaSlug}`,
+      href: homesForSaleCommunityPath(listing.city, listing.community),
     });
   }
   crumbs.push({ label: streetLine });
@@ -371,13 +371,16 @@ export default async function ListingDetailPage({ params }: Params) {
           : ("residential" as const),
   };
 
+  const coverUrl =
+    listing.media.find((m) => m.isPrimary)?.url ?? listing.media[0]?.url ?? null;
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "RealEstateListing",
-    name: listing.addressLine,
+    name: addressLabel,
     url: `${SITE_URL}${canonicalPath}`,
     description: listing.description.slice(0, 300),
     datePosted: listing.listedAt.toISOString(),
+    ...(coverUrl ? { image: [coverUrl] } : {}),
     offers: {
       "@type": "Offer",
       price: listing.listPrice,
@@ -395,11 +398,70 @@ export default async function ListingDetailPage({ params }: Params) {
       postalCode: listing.postalCode,
       addressCountry: "CA",
     },
+    ...(Number.isFinite(listing.lat) && Number.isFinite(listing.lng)
+      ? {
+          geo: {
+            "@type": "GeoCoordinates",
+            latitude: listing.lat,
+            longitude: listing.lng,
+          },
+        }
+      : {}),
     numberOfRooms: listing.beds,
+    numberOfBedrooms: listing.beds,
+    numberOfBathroomsTotal: listing.baths,
     floorSize: listing.sqft
       ? { "@type": "QuantitativeValue", value: listing.sqft, unitCode: "FTK" }
       : undefined,
-    provider: { "@type": "Organization", name: SITE_NAME },
+    provider: {
+      "@type": "RealEstateAgent",
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+  };
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: SITE_URL,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: listing.city,
+        item: `${SITE_URL}${homesForSaleCityPath(listing.city)}`,
+      },
+      ...(listing.community
+        ? [
+            {
+              "@type": "ListItem" as const,
+              position: 3,
+              name: listing.community,
+              item: `${SITE_URL}${homesForSaleCommunityPath(
+                listing.city,
+                listing.community,
+              )}`,
+            },
+            {
+              "@type": "ListItem" as const,
+              position: 4,
+              name: addressLabel,
+              item: `${SITE_URL}${canonicalPath}`,
+            },
+          ]
+        : [
+            {
+              "@type": "ListItem" as const,
+              position: 3,
+              name: addressLabel,
+              item: `${SITE_URL}${canonicalPath}`,
+            },
+          ]),
+    ],
   };
 
   return (
@@ -409,6 +471,10 @@ export default async function ListingDetailPage({ params }: Params) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
       <ListingMobileSideMenu
         mlsNumber={listing.mlsNumber}
@@ -590,14 +656,14 @@ export default async function ListingDetailPage({ params }: Params) {
               </div>
               <div className="mt-2 font-display leading-tight text-ink">
                 {detailsLocked ? (
-                  <span className="select-none blur-[5px]">
+                  <h1 className="select-none text-xl font-normal blur-[5px] md:text-2xl">
                     {addressSearchLabel}
-                  </span>
+                  </h1>
                 ) : (
                   <>
-                    <p className="text-xl font-normal md:text-2xl">
+                    <h1 className="text-xl font-normal md:text-2xl">
                       {streetLine}
-                    </p>
+                    </h1>
                     {addressLocality ? (
                       <p className="mt-1 text-base font-normal text-ink/70 md:text-lg">
                         {listing.community ? (
@@ -605,7 +671,10 @@ export default async function ListingDetailPage({ params }: Params) {
                             {listing.city.trim()}
                             {" - "}
                             <Link
-                              href={`/areas/${areaSlug}`}
+                              href={homesForSaleCommunityPath(
+                                listing.city,
+                                listing.community,
+                              )}
                               className="text-canopy hover:underline"
                             >
                               {listing.community}

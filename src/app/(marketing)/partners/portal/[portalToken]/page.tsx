@@ -1,11 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { HandoffActions } from "@/components/partners/HandoffActions";
 import { prisma } from "@/lib/prisma";
+import { noIndexMetadata } from "@/lib/seo";
 
 type Params = { params: Promise<{ portalToken: string }> };
 
-export const metadata = { title: "Partner portal" };
+export const metadata: Metadata = noIndexMetadata("Partner portal");
 
 export default async function PartnerPortalPage({ params }: Params) {
   const { portalToken } = await params;

@@ -1,21 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { formatPrice } from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
 import type { CmaComp } from "@/lib/market/cma";
 import { prisma } from "@/lib/prisma";
+import { noIndexMetadata } from "@/lib/seo";
 
 type Params = { params: Promise<{ token: string }> };
 
-export async function generateMetadata({ params }: Params) {
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { token } = await params;
   const report = await prisma.cmaReport.findUnique({ where: { token } });
-  return {
-    title: report
-      ? `CMA · ${report.subjectAddress ?? report.city}`
-      : "CMA",
-  };
+  return noIndexMetadata(
+    report ? `CMA · ${report.subjectAddress ?? report.city}` : "CMA",
+  );
 }
 
 export default async function PublicCmaPage({ params }: Params) {

@@ -1,0 +1,48 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { AreaSeoPage } from "@/components/areas/AreaSeoPage";
+import {
+  buildAreaPageCopy,
+  resolveHomesForSalePlace,
+} from "@/lib/geo/area-seo";
+import { getMarketPulse } from "@/lib/market/pulse";
+import { prisma } from "@/lib/prisma";
+import { publicPageMetadata } from "@/lib/seo";
+
+type Params = { params: Promise<{ city: string }> };
+
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
+  const { city: citySlug } = await params;
+  const place = await resolveHomesForSalePlace({ citySlug });
+  if (!place) return { title: "Homes for sale" };
+
+  const [activeCount, pulse] = await Promise.all([
+    prisma.listing.count({
+      where: {
+        status: "ACTIVE",
+        segment: { in: ["RESIDENTIAL", "COMMERCIAL"] },
+        city: { equals: place.city, mode: "insensitive" },
+      },
+    }),
+    getMarketPulse({ city: place.city, includeSold: false }),
+  ]);
+  const copy = buildAreaPageCopy({
+    place,
+    activeCount,
+    pulse,
+    amenityCounts: {},
+  });
+
+  return publicPageMetadata({
+    title: copy.h1,
+    description: copy.metaDescription,
+    path: place.path,
+  });
+}
+
+export default async function CityHomesForSalePage({ params }: Params) {
+  const { city: citySlug } = await params;
+  const place = await resolveHomesForSalePlace({ citySlug });
+  if (!place) notFound();
+  return <AreaSeoPage place={place} />;
+}

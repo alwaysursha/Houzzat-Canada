@@ -34,6 +34,8 @@ function isComingSoonBypass(pathname: string) {
   if (pathname.startsWith("/images/")) return true;
   if (pathname === "/favicon.ico") return true;
   if (pathname === "/robots.txt") return true;
+  if (pathname === "/sitemap.xml") return true;
+  if (pathname.startsWith("/sitemap/")) return true;
   return false;
 }
 

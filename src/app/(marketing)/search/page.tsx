@@ -1,8 +1,15 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { SearchExperience } from "@/components/listings/SearchExperience";
+import { publicPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Search" };
+export const metadata: Metadata = publicPageMetadata({
+  title: "Search GTA Homes for Sale",
+  description:
+    "Filter MLS listings across the Greater Toronto Area by price, beds, baths, property type, and neighbourhood.",
+  path: "/search",
+});
 
 export default function SearchPage() {
   return (

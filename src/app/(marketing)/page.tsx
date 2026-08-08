@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { HomeAreaRail } from "@/components/home/HomeAreaRail";
 import { HomeCustomerToolsStrip } from "@/components/home/HomeCustomerToolsStrip";
@@ -10,6 +11,7 @@ import { HomeRecentlyViewedRail } from "@/components/home/HomeRecentlyViewedRail
 import { HomepageMarketRails } from "@/components/home/HomepageMarketRails";
 import { HomepageSortedRails } from "@/components/home/HomepageSortedRails";
 import { auth } from "@/lib/auth";
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/constants";
 import { cityLandmarkImage } from "@/lib/geo/area-images";
 import {
   applyPersonalizationToSearchParams,
@@ -22,8 +24,32 @@ import { getPopularCities } from "@/lib/listings/popular-cities";
 import { prisma } from "@/lib/prisma";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { needsEmailVerification as userNeedsEmailVerification } from "@/lib/account-access";
+import { absoluteUrl, DEFAULT_OG_IMAGE } from "@/lib/seo";
 import { hasClientAccess } from "@/lib/vow";
 import type { ListingSegment, PropertyType } from "@prisma/client";
+
+export const metadata: Metadata = {
+  title: {
+    absolute: `${SITE_NAME} | GTA Homes for Sale & Open Houses`,
+  },
+  description: SITE_DESCRIPTION,
+  alternates: { canonical: absoluteUrl("/") },
+  openGraph: {
+    title: `${SITE_NAME} | GTA Homes for Sale & Open Houses`,
+    description: SITE_DESCRIPTION,
+    url: absoluteUrl("/"),
+    siteName: SITE_NAME,
+    type: "website",
+    locale: "en_CA",
+    images: [DEFAULT_OG_IMAGE],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} | GTA Homes for Sale & Open Houses`,
+    description: SITE_DESCRIPTION,
+    images: [DEFAULT_OG_IMAGE.url],
+  },
+};
 
 export default async function HomePage() {
   const session = await auth();
@@ -221,6 +247,7 @@ export default async function HomePage() {
         slug: place.slug,
         displayName: place.displayName,
         city: place.city,
+        community: place.community,
         summary: place.summary,
         imageUrl,
         imageSource: listingCover ? ("listing" as const) : ("city" as const),
@@ -268,6 +295,10 @@ export default async function HomePage() {
               "linear-gradient(180deg, rgb(15 107 76 / 0.2) 0%, rgb(15 107 76 / 0.08) 45%, rgb(15 107 76 / 0) 100%)",
           }}
         >
+          <h1 className="sr-only">
+            Find homes in Ontario — search GTA residential and commercial
+            properties
+          </h1>
           <HomeHeroSearch surface="page" />
           <HomeBrowseChips className="mt-3" />
         </div>
@@ -275,12 +306,12 @@ export default async function HomePage() {
         {/* Desktop hero copy + search */}
         <div className="relative hidden min-h-[40vh] w-full flex-col justify-end px-4 pb-8 pt-20 sm:flex sm:px-6 lg:px-10">
           <div>
-            <p className="font-display text-3xl tracking-tight text-white sm:text-4xl md:text-5xl">
+            <h1 className="font-display text-3xl tracking-tight text-white sm:text-4xl md:text-5xl">
               Find Homes in Ontario
-            </p>
-            <h1 className="mt-3 text-base font-medium text-white/90 sm:text-lg md:text-xl">
-              Search Residential and Commercial Properties — Data using Technology
             </h1>
+            <p className="mt-3 text-base font-medium text-white/90 sm:text-lg md:text-xl">
+              Search Residential and Commercial Properties — Data using Technology
+            </p>
           </div>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
             <div className="min-w-0 flex-1">

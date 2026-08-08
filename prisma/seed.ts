@@ -402,7 +402,58 @@ async function seedGeoPlaces() {
       },
     });
   }
-  console.log(`Seeded ${byKey.size} geo places`);
+
+  const byCity = new Map<
+    string,
+    { city: string; lat: number; lng: number; n: number }
+  >();
+  for (const listing of MOCK_LISTINGS) {
+    const key = listing.city;
+    const existing = byCity.get(key);
+    if (existing) {
+      existing.lat += listing.lat;
+      existing.lng += listing.lng;
+      existing.n += 1;
+    } else {
+      byCity.set(key, {
+        city: listing.city,
+        lat: listing.lat,
+        lng: listing.lng,
+        n: 1,
+      });
+    }
+  }
+  for (const place of byCity.values()) {
+    const slug = slugifyPlace(place.city);
+    const lat = place.lat / place.n;
+    const lng = place.lng / place.n;
+    await prisma.geoPlace.upsert({
+      where: { slug },
+      update: {
+        city: place.city,
+        community: null,
+        displayName: place.city,
+        lat,
+        lng,
+        published: true,
+        summary: `Homes for sale in ${place.city} — live inventory, neighbourhood guides, and market context on Houzzat.`,
+      },
+      create: {
+        slug,
+        city: place.city,
+        community: null,
+        displayName: place.city,
+        lat,
+        lng,
+        published: true,
+        summary: `Homes for sale in ${place.city} — live inventory, neighbourhood guides, and market context on Houzzat.`,
+      },
+    });
+  }
+
+  console.log(
+    `Seeded ${byKey.size} community geo places + ${byCity.size} city hubs`,
+  );
 }
 
 async function seedAdAccounts() {

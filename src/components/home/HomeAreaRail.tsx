@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
+import { homesForSalePath } from "@/lib/geo/area-seo";
 import { formatPrice, propertyTypeLabel } from "@/lib/listings/constants";
 import type { PropertyType } from "@prisma/client";
 
@@ -8,6 +9,7 @@ export type HomeAreaCardData = {
   slug: string;
   displayName: string;
   city: string;
+  community?: string | null;
   summary: string | null;
   imageUrl: string;
   imageSource: "listing" | "city";
@@ -33,7 +35,10 @@ export function HomeAreaRail({ places }: { places: HomeAreaCardData[] }) {
         {places.map((place) => (
           <Link
             key={place.slug}
-            href={`/areas/${place.slug}`}
+            href={homesForSalePath({
+              city: place.city,
+              community: place.community,
+            })}
             className="group flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface transition hover:border-canopy/40 hover:shadow-sm"
           >
             <div className="relative aspect-[16/10] bg-mist">

@@ -1,9 +1,24 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/constants";
+import { homesForSalePath } from "@/lib/geo/area-seo";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+/** Google allows 50k URLs/file; keep headroom for static + area rows. */
+const LISTING_CHUNK = 4_000;
+
+export async function generateSitemaps() {
+  const count = await prisma.listing.count({ where: { status: "ACTIVE" } });
+  const chunks = Math.max(1, Math.ceil(count / LISTING_CHUNK));
+  return Array.from({ length: chunks }, (_, id) => ({ id }));
+}
+
+export default async function sitemap(props: {
+  id: number | Promise<number>;
+}): Promise<MetadataRoute.Sitemap> {
+  const id = Number(await props.id);
+  const skip = id * LISTING_CHUNK;
+
   const [listings, areas, landings] = await Promise.all([
     prisma.listing.findMany({
       where: { status: "ACTIVE" },
@@ -14,32 +29,46 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         city: true,
         updatedAt: true,
       },
-      take: 500,
+      orderBy: { updatedAt: "desc" },
+      skip,
+      take: LISTING_CHUNK,
     }),
-    prisma.geoPlace.findMany({
-      where: { published: true },
-      select: { slug: true, updatedAt: true },
-    }),
-    prisma.landingPage.findMany({
-      where: { published: true },
-      select: { slug: true, updatedAt: true },
-    }),
+    id === 0
+      ? prisma.geoPlace.findMany({
+          where: { published: true },
+          select: {
+            city: true,
+            community: true,
+            updatedAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    id === 0
+      ? prisma.landingPage.findMany({
+          where: { published: true },
+          select: { slug: true, updatedAt: true },
+        })
+      : Promise.resolve([]),
   ]);
 
-  const staticRoutes: MetadataRoute.Sitemap = [
-    "",
-    "/search",
-    "/open-houses",
-    "/areas",
-    "/home-valuation",
-    "/tools/affordability",
-    "/tools/seller-readiness",
-    "/partners",
-  ].map((path) => ({
-    url: `${SITE_URL}${path}`,
-    changeFrequency: "daily",
-    priority: path === "" ? 1 : 0.7,
-  }));
+  const staticRoutes: MetadataRoute.Sitemap =
+    id === 0
+      ? [
+          "",
+          "/search",
+          "/open-houses",
+          "/areas",
+          "/home-valuation",
+          "/tools/affordability",
+          "/tools/seller-readiness",
+          "/partners",
+          "/route-planner",
+        ].map((path) => ({
+          url: `${SITE_URL}${path}`,
+          changeFrequency: "daily" as const,
+          priority: path === "" ? 1 : 0.7,
+        }))
+      : [];
 
   return [
     ...staticRoutes,
@@ -50,10 +79,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     })),
     ...areas.map((a) => ({
-      url: `${SITE_URL}/areas/${a.slug}`,
+      url: `${SITE_URL}${homesForSalePath({
+        city: a.city,
+        community: a.community,
+      })}`,
       lastModified: a.updatedAt,
-      changeFrequency: "weekly" as const,
-      priority: 0.6,
+      changeFrequency: "daily" as const,
+      priority: a.community ? 0.65 : 0.75,
     })),
     ...landings.map((l) => ({
       url: `${SITE_URL}/lp/${l.slug}`,

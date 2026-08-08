@@ -1,9 +1,13 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { RoutePlannerClient } from "@/components/route-planner/RoutePlannerClient";
 import { prisma } from "@/lib/prisma";
 import { enrichTourStops, serializeTour } from "@/lib/route-planner/server";
+import { noIndexMetadata } from "@/lib/seo";
 
 type Params = { params: Promise<{ token: string }> };
+
+export const metadata: Metadata = noIndexMetadata("Shared tour");
 
 export default async function RoutePlannerSharePage({ params }: Params) {
   const { token } = await params;
