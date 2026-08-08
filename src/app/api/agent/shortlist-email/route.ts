@@ -114,10 +114,21 @@ export async function POST(request: Request) {
 
   const shareUrl = `${SITE_URL}/share/homes/${token}`;
 
-  const listingLines = cards.map((c, i) => {
-    const addr = formatListingAddressOneLine(c);
-    const price = formatListPrice(c.listPrice, c.transactionType);
-    return `${i + 1}. ${addr} — ${price} (${formatListingBedsLabel(c)} bed · MLS ${c.mlsNumber})\n   ${SITE_URL}${listingPath(c)}`;
+  const emailListings = cards.map((c) => {
+    const baths = Number.isInteger(c.baths)
+      ? String(c.baths)
+      : c.baths.toFixed(1);
+    return {
+      mlsNumber: c.mlsNumber,
+      addressLine: formatListingAddressOneLine(c),
+      city: c.city,
+      priceLabel: formatListPrice(c.listPrice, c.transactionType),
+      listingUrl: `${SITE_URL}${listingPath(c)}`,
+      bedsLabel: formatListingBedsLabel(c),
+      bathsLabel: baths,
+      sqftLabel: c.sqft ? `${c.sqft.toLocaleString("en-CA")} sqft` : null,
+      imageUrl: c.primaryImageUrl,
+    };
   });
 
   const rendered = renderShortlistEmail({
@@ -125,7 +136,7 @@ export async function POST(request: Request) {
     agentName,
     shareUrl,
     note,
-    listingLines: listingLines.map((line) => line.replace(/\n\s+/g, " · ")),
+    listings: emailListings,
   });
   if (parsed.data.subject?.trim()) {
     rendered.subject = parsed.data.subject.trim();

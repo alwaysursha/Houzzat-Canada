@@ -4,6 +4,8 @@ import {
   emailLayout,
   escapeAttr,
   escapeHtml,
+  infoCard,
+  EMAIL_MINT_GRADIENT,
 } from "@/lib/email/layout";
 
 export type RenderedEmail = {
@@ -38,12 +40,13 @@ export function renderVerifyEmail(input: {
   ].join("\n");
   const html = emailLayout({
     title: "Verify your email",
+    subtitle: "Confirm your address to unlock the full Houzzat experience.",
     preheader: `Confirm your ${SITE_NAME} account`,
     bodyHtml: `
-      <p style="margin:0 0 12px">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px">Please verify your email address to keep full access to ${escapeHtml(SITE_NAME)} — saved homes, alerts, and client tools.</p>
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      <p style="margin:0 0 12px;color:#115e59">Please verify your email address to keep full access to ${escapeHtml(SITE_NAME)} — saved homes, alerts, and client tools.</p>
       ${ctaButton(input.verifyUrl, "Verify email")}
-      <p style="margin:16px 0 0;font-size:13px;color:#64748b">This link expires in 7 days. If you didn’t create an account, you can ignore this message.</p>
+      <p style="margin:16px 0 0;font-size:13px;color:#047857">This link expires in 7 days. If you didn’t create an account, you can ignore this message.</p>
     `,
   });
   return { subject, text, html, kind: "verify_email" };
@@ -64,11 +67,12 @@ export function renderWelcomeEmail(input: {
   ].join("\n");
   const html = emailLayout({
     title: greet,
+    subtitle: "Your account is ready — start exploring GTA homes.",
     preheader: `Your ${SITE_NAME} account is ready`,
     bodyHtml: `
-      <p style="margin:0 0 12px">Thanks for joining ${escapeHtml(SITE_NAME)}. Search the GTA, save homes you love, and get notified when prices change or new listings match what you’re watching.</p>
+      <p style="margin:0 0 12px;color:#115e59">Thanks for joining ${escapeHtml(SITE_NAME)}. Search the GTA, save homes you love, and get notified when prices change or new listings match what you’re watching.</p>
       ${ctaButton(searchUrl, "Browse homes")}
-      <p style="margin:16px 0 0;font-size:13px;color:#64748b">Tip: turn on email alerts in your account so you never miss a price drop on a watched home.</p>
+      <p style="margin:16px 0 0;font-size:13px;color:#047857">Tip: turn on email alerts in your account so you never miss a price drop on a watched home.</p>
     `,
   });
   return { subject, text, html, kind: "welcome" };
@@ -90,27 +94,37 @@ export function renderPasswordResetEmail(input: {
   ].join("\n");
   const html = emailLayout({
     title: "Reset your password",
+    subtitle: "Use the secure link below to choose a new password.",
     preheader: "Password reset link inside",
     bodyHtml: `
-      <p style="margin:0 0 12px">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px">We received a request to reset your ${escapeHtml(SITE_NAME)} password.</p>
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      <p style="margin:0 0 12px;color:#115e59">We received a request to reset your ${escapeHtml(SITE_NAME)} password.</p>
       ${ctaButton(input.resetUrl, "Reset password")}
-      <p style="margin:16px 0 0;font-size:13px;color:#64748b">If you didn’t ask for this, you can safely ignore this email.</p>
+      <p style="margin:16px 0 0;font-size:13px;color:#047857">If you didn’t ask for this, you can safely ignore this email.</p>
     `,
   });
   return { subject, text, html, kind: "password_reset" };
 }
 
-export function renderPriceReductionEmail(input: {
-  name?: string | null;
-  addressLine: string;
-  city: string;
-  mlsNumber: string;
-  oldPrice: number;
-  newPrice: number;
-  listingUrl: string;
-  unsubscribeUrl?: string | null;
-}): RenderedEmail {
+type ListingCardExtras = {
+  imageUrl?: string | null;
+  bedsLabel?: string | null;
+  bathsLabel?: string | null;
+  sqftLabel?: string | null;
+};
+
+export function renderPriceReductionEmail(
+  input: {
+    name?: string | null;
+    addressLine: string;
+    city: string;
+    mlsNumber: string;
+    oldPrice: number;
+    newPrice: number;
+    listingUrl: string;
+    unsubscribeUrl?: string | null;
+  } & ListingCardExtras,
+): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const subject = `Price reduced · ${input.addressLine}`;
   const drop = input.oldPrice - input.newPrice;
@@ -125,36 +139,43 @@ export function renderPriceReductionEmail(input: {
   ].join("\n");
   const html = emailLayout({
     title: "Price reduced",
+    subtitle: "A home on your watch list just dropped in price.",
     preheader: `${input.addressLine} is now ${money(input.newPrice)}`,
     unsubscribeUrl: input.unsubscribeUrl,
     bodyHtml: `
-      <p style="margin:0 0 12px">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px">A property on your watch list just reduced its price.</p>
-      <div style="margin:16px 0;padding:16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0">
-        <p style="margin:0;font-weight:700;color:#0f172a">${escapeHtml(input.addressLine)}</p>
-        <p style="margin:4px 0 0;color:#64748b;font-size:13px">${escapeHtml(input.city)} · MLS® ${escapeHtml(input.mlsNumber)}</p>
-        <p style="margin:12px 0 0;font-size:18px;font-weight:700;color:#0d9488">
-          <span style="text-decoration:line-through;color:#94a3b8;font-size:14px;font-weight:600">${escapeHtml(money(input.oldPrice))}</span>
-          &nbsp;→&nbsp;${escapeHtml(money(input.newPrice))}
-        </p>
-        <p style="margin:6px 0 0;font-size:13px;color:#b45309">Down ${escapeHtml(money(drop))}</p>
-      </div>
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      <p style="margin:0 0 12px;color:#115e59">A property on your watch list just reduced its price.</p>
+      ${renderEmailPropertyCard({
+        mlsNumber: input.mlsNumber,
+        addressLine: input.addressLine,
+        city: input.city,
+        priceLabel: money(input.newPrice),
+        listingUrl: input.listingUrl,
+        imageUrl: input.imageUrl,
+        bedsLabel: input.bedsLabel,
+        bathsLabel: input.bathsLabel,
+        sqftLabel: input.sqftLabel,
+        badgeLabel: "Price drop",
+        priceNote: `Was ${money(input.oldPrice)} · Down ${money(drop)}`,
+      })}
       ${ctaButton(input.listingUrl, "View listing")}
     `,
   });
   return { subject, text, html, kind: "price_reduction" };
 }
 
-export function renderSoldAlertEmail(input: {
-  name?: string | null;
-  addressLine: string;
-  city: string;
-  mlsNumber: string;
-  statusLabel: string;
-  priceLabel: string;
-  listingUrl: string;
-  unsubscribeUrl?: string | null;
-}): RenderedEmail {
+export function renderSoldAlertEmail(
+  input: {
+    name?: string | null;
+    addressLine: string;
+    city: string;
+    mlsNumber: string;
+    statusLabel: string;
+    priceLabel: string;
+    listingUrl: string;
+    unsubscribeUrl?: string | null;
+  } & ListingCardExtras,
+): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const subject = `${input.statusLabel} · ${input.addressLine}`;
   const text = [
@@ -168,32 +189,42 @@ export function renderSoldAlertEmail(input: {
   ].join("\n");
   const html = emailLayout({
     title: input.statusLabel,
+    subtitle: "A property you’re watching changed status.",
     preheader: `${input.addressLine} · ${input.statusLabel}`,
     unsubscribeUrl: input.unsubscribeUrl,
     bodyHtml: `
-      <p style="margin:0 0 12px">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px">A property you’re watching changed status.</p>
-      <div style="margin:16px 0;padding:16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0">
-        <p style="margin:0;font-weight:700">${escapeHtml(input.addressLine)}</p>
-        <p style="margin:4px 0 0;color:#64748b;font-size:13px">${escapeHtml(input.city)} · MLS® ${escapeHtml(input.mlsNumber)}</p>
-        <p style="margin:12px 0 0;font-size:15px"><strong>${escapeHtml(input.statusLabel)}</strong> · ${escapeHtml(input.priceLabel)}</p>
-      </div>
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      <p style="margin:0 0 12px;color:#115e59">A property you’re watching changed status.</p>
+      ${renderEmailPropertyCard({
+        mlsNumber: input.mlsNumber,
+        addressLine: input.addressLine,
+        city: input.city,
+        priceLabel: input.priceLabel,
+        listingUrl: input.listingUrl,
+        imageUrl: input.imageUrl,
+        bedsLabel: input.bedsLabel,
+        bathsLabel: input.bathsLabel,
+        sqftLabel: input.sqftLabel,
+        badgeLabel: input.statusLabel,
+      })}
       ${ctaButton(input.listingUrl, "View details")}
     `,
   });
   return { subject, text, html, kind: "sold_alert" };
 }
 
-export function renderJustListedEmail(input: {
-  name?: string | null;
-  areaName: string;
-  addressLine: string;
-  city: string;
-  mlsNumber: string;
-  price: number;
-  listingUrl: string;
-  unsubscribeUrl?: string | null;
-}): RenderedEmail {
+export function renderJustListedEmail(
+  input: {
+    name?: string | null;
+    areaName: string;
+    addressLine: string;
+    city: string;
+    mlsNumber: string;
+    price: number;
+    listingUrl: string;
+    unsubscribeUrl?: string | null;
+  } & ListingCardExtras,
+): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const subject = `Just listed in ${input.areaName}`;
   const text = [
@@ -206,32 +237,42 @@ export function renderJustListedEmail(input: {
   ].join("\n");
   const html = emailLayout({
     title: `Just listed · ${input.areaName}`,
+    subtitle: "A new home matched your area alert.",
     preheader: `${input.addressLine} · ${money(input.price)}`,
     unsubscribeUrl: input.unsubscribeUrl,
     bodyHtml: `
-      <p style="margin:0 0 12px">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px">A new home matched your area alert for <strong>${escapeHtml(input.areaName)}</strong>.</p>
-      <div style="margin:16px 0;padding:16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0">
-        <p style="margin:0;font-weight:700">${escapeHtml(input.addressLine)}</p>
-        <p style="margin:4px 0 0;color:#64748b;font-size:13px">${escapeHtml(input.city)} · MLS® ${escapeHtml(input.mlsNumber)}</p>
-        <p style="margin:12px 0 0;font-size:18px;font-weight:700;color:#0d9488">${escapeHtml(money(input.price))}</p>
-      </div>
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      <p style="margin:0 0 12px;color:#115e59">A new home matched your area alert for <strong style="color:#064e3b">${escapeHtml(input.areaName)}</strong>.</p>
+      ${renderEmailPropertyCard({
+        mlsNumber: input.mlsNumber,
+        addressLine: input.addressLine,
+        city: input.city,
+        priceLabel: money(input.price),
+        listingUrl: input.listingUrl,
+        imageUrl: input.imageUrl,
+        bedsLabel: input.bedsLabel,
+        bathsLabel: input.bathsLabel,
+        sqftLabel: input.sqftLabel,
+        badgeLabel: "New listing",
+      })}
       ${ctaButton(input.listingUrl, "View listing")}
     `,
   });
   return { subject, text, html, kind: "just_listed" };
 }
 
-export function renderPropertyUpdateEmail(input: {
-  name?: string | null;
-  title: string;
-  addressLine: string;
-  city: string;
-  mlsNumber: string;
-  changes: string[];
-  listingUrl: string;
-  unsubscribeUrl?: string | null;
-}): RenderedEmail {
+export function renderPropertyUpdateEmail(
+  input: {
+    name?: string | null;
+    title: string;
+    addressLine: string;
+    city: string;
+    mlsNumber: string;
+    changes: string[];
+    listingUrl: string;
+    unsubscribeUrl?: string | null;
+  } & ListingCardExtras,
+): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const subject = input.title;
   const text = [
@@ -245,18 +286,25 @@ export function renderPropertyUpdateEmail(input: {
   ].join("\n");
   const html = emailLayout({
     title: "Property update",
+    subtitle: "There’s an update on a home you’re watching.",
     preheader: input.title,
     unsubscribeUrl: input.unsubscribeUrl,
     bodyHtml: `
-      <p style="margin:0 0 12px">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px">There’s an update on a home you’re watching.</p>
-      <div style="margin:16px 0;padding:16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0">
-        <p style="margin:0;font-weight:700">${escapeHtml(input.addressLine)}</p>
-        <p style="margin:4px 0 12px;color:#64748b;font-size:13px">${escapeHtml(input.city)} · MLS® ${escapeHtml(input.mlsNumber)}</p>
-        <ul style="margin:0;padding-left:18px;color:#334155">
-          ${input.changes.map((c) => `<li style="margin:0 0 6px">${escapeHtml(c)}</li>`).join("")}
-        </ul>
-      </div>
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      <p style="margin:0 0 12px;color:#115e59">There’s an update on a home you’re watching.</p>
+      ${renderEmailPropertyCard({
+        mlsNumber: input.mlsNumber,
+        addressLine: input.addressLine,
+        city: input.city,
+        priceLabel: "Updated listing",
+        listingUrl: input.listingUrl,
+        imageUrl: input.imageUrl,
+        bedsLabel: input.bedsLabel,
+        bathsLabel: input.bathsLabel,
+        sqftLabel: input.sqftLabel,
+        badgeLabel: "Update",
+        detailLines: input.changes,
+      })}
       ${ctaButton(input.listingUrl, "View listing")}
     `,
   });
@@ -268,10 +316,21 @@ export function renderShortlistEmail(input: {
   agentName: string;
   shareUrl: string;
   note?: string | null;
-  listingLines: string[];
+  listings?: EmailPropertyCard[];
+  /** Fallback text lines when structured listings are not provided. */
+  listingLines?: string[];
 }): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
-  const subject = `${input.listingLines.length} home${input.listingLines.length === 1 ? "" : "s"} for you`;
+  const cards = input.listings ?? [];
+  const count = cards.length || (input.listingLines?.length ?? 0);
+  const subject = `${count} home${count === 1 ? "" : "s"} for you`;
+  const textLines =
+    cards.length > 0
+      ? cards.map(
+          (l) =>
+            `• ${l.addressLine}, ${l.city} · ${l.priceLabel} — ${l.listingUrl}`,
+        )
+      : (input.listingLines ?? []);
   const text = [
     greet,
     "",
@@ -279,20 +338,23 @@ export function renderShortlistEmail(input: {
     input.note ? `\n${input.note}\n` : "",
     `View all: ${input.shareUrl}`,
     "",
-    ...input.listingLines,
+    ...textLines,
   ].join("\n");
   const html = emailLayout({
     title: "Homes selected for you",
+    subtitle: `${input.agentName} put together a shortlist for you.`,
     preheader: `${input.agentName} shared a shortlist`,
     bodyHtml: `
-      <p style="margin:0 0 12px">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px"><strong>${escapeHtml(input.agentName)}</strong> put together a shortlist of homes that match what you’ve been looking at.</p>
-      ${input.note ? `<p style="margin:0 0 12px;padding:12px 14px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;color:#334155">${escapeHtml(input.note)}</p>` : ""}
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      <p style="margin:0 0 12px;color:#115e59"><strong style="color:#064e3b">${escapeHtml(input.agentName)}</strong> put together a shortlist of homes that match what you’ve been looking at.</p>
+      ${input.note ? infoCard(`<p style="margin:0;color:#115e59">${escapeHtml(input.note)}</p>`) : ""}
+      ${cards.map((l) => renderEmailPropertyCard(l)).join("")}
+      ${
+        cards.length === 0 && input.listingLines?.length
+          ? `<ol style="margin:0;padding-left:18px;color:#115e59">${input.listingLines.map((line) => `<li style="margin:0 0 8px">${escapeHtml(line)}</li>`).join("")}</ol>`
+          : ""
+      }
       ${ctaButton(input.shareUrl, "View shortlist")}
-      <p style="margin:20px 0 8px;font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em">Included</p>
-      <ol style="margin:0;padding-left:18px;color:#334155">
-        ${input.listingLines.map((line) => `<li style="margin:0 0 8px">${escapeHtml(line)}</li>`).join("")}
-      </ol>
     `,
   });
   return { subject, text, html, kind: "shortlist" };
@@ -302,18 +364,22 @@ export function renderAgentMessageEmail(input: {
   name?: string | null;
   subject: string;
   body: string;
+  listings?: EmailPropertyCard[];
 }): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const paragraphs = input.body
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean);
+  const cards = input.listings ?? [];
   const html = emailLayout({
     title: input.subject,
+    subtitle: "A message from your Houzzat agent.",
     preheader: input.subject,
     bodyHtml: `
-      <p style="margin:0 0 12px">${escapeHtml(greet)}</p>
-      ${paragraphs.map((p) => `<p style="margin:0 0 12px;white-space:pre-wrap">${escapeHtml(p)}</p>`).join("")}
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      ${paragraphs.map((p) => `<p style="margin:0 0 12px;white-space:pre-wrap;color:#115e59">${escapeHtml(p)}</p>`).join("")}
+      ${cards.map((l) => renderEmailPropertyCard(l)).join("")}
     `,
   });
   return {
@@ -344,39 +410,47 @@ export function renderNewsletterEmail(input: {
   ].join("\n");
   const html = emailLayout({
     title: input.headline,
+    subtitle: "Fresh market notes from Houzzat.",
     preheader: input.subject,
     unsubscribeUrl: input.unsubscribeUrl,
     bodyHtml: `
-      <p style="margin:0 0 12px">${escapeHtml(greet)}</p>
-      ${input.bodyHtml}
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      <div style="color:#115e59">${input.bodyHtml}</div>
       ${input.ctaUrl && input.ctaLabel ? ctaButton(input.ctaUrl, input.ctaLabel) : ""}
     `,
   });
   return { subject: input.subject, text, html, kind: "newsletter" };
 }
 
-export type DigestListingLine = {
+/** Shared property card used across alert / digest emails. */
+export type EmailPropertyCard = {
   mlsNumber: string;
   addressLine: string;
   city: string;
   priceLabel: string;
-  metaLabel?: string | null;
   listingUrl: string;
+  metaLabel?: string | null;
   imageUrl?: string | null;
   bedsLabel?: string | null;
   bathsLabel?: string | null;
   sqftLabel?: string | null;
+  /** Amber pill above the price (e.g. "New listing", "Price drop"). */
+  badgeLabel?: string | null;
+  /** Optional note under the price (plain text). */
+  priceNote?: string | null;
+  /** Extra bullets under specs (e.g. property updates). */
+  detailLines?: string[];
+  /** @deprecated use badgeLabel — kept for digest callers */
   isNew?: boolean;
 };
 
-const DIGEST_MINT =
-  "linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%)";
+export type DigestListingLine = EmailPropertyCard;
 
-function digestSpecChip(label: string) {
+function cardSpecChip(label: string) {
   return `<td style="padding:0 14px 0 0;font-size:14px;line-height:1.3;color:#047857;white-space:nowrap">${escapeHtml(label)}</td>`;
 }
 
-function renderDigestListingCard(listing: DigestListingLine) {
+export function renderEmailPropertyCard(listing: EmailPropertyCard) {
   const beds =
     listing.bedsLabel ??
     listing.metaLabel?.match(/([\d.+]+)\s*bed/i)?.[1] ??
@@ -387,21 +461,34 @@ function renderDigestListingCard(listing: DigestListingLine) {
     null;
   const sqft = listing.sqftLabel;
   const specs = [
-    sqft ? digestSpecChip(sqft) : "",
-    beds ? digestSpecChip(`${beds} bed`) : "",
-    baths ? digestSpecChip(`${baths} bath`) : "",
+    sqft ? cardSpecChip(sqft) : "",
+    beds ? cardSpecChip(`${beds} bed`) : "",
+    baths ? cardSpecChip(`${baths} bath`) : "",
   ]
     .filter(Boolean)
     .join("");
 
   const imageBlock = listing.imageUrl
     ? `<img src="${escapeAttr(listing.imageUrl)}" alt="${escapeAttr(listing.addressLine)}" width="220" height="176" style="display:block;width:220px;height:176px;object-fit:cover;border:0" />`
-    : `<div style="width:220px;height:176px;background:${DIGEST_MINT}"></div>`;
+    : `<div style="width:220px;height:176px;background:${EMAIL_MINT_GRADIENT}"></div>`;
 
-  // Pill tag above the price — email-safe (absolute overlays break in Gmail).
-  const newTag = listing.isNew
-    ? `<p style="margin:0 0 10px"><span style="display:inline-block;background:#f59e0b;color:#ffffff;font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:6px 11px;border-radius:999px;line-height:1">New listing</span></p>`
+  const badgeText =
+    listing.badgeLabel?.trim() ||
+    (listing.isNew ? "New listing" : null);
+  const badge = badgeText
+    ? `<p style="margin:0 0 10px"><span style="display:inline-block;background:#f59e0b;color:#ffffff;font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:6px 11px;border-radius:999px;line-height:1">${escapeHtml(badgeText)}</span></p>`
     : "";
+
+  const priceNote = listing.priceNote?.trim()
+    ? `<p style="margin:8px 0 0;font-size:14px;font-weight:600;color:#b45309">${escapeHtml(listing.priceNote.trim())}</p>`
+    : "";
+
+  const details =
+    listing.detailLines && listing.detailLines.length > 0
+      ? `<ul style="margin:12px 0 0;padding-left:18px;color:#115e59;font-size:14px">
+          ${listing.detailLines.map((line) => `<li style="margin:0 0 4px">${escapeHtml(line)}</li>`).join("")}
+        </ul>`
+      : "";
 
   return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px">
@@ -417,8 +504,9 @@ function renderDigestListingCard(listing: DigestListingLine) {
                         ${imageBlock}
                       </td>
                       <td valign="middle" style="padding:20px 22px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-                        ${newTag}
+                        ${badge}
                         <p style="margin:0;font-size:26px;line-height:1.15;font-weight:800;color:#064e3b;letter-spacing:-0.02em">${escapeHtml(listing.priceLabel)}</p>
+                        ${priceNote}
                         <p style="margin:10px 0 0;font-size:17px;line-height:1.35;color:#115e59;font-weight:600">${escapeHtml(listing.addressLine)}</p>
                         <p style="margin:5px 0 0;font-size:15px;line-height:1.3;color:#047857">${escapeHtml(listing.city)}</p>
                         ${
@@ -426,6 +514,7 @@ function renderDigestListingCard(listing: DigestListingLine) {
                             ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:14px 0 0;width:100%"><tr><td style="padding-top:12px;border-top:1px solid #d1fae5"><table role="presentation" cellpadding="0" cellspacing="0"><tr>${specs}</tr></table></td></tr></table>`
                             : ""
                         }
+                        ${details}
                         <p style="margin:14px 0 0;font-size:16px;font-weight:700;color:#059669">View home →</p>
                       </td>
                     </tr>
@@ -437,65 +526,6 @@ function renderDigestListingCard(listing: DigestListingLine) {
         </td>
       </tr>
     </table>`;
-}
-
-function digestEmailShell(input: {
-  title: string;
-  preheader: string;
-  heroTitle: string;
-  heroSubtitle: string;
-  bodyHtml: string;
-  unsubscribeUrl?: string | null;
-}): string {
-  const unsub = input.unsubscribeUrl
-    ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#047857">
-         <a href="${escapeAttr(input.unsubscribeUrl)}" style="color:#047857;text-decoration:underline">Unsubscribe / email preferences</a>
-       </p>`
-    : "";
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>${escapeHtml(input.title)}</title>
-  <!--[if mso]><style>table,td{font-family:Arial,sans-serif!important}</style><![endif]-->
-</head>
-<body style="margin:0;padding:0;background:#e8f5f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:100% !important">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(input.preheader)}</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#e8f5f0;padding:20px 12px">
-    <tr>
-      <td align="center" style="padding:0">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:680px;border-radius:20px;overflow:hidden;background:#ecfdf5;background-image:${DIGEST_MINT};border:1px solid #a7f3d0">
-          <tr>
-            <td style="width:100%;background:#d1fae5;background-image:${DIGEST_MINT};padding:32px 24px 28px;text-align:left;border-radius:20px 20px 0 0">
-              <p style="margin:0;font-size:11px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#047857">${escapeHtml(SITE_NAME)}</p>
-              <h1 style="margin:10px 0 0;font-size:32px;line-height:1.15;font-weight:800;color:#064e3b;letter-spacing:-0.02em">${escapeHtml(input.heroTitle)}</h1>
-              <p style="margin:12px 0 0;font-size:15px;line-height:1.5;color:#115e59">${escapeHtml(input.heroSubtitle)}</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="width:100%;background:rgba(236,253,245,0.85);padding:20px 16px 8px">
-              ${input.bodyHtml}
-            </td>
-          </tr>
-          <tr>
-            <td style="width:100%;background:#a7f3d0;background-image:linear-gradient(160deg,#a7f3d0 0%,#6ee7b7 100%);padding:22px 24px;border-top:1px solid #6ee7b7;border-radius:0 0 20px 20px">
-              <p style="margin:0;font-size:13px;line-height:1.5;font-weight:600;color:#064e3b">
-                GTA Real Estate — Just a click away.
-              </p>
-              <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#115e59">
-                <a href="${escapeAttr(SITE_URL)}" style="color:#064e3b;text-decoration:none;font-weight:600">${escapeHtml(SITE_URL.replace(/^https?:\/\//, ""))}</a>
-              </p>
-              ${unsub}
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
 }
 
 export function renderSavedSearchDigestEmail(input: {
@@ -524,31 +554,28 @@ export function renderSavedSearchDigestEmail(input: {
     `Browse all matches: ${input.searchUrl}`,
   ].join("\n");
 
-  const cards = input.listings.map(renderDigestListingCard).join("");
+  const cards = input.listings
+    .map((l) =>
+      renderEmailPropertyCard({
+        ...l,
+        badgeLabel: l.badgeLabel ?? (l.isNew ? "New listing" : null),
+      }),
+    )
+    .join("");
   const previewNote =
     count > 0
       ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><p style="margin:0 0 16px;max-width:580px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;line-height:1.45;color:#115e59;text-align:left">${escapeHtml(greet)} Here ${count === 1 ? "is a fresh match" : `are ${count} fresh matches`} for <strong style="color:#064e3b">${escapeHtml(input.searchName)}</strong>.</p></td></tr></table>`
       : "";
 
-  const html = digestEmailShell({
-    title: subject,
+  const html = emailLayout({
+    title: "New listings found!",
+    subtitle: "We've found new homes that match your criteria—take a look.",
     preheader: `${count} new home${count === 1 ? "" : "s"} for ${input.searchName}`,
-    heroTitle: "New listings found!",
-    heroSubtitle:
-      "We've found new homes that match your criteria—take a look.",
     unsubscribeUrl: input.unsubscribeUrl,
     bodyHtml: `
       ${previewNote}
       ${cards}
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:8px 0 12px">
-        <tr>
-          <td align="center">
-            <a href="${escapeAttr(input.searchUrl)}" style="display:inline-block;background:#ecfdf5;background-image:linear-gradient(135deg,#ecfdf5 0%,#6ee7b7 100%);color:#064e3b;text-decoration:none;font-weight:700;font-size:13px;line-height:1.2;padding:10px 18px;border-radius:999px;border:1.5px solid #34d399;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-              Browse all matching homes →
-            </a>
-          </td>
-        </tr>
-      </table>
+      ${ctaButton(input.searchUrl, "Browse all matching homes →")}
     `,
   });
   return { subject, text, html, kind: "saved_search_digest" };
@@ -591,34 +618,39 @@ export function renderNeighborhoodWeeklyEmail(input: {
     .filter(Boolean)
     .join("\n");
 
-  const listBlock = (title: string, items: DigestListingLine[]) => {
+  const listBlock = (
+    title: string,
+    items: DigestListingLine[],
+    badgeLabel: string,
+  ) => {
     if (!items.length) {
-      return `<p style="margin:0 0 12px;color:#64748b;font-size:14px">No ${title.toLowerCase()} in this window.</p>`;
+      return `<p style="margin:0 0 12px;color:#047857;font-size:14px">No ${title.toLowerCase()} in this window.</p>`;
     }
     return `
-      <p style="margin:20px 0 8px;font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em">${escapeHtml(title)}</p>
-      <ul style="margin:0;padding-left:18px;color:#334155">
-        ${items
-          .map(
-            (l) =>
-              `<li style="margin:0 0 8px"><a href="${escapeAttr(l.listingUrl)}" style="color:#0f172a;text-decoration:none"><strong>${escapeHtml(l.addressLine)}</strong></a> · ${escapeHtml(l.priceLabel)}${l.metaLabel ? ` · ${escapeHtml(l.metaLabel)}` : ""}</li>`,
-          )
-          .join("")}
-      </ul>`;
+      <p style="margin:20px 0 8px;font-size:12px;font-weight:800;color:#047857;text-transform:uppercase;letter-spacing:0.06em">${escapeHtml(title)}</p>
+      ${items
+        .map((l) =>
+          renderEmailPropertyCard({
+            ...l,
+            badgeLabel: l.badgeLabel ?? badgeLabel,
+          }),
+        )
+        .join("")}`;
   };
 
   const html = emailLayout({
     title: "Neighborhood weekly report",
+    subtitle: `Here’s what happened near ${input.homeLabel} this week.`,
     preheader: `${input.newCount} new · ${input.soldCount} sold near ${input.homeLabel}`,
     unsubscribeUrl: input.unsubscribeUrl,
     bodyHtml: `
-      <p style="margin:0 0 12px">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 16px">Here’s what happened near <strong>${escapeHtml(input.homeLabel)}</strong> over the past week (≈${input.radiusKm} km).</p>
-      <div style="margin:0 0 16px;padding:14px 16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0">
-        <p style="margin:0;font-size:15px"><strong>${input.newCount}</strong> new · <strong>${input.soldCount}</strong> sold/leased${input.medianSoldLabel ? ` · median sold <strong>${escapeHtml(input.medianSoldLabel)}</strong>` : ""}</p>
-      </div>
-      ${listBlock("New listings", input.newListings)}
-      ${listBlock("Sold & leased", input.soldListings)}
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      <p style="margin:0 0 16px;color:#115e59">Here’s what happened near <strong style="color:#064e3b">${escapeHtml(input.homeLabel)}</strong> over the past week (≈${input.radiusKm} km).</p>
+      ${infoCard(`
+        <p style="margin:0;font-size:16px;color:#064e3b"><strong>${input.newCount}</strong> new · <strong>${input.soldCount}</strong> sold/leased${input.medianSoldLabel ? ` · median sold <strong>${escapeHtml(input.medianSoldLabel)}</strong>` : ""}</p>
+      `)}
+      ${listBlock("New listings", input.newListings, "New listing")}
+      ${listBlock("Sold & leased", input.soldListings, "Sold")}
       ${ctaButton(input.ctaUrl, "View seller tools")}
     `,
   });

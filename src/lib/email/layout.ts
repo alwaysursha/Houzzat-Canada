@@ -1,8 +1,13 @@
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 
+export const EMAIL_MINT_GRADIENT =
+  "linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%)";
+
 export function emailLayout(input: {
   preheader?: string;
   title: string;
+  /** Optional line under the hero title. */
+  subtitle?: string | null;
   bodyHtml: string;
   footerNote?: string;
   unsubscribeUrl?: string | null;
@@ -11,9 +16,12 @@ export function emailLayout(input: {
     ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(input.preheader)}</div>`
     : "";
   const unsub = input.unsubscribeUrl
-    ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#94a3b8">
-         <a href="${escapeAttr(input.unsubscribeUrl)}" style="color:#64748b;text-decoration:underline">Unsubscribe / email preferences</a>
+    ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#047857">
+         <a href="${escapeAttr(input.unsubscribeUrl)}" style="color:#047857;text-decoration:underline">Unsubscribe / email preferences</a>
        </p>`
+    : "";
+  const subtitle = input.subtitle?.trim()
+    ? `<p style="margin:12px 0 0;font-size:15px;line-height:1.5;color:#115e59">${escapeHtml(input.subtitle.trim())}</p>`
     : "";
 
   return `<!DOCTYPE html>
@@ -22,31 +30,33 @@ export function emailLayout(input: {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>${escapeHtml(input.title)}</title>
+  <!--[if mso]><style>table,td{font-family:Arial,sans-serif!important}</style><![endif]-->
 </head>
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:Georgia,'Times New Roman',serif">
+<body style="margin:0;padding:0;background:#e8f5f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:100% !important">
   ${preheader}
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:28px 12px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#e8f5f0;padding:20px 12px">
     <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0">
+      <td align="center" style="padding:0">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:680px;border-radius:20px;overflow:hidden;background:#ecfdf5;background-image:${EMAIL_MINT_GRADIENT};border:1px solid #a7f3d0">
           <tr>
-            <td style="padding:22px 28px 12px;background:linear-gradient(135deg,#0f3d2e 0%,#1a5c45 100%)">
-              <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#a7f3d0">${escapeHtml(SITE_NAME)}</p>
-              <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;font-weight:700;color:#ffffff">${escapeHtml(input.title)}</h1>
+            <td style="width:100%;background:#d1fae5;background-image:${EMAIL_MINT_GRADIENT};padding:32px 24px 28px;text-align:left;border-radius:20px 20px 0 0">
+              <p style="margin:0;font-size:11px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#047857">${escapeHtml(SITE_NAME)}</p>
+              <h1 style="margin:10px 0 0;font-size:28px;line-height:1.15;font-weight:800;color:#064e3b;letter-spacing:-0.02em">${escapeHtml(input.title)}</h1>
+              ${subtitle}
             </td>
           </tr>
           <tr>
-            <td style="padding:24px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.55;color:#1e293b">
+            <td style="width:100%;background:rgba(236,253,245,0.92);padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.55;color:#115e59">
               ${input.bodyHtml}
             </td>
           </tr>
           <tr>
-            <td style="padding:0 28px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-              <p style="margin:0;font-size:12px;line-height:1.5;color:#94a3b8">
-                ${escapeHtml(input.footerNote ?? `${SITE_NAME} · Greater Toronto Area real estate`)}
+            <td style="width:100%;background:#a7f3d0;background-image:linear-gradient(160deg,#a7f3d0 0%,#6ee7b7 100%);padding:22px 24px;border-top:1px solid #6ee7b7;border-radius:0 0 20px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+              <p style="margin:0;font-size:13px;line-height:1.5;font-weight:600;color:#064e3b">
+                ${escapeHtml(input.footerNote ?? "GTA Real Estate — Just a click away.")}
               </p>
-              <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#94a3b8">
-                <a href="${escapeAttr(SITE_URL)}" style="color:#0d9488;text-decoration:none">${escapeHtml(SITE_URL.replace(/^https?:\/\//, ""))}</a>
+              <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#115e59">
+                <a href="${escapeAttr(SITE_URL)}" style="color:#064e3b;text-decoration:none;font-weight:600">${escapeHtml(SITE_URL.replace(/^https?:\/\//, ""))}</a>
               </p>
               ${unsub}
             </td>
@@ -59,10 +69,16 @@ export function emailLayout(input: {
 </html>`;
 }
 
+/** Primary mint CTA (pill). */
 export function ctaButton(href: string, label: string) {
-  return `<p style="margin:24px 0 8px">
-    <a href="${escapeAttr(href)}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:10px">${escapeHtml(label)}</a>
+  return `<p style="margin:22px 0 8px;text-align:center">
+    <a href="${escapeAttr(href)}" style="display:inline-block;background:#ecfdf5;background-image:linear-gradient(135deg,#ecfdf5 0%,#6ee7b7 100%);color:#064e3b;text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;padding:12px 20px;border-radius:999px;border:1.5px solid #34d399;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">${escapeHtml(label)}</a>
   </p>`;
+}
+
+/** White card with mint border for listing / detail callouts. */
+export function infoCard(innerHtml: string) {
+  return `<div style="margin:16px 0;padding:18px 20px;border-radius:12px;background:#ffffff;border:1px solid #a7f3d0">${innerHtml}</div>`;
 }
 
 export function escapeHtml(value: string) {

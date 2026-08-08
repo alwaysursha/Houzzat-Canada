@@ -36,6 +36,14 @@ function toLine(listing: DigestListingCard, opts?: { sold?: boolean }) {
   const price = opts?.sold
     ? (listing.soldPrice ?? listing.listPrice)
     : listing.listPrice;
+  const beds =
+    listing.bedsLabel?.trim() ||
+    (Number.isInteger(listing.beds)
+      ? String(listing.beds)
+      : listing.beds.toFixed(1));
+  const baths = Number.isInteger(listing.baths)
+    ? String(listing.baths)
+    : listing.baths.toFixed(1);
   return {
     mlsNumber: listing.mlsNumber,
     addressLine: listing.addressLine,
@@ -44,6 +52,17 @@ function toLine(listing: DigestListingCard, opts?: { sold?: boolean }) {
       ? `${listing.status === "LEASED" ? "Leased" : "Sold"} ${formatListPrice(price)}`
       : formatListPrice(price),
     metaLabel: listing.community,
+    bedsLabel: beds,
+    bathsLabel: baths,
+    sqftLabel: listing.sqft
+      ? `${listing.sqft.toLocaleString("en-CA")} sqft`
+      : null,
+    imageUrl: listing.imageUrl,
+    badgeLabel: opts?.sold
+      ? listing.status === "LEASED"
+        ? "Leased"
+        : "Sold"
+      : "New listing",
     listingUrl: listingUrl(listing.mlsNumber),
   };
 }

@@ -12,7 +12,65 @@ import {
   renderPropertyUpdateEmail,
   renderSoldAlertEmail,
 } from "@/lib/email/templates";
+import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
+import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { prisma } from "@/lib/prisma";
+
+type ListingCardExtras = {
+  imageUrl?: string | null;
+  bedsLabel?: string | null;
+  bathsLabel?: string | null;
+  sqftLabel?: string | null;
+};
+
+function listingCardExtras(listing: {
+  beds: number;
+  baths: number;
+  sqft: number | null;
+  facts: unknown;
+  media: { url: string }[];
+}): ListingCardExtras {
+  const facts = parseListingFacts(listing.facts);
+  const bedsLabel =
+    formatBedsPlusLabel(listing.beds, facts) ??
+    (Number.isInteger(listing.beds)
+      ? String(listing.beds)
+      : listing.beds.toFixed(1));
+  const baths = Number.isInteger(listing.baths)
+    ? String(listing.baths)
+    : listing.baths.toFixed(1);
+  const photo = listing.media[0]?.url;
+  return {
+    bedsLabel,
+    bathsLabel: baths,
+    sqftLabel: listing.sqft
+      ? `${listing.sqft.toLocaleString("en-CA")} sqft`
+      : null,
+    imageUrl: photo ? listingPhotoSrc(photo) ?? photo : null,
+  };
+}
+
+const listingEmailSelect = {
+  mlsNumber: true,
+  addressLine: true,
+  city: true,
+  listPrice: true,
+  soldPrice: true,
+  status: true,
+  ownerStatus: true,
+  dataSource: true,
+  beds: true,
+  baths: true,
+  sqft: true,
+  facts: true,
+  listedAt: true,
+  soldAt: true,
+  media: {
+    orderBy: [{ isPrimary: "desc" as const }, { sortOrder: "asc" as const }],
+    take: 1,
+    select: { url: true },
+  },
+} satisfies Prisma.ListingSelect;
 
 function formatPrice(amount: number) {
   return new Intl.NumberFormat("en-CA", {
@@ -45,37 +103,37 @@ async function createAlert(input: {
   monitorEmailAlerts: boolean;
   /** Structured fields for HTML templates when available. */
   template?:
-    | {
+    | ({
         type: "price_reduction";
         addressLine: string;
         city: string;
         mlsNumber: string;
         oldPrice: number;
         newPrice: number;
-      }
-    | {
+      } & ListingCardExtras)
+    | ({
         type: "sold";
         addressLine: string;
         city: string;
         mlsNumber: string;
         statusLabel: string;
         priceLabel: string;
-      }
-    | {
+      } & ListingCardExtras)
+    | ({
         type: "just_listed";
         areaName: string;
         addressLine: string;
         city: string;
         mlsNumber: string;
         price: number;
-      }
-    | {
+      } & ListingCardExtras)
+    | ({
         type: "property_update";
         addressLine: string;
         city: string;
         mlsNumber: string;
         changes: string[];
-      };
+      } & ListingCardExtras);
 }) {
   await prisma.customerAlert.create({
     data: {
@@ -110,6 +168,10 @@ async function createAlert(input: {
         newPrice: t.newPrice,
         listingUrl: listingUrl(t.mlsNumber),
         unsubscribeUrl: unsub,
+        imageUrl: t.imageUrl,
+        bedsLabel: t.bedsLabel,
+        bathsLabel: t.bathsLabel,
+        sqftLabel: t.sqftLabel,
       });
     }
     if (t.type === "sold") {
@@ -122,6 +184,10 @@ async function createAlert(input: {
         priceLabel: t.priceLabel,
         listingUrl: listingUrl(t.mlsNumber),
         unsubscribeUrl: unsub,
+        imageUrl: t.imageUrl,
+        bedsLabel: t.bedsLabel,
+        bathsLabel: t.bathsLabel,
+        sqftLabel: t.sqftLabel,
       });
     }
     if (t.type === "just_listed") {
@@ -134,6 +200,10 @@ async function createAlert(input: {
         price: t.price,
         listingUrl: listingUrl(t.mlsNumber),
         unsubscribeUrl: unsub,
+        imageUrl: t.imageUrl,
+        bedsLabel: t.bedsLabel,
+        bathsLabel: t.bathsLabel,
+        sqftLabel: t.sqftLabel,
       });
     }
     return renderPropertyUpdateEmail({
@@ -145,6 +215,10 @@ async function createAlert(input: {
       changes: t.changes,
       listingUrl: listingUrl(t.mlsNumber),
       unsubscribeUrl: unsub,
+      imageUrl: t.imageUrl,
+      bedsLabel: t.bedsLabel,
+      bathsLabel: t.bathsLabel,
+      sqftLabel: t.sqftLabel,
     });
   })();
 
@@ -199,18 +273,10 @@ export async function runPropertyMonitorChecks(userId?: string) {
   for (const monitor of monitors) {
     const listing = await prisma.listing.findUnique({
       where: { mlsNumber: monitor.mlsNumber },
-      select: {
-        mlsNumber: true,
-        addressLine: true,
-        city: true,
-        listPrice: true,
-        status: true,
-        ownerStatus: true,
-        dataSource: true,
-        soldPrice: true,
-      },
+      select: listingEmailSelect,
     });
     if (!listing) continue;
+    const cardExtras = listingCardExtras(listing);
 
     const changes: string[] = [];
     let kind:
@@ -281,6 +347,7 @@ export async function runPropertyMonitorChecks(userId?: string) {
             mlsNumber: listing.mlsNumber,
             statusLabel: listing.status === "LEASED" ? "Leased" : "Sold",
             priceLabel: formatPrice(listing.soldPrice ?? listing.listPrice),
+            ...cardExtras,
           }
         : priceDrop
           ? {
@@ -290,6 +357,7 @@ export async function runPropertyMonitorChecks(userId?: string) {
               mlsNumber: listing.mlsNumber,
               oldPrice: priceDrop.oldPrice,
               newPrice: priceDrop.newPrice,
+              ...cardExtras,
             }
           : {
               type: "property_update",
@@ -297,6 +365,7 @@ export async function runPropertyMonitorChecks(userId?: string) {
               city: listing.city,
               mlsNumber: listing.mlsNumber,
               changes,
+              ...cardExtras,
             },
     });
 
@@ -368,13 +437,7 @@ export async function runAreaMonitorChecks(userId?: string) {
         },
         take: 10,
         orderBy: { listedAt: "desc" },
-        select: {
-          mlsNumber: true,
-          addressLine: true,
-          city: true,
-          listPrice: true,
-          listedAt: true,
-        },
+        select: listingEmailSelect,
       });
 
       for (const listing of news) {
@@ -396,6 +459,7 @@ export async function runAreaMonitorChecks(userId?: string) {
             city: listing.city,
             mlsNumber: listing.mlsNumber,
             price: listing.listPrice,
+            ...listingCardExtras(listing),
           },
         });
         alerts += 1;
@@ -411,15 +475,7 @@ export async function runAreaMonitorChecks(userId?: string) {
         },
         take: 10,
         orderBy: { soldAt: "desc" },
-        select: {
-          mlsNumber: true,
-          addressLine: true,
-          city: true,
-          status: true,
-          soldPrice: true,
-          listPrice: true,
-          soldAt: true,
-        },
+        select: listingEmailSelect,
       });
 
       for (const listing of solds) {
@@ -442,6 +498,7 @@ export async function runAreaMonitorChecks(userId?: string) {
             mlsNumber: listing.mlsNumber,
             statusLabel: listing.status === "LEASED" ? "Leased" : "Sold",
             priceLabel: formatPrice(price),
+            ...listingCardExtras(listing),
           },
         });
         alerts += 1;
