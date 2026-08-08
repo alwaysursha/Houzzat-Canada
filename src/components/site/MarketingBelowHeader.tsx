@@ -3,6 +3,8 @@
 import { usePathname } from "next/navigation";
 import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
 import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
+import { SeoFooterLinks } from "@/components/site/SeoFooterLinks";
+import { SeoLocationProvider } from "@/components/site/SeoLocationContext";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
 /** Hides marketing chrome on immersive routes like /search. */
@@ -17,11 +19,12 @@ export function MarketingBelowHeader({
   const immersive = pathname === "/search" || pathname.startsWith("/search?");
 
   return (
-    <>
+    <SeoLocationProvider>
       {!immersive ? <HomepagePersonalizationBanner cities={cities} /> : null}
       {!immersive ? <SavedSearchChipBar cities={cities} /> : null}
       <main className={immersive ? "min-h-0" : undefined}>{children}</main>
+      {!immersive ? <SeoFooterLinks fallbackCities={cities} /> : null}
       {!immersive ? <SiteFooter /> : null}
-    </>
+    </SeoLocationProvider>
   );
 }

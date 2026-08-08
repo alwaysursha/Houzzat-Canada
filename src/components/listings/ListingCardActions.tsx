@@ -104,25 +104,9 @@ export function ListingCardActions({
     }
   }
 
-  async function shareNative(event: ReactMouseEvent) {
+  function toggleShareMenu(event: ReactMouseEvent) {
     event.preventDefault();
     event.stopPropagation();
-
-    const shareUrl = listingUrl(mlsNumber, path);
-    const shareData = {
-      title: `${title} | ${SITE_NAME}`,
-      text: `Check out this property on ${SITE_NAME}`,
-      url: shareUrl,
-    };
-
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share(shareData);
-        return;
-      } catch {
-        // User cancelled or share failed — fall through to menu.
-      }
-    }
     setShareOpen((open) => !open);
   }
 
@@ -183,7 +167,7 @@ export function ListingCardActions({
           type="button"
           aria-label="Share property"
           aria-expanded={shareOpen}
-          onClick={shareNative}
+          onClick={toggleShareMenu}
           className="inline-flex size-9 items-center justify-center rounded-lg border border-line bg-mist text-ink transition hover:border-canopy/40 hover:bg-canopy/5"
         >
           <Share2 className="size-4" strokeWidth={2.25} />

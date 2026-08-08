@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
-import { homesForSalePath } from "@/lib/geo/area-seo";
+import { homesForSalePath } from "@/lib/geo/area-paths";
 import { formatPrice, propertyTypeLabel } from "@/lib/listings/constants";
 import type { PropertyType } from "@prisma/client";
 

@@ -6,6 +6,7 @@ import { ChevronLeft, Search, X } from "lucide-react";
 import { SaveListingButton } from "@/components/account/SaveListingButton";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { WatchListingButton } from "@/components/account/WatchListingButton";
+import { ShareListingButton } from "@/components/listings/ShareListingButton";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,6 +14,7 @@ import { cn } from "@/lib/utils";
  */
 export function ListingMobileSideMenu({
   mlsNumber,
+  shareTitle,
   callbackPath,
   initiallySaved,
   initiallyWatching,
@@ -25,6 +27,8 @@ export function ListingMobileSideMenu({
   similarHomesHref,
 }: {
   mlsNumber: string;
+  /** Address / label used in share text. */
+  shareTitle: string;
   /** Canonical SEO path for auth redirects. */
   callbackPath?: string;
   initiallySaved: boolean;
@@ -169,6 +173,14 @@ export function ListingMobileSideMenu({
             Follow this listing
           </p>
           <ul className="space-y-2">
+            <li className="[&_button]:h-11 [&_button]:w-full [&_button]:justify-start [&_button]:px-3 [&_button]:text-sm">
+              <ShareListingButton
+                mlsNumber={mlsNumber}
+                title={shareTitle}
+                path={callbackPath}
+                className="w-full [&_button]:h-11 [&_button]:w-full [&_button]:justify-start [&_button]:px-3 [&_button]:text-sm"
+              />
+            </li>
             <li className="[&_button]:h-11 [&_button]:w-full [&_button]:justify-start [&_button]:px-3 [&_button]:text-sm">
               <SaveListingButton
                 mlsNumber={mlsNumber}

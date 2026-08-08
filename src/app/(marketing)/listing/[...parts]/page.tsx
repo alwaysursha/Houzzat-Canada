@@ -23,6 +23,7 @@ import { ListingDetailSectionNav } from "@/components/listings/ListingDetailSect
 import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
 import { ListingMobileNotes } from "@/components/listings/ListingMobileNotes";
 import { RecordRecentView } from "@/components/listings/RecordRecentView";
+import { SeoLocationBridge } from "@/components/site/SeoLocationContext";
 import { ListingInsightsDeferred } from "@/components/listings/insights/ListingInsightsDeferred";
 import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
@@ -466,6 +467,10 @@ export default async function ListingDetailPage({ params }: Params) {
 
   return (
     <>
+      <SeoLocationBridge
+        city={listing.city}
+        community={listing.community}
+      />
       <RecordRecentView mlsNumber={listing.mlsNumber} />
       <ListingDetailCoachMarks />
       <script
@@ -478,6 +483,7 @@ export default async function ListingDetailPage({ params }: Params) {
       />
       <ListingMobileSideMenu
         mlsNumber={listing.mlsNumber}
+        shareTitle={addressLabel}
         callbackPath={canonicalPath}
         initiallySaved={saved}
         initiallyWatching={watching}
@@ -519,6 +525,7 @@ export default async function ListingDetailPage({ params }: Params) {
         <ListingStickyBar
           crumbs={crumbs}
           mlsNumber={listing.mlsNumber}
+          shareTitle={addressLabel}
           callbackPath={canonicalPath}
           initiallySaved={saved}
           initiallyWatching={watching}

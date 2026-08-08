@@ -6,6 +6,7 @@ import { ChevronRight, Search } from "lucide-react";
 import { SaveListingButton } from "@/components/account/SaveListingButton";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { WatchListingButton } from "@/components/account/WatchListingButton";
+import { ShareListingButton } from "@/components/listings/ShareListingButton";
 import { cn } from "@/lib/utils";
 
 type Crumb = {
@@ -69,6 +70,7 @@ function ListingBreadcrumbs({
 export function ListingStickyBar({
   crumbs,
   mlsNumber,
+  shareTitle,
   callbackPath,
   initiallySaved,
   initiallyWatching,
@@ -82,6 +84,8 @@ export function ListingStickyBar({
 }: {
   crumbs: Crumb[];
   mlsNumber: string;
+  /** Address / label used in share text. */
+  shareTitle: string;
   /** Canonical SEO path for auth redirects. */
   callbackPath?: string;
   initiallySaved: boolean;
@@ -173,6 +177,11 @@ export function ListingStickyBar({
                 <ListingBreadcrumbs crumbs={crumbs} className="overflow-hidden" />
 
                 <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
+                  <ShareListingButton
+                    mlsNumber={mlsNumber}
+                    title={shareTitle}
+                    path={callbackPath}
+                  />
                   <SaveListingButton
                     mlsNumber={mlsNumber}
                     initiallySaved={initiallySaved}

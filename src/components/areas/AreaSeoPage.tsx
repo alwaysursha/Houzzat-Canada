@@ -4,6 +4,7 @@ import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { NearbyAmenities } from "@/components/listings/NearbyAmenities";
 import { MarketPulseCard } from "@/components/market/MarketPulseCard";
 import { JsonLd } from "@/components/seo/JsonLd";
+import { SeoLocationBridge } from "@/components/site/SeoLocationContext";
 import { getCommunityNarrative } from "@/lib/ai/narratives";
 import { auth } from "@/lib/auth";
 import {
@@ -114,6 +115,7 @@ export async function AreaSeoPage({ place }: Props) {
 
   return (
     <>
+      <SeoLocationBridge city={place.city} community={place.community} />
       <JsonLd
         data={areaPlaceJsonLd({ place, description: copy.metaDescription })}
       />
