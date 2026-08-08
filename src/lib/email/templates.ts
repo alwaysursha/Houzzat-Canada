@@ -362,7 +362,141 @@ export type DigestListingLine = {
   priceLabel: string;
   metaLabel?: string | null;
   listingUrl: string;
+  imageUrl?: string | null;
+  bedsLabel?: string | null;
+  bathsLabel?: string | null;
+  sqftLabel?: string | null;
+  isNew?: boolean;
 };
+
+const DIGEST_MINT =
+  "linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%)";
+
+function digestSpecChip(label: string) {
+  return `<td style="padding:0 14px 0 0;font-size:14px;line-height:1.3;color:#047857;white-space:nowrap">${escapeHtml(label)}</td>`;
+}
+
+function renderDigestListingCard(listing: DigestListingLine) {
+  const beds =
+    listing.bedsLabel ??
+    listing.metaLabel?.match(/([\d.+]+)\s*bed/i)?.[1] ??
+    null;
+  const baths =
+    listing.bathsLabel ??
+    listing.metaLabel?.match(/([\d.]+)\s*bath/i)?.[1] ??
+    null;
+  const sqft = listing.sqftLabel;
+  const specs = [
+    sqft ? digestSpecChip(sqft) : "",
+    beds ? digestSpecChip(`${beds} bed`) : "",
+    baths ? digestSpecChip(`${baths} bath`) : "",
+  ]
+    .filter(Boolean)
+    .join("");
+
+  const imageBlock = listing.imageUrl
+    ? `<img src="${escapeAttr(listing.imageUrl)}" alt="${escapeAttr(listing.addressLine)}" width="220" height="176" style="display:block;width:220px;height:176px;object-fit:cover;border:0" />`
+    : `<div style="width:220px;height:176px;background:${DIGEST_MINT}"></div>`;
+
+  // Pill tag above the price — email-safe (absolute overlays break in Gmail).
+  const newTag = listing.isNew
+    ? `<p style="margin:0 0 10px"><span style="display:inline-block;background:#f59e0b;color:#ffffff;font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:6px 11px;border-radius:999px;line-height:1">New listing</span></p>`
+    : "";
+
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="580" cellpadding="0" cellspacing="0" style="width:580px;max-width:580px;background:#ffffff;border:1px solid #a7f3d0;border-radius:12px;overflow:hidden">
+            <tr>
+              <td>
+                <a href="${escapeAttr(listing.listingUrl)}" style="text-decoration:none;color:#0f172a;display:block">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td width="220" valign="top" style="width:220px;line-height:0">
+                        ${imageBlock}
+                      </td>
+                      <td valign="middle" style="padding:20px 22px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+                        ${newTag}
+                        <p style="margin:0;font-size:26px;line-height:1.15;font-weight:800;color:#064e3b;letter-spacing:-0.02em">${escapeHtml(listing.priceLabel)}</p>
+                        <p style="margin:10px 0 0;font-size:17px;line-height:1.35;color:#115e59;font-weight:600">${escapeHtml(listing.addressLine)}</p>
+                        <p style="margin:5px 0 0;font-size:15px;line-height:1.3;color:#047857">${escapeHtml(listing.city)}</p>
+                        ${
+                          specs
+                            ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:14px 0 0;width:100%"><tr><td style="padding-top:12px;border-top:1px solid #d1fae5"><table role="presentation" cellpadding="0" cellspacing="0"><tr>${specs}</tr></table></td></tr></table>`
+                            : ""
+                        }
+                        <p style="margin:14px 0 0;font-size:16px;font-weight:700;color:#059669">View home →</p>
+                      </td>
+                    </tr>
+                  </table>
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>`;
+}
+
+function digestEmailShell(input: {
+  title: string;
+  preheader: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  bodyHtml: string;
+  unsubscribeUrl?: string | null;
+}): string {
+  const unsub = input.unsubscribeUrl
+    ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#047857">
+         <a href="${escapeAttr(input.unsubscribeUrl)}" style="color:#047857;text-decoration:underline">Unsubscribe / email preferences</a>
+       </p>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${escapeHtml(input.title)}</title>
+  <!--[if mso]><style>table,td{font-family:Arial,sans-serif!important}</style><![endif]-->
+</head>
+<body style="margin:0;padding:0;background:#e8f5f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:100% !important">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(input.preheader)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#e8f5f0;padding:20px 12px">
+    <tr>
+      <td align="center" style="padding:0">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:680px;border-radius:20px;overflow:hidden;background:#ecfdf5;background-image:${DIGEST_MINT};border:1px solid #a7f3d0">
+          <tr>
+            <td style="width:100%;background:#d1fae5;background-image:${DIGEST_MINT};padding:32px 24px 28px;text-align:left;border-radius:20px 20px 0 0">
+              <p style="margin:0;font-size:11px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#047857">${escapeHtml(SITE_NAME)}</p>
+              <h1 style="margin:10px 0 0;font-size:32px;line-height:1.15;font-weight:800;color:#064e3b;letter-spacing:-0.02em">${escapeHtml(input.heroTitle)}</h1>
+              <p style="margin:12px 0 0;font-size:15px;line-height:1.5;color:#115e59">${escapeHtml(input.heroSubtitle)}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="width:100%;background:rgba(236,253,245,0.85);padding:20px 16px 8px">
+              ${input.bodyHtml}
+            </td>
+          </tr>
+          <tr>
+            <td style="width:100%;background:#a7f3d0;background-image:linear-gradient(160deg,#a7f3d0 0%,#6ee7b7 100%);padding:22px 24px;border-top:1px solid #6ee7b7;border-radius:0 0 20px 20px">
+              <p style="margin:0;font-size:13px;line-height:1.5;font-weight:600;color:#064e3b">
+                GTA Real Estate — Just a click away.
+              </p>
+              <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#115e59">
+                <a href="${escapeAttr(SITE_URL)}" style="color:#064e3b;text-decoration:none;font-weight:600">${escapeHtml(SITE_URL.replace(/^https?:\/\//, ""))}</a>
+              </p>
+              ${unsub}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
 
 export function renderSavedSearchDigestEmail(input: {
   name?: string | null;
@@ -373,7 +507,10 @@ export function renderSavedSearchDigestEmail(input: {
 }): RenderedEmail {
   const count = input.listings.length;
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
-  const subject = `${count} new home${count === 1 ? "" : "s"} matching your search`;
+  const subject =
+    count === 1
+      ? `New listing alert · ${input.listings[0]?.addressLine ?? input.searchName}`
+      : `${count} new homes matching your search`;
   const text = [
     greet,
     "",
@@ -384,33 +521,34 @@ export function renderSavedSearchDigestEmail(input: {
         `• ${l.addressLine}, ${l.city} · ${l.priceLabel}${l.metaLabel ? ` · ${l.metaLabel}` : ""} — ${l.listingUrl}`,
     ),
     "",
-    `See all: ${input.searchUrl}`,
+    `Browse all matches: ${input.searchUrl}`,
   ].join("\n");
 
-  const rows = input.listings
-    .map(
-      (l) => `
-      <tr>
-        <td style="padding:12px 0;border-bottom:1px solid #e2e8f0">
-          <a href="${escapeAttr(l.listingUrl)}" style="text-decoration:none;color:#0f172a">
-            <p style="margin:0;font-weight:700">${escapeHtml(l.addressLine)}</p>
-            <p style="margin:4px 0 0;font-size:13px;color:#64748b">${escapeHtml(l.city)}${l.metaLabel ? ` · ${escapeHtml(l.metaLabel)}` : ""}</p>
-            <p style="margin:8px 0 0;font-size:16px;font-weight:700;color:#0d9488">${escapeHtml(l.priceLabel)}</p>
-          </a>
-        </td>
-      </tr>`,
-    )
-    .join("");
+  const cards = input.listings.map(renderDigestListingCard).join("");
+  const previewNote =
+    count > 0
+      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><p style="margin:0 0 16px;max-width:580px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;line-height:1.45;color:#115e59;text-align:left">${escapeHtml(greet)} Here ${count === 1 ? "is a fresh match" : `are ${count} fresh matches`} for <strong style="color:#064e3b">${escapeHtml(input.searchName)}</strong>.</p></td></tr></table>`
+      : "";
 
-  const html = emailLayout({
+  const html = digestEmailShell({
     title: subject,
-    preheader: `Fresh matches for ${input.searchName}`,
+    preheader: `${count} new home${count === 1 ? "" : "s"} for ${input.searchName}`,
+    heroTitle: "New listings found!",
+    heroSubtitle:
+      "We've found new homes that match your criteria—take a look.",
     unsubscribeUrl: input.unsubscribeUrl,
     bodyHtml: `
-      <p style="margin:0 0 12px">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 16px">Based on your <strong>${escapeHtml(input.searchName)}</strong> search (saved + browsing), here are new listings from the last day.</p>
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
-      ${ctaButton(input.searchUrl, "Open your search")}
+      ${previewNote}
+      ${cards}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:8px 0 12px">
+        <tr>
+          <td align="center">
+            <a href="${escapeAttr(input.searchUrl)}" style="display:inline-block;background:#ecfdf5;background-image:linear-gradient(135deg,#ecfdf5 0%,#6ee7b7 100%);color:#064e3b;text-decoration:none;font-weight:700;font-size:13px;line-height:1.2;padding:10px 18px;border-radius:999px;border:1.5px solid #34d399;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+              Browse all matching homes →
+            </a>
+          </td>
+        </tr>
+      </table>
     `,
   });
   return { subject, text, html, kind: "saved_search_digest" };

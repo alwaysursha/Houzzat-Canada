@@ -15,6 +15,7 @@ import {
 import { emailPreferencesUrl } from "@/lib/email/log";
 import { renderSavedSearchDigestEmail } from "@/lib/email/templates";
 import { formatListPrice } from "@/lib/listings/constants";
+import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -32,28 +33,27 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function listingUrl(mlsNumber: string) {
-  return `${SITE_URL}/listing/${mlsNumber}`;
-}
-
 function toDigestLine(listing: DigestListingCard) {
+  const beds =
+    listing.bedsLabel?.trim() ||
+    (Number.isInteger(listing.beds)
+      ? String(listing.beds)
+      : listing.beds.toFixed(1));
+  const baths = Number.isInteger(listing.baths)
+    ? String(listing.baths)
+    : listing.baths.toFixed(1);
   return {
     mlsNumber: listing.mlsNumber,
     addressLine: listing.addressLine,
     city: listing.city,
     priceLabel: formatListPrice(listing.listPrice),
-    metaLabel: (() => {
-      const beds =
-        listing.bedsLabel?.trim() ||
-        (Number.isInteger(listing.beds)
-          ? String(listing.beds)
-          : listing.beds.toFixed(1));
-      const baths = Number.isInteger(listing.baths)
-        ? String(listing.baths)
-        : listing.baths.toFixed(1);
-      return `${beds} bed · ${baths} bath`;
-    })(),
-    listingUrl: listingUrl(listing.mlsNumber),
+    metaLabel: `${beds} bed · ${baths} bath`,
+    bedsLabel: beds,
+    bathsLabel: baths,
+    sqftLabel: listing.sqft ? `${listing.sqft.toLocaleString("en-CA")} sqft` : null,
+    imageUrl: listing.imageUrl,
+    isNew: true,
+    listingUrl: `${SITE_URL}${listingPath(listing)}`,
   };
 }
 

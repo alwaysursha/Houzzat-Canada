@@ -192,6 +192,7 @@ function buildWhereFromSearchParams(
 export type DigestListingCard = {
   mlsNumber: string;
   addressLine: string;
+  unitNumber: string | null;
   city: string;
   community: string | null;
   listPrice: number;
@@ -199,6 +200,8 @@ export type DigestListingCard = {
   beds: number;
   bedsLabel: string | null;
   baths: number;
+  sqft: number | null;
+  imageUrl: string | null;
   status: ListingStatus;
   listedAt: Date;
   soldAt: Date | null;
@@ -207,16 +210,23 @@ export type DigestListingCard = {
 const digestSelect = {
   mlsNumber: true,
   addressLine: true,
+  unitNumber: true,
   city: true,
   community: true,
   listPrice: true,
   soldPrice: true,
   beds: true,
   baths: true,
+  sqft: true,
   status: true,
   listedAt: true,
   soldAt: true,
   facts: true,
+  media: {
+    orderBy: [{ isPrimary: "desc" as const }, { sortOrder: "asc" as const }],
+    take: 1,
+    select: { url: true },
+  },
 } satisfies Prisma.ListingSelect;
 
 function toDigestCard(
@@ -226,6 +236,7 @@ function toDigestCard(
   return {
     mlsNumber: row.mlsNumber,
     addressLine: row.addressLine,
+    unitNumber: row.unitNumber,
     city: row.city,
     community: row.community,
     listPrice: row.listPrice,
@@ -233,6 +244,8 @@ function toDigestCard(
     beds: row.beds,
     bedsLabel: formatBedsPlusLabel(row.beds, facts),
     baths: row.baths,
+    sqft: row.sqft,
+    imageUrl: row.media[0]?.url ?? null,
     status: row.status,
     listedAt: row.listedAt,
     soldAt: row.soldAt,

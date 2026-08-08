@@ -42,6 +42,12 @@ async function main() {
       city: "Toronto",
       priceLabel: "$1,099,000",
       metaLabel: "3+1 bed · 3 bath",
+      bedsLabel: "3+1",
+      bathsLabel: "3",
+      sqftLabel: "2,100 sqft",
+      isNew: true,
+      imageUrl:
+        "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=800&q=80",
       listingUrl: listing,
     },
     {
@@ -50,6 +56,12 @@ async function main() {
       city: "Mississauga",
       priceLabel: "$989,000",
       metaLabel: "2 bed · 2 bath",
+      bedsLabel: "2",
+      bathsLabel: "2",
+      sqftLabel: "1,150 sqft",
+      isNew: true,
+      imageUrl:
+        "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80",
       listingUrl: `${SITE}/listing/W7654321`,
     },
     {
@@ -58,6 +70,12 @@ async function main() {
       city: "Toronto",
       priceLabel: "$875,000",
       metaLabel: "3 bed · 2 bath",
+      bedsLabel: "3",
+      bathsLabel: "2",
+      sqftLabel: "1,450 sqft",
+      isNew: true,
+      imageUrl:
+        "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80",
       listingUrl: `${SITE}/listing/C1112223`,
     },
   ];
