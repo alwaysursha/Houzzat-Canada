@@ -26,7 +26,32 @@ export function TeamAdminClient({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("AGENT");
   const [pending, setPending] = useState(false);
+  const [inviteActionId, setInviteActionId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+
+  async function runInviteAction(
+    inviteId: string,
+    action: "resend_invite" | "cancel_invite",
+  ) {
+    setInviteActionId(inviteId);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/agent/team", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, inviteId }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setMsg(json.error || "Action failed");
+        return;
+      }
+      setMsg(action === "resend_invite" ? "Invite resent." : "Invite cancelled.");
+      router.refresh();
+    } finally {
+      setInviteActionId(null);
+    }
+  }
 
   if (!canManage) {
     return (
@@ -41,7 +66,8 @@ export function TeamAdminClient({
       <div className="rounded-2xl border border-line bg-surface p-5">
         <h2 className="font-semibold text-ink">Seats</h2>
         <p className="mt-1 text-sm text-ink/55">
-          {memberCount} / {seatLimit} used
+          {memberCount} / {seatLimit} used. Invites email a secure link so the
+          agent can create an account or sign in and join the team.
         </p>
         <form
           className="mt-4 flex flex-wrap gap-2"
@@ -121,17 +147,54 @@ export function TeamAdminClient({
       {invites.length ? (
         <div className="rounded-2xl border border-line bg-surface p-5">
           <h2 className="font-semibold text-ink">Pending invites</h2>
-          <ul className="mt-3 space-y-2 text-sm">
-            {invites.map((i) => (
-              <li key={i.id} className="flex justify-between gap-2 text-ink/70">
-                <span>
-                  {i.email} · {i.role}
-                </span>
-                <span className="text-xs text-ink/40">
-                  expires {new Date(i.expiresAt).toLocaleDateString("en-CA")}
-                </span>
-              </li>
-            ))}
+          <ul className="mt-3 divide-y divide-line/70">
+            {invites.map((i) => {
+              const busy = inviteActionId === i.id;
+              return (
+                <li
+                  key={i.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-ink">
+                      {i.email}{" "}
+                      <span className="font-normal text-ink/50">· {i.role}</span>
+                    </p>
+                    <p className="text-xs text-ink/40">
+                      expires{" "}
+                      {new Date(i.expiresAt).toLocaleDateString("en-CA")}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={busy || pending}
+                      onClick={() => void runInviteAction(i.id, "resend_invite")}
+                      className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#2b6cb0] hover:bg-[#eff6ff] disabled:opacity-50"
+                    >
+                      {busy ? "Working…" : "Resend"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || pending}
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            `Cancel invite to ${i.email}? They won’t be able to use the old link.`,
+                          )
+                        ) {
+                          return;
+                        }
+                        void runInviteAction(i.id, "cancel_invite");
+                      }}
+                      className="rounded-lg border border-[#fecdd3] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#be123c] hover:bg-[#fff1f2] disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       ) : null}

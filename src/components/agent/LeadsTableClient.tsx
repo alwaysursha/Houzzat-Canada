@@ -11,7 +11,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleCheck,
-  Download,
   Eye,
   Flame,
   Heart,
@@ -30,6 +29,7 @@ import {
 import type { LeadStatus } from "@prisma/client";
 import { MassEmailForm } from "@/components/agent/LeadEmailForm";
 import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
+import { LeadImportModal } from "@/components/agent/LeadImportModal";
 import { openLeadProfileHref, rememberLeadNavIds } from "@/components/agent/LeadQueryPopup";
 import {
   PIPELINE_STATUSES,
@@ -213,19 +213,6 @@ export function LeadsTableClient({
   const [showMassEmail, setShowMassEmail] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [importCsv, setImportCsv] = useState("");
-  const [importFileName, setImportFileName] = useState<string | null>(null);
-  const [importAllowDupes, setImportAllowDupes] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [importResult, setImportResult] = useState<{
-    createdCount: number;
-    skippedCount: number;
-    failedCount: number;
-    parseErrorCount: number;
-    skipped: Array<{ row: number; email: string; reason: string }>;
-    failed: Array<{ row: number; email: string; error: string }>;
-    parseErrors: Array<{ row: number; error: string }>;
-  } | null>(null);
   const [pipelineOpenId, setPipelineOpenId] = useState<string | null>(null);
   const [phoneMenuId, setPhoneMenuId] = useState<string | null>(null);
   const [verifyState, setVerifyState] = useState<
@@ -524,86 +511,6 @@ export function LeadsTableClient({
     }
   }
 
-  function closeImportModal() {
-    setImportOpen(false);
-    setImportCsv("");
-    setImportFileName(null);
-    setImportError(null);
-    setImportResult(null);
-    setImportAllowDupes(false);
-  }
-
-  async function onImportFileChange(file: File | null) {
-    setImportError(null);
-    setImportResult(null);
-    if (!file) {
-      setImportCsv("");
-      setImportFileName(null);
-      return;
-    }
-    setImportFileName(file.name);
-    const text = await file.text();
-    setImportCsv(text);
-  }
-
-  async function importLeads(e: FormEvent) {
-    e.preventDefault();
-    setImportError(null);
-    setImportResult(null);
-    if (!importCsv.trim()) {
-      setImportError("Choose a CSV file first.");
-      return;
-    }
-    setPending(true);
-    try {
-      const res = await fetch("/api/agent/leads/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          csv: importCsv,
-          allowDuplicates: importAllowDupes,
-        }),
-      });
-      const json = (await res.json()) as {
-        error?: string;
-        createdCount?: number;
-        skippedCount?: number;
-        failedCount?: number;
-        parseErrorCount?: number;
-        skipped?: Array<{ row: number; email: string; reason: string }>;
-        failed?: Array<{ row: number; email: string; error: string }>;
-        parseErrors?: Array<{ row: number; error: string }>;
-      };
-      if (!res.ok) {
-        setImportError(json.error || "Import failed");
-        if (json.parseErrors?.length) {
-          setImportResult({
-            createdCount: 0,
-            skippedCount: 0,
-            failedCount: 0,
-            parseErrorCount: json.parseErrors.length,
-            skipped: [],
-            failed: [],
-            parseErrors: json.parseErrors,
-          });
-        }
-        return;
-      }
-      setImportResult({
-        createdCount: json.createdCount ?? 0,
-        skippedCount: json.skippedCount ?? 0,
-        failedCount: json.failedCount ?? 0,
-        parseErrorCount: json.parseErrorCount ?? 0,
-        skipped: json.skipped ?? [],
-        failed: json.failed ?? [],
-        parseErrors: json.parseErrors ?? [],
-      });
-      router.refresh();
-    } finally {
-      setPending(false);
-    }
-  }
-
   return (
     <div className="space-y-3">
       {/* Toolbar */}
@@ -790,11 +697,7 @@ export function LeadsTableClient({
 
           <button
             type="button"
-            onClick={() => {
-              setImportOpen(true);
-              setImportError(null);
-              setImportResult(null);
-            }}
+            onClick={() => setImportOpen(true)}
             className="inline-flex items-center gap-1.5 rounded border border-[#5b9aaa]/50 bg-white px-3 py-1.5 text-[12px] font-semibold text-[#3d6f7c] hover:bg-[#5b9aaa]/10"
           >
             <Upload className="size-3.5" />
@@ -1517,118 +1420,11 @@ export function LeadsTableClient({
         </div>
       ) : null}
 
-      {importOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-[#1e2a38]/40"
-            aria-label="Close"
-            onClick={closeImportModal}
-          />
-          <form
-            onSubmit={importLeads}
-            className="relative z-10 w-full max-w-lg space-y-3 rounded-xl border border-[#d8dee6] bg-white p-5 shadow-xl"
-          >
-            <h3 className="text-[16px] font-bold text-[#1e2a38]">
-              Import Leads (CSV)
-            </h3>
-            <p className="text-[12px] leading-relaxed text-[#64748b]">
-              Columns: <span className="font-semibold text-[#334155]">name</span>,{" "}
-              <span className="font-semibold text-[#334155]">email</span>{" "}
-              (required), optional{" "}
-              <span className="font-semibold text-[#334155]">phone</span>,{" "}
-              <span className="font-semibold text-[#334155]">notes</span>. Max 500
-              rows. Leads are assigned to you as New Lead.
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <a
-                href="/api/agent/leads/import"
-                className="inline-flex items-center gap-1.5 rounded border border-[#d8dee6] px-2.5 py-1.5 text-[11px] font-semibold text-[#475569] hover:bg-[#f8fafc]"
-              >
-                <Download className="size-3.5" />
-                Download template
-              </a>
-              {importFileName ? (
-                <span className="text-[11px] text-[#64748b]">
-                  Selected: {importFileName}
-                </span>
-              ) : null}
-            </div>
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(e) => {
-                void onImportFileChange(e.target.files?.[0] ?? null);
-              }}
-              className="block w-full text-[12px] text-[#475569] file:mr-3 file:rounded-md file:border-0 file:bg-[#5b9aaa]/15 file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-[#3d6f7c]"
-            />
-            <label className="flex items-start gap-2 text-[12px] text-[#475569]">
-              <input
-                type="checkbox"
-                checked={importAllowDupes}
-                onChange={(e) => setImportAllowDupes(e.target.checked)}
-                className="mt-0.5"
-              />
-              <span>
-                Allow duplicates (create even if an open lead already exists for
-                that email)
-              </span>
-            </label>
-            {importError ? (
-              <p className="text-xs text-[#e11d48]">{importError}</p>
-            ) : null}
-            {importResult ? (
-              <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-[11px] text-[#334155]">
-                <p className="font-semibold">
-                  Created {importResult.createdCount}
-                  {importResult.skippedCount
-                    ? ` · Skipped ${importResult.skippedCount}`
-                    : ""}
-                  {importResult.failedCount
-                    ? ` · Failed ${importResult.failedCount}`
-                    : ""}
-                  {importResult.parseErrorCount
-                    ? ` · Parse issues ${importResult.parseErrorCount}`
-                    : ""}
-                </p>
-                {[
-                  ...importResult.parseErrors.map(
-                    (r) => `Row ${r.row}: ${r.error}`,
-                  ),
-                  ...importResult.skipped.map(
-                    (r) => `Row ${r.row} (${r.email}): ${r.reason}`,
-                  ),
-                  ...importResult.failed.map(
-                    (r) => `Row ${r.row} (${r.email}): ${r.error}`,
-                  ),
-                ]
-                  .slice(0, 40)
-                  .map((line) => (
-                    <p key={line} className="text-[#64748b]">
-                      {line}
-                    </p>
-                  ))}
-              </div>
-            ) : null}
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeImportModal}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-[#64748b]"
-              >
-                {importResult ? "Close" : "Cancel"}
-              </button>
-              <button
-                type="submit"
-                disabled={pending || !importCsv.trim()}
-                className="rounded-md bg-[#5b9aaa] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-              >
-                {pending ? "Importing…" : "Import CSV"}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
+      <LeadImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => router.refresh()}
+      />
     </div>
   );
 }

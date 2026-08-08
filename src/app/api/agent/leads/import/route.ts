@@ -8,17 +8,32 @@ import {
 import {
   LEADS_CSV_TEMPLATE,
   parseLeadsCsv,
+  validateImportDraft,
 } from "@/lib/agent/parse-leads-csv";
 
 export const runtime = "nodejs";
 
 const MAX_ROWS = 500;
 
-const bodySchema = z.object({
-  csv: z.string().min(1).max(2_000_000),
-  /** When true, create even if an open lead already exists for that email. */
-  allowDuplicates: z.boolean().optional(),
+const leadRowSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  email: z.string().trim().email().max(200),
+  phone: z.string().trim().max(40).optional(),
+  notes: z.string().trim().max(5000).optional(),
+  row: z.number().int().positive().optional(),
 });
+
+const bodySchema = z
+  .object({
+    /** Reviewed/edited rows from the import wizard (preferred). */
+    leads: z.array(leadRowSchema).max(MAX_ROWS).optional(),
+    /** Raw CSV fallback (legacy). */
+    csv: z.string().min(1).max(2_000_000).optional(),
+    allowDuplicates: z.boolean().optional(),
+  })
+  .refine((v) => Boolean(v.leads?.length || v.csv?.trim()), {
+    message: "Provide leads[] or csv",
+  });
 
 export async function GET() {
   const ctx = await requireAgentContext();
@@ -43,16 +58,54 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Provide a CSV string in { csv }." },
+      { error: "Provide reviewed leads[] or a CSV string." },
       { status: 400 },
     );
   }
 
-  const { leads, errors: parseErrors } = parseLeadsCsv(parsed.data.csv);
+  let leads: Array<{
+    name: string;
+    email: string;
+    phone?: string;
+    notes?: string;
+    row: number;
+  }> = [];
+  let parseErrors: Array<{ row: number; error: string }> = [];
+
+  if (parsed.data.leads?.length) {
+    const seen = new Set<string>();
+    parsed.data.leads.forEach((lead, index) => {
+      const row = lead.row ?? index + 1;
+      const issues = validateImportDraft(lead);
+      if (issues.length) {
+        for (const error of issues) parseErrors.push({ row, error });
+        return;
+      }
+      const email = lead.email.trim().toLowerCase();
+      if (seen.has(email)) {
+        parseErrors.push({ row, error: "Duplicate email in import" });
+        return;
+      }
+      seen.add(email);
+      leads.push({
+        name: lead.name.trim(),
+        email,
+        phone: lead.phone?.trim() || undefined,
+        notes: lead.notes?.trim() || undefined,
+        row,
+      });
+    });
+  } else if (parsed.data.csv) {
+    const result = parseLeadsCsv(parsed.data.csv);
+    leads = result.leads;
+    parseErrors = result.errors;
+  }
+
   if (leads.length === 0) {
     return NextResponse.json(
       {
-        error: "No valid leads found. Need columns: name, email (phone/notes optional).",
+        error:
+          "No valid leads to import. Fix name/email on the review step and try again.",
         parseErrors,
       },
       { status: 400 },

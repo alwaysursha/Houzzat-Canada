@@ -402,14 +402,12 @@ export default async function AgentLaunchpadPage() {
             <h2 className="text-[15px] font-semibold text-[#1e2a38]">
               Quick Modules
             </h2>
-            <div className="flex gap-2 text-[11px] font-bold uppercase tracking-wide">
-              <Link href="/agent" className="text-canopy hover:underline">
-                Refresh
-              </Link>
-              <Link href="/agent/leads" className="text-[#2b6cb0] hover:underline">
-                Edit
-              </Link>
-            </div>
+            <Link
+              href="/agent"
+              className="text-[11px] font-bold uppercase tracking-wide text-canopy hover:underline"
+            >
+              Refresh
+            </Link>
           </div>
 
           <QuickModulesPanel

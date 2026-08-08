@@ -21,6 +21,7 @@ async function main() {
     renderSavedSearchDigestEmail,
     renderShortlistEmail,
     renderSoldAlertEmail,
+    renderTeamInviteEmail,
     renderVerifyEmail,
     renderWelcomeEmail,
   } = await import("../src/lib/email/templates");
@@ -100,6 +101,16 @@ async function main() {
       rendered: renderPasswordResetEmail({
         name,
         resetUrl: `${SITE}/auth/reset-password?token=preview`,
+      }),
+    },
+    {
+      stream: "notify",
+      rendered: renderTeamInviteEmail({
+        orgName: "Houzzat Brokerage",
+        role: "AGENT",
+        inviteUrl: `${SITE}/auth/invite/preview-token`,
+        invitedByName: "Ali Syed",
+        expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
       }),
     },
     {

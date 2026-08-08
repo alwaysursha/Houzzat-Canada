@@ -106,6 +106,81 @@ export function renderPasswordResetEmail(input: {
   return { subject, text, html, kind: "password_reset" };
 }
 
+function orgRoleLabel(role: string) {
+  if (role === "OWNER") return "Owner";
+  if (role === "ADMIN") return "Team admin";
+  if (role === "AGENT") return "Agent";
+  return role;
+}
+
+export function renderTeamInviteEmail(input: {
+  orgName: string;
+  role: string;
+  inviteUrl: string;
+  invitedByName?: string | null;
+  /** When true, membership was already created (existing agent). */
+  alreadyMember?: boolean;
+  expiresAt?: Date | string | null;
+}): RenderedEmail {
+  const roleLabel = orgRoleLabel(input.role);
+  const inviter = input.invitedByName?.trim() || null;
+  const subject = input.alreadyMember
+    ? `You’re on the ${input.orgName} team on ${SITE_NAME}`
+    : `You’re invited to join ${input.orgName} on ${SITE_NAME}`;
+  const expireLabel = input.expiresAt
+    ? new Date(input.expiresAt).toLocaleDateString("en-CA", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : null;
+
+  const text = input.alreadyMember
+    ? [
+        `You’ve been added to ${input.orgName} as ${roleLabel}${inviter ? ` by ${inviter}` : ""}.`,
+        "",
+        `Open your CRM: ${SITE_URL}/agent`,
+      ].join("\n")
+    : [
+        `You’ve been invited to join ${input.orgName} as ${roleLabel}${inviter ? ` by ${inviter}` : ""}.`,
+        "",
+        `Accept your invite (create an account or sign in):`,
+        input.inviteUrl,
+        expireLabel ? `\nThis invite expires ${expireLabel}.` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+  const html = emailLayout({
+    title: input.alreadyMember ? "Welcome to the team" : "You’re invited",
+    subtitle: input.alreadyMember
+      ? `Your ${SITE_NAME} CRM seat is ready.`
+      : `Join ${input.orgName} on ${SITE_NAME}.`,
+    preheader: subject,
+    bodyHtml: `
+      <p style="margin:0 0 12px;color:#115e59">
+        ${
+          input.alreadyMember
+            ? `You’ve been added to <strong style="color:#064e3b">${escapeHtml(input.orgName)}</strong> as <strong style="color:#064e3b">${escapeHtml(roleLabel)}</strong>${inviter ? ` by ${escapeHtml(inviter)}` : ""}.`
+            : `${inviter ? `<strong style="color:#064e3b">${escapeHtml(inviter)}</strong> invited you` : "You’ve been invited"} to join <strong style="color:#064e3b">${escapeHtml(input.orgName)}</strong> as <strong style="color:#064e3b">${escapeHtml(roleLabel)}</strong>.`
+        }
+      </p>
+      ${infoCard(`
+        <p style="margin:0;font-size:14px;color:#115e59"><strong style="color:#064e3b">Team:</strong> ${escapeHtml(input.orgName)}</p>
+        <p style="margin:8px 0 0;font-size:14px;color:#115e59"><strong style="color:#064e3b">Role:</strong> ${escapeHtml(roleLabel)}</p>
+        ${expireLabel && !input.alreadyMember ? `<p style="margin:8px 0 0;font-size:13px;color:#047857">Invite expires ${escapeHtml(expireLabel)}</p>` : ""}
+      `)}
+      ${
+        input.alreadyMember
+          ? ctaButton(`${SITE_URL}/agent`, "Open CRM")
+          : `${ctaButton(input.inviteUrl, "Accept invite")}
+      <p style="margin:16px 0 0;font-size:13px;color:#047857">New here? The link lets you create your agent account with this email. Already have an account? Sign in on that page to join the team.</p>`
+      }
+    `,
+  });
+  return { subject, text, html, kind: "team_invite" };
+}
+
 type ListingCardExtras = {
   imageUrl?: string | null;
   bedsLabel?: string | null;
