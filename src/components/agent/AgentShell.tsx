@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  ActivityFeedDrawer,
+  ActivityGlobeButton,
+} from "@/components/agent/ActivityFeedDrawer";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { SITE_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -107,6 +111,7 @@ export function AgentShell({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   const isProfilePage = /^\/agent\/leads\/[^/]+$/.test(pathname);
   const mobileTabHrefs = new Set<string>(MOBILE_TABS.map((t) => t.href));
   const moreActive = NAV.some(
@@ -116,16 +121,17 @@ export function AgentShell({
 
   useEffect(() => {
     setMobileOpen(false);
+    setActivityOpen(false);
   }, [pathname]);
 
   useEffect(() => {
-    if (!mobileOpen) return;
+    if (!mobileOpen && !activityOpen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [mobileOpen]);
+  }, [mobileOpen, activityOpen]);
 
   return (
     <div className="flex min-h-dvh bg-[#eef1f4] text-ink">
@@ -245,8 +251,16 @@ export function AgentShell({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Desktop top bar */}
+        <header className="sticky top-0 z-50 hidden h-12 items-center justify-end gap-1 border-b border-[#d8dee6] bg-[#1e2a38] px-4 text-white lg:flex">
+          <ActivityGlobeButton
+            open={activityOpen}
+            onClick={() => setActivityOpen((v) => !v)}
+          />
+        </header>
+
         {/* Mobile top bar */}
-        <header className="sticky top-0 z-50 flex items-center gap-3 border-b border-[#d8dee6] bg-[#1e2a38] px-3 py-2.5 text-white lg:hidden">
+        <header className="sticky top-0 z-50 flex items-center gap-2 border-b border-[#d8dee6] bg-[#1e2a38] px-3 py-2.5 text-white lg:hidden">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
@@ -263,6 +277,10 @@ export function AgentShell({
               {orgName}
             </p>
           </div>
+          <ActivityGlobeButton
+            open={activityOpen}
+            onClick={() => setActivityOpen((v) => !v)}
+          />
           <Link
             href="/agent/leads?view=mine&pipeline=NEW_LEAD"
             className="rounded-lg bg-[#e11d48] px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm active:scale-[0.98]"
@@ -336,6 +354,11 @@ export function AgentShell({
           </div>
         </nav>
       </div>
+
+      <ActivityFeedDrawer
+        open={activityOpen}
+        onClose={() => setActivityOpen(false)}
+      />
     </div>
   );
 }
