@@ -31,6 +31,12 @@ export function SiteFooter() {
             >
               Terms of Use
             </Link>
+            <Link
+              href="/delete-account"
+              className="text-ink/60 underline-offset-2 hover:text-canopy hover:underline"
+            >
+              Delete account
+            </Link>
           </nav>
         </div>
 
