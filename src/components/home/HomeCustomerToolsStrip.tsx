@@ -16,6 +16,7 @@ import { PersonalizeHomepageModal } from "@/components/home/PersonalizeHomepageM
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { Input } from "@/components/ui/input";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
+import { savedQueryToSearchHref } from "@/lib/agent/intent-to-search";
 import { parseHomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
@@ -26,15 +27,6 @@ type ActiveSearch = {
   query: Record<string, unknown>;
   emailAlerts: boolean;
 };
-
-function queryToSearchParams(query: Record<string, unknown>) {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) {
-    if (value == null || value === "") continue;
-    params.set(key, String(value));
-  }
-  return params.toString();
-}
 
 export function HomeCustomerToolsStrip({
   unreadAlerts,
@@ -207,11 +199,13 @@ export function HomeCustomerToolsStrip({
 
   const customized = Boolean(activeSearch);
   const searchHref = activeSearch
-    ? `/search?${queryToSearchParams(activeSearch.query)}`
+    ? savedQueryToSearchHref(activeSearch.query)
     : "/search";
 
   return (
     <>
+      {/* Mobile tools live in MobileBottomNav → More. Keep this strip for md+. */}
+      <div className="hidden md:block">
       <div ref={sentinelRef} className="h-0 w-full" aria-hidden />
       <div
         className={cn(
@@ -428,6 +422,7 @@ export function HomeCustomerToolsStrip({
             : undefined
         }
       />
+      </div>
     </>
   );
 }

@@ -12,6 +12,12 @@ import {
   type HomepagePersonalizationQuery,
 } from "@/lib/listings/homepage-personalization";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
+import {
+  AppGeolocationError,
+  getCurrentCoordinates,
+  locationErrorMessage,
+  readLocationPermissionState,
+} from "@/lib/mobile/geolocation";
 
 type NearMeListing = ListingCardData & { distanceKm?: number };
 
@@ -20,20 +26,6 @@ type Status = "idle" | "locating" | "loading" | "ready" | "empty" | "hidden";
 const GEO_ASKED_KEY = "houzzat-geo-asked";
 const NEAR_ME_RADIUS_KM = 35;
 const NEAR_ME_LIMIT = 12;
-
-async function readGeolocationPermission(): Promise<PermissionState | "unknown"> {
-  if (typeof navigator === "undefined" || !navigator.permissions?.query) {
-    return "unknown";
-  }
-  try {
-    const result = await navigator.permissions.query({
-      name: "geolocation",
-    });
-    return result.state;
-  } catch {
-    return "unknown";
-  }
-}
 
 export function HomeNearMeRail({
   personalization = null,
@@ -106,26 +98,14 @@ export function HomeNearMeRail({
     }
   }
 
-  function readPosition(): Promise<GeolocationPosition> {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("unsupported"));
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false,
-        timeout: 12000,
-        maximumAge: 60_000,
-      });
-    });
-  }
-
   async function fetchWithLocation() {
     setStatus("locating");
     try {
-      const position = await readPosition();
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
+      const { lat, lng } = await getCurrentCoordinates({
+        enableHighAccuracy: false,
+        timeout: 12_000,
+        maximumAge: 60_000,
+      });
       void persistHomeLocationIfEmpty({ lat, lng });
       try {
         sessionStorage.setItem(
@@ -143,15 +123,13 @@ export function HomeNearMeRail({
       await loadNearby(lat, lng);
     } catch (error) {
       commitStatus("hidden");
-      const code =
-        error && typeof error === "object" && "code" in error
-          ? Number((error as { code: number }).code)
-          : null;
-      if (code === 1) {
+      const denied =
+        error instanceof AppGeolocationError && error.code === "denied";
+      // Auto-rail: only explain permission denial (not timeouts / GPS blips).
+      if (denied) {
         await alert({
           title: "Location not available",
-          message:
-            "Location access is turned off for this site. You can still browse homes on the map.",
+          message: locationErrorMessage(error),
           confirmLabel: "Got it",
         });
       }
@@ -162,12 +140,7 @@ export function HomeNearMeRail({
     let cancelled = false;
 
     async function init() {
-      if (!navigator.geolocation) {
-        commitStatus("hidden");
-        return;
-      }
-
-      const permission = await readGeolocationPermission();
+      const permission = await readLocationPermissionState();
       if (cancelled) return;
 
       if (permission === "granted") {
@@ -181,8 +154,7 @@ export function HomeNearMeRail({
       }
 
       // permission === "prompt" | "unknown"
-      // Do not show a site confirm first — that causes a double prompt
-      // (our modal, then the browser). Go straight to the browser prompt once.
+      // Avoid a double prompt (site modal + OS). Go straight to the OS prompt.
       const alreadyAsked =
         typeof sessionStorage !== "undefined" &&
         sessionStorage.getItem(GEO_ASKED_KEY) === "1";

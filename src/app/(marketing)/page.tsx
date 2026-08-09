@@ -365,6 +365,7 @@ export default async function HomePage() {
         <HomepageSortedRails
           reorderEmptyLast={personalized}
           personalization={personalization}
+          cities={popularCities.map((row) => row.city)}
           sections={[
             ...(recentlyViewed.length > 0 || personalized || !isCustomer
               ? [

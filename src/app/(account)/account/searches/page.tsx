@@ -16,6 +16,7 @@ function queryToHref(query: unknown) {
   const personalized = parseHomepagePersonalizationQuery(query);
   if (
     personalized.city ||
+    personalized.cities?.length ||
     personalized.communities?.length ||
     personalized.minPrice ||
     personalized.maxPrice ||
@@ -28,9 +29,13 @@ function queryToHref(query: unknown) {
   for (const [key, value] of Object.entries(query as Record<string, unknown>)) {
     if (value == null || value === "") continue;
     if (Array.isArray(value)) {
-      if (key === "communities") params.set(key, value.join("|"));
-      else if (key === "propertyTypes") params.set(key, value.join(","));
-      else params.set(key, String(value[0] ?? ""));
+      if (key === "communities" || key === "cities") {
+        params.set(key, value.join("|"));
+      } else if (key === "propertyTypes") {
+        params.set(key, value.join(","));
+      } else {
+        params.set(key, String(value[0] ?? ""));
+      }
       continue;
     }
     params.set(key, String(value));

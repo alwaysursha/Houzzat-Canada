@@ -4,6 +4,7 @@ import { UtmCapture } from "@/components/ads/UtmCapture";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { MarketingBelowHeader } from "@/components/site/MarketingBelowHeader";
 import { SiteHeader } from "@/components/site/SiteHeader";
+import { MobileBottomNav } from "@/components/site/MobileBottomNav";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
 import { RoutePlannerFloatingChip } from "@/components/route-planner/RoutePlannerFloatingChip";
 import { getPopularCities } from "@/lib/listings/popular-cities";
@@ -30,6 +31,7 @@ export default async function MarketingLayout({
       <MarketingBelowHeader cities={cities}>{children}</MarketingBelowHeader>
       <RoutePlannerFloatingChip />
       <ScrollToTopButton />
+      <MobileBottomNav cities={cities} />
     </div>
   );
 }

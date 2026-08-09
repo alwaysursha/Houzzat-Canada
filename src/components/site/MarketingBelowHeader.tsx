@@ -22,7 +22,15 @@ export function MarketingBelowHeader({
     <SeoLocationProvider>
       {!immersive ? <HomepagePersonalizationBanner cities={cities} /> : null}
       {!immersive ? <SavedSearchChipBar cities={cities} /> : null}
-      <main className={immersive ? "min-h-0" : undefined}>{children}</main>
+      <main
+        className={
+          immersive
+            ? "min-h-0"
+            : "pb-[var(--mobile-bottom-nav,0px)] md:pb-0"
+        }
+      >
+        {children}
+      </main>
       {!immersive ? <SeoFooterLinks fallbackCities={cities} /> : null}
       {!immersive ? <SiteFooter /> : null}
     </SeoLocationProvider>

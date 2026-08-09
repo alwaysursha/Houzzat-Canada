@@ -154,7 +154,8 @@ export function SavedSearchChipBar({
 
   return (
     <>
-      <div className="relative z-20 border-b border-signal/25 bg-signal/[0.07]">
+      {/* Mobile: account tools live in MobileBottomNav → More. */}
+      <div className="relative z-20 hidden border-b border-signal/25 bg-signal/[0.07] md:block">
         <div
           className={
             menuId

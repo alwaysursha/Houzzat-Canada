@@ -34,8 +34,8 @@ export function ScrollToTopButton() {
         "fixed right-4 z-40 flex size-10 items-center justify-center rounded-md border border-canopy/20 bg-canopy text-white shadow-md hover:bg-canopy-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canopy/40 focus-visible:ring-offset-2 focus-visible:ring-offset-mist sm:right-6",
         SCROLL_FAB_FADE_TRANSITION,
         aboveListingBar
-          ? "bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-6"
-          : "bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] sm:bottom-6",
+          ? "bottom-[calc(var(--mobile-bottom-nav,0px)+4.75rem)] md:bottom-6"
+          : "bottom-[calc(var(--mobile-bottom-nav,0px)+1.25rem)] sm:bottom-6",
         scrollFabFadeClass(visible),
       )}
     >

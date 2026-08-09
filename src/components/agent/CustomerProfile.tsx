@@ -1868,21 +1868,28 @@ export function CustomerProfile({
                       </Panel>
                     ) : null}
 
-                    <Panel title="Saved searches / alerts">
+                    <Panel title="Saved searches / homepage">
                       {data.savedSearches.length === 0 ? (
                         <p className="text-[13px] text-[#94a3b8]">
                           No saved searches yet — use “Save as search” above to
-                          create one from Looking for.
+                          create one from Looking for, or the customer can
+                          personalize their homepage.
                         </p>
                       ) : (
                         <div className="space-y-3">
                           {data.savedSearches.map((s) => (
-                            <SavedSearchEditor
-                              key={s.id}
-                              leadId={leadId}
-                              search={s}
-                              onUpdated={onUpdated}
-                            />
+                            <div key={s.id} className="space-y-1.5">
+                              {s.isHomepageActive ? (
+                                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#047857]">
+                                  Active homepage search
+                                </p>
+                              ) : null}
+                              <SavedSearchEditor
+                                leadId={leadId}
+                                search={s}
+                                onUpdated={onUpdated}
+                              />
+                            </div>
                           ))}
                         </div>
                       )}

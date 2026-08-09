@@ -14,6 +14,8 @@
   --foreground: var(--ink);
   /* Sticky offset below site header (grows when mobile search bar is open). */
   --site-header-stack: calc(4rem + env(safe-area-inset-top, 0px));
+  /* Mobile consumer bottom nav height (0 when hidden). */
+  --mobile-bottom-nav: 0px;
 }
 
 @theme inline {

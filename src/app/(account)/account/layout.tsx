@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { MobileBottomNav } from "@/components/site/MobileBottomNav";
 import { requireCustomerUser } from "@/lib/account";
 import { auth } from "@/lib/auth";
 import { SITE_NAME } from "@/lib/constants";
@@ -70,7 +71,8 @@ export default async function AccountLayout({
               Your Houzzat
             </p>
           </div>
-          <nav className="flex flex-wrap items-center gap-3 text-sm font-medium">
+          {/* Desktop account nav — mobile uses bottom nav + More sheet. */}
+          <nav className="hidden flex-wrap items-center gap-3 text-sm font-medium md:flex">
             {nav.map((item) => (
               <Link
                 key={item.href}
@@ -84,7 +86,10 @@ export default async function AccountLayout({
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-10 pb-[calc(2.5rem+var(--mobile-bottom-nav,0px))] sm:px-6 md:pb-10">
+        {children}
+      </main>
+      <MobileBottomNav />
     </div>
   );
 }

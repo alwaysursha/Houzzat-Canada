@@ -82,6 +82,7 @@ export type LeadSummary = {
     name: string;
     emailAlerts: boolean;
     smsAlerts: boolean;
+    isHomepageActive: boolean;
     query: unknown;
   }>;
   propertyMonitors: Array<{ id: string; mlsNumber: string }>;
@@ -345,13 +346,18 @@ export async function loadLeadSummary(
       }),
       prisma.savedSearch.findMany({
         where: { userId: lead.customerId },
-        orderBy: { updatedAt: "desc" },
+        orderBy: [
+          { isHomepageActive: "desc" },
+          { isPrimary: "desc" },
+          { updatedAt: "desc" },
+        ],
         take: 10,
         select: {
           id: true,
           name: true,
           emailAlerts: true,
           smsAlerts: true,
+          isHomepageActive: true,
           query: true,
         },
       }),

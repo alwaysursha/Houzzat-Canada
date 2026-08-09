@@ -66,8 +66,8 @@ export function ListingMobileNotes({
       aria-hidden={!visible}
       className={cn(
         "fixed right-4 z-40 flex flex-col items-end gap-2 md:hidden sm:right-6",
-        // Sit just above ScrollToTopButton (size-10) on listing pages.
-        "bottom-[calc(4.75rem+2.5rem+0.2rem)]",
+        // Above listing action bar + bottom nav + scroll-to-top (size-10 + gap).
+        "bottom-[calc(var(--mobile-bottom-nav,0px)+4.75rem+2.75rem)]",
         SCROLL_FAB_FADE_TRANSITION,
         scrollFabFadeClass(visible),
       )}

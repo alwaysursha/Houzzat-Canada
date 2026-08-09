@@ -18,7 +18,8 @@ export const BED_OPTIONS = ["", "1", "2", "3", "4", "5"];
 export const BATH_OPTIONS = ["", "1", "2", "3", "4"];
 
 export type CriteriaForm = {
-  city: string;
+  /** Comma-separated cities (multi-city homepage / saved searches). */
+  cities: string;
   /** Comma-separated communities (supports multi like Looking for). */
   communities: string;
   minPrice: string;
@@ -69,7 +70,7 @@ function parseList(raw: unknown, singular?: unknown): string[] {
 
 export function emptyCriteriaForm(): CriteriaForm {
   return {
-    city: "",
+    cities: "",
     communities: "",
     minPrice: "",
     maxPrice: "",
@@ -91,7 +92,7 @@ export function parseCriteria(query: unknown): CriteriaForm {
   const txn = asString(q.transactionType).toUpperCase();
 
   return {
-    city: cities[0] ?? "",
+    cities: cities.join(", "),
     communities: communities.join(", "),
     minPrice: asString(q.minPrice),
     maxPrice: asString(q.maxPrice),
@@ -124,7 +125,12 @@ export function criteriaToQuery(
   delete base.propertyTypes;
   delete base.propertyType;
 
-  if (form.city.trim()) base.city = form.city.trim();
+  const cities = form.cities
+    .split(/[,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (cities.length === 1) base.city = cities[0];
+  else if (cities.length > 1) base.cities = cities;
 
   const communities = form.communities
     .split(/[,|]/)
@@ -139,7 +145,7 @@ export function criteriaToQuery(
   if (form.minBaths) base.minBaths = form.minBaths;
   if (form.transactionType) base.transactionType = form.transactionType;
   if (form.propertyTypes.length) {
-    base.propertyTypes = form.propertyTypes.join(",");
+    base.propertyTypes = form.propertyTypes;
   }
 
   return base;
@@ -149,7 +155,13 @@ export function criteriaSummaryChips(form: CriteriaForm): string[] {
   const chips: string[] = [];
   if (form.transactionType === "LEASE") chips.push("For lease");
   else if (form.transactionType === "SALE") chips.push("For sale");
-  if (form.city.trim()) chips.push(form.city.trim());
+  for (const city of form.cities
+    .split(/[,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 4)) {
+    chips.push(city);
+  }
   for (const c of form.communities
     .split(/[,|]/)
     .map((s) => s.trim())
@@ -258,16 +270,19 @@ export function SearchCriteriaFields({
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <FieldLabel>City</FieldLabel>
+        <label className="block sm:col-span-2">
+          <FieldLabel>Cities</FieldLabel>
           <input
-            value={form.city}
-            onChange={(e) => patch({ city: e.target.value })}
-            placeholder="e.g. Mississauga"
+            value={form.cities}
+            onChange={(e) => patch({ cities: e.target.value })}
+            placeholder="Mississauga, Toronto, Brampton"
             className={fieldClassName()}
           />
+          <span className="mt-1 block text-[11px] text-[#94a3b8]">
+            Comma-separate multiple cities.
+          </span>
         </label>
-        <label className="block sm:col-span-1">
+        <label className="block sm:col-span-2">
           <FieldLabel>Communities</FieldLabel>
           <input
             value={form.communities}

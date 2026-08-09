@@ -32,6 +32,7 @@ export function SavedSearchEditor({
     name: string;
     emailAlerts: boolean;
     smsAlerts: boolean;
+    isHomepageActive?: boolean;
     query: unknown;
   };
   onUpdated?: () => void;
@@ -40,6 +41,9 @@ export function SavedSearchEditor({
   const [name, setName] = useState(search.name);
   const [emailAlerts, setEmailAlerts] = useState(search.emailAlerts);
   const [smsAlerts, setSmsAlerts] = useState(search.smsAlerts);
+  const [isHomepageActive, setIsHomepageActive] = useState(
+    Boolean(search.isHomepageActive),
+  );
   const [form, setForm] = useState<CriteriaForm>(() =>
     parseCriteria(search.query),
   );
@@ -85,6 +89,7 @@ export function SavedSearchEditor({
           name: name.trim() || "Saved search",
           emailAlerts,
           smsAlerts,
+          isHomepageActive,
           query,
         }),
       });
@@ -146,7 +151,7 @@ export function SavedSearchEditor({
         <div className="rounded-xl border border-[#e8edf2] bg-[#f8fafc] px-3 py-3">
           <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#64748b]">
             <Bell className="size-3" />
-            Alerts
+            Alerts & homepage
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -187,7 +192,31 @@ export function SavedSearchEditor({
                 )}
               />
             </button>
+            <button
+              type="button"
+              onClick={() => setIsHomepageActive((v) => !v)}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold transition",
+                isHomepageActive
+                  ? "bg-[#ecfdf5] text-[#047857] ring-1 ring-[#a7f3d0]"
+                  : "bg-white text-[#64748b] ring-1 ring-[#d8dee6]",
+              )}
+            >
+              Homepage search
+              <span
+                className={cn(
+                  "size-2 rounded-full",
+                  isHomepageActive ? "bg-[#10b981]" : "bg-[#cbd5e1]",
+                )}
+              />
+            </button>
           </div>
+          {isHomepageActive ? (
+            <p className="mt-2 text-[11px] text-[#64748b]">
+              Applied to this customer’s homepage rails (price, property type,
+              cities).
+            </p>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#eef2f6] pt-3">

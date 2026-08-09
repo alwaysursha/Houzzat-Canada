@@ -12,6 +12,10 @@ import {
 } from "@/lib/geo/regions";
 import type { HomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
+import {
+  getCurrentCoordinates,
+  readLocationPermissionState,
+} from "@/lib/mobile/geolocation";
 
 const GEO_REGION_KEY = "houzzat-region-geo";
 const RAIL_LIMIT = 12;
@@ -23,6 +27,15 @@ type HomeRailsPayload = {
   forLease?: ListingCardData[];
   commercial?: ListingCardData[];
 };
+
+function personalizationCities(
+  personalization: HomepagePersonalizationQuery | null | undefined,
+): string[] {
+  if (!personalization) return [];
+  if (personalization.cities?.length) return personalization.cities;
+  if (personalization.city) return [personalization.city];
+  return [];
+}
 
 function personalizationQuery(
   personalization: HomepagePersonalizationQuery | null,
@@ -64,8 +77,13 @@ export function HomepageMarketRails({
   personalization: HomepagePersonalizationQuery | null;
 }) {
   const [region, setRegion] = useState<MarketRegion>(() =>
-    resolveRegionFromCity(personalization?.city ?? null).region,
+    resolveRegionFromCity(personalizationCities(personalization)[0] ?? null)
+      .region,
   );
+  const [overrideCities, setOverrideCities] = useState<string[] | null>(() => {
+    const cities = personalizationCities(personalization);
+    return cities.length ? cities : null;
+  });
   const [ready, setReady] = useState(false);
   const [newListings, setNewListings] = useState<ListingCardData[]>([]);
   const [openHouses, setOpenHouses] = useState<ListingCardData[]>([]);
@@ -79,13 +97,12 @@ export function HomepageMarketRails({
     let cancelled = false;
 
     async function resolveBrowseRegion(): Promise<MarketRegion> {
-      if (personalization?.city) {
-        return resolveRegionFromCity(personalization.city).region;
+      const personalizedCities = personalizationCities(personalization);
+      if (personalizedCities.length) {
+        setOverrideCities(personalizedCities);
+        return resolveRegionFromCity(personalizedCities[0] ?? null).region;
       }
-
-      if (typeof navigator === "undefined" || !navigator.geolocation) {
-        return resolveRegionFromCity(null).region;
-      }
+      setOverrideCities(null);
 
       try {
         const cached =
@@ -105,11 +122,16 @@ export function HomepageMarketRails({
       return resolveRegionFromCity(null).region;
     }
 
-    async function loadForRegion(nextRegion: MarketRegion) {
+    async function loadForRegion(
+      nextRegion: MarketRegion,
+      cityOverride?: string[] | null,
+    ) {
       if (cancelled) return;
       setRegion(nextRegion);
 
-      const cities = citiesQueryParam(nextRegion.cities);
+      const cities = citiesQueryParam(
+        cityOverride?.length ? cityOverride : nextRegion.cities,
+      );
       const extras = personalizationQuery(personalization);
 
       try {
@@ -152,45 +174,46 @@ export function HomepageMarketRails({
       }
 
       const nextRegion = await resolveBrowseRegion();
-      await loadForRegion(nextRegion);
+      const personalizedCities = personalizationCities(personalization);
+      await loadForRegion(
+        nextRegion,
+        personalizedCities.length ? personalizedCities : null,
+      );
 
-      if (personalization?.city || cancelled) return;
-      if (typeof navigator === "undefined" || !navigator.geolocation) return;
+      if (personalizedCities.length || cancelled) return;
       try {
-        const permission = navigator.permissions?.query
-          ? (await navigator.permissions.query({ name: "geolocation" })).state
-          : "unknown";
+        const permission = await readLocationPermissionState();
         if (permission === "denied") return;
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            if (cancelled) return;
-            const { latitude: lat, longitude: lng } = position.coords;
-            try {
-              sessionStorage.setItem(
-                GEO_REGION_KEY,
-                JSON.stringify({ lat, lng }),
-              );
-            } catch {
-              // ignore
-            }
-            const upgraded = resolveRegionFromCoords(lat, lng).region;
-            if (upgraded.id === nextRegion.id) return;
-            void loadForRegion(upgraded);
-          },
-          () => undefined,
-          {
-            enableHighAccuracy: false,
-            timeout: 8000,
-            maximumAge: 300_000,
-          },
-        );
+        const { lat, lng } = await getCurrentCoordinates({
+          enableHighAccuracy: false,
+          timeout: 8_000,
+          maximumAge: 300_000,
+        });
+        if (cancelled) return;
+        try {
+          sessionStorage.setItem(
+            GEO_REGION_KEY,
+            JSON.stringify({ lat, lng }),
+          );
+        } catch {
+          // ignore
+        }
+        const upgraded = resolveRegionFromCoords(lat, lng).region;
+        if (upgraded.id === nextRegion.id) return;
+        void loadForRegion(upgraded);
       } catch {
         // ignore geo upgrade failures
       }
     }
 
     function onGeo(event: Event) {
-      if (vowOnlyGuest || personalization?.city || cancelled) return;
+      if (
+        vowOnlyGuest ||
+        personalizationCities(personalization).length ||
+        cancelled
+      ) {
+        return;
+      }
       const detail = (event as CustomEvent<{ lat: number; lng: number }>).detail;
       if (
         !detail ||
@@ -212,7 +235,9 @@ export function HomepageMarketRails({
     };
   }, [isClient, personalization, vowOnlyGuest]);
 
-  const citiesParam = citiesQueryParam(region.cities);
+  const citiesParam = citiesQueryParam(
+    overrideCities?.length ? overrideCities : region.cities,
+  );
 
   const seeAll = (extra: Record<string, string>) => {
     const q = new URLSearchParams({ cities: citiesParam, ...extra });
@@ -220,6 +245,9 @@ export function HomepageMarketRails({
     if (personalization?.maxPrice) q.set("maxPrice", personalization.maxPrice);
     if (personalization?.propertyTypes?.length) {
       q.set("propertyTypes", personalization.propertyTypes.join(","));
+    }
+    if (personalization?.communities?.length) {
+      q.set("communities", personalization.communities.join("|"));
     }
     return `/search?${q.toString()}`;
   };

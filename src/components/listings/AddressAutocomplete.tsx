@@ -42,6 +42,10 @@ import type {
   AutocompleteSuggestionGroup,
 } from "@/lib/listings/types";
 import { persistHomeLocationIfEmpty } from "@/lib/account/persist-home-location";
+import {
+  getCurrentCoordinates,
+  locationErrorMessage,
+} from "@/lib/mobile/geolocation";
 import { Input } from "@/components/ui/input";
 import { useClientAccess } from "@/hooks/use-client-access";
 import { cn } from "@/lib/utils";
@@ -597,46 +601,41 @@ export function AddressAutocomplete({
     pushLocalRecentSearch({ label, href });
   }
 
-  function runNearMe() {
+  async function runNearMe() {
     setGeoError(null);
-    if (!navigator.geolocation) {
-      setGeoError("Location isn’t available in this browser.");
-      return;
-    }
     setLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLoading(false);
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        void persistHomeLocationIfEmpty({ lat, lng });
-        const params = new URLSearchParams({
-          lat: String(lat),
-          lng: String(lng),
+    try {
+      const { lat, lng } = await getCurrentCoordinates({
+        enableHighAccuracy: false,
+        timeout: 12_000,
+        maximumAge: 60_000,
+      });
+      void persistHomeLocationIfEmpty({ lat, lng });
+      const params = new URLSearchParams({
+        lat: String(lat),
+        lng: String(lng),
+      });
+      if (transactionType) params.set("transactionType", transactionType);
+      const href = `/search?${params.toString()}`;
+      remember("Near me", href);
+      setOpen(false);
+      if (onPlaceSelect) {
+        onPlaceSelect({
+          type: "action",
+          action: "near_me",
+          label: "Near me",
+          lat,
+          lng,
+          href,
         });
-        if (transactionType) params.set("transactionType", transactionType);
-        const href = `/search?${params.toString()}`;
-        remember("Near me", href);
-        setOpen(false);
-        if (onPlaceSelect) {
-          onPlaceSelect({
-            type: "action",
-            action: "near_me",
-            label: "Near me",
-            lat,
-            lng,
-            href,
-          });
-          return;
-        }
-        router.push(href);
-      },
-      () => {
-        setLoading(false);
-        setGeoError("Couldn’t get your location. Check browser permissions.");
-      },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60_000 },
-    );
+        return;
+      }
+      router.push(href);
+    } catch (error) {
+      setGeoError(locationErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
   }
 
   function closeMobileSheet() {

@@ -58,11 +58,27 @@ export function ListingMobileActionBar({
   const [watching, setWatching] = useState(initiallyWatching);
   const [pending, setPending] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [hasBottomNav, setHasBottomNav] = useState(false);
   const authCallbackUrl = callbackPath ?? `/listing/${mlsNumber}`;
 
   useEffect(() => {
     setWatching(initiallyWatching);
   }, [initiallyWatching]);
+
+  useEffect(() => {
+    function sync() {
+      setHasBottomNav(
+        document.documentElement.dataset.mobileBottomNav === "1",
+      );
+    }
+    sync();
+    const mo = new MutationObserver(sync);
+    mo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-mobile-bottom-nav"],
+    });
+    return () => mo.disconnect();
+  }, []);
 
   async function onWatchProperty() {
     if (!signedIn) {
@@ -115,9 +131,13 @@ export function ListingMobileActionBar({
     <>
       <div
         className={cn(
-          "fixed inset-x-0 bottom-0 z-40 md:hidden",
+          "fixed inset-x-0 z-40 md:hidden",
+          "bottom-[var(--mobile-bottom-nav,0px)]",
           "border-t border-line/80 bg-surface/95 shadow-[0_-8px_24px_-12px_rgba(20,32,28,0.18)] backdrop-blur-md",
-          "pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3",
+          "pt-3",
+          hasBottomNav
+            ? "pb-3"
+            : "pb-[max(0.75rem,env(safe-area-inset-bottom))]",
         )}
       >
         <div className="flex items-center gap-2 px-3">

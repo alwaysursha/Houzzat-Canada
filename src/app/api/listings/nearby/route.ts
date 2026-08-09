@@ -35,8 +35,12 @@ export async function GET(request: Request) {
   const excludeMls = searchParams.get("excludeMls")?.trim() || null;
   const propertyTypesParam = searchParams.get("propertyTypes");
   const communitiesParam = searchParams.get("communities");
+  const citiesParam = searchParams.get("cities");
   const personalization = parseHomepagePersonalizationQuery({
     city: searchParams.get("city") ?? undefined,
+    cities: citiesParam
+      ? citiesParam.split("|").map((c) => c.trim()).filter(Boolean)
+      : undefined,
     minPrice: searchParams.get("minPrice") ?? undefined,
     maxPrice: searchParams.get("maxPrice") ?? undefined,
     propertyTypes: propertyTypesParam

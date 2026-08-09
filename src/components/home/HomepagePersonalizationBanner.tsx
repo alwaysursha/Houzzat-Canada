@@ -118,7 +118,8 @@ export function HomepagePersonalizationBanner({
 
   return (
     <>
-      <div className="relative overflow-hidden border-b border-canopy-deep bg-canopy text-white">
+      {/* Mobile tools live in MobileBottomNav → More. */}
+      <div className="relative hidden overflow-hidden border-b border-canopy-deep bg-canopy text-white md:block">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 opacity-[0.14]"

@@ -24,7 +24,7 @@ export function PersonalizeHomepageButton({
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-canopy/30 bg-surface px-3 py-2 text-xs font-semibold text-canopy-deep transition hover:border-canopy/50 hover:bg-canopy/5"
         >
           <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
-          Create Custom Search
+          Personalize homepage
         </button>
       ) : (
         <Button
@@ -36,7 +36,7 @@ export function PersonalizeHomepageButton({
           )}
         >
           <SlidersHorizontal className="size-4" aria-hidden />
-          Create Custom Search
+          Personalize homepage
         </Button>
       )}
       <PersonalizeHomepageModal

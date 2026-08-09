@@ -23,6 +23,9 @@ importers:
       '@capacitor/core':
         specifier: ^8.5.0
         version: 8.5.0
+      '@capacitor/geolocation':
+        specifier: ^8.2.1
+        version: 8.2.1(@capacitor/core@8.5.0)
       '@capacitor/ios':
         specifier: ^8.5.0
         version: 8.5.0(@capacitor/core@8.5.0)
@@ -487,6 +490,11 @@ packages:
   '@capacitor/core@8.5.0':
     resolution: {integrity: sha512-Ca4krtqH1hothjtBIwf2J2TW7IhYq1ujp8QeItTiJohNsqij8ja2DYYH3DU0l8RmxCWaBAFTGA2TgOgOMCSNsQ==}
 
+  '@capacitor/geolocation@8.2.1':
+    resolution: {integrity: sha512-1QprZ0KXKKuCkwrv0Ot8ao63QZQ0wIQC/vYbB54eSHmyNjSQ/o7rTbzRtW4VsGMhcx4EmY9RxlyzcnM7Da+lqw==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
   '@capacitor/ios@8.5.0':
     resolution: {integrity: sha512-7k1TfohJu5BzRXc1F3g04Q8QQ0fyQgms6h1AvhnHb04VaNr9EdHOx03hL8O+OigEKMQnyJd1ZOjTPPNHCqL5Yw==}
     peerDependencies:
@@ -501,6 +509,9 @@ packages:
     resolution: {integrity: sha512-csSpfNeN49Hx9JaQBSJEIiEbOLtXg3kcc2IpScq2fu5L520h3AWEvsxoH8Srk1jxfRKepaJ4S4sqSC3foI4AgA==}
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
+
+  '@capacitor/synapse@1.0.4':
+    resolution: {integrity: sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==}
 
   '@cloudflare/kv-asset-handler@0.5.0':
     resolution: {integrity: sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg==}
@@ -5313,6 +5324,11 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  '@capacitor/geolocation@8.2.1(@capacitor/core@8.5.0)':
+    dependencies:
+      '@capacitor/core': 8.5.0
+      '@capacitor/synapse': 1.0.4
+
   '@capacitor/ios@8.5.0(@capacitor/core@8.5.0)':
     dependencies:
       '@capacitor/core': 8.5.0
@@ -5324,6 +5340,8 @@ snapshots:
   '@capacitor/status-bar@8.0.3(@capacitor/core@8.5.0)':
     dependencies:
       '@capacitor/core': 8.5.0
+
+  '@capacitor/synapse@1.0.4': {}
 
   '@cloudflare/kv-asset-handler@0.5.0': {}
 

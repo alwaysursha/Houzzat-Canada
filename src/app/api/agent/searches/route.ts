@@ -15,6 +15,7 @@ const patchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   emailAlerts: z.boolean().optional(),
   smsAlerts: z.boolean().optional(),
+  isHomepageActive: z.boolean().optional(),
   query: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -55,14 +56,25 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Search not found" }, { status: 404 });
   }
 
-  const updated = await prisma.savedSearch.update({
-    where: { id: search.id },
-    data: {
-      name: parsed.data.name,
-      emailAlerts: parsed.data.emailAlerts,
-      smsAlerts: parsed.data.smsAlerts,
-      query: parsed.data.query as object | undefined,
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    if (parsed.data.isHomepageActive === true) {
+      await tx.savedSearch.updateMany({
+        where: { userId: lead.customerId!, isHomepageActive: true },
+        data: { isHomepageActive: false },
+      });
+    }
+    return tx.savedSearch.update({
+      where: { id: search.id },
+      data: {
+        name: parsed.data.name,
+        emailAlerts: parsed.data.emailAlerts,
+        smsAlerts: parsed.data.smsAlerts,
+        ...(parsed.data.isHomepageActive !== undefined
+          ? { isHomepageActive: parsed.data.isHomepageActive }
+          : {}),
+        query: parsed.data.query as object | undefined,
+      },
+    });
   });
 
   await prisma.leadActivity.create({

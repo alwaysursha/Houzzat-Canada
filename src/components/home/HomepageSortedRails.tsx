@@ -2,6 +2,7 @@
 
 import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
 import { HomeNearMeRail } from "@/components/home/HomeNearMeRail";
+import { PersonalizeHomepageBar } from "@/components/home/PersonalizeHomepageBar";
 import type { HomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
 
 export type HomepageRailSection = {
@@ -20,12 +21,14 @@ export function HomepageSortedRails({
   reorderEmptyLast,
   personalization,
   sections,
+  cities = [],
 }: {
   /** When true, rails with 0 results sort after rails with results (stable). */
   reorderEmptyLast: boolean;
   personalization: HomepagePersonalizationQuery | null;
   /** Default-order listing rails; Near me is inserted after `recently-viewed`. */
   sections: HomepageRailSection[];
+  cities?: string[];
 }) {
   const [nearMe, setNearMe] = useState<NearMeState>({
     // Pending: keep original slot until we know (treat as non-empty for order).
@@ -63,20 +66,32 @@ export function HomepageSortedRails({
           />
         ),
       });
+      rails.push({
+        id: "personalize-homepage",
+        resultCount: 1,
+        node: <PersonalizeHomepageBar cities={cities} />,
+      });
       nearMeInserted = true;
     }
   }
   if (!nearMeInserted) {
-    rails.unshift({
-      id: "near-me",
-      resultCount: nearMe.resultCount,
-      node: (
-        <HomeNearMeRail
-          personalization={personalization}
-          onStatusChange={onNearMeStatusChange}
-        />
-      ),
-    });
+    rails.unshift(
+      {
+        id: "near-me",
+        resultCount: nearMe.resultCount,
+        node: (
+          <HomeNearMeRail
+            personalization={personalization}
+            onStatusChange={onNearMeStatusChange}
+          />
+        ),
+      },
+      {
+        id: "personalize-homepage",
+        resultCount: 1,
+        node: <PersonalizeHomepageBar cities={cities} />,
+      },
+    );
   }
 
   return (
@@ -101,11 +116,6 @@ export function HomepageSortedRails({
           </div>
         );
       })}
-      {/* Lets chip jumps bring late rails (New / Sold / etc.) up under the header. */}
-      <div
-        aria-hidden
-        className="pointer-events-none h-[65vh] shrink-0 order-[9999]"
-      />
     </div>
   );
 }
