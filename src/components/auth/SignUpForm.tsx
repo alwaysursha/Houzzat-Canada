@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
@@ -131,9 +132,22 @@ export function SignUpForm({
         {pending ? "Creating…" : "Create Houzzat client account"}
       </Button>
       <p className="text-center text-[11px] leading-relaxed text-ink/50">
-        By creating an account you agree to our Terms, PropTx / VOW client
-        agreement, and to receive email alerts and phone contact from Houzzat
-        about your home search.
+        By creating an account you agree to our{" "}
+        <Link
+          href="/terms"
+          className="underline underline-offset-2 hover:text-ink/70"
+        >
+          Terms
+        </Link>
+        ,{" "}
+        <Link
+          href="/privacy"
+          className="underline underline-offset-2 hover:text-ink/70"
+        >
+          Privacy Policy
+        </Link>
+        , PropTx / VOW client agreement, and to receive email alerts and phone
+        contact from Houzzat about your home search.
       </p>
       {onSwitchMode ? (
         <p className="text-center text-sm text-ink/60">

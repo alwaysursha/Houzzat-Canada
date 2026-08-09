@@ -10,6 +10,7 @@ import { AuthModalProvider } from "@/components/auth/AuthModalProvider";
 import { RememberClientSession } from "@/components/auth/RememberClientSession";
 import { NavigationRecovery } from "@/components/feedback/NavigationRecovery";
 import { SiteAlertProvider } from "@/components/feedback/SiteAlertProvider";
+import { CapacitorBootstrap } from "@/components/mobile/CapacitorBootstrap";
 import { RoutePlannerProvider } from "@/components/route-planner/RoutePlannerProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -23,6 +24,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <RoutePlannerProvider>
           <SiteAlertProvider>
             <AuthModalProvider>
+              <CapacitorBootstrap />
               <RememberClientSession />
               <NavigationRecovery />
               <RecentViewsSync />

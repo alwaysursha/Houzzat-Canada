@@ -32,13 +32,23 @@
     "deploy": "NEXT_PUBLIC_SITE_URL=https://houzzat.com NEXTAUTH_URL=https://houzzat.com pnpm build:cloudflare && opennextjs-cloudflare deploy",
     "deploy:cf": "NEXT_PUBLIC_SITE_URL=https://houzzat.com NEXTAUTH_URL=https://houzzat.com pnpm build:cloudflare && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "cap:sync": "cap sync",
+    "cap:android": "cap open android",
+    "cap:ios": "cap open ios"
   },
+
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@prisma/adapter-neon": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "bcryptjs": "^3.0.3",
@@ -58,6 +68,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "@opennextjs/cloudflare": "^1.19.11",
     "@prisma/adapter-pg": "^7.8.0",
     "@tailwindcss/postcss": "^4",

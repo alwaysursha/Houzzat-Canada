@@ -266,7 +266,15 @@ export function TeamInviteClient({ token }: { token: string }) {
             />
           </div>
           <p className="text-[11px] text-ink/45">
-            By creating an account you agree to Houzzat’s Terms &amp; Conditions.
+            By creating an account you agree to Houzzat’s{" "}
+            <a href="/terms" className="underline underline-offset-2">
+              Terms
+            </a>{" "}
+            and{" "}
+            <a href="/privacy" className="underline underline-offset-2">
+              Privacy Policy
+            </a>
+            .
           </p>
           <Button type="submit" disabled={pending} className="w-full">
             {pending ? "Creating account…" : "Create account & join team"}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SITE_NAME } from "@/lib/constants";
 
 /**
@@ -14,6 +15,23 @@ export function SiteFooter() {
             MLS® listing data via TRREB / PropTx (IDX). Sold prices and history
             are shown to registered Houzzat clients only (VOW).
           </p>
+          <nav
+            aria-label="Legal"
+            className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-sm"
+          >
+            <Link
+              href="/privacy"
+              className="text-ink/60 underline-offset-2 hover:text-canopy hover:underline"
+            >
+              Privacy Policy
+            </Link>
+            <Link
+              href="/terms"
+              className="text-ink/60 underline-offset-2 hover:text-canopy hover:underline"
+            >
+              Terms of Use
+            </Link>
+          </nav>
         </div>
 
         <div className="flex max-w-md flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">

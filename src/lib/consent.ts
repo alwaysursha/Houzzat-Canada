@@ -12,6 +12,6 @@ export const COMMUNICATIONS_CONSENT_VERSION = "email-phone-comms-2026-08";
 export const COMMUNICATIONS_CONSENT_KIND = "email_phone_comms";
 
 /** Site Terms & Conditions accepted at customer registration. */
-export const TERMS_VERSION = "terms-2026-07";
+export const TERMS_VERSION = "terms-2026-08";
 
 export const TERMS_ACCEPT_KIND = "terms_accept";
