@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
+import { pushHref } from "@/lib/listings/navigate-listing";
 import { SaveSearchButton } from "@/components/account/SaveSearchButton";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
@@ -421,15 +422,18 @@ export function SearchExperience() {
 
   function onPlaceSelect(suggestion: AutocompleteSuggestion) {
     if (suggestion.action === "near_me" && suggestion.href) {
-      router.push(suggestion.href);
+      pushHref(router, suggestion.href);
       return;
     }
     if (suggestion.mlsNumber) {
-      router.push(suggestion.href ?? `/listing/${suggestion.mlsNumber}`);
+      pushHref(
+        router,
+        suggestion.href ?? `/listing/${suggestion.mlsNumber}`,
+      );
       return;
     }
     if (suggestion.href?.startsWith("/search")) {
-      router.push(suggestion.href);
+      pushHref(router, suggestion.href);
       return;
     }
     if (suggestion.lat != null && suggestion.lng != null) {

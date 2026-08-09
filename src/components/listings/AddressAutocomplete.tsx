@@ -46,6 +46,7 @@ import {
   getCurrentCoordinates,
   locationErrorMessage,
 } from "@/lib/mobile/geolocation";
+import { pushHref } from "@/lib/listings/navigate-listing";
 import { Input } from "@/components/ui/input";
 import { useClientAccess } from "@/hooks/use-client-access";
 import { cn } from "@/lib/utils";
@@ -630,7 +631,7 @@ export function AddressAutocomplete({
         });
         return;
       }
-      router.push(href);
+      pushHref(router, href);
     } catch (error) {
       setGeoError(locationErrorMessage(error));
     } finally {
@@ -665,7 +666,7 @@ export function AddressAutocomplete({
         });
         return;
       }
-      if (!fillOnly) router.push(resolvedNearHref);
+      if (!fillOnly) pushHref(router, resolvedNearHref);
       return;
     }
 
@@ -677,7 +678,7 @@ export function AddressAutocomplete({
     const href = searchHrefFromParsed(parsed, { transactionType });
     remember(trimmed, href);
     if (fillOnly) return;
-    router.push(href);
+    pushHref(router, href);
   }
 
   async function choose(suggestion: AutocompleteSuggestion) {
@@ -768,7 +769,7 @@ export function AddressAutocomplete({
     }
     if (fillOnly) return;
     if (resolved.href) {
-      router.push(resolved.href);
+      pushHref(router, resolved.href);
     }
   }
 
@@ -918,7 +919,7 @@ export function AddressAutocomplete({
         onPlaceSelect(suggestion);
         return;
       }
-      router.push(suggestion.href);
+      pushHref(router, suggestion.href);
       return;
     }
     void choose(suggestion);
@@ -1065,7 +1066,7 @@ export function AddressAutocomplete({
                     onPlaceSelect(searchForRow);
                     return;
                   }
-                  router.push(searchForRow.href);
+                  pushHref(router, searchForRow.href);
                   return;
                 }
                 runSearchFor(query);

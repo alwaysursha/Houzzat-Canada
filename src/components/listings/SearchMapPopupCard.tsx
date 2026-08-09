@@ -8,8 +8,6 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Bath, Bed, ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
@@ -23,8 +21,10 @@ import {
   propertyTypeLabel,
 } from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
+import { ListingLink } from "@/components/listings/ListingLink";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
+import { openListingPath } from "@/lib/listings/navigate-listing";
 import { cn } from "@/lib/utils";
 
 function listingImageUrls(listing: ListingCardData): string[] {
@@ -238,7 +238,6 @@ export function SearchMapPopupCard({
   const isCommercial = listing.segment === "COMMERCIAL";
   const urls = listingImageUrls(listing);
   const href = listingPath(listing);
-  const router = useRouter();
 
   const statusBadge = (
     <span
@@ -321,7 +320,7 @@ export function SearchMapPopupCard({
           onOpen
             ? onOpen
             : () => {
-                router.push(href);
+                openListingPath(href);
               }
         }
       />
@@ -335,9 +334,9 @@ export function SearchMapPopupCard({
           {details}
         </button>
       ) : (
-        <Link href={href} className="block transition hover:bg-mist/40">
+        <ListingLink href={href} className="block transition hover:bg-mist/40">
           {details}
-        </Link>
+        </ListingLink>
       )}
     </div>
   );

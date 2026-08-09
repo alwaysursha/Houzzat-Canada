@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { ListingLink } from "@/components/listings/ListingLink";
+import { isListingDetailPath } from "@/lib/listings/navigate-listing";
 import {
   Bell,
   Heart,
@@ -161,25 +163,30 @@ function ToolsFlyoutMenu({
           </div>
         ) : (
           <ul className="max-h-64 overflow-y-auto py-1">
-            {items.map((item) => (
-              <li key={item.id}>
-                <Link
-                  href={item.href}
-                  role="menuitem"
-                  className="flex w-full flex-col gap-0.5 px-3 py-2.5 text-left transition hover:bg-mist"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  <span className="text-xs font-semibold text-ink">
-                    {item.title}
-                  </span>
-                  {item.subtitle ? (
-                    <span className="truncate text-[11px] text-ink/50">
-                      {item.subtitle}
+            {items.map((item) => {
+              const ItemLink = isListingDetailPath(item.href)
+                ? ListingLink
+                : Link;
+              return (
+                <li key={item.id}>
+                  <ItemLink
+                    href={item.href}
+                    role="menuitem"
+                    className="flex w-full flex-col gap-0.5 px-3 py-2.5 text-left transition hover:bg-mist"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <span className="text-xs font-semibold text-ink">
+                      {item.title}
                     </span>
-                  ) : null}
-                </Link>
-              </li>
-            ))}
+                    {item.subtitle ? (
+                      <span className="truncate text-[11px] text-ink/50">
+                        {item.subtitle}
+                      </span>
+                    ) : null}
+                  </ItemLink>
+                </li>
+              );
+            })}
           </ul>
         )}
         {loaded && items.length > 0 ? (
@@ -499,25 +506,30 @@ export function WatchlistMenuButton() {
           <p className="px-3 py-2.5 text-[11px] text-ink/45">{emptyText}</p>
         ) : (
           <ul className="py-1">
-            {items.map((item) => (
-              <li key={item.id}>
-                <Link
-                  href={item.href}
-                  role="menuitem"
-                  className="flex w-full flex-col gap-0.5 px-3 py-2.5 text-left transition hover:bg-mist"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  <span className="text-xs font-semibold text-ink">
-                    {item.title}
-                  </span>
-                  {item.subtitle ? (
-                    <span className="truncate text-[11px] text-ink/50">
-                      {item.subtitle}
+            {items.map((item) => {
+              const ItemLink = isListingDetailPath(item.href)
+                ? ListingLink
+                : Link;
+              return (
+                <li key={item.id}>
+                  <ItemLink
+                    href={item.href}
+                    role="menuitem"
+                    className="flex w-full flex-col gap-0.5 px-3 py-2.5 text-left transition hover:bg-mist"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <span className="text-xs font-semibold text-ink">
+                      {item.title}
                     </span>
-                  ) : null}
-                </Link>
-              </li>
-            ))}
+                    {item.subtitle ? (
+                      <span className="truncate text-[11px] text-ink/50">
+                        {item.subtitle}
+                      </span>
+                    ) : null}
+                  </ItemLink>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

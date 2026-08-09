@@ -9,6 +9,7 @@ import {
   parseSearchQuery,
   searchHrefFromParsed,
 } from "@/lib/listings/parse-search-query";
+import { pushHref } from "@/lib/listings/navigate-listing";
 import { pushLocalRecentSearch } from "@/lib/listings/recent-searches-local";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { cn } from "@/lib/utils";
@@ -50,7 +51,7 @@ export function HomeHeroSearch({
 
   function goHref(href: string, label: string) {
     pushLocalRecentSearch({ label, href });
-    router.push(href);
+    pushHref(router, href);
   }
 
   function onSearchPlace(suggestion: AutocompleteSuggestion) {

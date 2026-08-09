@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { Bath, Bed, Calendar, Car, Maximize2 } from "lucide-react";
 import { ListingCardActions } from "@/components/listings/ListingCardActions";
+import { ListingLink } from "@/components/listings/ListingLink";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
@@ -242,7 +242,7 @@ export function ListingCard({
       {blockInteraction ? (
         <div className="flex flex-col">{body}</div>
       ) : (
-        <Link
+        <ListingLink
           href={listingPath(listing)}
           onMouseEnter={onFocus}
           onFocus={onFocus}
@@ -257,7 +257,7 @@ export function ListingCard({
           className="flex flex-col"
         >
           {body}
-        </Link>
+        </ListingLink>
       )}
 
       <div
