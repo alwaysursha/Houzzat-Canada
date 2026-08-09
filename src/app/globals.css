@@ -13,7 +13,7 @@
   --background: var(--mist);
   --foreground: var(--ink);
   /* Sticky offset below site header (grows when mobile search bar is open). */
-  --site-header-stack: 4rem;
+  --site-header-stack: calc(4rem + env(safe-area-inset-top, 0px));
 }
 
 @theme inline {

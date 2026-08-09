@@ -101,6 +101,11 @@ export function HomepageSortedRails({
           </div>
         );
       })}
+      {/* Lets chip jumps bring late rails (New / Sold / etc.) up under the header. */}
+      <div
+        aria-hidden
+        className="pointer-events-none h-[65vh] shrink-0 order-[9999]"
+      />
     </div>
   );
 }

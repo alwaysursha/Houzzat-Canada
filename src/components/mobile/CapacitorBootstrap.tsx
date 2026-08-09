@@ -17,10 +17,11 @@ export function CapacitorBootstrap() {
 
     void (async () => {
       try {
-        // Keep the system status bar as a solid brand bar (not overlaid on white UI).
-        await StatusBar.setOverlaysWebView({ overlay: false });
+        // Android 15+ forces edge-to-edge; web safe-area + green strip handle the bar.
+        // Keep overlay so inset env() vars are populated for the header.
+        await StatusBar.setOverlaysWebView({ overlay: true });
         await StatusBar.setBackgroundColor({ color: STATUS_BAR_GREEN });
-        // Light icons/text for a dark green status bar.
+        // Light icons/text on the green safe-area strip.
         await StatusBar.setStyle({ style: Style.Light });
       } catch {
         // Older WebViews / unsupported platforms — ignore.

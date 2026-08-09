@@ -258,10 +258,11 @@ export function SiteHeaderClient({
 
     function syncStack() {
       const mobile = window.matchMedia("(max-width: 767px)").matches;
-      // header 4rem + search bar (~3.25rem) + small gap
+      // Include status-bar safe area so sticky rails / chip scrolls clear the header.
+      const base = mobile && visible ? "7.75rem" : "4rem";
       root.style.setProperty(
         "--site-header-stack",
-        mobile && visible ? "7.75rem" : "4rem",
+        `calc(${base} + env(safe-area-inset-top, 0px))`,
       );
       root.dataset.mobileSearchVisible = mobile && visible ? "1" : "0";
     }
@@ -281,7 +282,13 @@ export function SiteHeaderClient({
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-line/80 bg-mist/95">
+      <header className="sticky top-0 z-40">
+        {/* Android 15+ edge-to-edge: keep system status icons on a brand bar. */}
+        <div
+          aria-hidden
+          className="bg-[#1A7B59] [height:env(safe-area-inset-top,0px)]"
+        />
+        <div className="border-b border-line/80 bg-mist/95">
         <div className="flex h-16 w-full items-center gap-2 px-4 sm:px-6 lg:px-10">
           <Link
             href="/"
@@ -390,6 +397,7 @@ export function SiteHeaderClient({
             </ul>
           </nav>
         ) : null}
+        </div>
       </header>
 
       {/*
@@ -398,7 +406,7 @@ export function SiteHeaderClient({
       */}
       <div
         className={cn(
-          "fixed inset-x-0 top-16 z-[39] border-b border-line/80 bg-mist md:hidden",
+          "fixed inset-x-0 top-[calc(4rem+env(safe-area-inset-top,0px))] z-[39] border-b border-line/80 bg-mist md:hidden",
           "transition-[opacity,transform,visibility] duration-200 ease-out",
           visible
             ? "visible translate-y-0 opacity-100"
