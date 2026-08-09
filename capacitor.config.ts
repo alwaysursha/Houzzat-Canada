@@ -22,20 +22,20 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchAutoHide: true,
-      backgroundColor: "#0f3d32",
+      backgroundColor: "#1A7B59",
       showSpinner: false,
     },
     StatusBar: {
       style: "DARK",
-      backgroundColor: "#0f3d32",
+      backgroundColor: "#1A7B59",
     },
   },
   android: {
     allowMixedContent: false,
-    backgroundColor: "#0f3d32",
+    backgroundColor: "#1A7B59",
   },
   ios: {
-    backgroundColor: "#0f3d32",
+    backgroundColor: "#1A7B59",
     contentInset: "automatic",
     preferredContentMode: "mobile",
   },

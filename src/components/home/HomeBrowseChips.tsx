@@ -10,11 +10,30 @@ const CHIPS = [
   { targetId: "listings-near-me", label: "Near me" },
 ] as const;
 
+/** Gap below sticky header so the rail heading stays fully visible. */
+function scrollOffsetPx() {
+  const root = document.documentElement;
+  const raw = getComputedStyle(root)
+    .getPropertyValue("--site-header-stack")
+    .trim();
+  const rootFont = parseFloat(getComputedStyle(root).fontSize) || 16;
+  let headerPx = 64;
+  if (raw.endsWith("rem")) {
+    headerPx = parseFloat(raw) * rootFont;
+  } else if (raw.endsWith("px")) {
+    headerPx = parseFloat(raw);
+  }
+  // Extra breathing room so the rail heading isn't tucked under the header.
+  return headerPx + 28;
+}
+
 export function HomeBrowseChips({ className }: { className?: string }) {
   function go(targetId: string) {
     const el = document.getElementById(targetId);
     if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    const top =
+      el.getBoundingClientRect().top + window.scrollY - scrollOffsetPx();
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
   }
 
   return (

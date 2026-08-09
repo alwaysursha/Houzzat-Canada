@@ -558,7 +558,9 @@ export function ListingGallery({
             needsEmailVerification={needsEmailVerification}
           />
         ) : null}
-        {(coverTag || segmentTag || (tourUrl && !detailsLocked)) ? (
+        {/* Hide cover tags on the map slide so Expand / Sold / Unlisted stay tappable. */}
+        {!onMapSlide &&
+        (coverTag || segmentTag || (tourUrl && !detailsLocked)) ? (
           <div className="pointer-events-none absolute bottom-3 left-3 z-30 flex flex-wrap items-center gap-1.5">
             {coverTag ? (
               <span

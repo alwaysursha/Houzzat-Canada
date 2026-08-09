@@ -222,7 +222,7 @@ export function HomeNearMeRail({
   return (
     <section
       id="listings-near-me"
-      className="scroll-mt-[calc(var(--site-header-stack)+0.75rem)] space-y-5"
+      className="scroll-mt-[calc(var(--site-header-stack)+env(safe-area-inset-top,0px)+1.25rem)] space-y-5"
     >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h2 className="font-display text-2xl text-ink">Listings near me</h2>
