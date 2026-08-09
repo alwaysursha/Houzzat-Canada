@@ -125,7 +125,12 @@ export function EngagementMatchboard({
           .filter(Boolean)
           .slice(0, 2)
           .join(" and ") ||
-        c.city.trim() ||
+        c.cities
+          .split(/[,|]/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .slice(0, 2)
+          .join(" and ") ||
         null;
       const price =
         c.minPrice || c.maxPrice
