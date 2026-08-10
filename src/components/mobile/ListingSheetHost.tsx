@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, X } from "lucide-react";
 import {
+  LISTING_SHEET_OPEN_MESSAGE,
+  backListingSheet,
   closeListingSheet,
+  openListingSheet,
   subscribeListingSheet,
+  type ListingSheetState,
 } from "@/lib/mobile/listing-sheet-store";
 
 function sheetSrc(href: string): string {
@@ -18,26 +22,111 @@ function sheetSrc(href: string): string {
 }
 
 /**
- * Full-screen listing overlay for the Capacitor app.
- * Underlying browse page stays alive — Back closes this layer only.
+ * Full listing-detail overlay (same page as /listing/..., not the map card).
+ * Stack of listings: Back pops one; Close / Escape dismisses the whole overlay.
  */
 export function ListingSheetHost() {
-  const [href, setHref] = useState<string | null>(null);
-
-  useEffect(() => subscribeListingSheet(setHref), []);
+  const [framed, setFramed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.self !== window.top;
+    } catch {
+      return true;
+    }
+  });
+  const [state, setState] = useState<ListingSheetState>({
+    href: null,
+    depth: 0,
+    canBack: false,
+  });
+  const historyPushedRef = useRef(false);
+  const syncingHistoryRef = useRef(false);
 
   useEffect(() => {
-    if (!href) return;
+    try {
+      setFramed(window.self !== window.top);
+    } catch {
+      setFramed(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (framed) return;
+    return subscribeListingSheet(setState);
+  }, [framed]);
+
+  // Child iframe asks parent to push another listing onto the stack.
+  useEffect(() => {
+    if (framed) return;
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as {
+        type?: string;
+        href?: string;
+      } | null;
+      if (data?.type !== LISTING_SHEET_OPEN_MESSAGE) return;
+      if (typeof data.href !== "string" || !data.href) return;
+      openListingSheet(data.href);
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [framed]);
+
+  useEffect(() => {
+    if (!state.href) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [href]);
+  }, [state.href]);
 
-  const src = useMemo(() => (href ? sheetSrc(href) : null), [href]);
+  // One browser-history entry while the overlay is open (Close clears it).
+  useEffect(() => {
+    if (!state.href) {
+      if (historyPushedRef.current) {
+        historyPushedRef.current = false;
+        syncingHistoryRef.current = true;
+        window.history.back();
+        queueMicrotask(() => {
+          syncingHistoryRef.current = false;
+        });
+      }
+      return;
+    }
 
-  if (!href || !src) return null;
+    if (!historyPushedRef.current) {
+      window.history.pushState({ houzzatListingSheet: true }, "");
+      historyPushedRef.current = true;
+    }
+
+    const onPopState = () => {
+      if (syncingHistoryRef.current) return;
+      historyPushedRef.current = false;
+      // Browser Back closes the whole overlay (in-sheet Back steps the stack).
+      closeListingSheet();
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, [state.href]);
+
+  useEffect(() => {
+    if (!state.href) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeListingSheet();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [state.href]);
+
+  const src = useMemo(
+    () => (state.href ? sheetSrc(state.href) : null),
+    [state.href],
+  );
+
+  if (framed || !state.href || !src) return null;
 
   return (
     <div
@@ -47,19 +136,31 @@ export function ListingSheetHost() {
       aria-label="Listing details"
     >
       <div
-        className="flex shrink-0 items-center justify-between border-b border-line bg-canopy px-3 pt-[env(safe-area-inset-top,0px)] text-white"
+        className="flex shrink-0 items-center justify-between gap-2 border-b border-line bg-canopy px-2 pt-[env(safe-area-inset-top,0px)] text-white sm:px-3"
         style={{ minHeight: "calc(2.75rem + env(safe-area-inset-top, 0px))" }}
       >
-        <button
-          type="button"
-          onClick={() => closeListingSheet()}
-          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-semibold text-white/95 transition hover:bg-white/10"
-        >
-          <X className="size-5" strokeWidth={2.2} />
-          Close
-        </button>
-        <span className="pr-2 text-xs font-medium tracking-wide text-white/70">
-          Listing
+        <div className="flex min-w-0 items-center gap-0.5">
+          {state.canBack ? (
+            <button
+              type="button"
+              onClick={() => backListingSheet()}
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-2 text-sm font-semibold text-white/95 transition hover:bg-white/10"
+            >
+              <ChevronLeft className="size-5" strokeWidth={2.2} />
+              Back
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => closeListingSheet()}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-semibold text-white/95 transition hover:bg-white/10"
+          >
+            <X className="size-5" strokeWidth={2.2} />
+            Close
+          </button>
+        </div>
+        <span className="shrink-0 pr-2 text-xs font-medium tracking-wide text-white/70">
+          {state.depth > 1 ? `Listing · ${state.depth}` : "Listing"}
         </span>
       </div>
       <iframe
@@ -67,7 +168,6 @@ export function ListingSheetHost() {
         title="Listing"
         src={src}
         className="min-h-0 w-full flex-1 border-0 bg-mist"
-        // Same-origin listing page; cookies/session stay available.
       />
     </div>
   );

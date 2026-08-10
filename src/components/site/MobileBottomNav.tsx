@@ -17,7 +17,9 @@ import {
 } from "lucide-react";
 import { PersonalizeHomepageModal } from "@/components/home/PersonalizeHomepageModal";
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
+import { SignOutButton } from "@/components/auth/SignOutButton";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
+import { parseHomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
 import { cn } from "@/lib/utils";
 
 const BOTTOM_NAV_HEIGHT = "3.5rem";
@@ -34,6 +36,11 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
   const menuId = useId();
   const [moreOpen, setMoreOpen] = useState(false);
   const [personalizeOpen, setPersonalizeOpen] = useState(false);
+  const [personalizeSearch, setPersonalizeSearch] = useState<{
+    id: string;
+    name: string;
+    query: Record<string, unknown>;
+  } | null>(null);
 
   const isConsumer =
     status === "authenticated" &&
@@ -153,7 +160,42 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
               type="button"
               onClick={() => {
                 setMoreOpen(false);
-                setPersonalizeOpen(true);
+                void (async () => {
+                  try {
+                    const res = await fetch("/api/saved-searches");
+                    if (res.ok) {
+                      const json = (await res.json()) as {
+                        items?: Array<{
+                          id: string;
+                          name: string;
+                          query: unknown;
+                          isHomepageActive?: boolean;
+                        }>;
+                      };
+                      const active =
+                        json.items?.find((item) => item.isHomepageActive) ??
+                        null;
+                      setPersonalizeSearch(
+                        active
+                          ? {
+                              id: active.id,
+                              name: active.name,
+                              query:
+                                typeof active.query === "object" &&
+                                active.query != null
+                                  ? (active.query as Record<string, unknown>)
+                                  : {},
+                            }
+                          : null,
+                      );
+                    } else {
+                      setPersonalizeSearch(null);
+                    }
+                  } catch {
+                    setPersonalizeSearch(null);
+                  }
+                  setPersonalizeOpen(true);
+                })();
               }}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-ink transition hover:bg-mist"
             >
@@ -168,6 +210,12 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
               label="Account"
               onNavigate={() => setMoreOpen(false)}
             />
+            <div className="border-t border-line/70 px-3 py-2">
+              <SignOutButton
+                label="Log out"
+                className="flex w-full items-center justify-center rounded-xl border border-line bg-mist/60 px-3 py-3 text-sm font-semibold text-ink hover:border-danger/40 hover:bg-danger/5 hover:text-danger"
+              />
+            </div>
           </nav>
         </div>
       ) : null}
@@ -222,8 +270,20 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
 
       <PersonalizeHomepageModal
         open={personalizeOpen}
-        onClose={() => setPersonalizeOpen(false)}
+        onClose={() => {
+          setPersonalizeOpen(false);
+          setPersonalizeSearch(null);
+        }}
         cities={cities}
+        searchId={personalizeSearch?.id}
+        initial={
+          personalizeSearch
+            ? {
+                name: personalizeSearch.name,
+                ...parseHomepagePersonalizationQuery(personalizeSearch.query),
+              }
+            : undefined
+        }
       />
     </>
   );

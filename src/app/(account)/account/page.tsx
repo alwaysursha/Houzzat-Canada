@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AlertPreferencesForm } from "@/components/account/AlertPreferencesForm";
 import { VowAcceptCard } from "@/components/account/VowAcceptCard";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
+import { SignOutButton } from "@/components/auth/SignOutButton";
 import { requireCustomerUser } from "@/lib/account";
 import { needsEmailVerification } from "@/lib/account-access";
 import { prisma } from "@/lib/prisma";
@@ -150,6 +151,12 @@ export default async function AccountPage() {
         <p className="mt-2 text-sm text-ink/60">
           Saved homes, notes, searches, and watchlist — signed in as {user.email}
         </p>
+        <div className="mt-4 md:hidden">
+          <SignOutButton
+            label="Log out"
+            className="inline-flex rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-ink hover:border-danger/40 hover:bg-danger/5 hover:text-danger"
+          />
+        </div>
       </div>
 
       {verifyLocked ? (

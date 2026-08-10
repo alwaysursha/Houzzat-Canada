@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -20,6 +21,7 @@ import { ListingRelatedSection } from "@/components/listings/ListingRelatedSecti
 import { ListingMobileSideMenu } from "@/components/listings/ListingMobileSideMenu";
 import { ListingDetailCoachMarks } from "@/components/listings/ListingDetailCoachMarks";
 import { ListingDetailSectionNav } from "@/components/listings/ListingDetailSectionNav";
+import { ListingSheetDocumentFlags } from "@/components/listings/ListingSheetDocumentFlags";
 import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
 import { ListingMobileNotes } from "@/components/listings/ListingMobileNotes";
 import { RecordRecentView } from "@/components/listings/RecordRecentView";
@@ -155,8 +157,16 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
-export default async function ListingDetailPage({ params }: Params) {
+export default async function ListingDetailPage({
+  params,
+  searchParams,
+}: Params & { searchParams: Promise<{ sheet?: string | string[] }> }) {
   const { parts } = await params;
+  const sp = await searchParams;
+  const sheetParam = sp.sheet;
+  const isListingSheet =
+    sheetParam === "1" ||
+    (Array.isArray(sheetParam) && sheetParam.includes("1"));
   const { mlsNumber, slug } = parseListingParts(parts);
   const listing = await loadListingByMls(mlsNumber);
   if (!listing) notFound();
@@ -468,6 +478,9 @@ export default async function ListingDetailPage({ params }: Params) {
       />
       <RecordRecentView mlsNumber={listing.mlsNumber} />
       <ListingDetailCoachMarks />
+      <Suspense fallback={null}>
+        <ListingSheetDocumentFlags />
+      </Suspense>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -511,7 +524,7 @@ export default async function ListingDetailPage({ params }: Params) {
             : undefined
         }
       />
-      <div className="w-full min-w-0 space-y-8 bg-[linear-gradient(180deg,rgb(244_247_245)_0%,rgb(255_255_255)_28%,rgb(255_255_255)_100%)] px-4 pb-[calc(2rem+4.25rem+var(--mobile-bottom-nav,0px)+env(safe-area-inset-bottom,0px))] pt-3 sm:px-6 md:pb-8 md:pt-6 lg:px-10">
+      <div className="w-full min-w-0 space-y-8 bg-[linear-gradient(180deg,rgb(244_247_245)_0%,rgb(255_255_255)_28%,rgb(255_255_255)_100%)] px-4 pb-[calc(2rem+4.25rem+var(--mobile-bottom-nav,0px)+var(--listing-action-pad-bottom))] pt-3 sm:px-6 md:pb-8 md:pt-6 lg:px-10">
         {/*
           Sticky bar must be a descendant of this tall page section (including the
           grid below), not a short breadcrumbs+gallery wrapper — otherwise sticky
@@ -531,16 +544,19 @@ export default async function ListingDetailPage({ params }: Params) {
           segment={listing.segment}
           inactive={isInactive}
           similarHomesHref={similarHomesHref}
+          sheetMode={isListingSheet}
         />
 
         <div className="-mt-5 space-y-3 md:mt-8 md:space-y-8">
-          <div className="-mx-4 empty:hidden sm:-mx-6 lg:-mx-10">
-            <HomepagePersonalizationBanner
-              cities={personalizationCities}
-              forceShow
-            />
-            <SavedSearchChipBar forceShow cities={personalizationCities} />
-          </div>
+          {!isListingSheet ? (
+            <div className="-mx-4 empty:hidden sm:-mx-6 lg:-mx-10">
+              <HomepagePersonalizationBanner
+                cities={personalizationCities}
+                forceShow
+              />
+              <SavedSearchChipBar forceShow cities={personalizationCities} />
+            </div>
+          ) : null}
 
           <ListingGallery
             addressLabel={addressLabel}
@@ -793,6 +809,7 @@ export default async function ListingDetailPage({ params }: Params) {
           <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
 
           <ListingDetailSectionNav
+            sheetMode={isListingSheet}
             items={[
               { id: "listing-about", label: "About" },
               { id: "listing-details", label: "Details" },

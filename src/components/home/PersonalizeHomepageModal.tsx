@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { PropertyType } from "@prisma/client";
 import { X } from "lucide-react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { CityMultiInput } from "@/components/home/CityMultiInput";
 import { PriceRangeSlider } from "@/components/home/PriceRangeSlider";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import {
   HOMEPAGE_PRICE_SLIDER_MAX,
   HOMEPAGE_SEARCH_DEFAULT_NAME,
 } from "@/lib/listings/homepage-personalization";
+import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
 const RESIDENTIAL_TYPES: PropertyType[] = [
@@ -58,6 +60,7 @@ export function PersonalizeHomepageModal({
 }) {
   const router = useRouter();
   const { openAuth } = useAuthModal();
+  const { confirm, toast } = useSiteAlert();
   const [name, setName] = useState(
     initial?.name ?? HOMEPAGE_SEARCH_DEFAULT_NAME,
   );
@@ -66,6 +69,7 @@ export function PersonalizeHomepageModal({
   const [propertyTypes, setPropertyTypes] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -176,6 +180,37 @@ export function PersonalizeHomepageModal({
     }
   }
 
+  async function onReset() {
+    if (!searchId) return;
+    const ok = await confirm({
+      ...SITE_MESSAGES.clearHomepageSearch,
+    });
+    if (!ok) return;
+
+    setResetting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/saved-searches", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: searchId, isHomepageActive: false }),
+      });
+      if (!res.ok) {
+        toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+        return;
+      }
+      toast({ message: "Homepage now shows all listings.", tone: "success" });
+      window.dispatchEvent(new Event("houzzat:homepage-personalization-changed"));
+      window.dispatchEvent(new Event("houzzat:saved-searches-changed"));
+      onClose();
+      router.refresh();
+    } catch {
+      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+    } finally {
+      setResetting(false);
+    }
+  }
+
   if (!open) return null;
 
   const panel = (
@@ -276,17 +311,32 @@ export function PersonalizeHomepageModal({
           ) : null}
         </div>
 
-        <footer className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={pending}
-            onClick={() => void onSave()}
-          >
-            {pending ? "Saving…" : "Save & Apply"}
-          </Button>
+        <footer className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur">
+          <div className="flex flex-wrap items-center gap-2">
+            {searchId ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pending || resetting}
+                onClick={() => void onReset()}
+                className="text-danger hover:bg-danger/5 hover:text-danger"
+              >
+                {resetting ? "Resetting…" : "Reset homepage"}
+              </Button>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={pending || resetting}
+              onClick={() => void onSave()}
+            >
+              {pending ? "Saving…" : "Save & Apply"}
+            </Button>
+          </div>
         </footer>
       </div>
     </div>

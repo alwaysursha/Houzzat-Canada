@@ -33,7 +33,9 @@ export default async function MarketingLayout({
           <SiteHeader />
         </MarketingChromeGate>
       </Suspense>
-      <MarketingBelowHeader cities={cities}>{children}</MarketingBelowHeader>
+      <Suspense fallback={null}>
+        <MarketingBelowHeader cities={cities}>{children}</MarketingBelowHeader>
+      </Suspense>
       <Suspense fallback={null}>
         <MarketingChromeGate>
           <RoutePlannerFloatingChip />

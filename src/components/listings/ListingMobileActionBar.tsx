@@ -135,9 +135,11 @@ export function ListingMobileActionBar({
           "bottom-[var(--mobile-bottom-nav,0px)]",
           "border-t border-line/80 bg-surface/95 shadow-[0_-8px_24px_-12px_rgba(20,32,28,0.18)] backdrop-blur-md",
           "pt-3",
+          // Sheet / edge-to-edge: --listing-action-pad-bottom clears system nav.
+          // With site bottom nav, that nav already includes safe-area.
           hasBottomNav
             ? "pb-3"
-            : "pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+            : "pb-[var(--listing-action-pad-bottom)]",
         )}
       >
         <div className="flex items-center gap-2 px-3">

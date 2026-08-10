@@ -9,8 +9,8 @@ type ListingLinkProps = Omit<ComponentProps<typeof Link>, "prefetch"> & {
 };
 
 /**
- * Link to a listing detail page that forces a full document load.
- * Avoids OpenNext soft-nav 500s on `/listing/[...parts]`.
+ * Link to a listing detail page — opens the full listing overlay sheet
+ * (same detail page, keeps browse mounted; avoids soft-nav remounts).
  */
 export function ListingLink({
   href,

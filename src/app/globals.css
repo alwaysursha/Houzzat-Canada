@@ -16,6 +16,16 @@
   --site-header-stack: calc(4rem + env(safe-area-inset-top, 0px));
   /* Mobile consumer bottom nav height (0 when hidden). */
   --mobile-bottom-nav: 0px;
+  /* Listing mobile action bar bottom padding (raised in sheet / edge-to-edge). */
+  --listing-action-pad-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* Overlay iframe: no site header; clear Android system nav under actions. */
+html[data-listing-sheet="1"] {
+  --site-header-stack: 0px;
+  --mobile-bottom-nav: 0px;
+  /* WebViews often report 0 for 3-button nav — keep a floor so actions stay tappable. */
+  --listing-action-pad-bottom: max(3rem, env(safe-area-inset-bottom, 0px));
 }
 
 @theme inline {

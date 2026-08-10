@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { ListingLink } from "@/components/listings/ListingLink";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
@@ -79,7 +79,7 @@ export function CompactPropertyCard({
         className,
       )}
     >
-      <Link
+      <ListingLink
         href={listingPath(listing)}
         className="absolute inset-0 block"
         aria-label={`${street}, ${place}`}
@@ -179,7 +179,7 @@ export function CompactPropertyCard({
             ) : null}
           </div>
         </div>
-      </Link>
+      </ListingLink>
     </article>
   );
 }

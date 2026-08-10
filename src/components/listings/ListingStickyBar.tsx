@@ -67,6 +67,18 @@ function ListingBreadcrumbs({
   );
 }
 
+function readStickyTopPx(): number {
+  if (typeof window === "undefined") return 64;
+  if (document.documentElement.dataset.listingSheet === "1") return 0;
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:fixed;visibility:hidden;pointer-events:none;top:var(--site-header-stack,4rem);";
+  document.body.appendChild(probe);
+  const px = Math.round(probe.getBoundingClientRect().top);
+  probe.remove();
+  return Number.isFinite(px) && px >= 0 ? px : 64;
+}
+
 export function ListingStickyBar({
   crumbs,
   mlsNumber,
@@ -81,6 +93,7 @@ export function ListingStickyBar({
   segment,
   inactive = false,
   similarHomesHref,
+  sheetMode = false,
 }: {
   crumbs: Crumb[];
   mlsNumber: string;
@@ -97,24 +110,62 @@ export function ListingStickyBar({
   segment?: "RESIDENTIAL" | "COMMERCIAL" | "PRE_CONSTRUCTION" | string;
   inactive?: boolean;
   similarHomesHref?: string;
+  /** Listing overlay iframe (?sheet=1) — pin flush under the green Close bar. */
+  sheetMode?: boolean;
 }) {
   const authCallbackUrl = callbackPath ?? `/listing/${mlsNumber}`;
   const sentinelRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
-  const [stuck, setStuck] = useState(false);
+  const [isSheet, setIsSheet] = useState(sheetMode);
+  const [stuck, setStuck] = useState(sheetMode);
+  const [topOffset, setTopOffset] = useState(sheetMode ? 0 : 64);
 
   useEffect(() => {
+    const sync = () => {
+      let framed = false;
+      try {
+        framed = window.self !== window.top;
+      } catch {
+        framed = true;
+      }
+      const sheet =
+        sheetMode ||
+        framed ||
+        document.documentElement.dataset.listingSheet === "1";
+      setIsSheet(sheet);
+      setTopOffset(readStickyTopPx());
+    };
+    sync();
+    window.addEventListener("resize", sync);
+    const mo = new MutationObserver(sync);
+    mo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-listing-sheet", "style"],
+    });
+    return () => {
+      window.removeEventListener("resize", sync);
+      mo.disconnect();
+    };
+  }, [sheetMode]);
+
+  useEffect(() => {
+    // In the listing sheet, pin under the green Close bar immediately.
+    if (isSheet) {
+      setStuck(true);
+      return;
+    }
+
     const el = sentinelRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         setStuck(!entry?.isIntersecting);
       },
-      { rootMargin: "-64px 0px 0px 0px", threshold: 0 },
+      { rootMargin: `-${Math.max(0, topOffset)}px 0px 0px 0px`, threshold: 0 },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [isSheet, topOffset]);
 
   useEffect(() => {
     const bar = barRef.current;
@@ -136,7 +187,7 @@ export function ListingStickyBar({
         "--listing-sticky-bar-height",
       );
     };
-  }, [stuck]);
+  }, [stuck, isSheet]);
 
   const watchSegment =
     segment === "COMMERCIAL" ? "COMMERCIAL" : ("RESIDENTIAL" as const);
@@ -149,12 +200,19 @@ export function ListingStickyBar({
         md:contents lifts children into the parent layout on desktop.
       */}
       <div className="hidden md:contents">
-        <div ref={sentinelRef} className="h-0 w-full" aria-hidden />
+        {!isSheet ? (
+          <div ref={sentinelRef} className="h-0 w-full" aria-hidden />
+        ) : null}
         <div
           ref={barRef}
           className={cn(
-            "sticky top-16 z-30 -mx-4 transition-[box-shadow,background-color,border-color] duration-300 sm:-mx-6 lg:-mx-10",
-            stuck
+            "z-30 -mx-4 transition-[box-shadow,background-color,border-color] duration-300 sm:-mx-6 lg:-mx-10",
+            // Sheet: fixed flush under the overlay Close bar (iframe top = 0).
+            // Full page: sticky under the site header stack.
+            isSheet
+              ? "fixed inset-x-0 top-0 mx-0"
+              : "sticky top-[var(--site-header-stack,4rem)]",
+            stuck || isSheet
               ? "border-b border-canopy/20 bg-mist/95 shadow-[0_8px_24px_-12px_rgba(15,107,76,0.35)] backdrop-blur-md"
               : "border-b border-transparent bg-transparent",
           )}
@@ -162,15 +220,18 @@ export function ListingStickyBar({
           <div
             className={cn(
               "mx-auto w-full px-4 transition-[padding] duration-300 sm:px-6 lg:px-10",
-              stuck ? "py-2.5" : "py-0",
+              stuck || isSheet ? "py-2.5" : "py-0",
             )}
           >
             <section
               className={cn(
-                "rounded-2xl border px-4 py-3 transition duration-300 sm:px-5",
-                stuck
-                  ? "border-canopy/25 bg-surface/95"
-                  : "border-canopy/15 bg-surface",
+                "border px-4 py-3 transition duration-300 sm:px-5",
+                // Sheet: flush strip under Close bar (no floating card gap).
+                isSheet
+                  ? "rounded-none border-x-0 border-t-0 border-canopy/20 bg-surface/95"
+                  : stuck
+                    ? "rounded-2xl border-canopy/25 bg-surface/95"
+                    : "rounded-2xl border-canopy/15 bg-surface",
               )}
             >
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
@@ -235,6 +296,13 @@ export function ListingStickyBar({
             </section>
           </div>
         </div>
+        {isSheet ? (
+          <div
+            className="w-full"
+            style={{ height: "var(--listing-sticky-bar-height, 4.5rem)" }}
+            aria-hidden
+          />
+        ) : null}
       </div>
     </>
   );

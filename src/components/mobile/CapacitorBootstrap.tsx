@@ -5,6 +5,8 @@ import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import {
+  backListingSheet,
+  canListingSheetBack,
   closeListingSheet,
   isListingSheetOpen,
 } from "@/lib/mobile/listing-sheet-store";
@@ -15,7 +17,7 @@ const STATUS_BAR_GREEN = "#1A7B59";
 /**
  * Native-shell polish when Houzzat runs inside Capacitor.
  *
- * Back priority: close listing sheet → hard-nav remembered path → exit.
+ * Back priority: listing sheet step/close → hard-nav remembered path → exit.
  * Closing the sheet never reloads the homepage underneath.
  */
 export function CapacitorBootstrap() {
@@ -34,7 +36,11 @@ export function CapacitorBootstrap() {
 
     const sub = CapApp.addListener("backButton", ({ canGoBack }) => {
       if (isListingSheetOpen()) {
-        closeListingSheet();
+        if (canListingSheetBack()) {
+          backListingSheet();
+        } else {
+          closeListingSheet();
+        }
         return;
       }
 

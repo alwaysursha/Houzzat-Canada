@@ -4,7 +4,13 @@ import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
-export function SignOutButton({ className }: { className?: string }) {
+export function SignOutButton({
+  className,
+  label = "Sign out",
+}: {
+  className?: string;
+  label?: string;
+}) {
   const { confirm } = useSiteAlert();
 
   async function onSignOut() {
@@ -29,7 +35,7 @@ export function SignOutButton({ className }: { className?: string }) {
         className,
       )}
     >
-      Sign out
+      {label}
     </button>
   );
 }

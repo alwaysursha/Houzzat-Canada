@@ -1,26 +1,13 @@
 /**
  * OpenNext on Cloudflare 500s soft RSC into `/listing/...` when the client
- * sends a full Next-Router-State-Tree. Full document loads work on web.
- *
- * On Capacitor, open listings in an overlay sheet so Back only closes the
- * sheet — the browse page underneath never remounts.
+ * sends a full Next-Router-State-Tree. Opening the full listing detail in an
+ * overlay sheet keeps the browse page mounted (web + Capacitor).
  */
 
-import { hardGo, rememberNavBackFrom } from "@/lib/mobile/nav-back";
-import { openListingSheet } from "@/lib/mobile/listing-sheet-store";
-
-function isNativeApp(): boolean {
-  try {
-    const cap = (
-      window as unknown as {
-        Capacitor?: { isNativePlatform?: () => boolean };
-      }
-    ).Capacitor;
-    return cap?.isNativePlatform?.() === true;
-  } catch {
-    return false;
-  }
-}
+import {
+  LISTING_SHEET_OPEN_MESSAGE,
+  openListingSheet,
+} from "@/lib/mobile/listing-sheet-store";
 
 export function isListingDetailPath(href: string): boolean {
   try {
@@ -42,20 +29,42 @@ function toAppHref(href: string): string {
   }
 }
 
-function openListing(href: string) {
-  const path = toAppHref(href);
-  if (typeof window === "undefined") return;
-
-  if (isNativeApp()) {
-    openListingSheet(path);
-    return;
+function isInsideListingSheetFrame(): boolean {
+  try {
+    if (new URLSearchParams(window.location.search).get("sheet") === "1") {
+      return true;
+    }
+    return (
+      window.self !== window.top &&
+      isListingDetailPath(window.location.pathname)
+    );
+  } catch {
+    return false;
   }
-
-  rememberNavBackFrom();
-  hardGo(path);
 }
 
-/** router.push that hard-loads listing detail URLs (or opens the app sheet). */
+function openListing(href: string) {
+  if (typeof window === "undefined") return;
+  const path = toAppHref(href);
+
+  // Inside the overlay iframe — ask the parent to push onto the sheet stack
+  // (avoids nested popups; Back/Close live on the parent chrome).
+  if (isInsideListingSheetFrame()) {
+    try {
+      window.parent.postMessage(
+        { type: LISTING_SHEET_OPEN_MESSAGE, href: path },
+        window.location.origin,
+      );
+      return;
+    } catch {
+      // fall through
+    }
+  }
+
+  openListingSheet(path);
+}
+
+/** router.push that opens listing detail in the overlay sheet. */
 export function pushHref(
   router: { push: (href: string) => void },
   href: string,
@@ -67,7 +76,7 @@ export function pushHref(
   router.push(href);
 }
 
-/** Open a listing detail URL (sheet on native, document load on web). */
+/** Open a listing detail URL in the overlay sheet (full listing page). */
 export function openListingPath(href: string): void {
   if (typeof window === "undefined") return;
   openListing(href);
