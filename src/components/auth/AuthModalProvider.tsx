@@ -12,6 +12,7 @@ import { X } from "lucide-react";
 import { SignInForm } from "@/components/auth/SignInForm";
 import { SignUpForm } from "@/components/auth/SignUpForm";
 import { hadClientSession } from "@/lib/auth/remembered-login";
+import { acquireScrollLock } from "@/lib/scroll-lock";
 import { cn } from "@/lib/utils";
 
 export type AuthMode = "sign-in" | "sign-up";
@@ -146,11 +147,7 @@ export function AuthModalProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!open) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
+    return acquireScrollLock();
   }, [open]);
 
   useEffect(() => {
@@ -161,6 +158,14 @@ export function AuthModalProvider({ children }: { children: React.ReactNode }) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, closeAuth]);
+
+  useEffect(() => {
+    function onOpenSignIn() {
+      openAuth({ mode: "sign-in" });
+    }
+    window.addEventListener("houzzat:open-sign-in", onOpenSignIn);
+    return () => window.removeEventListener("houzzat:open-sign-in", onOpenSignIn);
+  }, [openAuth]);
 
   const value = useMemo(
     () => ({

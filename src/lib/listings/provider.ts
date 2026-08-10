@@ -97,6 +97,7 @@ export function toCard(
     bedsLabel,
     baths: listing.baths,
     sqft: listing.sqft,
+    livingAreaRange: facts?.livingAreaRange ?? null,
     parkingSpaces: listing.parkingSpaces,
     addressLine: listing.addressLine,
     unitNumber: listing.unitNumber,

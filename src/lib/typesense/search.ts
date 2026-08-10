@@ -36,6 +36,7 @@ type TypesenseListingDoc = {
   soldPrice?: number;
   beds: number;
   bedsLabel?: string;
+  livingAreaRange?: string;
   baths: number;
   sqft?: number;
   parkingSpaces?: number;
@@ -210,6 +211,7 @@ function docToCard(doc: TypesenseListingDoc): ListingCard {
     bedsLabel: doc.bedsLabel ?? null,
     baths: doc.baths,
     sqft: doc.sqft ?? null,
+    livingAreaRange: doc.livingAreaRange ?? null,
     parkingSpaces: doc.parkingSpaces ?? 0,
     addressLine: doc.addressLine,
     unitNumber: doc.unitNumber ?? null,

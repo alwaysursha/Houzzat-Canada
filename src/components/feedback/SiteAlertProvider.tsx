@@ -11,6 +11,7 @@ import {
 } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { acquireScrollLock } from "@/lib/scroll-lock";
 import { cn } from "@/lib/utils";
 
 type AlertRequest = {
@@ -84,7 +85,7 @@ function SiteAlertPanel({
   const destructive = request.kind === "confirm" && request.destructive;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 py-8">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 py-8 pb-[max(2rem,env(safe-area-inset-bottom,0px))] pt-[max(2rem,env(safe-area-inset-top,0px))]">
       <button
         type="button"
         className="absolute inset-0 bg-ink/50 backdrop-blur-[2px]"
@@ -306,14 +307,13 @@ export function SiteAlertProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!request) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const release = acquireScrollLock();
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") finish(false);
     }
     document.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = previous;
+      release();
       document.removeEventListener("keydown", onKey);
     };
   }, [request, finish]);

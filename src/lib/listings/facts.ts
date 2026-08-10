@@ -115,6 +115,45 @@ function formatBedCount(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+/** Format a PropTx living-area range for UI, e.g. "1500-2000" → "1,500–2,000". */
+export function formatLivingAreaRangeLabel(
+  raw: string | null | undefined,
+): string | null {
+  const text = raw?.trim();
+  if (!text) return null;
+  const match = text.match(
+    /(\d+(?:,\d{3})*(?:\.\d+)?)\s*[-–—]\s*(\d+(?:,\d{3})*(?:\.\d+)?)/,
+  );
+  if (match) {
+    const a = Number(match[1]!.replace(/,/g, ""));
+    const b = Number(match[2]!.replace(/,/g, ""));
+    if (Number.isFinite(a) && Number.isFinite(b)) {
+      return `${Math.round(a).toLocaleString("en-CA")}–${Math.round(b).toLocaleString("en-CA")}`;
+    }
+  }
+  return text;
+}
+
+/**
+ * Sqft chip / card label.
+ * Prefer MLS living-area range when present (do not show a midpoint as exact).
+ * Fall back to an exact numeric sqft only when no range was provided.
+ */
+export function formatListingSqftLabel(input: {
+  sqft?: number | null;
+  livingAreaRange?: string | null;
+  /** When true, append " sqft" / " SqFt". */
+  unit?: "sqft" | "SqFt" | false;
+}): string | null {
+  const unit = input.unit === false ? "" : ` ${input.unit ?? "sqft"}`;
+  const range = formatLivingAreaRangeLabel(input.livingAreaRange);
+  if (range) return `${range}${unit}`;
+  if (input.sqft != null && input.sqft > 0) {
+    return `${input.sqft.toLocaleString("en-CA")}${unit}`;
+  }
+  return null;
+}
+
 /** Build display sections from Listing.facts (+ a few core columns). */
 export function buildListingFactSections(input: {
   facts?: ListingFacts | null;
@@ -150,7 +189,15 @@ export function buildListingFactSections(input: {
     "Year built",
     input.yearBuilt != null ? String(input.yearBuilt) : null,
   );
-  pushRow(overview, "Living area", f.livingAreaRange ?? input.sqftLabel);
+  pushRow(
+    overview,
+    "Living area",
+    formatListingSqftLabel({
+      sqft: null,
+      livingAreaRange: f.livingAreaRange,
+      unit: "sqft",
+    }) ?? input.sqftLabel,
+  );
   pushRow(overview, "Bedrooms", formatBedsPlusLabel(input.beds, f));
   pushRow(
     overview,

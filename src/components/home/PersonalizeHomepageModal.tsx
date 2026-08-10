@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { PropertyType } from "@prisma/client";
 import { X } from "lucide-react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
@@ -16,6 +16,8 @@ import {
   HOMEPAGE_PRICE_SLIDER_MAX,
   HOMEPAGE_SEARCH_DEFAULT_NAME,
 } from "@/lib/listings/homepage-personalization";
+import { hardGo } from "@/lib/mobile/nav-back";
+import { acquireScrollLock } from "@/lib/scroll-lock";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +61,7 @@ export function PersonalizeHomepageModal({
   };
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { openAuth } = useAuthModal();
   const { confirm, toast } = useSiteAlert();
   const [name, setName] = useState(
@@ -94,13 +97,25 @@ export function PersonalizeHomepageModal({
       if (event.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKey);
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const release = acquireScrollLock();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = previous;
+      release();
     };
   }, [open, onClose]);
+
+  function goHomeAndRefresh() {
+    window.dispatchEvent(new Event("houzzat:saved-searches-changed"));
+    window.dispatchEvent(
+      new Event("houzzat:homepage-personalization-changed"),
+    );
+    onClose();
+    if (pathname === "/") {
+      router.refresh();
+      return;
+    }
+    hardGo("/");
+  }
 
   function toggleType(type: PropertyType) {
     setPropertyTypes((current) =>
@@ -167,12 +182,7 @@ export function PersonalizeHomepageModal({
         return;
       }
 
-      window.dispatchEvent(new Event("houzzat:saved-searches-changed"));
-      window.dispatchEvent(
-        new Event("houzzat:homepage-personalization-changed"),
-      );
-      onClose();
-      router.refresh();
+      goHomeAndRefresh();
     } catch {
       setError("Could not save your search. Check your connection and try again.");
     } finally {
@@ -182,13 +192,14 @@ export function PersonalizeHomepageModal({
 
   async function onReset() {
     if (!searchId) return;
+    // Close first so the confirm dialog is visible and scroll locks unwind cleanly.
+    onClose();
     const ok = await confirm({
       ...SITE_MESSAGES.clearHomepageSearch,
     });
     if (!ok) return;
 
     setResetting(true);
-    setError(null);
     try {
       const res = await fetch("/api/saved-searches", {
         method: "PATCH",
@@ -202,8 +213,11 @@ export function PersonalizeHomepageModal({
       toast({ message: "Homepage now shows all listings.", tone: "success" });
       window.dispatchEvent(new Event("houzzat:homepage-personalization-changed"));
       window.dispatchEvent(new Event("houzzat:saved-searches-changed"));
-      onClose();
-      router.refresh();
+      if (pathname === "/") {
+        router.refresh();
+      } else {
+        hardGo("/");
+      }
     } catch {
       toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
     } finally {
@@ -218,14 +232,14 @@ export function PersonalizeHomepageModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="personalize-home-title"
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-ink/55 p-4 sm:items-center"
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-ink/55 p-4 pb-[max(1rem,calc(var(--mobile-bottom-nav,0px)+0.5rem))] pt-[max(1rem,env(safe-area-inset-top,0px))] sm:items-center sm:pb-4"
       onClick={onClose}
     >
       <div
-        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-line bg-surface shadow-2xl"
+        className="flex max-h-[min(90vh,calc(100dvh-var(--mobile-bottom-nav,0px)-2rem))] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-line bg-surface/95 px-5 py-4 backdrop-blur">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-line bg-surface/95 px-5 py-4 backdrop-blur">
           <div>
             <p
               id="personalize-home-title"
@@ -248,7 +262,7 @@ export function PersonalizeHomepageModal({
           </button>
         </header>
 
-        <div className="space-y-5 px-5 py-5">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
           <label className="block space-y-1.5 text-xs font-semibold uppercase tracking-wide text-ink/50">
             Search name
             <Input
@@ -311,7 +325,7 @@ export function PersonalizeHomepageModal({
           ) : null}
         </div>
 
-        <footer className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur">
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur">
           <div className="flex flex-wrap items-center gap-2">
             {searchId ? (
               <Button

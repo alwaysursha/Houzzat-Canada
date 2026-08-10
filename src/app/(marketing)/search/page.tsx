@@ -13,7 +13,7 @@ export const metadata: Metadata = publicPageMetadata({
 
 export default function SearchPage() {
   return (
-    <div className="flex h-[calc(100dvh-var(--site-header-stack,4rem))] flex-col overflow-hidden bg-mist">
+    <div className="flex h-[calc(100dvh-var(--site-header-stack,4rem)-var(--mobile-bottom-nav,0px))] flex-col overflow-hidden bg-mist">
       <Suspense
         fallback={
           <div className="flex flex-1 items-center justify-center text-sm text-ink/50">
@@ -23,7 +23,7 @@ export default function SearchPage() {
       >
         <SearchExperience />
       </Suspense>
-      <div className="shrink-0 border-t border-line/80 bg-surface px-4 py-1.5">
+      <div className="shrink-0 border-t border-line/80 bg-surface px-4 py-1.5 [[data-mobile-bottom-nav='0']_&]:pb-[max(0.375rem,env(safe-area-inset-bottom,0px))]">
         <MlsDisclaimer className="text-[10px] leading-snug text-ink/40" />
       </div>
     </div>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AlertPreferencesForm } from "@/components/account/AlertPreferencesForm";
+import { BiometricsAccountToggle } from "@/components/account/BiometricsAccountToggle";
 import { VowAcceptCard } from "@/components/account/VowAcceptCard";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { SignOutButton } from "@/components/auth/SignOutButton";
@@ -144,6 +145,17 @@ export default async function AccountPage() {
   const vowOk = hasVowAccess(user);
   const verifyLocked = needsEmailVerification(user);
 
+  let hasPassword = false;
+  try {
+    const authRow = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { password: true },
+    });
+    hasPassword = Boolean(authRow?.password);
+  } catch (error) {
+    console.error("[account] password presence check failed", error);
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -158,6 +170,8 @@ export default async function AccountPage() {
           />
         </div>
       </div>
+
+      <BiometricsAccountToggle email={user.email} hasPassword={hasPassword} />
 
       {verifyLocked ? (
         <div className="rounded-3xl border border-canopy/15 bg-white p-7 shadow-[0_20px_50px_-28px_rgba(15,61,46,0.35)] sm:p-9">

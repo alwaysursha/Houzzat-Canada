@@ -61,29 +61,36 @@ export default async function AccountLayout({
 
   return (
     <div className="min-h-full bg-mist">
-      <header className="sticky top-0 z-40 border-b border-line/80 bg-mist/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
-          <div>
-            <Link href="/" className="font-display text-2xl text-ink">
-              {SITE_NAME}
-            </Link>
-            <p className="text-xs uppercase tracking-[0.14em] text-ink/45">
-              Your Houzzat
-            </p>
-          </div>
-          {/* Desktop account nav — mobile uses bottom nav + More sheet. */}
-          <nav className="hidden flex-wrap items-center gap-3 text-sm font-medium md:flex">
-            {nav.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-ink/70 transition hover:text-canopy"
-              >
-                {item.label}
+      <header className="sticky top-0 z-40">
+        {/* Android edge-to-edge: brand bar under system status icons. */}
+        <div
+          aria-hidden
+          className="bg-[#1A7B59] [height:env(safe-area-inset-top,0px)]"
+        />
+        <div className="border-b border-line/80 bg-mist/85 backdrop-blur-md">
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
+            <div>
+              <Link href="/" className="font-display text-2xl text-ink">
+                {SITE_NAME}
               </Link>
-            ))}
-            <SignOutButton className="ml-1 border-l border-line pl-3" />
-          </nav>
+              <p className="text-xs uppercase tracking-[0.14em] text-ink/45">
+                Your Houzzat
+              </p>
+            </div>
+            {/* Desktop account nav — mobile uses bottom nav + More sheet. */}
+            <nav className="hidden flex-wrap items-center gap-3 text-sm font-medium md:flex">
+              {nav.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="text-ink/70 transition hover:text-canopy"
+                >
+                  {item.label}
+                </Link>
+              ))}
+              <SignOutButton className="ml-1 border-l border-line pl-3" />
+            </nav>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-10 pb-[calc(2.5rem+var(--mobile-bottom-nav,0px))] sm:px-6 md:pb-10">

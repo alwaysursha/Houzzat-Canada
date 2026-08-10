@@ -470,7 +470,7 @@ export function mapListingFacts(row: PropTxProperty): ListingFacts | undefined {
       const y = num(row, "TaxYear", "TaxesYear");
       return y != null && y >= 1900 && y <= 2100 ? Math.round(y) : null;
     })(),
-    livingAreaRange: str(row, "LivingAreaRange"),
+    livingAreaRange: mapLivingAreaRange(row),
     approximateAge: str(row, "ApproximateAge"),
     associationFeeIncludes: strList(row, "AssociationFeeIncludes"),
     associationAmenities: strList(row, "AssociationAmenities"),
@@ -503,6 +503,7 @@ function parseRangeMidpoint(raw: string | null): number | null {
 }
 
 function mapSqft(row: PropTxProperty): number | null {
+  // Exact numeric area only — never invent a midpoint from LivingAreaRange.
   const direct = num(
     row,
     "LivingArea",
@@ -512,17 +513,17 @@ function mapSqft(row: PropTxProperty): number | null {
     "SquareFootage",
   );
   if (direct != null && direct > 0) return Math.round(direct);
+  return null;
+}
 
-  const fromRange = parseRangeMidpoint(
-    str(
-      row,
-      "LivingAreaRange",
-      "BuildingAreaRange",
-      "ApproximateSquareFootage",
-      "SqftRange",
-    ),
+function mapLivingAreaRange(row: PropTxProperty): string | null {
+  return str(
+    row,
+    "LivingAreaRange",
+    "BuildingAreaRange",
+    "ApproximateSquareFootage",
+    "SqftRange",
   );
-  return fromRange != null && fromRange > 0 ? fromRange : null;
 }
 
 function mapYearBuilt(row: PropTxProperty): number | null {
@@ -702,7 +703,7 @@ export function mapPropertyToListingResult(
       soldPrice: soldPrice ?? undefined,
       beds,
       baths,
-      sqft: sqft ?? undefined,
+      sqft: sqft,
       parkingSpaces: parking,
       yearBuilt: yearBuilt ?? undefined,
       taxes: taxes ?? undefined,

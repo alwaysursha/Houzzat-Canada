@@ -15,6 +15,7 @@ import {
 } from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
+import { formatListingSqftLabel } from "@/lib/listings/facts";
 import { cn } from "@/lib/utils";
 
 function formatStat(value: number) {
@@ -31,8 +32,13 @@ function buildStatsLine(listing: ListingCardData) {
       `${formatStat(listing.baths)} ba`,
     );
   }
-  if (listing.sqft != null) {
-    parts.push(`${listing.sqft.toLocaleString()} sqft`);
+  const sqftLabel = formatListingSqftLabel({
+    sqft: listing.sqft,
+    livingAreaRange: listing.livingAreaRange,
+    unit: "sqft",
+  });
+  if (sqftLabel) {
+    parts.push(sqftLabel);
   } else if (listing.parkingSpaces > 0) {
     parts.push(`${listing.parkingSpaces} parking`);
   }

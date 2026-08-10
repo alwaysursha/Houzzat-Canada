@@ -48,6 +48,7 @@ import {
 import {
   formatBedsPlusLabel,
   parseListingFacts,
+  formatListingSqftLabel,
 } from "@/lib/listings/facts";
 import { getListingProvider } from "@/lib/listings/provider";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
@@ -343,6 +344,11 @@ export default async function ListingDetailPage({
   const timingLabel = formatListingTiming(listing);
   const listingFacts = parseListingFacts(listing.facts);
   const bedsPlusLabel = formatBedsPlusLabel(listing.beds, listingFacts);
+  const sqftLabel = formatListingSqftLabel({
+    sqft: listing.sqft,
+    livingAreaRange: listingFacts?.livingAreaRange,
+    unit: "SqFt",
+  });
   const taxesLabel = listing.taxes
     ? listingFacts?.taxYear
       ? `${formatPrice(listing.taxes)} / ${listingFacts.taxYear}`
@@ -777,9 +783,7 @@ export default async function ListingDetailPage({
                     aria-hidden
                   />
                   <span className="text-sm font-semibold leading-tight text-ink">
-                    {listing.sqft
-                      ? `${listing.sqft.toLocaleString()} SqFt`
-                      : "n/a SqFt"}
+                    {sqftLabel ?? "n/a SqFt"}
                   </span>
                 </div>
                 <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/60 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
@@ -844,9 +848,11 @@ export default async function ListingDetailPage({
             parkingSpaces={listing.parkingSpaces}
             yearBuilt={listing.yearBuilt}
             sqftLabel={
-              listing.sqft
-                ? `${listing.sqft.toLocaleString()} sqft`
-                : null
+              formatListingSqftLabel({
+                sqft: listing.sqft,
+                livingAreaRange: listingFacts?.livingAreaRange,
+                unit: "sqft",
+              })
             }
             daysOnMarket={daysOnMarket}
             brokerageName={listing.brokerageName}

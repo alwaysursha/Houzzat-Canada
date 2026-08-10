@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
+import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,6 +13,7 @@ import {
   rememberLoginCredentials,
 } from "@/lib/auth/remembered-login";
 import { flyToAccountPortal } from "@/lib/fly-to-account";
+import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
 
 export function SignInForm({
   callbackUrl: _callbackUrl = null,
@@ -23,6 +25,7 @@ export function SignInForm({
   onSwitchMode?: () => void;
 }) {
   const router = useRouter();
+  const { confirm } = useSiteAlert();
   const submitRef = useRef<HTMLButtonElement>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -71,6 +74,11 @@ export function SignInForm({
 
     await rememberLoginCredentials({ email: normalizedEmail, password });
     await getSession();
+    await offerBiometricsAfterCredentialsSignIn({
+      email: normalizedEmail,
+      password,
+      confirm,
+    });
     const fromRect = submitRef.current?.getBoundingClientRect() ?? null;
     setPending(false);
     onSuccess?.();

@@ -675,7 +675,7 @@ async function upsertPropertyRow(
         listPrice: data.listPrice,
         beds: data.beds,
         baths: data.baths,
-        sqft: data.sqft,
+        sqft: data.sqft ?? null,
         parkingSpaces: data.parkingSpaces,
         yearBuilt: data.yearBuilt,
         taxes: data.taxes,

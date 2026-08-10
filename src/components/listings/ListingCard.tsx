@@ -17,6 +17,7 @@ import {
   propertyTypeLabel,
 } from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
+import { formatListingSqftLabel } from "@/lib/listings/facts";
 import { cn } from "@/lib/utils";
 
 function formatStat(value: number) {
@@ -180,48 +181,62 @@ export function ListingCard({
 
         <ul
           className={cn(
-            "mt-1 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[15px] font-semibold text-ink",
+            "mt-1 flex flex-nowrap items-center gap-x-3.5 overflow-hidden text-[14px] font-semibold text-ink sm:gap-x-5 sm:text-[15px]",
             isLocked && "blur-[2.5px]",
           )}
         >
           {!isCommercial ? (
             <>
-              <li className="flex items-center gap-1.5">
+              <li className="flex shrink-0 items-center gap-1.5">
                 <Bed
-                  className="size-[18px] stroke-[2.25] text-canopy"
+                  className="size-[17px] stroke-[2.25] text-canopy sm:size-[18px]"
                   aria-hidden
                 />
-                <span>{formatListingBedsLabel(listing)}</span>
+                <span className="whitespace-nowrap">
+                  {formatListingBedsLabel(listing)}
+                </span>
                 <span className="sr-only">bedrooms</span>
               </li>
-              <li className="flex items-center gap-1.5">
+              <li className="flex shrink-0 items-center gap-1.5">
                 <Bath
-                  className="size-[18px] stroke-[2.25] text-canopy"
+                  className="size-[17px] stroke-[2.25] text-canopy sm:size-[18px]"
                   aria-hidden
                 />
-                <span>{formatStat(listing.baths)}</span>
+                <span className="whitespace-nowrap">
+                  {formatStat(listing.baths)}
+                </span>
                 <span className="sr-only">bathrooms</span>
               </li>
             </>
           ) : null}
-          {listing.sqft != null ? (
-            <li className="flex items-center gap-1.5">
-              <Maximize2
-                className="size-[18px] stroke-[2.25] text-canopy"
-                aria-hidden
-              />
-              <span>
-                {listing.sqft.toLocaleString()}{" "}
-                <span className="text-[13px] font-medium text-ink/65">sqft</span>
-              </span>
-            </li>
-          ) : null}
-          <li className="flex items-center gap-1.5">
+          {(() => {
+            const sqftLabel = formatListingSqftLabel({
+              sqft: listing.sqft,
+              livingAreaRange: listing.livingAreaRange,
+              unit: false,
+            });
+            if (!sqftLabel) return null;
+            return (
+              <li className="flex min-w-0 items-center gap-1.5">
+                <Maximize2
+                  className="size-[17px] shrink-0 stroke-[2.25] text-canopy sm:size-[18px]"
+                  aria-hidden
+                />
+                <span className="min-w-0 truncate whitespace-nowrap">
+                  {sqftLabel}{" "}
+                  <span className="text-[12.5px] font-medium text-ink/65 sm:text-[13px]">
+                    sqft
+                  </span>
+                </span>
+              </li>
+            );
+          })()}
+          <li className="flex shrink-0 items-center gap-1.5">
             <Car
-              className="size-[18px] stroke-[2.25] text-canopy"
+              className="size-[17px] stroke-[2.25] text-canopy sm:size-[18px]"
               aria-hidden
             />
-            <span>{listing.parkingSpaces}</span>
+            <span className="whitespace-nowrap">{listing.parkingSpaces}</span>
             <span className="sr-only">parking spaces</span>
           </li>
         </ul>

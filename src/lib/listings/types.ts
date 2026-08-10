@@ -22,6 +22,8 @@ export type ListingCard = {
   bedsLabel?: string | null;
   baths: number;
   sqft: number | null;
+  /** PropTx LivingAreaRange when exact sqft is unavailable, e.g. "1500-2000". */
+  livingAreaRange?: string | null;
   parkingSpaces: number;
   addressLine: string;
   unitNumber: string | null;

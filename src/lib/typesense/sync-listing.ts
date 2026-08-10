@@ -7,6 +7,7 @@ import { typesenseEnv, typesenseFlagEnabled } from "@/lib/typesense/env";
 import { listingToTypesenseDocument } from "@/lib/typesense/listing-document";
 
 let bedsLabelFieldEnsured = false;
+let livingAreaRangeFieldEnsured = false;
 
 async function ensureBedsLabelField(): Promise<void> {
   if (bedsLabelFieldEnsured) return;
@@ -21,6 +22,20 @@ async function ensureBedsLabelField(): Promise<void> {
     console.warn("[typesense/sync] bedsLabel field ensure:", error);
   }
   bedsLabelFieldEnsured = true;
+}
+
+async function ensureLivingAreaRangeField(): Promise<void> {
+  if (livingAreaRangeFieldEnsured) return;
+  try {
+    const client = getTypesenseAdminClient();
+    const collection = getTypesenseCollectionName();
+    await client.collections(collection).update({
+      fields: [{ name: "livingAreaRange", type: "string", optional: true }],
+    });
+  } catch (error) {
+    console.warn("[typesense/sync] livingAreaRange field ensure:", error);
+  }
+  livingAreaRangeFieldEnsured = true;
 }
 
 function isTypesenseSyncEnabled(): boolean {

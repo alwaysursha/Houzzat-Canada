@@ -50,6 +50,8 @@ export type TypesenseListingDocument = {
   /** Display beds e.g. "3+3"; optional until collection schema is patched. */
   bedsLabel?: string;
   baths: number;
+  /** PropTx LivingAreaRange when exact sqft is unavailable. */
+  livingAreaRange?: string;
   sqft?: number;
   parkingSpaces: number;
   listedAt: number;
@@ -123,11 +125,11 @@ export function listingToTypesenseDocument(
   if (listing.brokerageName) doc.brokerageName = listing.brokerageName;
   if (coverImageUrl) doc.coverImageUrl = coverImageUrl;
 
-  const bedsLabel = formatBedsPlusLabel(
-    listing.beds,
-    parseListingFacts(listing.facts),
-  );
+  const facts = parseListingFacts(listing.facts);
+  const bedsLabel = formatBedsPlusLabel(listing.beds, facts);
   if (bedsLabel) doc.bedsLabel = bedsLabel;
+  const livingAreaRange = facts?.livingAreaRange?.trim();
+  if (livingAreaRange) doc.livingAreaRange = livingAreaRange;
 
   return doc;
 }

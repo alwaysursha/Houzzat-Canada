@@ -12,7 +12,7 @@ import {
   renderPropertyUpdateEmail,
   renderSoldAlertEmail,
 } from "@/lib/email/templates";
-import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
+import { formatBedsPlusLabel, formatListingSqftLabel, parseListingFacts } from "@/lib/listings/facts";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { prisma } from "@/lib/prisma";
 
@@ -43,9 +43,11 @@ function listingCardExtras(listing: {
   return {
     bedsLabel,
     bathsLabel: baths,
-    sqftLabel: listing.sqft
-      ? `${listing.sqft.toLocaleString("en-CA")} sqft`
-      : null,
+    sqftLabel: formatListingSqftLabel({
+      sqft: listing.sqft,
+      livingAreaRange: facts?.livingAreaRange,
+      unit: "sqft",
+    }),
     imageUrl: photo ? listingPhotoSrc(photo) ?? photo : null,
   };
 }

@@ -23,6 +23,7 @@ import {
 import { listingPath } from "@/lib/listings/listing-path";
 import { ListingLink } from "@/components/listings/ListingLink";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
+import { formatListingSqftLabel } from "@/lib/listings/facts";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
 import { openListingPath } from "@/lib/listings/navigate-listing";
 import { cn } from "@/lib/utils";
@@ -281,12 +282,20 @@ export function SearchMapPopupCard({
             </span>
           </>
         ) : null}
-        {listing.sqft != null ? (
-          <span className="inline-flex items-center gap-1">
-            <Maximize2 className="size-3" aria-hidden />
-            {listing.sqft.toLocaleString()}
-          </span>
-        ) : null}
+        {(() => {
+          const sqftLabel = formatListingSqftLabel({
+            sqft: listing.sqft,
+            livingAreaRange: listing.livingAreaRange,
+            unit: false,
+          });
+          if (!sqftLabel) return null;
+          return (
+            <span className="inline-flex items-center gap-1">
+              <Maximize2 className="size-3" aria-hidden />
+              {sqftLabel}
+            </span>
+          );
+        })()}
       </p>
       <p className="pt-0.5 text-[11px] text-ink/45">
         {formatListingTiming(listing)}

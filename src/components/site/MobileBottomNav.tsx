@@ -20,12 +20,14 @@ import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
 import { parseHomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
+import { acquireScrollLock } from "@/lib/scroll-lock";
 import { cn } from "@/lib/utils";
 
 const BOTTOM_NAV_HEIGHT = "3.5rem";
+const FADE_MS = 220;
 
 /**
- * Mobile consumer shell: Home / Search / More.
+ * Mobile consumer shell: Home / Search / More / Account.
  * Moves account tools out of the tall sticky top strip.
  */
 export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
@@ -35,6 +37,9 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
   const routePlanner = useRoutePlanner();
   const menuId = useId();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [moreShown, setMoreShown] = useState(false);
+  const [moreVisible, setMoreVisible] = useState(false);
+  const [navReady, setNavReady] = useState(false);
   const [personalizeOpen, setPersonalizeOpen] = useState(false);
   const [personalizeSearch, setPersonalizeSearch] = useState<{
     id: string;
@@ -46,14 +51,14 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
     status === "authenticated" &&
     role !== "ADMIN" &&
     role !== "AGENT";
-  const immersive = pathname === "/search" || pathname.startsWith("/search?");
-  const visible = isConsumer && !immersive;
+  const visible = isConsumer;
 
   useEffect(() => {
     const root = document.documentElement;
     if (!visible) {
       root.style.setProperty("--mobile-bottom-nav", "0px");
       root.dataset.mobileBottomNav = "0";
+      setNavReady(false);
       return;
     }
     root.style.setProperty(
@@ -61,7 +66,9 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
       `calc(${BOTTOM_NAV_HEIGHT} + env(safe-area-inset-bottom, 0px))`,
     );
     root.dataset.mobileBottomNav = "1";
+    const frame = window.requestAnimationFrame(() => setNavReady(true));
     return () => {
+      window.cancelAnimationFrame(frame);
       root.style.setProperty("--mobile-bottom-nav", "0px");
       root.dataset.mobileBottomNav = "0";
     };
@@ -73,11 +80,18 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
 
   useEffect(() => {
     if (!moreOpen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
+    return acquireScrollLock();
+  }, [moreOpen]);
+
+  useEffect(() => {
+    if (moreOpen) {
+      setMoreShown(true);
+      const frame = window.requestAnimationFrame(() => setMoreVisible(true));
+      return () => window.cancelAnimationFrame(frame);
+    }
+    setMoreVisible(false);
+    const timer = window.setTimeout(() => setMoreShown(false), FADE_MS);
+    return () => window.clearTimeout(timer);
   }, [moreOpen]);
 
   if (!visible) return null;
@@ -89,16 +103,19 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
 
   return (
     <>
-      {moreOpen ? (
+      {moreShown ? (
         <button
           type="button"
           aria-label="Close menu"
-          className="fixed inset-0 z-[55] bg-ink/35 md:hidden"
+          className={cn(
+            "fixed inset-0 z-[55] bg-ink/35 transition-opacity duration-200 ease-out md:hidden",
+            moreVisible ? "opacity-100" : "opacity-0",
+          )}
           onClick={() => setMoreOpen(false)}
         />
       ) : null}
 
-      {moreOpen ? (
+      {moreShown ? (
         <div
           id={menuId}
           role="dialog"
@@ -108,6 +125,10 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
             "fixed inset-x-0 z-[56] mx-auto max-w-lg md:hidden",
             "bottom-[var(--mobile-bottom-nav)]",
             "rounded-t-2xl border border-line bg-surface shadow-[0_-12px_40px_-16px_rgba(20,32,28,0.35)]",
+            "transition-[opacity,transform] duration-200 ease-out",
+            moreVisible
+              ? "translate-y-0 opacity-100"
+              : "translate-y-2 opacity-0",
           )}
         >
           <div className="flex items-center justify-between border-b border-line/70 px-4 py-3">
@@ -225,6 +246,8 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
         className={cn(
           "fixed inset-x-0 bottom-0 z-[57] border-t border-line/80 bg-surface/95 backdrop-blur-md md:hidden",
           "pb-[env(safe-area-inset-bottom,0px)]",
+          "transition-opacity duration-200 ease-out",
+          navReady ? "opacity-100" : "opacity-0",
         )}
       >
         <div
@@ -250,8 +273,8 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
             aria-controls={menuId}
             onClick={() => setMoreOpen((open) => !open)}
             className={cn(
-              "flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold",
-              moreOpen ? "text-canopy" : "text-ink/55",
+              "flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-[color,opacity] duration-200 ease-out",
+              moreOpen ? "text-canopy opacity-100" : "text-ink/55 opacity-90",
             )}
           >
             <Menu className="size-5" strokeWidth={2.25} aria-hidden />
@@ -304,8 +327,10 @@ function NavItem({
     <Link
       href={href}
       className={cn(
-        "flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition",
-        active ? "text-canopy" : "text-ink/55 hover:text-ink/80",
+        "flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-[color,opacity,transform] duration-200 ease-out",
+        active
+          ? "translate-y-0 text-canopy opacity-100"
+          : "text-ink/55 opacity-90 hover:text-ink/80",
       )}
     >
       {icon}

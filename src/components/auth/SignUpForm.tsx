@@ -5,10 +5,12 @@ import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
+import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
 import { flyToAccountPortal } from "@/lib/fly-to-account";
+import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
 
 export function SignUpForm({
   callbackUrl: _callbackUrl = null,
@@ -20,6 +22,7 @@ export function SignUpForm({
   onSwitchMode?: () => void;
 }) {
   const router = useRouter();
+  const { confirm } = useSiteAlert();
   const submitRef = useRef<HTMLButtonElement>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -70,6 +73,12 @@ export function SignUpForm({
       setError("Account created — please sign in.");
       return;
     }
+
+    await offerBiometricsAfterCredentialsSignIn({
+      email: normalizedEmail,
+      password,
+      confirm,
+    });
 
     const fromRect = submitRef.current?.getBoundingClientRect() ?? null;
     onSuccess?.();
