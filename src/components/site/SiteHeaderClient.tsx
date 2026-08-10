@@ -26,6 +26,9 @@ const SITE_NAV = [
  * Homepage only: reveal header search after the hero scrolls away.
  * Uses scroll + hysteresis (not IntersectionObserver) so iOS Safari does not
  * flicker when the sticky/fixed search chrome appears near the threshold.
+ *
+ * Header lives in the marketing layout Suspense; `#home-hero` is in page
+ * Suspense and may mount later — always attach listeners and re-query the hero.
  */
 function useHomeHeroSearchVisible() {
   const pathname = usePathname();
@@ -37,26 +40,24 @@ function useHomeHeroSearchVisible() {
       return;
     }
 
-    const hero = document.getElementById("home-hero");
-    if (!hero) {
-      setVisible(false);
-      return;
-    }
-
     // Hero bottom vs viewport top. SHOW_AT < HIDE_AT → dead band (no flip).
     const SHOW_AT = 96;
     const HIDE_AT = 168;
 
     let frame = 0;
+    let cancelled = false;
 
     function readVisible(prev: boolean): boolean {
-      const bottom = hero!.getBoundingClientRect().bottom;
+      const hero = document.getElementById("home-hero");
+      if (!hero) return false;
+      const bottom = hero.getBoundingClientRect().bottom;
       if (!prev) return bottom <= SHOW_AT;
       return bottom < HIDE_AT;
     }
 
     function update() {
       frame = 0;
+      if (cancelled) return;
       setVisible((prev) => {
         const next = readVisible(prev);
         return next === prev ? prev : next;
@@ -74,7 +75,23 @@ function useHomeHeroSearchVisible() {
     window.visualViewport?.addEventListener("resize", onScrollOrResize);
     window.visualViewport?.addEventListener("scroll", onScrollOrResize);
 
+    // Re-check until the homepage hero streams in (sibling Suspense).
+    let attempts = 0;
+    function waitForHero() {
+      if (cancelled) return;
+      if (document.getElementById("home-hero")) {
+        update();
+        return;
+      }
+      attempts += 1;
+      if (attempts < 120) {
+        window.requestAnimationFrame(waitForHero);
+      }
+    }
+    waitForHero();
+
     return () => {
+      cancelled = true;
       if (frame) window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", onScrollOrResize);
       window.removeEventListener("resize", onScrollOrResize);
