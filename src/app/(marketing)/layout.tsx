@@ -3,6 +3,7 @@ import { AdsTrackingPixels } from "@/components/ads/AdsTrackingPixels";
 import { UtmCapture } from "@/components/ads/UtmCapture";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { MarketingBelowHeader } from "@/components/site/MarketingBelowHeader";
+import { MarketingChromeGate } from "@/components/site/MarketingChromeGate";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { MobileBottomNav } from "@/components/site/MobileBottomNav";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
@@ -27,11 +28,19 @@ export default async function MarketingLayout({
       <Suspense fallback={null}>
         <UtmCapture />
       </Suspense>
-      <SiteHeader />
+      <Suspense fallback={null}>
+        <MarketingChromeGate>
+          <SiteHeader />
+        </MarketingChromeGate>
+      </Suspense>
       <MarketingBelowHeader cities={cities}>{children}</MarketingBelowHeader>
-      <RoutePlannerFloatingChip />
-      <ScrollToTopButton />
-      <MobileBottomNav cities={cities} />
+      <Suspense fallback={null}>
+        <MarketingChromeGate>
+          <RoutePlannerFloatingChip />
+          <ScrollToTopButton />
+          <MobileBottomNav cities={cities} />
+        </MarketingChromeGate>
+      </Suspense>
     </div>
   );
 }

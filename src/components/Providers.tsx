@@ -12,6 +12,7 @@ import { NavigationRecovery } from "@/components/feedback/NavigationRecovery";
 import { SoftNavShield } from "@/components/feedback/SoftNavShield";
 import { SiteAlertProvider } from "@/components/feedback/SiteAlertProvider";
 import { CapacitorBootstrap } from "@/components/mobile/CapacitorBootstrap";
+import { ListingSheetHost } from "@/components/mobile/ListingSheetHost";
 import { RoutePlannerProvider } from "@/components/route-planner/RoutePlannerProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               </Suspense>
               <ContactUpdateReminder />
               {children}
+              <ListingSheetHost />
             </AuthModalProvider>
           </SiteAlertProvider>
         </RoutePlannerProvider>
