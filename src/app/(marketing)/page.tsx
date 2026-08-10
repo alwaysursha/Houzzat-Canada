@@ -200,8 +200,8 @@ export default async function HomePage() {
           },
         },
         orderBy: { listedAt: "desc" },
-        // Cap for SSR speed — medians/covers don't need the full city inventory.
-        take: 250,
+        // Keep small — large city scans contribute to Worker 1102 under load.
+        take: 48,
       });
 
       const prices = active.map((a) => a.listPrice).sort((a, b) => a - b);
