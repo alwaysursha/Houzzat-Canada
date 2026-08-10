@@ -19,6 +19,11 @@
       "service": "houzzat"
     }
   ],
+  // Extra CPU headroom for paid Workers (default 30s). Does not fix PropTx-on-SSR;
+  // listing HTML still must stay light — this is a safety net only.
+  "limits": {
+    "cpu_ms": 60000
+  },
   "vars": {
     "NEXTAUTH_URL": "https://houzzat.com",
     "NEXT_PUBLIC_SITE_URL": "https://houzzat.com",

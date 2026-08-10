@@ -8,7 +8,7 @@ import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
 import { VowAcceptCard } from "@/components/account/VowAcceptCard";
 import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
 import { ListingFactsPanel } from "@/components/listings/ListingFactsPanel";
-import { ListingGallery } from "@/components/listings/ListingGallery";
+import { ListingGalleryLive } from "@/components/listings/ListingGalleryLive";
 import { ListingRoomsPanel } from "@/components/listings/ListingRoomsPanel";
 import { ListingHistoryPanel } from "@/components/listings/ListingHistoryPanel";
 import { ListingNarrative } from "@/components/listings/ListingNarrative";
@@ -27,10 +27,7 @@ import { SeoLocationBridge } from "@/components/site/SeoLocationContext";
 import { ListingInsightsDeferred } from "@/components/listings/insights/ListingInsightsDeferred";
 import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
-import {
-  buildAddressListingHistoryRows,
-  findSiblingListingsAtAddress,
-} from "@/lib/listings/address-history";
+import { buildAddressListingHistoryRows } from "@/lib/listings/address-history";
 import { getLatestListPriceChange } from "@/lib/listings/history-rows";
 import {
   formatListingTiming,
@@ -52,7 +49,6 @@ import {
 } from "@/lib/listings/facts";
 import { getListingProvider } from "@/lib/listings/provider";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
-import { getPopularCities } from "@/lib/listings/popular-cities";
 import { auth } from "@/lib/auth";
 import { t } from "@/lib/i18n/dictionaries";
 import { getLocale } from "@/lib/i18n/locale";
@@ -235,8 +231,8 @@ export default async function ListingDetailPage({ params }: Params) {
   const gateDetails = accessGateCopy(access, "details");
   const gateSold = accessGateCopy(access, "sold");
 
-  // Full gallery from PropTx MediaURLs (DB only keeps cover for search/cards).
-  // Locked accounts get 5 free photos + a 6th locked "verify" slide.
+  // Neon cover only on SSR — PropTx Media is what tripped Cloudflare 1102.
+  // Full gallery upgrades in ListingGalleryLive right after paint.
   const galleryPhotosAll = await resolveListingGalleryPhotos(listing);
   const galleryPhotos = verifyLocked
     ? galleryPhotosAll.slice(0, 6)
@@ -245,51 +241,51 @@ export default async function ListingDetailPage({ params }: Params) {
     verifyLocked && galleryPhotosAll.length > 5
       ? galleryPhotosAll.length
       : null;
-  const saved = user
-    ? Boolean(
-        await prisma.savedListing.findUnique({
-          where: {
-            userId_mlsNumber: { userId: user.id, mlsNumber: listing.mlsNumber },
-          },
-        }),
-      )
-    : false;
-  const watching = user
-    ? Boolean(
-        await prisma.propertyMonitor.findUnique({
-          where: {
-            userId_mlsNumber: { userId: user.id, mlsNumber: listing.mlsNumber },
-          },
-        }),
-      )
-    : false;
-  const notePreview = user
-    ? await prisma.listingNote.findUnique({
-        where: {
-          userId_mlsNumber: { userId: user.id, mlsNumber: listing.mlsNumber },
-        },
-        select: { body: true },
-      })
-    : null;
 
-  try {
-    await prisma.listingView.create({
-      data: {
-        userId: user?.id,
-        mlsNumber: listing.mlsNumber,
-      },
-    });
-  } catch {
-    // Non-blocking analytics — never fail the listing page.
-  }
+  const [saved, watching, notePreview] = user
+    ? await Promise.all([
+        prisma.savedListing
+          .findUnique({
+            where: {
+              userId_mlsNumber: {
+                userId: user.id,
+                mlsNumber: listing.mlsNumber,
+              },
+            },
+            select: { id: true },
+          })
+          .then((row) => Boolean(row)),
+        prisma.propertyMonitor
+          .findUnique({
+            where: {
+              userId_mlsNumber: {
+                userId: user.id,
+                mlsNumber: listing.mlsNumber,
+              },
+            },
+            select: { id: true },
+          })
+          .then((row) => Boolean(row)),
+        prisma.listingNote.findUnique({
+          where: {
+            userId_mlsNumber: {
+              userId: user.id,
+              mlsNumber: listing.mlsNumber,
+            },
+          },
+          select: { body: true },
+        }),
+      ])
+    : [false, false, null];
 
-  // Heavy Insights / comps / amenities load client-side after first paint so
-  // fast listing↔listing navigation doesn't stall or trip the error boundary.
-  const [popularCities, addressSiblings] = await Promise.all([
-    getPopularCities(12).catch(() => [] as Awaited<ReturnType<typeof getPopularCities>>),
-    findSiblingListingsAtAddress(listing).catch(() => []),
-  ]);
-  const personalizationCities = popularCities.map((row) => row.city);
+  void prisma.listingView
+    .create({
+      data: { userId: user?.id, mlsNumber: listing.mlsNumber },
+    })
+    .catch(() => {});
+
+  // Address siblings enrich client-side (ListingHistoryPanel).
+  const personalizationCities: string[] = [];
   const upcomingOpenHouses = listing.openHouses.filter(
     (oh) => oh.endsAt.getTime() >= Date.now(),
   );
@@ -303,7 +299,7 @@ export default async function ListingDetailPage({ params }: Params) {
     status: listing.status,
     transactionType: listing.transactionType,
     history: listing.history,
-    siblings: addressSiblings,
+    siblings: [],
   });
 
   const showClosedPrice =
@@ -547,7 +543,7 @@ export default async function ListingDetailPage({ params }: Params) {
             <SavedSearchChipBar forceShow cities={personalizationCities} />
           </div>
 
-          <ListingGallery
+          <ListingGalleryLive
             addressLabel={addressLabel}
             mlsNumber={listing.mlsNumber}
             callbackPath={canonicalPath}

@@ -8,33 +8,56 @@ export type GalleryMedia = {
   isPrimary?: boolean;
 };
 
+function fromDb(
+  media: Array<{
+    id: string;
+    url: string;
+    sortOrder?: number;
+    isPrimary?: boolean;
+  }>,
+): GalleryMedia[] {
+  return media.map((row) => ({
+    id: row.id,
+    url: listingPhotoSrc(row.url) ?? row.url,
+    sortOrder: row.sortOrder,
+    isPrimary: row.isPrimary,
+  }));
+}
+
 /**
- * Prefer live PropTx gallery; fall back to Neon media (usually cover only).
- * DB intentionally stores one primary image for search/cards.
+ * Listing SSR must stay Worker-light (Cloudflare 1102).
+ * Default: Neon cover/media only. Opt in to PropTx with preferLive (API/client).
  */
-export async function resolveListingGalleryPhotos(listing: {
-  dataSource?: string | null;
-  listingKey?: string | null;
-  media: Array<{ id: string; url: string; sortOrder?: number; isPrimary?: boolean }>;
-}): Promise<GalleryMedia[]> {
-  const livePhotos =
+export async function resolveListingGalleryPhotos(
+  listing: {
+    dataSource?: string | null;
+    listingKey?: string | null;
+    media: Array<{
+      id: string;
+      url: string;
+      sortOrder?: number;
+      isPrimary?: boolean;
+    }>;
+  },
+  options?: { preferLive?: boolean; timeoutMs?: number; max?: number },
+): Promise<GalleryMedia[]> {
+  const db = fromDb(listing.media);
+  if (!options?.preferLive) return db;
+
+  const live =
     listing.dataSource === "mls" && listing.listingKey
-      ? await fetchListingPhotosFromPropTx(listing.listingKey)
+      ? await fetchListingPhotosFromPropTx(listing.listingKey, {
+          timeoutMs: options.timeoutMs ?? 5_000,
+          max: options.max ?? 60,
+        })
       : [];
 
-  if (livePhotos.length > 0) {
-    return livePhotos.map((photo) => ({
-      id: photo.id,
-      url: listingPhotoSrc(photo.url) ?? photo.url,
-      sortOrder: photo.sortOrder,
-      isPrimary: photo.isPrimary,
-    }));
-  }
+  if (live.length === 0) return db;
 
-  return listing.media.map((media) => ({
-    id: media.id,
-    url: listingPhotoSrc(media.url) ?? media.url,
-    sortOrder: media.sortOrder,
-    isPrimary: media.isPrimary,
+  return live.map((photo) => ({
+    id: photo.id,
+    url: listingPhotoSrc(photo.url) ?? photo.url,
+    sortOrder: photo.sortOrder,
+    isPrimary: photo.isPrimary,
   }));
 }
