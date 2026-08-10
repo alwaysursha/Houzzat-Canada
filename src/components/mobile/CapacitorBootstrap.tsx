@@ -4,12 +4,16 @@ import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { StatusBar, Style } from "@capacitor/status-bar";
+import { hardGo, takeNavBackHref } from "@/lib/mobile/nav-back";
 
 const STATUS_BAR_GREEN = "#1A7B59";
 
 /**
  * Native-shell polish when Houzzat runs inside Capacitor.
- * Safe no-op in regular browsers.
+ *
+ * Android Back must not call history.back() alone — after a listing hard-load,
+ * Next still soft-handles popstate and 500s/1102s on Cloudflare. Prefer a
+ * full document load to the remembered previous page.
  */
 export function CapacitorBootstrap() {
   useEffect(() => {
@@ -17,19 +21,26 @@ export function CapacitorBootstrap() {
 
     void (async () => {
       try {
-        // Android 15+ forces edge-to-edge; web safe-area + green strip handle the bar.
-        // Keep overlay so inset env() vars are populated for the header.
         await StatusBar.setOverlaysWebView({ overlay: true });
         await StatusBar.setBackgroundColor({ color: STATUS_BAR_GREEN });
-        // Light icons/text on the green safe-area strip.
         await StatusBar.setStyle({ style: Style.Light });
       } catch {
-        // Older WebViews / unsupported platforms — ignore.
+        // ignore
       }
     })();
 
     const sub = CapApp.addListener("backButton", ({ canGoBack }) => {
+      const remembered = takeNavBackHref();
+      if (remembered) {
+        hardGo(remembered);
+        return;
+      }
+      if (window.location.pathname.startsWith("/listing/")) {
+        hardGo("/");
+        return;
+      }
       if (canGoBack) {
+        // Last resort — SoftNavShield strips the broken RSC header.
         window.history.back();
         return;
       }

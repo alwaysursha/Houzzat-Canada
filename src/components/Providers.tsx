@@ -9,6 +9,7 @@ import { ActivityBeacon } from "@/components/analytics/ActivityBeacon";
 import { AuthModalProvider } from "@/components/auth/AuthModalProvider";
 import { RememberClientSession } from "@/components/auth/RememberClientSession";
 import { NavigationRecovery } from "@/components/feedback/NavigationRecovery";
+import { SoftNavShield } from "@/components/feedback/SoftNavShield";
 import { SiteAlertProvider } from "@/components/feedback/SiteAlertProvider";
 import { CapacitorBootstrap } from "@/components/mobile/CapacitorBootstrap";
 import { RoutePlannerProvider } from "@/components/route-planner/RoutePlannerProvider";
@@ -26,6 +27,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <AuthModalProvider>
               <CapacitorBootstrap />
               <RememberClientSession />
+              <SoftNavShield />
               <NavigationRecovery />
               <RecentViewsSync />
               <Suspense fallback={null}>

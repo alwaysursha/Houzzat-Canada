@@ -8,56 +8,41 @@ export type GalleryMedia = {
   isPrimary?: boolean;
 };
 
-function fromDb(
+/**
+ * Prefer live PropTx gallery on listing load; fall back to Neon media.
+ */
+export async function resolveListingGalleryPhotos(listing: {
+  dataSource?: string | null;
+  listingKey?: string | null;
   media: Array<{
     id: string;
     url: string;
     sortOrder?: number;
     isPrimary?: boolean;
-  }>,
-): GalleryMedia[] {
-  return media.map((row) => ({
-    id: row.id,
-    url: listingPhotoSrc(row.url) ?? row.url,
-    sortOrder: row.sortOrder,
-    isPrimary: row.isPrimary,
-  }));
-}
-
-/**
- * Listing SSR must stay Worker-light (Cloudflare 1102).
- * Default: Neon cover/media only. Opt in to PropTx with preferLive (API/client).
- */
-export async function resolveListingGalleryPhotos(
-  listing: {
-    dataSource?: string | null;
-    listingKey?: string | null;
-    media: Array<{
-      id: string;
-      url: string;
-      sortOrder?: number;
-      isPrimary?: boolean;
-    }>;
-  },
-  options?: { preferLive?: boolean; timeoutMs?: number; max?: number },
-): Promise<GalleryMedia[]> {
-  const db = fromDb(listing.media);
-  if (!options?.preferLive) return db;
-
-  const live =
+  }>;
+}): Promise<GalleryMedia[]> {
+  const livePhotos =
     listing.dataSource === "mls" && listing.listingKey
       ? await fetchListingPhotosFromPropTx(listing.listingKey, {
-          timeoutMs: options.timeoutMs ?? 5_000,
-          max: options.max ?? 60,
+          // Bound wait so a slow PropTx call cannot 1102 the whole page.
+          timeoutMs: 5_000,
+          max: 60,
         })
       : [];
 
-  if (live.length === 0) return db;
+  if (livePhotos.length > 0) {
+    return livePhotos.map((photo) => ({
+      id: photo.id,
+      url: listingPhotoSrc(photo.url) ?? photo.url,
+      sortOrder: photo.sortOrder,
+      isPrimary: photo.isPrimary,
+    }));
+  }
 
-  return live.map((photo) => ({
-    id: photo.id,
-    url: listingPhotoSrc(photo.url) ?? photo.url,
-    sortOrder: photo.sortOrder,
-    isPrimary: photo.isPrimary,
+  return listing.media.map((media) => ({
+    id: media.id,
+    url: listingPhotoSrc(media.url) ?? media.url,
+    sortOrder: media.sortOrder,
+    isPrimary: media.isPrimary,
   }));
 }

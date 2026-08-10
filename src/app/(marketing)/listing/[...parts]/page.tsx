@@ -8,7 +8,7 @@ import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
 import { VowAcceptCard } from "@/components/account/VowAcceptCard";
 import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
 import { ListingFactsPanel } from "@/components/listings/ListingFactsPanel";
-import { ListingGalleryLive } from "@/components/listings/ListingGalleryLive";
+import { ListingGallery } from "@/components/listings/ListingGallery";
 import { ListingRoomsPanel } from "@/components/listings/ListingRoomsPanel";
 import { ListingHistoryPanel } from "@/components/listings/ListingHistoryPanel";
 import { ListingNarrative } from "@/components/listings/ListingNarrative";
@@ -231,8 +231,7 @@ export default async function ListingDetailPage({ params }: Params) {
   const gateDetails = accessGateCopy(access, "details");
   const gateSold = accessGateCopy(access, "sold");
 
-  // Neon cover only on SSR — PropTx Media is what tripped Cloudflare 1102.
-  // Full gallery upgrades in ListingGalleryLive right after paint.
+  // Full PropTx gallery on listing load (with timeout inside resolve).
   const galleryPhotosAll = await resolveListingGalleryPhotos(listing);
   const galleryPhotos = verifyLocked
     ? galleryPhotosAll.slice(0, 6)
@@ -543,7 +542,7 @@ export default async function ListingDetailPage({ params }: Params) {
             <SavedSearchChipBar forceShow cities={personalizationCities} />
           </div>
 
-          <ListingGalleryLive
+          <ListingGallery
             addressLabel={addressLabel}
             mlsNumber={listing.mlsNumber}
             callbackPath={canonicalPath}
