@@ -132,7 +132,7 @@ export async function fetchListingPhotosFromPropTx(
 
   // PropTx Media can take several seconds on cold/edge; 4.5s often fell back
   // to the single cover photo stored in Neon.
-  const timeoutMs = options?.timeoutMs ?? 12_000;
+  const timeoutMs = options?.timeoutMs ?? 6_000;
 
   const work = async (): Promise<PropTxListingPhoto[]> => {
     for (const config of configs) {
