@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, cache } from "react";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -9,8 +9,11 @@ import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
 import { VowAcceptCard } from "@/components/account/VowAcceptCard";
 import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
 import { ListingFactsPanel } from "@/components/listings/ListingFactsPanel";
-import { ListingGallery } from "@/components/listings/ListingGallery";
-import { ListingRoomsPanel } from "@/components/listings/ListingRoomsPanel";
+import { ListingGalleryLive } from "@/components/listings/ListingGalleryLive";
+import {
+  ListingOpenHousesLive,
+  ListingRoomsLive,
+} from "@/components/listings/ListingRoomsOpenHousesLive";
 import { ListingHistoryPanel } from "@/components/listings/ListingHistoryPanel";
 import { ListingNarrative } from "@/components/listings/ListingNarrative";
 import { ListingQaPanel } from "@/components/listings/ListingQaPanel";
@@ -24,6 +27,7 @@ import { ListingDetailSectionNav } from "@/components/listings/ListingDetailSect
 import { ListingSheetDocumentFlags } from "@/components/listings/ListingSheetDocumentFlags";
 import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
 import { ListingMobileNotes } from "@/components/listings/ListingMobileNotes";
+import { ListingAccountChromeProvider } from "@/components/listings/ListingAccountChromeProvider";
 import { RecordRecentView } from "@/components/listings/RecordRecentView";
 import { SeoLocationBridge } from "@/components/site/SeoLocationContext";
 import { ListingInsightsDeferred } from "@/components/listings/insights/ListingInsightsDeferred";
@@ -51,10 +55,11 @@ import {
   formatListingSqftLabel,
 } from "@/lib/listings/facts";
 import { getListingProvider } from "@/lib/listings/provider";
+import { NEON_LISTING_MEDIA_CAP } from "@/lib/listings/gallery-constants";
+import { persistNeonListingMediaCap } from "@/lib/listings/persist-neon-media";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
+import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
 import { auth } from "@/lib/auth";
-import { t } from "@/lib/i18n/dictionaries";
-import { getLocale } from "@/lib/i18n/locale";
 import { prisma } from "@/lib/prisma";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { lookupAndUpsertOnDemand } from "@/lib/proptx/on-demand-lookup";
@@ -75,6 +80,9 @@ import {
   listingPageTitle,
   listingPath,
 } from "@/lib/listings/listing-path";
+
+/** Per-request: VOW/IDX gates, sold/history redaction, session access. */
+export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ parts: string[] }> };
 
@@ -98,16 +106,25 @@ function parseListingParts(parts: string[] | undefined): {
   return { slug: parts[0]!, mlsNumber: parts[1]! };
 }
 
-async function loadListingByMls(mlsNumber: string) {
+/**
+ * Request-scoped listing load shared by generateMetadata + page.
+ * Normalize MLS before cache() so case/whitespace variants hit one entry.
+ * Auth/VOW stay outside — this loader is MLS inventory only.
+ */
+const loadListingByMlsCached = cache(async (mlsNumber: string) => {
   const provider = getListingProvider();
-  let listing = await provider.getByMls(mlsNumber);
+  let listing = await provider.getByMlsForDetailPage(mlsNumber);
   if (!listing) {
     const pulled = await lookupAndUpsertOnDemand(mlsNumber);
     if (pulled.mlsNumbers.length > 0) {
-      listing = await provider.getByMls(mlsNumber);
+      listing = await provider.getByMlsForDetailPage(mlsNumber);
     }
   }
   return listing;
+});
+
+function loadListingByMls(mlsNumber: string) {
+  return loadListingByMlsCached(mlsNumber.trim().toUpperCase());
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
@@ -181,44 +198,24 @@ export default async function ListingDetailPage({
   }
 
   const session = await auth();
-  const locale = await getLocale();
+  // Access fields only on SSR — save/watch/note/phone/prefs load after paint.
   const user = session?.user?.email
-    ? await (async () => {
-        const email = session.user!.email!;
-        try {
-          return await prisma.user.findUnique({
-            where: { email },
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              phone: true,
-              role: true,
-              relatedListingsMode: true,
-              emailVerified: true,
-              createdAt: true,
-            },
-          });
-        } catch {
-          // Prefer schema include relatedListingsMode; fall back if DB not migrated yet.
-          const base = await prisma.user.findUnique({
-            where: { email },
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              phone: true,
-              role: true,
-              emailVerified: true,
-              createdAt: true,
-            },
-          });
-          return base
-            ? { ...base, relatedListingsMode: "SAME_AREA" as const }
-            : null;
-        }
-      })()
+    ? await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: {
+          id: true,
+          emailVerified: true,
+          createdAt: true,
+        },
+      })
     : null;
+  const sessionContact = user
+    ? {
+        name: session?.user?.name ?? null,
+        email: session?.user?.email ?? null,
+        phone: null as string | null,
+      }
+    : undefined;
 
   // MLS listing pages are public in IDX mode; VOW-only legacy still requires login.
   if (
@@ -242,51 +239,32 @@ export default async function ListingDetailPage({
   const gateDetails = accessGateCopy(access, "details");
   const gateSold = accessGateCopy(access, "sold");
 
-  // Full PropTx gallery on listing load (with timeout inside resolve).
-  const galleryPhotosAll = await resolveListingGalleryPhotos(listing);
-  const galleryPhotos = verifyLocked
-    ? galleryPhotosAll.slice(0, 6)
-    : galleryPhotosAll;
-  const galleryPhotoCap =
-    verifyLocked && galleryPhotosAll.length > 5
-      ? galleryPhotosAll.length
+  // Neon-only SSR gallery (≤5). Never await PropTx here — start it in parallel
+  // and pass the promise to the client so enrich skips an extra API hop.
+  const galleryPhotos = resolveListingGalleryPhotos(listing);
+  const livePhotosPromise =
+    listing.dataSource === "mls" && listing.listingKey
+      ? fetchListingPhotosFromPropTx(listing.listingKey, {
+          timeoutMs: 10_000,
+        }).then((photos) => {
+          if (photos.length > 0) {
+            void persistNeonListingMediaCap(
+              listing.id,
+              photos.slice(0, NEON_LISTING_MEDIA_CAP).map((photo) => ({
+                url: photo.mediaUrl,
+                sortOrder: photo.sortOrder,
+                isPrimary: photo.isPrimary,
+              })),
+            ).catch(() => {
+              // Best-effort Neon warm for next visit
+            });
+          }
+          return photos.map((photo) => ({
+            id: photo.id,
+            url: photo.url,
+          }));
+        })
       : null;
-
-  const [saved, watching, notePreview] = user
-    ? await Promise.all([
-        prisma.savedListing
-          .findUnique({
-            where: {
-              userId_mlsNumber: {
-                userId: user.id,
-                mlsNumber: listing.mlsNumber,
-              },
-            },
-            select: { id: true },
-          })
-          .then((row) => Boolean(row)),
-        prisma.propertyMonitor
-          .findUnique({
-            where: {
-              userId_mlsNumber: {
-                userId: user.id,
-                mlsNumber: listing.mlsNumber,
-              },
-            },
-            select: { id: true },
-          })
-          .then((row) => Boolean(row)),
-        prisma.listingNote.findUnique({
-          where: {
-            userId_mlsNumber: {
-              userId: user.id,
-              mlsNumber: listing.mlsNumber,
-            },
-          },
-          select: { body: true },
-        }),
-      ])
-    : [false, false, null];
 
   void prisma.listingView
     .create({
@@ -296,9 +274,6 @@ export default async function ListingDetailPage({
 
   // Address siblings enrich client-side (ListingHistoryPanel).
   const personalizationCities: string[] = [];
-  const upcomingOpenHouses = listing.openHouses.filter(
-    (oh) => oh.endsAt.getTime() >= Date.now(),
-  );
   const listingHistoryRows = buildAddressListingHistoryRows({
     mlsNumber: listing.mlsNumber,
     listPrice: listing.listPrice,
@@ -477,7 +452,10 @@ export default async function ListingDetailPage({
   };
 
   return (
-    <>
+    <ListingAccountChromeProvider
+      mlsNumber={listing.mlsNumber}
+      signedIn={Boolean(user)}
+    >
       <SeoLocationBridge
         city={listing.city}
         community={listing.community}
@@ -499,8 +477,8 @@ export default async function ListingDetailPage({
         mlsNumber={listing.mlsNumber}
         shareTitle={addressLabel}
         callbackPath={canonicalPath}
-        initiallySaved={saved}
-        initiallyWatching={watching}
+        initiallySaved={false}
+        initiallyWatching={false}
         signedIn={Boolean(user)}
         city={listing.city}
         community={listing.community}
@@ -512,7 +490,7 @@ export default async function ListingDetailPage({
       <ListingMobileActionBar
         mlsNumber={listing.mlsNumber}
         callbackPath={canonicalPath}
-        initiallyWatching={watching}
+        initiallyWatching={false}
         signedIn={Boolean(user)}
         inactive={isInactive}
         similarHomesHref={similarHomesHref}
@@ -520,15 +498,7 @@ export default async function ListingDetailPage({
         community={listing.community}
         transactionType={listing.transactionType}
         segment={listing.segment}
-        contact={
-          user
-            ? {
-                name: user.name,
-                email: user.email,
-                phone: user.phone,
-              }
-            : undefined
-        }
+        contact={sessionContact}
       />
       <div className="w-full min-w-0 space-y-8 bg-[linear-gradient(180deg,rgb(244_247_245)_0%,rgb(255_255_255)_28%,rgb(255_255_255)_100%)] px-4 pb-[calc(2rem+4.25rem+var(--mobile-bottom-nav,0px)+var(--listing-action-pad-bottom))] pt-3 sm:px-6 md:pb-8 md:pt-6 lg:px-10">
         {/*
@@ -541,8 +511,8 @@ export default async function ListingDetailPage({
           mlsNumber={listing.mlsNumber}
           shareTitle={addressLabel}
           callbackPath={canonicalPath}
-          initiallySaved={saved}
-          initiallyWatching={watching}
+          initiallySaved={false}
+          initiallyWatching={false}
           signedIn={Boolean(user)}
           city={listing.city}
           community={listing.community}
@@ -564,9 +534,10 @@ export default async function ListingDetailPage({
             </div>
           ) : null}
 
-          <ListingGallery
+          <ListingGalleryLive
             addressLabel={addressLabel}
             mlsNumber={listing.mlsNumber}
+            livePhotosPromise={livePhotosPromise}
             callbackPath={canonicalPath}
             coverTag={coverTagLabel}
             coverTagClassName={listingStatusBadgeClass(listing.status)}
@@ -575,9 +546,6 @@ export default async function ListingDetailPage({
             allowBooking={!isInactive}
             detailsLocked={detailsLocked}
             needsEmailVerification={verifyLocked}
-            hiddenPhotoCount={
-              galleryPhotoCap != null ? Math.max(0, galleryPhotoCap - 5) : 0
-            }
             mapSubject={
               Number.isFinite(listing.lat) && Number.isFinite(listing.lng)
                 ? {
@@ -602,15 +570,7 @@ export default async function ListingDetailPage({
                   }
                 : undefined
             }
-            contact={
-              user
-                ? {
-                    name: user.name,
-                    email: user.email,
-                    phone: user.phone,
-                  }
-                : undefined
-            }
+            contact={sessionContact}
             photos={galleryPhotos}
           />
         </div>
@@ -805,8 +765,8 @@ export default async function ListingDetailPage({
             mlsNumber={listing.mlsNumber}
             addressLine={addressLabel}
             city={listing.city}
-            title={t(locale, "grounded_qa_title")}
-            hint={t(locale, "grounded_qa_hint")}
+            title="Quick question?"
+            hint="Message the agent directly on WhatsApp — MLS® and address is already included."
             expertWhatsApp={getExpertWhatsAppNumber()}
           />
 
@@ -817,17 +777,13 @@ export default async function ListingDetailPage({
             items={[
               { id: "listing-about", label: "About" },
               { id: "listing-details", label: "Details" },
-              ...(listing.rooms.length > 0
-                ? [{ id: "listing-rooms", label: "Rooms" }]
-                : []),
+              { id: "listing-rooms", label: "Rooms" },
               { id: "listing-history", label: "History" },
               { id: "listing-insights", label: "Insights" },
               { id: "listing-estimated-value", label: "Estimated Value" },
               { id: "listing-related", label: "Similar" },
               { id: "listing-nearby", label: "Amenities" },
-              ...(upcomingOpenHouses.length > 0
-                ? [{ id: "listing-open-houses", label: "Open houses" }]
-                : []),
+              { id: "listing-open-houses", label: "Open houses" },
             ]}
           />
 
@@ -860,7 +816,7 @@ export default async function ListingDetailPage({
             baths={listing.baths}
           />
 
-          <ListingRoomsPanel rooms={listing.rooms} />
+          <ListingRoomsLive mlsNumber={listing.mlsNumber} />
 
           <ListingHistoryPanel
             mlsNumber={listing.mlsNumber}
@@ -892,47 +848,13 @@ export default async function ListingDetailPage({
               transactionType: listing.transactionType,
               segment: listing.segment,
             }}
-            initialMode={user?.relatedListingsMode ?? "SAME_AREA"}
+            initialMode="SAME_AREA"
             signedIn={Boolean(user)}
           />
 
           <NearbyAmenitiesDeferred lat={listing.lat} lng={listing.lng} />
 
-          {upcomingOpenHouses.length > 0 ? (
-            <section
-              id="listing-open-houses"
-              className="scroll-mt-[calc(var(--site-header-stack,4rem)+3.25rem)] rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6"
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
-                Showings
-              </p>
-              <h2 className="mt-1 font-display text-xl text-ink sm:text-2xl">
-                Open houses
-              </h2>
-              <ul className="mt-4 space-y-2">
-                {upcomingOpenHouses.map((oh) => (
-                  <li
-                    key={oh.id}
-                    className="rounded-xl border border-signal/20 bg-signal/5 px-4 py-3 text-sm font-medium text-ink/80"
-                  >
-                    {oh.startsAt.toLocaleString("en-CA", {
-                      weekday: "short",
-                      month: "short",
-                      day: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}{" "}
-                    –{" "}
-                    {oh.endsAt.toLocaleTimeString("en-CA", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                    {oh.notes ? ` · ${oh.notes}` : ""}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
+          <ListingOpenHousesLive mlsNumber={listing.mlsNumber} />
         </div>
 
         <aside className="min-w-0 space-y-5 sm:space-y-6">
@@ -942,14 +864,14 @@ export default async function ListingDetailPage({
           <ListingNotesPanel
             mlsNumber={listing.mlsNumber}
             signedIn={Boolean(user)}
-            initialBody={notePreview?.body ?? ""}
+            initialBody=""
             authCallbackUrl={canonicalPath}
             className="hidden md:block"
           />
           <ListingMobileNotes
             mlsNumber={listing.mlsNumber}
             signedIn={Boolean(user)}
-            initialBody={notePreview?.body ?? ""}
+            initialBody=""
             authCallbackUrl={canonicalPath}
           />
           <ViewingRequestPanel
@@ -963,20 +885,12 @@ export default async function ListingDetailPage({
             transactionType={listing.transactionType}
             segment={listing.segment}
             signedIn={Boolean(user)}
-            contact={
-              user
-                ? {
-                    name: user.name,
-                    email: user.email,
-                    phone: user.phone,
-                  }
-                : undefined
-            }
+            contact={sessionContact}
           />
           <MlsDisclaimer />
         </aside>
       </div>
     </div>
-    </>
+    </ListingAccountChromeProvider>
   );
 }

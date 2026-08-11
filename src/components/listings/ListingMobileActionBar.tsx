@@ -9,6 +9,10 @@ import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import {
+  useListingAccountChrome,
+  useListingContactDefaults,
+} from "@/components/listings/ListingAccountChromeProvider";
+import {
   ViewingBookingModal,
   type ViewingContactDefaults,
 } from "@/components/listings/ViewingBookingModal";
@@ -52,6 +56,8 @@ export function ListingMobileActionBar({
   const router = useRouter();
   const { openAuth } = useAuthModal();
   const { alert, confirm, toast } = useSiteAlert();
+  const chrome = useListingAccountChrome();
+  const resolvedContact = useListingContactDefaults(contact);
   const routePlanner = useRoutePlanner();
   const onTour = routePlanner?.isOnTour(mlsNumber) ?? false;
   const routeButtonRef = useRef<HTMLButtonElement>(null);
@@ -59,11 +65,17 @@ export function ListingMobileActionBar({
   const [pending, setPending] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [hasBottomNav, setHasBottomNav] = useState(false);
+  const watchTouched = useRef(false);
   const authCallbackUrl = callbackPath ?? `/listing/${mlsNumber}`;
 
   useEffect(() => {
+    if (watchTouched.current) return;
+    if (chrome.active && chrome.loaded) {
+      setWatching(chrome.watching);
+      return;
+    }
     setWatching(initiallyWatching);
-  }, [initiallyWatching]);
+  }, [chrome.active, chrome.loaded, chrome.watching, initiallyWatching]);
 
   useEffect(() => {
     function sync() {
@@ -110,6 +122,7 @@ export function ListingMobileActionBar({
       return;
     }
 
+    watchTouched.current = true;
     setWatching(nextWatching);
     router.refresh();
 
@@ -260,7 +273,7 @@ export function ListingMobileActionBar({
           open={bookingOpen}
           onClose={() => setBookingOpen(false)}
           mlsNumber={mlsNumber}
-          contact={contact}
+          contact={resolvedContact}
         />
       ) : null}
     </>

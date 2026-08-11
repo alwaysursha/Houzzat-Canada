@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,13 @@ export function LeadRequestForm({
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const phoneTouched = useRef(false);
+
+  useEffect(() => {
+    if (phoneTouched.current) return;
+    const next = defaults?.phone ?? "";
+    if (next && !phone) setPhone(next);
+  }, [defaults?.phone, phone]);
 
   const isVirtual = kind === "virtual_viewing";
 
@@ -112,7 +119,10 @@ export function LeadRequestForm({
       <Input
         placeholder="Phone (optional)"
         value={phone}
-        onChange={(e) => setPhone(e.target.value)}
+        onChange={(e) => {
+          phoneTouched.current = true;
+          setPhone(e.target.value);
+        }}
         autoComplete="tel"
       />
       {isVirtual ? (

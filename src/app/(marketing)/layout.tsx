@@ -8,17 +8,17 @@ import { SiteHeader } from "@/components/site/SiteHeader";
 import { MobileBottomNav } from "@/components/site/MobileBottomNav";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
 import { RoutePlannerFloatingChip } from "@/components/route-planner/RoutePlannerFloatingChip";
-import { getPopularCities } from "@/lib/listings/popular-cities";
+import { suggestedCitiesForLocation } from "@/lib/geo/regions";
 import { organizationJsonLd } from "@/lib/seo";
 import { getExpertWhatsAppNumber } from "@/lib/whatsapp";
 
-export default async function MarketingLayout({
+export default function MarketingLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const popularCities = await getPopularCities(12);
-  const cities = popularCities.map((row) => row.city);
+  // Static regional defaults — no Neon inventory ranking on every page.
+  const cities = suggestedCitiesForLocation({ limit: 12 });
   const phone = getExpertWhatsAppNumber();
 
   return (

@@ -9,7 +9,7 @@ import {
 } from "@/lib/listings/constants";
 import { ownerListingTag } from "@/lib/owner/pricing";
 import { prisma } from "@/lib/prisma";
-import { getPopularCities } from "@/lib/listings/popular-cities";
+import { suggestedCitiesForLocation } from "@/lib/geo/regions";
 import {
   filterAndRankListingsByQuery,
   listingQueryCandidateWhere,
@@ -383,6 +383,47 @@ export class DbListingProvider implements ListingProvider {
     return listing;
   }
 
+  /**
+   * Lean listing detail for page SSR / metadata first paint.
+   * Media capped at 5; history only recent Price Change rows (price chip).
+   * Rooms + open houses load after paint via deferred API.
+   */
+  async getByMlsForDetailPage(mlsNumber: string): Promise<ListingDetail | null> {
+    const listing = await prisma.listing.findUnique({
+      where: { mlsNumber },
+      include: {
+        media: {
+          orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
+          take: 5,
+        },
+        history: {
+          where: { event: { contains: "Price Change", mode: "insensitive" } },
+          orderBy: [{ lastUpdatedAt: "desc" }, { contractDate: "desc" }],
+          take: 5,
+        },
+      },
+    });
+    if (!listing) return null;
+    if (
+      listing.dataSource === "fsbo" &&
+      listing.ownerStatus !== "ACTIVE"
+    ) {
+      return null;
+    }
+    if (
+      this.name === "proptx" &&
+      listing.isMock &&
+      listing.dataSource !== "fsbo"
+    ) {
+      return null;
+    }
+    return {
+      ...listing,
+      openHouses: [],
+      rooms: [],
+    };
+  }
+
   async autocomplete(
     query: string,
     options?: AutocompleteOptions,
@@ -400,7 +441,11 @@ export class DbListingProvider implements ListingProvider {
     };
 
     if (options?.empty) {
-      return this.emptyAutocomplete(txn);
+      return this.emptyAutocomplete(txn, {
+        city: options.city,
+        lat: options.lat,
+        lng: options.lng,
+      });
     }
 
     const q = query.trim();
@@ -661,23 +706,29 @@ export class DbListingProvider implements ListingProvider {
 
   private async emptyAutocomplete(
     txn?: "SALE" | "LEASE",
+    location?: { city?: string | null; lat?: number | null; lng?: number | null },
   ): Promise<AutocompleteSuggestion[]> {
-    const popular = await getPopularCities(6);
+    const suggested = suggestedCitiesForLocation({
+      city: location?.city,
+      lat: location?.lat,
+      lng: location?.lng,
+      limit: 6,
+    });
     const paramsBase = () => {
       const params = new URLSearchParams();
       if (txn) params.set("transactionType", txn);
       return params;
     };
 
-    const cityRows: AutocompleteSuggestion[] = popular.map((row) => {
+    const cityRows: AutocompleteSuggestion[] = suggested.map((city) => {
       const params = paramsBase();
-      params.set("city", row.city);
+      params.set("city", city);
       return {
         type: "city" as const,
         group: "popular" as const,
-        label: row.city,
-        subtitle: `${row.count} active listing${row.count === 1 ? "" : "s"}`,
-        city: row.city,
+        label: city,
+        subtitle: "Homes in this area",
+        city,
         province: "ON",
         href: `/search?${params.toString()}`,
       };

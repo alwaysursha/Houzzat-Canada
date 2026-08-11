@@ -12,6 +12,16 @@ import {
 
 export type PropTxListingPhoto = {
   id: string;
+  /** Display URL (may be proxied). */
+  url: string;
+  /** Raw MLS media URL for Neon persistence. */
+  mediaUrl: string;
+  sortOrder: number;
+  isPrimary: boolean;
+};
+
+type PreferredListingPhoto = {
+  id: string;
   url: string;
   sortOrder: number;
   isPrimary: boolean;
@@ -34,7 +44,7 @@ function sizeScore(row: PropTxProperty): number {
 export function preferListingPhotos(
   rows: PropTxProperty[],
   max?: number,
-): PropTxListingPhoto[] {
+): PreferredListingPhoto[] {
   const preferred = new Map<
     string,
     {
@@ -140,8 +150,11 @@ export async function fetchListingPhotosFromPropTx(
         const rows = await fetchRawPropertyMedia(key, config);
         if (rows.length === 0) continue;
         return preferListingPhotos(rows, options?.max).map((photo) => ({
-          ...photo,
+          id: photo.id,
+          mediaUrl: photo.url,
           url: listingPhotoSrc(photo.url) ?? photo.url,
+          sortOrder: photo.sortOrder,
+          isPrimary: photo.isPrimary,
         }));
       } catch {
         // try next credential set

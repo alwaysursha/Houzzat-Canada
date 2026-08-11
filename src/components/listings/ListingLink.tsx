@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import type { ComponentProps, MouseEvent } from "react";
+import {
+  mlsNumberFromListingHref,
+  prefetchListingGallery,
+} from "@/lib/listings/gallery-client";
 import { openListingPath } from "@/lib/listings/navigate-listing";
 
 type ListingLinkProps = Omit<ComponentProps<typeof Link>, "prefetch"> & {
@@ -15,9 +19,16 @@ type ListingLinkProps = Omit<ComponentProps<typeof Link>, "prefetch"> & {
 export function ListingLink({
   href,
   onClick,
+  onPointerEnter,
+  onFocus,
   children,
   ...props
 }: ListingLinkProps) {
+  function warmGallery() {
+    const mls = mlsNumberFromListingHref(href);
+    if (mls) prefetchListingGallery(mls);
+  }
+
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
     onClick?.(event);
     if (event.defaultPrevented) return;
@@ -31,12 +42,27 @@ export function ListingLink({
     ) {
       return;
     }
+    // Start gallery fetch before the sheet iframe mounts.
+    warmGallery();
     event.preventDefault();
     openListingPath(href);
   }
 
   return (
-    <Link href={href} prefetch={false} onClick={handleClick} {...props}>
+    <Link
+      href={href}
+      prefetch={false}
+      onClick={handleClick}
+      onPointerEnter={(event) => {
+        warmGallery();
+        onPointerEnter?.(event);
+      }}
+      onFocus={(event) => {
+        warmGallery();
+        onFocus?.(event);
+      }}
+      {...props}
+    >
       {children}
     </Link>
   );

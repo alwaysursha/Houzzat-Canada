@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CompactPropertyCardRail } from "@/components/listings/CompactPropertyCardRail";
+import { useListingAccountChrome } from "@/components/listings/ListingAccountChromeProvider";
 import { ListingSection } from "@/components/listings/ListingSection";
 import { propertyTypeLabel } from "@/lib/listings/constants";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
@@ -42,11 +43,18 @@ export function ListingRelatedSection({
   initialMode?: "SAME_AREA" | "SAME_FEATURES";
   signedIn: boolean;
 }) {
+  const chrome = useListingAccountChrome();
   const [tab, setTab] = useState<RelatedTab>("for-sale");
   const [mode, setMode] = useState<RelatedMode>(preferenceToMode(initialMode));
   const [items, setItems] = useState<ListingCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const userTouchedMode = useRef(false);
+
+  useEffect(() => {
+    if (!chrome.active || !chrome.loaded || userTouchedMode.current) return;
+    setMode(preferenceToMode(chrome.relatedListingsMode));
+  }, [chrome.active, chrome.loaded, chrome.relatedListingsMode]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,6 +80,7 @@ export function ListingRelatedSection({
   }, [load]);
 
   async function selectMode(next: RelatedMode) {
+    userTouchedMode.current = true;
     setMode(next);
     if (!signedIn) return;
     setSaving(true);

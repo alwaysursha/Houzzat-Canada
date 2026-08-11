@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Heart } from "lucide-react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
+import { useListingAccountChrome } from "@/components/listings/ListingAccountChromeProvider";
 import { Button } from "@/components/ui/button";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
@@ -23,8 +24,19 @@ export function SaveListingButton({
   const router = useRouter();
   const { openAuth } = useAuthModal();
   const { toast } = useSiteAlert();
+  const chrome = useListingAccountChrome();
   const [saved, setSaved] = useState(initiallySaved);
   const [pending, setPending] = useState(false);
+  const userTouched = useRef(false);
+
+  useEffect(() => {
+    if (userTouched.current) return;
+    if (chrome.active && chrome.loaded) {
+      setSaved(chrome.saved);
+      return;
+    }
+    setSaved(initiallySaved);
+  }, [chrome.active, chrome.loaded, chrome.saved, initiallySaved]);
 
   async function toggle() {
     if (!signedIn) {
@@ -48,6 +60,7 @@ export function SaveListingButton({
       return;
     }
     const next = !saved;
+    userTouched.current = true;
     setSaved(next);
     toast({
       message: next

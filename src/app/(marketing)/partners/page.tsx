@@ -1,10 +1,7 @@
-import { getLocale } from "@/lib/i18n/locale";
-import { t } from "@/lib/i18n/dictionaries";
 import { prisma } from "@/lib/prisma";
 
 export async function generateMetadata() {
-  const locale = await getLocale();
-  return { title: t(locale, "partners_title") };
+  return { title: "Referral partners" };
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -15,7 +12,6 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 export default async function PartnersPage() {
-  const locale = await getLocale();
   const partners = await prisma.referralPartner.findMany({
     where: { active: true },
     orderBy: [{ type: "asc" }, { name: "asc" }],
@@ -24,11 +20,10 @@ export default async function PartnersPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-12 sm:px-6">
       <div>
-        <h1 className="font-display text-4xl text-ink">
-          {t(locale, "partners_title")}
-        </h1>
+        <h1 className="font-display text-4xl text-ink">Referral partners</h1>
         <p className="mt-2 max-w-2xl text-ink/70">
-          {t(locale, "partners_subtitle")}
+          Mortgage, legal, and inspection partners Houzzat agents can introduce
+          you to — tracked handoffs, no surprise spam.
         </p>
       </div>
 

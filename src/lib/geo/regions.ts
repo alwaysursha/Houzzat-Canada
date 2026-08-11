@@ -255,6 +255,64 @@ export function citiesQueryParam(cities: string[]): string {
   return cities.join("|");
 }
 
+/** Prefer dotted spellings when both "St Catharines" and "St. Catharines" exist. */
+function dedupeCityNames(cities: string[]): string[] {
+  const byKey = new Map<string, string>();
+  for (const city of cities) {
+    const trimmed = city.trim();
+    if (!trimmed) continue;
+    const key = normalizeCityKey(trimmed);
+    const existing = byKey.get(key);
+    if (!existing || trimmed.length > existing.length) {
+      byKey.set(key, trimmed);
+    }
+  }
+  return [...byKey.values()];
+}
+
+/**
+ * Static city chips for autocomplete / footer / personalize when no MLS
+ * popularity ranking is used. Prefer region around known city or coords.
+ */
+export function suggestedCitiesForLocation(input?: {
+  city?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  limit?: number;
+}): string[] {
+  const limit = input?.limit ?? 8;
+  const lat = input?.lat;
+  const lng = input?.lng;
+  if (
+    lat != null &&
+    lng != null &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng)
+  ) {
+    return dedupeCityNames(
+      resolveRegionFromCoords(lat, lng).region.cities,
+    ).slice(0, limit);
+  }
+  if (input?.city?.trim()) {
+    return dedupeCityNames(
+      resolveRegionFromCity(input.city).region.cities,
+    ).slice(0, limit);
+  }
+  return dedupeCityNames([...DEFAULT_HOMEPAGE_CITIES]).slice(0, limit);
+}
+
+/**
+ * Static Ontario market hubs for /areas and SEO indexes — no Neon inventory
+ * ranking.
+ */
+export function staticOntarioHubCities(): string[] {
+  const cities: string[] = [...DEFAULT_HOMEPAGE_CITIES];
+  for (const region of Object.values(MARKET_REGIONS)) {
+    cities.push(...region.cities);
+  }
+  return dedupeCityNames(cities).sort((a, b) => a.localeCompare(b));
+}
+
 /** Map fly-to target for a city name (case-insensitive). */
 export function cityMapCenter(
   city: string | null | undefined,

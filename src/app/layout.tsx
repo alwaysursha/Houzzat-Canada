@@ -4,8 +4,6 @@ import { Providers } from "@/components/Providers";
 import { buildRootMetadata } from "@/lib/seo";
 import "./globals.css";
 
-export const dynamic = "force-dynamic";
-
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,

@@ -168,14 +168,20 @@ export type AutocompleteSuggestion = {
 export type AutocompleteOptions = {
   /** When set, listing suggestions are limited to that transaction type. */
   transactionType?: ListingTransactionType;
-  /** Empty-focus panel: popular cities + Near me / open houses. */
+  /** Empty-focus panel: regional cities + Near me / open houses. */
   empty?: boolean;
+  /** Optional location bias for empty-state city chips (static regions). */
+  city?: string | null;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 export interface ListingProvider {
   readonly name: "mock" | "proptx";
   search(params: ListingSearchParams): Promise<ListingSearchResult>;
   getByMls(mlsNumber: string): Promise<ListingDetail | null>;
+  /** Lean SSR load for listing detail (no rooms / open houses). */
+  getByMlsForDetailPage(mlsNumber: string): Promise<ListingDetail | null>;
   autocomplete(
     query: string,
     options?: AutocompleteOptions,

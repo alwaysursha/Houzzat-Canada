@@ -4,6 +4,8 @@ import { TeamLeaderDeskBanner } from "@/components/agent/TeamLeaderDeskBanner";
 import { requireAgentContext } from "@/lib/agent";
 import { resolveDeskView } from "@/lib/agent/brokerage";
 
+export const dynamic = "force-dynamic";
+
 export default async function AgentLayout({
   children,
 }: {

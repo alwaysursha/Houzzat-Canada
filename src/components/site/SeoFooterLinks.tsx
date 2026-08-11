@@ -13,7 +13,7 @@ import { resolveRegionFromCity } from "@/lib/geo/regions";
 export function SeoFooterLinks({
   fallbackCities = [],
 }: {
-  /** Popular cities when page has no local context. */
+  /** Regional city fallbacks when page has no local context. */
   fallbackCities?: string[];
 }) {
   const pathname = usePathname() || "/";

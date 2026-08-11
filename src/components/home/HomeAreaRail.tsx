@@ -2,25 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
 import { homesForSalePath } from "@/lib/geo/area-paths";
+import type { HomeAreaCardData } from "@/lib/geo/home-area-stats";
 import { formatPrice, propertyTypeLabel } from "@/lib/listings/constants";
-import type { PropertyType } from "@prisma/client";
 
-export type HomeAreaCardData = {
-  slug: string;
-  displayName: string;
-  city: string;
-  community?: string | null;
-  summary: string | null;
-  imageUrl: string;
-  imageSource: "listing" | "city";
-  activeCount: number;
-  medianListPrice: number | null;
-  minListPrice: number | null;
-  maxListPrice: number | null;
-  avgDaysOnMarket: number | null;
-  openHouseCount: number;
-  topPropertyType: PropertyType | null;
-};
+export type { HomeAreaCardData };
 
 export function HomeAreaRail({ places }: { places: HomeAreaCardData[] }) {
   return (

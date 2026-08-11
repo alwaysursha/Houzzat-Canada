@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { NEON_LISTING_MEDIA_CAP } from "@/lib/listings/gallery-constants";
 import {
   getPropTxIdxConfig,
   getPropTxSoldSyncConfig,
@@ -490,14 +491,17 @@ async function syncHistoryBackfill(options: {
   );
 }
 
-/** Attach cover photo only — full gallery is loaded live from PropTx on detail pages. */
+/** Attach up to NEON_LISTING_MEDIA_CAP photos; full gallery loads async on detail pages. */
 async function syncMediaForListing(
   listingKey: string,
   listingId: string,
   stats: MlsSyncStats,
   options?: { maxPhotos?: number },
 ): Promise<void> {
-  const maxPhotos = Math.max(1, Math.min(options?.maxPhotos ?? 1, 3));
+  const maxPhotos = Math.max(
+    1,
+    Math.min(options?.maxPhotos ?? NEON_LISTING_MEDIA_CAP, NEON_LISTING_MEDIA_CAP),
+  );
   const rows = await fetchPropertyPhotos(listingKey);
   const selected = preferListingPhotos(rows, maxPhotos);
   if (selected.length === 0) return;
@@ -523,12 +527,34 @@ async function syncMediaForListing(
     }
   }
 
-  // Drop extras so Neon only keeps the cover (or tiny set).
+  // Drop extras so Neon never keeps more than the capped set.
   await prisma.listingMedia.deleteMany({
     where: {
       listingId,
       url: { notIn: [...keepUrls] },
     },
+  });
+}
+
+/** Drop Neon media beyond the SSR cap without calling PropTx. */
+async function pruneListingMediaToCap(listingId: string): Promise<void> {
+  const media = await prisma.listingMedia.findMany({
+    where: { listingId },
+    select: { id: true, isPrimary: true, sortOrder: true },
+  });
+  if (media.length <= NEON_LISTING_MEDIA_CAP) return;
+
+  const keepIds = media
+    .slice()
+    .sort((a, b) => {
+      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+      return a.sortOrder - b.sortOrder;
+    })
+    .slice(0, NEON_LISTING_MEDIA_CAP)
+    .map((row) => row.id);
+
+  await prisma.listingMedia.deleteMany({
+    where: { listingId, id: { notIn: keepIds } },
   });
 }
 
@@ -718,23 +744,32 @@ async function upsertPropertyRow(
       );
     }
 
-    // Always attach a cover when Neon has none — cards/rails use stored media only.
-    // Full gallery still loads live from PropTx on detail pages.
+    // Keep up to NEON_LISTING_MEDIA_CAP photos for SSR galleries.
+    // Remaining photos load async from PropTx on the listing detail page.
     if (data.listingKey) {
       const mediaCount = await prisma.listingMedia.count({
         where: { listingId: listing.id },
       });
-      if (mediaCount === 0) {
+      if (mediaCount < NEON_LISTING_MEDIA_CAP) {
         try {
           await syncMediaForListing(
             data.listingKey,
             listing.id,
             options.stats,
-            { maxPhotos: 1 },
+            { maxPhotos: NEON_LISTING_MEDIA_CAP },
           );
         } catch (err) {
           options.stats.errors.push(
             `media ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
+          );
+          if (isNeonSizeLimitError(err)) throw err;
+        }
+      } else if (mediaCount > NEON_LISTING_MEDIA_CAP) {
+        try {
+          await pruneListingMediaToCap(listing.id);
+        } catch (err) {
+          options.stats.errors.push(
+            `media prune ${data.mlsNumber}: ${err instanceof Error ? err.message : "failed"}`,
           );
           if (isNeonSizeLimitError(err)) throw err;
         }
@@ -821,18 +856,24 @@ export async function upsertPropTxPropertiesOnDemand(
         const mediaCount = await prisma.listingMedia.count({
           where: { listingId: listing.id },
         });
-        if (mediaCount === 0) {
+        if (mediaCount < NEON_LISTING_MEDIA_CAP) {
           try {
             await syncMediaForListing(listing.listingKey, listing.id, stats, {
-              maxPhotos: 1,
+              maxPhotos: NEON_LISTING_MEDIA_CAP,
             });
           } catch {
-            // Cover photo is best-effort on request path
+            // Gallery photos are best-effort on the request path
+          }
+        } else if (mediaCount > NEON_LISTING_MEDIA_CAP) {
+          try {
+            await pruneListingMediaToCap(listing.id);
+          } catch {
+            // Prune is best-effort on the request path
           }
         }
       }
 
-      // Re-sync after possible cover photo on the request path.
+      // Re-sync after possible media attach on the request path.
       await syncListingToTypesense(listing.id);
 
       try {
@@ -1129,8 +1170,8 @@ async function syncProperties(options: {
 }
 
 /**
- * Backfill photos for MLS rows that still have zero media (per-ListingKey fetch).
- * Cap via maxPages ≈ number of listings to process this run.
+ * Backfill photos for MLS rows with fewer than NEON_LISTING_MEDIA_CAP media rows.
+ * Cap via maxListings ≈ number of listings to process this run.
  */
 async function syncMediaBackfill(options: {
   maxListings: number;
@@ -1138,68 +1179,85 @@ async function syncMediaBackfill(options: {
   concurrency?: number;
 }): Promise<void> {
   const take = options.maxListings;
-  const baseWhere = {
-    dataSource: "mls" as const,
-    isMock: false,
-    listingKey: { not: null },
-    media: { none: {} },
+  const cap = NEON_LISTING_MEDIA_CAP;
+
+  type BackfillRow = {
+    id: string;
+    listingKey: string;
+    mlsNumber: string;
   };
 
-  // Newest ACTIVE without photos first (what visitors see), then closed,
-  // then terminated/expired/suspended so every status gets a cover over time.
-  const active = await prisma.listing.findMany({
-    where: { ...baseWhere, status: "ACTIVE" },
-    select: {
-      id: true,
-      listingKey: true,
-      mlsNumber: true,
-      status: true,
-      listedAt: true,
-    },
-    take,
-    orderBy: [{ listedAt: "desc" }, { updatedAt: "desc" }],
-  });
+  async function loadUnderfilled(
+    bucket: "ACTIVE" | "CLOSED" | "INACTIVE",
+    limit: number,
+  ): Promise<BackfillRow[]> {
+    if (limit <= 0) return [];
+    if (bucket === "ACTIVE") {
+      return prisma.$queryRaw<BackfillRow[]>`
+        SELECT l.id, l."listingKey", l."mlsNumber"
+        FROM "Listing" l
+        WHERE l."dataSource" = 'mls'
+          AND l."isMock" = false
+          AND l."listingKey" IS NOT NULL
+          AND l.status = 'ACTIVE'
+          AND (
+            SELECT count(*)::int FROM "ListingMedia" m WHERE m."listingId" = l.id
+          ) <> ${cap}
+        ORDER BY l."listedAt" DESC NULLS LAST, l."updatedAt" DESC
+        LIMIT ${limit}
+      `;
+    }
+    if (bucket === "CLOSED") {
+      return prisma.$queryRaw<BackfillRow[]>`
+        SELECT l.id, l."listingKey", l."mlsNumber"
+        FROM "Listing" l
+        WHERE l."dataSource" = 'mls'
+          AND l."isMock" = false
+          AND l."listingKey" IS NOT NULL
+          AND l.status IN ('LEASED', 'SOLD')
+          AND (
+            SELECT count(*)::int FROM "ListingMedia" m WHERE m."listingId" = l.id
+          ) <> ${cap}
+        ORDER BY l."listedAt" DESC NULLS LAST, l."updatedAt" DESC
+        LIMIT ${limit}
+      `;
+    }
+    return prisma.$queryRaw<BackfillRow[]>`
+      SELECT l.id, l."listingKey", l."mlsNumber"
+      FROM "Listing" l
+      WHERE l."dataSource" = 'mls'
+        AND l."isMock" = false
+        AND l."listingKey" IS NOT NULL
+        AND l.status IN ('TERMINATED', 'EXPIRED', 'SUSPENDED')
+        AND (
+          SELECT count(*)::int FROM "ListingMedia" m WHERE m."listingId" = l.id
+        ) <> ${cap}
+      ORDER BY l."listedAt" DESC NULLS LAST, l."updatedAt" DESC
+      LIMIT ${limit}
+    `;
+  }
 
-  let listings = active;
-  if (active.length < take) {
-    const closed = await prisma.listing.findMany({
-      where: {
-        ...baseWhere,
-        status: { in: ["LEASED", "SOLD"] },
-      },
-      select: {
-        id: true,
-        listingKey: true,
-        mlsNumber: true,
-        status: true,
-        listedAt: true,
-      },
-      take: take - active.length,
-      orderBy: [{ listedAt: "desc" }, { updatedAt: "desc" }],
-    });
-    listings = [...active, ...closed];
+  // Newest ACTIVE underfilled first, then closed, then inactive.
+  let listings = await loadUnderfilled("ACTIVE", take);
+  if (listings.length < take) {
+    const closed = await loadUnderfilled("CLOSED", take - listings.length);
+    const seen = new Set(listings.map((l) => l.id));
+    for (const row of closed) {
+      if (seen.has(row.id)) continue;
+      listings.push(row);
+    }
   }
   if (listings.length < take) {
-    const inactive = await prisma.listing.findMany({
-      where: {
-        ...baseWhere,
-        status: { in: ["TERMINATED", "EXPIRED", "SUSPENDED"] },
-      },
-      select: {
-        id: true,
-        listingKey: true,
-        mlsNumber: true,
-        status: true,
-        listedAt: true,
-      },
-      take: take - listings.length,
-      orderBy: [{ listedAt: "desc" }, { updatedAt: "desc" }],
-    });
-    listings = [...listings, ...inactive];
+    const inactive = await loadUnderfilled("INACTIVE", take - listings.length);
+    const seen = new Set(listings.map((l) => l.id));
+    for (const row of inactive) {
+      if (seen.has(row.id)) continue;
+      listings.push(row);
+    }
   }
 
   console.log(
-    `[mls] Media backfill start (${listings.length} listings missing photos, concurrency=${Math.max(1, Math.min(options.concurrency ?? 6, 12))})`,
+    `[mls] Media backfill start (${listings.length} listings needing ${cap} photos (fill or prune), concurrency=${Math.max(1, Math.min(options.concurrency ?? 6, 12))})`,
   );
 
   const concurrency = Math.max(1, Math.min(options.concurrency ?? 6, 12));
@@ -1213,12 +1271,19 @@ async function syncMediaBackfill(options: {
       index += 1;
       if (!current?.listingKey) continue;
       try {
-        await syncMediaForListing(
-          current.listingKey,
-          current.id,
-          options.stats,
-          { maxPhotos: 1 },
-        );
+        const mediaCount = await prisma.listingMedia.count({
+          where: { listingId: current.id },
+        });
+        if (mediaCount > NEON_LISTING_MEDIA_CAP) {
+          await pruneListingMediaToCap(current.id);
+        } else if (mediaCount < NEON_LISTING_MEDIA_CAP) {
+          await syncMediaForListing(
+            current.listingKey,
+            current.id,
+            options.stats,
+            { maxPhotos: NEON_LISTING_MEDIA_CAP },
+          );
+        }
         await syncListingToTypesense(current.id);
       } catch (err) {
         pushSyncError(

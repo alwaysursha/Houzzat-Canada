@@ -17,10 +17,8 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
   }
 
-  const [gallery, addressSiblings] = await Promise.all([
-    resolveListingGalleryPhotos(listing),
-    findSiblingListingsAtAddress(listing),
-  ]);
+  const gallery = resolveListingGalleryPhotos(listing);
+  const addressSiblings = await findSiblingListingsAtAddress(listing);
   const media =
     gallery.length > 0
       ? gallery.map((photo, index) => ({

@@ -34,10 +34,19 @@ export async function GET(request: Request) {
   const access = resolveClientAccess(user);
   const isClient = access.hasClientAccess;
 
+  const cityBias = searchParams.get("city");
+  const latRaw = searchParams.get("lat");
+  const lngRaw = searchParams.get("lng");
+  const lat = latRaw != null ? Number(latRaw) : null;
+  const lng = lngRaw != null ? Number(lngRaw) : null;
+
   const provider = getListingProvider();
   let suggestions = await provider.autocomplete(q, {
     transactionType,
     empty,
+    city: cityBias,
+    lat: Number.isFinite(lat) ? lat : null,
+    lng: Number.isFinite(lng) ? lng : null,
   });
 
   // Neon miss: kick off PropTx pull in the background so typing stays snappy.

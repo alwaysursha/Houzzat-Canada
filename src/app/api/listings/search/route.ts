@@ -7,6 +7,7 @@ import type {
 } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { getListingProvider } from "@/lib/listings/provider";
+import type { ListingSearchResult } from "@/lib/listings/types";
 import { prisma } from "@/lib/prisma";
 import {
   clientIpFromRequest,
@@ -14,6 +15,26 @@ import {
 } from "@/lib/proptx/on-demand-lookup";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { hasClientAccess } from "@/lib/vow";
+
+/** True when a NextAuth / Auth.js session cookie may be present. */
+function mayHaveSessionCookie(request: Request): boolean {
+  const cookie = request.headers.get("cookie");
+  if (!cookie) return false;
+  return /(?:__Secure-|__Host-)?(?:authjs|next-auth)\.session-token/i.test(
+    cookie,
+  );
+}
+
+async function resolveIsClient(): Promise<boolean> {
+  const session = await auth();
+  const user = session?.user?.email
+    ? await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true, emailVerified: true, createdAt: true },
+      })
+    : null;
+  return hasClientAccess(user);
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -27,15 +48,6 @@ export async function GET(request: Request) {
   const provider = getListingProvider();
   const segmentParam = searchParams.get("segment");
   const transactionParam = searchParams.get("transactionType");
-
-  const session = await auth();
-  const user = session?.user?.email
-    ? await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: { id: true, emailVerified: true, createdAt: true },
-      })
-    : null;
-  const isClient = hasClientAccess(user);
 
   const propertyTypesParam = searchParams.get("propertyTypes");
   const communitiesParam = searchParams.get("communities");
@@ -141,7 +153,15 @@ export async function GET(request: Request) {
     })() as "newest" | "price_asc" | "price_desc" | undefined,
   };
 
-  let result = await provider.search(searchParamsBody);
+  // IDX: start search immediately. Guests skip auth; signed-in access runs in parallel.
+  const searchPromise = provider.search(searchParamsBody);
+  const accessPromise = mayHaveSessionCookie(request)
+    ? resolveIsClient()
+    : Promise.resolve(false);
+
+  let result: ListingSearchResult;
+  let isClient: boolean;
+  [result, isClient] = await Promise.all([searchPromise, accessPromise]);
 
   // Neon miss + MLS/address/street query → PropTx on-demand (skip when map/filters dominate)
   const lightFilters =

@@ -7,6 +7,8 @@ import {
   resolveDeskView,
 } from "@/lib/agent/brokerage";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({
   children,
 }: {

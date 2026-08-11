@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Menu, UserRound, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
-import { LanguageToggle } from "@/components/site/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import {
   parseSearchQuery,
@@ -14,13 +14,31 @@ import {
 } from "@/lib/listings/parse-search-query";
 import { pushLocalRecentSearch } from "@/lib/listings/recent-searches-local";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
-import { t, type Locale } from "@/lib/i18n/dictionaries";
 import { cn } from "@/lib/utils";
 
 const SITE_NAV = [
-  { href: "/search?view=map", labelKey: "nav_map_search" as const },
-  { href: "/home-valuation", labelKey: "nav_home_worth" as const },
+  { href: "/search?view=map", label: "Map Search" },
+  { href: "/home-valuation", label: "What's my Home Worth?" },
 ];
+
+const ACCOUNT_SLOT_CLASS =
+  "inline-flex size-10 shrink-0 items-center justify-center rounded-full";
+
+function resolvePortal(role: string | undefined): {
+  href: string | null;
+  label: string;
+} {
+  if (!role) {
+    return { href: null, label: "Sign in" };
+  }
+  if (role === "ADMIN") {
+    return { href: "/admin", label: "Admin" };
+  }
+  if (role === "AGENT") {
+    return { href: "/agent", label: "Agent desk" };
+  }
+  return { href: "/account", label: "Your Houzzat" };
+}
 
 /**
  * Homepage only: reveal header search after the hero scrolls away.
@@ -240,21 +258,19 @@ function BuySearchControls({
  * Mobile: buy search is fixed below the header after the hero scrolls away
  * (out of document flow so show/hide cannot thrash scroll on iOS).
  */
-export function SiteHeaderClient({
-  siteName,
-  locale,
-  portalHref,
-  portalLabel,
-}: {
-  siteName: string;
-  locale: Locale;
-  portalHref: string | null;
-  portalLabel: string;
-}) {
+export function SiteHeaderClient({ siteName }: { siteName: string }) {
+  const { status, data } = useSession();
   const pathname = usePathname();
   const visible = useHomeHeroSearchVisible();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuId = useId();
+
+  const portal = useMemo(() => {
+    if (status !== "authenticated" || !data?.user) {
+      return { href: null as string | null, label: "Sign in" };
+    }
+    return resolvePortal(data.user.role);
+  }, [status, data?.user]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -338,20 +354,35 @@ export function SiteHeaderClient({
                   href={item.href}
                   className={navLinkClass}
                 >
-                  {t(locale, item.labelKey)}
+                  {item.label}
                 </Link>
               ))}
             </nav>
-            <LanguageToggle locale={locale} />
-            {portalHref ? (
-              <Link
-                href={portalHref}
-                data-houzzat-account-target=""
-                aria-label={portalLabel}
-                title={portalLabel}
+            {status === "loading" ? (
+              <span
+                role="status"
+                aria-label="Loading account"
+                aria-busy="true"
                 className={cn(
-                  "relative inline-flex size-10 items-center justify-center rounded-full",
-                  "bg-canopy text-white transition hover:bg-canopy-deep",
+                  ACCOUNT_SLOT_CLASS,
+                  "animate-pulse border border-line/70 bg-mist",
+                )}
+              >
+                <UserRound
+                  className="size-5 text-ink/25"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+              </span>
+            ) : portal.href ? (
+              <Link
+                href={portal.href}
+                data-houzzat-account-target=""
+                aria-label={portal.label}
+                title={portal.label}
+                className={cn(
+                  ACCOUNT_SLOT_CLASS,
+                  "relative bg-canopy text-white transition hover:bg-canopy-deep",
                   "ring-2 ring-canopy/25 ring-offset-2 ring-offset-mist",
                 )}
               >
@@ -365,10 +396,10 @@ export function SiteHeaderClient({
               <AuthOpenButton
                 mode="sign-in"
                 data-houzzat-account-target=""
-                aria-label={portalLabel}
-                title={portalLabel}
+                aria-label={portal.label}
+                title={portal.label}
                 className={cn(
-                  "inline-flex size-10 items-center justify-center rounded-full",
+                  ACCOUNT_SLOT_CLASS,
                   "border border-line bg-surface text-ink/70 transition",
                   "hover:border-canopy/40 hover:text-canopy",
                 )}
@@ -407,7 +438,7 @@ export function SiteHeaderClient({
                     className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-ink transition hover:bg-canopy/5 hover:text-canopy"
                     onClick={() => setMenuOpen(false)}
                   >
-                    {t(locale, item.labelKey)}
+                    {item.label}
                   </Link>
                 </li>
               ))}

@@ -1,5 +1,5 @@
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
-import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
+import { NEON_LISTING_MEDIA_CAP } from "@/lib/listings/gallery-constants";
 
 export type GalleryMedia = {
   id: string;
@@ -9,40 +9,28 @@ export type GalleryMedia = {
 };
 
 /**
- * Prefer live PropTx gallery on listing load; fall back to Neon media.
+ * Listing SSR gallery — Neon media only (never awaits PropTx).
+ * Sync keeps up to {@link NEON_LISTING_MEDIA_CAP} photos for an immediate grid.
  */
-export async function resolveListingGalleryPhotos(listing: {
-  dataSource?: string | null;
-  listingKey?: string | null;
+export function resolveListingGalleryPhotos(listing: {
   media: Array<{
     id: string;
     url: string;
     sortOrder?: number;
     isPrimary?: boolean;
   }>;
-}): Promise<GalleryMedia[]> {
-  const livePhotos =
-    listing.dataSource === "mls" && listing.listingKey
-      ? await fetchListingPhotosFromPropTx(listing.listingKey, {
-          // Bound wait so a slow PropTx call cannot 1102 the whole page.
-          timeoutMs: 5_000,
-          max: 60,
-        })
-      : [];
-
-  if (livePhotos.length > 0) {
-    return livePhotos.map((photo) => ({
-      id: photo.id,
-      url: listingPhotoSrc(photo.url) ?? photo.url,
-      sortOrder: photo.sortOrder,
-      isPrimary: photo.isPrimary,
+}): GalleryMedia[] {
+  return listing.media
+    .slice()
+    .sort((a, b) => {
+      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+    })
+    .slice(0, NEON_LISTING_MEDIA_CAP)
+    .map((media) => ({
+      id: media.id,
+      url: listingPhotoSrc(media.url) ?? media.url,
+      sortOrder: media.sortOrder,
+      isPrimary: media.isPrimary,
     }));
-  }
-
-  return listing.media.map((media) => ({
-    id: media.id,
-    url: listingPhotoSrc(media.url) ?? media.url,
-    sortOrder: media.sortOrder,
-    isPrimary: media.isPrimary,
-  }));
 }

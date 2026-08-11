@@ -4,6 +4,8 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import { requireOwnerUser } from "@/lib/owner/auth";
 import { SITE_NAME } from "@/lib/constants";
 
+export const dynamic = "force-dynamic";
+
 const nav = [
   { href: "/owner", label: "My listings" },
   { href: "/owner/new", label: "New listing" },

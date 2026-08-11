@@ -18,6 +18,7 @@ import {
 } from "@/components/listings/ListingMapView";
 import { ListingGalleryMapSlide } from "@/components/listings/ListingGalleryMapSlide";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
+import { useListingContactDefaults } from "@/components/listings/ListingAccountChromeProvider";
 import { ListingLockedGateOverlay } from "@/components/listings/ListingLockedGateOverlay";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { cn } from "@/lib/utils";
@@ -143,6 +144,7 @@ export function ListingGallery({
   /** Extra photos withheld until email verification. */
   hiddenPhotoCount?: number;
 }) {
+  const resolvedContact = useListingContactDefaults(contact);
   const tourUrl = virtualTourUrl?.trim() || null;
   const lockCallback = callbackPath ?? `/listing/${mlsNumber}`;
   const labelId = useId();
@@ -1001,7 +1003,7 @@ export function ListingGallery({
           open={bookingOpen}
           onClose={() => setBookingOpen(false)}
           mlsNumber={mlsNumber}
-          contact={contact}
+          contact={resolvedContact}
         />
       ) : null}
     </>

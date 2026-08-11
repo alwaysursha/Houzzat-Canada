@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import { cache } from "react";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
@@ -137,7 +138,12 @@ function isConsumerRoleSafe(role: Role) {
   return role === "BUYER" || role === "SELLER";
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const {
+  handlers,
+  auth: uncachedAuth,
+  signIn,
+  signOut,
+} = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(prisma) as Adapter,
   providers,
@@ -331,6 +337,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+/**
+ * Request-scoped session for RSC / route handlers.
+ * React.cache() dedupes repeated auth() within one request (e.g. SiteHeader + page).
+ * Does not cache across requests — each request gets a fresh lookup.
+ */
+export const auth = cache(async () => uncachedAuth());
 
 export async function requireAuth() {
   const session = await auth();

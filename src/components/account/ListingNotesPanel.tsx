@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { useListingAccountChrome } from "@/components/listings/ListingAccountChromeProvider";
 import { ListingSection } from "@/components/listings/ListingSection";
 import { cn } from "@/lib/utils";
 
@@ -23,28 +24,43 @@ export function ListingNotesPanel({
   authCallbackUrl?: string;
 }) {
   const { openAuth } = useAuthModal();
+  const chrome = useListingAccountChrome();
   const [body, setBody] = useState(initialBody);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydrated = useRef(false);
+  const userEdited = useRef(false);
   const callbackUrl = authCallbackUrl ?? `/listing/${mlsNumber}`;
 
   useEffect(() => {
     if (!signedIn) return;
+
+    // Listing detail: note body arrives via account-chrome (one request).
+    if (chrome.active) {
+      if (!chrome.loaded || userEdited.current) return;
+      setBody(chrome.noteBody);
+      hydrated.current = true;
+      return;
+    }
+
+    // Other surfaces without the provider still load notes directly.
     let cancelled = false;
     void (async () => {
-      const res = await fetch(`/api/account/notes/${encodeURIComponent(mlsNumber)}`);
+      const res = await fetch(
+        `/api/account/notes/${encodeURIComponent(mlsNumber)}`,
+      );
       if (!res.ok || cancelled) return;
       const data = (await res.json()) as { body?: string };
+      if (userEdited.current) return;
       setBody(data.body ?? "");
       hydrated.current = true;
     })();
     return () => {
       cancelled = true;
     };
-  }, [mlsNumber, signedIn]);
+  }, [mlsNumber, signedIn, chrome.active, chrome.loaded, chrome.noteBody]);
 
   function scheduleSave(next: string) {
     if (!signedIn) return;
@@ -136,6 +152,7 @@ export function ListingNotesPanel({
         value={body}
         onChange={(e) => {
           const next = e.target.value;
+          userEdited.current = true;
           setBody(next);
           if (hydrated.current || next !== initialBody) {
             scheduleSave(next);

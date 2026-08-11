@@ -13,9 +13,19 @@ type RouteErrorProps = {
   className?: string;
 };
 
-function isRecoverableRouteError(error: Error) {
+function isNavigationAbort(error: Error): boolean {
+  if (error.name === "AbortError") return true;
   const message = `${error.name} ${error.message}`;
-  return /ChunkLoadError|Loading chunk|Failed to fetch|NetworkError|fetch failed|aborted|AbortError|dynamically imported module/i.test(
+  return /AbortError|\baborted\b|AbortSignal|The user aborted|The operation was aborted|signal is aborted|Request aborted|Fetch aborted/i.test(
+    message,
+  );
+}
+
+function isRecoverableRouteError(error: Error) {
+  // Next cancels the previous soft-nav flight on rapid clicks — not a failure.
+  if (isNavigationAbort(error)) return false;
+  const message = `${error.name} ${error.message}`;
+  return /ChunkLoadError|Loading chunk|Failed to fetch|NetworkError|fetch failed|dynamically imported module/i.test(
     message,
   );
 }

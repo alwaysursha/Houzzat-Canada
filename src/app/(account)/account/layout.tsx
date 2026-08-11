@@ -7,6 +7,8 @@ import { auth } from "@/lib/auth";
 import { SITE_NAME } from "@/lib/constants";
 import { isDatabaseUnavailableError } from "@/lib/errors";
 
+export const dynamic = "force-dynamic";
+
 const nav = [
   { href: "/account", label: "Your Houzzat" },
   { href: "/route-planner", label: "Route Planner" },

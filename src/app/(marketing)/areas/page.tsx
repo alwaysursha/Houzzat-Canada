@@ -6,7 +6,7 @@ import {
   resolveHomesForSalePlace,
   slugifySegment,
 } from "@/lib/geo/area-seo";
-import { getPopularCities } from "@/lib/listings/popular-cities";
+import { staticOntarioHubCities } from "@/lib/geo/regions";
 import { prisma } from "@/lib/prisma";
 import { publicPageMetadata } from "@/lib/seo";
 
@@ -18,33 +18,29 @@ export const metadata: Metadata = publicPageMetadata({
 });
 
 export default async function AreasIndexPage() {
-  const [popularCities, places] = await Promise.all([
-    getPopularCities(16),
-    prisma.geoPlace.findMany({
-      where: { published: true, community: { not: null } },
-      orderBy: [{ city: "asc" }, { displayName: "asc" }],
-      select: {
-        slug: true,
-        city: true,
-        community: true,
-        displayName: true,
-      },
-    }),
-  ]);
+  const hubCities = staticOntarioHubCities();
+  const places = await prisma.geoPlace.findMany({
+    where: { published: true, community: { not: null } },
+    orderBy: [{ city: "asc" }, { displayName: "asc" }],
+    select: {
+      slug: true,
+      city: true,
+      community: true,
+      displayName: true,
+    },
+  });
 
-  // Ensure city hub GeoPlace rows exist for cities with active inventory.
+  // Ensure city hub GeoPlace rows exist for static Ontario markets.
   await Promise.all(
-    popularCities.map((row) =>
-      resolveHomesForSalePlace({ citySlug: slugifySegment(row.city) }),
+    hubCities.map((city) =>
+      resolveHomesForSalePlace({ citySlug: slugifySegment(city) }),
     ),
   );
 
-  const cityHubs = [
-    ...popularCities.map((row) => ({
-      city: row.city,
-      displayName: row.city,
-    })),
-  ];
+  const cityHubs = hubCities.map((city) => ({
+    city,
+    displayName: city,
+  }));
   const seenCities = new Set(cityHubs.map((h) => h.city.toLowerCase()));
   const extraHubs = await prisma.geoPlace.findMany({
     where: { published: true, community: null },
@@ -64,10 +60,6 @@ export default async function AreasIndexPage() {
     return acc;
   }, {});
 
-  const countByCity = new Map(
-    popularCities.map((row) => [row.city.toLowerCase(), row.count]),
-  );
-
   return (
     <div className="mx-auto max-w-6xl space-y-10 px-4 py-12 sm:px-6">
       <div>
@@ -83,24 +75,16 @@ export default async function AreasIndexPage() {
       <section className="space-y-4">
         <h2 className="font-display text-2xl text-ink">Cities</h2>
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {cityHubs.map((hub) => {
-            const count = countByCity.get(hub.city.toLowerCase());
-            return (
-              <li key={hub.city}>
-                <Link
-                  href={homesForSaleCityPath(hub.city)}
-                  className="block border-b border-line py-3 text-sm transition hover:border-canopy/40 hover:text-canopy"
-                >
-                  <span className="font-medium text-ink">{hub.displayName}</span>
-                  {count != null ? (
-                    <span className="ml-2 text-ink/45">
-                      {count} listing{count === 1 ? "" : "s"}
-                    </span>
-                  ) : null}
-                </Link>
-              </li>
-            );
-          })}
+          {cityHubs.map((hub) => (
+            <li key={hub.city}>
+              <Link
+                href={homesForSaleCityPath(hub.city)}
+                className="block border-b border-line py-3 text-sm transition hover:border-canopy/40 hover:text-canopy"
+              >
+                <span className="font-medium text-ink">{hub.displayName}</span>
+              </Link>
+            </li>
+          ))}
         </ul>
       </section>
 

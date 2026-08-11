@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
+import { useListingContactDefaults } from "@/components/listings/ListingAccountChromeProvider";
 import { LeadRequestForm } from "@/components/listings/LeadRequestForm";
 import {
   defaultViewingMessage,
@@ -43,6 +44,7 @@ export function ViewingRequestPanel({
   className?: string;
 }) {
   const [mode, setMode] = useState<"showing" | "virtual_viewing">("showing");
+  const resolvedContact = useListingContactDefaults(contact);
   const watchSegment =
     segment === "COMMERCIAL" ? "COMMERCIAL" : ("RESIDENTIAL" as const);
   const similarHref =
@@ -76,9 +78,9 @@ export function ViewingRequestPanel({
             mlsNumber={mlsNumber}
             kind="inquiry"
             defaults={{
-              name: contact?.name ?? "",
-              email: contact?.email ?? "",
-              phone: contact?.phone ?? "",
+              name: resolvedContact?.name ?? "",
+              email: resolvedContact?.email ?? "",
+              phone: resolvedContact?.phone ?? "",
               message: defaultInquiryMessage(mlsNumber),
             }}
           />
@@ -157,9 +159,9 @@ export function ViewingRequestPanel({
           mlsNumber={mlsNumber}
           kind={mode}
           defaults={{
-            name: contact?.name ?? "",
-            email: contact?.email ?? "",
-            phone: contact?.phone ?? "",
+            name: resolvedContact?.name ?? "",
+            email: resolvedContact?.email ?? "",
+            phone: resolvedContact?.phone ?? "",
             message: defaultViewingMessage(mlsNumber, mode),
           }}
         />
