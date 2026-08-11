@@ -8,6 +8,7 @@ import { Menu, UserRound, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import { Button } from "@/components/ui/button";
+import { pushHref } from "@/lib/listings/navigate-listing";
 import {
   parseSearchQuery,
   searchHrefFromParsed,
@@ -134,7 +135,7 @@ function BuySearchControls({
 
   function goHref(href: string, label: string) {
     pushLocalRecentSearch({ label, href });
-    router.push(href);
+    pushHref(router, href);
   }
 
   function goToSuggestion(suggestion: AutocompleteSuggestion) {
