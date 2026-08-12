@@ -31,30 +31,50 @@ const EMPTY: ListingAccountChromeState = {
 const ListingAccountChromeContext =
   createContext<ListingAccountChromeState>(EMPTY);
 
-const inflight = new Map<string, Promise<ListingAccountChromePayload>>();
+type InflightChrome = {
+  promise: Promise<ListingAccountChromePayload>;
+  controller: AbortController;
+};
+
+const inflight = new Map<string, InflightChrome>();
+
+const EMPTY_CHROME: ListingAccountChromePayload = {
+  saved: false,
+  watching: false,
+  noteBody: "",
+  relatedListingsMode: "SAME_AREA",
+  phone: null,
+};
 
 async function fetchAccountChrome(
   mlsNumber: string,
+  signal?: AbortSignal,
 ): Promise<ListingAccountChromePayload> {
   const key = mlsNumber.trim().toUpperCase();
+  if (signal?.aborted) return EMPTY_CHROME;
+
   const existing = inflight.get(key);
-  if (existing) return existing;
+  if (existing) {
+    if (signal) {
+      signal.addEventListener("abort", () => existing.controller.abort(), {
+        once: true,
+      });
+    }
+    return existing.promise;
+  }
+
+  const controller = new AbortController();
+  if (signal) {
+    signal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
 
   const request = (async () => {
     try {
       const res = await fetch(
         `/api/listings/${encodeURIComponent(key)}/account-chrome`,
-        { credentials: "same-origin" },
+        { credentials: "same-origin", signal: controller.signal },
       );
-      if (!res.ok) {
-        return {
-          saved: false,
-          watching: false,
-          noteBody: "",
-          relatedListingsMode: "SAME_AREA" as const,
-          phone: null,
-        };
-      }
+      if (!res.ok) return EMPTY_CHROME;
       const data = (await res.json()) as Partial<ListingAccountChromePayload>;
       return {
         saved: Boolean(data.saved),
@@ -67,19 +87,13 @@ async function fetchAccountChrome(
         phone: typeof data.phone === "string" ? data.phone : null,
       };
     } catch {
-      return {
-        saved: false,
-        watching: false,
-        noteBody: "",
-        relatedListingsMode: "SAME_AREA" as const,
-        phone: null,
-      };
+      return EMPTY_CHROME;
     } finally {
       inflight.delete(key);
     }
   })();
 
-  inflight.set(key, request);
+  inflight.set(key, { promise: request, controller });
   return request;
 }
 
@@ -116,8 +130,9 @@ export function ListingAccountChromeProvider({
     if (!mls) return;
 
     let cancelled = false;
+    const controller = new AbortController();
     setState((prev) => ({ ...prev, active: true, loaded: false }));
-    void fetchAccountChrome(mls).then((data) => {
+    void fetchAccountChrome(mls, controller.signal).then((data) => {
       if (cancelled) return;
       setState({
         active: true,
@@ -128,6 +143,7 @@ export function ListingAccountChromeProvider({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [mlsNumber, signedIn]);
 

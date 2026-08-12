@@ -56,27 +56,35 @@ export function ListingRelatedSection({
     setMode(preferenceToMode(chrome.relatedListingsMode));
   }, [chrome.active, chrome.loaded, chrome.relatedListingsMode]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        mlsNumber: subject.mlsNumber,
-        mode,
-        tab,
-        limit: "12",
-      });
-      const res = await fetch(`/api/listings/related?${params.toString()}`);
-      const data = (await res.json()) as { items?: ListingCardData[] };
-      setItems(res.ok ? (data.items ?? []) : []);
-    } catch {
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [subject.mlsNumber, mode, tab]);
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          mlsNumber: subject.mlsNumber,
+          mode,
+          tab,
+          limit: "12",
+        });
+        const res = await fetch(`/api/listings/related?${params.toString()}`, {
+          signal,
+        });
+        const data = (await res.json()) as { items?: ListingCardData[] };
+        setItems(res.ok ? (data.items ?? []) : []);
+      } catch {
+        if (signal?.aborted) return;
+        setItems([]);
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+    },
+    [subject.mlsNumber, mode, tab],
+  );
 
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
   async function selectMode(next: RelatedMode) {

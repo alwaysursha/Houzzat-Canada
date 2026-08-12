@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, X } from "lucide-react";
+import {
+  abortListingGalleryFetches,
+  mlsNumberFromListingHref,
+} from "@/lib/listings/gallery-client";
 import {
   LISTING_SHEET_OPEN_MESSAGE,
   backListingSheet,
@@ -41,6 +45,7 @@ export function ListingSheetHost() {
   });
   const historyPushedRef = useRef(false);
   const syncingHistoryRef = useRef(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     try {
@@ -126,6 +131,25 @@ export function ListingSheetHost() {
     [state.href],
   );
 
+  // One iframe only: blank the outgoing document immediately so its fetches die
+  // before the next listing mounts (key remount is not enough on its own).
+  useLayoutEffect(() => {
+    const iframe = iframeRef.current;
+    return () => {
+      if (!iframe) return;
+      try {
+        iframe.src = "about:blank";
+      } catch {
+        // Ignore teardown races
+      }
+    };
+  }, [src]);
+
+  useEffect(() => {
+    const mls = state.href ? mlsNumberFromListingHref(state.href) : null;
+    abortListingGalleryFetches(mls);
+  }, [state.href]);
+
   if (framed || !state.href || !src) return null;
 
   return (
@@ -165,6 +189,7 @@ export function ListingSheetHost() {
       </div>
       <iframe
         key={src}
+        ref={iframeRef}
         title="Listing"
         src={src}
         className="min-h-0 w-full flex-1 border-0 bg-mist"

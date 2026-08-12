@@ -51,6 +51,7 @@ export function ListingGalleryLive({
     if (!mls) return;
 
     let cancelled = false;
+    const controller = new AbortController();
 
     function applyLive(live: LivePhoto[]) {
       if (cancelled || live.length === 0) return;
@@ -84,13 +85,14 @@ export function ListingGalleryLive({
           // Fall through to client fetch
         }
       }
-      const live = await fetchListingGalleryClient(mls);
+      const live = await fetchListingGalleryClient(mls, controller.signal);
       applyLive(live);
     }
 
     void enrich();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [mlsNumber, livePhotosPromise]);
 

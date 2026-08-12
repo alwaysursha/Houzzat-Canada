@@ -27,18 +27,43 @@ type ExtrasPayload = {
   openHouses: OpenHouseRow[];
 };
 
-const inflight = new Map<string, Promise<ExtrasPayload>>();
+type InflightExtras = {
+  promise: Promise<ExtrasPayload>;
+  controller: AbortController;
+  subscribers: number;
+};
 
-async function fetchListingExtras(mlsNumber: string): Promise<ExtrasPayload> {
+const inflight = new Map<string, InflightExtras>();
+
+async function fetchListingExtras(
+  mlsNumber: string,
+  signal?: AbortSignal,
+): Promise<ExtrasPayload> {
   const key = mlsNumber.trim().toUpperCase();
-  const existing = inflight.get(key);
-  if (existing) return existing;
+  if (signal?.aborted) return { rooms: [], openHouses: [] };
 
+  const existing = inflight.get(key);
+  if (existing) {
+    existing.subscribers += 1;
+    if (signal) {
+      signal.addEventListener(
+        "abort",
+        () => {
+          existing.subscribers -= 1;
+          if (existing.subscribers <= 0) existing.controller.abort();
+        },
+        { once: true },
+      );
+    }
+    return existing.promise;
+  }
+
+  const controller = new AbortController();
   const request = (async () => {
     try {
       const res = await fetch(
         `/api/listings/${encodeURIComponent(key)}/rooms-open-houses`,
-        { credentials: "same-origin" },
+        { credentials: "same-origin", signal: controller.signal },
       );
       if (!res.ok) return { rooms: [], openHouses: [] };
       const data = (await res.json()) as {
@@ -56,7 +81,22 @@ async function fetchListingExtras(mlsNumber: string): Promise<ExtrasPayload> {
     }
   })();
 
-  inflight.set(key, request);
+  const entry: InflightExtras = {
+    promise: request,
+    controller,
+    subscribers: 1,
+  };
+  if (signal) {
+    signal.addEventListener(
+      "abort",
+      () => {
+        entry.subscribers -= 1;
+        if (entry.subscribers <= 0) controller.abort();
+      },
+      { once: true },
+    );
+  }
+  inflight.set(key, entry);
   return request;
 }
 
@@ -68,13 +108,15 @@ function useListingExtras(mlsNumber: string) {
     const mls = mlsNumber.trim().toUpperCase();
     if (!mls) return;
     let cancelled = false;
-    void fetchListingExtras(mls).then((data) => {
+    const controller = new AbortController();
+    void fetchListingExtras(mls, controller.signal).then((data) => {
       if (cancelled) return;
       setRooms(data.rooms);
       setOpenHouses(data.openHouses);
     });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [mlsNumber]);
 

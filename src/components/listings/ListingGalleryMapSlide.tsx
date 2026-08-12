@@ -490,6 +490,7 @@ export function ListingGalleryMapSlide({
       return;
     }
     let cancelled = false;
+    const controller = new AbortController();
     setLoadingSold(true);
     const params = new URLSearchParams({
       lat: String(lat),
@@ -503,7 +504,9 @@ export function ListingGalleryMapSlide({
 
     void (async () => {
       try {
-        const res = await fetch(`/api/listings/nearby?${params}`);
+        const res = await fetch(`/api/listings/nearby?${params}`, {
+          signal: controller.signal,
+        });
         const data = (await res.json()) as {
           items?: ListingCard[];
           requiresAuth?: boolean;
@@ -543,6 +546,7 @@ export function ListingGalleryMapSlide({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [
     hasClientAccess,
@@ -562,6 +566,7 @@ export function ListingGalleryMapSlide({
       return;
     }
     let cancelled = false;
+    const controller = new AbortController();
     setLoadingUnlisted(true);
     const params = new URLSearchParams({
       lat: String(lat),
@@ -575,7 +580,9 @@ export function ListingGalleryMapSlide({
 
     void (async () => {
       try {
-        const res = await fetch(`/api/listings/nearby?${params}`);
+        const res = await fetch(`/api/listings/nearby?${params}`, {
+          signal: controller.signal,
+        });
         const data = (await res.json()) as {
           items?: ListingCard[];
           requiresAuth?: boolean;
@@ -615,6 +622,7 @@ export function ListingGalleryMapSlide({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [hasClientAccess, showUnlisted, lat, lng, mlsNumber, openAuth]);
 
