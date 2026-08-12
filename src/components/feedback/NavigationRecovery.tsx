@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import {
+  clearStaleBuildRecoveryIfFresh,
   isStaleNextAssetFailure,
   reloadOnceForStaleBuild,
   staleAssetUrlFromEvent,
@@ -27,6 +28,12 @@ function rejectionMessage(reason: unknown) {
  */
 export function NavigationRecovery() {
   useEffect(() => {
+    clearStaleBuildRecoveryIfFresh();
+
+    function onPageshow(event: PageTransitionEvent) {
+      if (!event.persisted) clearStaleBuildRecoveryIfFresh();
+    }
+
     function onError(event: ErrorEvent) {
       const assetUrl = staleAssetUrlFromEvent(event);
       const message = eventMessage(event);
@@ -42,9 +49,11 @@ export function NavigationRecovery() {
       reloadOnceForStaleBuild(message);
     }
 
+    window.addEventListener("pageshow", onPageshow);
     window.addEventListener("error", onError, true);
     window.addEventListener("unhandledrejection", onRejection);
     return () => {
+      window.removeEventListener("pageshow", onPageshow);
       window.removeEventListener("error", onError, true);
       window.removeEventListener("unhandledrejection", onRejection);
     };

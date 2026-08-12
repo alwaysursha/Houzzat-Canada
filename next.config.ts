@@ -1,7 +1,27 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
+function resolveHouzzatBuildId(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_HOUZZAT_BUILD?.trim();
+  if (fromEnv) return fromEnv;
+  const sha = process.env.GITHUB_SHA?.trim();
+  if (sha) {
+    const run = process.env.GITHUB_RUN_ID?.trim();
+    return run ? `${sha.slice(0, 12)}-${run}` : sha.slice(0, 12);
+  }
+  if (process.env.NODE_ENV === "production") {
+    return `b${Date.now().toString(36)}`;
+  }
+  return "dev";
+}
+
+const houzzatBuildId = resolveHouzzatBuildId();
+
 const nextConfig: NextConfig = {
+  generateBuildId: async () => houzzatBuildId,
+  env: {
+    NEXT_PUBLIC_HOUZZAT_BUILD: houzzatBuildId,
+  },
   serverExternalPackages: ["@prisma/client", ".prisma/client"],
   experimental: {
     optimizePackageImports: ["lucide-react"],
