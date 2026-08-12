@@ -3,6 +3,11 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { SITE_NAME } from "@/lib/constants";
+import {
+  isNavigationAbort,
+  isStaleNextAssetFailure,
+  reloadOnceForStaleBuild,
+} from "@/lib/navigation/stale-build-recovery";
 import { cn } from "@/lib/utils";
 
 type RouteErrorProps = {
@@ -13,21 +18,13 @@ type RouteErrorProps = {
   className?: string;
 };
 
-function isNavigationAbort(error: Error): boolean {
-  if (error.name === "AbortError") return true;
-  const message = `${error.name} ${error.message}`;
-  return /AbortError|\baborted\b|AbortSignal|The user aborted|The operation was aborted|signal is aborted|Request aborted|Fetch aborted/i.test(
-    message,
-  );
-}
-
 function isRecoverableRouteError(error: Error) {
-  // Next cancels the previous soft-nav flight on rapid clicks — not a failure.
-  if (isNavigationAbort(error)) return false;
+  if (isNavigationAbort(`${error.name} ${error.message}`, error)) return false;
+  if (isStaleNextAssetFailure(`${error.name} ${error.message}`, error)) {
+    return false;
+  }
   const message = `${error.name} ${error.message}`;
-  return /ChunkLoadError|Loading chunk|Failed to fetch|NetworkError|fetch failed|dynamically imported module/i.test(
-    message,
-  );
+  return /Failed to fetch|NetworkError|fetch failed/i.test(message);
 }
 
 export function RouteError({
@@ -43,9 +40,15 @@ export function RouteError({
   }, [error]);
 
   useEffect(() => {
-    if (autoRetried.current || !isRecoverableRouteError(error)) return;
+    if (autoRetried.current) return;
+    const message = `${error.name} ${error.message}`;
+    if (isStaleNextAssetFailure(message, error)) {
+      autoRetried.current = true;
+      reloadOnceForStaleBuild(message);
+      return;
+    }
+    if (!isRecoverableRouteError(error)) return;
     autoRetried.current = true;
-    // Soft reset first (keeps SPA shell). Hard reload is a last resort via UI.
     const t = window.setTimeout(() => reset(), 120);
     return () => window.clearTimeout(t);
   }, [error, reset]);
