@@ -31,10 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-    "exclude": [
-      "node_modules",
-      "prisma/seed.ts",
-      "scripts",
-      "cloudflare/worker.ts"
-    ]
+    "exclude": ["node_modules", "prisma/seed.ts", "scripts"]
 }
