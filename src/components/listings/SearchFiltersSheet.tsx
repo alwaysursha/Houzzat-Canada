@@ -20,6 +20,7 @@ import {
   savedSearchDisplayName,
   searchFiltersToSavedQuery,
 } from "@/lib/listings/saved-search-query";
+import { acquireScrollLock } from "@/lib/scroll-lock";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
@@ -158,8 +159,7 @@ export function SearchFiltersSheet({
       setEntered(false);
       return;
     }
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const release = acquireScrollLock();
     const frame = window.requestAnimationFrame(() => setEntered(true));
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -167,7 +167,7 @@ export function SearchFiltersSheet({
     document.addEventListener("keydown", onKey);
     return () => {
       window.cancelAnimationFrame(frame);
-      document.body.style.overflow = previousOverflow;
+      release();
       document.removeEventListener("keydown", onKey);
     };
   }, [open, onClose]);

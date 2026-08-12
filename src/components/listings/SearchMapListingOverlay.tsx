@@ -46,6 +46,7 @@ import {
   buildListingHistoryRows,
   getLatestListPriceChange,
 } from "@/lib/listings/history-rows";
+import { acquireScrollLock } from "@/lib/scroll-lock";
 import { cn } from "@/lib/utils";
 
 type OverlayListing = {
@@ -124,8 +125,7 @@ export function SearchMapListingOverlay({
   }, []);
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const release = acquireScrollLock();
     const frame = window.requestAnimationFrame(() => setEntered(true));
 
     function onKey(event: KeyboardEvent) {
@@ -138,7 +138,7 @@ export function SearchMapListingOverlay({
     document.addEventListener("keydown", onKey, true);
     return () => {
       window.cancelAnimationFrame(frame);
-      document.body.style.overflow = previousOverflow;
+      release();
       document.removeEventListener("keydown", onKey, true);
     };
   }, [onClose]);

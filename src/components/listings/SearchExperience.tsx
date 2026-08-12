@@ -153,6 +153,7 @@ export function SearchExperience() {
   const [mapMoved, setMapMoved] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [placeQueryCleared, setPlaceQueryCleared] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1023px)");
@@ -259,11 +260,23 @@ export function SearchExperience() {
     };
   }, []);
 
-  const searchBarQuery =
-    filters.community.trim() ||
-    filters.city.trim() ||
-    qParam.trim() ||
-    "";
+  const searchBarQuery = placeQueryCleared
+    ? ""
+    : filters.community.trim() ||
+      filters.city.trim() ||
+      qParam.trim() ||
+      "";
+
+  useEffect(() => {
+    if (!placeQueryCleared) return;
+    if (
+      !qParam.trim() &&
+      !filters.city.trim() &&
+      !filters.community.trim()
+    ) {
+      setPlaceQueryCleared(false);
+    }
+  }, [placeQueryCleared, qParam, filters.city, filters.community]);
 
   // Fly map to the selected city (don't rely on map viewport for results).
   useEffect(() => {
@@ -276,7 +289,7 @@ export function SearchExperience() {
     (
       next: SearchFilters,
       nextView: SearchViewMode = view,
-      options?: { clearMultiPlace?: boolean },
+      options?: { clearMultiPlace?: boolean; clearQuery?: boolean },
     ) => {
       const params = new URLSearchParams();
       if (next.segment && next.segment !== "RESIDENTIAL") {
@@ -305,7 +318,7 @@ export function SearchExperience() {
       const statusQ = statusesQueryValue(next.statuses);
       if (statusQ) params.set("status", statusQ);
       if (next.sort !== "newest") params.set("sort", next.sort);
-      if (qParam) params.set("q", qParam);
+      if (!options?.clearQuery && qParam) params.set("q", qParam);
       if (nextView !== "split") params.set("view", nextView);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
@@ -421,6 +434,7 @@ export function SearchExperience() {
   }, [isNarrow, view, filters, syncUrl]);
 
   function onPlaceSelect(suggestion: AutocompleteSuggestion) {
+    setPlaceQueryCleared(false);
     if (suggestion.action === "near_me" && suggestion.href) {
       pushHref(router, suggestion.href);
       return;
@@ -456,7 +470,15 @@ export function SearchExperience() {
     }
   }
 
+  function onBarSearchClear() {
+    setPlaceQueryCleared(true);
+    const next = { ...filters, city: "", community: "" };
+    setFilters(next);
+    syncUrl(next, view, { clearMultiPlace: true, clearQuery: true });
+  }
+
   function onBarSearchSubmit(raw: string) {
+    setPlaceQueryCleared(false);
     const parsed = parseSearchQuery(raw);
     const txn =
       parsed.transactionType ??
@@ -629,6 +651,7 @@ export function SearchExperience() {
               inputClassName="h-9 border-0 bg-transparent shadow-none focus-visible:ring-0"
               onPlaceSelect={onPlaceSelect}
               onSearchSubmit={onBarSearchSubmit}
+              onClear={onBarSearchClear}
             />
           </div>
 

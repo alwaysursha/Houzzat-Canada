@@ -14,6 +14,7 @@ import {
   subscribeListingSheet,
   type ListingSheetState,
 } from "@/lib/mobile/listing-sheet-store";
+import { acquireScrollLock } from "@/lib/scroll-lock";
 
 function sheetSrc(href: string): string {
   try {
@@ -79,11 +80,7 @@ export function ListingSheetHost() {
 
   useEffect(() => {
     if (!state.href) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
+    return acquireScrollLock();
   }, [state.href]);
 
   // One browser-history entry while the overlay is open (Close clears it).

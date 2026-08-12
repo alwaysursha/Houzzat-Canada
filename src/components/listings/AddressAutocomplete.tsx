@@ -47,6 +47,7 @@ import {
   locationErrorMessage,
 } from "@/lib/mobile/geolocation";
 import { pushHref } from "@/lib/listings/navigate-listing";
+import { acquireScrollLock } from "@/lib/scroll-lock";
 import { Input } from "@/components/ui/input";
 import { useClientAccess } from "@/hooks/use-client-access";
 import { cn } from "@/lib/utils";
@@ -149,6 +150,7 @@ export function AddressAutocomplete({
   onQueryChange,
   fillOnly = false,
   onSearchSubmit,
+  onClear,
   closeWhenHiddenBehindHeader = false,
 }: {
   initialQuery?: string;
@@ -174,6 +176,8 @@ export function AddressAutocomplete({
   fillOnly?: boolean;
   /** Called when user confirms a free-text search (Enter / Search for). */
   onSearchSubmit?: (query: string) => void;
+  /** Called when the field is cleared (X). Parent should drop URL q/city/community. */
+  onClear?: () => void;
   /**
    * Close the panel when this field scrolls under the site header
    * (home hero search).
@@ -339,15 +343,16 @@ export function AddressAutocomplete({
 
   useEffect(() => {
     if (!sheetMounted || !isMobile) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const release = acquireScrollLock();
+    return release;
+  }, [sheetMounted, isMobile]);
+
+  useEffect(() => {
+    if (!sheetMounted || !isMobile || !sheetEntered) return;
     const id = window.setTimeout(() => {
-      if (sheetEntered) sheetInputRef.current?.focus();
+      sheetInputRef.current?.focus();
     }, 280);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.clearTimeout(id);
-    };
+    return () => window.clearTimeout(id);
   }, [sheetMounted, sheetEntered, isMobile]);
 
   useEffect(() => {
@@ -882,6 +887,7 @@ export function AddressAutocomplete({
     setActiveIndex(-1);
     setOpen(false);
     onQueryChange?.("");
+    onClear?.();
     if (isMobile && mobileSheetOpen) {
       sheetInputRef.current?.focus();
       void loadEmptyState();
@@ -889,15 +895,14 @@ export function AddressAutocomplete({
   }
 
   function openFromFocus() {
-    if (
+    if (isMobile) {
+      setMobileSheetOpen(true);
+    } else if (
       selectedQueryRef.current !== null &&
       query.trim() === selectedQueryRef.current.trim()
     ) {
-      // Prefill / already-chosen address — don't reopen suggestions.
+      // Desktop: prefill / already-chosen address — don't reopen suggestions.
       return;
-    }
-    if (isMobile) {
-      setMobileSheetOpen(true);
     }
     if (source === "listings" && query.trim().length < minChars) {
       void loadEmptyState();
