@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { hasFullClientAccess } from "@/lib/account-access";
+import { authorizeHistoryRowsForClient } from "@/lib/listings/build-listing-panel";
 import {
   enrichAddressListingHistory,
   loadListingForAddressHistory,
@@ -10,6 +11,8 @@ import {
   buildAddressListingHistoryRows,
   findSiblingListingsAtAddress,
 } from "@/lib/listings/address-history";
+import { loadListingDetailApiAccess } from "@/lib/listings/listing-detail-api-access";
+import type { HistoryRow } from "@/lib/listings/history-rows";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
@@ -24,43 +27,70 @@ async function canForceEnrich(): Promise<boolean> {
   return Boolean(user && hasFullClientAccess(user));
 }
 
-/** Current Neon address history (no PropTx). */
+function authorizeRows(
+  rows: HistoryRow[],
+  listing: {
+    listPrice: number;
+    status: string;
+    soldPrice: number | null;
+  },
+  canSeeRestricted: boolean,
+): HistoryRow[] {
+  return authorizeHistoryRowsForClient(rows, {
+    canSeeRestricted,
+    listPrice: listing.listPrice,
+    status: listing.status,
+  });
+}
+
+/** Current Neon address history (no PropTx). Authorized + redacted. */
 export async function GET(_request: Request, { params }: Params) {
   const { mlsNumber: raw } = await params;
-  const mlsNumber = decodeURIComponent(raw).trim().toUpperCase();
-  const listing = await loadListingForAddressHistory(mlsNumber);
+  const gated = await loadListingDetailApiAccess(raw);
+  if (!gated.ok) return gated.response;
+
+  const listing = await loadListingForAddressHistory(gated.listing.mlsNumber);
   if (!listing) {
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
   }
   const siblings = await findSiblingListingsAtAddress(listing);
-  const historyRows = buildAddressListingHistoryRows({
-    mlsNumber: listing.mlsNumber,
-    listPrice: listing.listPrice,
-    listedAt: listing.listedAt,
-    updatedAtMls: listing.updatedAtMls,
-    soldAt: listing.soldAt,
-    soldPrice: listing.soldPrice,
-    status: listing.status,
-    transactionType: listing.transactionType,
-    history: listing.history,
-    siblings,
-  });
-  return NextResponse.json({
-    historyRows,
-    enrichedAt: listing.addressHistoryEnrichedAt?.toISOString() ?? null,
-  });
+  const soldPrice = gated.access.canSeeRestricted ? listing.soldPrice : null;
+  const historyRows = authorizeRows(
+    buildAddressListingHistoryRows({
+      mlsNumber: listing.mlsNumber,
+      listPrice: listing.listPrice,
+      listedAt: listing.listedAt,
+      updatedAtMls: listing.updatedAtMls,
+      soldAt: listing.soldAt,
+      soldPrice,
+      status: listing.status,
+      transactionType: listing.transactionType,
+      history: listing.history,
+      siblings,
+    }),
+    listing,
+    gated.access.canSeeRestricted,
+  );
+  return NextResponse.json(
+    {
+      historyRows,
+      enrichedAt: listing.addressHistoryEnrichedAt?.toISOString() ?? null,
+    },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
 }
 
 /**
  * Pull PropTx sibling cycles at this address into Neon.
- * Public — any listing visitor can trigger (24h TTL). Restricted
- * prices/MLS#s stay gated in the UI via HistoryRow.public + canSeeRestricted.
- * Listing page calls this after paint — never blocks SSR.
+ * VOW-gated; response history rows are redacted for non-clients.
+ * Listing page / panel call this after paint — never blocks SSR.
  */
 export async function POST(request: Request, { params }: Params) {
   const { mlsNumber: raw } = await params;
-  const mlsNumber = decodeURIComponent(raw).trim().toUpperCase();
-  const listing = await loadListingForAddressHistory(mlsNumber);
+  const gated = await loadListingDetailApiAccess(raw);
+  if (!gated.ok) return gated.response;
+
+  const listing = await loadListingForAddressHistory(gated.listing.mlsNumber);
   if (!listing) {
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
   }
@@ -75,10 +105,16 @@ export async function POST(request: Request, { params }: Params) {
   const force = forceRequested ? await canForceEnrich() : false;
 
   const result = await enrichAddressListingHistory(listing, { force });
+  const historyRows = authorizeRows(
+    result.historyRows,
+    listing,
+    gated.access.canSeeRestricted,
+  );
+
   return NextResponse.json({
     ok: result.ok,
     skipped: result.skipped,
     upsertedMls: result.upsertedMls,
-    historyRows: result.historyRows,
+    historyRows,
   });
 }

@@ -1,76 +1,19 @@
-import { Suspense, cache } from "react";
+import { cache } from "react";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Bath, Bed, Car, Maximize2, ArrowDown, ArrowUp } from "lucide-react";
-import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
-import { ListingNotesPanel } from "@/components/account/ListingNotesPanel";
-import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
-import { VowAcceptCard } from "@/components/account/VowAcceptCard";
-import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
-import { ListingFactsPanel } from "@/components/listings/ListingFactsPanel";
-import { ListingGalleryLive } from "@/components/listings/ListingGalleryLive";
-import {
-  ListingOpenHousesLive,
-  ListingRoomsLive,
-} from "@/components/listings/ListingRoomsOpenHousesLive";
-import { ListingHistoryPanel } from "@/components/listings/ListingHistoryPanel";
-import { ListingNarrative } from "@/components/listings/ListingNarrative";
-import { ListingQaPanel } from "@/components/listings/ListingQaPanel";
-import { ListingStickyBar } from "@/components/listings/ListingStickyBar";
-import { NearbyAmenitiesDeferred } from "@/components/listings/NearbyAmenitiesDeferred";
-import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
-import { ListingRelatedSection } from "@/components/listings/ListingRelatedSection";
-import { ListingMobileSideMenu } from "@/components/listings/ListingMobileSideMenu";
-import { ListingDetailCoachMarks } from "@/components/listings/ListingDetailCoachMarks";
-import { ListingDetailSectionNav } from "@/components/listings/ListingDetailSectionNav";
-import { ListingSheetDocumentFlags } from "@/components/listings/ListingSheetDocumentFlags";
-import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
-import { ListingMobileNotes } from "@/components/listings/ListingMobileNotes";
-import { ListingAccountChromeProvider } from "@/components/listings/ListingAccountChromeProvider";
-import { RecordRecentView } from "@/components/listings/RecordRecentView";
-import { SeoLocationBridge } from "@/components/site/SeoLocationContext";
-import { ListingInsightsDeferred } from "@/components/listings/insights/ListingInsightsDeferred";
-import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
-import { SoldForPrice } from "@/components/listings/SoldForPrice";
+import { ListingDetailView } from "@/components/listings/ListingDetailView";
 import { buildAddressListingHistoryRows } from "@/lib/listings/address-history";
-import { getLatestListPriceChange } from "@/lib/listings/history-rows";
-import {
-  formatListingTiming,
-  formatListPrice,
-  formatPrice,
-  formatListingAddressSearchParts,
-  formatListingAddressOneLine,
-  daysOnMarketFromListedAt,
-  isClosedListingStatus,
-  isOnMarketListingStatus,
-  listingStatusBadgeClass,
-  listingStatusLabel,
-  propertyTypeLabel,
-  segmentLabel,
-} from "@/lib/listings/constants";
-import {
-  formatBedsPlusLabel,
-  parseListingFacts,
-  formatListingSqftLabel,
-} from "@/lib/listings/facts";
-import { getListingProvider } from "@/lib/listings/provider";
+import { resolveListingDetailAccess } from "@/lib/listings/build-listing-panel";
+import { formatListingAddressOneLine } from "@/lib/listings/constants";
 import { NEON_LISTING_MEDIA_CAP } from "@/lib/listings/gallery-constants";
+import { loadListingForDetailPage } from "@/lib/listings/load-listing-for-detail";
 import { persistNeonListingMediaCap } from "@/lib/listings/persist-neon-media";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
 import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isVowOnlyMlsMode } from "@/lib/proptx/config";
-import { lookupAndUpsertOnDemand } from "@/lib/proptx/on-demand-lookup";
-import {
-  accessGateCopy,
-  needsEmailVerification,
-  resolveClientAccess,
-} from "@/lib/account-access";
-import { hasVowAccess } from "@/lib/vow";
+import { needsEmailVerification } from "@/lib/account-access";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
-import { getExpertWhatsAppNumber } from "@/lib/whatsapp";
 import {
   homesForSaleCityPath,
   homesForSaleCommunityPath,
@@ -109,19 +52,10 @@ function parseListingParts(parts: string[] | undefined): {
 /**
  * Request-scoped listing load shared by generateMetadata + page.
  * Normalize MLS before cache() so case/whitespace variants hit one entry.
- * Auth/VOW stay outside — this loader is MLS inventory only.
  */
-const loadListingByMlsCached = cache(async (mlsNumber: string) => {
-  const provider = getListingProvider();
-  let listing = await provider.getByMlsForDetailPage(mlsNumber);
-  if (!listing) {
-    const pulled = await lookupAndUpsertOnDemand(mlsNumber);
-    if (pulled.mlsNumbers.length > 0) {
-      listing = await provider.getByMlsForDetailPage(mlsNumber);
-    }
-  }
-  return listing;
-});
+const loadListingByMlsCached = cache((mlsNumber: string) =>
+  loadListingForDetailPage(mlsNumber),
+);
 
 function loadListingByMls(mlsNumber: string) {
   return loadListingByMlsCached(mlsNumber.trim().toUpperCase());
@@ -217,12 +151,10 @@ export default async function ListingDetailPage({
       }
     : undefined;
 
-  // MLS listing pages are public in IDX mode; VOW-only legacy still requires login.
-  if (
-    isVowOnlyMlsMode() &&
-    listing.dataSource !== "fsbo" &&
-    !hasVowAccess(user)
-  ) {
+  // Same access resolver as GET /api/listings/[mls]/panel (flags cannot drift).
+  // RSC still redirects on VOW-only; the panel API returns 401/403 JSON instead.
+  const panelAccess = resolveListingDetailAccess(user, listing);
+  if (panelAccess.vowBlocked) {
     if (needsEmailVerification(user)) {
       redirect(
         `/auth/verify-email?callbackUrl=${encodeURIComponent(canonicalPath)}`,
@@ -233,11 +165,11 @@ export default async function ListingDetailPage({
     );
   }
 
-  const access = resolveClientAccess(user);
-  const vowOk = access.hasClientAccess;
-  const verifyLocked = access.needsEmailVerification;
-  const gateDetails = accessGateCopy(access, "details");
-  const gateSold = accessGateCopy(access, "sold");
+  const verifyLocked = panelAccess.needsEmailVerification;
+  const gateDetails = panelAccess.gateDetails;
+  const gateSold = panelAccess.gateSold;
+  const canSeeRestricted = panelAccess.canSeeRestricted;
+  const detailsLocked = panelAccess.detailsLocked;
 
   // Neon-only SSR gallery (≤5). Never await PropTx here — start it in parallel
   // and pass the promise to the client so enrich skips an extra API hop.
@@ -273,7 +205,8 @@ export default async function ListingDetailPage({
     .catch(() => {});
 
   // Address siblings enrich client-side (ListingHistoryPanel).
-  const personalizationCities: string[] = [];
+  // RSC keeps existing HTML behavior (soldPrice still in history builder);
+  // panel API redacts soldPrice server-side for guests.
   const listingHistoryRows = buildAddressListingHistoryRows({
     mlsNumber: listing.mlsNumber,
     listPrice: listing.listPrice,
@@ -287,76 +220,7 @@ export default async function ListingDetailPage({
     siblings: [],
   });
 
-  const showClosedPrice =
-    isClosedListingStatus(listing.status) && listing.soldPrice != null;
-  const isInactive = !isOnMarketListingStatus(listing.status);
-  const similarHomesHref = (() => {
-    const params = new URLSearchParams();
-    params.set("status", "ACTIVE");
-    params.set("transactionType", listing.transactionType);
-    params.set("city", listing.city);
-    if (listing.community) params.set("community", listing.community);
-    if (listing.segment) params.set("segment", listing.segment);
-    params.set("propertyType", listing.propertyType);
-    params.set("minBeds", String(Math.floor(listing.beds)));
-    return `/search?${params.toString()}`;
-  })();
-  const canSeeRestricted = vowOk;
-  const detailsLocked = isInactive && !canSeeRestricted;
-  const latestPriceChange = getLatestListPriceChange(
-    listing.history,
-    listing.mlsNumber,
-    { includeRestricted: canSeeRestricted },
-  );
-  const province = listing.province?.trim() || "ON";
-  const { street: streetLine, locality: addressLocality } =
-    formatListingAddressSearchParts(listing);
   const addressLabel = formatListingAddressOneLine(listing);
-  const addressSearchLabel = addressLocality
-    ? `${streetLine}, ${addressLocality}`
-    : streetLine;
-  const daysOnMarket = daysOnMarketFromListedAt(listing);
-  const timingLabel = formatListingTiming(listing);
-  const listingFacts = parseListingFacts(listing.facts);
-  const bedsPlusLabel = formatBedsPlusLabel(listing.beds, listingFacts);
-  const sqftLabel = formatListingSqftLabel({
-    sqft: listing.sqft,
-    livingAreaRange: listingFacts?.livingAreaRange,
-    unit: "SqFt",
-  });
-  const taxesLabel = listing.taxes
-    ? listingFacts?.taxYear
-      ? `${formatPrice(listing.taxes)} / ${listingFacts.taxYear}`
-      : formatPrice(listing.taxes)
-    : null;
-  const crumbs: { label: string; href?: string }[] = [
-    { label: province, href: "/search" },
-    {
-      label: listing.city,
-      href: homesForSaleCityPath(listing.city),
-    },
-  ];
-  if (listing.community) {
-    crumbs.push({
-      label: listing.community,
-      href: homesForSaleCommunityPath(listing.city, listing.community),
-    });
-  }
-  crumbs.push({ label: streetLine });
-
-  const coverTagLabel = listingStatusLabel(
-    listing.status,
-    listing.transactionType,
-  );
-  const segmentTagMeta = {
-    label: segmentLabel(listing.segment),
-    tone:
-      listing.segment === "COMMERCIAL"
-        ? ("commercial" as const)
-        : listing.segment === "PRE_CONSTRUCTION"
-          ? ("preconstruction" as const)
-          : ("residential" as const),
-  };
 
   const coverUrl =
     listing.media.find((m) => m.isPrimary)?.url ?? listing.media[0]?.url ?? null;
@@ -452,19 +316,7 @@ export default async function ListingDetailPage({
   };
 
   return (
-    <ListingAccountChromeProvider
-      mlsNumber={listing.mlsNumber}
-      signedIn={Boolean(user)}
-    >
-      <SeoLocationBridge
-        city={listing.city}
-        community={listing.community}
-      />
-      <RecordRecentView mlsNumber={listing.mlsNumber} />
-      <ListingDetailCoachMarks />
-      <Suspense fallback={null}>
-        <ListingSheetDocumentFlags />
-      </Suspense>
+    <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -473,424 +325,21 @@ export default async function ListingDetailPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
-      <ListingMobileSideMenu
-        mlsNumber={listing.mlsNumber}
-        shareTitle={addressLabel}
-        callbackPath={canonicalPath}
-        initiallySaved={false}
-        initiallyWatching={false}
+      <ListingDetailView
+        listing={listing}
+        galleryPhotos={galleryPhotos}
+        livePhotosPromise={livePhotosPromise}
+        listingHistoryRows={listingHistoryRows}
+        isListingSheet={isListingSheet}
         signedIn={Boolean(user)}
-        city={listing.city}
-        community={listing.community}
-        transactionType={listing.transactionType}
-        segment={listing.segment}
-        inactive={isInactive}
-        similarHomesHref={similarHomesHref}
+        sessionContact={sessionContact}
+        canSeeRestricted={canSeeRestricted}
+        detailsLocked={detailsLocked}
+        verifyLocked={verifyLocked}
+        gateDetails={gateDetails}
+        gateSold={gateSold}
+        canonicalPath={canonicalPath}
       />
-      <ListingMobileActionBar
-        mlsNumber={listing.mlsNumber}
-        callbackPath={canonicalPath}
-        initiallyWatching={false}
-        signedIn={Boolean(user)}
-        inactive={isInactive}
-        similarHomesHref={similarHomesHref}
-        city={listing.city}
-        community={listing.community}
-        transactionType={listing.transactionType}
-        segment={listing.segment}
-        contact={sessionContact}
-      />
-      <div className="w-full min-w-0 space-y-8 bg-[linear-gradient(180deg,rgb(244_247_245)_0%,rgb(255_255_255)_28%,rgb(255_255_255)_100%)] px-4 pb-[calc(2rem+4.25rem+var(--mobile-bottom-nav,0px)+var(--listing-action-pad-bottom))] pt-3 sm:px-6 md:pb-8 md:pt-6 lg:px-10">
-        {/*
-          Sticky bar must be a descendant of this tall page section (including the
-          grid below), not a short breadcrumbs+gallery wrapper — otherwise sticky
-          ends when the gallery scrolls away.
-        */}
-        <ListingStickyBar
-          crumbs={crumbs}
-          mlsNumber={listing.mlsNumber}
-          shareTitle={addressLabel}
-          callbackPath={canonicalPath}
-          initiallySaved={false}
-          initiallyWatching={false}
-          signedIn={Boolean(user)}
-          city={listing.city}
-          community={listing.community}
-          transactionType={listing.transactionType}
-          segment={listing.segment}
-          inactive={isInactive}
-          similarHomesHref={similarHomesHref}
-          sheetMode={isListingSheet}
-        />
-
-        <div className="-mt-5 space-y-3 md:mt-8 md:space-y-8">
-          {!isListingSheet ? (
-            <div className="-mx-4 empty:hidden sm:-mx-6 lg:-mx-10">
-              <HomepagePersonalizationBanner
-                cities={personalizationCities}
-                forceShow
-              />
-              <SavedSearchChipBar forceShow cities={personalizationCities} />
-            </div>
-          ) : null}
-
-          <ListingGalleryLive
-            addressLabel={addressLabel}
-            mlsNumber={listing.mlsNumber}
-            livePhotosPromise={livePhotosPromise}
-            callbackPath={canonicalPath}
-            coverTag={coverTagLabel}
-            coverTagClassName={listingStatusBadgeClass(listing.status)}
-            segmentTag={segmentTagMeta}
-            virtualTourUrl={listingFacts?.virtualTourUrl}
-            allowBooking={!isInactive}
-            detailsLocked={detailsLocked}
-            needsEmailVerification={verifyLocked}
-            mapSubject={
-              Number.isFinite(listing.lat) && Number.isFinite(listing.lng)
-                ? {
-                    mlsNumber: listing.mlsNumber,
-                    lat: listing.lat,
-                    lng: listing.lng,
-                    addressLabel: formatListingAddressOneLine(listing),
-                    city: listing.city,
-                    listPrice: listing.listPrice,
-                    transactionType: listing.transactionType,
-                    status: listing.status,
-                    propertyType: listing.propertyType,
-                    beds: listing.beds,
-                    bedsLabel: bedsPlusLabel,
-                    baths: listing.baths,
-                    sqft: listing.sqft,
-                    primaryImageUrl: listing.media[0]?.url ?? null,
-                    unitNumber: listing.unitNumber,
-                    addressLine: listing.addressLine,
-                    postalCode: listing.postalCode,
-                    province: listing.province,
-                  }
-                : undefined
-            }
-            contact={sessionContact}
-            photos={galleryPhotos}
-          />
-        </div>
-
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-10">
-        <div className="min-w-0 space-y-5 sm:space-y-6">
-          <div className="flex flex-col gap-5 rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-x-8 md:gap-y-5">
-            <div className="min-w-0 w-full md:flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-wrap items-center gap-3">
-                  {showClosedPrice ? (
-                    <SoldForPrice
-                      listPrice={listing.listPrice}
-                      soldPrice={listing.soldPrice}
-                      status={listing.status}
-                      transactionType={listing.transactionType}
-                      tone="light"
-                      locked={!canSeeRestricted}
-                      lockReason={verifyLocked ? "verify" : "sign-in"}
-                      size="lg"
-                    />
-                  ) : detailsLocked ? (
-                    <p className="font-display text-3xl tracking-tight text-ink/55 sm:text-4xl">
-                      <span className="mr-2 font-sans text-base font-semibold text-ink/45 sm:text-lg">
-                        {listing.transactionType === "LEASE"
-                          ? "Rent:"
-                          : "Listed:"}
-                      </span>
-                      {gateSold.title}
-                    </p>
-                  ) : (
-                    <>
-                      <p className="font-display text-3xl tracking-tight text-canopy sm:text-4xl">
-                        {formatListPrice(
-                          listing.listPrice,
-                          listing.transactionType,
-                        )}
-                      </p>
-                      {latestPriceChange ? (
-                        <span
-                          className={
-                            latestPriceChange.delta < 0
-                              ? "inline-flex items-center gap-1 rounded-full bg-danger/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-danger"
-                              : "inline-flex items-center gap-1 rounded-full bg-canopy/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-canopy-deep"
-                          }
-                          title={
-                            latestPriceChange.delta < 0
-                              ? `Reduced from ${formatPrice(latestPriceChange.originalPrice)}`
-                              : `Increased from ${formatPrice(latestPriceChange.originalPrice)}`
-                          }
-                        >
-                          {latestPriceChange.delta < 0 ? (
-                            <ArrowDown className="size-3.5" aria-hidden />
-                          ) : (
-                            <ArrowUp className="size-3.5" aria-hidden />
-                          )}
-                          {latestPriceChange.delta < 0 ? "−" : "+"}
-                          {formatPrice(Math.abs(latestPriceChange.delta))}
-                        </span>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-                <p className="shrink-0 pt-1.5 text-right text-sm font-medium leading-snug text-ink/55 md:hidden">
-                  {timingLabel}
-                </p>
-              </div>
-              <div className="mt-2 font-display leading-tight text-ink">
-                {detailsLocked ? (
-                  <h1 className="select-none text-xl font-normal blur-[5px] md:text-2xl">
-                    {addressSearchLabel}
-                  </h1>
-                ) : (
-                  <>
-                    <h1 className="text-xl font-normal md:text-2xl">
-                      {streetLine}
-                    </h1>
-                    {addressLocality ? (
-                      <p className="mt-1 text-base font-normal text-ink/70 md:text-lg">
-                        {listing.community ? (
-                          <>
-                            {listing.city.trim()}
-                            {" - "}
-                            <Link
-                              href={homesForSaleCommunityPath(
-                                listing.city,
-                                listing.community,
-                              )}
-                              className="text-canopy hover:underline"
-                            >
-                              {listing.community}
-                            </Link>
-                          </>
-                        ) : (
-                          addressLocality
-                        )}
-                      </p>
-                    ) : null}
-                  </>
-                )}
-              </div>
-              {detailsLocked ? (
-                <p className="mt-1 text-sm text-ink/55">
-                  <span className="font-bold text-ink">
-                    {propertyTypeLabel(listing.propertyType)}
-                  </span>
-                  {" · "}
-                  {listing.city}
-                  {" · "}
-                  {gateDetails.title}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-ink/55">
-                  <span className="font-bold text-ink">
-                    {propertyTypeLabel(listing.propertyType)}
-                  </span>
-                  {" · "}
-                  MLS® {listing.mlsNumber}
-                </p>
-              )}
-            </div>
-
-            <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:shrink-0 md:items-end">
-              <p className="hidden text-right text-sm font-medium leading-snug text-ink/55 md:block">
-                {timingLabel}
-              </p>
-              {/*
-                Mobile: equal columns so the row fits the content width.
-                Desktop (md+): keep the original fixed min-widths and gaps.
-              */}
-              <div
-                className={
-                  listing.segment !== "COMMERCIAL"
-                    ? `grid w-full grid-cols-4 gap-2 md:flex md:w-auto md:items-start md:gap-3 ${detailsLocked ? "select-none blur-[5px]" : ""}`
-                    : `grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:items-start md:gap-3 ${detailsLocked ? "select-none blur-[5px]" : ""}`
-                }
-              >
-                {listing.segment !== "COMMERCIAL" ? (
-                  <>
-                    <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/60 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
-                      <Bed
-                        className="size-5 text-canopy md:size-6"
-                        strokeWidth={1.75}
-                        aria-hidden
-                      />
-                      <span className="text-sm font-semibold leading-tight text-ink">
-                        {bedsPlusLabel
-                          ? bedsPlusLabel.includes("+")
-                            ? bedsPlusLabel
-                            : `${bedsPlusLabel} ${bedsPlusLabel === "1" ? "Bed" : "Beds"}`
-                          : `${listing.beds} ${listing.beds === 1 ? "Bed" : "Beds"}`}
-                      </span>
-                    </div>
-                    <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/60 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
-                      <Bath
-                        className="size-5 text-canopy md:size-6"
-                        strokeWidth={1.75}
-                        aria-hidden
-                      />
-                      <span className="text-sm font-semibold leading-tight text-ink">
-                        {listing.baths} {listing.baths === 1 ? "Bath" : "Baths"}
-                      </span>
-                    </div>
-                  </>
-                ) : null}
-                <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/60 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
-                  <Maximize2
-                    className="size-5 text-canopy md:size-6"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  <span className="text-sm font-semibold leading-tight text-ink">
-                    {sqftLabel ?? "n/a SqFt"}
-                  </span>
-                </div>
-                <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/60 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
-                  <Car
-                    className="size-5 text-canopy md:size-6"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  <span className="text-sm font-semibold leading-tight text-ink">
-                    {listing.parkingSpaces}{" "}
-                    {listing.parkingSpaces === 1 ? "Parking" : "Parkings"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <ListingQaPanel
-            mlsNumber={listing.mlsNumber}
-            addressLine={addressLabel}
-            city={listing.city}
-            title="Quick question?"
-            hint="Message the agent directly on WhatsApp — MLS® and address is already included."
-            expertWhatsApp={getExpertWhatsAppNumber()}
-          />
-
-          <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
-
-          <ListingDetailSectionNav
-            sheetMode={isListingSheet}
-            items={[
-              { id: "listing-about", label: "About" },
-              { id: "listing-details", label: "Details" },
-              { id: "listing-rooms", label: "Rooms" },
-              { id: "listing-history", label: "History" },
-              { id: "listing-insights", label: "Insights" },
-              { id: "listing-estimated-value", label: "Estimated Value" },
-              { id: "listing-related", label: "Similar" },
-              { id: "listing-nearby", label: "Amenities" },
-              { id: "listing-open-houses", label: "Open houses" },
-            ]}
-          />
-
-          <ListingNarrative body={listing.description} />
-
-          <ListingFactsPanel
-            facts={listing.facts}
-            propertyTypeLabel={propertyTypeLabel(listing.propertyType)}
-            mlsNumber={listing.mlsNumber}
-            community={listing.community}
-            postalCode={listing.postalCode}
-            taxesLabel={taxesLabel}
-            maintenanceLabel={
-              listing.maintenanceFee
-                ? `${formatPrice(listing.maintenanceFee)}/mo`
-                : null
-            }
-            parkingSpaces={listing.parkingSpaces}
-            yearBuilt={listing.yearBuilt}
-            sqftLabel={
-              formatListingSqftLabel({
-                sqft: listing.sqft,
-                livingAreaRange: listingFacts?.livingAreaRange,
-                unit: "sqft",
-              })
-            }
-            daysOnMarket={daysOnMarket}
-            brokerageName={listing.brokerageName}
-            beds={listing.beds}
-            baths={listing.baths}
-          />
-
-          <ListingRoomsLive mlsNumber={listing.mlsNumber} />
-
-          <ListingHistoryPanel
-            mlsNumber={listing.mlsNumber}
-            addressLabel={addressLabel}
-            propertyType={listing.propertyType}
-            transactionType={listing.transactionType}
-            callbackPath={canonicalPath}
-            canSeeRestricted={canSeeRestricted}
-            signedIn={Boolean(user)}
-            needsEmailVerification={verifyLocked}
-            enableAddressHistoryEnrich
-            rows={listingHistoryRows}
-          />
-
-          <ListingInsightsDeferred
-            mlsNumber={listing.mlsNumber}
-            callbackPath={canonicalPath}
-            needsEmailVerification={verifyLocked}
-          />
-
-          <ListingRelatedSection
-            subject={{
-              mlsNumber: listing.mlsNumber,
-              city: listing.city,
-              community: listing.community,
-              propertyType: listing.propertyType,
-              beds: listing.beds,
-              bedsLabel: bedsPlusLabel,
-              transactionType: listing.transactionType,
-              segment: listing.segment,
-            }}
-            initialMode="SAME_AREA"
-            signedIn={Boolean(user)}
-          />
-
-          <NearbyAmenitiesDeferred lat={listing.lat} lng={listing.lng} />
-
-          <ListingOpenHousesLive mlsNumber={listing.mlsNumber} />
-        </div>
-
-        <aside className="min-w-0 space-y-5 sm:space-y-6">
-          {detailsLocked ? (
-            <VowAcceptCard callbackPath={canonicalPath} />
-          ) : null}
-          <ListingNotesPanel
-            mlsNumber={listing.mlsNumber}
-            signedIn={Boolean(user)}
-            initialBody=""
-            authCallbackUrl={canonicalPath}
-            className="hidden md:block"
-          />
-          <ListingMobileNotes
-            mlsNumber={listing.mlsNumber}
-            signedIn={Boolean(user)}
-            initialBody=""
-            authCallbackUrl={canonicalPath}
-          />
-          <ViewingRequestPanel
-            className="hidden md:block"
-            mlsNumber={listing.mlsNumber}
-            callbackPath={canonicalPath}
-            inactive={isInactive}
-            similarHomesHref={similarHomesHref}
-            city={listing.city}
-            community={listing.community}
-            transactionType={listing.transactionType}
-            segment={listing.segment}
-            signedIn={Boolean(user)}
-            contact={sessionContact}
-          />
-          <MlsDisclaimer />
-        </aside>
-      </div>
-    </div>
-    </ListingAccountChromeProvider>
+    </>
   );
 }

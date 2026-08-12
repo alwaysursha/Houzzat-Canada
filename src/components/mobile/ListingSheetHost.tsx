@@ -2,10 +2,12 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, X } from "lucide-react";
+import { ListingDetailPanel } from "@/components/listings/ListingDetailPanel";
 import {
   abortListingGalleryFetches,
   mlsNumberFromListingHref,
 } from "@/lib/listings/gallery-client";
+import { isListingPanelEnabled } from "@/lib/listings/listing-panel-flag";
 import {
   LISTING_SHEET_OPEN_MESSAGE,
   backListingSheet,
@@ -29,6 +31,9 @@ function sheetSrc(href: string): string {
 /**
  * Full listing-detail overlay (same page as /listing/..., not the map card).
  * Stack of listings: Back pops one; Close / Escape dismisses the whole overlay.
+ *
+ * Production default: iframe of /listing/...?sheet=1.
+ * Internal flag (`?listingPanel=1`): in-app ListingDetailPanel (no second document).
  */
 export function ListingSheetHost() {
   const [framed, setFramed] = useState(() => {
@@ -44,6 +49,7 @@ export function ListingSheetHost() {
     depth: 0,
     canBack: false,
   });
+  const [usePanel, setUsePanel] = useState(false);
   const historyPushedRef = useRef(false);
   const syncingHistoryRef = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -60,6 +66,12 @@ export function ListingSheetHost() {
     if (framed) return;
     return subscribeListingSheet(setState);
   }, [framed]);
+
+  // Re-read flag when the sheet opens (query/cookie/sessionStorage).
+  useEffect(() => {
+    if (!state.href) return;
+    setUsePanel(isListingPanelEnabled());
+  }, [state.href]);
 
   // Child iframe asks parent to push another listing onto the stack.
   useEffect(() => {
@@ -124,8 +136,8 @@ export function ListingSheetHost() {
   }, [state.href]);
 
   const src = useMemo(
-    () => (state.href ? sheetSrc(state.href) : null),
-    [state.href],
+    () => (state.href && !usePanel ? sheetSrc(state.href) : null),
+    [state.href, usePanel],
   );
 
   // One iframe only: blank the outgoing document immediately so its fetches die
@@ -147,7 +159,8 @@ export function ListingSheetHost() {
     abortListingGalleryFetches(mls);
   }, [state.href]);
 
-  if (framed || !state.href || !src) return null;
+  if (framed || !state.href) return null;
+  if (!usePanel && !src) return null;
 
   return (
     <div
@@ -155,6 +168,7 @@ export function ListingSheetHost() {
       role="dialog"
       aria-modal="true"
       aria-label="Listing details"
+      data-listing-panel={usePanel ? "1" : undefined}
     >
       <div
         className="flex shrink-0 items-center justify-between gap-2 border-b border-line bg-canopy px-2 pt-[env(safe-area-inset-top,0px)] text-white sm:px-3"
@@ -181,16 +195,26 @@ export function ListingSheetHost() {
           </button>
         </div>
         <span className="shrink-0 pr-2 text-xs font-medium tracking-wide text-white/70">
-          {state.depth > 1 ? `Listing · ${state.depth}` : "Listing"}
+          {usePanel
+            ? state.depth > 1
+              ? `Panel · ${state.depth}`
+              : "Panel"
+            : state.depth > 1
+              ? `Listing · ${state.depth}`
+              : "Listing"}
         </span>
       </div>
-      <iframe
-        key={src}
-        ref={iframeRef}
-        title="Listing"
-        src={src}
-        className="min-h-0 w-full flex-1 border-0 bg-mist"
-      />
+      {usePanel ? (
+        <ListingDetailPanel key={state.href} href={state.href} />
+      ) : (
+        <iframe
+          key={src!}
+          ref={iframeRef}
+          title="Listing"
+          src={src!}
+          className="min-h-0 w-full flex-1 border-0 bg-mist"
+        />
+      )}
     </div>
   );
 }

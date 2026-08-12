@@ -1,33 +1,42 @@
 import { NextResponse } from "next/server";
+import { loadListingDetailApiAccess } from "@/lib/listings/listing-detail-api-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
 /**
  * Rooms + open houses for listing detail — after paint (not SSR).
+ * VOW / inactive locks match GET /api/listings/[mls]/panel.
  */
 export async function GET(_request: Request, { params }: Params) {
   const { mlsNumber: raw } = await params;
-  const mlsNumber = decodeURIComponent(raw).trim().toUpperCase();
-  if (!mlsNumber) {
-    return NextResponse.json({ error: "Missing MLS number" }, { status: 400 });
+  const gated = await loadListingDetailApiAccess(raw);
+  if (!gated.ok) return gated.response;
+
+  const { listing, access } = gated;
+
+  // Inactive / off-market details stay locked for non-clients.
+  if (access.detailsLocked) {
+    return NextResponse.json(
+      { rooms: [] as const, openHouses: [] as const, detailsLocked: true },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
   }
 
-  const listing = await prisma.listing.findUnique({
-    where: { mlsNumber },
+  const row = await prisma.listing.findUnique({
+    where: { id: listing.id },
     select: {
-      id: true,
       rooms: { orderBy: { sortOrder: "asc" } },
       openHouses: { orderBy: { startsAt: "asc" } },
     },
   });
 
-  if (!listing) {
+  if (!row) {
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
   }
 
   const now = Date.now();
-  const openHouses = listing.openHouses
+  const openHouses = row.openHouses
     .filter((oh) => oh.endsAt.getTime() >= now)
     .map((oh) => ({
       id: oh.id,
@@ -38,7 +47,7 @@ export async function GET(_request: Request, { params }: Params) {
 
   return NextResponse.json(
     {
-      rooms: listing.rooms.map((room) => ({
+      rooms: row.rooms.map((room) => ({
         id: room.id,
         roomType: room.roomType,
         roomLevel: room.roomLevel,
