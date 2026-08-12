@@ -26,9 +26,17 @@ import { cn } from "@/lib/utils";
 const BOTTOM_NAV_HEIGHT = "3.5rem";
 const FADE_MS = 220;
 
+function isAccountHref(href: string) {
+  return href === "/account" || href.startsWith("/account/");
+}
+
 /**
  * Mobile consumer shell: Home / Search / More / Account.
  * Moves account tools out of the tall sticky top strip.
+ *
+ * Shell renders immediately (loading + guest + consumer). Hidden only once
+ * session confirms ADMIN/AGENT. Account /account/* use full document loads
+ * so Capacitor avoids soft RSC into the force-dynamic account layout.
  */
 export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
   const { status, data } = useSession();
@@ -39,7 +47,6 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [moreShown, setMoreShown] = useState(false);
   const [moreVisible, setMoreVisible] = useState(false);
-  const [navReady, setNavReady] = useState(false);
   const [personalizeOpen, setPersonalizeOpen] = useState(false);
   const [personalizeSearch, setPersonalizeSearch] = useState<{
     id: string;
@@ -47,18 +54,16 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
     query: Record<string, unknown>;
   } | null>(null);
 
-  const isConsumer =
+  const isStaff =
     status === "authenticated" &&
-    role !== "ADMIN" &&
-    role !== "AGENT";
-  const visible = isConsumer;
+    (role === "ADMIN" || role === "AGENT");
+  const visible = !isStaff;
 
   useEffect(() => {
     const root = document.documentElement;
     if (!visible) {
       root.style.setProperty("--mobile-bottom-nav", "0px");
       root.dataset.mobileBottomNav = "0";
-      setNavReady(false);
       return;
     }
     root.style.setProperty(
@@ -66,9 +71,7 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
       `calc(${BOTTOM_NAV_HEIGHT} + env(safe-area-inset-bottom, 0px))`,
     );
     root.dataset.mobileBottomNav = "1";
-    const frame = window.requestAnimationFrame(() => setNavReady(true));
     return () => {
-      window.cancelAnimationFrame(frame);
       root.style.setProperty("--mobile-bottom-nav", "0px");
       root.dataset.mobileBottomNav = "0";
     };
@@ -246,8 +249,6 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
         className={cn(
           "fixed inset-x-0 bottom-0 z-[57] border-t border-line/80 bg-surface/95 backdrop-blur-md md:hidden",
           "pb-[env(safe-area-inset-bottom,0px)]",
-          "transition-opacity duration-200 ease-out",
-          navReady ? "opacity-100" : "opacity-0",
         )}
       >
         <div
@@ -284,6 +285,7 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
             href="/account"
             label="Account"
             active={accountActive}
+            hard
             icon={
               <UserRound className="size-5" strokeWidth={2.25} aria-hidden />
             }
@@ -312,27 +314,39 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
   );
 }
 
+function navItemClassName(active: boolean) {
+  return cn(
+    "flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-[color,opacity,transform] duration-200 ease-out",
+    active
+      ? "translate-y-0 text-canopy opacity-100"
+      : "text-ink/55 opacity-90 hover:text-ink/80",
+  );
+}
+
 function NavItem({
   href,
   label,
   active,
   icon,
+  hard = false,
 }: {
   href: string;
   label: string;
   active: boolean;
   icon: ReactNode;
+  hard?: boolean;
 }) {
+  const className = navItemClassName(active);
+  if (hard) {
+    return (
+      <a href={href} className={className}>
+        {icon}
+        {label}
+      </a>
+    );
+  }
   return (
-    <Link
-      href={href}
-      className={cn(
-        "flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-[color,opacity,transform] duration-200 ease-out",
-        active
-          ? "translate-y-0 text-canopy opacity-100"
-          : "text-ink/55 opacity-90 hover:text-ink/80",
-      )}
-    >
+    <Link href={href} className={className}>
       {icon}
       {label}
     </Link>
@@ -350,16 +364,28 @@ function MoreLink({
   label: string;
   onNavigate: () => void;
 }) {
-  return (
-    <Link
-      href={href}
-      onClick={onNavigate}
-      className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-ink transition hover:bg-mist"
-    >
+  const className =
+    "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-ink transition hover:bg-mist";
+  const body = (
+    <>
       <span className="inline-flex size-9 items-center justify-center rounded-lg bg-canopy/10 text-canopy">
         {icon}
       </span>
       {label}
+    </>
+  );
+
+  if (isAccountHref(href)) {
+    return (
+      <a href={href} onClick={onNavigate} className={className}>
+        {body}
+      </a>
+    );
+  }
+
+  return (
+    <Link href={href} onClick={onNavigate} className={className}>
+      {body}
     </Link>
   );
 }
