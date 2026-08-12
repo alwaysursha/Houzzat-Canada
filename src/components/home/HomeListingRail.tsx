@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
+import { HomeRailCardsSkeleton } from "@/components/home/HomeRailCardsSkeleton";
 import { ListingCard } from "@/components/listings/ListingCard";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 
@@ -10,6 +11,7 @@ export function HomeListingRail({
   href,
   items,
   emptyLabel,
+  loading = false,
 }: {
   id?: string;
   title: string;
@@ -17,6 +19,7 @@ export function HomeListingRail({
   href: string;
   items: ListingCardData[];
   emptyLabel?: string;
+  loading?: boolean;
 }) {
   return (
     <section
@@ -34,7 +37,9 @@ export function HomeListingRail({
           See all →
         </Link>
       </div>
-      {items.length === 0 ? (
+      {loading && items.length === 0 ? (
+        <HomeRailCardsSkeleton label={`Loading ${title}`} />
+      ) : items.length === 0 ? (
         <p className="text-sm text-ink/50">{emptyLabel ?? "Nothing here yet."}</p>
       ) : (
         <FreeSwipeRail label={title}>

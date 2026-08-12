@@ -84,7 +84,8 @@ export function HomepageMarketRails({
     const cities = personalizationCities(personalization);
     return cities.length ? cities : null;
   });
-  const [ready, setReady] = useState(false);
+  const loadedRef = useRef(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [newListings, setNewListings] = useState<ListingCardData[]>([]);
   const [openHouses, setOpenHouses] = useState<ListingCardData[]>([]);
   const [sold, setSold] = useState<ListingCardData[]>([]);
@@ -93,8 +94,15 @@ export function HomepageMarketRails({
   const regionIdRef = useRef(region.id);
   regionIdRef.current = region.id;
 
+  const personalizedCities = personalizationCities(personalization);
+  const personalizationKey = JSON.stringify({
+    cities: personalizedCities,
+    ...personalizationQuery(personalization),
+  });
+
   useEffect(() => {
     let cancelled = false;
+    let requestId = 0;
 
     async function resolveBrowseRegion(): Promise<MarketRegion> {
       const personalizedCities = personalizationCities(personalization);
@@ -127,6 +135,7 @@ export function HomepageMarketRails({
       cityOverride?: string[] | null,
     ) {
       if (cancelled) return;
+      const thisRequest = ++requestId;
       setRegion(nextRegion);
 
       const cities = citiesQueryParam(
@@ -140,35 +149,30 @@ export function HomepageMarketRails({
         });
         if (!res.ok) throw new Error(`home-rails ${res.status}`);
         const data = (await res.json()) as HomeRailsPayload;
-        if (cancelled) return;
-
-        // Paint rails as soon as the batch arrives (one round-trip).
+        if (cancelled || thisRequest !== requestId) return;
         setNewListings(data.newListings ?? []);
         setOpenHouses(data.openHouses ?? []);
         setSold(data.sold ?? []);
         setForLease(data.forLease ?? []);
         setCommercial(data.commercial ?? []);
-        setReady(true);
+        loadedRef.current = true;
+        setHasLoaded(true);
       } catch {
-        if (cancelled) return;
+        if (cancelled || thisRequest !== requestId) return;
+        if (loadedRef.current) return;
         setNewListings([]);
         setOpenHouses([]);
         setSold([]);
         setForLease([]);
         setCommercial([]);
-        setReady(true);
+        setHasLoaded(true);
       }
     }
 
     async function load() {
       if (vowOnlyGuest) {
         if (!cancelled) {
-          setReady(true);
-          setNewListings([]);
-          setOpenHouses([]);
-          setSold([]);
-          setForLease([]);
-          setCommercial([]);
+          setHasLoaded(true);
         }
         return;
       }
@@ -233,7 +237,7 @@ export function HomepageMarketRails({
       cancelled = true;
       window.removeEventListener("houzzat:geo", onGeo);
     };
-  }, [isClient, personalization, vowOnlyGuest]);
+  }, [personalizationKey, vowOnlyGuest]);
 
   const citiesParam = citiesQueryParam(
     overrideCities?.length ? overrideCities : region.cities,
@@ -267,11 +271,8 @@ export function HomepageMarketRails({
           sort: "newest",
         })}
         items={newListings}
-        emptyLabel={
-          ready
-            ? "No new listings in this area right now."
-            : "Loading new listings…"
-        }
+        loading={!hasLoaded}
+        emptyLabel="No new listings in this area right now."
       />
 
       <HomeOpenHousesRail
@@ -280,7 +281,7 @@ export function HomepageMarketRails({
           transactionType: "SALE",
           openHouseOnly: "1",
         })}
-        emptyLabel={ready ? undefined : "Loading open houses…"}
+        loading={!hasLoaded}
       />
 
       <HomeSoldRail
@@ -288,11 +289,8 @@ export function HomepageMarketRails({
         isClient={isClient}
         needsEmailVerification={needsEmailVerification}
         seeAllHref={seeAll({ status: "SOLD", sort: "newest" })}
-        emptyLabel={
-          ready
-            ? "No recently sold homes in this area right now."
-            : "Loading recently sold…"
-        }
+        loading={!hasLoaded}
+        emptyLabel="No recently sold homes in this area right now."
       />
 
       <HomeListingRail
@@ -300,11 +298,8 @@ export function HomepageMarketRails({
         title="For lease"
         href={seeAll({ transactionType: "LEASE", sort: "newest" })}
         items={forLease}
-        emptyLabel={
-          ready
-            ? "No lease listings in this area right now."
-            : "Loading lease listings…"
-        }
+        loading={!hasLoaded}
+        emptyLabel="No lease listings in this area right now."
       />
 
       <HomeListingRail
@@ -316,11 +311,8 @@ export function HomepageMarketRails({
           sort: "newest",
         })}
         items={commercial}
-        emptyLabel={
-          ready
-            ? "No commercial listings in this area right now."
-            : "Loading commercial…"
-        }
+        loading={!hasLoaded}
+        emptyLabel="No commercial listings in this area right now."
       />
     </div>
   );

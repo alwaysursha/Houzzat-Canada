@@ -6,6 +6,7 @@ import { Lock, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
+import { HomeRailCardsSkeleton } from "@/components/home/HomeRailCardsSkeleton";
 import { ListingCard } from "@/components/listings/ListingCard";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import { VOW_PUBLIC_NOTE } from "@/lib/vow";
@@ -156,6 +157,7 @@ export function HomeSoldRail({
   emptyLabel,
   regionLabel,
   seeAllHref = "/search?status=SOLD",
+  loading = false,
 }: {
   items: ListingCardData[];
   isClient: boolean;
@@ -163,8 +165,9 @@ export function HomeSoldRail({
   emptyLabel?: string;
   regionLabel?: string;
   seeAllHref?: string;
+  loading?: boolean;
 }) {
-  if (items.length === 0 && !emptyLabel) return null;
+  if (items.length === 0 && !emptyLabel && !loading) return null;
 
   return (
     <section
@@ -200,7 +203,9 @@ export function HomeSoldRail({
         )}
       </div>
 
-      {items.length === 0 ? (
+      {loading && items.length === 0 ? (
+        <HomeRailCardsSkeleton label="Loading recently sold" />
+      ) : items.length === 0 ? (
         <p className="text-sm text-ink/50">{emptyLabel}</p>
       ) : (
         <FreeSwipeRail label="Recently sold">

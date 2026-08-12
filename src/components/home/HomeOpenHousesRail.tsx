@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
+import { HomeRailCardsSkeleton } from "@/components/home/HomeRailCardsSkeleton";
 import { ListingCard } from "@/components/listings/ListingCard";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import { cn } from "@/lib/utils";
@@ -40,11 +41,13 @@ export function HomeOpenHousesRail({
   href,
   subtitle,
   emptyLabel,
+  loading = false,
 }: {
   items: ListingCardData[];
   href: string;
   subtitle?: string;
   emptyLabel?: string;
+  loading?: boolean;
 }) {
   const [tab, setTab] = useState<DayTab>("sat");
 
@@ -120,7 +123,9 @@ export function HomeOpenHousesRail({
         ))}
       </div>
 
-      {active.length === 0 ? (
+      {loading && items.length === 0 ? (
+        <HomeRailCardsSkeleton label="Loading open houses" />
+      ) : active.length === 0 ? (
         <p className="text-sm text-ink/50">
           {emptyLabel ??
             (tab === "sat"

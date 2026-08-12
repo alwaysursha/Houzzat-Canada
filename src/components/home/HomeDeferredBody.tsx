@@ -4,11 +4,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useSession } from "next-auth/react";
 import { HomeCustomerToolsStrip } from "@/components/home/HomeCustomerToolsStrip";
 import { HomeCustomerToolsTease } from "@/components/home/HomeCustomerToolsTease";
+import { HomeListingRail } from "@/components/home/HomeListingRail";
 import { HomeOwnerListingRail } from "@/components/home/HomeOwnerListingRail";
 import { HomeRecentlyViewedRail } from "@/components/home/HomeRecentlyViewedRail";
 import { HomepageMarketRails } from "@/components/home/HomepageMarketRails";
 import { HomepageSortedRails } from "@/components/home/HomepageSortedRails";
-import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
 import type { HomeCustomerShellPayload } from "@/lib/home/load-home-customer-shell";
 
 function ToolsStripSkeleton() {
@@ -26,32 +26,6 @@ function ToolsStripSkeleton() {
           />
         ))}
       </div>
-    </div>
-  );
-}
-
-function RailsSkeleton() {
-  return (
-    <div className="space-y-10 sm:space-y-16" aria-busy="true">
-      {Array.from({ length: 2 }, (_, section) => (
-        <section key={section} className="space-y-5">
-          <div className="h-8 w-48 animate-pulse rounded bg-mist" />
-          <FreeSwipeRail label="Loading listings">
-            {Array.from({ length: 4 }, (_, i) => (
-              <div
-                key={i}
-                className="overflow-hidden rounded-2xl border border-line bg-surface"
-              >
-                <div className="aspect-[4/3] animate-pulse bg-mist" />
-                <div className="space-y-2 p-3">
-                  <div className="h-4 w-[66%] animate-pulse rounded bg-mist" />
-                  <div className="h-3 w-1/2 animate-pulse rounded bg-mist" />
-                </div>
-              </div>
-            ))}
-          </FreeSwipeRail>
-        </section>
-      ))}
     </div>
   );
 }
@@ -77,80 +51,9 @@ function mayHaveSessionCookie(): boolean {
   );
 }
 
-function SortedRailsFromShell({
-  data,
-  cities,
-  guestRecent,
-}: {
-  data: HomeCustomerShellPayload;
-  cities: string[];
-  guestRecent?: boolean;
-}) {
-  return (
-    <HomepageSortedRails
-      reorderEmptyLast={data.personalized}
-      personalization={data.personalization}
-      cities={cities}
-      sections={[
-        ...(guestRecent ||
-        data.recentlyViewed.length > 0 ||
-        data.personalized
-          ? [
-              {
-                id: "recently-viewed",
-                resultCount: guestRecent ? 1 : data.recentlyViewed.length,
-                node: (
-                  <HomeRecentlyViewedRail
-                    items={data.recentlyViewed}
-                    useLocalFallback={Boolean(guestRecent)}
-                    emptyLabel={
-                      data.personalized
-                        ? "None of your recently viewed homes match your homepage search."
-                        : undefined
-                    }
-                  />
-                ),
-              },
-            ]
-          : []),
-        {
-          id: "market-rails",
-          resultCount: 1,
-          node: (
-            <HomepageMarketRails
-              isClient={data.isClient}
-              needsEmailVerification={data.needsEmailVerification}
-              vowOnlyGuest={data.vowOnlyGuest}
-              personalization={data.personalization}
-            />
-          ),
-        },
-        ...(data.ownerListings.length > 0 || data.personalized
-          ? [
-              {
-                id: "owner",
-                resultCount: data.ownerListings.length,
-                node: (
-                  <HomeOwnerListingRail
-                    items={data.ownerListings}
-                    emptyLabel={
-                      data.personalized
-                        ? "No owner listings match your homepage search."
-                        : undefined
-                    }
-                  />
-                ),
-              },
-            ]
-          : []),
-      ]}
-    />
-  );
-}
-
 /**
- * SSR / first paint: guest/IDX shell (cacheable).
- * After mount: session cookie hint → skeletons; authenticated → home-shell.
+ * SSR / first paint: guest/IDX shell (cacheable) including market rails.
+ * Session / home-shell run in parallel and only swap tools + customer rails.
  */
 export function HomeDeferredBody({
   vowOnlyGuest = false,
@@ -218,69 +121,22 @@ export function HomeDeferredBody({
   const contentPad =
     "w-full space-y-10 px-4 py-6 sm:space-y-16 sm:px-6 sm:py-10 lg:px-10";
 
-  const guestBody = (
-    <>
-      <div className="hidden sm:block">
-        <HomeCustomerToolsTease />
-      </div>
-      <div className={contentPad}>
-        <SortedRailsFromShell
-          data={guestFallback(vowOnlyGuest)}
-          cities={cities}
-          guestRecent
-        />
-        {children}
-      </div>
-    </>
-  );
-
-  const loadingBody = (showToolsSkeleton: boolean) => (
-    <>
-      {showToolsSkeleton ? <ToolsStripSkeleton /> : null}
-      <div className={contentPad}>
-        <RailsSkeleton />
-        {children}
-      </div>
-    </>
-  );
-
-  // Match SSR HTML until mount (hydration-safe guest shell).
-  if (!mounted) {
-    return guestBody;
-  }
-
-  // Session cookie present / session resolving — avoid guest rails flash.
-  if (
+  const awaitingAccountShell =
+    mounted &&
     cookieHint &&
-    (status === "loading" || (isAuthenticated && !shell && !failed))
-  ) {
-    // While role unknown, show tools skeleton; drop it for admin/agent once known.
-    return loadingBody(status === "loading" || isCustomerRole);
-  }
+    (status === "loading" || (isAuthenticated && !shell && !failed));
 
-  if (status === "loading") {
-    // No cookie hint — stay on guest shell (true guests).
-    return guestBody;
-  }
+  const resolved = shell ?? guestFallback(vowOnlyGuest);
 
-  if (!isAuthenticated) {
-    return guestBody;
-  }
-
-  if (!shell && !failed) {
-    return loadingBody(isCustomerRole);
-  }
-
-  const resolved =
-    shell ??
-    ({
-      ...guestFallback(false),
-      isCustomer: isCustomerRole,
-    } satisfies HomeCustomerShellPayload);
+  const showToolsSkeleton =
+    awaitingAccountShell && (status === "loading" || isCustomerRole);
+  const guestRecent = !mounted || !isAuthenticated;
 
   return (
     <>
-      {resolved.isCustomer && resolved.tools ? (
+      {showToolsSkeleton ? (
+        <ToolsStripSkeleton />
+      ) : resolved.isCustomer && resolved.tools ? (
         <HomeCustomerToolsStrip
           savedCount={resolved.tools.savedCount}
           noteCount={resolved.tools.noteCount}
@@ -289,9 +145,88 @@ export function HomeDeferredBody({
           unreadAlerts={resolved.tools.unreadAlerts}
           cities={cities}
         />
-      ) : null}
+      ) : (
+        <div className="hidden sm:block">
+          <HomeCustomerToolsTease />
+        </div>
+      )}
       <div className={contentPad}>
-        <SortedRailsFromShell data={resolved} cities={cities} />
+        <HomepageSortedRails
+          reorderEmptyLast={resolved.personalized}
+          personalization={resolved.personalization}
+          cities={cities}
+          sections={[
+            ...(awaitingAccountShell
+              ? [
+                  {
+                    id: "recently-viewed",
+                    resultCount: 1,
+                    node: (
+                      <HomeListingRail
+                        id="rail-recently-viewed"
+                        title="Recently viewed"
+                        href="/account"
+                        items={[]}
+                        loading
+                      />
+                    ),
+                  },
+                ]
+              : guestRecent ||
+                  resolved.recentlyViewed.length > 0 ||
+                  resolved.personalized
+                ? [
+                    {
+                      id: "recently-viewed",
+                      resultCount: guestRecent
+                        ? 1
+                        : resolved.recentlyViewed.length,
+                      node: (
+                        <HomeRecentlyViewedRail
+                          items={resolved.recentlyViewed}
+                          useLocalFallback={Boolean(guestRecent)}
+                          emptyLabel={
+                            resolved.personalized
+                              ? "None of your recently viewed homes match your homepage search."
+                              : undefined
+                          }
+                        />
+                      ),
+                    },
+                  ]
+                : []),
+            {
+              id: "market-rails",
+              resultCount: 1,
+              node: (
+                <HomepageMarketRails
+                  isClient={resolved.isClient}
+                  needsEmailVerification={resolved.needsEmailVerification}
+                  vowOnlyGuest={resolved.vowOnlyGuest}
+                  personalization={resolved.personalization}
+                />
+              ),
+            },
+            ...(resolved.ownerListings.length > 0 || resolved.personalized
+              ? [
+                  {
+                    id: "owner",
+                    resultCount: resolved.ownerListings.length,
+                    node: (
+                      <HomeOwnerListingRail
+                        items={resolved.ownerListings}
+                        emptyLabel={
+                          resolved.personalized
+                            ? "No owner listings match your homepage search."
+                            : undefined
+                        }
+                      />
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
         {children}
       </div>
     </>
