@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import { Providers } from "@/components/Providers";
 import { buildRootMetadata } from "@/lib/seo";
 import "./globals.css";
@@ -10,16 +10,18 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-const jakarta = Plus_Jakarta_Sans({
+const jakarta = localFont({
+  src: "../fonts/plus-jakarta-sans-latin-wght.woff2",
   variable: "--font-jakarta",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: "400 700",
+  display: "swap",
 });
 
-const fraunces = Fraunces({
+const fraunces = localFont({
+  src: "../fonts/fraunces-latin-wght.woff2",
   variable: "--font-fraunces",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: "500 700",
+  display: "swap",
 });
 
 export const metadata: Metadata = buildRootMetadata();
