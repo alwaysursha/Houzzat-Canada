@@ -7,7 +7,7 @@ import {
   sendEmailVerification,
   VERIFY_RESEND_COOLDOWN_MS,
 } from "@/lib/auth/email-verification";
-import { prisma } from "@/lib/prisma";
+import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 
 const schema = z.object({
   callbackUrl: z.string().trim().max(500).optional(),
@@ -75,25 +75,26 @@ export async function POST(request: Request) {
   lastSentByUser.set(user.id, Date.now());
 
   // Best-effort activity on CRM leads.
-  void prisma.lead
-    .findMany({
-      where: { customerId: user.id },
-      select: { id: true },
-      take: 10,
-    })
-    .then((leads) =>
-      leads.length
-        ? prisma.leadActivity.createMany({
-            data: leads.map((lead) => ({
-              leadId: lead.id,
-              userId: user.id,
-              type: "email_verification_requested",
-              body: "Customer requested email verification",
-            })),
-          })
-        : null,
-    )
-    .catch(() => undefined);
+  scheduleWorkerSideEffect(
+    prisma.lead
+      .findMany({
+        where: { customerId: user.id },
+        select: { id: true },
+        take: 10,
+      })
+      .then((leads) =>
+        leads.length
+          ? prisma.leadActivity.createMany({
+              data: leads.map((lead) => ({
+                leadId: lead.id,
+                userId: user.id,
+                type: "email_verification_requested",
+                body: "Customer requested email verification",
+              })),
+            })
+          : undefined,
+      ),
+  );
 
   return NextResponse.json({
     ok: true,

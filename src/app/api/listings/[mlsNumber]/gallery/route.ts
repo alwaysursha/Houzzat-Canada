@@ -4,7 +4,7 @@ import { loadListingDetailApiAccess } from "@/lib/listings/listing-detail-api-ac
 import { persistNeonListingMediaCap } from "@/lib/listings/persist-neon-media";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
-import { prisma } from "@/lib/prisma";
+import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
@@ -58,16 +58,16 @@ export async function GET(_request: Request, { params }: Params) {
   if (photos.length > 0) {
     // Warm Neon for the next SSR paint (cap only). Do not block the response
     // on slow DB — best-effort.
-    void persistNeonListingMediaCap(
-      listing.id,
-      photos.slice(0, NEON_LISTING_MEDIA_CAP).map((photo) => ({
-        url: photo.mediaUrl,
-        sortOrder: photo.sortOrder,
-        isPrimary: photo.isPrimary,
-      })),
-    ).catch(() => {
-      // Non-blocking
-    });
+    scheduleWorkerSideEffect(
+      persistNeonListingMediaCap(
+        listing.id,
+        photos.slice(0, NEON_LISTING_MEDIA_CAP).map((photo) => ({
+          url: photo.mediaUrl,
+          sortOrder: photo.sortOrder,
+          isPrimary: photo.isPrimary,
+        })),
+      ),
+    );
   }
 
   const neonMediaCount = await prisma.listingMedia.count({

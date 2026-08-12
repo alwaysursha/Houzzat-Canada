@@ -22,7 +22,12 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_HOUZZAT_BUILD: houzzatBuildId,
   },
-  serverExternalPackages: ["@prisma/client", ".prisma/client"],
+  serverExternalPackages: [
+    "@prisma/client",
+    ".prisma/client",
+    "@prisma/adapter-neon",
+    "@neondatabase/serverless",
+  ],
   experimental: {
     optimizePackageImports: ["lucide-react"],
   },

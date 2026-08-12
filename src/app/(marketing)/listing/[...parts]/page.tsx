@@ -11,7 +11,7 @@ import { persistNeonListingMediaCap } from "@/lib/listings/persist-neon-media";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
 import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { needsEmailVerification } from "@/lib/account-access";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import {
@@ -180,16 +180,16 @@ export default async function ListingDetailPage({
           timeoutMs: 10_000,
         }).then((photos) => {
           if (photos.length > 0) {
-            void persistNeonListingMediaCap(
-              listing.id,
-              photos.slice(0, NEON_LISTING_MEDIA_CAP).map((photo) => ({
-                url: photo.mediaUrl,
-                sortOrder: photo.sortOrder,
-                isPrimary: photo.isPrimary,
-              })),
-            ).catch(() => {
-              // Best-effort Neon warm for next visit
-            });
+            scheduleWorkerSideEffect(
+              persistNeonListingMediaCap(
+                listing.id,
+                photos.slice(0, NEON_LISTING_MEDIA_CAP).map((photo) => ({
+                  url: photo.mediaUrl,
+                  sortOrder: photo.sortOrder,
+                  isPrimary: photo.isPrimary,
+                })),
+              ),
+            );
           }
           return photos.map((photo) => ({
             id: photo.id,
@@ -198,11 +198,11 @@ export default async function ListingDetailPage({
         })
       : null;
 
-  void prisma.listingView
-    .create({
+  scheduleWorkerSideEffect(
+    prisma.listingView.create({
       data: { userId: user?.id, mlsNumber: listing.mlsNumber },
-    })
-    .catch(() => {});
+    }),
+  );
 
   // Address siblings enrich client-side (ListingHistoryPanel).
   // RSC keeps existing HTML behavior (soldPrice still in history builder);
