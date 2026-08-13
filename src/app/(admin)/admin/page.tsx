@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { PoiSyncClient } from "@/components/admin/PoiSyncClient";
 import { liveSinceDate } from "@/lib/admin/activity";
-import { getListingProvider } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
+import { getAdminMlsPulse } from "@/lib/proptx/sync-health";
 
 export const metadata = { title: "Admin HQ" };
 
@@ -43,12 +43,31 @@ function StatCard({
   );
 }
 
+function formatEventTime(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  try {
+    return date.toLocaleTimeString("en-CA", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return date.toISOString().slice(11, 16);
+  }
+}
+
 export default async function AdminPage() {
-  const sync = await getListingProvider().syncStatus();
   const since = liveSinceDate();
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
+  const emptySync = {
+    provider: "proptx" as const,
+    listingCount: 0,
+    message: "MLS pulse unavailable.",
+  };
+
   const [
+    sync,
     liveVisitors,
     peopleCount,
     agentsCount,
@@ -60,30 +79,45 @@ export default async function AdminPage() {
     adCount,
     recentEvents,
   ] = await Promise.all([
-    prisma.siteSession.count({ where: { lastSeenAt: { gte: since } } }),
-    prisma.user.count(),
-    prisma.user.count({ where: { role: "AGENT" } }),
-    prisma.user.count({ where: { isBuyer: true, role: { in: ["BUYER", "SELLER"] } } }),
-    prisma.user.count({ where: { isSeller: true } }),
-    prisma.activityEvent.count({ where: { createdAt: { gte: dayAgo } } }),
-    prisma.lead.count({ where: { createdAt: { gte: dayAgo } } }),
-    prisma.landingPage.count(),
-    prisma.adCampaign.count(),
-    prisma.activityEvent.findMany({
-      where: { type: { not: "HEARTBEAT" } },
-      orderBy: { createdAt: "desc" },
-      take: 12,
-      select: {
-        id: true,
-        type: true,
-        path: true,
-        title: true,
-        mlsNumber: true,
-        createdAt: true,
-        user: { select: { name: true, email: true } },
-        visitor: { select: { visitorKey: true } },
-      },
+    getAdminMlsPulse().catch((error) => {
+      console.error("[admin] MLS pulse failed", error);
+      return emptySync;
     }),
+    prisma.siteSession
+      .count({ where: { lastSeenAt: { gte: since } } })
+      .catch(() => 0),
+    prisma.user.count().catch(() => 0),
+    prisma.user.count({ where: { role: "AGENT" } }).catch(() => 0),
+    prisma.user
+      .count({ where: { isBuyer: true, role: { in: ["BUYER", "SELLER"] } } })
+      .catch(() => 0),
+    prisma.user.count({ where: { isSeller: true } }).catch(() => 0),
+    prisma.activityEvent
+      .count({ where: { createdAt: { gte: dayAgo } } })
+      .catch(() => 0),
+    prisma.lead.count({ where: { createdAt: { gte: dayAgo } } }).catch(() => 0),
+    prisma.landingPage.count().catch(() => 0),
+    prisma.adCampaign.count().catch(() => 0),
+    prisma.activityEvent
+      .findMany({
+        where: { type: { not: "HEARTBEAT" } },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+        select: {
+          id: true,
+          type: true,
+          path: true,
+          title: true,
+          mlsNumber: true,
+          createdAt: true,
+          user: { select: { name: true, email: true } },
+          visitor: { select: { visitorKey: true } },
+        },
+      })
+      .catch((error) => {
+        console.error("[admin] journey feed failed", error);
+        return [];
+      }),
   ]);
 
   return (
@@ -160,10 +194,7 @@ export default async function AdminPage() {
                     </p>
                   </div>
                   <time className="shrink-0 text-xs text-ink/40">
-                    {event.createdAt.toLocaleTimeString("en-CA", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
+                    {formatEventTime(event.createdAt)}
                   </time>
                 </li>
               ))

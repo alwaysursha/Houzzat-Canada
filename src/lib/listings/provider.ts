@@ -25,9 +25,7 @@ import type {
   ListingSearchResult,
   AutocompleteOptions,
 } from "@/lib/listings/types";
-import {
-  getPropTxSyncHealth,
-} from "@/lib/proptx/sync";
+import { getPropTxSyncHealth } from "@/lib/proptx/sync-health";
 import { isPropTxConfigured } from "@/lib/proptx/config";
 import {
   formatListingAddressSearchLine,

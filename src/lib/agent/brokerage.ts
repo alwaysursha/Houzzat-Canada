@@ -4,7 +4,7 @@ import {
   DESK_AGENT_COOKIE,
 } from "@/lib/agent/desk-constants";
 import { SITE_NAME } from "@/lib/constants";
-import { prisma } from "@/lib/prisma";
+import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 
 export { DESK_AGENT_ALL, DESK_AGENT_COOKIE } from "@/lib/agent/desk-constants";
 
@@ -24,17 +24,7 @@ const BROKERAGE_CACHE_MS = 5 * 60 * 1000;
  * Migrates stray personal-org memberships/leads/tasks into this desk.
  * Result is cached briefly — seat/migration sync does not need to run every request.
  */
-export async function ensureBrokerageOrganization(): Promise<{
-  id: string;
-  name: string;
-}> {
-  if (
-    brokerageCache &&
-    Date.now() - brokerageCache.at < BROKERAGE_CACHE_MS
-  ) {
-    return brokerageCache.org;
-  }
-
+async function resolveBrokerageOrg(): Promise<{ id: string; name: string }> {
   const fromEnv = process.env.DEFAULT_ORGANIZATION_ID?.trim();
   let org = fromEnv
     ? await prisma.organization.findUnique({
@@ -44,7 +34,6 @@ export async function ensureBrokerageOrganization(): Promise<{
     : null;
 
   if (!org) {
-    // Prefer an org that already has agent seats.
     const withAgents = await prisma.organizationMembership.findFirst({
       where: {
         user: { role: "AGENT", disabledAt: null },
@@ -65,28 +54,27 @@ export async function ensureBrokerageOrganization(): Promise<{
   }
 
   if (!org) {
-    org = await prisma.organization.create({
+    return prisma.organization.create({
       data: {
         name: `${SITE_NAME} Team`,
         slug: "houzzat-team",
       },
       select: { id: true, name: true },
     });
-  } else if (
-    /'s team$/i.test(org.name) ||
-    org.name === "My team"
-  ) {
-    // Soft-rename personal-looking desks to the brokerage label.
-    org = await prisma.organization.update({
+  }
+
+  if (/'s team$/i.test(org.name) || org.name === "My team") {
+    return prisma.organization.update({
       where: { id: org.id },
       data: { name: `${SITE_NAME} Team` },
       select: { id: true, name: true },
     });
   }
 
-  const brokerageId = org.id;
+  return org;
+}
 
-  // Team leaders (platform ADMIN) → OWNER on the brokerage.
+async function syncBrokerageSeats(brokerageId: string): Promise<void> {
   const admins = await prisma.user.findMany({
     where: { role: "ADMIN", disabledAt: null },
     select: { id: true },
@@ -108,7 +96,6 @@ export async function ensureBrokerageOrganization(): Promise<{
     });
   }
 
-  // Field agents → AGENT seats on the same brokerage (no personal teams).
   const agents = await prisma.user.findMany({
     where: { role: "AGENT", disabledAt: null },
     select: { id: true },
@@ -130,7 +117,6 @@ export async function ensureBrokerageOrganization(): Promise<{
     });
   }
 
-  // Pull CRM data into the single desk.
   await prisma.lead.updateMany({
     where: {
       OR: [{ organizationId: null }, { organizationId: { not: brokerageId } }],
@@ -141,8 +127,27 @@ export async function ensureBrokerageOrganization(): Promise<{
     where: { organizationId: { not: brokerageId } },
     data: { organizationId: brokerageId },
   });
+}
 
+export async function ensureBrokerageOrganization(): Promise<{
+  id: string;
+  name: string;
+}> {
+  if (
+    brokerageCache &&
+    Date.now() - brokerageCache.at < BROKERAGE_CACHE_MS
+  ) {
+    return brokerageCache.org;
+  }
+
+  const org = await resolveBrokerageOrg();
   brokerageCache = { org, at: Date.now() };
+  // Seat/lead migration must not 500 Admin HQ if a Worker query fails.
+  scheduleWorkerSideEffect(
+    syncBrokerageSeats(org.id).catch((error) => {
+      console.error("[brokerage] seat sync failed", error);
+    }),
+  );
   return org;
 }
 
@@ -184,6 +189,8 @@ export async function resolveDeskView(ctx: {
   user: { id: string };
   organizationId: string;
   canSeeTeamLeads: boolean;
+  /** Pass from the layout after reading cookies() — avoids cookies() after Prisma I/O. */
+  deskCookie?: string | null;
 }): Promise<{
   /** null = whole team overview */
   deskAgentId: string | null;
@@ -201,8 +208,11 @@ export async function resolveDeskView(ctx: {
     };
   }
 
-  const jar = await cookies();
-  const raw = jar.get(DESK_AGENT_COOKIE)?.value?.trim() || DESK_AGENT_ALL;
+  const raw =
+    (ctx.deskCookie !== undefined
+      ? ctx.deskCookie
+      : (await cookies()).get(DESK_AGENT_COOKIE)?.value
+    )?.trim() || DESK_AGENT_ALL;
 
   if (raw === DESK_AGENT_ALL) {
     return {

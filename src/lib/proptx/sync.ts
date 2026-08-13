@@ -4,7 +4,6 @@ import {
   getPropTxIdxConfig,
   getPropTxSoldSyncConfig,
   getPropTxSyncConfig,
-  isPropTxConfigured,
 } from "@/lib/proptx/config";
 import { PropTxError, proptxJson, proptxPages } from "@/lib/proptx/client";
 import type { PropTxConfig } from "@/lib/proptx/config";
@@ -1924,64 +1923,4 @@ function emptyStats(): MlsSyncStats {
   };
 }
 
-export async function getPropTxSyncHealth() {
-  const configured = isPropTxConfigured();
-  const mlsCount = await prisma.listing.count({
-    where: { dataSource: "mls", isMock: false },
-  });
-  const lastPropTxRun = await prisma.mlsSyncRun.findFirst({
-    where: {
-      OR: [
-        { message: { contains: "MLS sync" } },
-        { message: { contains: "VOW sync" } },
-        { message: { startsWith: "Synced properties=" } },
-        { message: { contains: "PropTx" } },
-      ],
-    },
-    orderBy: { startedAt: "desc" },
-  });
-  const lastRun = await prisma.mlsSyncRun.findFirst({
-    orderBy: { startedAt: "desc" },
-  });
-  const cursor = await prisma.mlsSyncCursor.findUnique({
-    where: { resource: RESOURCE_PROPERTY },
-  });
-
-  const seedLike =
-    lastRun?.message?.includes("mock listings") ||
-    (typeof lastRun?.stats === "object" &&
-      lastRun.stats !== null &&
-      "provider" in lastRun.stats &&
-      (lastRun.stats as { provider?: string }).provider === "mock");
-
-  return {
-    configured,
-    mlsCount,
-    hint:
-      mlsCount === 0
-        ? "No MLS rows yet. Browser GET only shows status — run POST /api/admin/mls/sync (or pnpm mls:sync) to pull PropTx."
-        : undefined,
-    lastRun: lastRun
-      ? {
-          id: lastRun.id,
-          status: lastRun.status,
-          startedAt: lastRun.startedAt.toISOString(),
-          finishedAt: lastRun.finishedAt?.toISOString() ?? null,
-          message: lastRun.message,
-          stats: lastRun.stats,
-          isSeedRun: Boolean(seedLike),
-        }
-      : null,
-    lastPropTxRun: lastPropTxRun
-      ? {
-          id: lastPropTxRun.id,
-          status: lastPropTxRun.status,
-          startedAt: lastPropTxRun.startedAt.toISOString(),
-          finishedAt: lastPropTxRun.finishedAt?.toISOString() ?? null,
-          message: lastPropTxRun.message,
-          stats: lastPropTxRun.stats,
-        }
-      : null,
-    propertyCursor: cursor?.cursor ?? null,
-  };
-}
+export { getPropTxSyncHealth } from "@/lib/proptx/sync-health";
