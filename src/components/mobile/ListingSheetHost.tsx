@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useSession } from "next-auth/react";
 import { ChevronLeft, X } from "lucide-react";
 import { ListingDetailPanel } from "@/components/listings/ListingDetailPanel";
@@ -218,9 +225,18 @@ export function ListingSheetHost() {
       aria-modal="true"
       aria-label="Listing details"
       data-listing-panel={usePanel ? "1" : undefined}
+      // Panel mode shares the parent viewport with ListingStickyBar's
+      // `position:fixed`. Offset that bar below this chrome (iframe mode
+      // leaves the var unset → sticky stays at top:0 inside the frame).
+      style={
+        {
+          "--listing-sheet-chrome-height":
+            "calc(2.75rem + env(safe-area-inset-top, 0px))",
+        } as CSSProperties
+      }
     >
       <div
-        className="flex shrink-0 items-center justify-between gap-2 border-b border-line bg-canopy px-2 pt-[env(safe-area-inset-top,0px)] text-white sm:px-3"
+        className="relative z-40 flex shrink-0 items-center justify-between gap-2 border-b border-line bg-canopy px-2 pt-[env(safe-area-inset-top,0px)] text-white sm:px-3"
         style={{ minHeight: "calc(2.75rem + env(safe-area-inset-top, 0px))" }}
       >
         <div className="flex min-w-0 items-center gap-0.5">
