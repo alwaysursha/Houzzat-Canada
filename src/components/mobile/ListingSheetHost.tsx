@@ -19,6 +19,10 @@ import {
 } from "@/lib/mobile/listing-sheet-store";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 
+type SheetHistoryState = {
+  houzzatListingSheet?: boolean;
+};
+
 function sheetSrc(href: string): string {
   try {
     const url = new URL(href, window.location.origin);
@@ -27,6 +31,28 @@ function sheetSrc(href: string): string {
   } catch {
     return href.includes("?") ? `${href}&sheet=1` : `${href}?sheet=1`;
   }
+}
+
+function absoluteUrl(href: string): string {
+  try {
+    return new URL(href, window.location.origin).href;
+  } catch {
+    return href;
+  }
+}
+
+/** Prefer replace so iframe loads don't push joint session-history entries. */
+function navigateIframe(iframe: HTMLIFrameElement, url: string) {
+  try {
+    const win = iframe.contentWindow;
+    if (win) {
+      win.location.replace(url);
+      return;
+    }
+  } catch {
+    // fall through — cross-origin or detached
+  }
+  iframe.src = url;
 }
 
 /**
@@ -109,6 +135,11 @@ export function ListingSheetHost() {
   }, [state.href]);
 
   // One browser-history entry while the overlay is open (Close clears it).
+  // Desktop browsers share joint session history with the same-origin iframe;
+  // loading/swapping listings via iframe.src can push extra entries above our
+  // marker. Browser Back / trackpad swipe into that marker must NOT dismiss
+  // the green Close bar — only leaving the marker should. (Capacitor mobile
+  // uses the native back handler instead, which is why mobile looked fine.)
   useEffect(() => {
     if (!state.href) {
       if (historyPushedRef.current) {
@@ -123,14 +154,19 @@ export function ListingSheetHost() {
     }
 
     if (!historyPushedRef.current) {
-      window.history.pushState({ houzzatListingSheet: true }, "");
+      const prev = (window.history.state ?? {}) as Record<string, unknown>;
+      window.history.pushState({ ...prev, houzzatListingSheet: true }, "");
       historyPushedRef.current = true;
     }
 
-    const onPopState = () => {
+    const onPopState = (event: PopStateEvent) => {
       if (syncingHistoryRef.current) return;
+      const next = event.state as SheetHistoryState | null;
+      if (next?.houzzatListingSheet) {
+        // Still on (or back to) our sheet history entry — keep overlay open.
+        return;
+      }
       historyPushedRef.current = false;
-      // Browser Back closes the whole overlay (in-sheet Back steps the stack).
       closeListingSheet();
     };
     window.addEventListener("popstate", onPopState);
@@ -153,17 +189,17 @@ export function ListingSheetHost() {
     [state.href, usePanel],
   );
 
-  // One iframe only: blank the outgoing document immediately so its fetches die
-  // before the next listing mounts (key remount is not enough on its own).
+  // Stable iframe + location.replace: avoid joint-history pushes from src=
+  // assignment / key remounts (those made desktop Back dismiss the sheet).
   useLayoutEffect(() => {
+    if (!src) return;
     const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    navigateIframe(iframe, absoluteUrl(src));
+
     return () => {
-      if (!iframe) return;
-      try {
-        iframe.src = "about:blank";
-      } catch {
-        // Ignore teardown races
-      }
+      navigateIframe(iframe, "about:blank");
     };
   }, [src]);
 
@@ -221,10 +257,9 @@ export function ListingSheetHost() {
         <ListingDetailPanel key={state.href} href={state.href} />
       ) : (
         <iframe
-          key={src!}
           ref={iframeRef}
           title="Listing"
-          src={src!}
+          src="about:blank"
           className="min-h-0 w-full flex-1 border-0 bg-mist"
         />
       )}
