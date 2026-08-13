@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { ChevronLeft, X } from "lucide-react";
 import { ListingDetailPanel } from "@/components/listings/ListingDetailPanel";
 import {
@@ -33,9 +34,11 @@ function sheetSrc(href: string): string {
  * Stack of listings: Back pops one; Close / Escape dismisses the whole overlay.
  *
  * Production default: iframe of /listing/...?sheet=1.
- * Internal flag (`?listingPanel=1`): in-app ListingDetailPanel (no second document).
+ * Limited cohort: signed-in ADMIN/AGENT, or `?listingPanel=1`.
+ * Rollback: `?listingPanel=0` forces the iframe.
  */
 export function ListingSheetHost() {
+  const { data: session, status } = useSession();
   const [framed, setFramed] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -67,11 +70,21 @@ export function ListingSheetHost() {
     return subscribeListingSheet(setState);
   }, [framed]);
 
-  // Re-read flag when the sheet opens (query/cookie/sessionStorage).
+  // Re-read flag when the sheet opens (query/cookie/sessionStorage/staff).
+  // Query/cookie apply immediately; staff wait until session is known.
+  // Do not persist staff enablement — sign-out returns to iframe.
   useEffect(() => {
-    if (!state.href) return;
-    setUsePanel(isListingPanelEnabled());
-  }, [state.href]);
+    if (!state.href) {
+      setUsePanel(false);
+      return;
+    }
+    if (isListingPanelEnabled()) {
+      setUsePanel(true);
+      return;
+    }
+    if (status === "loading") return;
+    setUsePanel(isListingPanelEnabled({ role: session?.user?.role }));
+  }, [state.href, status, session?.user?.role]);
 
   // Child iframe asks parent to push another listing onto the stack.
   useEffect(() => {

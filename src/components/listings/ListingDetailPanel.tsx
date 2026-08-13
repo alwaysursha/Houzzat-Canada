@@ -15,8 +15,8 @@ type LoadState =
 
 /**
  * In-app listing detail (no iframe). Fetches GET /api/listings/[mls]/panel
- * and renders the shared ListingDetailView. Used by ListingSheetHost when the
- * internal listingPanel flag is on — production default remains the iframe.
+ * and renders the shared ListingDetailView. Used by ListingSheetHost for the
+ * limited staff/opt-in cohort — production default for others remains the iframe.
  */
 export function ListingDetailPanel({ href }: { href: string }) {
   const mlsNumber = mlsNumberFromListingHref(href);

@@ -1,13 +1,16 @@
+import { isStaffRole } from "@/lib/roles";
+
 /**
- * Internal test flag for in-app ListingDetailPanel (Phase 3).
- * Production default: false → ListingSheetHost keeps the iframe.
+ * Limited-rollout flag for in-app ListingDetailPanel.
+ * Production default for guests and consumers: false → iframe sheet.
  *
  * Enable (any of):
- * - `?listingPanel=1` or `?houzzat-listing-panel=1` (persists for the session)
+ * - signed-in ADMIN / AGENT (not persisted; sign-out returns to iframe)
+ * - `?listingPanel=1` or `?houzzat-listing-panel=1` (persists cookie + sessionStorage)
  * - cookie `houzzat-listing-panel=1`
  * - sessionStorage `houzzat-listing-panel=1`
  *
- * Disable: `?listingPanel=0` (clears cookie + sessionStorage)
+ * Disable / rollback: `?listingPanel=0` (clears cookie + sessionStorage; wins over staff)
  */
 export const LISTING_PANEL_FLAG_COOKIE = "houzzat-listing-panel";
 export const LISTING_PANEL_FLAG_STORAGE = "houzzat-listing-panel";
@@ -72,8 +75,10 @@ function storageEnabled(): boolean {
   }
 }
 
-/** Client-only. Production default is false (iframe sheet). */
-export function isListingPanelEnabled(): boolean {
+/** Client-only. Production default is false (iframe sheet) except staff. */
+export function isListingPanelEnabled(opts?: {
+  role?: string | null;
+}): boolean {
   if (typeof window === "undefined") return false;
   const query = readQueryFlag();
   if (query === "on") {
@@ -84,5 +89,6 @@ export function isListingPanelEnabled(): boolean {
     persistOff();
     return false;
   }
-  return storageEnabled() || cookieEnabled();
+  if (storageEnabled() || cookieEnabled()) return true;
+  return isStaffRole(opts?.role);
 }

@@ -33,7 +33,6 @@ const ListingAccountChromeContext =
 
 type InflightChrome = {
   promise: Promise<ListingAccountChromePayload>;
-  controller: AbortController;
 };
 
 const inflight = new Map<string, InflightChrome>();
@@ -55,24 +54,19 @@ async function fetchAccountChrome(
 
   const existing = inflight.get(key);
   if (existing) {
-    if (signal) {
-      signal.addEventListener("abort", () => existing.controller.abort(), {
-        once: true,
-      });
-    }
-    return existing.promise;
+    const data = await existing.promise;
+    if (signal?.aborted) return EMPTY_CHROME;
+    return data;
   }
 
-  const controller = new AbortController();
-  if (signal) {
-    signal.addEventListener("abort", () => controller.abort(), { once: true });
-  }
-
+  // Do not abort this fetch when a caller unmounts (React Strict Mode and
+  // ListingSheetHost remounts). Aborting the shared request left the panel
+  // with empty save/watch/notes/phone chrome.
   const request = (async () => {
     try {
       const res = await fetch(
         `/api/listings/${encodeURIComponent(key)}/account-chrome`,
-        { credentials: "same-origin", signal: controller.signal },
+        { credentials: "same-origin" },
       );
       if (!res.ok) return EMPTY_CHROME;
       const data = (await res.json()) as Partial<ListingAccountChromePayload>;
@@ -93,8 +87,10 @@ async function fetchAccountChrome(
     }
   })();
 
-  inflight.set(key, { promise: request, controller });
-  return request;
+  inflight.set(key, { promise: request });
+  const data = await request;
+  if (signal?.aborted) return EMPTY_CHROME;
+  return data;
 }
 
 /**
