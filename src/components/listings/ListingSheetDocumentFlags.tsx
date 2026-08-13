@@ -25,11 +25,13 @@ export function ListingSheetDocumentFlags() {
     const root = document.documentElement;
     root.dataset.listingSheet = "1";
     root.style.setProperty("--site-header-stack", "0px");
+    root.style.setProperty("--listing-viewing-sticky-gap", "0px");
     root.style.setProperty("--mobile-bottom-nav", "0px");
     root.dataset.mobileBottomNav = "0";
     return () => {
       delete root.dataset.listingSheet;
       root.style.removeProperty("--site-header-stack");
+      root.style.removeProperty("--listing-viewing-sticky-gap");
       root.style.removeProperty("--mobile-bottom-nav");
       delete root.dataset.mobileBottomNav;
     };

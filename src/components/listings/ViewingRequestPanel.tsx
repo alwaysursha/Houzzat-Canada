@@ -55,8 +55,10 @@ export function ViewingRequestPanel({
   const shellClass = cn(
     // Parent column must be the tall grid aside — do not wrap this in a short
     // div, or sticky has no room to travel.
-    // Sit just under site header + listing action bar (header stack is 0 in sheet).
-    "sticky top-[calc(var(--site-header-stack,4rem)+var(--listing-sticky-bar-height,5.5rem)+0.5rem)] z-10 rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6",
+    // Sit just under site header + listing action bar.
+    // Sheet/panel sets --site-header-stack and --listing-viewing-sticky-gap to 0
+    // so this docks flush under the Share/Save bar (no phantom header gap).
+    "sticky top-[calc(var(--site-header-stack,4rem)+var(--listing-sticky-bar-height,5.5rem)+var(--listing-viewing-sticky-gap,0.5rem))] z-10 rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6",
     className,
   );
 

@@ -225,13 +225,16 @@ export function ListingSheetHost() {
       aria-modal="true"
       aria-label="Listing details"
       data-listing-panel={usePanel ? "1" : undefined}
-      // Panel mode shares the parent viewport with ListingStickyBar's
-      // `position:fixed`. Offset that bar below this chrome (iframe mode
-      // leaves the var unset → sticky stays at top:0 inside the frame).
+      // Panel mode shares the parent viewport (no iframe document flags):
+      // - chrome-height offsets ListingStickyBar under the Close bar
+      // - site-header-stack 0 so Book a viewing / scroll-mt don't reserve
+      //   a phantom site header (iframe sheet sets this on <html> instead)
       style={
         {
           "--listing-sheet-chrome-height":
             "calc(2.75rem + env(safe-area-inset-top, 0px))",
+          "--site-header-stack": "0px",
+          "--listing-viewing-sticky-gap": "0px",
         } as CSSProperties
       }
     >
