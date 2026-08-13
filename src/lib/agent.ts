@@ -3,7 +3,7 @@ import { cache } from "react";
 import { auth } from "@/lib/auth";
 import { ensureBrokerageOrganization } from "@/lib/agent/brokerage";
 import { isAdminRole, isAgentRole } from "@/lib/constants";
-import { prisma } from "@/lib/prisma";
+import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 
 const agentUserSelect = {
   id: true,
@@ -37,20 +37,62 @@ export type AgentOrgContext = {
   isPlatformAdmin: boolean;
 };
 
-export async function requireAgentUser(): Promise<AgentUser | null> {
+/** Lightweight staff gate for Agent layout chrome — no brokerage / desk I/O. */
+export type AgentGate = {
+  user: AgentUser;
+  isPlatformAdmin: boolean;
+};
+
+/**
+ * Security-only CRM entry check (auth + role + soft-disable).
+ * Layouts use this so Admin/Agent shells can paint before brokerage work.
+ */
+export const requireAgentGate = cache(async (): Promise<AgentGate | null> => {
+  const session = await auth();
+  if (!session?.user?.id && !session?.user?.email) return null;
+  if (!isAgentRole(session.user.role)) return null;
+
+  const isPlatformAdmin = isAdminRole(session.user.role);
+
+  // Platform admins: session role is enough (JWT rechecked periodically).
+  if (isPlatformAdmin) {
+    if (!session.user.id || !session.user.email) return null;
+    return {
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name ?? null,
+        image: session.user.image ?? null,
+        phone: null,
+        role: session.user.role,
+      },
+      isPlatformAdmin: true,
+    };
+  }
+
+  // Field agents: confirm seat is still active (security).
+  return requireAgentUser().then((user) =>
+    user ? { user, isPlatformAdmin: false } : null,
+  );
+});
+
+export const requireAgentUser = cache(async (): Promise<AgentUser | null> => {
   const session = await auth();
   if (!session?.user?.id && !session?.user?.email) return null;
 
   let user: AgentUser | null = null;
   if (session.user.id) {
     user = await prisma.user.findFirst({
-      where: { id: session.user.id },
+      where: { id: session.user.id, disabledAt: null },
       select: agentUserSelect,
     });
   }
   if (!user && session.user.email) {
     user = await prisma.user.findFirst({
-      where: { email: session.user.email.trim().toLowerCase() },
+      where: {
+        email: session.user.email.trim().toLowerCase(),
+        disabledAt: null,
+      },
       select: agentUserSelect,
     });
   }
@@ -67,6 +109,26 @@ export async function requireAgentUser(): Promise<AgentUser | null> {
   }
 
   return user;
+});
+
+function healAgentSeatFlags(userId: string): Promise<unknown> {
+  return (async () => {
+    const flags = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isBuyer: true, isSeller: true },
+    });
+    if (flags && (flags.isBuyer || flags.isSeller)) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { isBuyer: false, isSeller: false },
+      });
+    }
+    await prisma.agentProfile.upsert({
+      where: { userId },
+      create: { userId, active: true },
+      update: {},
+    });
+  })();
 }
 
 /**
@@ -124,23 +186,13 @@ export const requireAgentContext = cache(
       membership?.role === "OWNER" ||
       membership?.role === "ADMIN";
 
-    // Heal accounts promoted to agent that still have consumer dashboards on.
+    // Seat flag healing is not required to authorize the response.
     if (!isPlatformAdmin) {
-      const flags = await prisma.user.findUnique({
-        where: { id: user.id },
-        select: { isBuyer: true, isSeller: true },
-      });
-      if (flags && (flags.isBuyer || flags.isSeller)) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { isBuyer: false, isSeller: false },
-        });
-      }
-      await prisma.agentProfile.upsert({
-        where: { userId: user.id },
-        create: { userId: user.id, active: true },
-        update: {},
-      });
+      scheduleWorkerSideEffect(
+        healAgentSeatFlags(user.id).catch((error) => {
+          console.error("[agent] seat heal failed", error);
+        }),
+      );
     }
 
     return {

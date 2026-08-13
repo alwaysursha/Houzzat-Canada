@@ -12,6 +12,10 @@ import {
   type LeadImportDraft,
   type LeadImportField,
 } from "@/lib/agent/parse-leads-csv";
+import {
+  STAFF_OVERLAY_PRIORITY,
+  useStaffOverlay,
+} from "@/lib/mobile/use-staff-overlay";
 import { cn } from "@/lib/utils";
 
 type Step = "upload" | "review" | "done";
@@ -90,6 +94,13 @@ export function LeadImportModal({
     reset();
     onClose();
   }
+
+  useStaffOverlay({
+    open,
+    id: "lead-import-modal",
+    priority: STAFF_OVERLAY_PRIORITY.sheet,
+    onClose: handleClose,
+  });
 
   async function onFileChange(file: File | null) {
     setError(null);

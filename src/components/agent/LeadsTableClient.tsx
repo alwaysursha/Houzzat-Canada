@@ -43,6 +43,10 @@ import {
   purchaseTimeframeLabel,
   purchaseTimeframeSortKey,
 } from "@/lib/agent/timeframe";
+import {
+  STAFF_OVERLAY_PRIORITY,
+  useStaffOverlay,
+} from "@/lib/mobile/use-staff-overlay";
 import { cn } from "@/lib/utils";
 
 export type LeadRow = {
@@ -223,6 +227,13 @@ export function LeadsTableClient({
   const [addEmail, setAddEmail] = useState("");
   const [addPhone, setAddPhone] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
+
+  useStaffOverlay({
+    open: addOpen,
+    id: "leads-add-modal",
+    priority: STAFF_OVERLAY_PRIORITY.sheet,
+    onClose: () => setAddOpen(false),
+  });
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -617,7 +628,7 @@ export function LeadsTableClient({
           <button
             type="button"
             onClick={() => router.refresh()}
-            className="rounded border border-[#d8dee6] bg-white p-1.5 text-[#64748b] hover:bg-[#f8fafc]"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded border border-[#d8dee6] bg-white p-2 text-[#64748b] hover:bg-[#f8fafc]"
             title="Refresh"
           >
             <RefreshCw className="size-3.5" />
@@ -637,7 +648,7 @@ export function LeadsTableClient({
           <button
             type="button"
             onClick={() => window.print()}
-            className="rounded border border-[#e2e8f0] bg-white p-1.5 text-[#94a3b8] hover:bg-[#f8fafc]"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded border border-[#e2e8f0] bg-white p-2 text-[#94a3b8] hover:bg-[#f8fafc]"
             title="Print"
           >
             <Printer className="size-3.5" />
@@ -678,7 +689,7 @@ export function LeadsTableClient({
               type="button"
               disabled={safePage <= 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="rounded border border-[#d8dee6] p-1 disabled:opacity-30"
+              className="inline-flex min-h-10 min-w-10 items-center justify-center rounded border border-[#d8dee6] p-2 disabled:opacity-30"
             >
               <ChevronLeft className="size-3.5" />
             </button>
@@ -689,7 +700,7 @@ export function LeadsTableClient({
               type="button"
               disabled={safePage >= pageCount - 1}
               onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-              className="rounded border border-[#d8dee6] p-1 disabled:opacity-30"
+              className="inline-flex min-h-10 min-w-10 items-center justify-center rounded border border-[#d8dee6] p-2 disabled:opacity-30"
             >
               <ChevronRight className="size-3.5" />
             </button>
@@ -698,7 +709,7 @@ export function LeadsTableClient({
           <button
             type="button"
             onClick={() => setImportOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded border border-[#5b9aaa]/50 bg-white px-3 py-1.5 text-[12px] font-semibold text-[#3d6f7c] hover:bg-[#5b9aaa]/10"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded border border-[#5b9aaa]/50 bg-white px-3 py-2 text-[12px] font-semibold text-[#3d6f7c] hover:bg-[#5b9aaa]/10"
           >
             <Upload className="size-3.5" />
             Import Leads
@@ -706,7 +717,7 @@ export function LeadsTableClient({
           <button
             type="button"
             onClick={() => setAddOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded bg-[#5b9aaa] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#4f8a99]"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded bg-[#5b9aaa] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#4f8a99]"
           >
             <UserPlus className="size-3.5" />
             + Add New Lead
@@ -1404,14 +1415,14 @@ export function LeadsTableClient({
               <button
                 type="button"
                 onClick={() => setAddOpen(false)}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-[#64748b]"
+                className="inline-flex min-h-10 items-center rounded-md px-3 py-2 text-xs font-semibold text-[#64748b]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={pending}
-                className="rounded-md bg-[#5b9aaa] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                className="inline-flex min-h-10 items-center rounded-md bg-[#5b9aaa] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
               >
                 Create lead
               </button>

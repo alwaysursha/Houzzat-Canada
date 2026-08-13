@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ExternalLink, Eye, Loader2, X } from "lucide-react";
+import {
+  STAFF_OVERLAY_PRIORITY,
+  useStaffOverlay,
+} from "@/lib/mobile/use-staff-overlay";
 import { cn } from "@/lib/utils";
 
 type EmailPreviewPayload = {
@@ -74,13 +78,17 @@ export function EmailPreviewModal({
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
     };
   }, [emailId, onClose]);
+
+  useStaffOverlay({
+    open: Boolean(emailId),
+    id: `email-preview:${emailId ?? "closed"}`,
+    priority: STAFF_OVERLAY_PRIORITY.emailPreview,
+    onClose,
+  });
 
   if (!emailId) return null;
 

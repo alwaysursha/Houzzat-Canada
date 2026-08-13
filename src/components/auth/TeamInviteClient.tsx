@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { staffHardNavigate } from "@/components/site/StaffHardLink";
 import type { InvitePreview } from "@/lib/agent/accept-invite";
 import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
 
@@ -98,7 +99,7 @@ export function TeamInviteClient({ token }: { token: string }) {
       setDone(true);
       router.refresh();
       window.setTimeout(() => {
-        router.push("/agent");
+        staffHardNavigate("/agent");
       }, 400);
     } finally {
       setPending(false);
@@ -137,7 +138,7 @@ export function TeamInviteClient({ token }: { token: string }) {
             : ""}
           . Open the CRM to get started with {invite.orgName}.
         </p>
-        <Button className="mt-5" onClick={() => router.push("/agent")}>
+        <Button className="mt-5" onClick={() => staffHardNavigate("/agent")}>
           Open CRM
         </Button>
       </div>

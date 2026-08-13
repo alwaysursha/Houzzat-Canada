@@ -11,6 +11,10 @@ import {
 } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  STAFF_OVERLAY_PRIORITY,
+  pushStaffOverlay,
+} from "@/lib/mobile/staff-overlay-stack";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { cn } from "@/lib/utils";
 
@@ -308,12 +312,18 @@ export function SiteAlertProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!request) return;
     const release = acquireScrollLock();
+    const releaseOverlay = pushStaffOverlay({
+      id: "site-alert",
+      priority: STAFF_OVERLAY_PRIORITY.siteAlert,
+      close: () => finish(false),
+    });
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") finish(false);
     }
     document.addEventListener("keydown", onKey);
     return () => {
       release();
+      releaseOverlay();
       document.removeEventListener("keydown", onKey);
     };
   }, [request, finish]);

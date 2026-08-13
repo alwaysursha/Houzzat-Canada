@@ -21,9 +21,16 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { AdminDeskPicker } from "@/components/admin/AdminDeskPicker";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import {
+  StaffHardLink,
+  isStaffCrossLayoutHref,
+} from "@/components/site/StaffHardLink";
 import { SITE_NAME } from "@/lib/constants";
+import {
+  STAFF_OVERLAY_PRIORITY,
+  useStaffOverlay,
+} from "@/lib/mobile/use-staff-overlay";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -51,8 +58,6 @@ const MOBILE_TABS = [
   NAV[3],
   NAV[10],
 ] as const;
-
-type DeskAgent = { id: string; name: string | null; email: string };
 
 function navActive(pathname: string, href: string, exact?: boolean) {
   if (exact) return pathname === href;
@@ -84,22 +89,41 @@ function NavLinks({
         const exact = "exact" in item && item.exact;
         const active = navActive(pathname, item.href, exact);
         const Icon = item.icon;
+        const className = cn(
+          "flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm font-medium transition",
+          active
+            ? "bg-canopy/12 text-canopy shadow-[inset_0_0_0_1px_rgb(15_118_90/0.12)]"
+            : "text-ink/65 hover:bg-mist hover:text-ink",
+          collapsed && "justify-center px-2",
+        );
+        const body = (
+          <>
+            <Icon className="size-4 shrink-0" strokeWidth={2.1} />
+            {!collapsed ? <span>{item.label}</span> : null}
+          </>
+        );
+        if (isStaffCrossLayoutHref(item.href, "admin")) {
+          return (
+            <StaffHardLink
+              key={item.href}
+              href={item.href}
+              title={item.label}
+              onClick={onNavigate}
+              className={className}
+            >
+              {body}
+            </StaffHardLink>
+          );
+        }
         return (
           <Link
             key={item.href}
             href={item.href}
             title={item.label}
             onClick={onNavigate}
-            className={cn(
-              "flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm font-medium transition",
-              active
-                ? "bg-canopy/12 text-canopy shadow-[inset_0_0_0_1px_rgb(15_118_90/0.12)]"
-                : "text-ink/65 hover:bg-mist hover:text-ink",
-              collapsed && "justify-center px-2",
-            )}
+            className={className}
           >
-            <Icon className="size-4 shrink-0" strokeWidth={2.1} />
-            {!collapsed ? <span>{item.label}</span> : null}
+            {body}
           </Link>
         );
       })}
@@ -109,13 +133,18 @@ function NavLinks({
 
 export function AdminShell({
   email,
-  deskAgents = [],
-  deskAgentId = null,
+  deskSlot = null,
+  deskSlotCompact = null,
+  mobileDeskSlot = null,
   children,
 }: {
   email: string;
-  deskAgents?: DeskAgent[];
-  deskAgentId?: string | null;
+  /** Desktop sidebar desk picker (may be a Suspense boundary). */
+  deskSlot?: React.ReactNode;
+  /** Collapsed sidebar variant. */
+  deskSlotCompact?: React.ReactNode;
+  /** Mobile drawer desk picker (separate Suspense — request-cached). */
+  mobileDeskSlot?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -132,14 +161,12 @@ export function AdminShell({
     setMobileOpen(false);
   }, [pathname]);
 
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [mobileOpen]);
+  useStaffOverlay({
+    open: mobileOpen,
+    id: "admin-mobile-drawer",
+    priority: STAFF_OVERLAY_PRIORITY.shellDrawer,
+    onClose: () => setMobileOpen(false),
+  });
 
   return (
     <div className="min-h-dvh bg-[linear-gradient(165deg,rgb(238_243_240)_0%,rgb(255_255_255)_45%,rgb(244_247_245)_100%)]">
@@ -184,19 +211,17 @@ export function AdminShell({
             </button>
           </div>
 
-          {deskAgents.length > 0 ? (
+          {deskSlot || deskSlotCompact ? (
             <div
               className={cn(
                 "border-b border-line/70",
                 collapsed ? "px-1.5 py-2" : "px-3 py-3",
               )}
             >
-              <AdminDeskPicker
-                key={deskAgentId ?? "all"}
-                agents={deskAgents}
-                selectedAgentId={deskAgentId}
-                compact={collapsed}
-              />
+              <div className={collapsed ? "hidden" : "block"}>{deskSlot}</div>
+              <div className={collapsed ? "block" : "hidden"}>
+                {deskSlotCompact}
+              </div>
             </div>
           ) : null}
 
@@ -231,7 +256,7 @@ export function AdminShell({
           />
           <aside
             className={cn(
-              "absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col bg-surface shadow-[8px_0_40px_rgb(15_32_28/0.18)] transition-transform duration-300 ease-out",
+              "absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col bg-surface pt-[env(safe-area-inset-top)] shadow-[8px_0_40px_rgb(15_32_28/0.18)] transition-transform duration-300 ease-out",
               mobileOpen ? "translate-x-0" : "-translate-x-full",
             )}
           >
@@ -251,20 +276,16 @@ export function AdminShell({
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
-                className="rounded-lg p-2 text-ink/55 transition hover:bg-mist hover:text-ink"
+                className="inline-flex size-11 items-center justify-center rounded-lg text-ink/55 transition hover:bg-mist hover:text-ink"
                 aria-label="Close menu"
               >
                 <X className="size-5" />
               </button>
             </div>
 
-            {deskAgents.length > 0 ? (
+            {mobileDeskSlot ? (
               <div className="border-b border-line/70 px-3 py-3">
-                <AdminDeskPicker
-                  key={`mobile-${deskAgentId ?? "all"}`}
-                  agents={deskAgents}
-                  selectedAgentId={deskAgentId}
-                />
+                {mobileDeskSlot}
               </div>
             ) : null}
 
@@ -278,13 +299,13 @@ export function AdminShell({
             <div className="border-t border-line/70 p-4">
               <p className="mb-2 truncate text-xs text-ink/45">{email}</p>
               <div className="flex flex-col gap-2">
-                <Link
+                <StaffHardLink
                   href="/"
                   onClick={() => setMobileOpen(false)}
                   className="rounded-xl border border-line px-3 py-2.5 text-center text-sm font-semibold text-ink/70 transition hover:border-canopy/40 hover:text-canopy"
                 >
                   View site
-                </Link>
+                </StaffHardLink>
                 <SignOutButton className="w-full" />
               </div>
             </div>
@@ -293,11 +314,11 @@ export function AdminShell({
 
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Mobile top bar */}
-          <header className="sticky top-0 z-50 flex items-center gap-2 border-b border-line/80 bg-surface/95 px-3 py-2.5 backdrop-blur-md lg:hidden">
+          <header className="sticky top-0 z-50 flex items-center gap-2 border-b border-line/80 bg-surface/95 px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur-md lg:hidden">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="rounded-xl p-2 text-ink/70 transition active:bg-mist"
+              className="inline-flex size-11 items-center justify-center rounded-xl text-ink/70 transition active:bg-mist"
               aria-label="Open menu"
             >
               <Menu className="size-5" />
@@ -310,12 +331,12 @@ export function AdminShell({
                 Admin HQ
               </p>
             </div>
-            <Link
+            <StaffHardLink
               href="/agent"
-              className="rounded-xl bg-canopy px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm active:scale-[0.98]"
+              className="inline-flex min-h-10 items-center rounded-xl bg-canopy px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm active:scale-[0.98]"
             >
               CRM
-            </Link>
+            </StaffHardLink>
           </header>
 
           {/* Desktop top bar */}
@@ -329,16 +350,16 @@ export function AdminShell({
                   People · visitors · growth · operations
                 </p>
               </div>
-              <Link
+              <StaffHardLink
                 href="/"
                 className="shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink/70 transition hover:border-canopy/40 hover:text-canopy"
               >
                 View site
-              </Link>
+              </StaffHardLink>
             </div>
           </header>
 
-          <main className="min-w-0 flex-1 px-3 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-5 lg:px-8 lg:pb-8">
+          <main className="min-w-0 flex-1 overflow-x-hidden px-3 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-5 lg:px-8 lg:pb-8">
             {children}
           </main>
 
@@ -354,15 +375,12 @@ export function AdminShell({
                 const Icon = item.icon;
                 const shortLabel =
                   item.label === "CRM desk" ? "CRM" : item.label;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition",
-                      active ? "text-canopy" : "text-ink/45",
-                    )}
-                  >
+                const className = cn(
+                  "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition",
+                  active ? "text-canopy" : "text-ink/45",
+                );
+                const body = (
+                  <>
                     <span
                       className={cn(
                         "flex size-8 items-center justify-center rounded-xl transition",
@@ -375,6 +393,22 @@ export function AdminShell({
                       />
                     </span>
                     {shortLabel}
+                  </>
+                );
+                if (isStaffCrossLayoutHref(item.href, "admin")) {
+                  return (
+                    <StaffHardLink
+                      key={item.href}
+                      href={item.href}
+                      className={className}
+                    >
+                      {body}
+                    </StaffHardLink>
+                  );
+                }
+                return (
+                  <Link key={item.href} href={item.href} className={className}>
+                    {body}
                   </Link>
                 );
               })}

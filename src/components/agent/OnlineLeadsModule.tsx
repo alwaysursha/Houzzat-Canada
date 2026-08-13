@@ -6,6 +6,10 @@ import { ChevronRight, Radio, X } from "lucide-react";
 import { LeadQuickPopup } from "@/components/agent/LeadQuickPopup";
 import { pipelineShortLabel } from "@/lib/agent/pipeline";
 import type { LeadStatus } from "@prisma/client";
+import {
+  STAFF_OVERLAY_PRIORITY,
+  useStaffOverlay,
+} from "@/lib/mobile/use-staff-overlay";
 import { cn } from "@/lib/utils";
 
 export type OnlineLeadRow = {
@@ -38,17 +42,21 @@ export function OnlineLeadsModule({
   const dashboardHref = `/agent/leads?view=${deskView}&online=1`;
   const leadIds = leads.map((l) => l.id);
 
+  useStaffOverlay({
+    open,
+    id: "online-leads-sheet",
+    priority: STAFF_OVERLAY_PRIORITY.sheet,
+    onClose: () => setOpen(false),
+  });
+
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape" && !profileId) setOpen(false);
     }
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
     };
   }, [open, profileId]);
 

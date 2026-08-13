@@ -204,7 +204,7 @@ export function AgentStatisticsDashboard({ data }: { data: AgentStatistics }) {
                   href={`/agent/statistics?range=${days}`}
                   scroll={false}
                   className={cn(
-                    "rounded-md px-2.5 py-1.5 text-[12px] font-semibold tabular-nums transition sm:px-3",
+                    "inline-flex min-h-10 items-center rounded-md px-3 py-2 text-[12px] font-semibold tabular-nums transition sm:px-3",
                     active
                       ? "bg-white text-[#2b6cb0] shadow-sm"
                       : "text-[#64748b] hover:text-[#1e2a38]",

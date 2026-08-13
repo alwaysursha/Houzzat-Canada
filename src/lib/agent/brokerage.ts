@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import {
   DESK_AGENT_ALL,
@@ -129,29 +130,31 @@ async function syncBrokerageSeats(brokerageId: string): Promise<void> {
   });
 }
 
-export async function ensureBrokerageOrganization(): Promise<{
-  id: string;
-  name: string;
-}> {
-  if (
-    brokerageCache &&
-    Date.now() - brokerageCache.at < BROKERAGE_CACHE_MS
-  ) {
-    return brokerageCache.org;
-  }
+export const ensureBrokerageOrganization = cache(
+  async function ensureBrokerageOrganization(): Promise<{
+    id: string;
+    name: string;
+  }> {
+    if (
+      brokerageCache &&
+      Date.now() - brokerageCache.at < BROKERAGE_CACHE_MS
+    ) {
+      return brokerageCache.org;
+    }
 
-  const org = await resolveBrokerageOrg();
-  brokerageCache = { org, at: Date.now() };
-  // Seat/lead migration must not 500 Admin HQ if a Worker query fails.
-  scheduleWorkerSideEffect(
-    syncBrokerageSeats(org.id).catch((error) => {
-      console.error("[brokerage] seat sync failed", error);
-    }),
-  );
-  return org;
-}
+    const org = await resolveBrokerageOrg();
+    brokerageCache = { org, at: Date.now() };
+    // Seat/lead migration must not 500 Admin HQ if a Worker query fails.
+    scheduleWorkerSideEffect(
+      syncBrokerageSeats(org.id).catch((error) => {
+        console.error("[brokerage] seat sync failed", error);
+      }),
+    );
+    return org;
+  },
+);
 
-export async function listTeamAgents(
+export const listTeamAgents = cache(async function listTeamAgents(
   organizationId: string,
 ): Promise<TeamAgentOption[]> {
   const members = await prisma.organizationMembership.findMany({
@@ -178,7 +181,60 @@ export async function listTeamAgents(
       email: m.user.email,
       role: m.user.role as "AGENT" | "ADMIN",
     }));
-}
+});
+
+/**
+ * Desk resolution keyed by primitives so layout + page share one result
+ * (React cache uses Object.is — object ctx args would miss).
+ */
+const resolveDeskViewCached = cache(
+  async (
+    organizationId: string,
+    userId: string,
+    canSeeTeamLeads: boolean,
+    deskCookie: string | null,
+  ): Promise<{
+    deskAgentId: string | null;
+    teamAgents: TeamAgentOption[];
+    deskLabel: string;
+  }> => {
+    const teamAgents = await listTeamAgents(organizationId);
+    const fieldAgents = teamAgents.filter((a) => a.role === "AGENT");
+
+    if (!canSeeTeamLeads) {
+      return {
+        deskAgentId: userId,
+        teamAgents: fieldAgents,
+        deskLabel: "My desk",
+      };
+    }
+
+    const raw = deskCookie?.trim() || DESK_AGENT_ALL;
+
+    if (raw === DESK_AGENT_ALL) {
+      return {
+        deskAgentId: null,
+        teamAgents: fieldAgents,
+        deskLabel: "Team overview",
+      };
+    }
+
+    const match = fieldAgents.find((a) => a.id === raw);
+    if (match) {
+      return {
+        deskAgentId: match.id,
+        teamAgents: fieldAgents,
+        deskLabel: match.name || match.email,
+      };
+    }
+
+    return {
+      deskAgentId: null,
+      teamAgents: fieldAgents,
+      deskLabel: "Team overview",
+    };
+  },
+);
 
 /**
  * Which agent's desk is in view.
@@ -197,43 +253,15 @@ export async function resolveDeskView(ctx: {
   teamAgents: TeamAgentOption[];
   deskLabel: string;
 }> {
-  const teamAgents = await listTeamAgents(ctx.organizationId);
-  const fieldAgents = teamAgents.filter((a) => a.role === "AGENT");
-
-  if (!ctx.canSeeTeamLeads) {
-    return {
-      deskAgentId: ctx.user.id,
-      teamAgents: fieldAgents,
-      deskLabel: "My desk",
-    };
-  }
-
-  const raw =
-    (ctx.deskCookie !== undefined
+  const deskCookie =
+    ctx.deskCookie !== undefined
       ? ctx.deskCookie
-      : (await cookies()).get(DESK_AGENT_COOKIE)?.value
-    )?.trim() || DESK_AGENT_ALL;
+      : ((await cookies()).get(DESK_AGENT_COOKIE)?.value ?? null);
 
-  if (raw === DESK_AGENT_ALL) {
-    return {
-      deskAgentId: null,
-      teamAgents: fieldAgents,
-      deskLabel: "Team overview",
-    };
-  }
-
-  const match = fieldAgents.find((a) => a.id === raw);
-  if (match) {
-    return {
-      deskAgentId: match.id,
-      teamAgents: fieldAgents,
-      deskLabel: match.name || match.email,
-    };
-  }
-
-  return {
-    deskAgentId: null,
-    teamAgents: fieldAgents,
-    deskLabel: "Team overview",
-  };
+  return resolveDeskViewCached(
+    ctx.organizationId,
+    ctx.user.id,
+    ctx.canSeeTeamLeads,
+    deskCookie,
+  );
 }

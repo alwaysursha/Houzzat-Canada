@@ -1,17 +1,24 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { LeadStatus } from "@prisma/client";
-import { ContactRequestedPanel } from "@/components/agent/ContactRequestedPanel";
+import {
+  LaunchpadDeferredContact,
+  LaunchpadDeferredHotCard,
+  LaunchpadDeferredQuickModules,
+} from "@/components/agent/LaunchpadDeferredSections";
 import { LaunchpadTodoCarousel } from "@/components/agent/LaunchpadTodoCarousel";
-import { QuickModulesPanel } from "@/components/agent/QuickModulesPanel";
 import { leadScopeWhere, requireAgentContext } from "@/lib/agent";
-import { resolveDeskView } from "@/lib/agent/brokerage";
-import { computeHotnessMap, findOnlineUserIds } from "@/lib/agent/hotness";
+import { DESK_AGENT_COOKIE, resolveDeskView } from "@/lib/agent/brokerage";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Launchpad · Agent CRM" };
 
 export default async function AgentLaunchpadPage() {
+  // cookies() before Prisma (Worker-safe); listTeamAgents is request-cached.
+  const deskCookie =
+    (await cookies()).get(DESK_AGENT_COOKIE)?.value ?? null;
+
   const ctx = await requireAgentContext();
   if (!ctx) redirect("/auth/sign-in?callbackUrl=/agent");
 
@@ -21,23 +28,16 @@ export default async function AgentLaunchpadPage() {
   const endOfDay = new Date();
   endOfDay.setHours(23, 59, 59, 999);
 
-  const desk = await resolveDeskView(ctx);
+  const desk = await resolveDeskView({ ...ctx, deskCookie });
   const scopeMine = leadScopeWhere(ctx, "mine");
   const scopeTeam = leadScopeWhere(ctx, ctx.canSeeTeamLeads ? "team" : "mine");
-  const deskView = ctx.canSeeTeamLeads ? "team" : "mine";
-
-  // Team Leader viewing a specific agent → that agent's desk numbers.
-  // Team overview → whole brokerage. Field agent → own desk.
+  const deskView = (ctx.canSeeTeamLeads ? "team" : "mine") as "mine" | "team";
   const focusAgentId = desk.deskAgentId;
+
   const followUpStatuses = [
     "ATTEMPTED_CONTACT",
     "CONTACTED",
     "PENDING_CLIENT",
-  ] as LeadStatus[];
-  const contactRequestedStatuses = [
-    "NEW_LEAD",
-    "ATTEMPTED_CONTACT",
-    "CONTACTED",
   ] as LeadStatus[];
   const callNewLeadsWhere = focusAgentId
     ? {
@@ -73,12 +73,6 @@ export default async function AgentLaunchpadPage() {
     : ctx.canSeeTeamLeads
       ? {}
       : { assigneeId: ctx.user.id };
-  const contactRequestedWhere = {
-    ...scopeTeam,
-    status: { in: contactRequestedStatuses },
-    inquiryTag: null,
-    ...(focusAgentId ? { assignedAgentId: focusAgentId } : {}),
-  };
 
   const leadPreviewSelect = {
     id: true,
@@ -86,6 +80,7 @@ export default async function AgentLaunchpadPage() {
     customer: { select: { name: true, email: true } },
   } as const;
 
+  // Critical path only — first visible counts, previews, and todo carousel.
   const [
     dueTodayTasks,
     overdueTaskCount,
@@ -94,10 +89,7 @@ export default async function AgentLaunchpadPage() {
     contactedCount,
     callNewLeadsRaw,
     contactedLeadsRaw,
-    contactRequested,
     openTasks,
-    recentLeads,
-    respondedLeads,
   ] = await Promise.all([
     prisma.agentTask.findMany({
       where: {
@@ -142,31 +134,14 @@ export default async function AgentLaunchpadPage() {
     prisma.lead.findMany({
       where: callNewLeadsWhere,
       orderBy: { createdAt: "desc" },
-      take: 40,
+      take: 12,
       select: leadPreviewSelect,
     }),
     prisma.lead.findMany({
       where: followUpLeadsWhere,
       orderBy: { updatedAt: "desc" },
-      take: 40,
+      take: 12,
       select: leadPreviewSelect,
-    }),
-    prisma.lead.findMany({
-      where: contactRequestedWhere,
-      orderBy: { createdAt: "desc" },
-      take: 24,
-      include: {
-        customer: {
-          select: {
-            name: true,
-            email: true,
-            isBuyer: true,
-            isSeller: true,
-            emailVerified: true,
-            createdAt: true,
-          },
-        },
-      },
     }),
     prisma.agentTask.findMany({
       where: {
@@ -188,107 +163,7 @@ export default async function AgentLaunchpadPage() {
         },
       },
     }),
-    prisma.lead.findMany({
-      where: scopeTeam,
-      orderBy: { updatedAt: "desc" },
-      take: 30,
-      include: {
-        customer: {
-          select: { name: true, email: true, isBuyer: true, isSeller: true },
-        },
-      },
-    }),
-    // Response time = avg(NEW_LEAD → ATTEMPTED_CONTACT) for this desk.
-    prisma.lead.findMany({
-      where: {
-        organizationId: ctx.organizationId,
-        firstRespondedAt: { not: null },
-        ...(focusAgentId
-          ? { assignedAgentId: focusAgentId }
-          : ctx.canSeeTeamLeads
-            ? { assignedAgentId: { not: null } }
-            : { assignedAgentId: ctx.user.id }),
-      },
-      select: { createdAt: true, firstRespondedAt: true },
-      take: 2000,
-    }),
   ]);
-
-  const hotMap = await computeHotnessMap(
-    recentLeads.map((l) => ({
-      id: l.id,
-      customerId: l.customerId,
-      status: l.status,
-      score: l.score,
-      createdAt: l.createdAt,
-      firstRespondedAt: l.firstRespondedAt,
-    })),
-  );
-
-  const responseMins = respondedLeads
-    .map((l) => {
-      if (!l.firstRespondedAt) return null;
-      const mins =
-        (l.firstRespondedAt.getTime() - l.createdAt.getTime()) / 60_000;
-      return mins >= 0 ? mins : null;
-    })
-    .filter((n): n is number => n != null);
-  const avgResponseMins =
-    responseMins.length === 0
-      ? 0
-      : Math.round(
-          responseMins.reduce((sum, n) => sum + n, 0) / responseMins.length,
-        );
-
-  const onlineUserIds = await findOnlineUserIds();
-  const onlineLeadsRaw =
-    onlineUserIds.length === 0
-      ? []
-      : await prisma.lead.findMany({
-          where: {
-            ...leadScopeWhere(ctx, deskView),
-            customerId: { in: onlineUserIds },
-            ...(focusAgentId ? { assignedAgentId: focusAgentId } : {}),
-          },
-          orderBy: { updatedAt: "desc" },
-          take: 50,
-          select: {
-            id: true,
-            status: true,
-            customerId: true,
-            score: true,
-            createdAt: true,
-            firstRespondedAt: true,
-            customer: { select: { name: true, email: true } },
-          },
-        });
-  const onlineHotMap = await computeHotnessMap(
-    onlineLeadsRaw.map((l) => ({
-      id: l.id,
-      customerId: l.customerId,
-      status: l.status,
-      score: l.score,
-      createdAt: l.createdAt,
-      firstRespondedAt: l.firstRespondedAt,
-    })),
-  );
-  const onlineLeads = onlineLeadsRaw
-    .map((l) => {
-      const hot = onlineHotMap.get(l.id);
-      return {
-        id: l.id,
-        status: l.status,
-        customer: l.customer,
-        lastSeenAt: hot?.lastSeenAt?.toISOString() ?? null,
-        isOnline: hot?.isOnline ?? true,
-      };
-    })
-    .filter((l) => l.isOnline)
-    .sort((a, b) => {
-      const at = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
-      const bt = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
-      return bt - at;
-    });
 
   const dateLabel = now.toLocaleDateString("en-CA", {
     weekday: "long",
@@ -297,18 +172,6 @@ export default async function AgentLaunchpadPage() {
   });
 
   const todoRows = dueTodayTasks.length ? dueTodayTasks : openTasks.slice(0, 8);
-
-  const hotLeads = recentLeads
-    .filter((l) => (hotMap.get(l.id)?.hotness ?? 0) >= 60)
-    .slice(0, 40)
-    .map((l) => ({
-      id: l.id,
-      status: l.status,
-      customer: l.customer
-        ? { name: l.customer.name, email: l.customer.email }
-        : null,
-      meta: `Score ${hotMap.get(l.id)?.hotness ?? 0}`,
-    }));
 
   const moduleTasks = openTasks.slice(0, 40).map((task) => ({
     id: task.id,
@@ -344,7 +207,6 @@ export default async function AgentLaunchpadPage() {
         </p>
       </div>
 
-      {/* Mobile priority strip — critical counts always visible */}
       <div className="grid grid-cols-2 gap-2 xl:hidden">
         <Link
           href={`/agent/leads?view=${deskView}&pipeline=NEW_LEAD`}
@@ -379,24 +241,10 @@ export default async function AgentLaunchpadPage() {
             {contactedCount}
           </p>
         </Link>
-        <Link
-          href="/agent/leads?view=mine"
-          className="rounded-xl border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-3 active:scale-[0.99]"
-        >
-          <p className="text-[11px] font-bold uppercase tracking-wide text-canopy">
-            Hot now
-          </p>
-          <p className="mt-1 text-[28px] font-bold leading-none tabular-nums text-canopy-deep">
-            {
-              recentLeads.filter((l) => (hotMap.get(l.id)?.hotness ?? 0) >= 60)
-                .length
-            }
-          </p>
-        </Link>
+        <LaunchpadDeferredHotCard ctx={ctx} deskView={deskView} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        {/* Quick Modules — first on mobile so actions stay above the fold */}
         <aside className="order-1 space-y-3 xl:order-2">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-[15px] font-semibold text-[#1e2a38]">
@@ -410,8 +258,10 @@ export default async function AgentLaunchpadPage() {
             </Link>
           </div>
 
-          <QuickModulesPanel
+          <LaunchpadDeferredQuickModules
+            ctx={ctx}
             deskView={deskView}
+            focusAgentId={focusAgentId}
             callNewCount={newLeadCount}
             callNewLeads={callNewLeadsRaw}
             contactedCount={contactedCount}
@@ -419,10 +269,6 @@ export default async function AgentLaunchpadPage() {
             overdueTaskCount={overdueTaskCount}
             dueTodayCount={dueTodayCount}
             tasks={moduleTasks}
-            avgResponseMins={avgResponseMins}
-            onlineLeads={onlineLeads}
-            hotCount={hotLeads.length}
-            hotLeads={hotLeads}
           />
         </aside>
 
@@ -447,32 +293,7 @@ export default async function AgentLaunchpadPage() {
             }))}
           />
 
-          <ContactRequestedPanel
-            leads={contactRequested.map((lead) => {
-              const hot = hotMap.get(lead.id);
-              return {
-                id: lead.id,
-                source: lead.source,
-                status: lead.status,
-                notes: lead.notes,
-                listingMls: lead.listingMls,
-                inquiryTag: lead.inquiryTag,
-                createdAt: lead.createdAt.toISOString(),
-                customer: lead.customer
-                  ? {
-                      name: lead.customer.name,
-                      email: lead.customer.email,
-                      isBuyer: lead.customer.isBuyer,
-                      isSeller: lead.customer.isSeller,
-                      emailVerified: Boolean(lead.customer.emailVerified),
-                      createdAt: lead.customer.createdAt.toISOString(),
-                    }
-                  : null,
-                isOnline: hot?.isOnline,
-                binge: hot?.binge,
-              };
-            })}
-          />
+          <LaunchpadDeferredContact ctx={ctx} focusAgentId={focusAgentId} />
         </div>
       </div>
     </div>

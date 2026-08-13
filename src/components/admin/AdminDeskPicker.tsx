@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DESK_AGENT_ALL } from "@/lib/agent/desk-constants";
+import { staffHardNavigate } from "@/components/site/StaffHardLink";
 import { cn } from "@/lib/utils";
 
 type AgentOption = {
@@ -42,6 +43,7 @@ export function AdminDeskPicker({
     setPending(true);
     try {
       await saveDesk(next);
+      // Same Admin section — soft refresh is fine.
       router.refresh();
     } finally {
       setPending(false);
@@ -53,9 +55,9 @@ export function AdminDeskPicker({
     setPending(true);
     try {
       await saveDesk(value);
-      router.push("/agent");
-      router.refresh();
-    } finally {
+      // Cross into (agent) with a full document load (Capacitor-safe).
+      staffHardNavigate("/agent");
+    } catch {
       setPending(false);
     }
   }

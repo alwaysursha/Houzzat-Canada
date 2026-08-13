@@ -5,7 +5,15 @@ import {
   ActivityGlobeButton,
 } from "@/components/agent/ActivityFeedDrawer";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import {
+  StaffHardLink,
+  isStaffCrossLayoutHref,
+} from "@/components/site/StaffHardLink";
 import { SITE_NAME } from "@/lib/constants";
+import {
+  STAFF_OVERLAY_PRIORITY,
+  useStaffOverlay,
+} from "@/lib/mobile/use-staff-overlay";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -71,25 +79,44 @@ function NavLinks({
           compactLabels && "fullLabel" in item && item.fullLabel
             ? item.fullLabel
             : item.label;
+        const className = cn(
+          "relative flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-[13px] font-medium transition",
+          active
+            ? "bg-[#2b6cb0] text-white"
+            : "text-white/70 hover:bg-white/8 hover:text-white",
+          collapsed && "justify-center px-2",
+        );
+        const body = (
+          <>
+            {active ? (
+              <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-[#7dd3fc]" />
+            ) : null}
+            <Icon className="size-4 shrink-0" strokeWidth={1.85} />
+            {!collapsed ? <span>{label}</span> : null}
+          </>
+        );
+        if (isStaffCrossLayoutHref(item.href, "agent")) {
+          return (
+            <StaffHardLink
+              key={item.href}
+              href={item.href}
+              title={label}
+              onClick={onNavigate}
+              className={className}
+            >
+              {body}
+            </StaffHardLink>
+          );
+        }
         return (
           <Link
             key={item.href}
             href={item.href}
             title={label}
             onClick={onNavigate}
-            className={cn(
-              "relative flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-[13px] font-medium transition",
-              active
-                ? "bg-[#2b6cb0] text-white"
-                : "text-white/70 hover:bg-white/8 hover:text-white",
-              collapsed && "justify-center px-2",
-            )}
+            className={className}
           >
-            {active ? (
-              <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-[#7dd3fc]" />
-            ) : null}
-            <Icon className="size-4 shrink-0" strokeWidth={1.85} />
-            {!collapsed ? <span>{label}</span> : null}
+            {body}
           </Link>
         );
       })}
@@ -124,14 +151,19 @@ export function AgentShell({
     setActivityOpen(false);
   }, [pathname]);
 
-  useEffect(() => {
-    if (!mobileOpen && !activityOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [mobileOpen, activityOpen]);
+  useStaffOverlay({
+    open: mobileOpen,
+    id: "agent-mobile-drawer",
+    priority: STAFF_OVERLAY_PRIORITY.shellDrawer,
+    onClose: () => setMobileOpen(false),
+  });
+
+  useStaffOverlay({
+    open: activityOpen,
+    id: "agent-activity-drawer",
+    priority: STAFF_OVERLAY_PRIORITY.activity,
+    onClose: () => setActivityOpen(false),
+  });
 
   return (
     <div className="flex min-h-dvh bg-[#eef1f4] text-ink">
@@ -208,7 +240,7 @@ export function AgentShell({
         />
         <aside
           className={cn(
-            "absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col bg-[#1e2a38] text-white shadow-[8px_0_40px_rgb(0_0_0/0.35)] transition-transform duration-300 ease-out",
+            "absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col bg-[#1e2a38] pt-[env(safe-area-inset-top)] text-white shadow-[8px_0_40px_rgb(0_0_0/0.35)] transition-transform duration-300 ease-out",
             mobileOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
@@ -228,7 +260,7 @@ export function AgentShell({
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
-              className="rounded-md p-2 text-white/60 hover:bg-white/10 hover:text-white"
+              className="inline-flex size-11 items-center justify-center rounded-md text-white/60 hover:bg-white/10 hover:text-white"
               aria-label="Close menu"
             >
               <X className="size-5" />
@@ -260,11 +292,11 @@ export function AgentShell({
         </header>
 
         {/* Mobile top bar */}
-        <header className="sticky top-0 z-50 flex items-center gap-2 border-b border-[#d8dee6] bg-[#1e2a38] px-3 py-2.5 text-white lg:hidden">
+        <header className="sticky top-0 z-50 flex items-center gap-2 border-b border-[#d8dee6] bg-[#1e2a38] px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] text-white lg:hidden">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
-            className="rounded-lg p-2 text-white/80 transition active:bg-white/10"
+            className="inline-flex size-11 items-center justify-center rounded-lg text-white/80 transition active:bg-white/10"
             aria-label="Open menu"
           >
             <Menu className="size-5" />
@@ -283,7 +315,7 @@ export function AgentShell({
           />
           <Link
             href="/agent/leads?view=mine&pipeline=NEW_LEAD"
-            className="rounded-lg bg-[#e11d48] px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm active:scale-[0.98]"
+            className="inline-flex min-h-10 items-center rounded-lg bg-[#e11d48] px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm active:scale-[0.98]"
           >
             Call new
           </Link>
@@ -293,10 +325,8 @@ export function AgentShell({
           className={cn(
             "min-w-0 flex-1",
             isProfilePage
-              ? "overflow-hidden p-0"
-              : "px-3 py-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-5 lg:px-6 lg:pb-5",
-            isProfilePage &&
-              "pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0",
+              ? "overflow-hidden p-0 pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0"
+              : "overflow-x-hidden px-3 py-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-5 lg:px-6 lg:pb-5",
           )}
         >
           {children}

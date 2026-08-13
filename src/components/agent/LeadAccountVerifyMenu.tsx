@@ -280,7 +280,8 @@ export function LeadAccountVerifyMenu({
           setOpen((v) => !v);
         }}
         className={cn(
-          "inline-flex items-center gap-0.5 rounded-md p-0.5 transition hover:bg-[#f1f5f9] disabled:opacity-50",
+          "inline-flex min-h-10 min-w-10 items-center justify-center gap-0.5 rounded-md p-2 transition hover:bg-[#f1f5f9] disabled:opacity-50",
+          compact && "min-h-9 min-w-9 p-1.5",
           status === "verified_unlocked" && "text-[#6b9fd4]",
           status === "unverified_unlocked" && "text-[#ca8a04]",
           status === "unverified_locked" && "text-[#a8b4c0]",

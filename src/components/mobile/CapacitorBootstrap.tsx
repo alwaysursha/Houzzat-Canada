@@ -11,14 +11,19 @@ import {
   isListingSheetOpen,
 } from "@/lib/mobile/listing-sheet-store";
 import { hardGo, takeNavBackHref } from "@/lib/mobile/nav-back";
+import {
+  closeTopStaffOverlay,
+  hasStaffOverlay,
+} from "@/lib/mobile/staff-overlay-stack";
 
 const STATUS_BAR_GREEN = "#1A7B59";
 
 /**
  * Native-shell polish when Houzzat runs inside Capacitor.
  *
- * Back priority: listing sheet step/close → hard-nav remembered path → exit.
- * Closing the sheet never reloads the homepage underneath.
+ * Back priority:
+ * listing sheet → staff drawers/modals → hard-nav memory → history → exit.
+ * Closing overlays never leaves body scroll locked (acquireScrollLock).
  */
 export function CapacitorBootstrap() {
   useEffect(() => {
@@ -41,6 +46,10 @@ export function CapacitorBootstrap() {
         } else {
           closeListingSheet();
         }
+        return;
+      }
+
+      if (hasStaffOverlay() && closeTopStaffOverlay()) {
         return;
       }
 

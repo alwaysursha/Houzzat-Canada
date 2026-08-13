@@ -2,6 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import {
+  STAFF_OVERLAY_PRIORITY,
+  useStaffOverlay,
+} from "@/lib/mobile/use-staff-overlay";
 
 type Member = {
   id: string;
@@ -55,6 +59,13 @@ export function TeamAdminClient({
       ),
     [members, deleteTarget],
   );
+
+  useStaffOverlay({
+    open: Boolean(deleteTarget),
+    id: "team-delete-seat",
+    priority: STAFF_OVERLAY_PRIORITY.sheet,
+    onClose: () => setDeleteTarget(null),
+  });
 
   async function runInviteAction(
     inviteId: string,

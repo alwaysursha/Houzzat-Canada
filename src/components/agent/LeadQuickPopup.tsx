@@ -2,6 +2,10 @@
 
 import { useEffect } from "react";
 import { CustomerProfile } from "@/components/agent/CustomerProfile";
+import {
+  STAFF_OVERLAY_PRIORITY,
+  useStaffOverlay,
+} from "@/lib/mobile/use-staff-overlay";
 
 export function LeadQuickPopup({
   leadId,
@@ -15,6 +19,13 @@ export function LeadQuickPopup({
   onClose: () => void;
   onNavigate?: (leadId: string) => void;
 }) {
+  useStaffOverlay({
+    open: true,
+    id: `lead-quick-popup:${leadId}`,
+    priority: STAFF_OVERLAY_PRIORITY.leadPopup,
+    onClose,
+  });
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -31,11 +42,8 @@ export function LeadQuickPopup({
       }
     }
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
     };
   }, [onClose, onNavigate, leadId, leadIds]);
 
@@ -47,7 +55,7 @@ export function LeadQuickPopup({
         aria-label="Close customer profile"
         onClick={onClose}
       />
-      <div className="relative z-10 flex h-full w-full max-w-[1280px] items-stretch pb-[env(safe-area-inset-bottom)] sm:pb-0">
+      <div className="relative z-10 flex h-full w-full max-w-[1280px] items-stretch pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] sm:pb-0 sm:pt-0">
         <CustomerProfile
           key={leadId}
           leadId={leadId}

@@ -233,7 +233,7 @@ export function ActivityFeedDrawer({
 
       <aside
         className={cn(
-          "absolute inset-y-0 right-0 flex w-full max-w-[26rem] flex-col bg-[#f4f6f8] shadow-[-12px_0_40px_rgb(0_0_0/0.18)] transition-transform duration-300 ease-out",
+          "absolute inset-y-0 right-0 flex w-full max-w-[26rem] flex-col bg-[#f4f6f8] pt-[env(safe-area-inset-top)] shadow-[-12px_0_40px_rgb(0_0_0/0.18)] transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "translate-x-full",
         )}
         role="dialog"
@@ -416,7 +416,7 @@ export function ActivityGlobeButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-lg p-2 transition",
+        "inline-flex size-11 items-center justify-center rounded-lg transition",
         open
           ? "bg-[#0d9488]/15 text-[#0d9488]"
           : "text-white/75 hover:bg-white/10 hover:text-white",

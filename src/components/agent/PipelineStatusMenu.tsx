@@ -95,7 +95,7 @@ export function PipelineStatusMenu({
                 pipelineBannerClass(status),
               )
             : cn(
-                "rounded border px-2 py-1 text-[11px] font-semibold",
+                "min-h-10 rounded border px-3 py-2 text-[12px] font-semibold",
                 pipelineBannerClass(status),
               ),
         )}

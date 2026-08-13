@@ -265,7 +265,7 @@ export default async function AgentLeadsPage({
               key={v.id}
               href={`/agent/leads?view=${v.id}&layout=${layout}${filterSuffix}`}
               className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-semibold transition",
+                "inline-flex min-h-10 items-center rounded-md px-3 py-2 text-xs font-semibold transition",
                 view === v.id
                   ? "bg-[#6b8fad] text-white"
                   : "bg-white text-[#7b8794] ring-1 ring-[#e2e8f0] hover:bg-[#f8fafc]",
@@ -277,18 +277,19 @@ export default async function AgentLeadsPage({
           <Link
             href={`/agent/leads?view=${view}&layout=table${filterSuffix}`}
             className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-semibold",
+              "inline-flex min-h-10 items-center rounded-md px-3 py-2 text-xs font-semibold",
               layout === "table"
                 ? "bg-[#5a6878] text-white"
                 : "bg-white text-[#7b8794] ring-1 ring-[#e2e8f0]",
             )}
           >
-            Table
+            <span className="lg:hidden">List</span>
+            <span className="hidden lg:inline">Table</span>
           </Link>
           <Link
             href={`/agent/leads?view=${view}&layout=kanban${filterSuffix}`}
             className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-semibold",
+              "inline-flex min-h-10 items-center rounded-md px-3 py-2 text-xs font-semibold",
               layout === "kanban"
                 ? "bg-[#5a6878] text-white"
                 : "bg-white text-[#7b8794] ring-1 ring-[#e2e8f0]",
@@ -299,7 +300,7 @@ export default async function AgentLeadsPage({
           {pipelineParam || onlineOnly ? (
             <Link
               href={`/agent/leads?view=${view}&layout=${layout}`}
-              className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#2b6cb0] ring-1 ring-[#e2e8f0] hover:bg-[#f8fafc]"
+              className="inline-flex min-h-10 items-center rounded-md bg-white px-3 py-2 text-xs font-semibold text-[#2b6cb0] ring-1 ring-[#e2e8f0] hover:bg-[#f8fafc]"
             >
               Clear filter
             </Link>
@@ -316,13 +317,13 @@ export default async function AgentLeadsPage({
           view={view}
         />
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <div className="flex flex-col gap-3 overflow-x-hidden pb-2 lg:flex-row lg:overflow-x-auto">
           {COLUMNS.map((status) => {
             const columnLeads = leads.filter((l) => l.status === status);
             return (
               <div
                 key={status}
-                className="min-w-[240px] flex-1 rounded-xl border border-[#d8dee6] bg-white p-3"
+                className="w-full min-w-0 rounded-xl border border-[#d8dee6] bg-white p-3 lg:min-w-[240px] lg:flex-1"
               >
                 <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#64748b]">
                   {pipelineLabel(status)} · {columnLeads.length}

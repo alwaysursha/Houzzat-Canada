@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { Menu, UserRound, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
+import { StaffHardLink } from "@/components/site/StaffHardLink";
 import { Button } from "@/components/ui/button";
 import { pushHref } from "@/lib/listings/navigate-listing";
 import {
@@ -376,7 +377,7 @@ export function SiteHeaderClient({ siteName }: { siteName: string }) {
                 />
               </span>
             ) : portal.href ? (
-              <Link
+              <StaffHardLink
                 href={portal.href}
                 data-houzzat-account-target=""
                 aria-label={portal.label}
@@ -392,7 +393,7 @@ export function SiteHeaderClient({ siteName }: { siteName: string }) {
                   className="absolute right-0.5 top-0.5 size-2.5 rounded-full bg-signal ring-2 ring-mist"
                   aria-hidden
                 />
-              </Link>
+              </StaffHardLink>
             ) : (
               <AuthOpenButton
                 mode="sign-in"

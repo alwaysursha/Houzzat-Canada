@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { StaffHardLink } from "@/components/site/StaffHardLink";
 
 /** Shown only to Team Leaders while inspecting the CRM desk. */
 export function TeamLeaderDeskBanner({ deskLabel }: { deskLabel: string }) {
@@ -9,12 +9,12 @@ export function TeamLeaderDeskBanner({ deskLabel }: { deskLabel: string }) {
         <span className="text-ink/50"> · </span>
         Viewing <span className="font-semibold">{deskLabel}</span>
       </p>
-      <Link
+      <StaffHardLink
         href="/admin"
         className="font-semibold text-[#2b6cb0] underline-offset-2 hover:underline"
       >
         Change desk in Admin HQ
-      </Link>
+      </StaffHardLink>
     </div>
   );
 }
