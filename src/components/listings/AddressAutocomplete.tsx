@@ -17,6 +17,7 @@ import {
   formatListPrice,
   formatListingBedsLabel,
   formatRelativeAge,
+  isOnMarketListingStatus,
   listingStatusLabel,
   propertyTypeLabel,
   resolveListingAddedAt,
@@ -1398,7 +1399,7 @@ function SuggestionListingRow({
     : null;
   const detailsLocked =
     suggestion.status &&
-    suggestion.status !== "ACTIVE" &&
+    !isOnMarketListingStatus(suggestion.status) &&
     suggestion.listPrice == null;
   const typeLabel = suggestion.propertyType
     ? propertyTypeLabel(suggestion.propertyType)

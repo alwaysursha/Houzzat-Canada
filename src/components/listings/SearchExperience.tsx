@@ -78,12 +78,12 @@ function parseInitialStatuses(
   if (!statusParam || statusParam === "ACTIVE") return ["ACTIVE"];
   if (statusParam === "ALL") {
     return isLease
-      ? ["ACTIVE", "LEASED", "UNLISTED"]
+      ? ["ACTIVE", "SOLD_CONDITIONAL", "LEASED", "UNLISTED"]
       : ["ACTIVE", "SOLD_CONDITIONAL", "SOLD", "UNLISTED"];
   }
   const allowed = new Set<SearchStatusOption>(
     isLease
-      ? ["ACTIVE", "LEASED", "UNLISTED"]
+      ? ["ACTIVE", "SOLD_CONDITIONAL", "LEASED", "UNLISTED"]
       : ["ACTIVE", "SOLD_CONDITIONAL", "SOLD", "UNLISTED"],
   );
   const parsed = statusParam

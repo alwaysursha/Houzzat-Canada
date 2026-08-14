@@ -573,10 +573,11 @@ export function SearchMap({
 
       {onStatusToggle ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center px-3">
-          <div className="pointer-events-auto flex gap-2">
+          <div className="pointer-events-auto flex max-w-full flex-wrap justify-center gap-2">
             {(isLease
               ? ([
                   ["ACTIVE", "For lease", "canopy"],
+                  ["SOLD_CONDITIONAL", "Lease cond.", "amber"],
                   ["LEASED", "Leased", "danger"],
                   ["UNLISTED", "Unlisted", "muted"],
                 ] as const)

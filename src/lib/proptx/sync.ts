@@ -105,11 +105,12 @@ function odataStringLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-/** Active + Sold Conditional* (accepted offer; includes Escape variants). */
+/** Active + Sold/Leased Conditional (accepted offer; includes Escape variants). */
 function onMarketStatusFilter(): string {
   return (
     "(StandardStatus eq 'Active' or MlsStatus eq 'A' or " +
     "startswith(MlsStatus,'Sold Conditional') or " +
+    "startswith(MlsStatus,'Leased Conditional') or " +
     "StandardStatus eq 'Active Under Contract')"
   );
 }
@@ -580,6 +581,8 @@ async function upsertPropertyRow(
     fetchNested: boolean;
     /** Explicit user lookup — do not apply MLS sync city allowlist. */
     skipCityAllowlist?: boolean;
+    /** Bulk backfill: upsert listing row + Typesense without PropTx media pulls. */
+    skipMedia?: boolean;
   },
 ): Promise<Date | null> {
   const mapped = mapPropertyToListingResult(row);
@@ -745,7 +748,7 @@ async function upsertPropertyRow(
 
     // Keep up to NEON_LISTING_MEDIA_CAP photos for SSR galleries.
     // Remaining photos load async from PropTx on the listing detail page.
-    if (data.listingKey) {
+    if (!options.skipMedia && data.listingKey) {
       const mediaCount = await prisma.listingMedia.count({
         where: { listingId: listing.id },
       });
@@ -821,7 +824,7 @@ async function upsertPropertyRow(
  */
 export async function upsertPropTxPropertiesOnDemand(
   rows: PropTxProperty[],
-  options?: { concurrency?: number },
+  options?: { concurrency?: number; skipMedia?: boolean },
 ): Promise<string[]> {
   if (rows.length === 0) return [];
 
@@ -829,6 +832,7 @@ export async function upsertPropTxPropertiesOnDemand(
   const skipReasons: Record<string, number> = {};
   const mlsNumbers: string[] = [];
   const concurrency = Math.max(1, Math.min(options?.concurrency ?? 3, 6));
+  const skipMedia = options?.skipMedia === true;
   let index = 0;
 
   async function worker() {
@@ -841,6 +845,7 @@ export async function upsertPropTxPropertiesOnDemand(
         skipReasons,
         fetchNested: false,
         skipCityAllowlist: true,
+        skipMedia,
       });
       if (!mls) continue;
 
@@ -851,7 +856,7 @@ export async function upsertPropTxPropertiesOnDemand(
       if (!listing) continue;
       mlsNumbers.push(mls);
 
-      if (listing.listingKey) {
+      if (!skipMedia && listing.listingKey) {
         const mediaCount = await prisma.listingMedia.count({
           where: { listingId: listing.id },
         });

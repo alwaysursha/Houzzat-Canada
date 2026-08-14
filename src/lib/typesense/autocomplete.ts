@@ -4,7 +4,10 @@ import type {
   PropertyType,
 } from "@prisma/client";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
-import { formatListingAddressSearchLine } from "@/lib/listings/constants";
+import {
+  formatListingAddressSearchLine,
+  isOnMarketListingStatus,
+} from "@/lib/listings/constants";
 import type {
   AutocompleteOptions,
   AutocompleteSuggestion,
@@ -15,6 +18,10 @@ import {
   getTypesenseSearchClient,
 } from "@/lib/typesense/client";
 import { typesenseFlagEnabled } from "@/lib/typesense/env";
+import {
+  applyNeonListingStatuses,
+  loadNeonListingStatusesByMls,
+} from "@/lib/typesense/hydrate-status";
 
 type TypesenseHit = {
   document: {
@@ -158,9 +165,19 @@ export async function typesenseAutocomplete(
     const hits = (result.hits ?? []) as TypesenseHit[];
     const docs = hits.map((h) => h.document);
 
+    const neonByMls = await loadNeonListingStatusesByMls(
+      docs.map((d) => d.mlsNumber),
+    );
+    const hydratedDocs = applyNeonListingStatuses(docs, neonByMls);
+
+    // Keep on-market (Active + Sold/Leased Conditional) ahead of off-market hits.
     const ranked = [
-      ...docs.filter((d) => d.status === "ACTIVE"),
-      ...docs.filter((d) => d.status !== "ACTIVE"),
+      ...hydratedDocs.filter((d) =>
+        isOnMarketListingStatus(d.status ?? "ACTIVE"),
+      ),
+      ...hydratedDocs.filter(
+        (d) => !isOnMarketListingStatus(d.status ?? "ACTIVE"),
+      ),
     ];
 
     const mlsHits: AutocompleteSuggestion[] = [];

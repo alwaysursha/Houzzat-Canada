@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { ListingTransactionType } from "@prisma/client";
 import { auth } from "@/lib/auth";
+import { isOnMarketListingStatus } from "@/lib/listings/constants";
 import { getListingProvider } from "@/lib/listings/provider";
 import type { AutocompleteSuggestionGroup } from "@/lib/listings/types";
 import { prisma } from "@/lib/prisma";
@@ -64,7 +65,9 @@ export async function GET(request: Request) {
   if (!isClient) {
     suggestions = suggestions.map((s) => {
       if (s.type !== "listing" && s.type !== "mls") return s;
-      if (s.status && s.status !== "ACTIVE") {
+      // On-market (Active + Sold/Leased Conditional) keep public list price.
+      // Off-market / firm sold still redact for IDX visitors.
+      if (s.status && !isOnMarketListingStatus(s.status)) {
         return {
           ...s,
           listPrice: undefined,

@@ -146,7 +146,10 @@ export function listingStatusLabel(
     case "ACTIVE":
       return transactionType === "LEASE" ? "For Lease" : "For Sale";
     case "SOLD_CONDITIONAL":
-      return "Sold Conditional";
+      // Internal status is shared; SALE vs LEASE is transactionType.
+      return transactionType === "LEASE"
+        ? "Leased Conditional"
+        : "Sold Conditional";
     case "SOLD":
       return transactionType === "LEASE" ? "Leased" : "Sold";
     case "LEASED":
@@ -164,7 +167,7 @@ export function listingStatusLabel(
   }
 }
 
-/** Still on market (includes accepted-offer / Sold Conditional). */
+/** Still on market (includes accepted-offer / Sold or Leased Conditional). */
 export function isOnMarketListingStatus(status: ListingStatus | string) {
   return status === "ACTIVE" || status === "SOLD_CONDITIONAL";
 }
@@ -175,7 +178,7 @@ export const ON_MARKET_LISTING_STATUSES = [
 ] as const satisfies readonly ListingStatus[];
 
 /**
- * When search asks for ACTIVE, also include Sold Conditional (still on market).
+ * When search asks for ACTIVE, also include Sold/Leased Conditional (still on market).
  * Explicit SOLD_CONDITIONAL-only filters are left alone.
  */
 export function expandOnMarketStatuses(

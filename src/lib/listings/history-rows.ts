@@ -1,3 +1,6 @@
+import type { ListingStatus, ListingTransactionType } from "@prisma/client";
+import { listingStatusLabel } from "@/lib/listings/constants";
+
 export type HistoryRow = {
   id: string;
   /** PropTx VOW: ListingContractDate */
@@ -124,16 +127,10 @@ export function buildListingHistoryRows(input: {
 }): HistoryRow[] {
   const isClosed =
     input.status === "SOLD" || input.status === "LEASED";
-  const currentEvent =
-    input.status === "SOLD"
-      ? "Sold"
-      : input.status === "LEASED"
-        ? "Leased"
-        : input.status === "SOLD_CONDITIONAL"
-          ? "Sold Conditional"
-          : input.transactionType === "LEASE"
-            ? "For Lease"
-            : "For Sale";
+  const currentEvent = listingStatusLabel(
+    input.status as ListingStatus,
+    input.transactionType as ListingTransactionType,
+  );
 
   const currentPrice =
     isClosed && input.soldPrice != null && input.soldPrice > 0

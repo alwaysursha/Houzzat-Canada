@@ -19,6 +19,10 @@ import {
   getTypesenseSearchClient,
 } from "@/lib/typesense/client";
 import { typesenseFlagEnabled } from "@/lib/typesense/env";
+import {
+  applyNeonListingStatuses,
+  loadNeonListingStatusesByMls,
+} from "@/lib/typesense/hydrate-status";
 
 type TypesenseListingDoc = {
   mlsNumber: string;
@@ -297,6 +301,11 @@ export async function typesenseSearch(
         .slice(0, limit);
     }
 
+    const neonByMls = await loadNeonListingStatusesByMls(
+      items.map((item) => item.mlsNumber),
+    );
+    items = applyNeonListingStatuses(items, neonByMls);
+
     const found = result.found ?? items.length;
     const hasMore = page * limit < found;
 
@@ -451,12 +460,30 @@ export async function typesenseHomeRails(options: {
         : cards.slice(0, take);
     };
 
-    return {
+    const payload = {
       newListings: toItems(0, true),
       sold: toItems(1, false),
       forLease: toItems(2, true),
       commercial: toItems(3, true),
       openHouses: toItems(4, false, openHouseLimit),
+    };
+
+    const neonByMls = await loadNeonListingStatusesByMls(
+      [
+        ...payload.newListings,
+        ...payload.sold,
+        ...payload.forLease,
+        ...payload.commercial,
+        ...payload.openHouses,
+      ].map((item) => item.mlsNumber),
+    );
+
+    return {
+      newListings: applyNeonListingStatuses(payload.newListings, neonByMls),
+      sold: applyNeonListingStatuses(payload.sold, neonByMls),
+      forLease: applyNeonListingStatuses(payload.forLease, neonByMls),
+      commercial: applyNeonListingStatuses(payload.commercial, neonByMls),
+      openHouses: applyNeonListingStatuses(payload.openHouses, neonByMls),
     };
   } catch (error) {
     console.error("[typesense/home-rails]", error);
@@ -507,7 +534,11 @@ export async function typesenseOpenHouses(options: {
       });
 
     const hits = (result.hits ?? []) as Array<{ document: TypesenseListingDoc }>;
-    return hits.map((h) => docToCard(h.document));
+    const cards = hits.map((h) => docToCard(h.document));
+    const neonByMls = await loadNeonListingStatusesByMls(
+      cards.map((item) => item.mlsNumber),
+    );
+    return applyNeonListingStatuses(cards, neonByMls);
   } catch (error) {
     console.error("[typesense/open-houses]", error);
     return null;

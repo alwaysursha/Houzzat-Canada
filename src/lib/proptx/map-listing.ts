@@ -13,6 +13,7 @@ import {
   stripApproxPinNote,
   type ListingFacts,
 } from "@/lib/listings/facts";
+import { listingStatusLabel } from "@/lib/listings/constants";
 
 /** Loose RESO / PropTx Property row — fields vary by agreement. */
 export type PropTxProperty = Record<string, unknown>;
@@ -211,6 +212,24 @@ export function mapTransactionType(
   return "SALE";
 }
 
+/** Accepted offer / under contract — SALE or LEASE (still on market). */
+function isConditionalMlsStatus(mls: string, standard: string): boolean {
+  if (
+    standard.includes("active under contract") ||
+    standard === "activeundercontract"
+  ) {
+    return true;
+  }
+  if (mls.includes("sold conditional") || mls.includes("sld cond")) return true;
+  if (mls.includes("leased conditional") || mls.includes("lsd cond")) {
+    return true;
+  }
+  if (mls.includes("lease conditional")) return true;
+  if (mls.includes("conditional") && mls.includes("sold")) return true;
+  if (mls.includes("conditional") && mls.includes("leased")) return true;
+  return false;
+}
+
 export function mapListingStatus(
   row: PropTxProperty,
   transactionType: ListingTransactionType,
@@ -224,15 +243,9 @@ export function mapListingStatus(
 
   // Accepted offer, conditions not waived — still on market.
   // Prefer MlsStatus; StandardStatus is often "Active Under Contract".
-  if (
-    transactionType !== "LEASE" &&
-    !mls.includes("leased") &&
-    (mls.includes("sold conditional") ||
-      mls.includes("sld cond") ||
-      (mls.includes("conditional") && mls.includes("sold")) ||
-      standard.includes("active under contract") ||
-      standard === "activeundercontract")
-  ) {
+  // Shared Neon status SOLD_CONDITIONAL covers both SALE and LEASE;
+  // UI labels derive Sold vs Leased Conditional from transactionType.
+  if (isConditionalMlsStatus(mls, standard)) {
     return "SOLD_CONDITIONAL";
   }
 
@@ -994,14 +1007,15 @@ export function mapSyntheticHistoryFromProperty(
       modAt ??
       listedAt;
     if (at) {
+      const event = listingStatusLabel(status, transactionType);
       events.push({
-        event: "Sold Conditional",
+        event,
         price: listPrice,
         originalPrice: null,
         contractDate: listedAt ?? at,
         lastUpdatedAt: at,
         visibility: "public",
-        note: `${SYNTHETIC_HISTORY_NOTE_PREFIX}Sold Conditional`,
+        note: `${SYNTHETIC_HISTORY_NOTE_PREFIX}${event}`,
       });
     }
   } else if (status === "SOLD") {

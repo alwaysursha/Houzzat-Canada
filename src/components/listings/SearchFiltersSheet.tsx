@@ -140,6 +140,7 @@ export function SearchFiltersSheet({
   const statusOptions: { value: SearchStatusOption; label: string }[] = isLease
     ? [
         { value: "ACTIVE", label: "For lease" },
+        { value: "SOLD_CONDITIONAL", label: "Leased conditional" },
         { value: "LEASED", label: "Leased" },
         { value: "UNLISTED", label: "Unlisted" },
       ]
