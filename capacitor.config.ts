@@ -1,13 +1,30 @@
 import type { CapacitorConfig } from "@capacitor/cli";
+import proConfig from "./capacitor.config.pro";
 
 /**
- * Houzzat consumer app — loads the live site for fast iteration / low cost.
- * Native plugins (push, biometrics) will still run in this shell.
+ * Dual-target Capacitor entrypoint.
+ *
+ * Default (no env / any value other than `pro`) → Houzzat consumer
+ * (`com.houzzat.app`, ios/, android/).
+ *
+ * `HOUZZAT_CAP_TARGET=pro` → HouzzatPro (`com.houzzat.pro`, ios-pro/,
+ * android-pro/). Set only by `scripts/cap-target.sh pro …`.
+ *
+ * IMPORTANT: this file is never rewritten on disk during builds. Parallel CI
+ * jobs can run consumer + Pro in the same checkout as long as they set
+ * different `HOUZZAT_CAP_TARGET` values and write to different native trees.
  */
-const config: CapacitorConfig = {
+
+const houzzatConfig: CapacitorConfig = {
   appId: "com.houzzat.app",
   appName: "Houzzat",
   webDir: "mobile/www",
+  /**
+   * Server-visible native marker consumed by middleware for shell UX only
+   * (never authorization). Must match `nativeUserAgentMarker(HOUZZAT_APP_ID)`
+   * in src/lib/mobile/app-shell.ts.
+   */
+  appendUserAgent: "HouzzatNative/1 (com.houzzat.app)",
   server: {
     url: "https://houzzat.com",
     cleartext: false,
@@ -31,14 +48,18 @@ const config: CapacitorConfig = {
     },
   },
   android: {
+    path: "android",
     allowMixedContent: false,
     backgroundColor: "#1A7B59",
   },
   ios: {
+    path: "ios",
     backgroundColor: "#1A7B59",
     contentInset: "automatic",
     preferredContentMode: "mobile",
   },
 };
 
-export default config;
+const target = process.env.HOUZZAT_CAP_TARGET === "pro" ? "pro" : "houzzat";
+
+export default target === "pro" ? proConfig : houzzatConfig;

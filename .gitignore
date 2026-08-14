@@ -54,3 +54,11 @@ logs/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Capacitor dual-target lock / swap leftovers
+.capacitor-target.lock
+.capacitor.config.ts.consumer.bak
+
+# Local device QA artifacts
+.tmp-device-qa/
+

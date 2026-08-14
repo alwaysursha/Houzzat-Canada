@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AdminDeferredDeskPicker } from "@/components/admin/AdminDeferredDeskPicker";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { StaffRouteConsumerGate } from "@/components/mobile/StaffRouteConsumerGate";
 import { auth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ export default async function AdminLayout({
         userId ? <AdminDeferredDeskPicker userId={userId} /> : null
       }
     >
+      <StaffRouteConsumerGate />
       <Suspense fallback={null}>{children}</Suspense>
     </AdminShell>
   );

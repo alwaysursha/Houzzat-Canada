@@ -5,6 +5,11 @@ import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import {
+  clearAppShellCookieOnWeb,
+  resolveAppShell,
+  syncAppShellCookie,
+} from "@/lib/mobile/app-shell";
+import {
   backListingSheet,
   canListingSheetBack,
   closeListingSheet,
@@ -24,12 +29,21 @@ const STATUS_BAR_GREEN = "#1A7B59";
  * Back priority:
  * listing sheet → staff drawers/modals → hard-nav memory → history → exit.
  * Closing overlays never leaves body scroll locked (acquireScrollLock).
+ *
+ * Also syncs the UX-only `houzzat_shell` cookie (never used for authorization).
  */
 export function CapacitorBootstrap() {
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
+    if (!Capacitor.isNativePlatform()) {
+      // Prevent stale consumer/pro hints from affecting normal web SSR/middleware.
+      clearAppShellCookieOnWeb();
+      return;
+    }
 
     void (async () => {
+      const shell = await resolveAppShell();
+      syncAppShellCookie(shell);
+
       try {
         await StatusBar.setOverlaysWebView({ overlay: true });
         await StatusBar.setBackgroundColor({ color: STATUS_BAR_GREEN });

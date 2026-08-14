@@ -1,5 +1,15 @@
 import { auth } from "@/auth.edge";
 import { isComingSoonEnabled } from "@/lib/coming-soon";
+import {
+  APP_SHELL_COOKIE,
+  HOUZZATPRO_STAFF_ONLY_PATH,
+  HOUZZATPRO_START_PATH,
+  OPEN_HOUZZAT_PRO_PATH,
+  isStaffAppPath,
+  resolveRequestAppShell,
+  shouldGateStaffRoutesForConsumerShell,
+  shouldRedirectStaffAccountToCrm,
+} from "@/lib/mobile/app-shell";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import {
   canAccessSellerTools,
@@ -25,6 +35,8 @@ function redirectToPath(request: NextRequest, pathname: string) {
 
 function isComingSoonBypass(pathname: string) {
   if (pathname === "/coming-soon") return true;
+  if (pathname === OPEN_HOUZZAT_PRO_PATH) return true;
+  if (pathname === "/pro" || pathname.startsWith("/pro/")) return true;
   if (pathname.startsWith("/api/")) return true;
   if (pathname.startsWith("/auth/")) return true;
   if (pathname.startsWith("/admin")) return true;
@@ -43,9 +55,24 @@ function isPublicFsboSearch(request: NextRequest) {
   return request.nextUrl.searchParams.get("dataSource") === "fsbo";
 }
 
+/**
+ * UX-only shell resolution. Never used for authorization.
+ *
+ * A native shell must prove itself with the User-Agent marker injected by the
+ * Capacitor config; the cookie alone is ignored so a stale or hand-crafted
+ * `houzzat_shell` in an ordinary browser cannot gate staff web routes.
+ */
+function readShellHint(request: NextRequest) {
+  return resolveRequestAppShell({
+    userAgent: request.headers.get("user-agent"),
+    cookieValue: request.cookies.get(APP_SHELL_COOKIE)?.value,
+  });
+}
+
 export default auth((request) => {
   const { pathname } = request.nextUrl;
   const session = request.auth;
+  const shellHint = readShellHint(request);
 
   if (isComingSoonEnabled() && !isComingSoonBypass(pathname)) {
     return redirectToPath(request, "/coming-soon");
@@ -63,11 +90,45 @@ export default auth((request) => {
     }
   }
 
+  // Consumer / unrecognized native shell: never render Admin/CRM (UX gate only).
+  if (
+    shouldGateStaffRoutesForConsumerShell(shellHint) &&
+    isStaffAppPath(pathname) &&
+    pathname !== OPEN_HOUZZAT_PRO_PATH
+  ) {
+    return redirectToPath(request, OPEN_HOUZZAT_PRO_PATH);
+  }
+
+  // HouzzatPro cold-start: route from /pro using existing session role (no extra DB).
+  if (
+    shellHint === "houzzatpro" &&
+    (pathname === HOUZZATPRO_START_PATH || pathname === `${HOUZZATPRO_START_PATH}/`)
+  ) {
+    if (!session?.user) {
+      return redirectToSignIn(request, HOUZZATPRO_START_PATH);
+    }
+    if (session.user.role === "ADMIN") {
+      return redirectToPath(request, "/admin");
+    }
+    if (session.user.role === "AGENT") {
+      return redirectToPath(request, "/agent");
+    }
+    return redirectToPath(request, HOUZZATPRO_STAFF_ONLY_PATH);
+  }
+
   if (pathname.startsWith("/admin")) {
     if (!session?.user) {
       return redirectToSignIn(request, pathname);
     }
     if (!isAdminRole(session.user.role)) {
+      // Pro: staff without admin go to CRM they can use; only unsupported roles
+      // see the staff-only screen. Web keeps the existing /account bounce.
+      if (shellHint === "houzzatpro") {
+        if (isAgentRole(session.user.role)) {
+          return redirectToPath(request, "/agent");
+        }
+        return redirectToPath(request, HOUZZATPRO_STAFF_ONLY_PATH);
+      }
       return redirectToPath(request, "/account");
     }
   }
@@ -77,6 +138,12 @@ export default auth((request) => {
       return redirectToSignIn(request, pathname);
     }
     if (!isAgentRole(session.user.role)) {
+      if (shellHint === "houzzatpro") {
+        if (isAdminRole(session.user.role)) {
+          return redirectToPath(request, "/admin");
+        }
+        return redirectToPath(request, HOUZZATPRO_STAFF_ONLY_PATH);
+      }
       return redirectToPath(request, "/account");
     }
   }
@@ -85,11 +152,14 @@ export default auth((request) => {
     if (!session?.user) {
       return redirectToSignIn(request, pathname);
     }
-    if (session.user.role === "AGENT") {
-      return redirectToPath(request, "/agent");
-    }
-    if (session.user.role === "ADMIN") {
-      return redirectToPath(request, "/admin");
+    // Web + HouzzatPro: staff account → CRM. Consumer Houzzat: stay on /account.
+    if (shouldRedirectStaffAccountToCrm(shellHint)) {
+      if (session.user.role === "AGENT") {
+        return redirectToPath(request, "/agent");
+      }
+      if (session.user.role === "ADMIN") {
+        return redirectToPath(request, "/admin");
+      }
     }
   }
 
@@ -98,6 +168,10 @@ export default auth((request) => {
       return redirectToSignIn(request, pathname);
     }
     if (session.user.role === "AGENT") {
+      // Consumer shell: do not dump agents into CRM via /owner either.
+      if (shouldGateStaffRoutesForConsumerShell(shellHint)) {
+        return redirectToPath(request, OPEN_HOUZZAT_PRO_PATH);
+      }
       return redirectToPath(request, "/agent");
     }
     if (

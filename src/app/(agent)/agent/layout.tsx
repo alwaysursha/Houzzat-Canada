@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AgentDeferredLeaderBanner } from "@/components/agent/AgentDeferredLeaderBanner";
 import { AgentShell } from "@/components/agent/AgentShell";
+import { StaffRouteConsumerGate } from "@/components/mobile/StaffRouteConsumerGate";
 import { requireAgentGate } from "@/lib/agent";
 import { SITE_NAME } from "@/lib/constants";
 
@@ -24,6 +25,7 @@ export default async function AgentLayout({
       orgName={`${SITE_NAME} Team`}
       membershipRole={gate.isPlatformAdmin ? "OWNER" : "AGENT"}
     >
+      <StaffRouteConsumerGate />
       {gate.isPlatformAdmin ? <AgentDeferredLeaderBanner /> : null}
       <Suspense fallback={null}>{children}</Suspense>
     </AgentShell>

@@ -33,9 +33,23 @@
     "deploy:cf": "NEXT_PUBLIC_SITE_URL=https://houzzat.com NEXTAUTH_URL=https://houzzat.com pnpm build:cloudflare && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
-    "cap:sync": "cap sync",
-    "cap:android": "cap open android",
-    "cap:ios": "cap open ios"
+    "cap:sync": "bash scripts/cap-target.sh houzzat sync",
+    "cap:copy": "bash scripts/cap-target.sh houzzat copy",
+    "cap:android": "bash scripts/cap-target.sh houzzat open android",
+    "cap:ios": "bash scripts/cap-target.sh houzzat open ios",
+    "cap:assert": "bash scripts/assert-cap-identity.sh houzzat --require-both",
+    "cap:sync:pro": "bash scripts/cap-target.sh pro sync",
+    "cap:copy:pro": "bash scripts/cap-target.sh pro copy",
+    "cap:android:pro": "bash scripts/cap-target.sh pro open android",
+    "cap:ios:pro": "bash scripts/cap-target.sh pro open ios",
+    "cap:assert:pro": "bash scripts/assert-cap-identity.sh pro --require-both",
+    "cap:add:pro": "bash scripts/cap-target.sh pro add",
+    "cap:assert:all": "bash scripts/assert-cap-identity.sh houzzat --require-both && bash scripts/assert-cap-identity.sh pro --require-both",
+    "android:debug": "bash scripts/android-debug.sh houzzat",
+    "android:debug:pro": "bash scripts/android-debug.sh pro",
+    "android:device-qa": "bash scripts/android-device-qa.sh",
+    "ios:prepare": "bash scripts/ios-prepare.sh houzzat",
+    "ios:prepare:pro": "bash scripts/ios-prepare.sh pro"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

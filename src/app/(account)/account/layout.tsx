@@ -6,6 +6,8 @@ import { requireCustomerUser } from "@/lib/account";
 import { auth } from "@/lib/auth";
 import { SITE_NAME } from "@/lib/constants";
 import { isDatabaseUnavailableError } from "@/lib/errors";
+import { getRequestAppShell } from "@/lib/mobile/app-shell-server";
+import { shouldRedirectStaffAccountToCrm } from "@/lib/mobile/app-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -54,11 +56,15 @@ export default async function AccountLayout({
     redirect("/api/auth/logout");
   }
 
-  if (session.user.role === "ADMIN") {
-    redirect("/admin");
-  }
-  if (session.user.role === "AGENT") {
-    redirect("/agent");
+  // Web + HouzzatPro send staff to their CRM; consumer/unrecognized native
+  // shells keep staff on their own /account instead of loading a staff shell.
+  if (shouldRedirectStaffAccountToCrm(await getRequestAppShell())) {
+    if (session.user.role === "ADMIN") {
+      redirect("/admin");
+    }
+    if (session.user.role === "AGENT") {
+      redirect("/agent");
+    }
   }
 
   return (

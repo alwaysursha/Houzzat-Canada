@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">HouzzatPro</string>
+    <string name="title_activity_main">HouzzatPro</string>
+    <string name="package_name">com.houzzat.pro</string>
+    <string name="custom_url_scheme">com.houzzat.pro</string>
+</resources>

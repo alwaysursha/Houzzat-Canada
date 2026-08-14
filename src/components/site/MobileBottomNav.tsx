@@ -20,6 +20,7 @@ import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
 import { parseHomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
+import { resolveAppShell } from "@/lib/mobile/app-shell";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { cn } from "@/lib/utils";
 
@@ -53,11 +54,23 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
     name: string;
     query: Record<string, unknown>;
   } | null>(null);
+  const [houzzatProShell, setHouzzatProShell] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void resolveAppShell().then((shell) => {
+      if (!cancelled) setHouzzatProShell(shell === "houzzatpro");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const isStaff =
     status === "authenticated" &&
     (role === "ADMIN" || role === "AGENT");
-  const visible = !isStaff;
+  // HouzzatPro launches into staff chrome — never show consumer bottom tabs.
+  const visible = !isStaff && !houzzatProShell;
 
   useEffect(() => {
     const root = document.documentElement;
