@@ -125,7 +125,7 @@ export function HouzzatProWordmark({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-0.5 font-display tracking-tight text-ink",
+        "inline-flex items-center gap-2 font-display tracking-tight text-ink",
         scale,
         className,
       )}
