@@ -26,7 +26,10 @@ export function MarketingBelowHeader({
       return true;
     }
   });
-  const immersive = pathname === "/search" || pathname.startsWith("/search?");
+  const immersive =
+    pathname === "/search" ||
+    pathname.startsWith("/search?") ||
+    pathname === "/pro/sign-in";
   const listingSheet = params.get("sheet") === "1";
 
   useEffect(() => {

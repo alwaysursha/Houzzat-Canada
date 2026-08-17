@@ -62,3 +62,8 @@ next-env.d.ts
 # Local device QA artifacts
 .tmp-device-qa/
 
+# Android signing secrets (never commit — consumer or Pro)
+*.jks
+*.keystore
+keystore.properties
+

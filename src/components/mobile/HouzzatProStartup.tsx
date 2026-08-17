@@ -48,7 +48,7 @@ export function HouzzatProStartup() {
 
       if (status !== "authenticated" || !data?.user) {
         hardGo(
-          `/auth/sign-in?callbackUrl=${encodeURIComponent(HOUZZATPRO_START_PATH)}`,
+          `/pro/sign-in?callbackUrl=${encodeURIComponent(HOUZZATPRO_START_PATH)}`,
         );
         return;
       }

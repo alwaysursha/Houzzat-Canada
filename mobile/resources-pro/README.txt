@@ -1,7 +1,9 @@
-TEMPORARY DEV PLACEHOLDERS for HouzzatPro (Phase 3 internal testing only).
+HouzzatPro production branding assets.
 
-- Derived from Houzzat consumer icons with a visible "PRO DEV" banner.
-- Replace with final HouzzatPro branding before any store submission.
-- Do NOT overwrite mobile/resources/ (consumer Houzzat assets).
-
-Splash/status colors reuse canopy green (#1A7B59) temporarily.
+- Mark: roofed house with an agent figure (variant a).
+- Distinct from the consumer Houzzat house/heart logo.
+- Background: light mint gradient #96F0D8 -> #2FC3A2 (mid #63D9BD).
+- Mark colour: #FFFFFF (white); wordmark: #0B5C49 (ink).
+- No small launcher text; filled shapes stay legible at 48px.
+- Do NOT copy into mobile/resources/ (consumer Houzzat).
+- Regenerate: pnpm android:assets:pro [-- --variant b --mark ink --text white]

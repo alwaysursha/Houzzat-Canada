@@ -1,6 +1,7 @@
 "use client";
 
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
+import { prepareExplicitSignOut } from "@/lib/mobile/biometrics";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,9 @@ export function SignOutButton({
       destructive: true,
     });
     if (!ok) return;
+
+    // Block biometric auto re-login after cookies are cleared (native).
+    await prepareExplicitSignOut();
 
     // Hard navigation to the logout route — one response clears cookies and
     // redirects. Avoid next-auth client signOut on Cloudflare Workers: Auth.js

@@ -15,6 +15,11 @@ const ENABLED_KEY = "houzzat.biometrics.enabled";
 const MODE_KEY = "houzzat.biometrics.mode";
 /** Set after the post-sign-in opt-in is shown (accept or decline). */
 const OFFERED_KEY = "houzzat.biometrics.offered";
+/**
+ * Set on explicit Sign out so BiometricLockGate does not immediately
+ * re-authenticate with Keystore credentials after cookies are cleared.
+ */
+const INTENTIONAL_SIGNOUT_KEY = "houzzat.intentionalSignOut";
 /** Keychain/Keystore namespace for stored email+password. */
 export const BIOMETRIC_SERVER = "houzzat.com";
 
@@ -202,6 +207,41 @@ export async function disableBiometrics(): Promise<void> {
   }
   await Preferences.remove({ key: ENABLED_KEY });
   await Preferences.remove({ key: MODE_KEY });
+}
+
+/**
+ * Call before navigating to /api/auth/logout on native.
+ * Stops BiometricLockGate from signing the user back in with saved credentials.
+ * Biometrics stay enabled for unlock-after-password; credential auto-login is
+ * blocked until {@link clearIntentionalSignOut}.
+ */
+export async function prepareExplicitSignOut(): Promise<void> {
+  if (!isNative()) return;
+  try {
+    await Preferences.set({ key: INTENTIONAL_SIGNOUT_KEY, value: "1" });
+  } catch {
+    // ignore
+  }
+}
+
+export async function wasIntentionalSignOut(): Promise<boolean> {
+  if (!isNative()) return false;
+  try {
+    const { value } = await Preferences.get({ key: INTENTIONAL_SIGNOUT_KEY });
+    return value === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Clear after a successful password sign-in. */
+export async function clearIntentionalSignOut(): Promise<void> {
+  if (!isNative()) return;
+  try {
+    await Preferences.remove({ key: INTENTIONAL_SIGNOUT_KEY });
+  } catch {
+    // ignore
+  }
 }
 
 export async function markBiometricsOptInOffered(): Promise<void> {

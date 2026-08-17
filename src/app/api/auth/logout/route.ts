@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  HOUZZATPRO_APP_ID,
+  nativeAppIdFromUserAgent,
+} from "@/lib/mobile/app-shell";
 
 /**
  * Hard logout for Cloudflare Workers / OpenNext.
@@ -30,6 +34,13 @@ const AUTH_COOKIE_NAME_RE =
 function collectCookieNames(request: Request): string[] {
   const names = new Set<string>(ALWAYS_CLEAR);
 
+  // Auth.js may chunk large JWTs as `.0`, `.1`, …
+  for (const base of ALWAYS_CLEAR) {
+    for (let i = 0; i < 8; i += 1) {
+      names.add(`${base}.${i}`);
+    }
+  }
+
   const header = request.headers.get("cookie") ?? "";
   for (const part of header.split(";")) {
     const name = part.trim().split("=")[0]?.trim();
@@ -60,11 +71,20 @@ function expireCookie(response: NextResponse, name: string) {
   });
 }
 
-function clearedRedirect(request: Request) {
+function signOutDestination(request: Request): URL {
   const url = new URL(request.url);
-  const dest = new URL("/", url.origin);
+  const ua = request.headers.get("user-agent");
+  const appId = nativeAppIdFromUserAgent(ua);
+  const dest =
+    appId === HOUZZATPRO_APP_ID
+      ? new URL("/pro/sign-in", url.origin)
+      : new URL("/", url.origin);
   dest.searchParams.set("signedOut", "1");
-  const response = NextResponse.redirect(dest, 303);
+  return dest;
+}
+
+function clearedRedirect(request: Request) {
+  const response = NextResponse.redirect(signOutDestination(request), 303);
   for (const name of collectCookieNames(request)) {
     expireCookie(response, name);
   }

@@ -67,18 +67,39 @@ for file in "${FILES[@]}"; do
   fi
   checked=$((checked + 1))
 
-  got_id="$(rg -o '"appId": "[^"]+"' "$file" | head -1 | sed 's/"appId": "//;s/"$//')"
+  # Prefer python for JSON; fall back to grep so ripgrep is not required.
+  if command -v python3 >/dev/null 2>&1; then
+    got_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("appId",""))' "$file")"
+    has_ua=0
+    has_forbidden=0
+    if python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); sys.exit(0 if sys.argv[2] in str(c.get("appendUserAgent","")) else 1)' "$file" "$EXPECT_UA"; then
+      has_ua=1
+    fi
+    if [[ "$got_id" == "$FORBIDDEN_ID" ]]; then
+      has_forbidden=1
+    fi
+  else
+    got_id="$(grep -oE '"appId": "[^"]+"' "$file" | head -1 | sed 's/"appId": "//;s/"$//')"
+    has_ua=0
+    has_forbidden=0
+    if grep -F -q "$EXPECT_UA" "$file"; then
+      has_ua=1
+    fi
+    if grep -F -q "\"appId\": \"$FORBIDDEN_ID\"" "$file"; then
+      has_forbidden=1
+    fi
+  fi
   if [[ "$got_id" != "$EXPECT_ID" ]]; then
     echo "ERROR: $file appId='$got_id' (expected $EXPECT_ID)" >&2
     failures=$((failures + 1))
     continue
   fi
-  if ! rg -F -q "$EXPECT_UA" "$file"; then
+  if [[ "$has_ua" -ne 1 ]]; then
     echo "ERROR: $file missing UA marker: $EXPECT_UA" >&2
     failures=$((failures + 1))
     continue
   fi
-  if rg -F -q "\"appId\": \"$FORBIDDEN_ID\"" "$file"; then
+  if [[ "$has_forbidden" -eq 1 ]]; then
     echo "ERROR: $file contains forbidden appId $FORBIDDEN_ID" >&2
     failures=$((failures + 1))
     continue

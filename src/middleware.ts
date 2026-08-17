@@ -18,9 +18,13 @@ import {
 } from "@/lib/roles";
 import { NextResponse, type NextRequest } from "next/server";
 
-function redirectToSignIn(request: NextRequest, callbackPath: string) {
+function redirectToSignIn(
+  request: NextRequest,
+  callbackPath: string,
+  options?: { pro?: boolean },
+) {
   const signInUrl = request.nextUrl.clone();
-  signInUrl.pathname = "/auth/sign-in";
+  signInUrl.pathname = options?.pro ? "/pro/sign-in" : "/auth/sign-in";
   signInUrl.search = "";
   signInUrl.searchParams.set("callbackUrl", callbackPath);
   return NextResponse.redirect(signInUrl);
@@ -86,7 +90,9 @@ export default auth((request) => {
   ) {
     if (!session?.user) {
       const callback = `${pathname}${request.nextUrl.search}`;
-      return redirectToSignIn(request, callback);
+      return redirectToSignIn(request, callback, {
+        pro: shellHint === "houzzatpro",
+      });
     }
   }
 
@@ -105,7 +111,7 @@ export default auth((request) => {
     (pathname === HOUZZATPRO_START_PATH || pathname === `${HOUZZATPRO_START_PATH}/`)
   ) {
     if (!session?.user) {
-      return redirectToSignIn(request, HOUZZATPRO_START_PATH);
+      return redirectToSignIn(request, HOUZZATPRO_START_PATH, { pro: true });
     }
     if (session.user.role === "ADMIN") {
       return redirectToPath(request, "/admin");
@@ -118,7 +124,11 @@ export default auth((request) => {
 
   if (pathname.startsWith("/admin")) {
     if (!session?.user) {
-      return redirectToSignIn(request, pathname);
+      return redirectToSignIn(
+        request,
+        pathname,
+        shellHint === "houzzatpro" ? { pro: true } : undefined,
+      );
     }
     if (!isAdminRole(session.user.role)) {
       // Pro: staff without admin go to CRM they can use; only unsupported roles
@@ -135,7 +145,11 @@ export default auth((request) => {
 
   if (pathname.startsWith("/agent")) {
     if (!session?.user) {
-      return redirectToSignIn(request, pathname);
+      return redirectToSignIn(
+        request,
+        pathname,
+        shellHint === "houzzatpro" ? { pro: true } : undefined,
+      );
     }
     if (!isAgentRole(session.user.role)) {
       if (shellHint === "houzzatpro") {
@@ -150,7 +164,11 @@ export default auth((request) => {
 
   if (pathname.startsWith("/account")) {
     if (!session?.user) {
-      return redirectToSignIn(request, pathname);
+      return redirectToSignIn(
+        request,
+        pathname,
+        shellHint === "houzzatpro" ? { pro: true } : undefined,
+      );
     }
     // Web + HouzzatPro: staff account → CRM. Consumer Houzzat: stay on /account.
     if (shouldRedirectStaffAccountToCrm(shellHint)) {
@@ -165,7 +183,11 @@ export default auth((request) => {
 
   if (pathname.startsWith("/owner")) {
     if (!session?.user) {
-      return redirectToSignIn(request, pathname);
+      return redirectToSignIn(
+        request,
+        pathname,
+        shellHint === "houzzatpro" ? { pro: true } : undefined,
+      );
     }
     if (session.user.role === "AGENT") {
       // Consumer shell: do not dump agents into CRM via /owner either.

@@ -82,7 +82,9 @@ fi
 
 AAPT="$(ls "$ANDROID_HOME"/build-tools/*/aapt 2>/dev/null | sort | tail -1 || true)"
 if [[ -n "$AAPT" ]]; then
-  pkg="$("$AAPT" dump badging "$APK" | sed -n "s/.*name='\([^']*\)'.*/\1/p" | head -1)"
+  # Anchor on the `package:` line — a greedy match picks up trailing
+  # attributes like platformBuildVersionName instead of the package name.
+  pkg="$("$AAPT" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -1)"
   if [[ "$pkg" != "$EXPECT_ID" ]]; then
     echo "ERROR: APK package='$pkg' (expected $EXPECT_ID)" >&2
     exit 1
@@ -92,11 +94,11 @@ fi
 
 tmpdir="$(mktemp -d)"
 unzip -qo "$APK" assets/capacitor.config.json -d "$tmpdir"
-if ! rg -F -q "\"appId\": \"$EXPECT_ID\"" "$tmpdir/assets/capacitor.config.json"; then
+if ! grep -F -q "\"appId\": \"$EXPECT_ID\"" "$tmpdir/assets/capacitor.config.json"; then
   echo "ERROR: APK embedded appId mismatch" >&2
   exit 1
 fi
-if ! rg -F -q "$EXPECT_UA" "$tmpdir/assets/capacitor.config.json"; then
+if ! grep -F -q "$EXPECT_UA" "$tmpdir/assets/capacitor.config.json"; then
   echo "ERROR: APK missing UA marker $EXPECT_UA" >&2
   exit 1
 fi

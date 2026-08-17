@@ -12,6 +12,7 @@ import {
   isBiometricsEnabled,
   loadBiometricCredentials,
   verifyBiometricIdentity,
+  wasIntentionalSignOut,
 } from "@/lib/mobile/biometrics";
 import { SITE_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ export function BiometricLockGate() {
     if (!Capacitor.isNativePlatform()) return;
     let cancelled = false;
     void (async () => {
+      if (await wasIntentionalSignOut()) return;
       const enabled = await isBiometricsEnabled();
       if (cancelled || !enabled) return;
       const availability = await getBiometricAvailability();
@@ -73,6 +75,10 @@ export function BiometricLockGate() {
       }
 
       if (mode === "credentials") {
+        if (await wasIntentionalSignOut()) {
+          setError("Signed out. Sign in with your password.");
+          return;
+        }
         const creds = await loadBiometricCredentials();
         if (!creds) {
           setError("No saved login found. Sign in with your password.");
@@ -123,6 +129,7 @@ export function BiometricLockGate() {
       if (away < BACKGROUND_LOCK_MS) return;
       if (Date.now() - unlockedAtRef.current < 2_000) return;
       void (async () => {
+        if (await wasIntentionalSignOut()) return;
         if (!(await isBiometricsEnabled())) return;
         setError(null);
         setLocked(true);

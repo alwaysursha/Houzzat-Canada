@@ -29,22 +29,25 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchAutoHide: true,
-      backgroundColor: "#1A7B59",
+      // Light mint mid-tone (matches Pro splash gradient; distinct from
+      // consumer canopy #1A7B59). Keep lightweight — color only, no animation.
+      backgroundColor: "#63D9BD",
       showSpinner: false,
     },
     StatusBar: {
-      style: "DARK",
-      backgroundColor: "#1A7B59",
+      // Light background ⇒ dark status bar content.
+      style: "LIGHT",
+      backgroundColor: "#63D9BD",
     },
   },
   android: {
     path: "android-pro",
     allowMixedContent: false,
-    backgroundColor: "#1A7B59",
+    backgroundColor: "#63D9BD",
   },
   ios: {
     path: "ios-pro",
-    backgroundColor: "#1A7B59",
+    backgroundColor: "#63D9BD",
     contentInset: "automatic",
     preferredContentMode: "mobile",
     scheme: "HouzzatPro",

@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth/remembered-login";
 import { flyToAccountPortal } from "@/lib/fly-to-account";
 import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
+import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
 
 export function SignInForm({
   callbackUrl: _callbackUrl = null,
@@ -74,6 +75,7 @@ export function SignInForm({
 
     await rememberLoginCredentials({ email: normalizedEmail, password });
     await getSession();
+    await clearIntentionalSignOut();
     await offerBiometricsAfterCredentialsSignIn({
       email: normalizedEmail,
       password,

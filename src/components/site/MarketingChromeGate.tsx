@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 /**
  * Hide site chrome when a listing is shown inside the listing sheet iframe.
@@ -9,6 +9,7 @@ import { useSearchParams } from "next/navigation";
  */
 export function MarketingChromeGate({ children }: { children: ReactNode }) {
   const params = useSearchParams();
+  const pathname = usePathname();
   const [framed, setFramed] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -26,6 +27,7 @@ export function MarketingChromeGate({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  if (pathname === "/pro/sign-in") return null;
   if (params.get("sheet") === "1" || framed) return null;
   return children;
 }
