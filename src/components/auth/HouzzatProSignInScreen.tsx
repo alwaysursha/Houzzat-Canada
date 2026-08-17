@@ -65,7 +65,7 @@ function HouzzatProSignInInner() {
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
         <div className="text-center">
           <HouzzatProMark className="mx-auto" size={112} />
-          <div className="-mt-3">
+          <div className="mt-4">
             <HouzzatProWordmark size="xl" className="text-ink" />
           </div>
           <p className="mt-3 text-base font-semibold tracking-tight text-[#0B5C49]">
