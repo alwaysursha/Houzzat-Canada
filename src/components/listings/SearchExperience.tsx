@@ -126,6 +126,10 @@ export function SearchExperience() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchBasePath =
+    pathname === "/admin/search" || pathname === "/agent/search"
+      ? pathname
+      : "/search";
   const access = useClientAccess();
   /** Session present — for save/watch CTAs. */
   const signedIn = access.isSignedIn;
@@ -447,7 +451,11 @@ export function SearchExperience() {
       return;
     }
     if (suggestion.href?.startsWith("/search")) {
-      pushHref(router, suggestion.href);
+      const staffHref =
+        searchBasePath === "/search"
+          ? suggestion.href
+          : suggestion.href.replace(/^\/search/, searchBasePath);
+      pushHref(router, staffHref);
       return;
     }
     if (suggestion.lat != null && suggestion.lng != null) {
@@ -487,7 +495,7 @@ export function SearchExperience() {
         : "SALE");
     const href = searchHrefFromParsed(
       { ...parsed, transactionType: txn, hasFilters: true },
-      { transactionType: txn },
+      { transactionType: txn, basePath: searchBasePath },
     );
     router.push(href);
   }

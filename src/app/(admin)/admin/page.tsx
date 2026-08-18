@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   AdminDeferredJourneyFeed,
+  AdminDeferredMlsSync,
   AdminDeferredSecondarySidebar,
 } from "@/components/admin/AdminHqDeferredSections";
 import { PoiSyncClient } from "@/components/admin/PoiSyncClient";
@@ -101,6 +102,8 @@ export default async function AdminPage() {
       </div>
 
       <PoiSyncClient />
+
+      <AdminDeferredMlsSync />
     </div>
   );
 }

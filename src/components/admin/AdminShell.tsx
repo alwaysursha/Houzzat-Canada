@@ -22,11 +22,13 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { StaffPullToRefresh } from "@/components/mobile/StaffPullToRefresh";
 import {
   StaffHardLink,
   isStaffCrossLayoutHref,
 } from "@/components/site/StaffHardLink";
 import { SITE_NAME } from "@/lib/constants";
+import { resolveAppShell } from "@/lib/mobile/app-shell";
 import {
   STAFF_OVERLAY_PRIORITY,
   useStaffOverlay,
@@ -49,7 +51,7 @@ const NAV = [
     icon: Construction,
   },
   { href: "/agent", label: "CRM desk", icon: Briefcase },
-  { href: "/search", label: "Search", icon: Search },
+  { href: "/admin/search", label: "Search", icon: Search },
 ] as const;
 
 const MOBILE_TABS = [
@@ -150,6 +152,7 @@ export function AdminShell({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [hidePublicSiteLinks, setHidePublicSiteLinks] = useState(false);
   const title = pageTitle(pathname);
   const moreActive = NAV.filter(
     (item) =>
@@ -160,6 +163,16 @@ export function AdminShell({
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void resolveAppShell().then((shell) => {
+      if (!cancelled) setHidePublicSiteLinks(shell === "houzzatpro");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useStaffOverlay({
     open: mobileOpen,
@@ -296,16 +309,18 @@ export function AdminShell({
               />
             </nav>
 
-            <div className="border-t border-line/70 p-4">
+            <div className="border-t border-line/70 p-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
               <p className="mb-2 truncate text-xs text-ink/45">{email}</p>
               <div className="flex flex-col gap-2">
-                <StaffHardLink
-                  href="/"
-                  onClick={() => setMobileOpen(false)}
-                  className="rounded-xl border border-line px-3 py-2.5 text-center text-sm font-semibold text-ink/70 transition hover:border-canopy/40 hover:text-canopy"
-                >
-                  View site
-                </StaffHardLink>
+                {!hidePublicSiteLinks ? (
+                  <StaffHardLink
+                    href="/"
+                    onClick={() => setMobileOpen(false)}
+                    className="rounded-xl border border-line px-3 py-2.5 text-center text-sm font-semibold text-ink/70 transition hover:border-canopy/40 hover:text-canopy"
+                  >
+                    View site
+                  </StaffHardLink>
+                ) : null}
                 <SignOutButton className="w-full" />
               </div>
             </div>
@@ -341,7 +356,7 @@ export function AdminShell({
 
           {/* Desktop top bar */}
           <header className="sticky top-0 z-20 hidden border-b border-line/70 bg-surface/80 px-4 py-3 backdrop-blur-md sm:px-6 lg:block">
-            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/40">
                   Houzzat control center
@@ -350,17 +365,21 @@ export function AdminShell({
                   People · visitors · growth · operations
                 </p>
               </div>
-              <StaffHardLink
-                href="/"
-                className="shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink/70 transition hover:border-canopy/40 hover:text-canopy"
-              >
-                View site
-              </StaffHardLink>
+              {!hidePublicSiteLinks ? (
+                <StaffHardLink
+                  href="/"
+                  className="shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink/70 transition hover:border-canopy/40 hover:text-canopy"
+                >
+                  View site
+                </StaffHardLink>
+              ) : null}
             </div>
           </header>
 
           <main className="min-w-0 flex-1 overflow-x-hidden px-3 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-5 lg:px-8 lg:pb-8">
-            {children}
+            <StaffPullToRefresh>
+              {children}
+            </StaffPullToRefresh>
           </main>
 
           {/* Mobile bottom tabs */}

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatListPrice, formatPrice } from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
+import { openListingPath } from "@/lib/listings/navigate-listing";
 
 type OwnerOrder = {
   id: string;
@@ -277,12 +277,13 @@ export function FsboAdminClient() {
                     </p>
                   ) : null}
                 </div>
-                <Link
-                  href={listingPath(listing)}
+                <button
+                  type="button"
+                  onClick={() => openListingPath(listingPath(listing))}
                   className="text-sm font-semibold text-canopy"
                 >
-                  Public page
-                </Link>
+                  Preview Listing
+                </button>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {listing.ownerStatus === "PENDING_REVIEW" ||

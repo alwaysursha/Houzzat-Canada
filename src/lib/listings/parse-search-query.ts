@@ -192,10 +192,10 @@ export function parseSearchQuery(input: string): ParsedSearchQuery {
   return result;
 }
 
-/** Build `/search?...` from a parsed phrase + optional defaults. */
+/** Build `/search?...` (or a staff base path) from a parsed phrase + defaults. */
 export function searchHrefFromParsed(
   parsed: ParsedSearchQuery,
-  defaults?: { transactionType?: "SALE" | "LEASE" },
+  defaults?: { transactionType?: "SALE" | "LEASE"; basePath?: string },
 ): string {
   const params = new URLSearchParams();
   const txn = parsed.transactionType ?? defaults?.transactionType;
@@ -209,6 +209,7 @@ export function searchHrefFromParsed(
   }
   if (parsed.openHouseOnly) params.set("openHouseOnly", "1");
   if (parsed.q) params.set("q", parsed.q);
+  const base = defaults?.basePath?.replace(/\/$/, "") || "/search";
   const qs = params.toString();
-  return qs ? `/search?${qs}` : "/search";
+  return qs ? `${base}?${qs}` : base;
 }

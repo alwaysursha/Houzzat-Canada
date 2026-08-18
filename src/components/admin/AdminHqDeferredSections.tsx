@@ -81,14 +81,7 @@ export function AdminJourneyFeedSkeleton() {
 
 export function AdminSecondarySidebarSkeleton() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Loading MLS and growth">
-      <div className="rounded-2xl border border-line/80 bg-surface/90 p-5">
-        <div className="h-4 w-24 animate-pulse rounded bg-ink/10" />
-        <div className="mt-3 space-y-2">
-          <div className="h-3 w-full animate-pulse rounded bg-ink/10" />
-          <div className="h-3 w-[80%] animate-pulse rounded bg-ink/10" />
-        </div>
-      </div>
+    <div className="space-y-4" aria-busy="true" aria-label="Loading growth stats">
       <div className="rounded-2xl border border-line/80 bg-surface/90 p-4 sm:p-5">
         <div className="h-2.5 w-16 animate-pulse rounded bg-ink/10" />
         <div className="mt-3 h-8 w-14 animate-pulse rounded bg-ink/10" />
@@ -96,6 +89,22 @@ export function AdminSecondarySidebarSkeleton() {
       <div className="rounded-2xl border border-line/80 bg-surface/90 p-4 sm:p-5">
         <div className="h-2.5 w-20 animate-pulse rounded bg-ink/10" />
         <div className="mt-3 h-8 w-14 animate-pulse rounded bg-ink/10" />
+      </div>
+    </div>
+  );
+}
+
+export function AdminMlsSyncSkeleton() {
+  return (
+    <div
+      className="rounded-2xl border border-line/80 bg-surface/90 p-5"
+      aria-busy="true"
+      aria-label="Loading MLS sync"
+    >
+      <div className="h-4 w-24 animate-pulse rounded bg-ink/10" />
+      <div className="mt-3 space-y-2">
+        <div className="h-3 w-full animate-pulse rounded bg-ink/10" />
+        <div className="h-3 w-[80%] animate-pulse rounded bg-ink/10" />
       </div>
     </div>
   );
@@ -150,28 +159,32 @@ async function AdminJourneyFeedBody() {
   );
 }
 
+async function AdminMlsSyncBody() {
+  const sync = await loadAdminMlsPulse();
+
+  return (
+    <div className="rounded-2xl border border-line/80 bg-surface/90 p-5">
+      <h2 className="font-semibold text-ink">MLS sync</h2>
+      <dl className="mt-3 space-y-2 text-sm">
+        <div className="flex justify-between gap-3">
+          <dt className="text-ink/45">Provider</dt>
+          <dd className="font-medium uppercase">{sync.provider}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="text-ink/45">Listings</dt>
+          <dd className="font-medium">{sync.listingCount}</dd>
+        </div>
+      </dl>
+      <p className="mt-3 text-xs text-ink/55">{sync.message}</p>
+    </div>
+  );
+}
+
 async function AdminSecondarySidebarBody() {
-  const [sync, counts] = await Promise.all([
-    loadAdminMlsPulse(),
-    loadAdminSecondaryCounts(),
-  ]);
+  const counts = await loadAdminSecondaryCounts();
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-line/80 bg-surface/90 p-5">
-        <h2 className="font-semibold text-ink">MLS sync</h2>
-        <dl className="mt-3 space-y-2 text-sm">
-          <div className="flex justify-between gap-3">
-            <dt className="text-ink/45">Provider</dt>
-            <dd className="font-medium uppercase">{sync.provider}</dd>
-          </div>
-          <div className="flex justify-between gap-3">
-            <dt className="text-ink/45">Listings</dt>
-            <dd className="font-medium">{sync.listingCount}</dd>
-          </div>
-        </dl>
-        <p className="mt-3 text-xs text-ink/55">{sync.message}</p>
-      </div>
       <StatCard label="Landings" value={counts.landingCount} href="/admin/landings" />
       <StatCard label="Ad campaigns" value={counts.adCount} href="/admin/ads" />
     </div>
@@ -192,6 +205,14 @@ export function AdminDeferredSecondarySidebar() {
   return (
     <Suspense fallback={<AdminSecondarySidebarSkeleton />}>
       <AdminSecondarySidebarBody />
+    </Suspense>
+  );
+}
+
+export function AdminDeferredMlsSync() {
+  return (
+    <Suspense fallback={<AdminMlsSyncSkeleton />}>
+      <AdminMlsSyncBody />
     </Suspense>
   );
 }

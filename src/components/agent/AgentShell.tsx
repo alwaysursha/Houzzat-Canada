@@ -5,6 +5,7 @@ import {
   ActivityGlobeButton,
 } from "@/components/agent/ActivityFeedDrawer";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { StaffPullToRefresh } from "@/components/mobile/StaffPullToRefresh";
 import {
   StaffHardLink,
   isStaffCrossLayoutHref,
@@ -43,7 +44,7 @@ const NAV = [
   { href: "/agent/inbox", label: "Comms", icon: Inbox, fullLabel: "Communications" },
   { href: "/agent/cma", label: "CMA", icon: LineChart },
   { href: "/agent/team", label: "Team", icon: UsersRound },
-  { href: "/search", label: "Properties", icon: Search },
+  { href: "/agent/search", label: "Properties", icon: Search },
 ] as const;
 
 const MOBILE_TABS = [
@@ -273,7 +274,7 @@ export function AgentShell({
               compactLabels
             />
           </nav>
-          <div className="border-t border-white/10 p-4">
+          <div className="border-t border-white/10 p-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
             <p className="mb-2 truncate text-[11px] text-white/45">
               {membershipRole} · {email}
             </p>
@@ -329,7 +330,11 @@ export function AgentShell({
               : "overflow-x-hidden px-3 py-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-5 lg:px-6 lg:pb-5",
           )}
         >
-          {children}
+          {isProfilePage ? (
+            children
+          ) : (
+            <StaffPullToRefresh>{children}</StaffPullToRefresh>
+          )}
         </main>
 
         {/* Mobile bottom tabs */}
