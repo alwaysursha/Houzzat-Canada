@@ -40,6 +40,9 @@ const config: CapacitorConfig = {
       style: "DARK",
       backgroundColor: "#1e2a38",
     },
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"],
+    },
   },
   android: {
     path: "android-pro",

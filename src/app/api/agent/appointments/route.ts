@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AppointmentStatus } from "@prisma/client";
 import { canManageAllLeads, requireAgentUser } from "@/lib/agent";
 import { sendNotification } from "@/lib/notifications";
+import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -31,7 +32,7 @@ export async function PATCH(request: Request) {
   const appointment = await prisma.appointment.findUnique({
     where: { id: parsed.data.appointmentId },
     include: {
-      customer: { select: { email: true, phone: true, name: true } },
+      customer: { select: { id: true, email: true, phone: true, name: true } },
       lead: true,
     },
   });
@@ -92,6 +93,14 @@ export async function PATCH(request: Request) {
         .filter(Boolean)
         .join("\n"),
       smsText: `Houzzat: ${label} confirmed${updated.startsAt ? ` ${updated.startsAt.toLocaleString("en-CA")}` : ""}.`,
+    });
+    void sendPushToUser(appointment.customer.id, {
+      type: "viewing_reminder",
+      title: `${label} confirmed`,
+      body: appointment.listingMls
+        ? `MLS® ${appointment.listingMls}`
+        : "Your appointment is confirmed",
+      href: "/account",
     });
   }
 

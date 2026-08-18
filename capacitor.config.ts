@@ -46,6 +46,9 @@ const houzzatConfig: CapacitorConfig = {
       style: "DARK",
       backgroundColor: "#1A7B59",
     },
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"],
+    },
   },
   android: {
     path: "android",

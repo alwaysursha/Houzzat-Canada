@@ -14,6 +14,7 @@ import {
 import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
 import { estimateHomeValue } from "@/lib/market/home-value-estimate";
 import { sendNotification } from "@/lib/notifications";
+import { sendPushToUsers } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
 import { VOW_VERSION } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
@@ -331,7 +332,7 @@ export async function POST(request: Request) {
             role: { in: ["OWNER", "ADMIN"] },
             user: { disabledAt: null },
           },
-          select: { user: { select: { email: true, phone: true } } },
+          select: { user: { select: { id: true, email: true, phone: true } } },
           take: 8,
         })
       : [];
@@ -440,6 +441,16 @@ export async function POST(request: Request) {
         smsText: `Houzzat valuation lead: ${data.address}`,
       });
     }
+
+    void sendPushToUsers(
+      [assignedAgentId, ...deskNotifiers.map((row) => row.user.id)],
+      {
+        type: "new_lead",
+        title: "Valuation lead",
+        body: data.address,
+        href: `/agent/leads/${lead.id}`,
+      },
+    );
 
     return NextResponse.json({
       ok: true,

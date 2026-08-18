@@ -1,5 +1,7 @@
 import { Resend } from "resend";
+import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
 import { emailEnv } from "@/lib/email/env";
+import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
 
 export type ResendWebhookHandleResult =
@@ -36,9 +38,11 @@ async function findEmailLog(providerId: string) {
       id: true,
       leadId: true,
       subject: true,
+      kind: true,
       openedAt: true,
       openCount: true,
       clickCount: true,
+      lead: { select: { assignedAgentId: true } },
     },
   });
 }
@@ -69,6 +73,14 @@ async function recordOpened(providerId: string, at: Date) {
         },
       },
     });
+    if (isPropertyAlertEmailKind(log.kind) && log.lead.assignedAgentId) {
+      void sendPushToUser(log.lead.assignedAgentId, {
+        type: "alert_engagement",
+        title: "Property alert opened",
+        body: log.subject,
+        href: `/agent/leads/${log.leadId}`,
+      });
+    }
   }
 
   return true;
@@ -84,6 +96,7 @@ async function recordClicked(
 
   const url = link?.trim().slice(0, 2000) || null;
   const isFirstOpen = !log.openedAt;
+  const isFirstClick = log.clickCount === 0;
 
   await prisma.leadEmailLog.update({
     where: { id: log.id },
@@ -126,6 +139,15 @@ async function recordClicked(
           inferredFromClick: true,
         },
       },
+    });
+  }
+
+  if (isFirstClick && isPropertyAlertEmailKind(log.kind) && log.lead.assignedAgentId) {
+    void sendPushToUser(log.lead.assignedAgentId, {
+      type: "alert_engagement",
+      title: "Property alert clicked",
+      body: log.subject,
+      href: `/agent/leads/${log.leadId}`,
     });
   }
 

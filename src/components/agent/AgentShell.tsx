@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bell,
   CalendarDays,
   ChartColumn,
   CheckSquare,
@@ -45,6 +46,7 @@ const NAV = [
   { href: "/agent/inbox", label: "Comms", icon: Inbox, fullLabel: "Communications" },
   { href: "/agent/cma", label: "CMA", icon: LineChart },
   { href: "/agent/team", label: "Team", icon: UsersRound },
+  { href: "/agent/notifications", label: "Notifications", icon: Bell },
   { href: "/agent/search", label: "Properties", icon: Search },
 ] as const;
 

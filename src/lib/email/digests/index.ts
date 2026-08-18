@@ -3,6 +3,7 @@ import {
   type DigestRunStats,
 } from "@/lib/email/digests/buyer";
 import { runSellerNeighborhoodReports } from "@/lib/email/digests/seller";
+import { notifyOpenTasksDue } from "@/lib/notifications/staff-events";
 
 export type DigestJobResult = {
   buyer: DigestRunStats;
@@ -30,6 +31,10 @@ export async function runDigestJobs(opts?: {
     dryRun: opts?.dryRun,
     requireMonday: !forceSeller,
   });
+
+  if (!opts?.dryRun && !opts?.userId) {
+    await notifyOpenTasksDue();
+  }
 
   return { buyer, seller };
 }

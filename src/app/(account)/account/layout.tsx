@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 const nav = [
   { href: "/account", label: "Your Houzzat" },
+  { href: "/account/notifications", label: "Notifications" },
   { href: "/route-planner", label: "Route Planner" },
   { href: "/account/saved", label: "Saved" },
   { href: "/account/notes", label: "Notes" },

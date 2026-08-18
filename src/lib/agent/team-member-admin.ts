@@ -1,4 +1,5 @@
 import type { AgentOrgContext } from "@/lib/agent";
+import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
 
 export type MemberWorkload = {
@@ -205,6 +206,18 @@ export async function deleteTeamMember(input: {
       cmas: cmas.count,
     };
   });
+
+  if (transferred.leads > 0) {
+    void sendPushToUser(input.transferToUserId, {
+      type: "lead_reassigned",
+      title: "Leads assigned to you",
+      body:
+        transferred.leads === 1
+          ? "1 lead was transferred to you"
+          : `${transferred.leads} leads were transferred to you`,
+      href: "/agent/leads",
+    });
+  }
 
   return {
     ok: true as const,

@@ -12,6 +12,7 @@ import {
 import { SITE_URL } from "@/lib/constants";
 import { sendRenderedEmail } from "@/lib/email/send";
 import { renderTeamInviteEmail } from "@/lib/email/templates";
+import { notifyLeadAssignedToAgent } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 
 const inviteSchema = z.object({
@@ -297,6 +298,15 @@ export async function POST(request: Request) {
         },
       },
     });
+
+    if (parsed.data.assigneeId && parsed.data.assigneeId !== ctx.user.id) {
+      notifyLeadAssignedToAgent(parsed.data.assigneeId, {
+        leadId: updated.id,
+        label: updated.listingMls
+          ? `MLS® ${updated.listingMls}`
+          : "A lead was assigned to you",
+      });
+    }
 
     return NextResponse.json({ ok: true, lead: updated });
   }

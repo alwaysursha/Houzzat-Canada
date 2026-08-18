@@ -14,6 +14,7 @@ import {
   AGENT_CONTACT_CONSENT_VERSION,
 } from "@/lib/consent";
 import { sendNotification } from "@/lib/notifications";
+import { sendPushToUsers } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -100,7 +101,7 @@ export async function POST(request: Request) {
             user: { disabledAt: null },
           },
           select: {
-            user: { select: { email: true, phone: true, name: true } },
+            user: { select: { id: true, email: true, phone: true, name: true } },
           },
           take: 8,
         })
@@ -228,6 +229,33 @@ export async function POST(request: Request) {
             : undefined,
         preferWhatsApp:
           data.kind === "virtual_viewing" || data.kind === "showing",
+      });
+    }
+
+    const hotRequest =
+      data.kind === "virtual_viewing" || data.kind === "showing";
+    const staffIds = [
+      assignedAgentId,
+      ...deskNotifiers.map((row) => row.user.id),
+    ];
+    void sendPushToUsers(staffIds, {
+      type: "new_lead",
+      title: "New lead",
+      body: `${data.name} · ${listing.addressLine}`,
+      href: `/agent/leads/${lead.id}`,
+    });
+    if (hotRequest) {
+      void sendPushToUsers(staffIds, {
+        type: "contact_requested",
+        title: "Contact requested",
+        body: `${data.kind.replaceAll("_", " ")} · ${listing.addressLine}`,
+        href: `/agent/leads/${lead.id}`,
+      });
+      void sendPushToUsers(staffIds, {
+        type: "appointment",
+        title: "Appointment requested",
+        body: `${data.name} · ${listing.addressLine}`,
+        href: `/agent/leads/${lead.id}`,
       });
     }
 

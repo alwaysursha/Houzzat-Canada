@@ -8,6 +8,7 @@ import {
   resolveLeadDeskAssignment,
 } from "@/lib/agent/lead-intake";
 import { sendNotification } from "@/lib/notifications";
+import { sendPushToUsers } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
             role: { in: ["OWNER", "ADMIN"] },
             user: { disabledAt: null },
           },
-          select: { user: { select: { email: true, phone: true } } },
+          select: { user: { select: { id: true, email: true, phone: true } } },
         })
       : [];
 
@@ -114,6 +115,16 @@ export async function POST(request: Request) {
       smsText: `Houzzat pre-con lead: ${listing.addressLine}`,
     });
   }
+
+  void sendPushToUsers(
+    [assignedAgentId, ...deskNotifiers.map((row) => row.user.id)],
+    {
+      type: "new_lead",
+      title: "Pre-construction inquiry",
+      body: `${parsed.data.name} · ${listing.addressLine}`,
+      href: `/agent/leads/${lead.id}`,
+    },
+  );
 
   return NextResponse.json({ ok: true, leadId: lead.id });
 }

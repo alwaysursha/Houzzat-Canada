@@ -14,6 +14,7 @@ import { SiteAlertProvider } from "@/components/feedback/SiteAlertProvider";
 import { BiometricLockGate } from "@/components/mobile/BiometricLockGate";
 import { CapacitorBootstrap } from "@/components/mobile/CapacitorBootstrap";
 import { HouzzatProStartup } from "@/components/mobile/HouzzatProStartup";
+import { PushNotificationsBootstrap } from "@/components/mobile/PushNotificationsBootstrap";
 import { ListingSheetHost } from "@/components/mobile/ListingSheetHost";
 import { RoutePlannerProvider } from "@/components/route-planner/RoutePlannerProvider";
 
@@ -29,6 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <SiteAlertProvider>
             <AuthModalProvider>
               <CapacitorBootstrap />
+              <PushNotificationsBootstrap />
               <HouzzatProStartup />
               <BiometricLockGate />
               <RememberClientSession />

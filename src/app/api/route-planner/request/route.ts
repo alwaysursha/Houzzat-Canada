@@ -14,6 +14,7 @@ import {
   AGENT_CONTACT_CONSENT_VERSION,
 } from "@/lib/consent";
 import { sendNotification } from "@/lib/notifications";
+import { sendPushToUsers } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
 import {
   enrichTourStops,
@@ -122,7 +123,7 @@ export async function POST(request: Request) {
           user: { disabledAt: null },
         },
         select: {
-          user: { select: { email: true, phone: true, name: true } },
+          user: { select: { id: true, email: true, phone: true, name: true } },
         },
         take: 8,
       })
@@ -232,6 +233,16 @@ export async function POST(request: Request) {
       preferWhatsApp: true,
     });
   }
+
+  void sendPushToUsers(
+    [assignedAgentId, ...deskNotifiers.map((row) => row.user.id)],
+    {
+      type: "new_lead",
+      title: "Route Planner request",
+      body: `${tour.stops.length} homes to tour`,
+      href: `/agent/leads/${leadId}`,
+    },
+  );
 
   const refreshed = await getOrCreateActiveTour(user.id);
   const refreshedCards = await enrichTourStops(

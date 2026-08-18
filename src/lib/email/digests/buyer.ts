@@ -8,6 +8,7 @@ import {
 } from "@/lib/agent/intent-to-search";
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import { sendPushToUserFirstEnabled } from "@/lib/notifications/push";
 import {
   findNewListingsForSavedQuery,
   type DigestListingCard,
@@ -234,6 +235,19 @@ export async function runBuyerSavedSearchDigests(opts?: {
         console.error("[digest:buyer] send failed", user.email, result.error);
         continue;
       }
+
+      void sendPushToUserFirstEnabled(
+        user.id,
+        ["morning_digest", "saved_search_match"],
+        {
+          title: "New homes for you",
+          body:
+            listings.length === 1
+              ? "1 new match from your saved search"
+              : `${listings.length} new matches from your saved search`,
+          href: searchHref,
+        },
+      );
 
       const now = new Date();
       // Non-dry-run always synced a primary above.

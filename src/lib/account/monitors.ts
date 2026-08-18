@@ -6,6 +6,8 @@ import type {
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import { withPropertyAlertUtm } from "@/lib/email/property-alert-links";
+import { sendPushToUser } from "@/lib/notifications/push";
+import type { ConsumerPushType } from "@/lib/notifications/catalog";
 import { emailPreferencesUrl } from "@/lib/email/log";
 import {
   renderJustListedEmail,
@@ -147,6 +149,28 @@ async function createAlert(input: {
       mlsNumber: input.mlsNumber,
       areaMonitorId: input.areaMonitorId,
     },
+  });
+
+  const pushType: ConsumerPushType =
+    input.template?.type === "price_reduction"
+      ? "price_drop"
+      : input.template?.type === "sold"
+        ? "sold_status"
+        : input.template?.type === "just_listed"
+          ? "just_listed"
+          : input.kind === "PRICE_CHANGE"
+            ? "price_drop"
+            : input.kind === "STATUS_CHANGE" || input.kind === "AREA_SOLD"
+              ? "sold_status"
+              : input.kind === "AREA_NEW"
+                ? "just_listed"
+                : "property_update";
+
+  void sendPushToUser(input.userId, {
+    type: pushType,
+    title: input.title,
+    body: input.body.slice(0, 140),
+    href: input.mlsNumber ? `/listing/${input.mlsNumber}` : "/account/watchlist",
   });
 
   if (

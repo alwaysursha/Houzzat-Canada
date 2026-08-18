@@ -7,6 +7,7 @@ import {
   resolveLeadIntent,
 } from "@/lib/agent/lead-intake";
 import { auth } from "@/lib/auth";
+import { notifyLeadAssignedToAgent } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -104,6 +105,19 @@ export async function POST(
         activityBody: parsed.data.assigneeId
           ? `Assigned by admin to agent ${parsed.data.assigneeId}`
           : "Moved to pond by admin",
+      });
+    }
+  }
+
+  if (parsed.data.assigneeId && parsed.data.assigneeId !== session.user.id) {
+    const firstLeadId = leads[0]?.id;
+    if (firstLeadId) {
+      notifyLeadAssignedToAgent(parsed.data.assigneeId, {
+        leadId: firstLeadId,
+        label:
+          leads.length > 1
+            ? `${customer.name || customer.email}: ${leads.length} leads`
+            : customer.name || customer.email,
       });
     }
   }

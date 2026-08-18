@@ -160,6 +160,12 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
           </div>
           <nav className="max-h-[min(60vh,28rem)] space-y-1 overflow-y-auto px-2 py-2">
             <MoreLink
+              href="/account/notifications"
+              icon={<Bell className="size-4" aria-hidden />}
+              label="Notifications"
+              onNavigate={() => setMoreOpen(false)}
+            />
+            <MoreLink
               href="/account/searches"
               icon={<Search className="size-4" aria-hidden />}
               label="Saved searches"

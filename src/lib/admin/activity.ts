@@ -70,6 +70,15 @@ export async function ingestActivityBeacon(
     )?.slice(0, 40) || null;
   const referrer = payload.referrer?.slice(0, 1000) || null;
 
+  const previousLastSeenAt = opts.userId
+    ? (
+        await prisma.siteVisitor.findUnique({
+          where: { visitorKey },
+          select: { lastSeenAt: true },
+        })
+      )?.lastSeenAt ?? null
+    : null;
+
   const visitor = await prisma.siteVisitor.upsert({
     where: { visitorKey },
     create: {
@@ -123,7 +132,12 @@ export async function ingestActivityBeacon(
 
   // Heartbeats only refresh presence — skip cluttering the timeline.
   if (type === "HEARTBEAT") {
-    return { visitorId: visitor.id, sessionId: session.id, eventId: null };
+    return {
+      visitorId: visitor.id,
+      sessionId: session.id,
+      eventId: null,
+      previousLastSeenAt,
+    };
   }
 
   const event = await prisma.activityEvent.create({
@@ -147,6 +161,7 @@ export async function ingestActivityBeacon(
     visitorId: visitor.id,
     sessionId: session.id,
     eventId: event.id,
+    previousLastSeenAt,
   };
 }
 

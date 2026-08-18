@@ -4,6 +4,7 @@ import { z } from "zod";
 import { canAccessLead, requireAgentContext } from "@/lib/agent";
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import { sendPushToUser } from "@/lib/notifications/push";
 import { renderShortlistEmail } from "@/lib/email/templates";
 import {
   formatListPrice,
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
     include: {
       customer: {
         select: {
+          id: true,
           email: true,
           name: true,
           emailAlertsEnabled: true,
@@ -155,6 +157,15 @@ export async function POST(request: Request) {
 
   if (!result.ok) {
     return NextResponse.json({ error: "Send failed" }, { status: 502 });
+  }
+
+  if (lead.customerId) {
+    void sendPushToUser(lead.customerId, {
+      type: "shortlist",
+      title: "Homes from your agent",
+      body: `${cards.length} ${cards.length === 1 ? "home" : "homes"} to review`,
+      href: shareUrl.replace(SITE_URL, "") || "/account",
+    });
   }
 
   await prisma.leadActivity.create({

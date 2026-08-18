@@ -45,6 +45,13 @@ export function AlertPreferencesForm({
   return (
     <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
       <h2 className="font-semibold text-ink">Alert preferences</h2>
+      <p className="text-sm text-ink/60">
+        Email and SMS are separate from phone push. Manage lock-screen alerts in{" "}
+        <a href="/account/notifications" className="font-semibold text-canopy hover:underline">
+          Notifications
+        </a>
+        .
+      </p>
       <label className="flex items-center gap-3 text-sm">
         <input
           type="checkbox"

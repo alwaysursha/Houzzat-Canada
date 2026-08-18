@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { ingestActivityBeacon, type BeaconPayload } from "@/lib/admin/activity";
+import { auth } from "@/lib/auth";
+import { notifyCustomerCameOnline } from "@/lib/notifications/staff-events";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,18 @@ export async function POST(req: Request) {
       userId: session?.user?.id ?? null,
       userAgent,
     });
-    return NextResponse.json({ ok: true, ...result });
+    if (session?.user?.id) {
+      void notifyCustomerCameOnline(
+        session.user.id,
+        result.previousLastSeenAt,
+      );
+    }
+    return NextResponse.json({
+      ok: true,
+      visitorId: result.visitorId,
+      sessionId: result.sessionId,
+      eventId: result.eventId,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Beacon failed" },

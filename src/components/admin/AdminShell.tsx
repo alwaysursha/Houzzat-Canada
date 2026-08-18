@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   BarChart3,
+  Bell,
   Briefcase,
   Building2,
   Construction,
@@ -52,6 +53,7 @@ const NAV = [
   },
   { href: "/agent", label: "CRM desk", icon: Briefcase },
   { href: "/admin/search", label: "Search", icon: Search },
+  { href: "/admin/notifications", label: "Notifications", icon: Bell },
 ] as const;
 
 const MOBILE_TABS = [

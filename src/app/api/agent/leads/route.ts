@@ -13,6 +13,7 @@ import {
   CALL_NEW_LEAD_TASK_TITLE,
 } from "@/lib/agent/lead-intake";
 import { LEAD_STATUS_ZOD } from "@/lib/agent/pipeline";
+import { notifyLeadAssignedToAgent } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 
 const patchSchema = z.object({
@@ -164,6 +165,14 @@ export async function PATCH(request: Request) {
       organizationId,
       createdById: ctx.user.id,
     });
+    if (nextAssignee !== ctx.user.id) {
+      notifyLeadAssignedToAgent(nextAssignee, {
+        leadId: lead.id,
+        label: lead.listingMls
+          ? `MLS® ${lead.listingMls}`
+          : "A lead was assigned to you",
+      });
+    }
   }
 
   // Attempted Contact → leave Call New Leads, create 24h follow-up reminder.

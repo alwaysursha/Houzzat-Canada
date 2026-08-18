@@ -214,6 +214,11 @@ model User {
   lastBuyerDigestAt  DateTime?
   /** Last successful Neighborhood Weekly Report send. */
   lastSellerReportAt DateTime?
+  /**
+   * Per-type push toggles. Missing key = on (default all checked).
+   * Keys live in src/lib/notifications/catalog.ts
+   */
+  pushNotificationPrefs Json?
   /** Soft-suspend: blocked from signing in / using the product. */
   disabledAt    DateTime?
   createdAt     DateTime  @default(now())
@@ -255,6 +260,22 @@ model User {
   leadEmailsSent LeadEmailLog[]   @relation("LeadEmailSender")
   listingAgentFor CrmRoutingSettings[] @relation("ListingAgentSettings")
   routingWeights  CrmRoutingWeight[]
+  pushDevices   PushDevice[]
+}
+
+/** FCM/APNs token for Houzzat or HouzzatPro native shells. */
+model PushDevice {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  platform  String
+  shell     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, shell])
 }
 
 model Account {
