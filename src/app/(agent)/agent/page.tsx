@@ -187,7 +187,7 @@ export default async function AgentLaunchpadPage() {
   }));
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4 overflow-x-hidden">
       <div>
         <h1 className="text-[22px] font-bold leading-tight tracking-tight text-[#1e2a38] sm:text-[28px]">
           {dateLabel}
@@ -206,8 +206,8 @@ export default async function AgentLaunchpadPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <aside className="order-1 space-y-3 xl:order-2">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <aside className="order-1 min-w-0 space-y-3 xl:order-2">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-[15px] font-semibold text-[#1e2a38]">
               Quick Modules
@@ -234,7 +234,7 @@ export default async function AgentLaunchpadPage() {
           />
         </aside>
 
-        <div className="order-2 space-y-4 xl:order-1">
+        <div className="order-2 min-w-0 space-y-4 xl:order-1">
           <LaunchpadTodoCarousel
             totalOpen={openTasks.length}
             tasks={todoRows.map((task) => ({

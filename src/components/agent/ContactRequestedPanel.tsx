@@ -233,7 +233,7 @@ export function ContactRequestedPanel({
   }
 
   return (
-    <section className="relative z-20 rounded-xl border border-[#d8dee6] bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)] sm:rounded-md">
+    <section className="relative z-20 min-w-0 overflow-hidden rounded-xl border border-[#d8dee6] bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)] sm:rounded-md">
       <div className="relative z-40 flex flex-wrap items-center justify-between gap-3 border-b border-[#e8edf2] px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
           <Megaphone className="size-5 shrink-0 text-[#5b6775]" />

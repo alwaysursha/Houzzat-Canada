@@ -51,6 +51,7 @@ export function useSnapRail(count: number) {
 }
 
 export const SNAP_RAIL_CLASS =
-  "flex snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden";
+  "flex w-full min-w-0 max-w-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden";
 
-export const SNAP_SLIDE_CLASS = "w-full min-w-full shrink-0 snap-start";
+export const SNAP_SLIDE_CLASS =
+  "min-w-0 shrink-0 grow-0 basis-full snap-start";

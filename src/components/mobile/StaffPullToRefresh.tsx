@@ -160,7 +160,7 @@ export function StaffPullToRefresh({
 
   return (
     <div
-      className={cn("relative", className)}
+      className={cn("relative min-w-0 overflow-x-hidden", className)}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -193,6 +193,7 @@ export function StaffPullToRefresh({
         </div>
       </div>
       <div
+        className="min-w-0"
         style={{
           transform: pullPx > 0 || refreshing ? `translateY(${Math.min(pullPx, 56)}px)` : undefined,
           transition: pullingRef.current && !refreshing ? undefined : "transform 160ms ease-out",
