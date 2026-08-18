@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { ContactRequestedPanel } from "@/components/agent/ContactRequestedPanel";
 import { QuickModulesPanel } from "@/components/agent/QuickModulesPanel";
@@ -31,21 +30,6 @@ export function LaunchpadQuickModulesSkeleton() {
   );
 }
 
-export function LaunchpadHotCardSkeleton() {
-  return (
-    <div
-      className="rounded-xl border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-3"
-      aria-busy="true"
-      aria-label="Loading hot leads"
-    >
-      <p className="text-[11px] font-bold uppercase tracking-wide text-canopy">
-        Hot now
-      </p>
-      <div className="mt-2 h-7 w-10 animate-pulse rounded bg-canopy/20" />
-    </div>
-  );
-}
-
 export function LaunchpadContactSkeleton() {
   return (
     <div
@@ -66,30 +50,6 @@ export function LaunchpadContactSkeleton() {
         ))}
       </div>
     </div>
-  );
-}
-
-async function LaunchpadHotCard({
-  ctx,
-  deskView,
-}: {
-  ctx: AgentOrgContext;
-  deskView: "mine" | "team";
-}) {
-  const { hotCount } = await loadLaunchpadHotLeads(ctx);
-  return (
-    <Link
-      href="/agent/leads?view=mine"
-      className="rounded-xl border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-3 active:scale-[0.99]"
-    >
-      <p className="text-[11px] font-bold uppercase tracking-wide text-canopy">
-        Hot now
-      </p>
-      <p className="mt-1 text-[28px] font-bold leading-none tabular-nums text-canopy-deep">
-        {hotCount}
-      </p>
-      <span className="sr-only">{deskView}</span>
-    </Link>
   );
 }
 
@@ -154,17 +114,6 @@ async function LaunchpadContactBody({
 }) {
   const leads = await loadLaunchpadContactRequested({ ctx, focusAgentId });
   return <ContactRequestedPanel leads={leads} />;
-}
-
-export function LaunchpadDeferredHotCard(props: {
-  ctx: AgentOrgContext;
-  deskView: "mine" | "team";
-}) {
-  return (
-    <Suspense fallback={<LaunchpadHotCardSkeleton />}>
-      <LaunchpadHotCard {...props} />
-    </Suspense>
-  );
 }
 
 export function LaunchpadDeferredQuickModules(

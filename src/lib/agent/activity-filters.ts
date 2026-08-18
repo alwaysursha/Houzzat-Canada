@@ -69,6 +69,9 @@ export const ACTIVITY_FILTER_GROUPS: ActivityFilterGroup[] = [
           "PROPERTY_ALERT",
           "PROPERTY_ALERT_EMAIL",
           "DIGEST_EMAIL",
+          "PROPERTY_ALERT_OPENED",
+          "PROPERTY_ALERT_CLICKED",
+          "PROPERTY_ALERT_VIEW",
         ],
       },
       {
@@ -268,10 +271,13 @@ export function friendlyActivityTypeLabel(type: string): string {
     case "EMAIL_SENT":
       return "Email";
     case "EMAIL_OPENED":
+    case "PROPERTY_ALERT_OPENED":
       return "Email opened";
     case "EMAIL_CLICKED":
+    case "PROPERTY_ALERT_CLICKED":
       return "Link clicked";
     case "PROPERTY_ALERT_EMAIL":
+    case "PROPERTY_ALERT_VIEW":
       return "Property alert";
     case "DIGEST_EMAIL":
       return "Morning digest";

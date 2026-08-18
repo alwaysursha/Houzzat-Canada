@@ -2,6 +2,10 @@ import type { Prisma } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
 import { resolveDeskView } from "@/lib/agent/brokerage";
 import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
+import {
+  isPropertyAlertUtmCampaign,
+  pathLooksLikePropertyAlert,
+} from "@/lib/email/property-alert-links";
 import { prisma } from "@/lib/prisma";
 
 export const DESK_ACTIVITY_CATEGORIES = [
@@ -10,6 +14,7 @@ export const DESK_ACTIVITY_CATEGORIES = [
   "views_favorites",
   "agent_actions",
   "communications",
+  "property_alerts",
 ] as const;
 
 export type DeskActivityCategory = (typeof DESK_ACTIVITY_CATEGORIES)[number];
@@ -42,6 +47,16 @@ function categoryForType(type: string): Exclude<DeskActivityCategory, "all"> {
     return "notes";
   }
   if (
+    t === "PROPERTY_ALERT_EMAIL" ||
+    t === "DIGEST_EMAIL" ||
+    t === "PROPERTY_ALERT" ||
+    t === "PROPERTY_ALERT_OPENED" ||
+    t === "PROPERTY_ALERT_CLICKED" ||
+    t === "PROPERTY_ALERT_VIEW"
+  ) {
+    return "property_alerts";
+  }
+  if (
     t === "LISTING_VIEW" ||
     t === "SAVE_LISTING" ||
     t === "UNSAVE_LISTING" ||
@@ -58,8 +73,6 @@ function categoryForType(type: string): Exclude<DeskActivityCategory, "all"> {
     t.includes("EMAIL") ||
     t === "SHORTLIST_EMAILED" ||
     t === "AGENT_MESSAGE" ||
-    t === "DIGEST_EMAIL" ||
-    t === "PROPERTY_ALERT_EMAIL" ||
     t === "SMS" ||
     t === "TEXT" ||
     t === "CALL"
@@ -196,6 +209,7 @@ export async function loadDeskActivityFeed(input: {
         createdAt: true,
         openedAt: true,
         clickedAt: true,
+        lastClickedUrl: true,
         sentBy: { select: { name: true, email: true } },
       },
     }),
@@ -224,6 +238,7 @@ export async function loadDeskActivityFeed(input: {
             title: true,
             mlsNumber: true,
             path: true,
+            utmCampaign: true,
             createdAt: true,
           },
         })
@@ -275,7 +290,8 @@ export async function loadDeskActivityFeed(input: {
     const lead = leadById.get(row.leadId);
     if (!lead) continue;
     const kind = row.kind?.toUpperCase() ?? "EMAIL";
-    const type = isPropertyAlertEmailKind(row.kind)
+    const isAlert = isPropertyAlertEmailKind(row.kind);
+    const type = isAlert
       ? "PROPERTY_ALERT_EMAIL"
       : kind === "SHORTLIST" || kind === "SHORTLIST_EMAILED"
         ? "SHORTLIST_EMAILED"
@@ -288,10 +304,10 @@ export async function loadDeskActivityFeed(input: {
       (row.sentById == null ? "Houzzat" : null);
     items.push({
       id: `email:${row.id}`,
-      category: "communications",
+      category: isAlert ? "property_alerts" : "communications",
       type,
       actorName: actor,
-      action: "sent a message to",
+      action: isAlert ? "sent a property alert to" : "sent a message to",
       leadId: lead.id,
       leadName: leadDisplayName(lead),
       detail: sanitizeDetail(row.subject, 90),
@@ -300,10 +316,10 @@ export async function loadDeskActivityFeed(input: {
     if (row.openedAt) {
       items.push({
         id: `email-open:${row.id}`,
-        category: "communications",
-        type: "EMAIL_OPENED",
+        category: isAlert ? "property_alerts" : "communications",
+        type: isAlert ? "PROPERTY_ALERT_OPENED" : "EMAIL_OPENED",
         actorName: leadDisplayName(lead),
-        action: "opened",
+        action: isAlert ? "opened a property alert" : "opened",
         leadId: lead.id,
         leadName: leadDisplayName(lead),
         detail: sanitizeDetail(row.subject, 90),
@@ -313,13 +329,15 @@ export async function loadDeskActivityFeed(input: {
     if (row.clickedAt) {
       items.push({
         id: `email-click:${row.id}`,
-        category: "communications",
-        type: "EMAIL_CLICKED",
+        category: isAlert ? "property_alerts" : "communications",
+        type: isAlert ? "PROPERTY_ALERT_CLICKED" : "EMAIL_CLICKED",
         actorName: leadDisplayName(lead),
-        action: "clicked through",
+        action: isAlert
+          ? "opened a listing from a property alert"
+          : "clicked through",
         leadId: lead.id,
         leadName: leadDisplayName(lead),
-        detail: sanitizeDetail(row.subject, 90),
+        detail: sanitizeDetail(row.lastClickedUrl || row.subject, 90),
         createdAt: row.clickedAt.toISOString(),
       });
     }
@@ -330,9 +348,16 @@ export async function loadDeskActivityFeed(input: {
     const lead = customerToLead.get(row.userId);
     if (!lead) continue;
     const type = row.type;
-    const cat = categoryForType(type);
+    const fromAlert =
+      type === "LISTING_VIEW" &&
+      (isPropertyAlertUtmCampaign(row.utmCampaign) ||
+        pathLooksLikePropertyAlert(row.path));
+    const itemType = fromAlert ? "PROPERTY_ALERT_VIEW" : type;
+    const cat = categoryForType(itemType);
     const action =
-      type === "LISTING_VIEW"
+      itemType === "PROPERTY_ALERT_VIEW"
+        ? "viewed a listing from a property alert"
+        : type === "LISTING_VIEW"
         ? "viewed a property"
         : type === "SAVE_LISTING"
           ? "favorited a property"
@@ -348,7 +373,7 @@ export async function loadDeskActivityFeed(input: {
     items.push({
       id: `event:${row.id}`,
       category: cat === "notes" ? "views_favorites" : cat,
-      type,
+      type: itemType,
       actorName: leadDisplayName(lead),
       action,
       leadId: lead.id,
@@ -387,6 +412,7 @@ export async function loadDeskActivityFeed(input: {
     // Notes & emails already covered by dedicated tables when body is redundant.
     const t = row.type.toLowerCase();
     if (t === "note" || t === "note_pin" || t === "email_sent") continue;
+    if (t === "email_opened" || t === "email_clicked") continue;
     const lead = leadById.get(row.leadId);
     if (!lead) continue;
     const type = row.type;

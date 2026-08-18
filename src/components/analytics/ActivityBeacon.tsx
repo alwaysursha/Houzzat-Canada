@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { persistUtm } from "@/components/ads/UtmCapture";
+import { readUtmFromSearchParams } from "@/lib/ads/utm";
 import { mlsNumberFromListingPath } from "@/lib/listings/listing-path";
 
 const VISITOR_KEY = "houzzat:visitorKey";
@@ -73,7 +75,20 @@ export function ActivityBeacon() {
     const sessionKey = ensureId(sessionStorage, SESSION_KEY);
     const query = searchParams?.toString();
     const path = query ? `${pathname}?${query}` : pathname;
-    const utm = readUtm();
+    const fromUrl = searchParams
+      ? readUtmFromSearchParams(searchParams)
+      : {};
+    if (fromUrl.utmSource || fromUrl.utmCampaign) {
+      persistUtm(fromUrl);
+    }
+    const stored = readUtm();
+    const utm = {
+      utmSource: fromUrl.utmSource ?? stored.utmSource,
+      utmMedium: fromUrl.utmMedium ?? stored.utmMedium,
+      utmCampaign: fromUrl.utmCampaign ?? stored.utmCampaign,
+      utmContent: fromUrl.utmContent ?? stored.utmContent,
+      utmTerm: stored.utmTerm,
+    };
     const type = detectType(pathname);
     const mlsNumber = mlsNumberFromListingPath(pathname);
 

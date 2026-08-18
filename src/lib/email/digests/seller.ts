@@ -1,4 +1,5 @@
 import { SITE_URL } from "@/lib/constants";
+import { withPropertyAlertUtm } from "@/lib/email/property-alert-links";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import type { DigestRunStats } from "@/lib/email/digests/buyer";
 import {
@@ -20,7 +21,10 @@ function sleep(ms: number) {
 }
 
 function listingUrl(mlsNumber: string) {
-  return `${SITE_URL}/listing/${mlsNumber}`;
+  return withPropertyAlertUtm(
+    `${SITE_URL}/listing/${mlsNumber}`,
+    mlsNumber,
+  );
 }
 
 function homeLabel(address: string | null | undefined) {

@@ -5,6 +5,7 @@ import type {
 } from "@prisma/client";
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import { withPropertyAlertUtm } from "@/lib/email/property-alert-links";
 import { emailPreferencesUrl } from "@/lib/email/log";
 import {
   renderJustListedEmail,
@@ -83,7 +84,7 @@ function formatPrice(amount: number) {
 }
 
 function listingUrl(mlsNumber: string) {
-  return `${SITE_URL}/listing/${mlsNumber}`;
+  return withPropertyAlertUtm(`${SITE_URL}/listing/${mlsNumber}`, mlsNumber);
 }
 
 async function createAlert(input: {

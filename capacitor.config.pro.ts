@@ -35,9 +35,10 @@ const config: CapacitorConfig = {
       showSpinner: false,
     },
     StatusBar: {
-      // Light background ⇒ dark status bar content.
-      style: "LIGHT",
-      backgroundColor: "#63D9BD",
+      // Dark CRM chrome ⇒ light/white status icons. Runtime
+      // CapacitorBootstrap retunes per route (mint sign-in vs navy CRM).
+      style: "DARK",
+      backgroundColor: "#1e2a38",
     },
   },
   android: {

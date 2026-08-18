@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -105,6 +105,7 @@ export function QuickModulesPanel({
 }) {
   const [openId, setOpenId] = useState<ModuleId | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const cardRefs = useRef<Partial<Record<ModuleId, HTMLDivElement | null>>>({});
 
   const callNewHref = `/agent/leads?view=${deskView}&pipeline=NEW_LEAD`;
   const contactedHref = `/agent/leads?view=${deskView}&pipeline=FOLLOW_UP`;
@@ -133,6 +134,26 @@ export function QuickModulesPanel({
   function toggle(id: ModuleId) {
     setOpenId((prev) => (prev === id ? null : id));
   }
+
+  useEffect(() => {
+    if (!openId) return;
+    const el = cardRefs.current[openId];
+    if (!el) return;
+    const timer = window.setTimeout(() => {
+      const bottomInset = 96;
+      const topInset = 72;
+      const rect = el.getBoundingClientRect();
+      const vh = window.innerHeight;
+      if (rect.bottom > vh - bottomInset) {
+        el.scrollIntoView({ behavior: "smooth", block: "end" });
+        return;
+      }
+      if (rect.top < topInset) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 340);
+    return () => window.clearTimeout(timer);
+  }, [openId]);
 
   const modules: Array<{
     id: ModuleId;
@@ -251,8 +272,11 @@ export function QuickModulesPanel({
           return (
             <div
               key={mod.id}
+              ref={(node) => {
+                cardRefs.current[mod.id] = node;
+              }}
               className={cn(
-                "overflow-hidden rounded-xl border border-[#d8dee6] bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)] transition-shadow duration-300",
+                "scroll-mb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] scroll-mt-[calc(4.75rem+env(safe-area-inset-top,0px))] overflow-hidden rounded-xl border border-[#d8dee6] bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)] transition-shadow duration-300",
                 open && "relative z-10 shadow-[0_8px_28px_rgb(15_23_42/0.12)]",
               )}
             >

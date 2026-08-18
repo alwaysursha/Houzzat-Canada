@@ -53,7 +53,10 @@ const QUICK_CATEGORIES: Array<{
         u === "DIGEST_EMAIL" ||
         u === "WATCH_PROPERTY" ||
         u === "WATCH_AREA" ||
-        u === "PROPERTY_ALERT"
+        u === "PROPERTY_ALERT" ||
+        u === "PROPERTY_ALERT_OPENED" ||
+        u === "PROPERTY_ALERT_CLICKED" ||
+        u === "PROPERTY_ALERT_VIEW"
       );
     },
   },
@@ -70,14 +73,20 @@ const QUICK_CATEGORIES: Array<{
         u === "PROPERTY_ALERT_EMAIL" ||
         u === "DIGEST_EMAIL" ||
         u === "EMAIL_OPENED" ||
-        u === "EMAIL_CLICKED"
+        u === "EMAIL_CLICKED" ||
+        u === "PROPERTY_ALERT_OPENED" ||
+        u === "PROPERTY_ALERT_CLICKED" ||
+        u === "PROPERTY_ALERT_VIEW"
       );
     },
   },
   {
     id: "views",
     label: "Views",
-    match: (t) => t.toUpperCase() === "LISTING_VIEW",
+    match: (t) => {
+      const u = t.toUpperCase();
+      return u === "LISTING_VIEW" || u === "PROPERTY_ALERT_VIEW";
+    },
   },
   {
     id: "saves",
@@ -174,7 +183,7 @@ function categoryMeta(type: string): {
       rail: "from-[#94a3b8]/30 to-transparent",
     };
   }
-  if (t === "LISTING_VIEW") {
+  if (t === "LISTING_VIEW" || t === "PROPERTY_ALERT_VIEW") {
     return {
       icon: Eye,
       chip: "bg-[#e2e8f0] text-[#1e293b] ring-[#94a3b8]",

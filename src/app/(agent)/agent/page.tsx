@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import type { LeadStatus } from "@prisma/client";
 import {
   LaunchpadDeferredContact,
-  LaunchpadDeferredHotCard,
   LaunchpadDeferredQuickModules,
 } from "@/components/agent/LaunchpadDeferredSections";
 import { LaunchpadTodoCarousel } from "@/components/agent/LaunchpadTodoCarousel";
@@ -205,43 +204,6 @@ export default async function AgentLaunchpadPage() {
           ) : null}
           .
         </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 xl:hidden">
-        <Link
-          href={`/agent/leads?view=${deskView}&pipeline=NEW_LEAD`}
-          className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-3 py-3 active:scale-[0.99]"
-        >
-          <p className="text-[11px] font-bold uppercase tracking-wide text-[#e11d48]">
-            Call new
-          </p>
-          <p className="mt-1 text-[28px] font-bold leading-none tabular-nums text-[#9f1239]">
-            {newLeadCount}
-          </p>
-        </Link>
-        <Link
-          href="/agent/tasks"
-          className="rounded-xl border border-[#fde68a] bg-[#fffbeb] px-3 py-3 active:scale-[0.99]"
-        >
-          <p className="text-[11px] font-bold uppercase tracking-wide text-[#d97706]">
-            Due today
-          </p>
-          <p className="mt-1 text-[28px] font-bold leading-none tabular-nums text-[#92400e]">
-            {dueTodayCount}
-          </p>
-        </Link>
-        <Link
-          href={`/agent/leads?view=${deskView}&pipeline=FOLLOW_UP`}
-          className="rounded-xl border border-[#e2e8f0] bg-white px-3 py-3 active:scale-[0.99]"
-        >
-          <p className="text-[11px] font-bold uppercase tracking-wide text-[#64748b]">
-            Follow up
-          </p>
-          <p className="mt-1 text-[28px] font-bold leading-none tabular-nums text-[#1e2a38]">
-            {contactedCount}
-          </p>
-        </Link>
-        <LaunchpadDeferredHotCard ctx={ctx} deskView={deskView} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">

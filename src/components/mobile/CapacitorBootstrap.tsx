@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
-import { StatusBar, Style } from "@capacitor/status-bar";
+import { StatusBar } from "@capacitor/status-bar";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   clearAppShellCookieOnWeb,
   resolveAppShell,
   syncAppShellCookie,
+  type AppShell,
 } from "@/lib/mobile/app-shell";
+import {
+  applyNativeStatusBar,
+  getNativeStatusBarLightOverlay,
+  subscribeNativeStatusBarLightOverlay,
+} from "@/lib/mobile/native-status-bar";
 import {
   backListingSheet,
   canListingSheetBack,
@@ -20,8 +27,6 @@ import {
   closeTopStaffOverlay,
   hasStaffOverlay,
 } from "@/lib/mobile/staff-overlay-stack";
-
-const STATUS_BAR_GREEN = "#1A7B59";
 
 /**
  * Native-shell polish when Houzzat runs inside Capacitor.
@@ -43,11 +48,13 @@ export function CapacitorBootstrap() {
     void (async () => {
       const shell = await resolveAppShell();
       syncAppShellCookie(shell);
-
       try {
         await StatusBar.setOverlaysWebView({ overlay: true });
-        await StatusBar.setBackgroundColor({ color: STATUS_BAR_GREEN });
-        await StatusBar.setStyle({ style: Style.Light });
+        await applyNativeStatusBar({
+          pathname: window.location.pathname,
+          shell,
+          lightOverlay: getNativeStatusBarLightOverlay(),
+        });
       } catch {
         // ignore
       }
@@ -90,6 +97,40 @@ export function CapacitorBootstrap() {
       void sub.then((handle) => handle.remove());
     };
   }, []);
+
+  return <NativeStatusBarSync />;
+}
+
+function NativeStatusBarSync() {
+  const pathname = usePathname();
+  const [lightOverlay, setLightOverlay] = useState(
+    getNativeStatusBarLightOverlay,
+  );
+  const [shell, setShell] = useState<AppShell | null>(null);
+
+  useEffect(() => {
+    return subscribeNativeStatusBarLightOverlay(() => {
+      setLightOverlay(getNativeStatusBarLightOverlay());
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let cancelled = false;
+    void resolveAppShell().then((next) => {
+      if (!cancelled) setShell(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !shell) return;
+    void applyNativeStatusBar({ pathname, shell, lightOverlay }).catch(
+      () => undefined,
+    );
+  }, [pathname, shell, lightOverlay]);
 
   return null;
 }

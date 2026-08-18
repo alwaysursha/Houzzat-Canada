@@ -84,6 +84,15 @@ export function StaffPullToRefresh({
       const touch = event.touches[0];
       if (!touch) return;
       const parent = findScrollParent(event.target);
+      const origin =
+        event.target instanceof Element
+          ? event.target
+          : ((event.target as Node | null)?.parentElement ?? null);
+      if (origin?.closest("[data-snap-rail]")) {
+        startYRef.current = null;
+        pullingRef.current = false;
+        return;
+      }
       scrollParentRef.current = parent;
       if (parent.scrollTop > 2) {
         startYRef.current = null;

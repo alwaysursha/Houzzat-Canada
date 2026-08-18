@@ -1,5 +1,9 @@
 import type { ActivityEventType } from "@prisma/client";
 import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
+import {
+  isPropertyAlertUtmCampaign,
+  pathLooksLikePropertyAlert,
+} from "@/lib/email/property-alert-links";
 import { mlsNumberFromListingPath } from "@/lib/listings/listing-path";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { prisma } from "@/lib/prisma";
@@ -362,11 +366,17 @@ export async function loadCustomerTimeline(input: {
     for (const e of events) {
       const mlsNumber =
         mlsNumberFromListingPath(e.path) ?? e.mlsNumber ?? null;
+      const fromAlert =
+        e.type === "LISTING_VIEW" &&
+        (isPropertyAlertUtmCampaign(e.utmCampaign) ||
+          pathLooksLikePropertyAlert(e.path));
       items.push({
         id: `ae-${e.id}`,
         source: "activity",
-        type: e.type,
-        title: e.title || labelActivity(e.type),
+        type: fromAlert ? "PROPERTY_ALERT_VIEW" : e.type,
+        title: fromAlert
+          ? "Viewed from property alert"
+          : e.title || labelActivity(e.type),
         body: e.path,
         mlsNumber,
         path: e.path,

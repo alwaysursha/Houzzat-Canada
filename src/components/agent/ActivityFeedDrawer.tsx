@@ -31,6 +31,7 @@ const CATEGORIES: Array<{ id: DeskActivityCategory; label: string }> = [
   { id: "views_favorites", label: "Views & Favorites" },
   { id: "agent_actions", label: "Agent Actions" },
   { id: "communications", label: "Communications" },
+  { id: "property_alerts", label: "Property Alerts" },
 ];
 
 type Tab = "activity" | "dialer";
@@ -78,13 +79,21 @@ function iconForItem(item: DeskActivityItem) {
   if (t === "APPOINTMENT") {
     return { Icon: CalendarDays, tone: "bg-[#e11d48]" };
   }
-  if (t === "EMAIL_OPENED") {
+  if (t === "EMAIL_OPENED" || t === "PROPERTY_ALERT_OPENED") {
     return { Icon: MailOpen, tone: "bg-[#059669]" };
   }
-  if (t === "EMAIL_CLICKED") {
+  if (
+    t === "EMAIL_CLICKED" ||
+    t === "PROPERTY_ALERT_CLICKED" ||
+    t === "PROPERTY_ALERT_VIEW"
+  ) {
     return { Icon: MousePointerClick, tone: "bg-[#d97706]" };
   }
-  if (t === "PROPERTY_ALERT_EMAIL" || t === "DIGEST_EMAIL") {
+  if (
+    t === "PROPERTY_ALERT_EMAIL" ||
+    t === "DIGEST_EMAIL" ||
+    t === "PROPERTY_ALERT"
+  ) {
     return { Icon: Bell, tone: "bg-[#0891b2]" };
   }
   if (
@@ -233,7 +242,7 @@ export function ActivityFeedDrawer({
 
       <aside
         className={cn(
-          "absolute inset-y-0 right-0 flex w-full max-w-[26rem] flex-col bg-[#f4f6f8] pt-[env(safe-area-inset-top)] shadow-[-12px_0_40px_rgb(0_0_0/0.18)] transition-transform duration-300 ease-out",
+          "absolute inset-y-0 right-0 flex w-full max-w-[26rem] flex-col bg-[#f4f6f8] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-[-12px_0_40px_rgb(0_0_0/0.18)] transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "translate-x-full",
         )}
         role="dialog"
@@ -331,7 +340,7 @@ export function ActivityFeedDrawer({
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
               {loading ? (
                 <p className="px-2 py-10 text-center text-sm text-[#94a3b8]">
                   Loading activity…

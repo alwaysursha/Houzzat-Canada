@@ -10,6 +10,7 @@ import {
   StaffHardLink,
   isStaffCrossLayoutHref,
 } from "@/components/site/StaffHardLink";
+import { setNativeStatusBarLightOverlay } from "@/lib/mobile/native-status-bar";
 import { SITE_NAME } from "@/lib/constants";
 import {
   STAFF_OVERLAY_PRIORITY,
@@ -151,6 +152,11 @@ export function AgentShell({
     setMobileOpen(false);
     setActivityOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    setNativeStatusBarLightOverlay(activityOpen);
+    return () => setNativeStatusBarLightOverlay(false);
+  }, [activityOpen]);
 
   useStaffOverlay({
     open: mobileOpen,

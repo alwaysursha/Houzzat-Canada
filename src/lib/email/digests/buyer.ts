@@ -15,6 +15,7 @@ import {
 import { emailPreferencesUrl } from "@/lib/email/log";
 import { renderSavedSearchDigestEmail } from "@/lib/email/templates";
 import { formatListPrice } from "@/lib/listings/constants";
+import { withPropertyAlertUtm } from "@/lib/email/property-alert-links";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
 
@@ -53,7 +54,10 @@ function toDigestLine(listing: DigestListingCard) {
     sqftLabel: listing.sqft ? `${listing.sqft.toLocaleString("en-CA")} sqft` : null,
     imageUrl: listing.imageUrl,
     isNew: true,
-    listingUrl: `${SITE_URL}${listingPath(listing)}`,
+    listingUrl: withPropertyAlertUtm(
+      `${SITE_URL}${listingPath(listing)}`,
+      listing.mlsNumber,
+    ),
   };
 }
 
@@ -200,7 +204,10 @@ export async function runBuyerSavedSearchDigests(opts?: {
         name: user.name,
         searchName,
         listings: listings.map(toDigestLine),
-        searchUrl: `${SITE_URL}${searchHref}`,
+        searchUrl: withPropertyAlertUtm(
+          `${SITE_URL}${searchHref}`,
+          "saved_search",
+        ),
         unsubscribeUrl: emailPreferencesUrl(),
       });
 
