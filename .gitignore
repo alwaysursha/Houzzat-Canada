@@ -62,6 +62,10 @@ next-env.d.ts
 # Local device QA artifacts
 .tmp-device-qa/
 
+# Firebase admin service-account keys (never commit)
+*-firebase-adminsdk-*.json
+firebase-adminsdk*.json
+
 # Android signing secrets (never commit — consumer or Pro)
 *.jks
 *.keystore
