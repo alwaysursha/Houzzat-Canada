@@ -38,7 +38,7 @@ const houzzatConfig: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchAutoHide: true,
+      launchAutoHide: false,
       backgroundColor: "#1A7B59",
       showSpinner: false,
     },
