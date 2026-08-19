@@ -206,8 +206,6 @@ export function HouzzatPullToRefresh({
     };
   }, [enabled, findScrollParent, router, setPull]);
 
-  }, []);
-
   if (!enabled) return children;
 
   const visible = pullPx > 6 || refreshing;
