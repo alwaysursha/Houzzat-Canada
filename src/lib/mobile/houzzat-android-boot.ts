@@ -7,8 +7,10 @@ export const HOUZZAT_ANDROID_BOOT_MAX_MS = 12000;
 
 export const HOUZZAT_ANDROID_BOOT_CSS = [
   "html.hz-android-booting,html.hz-android-booting body{background:#0A2F24!important}",
+  // Flat solid only — must match Android 12 windowSplashScreenBackground.
+  // A gradient here reads as a second, different splash screen.
   "#hz-android-boot{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;overflow:hidden;background:#0A2F24;color:#fff;-webkit-user-select:none;user-select:none}",
-  "#hz-android-boot .bg{position:absolute;inset:-14%;background:radial-gradient(ellipse 70% 55% at 50% 42%,#1A7B59 0%,#0F4C3A 42%,#0A2F24 74%,#07251C 100%)}",
+  "#hz-android-boot .bg{display:none}",
   "#hz-android-boot .stage{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:18px;will-change:opacity,transform}",
   "#hz-android-boot .mark{width:min(38vw,168px);height:auto}",
   "#hz-android-boot .word{margin:0;font-family:var(--font-fraunces),Georgia,serif;font-size:clamp(26px,7.2vw,34px);font-weight:600;letter-spacing:-0.025em;line-height:1;color:#fff}",
