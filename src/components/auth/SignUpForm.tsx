@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
 import { flyToAccountPortal } from "@/lib/fly-to-account";
+import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
 import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
 
 export function SignUpForm({
@@ -74,10 +75,13 @@ export function SignUpForm({
       return;
     }
 
+    const session = await getSession();
+    await clearIntentionalSignOut({ userId: session?.user?.id });
     await offerBiometricsAfterCredentialsSignIn({
       email: normalizedEmail,
       password,
       confirm,
+      userId: session?.user?.id,
     });
 
     const fromRect = submitRef.current?.getBoundingClientRect() ?? null;

@@ -74,12 +74,13 @@ export function SignInForm({
     }
 
     await rememberLoginCredentials({ email: normalizedEmail, password });
-    await getSession();
-    await clearIntentionalSignOut();
+    const session = await getSession();
+    await clearIntentionalSignOut({ userId: session?.user?.id });
     await offerBiometricsAfterCredentialsSignIn({
       email: normalizedEmail,
       password,
       confirm,
+      userId: session?.user?.id,
     });
     const fromRect = submitRef.current?.getBoundingClientRect() ?? null;
     setPending(false);

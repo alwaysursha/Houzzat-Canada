@@ -102,11 +102,12 @@ export function HouzzatProSignInForm({
 
     await rememberLoginCredentials({ email: normalizedEmail, password });
     const session = await getSession();
-    await clearIntentionalSignOut();
+    await clearIntentionalSignOut({ userId: session?.user?.id });
     await offerBiometricsAfterCredentialsSignIn({
       email: normalizedEmail,
       password,
       confirm,
+      userId: session?.user?.id,
     });
 
     setPending(false);

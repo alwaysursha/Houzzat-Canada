@@ -14,6 +14,7 @@ import {
   stashPendingPushNavigation,
   takePendingPushNavigation,
 } from "@/lib/notifications/pending-push-nav";
+import { isBiometricGateLocked } from "@/lib/mobile/biometric-gate-state";
 import {
   clearPendingUnregister,
   clearPushPermissionDenied,
@@ -154,8 +155,9 @@ function navigateToPushHref(href: string) {
   }
 }
 
-/** Consume a stashed tap destination exactly once. */
+/** Consume a stashed tap destination exactly once (after biometric unlock if gated). */
 export function consumePendingPushNavigation(): void {
+  if (isBiometricGateLocked()) return;
   const href = takePendingPushNavigation();
   if (!href) return;
   navigateToPushHref(href);
@@ -172,6 +174,8 @@ function handleActionPerformed(notification: {
       ? data["google.message_id"]
       : null);
   if (!stashPendingPushNavigation({ href: data.href, id: messageId })) return;
+  // Keep destination pending while biometric lock covers the app.
+  if (isBiometricGateLocked()) return;
   const taken = takePendingPushNavigation();
   if (taken) navigateToPushHref(taken);
 }

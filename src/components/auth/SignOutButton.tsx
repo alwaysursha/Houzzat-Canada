@@ -38,7 +38,7 @@ export function SignOutButton({
       // ignore
     }
 
-    // Block biometric auto re-login after cookies are cleared (native).
+    // Clear legacy Keystore secrets; keep unlock preference for next login.
     await prepareExplicitSignOut();
 
     // Hard navigation to the logout route — one response clears cookies and

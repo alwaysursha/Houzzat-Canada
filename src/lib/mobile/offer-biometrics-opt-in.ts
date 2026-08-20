@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  enableBiometricsWithCredentials,
+  enableBiometricsUnlockOnly,
   getBiometricAvailability,
   markBiometricsOptInOffered,
   shouldOfferBiometricsOptIn,
@@ -15,19 +15,23 @@ type ConfirmFn = (options: {
 }) => Promise<boolean>;
 
 /**
- * After a successful email/password sign-in on native, offer Face ID / fingerprint once.
+ * After a successful email/password sign-in on native, offer biometric unlock once.
+ * Unlock-only — does not store the password.
  */
 export async function offerBiometricsAfterCredentialsSignIn(input: {
   email: string;
   password: string;
   confirm: ConfirmFn;
+  userId?: string | null;
 }): Promise<void> {
+  void input.email;
+  void input.password;
   if (!(await shouldOfferBiometricsOptIn())) return;
 
   const availability = await getBiometricAvailability();
   const accepted = await input.confirm({
-    title: `Use ${availability.label} next time?`,
-    message: `Unlock Houzzat and sign in faster with ${availability.label}. Your password stays on this device in secure storage.`,
+    title: `Use ${availability.label}?`,
+    message: `Protect Houzzat on this device with ${availability.label} while you’re signed in. Your password is not stored.`,
     confirmLabel: `Enable ${availability.label}`,
     cancelLabel: "Not now",
   });
@@ -35,8 +39,5 @@ export async function offerBiometricsAfterCredentialsSignIn(input: {
   await markBiometricsOptInOffered();
   if (!accepted) return;
 
-  await enableBiometricsWithCredentials({
-    email: input.email,
-    password: input.password,
-  });
+  await enableBiometricsUnlockOnly({ userId: input.userId });
 }

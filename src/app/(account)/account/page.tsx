@@ -171,7 +171,11 @@ export default async function AccountPage() {
         </div>
       </div>
 
-      <BiometricsAccountToggle email={user.email} hasPassword={hasPassword} />
+      <BiometricsAccountToggle
+        email={user.email}
+        hasPassword={hasPassword}
+        userId={user.id}
+      />
 
       {verifyLocked ? (
         <div className="rounded-3xl border border-canopy/15 bg-white p-7 shadow-[0_20px_50px_-28px_rgba(15,61,46,0.35)] sm:p-9">

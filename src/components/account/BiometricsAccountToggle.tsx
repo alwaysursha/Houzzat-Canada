@@ -1,38 +1,35 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import {
   disableBiometrics,
   enableBiometricsUnlockOnly,
-  enableBiometricsWithCredentials,
   getBiometricAvailability,
-  getBiometricMode,
   isBiometricsEnabled,
 } from "@/lib/mobile/biometrics";
+import { useCallback, useEffect, useState } from "react";
 
 /**
- * Account settings: enable/disable Face ID or fingerprint on native only.
- * Credentials users can store email+password in Keystore; Google-only = unlock gate.
+ * Account settings: enable/disable biometric app unlock on native only.
+ * Unlock-only — never stores email/password.
  */
 export function BiometricsAccountToggle({
-  email,
-  hasPassword,
+  email: _email,
+  hasPassword: _hasPassword,
+  userId,
 }: {
   email: string;
   hasPassword: boolean;
+  userId?: string | null;
 }) {
   const { confirm, toast } = useSiteAlert();
   const [visible, setVisible] = useState(false);
   const [enabled, setEnabled] = useState(false);
-  const [label, setLabel] = useState("Biometrics");
-  const [mode, setMode] = useState<"credentials" | "unlock" | null>(null);
+  const [label, setLabel] = useState("Biometric unlock");
+  const [unavailableHint, setUnavailableHint] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [password, setPassword] = useState("");
 
   const refresh = useCallback(async () => {
     if (!Capacitor.isNativePlatform()) {
@@ -40,14 +37,20 @@ export function BiometricsAccountToggle({
       return;
     }
     const availability = await getBiometricAvailability();
+    setLabel(availability.label);
     if (!availability.available) {
-      setVisible(false);
+      setVisible(true);
+      setEnabled(false);
+      setUnavailableHint(
+        availability.errorCode != null
+          ? `${availability.label} isn’t set up or is temporarily unavailable. Check your device security settings.`
+          : `This device doesn’t support ${availability.label.toLowerCase()}.`,
+      );
       return;
     }
-    setLabel(availability.label);
+    setUnavailableHint(null);
     setVisible(true);
     setEnabled(await isBiometricsEnabled());
-    setMode(await getBiometricMode());
   }, []);
 
   useEffect(() => {
@@ -60,7 +63,7 @@ export function BiometricsAccountToggle({
     const ok = await confirm({
       title: `Turn off ${label}?`,
       message:
-        "You’ll need your password (or Google) to sign in again. Saved login on this device will be cleared.",
+        "You’ll unlock Houzzat without biometrics on this device. Your account stays signed in.",
       confirmLabel: "Turn off",
       cancelLabel: "Keep on",
       destructive: true,
@@ -70,52 +73,23 @@ export function BiometricsAccountToggle({
     try {
       await disableBiometrics();
       setEnabled(false);
-      setMode(null);
-      setShowPassword(false);
-      setPassword("");
       toast({ message: `${label} turned off.`, tone: "success" });
     } finally {
       setPending(false);
     }
   }
 
-  async function onEnableUnlockOnly() {
+  async function onEnable() {
     setPending(true);
     try {
-      const result = await enableBiometricsUnlockOnly();
+      const result = await enableBiometricsUnlockOnly({ userId });
       if (!result.ok) {
         toast({ message: result.error, tone: "error" });
         return;
       }
       setEnabled(true);
-      setMode("unlock");
-      toast({ message: `${label} enabled.`, tone: "success" });
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function onEnableWithPassword() {
-    if (!password) {
-      toast({ message: "Enter your password to save a quick login.", tone: "error" });
-      return;
-    }
-    setPending(true);
-    try {
-      const result = await enableBiometricsWithCredentials({
-        email,
-        password,
-      });
-      if (!result.ok) {
-        toast({ message: result.error, tone: "error" });
-        return;
-      }
-      setEnabled(true);
-      setMode("credentials");
-      setShowPassword(false);
-      setPassword("");
       toast({
-        message: `${label} enabled — unlock or quick sign-in on this device.`,
+        message: `${label} enabled — protects this app while you’re signed in.`,
         tone: "success",
       });
     } finally {
@@ -128,17 +102,15 @@ export function BiometricsAccountToggle({
       <div>
         <h2 className="font-semibold text-ink">{label}</h2>
         <p className="mt-1 text-sm text-ink/55">
-          {enabled
-            ? mode === "credentials"
-              ? `Unlock Houzzat and sign back in quickly with ${label}.`
-              : `Unlock Houzzat with ${label} while signed in. Sign in again if your session expires.`
-            : hasPassword
-              ? `Use ${label} to unlock the app and sign in faster next time.`
-              : `Use ${label} to unlock the app while you’re signed in.`}
+          {unavailableHint
+            ? unavailableHint
+            : enabled
+              ? `Unlock Houzzat with ${label} while signed in. If your session expires, sign in normally — biometrics never recreate your login.`
+              : `Use ${label} to protect the app on this device while you’re signed in. Your password is never stored for biometrics.`}
         </p>
       </div>
 
-      {enabled ? (
+      {unavailableHint ? null : enabled ? (
         <Button
           type="button"
           variant="secondary"
@@ -147,52 +119,11 @@ export function BiometricsAccountToggle({
         >
           {pending ? "Updating…" : `Turn off ${label}`}
         </Button>
-      ) : showPassword && hasPassword ? (
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wide text-ink/45">
-              Password
-            </label>
-            <Input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Your Houzzat password"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              disabled={pending}
-              onClick={() => void onEnableWithPassword()}
-            >
-              {pending ? "Enabling…" : `Enable ${label}`}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={pending}
-              onClick={() => {
-                setShowPassword(false);
-                setPassword("");
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
       ) : (
         <Button
           type="button"
           disabled={pending}
-          onClick={() => {
-            if (hasPassword) {
-              setShowPassword(true);
-              return;
-            }
-            void onEnableUnlockOnly();
-          }}
+          onClick={() => void onEnable()}
         >
           {pending ? "Enabling…" : `Enable ${label}`}
         </Button>
