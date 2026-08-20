@@ -29,14 +29,17 @@ import { SITE_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 const BACKGROUND_LOCK_MS = 15_000;
-const FADE_MS = 260;
+const FADE_MS = 220;
 
 /**
  * Biometric privacy gate for the Capacitor app.
  * Protects an existing Auth.js session — never recreates it from a password.
  *
- * Presentation: translucent blur over the live app shell + compact unlock card
- * (not a separate full-screen green splash). Interaction stays blocked until unlock.
+ * Presentation: Home (or current route) loads normally underneath.
+ * Unlock uses the native Android/Knox biometric sheet — we do NOT show a
+ * full-screen green “window” or heavy blur behind it.
+ * A transparent interaction shield blocks taps until unlock.
+ * Compact retry UI appears only after a failed/cancelled native prompt.
  */
 export function BiometricLockGate() {
   const { status, data } = useSession();
@@ -65,6 +68,8 @@ export function BiometricLockGate() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [label, setLabel] = useState("Biometric unlock");
+  /** True after native prompt fails/cancels — show compact retry, not a splash. */
+  const [needsRetryUi, setNeedsRetryUi] = useState(false);
   const [visible, setVisible] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -114,7 +119,6 @@ export function BiometricLockGate() {
     }
   }, [native]);
 
-  // Fade the overlay in/out without remounting private content underneath.
   useEffect(() => {
     if (showCover) {
       setMounted(true);
@@ -126,7 +130,6 @@ export function BiometricLockGate() {
     return () => window.clearTimeout(timer);
   }, [showCover]);
 
-  // Preferences + migration — once on native mount.
   useEffect(() => {
     if (!native) return;
     let cancelled = false;
@@ -165,7 +168,6 @@ export function BiometricLockGate() {
     void reconcileBiometricsForSession({ userId: sessionUserId });
   }, [native, enabled, intentionalOut, status, sessionUserId]);
 
-  // Align lock with phase — never re-lock while foreground session is unlocked.
   useEffect(() => {
     if (phase === "open" || phase === "signed_out") {
       if (phase === "signed_out") {
@@ -174,6 +176,8 @@ export function BiometricLockGate() {
       }
       setLocked(false);
       setPrivacyCover(false);
+      setNeedsRetryUi(false);
+      setError(null);
       setBiometricGateLocked(false);
       return;
     }
@@ -193,9 +197,10 @@ export function BiometricLockGate() {
     promptingRef.current = true;
     setBusy(true);
     setError(null);
+    // While the OS/Knox sheet is up, hide our custom card so Home stays visible.
+    setNeedsRetryUi(false);
 
     try {
-      // Reuse SessionProvider state — no duplicate getSession() here.
       if (statusRef.current !== "authenticated") {
         setError("Session expired. Sign in to continue.");
         clearForegroundSessionUnlocked();
@@ -208,6 +213,7 @@ export function BiometricLockGate() {
       const ok = await verifyBiometricIdentity(`Unlock ${SITE_NAME}`);
       if (!ok) {
         setError(`Couldn’t verify ${label}. Try again.`);
+        setNeedsRetryUi(true);
         return;
       }
       unlockedAtRef.current = Date.now();
@@ -215,6 +221,7 @@ export function BiometricLockGate() {
       setFgUnlocked(true);
       setLocked(false);
       setPrivacyCover(false);
+      setNeedsRetryUi(false);
       setBiometricGateLocked(false);
       consumePendingPushNavigation();
     } finally {
@@ -223,15 +230,16 @@ export function BiometricLockGate() {
     }
   }, [phase, label]);
 
+  // Auto-open the native biometric sheet once — no custom splash first.
   useEffect(() => {
     if (phase !== "prompt" || !locked) return;
+    if (needsRetryUi) return;
     const t = window.setTimeout(() => {
       void unlockFlow();
-    }, 350);
+    }, 280);
     return () => window.clearTimeout(t);
-  }, [phase, locked, unlockFlow]);
+  }, [phase, locked, needsRetryUi, unlockFlow]);
 
-  // Single appStateChange listener for the native lifetime of this mount.
   useEffect(() => {
     if (!native) return;
 
@@ -272,10 +280,10 @@ export function BiometricLockGate() {
           setPrivacyCover(false);
           return;
         }
-        // Background timeout invalidates foreground unlock for this session.
         clearForegroundSessionUnlocked();
         setFgUnlocked(false);
         setError(null);
+        setNeedsRetryUi(false);
         setLocked(true);
         setBiometricGateLocked(true);
       })();
@@ -294,61 +302,69 @@ export function BiometricLockGate() {
     } catch {
       setBusy(false);
       setError("Couldn’t sign out. Try again.");
+      setNeedsRetryUi(true);
     }
   }
 
   if (!mounted) return null;
 
   const promptUi = phase === "prompt" && locked;
+  const showRetryCard = promptUi && needsRetryUi && !busy;
+  /** Soft dim only while backgrounded (app switcher privacy) — not during unlock. */
+  const appSwitcherCover = privacyCover && !locked;
 
   return (
     <div
       className={cn(
-        "fixed inset-0 z-[300] flex flex-col items-center justify-end sm:justify-center",
-        "bg-canopy/50 backdrop-blur-xl transition-opacity ease-out",
+        "fixed inset-0 z-[300] flex flex-col items-center justify-end",
         "pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]",
+        "transition-opacity ease-out",
         visible ? "opacity-100" : "opacity-0",
+        // Transparent shield while native biometrics run — Home stays sharp underneath.
+        // Slight dim only for app-switcher privacy, never a green blurred window.
+        appSwitcherCover ? "bg-ink/40" : "bg-transparent",
       )}
       style={{ transitionDuration: `${FADE_MS}ms` }}
       role="dialog"
       aria-modal="true"
       aria-label="Unlock Houzzat"
+      aria-busy={busy}
     >
-      {/* Extra privacy veil so signed-in chrome cannot be read through blur */}
-      <div
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-canopy/35 via-ink/25 to-ink/45"
+      {/* Invisible hit-catcher — blocks interaction; does not obscure Home. */}
+      <button
+        type="button"
+        tabIndex={-1}
         aria-hidden
+        className="absolute inset-0 cursor-default"
+        onClick={(e) => {
+          e.preventDefault();
+          if (showRetryCard) return;
+          if (promptUi && !busy) void unlockFlow();
+        }}
       />
 
-      <div
-        className={cn(
-          "relative z-10 mx-4 mb-8 w-full max-w-sm rounded-2xl border border-white/20 bg-canopy px-5 py-6 text-white shadow-[0_16px_48px_rgb(10_47_36/0.35)] sm:mb-0",
-          "transition-transform ease-out",
-          visible ? "translate-y-0" : "translate-y-3",
-        )}
-        style={{ transitionDuration: `${FADE_MS}ms` }}
-      >
-        {promptUi ? (
-          <div className="flex flex-col items-center gap-4 text-center">
-            <div
-              className={cn(
-                "flex size-16 items-center justify-center rounded-full bg-white/15",
-                busy && "animate-pulse",
-              )}
-            >
-              <Fingerprint className="size-8" strokeWidth={1.75} aria-hidden />
+      {showRetryCard ? (
+        <div
+          className={cn(
+            "relative z-10 mx-4 mb-6 w-full max-w-sm rounded-2xl border border-line bg-surface px-5 py-5 text-ink shadow-[0_12px_40px_rgb(10_47_36/0.22)]",
+            "transition-transform ease-out",
+            visible ? "translate-y-0" : "translate-y-3",
+          )}
+          style={{ transitionDuration: `${FADE_MS}ms` }}
+        >
+          <div className="flex flex-col items-center gap-3.5 text-center">
+            <div className="flex size-14 items-center justify-center rounded-full bg-canopy/10 text-canopy">
+              <Fingerprint className="size-7" strokeWidth={1.75} aria-hidden />
             </div>
             <div>
-              <p className="text-lg font-semibold tracking-tight">
+              <p className="text-base font-semibold tracking-tight text-ink">
                 Unlock {SITE_NAME}
               </p>
-              <p className="mt-1 text-sm text-white/75">
-                Confirm it’s you with {label}.
+              <p className="mt-1 text-sm text-ink/60">
+                Use {label} to continue. Home is ready underneath.
               </p>
               {error ? (
-                <p className="mt-2.5 text-sm font-medium text-amber-100">
-                  {error}
-                </p>
+                <p className="mt-2 text-sm font-medium text-signal">{error}</p>
               ) : null}
             </div>
             <div className="flex w-full flex-col gap-2">
@@ -357,7 +373,7 @@ export function BiometricLockGate() {
                 size="lg"
                 disabled={busy}
                 onClick={() => void unlockFlow()}
-                className="h-12 w-full bg-white text-canopy-deep hover:bg-white/90"
+                className="h-12 w-full"
               >
                 {busy ? "Checking…" : `Unlock with ${label}`}
               </Button>
@@ -367,19 +383,14 @@ export function BiometricLockGate() {
                 variant="secondary"
                 disabled={busy}
                 onClick={() => void onUsePassword()}
-                className="h-11 w-full border-white/30 bg-transparent text-white hover:bg-white/10"
+                className="h-11 w-full"
               >
                 Sign in another way
               </Button>
             </div>
           </div>
-        ) : (
-          <div className="flex flex-col items-center gap-3 py-4 text-center">
-            <div className="size-14 rounded-full bg-white/10" aria-hidden />
-            <p className="text-sm text-white/70">Preparing unlock…</p>
-          </div>
-        )}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

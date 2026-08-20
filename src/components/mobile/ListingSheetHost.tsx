@@ -267,6 +267,8 @@ export function ListingSheetHost() {
       <ListingSheetChrome
         href={state.href}
         canBack={state.canBack}
+        depth={state.depth}
+        usePanel={usePanel}
       />
       {usePanel ? (
         Panel ? (
