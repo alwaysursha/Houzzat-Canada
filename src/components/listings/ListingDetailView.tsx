@@ -219,7 +219,7 @@ export function ListingDetailView({
         segment={listing.segment}
         contact={sessionContact}
       />
-      <div className="w-full min-w-0 space-y-8 bg-[linear-gradient(180deg,rgb(244_247_245)_0%,rgb(255_255_255)_28%,rgb(255_255_255)_100%)] px-4 pb-[calc(2rem+4.25rem+var(--mobile-bottom-nav,0px)+var(--listing-action-pad-bottom))] pt-3 sm:px-6 md:pb-8 md:pt-6 lg:px-10">
+      <div className="w-full min-w-0 space-y-8 bg-[linear-gradient(180deg,rgb(244_247_245)_0%,rgb(255_255_255)_28%,rgb(255_255_255)_100%)] px-4 pb-[calc(2rem+5.25rem+var(--mobile-bottom-nav,0px)+var(--listing-action-pad-bottom))] pt-3 sm:px-6 md:pb-8 md:pt-6 lg:px-10">
         {/*
           Sticky bar must be a descendant of this tall page section (including the
           grid below), not a short breadcrumbs+gallery wrapper — otherwise sticky
@@ -492,6 +492,13 @@ export function ListingDetailView({
           <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
 
           <ListingDetailSectionNav
+            layout={
+              isListingSheet
+                ? applyDocumentSheetFlags
+                  ? "iframe"
+                  : "panel"
+                : "page"
+            }
             sheetMode={isListingSheet}
             items={[
               { id: "listing-about", label: "About" },

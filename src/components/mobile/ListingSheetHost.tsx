@@ -264,7 +264,7 @@ export function ListingSheetHost() {
       }
     >
       <div
-        className="relative z-40 flex shrink-0 items-center justify-between gap-2 border-b border-line bg-canopy px-2 pt-[env(safe-area-inset-top,0px)] text-white sm:px-3"
+        className="relative z-50 flex shrink-0 items-center justify-between gap-2 border-b border-line bg-canopy px-2 pt-[env(safe-area-inset-top,0px)] text-white sm:px-3"
         style={{ minHeight: "calc(2.75rem + env(safe-area-inset-top, 0px))" }}
       >
         <div className="flex min-w-0 items-center gap-0.5">

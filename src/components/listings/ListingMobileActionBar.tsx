@@ -144,7 +144,8 @@ export function ListingMobileActionBar({
     <>
       <div
         className={cn(
-          "fixed inset-x-0 z-40 md:hidden",
+          // Above section nav (z-34); below mobile bottom nav (z-57) and sheet chrome (z-50).
+          "fixed inset-x-0 z-[46] md:hidden",
           "bottom-[var(--mobile-bottom-nav,0px)]",
           "border-t border-line/80 bg-surface/95 shadow-[0_-8px_24px_-12px_rgba(20,32,28,0.18)] backdrop-blur-md",
           "pt-3",

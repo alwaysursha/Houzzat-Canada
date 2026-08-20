@@ -8,6 +8,9 @@ export type ListingSectionNavItem = {
   label: string;
 };
 
+/** Mobile listing section-nav layout contexts. */
+export type ListingSectionNavLayout = "page" | "iframe" | "panel";
+
 /** Scroll a chip into the horizontal scroller without moving the page. */
 function scrollChipIntoScroller(
   scroller: HTMLElement,
@@ -32,43 +35,96 @@ function isFramedDocument(): boolean {
   }
 }
 
-function readStickyTopPx(sheetMode: boolean): number {
-  if (typeof window === "undefined") return sheetMode ? 0 : 64;
-  if (
-    sheetMode ||
-    document.documentElement.dataset.listingSheet === "1" ||
-    isFramedDocument()
-  ) {
-    return 0;
+/** Nearest overflow scroll ancestor, else window (full page / iframe). */
+function getScrollRoot(from: HTMLElement | null): HTMLElement | Window {
+  let node = from?.parentElement ?? null;
+  while (node && node !== document.body && node !== document.documentElement) {
+    const style = window.getComputedStyle(node);
+    const oy = style.overflowY;
+    if (
+      (oy === "auto" || oy === "scroll" || oy === "overlay") &&
+      node.scrollHeight > node.clientHeight + 1
+    ) {
+      return node;
+    }
+    node = node.parentElement;
   }
+  return window;
+}
+
+/**
+ * Viewport Y where the section nav should pin.
+ * - page: under site header
+ * - panel: under sheet Close chrome (--listing-sheet-chrome-height)
+ * - iframe: 0 (Close lives outside the iframe)
+ */
+function readSectionNavTopPx(layout: ListingSectionNavLayout): number {
+  if (typeof window === "undefined") {
+    return layout === "page" ? 64 : 0;
+  }
+
   const probe = document.createElement("div");
-  probe.style.cssText =
-    "position:fixed;visibility:hidden;pointer-events:none;top:var(--site-header-stack,4rem);";
+  if (layout === "panel") {
+    probe.style.cssText =
+      "position:fixed;visibility:hidden;pointer-events:none;top:var(--listing-sheet-chrome-height, calc(2.75rem + env(safe-area-inset-top, 0px)));";
+  } else if (layout === "iframe") {
+    probe.style.cssText =
+      "position:fixed;visibility:hidden;pointer-events:none;top:0;";
+  } else {
+    probe.style.cssText =
+      "position:fixed;visibility:hidden;pointer-events:none;top:var(--site-header-stack,4rem);";
+  }
   document.body.appendChild(probe);
   const px = Math.round(probe.getBoundingClientRect().top);
   probe.remove();
-  return Number.isFinite(px) && px >= 0 ? px : 64;
+  return Number.isFinite(px) && px >= 0 ? px : layout === "page" ? 64 : 0;
+}
+
+function resolveLayout(
+  sheetMode: boolean,
+  layoutProp?: ListingSectionNavLayout,
+): ListingSectionNavLayout {
+  if (layoutProp) return layoutProp;
+  if (
+    isFramedDocument() ||
+    document.documentElement.dataset.listingSheet === "1"
+  ) {
+    return "iframe";
+  }
+  if (sheetMode || document.querySelector('[data-listing-panel="1"]')) {
+    return "panel";
+  }
+  return "page";
 }
 
 /**
  * Mobile-only horizontal jump links for listing detail sections.
- * Pins flush to the top of the listing sheet (or under the site header on
- * full-page mobile) using fixed positioning — CSS sticky fails in the
- * Capacitor/iframe sheet because of column containing blocks.
+ *
+ * Layering (mobile listing):
+ *   content < sticky bar (md) < section nav (z-34) < action bar (z-46)
+ *   < bottom nav (z-57) < sheet chrome (z-50 inside z-200 sheet)
+ *
+ * Panel mode prefers `position: sticky` inside the panel scrollport (already
+ * below Close). Page/iframe keep fixed pinning when stuck.
  */
 export function ListingDetailSectionNav({
   items,
   sheetMode = false,
+  layout: layoutProp,
 }: {
   items: ListingSectionNavItem[];
-  /** Listing overlay iframe (?sheet=1) — pin at top: 0 under Close bar. */
+  /** @deprecated Prefer `layout`. Listing overlay sheet/panel. */
   sheetMode?: boolean;
+  layout?: ListingSectionNavLayout;
 }) {
+  const [layout, setLayout] = useState<ListingSectionNavLayout>(() =>
+    resolveLayout(sheetMode, layoutProp),
+  );
   const [mountedItems, setMountedItems] = useState(items);
   const [activeId, setActiveId] = useState(items[0]?.id ?? "");
   const [stuck, setStuck] = useState(false);
   const [topOffset, setTopOffset] = useState(() =>
-    sheetMode ? 0 : 64,
+    readSectionNavTopPx(resolveLayout(sheetMode, layoutProp)),
   );
   const [navHeight, setNavHeight] = useState(0);
   const buttonRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -79,6 +135,13 @@ export function ListingDetailSectionNav({
   const allowChipScrollRef = useRef(false);
   /** Ignore scroll-spy briefly after a chip tap so selection doesn't flicker mid-scroll. */
   const clickLockUntilRef = useRef(0);
+
+  const useStickyPin = layout === "panel";
+
+  useEffect(() => {
+    const next = resolveLayout(sheetMode, layoutProp);
+    setLayout(next);
+  }, [sheetMode, layoutProp]);
 
   useEffect(() => {
     const present = items.filter((item) => document.getElementById(item.id));
@@ -102,24 +165,31 @@ export function ListingDetailSectionNav({
   }, [items]);
 
   useEffect(() => {
-    const sync = () => setTopOffset(readStickyTopPx(sheetMode));
+    const sync = () => setTopOffset(readSectionNavTopPx(layout));
     sync();
     window.addEventListener("resize", sync);
     const mo = new MutationObserver(sync);
     mo.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["data-listing-sheet", "style"],
+      attributeFilter: ["data-listing-sheet", "style", "data-listing-panel"],
     });
     return () => {
       window.removeEventListener("resize", sync);
       mo.disconnect();
     };
-  }, [sheetMode]);
+  }, [layout]);
 
-  // Scroll-based pin (more reliable than IntersectionObserver inside WebView iframes).
+  // Scroll-based pin — listen on the real scroll root (panel overflow, not only window).
   useEffect(() => {
+    if (useStickyPin) {
+      setStuck(true);
+      return;
+    }
+
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
+
+    const scrollRoot = getScrollRoot(sentinel);
 
     const updateStuck = () => {
       const top = sentinel.getBoundingClientRect().top;
@@ -138,18 +208,18 @@ export function ListingDetailSectionNav({
       });
     };
 
-    window.addEventListener("scroll", onScroll, { passive: true });
+    const target: HTMLElement | Window = scrollRoot;
+    target.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
-    // visualViewport helps Android WebView chrome show/hide.
     window.visualViewport?.addEventListener("resize", onScroll);
     window.visualViewport?.addEventListener("scroll", onScroll);
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      target.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
       window.visualViewport?.removeEventListener("resize", onScroll);
       window.visualViewport?.removeEventListener("scroll", onScroll);
     };
-  }, [topOffset]);
+  }, [topOffset, useStickyPin]);
 
   useEffect(() => {
     const nav = navRef.current;
@@ -159,12 +229,14 @@ export function ListingDetailSectionNav({
     const ro = new ResizeObserver(publish);
     ro.observe(nav);
     return () => ro.disconnect();
-  }, [mountedItems.length, stuck]);
+  }, [mountedItems.length, stuck, useStickyPin]);
 
   const navItems = useMemo(() => mountedItems, [mountedItems]);
 
   useEffect(() => {
     if (navItems.length === 0) return;
+
+    const scrollRoot = getScrollRoot(navRef.current);
 
     const activationY = () => {
       const nav = navRef.current;
@@ -204,10 +276,10 @@ export function ListingDetailSectionNav({
       });
     };
 
-    window.addEventListener("scroll", onScroll, { passive: true });
+    scrollRoot.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      scrollRoot.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
     };
   }, [navItems, topOffset]);
@@ -228,21 +300,35 @@ export function ListingDetailSectionNav({
     allowChipScrollRef.current = true;
     clickLockUntilRef.current = Date.now() + 700;
     setActiveId(id);
-    // Offset for fixed nav so the section title isn't hidden under the chips.
-    const y =
-      el.getBoundingClientRect().top +
-      window.scrollY -
-      topOffset -
-      (navHeight || 48) -
-      8;
-    window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+
+    const offset = topOffset + (navHeight || 48) + 8;
+    const scrollRoot = getScrollRoot(navRef.current);
+
+    if (scrollRoot === window) {
+      const y =
+        el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+    } else {
+      const root = scrollRoot as HTMLElement;
+      const rootRect = root.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      // Panel sticky: pin under scrollport top (chrome already outside).
+      const pin =
+        useStickyPin
+          ? (navHeight || 48) + 8
+          : offset - rootRect.top;
+      const nextTop = root.scrollTop + (elRect.top - rootRect.top) - pin;
+      root.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
+    }
     window.history.replaceState(null, "", `#${id}`);
   }
+
+  const pinned = useStickyPin || stuck;
 
   return (
     <>
       <div ref={sentinelRef} className="h-0 w-full md:hidden" aria-hidden />
-      {stuck ? (
+      {stuck && !useStickyPin ? (
         <div
           className="md:hidden"
           style={{ height: navHeight || 48 }}
@@ -253,18 +339,25 @@ export function ListingDetailSectionNav({
         ref={navRef}
         aria-label="Listing sections"
         className={cn(
-          "z-40 border-b border-line/80 bg-mist/95 backdrop-blur-md",
+          // Above listing content / sticky bar (z-30); below action bar (z-46) + sheet chrome (z-50).
+          "z-[34] border-b border-line/80 bg-mist/95 backdrop-blur-md",
           "md:hidden",
-          stuck
-            ? "fixed inset-x-0 left-0 right-0 mx-0"
-            : "relative -mx-4 sm:-mx-6",
+          useStickyPin
+            ? "sticky top-0"
+            : pinned
+              ? "fixed inset-x-0 left-0 right-0 mx-0"
+              : "relative -mx-4 sm:-mx-6",
         )}
-        style={stuck ? { top: topOffset } : undefined}
+        style={
+          !useStickyPin && pinned
+            ? { top: topOffset }
+            : undefined
+        }
       >
         <div
           ref={scrollerRef}
           className={cn(
-            "flex gap-1.5 overflow-x-auto overscroll-x-contain px-4 py-2.5 sm:px-6",
+            "flex gap-1.5 overflow-x-auto overscroll-x-contain px-4 py-2 sm:px-6",
             "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           )}
         >
@@ -281,7 +374,7 @@ export function ListingDetailSectionNav({
                 onClick={() => goToSection(item.id)}
                 aria-current={active ? "true" : undefined}
                 className={cn(
-                  "shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
+                  "inline-flex h-11 shrink-0 items-center rounded-full px-3.5 text-sm font-semibold transition",
                   active
                     ? "bg-canopy text-white shadow-sm"
                     : "bg-surface text-ink/65 ring-1 ring-line hover:bg-mist hover:text-ink",
