@@ -95,3 +95,6 @@ export function canListingSheetBack(): boolean {
 }
 
 export const LISTING_SHEET_OPEN_MESSAGE = "houzzat:listing-sheet-open" as const;
+
+/** Iframe → parent: close sheet stack and hard-navigate to a non-listing URL. */
+export const LISTING_SHEET_LEAVE_MESSAGE = "houzzat:listing-sheet-leave" as const;

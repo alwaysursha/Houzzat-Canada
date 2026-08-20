@@ -102,7 +102,7 @@ export function MonitorsClient({
       toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
       return;
     }
-    toast({ message: "Watchlist checked for updates.", tone: "success" });
+    toast({ message: "Watchlist refreshed.", tone: "success" });
     router.refresh();
   }
 
@@ -139,7 +139,7 @@ export function MonitorsClient({
           disabled={busy}
           onClick={() => void runCheck()}
         >
-          Check for updates
+          Refresh alerts
         </Button>
       </div>
 

@@ -15,7 +15,9 @@ import {
   mlsNumberFromListingHref,
 } from "@/lib/listings/gallery-client";
 import { isListingPanelEnabled } from "@/lib/listings/listing-panel-flag";
+import { leaveListingSheetThenGo } from "@/lib/listings/navigate-listing";
 import {
+  LISTING_SHEET_LEAVE_MESSAGE,
   LISTING_SHEET_OPEN_MESSAGE,
   closeListingSheet,
   openListingSheet,
@@ -146,7 +148,7 @@ export function ListingSheetHost() {
     };
   }, [usePanel, Panel]);
 
-  // Child iframe asks parent to push another listing onto the stack.
+  // Child iframe: push another listing, or leave sheet for Area/Search/etc.
   useEffect(() => {
     if (framed) return;
     function onMessage(event: MessageEvent) {
@@ -155,9 +157,14 @@ export function ListingSheetHost() {
         type?: string;
         href?: string;
       } | null;
-      if (data?.type !== LISTING_SHEET_OPEN_MESSAGE) return;
-      if (typeof data.href !== "string" || !data.href) return;
-      openListingSheet(data.href);
+      if (typeof data?.href !== "string" || !data.href) return;
+      if (data.type === LISTING_SHEET_OPEN_MESSAGE) {
+        openListingSheet(data.href);
+        return;
+      }
+      if (data.type === LISTING_SHEET_LEAVE_MESSAGE) {
+        leaveListingSheetThenGo(data.href);
+      }
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);

@@ -280,277 +280,518 @@ async function createAlert(input: {
   });
 }
 
-export async function runPropertyMonitorChecks(userId?: string) {
-  const monitors = await prisma.propertyMonitor.findMany({
-    where: userId ? { userId } : undefined,
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          emailAlertsEnabled: true,
-        },
-      },
-    },
-  });
+export type MonitorCheckStats = {
+  checked: number;
+  alerts: number;
+  failures: number;
+  pages: number;
+};
 
-  let alerts = 0;
+const PROPERTY_MONITOR_PAGE = 100;
+const PROPERTY_MONITOR_MAX = 5_000;
+const AREA_MONITOR_PAGE = 50;
+const AREA_EVENT_BATCH = 40;
+const AREA_EVENT_MAX_PAGES = 25;
+const AREA_MONITOR_MAX = 2_000;
 
-  for (const monitor of monitors) {
-    const listing = await prisma.listing.findUnique({
-      where: { mlsNumber: monitor.mlsNumber },
-      select: listingEmailSelect,
-    });
-    if (!listing) continue;
-    const cardExtras = listingCardExtras(listing);
-
-    const changes: string[] = [];
-    let kind:
-      | "PRICE_CHANGE"
-      | "STATUS_CHANGE"
-      | "OWNER_STATUS_CHANGE"
-      | null = null;
-    let priceDrop:
-      | { oldPrice: number; newPrice: number }
-      | null = null;
-
-    if (listing.listPrice !== monitor.lastKnownPrice) {
-      changes.push(
-        `Price ${formatPrice(monitor.lastKnownPrice)} → ${formatPrice(listing.listPrice)}`,
-      );
-      kind = "PRICE_CHANGE";
-      if (listing.listPrice < monitor.lastKnownPrice) {
-        priceDrop = {
-          oldPrice: monitor.lastKnownPrice,
-          newPrice: listing.listPrice,
-        };
-      }
-    }
-    if (listing.status !== monitor.lastKnownStatus) {
-      changes.push(`Status ${monitor.lastKnownStatus} → ${listing.status}`);
-      kind = kind ?? "STATUS_CHANGE";
-    }
-    if (
-      listing.dataSource === "fsbo" &&
-      listing.ownerStatus !== monitor.lastKnownOwnerStatus
-    ) {
-      changes.push(
-        `Owner status ${monitor.lastKnownOwnerStatus ?? "—"} → ${listing.ownerStatus ?? "—"}`,
-      );
-      kind = kind ?? "OWNER_STATUS_CHANGE";
-    }
-
-    if (changes.length === 0 || !kind) {
-      continue;
-    }
-
-    const title = `Update · ${listing.addressLine}`;
-    const body = `${listing.addressLine}, ${listing.city} (${listing.mlsNumber})\n${changes.join("\n")}`;
-
-    const soldLike =
-      listing.status !== monitor.lastKnownStatus &&
-      (listing.status === "SOLD" || listing.status === "LEASED");
-
-    await createAlert({
-      userId: monitor.userId,
-      kind,
-      title: soldLike
-        ? `${listing.status === "LEASED" ? "Leased" : "Sold"} · ${listing.addressLine}`
-        : priceDrop
-          ? `Price reduced · ${listing.addressLine}`
-          : title,
-      body,
-      mlsNumber: listing.mlsNumber,
-      email: monitor.user.email,
-      name: monitor.user.name,
-      emailAlertsEnabled: monitor.user.emailAlertsEnabled,
-      monitorEmailAlerts: monitor.emailAlerts,
-      template: soldLike
-        ? {
-            type: "sold",
-            addressLine: listing.addressLine,
-            city: listing.city,
-            mlsNumber: listing.mlsNumber,
-            statusLabel: listing.status === "LEASED" ? "Leased" : "Sold",
-            priceLabel: formatPrice(listing.soldPrice ?? listing.listPrice),
-            ...cardExtras,
-          }
-        : priceDrop
-          ? {
-              type: "price_reduction",
-              addressLine: listing.addressLine,
-              city: listing.city,
-              mlsNumber: listing.mlsNumber,
-              oldPrice: priceDrop.oldPrice,
-              newPrice: priceDrop.newPrice,
-              ...cardExtras,
-            }
-          : {
-              type: "property_update",
-              addressLine: listing.addressLine,
-              city: listing.city,
-              mlsNumber: listing.mlsNumber,
-              changes,
-              ...cardExtras,
-            },
-    });
-
-    await prisma.propertyMonitor.update({
-      where: { id: monitor.id },
-      data: {
-        lastKnownPrice: listing.listPrice,
-        lastKnownStatus: listing.status,
-        lastKnownOwnerStatus: listing.ownerStatus,
-        lastAlertedAt: new Date(),
-      },
-    });
-    alerts += 1;
-  }
-
-  return { checked: monitors.length, alerts };
+function logMonitors(
+  phase: string,
+  fields: Record<string, string | number | boolean | undefined>,
+) {
+  console.info(
+    `[monitors:${phase}]`,
+    JSON.stringify({
+      at: new Date().toISOString(),
+      ...fields,
+    }),
+  );
 }
 
-export async function runAreaMonitorChecks(userId?: string) {
-  const monitors = await prisma.areaMonitor.findMany({
-    where: userId ? { userId } : undefined,
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          emailAlertsEnabled: true,
-        },
-      },
-    },
-  });
-
+export async function runPropertyMonitorChecks(
+  userId?: string,
+): Promise<MonitorCheckStats> {
+  let checked = 0;
   let alerts = 0;
-  const sinceFallback = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7);
+  let failures = 0;
+  let pages = 0;
+  let cursorId: string | undefined;
 
-  for (const monitor of monitors) {
-    const since = monitor.lastSeenListingAt ?? monitor.lastAlertedAt ?? sinceFallback;
-    const whereBase: Prisma.ListingWhereInput = {
-      city: { equals: monitor.city, mode: "insensitive" },
-      ...(monitor.community
-        ? {
-            community: {
-              equals: monitor.community,
-              mode: "insensitive" as const,
-            },
-          }
-        : {}),
-      ...(monitor.segment ? { segment: monitor.segment } : {}),
-      ...(monitor.transactionType !== "ALL"
-        ? { transactionType: monitor.transactionType }
-        : {}),
-      OR: [
-        { dataSource: { not: "fsbo" } },
-        { dataSource: "fsbo", ownerStatus: "ACTIVE" },
-        {
-          dataSource: "fsbo",
-          status: { in: ["SOLD", "LEASED", "SUSPENDED", "TERMINATED", "EXPIRED"] },
-        },
-      ],
-    };
-
-    if (monitor.notifyNew) {
-      const news = await prisma.listing.findMany({
-        where: {
-          ...whereBase,
-          status: "ACTIVE",
-          listedAt: { gt: since },
-        },
-        take: 10,
-        orderBy: { listedAt: "desc" },
-        select: listingEmailSelect,
-      });
-
-      for (const listing of news) {
-        await createAlert({
-          userId: monitor.userId,
-          kind: "AREA_NEW",
-          title: `New in ${monitor.name}`,
-          body: `${listing.addressLine}, ${listing.city} · ${formatPrice(listing.listPrice)} (${listing.mlsNumber})`,
-          mlsNumber: listing.mlsNumber,
-          areaMonitorId: monitor.id,
-          email: monitor.user.email,
-          name: monitor.user.name,
-          emailAlertsEnabled: monitor.user.emailAlertsEnabled,
-          monitorEmailAlerts: monitor.emailAlerts,
-          template: {
-            type: "just_listed",
-            areaName: monitor.name,
-            addressLine: listing.addressLine,
-            city: listing.city,
-            mlsNumber: listing.mlsNumber,
-            price: listing.listPrice,
-            ...listingCardExtras(listing),
+  while (checked < PROPERTY_MONITOR_MAX) {
+    const monitors = await prisma.propertyMonitor.findMany({
+      where: {
+        ...(userId ? { userId } : {}),
+        ...(cursorId ? { id: { gt: cursorId } } : {}),
+      },
+      orderBy: { id: "asc" },
+      take: PROPERTY_MONITOR_PAGE,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            emailAlertsEnabled: true,
           },
-        });
-        alerts += 1;
-      }
-    }
-
-    if (monitor.notifySold) {
-      const solds = await prisma.listing.findMany({
-        where: {
-          ...whereBase,
-          status: { in: ["SOLD", "LEASED"] },
-          soldAt: { gt: since },
         },
-        take: 10,
-        orderBy: { soldAt: "desc" },
-        select: listingEmailSelect,
-      });
-
-      for (const listing of solds) {
-        const price = listing.soldPrice ?? listing.listPrice;
-        await createAlert({
-          userId: monitor.userId,
-          kind: "AREA_SOLD",
-          title: `${listing.status === "LEASED" ? "Leased" : "Sold"} in ${monitor.name}`,
-          body: `${listing.addressLine}, ${listing.city} · ${formatPrice(price)} (${listing.mlsNumber})`,
-          mlsNumber: listing.mlsNumber,
-          areaMonitorId: monitor.id,
-          email: monitor.user.email,
-          name: monitor.user.name,
-          emailAlertsEnabled: monitor.user.emailAlertsEnabled,
-          monitorEmailAlerts: monitor.emailAlerts,
-          template: {
-            type: "sold",
-            addressLine: listing.addressLine,
-            city: listing.city,
-            mlsNumber: listing.mlsNumber,
-            statusLabel: listing.status === "LEASED" ? "Leased" : "Sold",
-            priceLabel: formatPrice(price),
-            ...listingCardExtras(listing),
-          },
-        });
-        alerts += 1;
-      }
-    }
-
-    await prisma.areaMonitor.update({
-      where: { id: monitor.id },
-      data: {
-        lastAlertedAt: new Date(),
-        lastSeenListingAt: new Date(),
       },
     });
+
+    if (monitors.length === 0) break;
+    pages += 1;
+    cursorId = monitors[monitors.length - 1]!.id;
+
+    for (const monitor of monitors) {
+      checked += 1;
+      try {
+        const listing = await prisma.listing.findUnique({
+          where: { mlsNumber: monitor.mlsNumber },
+          select: listingEmailSelect,
+        });
+        if (!listing) continue;
+        const cardExtras = listingCardExtras(listing);
+
+        const changes: string[] = [];
+        let kind:
+          | "PRICE_CHANGE"
+          | "STATUS_CHANGE"
+          | "OWNER_STATUS_CHANGE"
+          | null = null;
+        let priceDrop: { oldPrice: number; newPrice: number } | null = null;
+
+        if (listing.listPrice !== monitor.lastKnownPrice) {
+          changes.push(
+            `Price ${formatPrice(monitor.lastKnownPrice)} → ${formatPrice(listing.listPrice)}`,
+          );
+          kind = "PRICE_CHANGE";
+          if (listing.listPrice < monitor.lastKnownPrice) {
+            priceDrop = {
+              oldPrice: monitor.lastKnownPrice,
+              newPrice: listing.listPrice,
+            };
+          }
+        }
+        if (listing.status !== monitor.lastKnownStatus) {
+          changes.push(
+            `Status ${monitor.lastKnownStatus} → ${listing.status}`,
+          );
+          kind = kind ?? "STATUS_CHANGE";
+        }
+        if (
+          listing.dataSource === "fsbo" &&
+          listing.ownerStatus !== monitor.lastKnownOwnerStatus
+        ) {
+          changes.push(
+            `Owner status ${monitor.lastKnownOwnerStatus ?? "—"} → ${listing.ownerStatus ?? "—"}`,
+          );
+          kind = kind ?? "OWNER_STATUS_CHANGE";
+        }
+
+        if (changes.length === 0 || !kind) {
+          continue;
+        }
+
+        const title = `Update · ${listing.addressLine}`;
+        const body = `${listing.addressLine}, ${listing.city} (${listing.mlsNumber})\n${changes.join("\n")}`;
+
+        const soldLike =
+          listing.status !== monitor.lastKnownStatus &&
+          (listing.status === "SOLD" || listing.status === "LEASED");
+
+        await createAlert({
+          userId: monitor.userId,
+          kind,
+          title: soldLike
+            ? `${listing.status === "LEASED" ? "Leased" : "Sold"} · ${listing.addressLine}`
+            : priceDrop
+              ? `Price reduced · ${listing.addressLine}`
+              : title,
+          body,
+          mlsNumber: listing.mlsNumber,
+          email: monitor.user.email,
+          name: monitor.user.name,
+          emailAlertsEnabled: monitor.user.emailAlertsEnabled,
+          monitorEmailAlerts: monitor.emailAlerts,
+          template: soldLike
+            ? {
+                type: "sold",
+                addressLine: listing.addressLine,
+                city: listing.city,
+                mlsNumber: listing.mlsNumber,
+                statusLabel: listing.status === "LEASED" ? "Leased" : "Sold",
+                priceLabel: formatPrice(
+                  listing.soldPrice ?? listing.listPrice,
+                ),
+                ...cardExtras,
+              }
+            : priceDrop
+              ? {
+                  type: "price_reduction",
+                  addressLine: listing.addressLine,
+                  city: listing.city,
+                  mlsNumber: listing.mlsNumber,
+                  oldPrice: priceDrop.oldPrice,
+                  newPrice: priceDrop.newPrice,
+                  ...cardExtras,
+                }
+              : {
+                  type: "property_update",
+                  addressLine: listing.addressLine,
+                  city: listing.city,
+                  mlsNumber: listing.mlsNumber,
+                  changes,
+                  ...cardExtras,
+                },
+        });
+
+        await prisma.propertyMonitor.update({
+          where: { id: monitor.id },
+          data: {
+            lastKnownPrice: listing.listPrice,
+            lastKnownStatus: listing.status,
+            lastKnownOwnerStatus: listing.ownerStatus,
+            lastAlertedAt: new Date(),
+          },
+        });
+        alerts += 1;
+      } catch (error) {
+        failures += 1;
+        logMonitors("property-fail", {
+          monitorId: monitor.id,
+          error: error instanceof Error ? error.name : "unknown",
+        });
+      }
+    }
+
+    if (monitors.length < PROPERTY_MONITOR_PAGE) break;
   }
 
-  return { checked: monitors.length, alerts };
+  return { checked, alerts, failures, pages };
+}
+
+async function existingAreaAlertMls(input: {
+  areaMonitorId: string;
+  kind: "AREA_NEW" | "AREA_SOLD";
+  mlsNumbers: string[];
+}): Promise<Set<string>> {
+  if (input.mlsNumbers.length === 0) return new Set();
+  const rows = await prisma.customerAlert.findMany({
+    where: {
+      areaMonitorId: input.areaMonitorId,
+      kind: input.kind,
+      mlsNumber: { in: input.mlsNumbers },
+    },
+    select: { mlsNumber: true },
+  });
+  return new Set(
+    rows.map((row) => row.mlsNumber).filter((mls): mls is string => Boolean(mls)),
+  );
+}
+
+/**
+ * Page matching listings since the stored cursor.
+ * Advances lastSeenListingAt only to the last successfully walked event time
+ * (never wall-clock `now`), so remaining matches are not skipped.
+ */
+async function processAreaEventPages(input: {
+  monitor: {
+    id: string;
+    userId: string;
+    name: string;
+    emailAlerts: boolean;
+    user: {
+      email: string | null;
+      name: string | null;
+      emailAlertsEnabled: boolean;
+    };
+  };
+  /** Shared waterline for this monitor pass (do not reuse mid-pass updates). */
+  since: Date;
+  whereBase: Prisma.ListingWhereInput;
+  kind: "AREA_NEW" | "AREA_SOLD";
+  timeField: "listedAt" | "soldAt";
+  statusFilter: Prisma.ListingWhereInput;
+}): Promise<{ alerts: number; failures: number; advancedTo: Date }> {
+  let cursorTime = input.since;
+  let cursorMls = "";
+  let alerts = 0;
+  let failures = 0;
+  let advancedTo = input.since;
+
+  for (let page = 0; page < AREA_EVENT_MAX_PAGES; page += 1) {
+    const timeClause: Prisma.ListingWhereInput =
+      input.timeField === "listedAt"
+        ? cursorMls
+          ? {
+              OR: [
+                { listedAt: { gt: cursorTime } },
+                {
+                  AND: [
+                    { listedAt: cursorTime },
+                    { mlsNumber: { gt: cursorMls } },
+                  ],
+                },
+              ],
+            }
+          : { listedAt: { gt: cursorTime } }
+        : cursorMls
+          ? {
+              OR: [
+                { soldAt: { gt: cursorTime } },
+                {
+                  AND: [
+                    { soldAt: cursorTime },
+                    { mlsNumber: { gt: cursorMls } },
+                  ],
+                },
+              ],
+            }
+          : { soldAt: { gt: cursorTime } };
+
+    const batch = await prisma.listing.findMany({
+      where: {
+        ...input.whereBase,
+        ...input.statusFilter,
+        ...timeClause,
+      },
+      orderBy:
+        input.timeField === "listedAt"
+          ? [{ listedAt: "asc" }, { mlsNumber: "asc" }]
+          : [{ soldAt: "asc" }, { mlsNumber: "asc" }],
+      take: AREA_EVENT_BATCH,
+      select: listingEmailSelect,
+    });
+
+    if (batch.length === 0) break;
+
+    const mlsNumbers = batch.map((row) => row.mlsNumber);
+    const already = await existingAreaAlertMls({
+      areaMonitorId: input.monitor.id,
+      kind: input.kind,
+      mlsNumbers,
+    });
+
+    for (const listing of batch) {
+      const eventAt =
+        input.timeField === "listedAt" ? listing.listedAt : listing.soldAt;
+      if (!eventAt) continue;
+      cursorTime = eventAt;
+      cursorMls = listing.mlsNumber;
+      advancedTo = eventAt;
+
+      if (already.has(listing.mlsNumber)) continue;
+
+      try {
+        if (input.kind === "AREA_NEW") {
+          await createAlert({
+            userId: input.monitor.userId,
+            kind: "AREA_NEW",
+            title: `New in ${input.monitor.name}`,
+            body: `${listing.addressLine}, ${listing.city} · ${formatPrice(listing.listPrice)} (${listing.mlsNumber})`,
+            mlsNumber: listing.mlsNumber,
+            areaMonitorId: input.monitor.id,
+            email: input.monitor.user.email,
+            name: input.monitor.user.name,
+            emailAlertsEnabled: input.monitor.user.emailAlertsEnabled,
+            monitorEmailAlerts: input.monitor.emailAlerts,
+            template: {
+              type: "just_listed",
+              areaName: input.monitor.name,
+              addressLine: listing.addressLine,
+              city: listing.city,
+              mlsNumber: listing.mlsNumber,
+              price: listing.listPrice,
+              ...listingCardExtras(listing),
+            },
+          });
+        } else {
+          const price = listing.soldPrice ?? listing.listPrice;
+          await createAlert({
+            userId: input.monitor.userId,
+            kind: "AREA_SOLD",
+            title: `${listing.status === "LEASED" ? "Leased" : "Sold"} in ${input.monitor.name}`,
+            body: `${listing.addressLine}, ${listing.city} · ${formatPrice(price)} (${listing.mlsNumber})`,
+            mlsNumber: listing.mlsNumber,
+            areaMonitorId: input.monitor.id,
+            email: input.monitor.user.email,
+            name: input.monitor.user.name,
+            emailAlertsEnabled: input.monitor.user.emailAlertsEnabled,
+            monitorEmailAlerts: input.monitor.emailAlerts,
+            template: {
+              type: "sold",
+              addressLine: listing.addressLine,
+              city: listing.city,
+              mlsNumber: listing.mlsNumber,
+              statusLabel: listing.status === "LEASED" ? "Leased" : "Sold",
+              priceLabel: formatPrice(price),
+              ...listingCardExtras(listing),
+            },
+          });
+        }
+        alerts += 1;
+      } catch (error) {
+        failures += 1;
+        logMonitors("area-event-fail", {
+          monitorId: input.monitor.id,
+          kind: input.kind,
+          error: error instanceof Error ? error.name : "unknown",
+        });
+      }
+    }
+
+    // Cursor is persisted by the caller after both new/sold passes (max waterline).
+    // Re-walks after a timeout are safe via CustomerAlert dedupe.
+
+    if (batch.length < AREA_EVENT_BATCH) break;
+  }
+
+  return { alerts, failures, advancedTo };
+}
+
+export async function runAreaMonitorChecks(
+  userId?: string,
+): Promise<MonitorCheckStats> {
+  let checked = 0;
+  let alerts = 0;
+  let failures = 0;
+  let pages = 0;
+  let cursorId: string | undefined;
+
+  while (checked < AREA_MONITOR_MAX) {
+    const monitors = await prisma.areaMonitor.findMany({
+      where: {
+        ...(userId ? { userId } : {}),
+        ...(cursorId ? { id: { gt: cursorId } } : {}),
+      },
+      orderBy: { id: "asc" },
+      take: AREA_MONITOR_PAGE,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            emailAlertsEnabled: true,
+          },
+        },
+      },
+    });
+
+    if (monitors.length === 0) break;
+    pages += 1;
+    cursorId = monitors[monitors.length - 1]!.id;
+
+    for (const monitor of monitors) {
+      checked += 1;
+      try {
+        const sinceFallback = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7);
+        const since =
+          monitor.lastSeenListingAt ?? monitor.lastAlertedAt ?? sinceFallback;
+
+        const whereBase: Prisma.ListingWhereInput = {
+          city: { equals: monitor.city, mode: "insensitive" },
+          ...(monitor.community
+            ? {
+                community: {
+                  equals: monitor.community,
+                  mode: "insensitive" as const,
+                },
+              }
+            : {}),
+          ...(monitor.segment ? { segment: monitor.segment } : {}),
+          ...(monitor.transactionType !== "ALL"
+            ? { transactionType: monitor.transactionType }
+            : {}),
+          OR: [
+            { dataSource: { not: "fsbo" } },
+            { dataSource: "fsbo", ownerStatus: "ACTIVE" },
+            {
+              dataSource: "fsbo",
+              status: {
+                in: ["SOLD", "LEASED", "SUSPENDED", "TERMINATED", "EXPIRED"],
+              },
+            },
+          ],
+        };
+
+        let waterline = since;
+
+        if (monitor.notifyNew) {
+          const result = await processAreaEventPages({
+            monitor,
+            since,
+            whereBase,
+            kind: "AREA_NEW",
+            timeField: "listedAt",
+            statusFilter: { status: "ACTIVE" },
+          });
+          alerts += result.alerts;
+          failures += result.failures;
+          if (result.advancedTo > waterline) waterline = result.advancedTo;
+        }
+
+        if (monitor.notifySold) {
+          const result = await processAreaEventPages({
+            monitor,
+            since,
+            whereBase,
+            kind: "AREA_SOLD",
+            timeField: "soldAt",
+            statusFilter: { status: { in: ["SOLD", "LEASED"] } },
+          });
+          alerts += result.alerts;
+          failures += result.failures;
+          if (result.advancedTo > waterline) waterline = result.advancedTo;
+        }
+
+        await prisma.areaMonitor.update({
+          where: { id: monitor.id },
+          data: {
+            lastSeenListingAt: waterline,
+            lastAlertedAt: new Date(),
+          },
+        });
+      } catch (error) {
+        failures += 1;
+        logMonitors("area-fail", {
+          monitorId: monitor.id,
+          error: error instanceof Error ? error.name : "unknown",
+        });
+      }
+    }
+
+    if (monitors.length < AREA_MONITOR_PAGE) break;
+  }
+
+  return { checked, alerts, failures, pages };
 }
 
 export async function runAllMonitorChecks(userId?: string) {
+  const started = Date.now();
+  logMonitors("start", {
+    scoped: Boolean(userId),
+  });
+
   const property = await runPropertyMonitorChecks(userId);
   const area = await runAreaMonitorChecks(userId);
+  const durationMs = Date.now() - started;
+
+  logMonitors("end", {
+    scoped: Boolean(userId),
+    propertyChecked: property.checked,
+    propertyAlerts: property.alerts,
+    propertyFailures: property.failures,
+    areaChecked: area.checked,
+    areaAlerts: area.alerts,
+    areaFailures: area.failures,
+    alerts: property.alerts + area.alerts,
+    durationMs,
+  });
+
   return {
     property,
     area,
     alerts: property.alerts + area.alerts,
+    durationMs,
   };
 }
 

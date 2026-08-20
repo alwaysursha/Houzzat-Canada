@@ -7,6 +7,7 @@ import { SaveListingButton } from "@/components/account/SaveListingButton";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { WatchListingButton } from "@/components/account/WatchListingButton";
 import { ShareListingButton } from "@/components/listings/ShareListingButton";
+import { interceptListingSheetExitClick } from "@/lib/listings/navigate-listing";
 import { cn } from "@/lib/utils";
 
 type Crumb = {
@@ -42,6 +43,9 @@ function ListingBreadcrumbs({
                 {crumb.href && !isLast ? (
                   <Link
                     href={crumb.href}
+                    onClick={(event) =>
+                      interceptListingSheetExitClick(event, crumb.href!)
+                    }
                     className="font-medium text-canopy transition hover:text-canopy-deep hover:underline"
                   >
                     {crumb.label}

@@ -2,15 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { useSession } from "next-auth/react";
 import { Check, Heart, Link2, Share2 } from "lucide-react";
-import { useSavedListingsStatus } from "@/components/account/SavedListingsProvider";
-import { useAuthModal } from "@/components/auth/AuthModalProvider";
-import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
+import { useSavedListingToggle } from "@/components/account/useSavedListingToggle";
 import { RoutePlannerToggleButton } from "@/components/route-planner/RoutePlannerToggleButton";
 import { SITE_NAME } from "@/lib/constants";
-import { flyHeartToSaved } from "@/lib/fly-to-saved";
-import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
 function listingUrl(mlsNumber: string, path?: string) {
@@ -35,26 +30,14 @@ export function ListingCardActions({
   path?: string;
   className?: string;
 }) {
-  const { status } = useSession();
-  const savedStatus = useSavedListingsStatus();
-  const { openAuth } = useAuthModal();
-  const { toast } = useSiteAlert();
-  const [saved, setSaved] = useState(false);
-  const [pending, setPending] = useState(false);
+  const { saved, pending, ready, toggle } = useSavedListingToggle({
+    mlsNumber,
+    authCallbackUrl: path ?? `/listing/${mlsNumber}`,
+  });
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (status !== "authenticated") {
-      setSaved(false);
-      return;
-    }
-    if (savedStatus?.ready) {
-      setSaved(savedStatus.isSaved(mlsNumber));
-    }
-  }, [status, mlsNumber, savedStatus, savedStatus?.ready]);
 
   useEffect(() => {
     function onDocClick(event: MouseEvent) {
@@ -71,37 +54,7 @@ export function ListingCardActions({
   async function toggleSave(event: ReactMouseEvent) {
     event.preventDefault();
     event.stopPropagation();
-
-    if (status !== "authenticated") {
-      openAuth({
-        mode: "sign-in",
-        callbackUrl: path ?? `/listing/${mlsNumber}`,
-      });
-      return;
-    }
-
-    const saving = !saved;
-
-    setPending(true);
-    const res = await fetch("/api/saved-listings", {
-      method: saved ? "DELETE" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mlsNumber }),
-    });
-    setPending(false);
-    if (!res.ok) {
-      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
-      return;
-    }
-    setSaved(!saved);
-    savedStatus?.setSavedState(mlsNumber, saving);
-    if (saving && saveButtonRef.current) {
-      flyHeartToSaved(saveButtonRef.current);
-      toast({ message: SITE_MESSAGES.saveAddedToast, tone: "success" });
-    } else {
-      window.dispatchEvent(new Event("houzzat:saved-listings-changed"));
-      toast({ message: SITE_MESSAGES.saveRemovedToast, tone: "info" });
-    }
+    await toggle({ flyFrom: saveButtonRef.current });
   }
 
   function toggleShareMenu(event: ReactMouseEvent) {
@@ -144,7 +97,8 @@ export function ListingCardActions({
         ref={saveButtonRef}
         type="button"
         aria-label={saved ? "Remove saved property" : "Save property"}
-        disabled={pending}
+        aria-busy={pending || !ready}
+        disabled={pending || !ready}
         onClick={toggleSave}
         className={cn(
           "inline-flex size-9 items-center justify-center rounded-lg border border-line bg-mist text-ink transition hover:border-canopy/40 hover:bg-canopy/5",
@@ -226,7 +180,10 @@ export function ListingCardActions({
             <button
               type="button"
               onClick={(event) =>
-                openNetwork(event, `https://wa.me/?text=${encodedTitle}%20${encoded}`)
+                openNetwork(
+                  event,
+                  `https://wa.me/?text=${encodedTitle}%20${encoded}`,
+                )
               }
               className="flex w-full px-3 py-2 text-left text-sm font-medium text-ink hover:bg-mist"
             >

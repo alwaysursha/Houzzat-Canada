@@ -1,6 +1,5 @@
 "use client";
 
-import { useSession } from "next-auth/react";
 import {
   Check,
   ChevronLeft,
@@ -10,33 +9,36 @@ import {
   Share2,
   X,
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { useAuthModal } from "@/components/auth/AuthModalProvider";
-import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
-import { useSavedListingsStatus } from "@/components/account/SavedListingsProvider";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSavedListingToggle } from "@/components/account/useSavedListingToggle";
 import { LazyAddressAutocomplete } from "@/components/listings/LazyAddressAutocomplete";
-import { Button } from "@/components/ui/button";
 import { mlsNumberFromListingHref } from "@/lib/listings/gallery-client";
 import { SITE_NAME } from "@/lib/constants";
-import { hardGo } from "@/lib/mobile/nav-back";
+import { leaveListingSheetThenGo } from "@/lib/listings/navigate-listing";
 import {
   backListingSheet,
   closeListingSheet,
   openListingSheet,
 } from "@/lib/mobile/listing-sheet-store";
 import {
+  isListingSheetSearchOpen,
+  setListingSheetSearchOpen,
+  subscribeListingSheetSearchClose,
+} from "@/lib/mobile/listing-sheet-search";
+import {
   parseSearchQuery,
   searchHrefFromParsed,
 } from "@/lib/listings/parse-search-query";
 import { pushLocalRecentSearch } from "@/lib/listings/recent-searches-local";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
-import { SITE_MESSAGES } from "@/lib/site-messages";
-import { acquireScrollLock } from "@/lib/scroll-lock";
 import { cn } from "@/lib/utils";
+
 
 /** Two-row sheet chrome body height (excludes safe-area; Host adds inset). */
 export const LISTING_SHEET_CHROME_BODY = "6.125rem";
+
+const SEARCH_PLACEHOLDER =
+  "Search active or sold listings by MLS® #, address or neighbourhood";
 
 function listingUrl(mlsNumber: string, path?: string) {
   const relative = path ?? `/listing/${mlsNumber}`;
@@ -44,6 +46,18 @@ function listingUrl(mlsNumber: string, path?: string) {
     return `${window.location.origin}${relative}`;
   }
   return relative;
+}
+
+function useIsDesktopChrome() {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  return isDesktop;
 }
 
 /** Same social share menu as property cards / ShareListingButton — no OS share sheet. */
@@ -178,62 +192,22 @@ function SheetSaveButton({
   mlsNumber: string;
   callbackPath: string;
 }) {
-  const { status } = useSession();
-  const signedIn = status === "authenticated";
-  const savedStatus = useSavedListingsStatus();
-  const { openAuth } = useAuthModal();
-  const { toast } = useSiteAlert();
-  const [saved, setSaved] = useState(false);
-  const [pending, setPending] = useState(false);
-
-  useEffect(() => {
-    if (!signedIn) {
-      setSaved(false);
-      return;
-    }
-    if (savedStatus?.ready) {
-      setSaved(savedStatus.isSaved(mlsNumber));
-    }
-  }, [signedIn, mlsNumber, savedStatus, savedStatus?.ready]);
-
-  async function toggle() {
-    if (!signedIn) {
-      openAuth({ mode: "sign-in", callbackUrl: callbackPath });
-      return;
-    }
-    const saving = !saved;
-    setPending(true);
-    const res = await fetch("/api/saved-listings", {
-      method: saved ? "DELETE" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mlsNumber }),
-    });
-    setPending(false);
-    if (!res.ok) {
-      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
-      return;
-    }
-    setSaved(saving);
-    savedStatus?.setSavedState(mlsNumber, saving);
-    window.dispatchEvent(new Event("houzzat:saved-listings-changed"));
-    toast({
-      message: saving
-        ? SITE_MESSAGES.saveAddedToast
-        : SITE_MESSAGES.saveRemovedToast,
-      tone: saving ? "success" : "info",
-    });
-  }
+  const { saved, pending, ready, toggle } = useSavedListingToggle({
+    mlsNumber,
+    authCallbackUrl: callbackPath,
+  });
 
   return (
     <button
       type="button"
-      disabled={pending || !mlsNumber}
+      disabled={pending || !mlsNumber || !ready}
       onClick={() => void toggle()}
       className={cn(
         "flex h-11 w-full flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-white/95 transition active:bg-white/15 hover:bg-white/10",
         saved && "text-white",
       )}
       aria-label={saved ? "Remove saved listing" : "Save listing"}
+      aria-busy={pending || !ready}
     >
       <Heart
         className={cn("size-5", saved && "fill-white")}
@@ -247,49 +221,14 @@ function SheetSaveButton({
   );
 }
 
-function SheetSearchPopup({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) {
-  const titleId = useId();
-  const [mounted, setMounted] = useState(false);
+function useListingChromeSearchNav(onCloseSearch: () => void) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AutocompleteSuggestion | null>(null);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const release = acquireScrollLock();
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => {
-      release();
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setSelected(null);
-    }
-  }, [open]);
-
   function leaveSheetForSearch(href: string, label: string) {
     pushLocalRecentSearch({ label, href });
-    onClose();
-    closeListingSheet();
-    requestAnimationFrame(() => {
-      hardGo(href);
-    });
+    onCloseSearch();
+    leaveListingSheetThenGo(href);
   }
 
   function goToSuggestion(suggestion: AutocompleteSuggestion) {
@@ -309,12 +248,12 @@ function SheetSearchPopup({
     if (suggestion.mlsNumber) {
       const listingHref =
         suggestion.href ?? `/listing/${suggestion.mlsNumber}`;
-      onClose();
+      onCloseSearch();
       openListingSheet(listingHref);
       return;
     }
     if (suggestion.href?.startsWith("/listing/")) {
-      onClose();
+      onCloseSearch();
       openListingSheet(suggestion.href);
       return;
     }
@@ -347,12 +286,12 @@ function SheetSearchPopup({
     if (selected?.mlsNumber && !rawQuery) {
       const listingHref =
         selected.href ?? `/listing/${selected.mlsNumber}`;
-      onClose();
+      onCloseSearch();
       openListingSheet(listingHref);
       return;
     }
     if (selected?.href?.startsWith("/listing/") && !rawQuery) {
-      onClose();
+      onCloseSearch();
       openListingSheet(selected.href);
       return;
     }
@@ -379,78 +318,19 @@ function SheetSearchPopup({
     leaveSheetForSearch(href, q);
   }
 
-  if (!mounted || !open) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-[220]" role="presentation">
-      <button
-        type="button"
-        aria-label="Close search"
-        className="absolute inset-0 bg-ink/45"
-        onClick={onClose}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="absolute inset-x-0 top-0 border-b border-line bg-surface px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-xl"
-      >
-        <div className="mb-2 flex items-center gap-2">
-          <h2
-            id={titleId}
-            className="flex-1 text-base font-semibold text-ink"
-          >
-            Search
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex size-10 items-center justify-center rounded-full text-ink/60 transition hover:bg-mist hover:text-ink"
-            aria-label="Close search"
-          >
-            <X className="size-5" aria-hidden />
-          </button>
-        </div>
-        <div
-          data-search-bar
-          className="flex items-center gap-2 rounded-xl border border-line bg-mist/50 p-1"
-        >
-          <div className="min-w-0 flex-1">
-            <LazyAddressAutocomplete
-              minChars={1}
-              transactionType="SALE"
-              placeholder="City, neighbourhood, address, or MLS® #"
-              inputClassName="h-11 rounded-lg border-0 bg-transparent text-[15px] shadow-none focus-visible:ring-0"
-              onQueryChange={(value) => {
-                setQuery(value);
-                setSelected(null);
-              }}
-              onPlaceSelect={goToSuggestion}
-              onPlaceResolved={(place) => {
-                setSelected(place);
-              }}
-              onSearchSubmit={(q) => onSearch(q)}
-            />
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            className="h-11 shrink-0 rounded-lg px-4"
-            onClick={() => onSearch()}
-          >
-            Search
-          </Button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
+  return {
+    query,
+    setQuery,
+    setSelected,
+    goToSuggestion,
+    onSearch,
+  };
 }
 
 /**
  * Listing overlay chrome — two rows:
  * 1) Listing[+count] | centered Houzzat mark + wordmark | Back (if stack) + Close
- * 2) Search · Share · Save
+ * 2) Desktop: full Search bar · Mobile: Search · Share · Save (expands to AC sheet)
  */
 export function ListingSheetChrome({
   href,
@@ -466,11 +346,53 @@ export function ListingSheetChrome({
   usePanel?: boolean;
   loading?: boolean;
 }) {
-  const [searchOpen, setSearchOpen] = useState(false);
+  const isDesktop = useIsDesktopChrome();
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const mlsNumber = href ? mlsNumberFromListingHref(href) : null;
   const callbackPath =
     href?.split("?")[0] ?? (mlsNumber ? `/listing/${mlsNumber}` : "/");
   const shareTitle = mlsNumber ? `MLS® ${mlsNumber}` : SITE_NAME;
+
+  const closeMobileSearch = useCallback(() => {
+    setMobileSearchOpen(false);
+  }, []);
+
+  const onMobileSheetOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) closeMobileSearch();
+    },
+    [closeMobileSearch],
+  );
+
+  const desktopNav = useListingChromeSearchNav(() => {});
+  const mobileNav = useListingChromeSearchNav(closeMobileSearch);
+
+  useEffect(() => {
+    setListingSheetSearchOpen(mobileSearchOpen);
+    return () => {
+      if (isListingSheetSearchOpen()) setListingSheetSearchOpen(false);
+    };
+  }, [mobileSearchOpen]);
+
+  useEffect(() => {
+    return subscribeListingSheetSearchClose(() => {
+      setMobileSearchOpen(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!mobileSearchOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMobileSearchOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mobileSearchOpen]);
+
+  // Leaving mobile viewport while search is open should not leave Cap flag stuck.
+  useEffect(() => {
+    if (isDesktop && mobileSearchOpen) setMobileSearchOpen(false);
+  }, [isDesktop, mobileSearchOpen]);
 
   const listingLabel = (() => {
     if (loading) return "Loading…";
@@ -478,6 +400,44 @@ export function ListingSheetChrome({
     if (depth > 1) return `${noun} · ${depth}`;
     return noun;
   })();
+
+  const searchField = (
+    nav: ReturnType<typeof useListingChromeSearchNav>,
+    opts: {
+      portalDesktop: boolean;
+      autoOpenMobile?: boolean;
+      mobileZ?: string;
+      inputClassName?: string;
+      className?: string;
+      onMobileSheetOpenChange?: (open: boolean) => void;
+    },
+  ) => (
+    <div data-search-bar className={cn("min-w-0 flex-1", opts.className)}>
+      <LazyAddressAutocomplete
+        minChars={1}
+        transactionType="SALE"
+        fillOnly
+        placeholder={SEARCH_PLACEHOLDER}
+        portalDesktopSuggestions={opts.portalDesktop}
+        autoOpenMobileSheet={opts.autoOpenMobile}
+        mobileSheetZClassName={opts.mobileZ}
+        onMobileSheetOpenChange={opts.onMobileSheetOpenChange}
+        inputClassName={
+          opts.inputClassName ??
+          "h-10 rounded-lg border-0 bg-white/95 pl-10 text-[15px] text-ink shadow-sm placeholder:text-ink/40 focus-visible:ring-2 focus-visible:ring-white/50"
+        }
+        onQueryChange={(value) => {
+          nav.setQuery(value);
+          nav.setSelected(null);
+        }}
+        onPlaceSelect={nav.goToSuggestion}
+        onPlaceResolved={(place) => {
+          nav.setSelected(place);
+        }}
+        onSearchSubmit={(q) => nav.onSearch(q)}
+      />
+    </div>
+  );
 
   return (
     <header
@@ -488,9 +448,15 @@ export function ListingSheetChrome({
     >
       {/*
         True screen-center brand (absolute), not flex-space between Listing/Close.
-        Official house mark + display wordmark — reads as logo, not tiny header text.
+        Hidden while mobile search is expanded (AC sheet covers; chrome stays stable).
       */}
-      <div className="pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-[1] flex h-11 items-center justify-center gap-1.5">
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-[1] flex h-11 items-center justify-center gap-1.5 transition-opacity duration-200 ease-out",
+          mobileSearchOpen ? "opacity-0" : "opacity-100",
+        )}
+        aria-hidden={mobileSearchOpen}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/images/houzzat-house-mark.png"
@@ -505,7 +471,12 @@ export function ListingSheetChrome({
         </span>
       </div>
 
-      <div className="relative z-[2] flex h-11 items-center justify-between gap-1 px-1 sm:px-2">
+      <div
+        className={cn(
+          "relative z-[2] flex h-11 items-center justify-between gap-1 px-1 transition-opacity duration-200 ease-out sm:px-2",
+          mobileSearchOpen && "pointer-events-none opacity-0",
+        )}
+      >
         <span className="min-w-0 max-w-[38%] truncate pl-2 text-sm font-semibold tracking-wide text-white/90">
           {listingLabel}
         </span>
@@ -534,12 +505,30 @@ export function ListingSheetChrome({
         </div>
       </div>
 
-      <div className="flex items-stretch gap-1 border-t border-white/12 bg-canopy-deep/25 px-2 py-1">
+      {/* Desktop: full-width Search bar (Share/Save live in ListingStickyBar). */}
+      <div className="hidden items-center gap-2 border-t border-white/12 bg-canopy-deep/25 px-3 py-1.5 md:flex lg:px-4">
+        {searchField(desktopNav, {
+          portalDesktop: true,
+          inputClassName:
+            "h-10 rounded-lg border-0 bg-white/95 pl-10 text-[15px] text-ink shadow-sm placeholder:text-ink/40 focus-visible:ring-2 focus-visible:ring-white/50",
+        })}
+      </div>
+
+      {/* Mobile collapsed: Search · Share · Save */}
+      <div
+        className={cn(
+          "flex items-stretch gap-1 border-t border-white/12 bg-canopy-deep/25 px-2 py-1 transition-[opacity,transform] duration-200 ease-out md:hidden",
+          mobileSearchOpen
+            ? "pointer-events-none absolute inset-x-0 opacity-0"
+            : "relative opacity-100",
+        )}
+      >
         <button
           type="button"
-          onClick={() => setSearchOpen(true)}
-          className="flex h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-white/95 transition active:bg-white/15 hover:bg-white/10"
+          onClick={() => setMobileSearchOpen(true)}
+          className="flex h-11 min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-white/95 transition active:bg-white/15 hover:bg-white/10"
           aria-label="Open search"
+          aria-expanded={mobileSearchOpen}
         >
           <Search className="size-5" strokeWidth={2.1} aria-hidden />
           <span className="text-[10px] font-semibold tracking-wide">Search</span>
@@ -560,7 +549,38 @@ export function ListingSheetChrome({
         )}
       </div>
 
-      <SheetSearchPopup open={searchOpen} onClose={() => setSearchOpen(false)} />
+      {/*
+        Mobile search mode: in-chrome back + field (matches reference proportions)
+        while AddressAutocomplete mobile sheet provides suggestions (reuse).
+      */}
+      <div
+        className={cn(
+          "border-t border-white/12 bg-canopy-deep/25 transition-[opacity,transform] duration-200 ease-out md:hidden",
+          mobileSearchOpen
+            ? "relative flex items-center gap-1 px-2 py-1 opacity-100"
+            : "pointer-events-none absolute inset-x-0 flex translate-y-1 items-center gap-1 px-2 py-1 opacity-0",
+        )}
+        aria-hidden={!mobileSearchOpen}
+      >
+        <button
+          type="button"
+          onClick={closeMobileSearch}
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-white transition active:bg-white/15 hover:bg-white/10"
+          aria-label="Close search"
+        >
+          <ChevronLeft className="size-5" strokeWidth={2.2} aria-hidden />
+        </button>
+        {mobileSearchOpen
+          ? searchField(mobileNav, {
+              portalDesktop: false,
+              autoOpenMobile: true,
+              mobileZ: "z-[220]",
+              inputClassName:
+                "h-11 rounded-md border-white/80 bg-white/95 pl-10 text-[15px] text-ink shadow-sm placeholder:text-ink/45 focus-visible:ring-2 focus-visible:ring-white/40",
+              onMobileSheetOpenChange,
+            })
+          : null}
+      </div>
     </header>
   );
 }

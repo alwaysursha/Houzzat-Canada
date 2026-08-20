@@ -9,6 +9,11 @@ import {
   useState,
 } from "react";
 import { useSession } from "next-auth/react";
+import {
+  isSavedListingsChangedMessage,
+  isSavedListingsRevStorageKey,
+  SAVED_LISTINGS_CHANGED_EVENT,
+} from "@/lib/account/saved-listings-sync";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 
 type SavedListingsContextValue = {
@@ -38,7 +43,9 @@ export function SavedListingsProvider({
     }
 
     try {
-      const res = await fetch("/api/saved-listings");
+      const res = await fetch("/api/saved-listings", {
+        credentials: "same-origin",
+      });
       if (!res.ok) {
         setReady(true);
         return;
@@ -70,9 +77,21 @@ export function SavedListingsProvider({
     function onChanged() {
       void reload();
     }
-    window.addEventListener("houzzat:saved-listings-changed", onChanged);
+    function onStorage(event: StorageEvent) {
+      if (isSavedListingsRevStorageKey(event.key)) onChanged();
+    }
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      if (!isSavedListingsChangedMessage(event.data)) return;
+      onChanged();
+    }
+    window.addEventListener(SAVED_LISTINGS_CHANGED_EVENT, onChanged);
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("message", onMessage);
     return () => {
-      window.removeEventListener("houzzat:saved-listings-changed", onChanged);
+      window.removeEventListener(SAVED_LISTINGS_CHANGED_EVENT, onChanged);
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("message", onMessage);
     };
   }, [reload]);
 

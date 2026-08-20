@@ -2,16 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Bell, CalendarDays, Search } from "lucide-react";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
+import { useWatchListingToggle } from "@/components/account/useWatchListingToggle";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
-import {
-  useListingAccountChrome,
-  useListingContactDefaults,
-} from "@/components/listings/ListingAccountChromeProvider";
+import { useListingContactDefaults } from "@/components/listings/ListingAccountChromeProvider";
 import {
   ViewingBookingModal,
   type ViewingContactDefaults,
@@ -53,29 +50,25 @@ export function ListingMobileActionBar({
   transactionType?: "SALE" | "LEASE";
   segment?: "RESIDENTIAL" | "COMMERCIAL" | "PRE_CONSTRUCTION" | string;
 }) {
-  const router = useRouter();
   const { openAuth } = useAuthModal();
-  const { alert, confirm, toast } = useSiteAlert();
-  const chrome = useListingAccountChrome();
+  const { toast } = useSiteAlert();
   const resolvedContact = useListingContactDefaults(contact);
   const routePlanner = useRoutePlanner();
   const onTour = routePlanner?.isOnTour(mlsNumber) ?? false;
   const routeButtonRef = useRef<HTMLButtonElement>(null);
-  const [watching, setWatching] = useState(initiallyWatching);
-  const [pending, setPending] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [hasBottomNav, setHasBottomNav] = useState(false);
-  const watchTouched = useRef(false);
   const authCallbackUrl = callbackPath ?? `/listing/${mlsNumber}`;
-
-  useEffect(() => {
-    if (watchTouched.current) return;
-    if (chrome.active && chrome.loaded) {
-      setWatching(chrome.watching);
-      return;
-    }
-    setWatching(initiallyWatching);
-  }, [chrome.active, chrome.loaded, chrome.watching, initiallyWatching]);
+  const {
+    watching,
+    pending: watchPending,
+    ready: watchReady,
+    toggle: toggleWatch,
+  } = useWatchListingToggle({
+    mlsNumber,
+    initiallyWatching,
+    authCallbackUrl,
+  });
 
   useEffect(() => {
     function sync() {
@@ -91,48 +84,6 @@ export function ListingMobileActionBar({
     });
     return () => mo.disconnect();
   }, []);
-
-  async function onWatchProperty() {
-    if (!signedIn) {
-      openAuth({
-        mode: "sign-in",
-        callbackUrl: authCallbackUrl,
-      });
-      return;
-    }
-
-    const nextWatching = !watching;
-    if (!nextWatching) {
-      const ok = await confirm({
-        ...SITE_MESSAGES.stopWatchingHome,
-        destructive: true,
-      });
-      if (!ok) return;
-    }
-
-    setPending(true);
-    const res = await fetch("/api/account/property-monitors", {
-      method: nextWatching ? "POST" : "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mlsNumber }),
-    });
-    setPending(false);
-    if (!res.ok) {
-      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
-      return;
-    }
-
-    watchTouched.current = true;
-    setWatching(nextWatching);
-    router.refresh();
-
-    if (nextWatching) {
-      await alert({ ...SITE_MESSAGES.watchAdded });
-      return;
-    }
-
-    toast({ message: SITE_MESSAGES.watchRemovedToast, tone: "info" });
-  }
 
   const similarHref =
     similarHomesHref ??
@@ -186,9 +137,9 @@ export function ListingMobileActionBar({
                 type="button"
                 variant="secondary"
                 size="lg"
-                disabled={pending}
+                disabled={watchPending || !watchReady}
                 data-houzzat-listing-coach="watchlist"
-                onClick={() => void onWatchProperty()}
+                onClick={() => void toggleWatch()}
                 className={cn(
                   "h-12 min-w-0 flex-1 gap-1.5 px-2 text-sm",
                   watching && "border-signal text-signal",

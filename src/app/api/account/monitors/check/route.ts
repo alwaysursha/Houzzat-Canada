@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireFullCustomerUser } from "@/lib/account";
 import { runAllMonitorChecks } from "@/lib/account/monitors";
 
-/** Dev/self-check stub — diffs monitors and writes CustomerAlert rows. */
+/** Dev/self-check + optional manual refresh — diffs monitors for the signed-in user only. */
 export async function POST() {
   const access = await requireFullCustomerUser();
   if (access.denied) return access.denied;

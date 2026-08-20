@@ -156,6 +156,9 @@ export function AddressAutocomplete({
   onClear,
   closeWhenHiddenBehindHeader = false,
   portalDesktopSuggestions = false,
+  autoOpenMobileSheet = false,
+  onMobileSheetOpenChange,
+  mobileSheetZClassName = "z-[200]",
 }: {
   initialQuery?: string;
   className?: string;
@@ -192,6 +195,12 @@ export function AddressAutocomplete({
    * scroll ancestors — e.g. Drive Time inside ListingSection).
    */
   portalDesktopSuggestions?: boolean;
+  /** Open the mobile full-screen search sheet on mount (listing chrome Search). */
+  autoOpenMobileSheet?: boolean;
+  /** Fires when the mobile search sheet opens or closes. */
+  onMobileSheetOpenChange?: (open: boolean) => void;
+  /** Tailwind z-index classes for the mobile search portal (default z-[200]). */
+  mobileSheetZClassName?: string;
 }) {
   const router = useRouter();
   const isMobile = useIsMobileSearch();
@@ -237,9 +246,24 @@ export function AddressAutocomplete({
   const placesFetchGenRef = useRef(0);
   const [panelStyle, setPanelStyle] = useState<CSSProperties | undefined>();
 
+  const mobileSheetWasOpenRef = useRef(false);
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!onMobileSheetOpenChange) return;
+    if (mobileSheetOpen) mobileSheetWasOpenRef.current = true;
+    // Avoid mount-time `false` closing a parent that just opened search.
+    if (!mobileSheetWasOpenRef.current) return;
+    onMobileSheetOpenChange(mobileSheetOpen);
+  }, [mobileSheetOpen, onMobileSheetOpenChange]);
+
+  useEffect(() => {
+    if (!autoOpenMobileSheet || !mounted || !isMobile) return;
+    setMobileSheetOpen(true);
+  }, [autoOpenMobileSheet, mounted, isMobile]);
 
   /** Mount/unmount mobile sheet with a slide-in / slide-out transition. */
   useEffect(() => {
@@ -1175,7 +1199,8 @@ export function AddressAutocomplete({
       ? createPortal(
           <div
             className={cn(
-              "fixed inset-0 z-[200] flex flex-col will-change-transform",
+              "fixed inset-0 flex flex-col will-change-transform",
+              mobileSheetZClassName,
               "transition-[transform,opacity] duration-300 ease-out",
               sheetEntered
                 ? "translate-x-0 opacity-100"

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Paths are filled in by scripts/macos/install-monitors-launchagent.sh
+  Placeholders: __HOZZAT_ROOT__
+-->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.houzzat.monitors</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/bash</string>
+      <string>__HOZZAT_ROOT__/scripts/run-monitors-mac.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__HOZZAT_ROOT__</string>
+
+    <!-- Every 10 minutes -->
+    <key>StartInterval</key>
+    <integer>600</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>__HOZZAT_ROOT__/logs/monitors.launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOZZAT_ROOT__/logs/monitors.launchd.err.log</string>
+  </dict>
+</plist>

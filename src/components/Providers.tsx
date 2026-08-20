@@ -5,6 +5,7 @@ import { SessionProvider } from "next-auth/react";
 import { ContactUpdateReminder } from "@/components/account/ContactUpdateReminder";
 import { RecentViewsSync } from "@/components/account/RecentViewsSync";
 import { SavedListingsProvider } from "@/components/account/SavedListingsProvider";
+import { PropertyWatchesProvider } from "@/components/account/PropertyWatchesProvider";
 import { ActivityBeacon } from "@/components/analytics/ActivityBeacon";
 import { AuthModalProvider } from "@/components/auth/AuthModalProvider";
 import { RememberClientSession } from "@/components/auth/RememberClientSession";
@@ -28,6 +29,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       refetchInterval={30 * 60}
     >
       <SavedListingsProvider>
+        <PropertyWatchesProvider>
         <RoutePlannerProvider>
           <SiteAlertProvider>
             <AuthModalProvider>
@@ -49,6 +51,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             </AuthModalProvider>
           </SiteAlertProvider>
         </RoutePlannerProvider>
+        </PropertyWatchesProvider>
       </SavedListingsProvider>
     </SessionProvider>
   );

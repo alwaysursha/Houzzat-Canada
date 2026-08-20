@@ -22,6 +22,10 @@ import {
   closeListingSheet,
   isListingSheetOpen,
 } from "@/lib/mobile/listing-sheet-store";
+import {
+  isListingSheetSearchOpen,
+  requestCloseListingSheetSearch,
+} from "@/lib/mobile/listing-sheet-search";
 import { hardGo, takeNavBackHref } from "@/lib/mobile/nav-back";
 import {
   closeTopStaffOverlay,
@@ -32,7 +36,7 @@ import {
  * Native-shell polish when Houzzat runs inside Capacitor.
  *
  * Back priority:
- * listing sheet → staff drawers/modals → hard-nav memory → history → exit.
+ * listing chrome search → listing sheet → staff drawers/modals → hard-nav memory → history → exit.
  * Closing overlays never leaves body scroll locked (acquireScrollLock).
  *
  * Also syncs the UX-only `houzzat_shell` cookie (never used for authorization).
@@ -61,6 +65,11 @@ export function CapacitorBootstrap() {
     })();
 
     const sub = CapApp.addListener("backButton", ({ canGoBack }) => {
+      if (isListingSheetSearchOpen()) {
+        requestCloseListingSheetSearch();
+        return;
+      }
+
       if (isListingSheetOpen()) {
         if (canListingSheetBack()) {
           backListingSheet();

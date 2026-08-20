@@ -62,6 +62,7 @@ import {
   homesForSaleCityPath,
   homesForSaleCommunityPath,
 } from "@/lib/geo/area-paths";
+import { interceptListingSheetExitClick } from "@/lib/listings/navigate-listing";
 import { getExpertWhatsAppNumber } from "@/lib/whatsapp";
 
 export type ListingDetailViewProps = {
@@ -154,10 +155,13 @@ export function ListingDetailView({
       href: homesForSaleCityPath(listing.city),
     },
   ];
-  if (listing.community) {
+  const communityHref = listing.community
+    ? homesForSaleCommunityPath(listing.city, listing.community)
+    : null;
+  if (communityHref && listing.community) {
     crumbs.push({
       label: listing.community,
-      href: homesForSaleCommunityPath(listing.city, listing.community),
+      href: communityHref,
     });
   }
   crumbs.push({ label: streetLine });
@@ -369,15 +373,18 @@ export function ListingDetailView({
                     </h1>
                     {addressLocality ? (
                       <p className="mt-1 text-base font-normal text-ink/70 md:text-lg">
-                        {listing.community ? (
+                        {communityHref && listing.community ? (
                           <>
                             {listing.city.trim()}
                             {" - "}
                             <Link
-                              href={homesForSaleCommunityPath(
-                                listing.city,
-                                listing.community,
-                              )}
+                              href={communityHref}
+                              onClick={(event) =>
+                                interceptListingSheetExitClick(
+                                  event,
+                                  communityHref,
+                                )
+                              }
                               className="text-canopy hover:underline"
                             >
                               {listing.community}

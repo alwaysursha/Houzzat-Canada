@@ -8,6 +8,10 @@ export const SITE_MESSAGES = {
     confirmLabel: "Got it",
   },
   watchRemovedToast: "Removed from watchlist. You won’t get alerts for this home.",
+  saveRequiresEmailVerificationToast:
+    "Verify your email to save listings.",
+  watchRequiresEmailVerificationToast:
+    "Verify your email to watch listings and areas.",
   saveAddedToast: "Added to Saved Listings",
   saveRemovedToast: "Removed from Saved Listings",
   routePlannerRemovedToast: "Removed from Route Planner",

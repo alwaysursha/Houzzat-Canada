@@ -22,6 +22,8 @@
     "mls:history": "node --import tsx scripts/mls-history-backfill.ts",
     "mls:address-history": "node --import tsx scripts/mls-address-history-enrich.ts",
     "digests:run": "node --import tsx scripts/run-digests.ts",
+    "monitors:run": "node --import tsx scripts/run-monitors.ts",
+    "monitors:selftest": "node --import tsx scripts/monitors-reliability-selftest.ts",
     "typesense:import": "node --import tsx scripts/typesense-import-listings.ts",
     "typesense:oh-fields": "node --import tsx scripts/typesense-ensure-open-house-fields.ts",
     "typesense:oh-backfill": "node --import tsx scripts/typesense-backfill-open-houses.ts",
