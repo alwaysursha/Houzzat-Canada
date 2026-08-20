@@ -17,7 +17,7 @@ import { HouzzatAndroidBootCover } from "@/components/mobile/HouzzatAndroidBootC
 import { HouzzatPullToRefresh } from "@/components/mobile/HouzzatPullToRefresh";
 import { HouzzatProStartup } from "@/components/mobile/HouzzatProStartup";
 import { PushNotificationsBootstrap } from "@/components/mobile/PushNotificationsBootstrap";
-import { ListingSheetHost } from "@/components/mobile/ListingSheetHost";
+import { ListingSheetHostLazy } from "@/components/mobile/ListingSheetHostLazy";
 import { RoutePlannerProvider } from "@/components/route-planner/RoutePlannerProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -45,7 +45,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               </Suspense>
               <ContactUpdateReminder />
               <HouzzatPullToRefresh>{children}</HouzzatPullToRefresh>
-              <ListingSheetHost />
+              <ListingSheetHostLazy />
             </AuthModalProvider>
           </SiteAlertProvider>
         </RoutePlannerProvider>

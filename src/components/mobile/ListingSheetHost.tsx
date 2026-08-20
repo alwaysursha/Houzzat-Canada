@@ -6,11 +6,11 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentType,
   type CSSProperties,
 } from "react";
 import { useSession } from "next-auth/react";
 import { ChevronLeft, X } from "lucide-react";
-import { ListingDetailPanel } from "@/components/listings/ListingDetailPanel";
 import {
   abortListingGalleryFetches,
   mlsNumberFromListingHref,
@@ -26,6 +26,18 @@ import {
 } from "@/lib/mobile/listing-sheet-store";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 
+type PanelComponent = ComponentType<{ href: string }>;
+
+let panelModulePromise: Promise<PanelComponent> | null = null;
+
+function loadListingDetailPanel(): Promise<PanelComponent> {
+  if (!panelModulePromise) {
+    panelModulePromise = import(
+      "@/components/listings/ListingDetailPanel"
+    ).then((mod) => mod.ListingDetailPanel);
+  }
+  return panelModulePromise;
+}
 type SheetHistoryState = {
   houzzatListingSheet?: boolean;
 };
@@ -86,6 +98,7 @@ export function ListingSheetHost() {
     canBack: false,
   });
   const [usePanel, setUsePanel] = useState(false);
+  const [Panel, setPanel] = useState<PanelComponent | null>(null);
   const historyPushedRef = useRef(false);
   const syncingHistoryRef = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -118,6 +131,18 @@ export function ListingSheetHost() {
     if (status === "loading") return;
     setUsePanel(isListingPanelEnabled({ role: session?.user?.role }));
   }, [state.href, status, session?.user?.role]);
+
+  // Panel cohort only — load ListingDetailView/MapLibre after panel mode is chosen.
+  useEffect(() => {
+    if (!usePanel || Panel) return;
+    let cancelled = false;
+    void loadListingDetailPanel().then((Comp) => {
+      if (!cancelled) setPanel(() => Comp);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [usePanel, Panel]);
 
   // Child iframe asks parent to push another listing onto the stack.
   useEffect(() => {
@@ -273,7 +298,13 @@ export function ListingSheetHost() {
         </span>
       </div>
       {usePanel ? (
-        <ListingDetailPanel key={state.href} href={state.href} />
+        Panel ? (
+          <Panel key={state.href} href={state.href} />
+        ) : (
+          <div className="flex min-h-0 flex-1 items-center justify-center bg-mist text-sm text-ink/55">
+            Loading listing…
+          </div>
+        )
       ) : (
         <iframe
           ref={iframeRef}

@@ -16,6 +16,7 @@ import {
   toggleLocalStop,
 } from "@/lib/route-planner/local";
 import { ROUTE_PLANNER_MAX_STOPS } from "@/lib/route-planner/optimize";
+import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 
 export type RoutePlannerStopSummary = {
   mlsNumber: string;
@@ -98,8 +99,19 @@ export function RoutePlannerProvider({
   }, [status, refresh]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (status === "loading") return;
+    // Local guest state is sync; authenticated network refresh is secondary.
+    if (status !== "authenticated") {
+      void refresh();
+      return;
+    }
+    return scheduleAfterFirstPaint(
+      () => {
+        void refresh();
+      },
+      { timeoutMs: 2_000 },
+    );
+  }, [refresh, status]);
 
   useEffect(() => {
     if (status === "authenticated") {

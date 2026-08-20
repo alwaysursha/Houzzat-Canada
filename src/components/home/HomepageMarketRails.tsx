@@ -13,11 +13,12 @@ import {
 import type { HomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
-  getCurrentCoordinates,
-  readLocationPermissionState,
-} from "@/lib/mobile/geolocation";
-
-const GEO_REGION_KEY = "houzzat-region-geo";
+  getHomeCoordinates,
+  HOME_GEO_EVENT,
+  readCachedHomeCoordinates,
+} from "@/lib/mobile/home-geolocation";
+import { readLocationPermissionState } from "@/lib/mobile/geolocation";
+import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 const RAIL_LIMIT = 12;
 
 type HomeRailsPayload = {
@@ -112,19 +113,9 @@ export function HomepageMarketRails({
       }
       setOverrideCities(null);
 
-      try {
-        const cached =
-          typeof sessionStorage !== "undefined"
-            ? sessionStorage.getItem(GEO_REGION_KEY)
-            : null;
-        if (cached) {
-          const parsed = JSON.parse(cached) as { lat: number; lng: number };
-          if (Number.isFinite(parsed.lat) && Number.isFinite(parsed.lng)) {
-            return resolveRegionFromCoords(parsed.lat, parsed.lng).region;
-          }
-        }
-      } catch {
-        // ignore cache parse
+      const cached = readCachedHomeCoordinates(300_000);
+      if (cached) {
+        return resolveRegionFromCoords(cached.lat, cached.lng).region;
       }
 
       return resolveRegionFromCity(null).region;
@@ -188,22 +179,15 @@ export function HomepageMarketRails({
       try {
         const permission = await readLocationPermissionState();
         if (permission === "denied") return;
-        const { lat, lng } = await getCurrentCoordinates({
-          enableHighAccuracy: false,
+        // Shared single-flight with Near Me — no second native GPS call.
+        const { lat, lng } = await getHomeCoordinates({
           timeout: 8_000,
           maximumAge: 300_000,
+          emitEvent: true,
         });
         if (cancelled) return;
-        try {
-          sessionStorage.setItem(
-            GEO_REGION_KEY,
-            JSON.stringify({ lat, lng }),
-          );
-        } catch {
-          // ignore
-        }
         const upgraded = resolveRegionFromCoords(lat, lng).region;
-        if (upgraded.id === nextRegion.id) return;
+        if (upgraded.id === regionIdRef.current) return;
         void loadForRegion(upgraded);
       } catch {
         // ignore geo upgrade failures
@@ -231,11 +215,19 @@ export function HomepageMarketRails({
       void loadForRegion(next);
     }
 
-    window.addEventListener("houzzat:geo", onGeo);
-    void load();
+    window.addEventListener(HOME_GEO_EVENT, onGeo);
+    // Defer market fetch slightly so the hero paints first — still starts
+    // quickly via idle timeout so the finished page is not slower overall.
+    const cancelSchedule = scheduleAfterFirstPaint(
+      () => {
+        if (!cancelled) void load();
+      },
+      { timeoutMs: 900 },
+    );
     return () => {
       cancelled = true;
-      window.removeEventListener("houzzat:geo", onGeo);
+      cancelSchedule();
+      window.removeEventListener(HOME_GEO_EVENT, onGeo);
     };
   }, [personalizationKey, vowOnlyGuest]);
 

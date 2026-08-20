@@ -7,6 +7,7 @@ import { Phone } from "lucide-react";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 import { cn } from "@/lib/utils";
 
 const SNOOZE_KEY = "houzzat:contact-reminder-snooze";
@@ -116,8 +117,17 @@ export function ContactUpdateReminder() {
   }, [status, role]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (status !== "authenticated") {
+      void load();
+      return;
+    }
+    return scheduleAfterFirstPaint(
+      () => {
+        void load();
+      },
+      { timeoutMs: 3_200 },
+    );
+  }, [load, status]);
 
   useEffect(() => () => clearFadeTimer(), [clearFadeTimer]);
 

@@ -10,6 +10,7 @@ import { HomeRecentlyViewedRail } from "@/components/home/HomeRecentlyViewedRail
 import { HomepageMarketRails } from "@/components/home/HomepageMarketRails";
 import { HomepageSortedRails } from "@/components/home/HomepageSortedRails";
 import type { HomeCustomerShellPayload } from "@/lib/home/load-home-customer-shell";
+import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 
 function ToolsStripSkeleton() {
   return (
@@ -111,9 +112,17 @@ export function HomeDeferredBody({
       }
     }
 
-    void load();
+    // Tools/personalization shortly after hero — not on the critical first paint.
+    const cancelSchedule = scheduleAfterFirstPaint(
+      () => {
+        if (!cancelled) void load();
+      },
+      { timeoutMs: 700 },
+    );
+
     return () => {
       cancelled = true;
+      cancelSchedule();
       controller.abort();
     };
   }, [isAuthenticated]);

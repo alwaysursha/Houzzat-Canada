@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { useSession } from "next-auth/react";
+import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 
 type SavedListingsContextValue = {
   ready: boolean;
@@ -52,8 +53,18 @@ export function SavedListingsProvider({
   }, [status]);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    // Guest resolution is sync/cheap; authenticated fetch waits for first paint.
+    if (status !== "authenticated") {
+      void reload();
+      return;
+    }
+    return scheduleAfterFirstPaint(
+      () => {
+        void reload();
+      },
+      { timeoutMs: 1_800 },
+    );
+  }, [reload, status]);
 
   useEffect(() => {
     function onChanged() {

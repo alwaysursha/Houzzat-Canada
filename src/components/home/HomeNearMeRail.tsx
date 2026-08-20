@@ -13,11 +13,14 @@ import {
 } from "@/lib/listings/homepage-personalization";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
+  getHomeCoordinates,
+} from "@/lib/mobile/home-geolocation";
+import {
   AppGeolocationError,
-  getCurrentCoordinates,
   locationErrorMessage,
   readLocationPermissionState,
 } from "@/lib/mobile/geolocation";
+import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 
 type NearMeListing = ListingCardData & { distanceKm?: number };
 
@@ -101,25 +104,12 @@ export function HomeNearMeRail({
   async function fetchWithLocation() {
     setStatus("locating");
     try {
-      const { lat, lng } = await getCurrentCoordinates({
-        enableHighAccuracy: false,
+      const { lat, lng } = await getHomeCoordinates({
         timeout: 12_000,
         maximumAge: 60_000,
+        emitEvent: true,
       });
       void persistHomeLocationIfEmpty({ lat, lng });
-      try {
-        sessionStorage.setItem(
-          "houzzat-region-geo",
-          JSON.stringify({ lat, lng }),
-        );
-      } catch {
-        // ignore
-      }
-      window.dispatchEvent(
-        new CustomEvent("houzzat:geo", {
-          detail: { lat, lng },
-        }),
-      );
       await loadNearby(lat, lng);
     } catch (error) {
       commitStatus("hidden");
@@ -164,14 +154,25 @@ export function HomeNearMeRail({
         return;
       }
 
-      sessionStorage.setItem(GEO_ASKED_KEY, "1");
+      try {
+        sessionStorage.setItem(GEO_ASKED_KEY, "1");
+      } catch {
+        // ignore
+      }
       await fetchWithLocation();
     }
 
-    void init();
+    // Keep the hero free of GPS + nearby fetch on first paint.
+    const cancelSchedule = scheduleAfterFirstPaint(
+      () => {
+        if (!cancelled) void init();
+      },
+      { timeoutMs: 1_400 },
+    );
 
     return () => {
       cancelled = true;
+      cancelSchedule();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-fetch when personalizationKey changes
   }, [personalizationKey]);

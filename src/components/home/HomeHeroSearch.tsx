@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
-import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
+import { LazyAddressAutocomplete } from "@/components/listings/LazyAddressAutocomplete";
 import { Button } from "@/components/ui/button";
 import {
   parseSearchQuery,
@@ -254,7 +254,7 @@ export function HomeHeroSearch({
           )}
         >
           <div className="min-w-0 flex-1">
-            <AddressAutocomplete
+            <LazyAddressAutocomplete
               key={mode}
               initialQuery={query}
               fillOnly={mode === "sell"}

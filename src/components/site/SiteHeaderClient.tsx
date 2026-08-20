@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Menu, UserRound, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
-import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
+import { LazyAddressAutocomplete } from "@/components/listings/LazyAddressAutocomplete";
 import { StaffHardLink } from "@/components/site/StaffHardLink";
 import { Button } from "@/components/ui/button";
 import { pushHref } from "@/lib/listings/navigate-listing";
@@ -226,7 +226,7 @@ function BuySearchControls({
       )}
     >
       <div className="min-w-0 flex-1">
-        <AddressAutocomplete
+        <LazyAddressAutocomplete
           minChars={1}
           transactionType="SALE"
           placeholder="Search active or sold listings by MLS® #, address or neighbourhood"

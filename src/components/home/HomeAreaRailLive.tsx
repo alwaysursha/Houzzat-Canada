@@ -7,6 +7,7 @@ import {
 } from "@/components/home/HomeAreaRail";
 import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
 import Link from "next/link";
+import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 
 function HomeAreaRailSkeleton() {
   return (
@@ -69,9 +70,16 @@ export function HomeAreaRailLive() {
       }
     }
 
-    void load();
+    const cancelSchedule = scheduleAfterFirstPaint(
+      () => {
+        if (!cancelled) void load();
+      },
+      { timeoutMs: 1_600 },
+    );
+
     return () => {
       cancelled = true;
+      cancelSchedule();
       controller.abort();
     };
   }, []);
