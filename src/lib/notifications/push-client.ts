@@ -26,10 +26,18 @@ import {
   setStoredPushBinding,
   wasPushPermissionDenied,
 } from "@/lib/notifications/push-device-store";
+import {
+  HOUZZAT_UPDATES_CHANNEL_DESCRIPTION,
+  HOUZZAT_UPDATES_CHANNEL_ID,
+  HOUZZAT_UPDATES_CHANNEL_IMPORTANCE,
+  HOUZZAT_UPDATES_CHANNEL_NAME,
+  HOUZZAT_UPDATES_CHANNEL_VISIBILITY,
+} from "@/lib/notifications/android-channel";
 
 let actionListenerAttached = false;
 let registrationListenerAttached = false;
 let registerInFlight = false;
+let consumerChannelReady = false;
 let lastRegisteredToken: string | null = null;
 let lastPostedToken: string | null = null;
 let lastPostedUserId: string | null = null;
@@ -46,6 +54,29 @@ function isNative(): boolean {
 
 function platform(): "android" | "ios" {
   return Capacitor.getPlatform() === "ios" ? "ios" : "android";
+}
+
+/**
+ * Ensure HIGH-importance consumer channel exists (heads-up banners).
+ * No-op on iOS / Pro. Safe to call repeatedly — Android ignores recreate
+ * with the same id (importance stays as first-created).
+ */
+export async function ensureHouzzatUpdatesChannel(): Promise<void> {
+  if (!isNative() || platform() !== "android" || consumerChannelReady) return;
+  try {
+    await PushNotifications.createChannel({
+      id: HOUZZAT_UPDATES_CHANNEL_ID,
+      name: HOUZZAT_UPDATES_CHANNEL_NAME,
+      description: HOUZZAT_UPDATES_CHANNEL_DESCRIPTION,
+      importance: HOUZZAT_UPDATES_CHANNEL_IMPORTANCE,
+      visibility: HOUZZAT_UPDATES_CHANNEL_VISIBILITY,
+      vibration: true,
+      // Omit sound → system default for HIGH channels.
+    });
+    consumerChannelReady = true;
+  } catch {
+    // Plugin / older Android — FCM may still land in default channel.
+  }
 }
 
 async function postRegister(token: string, shell: "houzzat" | "houzzatpro") {
@@ -153,6 +184,7 @@ export async function ensurePushActionListener(): Promise<void> {
   if (!isNative() || actionListenerAttached) return;
   actionListenerAttached = true;
   try {
+    await ensureHouzzatUpdatesChannel();
     await PushNotifications.addListener(
       "pushNotificationActionPerformed",
       (action) => {
@@ -203,6 +235,10 @@ export async function registerPushForSession(options?: {
     if (shell !== "houzzat" && shell !== "houzzatpro") return "skipped";
     registrationShell = shell;
     registrationUserId = options?.userId?.trim() || null;
+
+    if (shell === "houzzat") {
+      await ensureHouzzatUpdatesChannel();
+    }
 
     let perm = await PushNotifications.checkPermissions();
     if (perm.receive === "granted") {

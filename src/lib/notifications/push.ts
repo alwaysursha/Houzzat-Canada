@@ -6,6 +6,7 @@ import {
   shellForAudience,
   type PushType,
 } from "@/lib/notifications/catalog";
+import { HOUZZAT_UPDATES_CHANNEL_ID } from "@/lib/notifications/android-channel";
 
 export type PushPayload = {
   type: PushType;
@@ -165,6 +166,20 @@ async function deliverFcm(token: string, payload: PushPayload) {
     const accessToken = await getAccessToken(account);
     if (!accessToken) return "failed" as const;
 
+    const shell = shellForAudience(audienceForPushType(payload.type));
+    const androidConfig =
+      shell === "houzzat"
+        ? {
+            priority: "HIGH" as const,
+            notification: {
+              channel_id: HOUZZAT_UPDATES_CHANNEL_ID,
+              notification_priority: "PRIORITY_HIGH" as const,
+              default_sound: true,
+              default_vibrate_timings: true,
+            },
+          }
+        : { priority: "HIGH" as const };
+
     const res = await fetch(
       `https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`,
       {
@@ -184,7 +199,7 @@ async function deliverFcm(token: string, payload: PushPayload) {
               type: payload.type,
               href: payload.href ?? "",
             },
-            android: { priority: "HIGH" },
+            android: androidConfig,
           },
         }),
       },
