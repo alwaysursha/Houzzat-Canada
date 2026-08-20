@@ -26,8 +26,10 @@ export default function SearchPage() {
       >
         <SearchExperience />
       </Suspense>
-      <div className="shrink-0 border-t border-line/80 bg-surface px-4 py-1.5 [[data-mobile-bottom-nav='0']_&]:pb-[max(0.375rem,env(safe-area-inset-bottom,0px))]">
-        <MlsDisclaimer className="text-[10px] leading-snug text-ink/40" />
+      <div className="shrink-0 border-t border-line/80 bg-surface px-3 py-1 sm:px-4 sm:py-1.5 [[data-mobile-bottom-nav='0']_&]:pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]">
+        {/* ≤1023: collapsed disclosure (full approved copy on expand). Desktop: full text. */}
+        <MlsDisclaimer compact className="lg:hidden" />
+        <MlsDisclaimer className="hidden text-[10px] leading-snug text-ink/40 lg:block" />
       </div>
     </div>
   );

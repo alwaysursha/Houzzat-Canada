@@ -8,6 +8,7 @@ import {
   useState,
   useTransition,
 } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { PropertyType } from "@prisma/client";
@@ -27,6 +28,7 @@ import { pushHref } from "@/lib/listings/navigate-listing";
 import { SaveSearchButton } from "@/components/account/SaveSearchButton";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
+import { SearchActiveFilterStrip } from "@/components/listings/SearchActiveFilterStrip";
 import {
   countActiveSearchFilters,
   type SearchFilters,
@@ -36,7 +38,6 @@ import {
 import { SearchFiltersMenu } from "@/components/listings/SearchFiltersMenu";
 import { SearchFiltersSheet } from "@/components/listings/SearchFiltersSheet";
 import { MapSearchCoachMarks } from "@/components/listings/MapSearchCoachMarks";
-import { SearchMap } from "@/components/listings/SearchMap";
 import { SearchMapListingOverlay } from "@/components/listings/SearchMapListingOverlay";
 import { SearchResultsPane } from "@/components/listings/SearchResultsPane";
 import {
@@ -46,6 +47,20 @@ import {
 import { pointInPolygon, polygonBBox } from "@/lib/maps/geo";
 import { cityMapCenter } from "@/lib/geo/regions";
 import { cn } from "@/lib/utils";
+
+/** MapLibre stays out of the List/cards bundle until Map (or Split) is shown. */
+const SearchMap = dynamic(
+  () =>
+    import("@/components/listings/SearchMap").then((m) => m.SearchMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center bg-mist text-sm text-ink/45">
+        Loading map…
+      </div>
+    ),
+  },
+);
 
 type Bounds = {
   west: number;
@@ -615,62 +630,64 @@ export function SearchExperience() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 space-y-2.5 border-b border-line/80 bg-surface px-3 py-2.5 sm:px-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-full bg-mist p-0.5">
-            {transactionButtons.map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => {
-                  updateFilters({
-                    ...filters,
-                    transactionType: value,
-                    statuses: ["ACTIVE"],
-                    openHouseOnly:
-                      value === "LEASE" ? false : filters.openHouseOnly,
-                  });
-                }}
-                className={cn(
-                  "rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
-                  filters.transactionType === value
-                    ? "bg-canopy text-white shadow-sm"
-                    : "text-ink/55 hover:text-ink",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div
-            data-search-bar
-            className="min-w-0 flex-1 basis-[16rem] rounded-full border border-line bg-mist/60 px-1"
-          >
-            <AddressAutocomplete
-              initialQuery={searchBarQuery}
-              transactionType={
-                filters.transactionType === "LEASE" ||
-                filters.transactionType === "SALE"
-                  ? filters.transactionType
-                  : undefined
-              }
-              placeholder="City, neighbourhood, address, or MLS® #"
-              inputClassName="h-9 border-0 bg-transparent shadow-none focus-visible:ring-0"
-              onPlaceSelect={onPlaceSelect}
-              onSearchSubmit={onBarSearchSubmit}
-              onClear={onBarSearchClear}
-            />
+      <div className="shrink-0 border-b border-line/80 bg-surface px-3 py-2 sm:px-4 sm:py-2.5">
+        {isNarrow ? (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="flex shrink-0 rounded-full bg-mist p-0.5">
+              {transactionButtons.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    updateFilters({
+                      ...filters,
+                      transactionType: value,
+                      statuses: ["ACTIVE"],
+                      openHouseOnly:
+                        value === "LEASE" ? false : filters.openHouseOnly,
+                    });
+                  }}
+                  className={cn(
+                    "min-h-11 rounded-full px-3.5 text-sm font-semibold transition",
+                    filters.transactionType === value
+                      ? "bg-canopy text-white shadow-sm"
+                      : "text-ink/55 hover:text-ink",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div
+              data-search-bar
+              className="min-w-0 flex-1 rounded-full border border-line bg-mist/60 px-1"
+            >
+              <AddressAutocomplete
+                initialQuery={searchBarQuery}
+                transactionType={
+                  filters.transactionType === "LEASE" ||
+                  filters.transactionType === "SALE"
+                    ? filters.transactionType
+                    : undefined
+                }
+                placeholder="City, neighbourhood, address…"
+                inputClassName="h-11 border-0 bg-transparent shadow-none focus-visible:ring-0"
+                onPlaceSelect={onPlaceSelect}
+                onSearchSubmit={onBarSearchSubmit}
+                onClear={onBarSearchClear}
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {isNarrow && !showMap ? (
+            {!showMap ? (
               <button
                 type="button"
                 onClick={() => setFiltersOpen(true)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-mist px-3 text-xs font-semibold text-ink transition hover:border-canopy/40"
+                className="inline-flex h-11 min-w-11 items-center gap-1.5 rounded-full border border-line bg-mist px-3.5 text-sm font-semibold text-ink transition hover:border-canopy/40"
               >
-                <ListFilter className="size-3.5" aria-hidden />
+                <ListFilter className="size-4" aria-hidden />
                 Filters
                 {activeFilterCount > 0 ? (
                   <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-canopy px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
@@ -679,69 +696,13 @@ export function SearchExperience() {
                 ) : null}
               </button>
             ) : null}
-            <div
-              ref={viewToggleRef}
-              className="flex rounded-full border border-line bg-mist p-0.5"
-            >
-              {(
-                [
-                  ["map", MapIcon, "Map"],
-                  ["split", Columns2, "Split"],
-                  ["cards", LayoutGrid, "Cards"],
-                ] as const
-              )
-                .filter(([mode]) => !(isNarrow && mode === "split"))
-                .map(([mode, Icon, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  aria-label={label}
-                  title={label}
-                  onClick={() => updateView(mode)}
-                  className={cn(
-                    "inline-flex size-9 items-center justify-center rounded-full transition",
-                    view === mode
-                      ? "bg-surface text-canopy shadow-sm"
-                      : "text-ink/45 hover:text-ink",
-                  )}
-                >
-                  <Icon className="size-4" aria-hidden />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
 
-        <div
-          className={cn(
-            "flex flex-wrap items-center justify-between gap-2",
-            isNarrow && "justify-end",
-          )}
-        >
-          {!isNarrow ? (
-            <SearchFiltersMenu
-              filters={filters}
-              onChange={updateFilters}
-              resultCount={total}
-              resultNoun={noun}
-              signedIn={signedIn}
-              previewExtras={filterPreviewExtras}
-            />
-          ) : null}
-          <div className="flex flex-wrap items-center gap-2 text-xs text-ink/50">
-            <span className="inline-flex items-center gap-1.5 font-medium text-ink/65">
-              {pending ? (
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
-              ) : null}
-              {pending ? "Updating…" : `${total.toLocaleString("en-CA")} ${noun}`}
-              {provider === "mock" ? " · demo" : ""}
-            </span>
-            <label className="group relative inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 shadow-sm transition hover:border-canopy/40">
+            <label className="group relative inline-flex h-11 min-w-11 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border border-line bg-mist px-3 shadow-sm transition hover:border-canopy/40">
               <ArrowUpDown
                 className="size-3.5 shrink-0 text-canopy"
                 aria-hidden
               />
-              <span className="text-xs font-semibold text-ink">
+              <span className="truncate text-sm font-semibold text-ink">
                 {filters.sort === "newest"
                   ? "Newest"
                   : filters.sort === "price_desc"
@@ -749,7 +710,7 @@ export function SearchExperience() {
                     : "Price ↑"}
               </span>
               <ChevronDown
-                className="size-3.5 shrink-0 text-ink/35 group-hover:text-ink/55"
+                className="size-3.5 shrink-0 text-ink/35"
                 aria-hidden
               />
               <select
@@ -768,7 +729,49 @@ export function SearchExperience() {
                 <option value="price_desc">Price: high to low</option>
               </select>
             </label>
-            <div ref={saveSearchRef} className="inline-flex">
+
+            <div
+              ref={viewToggleRef}
+              className="flex shrink-0 rounded-full border border-line bg-mist p-0.5"
+            >
+              {(
+                [
+                  ["map", MapIcon, "Map"],
+                  ["cards", LayoutGrid, "List"],
+                ] as const
+              ).map(([mode, Icon, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-label={label}
+                  title={label}
+                  onClick={() => updateView(mode)}
+                  className={cn(
+                    "inline-flex size-11 items-center justify-center rounded-full transition",
+                    view === mode
+                      ? "bg-surface text-canopy shadow-sm"
+                      : "text-ink/45 hover:text-ink",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <p className="inline-flex min-w-0 items-center gap-1.5 font-medium text-ink/55">
+              {pending ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              ) : null}
+              <span className="truncate">
+                {pending
+                  ? "Updating…"
+                  : `${total.toLocaleString("en-CA")} ${noun}`}
+                {provider === "mock" ? " · demo" : ""}
+              </span>
+            </p>
+            <div ref={saveSearchRef} className="inline-flex shrink-0">
               <SaveSearchButton
                 signedIn={signedIn}
                 query={{
@@ -796,31 +799,207 @@ export function SearchExperience() {
                 }}
               />
             </div>
-            <WatchAreaButton
-              signedIn={signedIn}
-              city={filters.city}
-              community={filters.community || undefined}
-              transactionType={filters.transactionType}
-              segment={filters.segment}
+          </div>
+
+          {activeFilterCount > 0 ? (
+            <SearchActiveFilterStrip
+              filters={filters}
+              onChange={updateFilters}
             />
-            {filters.dataSource === "fsbo" ? (
-              <button
-                type="button"
-                onClick={() => updateFilters({ ...filters, dataSource: "" })}
-                className="rounded-full bg-signal/15 px-2.5 py-1 font-semibold text-signal"
+          ) : null}
+        </div>
+        ) : (
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-full bg-mist p-0.5">
+              {transactionButtons.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    updateFilters({
+                      ...filters,
+                      transactionType: value,
+                      statuses: ["ACTIVE"],
+                      openHouseOnly:
+                        value === "LEASE" ? false : filters.openHouseOnly,
+                    });
+                  }}
+                  className={cn(
+                    "rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
+                    filters.transactionType === value
+                      ? "bg-canopy text-white shadow-sm"
+                      : "text-ink/55 hover:text-ink",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div
+              data-search-bar
+              className="min-w-0 flex-1 basis-[16rem] rounded-full border border-line bg-mist/60 px-1"
+            >
+              <AddressAutocomplete
+                initialQuery={searchBarQuery}
+                transactionType={
+                  filters.transactionType === "LEASE" ||
+                  filters.transactionType === "SALE"
+                    ? filters.transactionType
+                    : undefined
+                }
+                placeholder="City, neighbourhood, address, or MLS® #"
+                inputClassName="h-9 border-0 bg-transparent shadow-none focus-visible:ring-0"
+                onPlaceSelect={onPlaceSelect}
+                onSearchSubmit={onBarSearchSubmit}
+                onClear={onBarSearchClear}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div
+                ref={isNarrow ? undefined : viewToggleRef}
+                className="flex rounded-full border border-line bg-mist p-0.5"
               >
-                By owner · clear
-              </button>
-            ) : (
-              <Link
-                href="/owner/new"
-                className="hidden font-semibold text-ink/45 hover:text-canopy sm:inline"
+                {(
+                  [
+                    ["map", MapIcon, "Map"],
+                    ["split", Columns2, "Split"],
+                    ["cards", LayoutGrid, "Cards"],
+                  ] as const
+                )
+                  .filter(([mode]) => !(isNarrow && mode === "split"))
+                  .map(([mode, Icon, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-label={label}
+                      title={label}
+                      onClick={() => updateView(mode)}
+                      className={cn(
+                        "inline-flex size-9 items-center justify-center rounded-full transition",
+                        view === mode
+                          ? "bg-surface text-canopy shadow-sm"
+                          : "text-ink/45 hover:text-ink",
+                      )}
+                    >
+                      <Icon className="size-4" aria-hidden />
+                    </button>
+                  ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <SearchFiltersMenu
+              filters={filters}
+              onChange={updateFilters}
+              resultCount={total}
+              resultNoun={noun}
+              signedIn={signedIn}
+              previewExtras={filterPreviewExtras}
+            />
+            <div className="flex flex-wrap items-center gap-2 text-xs text-ink/50">
+              <span className="inline-flex items-center gap-1.5 font-medium text-ink/65">
+                {pending ? (
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                ) : null}
+                {pending
+                  ? "Updating…"
+                  : `${total.toLocaleString("en-CA")} ${noun}`}
+                {provider === "mock" ? " · demo" : ""}
+              </span>
+              <label className="group relative inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 shadow-sm transition hover:border-canopy/40">
+                <ArrowUpDown
+                  className="size-3.5 shrink-0 text-canopy"
+                  aria-hidden
+                />
+                <span className="text-xs font-semibold text-ink">
+                  {filters.sort === "newest"
+                    ? "Newest"
+                    : filters.sort === "price_desc"
+                      ? "Price ↓"
+                      : "Price ↑"}
+                </span>
+                <ChevronDown
+                  className="size-3.5 shrink-0 text-ink/35 group-hover:text-ink/55"
+                  aria-hidden
+                />
+                <select
+                  aria-label="Sort listings"
+                  value={filters.sort}
+                  onChange={(e) =>
+                    updateFilters({
+                      ...filters,
+                      sort: e.target.value as SearchFilters["sort"],
+                    })
+                  }
+                  className="absolute inset-0 cursor-pointer opacity-0"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="price_asc">Price: low to high</option>
+                  <option value="price_desc">Price: high to low</option>
+                </select>
+              </label>
+              <div
+                ref={isNarrow ? undefined : saveSearchRef}
+                className="inline-flex"
               >
-                List yours
-              </Link>
-            )}
+                <SaveSearchButton
+                  signedIn={signedIn}
+                  query={{
+                    segment:
+                      filters.segment !== "RESIDENTIAL"
+                        ? filters.segment
+                        : undefined,
+                    transactionType:
+                      filters.transactionType !== "ALL"
+                        ? filters.transactionType
+                        : undefined,
+                    dataSource: filters.dataSource || undefined,
+                    city: filters.city || undefined,
+                    community: filters.community || undefined,
+                    propertyTypes: filters.propertyTypes.length
+                      ? filters.propertyTypes.join(",")
+                      : undefined,
+                    minPrice: filters.minPrice || undefined,
+                    maxPrice: filters.maxPrice || undefined,
+                    minBeds: filters.minBeds || undefined,
+                    minBaths: filters.minBaths || undefined,
+                    openHouseOnly: filters.openHouseOnly ? "1" : undefined,
+                    status: statusesQueryValue(filters.statuses) ?? undefined,
+                    sort: filters.sort !== "newest" ? filters.sort : undefined,
+                  }}
+                />
+              </div>
+              <WatchAreaButton
+                signedIn={signedIn}
+                city={filters.city}
+                community={filters.community || undefined}
+                transactionType={filters.transactionType}
+                segment={filters.segment}
+              />
+              {filters.dataSource === "fsbo" ? (
+                <button
+                  type="button"
+                  onClick={() => updateFilters({ ...filters, dataSource: "" })}
+                  className="rounded-full bg-signal/15 px-2.5 py-1 font-semibold text-signal"
+                >
+                  By owner · clear
+                </button>
+              ) : (
+                <Link
+                  href="/owner/new"
+                  className="hidden font-semibold text-ink/45 hover:text-canopy sm:inline"
+                >
+                  List yours
+                </Link>
+              )}
+            </div>
           </div>
         </div>
+        )}
       </div>
 
       <div

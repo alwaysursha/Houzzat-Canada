@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { PropertyType } from "@prisma/client";
 import { ArrowLeft, Check, Loader2, RotateCcw } from "lucide-react";
@@ -23,6 +23,8 @@ import {
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
+
+type FiltersHistoryState = { houzzatSearchFilters?: boolean };
 
 const RESIDENTIAL_TYPES: PropertyType[] = [
   "DETACHED",
@@ -133,6 +135,7 @@ export function SearchFiltersSheet({
   const [entered, setEntered] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const historyPushedRef = useRef(false);
   const isLease = filters.transactionType === "LEASE";
   const pricePresets = isLease ? LEASE_PRICE_PRESETS : SALE_PRICE_PRESETS;
   const typeOptions =
@@ -155,6 +158,18 @@ export function SearchFiltersSheet({
     setMounted(true);
   }, []);
 
+  const closeViaUi = useCallback(() => {
+    if (
+      historyPushedRef.current &&
+      (window.history.state as FiltersHistoryState | null)?.houzzatSearchFilters
+    ) {
+      historyPushedRef.current = false;
+      window.history.back();
+      return;
+    }
+    onClose();
+  }, [onClose]);
+
   useEffect(() => {
     if (!open) {
       setEntered(false);
@@ -163,13 +178,36 @@ export function SearchFiltersSheet({
     const release = acquireScrollLock();
     const frame = window.requestAnimationFrame(() => setEntered(true));
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") closeViaUi();
     }
     document.addEventListener("keydown", onKey);
     return () => {
       window.cancelAnimationFrame(frame);
       release();
       document.removeEventListener("keydown", onKey);
+    };
+  }, [open, closeViaUi]);
+
+  // Hardware / browser Back closes Filters before leaving Search.
+  useEffect(() => {
+    if (!open) {
+      historyPushedRef.current = false;
+      return;
+    }
+
+    const prev = (window.history.state ?? {}) as FiltersHistoryState;
+    if (!prev.houzzatSearchFilters) {
+      window.history.pushState({ ...prev, houzzatSearchFilters: true }, "");
+      historyPushedRef.current = true;
+    }
+
+    const onPopState = () => {
+      historyPushedRef.current = false;
+      onClose();
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
     };
   }, [open, onClose]);
 
@@ -180,7 +218,7 @@ export function SearchFiltersSheet({
         message: "Sign in to save this search to your buyer profile.",
         tone: "info",
       });
-      onClose();
+      closeViaUi();
       return;
     }
     setSaving(true);
@@ -212,7 +250,7 @@ export function SearchFiltersSheet({
       tone: "success",
     });
     setConfirmOpen(false);
-    onClose();
+    closeViaUi();
   }
 
   if (!mounted || !open) return null;
@@ -226,7 +264,7 @@ export function SearchFiltersSheet({
           "absolute inset-0 bg-ink/45 transition-opacity duration-300",
           entered ? "opacity-100" : "opacity-0",
         )}
-        onClick={onClose}
+        onClick={closeViaUi}
       />
       <div
         role="dialog"
@@ -240,9 +278,9 @@ export function SearchFiltersSheet({
         <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface px-3 py-2.5 pt-[max(0.65rem,env(safe-area-inset-top))]">
           <button
             type="button"
-            onClick={onClose}
+            onClick={closeViaUi}
             className="inline-flex size-10 items-center justify-center rounded-full text-ink/70 transition hover:bg-mist hover:text-ink"
-            aria-label="Back to map"
+            aria-label="Back to search"
           >
             <ArrowLeft className="size-5" aria-hidden />
           </button>
