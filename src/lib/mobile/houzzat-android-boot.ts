@@ -13,18 +13,18 @@ export const HOUZZAT_ANDROID_SPLASH_ICON =
   "/images/houzzat-android-splash-icon.png";
 
 /**
- * Android 12 places the splash animated icon in a 240dp box, centered on
- * `windowSplashScreenBackground`. Web cover mirrors that exactly — one
- * baked lockup image, no separate CSS wordmark/gap.
+ * Android `Theme.SplashScreen` (no icon background) draws the animated icon
+ * at 288×288 dp (`splashscreen_icon_size_no_background`). IconBackground
+ * themes use 240dp — we do not. Web cover must match 288.
  */
-export const HOUZZAT_ANDROID_SPLASH_ICON_DP = 240;
+export const HOUZZAT_ANDROID_SPLASH_ICON_DP = 288;
 
 export const HOUZZAT_ANDROID_BOOT_CSS = [
   "html.hz-android-booting,html.hz-android-booting body{background:#0A2F24!important}",
   // Flat solid only — must match Android 12 windowSplashScreenBackground.
   "#hz-android-boot{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;overflow:hidden;background:#0A2F24;-webkit-user-select:none;user-select:none}",
   "#hz-android-boot .stage{position:relative;z-index:1;display:grid;place-items:center;will-change:opacity}",
-  // 240 CSS px ≈ 240dp in the Android WebView viewport.
+  // 288 CSS px ≈ 288dp in the Android WebView (system splash icon box).
   `#hz-android-boot .mark{display:block;width:${HOUZZAT_ANDROID_SPLASH_ICON_DP}px;height:${HOUZZAT_ANDROID_SPLASH_ICON_DP}px;object-fit:contain}`,
   `#hz-android-boot.hz-boot--out .stage{opacity:0;transition:opacity ${HOUZZAT_ANDROID_BOOT_FADE_MS}ms cubic-bezier(.22,1,.36,1)}`,
   `#hz-android-boot.hz-boot--out{opacity:0;pointer-events:none;transition:opacity ${HOUZZAT_ANDROID_BOOT_FADE_MS}ms cubic-bezier(.22,1,.36,1)}`,
