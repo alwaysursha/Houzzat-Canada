@@ -7,13 +7,19 @@ import { useSession } from "next-auth/react";
 import { Fingerprint } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { setBiometricGateLocked } from "@/lib/mobile/biometric-gate-state";
-import { decideBiometricGatePhase } from "@/lib/mobile/biometric-policy";
 import {
+  decideBiometricGatePhase,
+  shouldStartBiometricLocked,
+} from "@/lib/mobile/biometric-policy";
+import {
+  clearForegroundSessionUnlocked,
   getBiometricAvailability,
   isBiometricsEnabled,
+  markForegroundSessionUnlocked,
   migrateLegacyBiometricCredentialsOnce,
   prepareExplicitSignOut,
   readBiometricEarlyGateSync,
+  readForegroundUnlockedSync,
   reconcileBiometricsForSession,
   verifyBiometricIdentity,
   wasIntentionalSignOut,
@@ -28,12 +34,17 @@ const BACKGROUND_LOCK_MS = 15_000;
  * Full-screen biometric gate for the Capacitor app.
  * Protects access to an existing Auth.js session — never recreates it
  * from a stored password.
+ *
+ * Unlock state is stored in sessionStorage so hard Account document loads
+ * in the same native WebView browsing session do not re-prompt. Cold start,
+ * force-stop, and background ≥15s clear that marker.
  */
 export function BiometricLockGate() {
   const { status, data } = useSession();
   const sessionUserId = data?.user?.id ?? null;
 
   const earlySync = readBiometricEarlyGateSync();
+  const initialFgUnlocked = readForegroundUnlockedSync();
   const [native] = useState(() => {
     try {
       return Capacitor.isNativePlatform();
@@ -44,7 +55,13 @@ export function BiometricLockGate() {
   const [enabled, setEnabled] = useState(earlySync);
   const [intentionalOut, setIntentionalOut] = useState(false);
   const [prefsReady, setPrefsReady] = useState(false);
-  const [locked, setLocked] = useState(Boolean(native && earlySync));
+  const [fgUnlocked, setFgUnlocked] = useState(initialFgUnlocked);
+  const [locked, setLocked] = useState(() =>
+    shouldStartBiometricLocked({
+      biometricsEnabledHint: Boolean(native && earlySync),
+      foregroundSessionUnlocked: initialFgUnlocked,
+    }),
+  );
   const [privacyCover, setPrivacyCover] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +70,6 @@ export function BiometricLockGate() {
   const unlockedAtRef = useRef(0);
   const backgroundedAtRef = useRef<number | null>(null);
   const promptingRef = useRef(false);
-  const unlockedThisSessionRef = useRef(false);
   const enabledRef = useRef(enabled);
   const intentionalRef = useRef(intentionalOut);
   const statusRef = useRef(status);
@@ -75,6 +91,7 @@ export function BiometricLockGate() {
     biometricsEnabled: Boolean(native && enabled && !intentionalOut),
     intentionalSignOut: intentionalOut,
     sessionStatus: prefsReady || earlySync ? sessionStatus : "loading",
+    foregroundSessionUnlocked: fgUnlocked,
   });
 
   const showCover =
@@ -85,6 +102,12 @@ export function BiometricLockGate() {
 
   useLayoutEffect(() => {
     if (!native) return;
+    if (readForegroundUnlockedSync()) {
+      setFgUnlocked(true);
+      setLocked(false);
+      setBiometricGateLocked(false);
+      return;
+    }
     if (readBiometricEarlyGateSync()) {
       setBiometricGateLocked(true);
     }
@@ -106,7 +129,14 @@ export function BiometricLockGate() {
       setLabel(availability.label);
       setPrefsReady(true);
       if (intentional || !on) {
-        unlockedThisSessionRef.current = true;
+        clearForegroundSessionUnlocked();
+        setFgUnlocked(false);
+        setLocked(false);
+        setBiometricGateLocked(false);
+        return;
+      }
+      if (readForegroundUnlockedSync()) {
+        setFgUnlocked(true);
         setLocked(false);
         setBiometricGateLocked(false);
       }
@@ -122,9 +152,13 @@ export function BiometricLockGate() {
     void reconcileBiometricsForSession({ userId: sessionUserId });
   }, [native, enabled, intentionalOut, status, sessionUserId]);
 
-  // Align lock with phase without re-locking after a successful unlock.
+  // Align lock with phase — never re-lock while foreground session is unlocked.
   useEffect(() => {
     if (phase === "open" || phase === "signed_out") {
+      if (phase === "signed_out") {
+        clearForegroundSessionUnlocked();
+        setFgUnlocked(false);
+      }
       setLocked(false);
       setPrivacyCover(false);
       setBiometricGateLocked(false);
@@ -135,10 +169,8 @@ export function BiometricLockGate() {
       return;
     }
     if (phase === "prompt") {
-      if (!unlockedThisSessionRef.current) {
-        setLocked(true);
-        setBiometricGateLocked(true);
-      }
+      setLocked(true);
+      setBiometricGateLocked(true);
     }
   }, [phase]);
 
@@ -153,7 +185,8 @@ export function BiometricLockGate() {
       // Reuse SessionProvider state — no duplicate getSession() here.
       if (statusRef.current !== "authenticated") {
         setError("Session expired. Sign in to continue.");
-        unlockedThisSessionRef.current = true;
+        clearForegroundSessionUnlocked();
+        setFgUnlocked(false);
         setLocked(false);
         setBiometricGateLocked(false);
         return;
@@ -165,7 +198,8 @@ export function BiometricLockGate() {
         return;
       }
       unlockedAtRef.current = Date.now();
-      unlockedThisSessionRef.current = true;
+      markForegroundSessionUnlocked();
+      setFgUnlocked(true);
       setLocked(false);
       setPrivacyCover(false);
       setBiometricGateLocked(false);
@@ -225,8 +259,10 @@ export function BiometricLockGate() {
           setPrivacyCover(false);
           return;
         }
+        // Background timeout invalidates foreground unlock for this session.
+        clearForegroundSessionUnlocked();
+        setFgUnlocked(false);
         setError(null);
-        unlockedThisSessionRef.current = false;
         setLocked(true);
         setBiometricGateLocked(true);
       })();

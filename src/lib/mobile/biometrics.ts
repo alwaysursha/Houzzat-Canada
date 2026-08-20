@@ -32,10 +32,20 @@ const BOUND_USER_KEY = "houzzat.biometrics.boundUserId";
 /** Idempotent migration marker (credentials → unlock). */
 const MIGRATED_KEY = "houzzat.biometrics.migratedUnlockV1";
 /**
- * Sync early-paint flag (localStorage). Lets the lock cover appear before
- * Preferences resolves, without a network call.
+ * Sync early-paint flag (localStorage). Means biometrics are enabled on this
+ * device — NOT that the current document must prompt. Survives hard nav and
+ * cold start; used only as a hint to show an opaque cover until we know
+ * whether this WebView browsing session is already unlocked.
  */
 export const BIOMETRIC_EARLY_GATE_KEY = "houzzat.biometrics.earlyGate";
+/**
+ * Foreground unlock marker (sessionStorage). Survives hard in-app document
+ * navigations (Account) in the same WebView browsing session. Cleared on
+ * force-stop / genuine cold start, background timeout, and logout.
+ * Never used as server authentication.
+ */
+export const BIOMETRIC_FOREGROUND_UNLOCK_KEY =
+  "houzzat.biometrics.fgUnlocked";
 
 /** Legacy Keystore namespace — deleted on migrate / logout / disable. */
 export const BIOMETRIC_SERVER = "houzzat.com";
@@ -116,6 +126,36 @@ export function readBiometricEarlyGateSync(): boolean {
     return window.localStorage.getItem(BIOMETRIC_EARLY_GATE_KEY) === "1";
   } catch {
     return false;
+  }
+}
+
+/** True when this WebView browsing session already unlocked biometrics. */
+export function readForegroundUnlockedSync(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.sessionStorage.getItem(BIOMETRIC_FOREGROUND_UNLOCK_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Mark current native browsing session unlocked (survives hard Account nav). */
+export function markForegroundSessionUnlocked(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(BIOMETRIC_FOREGROUND_UNLOCK_KEY, "1");
+  } catch {
+    // ignore
+  }
+}
+
+/** Invalidate foreground unlock (background timeout, logout, lock). */
+export function clearForegroundSessionUnlocked(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(BIOMETRIC_FOREGROUND_UNLOCK_KEY);
+  } catch {
+    // ignore
   }
 }
 
@@ -307,6 +347,7 @@ export async function disableBiometrics(): Promise<void> {
   await Preferences.remove({ key: MODE_KEY });
   await Preferences.remove({ key: BOUND_USER_KEY });
   setEarlyGateSync(false);
+  clearForegroundSessionUnlocked();
 }
 
 /**
@@ -329,6 +370,7 @@ export async function prepareExplicitSignOut(): Promise<void> {
       await Preferences.remove({ key: MODE_KEY });
     }
     setEarlyGateSync(false);
+    clearForegroundSessionUnlocked();
   } catch {
     // ignore
   }

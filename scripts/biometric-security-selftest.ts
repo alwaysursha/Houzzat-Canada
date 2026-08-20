@@ -9,6 +9,7 @@ import {
   migrateBiometricMode,
   shouldKeepBiometricsEnabledOnLogout,
   shouldRebindBiometricUser,
+  shouldStartBiometricLocked,
   usePasswordRequiresExplicitSignOut,
 } from "../src/lib/mobile/biometric-policy";
 import {
@@ -123,6 +124,57 @@ async function main() {
     }),
     "prompt",
   );
+  // Hard Account / soft tab nav: already unlocked this WebView session → open
+  assert.equal(
+    decideBiometricGatePhase({
+      biometricsEnabled: true,
+      intentionalSignOut: false,
+      sessionStatus: "authenticated",
+      foregroundSessionUnlocked: true,
+    }),
+    "open",
+  );
+  assert.equal(
+    decideBiometricGatePhase({
+      biometricsEnabled: true,
+      intentionalSignOut: false,
+      sessionStatus: "loading",
+      foregroundSessionUnlocked: true,
+    }),
+    "open",
+  );
+  // Session gone still wins over fg unlock marker
+  assert.equal(
+    decideBiometricGatePhase({
+      biometricsEnabled: true,
+      intentionalSignOut: false,
+      sessionStatus: "unauthenticated",
+      foregroundSessionUnlocked: true,
+    }),
+    "signed_out",
+  );
+
+  assert.equal(
+    shouldStartBiometricLocked({
+      biometricsEnabledHint: true,
+      foregroundSessionUnlocked: false,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldStartBiometricLocked({
+      biometricsEnabledHint: true,
+      foregroundSessionUnlocked: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldStartBiometricLocked({
+      biometricsEnabledHint: false,
+      foregroundSessionUnlocked: false,
+    }),
+    false,
+  );
 
   // --- gate lock holds pending push ---
   __resetBiometricGateStateForTests();
@@ -162,6 +214,47 @@ async function main() {
   // loadBiometricCredentials must be a no-op (no password path)
   const biometrics = await import("../src/lib/mobile/biometrics");
   assert.equal(await biometrics.loadBiometricCredentials(), null);
+
+  // --- foreground unlock survives hard nav marker; clears on invalidate ---
+  (globalThis as unknown as { localStorage: Storage }).localStorage = {
+    getItem: (k) => memory.get(`ls:${k}`) ?? null,
+    setItem: (k, v) => {
+      memory.set(`ls:${k}`, String(v));
+    },
+    removeItem: (k) => {
+      memory.delete(`ls:${k}`);
+    },
+    clear: () => {
+      for (const key of [...memory.keys()]) {
+        if (key.startsWith("ls:")) memory.delete(key);
+      }
+    },
+    key: () => null,
+    get length() {
+      return [...memory.keys()].filter((k) => k.startsWith("ls:")).length;
+    },
+  };
+
+  assert.equal(biometrics.readForegroundUnlockedSync(), false);
+  biometrics.markForegroundSessionUnlocked();
+  assert.equal(biometrics.readForegroundUnlockedSync(), true);
+  // Simulate hard Account document remount reading the same sessionStorage
+  assert.equal(
+    shouldStartBiometricLocked({
+      biometricsEnabledHint: true,
+      foregroundSessionUnlocked: biometrics.readForegroundUnlockedSync(),
+    }),
+    false,
+  );
+  biometrics.clearForegroundSessionUnlocked();
+  assert.equal(biometrics.readForegroundUnlockedSync(), false);
+  assert.equal(
+    shouldStartBiometricLocked({
+      biometricsEnabledHint: true,
+      foregroundSessionUnlocked: false,
+    }),
+    true,
+  );
 
   console.log("biometric-security-selftest: ok");
 }
