@@ -14,6 +14,14 @@ const TYPE_COLOR: Record<string, string> = {
   OTHER: "#6B7280",
 };
 
+/** Listing-centered; slightly closer than city overview so streets/amenities read. */
+const NEARBY_INITIAL_ZOOM = 14;
+
+/**
+ * Embedded Nearby amenities map.
+ * Cooperative gestures: one finger scrolls the listing; two fingers pan/zoom.
+ * (Search map intentionally keeps one-finger pan — leave that alone.)
+ */
 export function NearbyMap({
   lat,
   lng,
@@ -35,11 +43,17 @@ export function NearbyMap({
       container: containerRef.current,
       style: OSM_STYLE,
       center: [lng, lat],
-      zoom: 13.2,
+      zoom: NEARBY_INITIAL_ZOOM,
       minZoom: MAP_MIN_ZOOM,
       maxZoom: MAP_MAX_ZOOM,
+      // Mobile: block one-finger map pan so listing scroll continues.
+      // Desktop: require Ctrl/⌘ + scroll to zoom (same handler).
+      cooperativeGestures: true,
     });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false }),
+      "top-right",
+    );
     mapRef.current = map;
     return () => {
       markersRef.current.forEach((m) => m.remove());
@@ -84,7 +98,7 @@ export function NearbyMap({
   return (
     <div
       ref={containerRef}
-      className="h-64 w-full overflow-hidden rounded-2xl border border-line bg-mist"
+      className="h-64 w-full overflow-hidden rounded-2xl border border-line bg-mist [&_.maplibregl-cooperative-gesture-screen]:rounded-2xl"
     />
   );
 }
