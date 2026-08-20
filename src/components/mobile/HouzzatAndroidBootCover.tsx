@@ -6,9 +6,9 @@ import {
   HOUZZAT_ANDROID_BOOT_CSS,
   HOUZZAT_ANDROID_BOOT_FADE_MS,
   HOUZZAT_ANDROID_BOOT_KEY,
+  HOUZZAT_ANDROID_BOOT_MARKUP,
   HOUZZAT_ANDROID_BOOT_MAX_MS,
   HOUZZAT_ANDROID_BOOT_MIN_MS,
-  HOUZZAT_ANDROID_BOOT_SLOW_MS,
   isHouzzatAndroidConsumer,
   shouldSkipHouzzatAndroidBoot,
 } from "@/lib/mobile/houzzat-android-boot";
@@ -36,8 +36,7 @@ function ensureCover() {
   d.id = "hz-android-boot";
   d.setAttribute("aria-hidden", "true");
   d.setAttribute("data-started", String(Date.now()));
-  d.innerHTML =
-    '<div class="bg"></div><div class="stage"><img class="mark" src="/images/houzzat-house-mark.png" alt="" width="168" height="168"/><p class="word">Houzzat</p></div><div class="hint"></div>';
+  d.innerHTML = HOUZZAT_ANDROID_BOOT_MARKUP;
   document.body.appendChild(d);
 }
 
@@ -124,9 +123,6 @@ export function HouzzatAndroidBootCover() {
     const consider = () => {
       if (fading) return;
       const elapsed = Date.now() - startedAt;
-      if (elapsed >= HOUZZAT_ANDROID_BOOT_SLOW_MS) {
-        overlay?.classList.add("hz-boot--slow");
-      }
       if (elapsed >= HOUZZAT_ANDROID_BOOT_MAX_MS) {
         fade();
         return;
@@ -140,14 +136,12 @@ export function HouzzatAndroidBootCover() {
     observer.observe(document.body, { childList: true, subtree: true });
     poll = window.setInterval(consider, 80);
     const minTimer = window.setTimeout(consider, HOUZZAT_ANDROID_BOOT_MIN_MS);
-    const slowTimer = window.setTimeout(consider, HOUZZAT_ANDROID_BOOT_SLOW_MS);
     const maxTimer = window.setTimeout(consider, HOUZZAT_ANDROID_BOOT_MAX_MS);
     consider();
 
     return () => {
       window.clearInterval(poll);
       window.clearTimeout(minTimer);
-      window.clearTimeout(slowTimer);
       window.clearTimeout(maxTimer);
       window.clearTimeout(handoffTimer);
       observer?.disconnect();
