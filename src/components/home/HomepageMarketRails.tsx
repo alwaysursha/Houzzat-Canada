@@ -15,9 +15,15 @@ import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
   getHomeCoordinates,
   HOME_GEO_EVENT,
+  NORMAL_LOCATION_MAX_AGE,
+  NORMAL_LOCATION_TIMEOUT,
   readCachedHomeCoordinates,
 } from "@/lib/mobile/home-geolocation";
 import { readLocationPermissionState } from "@/lib/mobile/geolocation";
+import {
+  mayResolveLocationPassively,
+  shouldUpgradeHomeRailsRegion,
+} from "@/lib/mobile/location-policy";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 const RAIL_LIMIT = 12;
 
@@ -104,6 +110,8 @@ export function HomepageMarketRails({
   useEffect(() => {
     let cancelled = false;
     let requestId = 0;
+    /** Regions already geo-upgraded this effect cycle — blocks double fetch. */
+    const upgradedRegionIds = new Set<string>();
 
     async function resolveBrowseRegion(): Promise<MarketRegion> {
       const personalizedCities = personalizationCities(personalization);
@@ -113,7 +121,7 @@ export function HomepageMarketRails({
       }
       setOverrideCities(null);
 
-      const cached = readCachedHomeCoordinates(300_000);
+      const cached = readCachedHomeCoordinates(NORMAL_LOCATION_MAX_AGE);
       if (cached) {
         return resolveRegionFromCoords(cached.lat, cached.lng).region;
       }
@@ -160,6 +168,29 @@ export function HomepageMarketRails({
       }
     }
 
+    function tryGeoUpgrade(lat: number, lng: number) {
+      if (
+        vowOnlyGuest ||
+        personalizationCities(personalization).length ||
+        cancelled
+      ) {
+        return;
+      }
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const next = resolveRegionFromCoords(lat, lng).region;
+      if (
+        !shouldUpgradeHomeRailsRegion({
+          currentRegionId: regionIdRef.current,
+          nextRegionId: next.id,
+          upgradedRegionIds,
+        })
+      ) {
+        return;
+      }
+      upgradedRegionIds.add(next.id);
+      void loadForRegion(next);
+    }
+
     async function load() {
       if (vowOnlyGuest) {
         if (!cancelled) {
@@ -176,43 +207,28 @@ export function HomepageMarketRails({
       );
 
       if (personalizedCities.length || cancelled) return;
+
+      // Passive only — never request OS permission from market rails.
       try {
         const permission = await readLocationPermissionState();
-        if (permission === "denied") return;
-        // Shared single-flight with Near Me — no second native GPS call.
+        if (!mayResolveLocationPassively(permission)) return;
         const { lat, lng } = await getHomeCoordinates({
-          timeout: 8_000,
-          maximumAge: 300_000,
-          emitEvent: true,
+          timeout: NORMAL_LOCATION_TIMEOUT,
+          maximumAge: NORMAL_LOCATION_MAX_AGE,
+          emitEvent: false,
+          requestPermission: false,
         });
         if (cancelled) return;
-        const upgraded = resolveRegionFromCoords(lat, lng).region;
-        if (upgraded.id === regionIdRef.current) return;
-        void loadForRegion(upgraded);
+        tryGeoUpgrade(lat, lng);
       } catch {
-        // ignore geo upgrade failures
+        // ignore geo upgrade failures (timeout / GPS off / etc.)
       }
     }
 
     function onGeo(event: Event) {
-      if (
-        vowOnlyGuest ||
-        personalizationCities(personalization).length ||
-        cancelled
-      ) {
-        return;
-      }
       const detail = (event as CustomEvent<{ lat: number; lng: number }>).detail;
-      if (
-        !detail ||
-        !Number.isFinite(detail.lat) ||
-        !Number.isFinite(detail.lng)
-      ) {
-        return;
-      }
-      const next = resolveRegionFromCoords(detail.lat, detail.lng).region;
-      if (next.id === regionIdRef.current) return;
-      void loadForRegion(next);
+      if (!detail) return;
+      tryGeoUpgrade(detail.lat, detail.lng);
     }
 
     window.addEventListener(HOME_GEO_EVENT, onGeo);

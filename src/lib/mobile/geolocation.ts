@@ -1,5 +1,8 @@
 import { Capacitor } from "@capacitor/core";
 import { Geolocation } from "@capacitor/geolocation";
+import {
+  NORMAL_LOCATION_TIMEOUT_MS,
+} from "@/lib/mobile/location-policy";
 
 export type GeoCoords = {
   lat: number;
@@ -37,7 +40,7 @@ function mapBrowserError(error: GeolocationPositionError): AppGeolocationError {
   if (error.code === error.POSITION_UNAVAILABLE) {
     return new AppGeolocationError(
       "unavailable",
-      "Couldn’t determine your location.",
+      "Couldn’t determine your location. Check that Location is turned on.",
     );
   }
   if (error.code === error.TIMEOUT) {
@@ -49,27 +52,48 @@ function mapBrowserError(error: GeolocationPositionError): AppGeolocationError {
   return new AppGeolocationError("unknown", "Couldn’t get your location.");
 }
 
-async function ensureNativePermission(): Promise<void> {
+/**
+ * Native permission gate.
+ * When `requestPermission` is false, never calls requestPermissions() —
+ * Home/background code cannot accidentally open the OS dialog.
+ */
+async function ensureNativePermission(requestPermission: boolean): Promise<void> {
   const current = await Geolocation.checkPermissions();
   let status = current.location;
-  if (status === "prompt" || status === "prompt-with-rationale") {
+
+  if (status === "granted") return;
+
+  if (
+    requestPermission &&
+    (status === "prompt" || status === "prompt-with-rationale")
+  ) {
     const requested = await Geolocation.requestPermissions();
     status = requested.location;
   }
-  if (status !== "granted") {
+
+  if (status === "granted") return;
+
+  if (status === "denied") {
     throw new AppGeolocationError(
       "denied",
       "Location access is turned off for Houzzat. Enable it in system settings.",
     );
   }
+
+  // Still prompt/unknown and we were not allowed to ask.
+  throw new AppGeolocationError(
+    "denied",
+    "Location permission is required to use Near me.",
+  );
 }
 
 async function getNativeCoordinates(options: {
   enableHighAccuracy: boolean;
   timeout: number;
   maximumAge: number;
+  requestPermission: boolean;
 }): Promise<GeoCoords> {
-  await ensureNativePermission();
+  await ensureNativePermission(options.requestPermission);
   try {
     const position = await Geolocation.getCurrentPosition({
       enableHighAccuracy: options.enableHighAccuracy,
@@ -81,6 +105,7 @@ async function getNativeCoordinates(options: {
       lng: position.coords.longitude,
     };
   } catch (error) {
+    if (error instanceof AppGeolocationError) throw error;
     const message =
       error instanceof Error ? error.message.toLowerCase() : String(error);
     if (message.includes("denied") || message.includes("permission")) {
@@ -94,26 +119,36 @@ async function getNativeCoordinates(options: {
     }
     throw new AppGeolocationError(
       "unavailable",
-      "Couldn’t determine your location.",
+      "Couldn’t determine your location. Check that Location is turned on.",
     );
   }
 }
 
-function getBrowserCoordinates(options: {
+async function getBrowserCoordinates(options: {
   enableHighAccuracy: boolean;
   timeout: number;
   maximumAge: number;
+  requestPermission: boolean;
 }): Promise<GeoCoords> {
-  return new Promise((resolve, reject) => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      reject(
-        new AppGeolocationError(
-          "unsupported",
-          "Location isn’t available in this browser.",
-        ),
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    throw new AppGeolocationError(
+      "unsupported",
+      "Location isn’t available in this browser.",
+    );
+  }
+
+  if (!options.requestPermission) {
+    // Avoid implicit browser prompt from passive callers.
+    const state = await readLocationPermissionState();
+    if (state !== "granted") {
+      throw new AppGeolocationError(
+        "denied",
+        "Location permission is required to use Near me.",
       );
-      return;
     }
+  }
+
+  return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         resolve({
@@ -131,16 +166,23 @@ function getBrowserCoordinates(options: {
   });
 }
 
-/** Current coordinates — Capacitor native permissions on app, browser API on web. */
+/**
+ * Current coordinates — Capacitor native permissions on app, browser API on web.
+ * Default: do NOT request permission (safe for Home effects).
+ * Pass `requestPermission: true` only from explicit user actions (Near Me CTA).
+ */
 export async function getCurrentCoordinates(options?: {
   enableHighAccuracy?: boolean;
   timeout?: number;
   maximumAge?: number;
+  /** When true, may show the OS/browser permission dialog. Default false. */
+  requestPermission?: boolean;
 }): Promise<GeoCoords> {
   const resolved = {
     enableHighAccuracy: options?.enableHighAccuracy ?? false,
-    timeout: options?.timeout ?? 12_000,
+    timeout: options?.timeout ?? NORMAL_LOCATION_TIMEOUT_MS,
     maximumAge: options?.maximumAge ?? 60_000,
+    requestPermission: options?.requestPermission === true,
   };
 
   if (isNativeApp()) {
@@ -180,6 +222,11 @@ export function locationErrorMessage(error: unknown): string {
       return isNativeApp()
         ? "Location access is turned off for Houzzat. Enable Location in Android settings → Apps → Houzzat."
         : "Location access is turned off for this site. You can still browse homes on the map.";
+    }
+    if (error.code === "unavailable") {
+      return isNativeApp()
+        ? "Location services look turned off. Turn on Location in Android settings, then try again."
+        : "Couldn’t determine your location. Check that location services are on.";
     }
     return error.message;
   }

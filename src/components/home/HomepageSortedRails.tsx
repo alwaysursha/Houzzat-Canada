@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
-import { HomeNearMeRail } from "@/components/home/HomeNearMeRail";
+import {
+  HomeNearMeRail,
+  type NearMeRailStatus,
+} from "@/components/home/HomeNearMeRail";
 import { PersonalizeHomepageBar } from "@/components/home/PersonalizeHomepageBar";
 import type { HomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
 
@@ -37,7 +40,7 @@ export function HomepageSortedRails({
   });
 
   const onNearMeStatusChange = useCallback(
-    (status: "ready" | "empty" | "hidden", count = 0) => {
+    (status: NearMeRailStatus, count = 0) => {
       if (status === "hidden") {
         setNearMe({ visible: false, resultCount: 0 });
         return;
@@ -46,6 +49,7 @@ export function HomepageSortedRails({
         setNearMe({ visible: true, resultCount: 0 });
         return;
       }
+      // ready | opt_in | unavailable — keep the Near Me slot visible
       setNearMe({ visible: true, resultCount: Math.max(count, 1) });
     },
     [],

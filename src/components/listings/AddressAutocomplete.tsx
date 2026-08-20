@@ -44,9 +44,11 @@ import type {
 } from "@/lib/listings/types";
 import { persistHomeLocationIfEmpty } from "@/lib/account/persist-home-location";
 import {
-  getCurrentCoordinates,
-  locationErrorMessage,
-} from "@/lib/mobile/geolocation";
+  getHomeCoordinates,
+  NORMAL_LOCATION_MAX_AGE,
+  NORMAL_LOCATION_TIMEOUT,
+} from "@/lib/mobile/home-geolocation";
+import { locationErrorMessage } from "@/lib/mobile/geolocation";
 import { pushHref } from "@/lib/listings/navigate-listing";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { Input } from "@/components/ui/input";
@@ -612,10 +614,12 @@ export function AddressAutocomplete({
     setGeoError(null);
     setLoading(true);
     try {
-      const { lat, lng } = await getCurrentCoordinates({
-        enableHighAccuracy: false,
-        timeout: 12_000,
-        maximumAge: 60_000,
+      // Shared Home/Search coordinator — reuses cache within TTL.
+      const { lat, lng } = await getHomeCoordinates({
+        timeout: NORMAL_LOCATION_TIMEOUT,
+        maximumAge: NORMAL_LOCATION_MAX_AGE,
+        emitEvent: true,
+        requestPermission: true,
       });
       void persistHomeLocationIfEmpty({ lat, lng });
       const params = new URLSearchParams({

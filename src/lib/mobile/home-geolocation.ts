@@ -2,9 +2,17 @@ import {
   getCurrentCoordinates,
   type GeoCoords,
 } from "@/lib/mobile/geolocation";
+import {
+  NORMAL_LOCATION_MAX_AGE_MS,
+  NORMAL_LOCATION_TIMEOUT_MS,
+} from "@/lib/mobile/location-policy";
 
 export const HOME_GEO_STORAGE_KEY = "houzzat-region-geo";
 export const HOME_GEO_EVENT = "houzzat:geo";
+
+/** Shared coarse-location TTL for Home + Search Near Me. */
+export const NORMAL_LOCATION_MAX_AGE = NORMAL_LOCATION_MAX_AGE_MS;
+export const NORMAL_LOCATION_TIMEOUT = NORMAL_LOCATION_TIMEOUT_MS;
 
 type CachedHomeGeo = {
   lat: number;
@@ -12,8 +20,13 @@ type CachedHomeGeo = {
   at: number;
 };
 
+type GetCoordsFn = typeof getCurrentCoordinates;
+
 let memory: CachedHomeGeo | null = null;
 let inflight: Promise<GeoCoords> | null = null;
+/** Tracks whether the in-flight op was allowed to prompt (for joiners). */
+let inflightRequestsPermission = false;
+let getCoordsImpl: GetCoordsFn = getCurrentCoordinates;
 
 function isFresh(entry: CachedHomeGeo, maximumAge: number): boolean {
   return Date.now() - entry.at <= maximumAge;
@@ -54,9 +67,9 @@ function writeSessionCache(coords: GeoCoords) {
   }
 }
 
-/** Sync read of the latest Home geo (memory or sessionStorage). */
+/** Sync read of the latest app geo (memory or sessionStorage). */
 export function readCachedHomeCoordinates(
-  maximumAge = 300_000,
+  maximumAge = NORMAL_LOCATION_MAX_AGE,
 ): GeoCoords | null {
   if (memory && isFresh(memory, maximumAge)) {
     return { lat: memory.lat, lng: memory.lng };
@@ -70,29 +83,44 @@ export function readCachedHomeCoordinates(
 }
 
 /**
- * Single-flight Home geolocation for Near Me + market rails.
+ * Single-flight consumer geolocation for Home Near Me, market rails, Search.
  * Coarse accuracy only — no continuous tracking.
+ *
+ * `requestPermission` defaults to **false** so Home effects never open the OS
+ * dialog. Pass `true` only from an explicit user tap (Near Me CTA).
  */
 export async function getHomeCoordinates(options?: {
   timeout?: number;
   maximumAge?: number;
-  /** When false, skip the `houzzat:geo` broadcast (caller will emit). */
+  /** When false, skip the `houzzat:geo` broadcast. Default true. */
   emitEvent?: boolean;
+  /**
+   * When true, may show the OS/browser permission dialog.
+   * Default false — safe for passive Home / rails code.
+   */
+  requestPermission?: boolean;
 }): Promise<GeoCoords> {
-  const maximumAge = options?.maximumAge ?? 300_000;
-  const timeout = options?.timeout ?? 12_000;
+  const maximumAge = options?.maximumAge ?? NORMAL_LOCATION_MAX_AGE;
+  const timeout = options?.timeout ?? NORMAL_LOCATION_TIMEOUT;
   const emitEvent = options?.emitEvent !== false;
+  const requestPermission = options?.requestPermission === true;
 
   const cached = readCachedHomeCoordinates(maximumAge);
   if (cached) return cached;
 
-  if (inflight) return inflight;
+  // Join an existing in-flight only when it already covers our permission need
+  // (or we also don't need to prompt).
+  if (inflight && (inflightRequestsPermission || !requestPermission)) {
+    return inflight;
+  }
 
+  inflightRequestsPermission = requestPermission;
   inflight = (async () => {
-    const coords = await getCurrentCoordinates({
+    const coords = await getCoordsImpl({
       enableHighAccuracy: false,
       timeout,
       maximumAge,
+      requestPermission,
     });
     writeSessionCache(coords);
     if (emitEvent && typeof window !== "undefined") {
@@ -105,7 +133,31 @@ export async function getHomeCoordinates(options?: {
     return coords;
   })().finally(() => {
     inflight = null;
+    inflightRequestsPermission = false;
   });
 
   return inflight;
+}
+
+/** Alias — same shared coordinator. Prefer this name in new call sites. */
+export const getAppCoordinates = getHomeCoordinates;
+
+/** Test helper — reset module cache / in-flight. */
+export function __resetHomeGeolocationForTests(): void {
+  memory = null;
+  inflight = null;
+  inflightRequestsPermission = false;
+  getCoordsImpl = getCurrentCoordinates;
+  if (typeof sessionStorage !== "undefined") {
+    try {
+      sessionStorage.removeItem(HOME_GEO_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/** Test helper — inject GPS implementation. */
+export function __setGetCurrentCoordinatesForTests(fn: GetCoordsFn): void {
+  getCoordsImpl = fn;
 }
