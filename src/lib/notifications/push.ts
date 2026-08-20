@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { prisma } from "@/lib/prisma";
+import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import {
   audienceForPushType,
   isPushTypeEnabled,
@@ -204,12 +204,10 @@ async function deliverFcm(token: string, payload: PushPayload) {
   }
 }
 
-export async function sendPushToUser(
-  userId: string | null | undefined,
+async function deliverPushToUser(
+  userId: string,
   payload: PushPayload,
-) {
-  if (!userId) return;
-
+): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, disabledAt: true, pushNotificationPrefs: true },
@@ -231,29 +229,49 @@ export async function sendPushToUser(
   await Promise.all(devices.map((d) => deliverFcm(d.token, payload)));
 }
 
-export async function sendPushToUsers(
+/**
+ * Enqueue FCM delivery for one user.
+ * Lifetime ownership: scheduleWorkerSideEffect (CF waitUntil) — callers should
+ * not wrap again. Returns immediately; does not await FCM.
+ */
+export function sendPushToUser(
+  userId: string | null | undefined,
+  payload: PushPayload,
+): void {
+  if (!userId) return;
+  scheduleWorkerSideEffect(deliverPushToUser(userId, payload));
+}
+
+export function sendPushToUsers(
   userIds: Array<string | null | undefined>,
   payload: PushPayload,
-) {
+): void {
   const unique = [...new Set(userIds.filter((id): id is string => Boolean(id)))];
-  await Promise.all(unique.map((id) => sendPushToUser(id, payload)));
+  if (unique.length === 0) return;
+  scheduleWorkerSideEffect(
+    Promise.all(unique.map((id) => deliverPushToUser(id, payload))),
+  );
 }
 
 /** One lock-screen alert for the first enabled type (digest = morning or matches). */
-export async function sendPushToUserFirstEnabled(
+export function sendPushToUserFirstEnabled(
   userId: string | null | undefined,
   types: PushType[],
   payload: Omit<PushPayload, "type">,
-) {
+): void {
   if (!userId || types.length === 0) return;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { disabledAt: true, pushNotificationPrefs: true },
-  });
-  if (!user || user.disabledAt) return;
-  const type = types.find((item) =>
-    isPushTypeEnabled(user.pushNotificationPrefs, item),
+  scheduleWorkerSideEffect(
+    (async () => {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { disabledAt: true, pushNotificationPrefs: true },
+      });
+      if (!user || user.disabledAt) return;
+      const type = types.find((item) =>
+        isPushTypeEnabled(user.pushNotificationPrefs, item),
+      );
+      if (!type) return;
+      await deliverPushToUser(userId, { ...payload, type });
+    })(),
   );
-  if (!type) return;
-  await sendPushToUser(userId, { ...payload, type });
 }

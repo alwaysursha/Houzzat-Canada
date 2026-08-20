@@ -33,6 +33,7 @@ export default async function AccountNotificationsPage() {
       </div>
       <NotificationPreferencesForm
         items={items}
+        showDeviceActions
         intro="Push alerts for your home search. Email alerts are still managed separately on Your Houzzat."
       />
     </div>

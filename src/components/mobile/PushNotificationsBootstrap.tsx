@@ -1,70 +1,70 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
-import { PushNotifications } from "@capacitor/push-notifications";
 import { useSession } from "next-auth/react";
-import { resolveAppShell } from "@/lib/mobile/app-shell";
+import {
+  consumePendingPushNavigation,
+  ensurePushActionListener,
+  flushPendingPushUnregister,
+  registerPushForSession,
+  schedulePushRegistration,
+} from "@/lib/notifications/push-client";
 
 /**
- * Registers the native FCM/APNs token after sign-in.
- * No-ops on web or if the Push plugin / permission is unavailable.
+ * Native push bootstrap for Houzzat / HouzzatPro shells.
+ * - Tap listener attaches early (cold-start retained events).
+ * - FCM register waits until after first paint + authenticated.
+ * - Does not re-prompt after an explicit denial.
  */
 export function PushNotificationsBootstrap() {
-  const { status } = useSession();
+  const { status, data } = useSession();
+  const registeredForSession = useRef<string | null>(null);
+  const userId = data?.user?.id ?? null;
 
+  // Tap routing + offline unregister — independent of auth.
   useEffect(() => {
-    if (status !== "authenticated") return;
     if (!Capacitor.isNativePlatform()) return;
+    let cancelled = false;
+    void (async () => {
+      await flushPendingPushUnregister();
+      if (cancelled) return;
+      await ensurePushActionListener();
+      if (cancelled) return;
+      consumePendingPushNavigation();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // After Home paint: register when signed in (deferred permission).
+  useEffect(() => {
+    if (status !== "authenticated" || !userId) {
+      registeredForSession.current = null;
+      return;
+    }
+    if (!Capacitor.isNativePlatform()) return;
+    if (registeredForSession.current === userId) return;
 
     let cancelled = false;
-    let remove: (() => void) | null = null;
-
-    void (async () => {
-      try {
-        const shell = await resolveAppShell();
-        if (cancelled) return;
-        if (shell !== "houzzat" && shell !== "houzzatpro") return;
-
-        let perm = await PushNotifications.checkPermissions();
-        if (perm.receive === "prompt") {
-          perm = await PushNotifications.requestPermissions();
-        }
-        if (perm.receive !== "granted") return;
-
-        const handle = await PushNotifications.addListener(
-          "registration",
-          (token) => {
-            const value = token.value?.trim();
-            if (!value) return;
-            void fetch("/api/notifications/register", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                token: value,
-                platform: Capacitor.getPlatform() === "ios" ? "ios" : "android",
-                shell,
-              }),
-            });
-          },
-        );
-        remove = () => {
-          void handle.remove();
-        };
-        if (cancelled) {
-          remove();
-          return;
-        }
-        await PushNotifications.register();
-      } catch {
-        // Plugin missing until native cap sync + Firebase config.
-      }
-    })();
+    const cancelSchedule = schedulePushRegistration(() => {
+      if (cancelled) return;
+      if (registeredForSession.current === userId) return;
+      registeredForSession.current = userId;
+      void registerPushForSession({ userId });
+    });
 
     return () => {
       cancelled = true;
-      remove?.();
+      cancelSchedule();
     };
+  }, [status, userId]);
+
+  // Session ready (or guest): consume any leftover cold-start destination once.
+  useEffect(() => {
+    if (status === "loading") return;
+    consumePendingPushNavigation();
   }, [status]);
 
   return null;

@@ -1,7 +1,9 @@
 "use client";
 
+import { useSession } from "next-auth/react";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { prepareExplicitSignOut } from "@/lib/mobile/biometrics";
+import { unregisterCurrentPushDevice } from "@/lib/notifications/push-client";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +15,8 @@ export function SignOutButton({
   label?: string;
 }) {
   const { confirm } = useSiteAlert();
+  const { data } = useSession();
+  const userId = data?.user?.id;
 
   async function onSignOut() {
     const ok = await confirm({
@@ -20,6 +24,19 @@ export function SignOutButton({
       destructive: true,
     });
     if (!ok) return;
+
+    // Unregister THIS device token while the session cookie still works.
+    // Offline → Preferences pending cleanup on next launch. Never blocks logout.
+    try {
+      await Promise.race([
+        unregisterCurrentPushDevice({ userId }),
+        new Promise<void>((resolve) => {
+          window.setTimeout(resolve, 2_500);
+        }),
+      ]);
+    } catch {
+      // ignore
+    }
 
     // Block biometric auto re-login after cookies are cleared (native).
     await prepareExplicitSignOut();
