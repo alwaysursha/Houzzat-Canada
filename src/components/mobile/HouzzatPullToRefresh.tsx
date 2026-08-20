@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Capacitor } from "@capacitor/core";
+import { Loader2 } from "lucide-react";
 import { isListingSheetOpen } from "@/lib/mobile/listing-sheet-store";
 import { cn } from "@/lib/utils";
 
-const PULL_THRESHOLD_PX = 70;
-const MAX_PULL_PX = 108;
+const PULL_THRESHOLD_PX = 76;
+const MAX_PULL_PX = 128;
+const HOLD_PULL_PX = 64;
 const LAST_REFRESH_KEY = "houzzat:last-refresh";
-const RING = 2 * Math.PI * 13;
 
 function formatLastRefresh(iso: string | null): string {
   if (!iso) return "Pull to refresh";
@@ -35,7 +36,8 @@ function isStaffPath(pathname: string) {
 
 /**
  * Native Houzzat consumer pull-to-refresh.
- * Lightweight rubber-band + canopy progress ring; skips CRM/Pro shells.
+ * Indicator is fixed below the status-bar brand strip so it never hides
+ * behind the green safe-area chrome.
  */
 export function HouzzatPullToRefresh({
   children,
@@ -147,12 +149,14 @@ export function HouzzatPullToRefresh({
         return;
       }
       event.preventDefault();
-      const damped = Math.min(MAX_PULL_PX, delta * 0.48);
+      // Ease-out rubber band so the last stretch feels soft.
+      const t = Math.min(1, delta / (MAX_PULL_PX * 2.1));
+      const damped = MAX_PULL_PX * (1 - Math.pow(1 - t, 2.35));
       setPull(damped);
       if (damped >= PULL_THRESHOLD_PX && !armedHapticRef.current) {
         armedHapticRef.current = true;
         try {
-          navigator.vibrate?.(12);
+          navigator.vibrate?.(14);
         } catch {
           // ignore
         }
@@ -162,10 +166,10 @@ export function HouzzatPullToRefresh({
     const finish = async () => {
       refreshingRef.current = true;
       setRefreshing(true);
-      setPull(Math.round(PULL_THRESHOLD_PX * 0.72));
+      setPull(HOLD_PULL_PX);
       try {
         router.refresh();
-        await new Promise((r) => window.setTimeout(r, 420));
+        await new Promise((r) => window.setTimeout(r, 480));
         const iso = new Date().toISOString();
         try {
           localStorage.setItem(LAST_REFRESH_KEY, iso);
@@ -208,96 +212,87 @@ export function HouzzatPullToRefresh({
 
   if (!enabled) return children;
 
-  const visible = pullPx > 6 || refreshing;
+  const visible = pullPx > 8 || refreshing;
   const progress = Math.min(1, pullPx / PULL_THRESHOLD_PX);
   const armed = progress >= 1 || refreshing;
+  const contentShift = Math.min(pullPx, HOLD_PULL_PX + 8);
 
   return (
     <div ref={rootRef} className="relative min-w-0">
       <div
         className={cn(
-          "pointer-events-none absolute inset-x-0 top-0 z-[60] flex justify-center",
-          visible ? "opacity-100" : "opacity-0",
+          "pointer-events-none fixed inset-x-0 z-[80] flex justify-center",
+          "transition-[opacity,transform] duration-200 ease-out",
+          visible
+            ? "translate-y-0 opacity-100"
+            : "-translate-y-2 opacity-0",
         )}
         style={{
-          height: Math.max(pullPx, refreshing ? 52 : 0),
-          paddingTop: "env(safe-area-inset-top)",
-          transition: pullingRef.current && !refreshing ? "opacity 80ms" : "height 180ms ease-out, opacity 180ms",
+          top: "calc(env(safe-area-inset-top, 0px) + 10px)",
         }}
         aria-live="polite"
+        aria-busy={refreshing}
       >
-        <div className="mt-1 flex flex-col items-center gap-1">
-          <svg
-            width="36"
-            height="36"
-            viewBox="0 0 36 36"
-            className={cn(refreshing && "hz-ptr-spin")}
-            aria-hidden
-          >
-            <circle
-              cx="18"
-              cy="18"
-              r="13"
-              fill="none"
-              stroke="rgba(26,123,89,0.18)"
-              strokeWidth="2.4"
+        <div
+          className={cn(
+            "flex items-center gap-2 rounded-full border px-3.5 py-2 shadow-[0_8px_24px_rgb(10_47_36/0.18)] backdrop-blur-md",
+            "transition-[background-color,border-color,box-shadow] duration-200 ease-out",
+            armed
+              ? "border-canopy/35 bg-white text-canopy shadow-[0_10px_28px_rgb(26_123_89/0.22)]"
+              : "border-white/70 bg-white/95 text-ink/70",
+          )}
+          style={{
+            transform: `scale(${0.92 + progress * 0.08})`,
+          }}
+        >
+          {refreshing ? (
+            <Loader2
+              className="size-4 shrink-0 animate-spin text-canopy"
+              strokeWidth={2.4}
+              aria-hidden
             />
-            <circle
-              cx="18"
-              cy="18"
-              r="13"
-              fill="none"
-              stroke="#1A7B59"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeDasharray={RING}
-              strokeDashoffset={refreshing ? RING * 0.28 : RING * (1 - progress)}
-              transform="rotate(-90 18 18)"
-            />
-            <circle
-              cx="18"
-              cy="18"
-              r="3.1"
-              fill="#1A7B59"
-              opacity={armed ? 1 : 0.35 + progress * 0.65}
-            />
-          </svg>
-          <span
-            className={cn(
-              "text-[10px] font-semibold tracking-wide",
-              armed ? "text-canopy" : "text-ink/45",
-            )}
-          >
+          ) : (
+            <span
+              className="relative grid size-4 shrink-0 place-items-center"
+              aria-hidden
+            >
+              <span className="absolute inset-0 rounded-full border-2 border-canopy/20" />
+              <span
+                className="absolute inset-0 rounded-full border-2 border-transparent border-t-canopy transition-[transform,opacity] duration-100"
+                style={{
+                  transform: `rotate(${progress * 360}deg)`,
+                  opacity: 0.45 + progress * 0.55,
+                }}
+              />
+              <span
+                className="size-1.5 rounded-full bg-canopy transition-opacity duration-100"
+                style={{ opacity: 0.35 + progress * 0.65 }}
+              />
+            </span>
+          )}
+          <span className="text-[12px] font-semibold tracking-wide">
             {refreshing
-              ? "Refreshing"
+              ? "Refreshing…"
               : armed
-                ? "Release"
+                ? "Release to refresh"
                 : formatLastRefresh(lastRefresh)}
           </span>
         </div>
       </div>
+
       <div
         style={{
           transform:
-            pullPx > 0 || refreshing
-              ? `translate3d(0, ${Math.min(pullPx, 52)}px, 0)`
-              : undefined,
+            contentShift > 0 ? `translate3d(0, ${contentShift}px, 0)` : undefined,
           transition:
             pullingRef.current && !refreshing
               ? undefined
-              : "transform 200ms cubic-bezier(0.22, 1, 0.36, 1)",
-          willChange: pullPx > 0 || refreshing ? "transform" : undefined,
+              : "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)",
+          willChange: contentShift > 0 ? "transform" : undefined,
         }}
       >
         {children}
       </div>
-      <style>{`
-        .hz-ptr-spin { animation: hz-ptr-spin 0.7s linear infinite; }
-        @keyframes hz-ptr-spin { to { transform: rotate(360deg); } }
-        @media (prefers-reduced-motion: reduce) {
-          .hz-ptr-spin { animation: none; }
-        }
-      `}</style>
     </div>
   );
 }
