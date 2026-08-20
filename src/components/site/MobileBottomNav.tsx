@@ -1,8 +1,16 @@
 "use client";
 
-import { useEffect, useId, useState, type ReactNode } from "react";
+import {
+  memo,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   Bell,
@@ -21,11 +29,18 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
 import { parseHomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
 import { resolveAppShell } from "@/lib/mobile/app-shell";
+import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { cn } from "@/lib/utils";
 
-const BOTTOM_NAV_HEIGHT = "3.5rem";
-const FADE_MS = 220;
+/** Compact bar; each cell still clears a ≥44px touch target. */
+const BOTTOM_NAV_HEIGHT = "3.75rem";
+const FADE_MS = 180;
+const SEARCH_HREF = "/search";
+
+type MoreHistoryState = {
+  houzzatMoreMenu?: boolean;
+};
 
 function isAccountHref(href: string) {
   return href === "/account" || href.startsWith("/account/");
@@ -43,7 +58,7 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
   const { status, data } = useSession();
   const role = data?.user?.role;
   const pathname = usePathname() || "/";
-  const routePlanner = useRoutePlanner();
+  const router = useRouter();
   const menuId = useId();
   const [moreOpen, setMoreOpen] = useState(false);
   const [moreShown, setMoreShown] = useState(false);
@@ -55,6 +70,9 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
     query: Record<string, unknown>;
   } | null>(null);
   const [houzzatProShell, setHouzzatProShell] = useState(false);
+  const [pressedTab, setPressedTab] = useState<string | null>(null);
+  const moreHistoryPushedRef = useRef(false);
+  const searchPrefetchedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +90,7 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
   // HouzzatPro launches into staff chrome — never show consumer bottom tabs.
   const visible = !isStaff && !houzzatProShell;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
     if (!visible) {
       root.style.setProperty("--mobile-bottom-nav", "0px");
@@ -90,8 +108,37 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
     };
   }, [visible]);
 
+  // Warm Search after Home is idle — not on every route, no account/maps.
+  useEffect(() => {
+    if (!visible) return;
+    if (pathname !== "/") return;
+    if (searchPrefetchedRef.current) return;
+    return scheduleAfterFirstPaint(
+      () => {
+        if (searchPrefetchedRef.current) return;
+        searchPrefetchedRef.current = true;
+        try {
+          router.prefetch(SEARCH_HREF);
+        } catch {
+          // ignore
+        }
+      },
+      { timeoutMs: 2_400 },
+    );
+  }, [visible, pathname, router]);
+
   useEffect(() => {
     setMoreOpen(false);
+    // Drop synthetic More history if a tab navigation closed the sheet.
+    if (moreHistoryPushedRef.current) {
+      moreHistoryPushedRef.current = false;
+      const state = window.history.state as MoreHistoryState | null;
+      if (state?.houzzatMoreMenu) {
+        const rest = { ...state };
+        delete rest.houzzatMoreMenu;
+        window.history.replaceState(rest, "");
+      }
+    }
   }, [pathname]);
 
   useEffect(() => {
@@ -110,12 +157,73 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
     return () => window.clearTimeout(timer);
   }, [moreOpen]);
 
+  // Hardware / browser Back closes More without changing Cap Back wiring:
+  // Cap already calls history.back() when canGoBack.
+  useEffect(() => {
+    if (!moreOpen) {
+      moreHistoryPushedRef.current = false;
+      return;
+    }
+
+    const prev = (window.history.state ?? {}) as MoreHistoryState;
+    if (!prev.houzzatMoreMenu) {
+      window.history.pushState({ ...prev, houzzatMoreMenu: true }, "");
+      moreHistoryPushedRef.current = true;
+    }
+
+    const onPopState = () => {
+      moreHistoryPushedRef.current = false;
+      setMoreOpen(false);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, [moreOpen]);
+
+  /** Close More via UI (X / backdrop). Pops the synthetic history entry. */
+  function closeMore() {
+    if (
+      moreHistoryPushedRef.current &&
+      (window.history.state as MoreHistoryState | null)?.houzzatMoreMenu
+    ) {
+      moreHistoryPushedRef.current = false;
+      window.history.back();
+      return;
+    }
+    setMoreOpen(false);
+  }
+
+  /**
+   * Dismiss More before a real navigation (More link tap).
+   * Clears the synthetic entry without history.back() racing the next route.
+   */
+  function dismissMoreForNavigate() {
+    moreHistoryPushedRef.current = false;
+    setMoreOpen(false);
+    const state = window.history.state as MoreHistoryState | null;
+    if (state?.houzzatMoreMenu) {
+      const rest = { ...state };
+      delete rest.houzzatMoreMenu;
+      window.history.replaceState(rest, "");
+    }
+  }
+
+  function warmSearch() {
+    if (searchPrefetchedRef.current) return;
+    searchPrefetchedRef.current = true;
+    try {
+      router.prefetch(SEARCH_HREF);
+    } catch {
+      // ignore
+    }
+  }
+
   if (!visible) return null;
 
   const homeActive = pathname === "/";
   const searchActive = pathname.startsWith("/search");
   const accountActive = pathname.startsWith("/account");
-  const routeCount = routePlanner?.count ?? 0;
 
   return (
     <>
@@ -127,140 +235,55 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
             "fixed inset-0 z-[55] bg-ink/35 transition-opacity duration-200 ease-out md:hidden",
             moreVisible ? "opacity-100" : "opacity-0",
           )}
-          onClick={() => setMoreOpen(false)}
+          onClick={closeMore}
         />
       ) : null}
 
       {moreShown ? (
-        <div
-          id={menuId}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Your Houzzat tools"
-          className={cn(
-            "fixed inset-x-0 z-[56] mx-auto max-w-lg md:hidden",
-            "bottom-[var(--mobile-bottom-nav)]",
-            "rounded-t-2xl border border-line bg-surface shadow-[0_-12px_40px_-16px_rgba(20,32,28,0.35)]",
-            "transition-[opacity,transform] duration-200 ease-out",
-            moreVisible
-              ? "translate-y-0 opacity-100"
-              : "translate-y-2 opacity-0",
-          )}
-        >
-          <div className="flex items-center justify-between border-b border-line/70 px-4 py-3">
-            <p className="font-display text-lg text-ink">Your Houzzat</p>
-            <button
-              type="button"
-              onClick={() => setMoreOpen(false)}
-              aria-label="Close"
-              className="rounded-lg p-1.5 text-ink/55 transition hover:bg-mist hover:text-ink"
-            >
-              <X className="size-4" aria-hidden />
-            </button>
-          </div>
-          <nav className="max-h-[min(60vh,28rem)] space-y-1 overflow-y-auto px-2 py-2">
-            <MoreLink
-              href="/account/notifications"
-              icon={<Bell className="size-4" aria-hidden />}
-              label="Notifications"
-              onNavigate={() => setMoreOpen(false)}
-            />
-            <MoreLink
-              href="/account/searches"
-              icon={<Search className="size-4" aria-hidden />}
-              label="Saved searches"
-              onNavigate={() => setMoreOpen(false)}
-            />
-            <MoreLink
-              href="/account/saved"
-              icon={<Heart className="size-4" aria-hidden />}
-              label="Saved listings"
-              onNavigate={() => setMoreOpen(false)}
-            />
-            <MoreLink
-              href="/account/watchlist"
-              icon={<Bell className="size-4" aria-hidden />}
-              label="Watchlist"
-              onNavigate={() => setMoreOpen(false)}
-            />
-            <MoreLink
-              href="/account/notes"
-              icon={<NotebookPen className="size-4" aria-hidden />}
-              label="Notes"
-              onNavigate={() => setMoreOpen(false)}
-            />
-            <MoreLink
-              href="/route-planner"
-              icon={<RouteStartIcon className="size-4" />}
-              label={
-                routeCount > 0
-                  ? `Route Planner · ${routeCount}`
-                  : "Route Planner"
+        <MoreSheet
+          menuId={menuId}
+          moreVisible={moreVisible}
+          onClose={closeMore}
+          onNavigateAway={dismissMoreForNavigate}
+          onPersonalize={() => {
+            dismissMoreForNavigate();
+            void (async () => {
+              try {
+                const res = await fetch("/api/saved-searches");
+                if (res.ok) {
+                  const json = (await res.json()) as {
+                    items?: Array<{
+                      id: string;
+                      name: string;
+                      query: unknown;
+                      isHomepageActive?: boolean;
+                    }>;
+                  };
+                  const active =
+                    json.items?.find((item) => item.isHomepageActive) ?? null;
+                  setPersonalizeSearch(
+                    active
+                      ? {
+                          id: active.id,
+                          name: active.name,
+                          query:
+                            typeof active.query === "object" &&
+                            active.query != null
+                              ? (active.query as Record<string, unknown>)
+                              : {},
+                        }
+                      : null,
+                  );
+                } else {
+                  setPersonalizeSearch(null);
+                }
+              } catch {
+                setPersonalizeSearch(null);
               }
-              onNavigate={() => setMoreOpen(false)}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setMoreOpen(false);
-                void (async () => {
-                  try {
-                    const res = await fetch("/api/saved-searches");
-                    if (res.ok) {
-                      const json = (await res.json()) as {
-                        items?: Array<{
-                          id: string;
-                          name: string;
-                          query: unknown;
-                          isHomepageActive?: boolean;
-                        }>;
-                      };
-                      const active =
-                        json.items?.find((item) => item.isHomepageActive) ??
-                        null;
-                      setPersonalizeSearch(
-                        active
-                          ? {
-                              id: active.id,
-                              name: active.name,
-                              query:
-                                typeof active.query === "object" &&
-                                active.query != null
-                                  ? (active.query as Record<string, unknown>)
-                                  : {},
-                            }
-                          : null,
-                      );
-                    } else {
-                      setPersonalizeSearch(null);
-                    }
-                  } catch {
-                    setPersonalizeSearch(null);
-                  }
-                  setPersonalizeOpen(true);
-                })();
-              }}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-ink transition hover:bg-mist"
-            >
-              <span className="inline-flex size-9 items-center justify-center rounded-lg bg-canopy/10 text-canopy">
-                <SlidersHorizontal className="size-4" aria-hidden />
-              </span>
-              Personalize homepage
-            </button>
-            <MoreLink
-              href="/account"
-              icon={<UserRound className="size-4" aria-hidden />}
-              label="Account"
-              onNavigate={() => setMoreOpen(false)}
-            />
-            <div className="border-t border-line/70 px-3 py-2">
-              <SignOutButton
-                label="Log out"
-                className="flex w-full items-center justify-center rounded-xl border border-line bg-mist/60 px-3 py-3 text-sm font-semibold text-ink hover:border-danger/40 hover:bg-danger/5 hover:text-danger"
-              />
-            </div>
-          </nav>
-        </div>
+              setPersonalizeOpen(true);
+            })();
+          }}
+        />
       ) : null}
 
       <nav
@@ -271,42 +294,58 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
         )}
       >
         <div
-          className="mx-auto grid max-w-lg grid-cols-4 px-1"
+          className="mx-auto grid max-w-lg grid-cols-4 px-0.5"
           style={{ height: BOTTOM_NAV_HEIGHT }}
         >
           <NavItem
             href="/"
             label="Home"
             active={homeActive}
-            icon={<Home className="size-5" strokeWidth={2.25} aria-hidden />}
+            pressed={pressedTab === "home"}
+            onPressChange={(down) => setPressedTab(down ? "home" : null)}
+            icon={<Home className="size-6" strokeWidth={2.15} aria-hidden />}
+            onSameRoute={() => {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
           />
           <NavItem
-            href="/search"
+            href={SEARCH_HREF}
             label="Search"
             active={searchActive}
-            icon={<Search className="size-5" strokeWidth={2.25} aria-hidden />}
+            pressed={pressedTab === "search"}
+            onPressChange={(down) => setPressedTab(down ? "search" : null)}
+            icon={<Search className="size-6" strokeWidth={2.15} aria-hidden />}
+            onWarm={warmSearch}
           />
           <button
             type="button"
             aria-label="More tools"
             aria-expanded={moreOpen}
             aria-controls={menuId}
-            onClick={() => setMoreOpen((open) => !open)}
-            className={cn(
-              "flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-[color,opacity] duration-200 ease-out",
-              moreOpen ? "text-canopy opacity-100" : "text-ink/55 opacity-90",
-            )}
+            onPointerDown={() => setPressedTab("more")}
+            onPointerUp={() => setPressedTab(null)}
+            onPointerCancel={() => setPressedTab(null)}
+            onPointerLeave={() => setPressedTab(null)}
+            onClick={() => {
+              if (moreOpen) closeMore();
+              else setMoreOpen(true);
+            }}
+            className={navItemClassName(moreOpen, pressedTab === "more")}
           >
-            <Menu className="size-5" strokeWidth={2.25} aria-hidden />
+            <span className={navIconWrapClassName(moreOpen)}>
+              <Menu className="size-6" strokeWidth={2.15} aria-hidden />
+            </span>
             More
           </button>
           <NavItem
             href="/account"
             label="Account"
             active={accountActive}
+            pressed={pressedTab === "account"}
+            onPressChange={(down) => setPressedTab(down ? "account" : null)}
             hard
             icon={
-              <UserRound className="size-5" strokeWidth={2.25} aria-hidden />
+              <UserRound className="size-6" strokeWidth={2.15} aria-hidden />
             }
           />
         </div>
@@ -333,42 +372,209 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
   );
 }
 
-function navItemClassName(active: boolean) {
+function navItemClassName(active: boolean, pressed: boolean) {
   return cn(
-    "flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-[color,opacity,transform] duration-200 ease-out",
-    active
-      ? "translate-y-0 text-canopy opacity-100"
-      : "text-ink/55 opacity-90 hover:text-ink/80",
+    "relative flex min-h-[44px] flex-col items-center justify-center gap-0.5 px-1",
+    "text-[11px] font-semibold leading-none tracking-wide",
+    "transition-[color,background-color,transform,opacity] duration-75 ease-out",
+    "active:scale-[0.96]",
+    pressed && "scale-[0.96] bg-canopy/[0.07]",
+    active ? "text-canopy" : "text-ink/55",
   );
 }
 
-function NavItem({
+function navIconWrapClassName(active: boolean) {
+  return cn(
+    "relative inline-flex size-7 items-center justify-center rounded-lg transition-colors duration-75",
+    active && "bg-canopy/10",
+  );
+}
+
+const NavItem = memo(function NavItem({
   href,
   label,
   active,
   icon,
   hard = false,
+  pressed,
+  onPressChange,
+  onWarm,
+  onSameRoute,
 }: {
   href: string;
   label: string;
   active: boolean;
   icon: ReactNode;
   hard?: boolean;
+  pressed: boolean;
+  onPressChange: (down: boolean) => void;
+  onWarm?: () => void;
+  onSameRoute?: () => void;
 }) {
-  const className = navItemClassName(active);
+  const className = navItemClassName(active, pressed);
+  const pressProps = {
+    onPointerDown: () => {
+      onPressChange(true);
+      onWarm?.();
+    },
+    onPointerUp: () => onPressChange(false),
+    onPointerCancel: () => onPressChange(false),
+    onPointerLeave: () => onPressChange(false),
+  };
+
+  const body = (
+    <>
+      <span className={navIconWrapClassName(active)}>{icon}</span>
+      <span>{label}</span>
+      {active ? (
+        <span
+          aria-hidden
+          className="absolute inset-x-5 top-0 h-0.5 rounded-full bg-canopy"
+        />
+      ) : null}
+    </>
+  );
+
   if (hard) {
     return (
-      <a href={href} className={className}>
-        {icon}
-        {label}
+      <a
+        href={href}
+        className={className}
+        aria-current={active ? "page" : undefined}
+        {...pressProps}
+      >
+        {body}
       </a>
     );
   }
+
   return (
-    <Link href={href} className={className}>
-      {icon}
-      {label}
+    <Link
+      href={href}
+      prefetch={false}
+      className={className}
+      aria-current={active ? "page" : undefined}
+      {...pressProps}
+      onClick={(event) => {
+        if (active && onSameRoute) {
+          event.preventDefault();
+          onSameRoute();
+        }
+      }}
+    >
+      {body}
     </Link>
+  );
+});
+
+function MoreSheet({
+  menuId,
+  moreVisible,
+  onClose,
+  onNavigateAway,
+  onPersonalize,
+}: {
+  menuId: string;
+  moreVisible: boolean;
+  onClose: () => void;
+  onNavigateAway: () => void;
+  onPersonalize: () => void;
+}) {
+  const routePlanner = useRoutePlanner();
+  const routeCount = routePlanner?.count ?? 0;
+
+  return (
+    <div
+      id={menuId}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Your Houzzat tools"
+      className={cn(
+        "fixed inset-x-0 z-[56] mx-auto max-w-lg md:hidden",
+        "bottom-[var(--mobile-bottom-nav)]",
+        "rounded-t-2xl border border-line bg-surface shadow-[0_-12px_40px_-16px_rgba(20,32,28,0.35)]",
+        "transition-[opacity,transform] duration-200 ease-out",
+        moreVisible
+          ? "translate-y-0 opacity-100"
+          : "translate-y-2 opacity-0",
+      )}
+    >
+      <div className="flex items-center justify-between border-b border-line/70 px-4 py-3">
+        <p className="font-display text-lg text-ink">Your Houzzat</p>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="rounded-lg p-1.5 text-ink/55 transition hover:bg-mist hover:text-ink active:scale-95"
+        >
+          <X className="size-4" aria-hidden />
+        </button>
+      </div>
+      <nav className="max-h-[min(60vh,28rem)] space-y-1 overflow-y-auto px-2 py-2">
+        <MoreLink
+          href="/account/notifications"
+          icon={<Bell className="size-4" aria-hidden />}
+          label="Notifications"
+          onNavigate={onNavigateAway}
+        />
+        <MoreLink
+          href="/account/searches"
+          icon={<Search className="size-4" aria-hidden />}
+          label="Saved searches"
+          onNavigate={onNavigateAway}
+        />
+        <MoreLink
+          href="/account/saved"
+          icon={<Heart className="size-4" aria-hidden />}
+          label="Saved listings"
+          onNavigate={onNavigateAway}
+        />
+        <MoreLink
+          href="/account/watchlist"
+          icon={<Bell className="size-4" aria-hidden />}
+          label="Watchlist"
+          onNavigate={onNavigateAway}
+        />
+        <MoreLink
+          href="/account/notes"
+          icon={<NotebookPen className="size-4" aria-hidden />}
+          label="Notes"
+          onNavigate={onNavigateAway}
+        />
+        <MoreLink
+          href="/route-planner"
+          icon={<RouteStartIcon className="size-4" />}
+          label={
+            routeCount > 0
+              ? `Route Planner · ${routeCount}`
+              : "Route Planner"
+          }
+          onNavigate={onNavigateAway}
+        />
+        <button
+          type="button"
+          onClick={onPersonalize}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-ink transition hover:bg-mist active:scale-[0.99]"
+        >
+          <span className="inline-flex size-9 items-center justify-center rounded-lg bg-canopy/10 text-canopy">
+            <SlidersHorizontal className="size-4" aria-hidden />
+          </span>
+          Personalize homepage
+        </button>
+        <MoreLink
+          href="/account"
+          icon={<UserRound className="size-4" aria-hidden />}
+          label="Account"
+          onNavigate={onNavigateAway}
+        />
+        <div className="border-t border-line/70 px-3 py-2">
+          <SignOutButton
+            label="Log out"
+            className="flex w-full items-center justify-center rounded-xl border border-line bg-mist/60 px-3 py-3 text-sm font-semibold text-ink hover:border-danger/40 hover:bg-danger/5 hover:text-danger"
+          />
+        </div>
+      </nav>
+    </div>
   );
 }
 
@@ -384,7 +590,7 @@ function MoreLink({
   onNavigate: () => void;
 }) {
   const className =
-    "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-ink transition hover:bg-mist";
+    "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-ink transition hover:bg-mist active:scale-[0.99]";
   const body = (
     <>
       <span className="inline-flex size-9 items-center justify-center rounded-lg bg-canopy/10 text-canopy">
@@ -403,7 +609,7 @@ function MoreLink({
   }
 
   return (
-    <Link href={href} onClick={onNavigate} className={className}>
+    <Link href={href} prefetch={false} onClick={onNavigate} className={className}>
       {body}
     </Link>
   );
