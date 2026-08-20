@@ -38,13 +38,18 @@ const houzzatConfig: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
+      // Keep the cinematic still up until the WebView paints the overlay,
+      // then HouzzatBootSplash / the first-paint script hide it.
       launchAutoHide: false,
-      backgroundColor: "#1A7B59",
+      backgroundColor: "#0A2F24",
+      androidScaleType: "CENTER_CROP",
+      splashFullScreen: true,
+      splashImmersive: true,
       showSpinner: false,
     },
     StatusBar: {
       style: "DARK",
-      backgroundColor: "#1A7B59",
+      backgroundColor: "#0A2F24",
     },
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],
@@ -53,11 +58,11 @@ const houzzatConfig: CapacitorConfig = {
   android: {
     path: "android",
     allowMixedContent: false,
-    backgroundColor: "#1A7B59",
+    backgroundColor: "#0A2F24",
   },
   ios: {
     path: "ios",
-    backgroundColor: "#1A7B59",
+    backgroundColor: "#0A2F24",
     contentInset: "automatic",
     preferredContentMode: "mobile",
   },

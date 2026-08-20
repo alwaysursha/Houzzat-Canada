@@ -20,10 +20,11 @@
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <!-- Android 12+ ignores @drawable/splash and uses these attrs.
-             Unset background → Material light surface (the purple/lavender). -->
+        <!-- Android 12+ always draws a brief icon splash; it cannot be skipped.
+             Match the cinematic still so the Capacitor splash is not a second look. -->
         <item name="windowSplashScreenBackground">@color/splashBackground</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_house</item>
+        <item name="windowSplashScreenAnimationDuration">200</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
         <item name="android:windowBackground">@drawable/splash_gradient</item>
         <item name="android:statusBarColor">@color/splashBackground</item>
