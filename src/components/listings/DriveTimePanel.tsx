@@ -98,6 +98,7 @@ export function DriveTimePanel({
       eyebrow="Commute"
       title="Drive time"
       hint="Typical drive distance and time from this home to work, school, or anywhere you go."
+      className="overflow-visible"
       action={
         <span className="flex size-10 items-center justify-center rounded-xl bg-canopy/10 text-canopy">
           <Car className="size-5" aria-hidden />
@@ -107,6 +108,7 @@ export function DriveTimePanel({
       <AddressAutocomplete
         source="google"
         fillOnly
+        portalDesktopSuggestions
         placeholder="Enter a workplace, school, or address…"
         onPlaceSelect={(place) => {
           void runDriveCheck(place);

@@ -385,6 +385,15 @@ export function ListingGallery({
 
   function onViewerPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    // Arrow/Close controls live inside this swipe stage. Capturing the pointer
+    // on the stage swallows their click — skip swipe start for interactive targets.
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest("button, a, input, textarea, select, [data-no-swipe]")
+    ) {
+      return;
+    }
     dragRef.current = {
       id: event.pointerId,
       startX: event.clientX,
@@ -830,20 +839,30 @@ export function ListingGallery({
               <>
                 <button
                   type="button"
-                  onClick={() => step(-1)}
+                  data-no-swipe=""
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    step(-1);
+                  }}
                   disabled={verifyGateIndex != null && index <= 0}
-                  className="absolute left-3 z-10 hidden rounded-full bg-white/10 px-3 py-3 text-lg text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30 md:block"
+                  className="absolute left-3 z-20 hidden size-11 items-center justify-center rounded-full bg-white/10 text-lg text-white transition hover:bg-white/20 active:bg-white/25 disabled:cursor-not-allowed disabled:opacity-30 md:inline-flex"
                   aria-label="Previous photo"
                 >
                   ←
                 </button>
                 <button
                   type="button"
-                  onClick={() => step(1)}
+                  data-no-swipe=""
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    step(1);
+                  }}
                   disabled={
                     verifyGateIndex != null && index >= verifyGateIndex
                   }
-                  className="absolute right-3 z-10 hidden rounded-full bg-white/10 px-3 py-3 text-lg text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30 md:block"
+                  className="absolute right-3 z-20 hidden size-11 items-center justify-center rounded-full bg-white/10 text-lg text-white transition hover:bg-white/20 active:bg-white/25 disabled:cursor-not-allowed disabled:opacity-30 md:inline-flex"
                   aria-label="Next photo"
                 >
                   →

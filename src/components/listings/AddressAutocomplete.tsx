@@ -155,6 +155,7 @@ export function AddressAutocomplete({
   onSearchSubmit,
   onClear,
   closeWhenHiddenBehindHeader = false,
+  portalDesktopSuggestions = false,
 }: {
   initialQuery?: string;
   className?: string;
@@ -186,6 +187,11 @@ export function AddressAutocomplete({
    * (home hero search).
    */
   closeWhenHiddenBehindHeader?: boolean;
+  /**
+   * Render desktop suggestions in a fixed portal (escape overflow-hidden /
+   * scroll ancestors — e.g. Drive Time inside ListingSection).
+   */
+  portalDesktopSuggestions?: boolean;
 }) {
   const router = useRouter();
   const isMobile = useIsMobileSearch();
@@ -262,7 +268,7 @@ export function AddressAutocomplete({
       setPanelStyle(undefined);
       return;
     }
-    function syncPanelWidth() {
+    function syncPanel() {
       const box = boxRef.current;
       if (!box) return;
       const shell = box.closest("[data-search-bar]") as HTMLElement | null;
@@ -274,6 +280,41 @@ export function AddressAutocomplete({
         Math.max(shellRect.width, minWidth),
         window.innerWidth - viewportPad * 2,
       );
+
+      if (portalDesktopSuggestions) {
+        let left = shellRect.left;
+        if (left + width > window.innerWidth - viewportPad) {
+          left = window.innerWidth - viewportPad - width;
+        }
+        left = Math.max(viewportPad, left);
+        const gap = 8;
+        const spaceBelow =
+          window.innerHeight - boxRect.bottom - viewportPad - gap;
+        const spaceAbove = boxRect.top - viewportPad - gap;
+        const placeBelow = spaceBelow >= 160 || spaceBelow >= spaceAbove;
+        const maxHeight = Math.max(
+          140,
+          Math.min(28 * 16, placeBelow ? spaceBelow : spaceAbove),
+        );
+        const top = placeBelow
+          ? boxRect.bottom + gap
+          : Math.max(viewportPad, boxRect.top - gap - maxHeight);
+        const sheet = document.querySelector<HTMLElement>(
+          '[role="dialog"][aria-label="Listing details"]',
+        );
+        const inListingSheet = Boolean(sheet?.contains(box));
+        setPanelStyle({
+          position: "fixed",
+          top,
+          left,
+          width,
+          maxHeight,
+          // Inside listing sheet: below green chrome (z-50). Full page / map overlay: above content.
+          zIndex: inListingSheet ? 40 : 90,
+        });
+        return;
+      }
+
       let left = shellRect.left - boxRect.left;
       const absoluteRight = shellRect.left + width;
       const overflowRight = absoluteRight - (window.innerWidth - viewportPad);
@@ -282,10 +323,16 @@ export function AddressAutocomplete({
       }
       setPanelStyle({ left, width });
     }
-    syncPanelWidth();
-    window.addEventListener("resize", syncPanelWidth);
-    return () => window.removeEventListener("resize", syncPanelWidth);
-  }, [open, query, suggestions.length, isMobile]);
+    syncPanel();
+    window.addEventListener("resize", syncPanel);
+    if (portalDesktopSuggestions) {
+      window.addEventListener("scroll", syncPanel, true);
+    }
+    return () => {
+      window.removeEventListener("resize", syncPanel);
+      window.removeEventListener("scroll", syncPanel, true);
+    };
+  }, [open, query, suggestions.length, isMobile, portalDesktopSuggestions]);
 
   /** Hero: dismiss desktop suggestions once the bar scrolls under the header. */
   useEffect(() => {
@@ -335,14 +382,21 @@ export function AddressAutocomplete({
   useEffect(() => {
     function onDocClick(event: MouseEvent) {
       if (mobileSheetOpen) return;
-      if (!boxRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-        setActiveIndex(-1);
+      const target = event.target as Node;
+      if (boxRef.current?.contains(target)) return;
+      if (
+        portalDesktopSuggestions &&
+        target instanceof Element &&
+        target.closest(`[data-ac-portal="${listboxId}"]`)
+      ) {
+        return;
       }
+      setOpen(false);
+      setActiveIndex(-1);
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
-  }, [mobileSheetOpen]);
+  }, [mobileSheetOpen, portalDesktopSuggestions, listboxId]);
 
   useEffect(() => {
     if (!sheetMounted || !isMobile) return;
@@ -1204,6 +1258,33 @@ export function AddressAutocomplete({
         )
       : null;
 
+  const desktopListbox = desktopPanelOpen ? (
+    <div
+      id={listboxId}
+      role="listbox"
+      data-ac-portal={listboxId}
+      style={panelStyle}
+      className={cn(
+        "overflow-auto rounded-md border border-line bg-surface py-1.5 shadow-lg",
+        !portalDesktopSuggestions &&
+          "absolute z-50 mt-4 max-h-[min(28rem,70vh)] w-full",
+      )}
+    >
+      {renderSuggestionList()}
+    </div>
+  ) : null;
+
+  /** Prefer listing-sheet dialog root so suggestions stack above panel content
+   * but under sheet chrome (z-50). Full-page listing portals to document.body. */
+  function desktopSuggestionPortalRoot(): HTMLElement {
+    const box = boxRef.current;
+    const sheet = document.querySelector<HTMLElement>(
+      '[role="dialog"][aria-label="Listing details"]',
+    );
+    if (box && sheet?.contains(box)) return sheet;
+    return document.body;
+  }
+
   return (
     <div ref={boxRef} className={cn("relative", className)}>
       <Search
@@ -1258,15 +1339,12 @@ export function AddressAutocomplete({
           {geoError}
         </p>
       ) : null}
-      {desktopPanelOpen ? (
-        <div
-          id={listboxId}
-          role="listbox"
-          style={panelStyle}
-          className="absolute z-50 mt-4 max-h-[min(28rem,70vh)] w-full overflow-auto rounded-md border border-line bg-surface py-1.5 shadow-lg"
-        >
-          {renderSuggestionList()}
-        </div>
+      {desktopListbox ? (
+        portalDesktopSuggestions && mounted ? (
+          createPortal(desktopListbox, desktopSuggestionPortalRoot())
+        ) : (
+          desktopListbox
+        )
       ) : null}
       {mobilePortal}
     </div>

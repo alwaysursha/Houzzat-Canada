@@ -346,7 +346,26 @@ export function ListingMapViewModal({
     mapRef.current = map;
     fittedRef.current = false;
 
+    // Modal flex layout often settles after first paint — same pattern as
+    // ListingGalleryMapSlide so the canvas is not stuck at 0×0.
+    const resize = () => {
+      try {
+        map.resize();
+      } catch {
+        // map may already be removed
+      }
+    };
+    resize();
+    const frame = window.requestAnimationFrame(resize);
+    const t1 = window.setTimeout(resize, 50);
+    const t2 = window.setTimeout(resize, 250);
+    const t3 = window.setTimeout(resize, 600);
+
     return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       map.remove();
@@ -486,7 +505,9 @@ export function ListingMapViewModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      className="fixed inset-0 z-[100] flex flex-col bg-mist"
+      // Above ListingSheetHost (z-200) so desktop Map view is visible in the
+      // listing popup — mobile uses the in-gallery map slide instead.
+      className="fixed inset-0 z-[210] flex flex-col bg-mist"
     >
       <header className="relative z-20 flex shrink-0 items-start justify-between gap-3 border-b border-line/70 bg-surface/95 px-4 py-3 shadow-sm backdrop-blur-md sm:px-5 sm:py-4">
         <div className="min-w-0 max-w-2xl">
@@ -522,7 +543,7 @@ export function ListingMapViewModal({
 
       {hover ? (
         <div
-          className="fixed z-[110]"
+          className="fixed z-[220]"
           style={{ left: hover.left, top: hover.top }}
           onMouseEnter={clearHideTimer}
           onMouseLeave={scheduleHideFromCard}

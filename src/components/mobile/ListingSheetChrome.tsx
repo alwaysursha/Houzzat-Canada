@@ -449,7 +449,7 @@ function SheetSearchPopup({
 
 /**
  * Listing overlay chrome — two rows:
- * 1) Listing[+count] | centered Houzzat text | Back (if stack) + Close
+ * 1) Listing[+count] | centered Houzzat mark + wordmark | Back (if stack) + Close
  * 2) Search · Share · Save
  */
 export function ListingSheetChrome({
@@ -486,13 +486,26 @@ export function ListingSheetChrome({
         paddingTop: "env(safe-area-inset-top, 0px)",
       }}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] flex h-11 items-center justify-center">
-        <span className="font-display text-[15px] font-semibold tracking-tight text-white">
+      {/*
+        True screen-center brand (absolute), not flex-space between Listing/Close.
+        Official house mark + display wordmark — reads as logo, not tiny header text.
+      */}
+      <div className="pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-[1] flex h-11 items-center justify-center gap-1.5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/houzzat-house-mark.png"
+          alt=""
+          width={32}
+          height={32}
+          className="size-8 shrink-0 object-contain"
+          aria-hidden
+        />
+        <span className="font-display text-xl font-semibold leading-none tracking-tight text-white sm:text-[1.35rem]">
           {SITE_NAME}
         </span>
       </div>
 
-      <div className="relative flex h-11 items-center justify-between gap-1 px-1 sm:px-2">
+      <div className="relative z-[2] flex h-11 items-center justify-between gap-1 px-1 sm:px-2">
         <span className="min-w-0 max-w-[38%] truncate pl-2 text-sm font-semibold tracking-wide text-white/90">
           {listingLabel}
         </span>
