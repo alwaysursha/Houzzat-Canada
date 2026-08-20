@@ -317,7 +317,7 @@ export function SiteHeaderClient({ siteName }: { siteName: string }) {
 
   return (
     <>
-      <header className="sticky top-0 z-40">
+      <header id="houzzat-site-header" className="sticky top-0 z-40">
         {/* Android 15+ edge-to-edge: keep system status icons on a brand bar. */}
         <div
           aria-hidden

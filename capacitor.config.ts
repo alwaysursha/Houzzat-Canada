@@ -38,14 +38,17 @@ const houzzatConfig: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      // One native branded splash (gradient + mark + wordmark), then home.
-      // No web welcome overlay — launchAutoHide reveals the app when ready.
+      // Android 12 keeps the system splash until JS hides it. Duration must
+      // be > 0 or Capacitor never installs the keep-on-screen condition —
+      // that was the logo-then-plain-green gap.
+      // autoHide after 10s is only a failsafe if houzzat.com never calls hide.
       launchAutoHide: true,
-      launchShowDuration: 0,
+      launchShowDuration: 10000,
+      launchFadeOutDuration: 0,
       backgroundColor: "#0A2F24",
       androidScaleType: "CENTER_CROP",
-      splashFullScreen: true,
-      splashImmersive: true,
+      splashFullScreen: false,
+      splashImmersive: false,
       showSpinner: false,
     },
     StatusBar: {

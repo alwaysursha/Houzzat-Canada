@@ -13,6 +13,8 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Match the splash tone so a WebView gap cannot flash white/mist. -->
+        <item name="android:windowBackground">@color/splashBackground</item>
         <item name="android:statusBarColor">@color/statusBarColor</item>
         <item name="android:navigationBarColor">@android:color/white</item>
         <item name="android:windowLightStatusBar">false</item>
@@ -20,8 +22,8 @@
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <!-- Android 12+ shows a brief icon splash (house + Fraunces wordmark).
-             Capacitor then shows the full gradient splash.png until the WebView is ready. -->
+        <!-- Android 12+ can only draw icon + solid color. Keep it on-screen
+             until the WebView boot cover is painted (see SplashScreen plugin). -->
         <item name="windowSplashScreenBackground">@color/splashBackground</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_house</item>
         <item name="windowSplashScreenAnimationDuration">0</item>

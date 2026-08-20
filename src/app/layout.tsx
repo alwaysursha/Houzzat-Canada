@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { Providers } from "@/components/Providers";
+import { getHouzzatAndroidBootScript } from "@/lib/mobile/houzzat-android-boot";
 import { getStaleBuildBootScript } from "@/lib/navigation/stale-build-recovery";
 import { buildRootMetadata } from "@/lib/seo";
 import "./globals.css";
@@ -39,6 +40,9 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full">
+        <script
+          dangerouslySetInnerHTML={{ __html: getHouzzatAndroidBootScript() }}
+        />
         <script
           dangerouslySetInnerHTML={{ __html: getStaleBuildBootScript() }}
         />

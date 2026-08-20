@@ -13,6 +13,7 @@ import { SoftNavShield } from "@/components/feedback/SoftNavShield";
 import { SiteAlertProvider } from "@/components/feedback/SiteAlertProvider";
 import { BiometricLockGate } from "@/components/mobile/BiometricLockGate";
 import { CapacitorBootstrap } from "@/components/mobile/CapacitorBootstrap";
+import { HouzzatAndroidBootCover } from "@/components/mobile/HouzzatAndroidBootCover";
 import { HouzzatPullToRefresh } from "@/components/mobile/HouzzatPullToRefresh";
 import { HouzzatProStartup } from "@/components/mobile/HouzzatProStartup";
 import { PushNotificationsBootstrap } from "@/components/mobile/PushNotificationsBootstrap";
@@ -31,6 +32,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <SiteAlertProvider>
             <AuthModalProvider>
               <CapacitorBootstrap />
+              <HouzzatAndroidBootCover />
               <PushNotificationsBootstrap />
               <HouzzatProStartup />
               <BiometricLockGate />
