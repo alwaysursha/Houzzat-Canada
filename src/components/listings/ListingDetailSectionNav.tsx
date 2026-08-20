@@ -55,7 +55,7 @@ function getScrollRoot(from: HTMLElement | null): HTMLElement | Window {
 /**
  * Viewport Y where the section nav should pin.
  * - page: under site header
- * - panel: under sheet Close chrome (--listing-sheet-chrome-height)
+ * - panel: under sheet chrome (--listing-sheet-chrome-height)
  * - iframe: 0 (Close lives outside the iframe)
  */
 function readSectionNavTopPx(layout: ListingSectionNavLayout): number {
@@ -66,7 +66,7 @@ function readSectionNavTopPx(layout: ListingSectionNavLayout): number {
   const probe = document.createElement("div");
   if (layout === "panel") {
     probe.style.cssText =
-      "position:fixed;visibility:hidden;pointer-events:none;top:var(--listing-sheet-chrome-height, calc(2.75rem + env(safe-area-inset-top, 0px)));";
+      "position:fixed;visibility:hidden;pointer-events:none;top:var(--listing-sheet-chrome-height, calc(6.125rem + env(safe-area-inset-top, 0px)));";
   } else if (layout === "iframe") {
     probe.style.cssText =
       "position:fixed;visibility:hidden;pointer-events:none;top:0;";

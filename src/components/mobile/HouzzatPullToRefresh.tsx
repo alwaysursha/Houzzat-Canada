@@ -7,9 +7,15 @@ import { Loader2 } from "lucide-react";
 import { isListingSheetOpen } from "@/lib/mobile/listing-sheet-store";
 import { cn } from "@/lib/utils";
 
-const PULL_THRESHOLD_PX = 76;
-const MAX_PULL_PX = 128;
-const HOLD_PULL_PX = 64;
+/** Commit refresh only after a deliberate downward pull. */
+const PULL_THRESHOLD_PX = 118;
+/** Visual rubber-band ceiling (page can travel farther than before). */
+const MAX_PULL_PX = 176;
+const HOLD_PULL_PX = 72;
+/** Ignore tiny jitters before direction lock. */
+const DIRECTION_LOCK_PX = 14;
+/** Vertical must clearly dominate horizontal (≈ ~34° from vertical). */
+const VERTICAL_DOMINANCE = 1.75;
 const LAST_REFRESH_KEY = "houzzat:last-refresh";
 
 function formatLastRefresh(iso: string | null): string {
@@ -26,18 +32,39 @@ function formatLastRefresh(iso: string | null): string {
   }
 }
 
-function isStaffPath(pathname: string) {
-  return (
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/agent") ||
-    pathname.startsWith("/pro")
-  );
+function isConsumerHome(pathname: string) {
+  return pathname === "/";
+}
+
+function isHorizontalGestureTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  if (
+    target.closest(
+      "input, textarea, select, [data-no-ptr], [data-snap-rail], [data-horizontal-scroll]",
+    )
+  ) {
+    return true;
+  }
+  let node: Element | null = target;
+  while (node && node !== document.documentElement) {
+    if (node instanceof HTMLElement) {
+      const style = window.getComputedStyle(node);
+      const ox = style.overflowX;
+      if (
+        (ox === "auto" || ox === "scroll" || ox === "overlay") &&
+        node.scrollWidth > node.clientWidth + 8
+      ) {
+        return true;
+      }
+    }
+    node = node.parentElement;
+  }
+  return false;
 }
 
 /**
- * Native Houzzat consumer pull-to-refresh.
- * Indicator is fixed below the status-bar brand strip so it never hides
- * behind the green safe-area chrome.
+ * Native Houzzat consumer pull-to-refresh — Home only.
+ * Indicator sits below the status-bar brand strip.
  */
 export function HouzzatPullToRefresh({
   children,
@@ -47,10 +74,13 @@ export function HouzzatPullToRefresh({
   const router = useRouter();
   const pathname = usePathname() || "/";
   const [native, setNative] = useState(false);
-  const enabled = native && !isStaffPath(pathname);
+  const enabled = native && isConsumerHome(pathname);
 
   const rootRef = useRef<HTMLDivElement>(null);
+  const startXRef = useRef(0);
   const startYRef = useRef<number | null>(null);
+  /** null = undecided, true = vertical PTR, false = hand off to scroll/horizontal */
+  const axisLockedRef = useRef<boolean | null>(null);
   const pullingRef = useRef(false);
   const armedHapticRef = useRef(false);
   const scrollParentRef = useRef<HTMLElement | null>(null);
@@ -98,6 +128,14 @@ export function HouzzatPullToRefresh({
     setPullPx(px);
   }, []);
 
+  const resetGesture = useCallback(() => {
+    startYRef.current = null;
+    axisLockedRef.current = null;
+    pullingRef.current = false;
+    armedHapticRef.current = false;
+    setPull(0);
+  }, [setPull]);
+
   useEffect(() => {
     if (!enabled) return;
     const root = rootRef.current;
@@ -109,23 +147,19 @@ export function HouzzatPullToRefresh({
       const touch = event.touches[0];
       if (!touch) return;
       const target = event.target;
-      if (
-        target instanceof Element &&
-        (target.closest("input, textarea, select, [data-no-ptr]") ||
-          target.closest("[data-snap-rail]"))
-      ) {
-        pullingRef.current = false;
-        startYRef.current = null;
+      if (isHorizontalGestureTarget(target)) {
+        resetGesture();
         return;
       }
       const parent = findScrollParent(target);
       scrollParentRef.current = parent;
       if (parent.scrollTop > 2) {
-        pullingRef.current = false;
-        startYRef.current = null;
+        resetGesture();
         return;
       }
+      startXRef.current = touch.clientX;
       startYRef.current = touch.clientY;
+      axisLockedRef.current = null;
       pullingRef.current = true;
       armedHapticRef.current = false;
     };
@@ -138,19 +172,41 @@ export function HouzzatPullToRefresh({
       if (!touch) return;
       const parent = scrollParentRef.current;
       if (parent && parent.scrollTop > 2) {
-        pullingRef.current = false;
-        startYRef.current = null;
+        resetGesture();
+        return;
+      }
+
+      const deltaX = touch.clientX - startXRef.current;
+      const deltaY = touch.clientY - startYRef.current;
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+
+      if (axisLockedRef.current === null) {
+        if (absX < DIRECTION_LOCK_PX && absY < DIRECTION_LOCK_PX) {
+          return;
+        }
+        // Horizontal or diagonal → abandon PTR (do not preventDefault).
+        if (absY <= absX * VERTICAL_DOMINANCE || deltaY <= 0) {
+          axisLockedRef.current = false;
+          pullingRef.current = false;
+          setPull(0);
+          return;
+        }
+        axisLockedRef.current = true;
+      }
+
+      if (axisLockedRef.current !== true) {
+        return;
+      }
+
+      if (deltaY <= 0) {
         setPull(0);
         return;
       }
-      const delta = touch.clientY - startYRef.current;
-      if (delta <= 0) {
-        setPull(0);
-        return;
-      }
+
       event.preventDefault();
-      // Ease-out rubber band so the last stretch feels soft.
-      const t = Math.min(1, delta / (MAX_PULL_PX * 2.1));
+      // Ease-out rubber band — longer travel before commit.
+      const t = Math.min(1, deltaY / (MAX_PULL_PX * 2.35));
       const damped = MAX_PULL_PX * (1 - Math.pow(1 - t, 2.35));
       setPull(damped);
       if (damped >= PULL_THRESHOLD_PX && !armedHapticRef.current) {
@@ -180,22 +236,24 @@ export function HouzzatPullToRefresh({
       } finally {
         refreshingRef.current = false;
         setRefreshing(false);
-        setPull(0);
-        startYRef.current = null;
-        pullingRef.current = false;
+        resetGesture();
       }
     };
 
     const onEnd = () => {
-      if (!pullingRef.current) return;
+      if (!pullingRef.current && axisLockedRef.current !== true) {
+        resetGesture();
+        return;
+      }
       if (refreshingRef.current) return;
-      if (pullPxRef.current >= PULL_THRESHOLD_PX) {
+      if (
+        axisLockedRef.current === true &&
+        pullPxRef.current >= PULL_THRESHOLD_PX
+      ) {
         void finish();
         return;
       }
-      setPull(0);
-      startYRef.current = null;
-      pullingRef.current = false;
+      resetGesture();
     };
 
     root.addEventListener("touchstart", onStart, { passive: true });
@@ -208,14 +266,14 @@ export function HouzzatPullToRefresh({
       root.removeEventListener("touchend", onEnd);
       root.removeEventListener("touchcancel", onEnd);
     };
-  }, [enabled, findScrollParent, router, setPull]);
+  }, [enabled, findScrollParent, resetGesture, router, setPull]);
 
   if (!enabled) return children;
 
-  const visible = pullPx > 8 || refreshing;
+  const visible = pullPx > 10 || refreshing;
   const progress = Math.min(1, pullPx / PULL_THRESHOLD_PX);
   const armed = progress >= 1 || refreshing;
-  const contentShift = Math.min(pullPx, HOLD_PULL_PX + 8);
+  const contentShift = Math.min(pullPx, HOLD_PULL_PX + 12);
 
   return (
     <div ref={rootRef} className="relative min-w-0">

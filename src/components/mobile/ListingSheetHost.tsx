@@ -10,7 +10,6 @@ import {
   type CSSProperties,
 } from "react";
 import { useSession } from "next-auth/react";
-import { ChevronLeft, X } from "lucide-react";
 import {
   abortListingGalleryFetches,
   mlsNumberFromListingHref,
@@ -18,12 +17,15 @@ import {
 import { isListingPanelEnabled } from "@/lib/listings/listing-panel-flag";
 import {
   LISTING_SHEET_OPEN_MESSAGE,
-  backListingSheet,
   closeListingSheet,
   openListingSheet,
   subscribeListingSheet,
   type ListingSheetState,
 } from "@/lib/mobile/listing-sheet-store";
+import {
+  ListingSheetChrome,
+  listingSheetChromeHeightVar,
+} from "@/components/mobile/ListingSheetChrome";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 
 type PanelComponent = ComponentType<{ href: string }>;
@@ -251,52 +253,21 @@ export function ListingSheetHost() {
       aria-label="Listing details"
       data-listing-panel={usePanel ? "1" : undefined}
       // Panel mode shares the parent viewport (no iframe document flags):
-      // - chrome-height offsets ListingStickyBar under the Close bar
+      // - chrome-height offsets ListingStickyBar / section nav under sheet chrome
       // - site-header-stack 0 so Book a viewing / scroll-mt don't reserve
       //   a phantom site header (iframe sheet sets this on <html> instead)
       style={
         {
-          "--listing-sheet-chrome-height":
-            "calc(2.75rem + env(safe-area-inset-top, 0px))",
+          "--listing-sheet-chrome-height": listingSheetChromeHeightVar(),
           "--site-header-stack": "0px",
           "--listing-viewing-sticky-gap": "0px",
         } as CSSProperties
       }
     >
-      <div
-        className="relative z-50 flex shrink-0 items-center justify-between gap-2 border-b border-line bg-canopy px-2 pt-[env(safe-area-inset-top,0px)] text-white sm:px-3"
-        style={{ minHeight: "calc(2.75rem + env(safe-area-inset-top, 0px))" }}
-      >
-        <div className="flex min-w-0 items-center gap-0.5">
-          {state.canBack ? (
-            <button
-              type="button"
-              onClick={() => backListingSheet()}
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-2 text-sm font-semibold text-white/95 transition hover:bg-white/10"
-            >
-              <ChevronLeft className="size-5" strokeWidth={2.2} />
-              Back
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => closeListingSheet()}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-semibold text-white/95 transition hover:bg-white/10"
-          >
-            <X className="size-5" strokeWidth={2.2} />
-            Close
-          </button>
-        </div>
-        <span className="shrink-0 pr-2 text-xs font-medium tracking-wide text-white/70">
-          {usePanel
-            ? state.depth > 1
-              ? `Panel · ${state.depth}`
-              : "Panel"
-            : state.depth > 1
-              ? `Listing · ${state.depth}`
-              : "Listing"}
-        </span>
-      </div>
+      <ListingSheetChrome
+        href={state.href}
+        canBack={state.canBack}
+      />
       {usePanel ? (
         Panel ? (
           <Panel key={state.href} href={state.href} />

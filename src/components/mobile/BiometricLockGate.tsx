@@ -29,15 +29,14 @@ import { SITE_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 const BACKGROUND_LOCK_MS = 15_000;
+const FADE_MS = 260;
 
 /**
- * Full-screen biometric gate for the Capacitor app.
- * Protects access to an existing Auth.js session — never recreates it
- * from a stored password.
+ * Biometric privacy gate for the Capacitor app.
+ * Protects an existing Auth.js session — never recreates it from a password.
  *
- * Unlock state is stored in sessionStorage so hard Account document loads
- * in the same native WebView browsing session do not re-prompt. Cold start,
- * force-stop, and background ≥15s clear that marker.
+ * Presentation: translucent blur over the live app shell + compact unlock card
+ * (not a separate full-screen green splash). Interaction stays blocked until unlock.
  */
 export function BiometricLockGate() {
   const { status, data } = useSession();
@@ -66,6 +65,8 @@ export function BiometricLockGate() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [label, setLabel] = useState("Biometric unlock");
+  const [visible, setVisible] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const unlockedAtRef = useRef(0);
   const backgroundedAtRef = useRef<number | null>(null);
@@ -112,6 +113,18 @@ export function BiometricLockGate() {
       setBiometricGateLocked(true);
     }
   }, [native]);
+
+  // Fade the overlay in/out without remounting private content underneath.
+  useEffect(() => {
+    if (showCover) {
+      setMounted(true);
+      const frame = window.requestAnimationFrame(() => setVisible(true));
+      return () => window.cancelAnimationFrame(frame);
+    }
+    setVisible(false);
+    const timer = window.setTimeout(() => setMounted(false), FADE_MS);
+    return () => window.clearTimeout(timer);
+  }, [showCover]);
 
   // Preferences + migration — once on native mount.
   useEffect(() => {
@@ -284,39 +297,61 @@ export function BiometricLockGate() {
     }
   }
 
-  if (!showCover) return null;
+  if (!mounted) return null;
 
   const promptUi = phase === "prompt" && locked;
 
   return (
     <div
-      className="fixed inset-0 z-[300] flex flex-col bg-canopy text-white"
+      className={cn(
+        "fixed inset-0 z-[300] flex flex-col items-center justify-end sm:justify-center",
+        "bg-canopy/50 backdrop-blur-xl transition-opacity ease-out",
+        "pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]",
+        visible ? "opacity-100" : "opacity-0",
+      )}
+      style={{ transitionDuration: `${FADE_MS}ms` }}
       role="dialog"
       aria-modal="true"
       aria-label="Unlock Houzzat"
     >
-      <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]">
-        <p className="font-display text-4xl tracking-tight">{SITE_NAME}</p>
+      {/* Extra privacy veil so signed-in chrome cannot be read through blur */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-canopy/35 via-ink/25 to-ink/45"
+        aria-hidden
+      />
+
+      <div
+        className={cn(
+          "relative z-10 mx-4 mb-8 w-full max-w-sm rounded-2xl border border-white/20 bg-canopy px-5 py-6 text-white shadow-[0_16px_48px_rgb(10_47_36/0.35)] sm:mb-0",
+          "transition-transform ease-out",
+          visible ? "translate-y-0" : "translate-y-3",
+        )}
+        style={{ transitionDuration: `${FADE_MS}ms` }}
+      >
         {promptUi ? (
-          <>
+          <div className="flex flex-col items-center gap-4 text-center">
             <div
               className={cn(
-                "flex size-20 items-center justify-center rounded-full bg-white/15",
+                "flex size-16 items-center justify-center rounded-full bg-white/15",
                 busy && "animate-pulse",
               )}
             >
-              <Fingerprint className="size-10" strokeWidth={1.75} aria-hidden />
+              <Fingerprint className="size-8" strokeWidth={1.75} aria-hidden />
             </div>
-            <div className="max-w-sm text-center">
-              <p className="text-lg font-semibold">Unlock with {label}</p>
-              <p className="mt-1.5 text-sm text-white/75">
-                Confirm it’s you to open your saved homes and watchlist.
+            <div>
+              <p className="text-lg font-semibold tracking-tight">
+                Unlock {SITE_NAME}
+              </p>
+              <p className="mt-1 text-sm text-white/75">
+                Confirm it’s you with {label}.
               </p>
               {error ? (
-                <p className="mt-3 text-sm font-medium text-amber-100">{error}</p>
+                <p className="mt-2.5 text-sm font-medium text-amber-100">
+                  {error}
+                </p>
               ) : null}
             </div>
-            <div className="flex w-full max-w-xs flex-col gap-2.5">
+            <div className="flex w-full flex-col gap-2">
               <Button
                 type="button"
                 size="lg"
@@ -332,14 +367,17 @@ export function BiometricLockGate() {
                 variant="secondary"
                 disabled={busy}
                 onClick={() => void onUsePassword()}
-                className="h-12 w-full border-white/30 bg-transparent text-white hover:bg-white/10"
+                className="h-11 w-full border-white/30 bg-transparent text-white hover:bg-white/10"
               >
                 Sign in another way
               </Button>
             </div>
-          </>
+          </div>
         ) : (
-          <div className="size-20 rounded-full bg-white/10" aria-hidden />
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <div className="size-14 rounded-full bg-white/10" aria-hidden />
+            <p className="text-sm text-white/70">Preparing unlock…</p>
+          </div>
         )}
       </div>
     </div>
