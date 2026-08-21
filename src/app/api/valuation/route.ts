@@ -15,7 +15,7 @@ import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
 import { estimateHomeValue } from "@/lib/market/home-value-estimate";
 import { sendNotification } from "@/lib/notifications";
 import { sendPushToUsers } from "@/lib/notifications/push";
-import { prisma } from "@/lib/prisma";
+import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { VOW_VERSION } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 
@@ -103,7 +103,7 @@ function requestClientMeta(request: Request) {
 
 /**
  * Ensure a seller (and buyer) consumer account exists for this valuation lead.
- * Grants the Seller profile so /owner desk is available; Buyer stays enabled too.
+ * Flat writes only — nested Prisma creates break on PrismaNeonHttp (Workers).
  */
 async function ensureOwnerCustomer(opts: {
   email: string;
@@ -173,44 +173,51 @@ async function ensureOwnerCustomer(opts: {
             vowAcceptedAt: now,
             vowVersion: VOW_VERSION,
             caslConsentAt: now,
-            consentEvents: {
-              create: [
-                {
-                  kind: TERMS_ACCEPT_KIND,
-                  version: TERMS_VERSION,
-                  email,
-                  ip,
-                  userAgent,
-                },
-                {
-                  kind: "vow_accept",
-                  version: VOW_VERSION,
-                  email,
-                  ip,
-                  userAgent,
-                },
-              ],
-            },
           }
         : {}),
     },
   });
 
-  void sendNotification({
-    toEmail: email,
-    subject: `Your ${SITE_NAME} owner account is ready`,
-    text: [
-      `Hi ${opts.name},`,
-      "",
-      `Thanks for requesting a home value estimate for ${opts.address}.`,
-      "",
-      `We've created your ${SITE_NAME} owner account so you can manage seller tools and (soon) list your home.`,
-      `Sign in at ${SITE_URL}/auth/sign-in with this email.`,
-      `If you signed up with a temporary password, use Google sign-in or contact us to set a password.`,
-      "",
-      `— ${SITE_NAME}`,
-    ].join("\n"),
-  });
+  if (opts.acceptTerms) {
+    await prisma.consentEvent.createMany({
+      data: [
+        {
+          userId: user.id,
+          kind: TERMS_ACCEPT_KIND,
+          version: TERMS_VERSION,
+          email,
+          ip,
+          userAgent,
+        },
+        {
+          userId: user.id,
+          kind: "vow_accept",
+          version: VOW_VERSION,
+          email,
+          ip,
+          userAgent,
+        },
+      ],
+    });
+  }
+
+  scheduleWorkerSideEffect(
+    sendNotification({
+      toEmail: email,
+      subject: `Your ${SITE_NAME} owner account is ready`,
+      text: [
+        `Hi ${opts.name},`,
+        "",
+        `Thanks for requesting a home value estimate for ${opts.address}.`,
+        "",
+        `We've created your ${SITE_NAME} owner account so you can manage seller tools and (soon) list your home.`,
+        `Sign in at ${SITE_URL}/auth/sign-in with this email.`,
+        `If you signed up with a temporary password, use Google sign-in or contact us to set a password.`,
+        "",
+        `— ${SITE_NAME}`,
+      ].join("\n"),
+    }),
+  );
 
   return { userId: user.id, accountCreated: true };
 }
@@ -349,6 +356,8 @@ export async function POST(request: Request) {
             ? "sold comps + active listings"
             : "market fallback";
 
+    // Flat Lead create — nested activities/appointments used an implicit
+    // transaction that fails on PrismaNeonHttp (Workers) after Aug 12.
     const lead = await prisma.lead.create({
       data: {
         source: "HOME_VALUATION",
@@ -358,6 +367,8 @@ export async function POST(request: Request) {
         customerId,
         assignedAgentId,
         organizationId: organizationId ?? undefined,
+        contactConsentAt: new Date(),
+        statusChangedAt: new Date(),
         ...utmLeadFields(utm, adCampaignId),
         notes: [
           `Home valuation for ${data.address}`,
@@ -376,7 +387,9 @@ export async function POST(request: Request) {
             ? `Community avg sold: $${estimate.communityAvgSold.toLocaleString()} (n=${estimate.communitySoldCount})`
             : null,
           `Intent: ${data.intent}`,
-          accountCreated ? "Seller profile created (buyer+seller, owner desk)" : null,
+          accountCreated
+            ? "Seller profile created (buyer+seller, owner desk)"
+            : null,
           isQuick ? "Captured from homepage Sell a Home → Get Estimate" : null,
           `Indicative range: $${estimate.low.toLocaleString()} – $${estimate.high.toLocaleString()} (mid $${estimate.mid.toLocaleString()})`,
           `Method: ${methodLabel}; sample=${estimate.sampleSize}; sold=${estimate.soldCount}; active=${estimate.activeCount}`,
@@ -388,38 +401,44 @@ export async function POST(request: Request) {
             ? "Opted in to market updates"
             : null,
           data.marketPulseOptIn ? "Market Pulse: yes" : null,
-          data.neighbourhoodSalesOptIn ? "Neighbourhood sales alerts: yes" : null,
+          data.neighbourhoodSalesOptIn
+            ? "Neighbourhood sales alerts: yes"
+            : null,
         ]
           .filter(Boolean)
           .join("\n"),
-        activities: {
-          create: {
-            type: "home_valuation",
-            userId: customerId,
-            body: data.address,
-            meta: {
-              email: contactEmail,
-              phone: data.phone,
-              intent: data.intent,
-              quick: isQuick,
-              accountCreated,
-              estimate,
-            },
-          },
-        },
-        appointments: isQuick
-          ? undefined
-          : {
-              create: {
-                type: "VALUATION_CALL",
-                status: "REQUESTED",
-                customerId,
-                agentId: assignedAgentId,
-                notes: `Valuation follow-up for ${data.address}`,
-              },
-            },
       },
     });
+
+    await prisma.leadActivity.create({
+      data: {
+        leadId: lead.id,
+        type: "home_valuation",
+        userId: customerId,
+        body: data.address,
+        meta: {
+          email: contactEmail,
+          phone: data.phone,
+          intent: data.intent,
+          quick: isQuick,
+          accountCreated,
+          estimate,
+        },
+      },
+    });
+
+    if (!isQuick) {
+      await prisma.appointment.create({
+        data: {
+          type: "VALUATION_CALL",
+          status: "REQUESTED",
+          customerId,
+          agentId: assignedAgentId,
+          leadId: lead.id,
+          notes: `Valuation follow-up for ${data.address}`,
+        },
+      });
+    }
 
     if (assignedAgentId && organizationId) {
       await createCallNewLeadTask({
@@ -431,18 +450,21 @@ export async function POST(request: Request) {
 
     for (const row of deskNotifiers) {
       if (!row.user.email) continue;
-      void sendNotification({
-        toEmail: row.user.email,
-        toPhone: row.user.phone,
-        subject: isQuick
-          ? "New homepage sell estimate lead"
-          : "New home valuation / seller lead",
-        text: `Valuation lead: ${data.address}\n${contactName} <${contactEmail}>\nRange: $${estimate.low.toLocaleString()}–$${estimate.high.toLocaleString()}\nLead: ${lead.id}${accountCreated ? "\nOwner account created" : ""}`,
-        smsText: `Houzzat valuation lead: ${data.address}`,
-      });
+      scheduleWorkerSideEffect(
+        sendNotification({
+          toEmail: row.user.email,
+          toPhone: row.user.phone,
+          subject: isQuick
+            ? "New homepage sell estimate lead"
+            : "New home valuation / seller lead",
+          text: `Valuation lead: ${data.address}\n${contactName} <${contactEmail}>\nRange: $${estimate.low.toLocaleString()}–$${estimate.high.toLocaleString()}\nLead: ${lead.id}${accountCreated ? "\nOwner account created" : ""}`,
+          smsText: `Houzzat valuation lead: ${data.address}`,
+        }),
+      );
     }
 
-    void sendPushToUsers(
+    // sendPushToUsers already schedules via waitUntil internally.
+    sendPushToUsers(
       [assignedAgentId, ...deskNotifiers.map((row) => row.user.id)],
       {
         type: "new_lead",

@@ -286,18 +286,14 @@ export async function resolveDefaultOrganizationId(): Promise<string | null> {
 /**
  * Public inquiries land in the shared Pond (unassigned) so any agent can claim
  * and the Team Leader can assign from the desk.
+ * Org backfill for stray leads runs in ensureBrokerageOrganization side effects —
+ * do not updateMany on every public lead POST (Worker hot path).
  */
 export async function resolvePublicLeadDesk(): Promise<{
   assignedAgentId: null;
   organizationId: string | null;
 }> {
   const organizationId = await resolveDefaultOrganizationId();
-  if (organizationId) {
-    await prisma.lead.updateMany({
-      where: { organizationId: null },
-      data: { organizationId },
-    });
-  }
   return {
     assignedAgentId: null,
     organizationId,

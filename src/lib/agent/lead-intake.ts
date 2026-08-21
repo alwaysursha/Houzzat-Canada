@@ -375,13 +375,15 @@ export async function captureWebsiteLead(input: {
       organizationId: organizationId ?? undefined,
       contactConsentAt: new Date(),
       statusChangedAt: new Date(),
-      activities: {
-        create: {
-          type: "created",
-          userId: input.actorId ?? input.customerId,
-          body: `Lead captured (${intent.toLowerCase()}) via ${input.source}`,
-        },
-      },
+    },
+  });
+
+  await prisma.leadActivity.create({
+    data: {
+      leadId: lead.id,
+      type: "created",
+      userId: input.actorId ?? input.customerId,
+      body: `Lead captured (${intent.toLowerCase()}) via ${input.source}`,
     },
   });
 

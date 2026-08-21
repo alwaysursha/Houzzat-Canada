@@ -286,9 +286,12 @@ export function HomeValuationForm() {
   const { digits: whatsappDigits } = useExpertWhatsAppNumber();
   const initialAddress = searchParams.get("address") ?? "";
   const initialCity = searchParams.get("city") ?? "";
+  const initialCommunity = searchParams.get("community") ?? "";
   const initialLeadId = searchParams.get("leadId");
   const initialLow = searchParams.get("low");
   const initialHigh = searchParams.get("high");
+  const initialLat = searchParams.get("lat");
+  const initialLng = searchParams.get("lng");
   const fromHero = searchParams.get("from") === "hero";
 
   const heroEstimate = useMemo(() => {
@@ -304,7 +307,9 @@ export function HomeValuationForm() {
   );
   const [address, setAddress] = useState(initialAddress);
   const [city, setCity] = useState(initialCity);
-  const [community, setCommunity] = useState<string | null>(null);
+  const [community, setCommunity] = useState<string | null>(
+    initialCommunity || null,
+  );
   const [areaCommunity, setAreaCommunity] = useState<string | null>(null);
   const [beds, setBeds] = useState("3");
   const [baths, setBaths] = useState("2");
@@ -313,8 +318,16 @@ export function HomeValuationForm() {
   const [propertyType, setPropertyType] = useState<PropertyType | "">(
     "DETACHED",
   );
-  const [lat, setLat] = useState<number | undefined>();
-  const [lng, setLng] = useState<number | undefined>();
+  const [lat, setLat] = useState<number | undefined>(() => {
+    if (!initialLat) return undefined;
+    const n = Number(initialLat);
+    return Number.isFinite(n) ? n : undefined;
+  });
+  const [lng, setLng] = useState<number | undefined>(() => {
+    if (!initialLng) return undefined;
+    const n = Number(initialLng);
+    return Number.isFinite(n) ? n : undefined;
+  });
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -337,6 +350,7 @@ export function HomeValuationForm() {
       : null,
   );
   const estimateRequestId = useRef(0);
+  const submitLockRef = useRef(false);
 
   function onPlace(suggestion: AutocompleteSuggestion) {
     setAddress(
@@ -414,52 +428,66 @@ export function HomeValuationForm() {
 
   async function submitAddress(event: React.FormEvent) {
     event.preventDefault();
+    if (submitLockRef.current) return;
     if (!address.trim()) {
       setError("Please enter your home address to continue.");
       return;
     }
+    submitLockRef.current = true;
     setPending(true);
     setError(null);
 
-    const res = await fetch("/api/valuation", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        address: address.trim(),
-        city: city.trim() || undefined,
-        community: community || undefined,
-        lat,
-        lng,
-        intent: fromHero ? "sell" : "curious",
-        quick: true,
-        ...featurePayload(),
-        ...loadPersistedUtm(),
-      }),
-    });
+    try {
+      const res = await fetch("/api/valuation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: address.trim(),
+          city: city.trim() || undefined,
+          community: community || undefined,
+          lat,
+          lng,
+          intent: fromHero ? "sell" : "curious",
+          quick: true,
+          ...(result
+            ? {
+                estimatedLow: result.low,
+                estimatedHigh: result.high,
+                estimatedMid: result.mid,
+              }
+            : {}),
+          ...featurePayload(),
+          ...loadPersistedUtm(),
+        }),
+      });
 
-    const data = (await res.json()) as {
-      error?: string;
-      leadId?: string;
-      estimate?: EstimateResult;
-    };
-    setPending(false);
+      const data = (await res.json()) as {
+        error?: string;
+        leadId?: string;
+        estimate?: EstimateResult;
+      };
 
-    if (!res.ok) {
-      setError(data.error ?? "Could not pull neighbourhood sales. Try again.");
-      return;
-    }
+      if (!res.ok || !data.leadId || !data.estimate) {
+        setError(data.error ?? "Could not pull neighbourhood sales. Try again.");
+        return;
+      }
 
-    if (data.leadId) setLeadId(data.leadId);
-    if (data.estimate) {
+      setLeadId(data.leadId);
       setResult(data.estimate);
       if (data.estimate.community) setAreaCommunity(data.estimate.community);
       if (data.estimate.city && !city) setCity(data.estimate.city);
+      setStep("features");
+    } catch {
+      setError("Could not pull neighbourhood sales. Try again.");
+    } finally {
+      submitLockRef.current = false;
+      setPending(false);
     }
-    setStep("features");
   }
 
   async function submitContact(event: React.FormEvent) {
     event.preventDefault();
+    if (submitLockRef.current) return;
     if (!name.trim() || !email.trim()) {
       setError("Please enter your name and email.");
       return;
@@ -469,51 +497,65 @@ export function HomeValuationForm() {
       return;
     }
 
+    submitLockRef.current = true;
     setPending(true);
     setError(null);
 
     const marketingOptIn = marketPulseOptIn || neighbourhoodSalesOptIn;
 
-    const res = await fetch("/api/valuation", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        address: address.trim(),
-        city: city.trim() || undefined,
-        community: community || undefined,
-        lat,
-        lng,
-        name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        intent: "sell",
-        marketingOptIn,
-        acceptTerms: true,
-        marketPulseOptIn,
-        neighbourhoodSalesOptIn,
-        ...featurePayload(),
-        ...loadPersistedUtm(),
-      }),
-    });
+    try {
+      const res = await fetch("/api/valuation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: address.trim(),
+          city: city.trim() || undefined,
+          community: community || undefined,
+          lat,
+          lng,
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          intent: "sell",
+          marketingOptIn,
+          acceptTerms: true,
+          marketPulseOptIn,
+          neighbourhoodSalesOptIn,
+          ...(result
+            ? {
+                estimatedLow: result.low,
+                estimatedHigh: result.high,
+                estimatedMid: result.mid,
+              }
+            : {}),
+          ...featurePayload(),
+          ...loadPersistedUtm(),
+        }),
+      });
 
-    const data = (await res.json()) as {
-      error?: string;
-      leadId?: string;
-      accountCreated?: boolean;
-      estimate?: EstimateResult;
-    };
-    setPending(false);
+      const data = (await res.json()) as {
+        error?: string;
+        leadId?: string;
+        accountCreated?: boolean;
+        estimate?: EstimateResult;
+      };
 
-    if (!res.ok || !data.estimate) {
-      setError(data.error ?? "Could not save your estimate. Try again.");
-      return;
+      if (!res.ok || !data.leadId || !data.estimate) {
+        setError(data.error ?? "Could not save your estimate. Try again.");
+        return;
+      }
+
+      setLeadId(data.leadId);
+      setAccountCreated(Boolean(data.accountCreated));
+      setResult(data.estimate);
+      if (data.estimate.community) setAreaCommunity(data.estimate.community);
+      setStep("result");
+    } catch {
+      setError("Could not save your estimate. Try again.");
+    } finally {
+      submitLockRef.current = false;
+      setPending(false);
     }
-
-    if (data.leadId) setLeadId(data.leadId);
-    setAccountCreated(Boolean(data.accountCreated));
-    setResult(data.estimate);
-    if (data.estimate.community) setAreaCommunity(data.estimate.community);
-    setStep("result");
   }
 
   const meetingHref =
@@ -556,7 +598,8 @@ export function HomeValuationForm() {
                 inputClassName="h-12 text-base"
               />
               <p className="text-xs text-ink/50">
-                Include unit number if you live in a condo or townhome.
+                Pick an address from the suggestions when possible so city and
+                map location are accurate. Unit numbers are welcome.
               </p>
             </div>
 

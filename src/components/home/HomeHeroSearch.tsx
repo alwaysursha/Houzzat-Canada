@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
 import { LazyAddressAutocomplete } from "@/components/listings/LazyAddressAutocomplete";
@@ -31,6 +31,7 @@ export function HomeHeroSearch({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const onPage = surface === "page";
+  const estimateLockRef = useRef(false);
 
   function txn() {
     return mode === "rent" ? "LEASE" : "SALE";
@@ -136,12 +137,14 @@ export function HomeHeroSearch({
   }
 
   async function onGetEstimate() {
+    if (estimateLockRef.current) return;
     const address = query.trim();
     if (address.length < 3) {
       setError("Enter your home address to continue.");
       return;
     }
 
+    estimateLockRef.current = true;
     setPending(true);
     setError(null);
 
@@ -164,6 +167,11 @@ export function HomeHeroSearch({
         body: JSON.stringify({
           address,
           city,
+          community: selected?.community || undefined,
+          lat:
+            typeof selected?.lat === "number" ? selected.lat : undefined,
+          lng:
+            typeof selected?.lng === "number" ? selected.lng : undefined,
           intent: "sell",
           quick: true,
           ...loadPersistedUtm(),
@@ -178,6 +186,7 @@ export function HomeHeroSearch({
       if (!res.ok || !data.estimate || !data.leadId) {
         setError(data.error ?? "Could not start your estimate.");
         setPending(false);
+        estimateLockRef.current = false;
         return;
       }
 
@@ -189,10 +198,18 @@ export function HomeHeroSearch({
         high: String(data.estimate.high),
         from: "hero",
       });
+      if (selected?.community) params.set("community", selected.community);
+      if (typeof selected?.lat === "number") {
+        params.set("lat", String(selected.lat));
+      }
+      if (typeof selected?.lng === "number") {
+        params.set("lng", String(selected.lng));
+      }
       router.push(`/home-valuation?${params.toString()}`);
     } catch {
       setError("Could not start your estimate.");
       setPending(false);
+      estimateLockRef.current = false;
     }
   }
 

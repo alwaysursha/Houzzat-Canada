@@ -49,7 +49,7 @@ function applyClears(response: NextResponse, request: Request) {
   response.headers.set("Pragma", "no-cache");
 }
 
-export function signOutDestinationPath(request: Request): string {
+function signOutDestinationPath(request: Request): string {
   const ua = request.headers.get("user-agent");
   const appId = nativeAppIdFromUserAgent(ua);
   const path = appId === HOUZZATPRO_APP_ID ? "/pro/sign-in" : "/";
