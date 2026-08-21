@@ -50,6 +50,6 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     job: "monitors",
-    schedule: "every ~10 minutes (GitHub Actions + optional Mac LaunchAgent)",
+    schedule: "Sync Mac LaunchAgent every ~10 minutes (pnpm monitors:run)",
   });
 }

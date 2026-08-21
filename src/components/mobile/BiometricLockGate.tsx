@@ -28,7 +28,9 @@ import { consumePendingPushNavigation } from "@/lib/notifications/push-client";
 import { SITE_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-const BACKGROUND_LOCK_MS = 15_000;
+/** Re-lock after this long in background (12 hours). */
+const BACKGROUND_LOCK_MS = 12 * 60 * 60 * 1000;
+
 const FADE_MS = 220;
 
 /**
