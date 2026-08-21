@@ -49,6 +49,8 @@
     "cap:assert:all": "bash scripts/assert-cap-identity.sh houzzat --require-both && bash scripts/assert-cap-identity.sh pro --require-both",
     "android:debug": "bash scripts/android-debug.sh houzzat",
     "android:debug:pro": "bash scripts/android-debug.sh pro",
+    "android:release": "bash scripts/android-release.sh houzzat",
+    "android:release:pro": "bash scripts/android-release.sh pro",
     "android:assets:pro": "python3 scripts/generate-pro-android-assets.py",
     "android:device-qa": "bash scripts/android-device-qa.sh",
     "ios:prepare": "bash scripts/ios-prepare.sh houzzat",

@@ -50,17 +50,13 @@ export function SiteFooter({
       >
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between lg:gap-12">
           <div className="max-w-md space-y-3">
-            <div className="flex items-center gap-2.5">
-              {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
-              <img
-                src="/images/houzzat-house-mark.png"
-                alt=""
-                width={36}
-                height={36}
-                className="size-9 shrink-0 object-contain"
+            <div className="flex items-center gap-2">
+              {/* White PNG mark → canopy via CSS mask (readable on mist footer). */}
+              <span
+                className="block size-7 shrink-0 bg-canopy [mask-image:url(/images/houzzat-house-mark.png)] [mask-position:center] [mask-repeat:no-repeat] [mask-size:contain] [-webkit-mask-image:url(/images/houzzat-house-mark.png)] [-webkit-mask-position:center] [-webkit-mask-repeat:no-repeat] [-webkit-mask-size:contain]"
                 aria-hidden
               />
-              <p className="font-display text-2xl font-semibold tracking-tight text-ink">
+              <p className="font-display text-2xl font-semibold leading-none tracking-tight text-ink">
                 {SITE_NAME}
               </p>
             </div>
