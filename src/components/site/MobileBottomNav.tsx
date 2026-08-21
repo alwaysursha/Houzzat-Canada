@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { PersonalizeHomepageModal } from "@/components/home/PersonalizeHomepageModal";
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
+import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
 import { parseHomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
@@ -480,6 +481,8 @@ function MoreSheet({
   onNavigateAway: () => void;
   onPersonalize: () => void;
 }) {
+  const { status } = useSession();
+  const signedIn = status === "authenticated";
   const routePlanner = useRoutePlanner();
   const routeCount = routePlanner?.count ?? 0;
 
@@ -568,10 +571,28 @@ function MoreSheet({
           onNavigate={onNavigateAway}
         />
         <div className="border-t border-line/70 px-3 py-2">
-          <SignOutButton
-            label="Log out"
-            className="flex w-full items-center justify-center rounded-xl border border-line bg-mist/60 px-3 py-3 text-sm font-semibold text-ink hover:border-danger/40 hover:bg-danger/5 hover:text-danger"
-          />
+          {signedIn ? (
+            <SignOutButton
+              label="Log out"
+              className="flex w-full items-center justify-center rounded-xl border border-line bg-mist/60 px-3 py-3 text-sm font-semibold text-ink hover:border-danger/40 hover:bg-danger/5 hover:text-danger"
+            />
+          ) : status === "loading" ? (
+            <div
+              className="flex w-full items-center justify-center rounded-xl border border-line bg-mist/40 px-3 py-3 text-sm font-semibold text-ink/40"
+              aria-busy
+            >
+              …
+            </div>
+          ) : (
+            <AuthOpenButton
+              mode="sign-in"
+              callbackUrl="/"
+              onClick={onNavigateAway}
+              className="flex w-full items-center justify-center rounded-xl border border-canopy/30 bg-canopy/10 px-3 py-3 text-sm font-semibold text-canopy-deep hover:border-canopy/50 hover:bg-canopy/15"
+            >
+              Sign in
+            </AuthOpenButton>
+          )}
         </div>
       </nav>
     </div>

@@ -16,7 +16,10 @@
         <!-- Match the splash tone so a WebView gap cannot flash white/mist. -->
         <item name="android:windowBackground">@color/splashBackground</item>
         <item name="android:statusBarColor">@color/statusBarColor</item>
+        <!-- Light nav bar + light icons = invisible Back/Home/Recents on white.
+             windowLightNavigationBar draws dark system buttons (API 27+). -->
         <item name="android:navigationBarColor">@android:color/white</item>
+        <item name="android:windowLightNavigationBar">true</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
