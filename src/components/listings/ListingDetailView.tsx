@@ -3,8 +3,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { Bath, Bed, Car, Maximize2, ArrowDown, ArrowUp } from "lucide-react";
-import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { ListingNotesPanel } from "@/components/account/ListingNotesPanel";
+import { ListingDetailFooter } from "@/components/listings/ListingDetailFooter";
 import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
 import { VowAcceptCard } from "@/components/account/VowAcceptCard";
 import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
@@ -620,9 +620,10 @@ export function ListingDetailView({
             signedIn={signedIn}
             contact={sessionContact}
           />
-          <MlsDisclaimer />
         </aside>
       </div>
+
+      <ListingDetailFooter isListingSheet={isListingSheet} />
     </div>
     </ListingAccountChromeProvider>
   );

@@ -1214,15 +1214,15 @@ export function AddressAutocomplete({
             aria-modal="true"
             aria-label="Search homes"
           >
-            <div className="shrink-0 border-b border-line/70 bg-white/55 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-md">
-              <div className="flex items-center gap-2">
+            <div className="shrink-0 border-b border-white/15 bg-canopy px-3 pb-3.5 pt-[max(0.85rem,env(safe-area-inset-top))] text-white">
+              <div className="flex items-center gap-2.5 pt-1">
                 <button
                   type="button"
                   onClick={closeMobileSheet}
-                  className="inline-flex size-10 shrink-0 items-center justify-center rounded-md text-ink transition hover:bg-white/70"
+                  className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-white transition active:bg-white/15 hover:bg-white/10"
                   aria-label="Close search"
                 >
-                  <ArrowLeft className="size-5" aria-hidden />
+                  <ArrowLeft className="size-5" strokeWidth={2.2} aria-hidden />
                 </button>
                 <div className="relative min-w-0 flex-1">
                   <Search
@@ -1245,7 +1245,7 @@ export function AddressAutocomplete({
                         : undefined
                     }
                     className={cn(
-                      "h-11 rounded-md border-white/80 bg-white/85 pl-10 text-[15px] shadow-sm",
+                      "h-11 rounded-xl border-0 bg-white pl-10 text-[15px] text-ink shadow-[0_1px_2px_rgb(0_0_0/0.1)] placeholder:text-ink/45 focus-visible:ring-2 focus-visible:ring-white/50",
                       query.trim() ? "pr-10" : undefined,
                     )}
                     autoComplete="street-address"
@@ -1268,7 +1268,7 @@ export function AddressAutocomplete({
                 </div>
               </div>
               {geoError ? (
-                <p className="mt-2 px-1 text-sm text-danger">{geoError}</p>
+                <p className="mt-2 px-1 text-sm text-white/90">{geoError}</p>
               ) : null}
             </div>
             <div

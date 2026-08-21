@@ -66,7 +66,7 @@ function readSectionNavTopPx(layout: ListingSectionNavLayout): number {
   const probe = document.createElement("div");
   if (layout === "panel") {
     probe.style.cssText =
-      "position:fixed;visibility:hidden;pointer-events:none;top:var(--listing-sheet-chrome-height, calc(6.125rem + env(safe-area-inset-top, 0px)));";
+      "position:fixed;visibility:hidden;pointer-events:none;top:var(--listing-sheet-chrome-height, calc(6.5rem + env(safe-area-inset-top, 0px)));";
   } else if (layout === "iframe") {
     probe.style.cssText =
       "position:fixed;visibility:hidden;pointer-events:none;top:0;";

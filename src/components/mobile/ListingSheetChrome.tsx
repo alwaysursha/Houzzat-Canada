@@ -35,7 +35,8 @@ import { cn } from "@/lib/utils";
 
 
 /** Two-row sheet chrome body height (excludes safe-area; Host adds inset). */
-export const LISTING_SHEET_CHROME_BODY = "6.125rem";
+/** Row 1 (2.75rem) + desktop search band (~3.25rem). Mobile action row matches. */
+export const LISTING_SHEET_CHROME_BODY = "6.5rem";
 
 const SEARCH_PLACEHOLDER =
   "Search active or sold listings by MLS® #, address or neighbourhood";
@@ -452,21 +453,12 @@ export function ListingSheetChrome({
       */}
       <div
         className={cn(
-          "pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-[1] flex h-11 items-center justify-center gap-1.5 transition-opacity duration-200 ease-out",
+          "pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-[1] flex h-11 items-center justify-center transition-opacity duration-200 ease-out",
           mobileSearchOpen ? "opacity-0" : "opacity-100",
         )}
         aria-hidden={mobileSearchOpen}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/images/houzzat-house-mark.png"
-          alt=""
-          width={32}
-          height={32}
-          className="size-8 shrink-0 object-contain"
-          aria-hidden
-        />
-        <span className="font-display text-xl font-semibold leading-none tracking-tight text-white sm:text-[1.35rem]">
+        <span className="font-display text-[1.7rem] font-semibold leading-none tracking-tight text-white sm:text-[1.85rem]">
           {SITE_NAME}
         </span>
       </div>
@@ -505,13 +497,15 @@ export function ListingSheetChrome({
         </div>
       </div>
 
-      {/* Desktop: full-width Search bar (Share/Save live in ListingStickyBar). */}
-      <div className="hidden items-center gap-2 border-t border-white/12 bg-canopy-deep/25 px-3 py-1.5 md:flex lg:px-4">
-        {searchField(desktopNav, {
-          portalDesktop: true,
-          inputClassName:
-            "h-10 rounded-lg border-0 bg-white/95 pl-10 text-[15px] text-ink shadow-sm placeholder:text-ink/40 focus-visible:ring-2 focus-visible:ring-white/50",
-        })}
+      {/* Desktop: centered search — not edge-to-edge; breathing room in the band. */}
+      <div className="hidden border-t border-white/12 bg-canopy-deep/25 md:block">
+        <div className="mx-auto flex max-w-2xl items-center px-6 py-3 lg:px-8">
+          {searchField(desktopNav, {
+            portalDesktop: true,
+            inputClassName:
+              "h-10 rounded-xl border-0 bg-white pl-10 text-[15px] text-ink shadow-[0_1px_2px_rgb(0_0_0/0.08)] placeholder:text-ink/40 focus-visible:ring-2 focus-visible:ring-white/55",
+          })}
+        </div>
       </div>
 
       {/* Mobile collapsed: Search · Share · Save */}
