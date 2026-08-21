@@ -351,7 +351,7 @@ export async function disableBiometrics(): Promise<void> {
 }
 
 /**
- * Call before navigating to /api/auth/logout on native.
+ * Call before hard sign-out on native (`performHardSignOut` / logout route).
  * Clears legacy Keystore secrets. Keeps unlock preference for next login
  * when {@link shouldKeepBiometricsEnabledOnLogout} is true.
  */

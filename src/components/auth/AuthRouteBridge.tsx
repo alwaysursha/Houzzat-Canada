@@ -7,6 +7,7 @@ import {
   useAuthModal,
   type AuthMode,
 } from "@/components/auth/AuthModalProvider";
+import { performHardSignOut } from "@/lib/auth/hard-sign-out";
 
 function safeCallbackPath(callbackUrl: string | null) {
   if (
@@ -60,8 +61,8 @@ export function AuthRouteBridge({ mode }: { mode: AuthMode }) {
           router.refresh();
           return;
         }
-        // Stale JWT after DB rebuild — hard-clear cookies on Workers.
-        window.location.assign("/api/auth/logout");
+        // Stale JWT after DB rebuild — hard-clear cookies on Workers / WebView.
+        await performHardSignOut();
         return;
       }
       openAuth({ mode, callbackUrl });

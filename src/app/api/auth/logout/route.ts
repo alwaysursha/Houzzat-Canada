@@ -1,56 +1,25 @@
 import { NextResponse } from "next/server";
+import { collectAuthCookieNamesToClear } from "@/lib/auth/logout-cookies";
 import {
   HOUZZATPRO_APP_ID,
   nativeAppIdFromUserAgent,
 } from "@/lib/mobile/app-shell";
 
 /**
- * Hard logout for Cloudflare Workers / OpenNext.
+ * Hard logout for Cloudflare Workers / OpenNext + Capacitor WebView.
  *
  * Do NOT call Auth.js `signOut()` here: on Workers it often emits a blank
  * Set-Cookie then a refreshed session cookie; Chrome keeps the last one, so
  * the user stays signed in.
  *
- * Only clear cookies that are actually on the request (plus a tiny always-clear
- * set). Pre-emitting hundreds of chunk variants blows CF header limits → 502.
+ * Do NOT 303-redirect with Set-Cookie: Android System WebView frequently
+ * drops Set-Cookie on redirect responses, so Cap apps stay signed in while
+ * desktop Chrome clears correctly. Serve 200 HTML (cookies expire here),
+ * then client-navigate to the signed-out destination.
+ *
+ * Only clear cookies present on the request (plus a tiny always-clear set).
+ * Pre-emitting hundreds of chunk variants blows CF header limits → 502.
  */
-
-const ALWAYS_CLEAR = [
-  "authjs.session-token",
-  "__Secure-authjs.session-token",
-  "__Host-authjs.session-token",
-  "next-auth.session-token",
-  "__Secure-next-auth.session-token",
-  "authjs.csrf-token",
-  "__Host-authjs.csrf-token",
-  "__Secure-authjs.csrf-token",
-  "authjs.callback-url",
-  "__Secure-authjs.callback-url",
-] as const;
-
-const AUTH_COOKIE_NAME_RE =
-  /^(?:__Secure-|__Host-)?(?:authjs|next-auth)\./i;
-
-function collectCookieNames(request: Request): string[] {
-  const names = new Set<string>(ALWAYS_CLEAR);
-
-  // Auth.js may chunk large JWTs as `.0`, `.1`, …
-  for (const base of ALWAYS_CLEAR) {
-    for (let i = 0; i < 8; i += 1) {
-      names.add(`${base}.${i}`);
-    }
-  }
-
-  const header = request.headers.get("cookie") ?? "";
-  for (const part of header.split(";")) {
-    const name = part.trim().split("=")[0]?.trim();
-    if (name && AUTH_COOKIE_NAME_RE.test(name)) {
-      names.add(name);
-    }
-  }
-
-  return [...names];
-}
 
 function expireCookie(response: NextResponse, name: string) {
   const isHost = name.startsWith("__Host-");
@@ -71,41 +40,56 @@ function expireCookie(response: NextResponse, name: string) {
   });
 }
 
-function signOutDestination(request: Request): URL {
-  const url = new URL(request.url);
-  const ua = request.headers.get("user-agent");
-  const appId = nativeAppIdFromUserAgent(ua);
-  const dest =
-    appId === HOUZZATPRO_APP_ID
-      ? new URL("/pro/sign-in", url.origin)
-      : new URL("/", url.origin);
-  dest.searchParams.set("signedOut", "1");
-  return dest;
-}
-
-function clearedRedirect(request: Request) {
-  const response = NextResponse.redirect(signOutDestination(request), 303);
-  for (const name of collectCookieNames(request)) {
+function applyClears(response: NextResponse, request: Request) {
+  const header = request.headers.get("cookie") ?? "";
+  for (const name of collectAuthCookieNamesToClear(header)) {
     expireCookie(response, name);
   }
   response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  response.headers.set("Pragma", "no-cache");
+}
+
+export function signOutDestinationPath(request: Request): string {
+  const ua = request.headers.get("user-agent");
+  const appId = nativeAppIdFromUserAgent(ua);
+  const path = appId === HOUZZATPRO_APP_ID ? "/pro/sign-in" : "/";
+  const dest = new URL(path, "https://houzzat.local");
+  dest.searchParams.set("signedOut", "1");
+  return `${dest.pathname}${dest.search}`;
+}
+
+function clearedHtml(request: Request) {
+  const destPath = signOutDestinationPath(request);
+  // Destination is always same-origin path we control (no user input).
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="refresh" content="0;url=${destPath}"/><title>Signing out</title><script>location.replace(${JSON.stringify(destPath)});</script></head><body>Signing out…</body></html>`;
+  const response = new NextResponse(html, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+    },
+  });
+  applyClears(response, request);
   return response;
 }
 
 function clearedJson(request: Request) {
-  const response = NextResponse.json({ ok: true });
-  for (const name of collectCookieNames(request)) {
-    expireCookie(response, name);
-  }
-  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  const response = NextResponse.json({
+    ok: true,
+    destination: signOutDestinationPath(request),
+  });
+  applyClears(response, request);
   return response;
 }
 
-/** Prefer this from the browser — Set-Cookie applies on the redirect response. */
+/**
+ * Browser / WebView navigation target.
+ * Returns 200 + Set-Cookie clears, then client-side redirect (WebView-safe).
+ */
 export async function GET(request: Request) {
-  return clearedRedirect(request);
+  return clearedHtml(request);
 }
 
+/** Used by client hard-sign-out: apply clears without following a redirect. */
 export async function POST(request: Request) {
   return clearedJson(request);
 }

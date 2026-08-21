@@ -17,6 +17,9 @@ export function setListingSheetSearchOpen(open: boolean) {
 
 /** Ask ListingSheetChrome to collapse search (Capacitor Back). */
 export function requestCloseListingSheetSearch() {
+  // Clear immediately so a second Cap Back in the same frame hits the listing
+  // sheet, not Search again (React setState for the flag runs in an effect).
+  searchOpen = false;
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(CLOSE_EVENT));
 }

@@ -3,15 +3,27 @@ import { z } from "zod";
 import { requireFullCustomerUser } from "@/lib/account";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { listingPath } from "@/lib/listings/listing-path";
-import { prisma } from "@/lib/prisma";
+import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
+
+function normalizeMlsNumber(raw: string): string {
+  return raw.trim().toUpperCase();
+}
+
+const mlsSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(32)
+  .transform(normalizeMlsNumber);
 
 export async function GET(request: Request) {
   const access = await requireFullCustomerUser();
   if (access.denied) return access.denied;
   const user = access.user;
 
-  const mlsNumber = new URL(request.url).searchParams.get("mlsNumber");
-  if (mlsNumber) {
+  const mlsRaw = new URL(request.url).searchParams.get("mlsNumber");
+  if (mlsRaw) {
+    const mlsNumber = normalizeMlsNumber(mlsRaw);
     const item = await prisma.savedListing.findUnique({
       where: {
         userId_mlsNumber: { userId: user.id, mlsNumber },
@@ -60,7 +72,7 @@ export async function GET(request: Request) {
 }
 
 const postSchema = z.object({
-  mlsNumber: z.string().min(3).max(32),
+  mlsNumber: mlsSchema,
 });
 
 export async function POST(request: Request) {
@@ -68,14 +80,22 @@ export async function POST(request: Request) {
   if (access.denied) return access.denied;
   const user = access.user;
 
-  const body = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid listing." }, { status: 400 });
+  }
+
   const parsed = postSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid listing." }, { status: 400 });
   }
 
+  const mlsNumber = parsed.data.mlsNumber;
+
   const listing = await prisma.listing.findUnique({
-    where: { mlsNumber: parsed.data.mlsNumber },
+    where: { mlsNumber },
     select: {
       mlsNumber: true,
       addressLine: true,
@@ -87,6 +107,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Listing not found." }, { status: 404 });
   }
 
+  // Do not use `update: {}` — PrismaNeonHttp on Workers has failed those no-op
+  // upserts while PropertyMonitor (non-empty update) succeeded. Touch mlsNumber
+  // so the update clause is non-empty; unique key keeps a single row per user.
   const item = await prisma.savedListing.upsert({
     where: {
       userId_mlsNumber: {
@@ -94,26 +117,30 @@ export async function POST(request: Request) {
         mlsNumber: listing.mlsNumber,
       },
     },
-    update: {},
+    update: {
+      mlsNumber: listing.mlsNumber,
+    },
     create: {
       userId: user.id,
       mlsNumber: listing.mlsNumber,
     },
   });
 
-  void recordActivityEvent({
-    type: "SAVE_LISTING",
-    userId: user.id,
-    mlsNumber: listing.mlsNumber,
-    path: listingPath(listing),
-    title: `Saved ${listing.mlsNumber}`,
-  });
+  scheduleWorkerSideEffect(
+    recordActivityEvent({
+      type: "SAVE_LISTING",
+      userId: user.id,
+      mlsNumber: listing.mlsNumber,
+      path: listingPath(listing),
+      title: `Saved ${listing.mlsNumber}`,
+    }),
+  );
 
   return NextResponse.json({ ok: true, item });
 }
 
 const deleteSchema = z.object({
-  mlsNumber: z.string().min(3).max(32),
+  mlsNumber: mlsSchema,
 });
 
 export async function DELETE(request: Request) {
@@ -121,23 +148,33 @@ export async function DELETE(request: Request) {
   if (access.denied) return access.denied;
   const user = access.user;
 
-  const body = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid listing." }, { status: 400 });
+  }
+
   const parsed = deleteSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid listing." }, { status: 400 });
   }
 
+  const mlsNumber = parsed.data.mlsNumber;
+
   await prisma.savedListing.deleteMany({
-    where: { userId: user.id, mlsNumber: parsed.data.mlsNumber },
+    where: { userId: user.id, mlsNumber },
   });
 
-  void recordActivityEvent({
-    type: "UNSAVE_LISTING",
-    userId: user.id,
-    mlsNumber: parsed.data.mlsNumber,
-    path: `/listing/${parsed.data.mlsNumber}`,
-    title: `Unsaved ${parsed.data.mlsNumber}`,
-  });
+  scheduleWorkerSideEffect(
+    recordActivityEvent({
+      type: "UNSAVE_LISTING",
+      userId: user.id,
+      mlsNumber,
+      path: `/listing/${mlsNumber}`,
+      title: `Unsaved ${mlsNumber}`,
+    }),
+  );
 
   return NextResponse.json({ ok: true });
 }

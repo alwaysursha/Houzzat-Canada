@@ -49,6 +49,7 @@ import {
   NORMAL_LOCATION_TIMEOUT,
 } from "@/lib/mobile/home-geolocation";
 import { locationErrorMessage } from "@/lib/mobile/geolocation";
+import { registerMobileSearchSheet } from "@/lib/mobile/mobile-search-sheet";
 import { pushHref } from "@/lib/listings/navigate-listing";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { Input } from "@/components/ui/input";
@@ -732,6 +733,17 @@ export function AddressAutocomplete({
     setOpen(false);
     setActiveIndex(-1);
   }
+
+  const closeMobileSheetRef = useRef(closeMobileSheet);
+  closeMobileSheetRef.current = closeMobileSheet;
+
+  // Capacitor hardware Back: register open mobile sheet (Home / header / listing AC).
+  useEffect(() => {
+    if (!mounted || !isMobile || !mobileSheetOpen) return;
+    return registerMobileSearchSheet(() => {
+      closeMobileSheetRef.current();
+    });
+  }, [mounted, isMobile, mobileSheetOpen]);
 
   function runSearchFor(raw: string) {
     const trimmed = raw.trim();

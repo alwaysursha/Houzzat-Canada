@@ -10,12 +10,16 @@ import { notifySavedListingsChanged } from "@/lib/account/saved-listings-sync";
 import { flyHeartToSaved } from "@/lib/fly-to-saved";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 
+function normalizeMls(mlsNumber: string): string {
+  return mlsNumber.trim().toUpperCase();
+}
+
 /**
  * Single Save/Unsave mutation path for chrome, sticky bar, cards, etc.
  * Source of truth: SavedListingsProvider (Neon via /api/saved-listings).
  */
 export function useSavedListingToggle({
-  mlsNumber,
+  mlsNumber: mlsNumberRaw,
   authCallbackUrl,
   initiallySaved = false,
 }: {
@@ -23,6 +27,7 @@ export function useSavedListingToggle({
   authCallbackUrl?: string;
   initiallySaved?: boolean;
 }) {
+  const mlsNumber = normalizeMls(mlsNumberRaw);
   const { status } = useSession();
   const signedIn = status === "authenticated";
   const sessionLoading = status === "loading";
@@ -67,7 +72,7 @@ export function useSavedListingToggle({
   const toggle = useCallback(
     async (options?: { flyFrom?: HTMLElement | null }) => {
       if (pendingRef.current) return;
-      if (!mlsNumber.trim()) return;
+      if (!mlsNumber) return;
 
       if (sessionLoading) return;
 
@@ -121,6 +126,10 @@ export function useSavedListingToggle({
           return;
         }
 
+        // Persist notify immediately so Account/provider refresh does not wait
+        // on the optional fly animation (which can be cancelled on navigate).
+        notifySavedListingsChanged();
+
         toast({
           message: next
             ? SITE_MESSAGES.saveAddedToast
@@ -129,9 +138,7 @@ export function useSavedListingToggle({
         });
 
         if (next && options?.flyFrom) {
-          flyHeartToSaved(options.flyFrom);
-        } else {
-          notifySavedListingsChanged();
+          flyHeartToSaved(options.flyFrom, { skipNotify: true });
         }
       } catch {
         savedStatus?.setSavedState(mlsNumber, !next);

@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useSession } from "next-auth/react";
@@ -26,6 +27,10 @@ const SavedListingsContext = createContext<SavedListingsContextValue | null>(
   null,
 );
 
+function normalizeMls(mlsNumber: string): string {
+  return mlsNumber.trim().toUpperCase();
+}
+
 export function SavedListingsProvider({
   children,
 }: {
@@ -34,6 +39,7 @@ export function SavedListingsProvider({
   const { status } = useSession();
   const [ready, setReady] = useState(false);
   const [savedMls, setSavedMls] = useState<Set<string>>(() => new Set());
+  const reloadGenRef = useRef(0);
 
   const reload = useCallback(async () => {
     if (status !== "authenticated") {
@@ -42,20 +48,30 @@ export function SavedListingsProvider({
       return;
     }
 
+    const gen = ++reloadGenRef.current;
     try {
       const res = await fetch("/api/saved-listings", {
         credentials: "same-origin",
+        cache: "no-store",
       });
+      if (gen !== reloadGenRef.current) return;
       if (!res.ok) {
         setReady(true);
         return;
       }
       const data = (await res.json()) as { items?: { mlsNumber: string }[] };
-      setSavedMls(new Set((data.items ?? []).map((item) => item.mlsNumber)));
+      if (gen !== reloadGenRef.current) return;
+      setSavedMls(
+        new Set(
+          (data.items ?? []).map((item) => normalizeMls(item.mlsNumber)),
+        ),
+      );
     } catch {
       // Leave previous set; page should still work if this fails.
     } finally {
-      setReady(true);
+      if (gen === reloadGenRef.current) {
+        setReady(true);
+      }
     }
   }, [status]);
 
@@ -98,12 +114,13 @@ export function SavedListingsProvider({
   const value = useMemo<SavedListingsContextValue>(
     () => ({
       ready,
-      isSaved: (mlsNumber: string) => savedMls.has(mlsNumber),
+      isSaved: (mlsNumber: string) => savedMls.has(normalizeMls(mlsNumber)),
       setSavedState: (mlsNumber: string, saved: boolean) => {
+        const key = normalizeMls(mlsNumber);
         setSavedMls((prev) => {
           const next = new Set(prev);
-          if (saved) next.add(mlsNumber);
-          else next.delete(mlsNumber);
+          if (saved) next.add(key);
+          else next.delete(key);
           return next;
         });
       },

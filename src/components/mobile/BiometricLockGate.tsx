@@ -25,6 +25,7 @@ import {
   wasIntentionalSignOut,
 } from "@/lib/mobile/biometrics";
 import { consumePendingPushNavigation } from "@/lib/notifications/push-client";
+import { performHardSignOut } from "@/lib/auth/hard-sign-out";
 import { SITE_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -300,7 +301,7 @@ export function BiometricLockGate() {
     setBusy(true);
     try {
       await prepareExplicitSignOut();
-      window.location.assign("/api/auth/logout");
+      await performHardSignOut();
     } catch {
       setBusy(false);
       setError("Couldn’t sign out. Try again.");

@@ -8,19 +8,28 @@ function prefersReducedMotion() {
 }
 
 /** Animate a heart from a save control to the Saved tools button. */
-export function flyHeartToSaved(fromEl: HTMLElement) {
+export function flyHeartToSaved(
+  fromEl: HTMLElement,
+  options?: { skipNotify?: boolean },
+) {
   if (typeof document === "undefined") return;
 
-  const target = document.querySelector(SAVED_TARGET_SELECTOR) as HTMLElement | null;
+  const finish = () => {
+    if (!options?.skipNotify) notifySavedListingsChanged();
+  };
+
+  const target = document.querySelector(
+    SAVED_TARGET_SELECTOR,
+  ) as HTMLElement | null;
   if (!target) {
-    notifySavedListingsChanged();
+    finish();
     return;
   }
 
   const from = fromEl.getBoundingClientRect();
   const to = target.getBoundingClientRect();
   if (from.width === 0 || to.width === 0) {
-    notifySavedListingsChanged();
+    finish();
     return;
   }
 
@@ -76,15 +85,20 @@ export function flyHeartToSaved(fromEl: HTMLElement) {
     },
   );
 
-  void animation.finished.then(() => {
-    ghost.remove();
-    target.classList.remove("houzzat-saved-pulse");
-    // Retrigger CSS animation
-    void target.offsetWidth;
-    target.classList.add("houzzat-saved-pulse");
-    window.setTimeout(() => {
+  void animation.finished
+    .then(() => {
+      ghost.remove();
       target.classList.remove("houzzat-saved-pulse");
-    }, 700);
-    notifySavedListingsChanged();
-  });
+      // Retrigger CSS animation
+      void target.offsetWidth;
+      target.classList.add("houzzat-saved-pulse");
+      window.setTimeout(() => {
+        target.classList.remove("houzzat-saved-pulse");
+      }, 700);
+      finish();
+    })
+    .catch(() => {
+      ghost.remove();
+      finish();
+    });
 }

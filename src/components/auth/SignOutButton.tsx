@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
+import { performHardSignOut } from "@/lib/auth/hard-sign-out";
 import { prepareExplicitSignOut } from "@/lib/mobile/biometrics";
 import { unregisterCurrentPushDevice } from "@/lib/notifications/push-client";
 import { SITE_MESSAGES } from "@/lib/site-messages";
@@ -39,12 +40,15 @@ export function SignOutButton({
     }
 
     // Clear legacy Keystore secrets; keep unlock preference for next login.
-    await prepareExplicitSignOut();
+    try {
+      await prepareExplicitSignOut();
+    } catch {
+      // Auth logout is the priority — biometric cleanup must not block it.
+    }
 
-    // Hard navigation to the logout route — one response clears cookies and
-    // redirects. Avoid next-auth client signOut on Cloudflare Workers: Auth.js
-    // middleware can re-issue the session cookie after a blank clear.
-    window.location.assign("/api/auth/logout");
+    // POST clears cookies (WebView-safe). Avoid next-auth client signOut on
+    // Cloudflare Workers (can re-issue the session cookie after a blank clear).
+    await performHardSignOut();
   }
 
   return (

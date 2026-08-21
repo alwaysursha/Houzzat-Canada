@@ -35,10 +35,14 @@ export default async function SavedHomesPage() {
 
   const byMls = new Map(listings.map((l) => [l.mlsNumber, l]));
 
-  const cards = saved
-    .map((s) => byMls.get(s.mlsNumber))
-    .filter(Boolean)
-    .map((listing) => toCard(listing!));
+  const rows = saved.map((s) => {
+    const listing = byMls.get(s.mlsNumber);
+    return {
+      mlsNumber: s.mlsNumber,
+      card: listing ? toCard(listing) : null,
+      note: noteByMls.get(s.mlsNumber) ?? null,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -53,16 +57,38 @@ export default async function SavedHomesPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((listing) => {
-          const note = noteByMls.get(listing.mlsNumber);
+        {rows.map((row) => {
+          if (row.card) {
+            return (
+              <div key={row.mlsNumber} className="space-y-2">
+                <ListingCard listing={row.card} />
+                {row.note ? (
+                  <p className="line-clamp-2 px-1 text-xs text-ink/55">
+                    Note: {row.note}
+                  </p>
+                ) : null}
+              </div>
+            );
+          }
+          // Saved row exists but inventory join missed — still show so saves
+          // are never silently invisible on Account.
           return (
-            <div key={listing.mlsNumber} className="space-y-2">
-              <ListingCard listing={listing} />
-              {note ? (
-                <p className="line-clamp-2 px-1 text-xs text-ink/55">
-                  Note: {note}
-                </p>
-              ) : null}
+            <div
+              key={row.mlsNumber}
+              className="rounded-2xl border border-line bg-surface p-4"
+            >
+              <p className="text-sm font-semibold text-ink">
+                MLS® {row.mlsNumber}
+              </p>
+              <p className="mt-1 text-xs text-ink/55">
+                Saved listing — open for current details.
+              </p>
+              <Link
+                href={`/listing/${row.mlsNumber}`}
+                className="mt-3 inline-flex text-sm font-semibold text-canopy hover:underline"
+              >
+                View listing
+              </Link>
             </div>
           );
         })}
