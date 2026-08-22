@@ -145,32 +145,38 @@ export async function POST(request: Request) {
         vowAcceptedAt: now,
         vowVersion: VOW_VERSION,
         caslConsentAt: now,
-        consentEvents: {
-          create: [
-            {
-              kind: TERMS_ACCEPT_KIND,
-              version: TERMS_VERSION,
-              email,
-              ip,
-              userAgent,
-            },
-            {
-              kind: "vow_accept",
-              version: VOW_VERSION,
-              email,
-              ip,
-              userAgent,
-            },
-            {
-              kind: COMMUNICATIONS_CONSENT_KIND,
-              version: COMMUNICATIONS_CONSENT_VERSION,
-              email,
-              ip,
-              userAgent,
-            },
-          ],
-        },
       },
+    });
+
+    // Flat writes only — nested consentEvents.create breaks on PrismaNeonHttp
+    // (Cloudflare Workers). Same pattern as /api/valuation ensureOwnerCustomer.
+    await prisma.consentEvent.createMany({
+      data: [
+        {
+          userId: user.id,
+          kind: TERMS_ACCEPT_KIND,
+          version: TERMS_VERSION,
+          email,
+          ip,
+          userAgent,
+        },
+        {
+          userId: user.id,
+          kind: "vow_accept",
+          version: VOW_VERSION,
+          email,
+          ip,
+          userAgent,
+        },
+        {
+          userId: user.id,
+          kind: COMMUNICATIONS_CONSENT_KIND,
+          version: COMMUNICATIONS_CONSENT_VERSION,
+          email,
+          ip,
+          userAgent,
+        },
+      ],
     });
 
     // Respond before Resend / CRM side effects — awaiting them caused Worker

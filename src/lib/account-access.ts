@@ -25,6 +25,20 @@ export function hasVerifyGrace(user: AccessUser | null | undefined): boolean {
   return Date.now() - created.getTime() < EMAIL_VERIFY_GRACE_MS;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Whole days left in the post-signup grace window; null when verified or past grace. */
+export function getVerifyGraceDaysRemaining(
+  user: AccessUser | null | undefined,
+): number | null {
+  if (!hasVerifyGrace(user)) return null;
+  const created = asDate(user?.createdAt ?? null);
+  if (!created) return null;
+  const remaining = EMAIL_VERIFY_GRACE_MS - (Date.now() - created.getTime());
+  if (remaining <= 0) return null;
+  return Math.max(1, Math.ceil(remaining / DAY_MS));
+}
+
 /** Signed-in client with verified email or active grace. */
 export function hasFullClientAccess(
   user: AccessUser | null | undefined,

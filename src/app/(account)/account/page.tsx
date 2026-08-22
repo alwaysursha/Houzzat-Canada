@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AccountProfileHeader } from "@/components/account/AccountProfileHeader";
 import { AlertPreferencesForm } from "@/components/account/AlertPreferencesForm";
 import { BiometricsAccountToggle } from "@/components/account/BiometricsAccountToggle";
 import { VowAcceptCard } from "@/components/account/VowAcceptCard";
-import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
-import { SignOutButton } from "@/components/auth/SignOutButton";
 import { requireCustomerUser } from "@/lib/account";
-import { needsEmailVerification } from "@/lib/account-access";
 import { prisma } from "@/lib/prisma";
 import { hasVowAccess } from "@/lib/vow";
 
@@ -143,7 +141,6 @@ export default async function AccountPage() {
   }
 
   const vowOk = hasVowAccess(user);
-  const verifyLocked = needsEmailVerification(user);
 
   let hasPassword = false;
   try {
@@ -158,37 +155,13 @@ export default async function AccountPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-display text-4xl text-ink">Your Houzzat</h1>
-        <p className="mt-2 text-sm text-ink/60">
-          Saved homes, notes, searches, and watchlist — signed in as {user.email}
-        </p>
-        <div className="mt-4 md:hidden">
-          <SignOutButton
-            label="Log out"
-            className="inline-flex rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-ink hover:border-danger/40 hover:bg-danger/5 hover:text-danger"
-          />
-        </div>
-      </div>
+      <AccountProfileHeader user={user} />
 
       <BiometricsAccountToggle
         email={user.email}
         hasPassword={hasPassword}
         userId={user.id}
       />
-
-      {verifyLocked ? (
-        <div className="rounded-3xl border border-canopy/15 bg-white p-7 shadow-[0_20px_50px_-28px_rgba(15,61,46,0.35)] sm:p-9">
-          <EmailVerificationRequired
-            variant="featured"
-            icon="mail"
-            eyebrow="Account locked"
-            callbackUrl="/account"
-            title="Email verification required"
-            body="Your 7-day grace period has ended. Verify your email to restore saved homes, sold prices, Route Planner, and other client tools."
-          />
-        </div>
-      ) : null}
 
       {loadError ? (
         <div className="rounded-2xl border border-signal/30 bg-signal/5 px-4 py-3 text-sm text-ink">
