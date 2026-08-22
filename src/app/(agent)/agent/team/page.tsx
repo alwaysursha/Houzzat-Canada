@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { TeamAdminClient } from "@/components/agent/TeamAdminClient";
 import { requireAgentContext } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
@@ -7,7 +8,7 @@ export const metadata = { title: "Team · Agent CRM" };
 
 export default async function AgentTeamPage() {
   const ctx = await requireAgentContext();
-  if (!ctx) redirect("/auth/sign-in?callbackUrl=/agent/team");
+  if (!ctx) redirect(await staffSignInRedirectUrl("/agent/team"));
 
   const [org, members, invites] = await Promise.all([
     prisma.organization.findUniqueOrThrow({

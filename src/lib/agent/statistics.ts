@@ -1,12 +1,17 @@
 import type { LeadStatus, Prisma } from "@prisma/client";
+import { Prisma as PrismaNs } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
 import { leadScopeWhere } from "@/lib/agent";
 import { resolveDeskView } from "@/lib/agent/brokerage";
 import type { AgentStatistics } from "@/lib/agent/statistics-shared";
+import { HOT_CANDIDATE_TAKE } from "@/lib/agent/statistics-shared";
 import { prisma } from "@/lib/prisma";
 
 export type { AgentStatistics } from "@/lib/agent/statistics-shared";
-export { formatResponseMins } from "@/lib/agent/statistics-shared";
+export {
+  formatResponseMins,
+  HOT_CANDIDATE_TAKE,
+} from "@/lib/agent/statistics-shared";
 
 const PIPELINE_ORDER: LeadStatus[] = [
   "NEW_LEAD",
@@ -30,6 +35,17 @@ const PIPELINE_LABEL: Record<LeadStatus, string> = {
   PAST_CLIENT: "Past",
 };
 
+type DayCountRow = { day: Date; n: bigint | number };
+type ResponseAggRow = {
+  avg_mins: number | null;
+  med_mins: number | null;
+  b_lt15: bigint | number;
+  b_15_60: bigint | number;
+  b_1_4h: bigint | number;
+  b_4_24h: bigint | number;
+  b_gt24h: bigint | number;
+};
+
 function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -47,24 +63,150 @@ function eachDay(from: Date, to: Date): string[] {
   return keys;
 }
 
-function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? Math.round((sorted[mid - 1]! + sorted[mid]!) / 2)
-    : sorted[mid]!;
+function asNumber(value: bigint | number | null | undefined): number {
+  if (value == null) return 0;
+  return typeof value === "bigint" ? Number(value) : value;
 }
 
-function avg(values: number[]): number | null {
-  if (values.length === 0) return null;
-  return Math.round(values.reduce((s, v) => s + v, 0) / values.length);
-}
-
-export async function loadAgentStatistics(
+/**
+ * SQL fragment matching `leadWhere` desk scope (org + assignee).
+ * Used for day-bucket / response aggregates — no raw Lead row transfer.
+ */
+export function leadDeskSql(
   ctx: AgentOrgContext,
-  rangeDays = 30,
-): Promise<AgentStatistics> {
+  focusAgentId: string | null,
+): PrismaNs.Sql {
+  if (focusAgentId) {
+    // Matches `{ organizationId: ctx.organizationId, assignedAgentId: focusAgentId }`.
+    return PrismaNs.sql`"organizationId" = ${ctx.organizationId} AND "assignedAgentId" = ${focusAgentId}`;
+  }
+
+  const orgIds = ctx.organizationIds.length
+    ? ctx.organizationIds
+    : [ctx.organizationId];
+  const orgClause = PrismaNs.sql`"organizationId" IN (${PrismaNs.join(orgIds)})`;
+
+  if (ctx.canSeeTeamLeads) {
+    // Matches leadScopeWhere(..., "team") → org only.
+    return orgClause;
+  }
+  // Matches `{ ...scopeMine, assignedAgentId: ctx.user.id }` — mine only, not pond.
+  return PrismaNs.sql`${orgClause} AND "assignedAgentId" = ${ctx.user.id}`;
+}
+
+async function loadLeadCreatedByDay(
+  deskSql: PrismaNs.Sql,
+  periodStart: Date,
+): Promise<Map<string, number>> {
+  const rows = await prisma.$queryRaw<DayCountRow[]>`
+    SELECT DATE_TRUNC('day', "createdAt" AT TIME ZONE 'UTC') AS day,
+           COUNT(*)::bigint AS n
+    FROM "Lead"
+    WHERE ${deskSql}
+      AND "createdAt" >= ${periodStart}
+    GROUP BY 1
+    ORDER BY 1
+  `;
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    map.set(dayKey(new Date(row.day)), asNumber(row.n));
+  }
+  return map;
+}
+
+async function loadResponsesByDay(
+  deskSql: PrismaNs.Sql,
+  periodStart: Date,
+): Promise<Map<string, number>> {
+  const rows = await prisma.$queryRaw<DayCountRow[]>`
+    SELECT DATE_TRUNC('day', "firstRespondedAt" AT TIME ZONE 'UTC') AS day,
+           COUNT(*)::bigint AS n
+    FROM "Lead"
+    WHERE ${deskSql}
+      AND "firstRespondedAt" IS NOT NULL
+      AND "firstRespondedAt" >= ${periodStart}
+    GROUP BY 1
+    ORDER BY 1
+  `;
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    map.set(dayKey(new Date(row.day)), asNumber(row.n));
+  }
+  return map;
+}
+
+/**
+ * Exact avg / median / histogram over response minutes in range.
+ * Replaces the prior capped findMany response sample + JS median (unordered).
+ */
+async function loadResponseAggregates(
+  deskSql: PrismaNs.Sql,
+  periodStart: Date,
+): Promise<{
+  avgResponseMins: number | null;
+  medianResponseMins: number | null;
+  responseBuckets: AgentStatistics["responseBuckets"];
+}> {
+  const rows = await prisma.$queryRaw<ResponseAggRow[]>`
+    SELECT
+      AVG(mins) AS avg_mins,
+      PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY mins) AS med_mins,
+      COUNT(*) FILTER (WHERE mins < 15)::bigint AS b_lt15,
+      COUNT(*) FILTER (WHERE mins >= 15 AND mins < 60)::bigint AS b_15_60,
+      COUNT(*) FILTER (WHERE mins >= 60 AND mins < 240)::bigint AS b_1_4h,
+      COUNT(*) FILTER (WHERE mins >= 240 AND mins < 1440)::bigint AS b_4_24h,
+      COUNT(*) FILTER (WHERE mins >= 1440)::bigint AS b_gt24h
+    FROM (
+      SELECT EXTRACT(EPOCH FROM ("firstRespondedAt" - "createdAt")) / 60.0 AS mins
+      FROM "Lead"
+      WHERE ${deskSql}
+        AND "firstRespondedAt" IS NOT NULL
+        AND "firstRespondedAt" >= ${periodStart}
+    ) t
+    WHERE mins >= 0
+  `;
+  const row = rows[0];
+  if (!row || (row.avg_mins == null && asNumber(row.b_lt15) === 0)) {
+    return {
+      avgResponseMins: null,
+      medianResponseMins: null,
+      responseBuckets: [
+        { label: "< 15m", count: 0 },
+        { label: "15–60m", count: 0 },
+        { label: "1–4h", count: 0 },
+        { label: "4–24h", count: 0 },
+        { label: "> 24h", count: 0 },
+      ],
+    };
+  }
+  return {
+    avgResponseMins:
+      row.avg_mins == null ? null : Math.round(Number(row.avg_mins)),
+    medianResponseMins:
+      row.med_mins == null ? null : Math.round(Number(row.med_mins)),
+    responseBuckets: [
+      { label: "< 15m", count: asNumber(row.b_lt15) },
+      { label: "15–60m", count: asNumber(row.b_15_60) },
+      { label: "1–4h", count: asNumber(row.b_1_4h) },
+      { label: "4–24h", count: asNumber(row.b_4_24h) },
+      { label: "> 24h", count: asNumber(row.b_gt24h) },
+    ],
+  };
+}
+
+export type StatisticsScope = {
+  leadWhere: Prisma.LeadWhereInput;
+  deskSql: PrismaNs.Sql;
+  scopeLabel: string;
+  focusAgentId: string | null;
+  organizationId: string;
+  userId: string;
+  canSeeTeamLeads: boolean;
+};
+
+export async function resolveStatisticsScope(
+  ctx: AgentOrgContext,
+): Promise<StatisticsScope> {
   const desk = await resolveDeskView(ctx);
   const focusAgentId = desk.deskAgentId;
   const scopeTeam = leadScopeWhere(ctx, ctx.canSeeTeamLeads ? "team" : "mine");
@@ -82,6 +224,34 @@ export async function loadAgentStatistics(
       ? "Team overview"
       : "My desk";
 
+  return {
+    leadWhere,
+    deskSql: leadDeskSql(ctx, focusAgentId),
+    scopeLabel,
+    focusAgentId,
+    organizationId: ctx.organizationId,
+    userId: ctx.user.id,
+    canSeeTeamLeads: ctx.canSeeTeamLeads,
+  };
+}
+
+/** Cheap first-paint KPIs + groupBy charts (no large findMany). */
+export async function loadAgentStatisticsKpis(
+  ctx: AgentOrgContext,
+  rangeDays = 30,
+): Promise<
+  Pick<AgentStatistics, "scopeLabel" | "rangeDays" | "kpis" | "responseBuckets"> & {
+    pipeline: AgentStatistics["pipeline"];
+    sources: AgentStatistics["sources"];
+    inquiryTags: AgentStatistics["inquiryTags"];
+    intentMix: AgentStatistics["intentMix"];
+    activityByType: AgentStatistics["activityByType"];
+    funnel: AgentStatistics["funnel"];
+  }
+> {
+  const scope = await resolveStatisticsScope(ctx);
+  const { leadWhere, deskSql, scopeLabel, focusAgentId } = scope;
+
   const now = new Date();
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
@@ -90,16 +260,7 @@ export async function loadAgentStatistics(
   periodStart.setHours(0, 0, 0, 0);
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  const customerIds = (
-    await prisma.lead.findMany({
-      where: { ...leadWhere, customerId: { not: null } },
-      select: { customerId: true },
-      distinct: ["customerId"],
-      take: 2000,
-    })
-  )
-    .map((l) => l.customerId)
-    .filter((id): id is string => Boolean(id));
+  const customerLeadFilter = { leads: { some: leadWhere } };
 
   const [
     leadsTotal,
@@ -110,8 +271,7 @@ export async function loadAgentStatistics(
     sourceGroups,
     tagGroups,
     intentGroups,
-    periodLeads,
-    respondedLeads,
+    responseAgg,
     emailsPeriod,
     tasksCompletedPeriod,
     appointmentsPeriod,
@@ -156,19 +316,7 @@ export async function loadAgentStatistics(
       where: leadWhere,
       _count: { _all: true },
     }),
-    prisma.lead.findMany({
-      where: { ...leadWhere, createdAt: { gte: periodStart } },
-      select: { createdAt: true, firstRespondedAt: true },
-      take: 5000,
-    }),
-    prisma.lead.findMany({
-      where: {
-        ...leadWhere,
-        firstRespondedAt: { not: null, gte: periodStart },
-      },
-      select: { createdAt: true, firstRespondedAt: true },
-      take: 3000,
-    }),
+    loadResponseAggregates(deskSql, periodStart),
     prisma.leadEmailLog.count({
       where: {
         createdAt: { gte: periodStart },
@@ -193,45 +341,37 @@ export async function loadAgentStatistics(
         lead: leadWhere,
       },
     }),
-    customerIds.length
-      ? prisma.activityEvent.count({
-          where: {
-            type: "LISTING_VIEW",
-            createdAt: { gte: periodStart },
-            userId: { in: customerIds },
-          },
-        })
-      : Promise.resolve(0),
-    customerIds.length
-      ? prisma.activityEvent.count({
-          where: {
-            type: "SEARCH",
-            createdAt: { gte: periodStart },
-            userId: { in: customerIds },
-          },
-        })
-      : Promise.resolve(0),
-    customerIds.length
-      ? prisma.savedListing.count({
-          where: {
-            userId: { in: customerIds },
-            createdAt: { gte: periodStart },
-          },
-        })
-      : Promise.resolve(0),
-    customerIds.length
-      ? prisma.activityEvent.groupBy({
-          by: ["type"],
-          where: {
-            createdAt: { gte: periodStart },
-            userId: { in: customerIds },
-            type: { not: "HEARTBEAT" },
-          },
-          _count: { _all: true },
-          orderBy: { _count: { type: "desc" } },
-          take: 8,
-        })
-      : Promise.resolve([]),
+    prisma.activityEvent.count({
+      where: {
+        type: "LISTING_VIEW",
+        createdAt: { gte: periodStart },
+        user: customerLeadFilter,
+      },
+    }),
+    prisma.activityEvent.count({
+      where: {
+        type: "SEARCH",
+        createdAt: { gte: periodStart },
+        user: customerLeadFilter,
+      },
+    }),
+    prisma.savedListing.count({
+      where: {
+        createdAt: { gte: periodStart },
+        user: customerLeadFilter,
+      },
+    }),
+    prisma.activityEvent.groupBy({
+      by: ["type"],
+      where: {
+        createdAt: { gte: periodStart },
+        type: { not: "HEARTBEAT" },
+        user: customerLeadFilter,
+      },
+      _count: { _all: true },
+      orderBy: { _count: { type: "desc" } },
+      take: 8,
+    }),
     prisma.lead.findMany({
       where: {
         ...leadWhere,
@@ -245,45 +385,15 @@ export async function loadAgentStatistics(
         createdAt: true,
         firstRespondedAt: true,
       },
-      take: 80,
+      take: HOT_CANDIDATE_TAKE,
       orderBy: { updatedAt: "desc" },
     }),
   ]);
 
-  const responseMins = respondedLeads
-    .map((l) => {
-      if (!l.firstRespondedAt) return null;
-      const mins =
-        (l.firstRespondedAt.getTime() - l.createdAt.getTime()) / 60_000;
-      return mins >= 0 ? mins : null;
-    })
-    .filter((n): n is number => n != null);
-
-  const touched =
-    leadsTotal -
-    newWaiting;
   const responseRate =
     leadsTotal > 0
       ? Math.round(((leadsTotal - newWaiting) / leadsTotal) * 100)
       : 0;
-
-  const days = eachDay(periodStart, now);
-  const leadsDayMap = new Map<string, number>();
-  const responseDayMap = new Map<string, number>();
-  for (const key of days) {
-    leadsDayMap.set(key, 0);
-    responseDayMap.set(key, 0);
-  }
-  for (const l of periodLeads) {
-    const k = dayKey(l.createdAt);
-    if (leadsDayMap.has(k)) leadsDayMap.set(k, (leadsDayMap.get(k) ?? 0) + 1);
-  }
-  for (const l of respondedLeads) {
-    if (!l.firstRespondedAt) continue;
-    const k = dayKey(l.firstRespondedAt);
-    if (responseDayMap.has(k))
-      responseDayMap.set(k, (responseDayMap.get(k) ?? 0) + 1);
-  }
 
   const pipelineMap = new Map(
     pipelineGroups.map((g) => [g.status, g._count._all]),
@@ -316,19 +426,6 @@ export async function loadAgentStatistics(
     pct: Math.round((f.count / funnelTop) * 100),
   }));
 
-  const buckets = [
-    { label: "< 15m", test: (m: number) => m < 15 },
-    { label: "15–60m", test: (m: number) => m >= 15 && m < 60 },
-    { label: "1–4h", test: (m: number) => m >= 60 && m < 240 },
-    { label: "4–24h", test: (m: number) => m >= 240 && m < 1440 },
-    { label: "> 24h", test: (m: number) => m >= 1440 },
-  ];
-  const responseBuckets = buckets.map((b) => ({
-    label: b.label,
-    count: responseMins.filter(b.test).length,
-  }));
-
-  // Lightweight hot estimate without N+1: score + recent status weight
   let hotLeads = 0;
   if (hotCandidates.length > 0) {
     const ids = hotCandidates
@@ -358,8 +455,6 @@ export async function loadAgentStatistics(
     }
   }
 
-  void touched;
-
   return {
     scopeLabel,
     rangeDays,
@@ -369,8 +464,8 @@ export async function loadAgentStatistics(
       leadsToday,
       newWaiting,
       responseRate,
-      avgResponseMins: avg(responseMins),
-      medianResponseMins: median(responseMins),
+      avgResponseMins: responseAgg.avgResponseMins,
+      medianResponseMins: responseAgg.medianResponseMins,
       listingViewsPeriod,
       searchesPeriod,
       emailsPeriod,
@@ -379,18 +474,6 @@ export async function loadAgentStatistics(
       hotLeads,
       savesPeriod,
     },
-    leadsByDay: days.map((date) => {
-      const d = new Date(`${date}T12:00:00Z`);
-      return {
-        date,
-        label: d.toLocaleDateString("en-CA", {
-          month: "short",
-          day: "numeric",
-        }),
-        leads: leadsDayMap.get(date) ?? 0,
-        responses: responseDayMap.get(date) ?? 0,
-      };
-    }),
     pipeline,
     sources: sourceGroups.map((g) => ({
       source: g.source,
@@ -415,6 +498,67 @@ export async function loadAgentStatistics(
       count: g._count._all,
     })),
     funnel,
-    responseBuckets,
+    responseBuckets: responseAgg.responseBuckets,
+  };
+}
+
+/** Day-series chart data (SQL date buckets — no raw Lead samples). */
+export async function loadAgentStatisticsSeries(
+  ctx: AgentOrgContext,
+  rangeDays = 30,
+): Promise<Pick<AgentStatistics, "leadsByDay">> {
+  const scope = await resolveStatisticsScope(ctx);
+  const now = new Date();
+  const periodStart = new Date(now);
+  periodStart.setDate(periodStart.getDate() - (rangeDays - 1));
+  periodStart.setHours(0, 0, 0, 0);
+
+  const [leadsDayMap, responseDayMap] = await Promise.all([
+    loadLeadCreatedByDay(scope.deskSql, periodStart),
+    loadResponsesByDay(scope.deskSql, periodStart),
+  ]);
+
+  const days = eachDay(periodStart, now);
+  return {
+    leadsByDay: days.map((date) => {
+      const d = new Date(`${date}T12:00:00Z`);
+      return {
+        date,
+        label: d.toLocaleDateString("en-CA", {
+          month: "short",
+          day: "numeric",
+        }),
+        leads: leadsDayMap.get(date) ?? 0,
+        responses: responseDayMap.get(date) ?? 0,
+      };
+    }),
+  };
+}
+
+/**
+ * Full statistics payload for the dashboard.
+ * Prefer page-level KPI + Suspense series split; this remains for parity/tests.
+ */
+export async function loadAgentStatistics(
+  ctx: AgentOrgContext,
+  rangeDays = 30,
+): Promise<AgentStatistics> {
+  const [kpisPart, seriesPart] = await Promise.all([
+    loadAgentStatisticsKpis(ctx, rangeDays),
+    loadAgentStatisticsSeries(ctx, rangeDays),
+  ]);
+
+  return {
+    scopeLabel: kpisPart.scopeLabel,
+    rangeDays: kpisPart.rangeDays,
+    kpis: kpisPart.kpis,
+    leadsByDay: seriesPart.leadsByDay,
+    pipeline: kpisPart.pipeline,
+    sources: kpisPart.sources,
+    inquiryTags: kpisPart.inquiryTags,
+    intentMix: kpisPart.intentMix,
+    activityByType: kpisPart.activityByType,
+    funnel: kpisPart.funnel,
+    responseBuckets: kpisPart.responseBuckets,
   };
 }

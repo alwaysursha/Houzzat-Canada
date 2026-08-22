@@ -1,5 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { TaskCompleteButton, TaskForm } from "@/components/agent/TaskForm";
 import { requireAgentContext } from "@/lib/agent";
 import { resolveDeskView } from "@/lib/agent/brokerage";
@@ -9,7 +10,7 @@ export const metadata = { title: "Tasks · Agent CRM" };
 
 export default async function AgentTasksPage() {
   const ctx = await requireAgentContext();
-  if (!ctx) redirect("/auth/sign-in?callbackUrl=/agent/tasks");
+  if (!ctx) redirect(await staffSignInRedirectUrl("/agent/tasks"));
 
   const desk = await resolveDeskView(ctx);
   const focusAgentId = desk.deskAgentId;

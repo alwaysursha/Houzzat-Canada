@@ -10,43 +10,10 @@ import {
   loadRememberedLogin,
   rememberLoginCredentials,
 } from "@/lib/auth/remembered-login";
+import { resolveProPostSignInHref } from "@/lib/auth/pro-sign-in-routing";
 import { hardGo } from "@/lib/mobile/nav-back";
 import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
-import {
-  HOUZZATPRO_STAFF_ONLY_PATH,
-  HOUZZATPRO_START_PATH,
-} from "@/lib/mobile/app-shell";
-import { isAdminRole, isAgentRole } from "@/lib/roles";
-
-function safeCallbackPath(callbackUrl: string | null) {
-  if (
-    !callbackUrl ||
-    !callbackUrl.startsWith("/") ||
-    callbackUrl.startsWith("//")
-  ) {
-    return HOUZZATPRO_START_PATH;
-  }
-  if (callbackUrl.startsWith("/auth")) {
-    return HOUZZATPRO_START_PATH;
-  }
-  return callbackUrl;
-}
-
-function resolvePostSignInHref(callbackUrl: string | null, role?: string) {
-  const target = safeCallbackPath(callbackUrl);
-  if (
-    target === HOUZZATPRO_START_PATH ||
-    target.startsWith("/pro") ||
-    target.startsWith("/admin") ||
-    target.startsWith("/agent")
-  ) {
-    if (isAdminRole(role)) return "/admin";
-    if (isAgentRole(role)) return "/agent";
-    return HOUZZATPRO_STAFF_ONLY_PATH;
-  }
-  return target;
-}
 
 export function HouzzatProSignInForm({
   callbackUrl = null,
@@ -111,7 +78,7 @@ export function HouzzatProSignInForm({
     });
 
     setPending(false);
-    hardGo(resolvePostSignInHref(callbackUrl, session?.user?.role));
+    hardGo(resolveProPostSignInHref(callbackUrl, session?.user?.role));
   }
 
   return (

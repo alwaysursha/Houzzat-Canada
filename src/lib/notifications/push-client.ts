@@ -28,6 +28,11 @@ import {
   wasPushPermissionDenied,
 } from "@/lib/notifications/push-device-store";
 import {
+  HOUZZAT_PRO_ALERTS_CHANNEL_DESCRIPTION,
+  HOUZZAT_PRO_ALERTS_CHANNEL_ID,
+  HOUZZAT_PRO_ALERTS_CHANNEL_IMPORTANCE,
+  HOUZZAT_PRO_ALERTS_CHANNEL_NAME,
+  HOUZZAT_PRO_ALERTS_CHANNEL_VISIBILITY,
   HOUZZAT_UPDATES_CHANNEL_DESCRIPTION,
   HOUZZAT_UPDATES_CHANNEL_ID,
   HOUZZAT_UPDATES_CHANNEL_IMPORTANCE,
@@ -39,6 +44,7 @@ let actionListenerAttached = false;
 let registrationListenerAttached = false;
 let registerInFlight = false;
 let consumerChannelReady = false;
+let proChannelReady = false;
 let lastRegisteredToken: string | null = null;
 let lastPostedToken: string | null = null;
 let lastPostedUserId: string | null = null;
@@ -75,6 +81,27 @@ export async function ensureHouzzatUpdatesChannel(): Promise<void> {
       // Omit sound → system default for HIGH channels.
     });
     consumerChannelReady = true;
+  } catch {
+    // Plugin / older Android — FCM may still land in default channel.
+  }
+}
+
+/**
+ * Ensure HIGH-importance HouzzatPro staff channel exists (heads-up + private lock screen).
+ * No-op on iOS / consumer. New channel id — no sticky upgrade from consumer.
+ */
+export async function ensureHouzzatProAlertsChannel(): Promise<void> {
+  if (!isNative() || platform() !== "android" || proChannelReady) return;
+  try {
+    await PushNotifications.createChannel({
+      id: HOUZZAT_PRO_ALERTS_CHANNEL_ID,
+      name: HOUZZAT_PRO_ALERTS_CHANNEL_NAME,
+      description: HOUZZAT_PRO_ALERTS_CHANNEL_DESCRIPTION,
+      importance: HOUZZAT_PRO_ALERTS_CHANNEL_IMPORTANCE,
+      visibility: HOUZZAT_PRO_ALERTS_CHANNEL_VISIBILITY,
+      vibration: true,
+    });
+    proChannelReady = true;
   } catch {
     // Plugin / older Android — FCM may still land in default channel.
   }
@@ -242,6 +269,8 @@ export async function registerPushForSession(options?: {
 
     if (shell === "houzzat") {
       await ensureHouzzatUpdatesChannel();
+    } else if (shell === "houzzatpro") {
+      await ensureHouzzatProAlertsChannel();
     }
 
     let perm = await PushNotifications.checkPermissions();

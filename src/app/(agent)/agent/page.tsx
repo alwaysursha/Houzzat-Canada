@@ -1,6 +1,7 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import type { LeadStatus } from "@prisma/client";
 import {
   LaunchpadDeferredContact,
@@ -19,7 +20,7 @@ export default async function AgentLaunchpadPage() {
     (await cookies()).get(DESK_AGENT_COOKIE)?.value ?? null;
 
   const ctx = await requireAgentContext();
-  if (!ctx) redirect("/auth/sign-in?callbackUrl=/agent");
+  if (!ctx) redirect(await staffSignInRedirectUrl("/agent"));
 
   const now = new Date();
   const startOfDay = new Date();

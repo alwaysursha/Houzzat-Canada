@@ -6,7 +6,10 @@ import {
   shellForAudience,
   type PushType,
 } from "@/lib/notifications/catalog";
-import { HOUZZAT_UPDATES_CHANNEL_ID } from "@/lib/notifications/android-channel";
+import {
+  HOUZZAT_PRO_ALERTS_CHANNEL_ID,
+  HOUZZAT_UPDATES_CHANNEL_ID,
+} from "@/lib/notifications/android-channel";
 
 export type PushPayload = {
   type: PushType;
@@ -176,9 +179,20 @@ async function deliverFcm(token: string, payload: PushPayload) {
               notification_priority: "PRIORITY_HIGH" as const,
               default_sound: true,
               default_vibrate_timings: true,
+              visibility: "PUBLIC" as const,
             },
           }
-        : { priority: "HIGH" as const };
+        : {
+            priority: "HIGH" as const,
+            notification: {
+              channel_id: HOUZZAT_PRO_ALERTS_CHANNEL_ID,
+              notification_priority: "PRIORITY_HIGH" as const,
+              default_sound: true,
+              default_vibrate_timings: true,
+              // CRM payloads may include customer names/addresses — private lock screen.
+              visibility: "PRIVATE" as const,
+            },
+          };
 
     const res = await fetch(
       `https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`,

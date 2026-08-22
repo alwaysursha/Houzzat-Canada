@@ -1,9 +1,11 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import type { LeadStatus } from "@prisma/client";
 import { LeadActions } from "@/components/agent/LeadActions";
 import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
 import { LeadQueryPopup } from "@/components/agent/LeadQueryPopup";
+import { KanbanLeadLink } from "@/components/agent/KanbanLeadLink";
 import {
   LeadsTableClient,
   type LeadRow,
@@ -28,12 +30,11 @@ export default async function AgentLeadsPage({
     view?: string;
     layout?: string;
     pipeline?: string;
-    lead?: string;
     online?: string;
   }>;
 }) {
   const ctx = await requireAgentContext();
-  if (!ctx) redirect("/auth/sign-in?callbackUrl=/agent/leads");
+  if (!ctx) redirect(await staffSignInRedirectUrl("/agent/leads"));
   const params = await searchParams;
 
   const viewParam = params.view;
@@ -45,7 +46,6 @@ export default async function AgentLeadsPage({
         : "mine";
   const layout = params.layout === "kanban" ? "kanban" : "table";
   const pipelineParam = params.pipeline?.trim() || null;
-  const openLeadId = params.lead?.trim() || null;
   const onlineOnly =
     params.online === "1" || params.online === "true";
   const pipeline =
@@ -335,14 +335,15 @@ export default async function AgentLeadsPage({
                       className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-sm"
                     >
                       <div className="flex items-center gap-1">
-                        <Link
+                        <KanbanLeadLink
                           href={`/agent/leads?view=${view}&layout=kanban&lead=${lead.id}${pipelineParam ? `&pipeline=${pipelineParam}` : ""}`}
+                          leadId={lead.id}
                           className="font-semibold text-[#2563eb] hover:underline"
                         >
                           {lead.customer?.name ||
                             lead.customer?.email ||
                             lead.source.replaceAll("_", " ")}
-                        </Link>
+                        </KanbanLeadLink>
                         {lead.customer ? (
                           <LeadAccountVerifyMenu
                             compact
@@ -376,10 +377,7 @@ export default async function AgentLeadsPage({
       )}
 
       <Suspense fallback={null}>
-        <LeadQueryPopup
-          leadId={openLeadId}
-          fallbackLeadIds={rows.map((r) => r.id)}
-        />
+        <LeadQueryPopup fallbackLeadIds={rows.map((r) => r.id)} />
       </Suspense>
     </div>
   );

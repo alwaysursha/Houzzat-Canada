@@ -6,41 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { HouzzatProMark } from "@/components/auth/HouzzatProMark";
 import { HouzzatProSignInForm } from "@/components/auth/HouzzatProSignInForm";
 import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
+import { resolveProPostSignInHref } from "@/lib/auth/pro-sign-in-routing";
 import { hardGo } from "@/lib/mobile/nav-back";
-import {
-  HOUZZATPRO_STAFF_ONLY_PATH,
-  HOUZZATPRO_START_PATH,
-} from "@/lib/mobile/app-shell";
-import { isAdminRole, isAgentRole } from "@/lib/roles";
-
-function safeCallbackPath(callbackUrl: string | null) {
-  if (
-    !callbackUrl ||
-    !callbackUrl.startsWith("/") ||
-    callbackUrl.startsWith("//")
-  ) {
-    return HOUZZATPRO_START_PATH;
-  }
-  if (callbackUrl.startsWith("/auth") || callbackUrl.startsWith("/pro/sign-in")) {
-    return HOUZZATPRO_START_PATH;
-  }
-  return callbackUrl;
-}
-
-function resolvePostSignInHref(callbackUrl: string | null, role?: string) {
-  const target = safeCallbackPath(callbackUrl);
-  if (
-    target === HOUZZATPRO_START_PATH ||
-    target.startsWith("/pro") ||
-    target.startsWith("/admin") ||
-    target.startsWith("/agent")
-  ) {
-    if (isAdminRole(role)) return "/admin";
-    if (isAgentRole(role)) return "/agent";
-    return HOUZZATPRO_STAFF_ONLY_PATH;
-  }
-  return target;
-}
 
 function HouzzatProSignInInner() {
   const router = useRouter();
@@ -56,7 +23,7 @@ function HouzzatProSignInInner() {
       if (!session?.user) return;
       const me = await fetch("/api/me", { cache: "no-store" }).catch(() => null);
       if (!me?.ok) return;
-      hardGo(resolvePostSignInHref(callbackUrl, session.user.role));
+      hardGo(resolveProPostSignInHref(callbackUrl, session.user.role));
     })();
   }, [callbackUrl, router]);
 

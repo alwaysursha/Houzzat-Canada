@@ -2,9 +2,18 @@ import { prisma } from "@/lib/prisma";
 
 /** Presence window used for ONLINE badge + Online Leads desk. */
 export const ONLINE_MS = 3 * 60 * 1000;
-const HOT_VIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** Hotness view window — matches views24h / distinctListings24h score inputs. */
+export const HOT_VIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Look back for last non-heartbeat activity when batching. */
 const LAST_EVENT_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Cap on (userId, mlsNumber) groups returned for hotness.
+ * Scoring saturates at ~14 views (+40) and ~4 distinct MLS (+30 / binge at 3),
+ * so thousands of raw re-views never change rank once groups cover the cohort.
+ * Hard ceiling keeps Worker memory flat if a cohort binge-views many MLS.
+ */
+export const HOT_VIEW_GROUP_TAKE = 2_500;
 
 /**
  * Signed-in users with a site session (or visitor) heartbeat in the ONLINE window.
@@ -85,6 +94,31 @@ function scoreHotness(
   };
 }
 
+/**
+ * Collapse listingView groups into per-user view counts + distinct MLS sets.
+ * Exported for focused self-tests (same math as computeHotnessMap aggregation).
+ */
+export function accumulateViewGroups(
+  groups: Array<{
+    userId: string | null;
+    mlsNumber: string;
+    _count: { _all: number };
+  }>,
+): Map<string, { count: number; mls: Set<string> }> {
+  const viewsByUser = new Map<string, { count: number; mls: Set<string> }>();
+  for (const row of groups) {
+    if (!row.userId) continue;
+    const bucket = viewsByUser.get(row.userId) ?? {
+      count: 0,
+      mls: new Set<string>(),
+    };
+    bucket.count += row._count._all;
+    bucket.mls.add(row.mlsNumber);
+    viewsByUser.set(row.userId, bucket);
+  }
+  return viewsByUser;
+}
+
 /** Lead quality / urgency signals for a single lead (profile popup). */
 export async function computeHotness(
   input: HotLeadInput,
@@ -111,6 +145,10 @@ export async function computeHotness(
 
 /**
  * Batch hotness for Launchpad / leads table — a few queries instead of 3×N.
+ *
+ * Listing views use groupBy (userId, mlsNumber) inside the 24h window instead of
+ * an unbounded findMany of every raw view row (production: thousands of re-views
+ * collapse to tens of groups).
  */
 export async function computeHotnessMap(
   leads: Array<{
@@ -141,10 +179,16 @@ export async function computeHotnessMap(
     const viewSince = new Date(Date.now() - HOT_VIEW_WINDOW_MS);
     const eventSince = new Date(Date.now() - LAST_EVENT_WINDOW_MS);
 
-    const [views, events, visitors] = await Promise.all([
-      prisma.listingView.findMany({
-        where: { userId: { in: customerIds }, createdAt: { gte: viewSince } },
-        select: { userId: true, mlsNumber: true },
+    const [viewGroups, events, visitors] = await Promise.all([
+      prisma.listingView.groupBy({
+        by: ["userId", "mlsNumber"],
+        where: {
+          userId: { in: customerIds },
+          createdAt: { gte: viewSince },
+        },
+        _count: { _all: true },
+        orderBy: { _count: { userId: "desc" } },
+        take: HOT_VIEW_GROUP_TAKE,
       }),
       prisma.activityEvent.findMany({
         where: {
@@ -166,18 +210,13 @@ export async function computeHotnessMap(
             select: { lastSeenAt: true },
           },
         },
+        take: Math.min(Math.max(customerIds.length, 50), 500),
       }),
     ]);
 
-    for (const row of views) {
-      if (!row.userId) continue;
-      const bucket = viewsByUser.get(row.userId) ?? {
-        count: 0,
-        mls: new Set<string>(),
-      };
-      bucket.count += 1;
-      bucket.mls.add(row.mlsNumber);
-      viewsByUser.set(row.userId, bucket);
+    const aggregated = accumulateViewGroups(viewGroups);
+    for (const [userId, bucket] of aggregated) {
+      viewsByUser.set(userId, bucket);
     }
 
     for (const row of events) {

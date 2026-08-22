@@ -1,98 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { LeadQuickPopup } from "@/components/agent/LeadQuickPopup";
+import {
+  LEAD_QUERY_CHANGE_EVENT,
+  readLeadNavIds,
+  readLeadQueryParam,
+  replaceLeadQueryParam,
+} from "@/lib/agent/lead-profile-query";
 
-export const LEAD_NAV_STORAGE_KEY = "houzzat-lead-nav-ids";
-
-export function rememberLeadNavIds(ids: string[]) {
-  try {
-    sessionStorage.setItem(LEAD_NAV_STORAGE_KEY, JSON.stringify(ids));
-  } catch {
-    // ignore quota / private mode
-  }
-}
-
-function readLeadNavIds(): string[] {
-  try {
-    const raw = sessionStorage.getItem(LEAD_NAV_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((id): id is string => typeof id === "string");
-  } catch {
-    return [];
-  }
-}
+export {
+  LEAD_NAV_STORAGE_KEY,
+  openLeadProfileHref,
+  rememberLeadNavIds,
+} from "@/lib/agent/lead-profile-query";
 
 /** Opens lead profile popup from `?lead=` and clears the param on close. */
 export function LeadQueryPopup({
-  leadId,
   fallbackLeadIds = [],
 }: {
-  leadId: string | null;
   /** Used when session nav list is missing (e.g. deep link / kanban). */
   fallbackLeadIds?: string[];
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [activeLeadId, setActiveLeadId] = useState<string | null>(null);
   const [leadIds, setLeadIds] = useState<string[]>([]);
 
+  // Sync from Next navigation (deep links, tasks/inbox) and initial browser URL.
   useEffect(() => {
-    if (!leadId) return;
+    setActiveLeadId(readLeadQueryParam() ?? searchParams.get("lead"));
+  }, [searchParams]);
+
+  // Same-page History API updates (open / next / prev / close without Next router).
+  useEffect(() => {
+    function onLeadQueryChange(event: Event) {
+      const detail = (event as CustomEvent<{ leadId: string | null }>).detail;
+      setActiveLeadId(detail.leadId);
+    }
+    function onPopState() {
+      setActiveLeadId(readLeadQueryParam());
+    }
+    window.addEventListener(LEAD_QUERY_CHANGE_EVENT, onLeadQueryChange);
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener(LEAD_QUERY_CHANGE_EVENT, onLeadQueryChange);
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeLeadId) return;
     const stored = readLeadNavIds();
-    if (stored.includes(leadId)) {
+    if (stored.includes(activeLeadId)) {
       setLeadIds(stored);
       return;
     }
-    if (fallbackLeadIds.includes(leadId)) {
+    if (fallbackLeadIds.includes(activeLeadId)) {
       setLeadIds(fallbackLeadIds);
       return;
     }
     setLeadIds(stored.length ? stored : fallbackLeadIds);
-  }, [leadId, fallbackLeadIds]);
+  }, [activeLeadId, fallbackLeadIds]);
 
-  if (!leadId) return null;
+  const close = useCallback(() => {
+    setActiveLeadId(null);
+    if (pathname === "/agent/leads") {
+      replaceLeadQueryParam(null);
+    }
+  }, [pathname]);
 
-  function hrefForLead(nextLeadId: string) {
-    const next = new URLSearchParams(searchParams.toString());
-    next.set("lead", nextLeadId);
-    return `${pathname}?${next.toString()}`;
-  }
+  const navigate = useCallback(
+    (nextLeadId: string) => {
+      setActiveLeadId(nextLeadId);
+      if (pathname === "/agent/leads") {
+        replaceLeadQueryParam(nextLeadId);
+      }
+    },
+    [pathname],
+  );
 
-  function close() {
-    const next = new URLSearchParams(searchParams.toString());
-    next.delete("lead");
-    const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }
-
-  function navigate(nextLeadId: string) {
-    router.replace(hrefForLead(nextLeadId), { scroll: false });
-  }
+  if (!activeLeadId) return null;
 
   return (
     <LeadQuickPopup
-      leadId={leadId}
+      leadId={activeLeadId}
       leadIds={leadIds}
       onClose={close}
       onNavigate={navigate}
     />
   );
-}
-
-export function openLeadProfileHref(
-  leadId: string,
-  extras?: Record<string, string | undefined>,
-) {
-  const q = new URLSearchParams();
-  q.set("lead", leadId);
-  if (extras) {
-    for (const [key, value] of Object.entries(extras)) {
-      if (value) q.set(key, value);
-    }
-  }
-  return `/agent/leads?${q.toString()}`;
 }

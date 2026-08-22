@@ -1,5 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { leadScopeWhere, requireAgentContext } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
 
@@ -7,7 +8,7 @@ export const metadata = { title: "Inbox · Agent CRM" };
 
 export default async function AgentInboxPage() {
   const ctx = await requireAgentContext();
-  if (!ctx) redirect("/auth/sign-in?callbackUrl=/agent/inbox");
+  if (!ctx) redirect(await staffSignInRedirectUrl("/agent/inbox"));
 
   const scope = leadScopeWhere(ctx, ctx.canSeeTeamLeads ? "team" : "mine");
   const leadIds = (

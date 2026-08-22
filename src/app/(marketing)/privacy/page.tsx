@@ -11,12 +11,12 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalDocument title="Privacy Policy" updated="August 8, 2026">
+    <LegalDocument title="Privacy Policy" updated="August 22, 2026">
       <p>
         This Privacy Policy explains how <strong>{SITE_NAME}</strong> (“we”,
         “us”, “our”) collects, uses, discloses, and protects personal
-        information when you use houzzat.com, our mobile applications, and
-        related services (the “Services”).
+        information when you use houzzat.com, our mobile applications
+        (including HouzzatPro), and related services (the “Services”).
       </p>
       <p>
         We operate in Canada and handle personal information in accordance with
@@ -132,7 +132,65 @@ export default function PrivacyPage() {
         legally required notices) may still be sent.
       </p>
 
-      <h2>7. Retention</h2>
+      <h2>7. HouzzatPro / staff app</h2>
+      <p>
+        HouzzatPro is a separate mobile app for authorized real-estate agents
+        and brokerage administrators. Staff accounts may be
+        organization-provisioned, for example through an invitation or brokerage
+        administrator.
+      </p>
+      <p>
+        <strong>Customer CRM information.</strong> Authorized staff may access
+        customer information needed to provide real-estate services, including
+        names, email addresses, phone numbers, inquiries, lead notes, tasks,
+        appointments, and related activity, subject to applicable role and
+        brokerage access controls.
+      </p>
+      <p>
+        <strong>Service providers.</strong> We use service providers and
+        processors, including hosting/database infrastructure, Firebase Cloud
+        Messaging for push delivery, and email-delivery providers, to operate
+        the Services.
+      </p>
+      <p>
+        <strong>Push notifications.</strong> With permission, HouzzatPro may
+        store a device push token associated with the signed-in staff account to
+        deliver work-related alerts. Push tokens are not sold.
+      </p>
+      <p>
+        <strong>Biometric unlock.</strong> Optional biometric unlock uses the
+        device’s biometric system. Houzzat does not receive fingerprint or
+        facial biometric images. Biometric preference information is stored
+        locally on the device. Authentication continues to rely on the user’s
+        Houzzat account session.
+      </p>
+      <p>
+        <strong>Remembered sign-in.</strong> If a user chooses to remain signed
+        in or use remembered sign-in functionality, limited sign-in information
+        may be stored locally on that device.
+      </p>
+      <p>
+        <strong>Location.</strong> If a user invokes a location-based feature
+        such as “Near me” within Agent Search, HouzzatPro may access approximate
+        device location with permission. HouzzatPro does not use background
+        location tracking.
+      </p>
+      <p>
+        <strong>Advertising.</strong> HouzzatPro does not display advertising
+        and does not use an advertising identifier for advertising purposes.
+      </p>
+      <p>
+        <strong>Staff account deletion.</strong> Staff may request deletion or
+        deactivation of their Houzzat account by contacting{" "}
+        <a href="mailto:notify@houzzat.com">notify@houzzat.com</a>.
+        Organization-managed access may also be disabled by an authorized
+        brokerage administrator. We process deletion or deactivation requests
+        subject to applicable legal, security, MLS/board, and record-retention
+        requirements. See also{" "}
+        <Link href="/delete-account">Delete your account</Link>.
+      </p>
+
+      <h2>8. Retention</h2>
       <p>
         We keep personal information only as long as needed for the purposes
         above, including legal, accounting, board-compliance, and dispute
@@ -140,7 +198,7 @@ export default function PrivacyPage() {
         it where practical.
       </p>
 
-      <h2>8. Security</h2>
+      <h2>9. Security</h2>
       <p>
         We use administrative, technical, and physical safeguards appropriate to
         the sensitivity of the information, including encrypted transport (HTTPS)
@@ -148,38 +206,38 @@ export default function PrivacyPage() {
         secure.
       </p>
 
-      <h2>9. Your choices and rights</h2>
+      <h2>10. Your choices and rights</h2>
       <p>
         Subject to applicable law, you may request access to, correction of, or
         deletion of your personal information, and you may withdraw consent where
         consent is the basis for processing (without affecting prior lawful
-        processing).         Contact{" "}
+        processing). Contact{" "}
         <a href="mailto:notify@houzzat.com">notify@houzzat.com</a>. We may need
         to verify your identity before fulfilling a request.
       </p>
 
-      <h2>10. Children’s privacy</h2>
+      <h2>11. Children’s privacy</h2>
       <p>
         The Services are intended for adults seeking real estate information in
         Canada. We do not knowingly collect personal information from children
         under 13.
       </p>
 
-      <h2>11. International processing</h2>
+      <h2>12. International processing</h2>
       <p>
         Our vendors may process data in Canada or other countries. Where data is
         processed outside Canada, it may be subject to the laws of those
         jurisdictions.
       </p>
 
-      <h2>12. Changes</h2>
+      <h2>13. Changes</h2>
       <p>
         We may update this Privacy Policy from time to time. The “Last updated”
         date will change when we do. Continued use of the Services after an
         update means you accept the revised policy.
       </p>
 
-      <h2>13. Related terms</h2>
+      <h2>14. Related terms</h2>
       <p>
         Use of the Services is also governed by our{" "}
         <Link href="/terms">Terms of Use</Link>.

@@ -1,9 +1,13 @@
-import { Suspense } from "react";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { AdminDeferredDeskPicker } from "@/components/admin/AdminDeferredDeskPicker";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { StaffRouteConsumerGate } from "@/components/mobile/StaffRouteConsumerGate";
 import { auth } from "@/lib/auth";
+import {
+  redirectNonAdminFromAdminShell,
+  staffSignInRedirectUrl,
+} from "@/lib/auth/staff-sign-in-redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -15,17 +19,18 @@ export default async function AdminLayout({
   // Security only — paint shell before brokerage / desk / team queries.
   const session = await auth();
   if (!session?.user) {
-    redirect("/auth/sign-in?callbackUrl=/admin");
+    redirect(await staffSignInRedirectUrl("/admin"));
   }
-  if (session.user.role !== "ADMIN") {
-    redirect(session.user.role === "AGENT" ? "/agent" : "/account");
+  const user = session!.user;
+  if (user.role !== "ADMIN") {
+    await redirectNonAdminFromAdminShell(user.role);
   }
 
-  const userId = session.user.id ?? "";
+  const userId = user.id ?? "";
 
   return (
     <AdminShell
-      email={session.user.email ?? "admin"}
+      email={user.email ?? "admin"}
       deskSlot={
         userId ? <AdminDeferredDeskPicker userId={userId} /> : null
       }

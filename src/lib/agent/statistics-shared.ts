@@ -1,5 +1,8 @@
 /** Client-safe types + formatters for agent statistics (no Prisma). */
 
+/** Max hot-pipeline candidates (bounded raw sample — score heuristic only). */
+export const HOT_CANDIDATE_TAKE = 80;
+
 export type AgentStatistics = {
   scopeLabel: string;
   rangeDays: number;

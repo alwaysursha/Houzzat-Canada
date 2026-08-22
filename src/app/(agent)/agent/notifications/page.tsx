@@ -1,14 +1,15 @@
+import { redirect } from "next/navigation";
 import { NotificationPreferencesForm } from "@/components/notifications/NotificationPreferencesForm";
 import { requireAgentContext } from "@/lib/agent";
 import { catalogForAudience, isPushTypeEnabled } from "@/lib/notifications/catalog";
 import { prisma } from "@/lib/prisma";
-import { redirect } from "next/navigation";
+import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 
 export const metadata = { title: "Notifications · CRM" };
 
 export default async function AgentNotificationsPage() {
   const ctx = await requireAgentContext();
-  if (!ctx) redirect("/auth/sign-in?callbackUrl=/agent/notifications");
+  if (!ctx) redirect(await staffSignInRedirectUrl("/agent/notifications"));
 
   const user = await prisma.user.findUnique({
     where: { id: ctx.user.id },

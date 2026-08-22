@@ -169,9 +169,12 @@ function ChartTooltip({
   );
 }
 
-export function AgentStatisticsDashboard({ data }: { data: AgentStatistics }) {
+export function AgentStatisticsShell({
+  data,
+}: {
+  data: Pick<AgentStatistics, "scopeLabel" | "rangeDays" | "kpis">;
+}) {
   const { kpis } = data;
-  const maxPipeline = Math.max(...data.pipeline.map((p) => p.count), 1);
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -204,7 +207,7 @@ export function AgentStatisticsDashboard({ data }: { data: AgentStatistics }) {
                   href={`/agent/statistics?range=${days}`}
                   scroll={false}
                   className={cn(
-                    "inline-flex min-h-10 items-center rounded-md px-3 py-2 text-[12px] font-semibold tabular-nums transition sm:px-3",
+                    "inline-flex min-h-11 min-w-[44px] items-center justify-center rounded-md px-3 py-2 text-[12px] font-semibold tabular-nums transition sm:px-3",
                     active
                       ? "bg-white text-[#2b6cb0] shadow-sm"
                       : "text-[#64748b] hover:text-[#1e2a38]",
@@ -276,7 +279,15 @@ export function AgentStatisticsDashboard({ data }: { data: AgentStatistics }) {
           tone="ok"
         />
       </div>
+    </div>
+  );
+}
 
+export function AgentStatisticsChartSections({ data }: { data: AgentStatistics }) {
+  const maxPipeline = Math.max(...data.pipeline.map((p) => p.count), 1);
+
+  return (
+    <div className="space-y-4 sm:space-y-5">
       <div className="grid gap-4 xl:grid-cols-5">
         <Card className="xl:col-span-3">
           <CardHeader
@@ -607,6 +618,15 @@ export function AgentStatisticsDashboard({ data }: { data: AgentStatistics }) {
           )}
         </div>
       </Card>
+    </div>
+  );
+}
+
+export function AgentStatisticsDashboard({ data }: { data: AgentStatistics }) {
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      <AgentStatisticsShell data={data} />
+      <AgentStatisticsChartSections data={data} />
     </div>
   );
 }

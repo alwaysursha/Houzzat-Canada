@@ -832,10 +832,13 @@ export function CustomerProfile({
             </p>
 
             {showLeadNav ? (
-              <div className="flex shrink-0 items-center">
+              <div
+                className="flex shrink-0 items-center"
+                aria-busy={loading || undefined}
+              >
                 <button
                   type="button"
-                  disabled={!prevLeadId}
+                  disabled={!prevLeadId || loading}
                   onClick={() => prevLeadId && onNavigateLead?.(prevLeadId)}
                   className="rounded-md p-1.5 text-[#1e2a38] transition hover:bg-[#f1f5f9] disabled:cursor-not-allowed disabled:opacity-30"
                   aria-label="Previous lead"
@@ -844,7 +847,7 @@ export function CustomerProfile({
                 </button>
                 <button
                   type="button"
-                  disabled={!nextLeadId}
+                  disabled={!nextLeadId || loading}
                   onClick={() => nextLeadId && onNavigateLead?.(nextLeadId)}
                   className="rounded-md p-1.5 text-[#1e2a38] transition hover:bg-[#f1f5f9] disabled:cursor-not-allowed disabled:opacity-30"
                   aria-label="Next lead"

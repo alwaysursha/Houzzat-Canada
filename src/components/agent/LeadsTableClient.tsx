@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 import {
   ArrowDown,
@@ -31,6 +31,10 @@ import { MassEmailForm } from "@/components/agent/LeadEmailForm";
 import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
 import { LeadImportModal } from "@/components/agent/LeadImportModal";
 import { openLeadProfileHref, rememberLeadNavIds } from "@/components/agent/LeadQueryPopup";
+import {
+  isLeadsDeskPath,
+  replaceLeadQueryParam,
+} from "@/lib/agent/lead-profile-query";
 import {
   PIPELINE_STATUSES,
   PIPELINE_STATUS_ORDER,
@@ -206,6 +210,7 @@ export function LeadsTableClient({
   view: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [selected, setSelected] = useState<string[]>([]);
   const [q, setQ] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("lastLogin");
@@ -268,6 +273,10 @@ export function LeadsTableClient({
 
   function openLead(leadId: string) {
     rememberLeadNavIds(filtered.map((l) => l.id));
+    if (isLeadsDeskPath(pathname)) {
+      replaceLeadQueryParam(leadId);
+      return;
+    }
     router.push(openLeadProfileHref(leadId, { view }), { scroll: false });
   }
 
@@ -1288,6 +1297,11 @@ export function LeadsTableClient({
                     <td className="px-2 py-3 text-[12px]">
                       <Link
                         href={openLeadProfileHref(lead.id, { view })}
+                        onClick={(event) => {
+                          if (!isLeadsDeskPath(pathname)) return;
+                          event.preventDefault();
+                          openLead(lead.id);
+                        }}
                         className="font-semibold text-[#5a7fa3] hover:underline"
                       >
                         {lead.nextReminder

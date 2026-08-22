@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { staffHardNavigate } from "@/components/site/StaffHardLink";
 import { SITE_NAME } from "@/lib/constants";
 import {
   isNavigationAbort,
@@ -15,6 +16,16 @@ type RouteErrorProps = {
   reset: () => void;
   /** Narrow copy for a specific area of the product. */
   title?: string;
+  /** Overrides the default temporary-hiccup blurb. */
+  description?: string;
+  /** Escape link (default consumer Home). */
+  secondaryHref?: string;
+  secondaryLabel?: string;
+  /**
+   * Use Capacitor-safe hard navigation for the secondary action
+   * (staff CRM / Admin shells).
+   */
+  hardSecondaryNav?: boolean;
   className?: string;
 };
 
@@ -31,6 +42,10 @@ export function RouteError({
   error,
   reset,
   title = "Something went wrong",
+  description = "Please try again. Your account and saved homes are safe — this was a temporary hiccup loading the page.",
+  secondaryHref = "/",
+  secondaryLabel = "Home",
+  hardSecondaryNav = false,
   className,
 }: RouteErrorProps) {
   const autoRetried = useRef(false);
@@ -53,6 +68,10 @@ export function RouteError({
     return () => window.clearTimeout(t);
   }, [error, reset]);
 
+  function onSecondaryClick() {
+    staffHardNavigate(secondaryHref, { rememberFrom: false });
+  }
+
   return (
     <div
       className={cn(
@@ -64,10 +83,7 @@ export function RouteError({
         {SITE_NAME}
       </p>
       <h1 className="mt-3 font-display text-3xl text-ink sm:text-4xl">{title}</h1>
-      <p className="mt-3 max-w-md text-sm text-ink/60">
-        Please try again. Your account and saved homes are safe — this was a
-        temporary hiccup loading the page.
-      </p>
+      <p className="mt-3 max-w-md text-sm text-ink/60">{description}</p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
         <button
           type="button"
@@ -83,12 +99,22 @@ export function RouteError({
         >
           Reload
         </button>
-        <Link
-          href="/"
-          className="rounded-full border border-line bg-surface px-5 py-2.5 text-sm font-semibold text-ink transition hover:border-canopy/40"
-        >
-          Home
-        </Link>
+        {hardSecondaryNav ? (
+          <button
+            type="button"
+            onClick={onSecondaryClick}
+            className="rounded-full border border-line bg-surface px-5 py-2.5 text-sm font-semibold text-ink transition hover:border-canopy/40"
+          >
+            {secondaryLabel}
+          </button>
+        ) : (
+          <Link
+            href={secondaryHref}
+            className="rounded-full border border-line bg-surface px-5 py-2.5 text-sm font-semibold text-ink transition hover:border-canopy/40"
+          >
+            {secondaryLabel}
+          </Link>
+        )}
       </div>
       {error.digest ? (
         <p className="mt-8 text-xs text-ink/35">Ref {error.digest}</p>

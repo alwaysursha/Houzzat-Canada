@@ -1,6 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import type { ActiveMode, Role } from "@prisma/client";
-import { canAccessSellerTools, isAgentRole } from "@/lib/roles";
+import { canAccessSellerTools } from "@/lib/roles";
 
 /** VOW-friendly idle timeout: cookie dies after 48h without activity. */
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 48;
@@ -67,12 +67,10 @@ export const authConfig = {
       const role = auth?.user?.role as Role | undefined;
       const isSeller = Boolean(auth?.user?.isSeller);
 
-      if (pathname.startsWith("/admin")) {
-        return isLoggedIn && role === "ADMIN";
-      }
-
-      if (pathname.startsWith("/agent")) {
-        return isLoggedIn && isAgentRole(role);
+      if (pathname.startsWith("/admin") || pathname.startsWith("/agent")) {
+        // Defer to middleware.ts — returning false here forces Auth.js
+        // pages.signIn (/auth/sign-in) and bypasses HouzzatPro /pro/sign-in.
+        return true;
       }
 
       if (pathname.startsWith("/account")) {

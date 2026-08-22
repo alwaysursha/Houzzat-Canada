@@ -1,5 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { AppointmentActions } from "@/components/agent/AppointmentActions";
 import { requireAgentContext } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +13,7 @@ export default async function AgentAppointmentsPage({
   searchParams: Promise<{ type?: string }>;
 }) {
   const ctx = await requireAgentContext();
-  if (!ctx) redirect("/auth/sign-in?callbackUrl=/agent/appointments");
+  if (!ctx) redirect(await staffSignInRedirectUrl("/agent/appointments"));
   const params = await searchParams;
 
   const orgLeadIds = (

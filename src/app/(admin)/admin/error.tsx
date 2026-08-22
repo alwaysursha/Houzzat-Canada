@@ -14,6 +14,10 @@ export default function AdminError({
       error={error}
       reset={reset}
       title="Admin HQ hit a snag"
+      description="We couldn't load this Admin view. Your session is still signed in — try again or return to Admin HQ."
+      secondaryHref="/admin"
+      secondaryLabel="Back to Admin"
+      hardSecondaryNav
     />
   );
 }

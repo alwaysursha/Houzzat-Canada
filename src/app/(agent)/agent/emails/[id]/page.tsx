@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
+import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { ArrowLeft } from "lucide-react";
 import { canAccessLead, requireAgentContext } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +13,7 @@ export default async function AgentEmailPreviewPage({
   params: Promise<{ id: string }>;
 }) {
   const ctx = await requireAgentContext();
-  if (!ctx) redirect("/auth/sign-in?callbackUrl=/agent");
+  if (!ctx) redirect(await staffSignInRedirectUrl("/agent"));
 
   const { id } = await params;
   const email = await prisma.leadEmailLog.findUnique({

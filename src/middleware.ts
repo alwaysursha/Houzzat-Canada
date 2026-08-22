@@ -124,11 +124,10 @@ export default auth((request) => {
 
   if (pathname.startsWith("/admin")) {
     if (!session?.user) {
-      return redirectToSignIn(
-        request,
-        pathname,
-        shellHint === "houzzatpro" ? { pro: true } : undefined,
-      );
+      const callback = `${pathname}${request.nextUrl.search}`;
+      return redirectToSignIn(request, callback, {
+        pro: shellHint === "houzzatpro",
+      });
     }
     if (!isAdminRole(session.user.role)) {
       // Pro: staff without admin go to CRM they can use; only unsupported roles
@@ -145,11 +144,10 @@ export default auth((request) => {
 
   if (pathname.startsWith("/agent")) {
     if (!session?.user) {
-      return redirectToSignIn(
-        request,
-        pathname,
-        shellHint === "houzzatpro" ? { pro: true } : undefined,
-      );
+      const callback = `${pathname}${request.nextUrl.search}`;
+      return redirectToSignIn(request, callback, {
+        pro: shellHint === "houzzatpro",
+      });
     }
     if (!isAgentRole(session.user.role)) {
       if (shellHint === "houzzatpro") {
@@ -164,11 +162,10 @@ export default auth((request) => {
 
   if (pathname.startsWith("/account")) {
     if (!session?.user) {
-      return redirectToSignIn(
-        request,
-        pathname,
-        shellHint === "houzzatpro" ? { pro: true } : undefined,
-      );
+      const callback = `${pathname}${request.nextUrl.search}`;
+      return redirectToSignIn(request, callback, {
+        pro: shellHint === "houzzatpro",
+      });
     }
     // Web + HouzzatPro: staff account → CRM. Consumer Houzzat: stay on /account.
     if (shouldRedirectStaffAccountToCrm(shellHint)) {
@@ -183,11 +180,10 @@ export default auth((request) => {
 
   if (pathname.startsWith("/owner")) {
     if (!session?.user) {
-      return redirectToSignIn(
-        request,
-        pathname,
-        shellHint === "houzzatpro" ? { pro: true } : undefined,
-      );
+      const callback = `${pathname}${request.nextUrl.search}`;
+      return redirectToSignIn(request, callback, {
+        pro: shellHint === "houzzatpro",
+      });
     }
     if (session.user.role === "AGENT") {
       // Consumer shell: do not dump agents into CRM via /owner either.
