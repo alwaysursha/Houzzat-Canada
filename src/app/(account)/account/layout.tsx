@@ -54,7 +54,7 @@ export default async function AccountLayout({
   }
 
   if (!customer) {
-    redirect("/api/auth/logout");
+    redirect("/auth/sign-out");
   }
 
   // Web + HouzzatPro send staff to their CRM; consumer/unrecognized native

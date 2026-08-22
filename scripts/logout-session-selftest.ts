@@ -14,6 +14,16 @@ function testCollectCookies() {
   assert.ok(!names.includes("other"));
 }
 
+function testMinimalClearWithoutSession() {
+  const names = collectAuthCookieNamesToClear("");
+  assert.ok(names.includes("__Secure-authjs.session-token"));
+  assert.equal(
+    names.filter((n) => /\.\d+$/.test(n)).length,
+    0,
+    "must not pre-emit chunk cookies without a session",
+  );
+}
+
 function testSessionShape() {
   assert.equal(authSessionLooksAuthenticated(null), false);
   assert.equal(authSessionLooksAuthenticated({}), false);
@@ -25,5 +35,6 @@ function testSessionShape() {
 }
 
 testCollectCookies();
+testMinimalClearWithoutSession();
 testSessionShape();
 console.log("logout-session-selftest: ok");

@@ -4,8 +4,8 @@
  *
  * Android WebView often ignores Set-Cookie on 3xx redirects. Prefer POST
  * (200 + Set-Cookie), verify `/api/auth/session` is empty, then hard-navigate.
- * If the session is still present, fall back to GET `/api/auth/logout` (200 HTML
- * clear + client redirect).
+ * If the session is still present, repeat via GET fetch (never navigate the
+ * WebView to `/api/auth/logout` — that surfaces a raw API page / 502).
  */
 
 import { authSessionLooksAuthenticated } from "@/lib/auth/logout-cookies";
@@ -40,6 +40,45 @@ export async function fetchAuthSessionUser(): Promise<boolean> {
   }
 }
 
+async function postLogoutClear(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    try {
+      const body = (await res.json()) as { destination?: string };
+      if (
+        typeof body.destination === "string" &&
+        body.destination.startsWith("/")
+      ) {
+        return body.destination;
+      }
+    } catch {
+      // ignore body parse
+    }
+  } catch {
+    // network blip
+  }
+  return null;
+}
+
+/** GET clear via fetch so Set-Cookie applies without loading the API URL as a page. */
+async function getLogoutClearFetch(): Promise<void> {
+  try {
+    await fetch("/api/auth/logout", {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Clear Auth.js cookies via POST, confirm session is gone, hard-navigate.
  * Never throws for navigation — callers should not catch around the assign.
@@ -49,37 +88,17 @@ export async function performHardSignOut(options?: {
 }): Promise<HardSignOutResult> {
   let destination = options?.destination ?? defaultDestinationFromUa();
 
-  try {
-    const res = await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "same-origin",
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    if (res.ok) {
-      try {
-        const body = (await res.json()) as { destination?: string };
-        if (
-          typeof body.destination === "string" &&
-          body.destination.startsWith("/")
-        ) {
-          destination = body.destination;
-        }
-      } catch {
-        // ignore body parse
-      }
-    }
-  } catch {
-    // Network blip — still try verify + GET fallback
-  }
+  const fromPost = await postLogoutClear();
+  if (fromPost) destination = fromPost;
 
-  const stillAuthed = await fetchAuthSessionUser();
+  let stillAuthed = await fetchAuthSessionUser();
   if (stillAuthed) {
-    // WebView-safe HTML clear path (Set-Cookie on 200, then location.replace).
-    window.location.assign("/api/auth/logout");
-    return { sessionCleared: false, destination: "/api/auth/logout" };
+    await getLogoutClearFetch();
+    stillAuthed = await fetchAuthSessionUser();
   }
 
+  // Always leave the API route — land on the signed-out shell even if WebView
+  // was stubborn about cookie clears (user can retry sign-in).
   window.location.assign(destination);
-  return { sessionCleared: true, destination };
+  return { sessionCleared: !stillAuthed, destination };
 }

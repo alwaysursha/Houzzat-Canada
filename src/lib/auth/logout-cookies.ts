@@ -19,20 +19,32 @@ const ALWAYS_CLEAR = [
 const AUTH_COOKIE_NAME_RE =
   /^(?:__Secure-|__Host-)?(?:authjs|next-auth)\./i;
 
+const CHUNK_SUFFIX_RE = /^(.+)\.(\d+)$/;
+
+/** Max Auth.js JWT chunk index we clear when any chunk for a base is present. */
+const MAX_CHUNK_INDEX = 7;
+
+/**
+ * Names to expire on logout. Only emits chunk variants (`.0`…`.7`) when the
+ * request already has a chunked cookie for that base — avoids 80+ Set-Cookie
+ * headers on every sign-out (Cloudflare / WebView header limits → 502).
+ */
 export function collectAuthCookieNamesToClear(cookieHeader: string): string[] {
   const names = new Set<string>(ALWAYS_CLEAR);
 
-  // Auth.js may chunk large JWTs as `.0`, `.1`, …
-  for (const base of ALWAYS_CLEAR) {
-    for (let i = 0; i < 8; i += 1) {
-      names.add(`${base}.${i}`);
-    }
-  }
-
   for (const part of cookieHeader.split(";")) {
     const name = part.trim().split("=")[0]?.trim();
-    if (name && AUTH_COOKIE_NAME_RE.test(name)) {
-      names.add(name);
+    if (!name || !AUTH_COOKIE_NAME_RE.test(name)) continue;
+
+    names.add(name);
+
+    const chunk = name.match(CHUNK_SUFFIX_RE);
+    if (!chunk) continue;
+
+    const base = chunk[1]!;
+    names.add(base);
+    for (let i = 0; i <= MAX_CHUNK_INDEX; i += 1) {
+      names.add(`${base}.${i}`);
     }
   }
 
