@@ -15,6 +15,20 @@ export function notifyLeadAssignedToAgent(
   });
 }
 
+/** After a new lead is captured and routed — HouzzatPro `new_lead` alert. */
+export function notifyNewLeadCaptured(
+  agentId: string | null | undefined,
+  input: { leadId: string; label: string },
+) {
+  if (!agentId) return;
+  sendPushToUser(agentId, {
+    type: "new_lead",
+    title: "New lead",
+    body: input.label,
+    href: `/agent/leads/${input.leadId}`,
+  });
+}
+
 /** First beacon after the 3-minute presence window — assigned agents only. */
 export async function notifyCustomerCameOnline(
   userId: string,

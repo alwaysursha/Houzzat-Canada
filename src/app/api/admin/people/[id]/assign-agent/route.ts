@@ -109,7 +109,7 @@ export async function POST(
     }
   }
 
-  if (parsed.data.assigneeId && parsed.data.assigneeId !== session.user.id) {
+  if (parsed.data.assigneeId && parsed.data.assigneeId !== session.user.id && !createdLead) {
     const firstLeadId = leads[0]?.id;
     if (firstLeadId) {
       notifyLeadAssignedToAgent(parsed.data.assigneeId, {

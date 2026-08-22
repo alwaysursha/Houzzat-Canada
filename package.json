@@ -25,6 +25,7 @@
     "monitors:run": "node --import tsx scripts/run-monitors.ts",
     "monitors:selftest": "node --import tsx scripts/monitors-reliability-selftest.ts",
     "signup:selftest": "node --import tsx scripts/signup-reliability-selftest.ts",
+    "signup-lead-push:selftest": "node --import tsx scripts/signup-lead-push-selftest.ts",
     "verify-email:selftest": "node --import tsx scripts/verify-email-auth-selftest.ts",
     "typesense:import": "node --import tsx scripts/typesense-import-listings.ts",
     "typesense:oh-fields": "node --import tsx scripts/typesense-ensure-open-house-fields.ts",

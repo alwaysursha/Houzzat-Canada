@@ -3,6 +3,7 @@ import {
   resolveDefaultOrganizationId,
   resolveOrganizationIdForAssignee,
 } from "@/lib/agent";
+import { notifyNewLeadCaptured } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 
 export const CALL_NEW_LEAD_TASK_TITLE = "Call new lead";
@@ -393,6 +394,21 @@ export async function captureWebsiteLead(input: {
       assigneeId,
       organizationId,
       createdById: input.actorId,
+    });
+  }
+
+  if (assigneeId) {
+    const contactLabel =
+      input.name?.trim() ||
+      input.email?.trim() ||
+      "New client";
+    const bodyLabel =
+      input.source === "SIGNUP"
+        ? `${contactLabel} · signup`
+        : contactLabel;
+    notifyNewLeadCaptured(assigneeId, {
+      leadId: lead.id,
+      label: bodyLabel,
     });
   }
 
