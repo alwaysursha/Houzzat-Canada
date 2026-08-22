@@ -36,23 +36,83 @@ export function SignUpForm({
     setPending(true);
     setError(null);
 
+    const trimmedName = name.trim();
     const normalizedEmail = email.trim().toLowerCase();
-    const response = await fetch("/api/auth/sign-up", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        email: normalizedEmail,
-        password,
-        acceptTerms: true,
-      }),
-    });
 
-    const data = (await response.json()) as { error?: string };
+    if (!trimmedName) {
+      setPending(false);
+      setError("Enter your name.");
+      return;
+    }
+    if (!normalizedEmail || !normalizedEmail.includes("@")) {
+      setPending(false);
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (password.length < 8) {
+      setPending(false);
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
+    let response: Response;
+    try {
+      response = await fetch("/api/auth/sign-up", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedName,
+          email: normalizedEmail,
+          password,
+          acceptTerms: true,
+        }),
+      });
+    } catch {
+      setPending(false);
+      setError(
+        "Could not reach Houzzat. Check your connection and try again.",
+      );
+      return;
+    }
+
+    let data: { error?: string } = {};
+    try {
+      const raw = await response.text();
+      data = raw ? (JSON.parse(raw) as { error?: string }) : {};
+    } catch {
+      setPending(false);
+      setError(
+        response.status === 409
+          ? "An account with this email already exists. Sign in instead."
+          : "Something went wrong. Please try again.",
+      );
+      return;
+    }
 
     if (!response.ok) {
       setPending(false);
-      setError(data.error ?? "Could not create account.");
+      if (response.status === 409) {
+        setError(
+          data.error ??
+            "An account with this email already exists. Sign in instead.",
+        );
+        return;
+      }
+      if (response.status === 400) {
+        setError(data.error ?? "Please check your name, email, and password.");
+        return;
+      }
+      if (response.status === 403) {
+        setError(
+          data.error ??
+            "This account cannot be created. Contact Houzzat support.",
+        );
+        return;
+      }
+      setError(
+        data.error ??
+          "We couldn't create your account right now. Please try again.",
+      );
       return;
     }
 
@@ -71,7 +131,9 @@ export function SignUpForm({
 
     if (result?.error) {
       onSwitchMode?.();
-      setError("Account created — please sign in.");
+      setError(
+        "Account created — please sign in with your email and password.",
+      );
       return;
     }
 

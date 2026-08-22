@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -12,13 +13,16 @@ import {
   TERMS_ACCEPT_KIND,
   TERMS_VERSION,
 } from "@/lib/consent";
-import { prisma } from "@/lib/prisma";
+import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { VOW_VERSION } from "@/lib/vow";
 
 const schema = z.object({
-  name: z.string().trim().min(1).max(120),
-  email: z.string().trim().email().max(254),
-  password: z.string().min(8).max(128),
+  name: z.string().trim().min(1, "Enter your name.").max(120),
+  email: z.string().trim().email("Enter a valid email address.").max(254),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters.")
+    .max(128),
   /** Always true from the client — Terms accepted by creating an account. */
   acceptTerms: z.literal(true),
   /** buyer (default) | seller — seller signup / sell-a-home paths */
@@ -36,32 +40,90 @@ function requestClientMeta(request: Request) {
   return { ip, userAgent };
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const parsed = schema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error:
-            "Please provide name, email, password, and accept the Terms & Conditions.",
-        },
-        { status: 400 },
-      );
+function validationErrorMessage(error: z.ZodError): string {
+  for (const issue of error.issues) {
+    const field = issue.path[0];
+    if (field === "acceptTerms") {
+      return "You must accept the Terms & Conditions.";
     }
+    if (issue.message && typeof issue.message === "string") {
+      return issue.message;
+    }
+  }
+  return "Please check your name, email, and password.";
+}
 
-    const email = parsed.data.email.toLowerCase();
+function duplicateEmailResponse() {
+  return NextResponse.json(
+    {
+      error:
+        "An account with this email already exists. Sign in instead, or use a different email.",
+    },
+    { status: 409 },
+  );
+}
+
+function mapSignUpFailure(error: unknown): NextResponse {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2002") {
+      const target = error.meta?.target;
+      if (
+        target === "User_email_key" ||
+        (Array.isArray(target) && target.includes("email"))
+      ) {
+        return duplicateEmailResponse();
+      }
+    }
+  }
+
+  console.error("[sign-up]", error);
+  return NextResponse.json(
+    {
+      error:
+        "We couldn't create your account right now. Please try again in a moment.",
+    },
+    { status: 500 },
+  );
+}
+
+export async function POST(request: Request) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid sign-up request. Please try again." },
+      { status: 400 },
+    );
+  }
+
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: validationErrorMessage(parsed.error) },
+      { status: 400 },
+    );
+  }
+
+  const email = parsed.data.email.toLowerCase();
+
+  try {
     const existing = await prisma.user.findUnique({
       where: { email },
-      select: { id: true },
+      select: { id: true, disabledAt: true },
     });
 
     if (existing) {
-      return NextResponse.json(
-        { error: "An account with this email already exists." },
-        { status: 409 },
-      );
+      if (existing.disabledAt) {
+        return NextResponse.json(
+          {
+            error:
+              "This account has been disabled. Contact Houzzat support if you need help.",
+          },
+          { status: 403 },
+        );
+      }
+      return duplicateEmailResponse();
     }
 
     const password = await bcrypt.hash(parsed.data.password, 10);
@@ -111,49 +173,50 @@ export async function POST(request: Request) {
       },
     });
 
-    try {
-      await captureWebsiteLead({
-        source: "SIGNUP",
-        customerId: user.id,
-        name: user.name,
-        email: user.email,
-        isBuyer: true,
-        isSeller: asSeller,
-        score: asSeller ? 40 : 20,
-      });
-    } catch (err) {
-      console.error("[sign-up] lead capture failed", err);
-    }
+    // Respond before Resend / CRM side effects — awaiting them caused Worker
+    // timeouts and left users seeing "Could not create account" after a
+    // successful DB insert (duplicate email on retry).
+    scheduleWorkerSideEffect(
+      (async () => {
+        try {
+          await captureWebsiteLead({
+            source: "SIGNUP",
+            customerId: user.id,
+            name: user.name,
+            email: user.email,
+            isBuyer: true,
+            isSeller: asSeller,
+            score: asSeller ? 40 : 20,
+          });
+        } catch (err) {
+          console.error("[sign-up] lead capture failed", err);
+        }
 
-    // Await sends — fire-and-forget after the response can be cancelled by
-    // Next.js once the request context ends, which silently drops Resend calls.
-    const [verifyStatus, welcomeStatus] = await Promise.all([
-      sendEmailVerification({
-        email,
-        name: parsed.data.name,
-        callbackUrl: "/account",
-        customerId: user.id,
-      }).catch((err) => {
-        console.error("[sign-up] verification email failed", err);
-        return "failed" as const;
-      }),
-      sendWelcomeEmail({
-        email,
-        name: parsed.data.name,
-        customerId: user.id,
-      }).catch((err) => {
-        console.error("[sign-up] welcome email failed", err);
-        return "failed" as const;
-      }),
-    ]);
-    console.info("[sign-up] emails", { email, verifyStatus, welcomeStatus });
+        const [verifyStatus, welcomeStatus] = await Promise.all([
+          sendEmailVerification({
+            email,
+            name: parsed.data.name,
+            callbackUrl: "/account",
+            customerId: user.id,
+          }).catch((err) => {
+            console.error("[sign-up] verification email failed", err);
+            return "failed" as const;
+          }),
+          sendWelcomeEmail({
+            email,
+            name: parsed.data.name,
+            customerId: user.id,
+          }).catch((err) => {
+            console.error("[sign-up] welcome email failed", err);
+            return "failed" as const;
+          }),
+        ]);
+        console.info("[sign-up] emails", { email, verifyStatus, welcomeStatus });
+      })(),
+    );
 
     return NextResponse.json({ ok: true, userId: user.id });
   } catch (error) {
-    console.error("[sign-up]", error);
-    return NextResponse.json(
-      { error: "Could not create account." },
-      { status: 500 },
-    );
+    return mapSignUpFailure(error);
   }
 }
