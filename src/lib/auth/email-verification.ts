@@ -1,5 +1,7 @@
 import { randomBytes } from "crypto";
+import type { ActiveMode, Role } from "@prisma/client";
 import { SITE_URL } from "@/lib/constants";
+import { safeInternalCallbackUrl } from "@/lib/auth/safe-callback-url";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import { isResendConfigured } from "@/lib/email/config";
 import { renderVerifyEmail, renderWelcomeEmail } from "@/lib/email/templates";
@@ -34,10 +36,11 @@ export async function createEmailVerificationToken(email: string) {
 }
 
 export function verificationLink(token: string, callbackUrl?: string) {
-  const url = new URL("/auth/verify-email", SITE_URL);
+  const url = new URL("/api/auth/verify-email", SITE_URL);
   url.searchParams.set("token", token);
-  if (callbackUrl?.startsWith("/")) {
-    url.searchParams.set("callbackUrl", callbackUrl);
+  const safe = safeInternalCallbackUrl(callbackUrl, "/");
+  if (safe !== "/") {
+    url.searchParams.set("callbackUrl", safe);
   }
   return url.toString();
 }
@@ -112,31 +115,81 @@ export async function sendWelcomeEmail(input: {
 
 export async function consumeEmailVerificationToken(
   token: string,
-): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
+): Promise<
+  | {
+      ok: true;
+      user: {
+        id: string;
+        email: string;
+        name: string | null;
+        image: string | null;
+        role: Role;
+        isBuyer: boolean;
+        isSeller: boolean;
+        activeMode: ActiveMode;
+      };
+    }
+  | { ok: false; error: string }
+> {
   const trimmed = token.trim();
   if (!trimmed) return { ok: false, error: "Missing verification token." };
 
   const row = await prisma.verificationToken.findUnique({
     where: { token: trimmed },
   });
-  if (!row) return { ok: false, error: "Invalid or expired verification link." };
+  if (!row) {
+    return {
+      ok: false,
+      error: "Verification link expired or invalid.",
+    };
+  }
   if (row.expires.getTime() < Date.now()) {
     await prisma.verificationToken.delete({ where: { token: trimmed } }).catch(
       () => undefined,
     );
-    return { ok: false, error: "This verification link has expired." };
+    return { ok: false, error: "Verification link expired or invalid." };
   }
 
   const email = row.identifier.trim().toLowerCase();
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      image: true,
+      role: true,
+      isBuyer: true,
+      isSeller: true,
+      activeMode: true,
+      disabledAt: true,
+    },
   });
   if (!user) {
     await prisma.verificationToken.delete({ where: { token: trimmed } }).catch(
       () => undefined,
     );
     return { ok: false, error: "Account not found for this link." };
+  }
+
+  if (user.disabledAt) {
+    await prisma.verificationToken.delete({ where: { token: trimmed } }).catch(
+      () => undefined,
+    );
+    return {
+      ok: false,
+      error: "This account has been disabled. Contact Houzzat support.",
+    };
+  }
+
+  if (user.role === "AGENT" || user.role === "ADMIN") {
+    await prisma.verificationToken.delete({ where: { token: trimmed } }).catch(
+      () => undefined,
+    );
+    return {
+      ok: false,
+      error: "Use your team sign-in page for this account.",
+    };
   }
 
   await prisma.$transaction([
@@ -147,5 +200,17 @@ export async function consumeEmailVerificationToken(
     prisma.verificationToken.deleteMany({ where: { identifier: email } }),
   ]);
 
-  return { ok: true, email };
+  return {
+    ok: true,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      image: user.image,
+      role: user.role,
+      isBuyer: user.isBuyer,
+      isSeller: user.isSeller,
+      activeMode: user.activeMode,
+    },
+  };
 }

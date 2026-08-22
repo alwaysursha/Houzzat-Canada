@@ -10,6 +10,10 @@ import type { ActiveMode } from "@prisma/client";
 import { Role } from "@prisma/client";
 import { authConfig } from "@/lib/auth.config";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
+import {
+  authorizeEmailVerificationToken,
+} from "@/lib/auth/verify-email-provider";
+import { VERIFY_EMAIL_PROVIDER_ID } from "@/lib/auth/verify-email-constants";
 import { isAdminRole, isAgentRole, resolveActiveMode } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 
@@ -72,6 +76,31 @@ const providers: Provider[] = [
         console.error("[auth] authorize failed", error);
         throw error;
       }
+    },
+  }),
+  Credentials({
+    id: VERIFY_EMAIL_PROVIDER_ID,
+    name: "Email verification",
+    credentials: {
+      token: { label: "Token", type: "text" },
+    },
+    async authorize(credentials) {
+      const token = credentials?.token?.toString() ?? "";
+      const user = await authorizeEmailVerificationToken(token);
+      if (!user) {
+        return null;
+      }
+
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        image: user.image,
+        role: user.role,
+        isBuyer: user.isBuyer,
+        isSeller: user.isSeller,
+        activeMode: user.activeMode,
+      };
     },
   }),
 ];

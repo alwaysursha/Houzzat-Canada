@@ -235,7 +235,7 @@ export async function POST(request: Request) {
           sendEmailVerification({
             email,
             name: parsed.data.name,
-            callbackUrl: "/account",
+            callbackUrl: "/",
             customerId: user.id,
           }).catch((err) => {
             console.error("[sign-up] verification email failed", err);
