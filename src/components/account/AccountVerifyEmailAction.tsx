@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function AccountVerifyEmailAction({
@@ -50,24 +51,25 @@ export function AccountVerifyEmailAction({
 
   const label =
     daysRemaining != null
-      ? `Request verification email — ${daysRemaining} day${daysRemaining === 1 ? "" : "s"} remaining`
-      : "Request verification email";
+      ? `Send verification email · ${daysRemaining} day${daysRemaining === 1 ? "" : "s"} left`
+      : "Send verification email";
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn("space-y-2.5", className)}>
       <button
         type="button"
         disabled={pending}
         onClick={() => void requestEmail()}
-        className="text-sm font-semibold text-white underline decoration-white/50 underline-offset-4 transition hover:decoration-white disabled:opacity-60"
+        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-canopy px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_-14px_rgba(15,107,76,0.55)] transition hover:bg-canopy-deep disabled:opacity-60 sm:w-auto"
       >
+        <Mail className="size-4" strokeWidth={2.25} aria-hidden />
         {pending ? "Sending…" : label}
       </button>
       {message ? (
-        <p className="text-xs font-medium text-white/90">{message}</p>
+        <p className="text-xs font-medium text-canopy-deep">{message}</p>
       ) : null}
       {error ? (
-        <p className="text-xs font-medium text-amber-100">{error}</p>
+        <p className="text-xs font-medium text-danger">{error}</p>
       ) : null}
     </div>
   );

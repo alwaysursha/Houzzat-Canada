@@ -3,17 +3,13 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { captureWebsiteLead } from "@/lib/agent/lead-intake";
+import { persistSignupConsentEvents } from "@/lib/auth/sign-up-consent";
 import {
   sendEmailVerification,
   sendWelcomeEmail,
 } from "@/lib/auth/email-verification";
-import {
-  COMMUNICATIONS_CONSENT_KIND,
-  COMMUNICATIONS_CONSENT_VERSION,
-  TERMS_ACCEPT_KIND,
-  TERMS_VERSION,
-} from "@/lib/consent";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
+import { TERMS_VERSION } from "@/lib/consent";
 import { VOW_VERSION } from "@/lib/vow";
 
 const schema = z.object({
@@ -29,6 +25,13 @@ const schema = z.object({
   intent: z.enum(["buyer", "seller"]).optional(),
 });
 
+type SignUpStage =
+  | "user_lookup"
+  | "password_hash"
+  | "user_create"
+  | "consent_create"
+  | "signup_complete";
+
 function requestClientMeta(request: Request) {
   const forwarded = request.headers.get("x-forwarded-for");
   const ip =
@@ -38,6 +41,45 @@ function requestClientMeta(request: Request) {
     undefined;
   const userAgent = request.headers.get("user-agent") || undefined;
   return { ip, userAgent };
+}
+
+function requestCorrelationId(request: Request): string | undefined {
+  return (
+    request.headers.get("cf-ray") ||
+    request.headers.get("x-request-id") ||
+    undefined
+  );
+}
+
+function logSignUpStage(
+  stage: SignUpStage,
+  meta?: { correlationId?: string; userId?: string },
+) {
+  console.info("[sign-up]", { stage, ...meta });
+}
+
+function logSignUpFailure(
+  stage: SignUpStage,
+  error: unknown,
+  correlationId?: string,
+) {
+  const prismaCode =
+    error instanceof Prisma.PrismaClientKnownRequestError
+      ? error.code
+      : undefined;
+  const errorName = error instanceof Error ? error.name : undefined;
+  const message =
+    error instanceof Error
+      ? error.message.slice(0, 240)
+      : String(error).slice(0, 240);
+
+  console.error("[sign-up]", {
+    stage,
+    prismaCode,
+    errorName,
+    message,
+    correlationId,
+  });
 }
 
 function validationErrorMessage(error: z.ZodError): string {
@@ -63,7 +105,13 @@ function duplicateEmailResponse() {
   );
 }
 
-function mapSignUpFailure(error: unknown): NextResponse {
+function mapSignUpFailure(
+  error: unknown,
+  stage: SignUpStage,
+  correlationId?: string,
+): NextResponse {
+  logSignUpFailure(stage, error, correlationId);
+
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === "P2002") {
       const target = error.meta?.target;
@@ -76,7 +124,6 @@ function mapSignUpFailure(error: unknown): NextResponse {
     }
   }
 
-  console.error("[sign-up]", error);
   return NextResponse.json(
     {
       error:
@@ -87,6 +134,8 @@ function mapSignUpFailure(error: unknown): NextResponse {
 }
 
 export async function POST(request: Request) {
+  const correlationId = requestCorrelationId(request);
+
   let body: unknown;
   try {
     body = await request.json();
@@ -106,8 +155,10 @@ export async function POST(request: Request) {
   }
 
   const email = parsed.data.email.toLowerCase();
+  let stage: SignUpStage = "user_lookup";
 
   try {
+    logSignUpStage(stage, { correlationId });
     const existing = await prisma.user.findUnique({
       where: { email },
       select: { id: true, disabledAt: true },
@@ -126,11 +177,15 @@ export async function POST(request: Request) {
       return duplicateEmailResponse();
     }
 
+    stage = "password_hash";
+    logSignUpStage(stage, { correlationId });
     const password = await bcrypt.hash(parsed.data.password, 10);
     const now = new Date();
     const { ip, userAgent } = requestClientMeta(request);
     const asSeller = parsed.data.intent === "seller";
 
+    stage = "user_create";
+    logSignUpStage(stage, { correlationId });
     const user = await prisma.user.create({
       data: {
         name: parsed.data.name,
@@ -148,35 +203,13 @@ export async function POST(request: Request) {
       },
     });
 
-    // Flat writes only — nested consentEvents.create breaks on PrismaNeonHttp
-    // (Cloudflare Workers). Same pattern as /api/valuation ensureOwnerCustomer.
-    await prisma.consentEvent.createMany({
-      data: [
-        {
-          userId: user.id,
-          kind: TERMS_ACCEPT_KIND,
-          version: TERMS_VERSION,
-          email,
-          ip,
-          userAgent,
-        },
-        {
-          userId: user.id,
-          kind: "vow_accept",
-          version: VOW_VERSION,
-          email,
-          ip,
-          userAgent,
-        },
-        {
-          userId: user.id,
-          kind: COMMUNICATIONS_CONSENT_KIND,
-          version: COMMUNICATIONS_CONSENT_VERSION,
-          email,
-          ip,
-          userAgent,
-        },
-      ],
+    stage = "consent_create";
+    logSignUpStage(stage, { correlationId, userId: user.id });
+    await persistSignupConsentEvents(prisma, {
+      userId: user.id,
+      email,
+      ip,
+      userAgent,
     });
 
     // Respond before Resend / CRM side effects — awaiting them caused Worker
@@ -221,8 +254,10 @@ export async function POST(request: Request) {
       })(),
     );
 
+    stage = "signup_complete";
+    logSignUpStage(stage, { correlationId, userId: user.id });
     return NextResponse.json({ ok: true, userId: user.id });
   } catch (error) {
-    return mapSignUpFailure(error);
+    return mapSignUpFailure(error, stage, correlationId);
   }
 }
