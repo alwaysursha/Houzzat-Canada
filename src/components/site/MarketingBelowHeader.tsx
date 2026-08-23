@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { AccountVerifiedSuccessBanner } from "@/components/auth/AccountVerifiedSuccessBanner";
 import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
 import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersonalizationBanner";
 import { SeoFooterLinks } from "@/components/site/SeoFooterLinks";
@@ -53,6 +54,9 @@ export function MarketingBelowHeader({
             : "pb-[var(--mobile-bottom-nav,0px)] md:pb-0"
         }
       >
+        {!hideChrome && pathname !== "/" ? (
+          <AccountVerifiedSuccessBanner />
+        ) : null}
         {children}
       </main>
       {!hideChrome ? <SeoFooterLinks fallbackCities={cities} /> : null}

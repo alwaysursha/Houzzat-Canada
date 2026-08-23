@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useSession } from "next-auth/react";
+import { AccountVerifiedSuccessBanner } from "@/components/auth/AccountVerifiedSuccessBanner";
 import { HomeCustomerToolsStrip } from "@/components/home/HomeCustomerToolsStrip";
 import { HomeCustomerToolsTease } from "@/components/home/HomeCustomerToolsTease";
 import { HomeListingRail } from "@/components/home/HomeListingRail";
@@ -10,6 +11,7 @@ import { HomeRecentlyViewedRail } from "@/components/home/HomeRecentlyViewedRail
 import { HomepageMarketRails } from "@/components/home/HomepageMarketRails";
 import { HomepageSortedRails } from "@/components/home/HomepageSortedRails";
 import type { HomeCustomerShellPayload } from "@/lib/home/load-home-customer-shell";
+import { EMAIL_VERIFIED_EVENT } from "@/lib/auth/verification-success-signal";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 
 function ToolsStripSkeleton() {
@@ -127,6 +129,41 @@ export function HomeDeferredBody({
     };
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    async function reloadShell() {
+      try {
+        const res = await fetch("/api/account/home-shell", {
+          signal: controller.signal,
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (!res.ok || cancelled) return;
+        const payload = (await res.json()) as HomeCustomerShellPayload;
+        if (!cancelled) {
+          setShell(payload);
+          setFailed(false);
+        }
+      } catch {
+        // ignore — existing shell stays visible
+      }
+    }
+
+    const onVerified = () => {
+      void reloadShell();
+    };
+    window.addEventListener(EMAIL_VERIFIED_EVENT, onVerified);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.removeEventListener(EMAIL_VERIFIED_EVENT, onVerified);
+    };
+  }, [isAuthenticated]);
+
   const contentPad =
     "w-full space-y-10 px-4 py-6 sm:space-y-16 sm:px-6 sm:py-10 lg:px-10";
 
@@ -143,6 +180,7 @@ export function HomeDeferredBody({
 
   return (
     <>
+      <AccountVerifiedSuccessBanner />
       {showToolsSkeleton ? (
         <ToolsStripSkeleton />
       ) : resolved.isCustomer && resolved.tools ? (

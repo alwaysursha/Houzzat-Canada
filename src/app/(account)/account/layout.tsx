@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AccountVerifiedSuccessSlot } from "@/components/account/AccountVerifiedSuccessSlot";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { MobileBottomNav } from "@/components/site/MobileBottomNav";
 import { requireCustomerUser } from "@/lib/account";
@@ -103,6 +104,7 @@ export default async function AccountLayout({
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-10 pb-[calc(2.5rem+var(--mobile-bottom-nav,0px))] sm:px-6 md:pb-10">
+        <AccountVerifiedSuccessSlot />
         {children}
       </main>
       <MobileBottomNav />

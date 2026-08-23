@@ -7,6 +7,7 @@ import { Phone } from "lucide-react";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EMAIL_VERIFIED_EVENT } from "@/lib/auth/verification-success-signal";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 import { cn } from "@/lib/utils";
 
@@ -128,6 +129,14 @@ export function ContactUpdateReminder() {
       { timeoutMs: 3_200 },
     );
   }, [load, status]);
+
+  useEffect(() => {
+    const onVerified = () => {
+      void load();
+    };
+    window.addEventListener(EMAIL_VERIFIED_EVENT, onVerified);
+    return () => window.removeEventListener(EMAIL_VERIFIED_EVENT, onVerified);
+  }, [load]);
 
   useEffect(() => () => clearFadeTimer(), [clearFadeTimer]);
 

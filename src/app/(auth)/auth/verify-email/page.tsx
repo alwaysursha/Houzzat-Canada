@@ -6,6 +6,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { getSession, signIn, useSession } from "next-auth/react";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { safeInternalCallbackUrl } from "@/lib/auth/safe-callback-url";
+import { stashVerificationSuccessSignal } from "@/lib/auth/verification-success-signal";
 import { VERIFY_EMAIL_PROVIDER_ID } from "@/lib/auth/verify-email-constants";
 
 const DIFFERENT_USER_MESSAGE =
@@ -66,6 +67,12 @@ function VerifyEmailInner() {
   );
   const verifyStarted = useRef(false);
 
+  function redirectAfterFreshVerification() {
+    stashVerificationSuccessSignal();
+    router.replace(callbackUrl);
+    router.refresh();
+  }
+
   useEffect(() => {
     if (!token || errorCode || verifyStarted.current) return;
     verifyStarted.current = true;
@@ -119,8 +126,7 @@ function VerifyEmailInner() {
             setError(verifyErrorMessage("invalid"));
             return;
           }
-          router.replace(callbackUrl);
-          router.refresh();
+          redirectAfterFreshVerification();
           return;
         }
 
@@ -168,9 +174,9 @@ function VerifyEmailInner() {
         return;
       }
 
+      await update({ refreshProfile: true });
       await getSession();
-      router.replace(callbackUrl);
-      router.refresh();
+      redirectAfterFreshVerification();
     })();
   }, [token, errorCode, callbackUrl, router, update]);
 

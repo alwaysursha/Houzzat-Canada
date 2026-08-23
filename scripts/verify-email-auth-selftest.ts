@@ -277,6 +277,46 @@ function testDifferentUserMessage() {
   );
 }
 
+function testVerificationSuccessSignal() {
+  const signalFile = readFileSync(
+    join(root, "src/lib/auth/verification-success-signal.ts"),
+    "utf8",
+  );
+  const bannerFile = readFileSync(
+    join(root, "src/components/auth/AccountVerifiedSuccessBanner.tsx"),
+    "utf8",
+  );
+
+  assert.ok(
+    signalFile.includes("sessionStorage"),
+    "verification success signal must use sessionStorage",
+  );
+  assert.ok(
+    !signalFile.includes("localStorage"),
+    "verification success signal must not use localStorage",
+  );
+  assert.ok(
+    verifyPage.includes("stashVerificationSuccessSignal"),
+    "fresh verification redirect must stash one-time success signal",
+  );
+  assert.ok(
+    verifyPage.includes("redirectAfterFreshVerification"),
+    "only fresh verification paths may stash success signal",
+  );
+  assert.ok(
+    bannerFile.includes("takeVerificationSuccessSignal"),
+    "success banner must consume signal on mount",
+  );
+  assert.ok(
+    bannerFile.includes('aria-label="Dismiss verification success message"'),
+    "success banner must expose accessible dismiss control",
+  );
+  assert.ok(
+    bannerFile.includes("Email verified"),
+    "success banner must show verification headline",
+  );
+}
+
 testProviderRegistered();
 testEmailLinkPointsToPage();
 testTokenPeekIsReadOnly();
@@ -294,5 +334,6 @@ testDefaultCallbackHome();
 testSuccessRequiresEmailVerified();
 testSessionRefreshAfterSameUser();
 testDifferentUserMessage();
+testVerificationSuccessSignal();
 
 console.log("verify-email-auth-selftest: ok");
