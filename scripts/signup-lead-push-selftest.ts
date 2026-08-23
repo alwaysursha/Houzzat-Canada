@@ -108,11 +108,58 @@ function testAssignmentBeforePush() {
   );
 }
 
+function testPushBeforeTask() {
+  const fnStart = leadIntake.indexOf("export async function captureWebsiteLead");
+  const body = leadIntake.slice(fnStart);
+  const notifyIdx = body.indexOf("notifyNewLeadCaptured(");
+  const taskIdx = body.indexOf("createCallNewLeadTask(");
+  assert.ok(
+    notifyIdx > 0 && taskIdx > notifyIdx,
+    "push must fire before createCallNewLeadTask",
+  );
+}
+
+function testTaskFailureIsolation() {
+  const fnStart = leadIntake.indexOf("export async function captureWebsiteLead");
+  const body = leadIntake.slice(fnStart);
+  assert.ok(
+    body.includes("[lead-intake] call-new-lead-task failed"),
+    "task failures must be logged",
+  );
+  const tryIdx = body.indexOf("try {");
+  const taskIdx = body.indexOf("createCallNewLeadTask(");
+  const notifyIdx = body.indexOf("notifyNewLeadCaptured(");
+  assert.ok(
+    notifyIdx > 0 && notifyIdx < tryIdx && tryIdx < taskIdx,
+    "task try/catch must wrap only createCallNewLeadTask after push",
+  );
+}
+
+function testUnassignedNoPush() {
+  const fnStart = leadIntake.indexOf("export async function captureWebsiteLead");
+  const body = leadIntake.slice(fnStart);
+  const notifyBlock = body.slice(
+    body.indexOf("if (assigneeId) {"),
+    body.indexOf("createCallNewLeadTask("),
+  );
+  assert.ok(
+    notifyBlock.includes("notifyNewLeadCaptured"),
+    "push gated inside assigneeId block",
+  );
+  assert.ok(
+    !notifyBlock.includes("else"),
+    "no push fallback branch for unassigned leads",
+  );
+}
+
 testCentralPushInLeadIntake();
 testSignupRouteDoesNotPushDirectly();
 testNewLeadPayloadShape();
 testAdminDuplicateProtection();
 testPushPrefsAndAudience();
 testAssignmentBeforePush();
+testPushBeforeTask();
+testTaskFailureIsolation();
+testUnassignedNoPush();
 
 console.log("signup-lead-push-selftest: ok");

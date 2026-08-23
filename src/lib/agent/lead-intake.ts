@@ -388,15 +388,6 @@ export async function captureWebsiteLead(input: {
     },
   });
 
-  if (assigneeId && organizationId) {
-    await createCallNewLeadTask({
-      leadId: lead.id,
-      assigneeId,
-      organizationId,
-      createdById: input.actorId,
-    });
-  }
-
   if (assigneeId) {
     const contactLabel =
       input.name?.trim() ||
@@ -410,6 +401,26 @@ export async function captureWebsiteLead(input: {
       leadId: lead.id,
       label: bodyLabel,
     });
+  }
+
+  if (assigneeId && organizationId) {
+    try {
+      await createCallNewLeadTask({
+        leadId: lead.id,
+        assigneeId,
+        organizationId,
+        createdById: input.actorId,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[lead-intake] call-new-lead-task failed", {
+        leadId: lead.id,
+        assigneeId,
+        organizationId,
+        source: input.source,
+        error: message,
+      });
+    }
   }
 
   return { lead, assignedAgentId: assigneeId, organizationId };
