@@ -10,6 +10,10 @@ const verifyRoute = readFileSync(
   join(root, "src/app/api/auth/verify-email/route.ts"),
   "utf8",
 );
+const sameUserRoute = readFileSync(
+  join(root, "src/app/api/auth/verify-email/same-user/route.ts"),
+  "utf8",
+);
 const emailVerification = readFileSync(
   join(root, "src/lib/auth/email-verification.ts"),
   "utf8",
@@ -50,6 +54,28 @@ function testEmailLinkPointsToPage() {
   );
 }
 
+function testTokenPeekIsReadOnly() {
+  assert.ok(
+    emailVerification.includes("export async function peekEmailVerificationToken"),
+    "must expose read-only token inspection",
+  );
+  const peekStart = emailVerification.indexOf(
+    "export async function peekEmailVerificationToken",
+  );
+  const consumeStart = emailVerification.indexOf(
+    "export async function consumeEmailVerificationToken",
+  );
+  const peekBody = emailVerification.slice(peekStart, consumeStart);
+  assert.ok(
+    !peekBody.includes("verificationToken.delete"),
+    "peek must not delete tokens",
+  );
+  assert.ok(
+    !peekBody.includes("emailVerified: new Date()"),
+    "peek must not set emailVerified",
+  );
+}
+
 function testApiGetRedirectOnly() {
   const getStart = verifyRoute.indexOf("export async function GET");
   const postStart = verifyRoute.indexOf("export async function POST");
@@ -62,9 +88,28 @@ function testApiGetRedirectOnly() {
     !getBlock.includes("signIn("),
     "API GET must not call signIn or consume tokens",
   );
+}
+
+function testSameUserRoute() {
   assert.ok(
-    !verifyRoute.includes("consumeEmailVerificationToken"),
-    "API route must not consume token outside Auth.js authorize",
+    sameUserRoute.includes("peekEmailVerificationToken"),
+    "same-user route must peek before consuming",
+  );
+  assert.ok(
+    sameUserRoute.includes('code: "different_user"'),
+    "different-user must be rejected before consume",
+  );
+  const postStart = sameUserRoute.indexOf("export async function POST");
+  const postBody = sameUserRoute.slice(postStart);
+  const differentIdx = postBody.indexOf('code: "different_user"');
+  const consumeIdx = postBody.indexOf("consumeEmailVerificationToken(");
+  assert.ok(
+    differentIdx > 0 && differentIdx < consumeIdx,
+    "different-user check must run before consume",
+  );
+  assert.ok(
+    sameUserRoute.includes("alreadyVerified"),
+    "already-verified same user must not consume token",
   );
 }
 
@@ -75,49 +120,69 @@ function testPageUsesClientSignIn() {
   );
   assert.ok(
     verifyPage.includes(`signIn(VERIFY_EMAIL_PROVIDER_ID`),
-    "page must sign in via email-verification provider",
+    "signed-out path must sign in via email-verification provider",
   );
   assert.ok(
     verifyPage.includes("redirect: false"),
     "client signIn must not rely on server redirect",
   );
   assert.ok(
-    verifyPage.includes("getSession"),
-    "page must confirm browser session after signIn",
+    verifyPage.includes("/api/auth/verify-email/same-user"),
+    "signed-in path must use same-user verify endpoint",
   );
   assert.ok(
     !verifyPage.includes("window.location.replace"),
     "page must not auto-forward to mutating API GET",
   );
   assert.ok(
-    !verifyPage.includes("/api/auth/verify-email"),
-    "page must not call legacy mutating API URL",
+    !verifyPage.includes('"/api/auth/verify-email"'),
+    "page must not call legacy API GET URL",
+  );
+}
+
+function testSameUserMustNotSignOut() {
+  assert.ok(
+    !verifyPage.includes("signOut"),
+    "same-user verification must not sign the customer out",
+  );
+}
+
+function testAuthenticatedUnverifiedUsesSameUser() {
+  const effectStart = verifyPage.indexOf("useEffect(() => {");
+  const effectEnd = verifyPage.indexOf("}, [token, errorCode, callbackUrl, router, update]);");
+  const effectBody = verifyPage.slice(effectStart, effectEnd);
+  const sameUserIdx = effectBody.indexOf("/api/auth/verify-email/same-user");
+  const signInIdx = effectBody.indexOf("signIn(VERIFY_EMAIL_PROVIDER_ID");
+  assert.ok(sameUserIdx > 0, "authenticated path must call same-user endpoint");
+  assert.ok(
+    effectBody.indexOf("if (sessionBefore?.user)") < sameUserIdx,
+    "same-user path must be gated on existing session",
+  );
+  assert.ok(
+    signInIdx > sameUserIdx,
+    "signIn must only run on signed-out path after same-user branch",
   );
 }
 
 function testTokenConsumeOnlyInAuthorizePath() {
   assert.ok(
     verifyProvider.includes("await consumeEmailVerificationToken"),
-    "authorize helper must consume the token",
+    "authorize helper must consume the token for signed-out signIn",
+  );
+  assert.ok(
+    sameUserRoute.includes("consumeEmailVerificationToken"),
+    "same-user route must consume for signed-in path",
   );
   assert.ok(
     !verifyPage.includes("consumeEmailVerificationToken"),
     "page must not consume tokens directly",
-  );
-  assert.ok(
-    !verifyRoute.includes("consumeEmailVerificationToken"),
-    "API GET must not consume tokens",
-  );
-  assert.ok(
-    emailVerification.includes("export async function consumeEmailVerificationToken"),
-    "consume implementation must remain centralized",
   );
 }
 
 function testSingleConsumeGuard() {
   assert.ok(
     verifyPage.includes("verifyStarted"),
-    "page must guard against duplicate client signIn attempts",
+    "page must guard against duplicate client verify attempts",
   );
 }
 
@@ -153,10 +218,24 @@ function testStaffDisabledErrors() {
     verifyProvider.includes("STAFF_ACCOUNT"),
     "staff accounts must surface a distinct authorize error",
   );
+  assert.ok(
+    emailVerification.includes('code: "disabled"'),
+    "peek must classify disabled accounts",
+  );
+  assert.ok(
+    emailVerification.includes('code: "staff"'),
+    "peek must classify staff accounts",
+  );
 }
 
 function testNoPasswordInVerifyFlow() {
-  for (const file of [verifyRoute, emailVerification, verifyPage, verifyProvider]) {
+  for (const file of [
+    verifyRoute,
+    sameUserRoute,
+    emailVerification,
+    verifyPage,
+    verifyProvider,
+  ]) {
     assert.ok(
       !file.includes("password"),
       "verify flow must not handle passwords",
@@ -175,23 +254,45 @@ function testDefaultCallbackHome() {
   );
 }
 
-function testExistingSessionPreserved() {
+function testSuccessRequiresEmailVerified() {
   assert.ok(
-    verifyPage.includes("sessionAfterFail"),
-    "failed token must not clear an existing browser session",
+    verifyPage.includes("contactAfter?.emailVerified"),
+    "success redirect must require emailVerified in contact-status",
+  );
+}
+
+function testSessionRefreshAfterSameUser() {
+  assert.ok(
+    verifyPage.includes("update({ refreshProfile: true })"),
+    "same-user verify must refresh Auth.js session without sign-out",
+  );
+}
+
+function testDifferentUserMessage() {
+  assert.ok(
+    verifyPage.includes(
+      "This verification link belongs to a different account. Please sign out first.",
+    ),
+    "different-user must show safe message",
   );
 }
 
 testProviderRegistered();
 testEmailLinkPointsToPage();
+testTokenPeekIsReadOnly();
 testApiGetRedirectOnly();
+testSameUserRoute();
 testPageUsesClientSignIn();
+testSameUserMustNotSignOut();
+testAuthenticatedUnverifiedUsesSameUser();
 testTokenConsumeOnlyInAuthorizePath();
 testSingleConsumeGuard();
 testTokenSecurityChecks();
 testStaffDisabledErrors();
 testNoPasswordInVerifyFlow();
 testDefaultCallbackHome();
-testExistingSessionPreserved();
+testSuccessRequiresEmailVerified();
+testSessionRefreshAfterSameUser();
+testDifferentUserMessage();
 
 console.log("verify-email-auth-selftest: ok");

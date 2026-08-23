@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { getSession, signIn } from "next-auth/react";
+import { getSession, signIn, useSession } from "next-auth/react";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { safeInternalCallbackUrl } from "@/lib/auth/safe-callback-url";
 import { VERIFY_EMAIL_PROVIDER_ID } from "@/lib/auth/verify-email-constants";
+
+const DIFFERENT_USER_MESSAGE =
+  "This verification link belongs to a different account. Please sign out first.";
 
 function verifyErrorMessage(code: string | null): string {
   switch (code) {
@@ -32,8 +35,21 @@ function mapAuthError(error: string | undefined): string {
   return verifyErrorMessage("invalid");
 }
 
+async function readContactStatus(): Promise<{ emailVerified: boolean } | null> {
+  try {
+    const res = await fetch("/api/account/contact-status", {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as { emailVerified: boolean };
+  } catch {
+    return null;
+  }
+}
+
 function VerifyEmailInner() {
   const router = useRouter();
+  const { update } = useSession();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const errorCode = searchParams.get("error");
@@ -55,10 +71,68 @@ function VerifyEmailInner() {
     verifyStarted.current = true;
 
     void (async () => {
-      const existing = await getSession();
-      if (existing?.user) {
+      const contactBefore = await readContactStatus();
+      if (contactBefore?.emailVerified) {
         router.replace(callbackUrl);
         router.refresh();
+        return;
+      }
+
+      const sessionBefore = await getSession();
+
+      if (sessionBefore?.user) {
+        const res = await fetch("/api/auth/verify-email/same-user", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        const body = (await res.json().catch(() => null)) as {
+          ok?: boolean;
+          error?: string;
+          code?: string;
+        } | null;
+
+        if (res.status === 403 && body?.code === "different_user") {
+          setStatus("error");
+          setError(DIFFERENT_USER_MESSAGE);
+          return;
+        }
+
+        if (body?.error?.includes("disabled")) {
+          setStatus("error");
+          setError(
+            "This account has been disabled. Contact Houzzat support.",
+          );
+          return;
+        }
+        if (body?.error?.includes("team sign-in")) {
+          setStatus("error");
+          setError("Use your team sign-in page for this account.");
+          return;
+        }
+
+        if (res.ok && body?.ok) {
+          await update({ refreshProfile: true });
+          const contactAfter = await readContactStatus();
+          if (!contactAfter?.emailVerified) {
+            setStatus("error");
+            setError(verifyErrorMessage("invalid"));
+            return;
+          }
+          router.replace(callbackUrl);
+          router.refresh();
+          return;
+        }
+
+        const contactAfterFail = await readContactStatus();
+        if (contactAfterFail?.emailVerified) {
+          router.replace(callbackUrl);
+          router.refresh();
+          return;
+        }
+
+        setStatus("error");
+        setError(body?.error ?? verifyErrorMessage("invalid"));
         return;
       }
 
@@ -76,8 +150,8 @@ function VerifyEmailInner() {
       }
 
       if (signInError) {
-        const sessionAfterFail = await getSession();
-        if (sessionAfterFail?.user) {
+        const contactAfterFail = await readContactStatus();
+        if (contactAfterFail?.emailVerified) {
           router.replace(callbackUrl);
           router.refresh();
           return;
@@ -87,17 +161,18 @@ function VerifyEmailInner() {
         return;
       }
 
-      const session = await getSession();
-      if (!session?.user) {
+      const contactAfter = await readContactStatus();
+      if (!contactAfter?.emailVerified) {
         setStatus("error");
         setError(verifyErrorMessage("invalid"));
         return;
       }
 
+      await getSession();
       router.replace(callbackUrl);
       router.refresh();
     })();
-  }, [token, errorCode, callbackUrl, router]);
+  }, [token, errorCode, callbackUrl, router, update]);
 
   return (
     <div className="mx-auto w-full max-w-lg rounded-3xl border border-line bg-white p-7 shadow-[0_24px_55px_-28px_rgba(15,40,30,0.35)] sm:p-9">

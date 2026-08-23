@@ -113,6 +113,87 @@ export async function sendWelcomeEmail(input: {
       : "failed";
 }
 
+export type VerificationTokenPeekCode =
+  | "missing"
+  | "expired"
+  | "invalid"
+  | "disabled"
+  | "staff";
+
+export type VerificationTokenPeekResult =
+  | {
+      ok: true;
+      userId: string;
+      emailVerified: boolean;
+    }
+  | { ok: false; error: string; code: VerificationTokenPeekCode };
+
+/** Read token owner/expiry without consuming or deleting the token. */
+export async function peekEmailVerificationToken(
+  token: string,
+): Promise<VerificationTokenPeekResult> {
+  const trimmed = token.trim();
+  if (!trimmed) {
+    return { ok: false, error: "Missing verification token.", code: "missing" };
+  }
+
+  const row = await prisma.verificationToken.findUnique({
+    where: { token: trimmed },
+  });
+  if (!row) {
+    return {
+      ok: false,
+      error: "Verification link expired or invalid.",
+      code: "invalid",
+    };
+  }
+  if (row.expires.getTime() < Date.now()) {
+    return {
+      ok: false,
+      error: "Verification link expired or invalid.",
+      code: "expired",
+    };
+  }
+
+  const email = row.identifier.trim().toLowerCase();
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      emailVerified: true,
+      role: true,
+      disabledAt: true,
+    },
+  });
+  if (!user) {
+    return {
+      ok: false,
+      error: "Verification link expired or invalid.",
+      code: "invalid",
+    };
+  }
+  if (user.disabledAt) {
+    return {
+      ok: false,
+      error: "This account has been disabled. Contact Houzzat support.",
+      code: "disabled",
+    };
+  }
+  if (user.role === "AGENT" || user.role === "ADMIN") {
+    return {
+      ok: false,
+      error: "Use your team sign-in page for this account.",
+      code: "staff",
+    };
+  }
+
+  return {
+    ok: true,
+    userId: user.id,
+    emailVerified: Boolean(user.emailVerified),
+  };
+}
+
 export async function consumeEmailVerificationToken(
   token: string,
 ): Promise<
