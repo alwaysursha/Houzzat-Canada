@@ -4,35 +4,13 @@ import { signIn } from "@/lib/auth";
 import { safeInternalCallbackUrl } from "@/lib/auth/safe-callback-url";
 import { VERIFY_EMAIL_PROVIDER_ID } from "@/lib/auth/verify-email-constants";
 
-function isNextRedirect(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "digest" in error &&
-    typeof (error as { digest?: unknown }).digest === "string" &&
-    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
-  );
-}
-
 const schema = z.object({
   token: z.string().trim().min(10).max(200),
 });
 
-function verifyPageRedirect(
-  request: Request,
-  params: { error?: string; callbackUrl?: string },
-) {
-  const url = new URL("/auth/verify-email", request.url);
-  if (params.error) url.searchParams.set("error", params.error);
-  if (params.callbackUrl && params.callbackUrl !== "/") {
-    url.searchParams.set("callbackUrl", params.callbackUrl);
-  }
-  return NextResponse.redirect(url);
-}
-
 /**
- * Email links land here: consume token via Auth.js, establish session, redirect.
- * Legacy /auth/verify-email?token= pages forward to this route.
+ * Legacy email links may still point here. GET is inert — redirect to the
+ * verification page without consuming the token (scanner-safe).
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -42,26 +20,20 @@ export async function GET(request: Request) {
     "/",
   );
 
-  if (!token) {
-    return verifyPageRedirect(request, { error: "missing", callbackUrl });
+  const pageUrl = new URL("/auth/verify-email", request.url);
+  if (token) {
+    pageUrl.searchParams.set("token", token);
+  } else {
+    pageUrl.searchParams.set("error", "missing");
+  }
+  if (callbackUrl !== "/") {
+    pageUrl.searchParams.set("callbackUrl", callbackUrl);
   }
 
-  try {
-    await signIn(VERIFY_EMAIL_PROVIDER_ID, {
-      token,
-      redirectTo: callbackUrl,
-    });
-  } catch (error) {
-    if (isNextRedirect(error)) {
-      throw error;
-    }
-    return verifyPageRedirect(request, { error: "invalid", callbackUrl });
-  }
-
-  return NextResponse.redirect(new URL(callbackUrl, request.url));
+  return NextResponse.redirect(pageUrl);
 }
 
-/** Programmatic verify without session (legacy). Prefer GET + Auth.js signIn. */
+/** Programmatic verify (POST). Prefer browser signIn on /auth/verify-email. */
 export async function POST(request: Request) {
   let body: unknown;
   try {
@@ -90,7 +62,7 @@ export async function POST(request: Request) {
       token: parsed.data.token,
       redirect: false,
     });
-    if (result && "error" in result && result.error) {
+    if (result && typeof result === "object" && "error" in result && result.error) {
       return NextResponse.json(
         { error: "Verification link expired or invalid." },
         { status: 400 },
@@ -98,8 +70,28 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ ok: true, callbackUrl });
   } catch (error) {
-    if (isNextRedirect(error)) {
-      throw error;
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "message" in error &&
+      typeof (error as { message?: unknown }).message === "string"
+    ) {
+      const message = (error as { message: string }).message;
+      if (message === "ACCOUNT_DISABLED") {
+        return NextResponse.json(
+          {
+            error:
+              "This account has been disabled. Contact Houzzat support.",
+          },
+          { status: 403 },
+        );
+      }
+      if (message === "STAFF_ACCOUNT") {
+        return NextResponse.json(
+          { error: "Use your team sign-in page for this account." },
+          { status: 403 },
+        );
+      }
     }
     return NextResponse.json(
       { error: "Verification link expired or invalid." },

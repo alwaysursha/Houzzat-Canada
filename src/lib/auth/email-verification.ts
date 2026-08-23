@@ -36,7 +36,7 @@ export async function createEmailVerificationToken(email: string) {
 }
 
 export function verificationLink(token: string, callbackUrl?: string) {
-  const url = new URL("/api/auth/verify-email", SITE_URL);
+  const url = new URL("/auth/verify-email", SITE_URL);
   url.searchParams.set("token", token);
   const safe = safeInternalCallbackUrl(callbackUrl, "/");
   if (safe !== "/") {

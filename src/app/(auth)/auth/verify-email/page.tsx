@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { getSession, signIn } from "next-auth/react";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { safeInternalCallbackUrl } from "@/lib/auth/safe-callback-url";
+import { VERIFY_EMAIL_PROVIDER_ID } from "@/lib/auth/verify-email-constants";
 
 function verifyErrorMessage(code: string | null): string {
   switch (code) {
@@ -16,7 +18,22 @@ function verifyErrorMessage(code: string | null): string {
   }
 }
 
+function mapAuthError(error: string | undefined): string {
+  const normalized = error?.trim() ?? "";
+  if (
+    normalized === "ACCOUNT_DISABLED" ||
+    normalized.includes("DISABLED")
+  ) {
+    return "This account has been disabled. Contact Houzzat support.";
+  }
+  if (normalized === "STAFF_ACCOUNT" || normalized.includes("STAFF")) {
+    return "Use your team sign-in page for this account.";
+  }
+  return verifyErrorMessage("invalid");
+}
+
 function VerifyEmailInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const errorCode = searchParams.get("error");
@@ -25,22 +42,62 @@ function VerifyEmailInner() {
     "/",
   );
 
-  const [status] = useState<"idle" | "working" | "error">(
+  const [status, setStatus] = useState<"idle" | "working" | "error">(
     token && !errorCode ? "working" : errorCode ? "error" : "idle",
   );
-  const [error] = useState<string | null>(
+  const [error, setError] = useState<string | null>(
     errorCode ? verifyErrorMessage(errorCode) : null,
   );
+  const verifyStarted = useRef(false);
 
   useEffect(() => {
-    if (!token || errorCode) return;
+    if (!token || errorCode || verifyStarted.current) return;
+    verifyStarted.current = true;
 
-    const params = new URLSearchParams({ token });
-    if (callbackUrl !== "/") {
-      params.set("callbackUrl", callbackUrl);
-    }
-    window.location.replace(`/api/auth/verify-email?${params.toString()}`);
-  }, [token, errorCode, callbackUrl]);
+    void (async () => {
+      const existing = await getSession();
+      if (existing?.user) {
+        router.replace(callbackUrl);
+        router.refresh();
+        return;
+      }
+
+      let signInError: string | undefined;
+      try {
+        const result = await signIn(VERIFY_EMAIL_PROVIDER_ID, {
+          token,
+          redirect: false,
+          callbackUrl,
+        });
+        signInError = result?.error ?? undefined;
+      } catch (err) {
+        signInError =
+          err instanceof Error ? err.message : "Verification failed";
+      }
+
+      if (signInError) {
+        const sessionAfterFail = await getSession();
+        if (sessionAfterFail?.user) {
+          router.replace(callbackUrl);
+          router.refresh();
+          return;
+        }
+        setStatus("error");
+        setError(mapAuthError(signInError));
+        return;
+      }
+
+      const session = await getSession();
+      if (!session?.user) {
+        setStatus("error");
+        setError(verifyErrorMessage("invalid"));
+        return;
+      }
+
+      router.replace(callbackUrl);
+      router.refresh();
+    })();
+  }, [token, errorCode, callbackUrl, router]);
 
   return (
     <div className="mx-auto w-full max-w-lg rounded-3xl border border-line bg-white p-7 shadow-[0_24px_55px_-28px_rgba(15,40,30,0.35)] sm:p-9">

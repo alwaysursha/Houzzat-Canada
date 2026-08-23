@@ -20,7 +20,15 @@ export async function authorizeEmailVerificationToken(
   if (!trimmed) return null;
 
   const result = await consumeEmailVerificationToken(trimmed);
-  if (!result.ok) return null;
+  if (!result.ok) {
+    if (result.error.includes("disabled")) {
+      throw new Error("ACCOUNT_DISABLED");
+    }
+    if (result.error.includes("team sign-in")) {
+      throw new Error("STAFF_ACCOUNT");
+    }
+    return null;
+  }
 
   return result.user;
 }
