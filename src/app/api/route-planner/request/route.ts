@@ -13,8 +13,10 @@ import {
   AGENT_CONTACT_CONSENT_KIND,
   AGENT_CONTACT_CONSENT_VERSION,
 } from "@/lib/consent";
-import { sendNotification } from "@/lib/notifications";
-import { sendPushToUsers } from "@/lib/notifications/push";
+import {
+  notifyNewLeadCapturedToStaff,
+  scheduleNewLeadStaffEmail,
+} from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 import {
   enrichTourStops,
@@ -204,12 +206,48 @@ export async function POST(request: Request) {
     return { leadId: lead.id, shareToken: token };
   });
 
+  const deskUserIds = deskNotifiers.map((row) => row.user.id);
+
+  notifyNewLeadCapturedToStaff({
+    leadId,
+    label: `${tour.stops.length} homes to tour`,
+    title: "Route Planner request",
+    assigneeId: assignedAgentId,
+    deskUserIds,
+  });
+
+  scheduleNewLeadStaffEmail({
+    leadId,
+    source: "route_planner",
+    subject: "New route planner lead",
+    detailLines: [
+      `Tour request: ${tour.stops.length} homes`,
+      itineraryText,
+    ],
+    assigneeId: assignedAgentId,
+    deskRecipients: deskNotifiers.map((row) => ({
+      id: row.user.id,
+      email: row.user.email,
+      phone: row.user.phone,
+    })),
+    smsText: `Houzzat Route Planner: ${tour.stops.length} homes — check agent desk.`,
+    whatsappText: `Route Planner request (${tour.stops.length} homes).`,
+    preferWhatsApp: true,
+  });
+
   if (assignedAgentId && organizationId) {
-    await createCallNewLeadTask({
-      leadId,
-      assigneeId: assignedAgentId,
-      organizationId,
-    });
+    try {
+      await createCallNewLeadTask({
+        leadId,
+        assigneeId: assignedAgentId,
+        organizationId,
+      });
+    } catch (err) {
+      console.error("[route-planner] call-new-lead-task failed", {
+        leadId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   void recordActivityEvent({
@@ -220,29 +258,6 @@ export async function POST(request: Request) {
     mlsNumber: firstMls,
     meta: { leadId, tourId: tour.id },
   });
-
-  for (const row of deskNotifiers) {
-    if (!row.user.email) continue;
-    void sendNotification({
-      toEmail: row.user.email,
-      toPhone: row.user.phone,
-      subject: `Route Planner request · ${tour.stops.length} homes`,
-      text: `${itineraryText}\n\nClaim or assign: /agent/leads/${leadId}`,
-      smsText: `Houzzat Route Planner: ${tour.stops.length} homes — check agent desk.`,
-      whatsappText: `Route Planner request (${tour.stops.length} homes). /agent/leads/${leadId}`,
-      preferWhatsApp: true,
-    });
-  }
-
-  void sendPushToUsers(
-    [assignedAgentId, ...deskNotifiers.map((row) => row.user.id)],
-    {
-      type: "new_lead",
-      title: "Route Planner request",
-      body: `${tour.stops.length} homes to tour`,
-      href: `/agent/leads/${leadId}`,
-    },
-  );
 
   const refreshed = await getOrCreateActiveTour(user.id);
   const refreshedCards = await enrichTourStops(

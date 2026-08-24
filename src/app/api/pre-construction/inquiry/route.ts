@@ -7,8 +7,10 @@ import {
   createCallNewLeadTask,
   resolveLeadDeskAssignment,
 } from "@/lib/agent/lead-intake";
-import { sendNotification } from "@/lib/notifications";
-import { sendPushToUsers } from "@/lib/notifications/push";
+import {
+  notifyNewLeadCapturedToStaff,
+  scheduleNewLeadStaffEmail,
+} from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -89,42 +91,49 @@ export async function POST(request: Request) {
     },
   });
 
-  if (assignedAgentId && organizationId) {
-    await createCallNewLeadTask({
-      leadId: lead.id,
-      assigneeId: assignedAgentId,
-      organizationId,
-    });
-  }
+  const deskUserIds = deskNotifiers.map((row) => row.user.id);
+
+  notifyNewLeadCapturedToStaff({
+    leadId: lead.id,
+    label: `${parsed.data.name} · ${listing.addressLine}`,
+    title: "Pre-construction inquiry",
+    assigneeId: assignedAgentId,
+    deskUserIds,
+  });
+
+  scheduleNewLeadStaffEmail({
+    leadId: lead.id,
+    source: "pre_construction",
+    subject: "New pre-construction lead",
+    detailLines: [
+      `Listing: ${listing.addressLine}`,
+      `Contact: ${parsed.data.name}`,
+      `Email: ${parsed.data.email}`,
+      parsed.data.phone ? `Phone: ${parsed.data.phone}` : null,
+    ].filter((line): line is string => Boolean(line)),
+    assigneeId: assignedAgentId,
+    deskRecipients: deskNotifiers.map((row) => ({
+      id: row.user.id,
+      email: row.user.email,
+      phone: row.user.phone,
+    })),
+    smsText: `Houzzat pre-con lead: ${listing.addressLine}`,
+  });
 
   if (assignedAgentId && organizationId) {
-    await createCallNewLeadTask({
-      leadId: lead.id,
-      assigneeId: assignedAgentId,
-      organizationId,
-    });
+    try {
+      await createCallNewLeadTask({
+        leadId: lead.id,
+        assigneeId: assignedAgentId,
+        organizationId,
+      });
+    } catch (err) {
+      console.error("[pre-construction] call-new-lead-task failed", {
+        leadId: lead.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
-
-  for (const row of deskNotifiers) {
-    if (!row.user.email) continue;
-    void sendNotification({
-      toEmail: row.user.email,
-      toPhone: row.user.phone,
-      subject: "Pre-construction inquiry",
-      text: `${listing.addressLine} — ${parsed.data.name} <${parsed.data.email}>`,
-      smsText: `Houzzat pre-con lead: ${listing.addressLine}`,
-    });
-  }
-
-  void sendPushToUsers(
-    [assignedAgentId, ...deskNotifiers.map((row) => row.user.id)],
-    {
-      type: "new_lead",
-      title: "Pre-construction inquiry",
-      body: `${parsed.data.name} · ${listing.addressLine}`,
-      href: `/agent/leads/${lead.id}`,
-    },
-  );
 
   return NextResponse.json({ ok: true, leadId: lead.id });
 }

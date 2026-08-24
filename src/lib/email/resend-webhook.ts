@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
+import { openLeadProfileHref } from "@/lib/agent/lead-profile-query";
 import { emailEnv } from "@/lib/email/env";
 import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
@@ -78,7 +79,7 @@ async function recordOpened(providerId: string, at: Date) {
         type: "alert_engagement",
         title: "Property alert opened",
         body: log.subject,
-        href: `/agent/leads/${log.leadId}`,
+        href: openLeadProfileHref(log.leadId),
       });
     }
   }
@@ -147,7 +148,7 @@ async function recordClicked(
       type: "alert_engagement",
       title: "Property alert clicked",
       body: log.subject,
-      href: `/agent/leads/${log.leadId}`,
+      href: openLeadProfileHref(log.leadId),
     });
   }
 

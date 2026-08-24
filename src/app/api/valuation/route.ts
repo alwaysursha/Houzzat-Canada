@@ -14,7 +14,10 @@ import {
 import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
 import { estimateHomeValue } from "@/lib/market/home-value-estimate";
 import { sendNotification } from "@/lib/notifications";
-import { sendPushToUsers } from "@/lib/notifications/push";
+import {
+  notifyNewLeadCapturedToStaff,
+  scheduleNewLeadStaffEmail,
+} from "@/lib/notifications/staff-events";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { VOW_VERSION } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
@@ -440,39 +443,51 @@ export async function POST(request: Request) {
       });
     }
 
+    const deskUserIds = deskNotifiers.map((row) => row.user.id);
+    notifyNewLeadCapturedToStaff({
+      leadId: lead.id,
+      label: data.address,
+      title: "Valuation lead",
+      assigneeId: assignedAgentId,
+      deskUserIds,
+    });
+
+    scheduleNewLeadStaffEmail({
+      leadId: lead.id,
+      source: "valuation",
+      subject: isQuick
+        ? "New homepage sell estimate lead"
+        : "New valuation lead",
+      detailLines: [
+        `Address: ${data.address}`,
+        `Contact: ${contactName}`,
+        `Email: ${contactEmail}`,
+        `Estimate range: $${estimate.low.toLocaleString()}–$${estimate.high.toLocaleString()}`,
+        accountCreated ? "Owner account created" : null,
+      ].filter((line): line is string => Boolean(line)),
+      assigneeId: assignedAgentId,
+      deskRecipients: deskNotifiers.map((row) => ({
+        id: row.user.id,
+        email: row.user.email,
+        phone: row.user.phone,
+      })),
+      smsText: `Houzzat valuation lead: ${data.address}`,
+    });
+
     if (assignedAgentId && organizationId) {
-      await createCallNewLeadTask({
-        leadId: lead.id,
-        assigneeId: assignedAgentId,
-        organizationId,
-      });
+      try {
+        await createCallNewLeadTask({
+          leadId: lead.id,
+          assigneeId: assignedAgentId,
+          organizationId,
+        });
+      } catch (err) {
+        console.error("[valuation] call-new-lead-task failed", {
+          leadId: lead.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
-
-    for (const row of deskNotifiers) {
-      if (!row.user.email) continue;
-      scheduleWorkerSideEffect(
-        sendNotification({
-          toEmail: row.user.email,
-          toPhone: row.user.phone,
-          subject: isQuick
-            ? "New homepage sell estimate lead"
-            : "New home valuation / seller lead",
-          text: `Valuation lead: ${data.address}\n${contactName} <${contactEmail}>\nRange: $${estimate.low.toLocaleString()}–$${estimate.high.toLocaleString()}\nLead: ${lead.id}${accountCreated ? "\nOwner account created" : ""}`,
-          smsText: `Houzzat valuation lead: ${data.address}`,
-        }),
-      );
-    }
-
-    // sendPushToUsers already schedules via waitUntil internally.
-    sendPushToUsers(
-      [assignedAgentId, ...deskNotifiers.map((row) => row.user.id)],
-      {
-        type: "new_lead",
-        title: "Valuation lead",
-        body: data.address,
-        href: `/agent/leads/${lead.id}`,
-      },
-    );
 
     return NextResponse.json({
       ok: true,

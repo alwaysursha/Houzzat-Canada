@@ -215,8 +215,9 @@ model User {
   /** Last successful Neighborhood Weekly Report send. */
   lastSellerReportAt DateTime?
   /**
-   * Per-type push toggles. Missing key = on (default all checked).
-   * Keys live in src/lib/notifications/catalog.ts
+   * Per-type push toggles (+ nested staffEmail category prefs for HouzzatPro).
+   * Missing push key = on. Missing staffEmail category = on.
+   * Keys: src/lib/notifications/catalog.ts + staff-categories.ts
    */
   pushNotificationPrefs Json?
   /** Soft-suspend: blocked from signing in / using the product. */

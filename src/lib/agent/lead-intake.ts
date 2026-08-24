@@ -3,7 +3,7 @@ import {
   resolveDefaultOrganizationId,
   resolveOrganizationIdForAssignee,
 } from "@/lib/agent";
-import { notifyNewLeadCaptured } from "@/lib/notifications/staff-events";
+import { notifyNewLeadCaptured, scheduleNewLeadStaffEmail } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 
 export const CALL_NEW_LEAD_TASK_TITLE = "Call new lead";
@@ -400,6 +400,30 @@ export async function captureWebsiteLead(input: {
     notifyNewLeadCaptured(assigneeId, {
       leadId: lead.id,
       label: bodyLabel,
+    });
+
+    const intentLabel = intent === "SELLER" ? "Seller" : "Buyer";
+    const sourceKind =
+      input.source === "SIGNUP"
+        ? ("signup" as const)
+        : ("other" as const);
+    scheduleNewLeadStaffEmail({
+      leadId: lead.id,
+      source: sourceKind,
+      subject:
+        input.source === "SIGNUP"
+          ? "New signup lead"
+          : "New Houzzat lead",
+      detailLines: [
+        input.source === "SIGNUP"
+          ? "A new customer signed up on Houzzat."
+          : `A new lead was captured (${input.source}).`,
+        `Contact: ${contactLabel}`,
+        input.email ? `Email: ${input.email}` : null,
+        input.phone ? `Phone: ${input.phone}` : null,
+        `Intent: ${intentLabel}`,
+      ].filter((line): line is string => Boolean(line)),
+      assigneeId,
     });
   }
 

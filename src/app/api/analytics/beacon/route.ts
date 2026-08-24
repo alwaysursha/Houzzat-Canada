@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ingestActivityBeacon, type BeaconPayload } from "@/lib/admin/activity";
 import { auth } from "@/lib/auth";
-import { notifyCustomerCameOnline } from "@/lib/notifications/staff-events";
+import { scheduleNotifyCustomerCameOnline } from "@/lib/notifications/staff-events";
 
 export const runtime = "nodejs";
 
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       userAgent,
     });
     if (session?.user?.id) {
-      void notifyCustomerCameOnline(
+      scheduleNotifyCustomerCameOnline(
         session.user.id,
         result.previousLastSeenAt,
       );

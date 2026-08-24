@@ -1,10 +1,29 @@
 /**
- * Focused Phase 3B push reliability checks (no Vitest harness in repo).
- * Run: pnpm exec tsx scripts/push-reliability-selftest.ts
+ * Push deep-link / tap navigation reliability (no Vitest harness in repo).
+ * Run: pnpm push-reliability:selftest
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { openLeadProfileHref } from "../src/lib/agent/lead-profile-query";
 import { sanitizePushHref } from "../src/lib/notifications/push-href";
+import { resolveProPostSignInHref } from "../src/lib/auth/pro-sign-in-routing";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const staffEvents = readFileSync(
+  join(root, "src/lib/notifications/staff-events.ts"),
+  "utf8",
+);
+const pushHrefFile = readFileSync(
+  join(root, "src/lib/notifications/push-href.ts"),
+  "utf8",
+);
+const proStartup = readFileSync(
+  join(root, "src/components/mobile/HouzzatProStartup.tsx"),
+  "utf8",
+);
 
 const memory = new Map<string, string>();
 
@@ -25,7 +44,7 @@ const memory = new Map<string, string>();
 };
 
 async function main() {
-  // --- href sanitizer ---
+  // --- consumer + staff href sanitizer ---
   assert.equal(sanitizePushHref("https://evil.com/x"), null);
   assert.equal(sanitizePushHref("//evil.com/x"), null);
   assert.equal(sanitizePushHref("javascript:alert(1)"), null);
@@ -42,9 +61,23 @@ async function main() {
   assert.equal(sanitizePushHref("/account/notifications"), "/account/notifications");
   assert.equal(sanitizePushHref("/search?q=1"), "/search?q=1");
   assert.equal(sanitizePushHref("/share/homes/abc"), "/share/homes/abc");
-  assert.equal(sanitizePushHref("/agent/leads/1"), null);
 
-  // --- pending consume-once ---
+  // Staff CRM deep-links (canonical query + legacy path) must pass.
+  const leadHref = openLeadProfileHref("lead_abc");
+  assert.equal(leadHref, "/agent/leads?lead=lead_abc");
+  assert.equal(sanitizePushHref(leadHref), leadHref);
+  assert.equal(
+    sanitizePushHref("/agent/leads/lead_abc"),
+    "/agent/leads/lead_abc",
+  );
+  assert.equal(sanitizePushHref("/agent/tasks"), "/agent/tasks");
+  assert.equal(sanitizePushHref("/admin/people"), "/admin/people");
+  assert.equal(sanitizePushHref("/agent/leads"), "/agent/leads");
+
+  // Path traversal still rejected.
+  assert.equal(sanitizePushHref("/agent/../auth/sign-in"), null);
+
+  // --- pending consume-once with staff query preserved ---
   const pending = await import("../src/lib/notifications/pending-push-nav");
   pending.__resetPendingPushNavigationForTests();
 
@@ -77,20 +110,52 @@ async function main() {
 
   assert.equal(
     pending.stashPendingPushNavigation({
-      href: "/listing/N9",
-      id: "msg-2",
+      href: leadHref,
+      id: "msg-lead",
     }),
-    "/listing/N9",
+    leadHref,
   );
-  assert.equal(pending.peekPendingPushNavigation()?.href, "/listing/N9");
-  assert.equal(pending.takePendingPushNavigation(), "/listing/N9");
+  assert.equal(pending.peekPendingPushNavigation()?.href, leadHref);
+  assert.equal(pending.takePendingPushNavigation(), leadHref);
+  assert.equal(pending.takePendingPushNavigation(), null);
+
+  // --- auth callback preserves lead query ---
+  assert.equal(
+    resolveProPostSignInHref("/agent/leads?lead=lead_abc", "AGENT"),
+    "/agent/leads?lead=lead_abc",
+  );
+  assert.equal(
+    resolveProPostSignInHref("/agent/leads?lead=lead_abc", "ADMIN"),
+    "/agent/leads?lead=lead_abc",
+  );
+  assert.equal(
+    resolveProPostSignInHref("https://evil.com", "AGENT"),
+    "/agent",
+  );
+
+  // --- structural: staff senders use profile href helper ---
+  assert.ok(staffEvents.includes("openLeadProfileHref"));
+  assert.ok(staffEvents.includes("href: openLeadProfileHref(input.leadId)"));
+  assert.ok(staffEvents.includes('type: "new_lead"'));
+  assert.ok(staffEvents.includes('type: "lead_reassigned"'));
+  assert.ok(staffEvents.includes('type: "task_due"'));
+  assert.ok(
+    staffEvents.includes('href: first.leadId ? openLeadProfileHref(first.leadId) : "/agent/tasks"'),
+  );
+  assert.ok(
+    pushHrefFile.includes('path.startsWith("/agent/")'),
+    "sanitizer must allow HouzzatPro /agent paths",
+  );
+  assert.ok(
+    proStartup.includes("peekPendingPushNavigation"),
+    "Pro startup must honor pending push destination",
+  );
 
   // --- Worker dispatch ownership (shape) ---
   const pushMod = await import("../src/lib/notifications/push");
   assert.equal(typeof pushMod.sendPushToUser, "function");
   assert.equal(typeof pushMod.sendPushToUsers, "function");
   assert.equal(typeof pushMod.sendPushToUserFirstEnabled, "function");
-  // Returns void (enqueue), not a Promise
   const ret = pushMod.sendPushToUser(undefined, {
     type: "property_update",
     title: "t",

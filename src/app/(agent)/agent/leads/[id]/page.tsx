@@ -7,10 +7,12 @@ type Params = { params: Promise<{ id: string }> };
 
 /** Deep links open the leads desk with the profile popup — no separate full page. */
 export default async function AgentLeadDetailPage({ params }: Params) {
-  const ctx = await requireAgentContext();
-  if (!ctx) redirect(await staffSignInRedirectUrl("/agent/leads"));
-
   const { id } = await params;
+  const deepLink = `/agent/leads?lead=${encodeURIComponent(id)}`;
+
+  const ctx = await requireAgentContext();
+  if (!ctx) redirect(await staffSignInRedirectUrl(deepLink));
+
   const lead = await prisma.lead.findUnique({
     where: { id },
     select: {
@@ -21,5 +23,5 @@ export default async function AgentLeadDetailPage({ params }: Params) {
   });
   if (!lead || !canAccessLead(ctx, lead)) notFound();
 
-  redirect(`/agent/leads?lead=${encodeURIComponent(id)}`);
+  redirect(deepLink);
 }

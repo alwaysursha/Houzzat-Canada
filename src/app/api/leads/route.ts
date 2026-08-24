@@ -13,8 +13,10 @@ import {
   AGENT_CONTACT_CONSENT_KIND,
   AGENT_CONTACT_CONSENT_VERSION,
 } from "@/lib/consent";
-import { sendNotification } from "@/lib/notifications";
-import { sendPushToUsers } from "@/lib/notifications/push";
+import {
+  notifyNewLeadCapturedToStaff,
+  scheduleNewLeadStaffEmail,
+} from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -207,56 +209,61 @@ export async function POST(request: Request) {
       return created;
     });
 
-    if (assignedAgentId && organizationId) {
-      await createCallNewLeadTask({
-        leadId: lead.id,
-        assigneeId: assignedAgentId,
-        organizationId,
-      });
-    }
-
-    for (const row of deskNotifiers) {
-      if (!row.user.email) continue;
-      void sendNotification({
-        toEmail: row.user.email,
-        toPhone: row.user.phone,
-        subject: `New Houzzat lead: ${source.replaceAll("_", " ")}`,
-        text: `New lead for ${listing.addressLine}, ${listing.city} (${listing.mlsNumber}).\nContact: ${data.name} <${data.email}>\n${data.phone ? `Phone: ${data.phone}\n` : ""}Consent: agent contact accepted\nOpen: /agent/leads/${lead.id}`,
-        smsText: `Houzzat lead: ${listing.addressLine} — ${data.name}. Check agent desk.`,
-        whatsappText:
-          data.kind === "virtual_viewing" || data.kind === "showing"
-            ? `Hot Houzzat lead (${data.kind.replaceAll("_", " ")}): ${listing.addressLine} — ${data.name}. /agent/leads/${lead.id}`
-            : undefined,
-        preferWhatsApp:
-          data.kind === "virtual_viewing" || data.kind === "showing",
-      });
-    }
-
     const hotRequest =
       data.kind === "virtual_viewing" || data.kind === "showing";
-    const staffIds = [
-      assignedAgentId,
-      ...deskNotifiers.map((row) => row.user.id),
-    ];
-    void sendPushToUsers(staffIds, {
-      type: "new_lead",
-      title: "New lead",
-      body: `${data.name} · ${listing.addressLine}`,
-      href: `/agent/leads/${lead.id}`,
+    const deskUserIds = deskNotifiers.map((row) => row.user.id);
+    const pushLabel = hotRequest
+      ? `${data.name} · ${data.kind.replaceAll("_", " ")} · ${listing.addressLine}`
+      : `${data.name} · ${listing.addressLine}`;
+
+    // Push before task — task failure must not block new_lead delivery.
+    notifyNewLeadCapturedToStaff({
+      leadId: lead.id,
+      label: pushLabel,
+      assigneeId: assignedAgentId,
+      deskUserIds,
     });
-    if (hotRequest) {
-      void sendPushToUsers(staffIds, {
-        type: "contact_requested",
-        title: "Contact requested",
-        body: `${data.kind.replaceAll("_", " ")} · ${listing.addressLine}`,
-        href: `/agent/leads/${lead.id}`,
-      });
-      void sendPushToUsers(staffIds, {
-        type: "appointment",
-        title: "Appointment requested",
-        body: `${data.name} · ${listing.addressLine}`,
-        href: `/agent/leads/${lead.id}`,
-      });
+
+    scheduleNewLeadStaffEmail({
+      leadId: lead.id,
+      source: "listing_inquiry",
+      subject: `New Houzzat lead: ${source.replaceAll("_", " ")}`,
+      detailLines: [
+        `Listing: ${listing.addressLine}, ${listing.city} (MLS® ${listing.mlsNumber})`,
+        `Contact: ${data.name}`,
+        `Email: ${data.email}`,
+        data.phone ? `Phone: ${data.phone}` : null,
+        hotRequest
+          ? `Request: ${data.kind.replaceAll("_", " ")}`
+          : `Source: ${source.replaceAll("_", " ")}`,
+        "Consent: agent contact accepted",
+      ].filter((line): line is string => Boolean(line)),
+      assigneeId: assignedAgentId,
+      deskRecipients: deskNotifiers.map((row) => ({
+        id: row.user.id,
+        email: row.user.email,
+        phone: row.user.phone,
+      })),
+      smsText: `Houzzat lead: ${listing.addressLine} — ${data.name}. Check agent desk.`,
+      whatsappText: hotRequest
+        ? `Hot Houzzat lead (${data.kind.replaceAll("_", " ")}): ${listing.addressLine} — ${data.name}.`
+        : undefined,
+      preferWhatsApp: hotRequest,
+    });
+
+    if (assignedAgentId && organizationId) {
+      try {
+        await createCallNewLeadTask({
+          leadId: lead.id,
+          assigneeId: assignedAgentId,
+          organizationId,
+        });
+      } catch (err) {
+        console.error("[leads] call-new-lead-task failed", {
+          leadId: lead.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     return NextResponse.json({ ok: true, leadId: lead.id });

@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
-import { NotificationPreferencesForm } from "@/components/notifications/NotificationPreferencesForm";
+import { StaffNotificationPreferencesForm } from "@/components/notifications/StaffNotificationPreferencesForm";
 import { requireAgentContext } from "@/lib/agent";
-import { catalogForAudience, isPushTypeEnabled } from "@/lib/notifications/catalog";
-import { prisma } from "@/lib/prisma";
 import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
+import { staffCategoriesForUi } from "@/lib/notifications/staff-categories";
+import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Notifications · CRM" };
 
@@ -16,25 +16,22 @@ export default async function AgentNotificationsPage() {
     select: { pushNotificationPrefs: true },
   });
 
-  const items = catalogForAudience("staff").map((item) => ({
-    ...item,
-    enabled: isPushTypeEnabled(user?.pushNotificationPrefs, item.id),
-  }));
+  const categories = staffCategoriesForUi(user?.pushNotificationPrefs);
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-2xl space-y-5">
       <div>
         <h1 className="text-[22px] font-bold tracking-tight text-[#1e2a38]">
           Notifications
         </h1>
         <p className="mt-1 max-w-xl text-sm text-[#64748b]">
-          HouzzatPro lock-screen alerts. All types start on — uncheck what you
-          don’t want.
+          Choose push and email alerts for your HouzzatPro desk. Push and email
+          are independent — turning one off does not change the other.
         </p>
       </div>
-      <NotificationPreferencesForm
-        items={items}
-        intro="These only fire on the HouzzatPro app when push is set up on this device."
+      <StaffNotificationPreferencesForm
+        categories={categories}
+        intro="Push alerts appear on the HouzzatPro app when this device is registered. Email alerts use your staff account email."
       />
     </div>
   );

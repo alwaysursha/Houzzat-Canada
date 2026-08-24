@@ -68,11 +68,18 @@ function testSignupRouteDoesNotPushDirectly() {
 
 function testNewLeadPayloadShape() {
   assert.ok(staffEvents.includes('type: "new_lead"'));
-  assert.ok(staffEvents.includes('title: "New lead"'));
-  assert.ok(staffEvents.includes("href: `/agent/leads/${input.leadId}`"));
+  assert.ok(staffEvents.includes('title: input.title ?? "New lead"'));
   assert.ok(
-    !staffEvents.includes("scheduleWorkerSideEffect"),
-    "staff-events must not double-wrap push lifetime",
+    staffEvents.includes("href: openLeadProfileHref(input.leadId)"),
+    "new_lead must deep-link to lead profile query (?lead=)",
+  );
+  assert.ok(
+    staffEvents.includes("notifyNewLeadCapturedToStaff"),
+    "signup convenience must delegate to staff fan-out helper",
+  );
+  assert.ok(
+    staffEvents.includes("scheduleWorkerSideEffect"),
+    "staff-events owns Worker scheduling for email/online",
   );
 }
 

@@ -37,7 +37,7 @@ export function sanitizePushHref(raw: unknown): string | null {
   const segments = pathOnly.split("/");
   if (segments.some((s) => s === ".." || s === ".")) return null;
 
-  // Allowlist prefixes that exist in the consumer app today.
+  // Allowlist: consumer Houzzat + HouzzatPro CRM paths. Query/hash preserved.
   if (!isAllowedPushPath(pathOnly)) return null;
 
   return trimmed;
@@ -53,5 +53,9 @@ function isAllowedPushPath(path: string): boolean {
   // Shared shortlist / marketing surfaces used by existing push hrefs.
   if (path.startsWith("/share/")) return true;
   if (path.startsWith("/s/")) return true;
+  // HouzzatPro CRM — lead profile uses `/agent/leads?lead=` (and `/agent/leads/{id}` redirect).
+  if (path === "/agent" || path.startsWith("/agent/")) return true;
+  if (path === "/admin" || path.startsWith("/admin/")) return true;
+  if (path === "/pro" || path.startsWith("/pro/")) return true;
   return false;
 }
