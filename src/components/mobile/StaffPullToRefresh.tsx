@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { hasStaffOverlay } from "@/lib/mobile/staff-overlay-stack";
 
 const PULL_THRESHOLD_PX = 72;
 const MAX_PULL_PX = 112;
@@ -88,7 +89,16 @@ export function StaffPullToRefresh({
         event.target instanceof Element
           ? event.target
           : ((event.target as Node | null)?.parentElement ?? null);
-      if (origin?.closest("[data-snap-rail]")) {
+      if (
+        origin?.closest(
+          "[data-snap-rail], [data-staff-overlay], [data-lead-profile-popup]",
+        )
+      ) {
+        startYRef.current = null;
+        pullingRef.current = false;
+        return;
+      }
+      if (hasStaffOverlay()) {
         startYRef.current = null;
         pullingRef.current = false;
         return;
@@ -106,6 +116,12 @@ export function StaffPullToRefresh({
   );
 
   const onTouchMove = useCallback((event: React.TouchEvent) => {
+    if (hasStaffOverlay()) {
+      startYRef.current = null;
+      pullingRef.current = false;
+      setPullPx(0);
+      return;
+    }
     if (!pullingRef.current || startYRef.current == null || refreshing) return;
     const touch = event.touches[0];
     if (!touch) return;
@@ -144,6 +160,12 @@ export function StaffPullToRefresh({
   }, [router]);
 
   const onTouchEnd = useCallback(() => {
+    if (hasStaffOverlay()) {
+      setPullPx(0);
+      startYRef.current = null;
+      pullingRef.current = false;
+      return;
+    }
     if (!pullingRef.current) return;
     if (refreshing) return;
     if (pullPx >= PULL_THRESHOLD_PX) {

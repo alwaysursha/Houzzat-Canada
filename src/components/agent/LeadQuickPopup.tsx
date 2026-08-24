@@ -48,14 +48,17 @@ export function LeadQuickPopup({
   }, [onClose, onNavigate, leadId, leadIds]);
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-stretch justify-end p-0 sm:p-3 sm:pl-14 lg:p-5 lg:pl-16">
+    <div className="fixed inset-0 z-[90] flex items-stretch justify-end p-0 sm:p-3 sm:pl-14 lg:p-5 lg:pl-16" data-staff-overlay>
       <button
         type="button"
         className="absolute inset-0 bg-[#1e2a38]/55 backdrop-blur-[2px] sm:bg-[#1e2a38]/45 sm:backdrop-blur-[1px]"
         aria-label="Close customer profile"
         onClick={onClose}
       />
-      <div className="relative z-10 flex h-full w-full max-w-[1280px] items-stretch pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] sm:pb-0 sm:pt-0">
+      <div
+        data-lead-profile-popup=""
+        className="relative z-10 flex h-full w-full max-w-[1280px] items-stretch pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] sm:pb-0 sm:pt-0"
+      >
         <CustomerProfile
           key={leadId}
           leadId={leadId}

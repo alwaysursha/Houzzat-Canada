@@ -263,11 +263,11 @@ export function ContactUpdateReminder() {
         onClick={openFromChip}
         className={cn(
           // Same row as ScrollToTop (size-10): sit to its left with a small gap.
-          "fixed z-[80] flex max-w-[min(100%-7.5rem,15.5rem)] items-center gap-2.5",
+          "fixed z-40 flex max-w-[min(100%-7.5rem,15.5rem)] items-center gap-2.5",
           "right-[calc(1rem+2.5rem+0.5rem)] sm:right-[calc(1.5rem+2.5rem+0.5rem)]",
           aboveListingBar
-            ? "bottom-[4.75rem] md:bottom-6"
-            : "bottom-5 sm:bottom-6",
+            ? "bottom-[calc(var(--mobile-bottom-nav,0px)+4.75rem)] md:bottom-6"
+            : "bottom-[calc(var(--mobile-bottom-nav,0px)+1.25rem)] sm:bottom-6",
           "rounded-full border border-canopy/25 bg-surface/95 px-3.5 py-2.5 text-left shadow-[0_8px_28px_rgba(20,32,28,0.14)]",
           "backdrop-blur-md transition-[opacity,transform,border-color,box-shadow] duration-300 ease-out",
           "hover:border-canopy/45 hover:shadow-[0_10px_32px_rgba(20,32,28,0.18)]",

@@ -366,6 +366,7 @@ export function CustomerProfile({
   const [noteMessage, setNoteMessage] = useState<string | null>(null);
   const [pinPendingId, setPinPendingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(!initialData);
+  const [refreshing, setRefreshing] = useState(false);
   const [editingContact, setEditingContact] = useState<
     "phone" | "email" | "address" | null
   >(null);
@@ -418,6 +419,19 @@ export function CustomerProfile({
   const onUpdated = useCallback(() => {
     void reload().catch(() => undefined);
   }, [reload]);
+
+  const refreshProfile = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [reload, refreshing]);
 
   async function toggleProfileFlag(flag: "buyer" | "seller") {
     if (!data?.lead.customer || profileFlagPending) return;
@@ -827,9 +841,19 @@ export function CustomerProfile({
               <span className="size-8" />
             )}
 
-            <p className="min-w-0 flex-1 truncate text-[11px] font-bold uppercase tracking-wide text-[#94a3b8]">
-              Lead profile
-            </p>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <p className="truncate text-[11px] font-bold uppercase tracking-wide text-[#94a3b8]">
+                Lead profile
+              </p>
+              <button
+                type="button"
+                onClick={() => void refreshProfile()}
+                disabled={loading || refreshing}
+                className="shrink-0 text-[11px] font-semibold text-[#2b6cb0] transition hover:text-[#1d4ed8] hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {refreshing ? "Refreshing…" : "Refresh profile"}
+              </button>
+            </div>
 
             {showLeadNav ? (
               <div
