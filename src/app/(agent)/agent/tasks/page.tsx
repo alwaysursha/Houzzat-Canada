@@ -3,6 +3,7 @@ import Link from "next/link";
 import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { TaskCompleteButton, TaskForm } from "@/components/agent/TaskForm";
 import { requireAgentContext } from "@/lib/agent";
+import { agentTaskTenantWhere } from "@/lib/crm-read-scope";
 import { resolveDeskView } from "@/lib/agent/brokerage";
 import { prisma } from "@/lib/prisma";
 
@@ -23,7 +24,7 @@ export default async function AgentTasksPage() {
   const now = new Date();
   const tasks = await prisma.agentTask.findMany({
     where: {
-      organizationId: ctx.organizationId,
+      ...agentTaskTenantWhere(ctx),
       status: "OPEN",
       ...assigneeFilter,
     },

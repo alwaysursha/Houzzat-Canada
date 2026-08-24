@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
+import { leadWhereForDesk } from "@/lib/crm-read-scope";
 import { resolveDeskView } from "@/lib/agent/brokerage";
 import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
 import {
@@ -80,20 +81,6 @@ function categoryForType(type: string): Exclude<DeskActivityCategory, "all"> {
     return "communications";
   }
   return "agent_actions";
-}
-
-function leadWhereForDesk(
-  ctx: AgentOrgContext,
-  deskAgentId: string | null,
-): Prisma.LeadWhereInput {
-  const org: Prisma.LeadWhereInput = {
-    organizationId: { in: ctx.organizationIds },
-  };
-  if (ctx.canSeeTeamLeads) {
-    if (deskAgentId) return { ...org, assignedAgentId: deskAgentId };
-    return org;
-  }
-  return { ...org, assignedAgentId: ctx.user.id };
 }
 
 function sanitizeDetail(text: string | null | undefined, max = 100): string | null {

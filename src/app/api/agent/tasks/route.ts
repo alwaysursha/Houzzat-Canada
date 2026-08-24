@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import {
   canAccessLead,
   markLeadFirstResponse,
   requireAgentContext,
 } from "@/lib/agent";
 import { resolveChildCrmOwnership } from "@/lib/crm-ownership";
+import { agentTaskTenantWhere, isWorkspaceReadMode } from "@/lib/crm-read-scope";
 import { prisma } from "@/lib/prisma";
 
 const createSchema = z.object({
@@ -39,14 +41,8 @@ export async function GET(request: Request) {
   const endOfDay = new Date();
   endOfDay.setHours(23, 59, 59, 999);
 
-  const where: {
-    organizationId: string;
-    assigneeId?: string;
-    leadId?: string;
-    status?: "OPEN";
-    dueAt?: { lte?: Date; lt?: Date };
-  } = {
-    organizationId: ctx.organizationId,
+  const where: Prisma.AgentTaskWhereInput = {
+    ...agentTaskTenantWhere(ctx),
     status: "OPEN",
   };
 
@@ -143,9 +139,12 @@ export async function PATCH(request: Request) {
   const existing = await prisma.agentTask.findUnique({
     where: { id: parsed.data.taskId },
   });
+  const tenantMatch = isWorkspaceReadMode()
+    ? existing?.workspaceId === ctx.workspaceId
+    : existing?.organizationId === ctx.organizationId;
   if (
     !existing ||
-    existing.organizationId !== ctx.organizationId ||
+    !tenantMatch ||
     (!ctx.canSeeTeamLeads && existing.assigneeId !== ctx.user.id)
   ) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

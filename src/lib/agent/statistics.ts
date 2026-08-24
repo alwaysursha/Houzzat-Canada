@@ -1,7 +1,7 @@
 import type { LeadStatus, Prisma } from "@prisma/client";
 import { Prisma as PrismaNs } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
-import { leadScopeWhere } from "@/lib/agent";
+import { agentTaskTenantWhere, leadDeskSql, leadWhereForDesk } from "@/lib/crm-read-scope";
 import { resolveDeskView } from "@/lib/agent/brokerage";
 import type { AgentStatistics } from "@/lib/agent/statistics-shared";
 import { HOT_CANDIDATE_TAKE } from "@/lib/agent/statistics-shared";
@@ -68,31 +68,7 @@ function asNumber(value: bigint | number | null | undefined): number {
   return typeof value === "bigint" ? Number(value) : value;
 }
 
-/**
- * SQL fragment matching `leadWhere` desk scope (org + assignee).
- * Used for day-bucket / response aggregates — no raw Lead row transfer.
- */
-export function leadDeskSql(
-  ctx: AgentOrgContext,
-  focusAgentId: string | null,
-): PrismaNs.Sql {
-  if (focusAgentId) {
-    // Matches `{ organizationId: ctx.organizationId, assignedAgentId: focusAgentId }`.
-    return PrismaNs.sql`"organizationId" = ${ctx.organizationId} AND "assignedAgentId" = ${focusAgentId}`;
-  }
-
-  const orgIds = ctx.organizationIds.length
-    ? ctx.organizationIds
-    : [ctx.organizationId];
-  const orgClause = PrismaNs.sql`"organizationId" IN (${PrismaNs.join(orgIds)})`;
-
-  if (ctx.canSeeTeamLeads) {
-    // Matches leadScopeWhere(..., "team") → org only.
-    return orgClause;
-  }
-  // Matches `{ ...scopeMine, assignedAgentId: ctx.user.id }` — mine only, not pond.
-  return PrismaNs.sql`${orgClause} AND "assignedAgentId" = ${ctx.user.id}`;
-}
+export { leadDeskSql } from "@/lib/crm-read-scope";
 
 async function loadLeadCreatedByDay(
   deskSql: PrismaNs.Sql,
@@ -209,14 +185,7 @@ export async function resolveStatisticsScope(
 ): Promise<StatisticsScope> {
   const desk = await resolveDeskView(ctx);
   const focusAgentId = desk.deskAgentId;
-  const scopeTeam = leadScopeWhere(ctx, ctx.canSeeTeamLeads ? "team" : "mine");
-  const scopeMine = leadScopeWhere(ctx, "mine");
-
-  const leadWhere: Prisma.LeadWhereInput = focusAgentId
-    ? { organizationId: ctx.organizationId, assignedAgentId: focusAgentId }
-    : ctx.canSeeTeamLeads
-      ? scopeTeam
-      : { ...scopeMine, assignedAgentId: ctx.user.id };
+  const leadWhere = leadWhereForDesk(ctx, focusAgentId);
 
   const scopeLabel = focusAgentId
     ? "Selected agent desk"
@@ -325,7 +294,7 @@ export async function loadAgentStatisticsKpis(
     }),
     prisma.agentTask.count({
       where: {
-        organizationId: ctx.organizationId,
+        ...agentTaskTenantWhere(ctx),
         status: "DONE",
         completedAt: { gte: periodStart },
         ...(focusAgentId

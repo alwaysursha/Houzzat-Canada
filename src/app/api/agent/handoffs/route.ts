@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAgentUser } from "@/lib/agent";
+import { canAccessLead, requireAgentContext, requireAgentUser } from "@/lib/agent";
 import { SITE_URL } from "@/lib/constants";
 import { sendNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -13,6 +13,15 @@ const schema = z.object({
   listingMls: z.string().optional(),
   notes: z.string().max(2000).optional(),
 });
+
+const leadAuthSelect = {
+  id: true,
+  organizationId: true,
+  workspaceId: true,
+  assignedAgentId: true,
+  listingMls: true,
+  notes: true,
+} as const;
 
 export async function GET() {
   const agent = await requireAgentUser();
@@ -35,8 +44,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const agent = await requireAgentUser();
-  if (!agent) {
+  const ctx = await requireAgentContext();
+  if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -55,27 +64,31 @@ export async function POST(request: Request) {
   let customerName = parsed.data.customerName;
   let customerEmail = parsed.data.customerEmail;
   let listingMls = parsed.data.listingMls;
+  let authorizedLeadId: string | undefined;
 
   if (parsed.data.leadId) {
     const lead = await prisma.lead.findUnique({
       where: { id: parsed.data.leadId },
+      select: leadAuthSelect,
     });
-    if (lead) {
-      listingMls = listingMls ?? lead.listingMls ?? undefined;
-      if (lead.notes) {
-        const emailMatch = lead.notes.match(/<([^>]+@[^>]+)>/);
-        if (emailMatch && !customerEmail) customerEmail = emailMatch[1];
-        const nameMatch = lead.notes.match(/Contact:\s*([^<\n]+)/);
-        if (nameMatch && !customerName) customerName = nameMatch[1].trim();
-      }
+    if (!lead || !canAccessLead(ctx, lead)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    authorizedLeadId = lead.id;
+    listingMls = listingMls ?? lead.listingMls ?? undefined;
+    if (lead.notes) {
+      const emailMatch = lead.notes.match(/<([^>]+@[^>]+)>/);
+      if (emailMatch && !customerEmail) customerEmail = emailMatch[1];
+      const nameMatch = lead.notes.match(/Contact:\s*([^<\n]+)/);
+      if (nameMatch && !customerName) customerName = nameMatch[1].trim();
     }
   }
 
   const handoff = await prisma.referralHandoff.create({
     data: {
       partnerId: partner.id,
-      agentId: agent.id,
-      leadId: parsed.data.leadId,
+      agentId: ctx.user.id,
+      leadId: authorizedLeadId,
       customerName,
       customerEmail,
       listingMls,
@@ -92,7 +105,7 @@ export async function POST(request: Request) {
     toPhone: partner.phone,
     subject: `Houzzat referral handoff — ${customerName ?? "client"}`,
     text: [
-      `New referral from ${agent.name ?? agent.email}`,
+      `New referral from ${ctx.user.name ?? ctx.user.email}`,
       customerName ? `Client: ${customerName}` : null,
       customerEmail ? `Email: ${customerEmail}` : null,
       listingMls ? `Listing: ${listingMls}` : null,
@@ -107,11 +120,11 @@ export async function POST(request: Request) {
     preferWhatsApp: true,
   });
 
-  if (parsed.data.leadId) {
+  if (authorizedLeadId) {
     await prisma.leadActivity.create({
       data: {
-        leadId: parsed.data.leadId,
-        userId: agent.id,
+        leadId: authorizedLeadId,
+        userId: ctx.user.id,
         type: "referral_handoff",
         body: `${partner.type} → ${partner.name}`,
         meta: { handoffId: handoff.id, partnerId: partner.id },

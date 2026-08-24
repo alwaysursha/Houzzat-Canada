@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { AppointmentStatus } from "@prisma/client";
-import { canManageAllLeads, requireAgentUser } from "@/lib/agent";
+import { requireAgentContext } from "@/lib/agent";
+import { canMutateAppointment } from "@/lib/crm-read-scope";
 import { sendNotification } from "@/lib/notifications";
 import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
@@ -17,9 +18,15 @@ const schema = z.object({
   notes: z.string().max(2000).optional(),
 });
 
+const leadAuthSelect = {
+  organizationId: true,
+  workspaceId: true,
+  assignedAgentId: true,
+} as const;
+
 export async function PATCH(request: Request) {
-  const agent = await requireAgentUser();
-  if (!agent) {
+  const ctx = await requireAgentContext();
+  if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -31,9 +38,13 @@ export async function PATCH(request: Request) {
 
   const appointment = await prisma.appointment.findUnique({
     where: { id: parsed.data.appointmentId },
-    include: {
+    select: {
+      id: true,
+      type: true,
+      agentId: true,
+      listingMls: true,
       customer: { select: { id: true, email: true, phone: true, name: true } },
-      lead: true,
+      lead: { select: leadAuthSelect },
     },
   });
 
@@ -41,11 +52,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (
-    !canManageAllLeads(agent.role) &&
-    appointment.agentId &&
-    appointment.agentId !== agent.id
-  ) {
+  const auth = canMutateAppointment(ctx, appointment);
+  if (!auth.allowed) {
+    if (auth.reason === "lead") {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -62,7 +73,7 @@ export async function PATCH(request: Request) {
           ? null
           : parsed.data.videoJoinUrl,
       notes: parsed.data.notes,
-      agentId: appointment.agentId ?? agent.id,
+      agentId: appointment.agentId ?? ctx.user.id,
     },
   });
 

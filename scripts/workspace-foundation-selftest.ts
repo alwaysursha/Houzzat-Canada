@@ -84,27 +84,17 @@ function testOrganizationUntouched() {
   assert.ok(schema.includes("organizationId  String?"), "Lead.organizationId preserved");
 }
 
-function testNoRuntimeWorkspaceWiring() {
-  const appSrc = [
-    agent,
-    brokerage,
-    leadIntake,
-    staffEvents,
-    auth,
-    middleware,
-  ].join("\n");
-  assert.ok(
-    !appSrc.includes("WorkspaceMember"),
-    "runtime must not reference WorkspaceMember yet",
-  );
-  assert.ok(
-    !appSrc.includes("prisma.workspace"),
-    "runtime must not query Workspace yet",
-  );
-  assert.ok(
-    !appSrc.includes("workspaceId"),
-    "runtime must not use workspaceId yet",
-  );
+function testRuntimeWorkspaceReadFoundation() {
+  const workspaceCtx = read("src/lib/workspace-context.ts");
+  const readScope = read("src/lib/crm-read-scope.ts");
+
+  assert.ok(workspaceCtx.includes("resolveWorkspaceStaffContext"));
+  assert.ok(workspaceCtx.includes("workspaceMember.findMany"));
+  assert.ok(readScope.includes("parseCrmReadScope"));
+  assert.ok(readScope.includes("WORKSPACE_READ_SCOPE"));
+
+  // Brokerage desk routing stays org-scoped in Stage 3F.
+  assert.ok(!brokerage.includes("workspaceId"));
 }
 
 function testBrokerageAndRoutingUntouched() {
@@ -138,7 +128,7 @@ testWorkspaceMemberUniqueness();
 testWorkspaceSlugUnique();
 testWorkspaceIdScopeMatchesStage3B();
 testOrganizationUntouched();
-testNoRuntimeWorkspaceWiring();
+testRuntimeWorkspaceReadFoundation();
 testBrokerageAndRoutingUntouched();
 testNotificationsUntouched();
 testFkDeleteBehaviorDocumentedInSchema();

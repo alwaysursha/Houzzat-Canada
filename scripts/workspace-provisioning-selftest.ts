@@ -46,14 +46,13 @@ function testProvisionScriptStructure() {
 }
 
 function testNoRuntimeWorkspaceWiring() {
-  const agent = read("src/lib/agent.ts");
   const brokerage = read("src/lib/agent/brokerage.ts");
   const staffEvents = read("src/lib/notifications/staff-events.ts");
-  const combined = [agent, brokerage, staffEvents].join("\n");
+  const workspaceCtx = read("src/lib/workspace-context.ts");
 
-  assert.ok(!combined.includes("prisma.workspace"));
-  assert.ok(!combined.includes("WorkspaceMember"));
-  assert.ok(!combined.includes("workspaceId"));
+  assert.ok(workspaceCtx.includes("resolveWorkspaceStaffContext"));
+  assert.ok(!brokerage.includes("workspaceId"));
+  assert.ok(!staffEvents.includes("workspaceId"));
 }
 
 function testOwnerNotPrimaryAgentRole() {

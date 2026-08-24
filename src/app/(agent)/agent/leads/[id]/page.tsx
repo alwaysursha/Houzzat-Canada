@@ -18,6 +18,7 @@ export default async function AgentLeadDetailPage({ params }: Params) {
     select: {
       id: true,
       organizationId: true,
+      workspaceId: true,
       assignedAgentId: true,
     },
   });

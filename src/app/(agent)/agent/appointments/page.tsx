@@ -3,6 +3,7 @@ import Link from "next/link";
 import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { AppointmentActions } from "@/components/agent/AppointmentActions";
 import { requireAgentContext } from "@/lib/agent";
+import { leadTenantWhere } from "@/lib/crm-read-scope";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Appointments · Agent CRM" };
@@ -18,7 +19,7 @@ export default async function AgentAppointmentsPage({
 
   const orgLeadIds = (
     await prisma.lead.findMany({
-      where: { organizationId: ctx.organizationId },
+      where: leadTenantWhere(ctx),
       select: { id: true },
     })
   ).map((l) => l.id);

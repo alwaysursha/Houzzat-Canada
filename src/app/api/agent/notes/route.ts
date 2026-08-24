@@ -116,6 +116,7 @@ export async function PATCH(request: Request) {
         select: {
           id: true,
           organizationId: true,
+          workspaceId: true,
           assignedAgentId: true,
         },
       },

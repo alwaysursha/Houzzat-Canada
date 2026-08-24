@@ -93,9 +93,15 @@ function testDeferredModelsHaveNoWorkspaceId() {
   }
 }
 
-function testNoRuntimeWorkspaceOwnershipUsage() {
-  assert.ok(!appSrc.includes("workspaceId"));
-  assert.ok(!appSrc.includes("prisma.workspace"));
+function testRuntimeWorkspaceOwnershipReadFoundation() {
+  const readScope = read("src/lib/crm-read-scope.ts");
+  const ownership = read("src/lib/crm-ownership.ts");
+  const workspaceCtx = read("src/lib/workspace-context.ts");
+
+  assert.ok(readScope.includes("leadTenantWhere"));
+  assert.ok(ownership.includes("resolveLeadCrmOwnership"));
+  assert.ok(workspaceCtx.includes("workspaceMember.findMany"));
+  assert.ok(!read("src/lib/agent/brokerage.ts").includes("workspaceId"));
 }
 
 function testStage3bMigrationSql() {
@@ -121,7 +127,7 @@ testFkRestrictOnDelete();
 testApprovedIndexes();
 testOrganizationIndexesPreserved();
 testDeferredModelsHaveNoWorkspaceId();
-testNoRuntimeWorkspaceOwnershipUsage();
+testRuntimeWorkspaceOwnershipReadFoundation();
 testStage3bMigrationSql();
 
 console.log("workspace-ownership-schema:selftest: ok");

@@ -65,11 +65,10 @@ function testWritePathsWired() {
 }
 
 function testNoWorkspaceReadsInRuntime() {
-  const agent = read("src/lib/agent.ts");
-  const brokerage = read("src/lib/agent/brokerage.ts");
-  const combined = [agent, brokerage].join("\n");
-  assert.ok(!combined.includes("workspaceId"), "reads remain organizationId-authoritative");
-  assert.ok(!combined.includes("prisma.workspace"));
+  const readScope = read("src/lib/crm-read-scope.ts");
+  const ownership = read("src/lib/crm-ownership.ts");
+  assert.ok(readScope.includes("leadTenantWhere"));
+  assert.ok(ownership.includes("WORKSPACE_DUAL_WRITE"));
 }
 
 function testNullWriteGuardLogic() {

@@ -26,6 +26,7 @@ export async function POST(request: Request) {
     select: {
       id: true,
       organizationId: true,
+      workspaceId: true,
       assignedAgentId: true,
       customerId: true,
     },

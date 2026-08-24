@@ -33,6 +33,7 @@ export async function GET(_request: Request, { params }: Params) {
           select: {
             id: true,
             organizationId: true,
+            workspaceId: true,
             assignedAgentId: true,
             customer: { select: { name: true, email: true } },
           },

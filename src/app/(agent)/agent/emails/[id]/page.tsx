@@ -23,6 +23,7 @@ export default async function AgentEmailPreviewPage({
         select: {
           id: true,
           organizationId: true,
+          workspaceId: true,
           assignedAgentId: true,
           customer: { select: { name: true, email: true } },
         },

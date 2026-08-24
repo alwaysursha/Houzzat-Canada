@@ -8,8 +8,12 @@ import {
   LaunchpadDeferredQuickModules,
 } from "@/components/agent/LaunchpadDeferredSections";
 import { LaunchpadTodoCarousel } from "@/components/agent/LaunchpadTodoCarousel";
-import { leadScopeWhere, requireAgentContext } from "@/lib/agent";
+import { requireAgentContext } from "@/lib/agent";
 import { DESK_AGENT_COOKIE, resolveDeskView } from "@/lib/agent/brokerage";
+import {
+  agentTaskTenantWhere,
+  leadWhereForDesk,
+} from "@/lib/crm-read-scope";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Launchpad · Agent CRM" };
@@ -29,45 +33,20 @@ export default async function AgentLaunchpadPage() {
   endOfDay.setHours(23, 59, 59, 999);
 
   const desk = await resolveDeskView({ ...ctx, deskCookie });
-  const scopeMine = leadScopeWhere(ctx, "mine");
-  const scopeTeam = leadScopeWhere(ctx, ctx.canSeeTeamLeads ? "team" : "mine");
   const deskView = (ctx.canSeeTeamLeads ? "team" : "mine") as "mine" | "team";
   const focusAgentId = desk.deskAgentId;
+  const deskLeadBase = leadWhereForDesk(ctx, focusAgentId);
 
   const followUpStatuses = [
     "ATTEMPTED_CONTACT",
     "CONTACTED",
     "PENDING_CLIENT",
   ] as LeadStatus[];
-  const callNewLeadsWhere = focusAgentId
-    ? {
-        organizationId: ctx.organizationId,
-        assignedAgentId: focusAgentId,
-        status: "NEW_LEAD" as const,
-      }
-    : ctx.canSeeTeamLeads
-      ? { ...scopeTeam, status: "NEW_LEAD" as const }
-      : {
-          ...scopeMine,
-          status: "NEW_LEAD" as const,
-          assignedAgentId: ctx.user.id,
-        };
-  const followUpLeadsWhere = focusAgentId
-    ? {
-        organizationId: ctx.organizationId,
-        assignedAgentId: focusAgentId,
-        status: { in: followUpStatuses },
-      }
-    : ctx.canSeeTeamLeads
-      ? {
-          ...scopeTeam,
-          status: { in: followUpStatuses },
-        }
-      : {
-          ...scopeMine,
-          assignedAgentId: ctx.user.id,
-          status: { in: followUpStatuses },
-        };
+  const callNewLeadsWhere = { ...deskLeadBase, status: "NEW_LEAD" as const };
+  const followUpLeadsWhere = {
+    ...deskLeadBase,
+    status: { in: followUpStatuses },
+  };
   const assigneeFilter = focusAgentId
     ? { assigneeId: focusAgentId }
     : ctx.canSeeTeamLeads
@@ -93,7 +72,7 @@ export default async function AgentLaunchpadPage() {
   ] = await Promise.all([
     prisma.agentTask.findMany({
       where: {
-        organizationId: ctx.organizationId,
+        ...agentTaskTenantWhere(ctx),
         status: "OPEN",
         dueAt: { lte: endOfDay },
         ...assigneeFilter,
@@ -115,7 +94,7 @@ export default async function AgentLaunchpadPage() {
     }),
     prisma.agentTask.count({
       where: {
-        organizationId: ctx.organizationId,
+        ...agentTaskTenantWhere(ctx),
         status: "OPEN",
         dueAt: { lt: now },
         ...assigneeFilter,
@@ -123,7 +102,7 @@ export default async function AgentLaunchpadPage() {
     }),
     prisma.agentTask.count({
       where: {
-        organizationId: ctx.organizationId,
+        ...agentTaskTenantWhere(ctx),
         status: "OPEN",
         dueAt: { gte: startOfDay, lte: endOfDay },
         ...assigneeFilter,
@@ -145,7 +124,7 @@ export default async function AgentLaunchpadPage() {
     }),
     prisma.agentTask.findMany({
       where: {
-        organizationId: ctx.organizationId,
+        ...agentTaskTenantWhere(ctx),
         status: "OPEN",
         ...assigneeFilter,
       },

@@ -78,10 +78,8 @@ async function LaunchpadQuickModulesBody({
 }) {
   const [avgResponseMins, onlineLeads, hot] = await Promise.all([
     loadLaunchpadAvgResponseMins({
-      organizationId: ctx.organizationId,
+      ctx,
       focusAgentId,
-      canSeeTeamLeads: ctx.canSeeTeamLeads,
-      userId: ctx.user.id,
     }),
     loadLaunchpadOnlineLeads({ ctx, deskView, focusAgentId }),
     loadLaunchpadHotLeads(ctx),

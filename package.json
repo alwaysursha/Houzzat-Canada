@@ -39,6 +39,8 @@
     "workspace:rollback-houzzat-ownership": "node --import tsx scripts/rollback-houzzat-workspace-ownership.ts",
     "workspace-ownership:shadow": "node --import tsx scripts/workspace-ownership-shadow-selftest.ts",
     "workspace-dual-write:selftest": "node --import tsx scripts/workspace-dual-write-selftest.ts",
+    "workspace-read-shadow:selftest": "node --import tsx scripts/workspace-read-shadow-selftest.ts",
+    "workspace-read-scope:selftest": "node --import tsx scripts/workspace-read-scope-selftest.ts",
     "push-reliability:selftest": "node --import tsx scripts/push-reliability-selftest.ts",
     "verify-email:selftest": "node --import tsx scripts/verify-email-auth-selftest.ts",
     "typesense:import": "node --import tsx scripts/typesense-import-listings.ts",

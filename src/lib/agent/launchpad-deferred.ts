@@ -2,6 +2,7 @@ import { cache } from "react";
 import type { LeadStatus } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
 import { leadScopeWhere } from "@/lib/agent";
+import { leadWhereForDesk } from "@/lib/crm-read-scope";
 import { computeHotnessMap, findOnlineUserIds } from "@/lib/agent/hotness";
 import { prisma } from "@/lib/prisma";
 
@@ -12,20 +13,16 @@ const ONLINE_LEADS_TAKE = 40;
 const CONTACT_REQUESTED_TAKE = 24;
 
 export async function loadLaunchpadAvgResponseMins(input: {
-  organizationId: string;
+  ctx: AgentOrgContext;
   focusAgentId: string | null;
-  canSeeTeamLeads: boolean;
-  userId: string;
 }): Promise<number> {
   const respondedLeads = await prisma.lead.findMany({
     where: {
-      organizationId: input.organizationId,
+      ...leadWhereForDesk(input.ctx, input.focusAgentId),
       firstRespondedAt: { not: null },
-      ...(input.focusAgentId
-        ? { assignedAgentId: input.focusAgentId }
-        : input.canSeeTeamLeads
-          ? { assignedAgentId: { not: null } }
-          : { assignedAgentId: input.userId }),
+      ...(!input.focusAgentId && input.ctx.canSeeTeamLeads
+        ? { assignedAgentId: { not: null } }
+        : {}),
     },
     select: { createdAt: true, firstRespondedAt: true },
     orderBy: { firstRespondedAt: "desc" },

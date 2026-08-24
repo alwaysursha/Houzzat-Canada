@@ -1,9 +1,16 @@
-import type { OrgMembershipRole, Prisma, Role } from "@prisma/client";
+import type { OrgMembershipRole, Prisma, Role, WorkspaceMemberRole, WorkspaceMemberStatus, WorkspaceStatus } from "@prisma/client";
 import { cache } from "react";
 import { auth } from "@/lib/auth";
 import { ensureBrokerageOrganization } from "@/lib/agent/brokerage";
+import {
+  canAccessLead as canAccessLeadScoped,
+  leadScopeWhere as leadScopeWhereScoped,
+  parseCrmReadScope,
+  type CrmReadScopeMode,
+} from "@/lib/crm-read-scope";
 import { isAdminRole, isAgentRole } from "@/lib/constants";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
+import { resolveWorkspaceStaffContext } from "@/lib/workspace-context";
 
 const agentUserSelect = {
   id: true,
@@ -35,7 +42,18 @@ export type AgentOrgContext = {
   canSeeTeamLeads: boolean;
   /** Platform Houzzat ADMIN — Team Leader / ops. */
   isPlatformAdmin: boolean;
+  /** Resolved from ACTIVE WorkspaceMember — never from brokerageAffiliation. */
+  workspaceId: string | null;
+  workspaceRole: WorkspaceMemberRole | null;
+  workspaceMemberStatus: WorkspaceMemberStatus | null;
+  workspaceStatus: WorkspaceStatus | null;
+  isWorkspaceMember: boolean;
+  isWorkspaceCrmAllowed: boolean;
+  hasAmbiguousWorkspaceMembership: boolean;
+  readScope: CrmReadScopeMode;
 };
+
+export { parseCrmReadScope, type CrmReadScopeMode };
 
 /** Lightweight staff gate for Agent layout chrome — no brokerage / desk I/O. */
 export type AgentGate = {
@@ -186,6 +204,9 @@ export const requireAgentContext = cache(
       membership?.role === "OWNER" ||
       membership?.role === "ADMIN";
 
+    const workspace = await resolveWorkspaceStaffContext(user.id);
+    const readScope = parseCrmReadScope();
+
     // Seat flag healing is not required to authorize the response.
     if (!isPlatformAdmin) {
       scheduleWorkerSideEffect(
@@ -203,6 +224,14 @@ export const requireAgentContext = cache(
       membershipRole: membership?.role ?? membershipRole,
       canSeeTeamLeads,
       isPlatformAdmin,
+      workspaceId: workspace.workspaceId,
+      workspaceRole: workspace.workspaceRole,
+      workspaceMemberStatus: workspace.workspaceMemberStatus,
+      workspaceStatus: workspace.workspaceStatus,
+      isWorkspaceMember: workspace.isWorkspaceMember,
+      isWorkspaceCrmAllowed: workspace.isWorkspaceCrmAllowed,
+      hasAmbiguousWorkspaceMembership: workspace.hasAmbiguousMembership,
+      readScope,
     };
   },
 );
@@ -212,36 +241,18 @@ export function leadScopeWhere(
   ctx: AgentOrgContext,
   view: "mine" | "pond" | "team" = "mine",
 ): Prisma.LeadWhereInput {
-  const org = { organizationId: { in: ctx.organizationIds } };
-
-  if (view === "pond") {
-    return { ...org, assignedAgentId: null };
-  }
-
-  if (view === "team" && ctx.canSeeTeamLeads) {
-    return org;
-  }
-
-  // Default: my leads + claimable pond in the brokerage.
-  return {
-    ...org,
-    OR: [{ assignedAgentId: ctx.user.id }, { assignedAgentId: null }],
-  };
+  return leadScopeWhereScoped(ctx, view);
 }
 
 export function canAccessLead(
   ctx: AgentOrgContext,
-  lead: { organizationId: string | null; assignedAgentId: string | null },
+  lead: {
+    organizationId: string | null;
+    workspaceId?: string | null;
+    assignedAgentId: string | null;
+  },
 ): boolean {
-  if (ctx.isPlatformAdmin || ctx.canSeeTeamLeads) return true;
-  if (
-    lead.organizationId &&
-    !ctx.organizationIds.includes(lead.organizationId)
-  ) {
-    return false;
-  }
-  if (!lead.assignedAgentId) return true;
-  return lead.assignedAgentId === ctx.user.id;
+  return canAccessLeadScoped(ctx, lead);
 }
 
 /**
