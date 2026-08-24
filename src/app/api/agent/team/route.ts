@@ -4,6 +4,7 @@ import {
   requireAgentContext,
   resolveOrganizationIdForAssignee,
 } from "@/lib/agent";
+import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import {
   deleteTeamMember,
   disableTeamMember,
@@ -281,12 +282,14 @@ export async function POST(request: Request) {
         (await resolveOrganizationIdForAssignee(parsed.data.assigneeId)) ??
         organizationId;
     }
+    const ownership = await resolveLeadCrmOwnership(organizationId);
 
     const updated = await prisma.lead.update({
       where: { id: parsed.data.leadId },
       data: {
         assignedAgentId: parsed.data.assigneeId,
         organizationId,
+        workspaceId: ownership.workspaceId,
         activities: {
           create: {
             type: "reassigned",

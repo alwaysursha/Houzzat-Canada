@@ -1,5 +1,6 @@
 import { SITE_URL } from "@/lib/constants";
 import { resolveDefaultOrganizationId } from "@/lib/agent";
+import { resolveChildCrmOwnership } from "@/lib/crm-ownership";
 import type { RenderedEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
 
@@ -38,9 +39,15 @@ export async function logClientEmail(input: {
   }
   if (!organizationId) return null;
 
+  const ownership = await resolveChildCrmOwnership({
+    organizationId,
+    leadId,
+  });
+
   const row = await prisma.leadEmailLog.create({
     data: {
-      organizationId,
+      organizationId: ownership.organizationId,
+      workspaceId: ownership.workspaceId,
       leadId,
       sentById: input.sentById ?? null,
       toEmail: input.toEmail,

@@ -8,6 +8,7 @@ import {
   resolveLeadDeskAssignment,
   resolveLeadIntent,
 } from "@/lib/agent/lead-intake";
+import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import {
   AGENT_CONTACT_CONSENT_KIND,
@@ -138,6 +139,7 @@ export async function POST(request: Request) {
   const userAgent = request.headers.get("user-agent");
 
   const { leadId, shareToken } = await prisma.$transaction(async (tx) => {
+    const ownership = await resolveLeadCrmOwnership(organizationId);
     const lead = await tx.lead.create({
       data: {
         source: "SHOWING_REQUEST",
@@ -147,7 +149,8 @@ export async function POST(request: Request) {
         listingMls: firstMls,
         customerId: user.id,
         assignedAgentId,
-        organizationId: organizationId ?? undefined,
+        organizationId: ownership.organizationId ?? organizationId ?? undefined,
+        workspaceId: ownership.workspaceId,
         contactConsentAt: consentAt,
         notes: itineraryText,
         activities: {

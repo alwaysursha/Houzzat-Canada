@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
 import { resolvePublicLeadDesk } from "@/lib/agent";
+import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import {
   createCallNewLeadTask,
   resolveLeadDeskAssignment,
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
       intent: "BUYER",
       score: 30,
       assignedAgentId,
-      organizationId: organizationId ?? undefined,
+      ...(await resolveLeadCrmOwnership(organizationId)),
       ...utmLeadFields(utm, adCampaignId),
       notes: [
         `Affordability lead: ${parsed.data.name} <${parsed.data.email}>`,

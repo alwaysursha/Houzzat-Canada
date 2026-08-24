@@ -11,6 +11,7 @@ import {
   inquiryReminderDueAt,
   inquiryReminderTitle,
 } from "@/lib/agent/inquiry-tag";
+import { resolveChildCrmOwnership, resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -41,6 +42,12 @@ export async function POST(request: Request) {
     const dueAt = inquiryReminderDueAt(tag);
     const orgId = lead.organizationId ?? ctx.organizationId;
     const label = INQUIRY_TAG_LABEL[tag];
+    const leadOwnership = await resolveLeadCrmOwnership(orgId);
+    const taskOwnership = await resolveChildCrmOwnership({
+      organizationId: orgId,
+      leadId: lead.id,
+      leadWorkspaceId: lead.workspaceId ?? leadOwnership.workspaceId,
+    });
 
     const [updated] = await prisma.$transaction([
       prisma.lead.update({
@@ -48,6 +55,7 @@ export async function POST(request: Request) {
         data: {
           inquiryTag: tag,
           organizationId: orgId,
+          workspaceId: leadOwnership.workspaceId,
           assignedAgentId: lead.assignedAgentId ?? ctx.user.id,
         },
       }),
@@ -65,7 +73,8 @@ export async function POST(request: Request) {
       }),
       prisma.agentTask.create({
         data: {
-          organizationId: orgId,
+          organizationId: taskOwnership.organizationId,
+          workspaceId: taskOwnership.workspaceId,
           leadId: lead.id,
           assigneeId: ctx.user.id,
           createdById: ctx.user.id,

@@ -7,6 +7,7 @@ import {
   createCallNewLeadTask,
   resolveLeadDeskAssignment,
 } from "@/lib/agent/lead-intake";
+import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import {
   notifyNewLeadCapturedToStaff,
   scheduleNewLeadStaffEmail,
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
 
   const utm = pickUtm(parsed.data);
   const adCampaignId = await resolveAdCampaignId(utm);
+  const ownership = await resolveLeadCrmOwnership(organizationId);
 
   const lead = await prisma.lead.create({
     data: {
@@ -68,7 +70,8 @@ export async function POST(request: Request) {
       score: 45,
       listingMls: listing.mlsNumber,
       assignedAgentId,
-      organizationId: organizationId ?? undefined,
+      organizationId: ownership.organizationId ?? organizationId ?? undefined,
+      workspaceId: ownership.workspaceId,
       ...utmLeadFields(utm, adCampaignId),
       notes: [
         `Pre-construction inquiry: ${listing.addressLine}, ${listing.city}`,

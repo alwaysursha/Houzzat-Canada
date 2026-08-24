@@ -3,6 +3,10 @@ import {
   resolveDefaultOrganizationId,
   resolveOrganizationIdForAssignee,
 } from "@/lib/agent";
+import {
+  resolveChildCrmOwnership,
+  resolveLeadCrmOwnership,
+} from "@/lib/crm-ownership";
 import { notifyNewLeadCaptured, scheduleNewLeadStaffEmail } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 
@@ -212,9 +216,15 @@ export async function createCallNewLeadTask(input: {
     data: { status: "CANCELLED" },
   });
 
+  const ownership = await resolveChildCrmOwnership({
+    organizationId: input.organizationId,
+    leadId: input.leadId,
+  });
+
   return prisma.agentTask.create({
     data: {
-      organizationId: input.organizationId,
+      organizationId: ownership.organizationId,
+      workspaceId: ownership.workspaceId,
       leadId: input.leadId,
       assigneeId: input.assigneeId,
       createdById: input.createdById ?? null,
@@ -252,9 +262,15 @@ export async function onLeadAttemptedContact(input: {
     data: { status: "CANCELLED" },
   });
 
+  const ownership = await resolveChildCrmOwnership({
+    organizationId: input.organizationId,
+    leadId: input.leadId,
+  });
+
   return prisma.agentTask.create({
     data: {
-      organizationId: input.organizationId,
+      organizationId: ownership.organizationId,
+      workspaceId: ownership.workspaceId,
       leadId: input.leadId,
       assigneeId: input.assigneeId,
       createdById: input.createdById ?? null,
@@ -276,12 +292,15 @@ export async function applyLeadAssignment(input: {
   const organizationId =
     (await resolveOrganizationIdForAssignee(input.assigneeId)) ??
     (await resolveDefaultOrganizationId());
+  const ownership = await resolveLeadCrmOwnership(organizationId);
 
   await prisma.lead.update({
     where: { id: input.leadId },
     data: {
       assignedAgentId: input.assigneeId,
-      ...(organizationId ? { organizationId } : {}),
+      ...(organizationId
+        ? { organizationId, workspaceId: ownership.workspaceId }
+        : {}),
       activities: {
         create: {
           type: input.assigneeId ? "assigned" : "unassigned",
@@ -353,6 +372,7 @@ export async function captureWebsiteLead(input: {
       : await resolveLeadDeskAssignment(intent);
 
   const { assigneeId, organizationId } = routed;
+  const ownership = await resolveLeadCrmOwnership(organizationId);
 
   const lead = await prisma.lead.create({
     data: {
@@ -373,7 +393,8 @@ export async function captureWebsiteLead(input: {
           .join("\n"),
       customerId: input.customerId,
       assignedAgentId: assigneeId,
-      organizationId: organizationId ?? undefined,
+      organizationId: ownership.organizationId ?? organizationId ?? undefined,
+      workspaceId: ownership.workspaceId,
       contactConsentAt: new Date(),
       statusChangedAt: new Date(),
     },

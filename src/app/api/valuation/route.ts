@@ -11,6 +11,7 @@ import {
   resolveLeadDeskAssignment,
   resolveLeadIntent,
 } from "@/lib/agent/lead-intake";
+import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
 import { estimateHomeValue } from "@/lib/market/home-value-estimate";
 import { sendNotification } from "@/lib/notifications";
@@ -369,7 +370,7 @@ export async function POST(request: Request) {
         score: data.intent === "sell" ? 72 : data.intent === "buy" ? 40 : 45,
         customerId,
         assignedAgentId,
-        organizationId: organizationId ?? undefined,
+        ...(await resolveLeadCrmOwnership(organizationId)),
         contactConsentAt: new Date(),
         statusChangedAt: new Date(),
         ...utmLeadFields(utm, adCampaignId),

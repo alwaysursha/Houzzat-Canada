@@ -1,0 +1,121 @@
+
+> houzzat@0.1.0 tenancy:baseline /Users/ali/Projects/teamalisyedrealestate
+> node --import tsx scripts/tenancy-baseline.ts
+
+{
+  "generatedAt": "2026-08-24T18:38:12.876Z",
+  "environment": "development",
+  "siteUrl": "https://houzzat.com",
+  "defaultOrganizationIdEnv": null,
+  "readOnly": true,
+  "data": {
+    "organizations": 2,
+    "organizationMemberships": 4,
+    "membershipByRole": {
+      "OWNER": 4
+    },
+    "usersByRoleActive": {
+      "ADMIN": 2,
+      "AGENT": 1,
+      "BUYER": 29
+    },
+    "disabledStaff": 0,
+    "leads": {
+      "total": 41,
+      "nullOrganizationId": 0,
+      "unassignedAgent": 0,
+      "byStatus": {
+        "NEW_LEAD": 35,
+        "CONTACTED": 5,
+        "PENDING_CLIENT": 1
+      },
+      "topSources": {
+        "SIGNUP": 20,
+        "HOME_VALUATION": 16,
+        "OTHER": 4,
+        "SELLER_READINESS": 1
+      },
+      "assigneeBucketCount": 1,
+      "topAssigneeLeadCounts": [
+        {
+          "assigneeIdPrefix": "cmrz0wkx",
+          "count": 41
+        }
+      ],
+      "organizationBucketCount": 1,
+      "leadsByOrganization": [
+        {
+          "organizationIdPrefix": "cmsaje1f",
+          "count": 41
+        }
+      ]
+    },
+    "crmChildren": {
+      "agentTasks": 25,
+      "openAgentTasks": 11,
+      "leadNotes": 4,
+      "leadEmailLogs": 76,
+      "leadActivities": 238,
+      "appointments": 4
+    },
+    "routing": {
+      "settingsRows": 1,
+      "weightRows": 2,
+      "weightsByLane": {
+        "SELLER": 1,
+        "BUYER": 1
+      },
+      "singleton": {
+        "id": "default",
+        "sellerAssignMode": "LISTING_AGENT",
+        "hasListingAgent": true,
+        "listingAgentIdPrefix": "cmrz0wkx",
+        "weightCount": 2,
+        "updatedAt": "2026-08-24T03:59:26.495Z"
+      }
+    },
+    "consumer": {
+      "savedListings": 3,
+      "savedSearches": 19,
+      "propertyMonitors": 7,
+      "areaMonitors": 0,
+      "customerAlerts": 1
+    },
+    "notifications": {
+      "pushDevicesByShell": {
+        "houzzat": 3,
+        "houzzatpro": 4
+      }
+    },
+    "staff": {
+      "activeAgentProfiles": 1,
+      "inactiveAgentProfiles": 1
+    },
+    "marketing": {
+      "landingPages": 1,
+      "adCampaigns": 1,
+      "consentEvents": 60
+    },
+    "workspaceFoundation": {
+      "workspaces": 1,
+      "workspaceMembers": 3
+    },
+    "resolvedBrokerageOrg": {
+      "resolution": "first_by_createdAt",
+      "idPrefix": "cmsaje16",
+      "slug": "houzzat-admin",
+      "seatLimit": 5,
+      "createdAt": "2026-08-01T15:39:04.714Z"
+    }
+  },
+  "integrityChecks": {
+    "leadsWithoutOrg": 0,
+    "multipleOrganizations": true,
+    "singletonRoutingPresent": true,
+    "routingIdIsDefault": true
+  },
+  "durationMs": 1790,
+  "stats": {
+    "assigneeDistributionMedian": 41
+  }
+}

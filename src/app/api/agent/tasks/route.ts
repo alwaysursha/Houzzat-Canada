@@ -5,6 +5,7 @@ import {
   markLeadFirstResponse,
   requireAgentContext,
 } from "@/lib/agent";
+import { resolveChildCrmOwnership } from "@/lib/crm-ownership";
 import { prisma } from "@/lib/prisma";
 
 const createSchema = z.object({
@@ -94,9 +95,15 @@ export async function POST(request: Request) {
     }
   }
 
+  const ownership = await resolveChildCrmOwnership({
+    organizationId: ctx.organizationId,
+    leadId: parsed.data.leadId,
+  });
+
   const task = await prisma.agentTask.create({
     data: {
-      organizationId: ctx.organizationId,
+      organizationId: ownership.organizationId,
+      workspaceId: ownership.workspaceId,
       leadId: parsed.data.leadId,
       assigneeId: parsed.data.assigneeId ?? ctx.user.id,
       createdById: ctx.user.id,

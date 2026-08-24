@@ -5,6 +5,7 @@ import {
   markLeadFirstResponse,
   requireAgentContext,
 } from "@/lib/agent";
+import { resolveChildCrmOwnership, resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { prisma } from "@/lib/prisma";
 
 const createSchema = z.object({
@@ -45,9 +46,16 @@ export async function POST(request: Request) {
   const category = parsed.data.category;
   const pinned = parsed.data.pinned;
 
+  const ownership = await resolveChildCrmOwnership({
+    organizationId: orgId,
+    leadId: lead.id,
+    leadWorkspaceId: lead.workspaceId,
+  });
+
   const note = await prisma.leadNote.create({
     data: {
-      organizationId: orgId,
+      organizationId: ownership.organizationId,
+      workspaceId: ownership.workspaceId,
       leadId: lead.id,
       authorId: ctx.user.id,
       body,
@@ -77,11 +85,13 @@ export async function POST(request: Request) {
   const kind = category === "CALL" ? "Call" : "General";
   const pinMark = pinned ? " · pinned" : "";
   const line = `[${stamp}] [${kind}${pinMark}] ${ctx.user.name || ctx.user.email}: ${body}`;
+  const leadOwnership = await resolveLeadCrmOwnership(orgId);
   await prisma.lead.update({
     where: { id: lead.id },
     data: {
       notes: lead.notes ? `${lead.notes}\n\n${line}` : line,
       organizationId: orgId,
+      workspaceId: leadOwnership.workspaceId,
     },
   });
 

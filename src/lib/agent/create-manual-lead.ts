@@ -1,4 +1,5 @@
 import { createCallNewLeadTask } from "@/lib/agent/lead-intake";
+import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { prisma } from "@/lib/prisma";
 
 export type ManualLeadInput = {
@@ -44,6 +45,8 @@ export async function createManualLead(input: ManualLeadInput) {
     });
   }
 
+  const ownership = await resolveLeadCrmOwnership(input.organizationId);
+
   const lead = await prisma.lead.create({
     data: {
       status: "NEW_LEAD",
@@ -53,7 +56,8 @@ export async function createManualLead(input: ManualLeadInput) {
       notes,
       customerId: customer.id,
       assignedAgentId: input.agentId,
-      organizationId: input.organizationId,
+      organizationId: ownership.organizationId ?? input.organizationId,
+      workspaceId: ownership.workspaceId,
       contactConsentAt: new Date(),
       statusChangedAt: new Date(),
       activities: {
