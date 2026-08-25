@@ -10,15 +10,15 @@ import {
   readActiveWorkspaceIdFromCookies,
   signActiveWorkspaceId,
 } from "@/lib/active-workspace";
+import { shouldConfirmWorkspaceSwitch } from "@/lib/open-lead-workspace-switch";
 import { prisma } from "@/lib/prisma";
 import { isAgentRole } from "@/lib/roles";
 
 /**
  * Stage 3I.1 — server-validated lead deep-link handoff.
  *
- * Same-workspace: set/confirm cookie + redirect to exact lead (no chooser).
- * Cross-workspace: require explicit confirmation before mutating cookie (CSRF-safe UX).
- * Never trusts ?workspaceId=.
+ * Confirm ONLY for true cross-workspace switch (valid A cookie → lead in B).
+ * Single membership + missing/stale cookie → direct open (matches staff context).
  */
 export default async function OpenLeadHandoffPage({
   params,
@@ -54,23 +54,27 @@ export default async function OpenLeadHandoffPage({
     notFound();
   }
 
-  const membership = await prisma.workspaceMember.findFirst({
+  const activeMemberships = await prisma.workspaceMember.findMany({
     where: {
-      workspaceId: lead.workspaceId,
       userId: user.id,
       status: "ACTIVE",
+      workspace: { status: "ACTIVE" },
     },
-    select: { id: true },
+    select: { workspaceId: true },
   });
-  if (!membership) {
+  const activeMemberWorkspaceIds = activeMemberships.map((m) => m.workspaceId);
+  if (!activeMemberWorkspaceIds.includes(lead.workspaceId)) {
     notFound();
   }
 
-  const currentWorkspaceId = await readActiveWorkspaceIdFromCookies();
-  const sameWorkspace = currentWorkspaceId === lead.workspaceId;
+  const cookieWorkspaceId = await readActiveWorkspaceIdFromCookies();
+  const needsConfirm = shouldConfirmWorkspaceSwitch({
+    leadWorkspaceId: lead.workspaceId,
+    cookieWorkspaceId,
+    activeMemberWorkspaceIds,
+  });
 
-  // Explicit confirm query after POST redirect, or same-workspace direct open.
-  if (sameWorkspace || sp.confirm === "1") {
+  if (!needsConfirm || sp.confirm === "1") {
     const cookieStore = await cookies();
     cookieStore.set(
       ACTIVE_WORKSPACE_COOKIE,
@@ -80,11 +84,14 @@ export default async function OpenLeadHandoffPage({
     redirect(openLeadProfileHref(lead.id));
   }
 
-  // Cross-workspace silent GET would switch cookie — require confirmation.
-  const currentName = currentWorkspaceId
+  const validCookieWorkspaceId =
+    cookieWorkspaceId && activeMemberWorkspaceIds.includes(cookieWorkspaceId)
+      ? cookieWorkspaceId
+      : null;
+  const currentName = validCookieWorkspaceId
     ? (
         await prisma.workspace.findUnique({
-          where: { id: currentWorkspaceId },
+          where: { id: validCookieWorkspaceId },
           select: { name: true },
         })
       )?.name
@@ -98,12 +105,16 @@ export default async function OpenLeadHandoffPage({
         <strong className="text-ink">{lead.workspace.name}</strong>
         {currentName ? (
           <>
-            . You are currently in <strong className="text-ink">{currentName}</strong>
+            . You are currently in{" "}
+            <strong className="text-ink">{currentName}</strong>
           </>
         ) : null}
         . Continue to open the exact lead profile in that Workspace.
       </p>
-      <form action={`/api/agent/open-lead/${encodeURIComponent(lead.id)}`} method="post">
+      <form
+        action={`/api/agent/open-lead/${encodeURIComponent(lead.id)}`}
+        method="post"
+      >
         <button
           type="submit"
           className="w-full rounded-lg bg-canopy px-4 py-2.5 text-sm font-semibold text-white"

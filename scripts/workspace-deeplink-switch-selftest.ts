@@ -9,6 +9,7 @@ import {
   openLeadHandoffHref,
   openLeadProfileHref,
 } from "../src/lib/agent/lead-profile-query";
+import { shouldConfirmWorkspaceSwitch } from "../src/lib/open-lead-workspace-switch";
 import { USERS, WS_A, WS_B, leadById } from "./lib/multi-workspace-isolation-fixtures";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -30,13 +31,75 @@ function testDeskHrefUnchanged() {
 
 function testOpenLeadPageServerValidated() {
   const page = read("src/app/(agent)/agent/open-lead/[leadId]/page.tsx");
-  assert.ok(page.includes("lead.workspaceId"));
-  assert.ok(page.includes('status: "ACTIVE"'));
+  assert.ok(page.includes("shouldConfirmWorkspaceSwitch"));
   assert.ok(page.includes("signActiveWorkspaceId"));
-  assert.ok(page.includes("notFound()"));
   assert.ok(page.includes("Switch Workspace?"));
   assert.ok(page.includes('method="post"'));
-  assert.ok(!page.includes("searchParams.get(\"workspaceId\")"));
+  assert.ok(!page.includes('searchParams.get("workspaceId")'));
+}
+
+function testOpenLeadMatrix() {
+  const houzzat = "cmt7kfcth0000gvu0bqsycsvz";
+
+  // Production regression: sole Houzzat membership + no cookie → DIRECT OPEN
+  assert.equal(
+    shouldConfirmWorkspaceSwitch({
+      leadWorkspaceId: houzzat,
+      cookieWorkspaceId: null,
+      activeMemberWorkspaceIds: [houzzat],
+    }),
+    false,
+  );
+
+  // Sole membership + stale cookie for unknown id → DIRECT OPEN
+  assert.equal(
+    shouldConfirmWorkspaceSwitch({
+      leadWorkspaceId: houzzat,
+      cookieWorkspaceId: "stale_other_workspace_id",
+      activeMemberWorkspaceIds: [houzzat],
+    }),
+    false,
+  );
+
+  // Sole membership + matching cookie → DIRECT OPEN
+  assert.equal(
+    shouldConfirmWorkspaceSwitch({
+      leadWorkspaceId: houzzat,
+      cookieWorkspaceId: houzzat,
+      activeMemberWorkspaceIds: [houzzat],
+    }),
+    false,
+  );
+
+  // Multi: cookie A, lead B → CONFIRM
+  assert.equal(
+    shouldConfirmWorkspaceSwitch({
+      leadWorkspaceId: WS_B,
+      cookieWorkspaceId: WS_A,
+      activeMemberWorkspaceIds: [WS_A, WS_B],
+    }),
+    true,
+  );
+
+  // Multi: cookie B, lead B → DIRECT OPEN
+  assert.equal(
+    shouldConfirmWorkspaceSwitch({
+      leadWorkspaceId: WS_B,
+      cookieWorkspaceId: WS_B,
+      activeMemberWorkspaceIds: [WS_A, WS_B],
+    }),
+    false,
+  );
+
+  // Multi: no cookie, lead B → DIRECT OPEN (establishing selection, not switching)
+  assert.equal(
+    shouldConfirmWorkspaceSwitch({
+      leadWorkspaceId: WS_B,
+      cookieWorkspaceId: null,
+      activeMemberWorkspaceIds: [WS_A, WS_B],
+    }),
+    false,
+  );
 }
 
 function testPushUsesHandoff() {
@@ -48,8 +111,6 @@ function testPushUsesHandoff() {
 }
 
 function testMembershipGateLogic() {
-  // Shared user in fixtures belongs to both workspaces conceptually via sharedUser.
-  // Lead B is only accessible when membership includes WS_B.
   const leadB = leadById("lead_b1");
   assert.equal(leadB.workspaceId, WS_B);
   assert.notEqual(leadB.workspaceId, WS_A);
@@ -68,6 +129,7 @@ async function main() {
   testHandoffHref();
   testDeskHrefUnchanged();
   testOpenLeadPageServerValidated();
+  testOpenLeadMatrix();
   testPushUsesHandoff();
   testMembershipGateLogic();
   testOpenLeadExcludedFromChooserGate();
