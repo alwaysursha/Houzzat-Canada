@@ -15,6 +15,10 @@ import { sendRenderedEmail } from "@/lib/email/send";
 import { renderTeamInviteEmail } from "@/lib/email/templates";
 import { notifyLeadAssignedToAgent } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
+import {
+  getWorkspaceTeamPayload,
+  usesWorkspaceTeamScope,
+} from "@/lib/workspace-team";
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -73,6 +77,20 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (usesWorkspaceTeamScope(ctx)) {
+    const payload = await getWorkspaceTeamPayload(ctx);
+    if (!payload) {
+      return NextResponse.json({ error: "Workspace required" }, { status: 403 });
+    }
+    return NextResponse.json({
+      scope: "workspace",
+      workspace: payload.workspace,
+      members: payload.members,
+      invites: payload.invites,
+      canManage: payload.canManage,
+    });
+  }
+
   const [members, invites, org] = await Promise.all([
     prisma.organizationMembership.findMany({
       where: { organizationId: ctx.organizationId },
@@ -103,6 +121,7 @@ export async function GET() {
   ]);
 
   return NextResponse.json({
+    scope: "organization",
     organization: org,
     members,
     invites,
@@ -115,7 +134,21 @@ export async function POST(request: Request) {
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!ctx.canSeeTeamLeads) {
+
+  // Stage 3H.1: workspace team WRITES incomplete — refuse mixed Organization/Workspace state.
+  if (usesWorkspaceTeamScope(ctx)) {
+    return NextResponse.json(
+      {
+        error:
+          "Workspace team writes are not enabled yet. Keep WORKSPACE_TEAM_SCOPE=legacy until Stage 3I.",
+        code: "WORKSPACE_TEAM_WRITES_DISABLED",
+      },
+      { status: 501 },
+    );
+  }
+
+  const canManageTeam = ctx.canSeeTeamLeads;
+  if (!canManageTeam) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

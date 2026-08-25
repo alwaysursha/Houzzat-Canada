@@ -12,6 +12,7 @@ import {
   notifyNewLeadCapturedToStaff,
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
+import { resolveLeadDeskNotifiers } from "@/lib/workspace-notification-recipients";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -47,16 +48,10 @@ export async function POST(request: Request) {
   const routed = await resolveLeadDeskAssignment("BUYER");
   const organizationId = routed.organizationId ?? desk.organizationId;
   const assignedAgentId = routed.assigneeId;
-  const deskNotifiers = organizationId
-      ? await prisma.organizationMembership.findMany({
-          where: {
-            organizationId,
-            role: { in: ["OWNER", "ADMIN"] },
-            user: { disabledAt: null },
-          },
-          select: { user: { select: { id: true, email: true, phone: true } } },
-        })
-      : [];
+  const deskNotifiers = await resolveLeadDeskNotifiers({
+    organizationId,
+    workspaceId: routed.workspaceId,
+  });
 
   const utm = pickUtm(parsed.data);
   const adCampaignId = await resolveAdCampaignId(utm);

@@ -18,6 +18,7 @@ import {
   notifyNewLeadCapturedToStaff,
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
+import { resolveLeadDeskNotifiers } from "@/lib/workspace-notification-recipients";
 import { prisma } from "@/lib/prisma";
 import {
   enrichTourStops,
@@ -118,19 +119,10 @@ export async function POST(request: Request) {
   const routed = await resolveLeadDeskAssignment(intent);
   const organizationId = routed.organizationId ?? desk.organizationId;
   const assignedAgentId = routed.assigneeId;
-  const deskNotifiers = organizationId
-    ? await prisma.organizationMembership.findMany({
-        where: {
-          organizationId,
-          role: { in: ["OWNER", "ADMIN"] },
-          user: { disabledAt: null },
-        },
-        select: {
-          user: { select: { id: true, email: true, phone: true, name: true } },
-        },
-        take: 8,
-      })
-    : [];
+  const deskNotifiers = await resolveLeadDeskNotifiers({
+    organizationId,
+    workspaceId: routed.workspaceId,
+  });
 
   const consentAt = new Date();
   const firstMls = tour.stops[0]!.mlsNumber;

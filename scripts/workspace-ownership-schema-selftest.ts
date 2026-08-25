@@ -80,7 +80,6 @@ function testDeferredModelsHaveNoWorkspaceId() {
     "CmaReport",
     "ReferralHandoff",
     "SavedListing",
-    "CrmRoutingSettings",
   ]) {
     const start = schema.indexOf(`model ${model} `);
     assert.ok(start > 0, `model ${model}`);
@@ -88,9 +87,16 @@ function testDeferredModelsHaveNoWorkspaceId() {
     const block = schema.slice(start, end > 0 ? end : start + 2000);
     assert.ok(
       !block.includes("workspaceId"),
-      `${model} must not have workspaceId in Stage 3B`,
+      `${model} must not have workspaceId`,
     );
   }
+}
+
+function testRoutingSettingsHasNullableWorkspaceId() {
+  const start = schema.indexOf("model CrmRoutingSettings ");
+  const end = schema.indexOf("\nmodel ", start + 1);
+  const block = schema.slice(start, end > 0 ? end : start + 800);
+  assert.match(block, /workspaceId\s+String\?/);
 }
 
 function testRuntimeWorkspaceOwnershipReadFoundation() {
@@ -127,6 +133,7 @@ testFkRestrictOnDelete();
 testApprovedIndexes();
 testOrganizationIndexesPreserved();
 testDeferredModelsHaveNoWorkspaceId();
+testRoutingSettingsHasNullableWorkspaceId();
 testRuntimeWorkspaceOwnershipReadFoundation();
 testStage3bMigrationSql();
 

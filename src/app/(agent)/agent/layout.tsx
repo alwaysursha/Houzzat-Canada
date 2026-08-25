@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { ActiveWorkspaceGate } from "@/components/agent/ActiveWorkspaceGate";
 import { AgentDeferredLeaderBanner } from "@/components/agent/AgentDeferredLeaderBanner";
 import { AgentShell } from "@/components/agent/AgentShell";
 import { StaffRouteConsumerGate } from "@/components/mobile/StaffRouteConsumerGate";
@@ -27,6 +28,7 @@ export default async function AgentLayout({
       orgName={`${SITE_NAME} Team`}
       membershipRole={agentGate.isPlatformAdmin ? "OWNER" : "AGENT"}
     >
+      <ActiveWorkspaceGate />
       <StaffRouteConsumerGate />
       {agentGate.isPlatformAdmin ? <AgentDeferredLeaderBanner /> : null}
       <Suspense fallback={null}>{children}</Suspense>

@@ -9,6 +9,11 @@ import {
 import { sendPushToUser, sendPushToUsers } from "@/lib/notifications/push";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { isAgentRole } from "@/lib/roles";
+import {
+  authorizeStaffRecipientForLead,
+  authorizeStaffRecipientForTask,
+  filterStaffRecipientsForLead,
+} from "@/lib/workspace-notification-recipients";
 
 function uniqueUserIds(
   ids: Array<string | null | undefined>,
@@ -74,8 +79,21 @@ export function scheduleNewLeadStaffEmail(input: {
 
   scheduleWorkerSideEffect(
     (async () => {
+      const authorizedIds = await filterStaffRecipientsForLead(
+        input.leadId,
+        recipientIds,
+        "new_lead_email",
+      );
+      if (authorizedIds.length === 0) {
+        console.info("[staff-notify] new_lead email skipped: no authorized recipients", {
+          leadId: input.leadId,
+          source: input.source,
+        });
+        return;
+      }
+
       const users = await prisma.user.findMany({
-        where: { id: { in: recipientIds } },
+        where: { id: { in: authorizedIds } },
         select: {
           id: true,
           email: true,
@@ -88,7 +106,7 @@ export function scheduleNewLeadStaffEmail(input: {
       const byId = new Map(users.map((u) => [u.id, u]));
       const emailed = new Set<string>();
 
-      for (const id of recipientIds) {
+      for (const id of authorizedIds) {
         const user = byId.get(id);
         if (!user || user.disabledAt) continue;
         if (!isAgentRole(user.role)) continue;
@@ -206,12 +224,26 @@ export function notifyLeadAssignedToAgent(
   input: { leadId: string; label: string },
 ) {
   if (!agentId) return;
-  sendPushToUser(agentId, {
-    type: "lead_reassigned",
-    title: "Lead assigned to you",
-    body: input.label,
-    href: openLeadProfileHref(input.leadId),
-  });
+  scheduleWorkerSideEffect(
+    (async () => {
+      const ok = await authorizeStaffRecipientForLead({
+        userId: agentId,
+        leadId: input.leadId,
+        event: "lead_reassigned",
+      });
+      if (!ok) return;
+      sendPushToUser(agentId, {
+        type: "lead_reassigned",
+        title: "Lead assigned to you",
+        body: input.label,
+        href: openLeadProfileHref(input.leadId),
+      });
+    })().catch((error) => {
+      console.error("[staff-notify] lead_reassigned failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }),
+  );
 }
 
 /**
@@ -235,12 +267,32 @@ export function notifyNewLeadCapturedToStaff(input: {
     });
     return;
   }
-  sendPushToUsers(recipients, {
-    type: "new_lead",
-    title: input.title ?? "New lead",
-    body: input.label,
-    href: openLeadProfileHref(input.leadId),
-  });
+  scheduleWorkerSideEffect(
+    (async () => {
+      const authorized = await filterStaffRecipientsForLead(
+        input.leadId,
+        recipients,
+        "new_lead",
+      );
+      if (authorized.length === 0) {
+        console.info("[staff-notify] new_lead skipped: no authorized recipients", {
+          leadId: input.leadId,
+        });
+        return;
+      }
+      sendPushToUsers(authorized, {
+        type: "new_lead",
+        title: input.title ?? "New lead",
+        body: input.label,
+        href: openLeadProfileHref(input.leadId),
+      });
+    })().catch((error) => {
+      console.error("[staff-notify] new_lead push failed", {
+        leadId: input.leadId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }),
+  );
 }
 
 /** Signup / single-assignee convenience — same push as desk fan-out with one id. */
@@ -269,6 +321,7 @@ export async function notifyCustomerCameOnline(
     where: { customerId: userId, assignedAgentId: { not: null } },
     select: {
       id: true,
+      workspaceId: true,
       assignedAgentId: true,
       customer: { select: { name: true, email: true } },
     },
@@ -285,6 +338,12 @@ export async function notifyCustomerCameOnline(
   for (const lead of leads) {
     const agentId = lead.assignedAgentId;
     if (!agentId || agentId === userId || seen.has(agentId)) continue;
+    const ok = await authorizeStaffRecipientForLead({
+      userId: agentId,
+      leadId: lead.id,
+      event: "lead_online",
+    });
+    if (!ok) continue;
     seen.add(agentId);
     sendPushToUser(agentId, {
       type: "lead_online",
@@ -313,6 +372,12 @@ export async function notifyCustomerCameOnline(
   for (const agentId of seen) {
     const lead = leads.find((row) => row.assignedAgentId === agentId);
     if (!lead) continue;
+    const ok = await authorizeStaffRecipientForLead({
+      userId: agentId,
+      leadId: lead.id,
+      event: "hot_pipeline",
+    });
+    if (!ok) continue;
     sendPushToUser(agentId, {
       type: "hot_pipeline",
       title: "Hot pipeline",
@@ -347,6 +412,7 @@ export async function notifyOpenTasksDue() {
       title: true,
       assigneeId: true,
       leadId: true,
+      workspaceId: true,
     },
     take: 300,
     orderBy: { dueAt: "asc" },
@@ -354,6 +420,13 @@ export async function notifyOpenTasksDue() {
 
   const byAgent = new Map<string, typeof tasks>();
   for (const task of tasks) {
+    const ok = await authorizeStaffRecipientForTask({
+      userId: task.assigneeId,
+      taskWorkspaceId: task.workspaceId,
+      leadId: task.leadId,
+      event: "task_due",
+    });
+    if (!ok) continue;
     const list = byAgent.get(task.assigneeId) ?? [];
     list.push(task);
     byAgent.set(task.assigneeId, list);

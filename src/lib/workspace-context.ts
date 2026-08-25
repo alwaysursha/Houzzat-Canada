@@ -1,5 +1,5 @@
 /**
- * Stage 3F — Workspace staff context resolved from ACTIVE WorkspaceMember rows.
+ * Stage 3F/3H — Workspace staff context from ACTIVE WorkspaceMember rows.
  * Tenant access is never inferred from brokerageAffiliation, User.role, or slug alone.
  */
 import type {
@@ -14,11 +14,18 @@ export type WorkspaceStaffContext = {
   workspaceRole: WorkspaceMemberRole | null;
   workspaceMemberStatus: WorkspaceMemberStatus | null;
   workspaceStatus: WorkspaceStatus | null;
+  workspaceName: string | null;
   isWorkspaceMember: boolean;
   /** ACTIVE member on an ACTIVE workspace — required for WORKSPACE read mode. */
   isWorkspaceCrmAllowed: boolean;
-  /** Multiple ACTIVE memberships — workspace mode must fail closed until explicit picker exists. */
-  hasAmbiguousMembership: boolean;
+  /**
+   * True when >1 ACTIVE membership and no valid active Workspace selection.
+   * Legacy name retained for crm-read-scope compatibility.
+   */
+  hasAmbiguousWorkspaceMembership: boolean;
+  hasMultipleWorkspaces: boolean;
+  requiresWorkspaceSelection: boolean;
+  canManageWorkspace: boolean;
 };
 
 const EMPTY_WORKSPACE_CONTEXT: WorkspaceStaffContext = {
@@ -26,13 +33,56 @@ const EMPTY_WORKSPACE_CONTEXT: WorkspaceStaffContext = {
   workspaceRole: null,
   workspaceMemberStatus: null,
   workspaceStatus: null,
+  workspaceName: null,
   isWorkspaceMember: false,
   isWorkspaceCrmAllowed: false,
-  hasAmbiguousMembership: false,
+  hasAmbiguousWorkspaceMembership: false,
+  hasMultipleWorkspaces: false,
+  requiresWorkspaceSelection: false,
+  canManageWorkspace: false,
 };
+
+type MembershipRow = {
+  role: WorkspaceMemberRole;
+  status: WorkspaceMemberStatus;
+  workspaceId: string;
+  workspace: {
+    id: string;
+    status: WorkspaceStatus;
+    name: string;
+  };
+};
+
+function buildWorkspaceContext(
+  member: MembershipRow,
+  options: {
+    hasMultipleWorkspaces: boolean;
+    requiresWorkspaceSelection: boolean;
+  },
+): WorkspaceStaffContext {
+  const workspaceActive = member.workspace.status === "ACTIVE";
+  const memberActive = member.status === "ACTIVE";
+  const canManageWorkspace =
+    workspaceActive && memberActive && (member.role === "OWNER" || member.role === "ADMIN");
+
+  return {
+    workspaceId: member.workspaceId,
+    workspaceRole: member.role,
+    workspaceMemberStatus: member.status,
+    workspaceStatus: member.workspace.status,
+    workspaceName: member.workspace.name,
+    isWorkspaceMember: true,
+    isWorkspaceCrmAllowed: workspaceActive && memberActive,
+    hasAmbiguousWorkspaceMembership: options.requiresWorkspaceSelection,
+    hasMultipleWorkspaces: options.hasMultipleWorkspaces,
+    requiresWorkspaceSelection: options.requiresWorkspaceSelection,
+    canManageWorkspace,
+  };
+}
 
 export async function resolveWorkspaceStaffContext(
   userId: string,
+  activeWorkspaceId?: string | null,
 ): Promise<WorkspaceStaffContext> {
   const memberships = await prisma.workspaceMember.findMany({
     where: {
@@ -43,32 +93,65 @@ export async function resolveWorkspaceStaffContext(
       role: true,
       status: true,
       workspaceId: true,
-      workspace: { select: { id: true, status: true } },
+      workspace: { select: { id: true, status: true, name: true } },
     },
     orderBy: { createdAt: "asc" },
   });
-
-  if (memberships.length > 1) {
-    return {
-      ...EMPTY_WORKSPACE_CONTEXT,
-      hasAmbiguousMembership: true,
-    };
-  }
 
   if (memberships.length === 0) {
     return { ...EMPTY_WORKSPACE_CONTEXT };
   }
 
-  const member = memberships[0]!;
-  const workspaceActive = member.workspace.status === "ACTIVE";
+  const hasMultipleWorkspaces = memberships.length > 1;
 
-  return {
-    workspaceId: member.workspaceId,
-    workspaceRole: member.role,
-    workspaceMemberStatus: member.status,
-    workspaceStatus: member.workspace.status,
-    isWorkspaceMember: true,
-    isWorkspaceCrmAllowed: workspaceActive && member.status === "ACTIVE",
-    hasAmbiguousMembership: false,
-  };
+  if (memberships.length === 1) {
+    return buildWorkspaceContext(memberships[0]!, {
+      hasMultipleWorkspaces: false,
+      requiresWorkspaceSelection: false,
+    });
+  }
+
+  if (!activeWorkspaceId) {
+    return {
+      ...EMPTY_WORKSPACE_CONTEXT,
+      hasMultipleWorkspaces: true,
+      requiresWorkspaceSelection: true,
+      hasAmbiguousWorkspaceMembership: true,
+    };
+  }
+
+  const selected = memberships.find((m) => m.workspaceId === activeWorkspaceId);
+  if (!selected) {
+    return {
+      ...EMPTY_WORKSPACE_CONTEXT,
+      hasMultipleWorkspaces: true,
+      requiresWorkspaceSelection: true,
+      hasAmbiguousWorkspaceMembership: true,
+    };
+  }
+
+  return buildWorkspaceContext(selected, {
+    hasMultipleWorkspaces: true,
+    requiresWorkspaceSelection: false,
+  });
+}
+
+export async function listActiveWorkspaceMemberships(userId: string) {
+  return prisma.workspaceMember.findMany({
+    where: { userId, status: "ACTIVE" },
+    select: {
+      role: true,
+      workspaceId: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          status: true,
+          brokerageAffiliation: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
 }

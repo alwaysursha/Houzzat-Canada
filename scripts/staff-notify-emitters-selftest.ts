@@ -120,7 +120,9 @@ function testBeaconWorkerOwnership() {
 }
 
 function testAlertEngagementHref() {
-  assert.ok(resendWebhook.includes("openLeadProfileHref(log.leadId)"));
+  assert.ok(resendWebhook.includes("notifyAlertEngagement"));
+  assert.ok(resendWebhook.includes("authorizeStaffRecipientForLead"));
+  assert.ok(resendWebhook.includes("openLeadProfileHref(input.leadId)"));
   assert.ok(resendWebhook.includes('type: "alert_engagement"'));
 }
 

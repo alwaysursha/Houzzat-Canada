@@ -19,6 +19,7 @@ import {
   notifyNewLeadCapturedToStaff,
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
+import { resolveLeadDeskNotifiers } from "@/lib/workspace-notification-recipients";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { VOW_VERSION } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
@@ -336,17 +337,10 @@ export async function POST(request: Request) {
     const routed = await resolveLeadDeskAssignment(routedIntent);
     const organizationId = routed.organizationId ?? desk.organizationId;
     const assignedAgentId = routed.assigneeId;
-    const deskNotifiers = organizationId
-      ? await prisma.organizationMembership.findMany({
-          where: {
-            organizationId,
-            role: { in: ["OWNER", "ADMIN"] },
-            user: { disabledAt: null },
-          },
-          select: { user: { select: { id: true, email: true, phone: true } } },
-          take: 8,
-        })
-      : [];
+    const deskNotifiers = await resolveLeadDeskNotifiers({
+      organizationId,
+      workspaceId: routed.workspaceId,
+    });
 
     const utm = pickUtm(data);
     const adCampaignId = await resolveAdCampaignId(utm);

@@ -10,18 +10,22 @@ import {
 import { notifyNewLeadCaptured, scheduleNewLeadStaffEmail } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 
+export { CRM_ROUTING_SETTINGS_ID, type RoutableAgent } from "@/lib/agent/routing-types";
+
 export const CALL_NEW_LEAD_TASK_TITLE = "Call new lead";
 export const CALL_NEW_LEAD_DUE_MS = 12 * 60 * 60 * 1000;
 export const ATTEMPTED_CONTACT_REMINDER_TITLE =
   "Follow up — attempted contact";
 export const ATTEMPTED_CONTACT_REMINDER_MS = 24 * 60 * 60 * 1000;
-export const CRM_ROUTING_SETTINGS_ID = "default";
-
-export type RoutableAgent = {
-  id: string;
-  name: string | null;
-  email: string;
-};
+import {
+  CRM_ROUTING_SETTINGS_ID,
+  type RoutableAgent,
+} from "@/lib/agent/routing-types";
+import {
+  resolveDefaultWorkspaceIdForRouting,
+  resolveWorkspaceRoutedAssignee,
+  shouldUseWorkspaceRouting,
+} from "@/lib/workspace-routing";
 
 /** Active field agents used for auto-routing counts and weights. */
 export async function listRoutableAgents(): Promise<RoutableAgent[]> {
@@ -150,7 +154,12 @@ async function syncRoutingWeights(
  */
 export async function resolveRoutedAssignee(
   intent: LeadIntent,
+  workspaceId?: string | null,
 ): Promise<string | null> {
+  if (shouldUseWorkspaceRouting(workspaceId)) {
+    return resolveWorkspaceRoutedAssignee(workspaceId, intent);
+  }
+
   const agents = await listRoutableAgents();
   if (agents.length === 0) return null;
   if (agents.length === 1) return agents[0]!.id;
@@ -328,12 +337,17 @@ export async function applyLeadAssignment(input: {
 }
 
 /** Resolve org + assignee for a new lead create payload. */
-export async function resolveLeadDeskAssignment(intent: LeadIntent) {
-  const assigneeId = await resolveRoutedAssignee(intent);
+export async function resolveLeadDeskAssignment(
+  intent: LeadIntent,
+  workspaceId?: string | null,
+) {
+  const trustedWorkspaceId =
+    workspaceId ?? (await resolveDefaultWorkspaceIdForRouting());
+  const assigneeId = await resolveRoutedAssignee(intent, trustedWorkspaceId);
   const organizationId =
     (await resolveOrganizationIdForAssignee(assigneeId)) ??
     (await resolveDefaultOrganizationId());
-  return { assigneeId, organizationId };
+  return { assigneeId, organizationId, workspaceId: trustedWorkspaceId };
 }
 
 /**

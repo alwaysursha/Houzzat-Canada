@@ -4,6 +4,7 @@ import { openLeadProfileHref } from "@/lib/agent/lead-profile-query";
 import { emailEnv } from "@/lib/email/env";
 import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
+import { authorizeStaffRecipientForLead } from "@/lib/workspace-notification-recipients";
 
 export type ResendWebhookHandleResult =
   | { ok: true; handled: boolean; type?: string }
@@ -38,13 +39,34 @@ async function findEmailLog(providerId: string) {
     select: {
       id: true,
       leadId: true,
+      workspaceId: true,
       subject: true,
       kind: true,
       openedAt: true,
       openCount: true,
       clickCount: true,
-      lead: { select: { assignedAgentId: true } },
+      lead: { select: { assignedAgentId: true, workspaceId: true } },
     },
+  });
+}
+
+async function notifyAlertEngagement(input: {
+  leadId: string;
+  assigneeId: string;
+  title: string;
+  body: string;
+}) {
+  const ok = await authorizeStaffRecipientForLead({
+    userId: input.assigneeId,
+    leadId: input.leadId,
+    event: "alert_engagement",
+  });
+  if (!ok) return;
+  sendPushToUser(input.assigneeId, {
+    type: "alert_engagement",
+    title: input.title,
+    body: input.body,
+    href: openLeadProfileHref(input.leadId),
   });
 }
 
@@ -75,11 +97,11 @@ async function recordOpened(providerId: string, at: Date) {
       },
     });
     if (isPropertyAlertEmailKind(log.kind) && log.lead.assignedAgentId) {
-      void sendPushToUser(log.lead.assignedAgentId, {
-        type: "alert_engagement",
+      void notifyAlertEngagement({
+        leadId: log.leadId,
+        assigneeId: log.lead.assignedAgentId,
         title: "Property alert opened",
         body: log.subject,
-        href: openLeadProfileHref(log.leadId),
       });
     }
   }
@@ -144,11 +166,11 @@ async function recordClicked(
   }
 
   if (isFirstClick && isPropertyAlertEmailKind(log.kind) && log.lead.assignedAgentId) {
-    void sendPushToUser(log.lead.assignedAgentId, {
-      type: "alert_engagement",
+    void notifyAlertEngagement({
+      leadId: log.leadId,
+      assigneeId: log.lead.assignedAgentId,
       title: "Property alert clicked",
       body: log.subject,
-      href: openLeadProfileHref(log.leadId),
     });
   }
 

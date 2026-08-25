@@ -135,6 +135,13 @@ enum WorkspaceMemberStatus {
   SUSPENDED
 }
 
+enum WorkspaceInviteStatus {
+  PENDING
+  ACCEPTED
+  CANCELLED
+  EXPIRED
+}
+
 enum AgentTaskType {
   CALL
   EMAIL
@@ -217,10 +224,12 @@ model Workspace {
   billingOwner User?             @relation("WorkspaceBillingOwner", fields: [billingOwnerUserId], references: [id], onDelete: SetNull)
   primaryAgent User?             @relation("WorkspacePrimaryAgent", fields: [primaryAgentId], references: [id], onDelete: SetNull)
   members      WorkspaceMember[]
+  invites      WorkspaceInvite[]
   leads        Lead[]
   agentTasks   AgentTask[]
   leadNotes    LeadNote[]
   leadEmailLogs LeadEmailLog[]
+  crmRoutingSettings CrmRoutingSettings?
 
   @@index([status])
 }
@@ -243,6 +252,27 @@ model WorkspaceMember {
   @@unique([workspaceId, userId])
   @@index([userId])
   @@index([workspaceId, status])
+}
+
+model WorkspaceInvite {
+  id          String                @id @default(cuid())
+  workspaceId String
+  email       String
+  role        WorkspaceMemberRole   @default(AGENT)
+  token       String                @unique @default(cuid())
+  invitedById String?
+  status      WorkspaceInviteStatus @default(PENDING)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy User?     @relation("WorkspaceInviteInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, email])
+  @@index([workspaceId, status])
+  @@index([token])
 }
 
 model User {
@@ -334,6 +364,7 @@ model User {
   pushDevices   PushDevice[]
   workspaceMemberships     WorkspaceMember[]
   workspaceMembersInvited  WorkspaceMember[] @relation("WorkspaceMemberInvitedBy")
+  workspaceInvitesSent     WorkspaceInvite[] @relation("WorkspaceInviteInvitedBy")
   workspacesBillingOwned   Workspace[]       @relation("WorkspaceBillingOwner")
   workspacesPrimaryAgentFor Workspace[]      @relation("WorkspacePrimaryAgent")
 }
@@ -458,15 +489,20 @@ model Lead {
   @@index([adCampaignId])
 }
 
-/** Singleton CRM routing config (id = "default"). */
+/** CRM routing config — legacy singleton (id = "default") or per-workspace row. */
 model CrmRoutingSettings {
   id               String               @id @default("default")
+  /** Future per-workspace routing (Stage 3H — nullable until backfill). */
+  workspaceId      String?              @unique
   listingAgentId   String?
   sellerAssignMode SellerLeadAssignMode @default(LISTING_AGENT)
   updatedAt        DateTime             @updatedAt
 
+  workspace    Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   listingAgent User?              @relation("ListingAgentSettings", fields: [listingAgentId], references: [id], onDelete: SetNull)
   weights      CrmRoutingWeight[]
+
+  @@index([workspaceId])
 }
 
 model CrmRoutingWeight {

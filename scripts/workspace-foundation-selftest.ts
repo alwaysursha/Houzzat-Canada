@@ -97,12 +97,17 @@ function testRuntimeWorkspaceReadFoundation() {
   assert.ok(!brokerage.includes("workspaceId"));
 }
 
-function testBrokerageAndRoutingUntouched() {
+function testBrokerageAndRoutingStage3H() {
   assert.ok(brokerage.includes("syncBrokerageSeats"));
   assert.ok(brokerage.includes("ensureBrokerageOrganization"));
-  assert.ok(leadIntake.includes('CRM_ROUTING_SETTINGS_ID = "default"'));
+  assert.ok(leadIntake.includes("CRM_ROUTING_SETTINGS_ID"));
   assert.ok(leadIntake.includes("listRoutableAgents"));
   assert.ok(leadIntake.includes("resolveRoutedAssignee"));
+  assert.ok(leadIntake.includes("resolveWorkspaceRoutedAssignee"));
+  const routingStart = schema.indexOf("model CrmRoutingSettings");
+  const routingEnd = schema.indexOf("\nmodel ", routingStart + 1);
+  const routingBlock = schema.slice(routingStart, routingEnd > 0 ? routingEnd : routingStart + 800);
+  assert.ok(routingBlock.includes("workspaceId"));
 }
 
 function testNotificationsUntouched() {
@@ -116,11 +121,9 @@ function testFkDeleteBehaviorDocumentedInSchema() {
   assert.ok(schema.includes("onDelete: Cascade"));
 }
 
-function testWorkspaceInviteDeferred() {
-  assert.ok(
-    !schema.includes("model WorkspaceInvite"),
-    "WorkspaceInvite deferred — OrganizationInvite remains for current Houzzat",
-  );
+function testWorkspaceInvitePrepared() {
+  assert.ok(schema.includes("model WorkspaceInvite"));
+  assert.ok(schema.includes("enum WorkspaceInviteStatus"));
 }
 
 testWorkspaceSchemaExists();
@@ -129,9 +132,9 @@ testWorkspaceSlugUnique();
 testWorkspaceIdScopeMatchesStage3B();
 testOrganizationUntouched();
 testRuntimeWorkspaceReadFoundation();
-testBrokerageAndRoutingUntouched();
+testBrokerageAndRoutingStage3H();
 testNotificationsUntouched();
 testFkDeleteBehaviorDocumentedInSchema();
-testWorkspaceInviteDeferred();
+testWorkspaceInvitePrepared();
 
 console.log("workspace-foundation-selftest: ok");

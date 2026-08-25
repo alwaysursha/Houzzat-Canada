@@ -11,6 +11,7 @@ import {
 import { isAdminRole, isAgentRole } from "@/lib/constants";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { resolveWorkspaceStaffContext } from "@/lib/workspace-context";
+import { readActiveWorkspaceIdFromCookies } from "@/lib/active-workspace";
 
 const agentUserSelect = {
   id: true,
@@ -47,9 +48,13 @@ export type AgentOrgContext = {
   workspaceRole: WorkspaceMemberRole | null;
   workspaceMemberStatus: WorkspaceMemberStatus | null;
   workspaceStatus: WorkspaceStatus | null;
+  workspaceName: string | null;
   isWorkspaceMember: boolean;
   isWorkspaceCrmAllowed: boolean;
   hasAmbiguousWorkspaceMembership: boolean;
+  hasMultipleWorkspaces: boolean;
+  requiresWorkspaceSelection: boolean;
+  canManageWorkspace: boolean;
   readScope: CrmReadScopeMode;
 };
 
@@ -204,7 +209,11 @@ export const requireAgentContext = cache(
       membership?.role === "OWNER" ||
       membership?.role === "ADMIN";
 
-    const workspace = await resolveWorkspaceStaffContext(user.id);
+    const activeWorkspaceId = await readActiveWorkspaceIdFromCookies();
+    const workspace = await resolveWorkspaceStaffContext(
+      user.id,
+      activeWorkspaceId,
+    );
     const readScope = parseCrmReadScope();
 
     // Seat flag healing is not required to authorize the response.
@@ -228,9 +237,13 @@ export const requireAgentContext = cache(
       workspaceRole: workspace.workspaceRole,
       workspaceMemberStatus: workspace.workspaceMemberStatus,
       workspaceStatus: workspace.workspaceStatus,
+      workspaceName: workspace.workspaceName,
       isWorkspaceMember: workspace.isWorkspaceMember,
       isWorkspaceCrmAllowed: workspace.isWorkspaceCrmAllowed,
-      hasAmbiguousWorkspaceMembership: workspace.hasAmbiguousMembership,
+      hasAmbiguousWorkspaceMembership: workspace.hasAmbiguousWorkspaceMembership,
+      hasMultipleWorkspaces: workspace.hasMultipleWorkspaces,
+      requiresWorkspaceSelection: workspace.requiresWorkspaceSelection,
+      canManageWorkspace: workspace.canManageWorkspace,
       readScope,
     };
   },
