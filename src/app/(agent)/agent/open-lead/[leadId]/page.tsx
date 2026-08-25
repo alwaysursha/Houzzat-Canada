@@ -1,34 +1,29 @@
-import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { openLeadProfileHref } from "@/lib/agent/lead-profile-query";
-import {
-  ACTIVE_WORKSPACE_COOKIE,
-  activeWorkspaceCookieOptions,
-  readActiveWorkspaceIdFromCookies,
-  signActiveWorkspaceId,
-} from "@/lib/active-workspace";
-import { shouldConfirmWorkspaceSwitch } from "@/lib/open-lead-workspace-switch";
+import { readActiveWorkspaceIdFromCookies } from "@/lib/active-workspace";
+import { resolveOpenLeadHandoff } from "@/lib/open-lead-handoff";
 import { prisma } from "@/lib/prisma";
 import { isAgentRole } from "@/lib/roles";
 
 /**
- * Stage 3I.1 — server-validated lead deep-link handoff.
+ * Stage 3I.1 — server-validated lead deep-link handoff (read-only page).
  *
- * Confirm ONLY for true cross-workspace switch (valid A cookie → lead in B).
- * Single membership + missing/stale cookie → direct open (matches staff context).
+ * Cookie writes are illegal in Server Components and throw at runtime
+ * (Agent error boundary). Same-workspace / no-cookie paths either:
+ * - redirect straight to the desk when the cookie is already correct, or
+ * - redirect to GET /api/agent/open-lead/{id} which sets the cookie.
+ *
+ * Cross-workspace confirm → POST the same Route Handler.
  */
 export default async function OpenLeadHandoffPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ leadId: string }>;
-  searchParams: Promise<{ confirm?: string }>;
 }) {
   const { leadId } = await params;
-  const sp = await searchParams;
   const session = await auth();
   if (!session?.user?.id) {
     redirect(await staffSignInRedirectUrl(`/agent/open-lead/${leadId}`));
@@ -42,51 +37,28 @@ export default async function OpenLeadHandoffPage({
     notFound();
   }
 
-  const lead = await prisma.lead.findUnique({
-    where: { id: leadId },
-    select: {
-      id: true,
-      workspaceId: true,
-      workspace: { select: { id: true, name: true, status: true } },
-    },
-  });
-  if (!lead?.workspaceId || lead.workspace?.status !== "ACTIVE") {
-    notFound();
-  }
-
-  const activeMemberships = await prisma.workspaceMember.findMany({
-    where: {
-      userId: user.id,
-      status: "ACTIVE",
-      workspace: { status: "ACTIVE" },
-    },
-    select: { workspaceId: true },
-  });
-  const activeMemberWorkspaceIds = activeMemberships.map((m) => m.workspaceId);
-  if (!activeMemberWorkspaceIds.includes(lead.workspaceId)) {
-    notFound();
-  }
-
   const cookieWorkspaceId = await readActiveWorkspaceIdFromCookies();
-  const needsConfirm = shouldConfirmWorkspaceSwitch({
-    leadWorkspaceId: lead.workspaceId,
+  const handoff = await resolveOpenLeadHandoff({
+    userId: user.id,
+    leadId,
     cookieWorkspaceId,
-    activeMemberWorkspaceIds,
   });
+  if (!handoff.ok) {
+    notFound();
+  }
 
-  if (!needsConfirm || sp.confirm === "1") {
-    const cookieStore = await cookies();
-    cookieStore.set(
-      ACTIVE_WORKSPACE_COOKIE,
-      signActiveWorkspaceId(lead.workspaceId),
-      activeWorkspaceCookieOptions(),
-    );
-    redirect(openLeadProfileHref(lead.id));
+  if (!handoff.needsConfirm) {
+    if (handoff.cookieAlreadyCorrect) {
+      redirect(openLeadProfileHref(handoff.leadId));
+    }
+    // Cookie missing/stale — Route Handler is the only legal mutation context.
+    redirect(`/api/agent/open-lead/${encodeURIComponent(handoff.leadId)}`);
   }
 
   const validCookieWorkspaceId =
-    cookieWorkspaceId && activeMemberWorkspaceIds.includes(cookieWorkspaceId)
-      ? cookieWorkspaceId
+    handoff.cookieWorkspaceId &&
+    handoff.activeMemberWorkspaceIds.includes(handoff.cookieWorkspaceId)
+      ? handoff.cookieWorkspaceId
       : null;
   const currentName = validCookieWorkspaceId
     ? (
@@ -102,7 +74,7 @@ export default async function OpenLeadHandoffPage({
       <h1 className="font-display text-3xl text-ink">Switch Workspace?</h1>
       <p className="text-sm leading-relaxed text-ink/65">
         This lead belongs to{" "}
-        <strong className="text-ink">{lead.workspace.name}</strong>
+        <strong className="text-ink">{handoff.workspaceName}</strong>
         {currentName ? (
           <>
             . You are currently in{" "}
@@ -112,14 +84,14 @@ export default async function OpenLeadHandoffPage({
         . Continue to open the exact lead profile in that Workspace.
       </p>
       <form
-        action={`/api/agent/open-lead/${encodeURIComponent(lead.id)}`}
+        action={`/api/agent/open-lead/${encodeURIComponent(handoff.leadId)}`}
         method="post"
       >
         <button
           type="submit"
           className="w-full rounded-lg bg-canopy px-4 py-2.5 text-sm font-semibold text-white"
         >
-          Open lead in {lead.workspace.name}
+          Open lead in {handoff.workspaceName}
         </button>
       </form>
       <Link

@@ -51,6 +51,7 @@
     "workspace-team-writes:selftest": "node --import tsx scripts/workspace-team-writes-selftest.ts",
     "workspace-invites:selftest": "node --import tsx scripts/workspace-invites-selftest.ts",
     "workspace-deeplink-switch:selftest": "node --import tsx scripts/workspace-deeplink-switch-selftest.ts",
+    "open-lead-runtime:selftest": "node --import tsx scripts/open-lead-runtime-selftest.ts",
     "workspace-3i1-security:selftest": "node --import tsx scripts/workspace-3i1-security-selftest.ts",
     "workspace-3h1-safety:selftest": "node --import tsx scripts/workspace-3h1-safety-selftest.ts",
     "workspace-deploy-flags:selftest": "node --import tsx scripts/workspace-deploy-flags-selftest.ts",

@@ -31,10 +31,14 @@ function testDeskHrefUnchanged() {
 
 function testOpenLeadPageServerValidated() {
   const page = read("src/app/(agent)/agent/open-lead/[leadId]/page.tsx");
-  assert.ok(page.includes("shouldConfirmWorkspaceSwitch"));
-  assert.ok(page.includes("signActiveWorkspaceId"));
+  assert.ok(page.includes("resolveOpenLeadHandoff"));
   assert.ok(page.includes("Switch Workspace?"));
   assert.ok(page.includes('method="post"'));
+  assert.ok(page.includes("/api/agent/open-lead/"));
+  // Server Components must not mutate cookies (Next.js throws → error boundary).
+  assert.ok(!page.includes("cookies().set"));
+  assert.ok(!page.includes("cookieStore.set"));
+  assert.ok(!page.includes("signActiveWorkspaceId"));
   assert.ok(!page.includes('searchParams.get("workspaceId")'));
 }
 

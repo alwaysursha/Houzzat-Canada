@@ -74,17 +74,21 @@ function testInviteEmailMatchEnforced() {
 
 function testOpenLeadCrossWorkspaceConfirm() {
   const page = read("src/app/(agent)/agent/open-lead/[leadId]/page.tsx");
-  assert.ok(page.includes("shouldConfirmWorkspaceSwitch"));
+  assert.ok(page.includes("resolveOpenLeadHandoff"));
   assert.ok(page.includes("Switch Workspace?"));
   assert.ok(page.includes('method="post"'));
   assert.ok(page.includes("/api/agent/open-lead/"));
+  assert.ok(!page.includes("cookieStore.set"));
+  assert.ok(!page.includes("signActiveWorkspaceId"));
   const helper = read("src/lib/open-lead-workspace-switch.ts");
   assert.ok(helper.includes("soleWorkspaceId"));
   assert.ok(helper.includes("validCookieWorkspaceId"));
   const api = read("src/app/api/agent/open-lead/[leadId]/route.ts");
   assert.ok(api.includes("isTrustedStaffMutationOrigin"));
   assert.ok(api.includes("export async function POST"));
-  assert.ok(!api.includes("export async function GET"));
+  assert.ok(api.includes("export async function GET"));
+  assert.ok(api.includes("signActiveWorkspaceId"));
+  assert.ok(api.includes("needsConfirm"));
 }
 
 function testTeamFlagIsolationStructural() {
