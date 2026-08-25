@@ -63,9 +63,27 @@ export function LeadRoutingAdminClient({
   }
 
   async function save() {
+    if (initial.agents.length > 1 && buyerSum > 100) {
+      toast({
+        message: `Buyer routing cannot exceed 100% (now ${buyerSum}%).`,
+        tone: "error",
+      });
+      return;
+    }
     if (initial.agents.length > 1 && buyerSum !== 100) {
       toast({
         message: `Buyer routing must total 100% (now ${buyerSum}%).`,
+        tone: "error",
+      });
+      return;
+    }
+    if (
+      sellerAssignMode === "PERCENTAGE" &&
+      initial.agents.length > 1 &&
+      sellerSum > 100
+    ) {
+      toast({
+        message: `Seller routing cannot exceed 100% (now ${sellerSum}%).`,
         tone: "error",
       });
       return;
@@ -258,7 +276,11 @@ function WeightEditor({
           <span
             className={cn(
               "text-sm font-semibold tabular-nums",
-              sum === 100 ? "text-canopy" : "text-amber-700",
+              sum > 100
+                ? "text-red-700"
+                : sum === 100
+                  ? "text-canopy"
+                  : "text-amber-700",
             )}
           >
             Total {sum}%

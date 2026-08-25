@@ -29,6 +29,7 @@ export {
   listRoutableAgentsForSettings,
   syncCrmRoutingSettingsForWorkspace,
   syncRoutingWeightsForSettings,
+  planRoutingWeightSync,
   usesWorkspaceRoutingForSettings,
   validateListingAgentForSettings,
   validateWeightsForSettings,

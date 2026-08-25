@@ -95,17 +95,75 @@ export function validateWeightsForSettings(
     if (!pool.has(row.agentId)) {
       return `${label}: agent is not a routable member of the routing workspace`;
     }
+    if (row.percent < 0 || row.percent > 100) {
+      return `${label}: each percentage must be between 0 and 100`;
+    }
   }
   const sum = weights.reduce((s, w) => s + w.percent, 0);
-  if (weights.length > 0 && sum !== 100) {
-    return `${label} percentages must total 100 (currently ${sum}).`;
+  if (sum > 100) {
+    return `${label} percentages cannot exceed 100 (currently ${sum}).`;
   }
   return null;
 }
 
+export type RoutingWeightSyncRow = {
+  agentId: string;
+  lane: "BUYER" | "SELLER";
+  percent: number;
+};
+
+/**
+ * Pure weight sync planner — new pool members default to 0% and never alter
+ * existing configured percentages. Bootstrap: lone agent on an empty lane → 100%.
+ */
+export function planRoutingWeightSync(input: {
+  agentIds: string[];
+  existing: RoutingWeightRow[];
+}): RoutingWeightSyncRow[] {
+  const { agentIds, existing } = input;
+  const lanes = ["BUYER", "SELLER"] as const;
+  const result: RoutingWeightSyncRow[] = [];
+
+  for (const lane of lanes) {
+    const laneWeights = existing.filter((w) => w.lane === lane);
+    const byAgent = new Map(laneWeights.map((w) => [w.agentId, w]));
+
+    for (const agentId of agentIds) {
+      const prev = byAgent.get(agentId);
+      if (prev) {
+        result.push({ agentId, lane, percent: prev.percent });
+        continue;
+      }
+      const bootstrapPercent =
+        laneWeights.length === 0 && agentIds.length === 1 ? 100 : 0;
+      result.push({ agentId, lane, percent: bootstrapPercent });
+    }
+  }
+
+  return healLaneOverflow(result);
+}
+
+/** When a lane exceeds 100%, keep the highest weight and zero the rest. */
+function healLaneOverflow(planned: RoutingWeightSyncRow[]): RoutingWeightSyncRow[] {
+  const lanes = ["BUYER", "SELLER"] as const;
+  let result = planned;
+  for (const lane of lanes) {
+    const laneRows = result.filter((r) => r.lane === lane);
+    const sum = laneRows.reduce((s, r) => s + r.percent, 0);
+    if (sum <= 100) continue;
+    const keeper = [...laneRows].sort((a, b) => b.percent - a.percent)[0]!
+      .agentId;
+    result = result.map((r) => {
+      if (r.lane !== lane || r.agentId === keeper) return r;
+      return { ...r, percent: 0 };
+    });
+  }
+  return result;
+}
+
 /**
  * Sync weights for ONE settings row against ONE candidate pool.
- * Never touches other CrmRoutingSettings rows.
+ * New members: 0%. Existing percentages preserved. Removed members: dropped.
  */
 export async function syncRoutingWeightsForSettings(input: {
   settingsId: string;
@@ -113,48 +171,39 @@ export async function syncRoutingWeightsForSettings(input: {
   existing: RoutingWeightRow[];
 }): Promise<void> {
   const { settingsId, agentIds, existing } = input;
+  const planned = planRoutingWeightSync({ agentIds, existing });
   const lanes = ["BUYER", "SELLER"] as const;
-  const equal =
-    agentIds.length === 0 ? 0 : Math.floor(100 / agentIds.length);
-  const remainder =
-    agentIds.length === 0 ? 0 : 100 - equal * agentIds.length;
 
   for (const lane of lanes) {
-    const laneWeights = existing.filter((w) => w.lane === lane);
-    const known = new Set(laneWeights.map((w) => w.agentId));
+    const laneExisting = existing.filter((w) => w.lane === lane);
+    const lanePlanned = planned.filter((w) => w.lane === lane);
+    const plannedAgents = new Set(lanePlanned.map((w) => w.agentId));
 
-    for (const agentId of agentIds) {
-      if (known.has(agentId)) continue;
-      const index = agentIds.indexOf(agentId);
-      const percent = equal + (index === 0 ? remainder : 0);
-      await prisma.crmRoutingWeight.create({
-        data: {
-          settingsId,
-          agentId,
-          lane,
-          percent,
-        },
-      });
-    }
-
-    for (const weight of laneWeights) {
-      if (!agentIds.includes(weight.agentId)) {
+    for (const weight of laneExisting) {
+      if (!plannedAgents.has(weight.agentId)) {
         await prisma.crmRoutingWeight.delete({ where: { id: weight.id } });
       }
     }
 
-    const refreshed = await prisma.crmRoutingWeight.findMany({
-      where: { settingsId, lane },
-    });
-    const sum = refreshed.reduce((s, w) => s + w.percent, 0);
-    if (refreshed.length > 0 && sum === 0) {
-      for (let i = 0; i < refreshed.length; i++) {
-        const row = refreshed[i]!;
-        await prisma.crmRoutingWeight.update({
-          where: { id: row.id },
-          data: { percent: equal + (i === 0 ? remainder : 0) },
-        });
+    for (const row of lanePlanned) {
+      const prev = laneExisting.find((w) => w.agentId === row.agentId);
+      if (prev) {
+        if (prev.percent !== row.percent) {
+          await prisma.crmRoutingWeight.update({
+            where: { id: prev.id },
+            data: { percent: row.percent },
+          });
+        }
+        continue;
       }
+      await prisma.crmRoutingWeight.create({
+        data: {
+          settingsId,
+          agentId: row.agentId,
+          lane: row.lane,
+          percent: row.percent,
+        },
+      });
     }
   }
 }
