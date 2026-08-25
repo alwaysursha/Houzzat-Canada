@@ -1,18 +1,43 @@
 /**
- * Stage 3H/3I — WorkspaceMember-based team management (behind WORKSPACE_TEAM_SCOPE).
+ * Stage 3H/3I/3I.2 — WorkspaceMember-based team management (behind WORKSPACE_TEAM_SCOPE).
+ *
+ * Authority is fail-closed: when WORKSPACE_TEAM_SCOPE=workspace, missing workspace
+ * context MUST NOT fall back to OrganizationInvite / OrganizationMembership.
  */
 import type { WorkspaceMemberRole } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
 import { isWorkspaceTeamScope } from "@/lib/workspace-scope-flags";
 import { prisma } from "@/lib/prisma";
 
+export type TeamAuthority =
+  | { mode: "legacy"; organizationId: string }
+  | { mode: "workspace"; workspaceId: string }
+  | { mode: "unavailable"; reason: "WORKSPACE_CONTEXT_REQUIRED" };
+
+/**
+ * Single authoritative resolver for Team GET + all Team mutations.
+ * Workspace flag without a resolved workspaceId → unavailable (fail closed).
+ */
+export function resolveTeamAuthority(ctx: AgentOrgContext): TeamAuthority {
+  if (isWorkspaceTeamScope()) {
+    if (!ctx.workspaceId) {
+      return { mode: "unavailable", reason: "WORKSPACE_CONTEXT_REQUIRED" };
+    }
+    return { mode: "workspace", workspaceId: ctx.workspaceId };
+  }
+  return { mode: "legacy", organizationId: ctx.organizationId };
+}
+
+/** True only when Team operations must use WorkspaceMember / WorkspaceInvite. */
 export function usesWorkspaceTeamScope(ctx: AgentOrgContext): boolean {
-  return isWorkspaceTeamScope() && Boolean(ctx.workspaceId);
+  return resolveTeamAuthority(ctx).mode === "workspace";
 }
 
 export function workspaceTeamCanManage(ctx: AgentOrgContext): boolean {
-  if (!usesWorkspaceTeamScope(ctx)) return ctx.canSeeTeamLeads;
-  return ctx.canManageWorkspace;
+  const authority = resolveTeamAuthority(ctx);
+  if (authority.mode === "workspace") return ctx.canManageWorkspace;
+  if (authority.mode === "legacy") return ctx.canSeeTeamLeads;
+  return false;
 }
 
 /**

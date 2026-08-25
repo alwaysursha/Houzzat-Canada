@@ -50,6 +50,8 @@
     "workspace-team:selftest": "node --import tsx scripts/workspace-team-selftest.ts",
     "workspace-team-writes:selftest": "node --import tsx scripts/workspace-team-writes-selftest.ts",
     "workspace-invites:selftest": "node --import tsx scripts/workspace-invites-selftest.ts",
+    "workspace-invite-acceptance:selftest": "node --import tsx scripts/workspace-invite-acceptance-selftest.ts",
+    "workspace-invite-authority:selftest": "node --import tsx scripts/workspace-invite-authority-selftest.ts",
     "workspace-deeplink-switch:selftest": "node --import tsx scripts/workspace-deeplink-switch-selftest.ts",
     "open-lead-runtime:selftest": "node --import tsx scripts/open-lead-runtime-selftest.ts",
     "workspace-3i1-security:selftest": "node --import tsx scripts/workspace-3i1-security-selftest.ts",

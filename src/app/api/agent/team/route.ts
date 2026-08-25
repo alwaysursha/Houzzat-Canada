@@ -29,7 +29,7 @@ import {
 } from "@/lib/workspace-team-admin";
 import {
   getWorkspaceTeamPayload,
-  usesWorkspaceTeamScope,
+  resolveTeamAuthority,
   workspaceTeamCanManage,
 } from "@/lib/workspace-team";
 
@@ -98,7 +98,18 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (usesWorkspaceTeamScope(ctx)) {
+  const authority = resolveTeamAuthority(ctx);
+  if (authority.mode === "unavailable") {
+    return NextResponse.json(
+      {
+        error: "Select an active Workspace to manage Team.",
+        code: "WORKSPACE_CONTEXT_REQUIRED",
+      },
+      { status: 403 },
+    );
+  }
+
+  if (authority.mode === "workspace") {
     const payload = await getWorkspaceTeamPayload(ctx);
     if (!payload) {
       return NextResponse.json({ error: "Workspace required" }, { status: 403 });
@@ -389,6 +400,7 @@ async function handleWorkspaceTeamPost(
 
   return NextResponse.json({
     ok: true,
+    scope: "workspace",
     invite: {
       id: result.invite.id,
       email: result.invite.email,
@@ -408,10 +420,22 @@ export async function POST(request: Request) {
 
   const body: unknown = await request.json();
 
-  if (usesWorkspaceTeamScope(ctx)) {
+  const authority = resolveTeamAuthority(ctx);
+  if (authority.mode === "unavailable") {
+    return NextResponse.json(
+      {
+        error: "Select an active Workspace before managing Team.",
+        code: "WORKSPACE_CONTEXT_REQUIRED",
+      },
+      { status: 403 },
+    );
+  }
+
+  if (authority.mode === "workspace") {
     return handleWorkspaceTeamPost(ctx, body);
   }
 
+  // Legacy organization authority ONLY when WORKSPACE_TEAM_SCOPE is explicitly legacy.
   const canManageTeam = ctx.canSeeTeamLeads;
   if (!canManageTeam) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -702,6 +726,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
+    scope: "organization",
     invite,
     alreadyMember,
     convertsConsumerAccount: consumerLabels.length > 0,

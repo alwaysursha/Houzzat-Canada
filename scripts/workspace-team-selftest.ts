@@ -76,10 +76,11 @@ function testTeamApiBranchesOnFlag() {
     join(root, "src/app/api/agent/team/route.ts"),
     "utf8",
   );
-  assert.ok(route.includes("usesWorkspaceTeamScope"));
+  assert.ok(route.includes("resolveTeamAuthority"));
   assert.ok(route.includes("getWorkspaceTeamPayload"));
   assert.ok(route.includes("handleWorkspaceTeamPost"));
   assert.ok(route.includes("createWorkspaceInvite"));
+  assert.ok(route.includes("WORKSPACE_CONTEXT_REQUIRED"));
 }
 
 async function main() {

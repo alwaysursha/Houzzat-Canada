@@ -65,14 +65,24 @@ export function TeamInviteClient({ token }: { token: string }) {
           password: opts?.password,
         }),
       });
-      const json = (await res.json()) as {
+      let json: {
         error?: string;
         code?: string;
         createdAccount?: boolean;
         ok?: boolean;
-      };
+      } = {};
+      try {
+        json = (await res.json()) as typeof json;
+      } catch {
+        setError(
+          res.ok
+            ? "We couldn’t join the team. Please try again."
+            : "We couldn’t join the team. Please try again.",
+        );
+        return;
+      }
       if (!res.ok) {
-        setError(json.error || "Could not accept invite.");
+        setError(json.error || "We couldn’t join the team. Please try again.");
         return;
       }
 
@@ -101,6 +111,8 @@ export function TeamInviteClient({ token }: { token: string }) {
       window.setTimeout(() => {
         staffHardNavigate("/agent");
       }, 400);
+    } catch {
+      setError("We couldn’t join the team. Please try again.");
     } finally {
       setPending(false);
     }

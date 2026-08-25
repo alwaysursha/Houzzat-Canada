@@ -39,6 +39,9 @@ function testInviteModuleCoverage() {
   assert.ok(mod.includes("Cannot invite OWNER"));
   assert.ok(mod.includes("hashWorkspaceInviteToken"));
   assert.ok(mod.includes("createWorkspaceInviteRawToken"));
+  assert.ok(mod.includes("createAgentAccountFromInvite"));
+  assert.ok(!mod.includes("agentProfile: { create"));
+  assert.ok(!mod.includes("consentEvents:"));
 }
 
 function testAcceptApiBranches() {

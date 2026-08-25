@@ -3,20 +3,13 @@
  * Token is cryptographically random; authority comes from token + server lookup only.
  */
 import type { WorkspaceInviteStatus, WorkspaceMemberRole } from "@prisma/client";
-import bcrypt from "bcryptjs";
 import type { AgentOrgContext } from "@/lib/agent";
-import {
-  COMMUNICATIONS_CONSENT_KIND,
-  COMMUNICATIONS_CONSENT_VERSION,
-  TERMS_ACCEPT_KIND,
-  TERMS_VERSION,
-} from "@/lib/consent";
+import { createAgentAccountFromInvite } from "@/lib/auth/invite-account";
 import { SITE_URL } from "@/lib/constants";
 import { sendRenderedEmail } from "@/lib/email/send";
 import { renderTeamInviteEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
 import { reconcileUserPlatformStaffState } from "@/lib/reconcile-user-platform-staff";
-import { VOW_VERSION } from "@/lib/vow";
 import {
   createWorkspaceInviteRawToken,
   hashWorkspaceInviteToken,
@@ -543,50 +536,21 @@ export async function acceptWorkspaceInvite(input: {
     return { ok: false, error: "Password must be at least 8 characters." };
   }
 
-  const hashed = await bcrypt.hash(password, 10);
-  const now = new Date();
-
-  const user = await prisma.user.create({
-    data: {
-      name,
-      email: inviteEmail,
-      password: hashed,
-      role: "AGENT",
-      isBuyer: false,
-      isSeller: false,
-      emailVerified: now,
-      termsAcceptedAt: now,
-      termsVersion: TERMS_VERSION,
-      vowAcceptedAt: now,
-      vowVersion: VOW_VERSION,
-      caslConsentAt: now,
-      agentProfile: { create: { active: true } },
-      consentEvents: {
-        create: [
-          {
-            kind: TERMS_ACCEPT_KIND,
-            version: TERMS_VERSION,
-            email: inviteEmail,
-          },
-          {
-            kind: "vow_accept",
-            version: VOW_VERSION,
-            email: inviteEmail,
-          },
-          {
-            kind: COMMUNICATIONS_CONSENT_KIND,
-            version: COMMUNICATIONS_CONSENT_VERSION,
-            email: inviteEmail,
-          },
-        ],
-      },
-    },
+  // Flat writes only — nested user.create fails on PrismaNeonHttp (Workers).
+  // Order: User (+ profile + consents) → ACTIVE WorkspaceMember → ACCEPTED.
+  // Do not reconcile before membership exists (would demote to BUYER).
+  const { userId } = await createAgentAccountFromInvite(prisma, {
+    name,
+    email: inviteEmail,
+    password,
   });
+
+  const now = new Date();
 
   await prisma.workspaceMember.create({
     data: {
       workspaceId: invite.workspaceId,
-      userId: user.id,
+      userId,
       role: invite.role,
       status: "ACTIVE",
       invitedById: invite.invitedById,
@@ -601,7 +565,7 @@ export async function acceptWorkspaceInvite(input: {
 
   return {
     ok: true,
-    userId: user.id,
+    userId,
     workspaceId: invite.workspaceId,
     createdAccount: true,
     convertedConsumer: false,

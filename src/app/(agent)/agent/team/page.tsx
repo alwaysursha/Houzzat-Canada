@@ -5,7 +5,7 @@ import { requireAgentContext } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
 import {
   getWorkspaceTeamPayload,
-  usesWorkspaceTeamScope,
+  resolveTeamAuthority,
 } from "@/lib/workspace-team";
 
 export const metadata = { title: "Team · Agent CRM" };
@@ -14,7 +14,12 @@ export default async function AgentTeamPage() {
   const ctx = await requireAgentContext();
   if (!ctx) redirect(await staffSignInRedirectUrl("/agent/team"));
 
-  if (usesWorkspaceTeamScope(ctx)) {
+  const authority = resolveTeamAuthority(ctx);
+  if (authority.mode === "unavailable") {
+    redirect("/agent/workspace");
+  }
+
+  if (authority.mode === "workspace") {
     const payload = await getWorkspaceTeamPayload(ctx);
     if (!payload?.workspace) {
       redirect("/agent/workspace");

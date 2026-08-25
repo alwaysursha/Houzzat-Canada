@@ -193,6 +193,7 @@ export function TeamAdminClient({
               });
               const json = (await res.json()) as {
                 error?: string;
+                scope?: string;
                 convertsConsumerAccount?: boolean;
                 alreadyMember?: boolean;
               };
@@ -205,7 +206,9 @@ export function TeamAdminClient({
                     ? "Added to Workspace — they were already a staff account."
                     : json.convertsConsumerAccount
                       ? "Invite sent — they already have a buyer/seller account and will be asked to switch to agent."
-                      : "Invite sent.",
+                      : isWorkspace && json.scope === "workspace"
+                        ? "Workspace invite sent."
+                        : "Invite sent.",
                 );
                 router.refresh();
               }

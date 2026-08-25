@@ -94,6 +94,7 @@ function testOpenLeadCrossWorkspaceConfirm() {
 function testTeamFlagIsolationStructural() {
   const route = read("src/app/api/agent/team/route.ts");
   assert.ok(route.includes("handleWorkspaceTeamPost"));
+  assert.ok(route.includes("resolveTeamAuthority"));
   // Workspace branch must not call org delete/disable helpers
   const wsHandlerStart = route.indexOf("async function handleWorkspaceTeamPost");
   const postStart = route.indexOf("export async function POST");
@@ -102,10 +103,11 @@ function testTeamFlagIsolationStructural() {
   assert.ok(!wsHandler.includes("deleteTeamMember"));
   assert.ok(!wsHandler.includes("organizationInvite"));
   assert.ok(wsHandler.includes("createWorkspaceInvite"));
-  // Legacy POST still uses org helpers
+  // Legacy POST still uses org helpers — only after resolveTeamAuthority legacy
   const legacy = route.slice(postStart);
   assert.ok(legacy.includes("disableTeamMember"));
   assert.ok(legacy.includes("organizationInvite"));
+  assert.ok(legacy.includes('mode === "unavailable"'));
 }
 
 function testNotificationBatching() {

@@ -49,12 +49,51 @@ export async function POST(
     return NextResponse.json({ error: "Invalid payload." }, { status: 400 });
   }
 
-  const session = await auth();
-  const actingUserId = session?.user?.id ?? null;
+  try {
+    const session = await auth();
+    const actingUserId = session?.user?.id ?? null;
 
-  const workspacePreview = await loadWorkspaceInvitePreview(token);
-  if (workspacePreview) {
-    const result = await acceptWorkspaceInvite({
+    const workspacePreview = await loadWorkspaceInvitePreview(token);
+    if (workspacePreview) {
+      const result = await acceptWorkspaceInvite({
+        token,
+        actingUserId,
+        name: parsed.data.name,
+        password: parsed.data.password,
+      });
+
+      if (!result.ok) {
+        const status =
+          result.code === "NEED_SIGN_IN"
+            ? 401
+            : result.code === "WRONG_ACCOUNT"
+              ? 403
+              : 400;
+        return NextResponse.json(
+          { error: result.error, code: result.code },
+          { status },
+        );
+      }
+
+      const response = NextResponse.json({
+        ok: true,
+        userId: result.userId,
+        workspaceId: result.workspaceId,
+        createdAccount: result.createdAccount,
+        convertedConsumer: result.convertedConsumer,
+        secondMembership: result.secondMembership,
+        kind: "workspace",
+      });
+      // Enter the invited Workspace context immediately.
+      response.cookies.set(
+        ACTIVE_WORKSPACE_COOKIE,
+        signActiveWorkspaceId(result.workspaceId),
+        activeWorkspaceCookieOptions(),
+      );
+      return response;
+    }
+
+    const result = await acceptOrganizationInvite({
       token,
       actingUserId,
       name: parsed.data.name,
@@ -74,49 +113,20 @@ export async function POST(
       );
     }
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       ok: true,
       userId: result.userId,
-      workspaceId: result.workspaceId,
       createdAccount: result.createdAccount,
       convertedConsumer: result.convertedConsumer,
-      secondMembership: result.secondMembership,
-      kind: "workspace",
+      kind: "organization",
     });
-    // Enter the invited Workspace context immediately.
-    response.cookies.set(
-      ACTIVE_WORKSPACE_COOKIE,
-      signActiveWorkspaceId(result.workspaceId),
-      activeWorkspaceCookieOptions(),
-    );
-    return response;
-  }
-
-  const result = await acceptOrganizationInvite({
-    token,
-    actingUserId,
-    name: parsed.data.name,
-    password: parsed.data.password,
-  });
-
-  if (!result.ok) {
-    const status =
-      result.code === "NEED_SIGN_IN"
-        ? 401
-        : result.code === "WRONG_ACCOUNT"
-          ? 403
-          : 400;
+  } catch (error) {
+    console.error("[auth/invite] accept failed", {
+      message: error instanceof Error ? error.message : String(error),
+    });
     return NextResponse.json(
-      { error: result.error, code: result.code },
-      { status },
+      { error: "We couldn’t join the team. Please try again." },
+      { status: 500 },
     );
   }
-
-  return NextResponse.json({
-    ok: true,
-    userId: result.userId,
-    createdAccount: result.createdAccount,
-    convertedConsumer: result.convertedConsumer,
-    kind: "organization",
-  });
 }

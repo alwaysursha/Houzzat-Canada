@@ -1,13 +1,6 @@
 import type { OrgMembershipRole, Role } from "@prisma/client";
-import bcrypt from "bcryptjs";
-import {
-  COMMUNICATIONS_CONSENT_KIND,
-  COMMUNICATIONS_CONSENT_VERSION,
-  TERMS_ACCEPT_KIND,
-  TERMS_VERSION,
-} from "@/lib/consent";
+import { createAgentAccountFromInvite } from "@/lib/auth/invite-account";
 import { prisma } from "@/lib/prisma";
-import { VOW_VERSION } from "@/lib/vow";
 
 export type InvitePreview = {
   email: string;
@@ -209,50 +202,17 @@ export async function acceptOrganizationInvite(input: {
     return { ok: false, error: "Password must be at least 8 characters." };
   }
 
-  const hashed = await bcrypt.hash(password, 10);
-  const now = new Date();
-
-  const user = await prisma.user.create({
-    data: {
-      name,
-      email: invite.email,
-      password: hashed,
-      role: "AGENT",
-      isBuyer: false,
-      isSeller: false,
-      emailVerified: now,
-      termsAcceptedAt: now,
-      termsVersion: TERMS_VERSION,
-      vowAcceptedAt: now,
-      vowVersion: VOW_VERSION,
-      caslConsentAt: now,
-      agentProfile: { create: { active: true } },
-      consentEvents: {
-        create: [
-          {
-            kind: TERMS_ACCEPT_KIND,
-            version: TERMS_VERSION,
-            email: invite.email,
-          },
-          {
-            kind: "vow_accept",
-            version: VOW_VERSION,
-            email: invite.email,
-          },
-          {
-            kind: COMMUNICATIONS_CONSENT_KIND,
-            version: COMMUNICATIONS_CONSENT_VERSION,
-            email: invite.email,
-          },
-        ],
-      },
-    },
+  // Flat writes only — nested user.create fails on PrismaNeonHttp (Workers).
+  const { userId } = await createAgentAccountFromInvite(prisma, {
+    name,
+    email: invite.email,
+    password,
   });
 
   await prisma.organizationMembership.create({
     data: {
       organizationId: invite.organizationId,
-      userId: user.id,
+      userId,
       role: invite.role,
     },
   });
@@ -264,7 +224,7 @@ export async function acceptOrganizationInvite(input: {
 
   return {
     ok: true,
-    userId: user.id,
+    userId,
     createdAccount: true,
     convertedConsumer: false,
   };

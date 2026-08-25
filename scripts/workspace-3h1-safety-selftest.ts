@@ -132,7 +132,8 @@ function testTeamWorkspaceWritesEnabled() {
   assert.ok(route.includes("createWorkspaceInvite"));
   assert.ok(route.includes("suspendWorkspaceMember"));
   assert.ok(!route.includes("WORKSPACE_TEAM_WRITES_DISABLED"));
-  assert.ok(route.includes("usesWorkspaceTeamScope(ctx)"));
+  assert.ok(route.includes("resolveTeamAuthority(ctx)"));
+  assert.ok(route.includes("WORKSPACE_CONTEXT_REQUIRED"));
 }
 
 function testMigrationAdditiveOnly() {
