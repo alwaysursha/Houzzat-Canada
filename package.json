@@ -45,6 +45,7 @@
     "multi-workspace-isolation:selftest": "node --import tsx scripts/multi-workspace-isolation-selftest.ts",
     "workspace-selection:selftest": "node --import tsx scripts/workspace-selection-selftest.ts",
     "workspace-routing:selftest": "node --import tsx scripts/workspace-routing-selftest.ts",
+    "workspace-routing-config-isolation:selftest": "node --import tsx scripts/workspace-routing-config-isolation-selftest.ts",
     "workspace-routing:backfill-houzzat": "node --import tsx scripts/backfill-houzzat-workspace-routing.ts",
     "workspace-routing:rollback-houzzat": "node --import tsx scripts/rollback-houzzat-workspace-routing.ts",
     "workspace-notifications:selftest": "node --import tsx scripts/workspace-notifications-selftest.ts",

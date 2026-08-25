@@ -1,16 +1,14 @@
 import { LeadRoutingAdminClient } from "@/components/admin/LeadRoutingAdminClient";
 import {
   ensureCrmRoutingSettings,
-  listRoutableAgents,
-} from "@/lib/agent/lead-intake";
+  listRoutableAgentsForSettings,
+} from "@/lib/crm-routing-config";
 
 export const metadata = { title: "Lead routing" };
 
 export default async function AdminLeadRoutingPage() {
-  const [settings, agents] = await Promise.all([
-    ensureCrmRoutingSettings(),
-    listRoutableAgents(),
-  ]);
+  const settings = await ensureCrmRoutingSettings();
+  const agents = await listRoutableAgentsForSettings(settings);
 
   return (
     <div className="space-y-6">

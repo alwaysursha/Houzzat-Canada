@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeAuditLog } from "@/lib/admin/audit";
+import { CRM_ROUTING_SETTINGS_ID } from "@/lib/agent/routing-types";
 import {
-  CRM_ROUTING_SETTINGS_ID,
   ensureCrmRoutingSettings,
-  listRoutableAgents,
-} from "@/lib/agent/lead-intake";
+  listRoutableAgentsForSettings,
+  validateListingAgentForSettings,
+  validateWeightsForSettings,
+} from "@/lib/crm-routing-config";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -29,10 +31,8 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [settings, agents] = await Promise.all([
-    ensureCrmRoutingSettings(),
-    listRoutableAgents(),
-  ]);
+  const settings = await ensureCrmRoutingSettings();
+  const agents = await listRoutableAgentsForSettings(settings);
 
   return NextResponse.json({
     agents,
@@ -70,43 +70,29 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  await ensureCrmRoutingSettings();
-  const agents = await listRoutableAgents();
-  const agentIds = new Set(agents.map((a) => a.id));
+  const settings = await ensureCrmRoutingSettings();
+  const agents = await listRoutableAgentsForSettings(settings);
 
-  if (parsed.data.listingAgentId) {
-    if (!agentIds.has(parsed.data.listingAgentId)) {
-      return NextResponse.json(
-        { error: "Listing agent must be an active agent." },
-        { status: 400 },
-      );
-    }
+  const listingErr = validateListingAgentForSettings(
+    parsed.data.listingAgentId,
+    agents,
+  );
+  if (listingErr) {
+    return NextResponse.json({ error: listingErr }, { status: 400 });
   }
 
-  function validateWeights(
-    weights: { agentId: string; percent: number }[] | undefined,
-    label: string,
-  ) {
-    if (!weights) return null;
-    for (const row of weights) {
-      if (!agentIds.has(row.agentId)) {
-        return `${label}: unknown agent`;
-      }
-    }
-    const sum = weights.reduce((s, w) => s + w.percent, 0);
-    if (weights.length > 0 && sum !== 100) {
-      return `${label} percentages must total 100 (currently ${sum}).`;
-    }
-    return null;
-  }
-
-  const buyerErr = validateWeights(parsed.data.buyerWeights, "Buyer routing");
+  const buyerErr = validateWeightsForSettings(
+    parsed.data.buyerWeights,
+    "Buyer routing",
+    agents,
+  );
   if (buyerErr) {
     return NextResponse.json({ error: buyerErr }, { status: 400 });
   }
-  const sellerErr = validateWeights(
+  const sellerErr = validateWeightsForSettings(
     parsed.data.sellerWeights,
     "Seller routing",
+    agents,
   );
   if (sellerErr) {
     return NextResponse.json({ error: sellerErr }, { status: 400 });
@@ -164,10 +150,10 @@ export async function PATCH(request: Request) {
     meta: parsed.data,
   });
 
-  const settings = await ensureCrmRoutingSettings();
+  const updated = await ensureCrmRoutingSettings();
   return NextResponse.json({
     ok: true,
-    listingAgentId: settings.listingAgentId,
-    sellerAssignMode: settings.sellerAssignMode,
+    listingAgentId: updated.listingAgentId,
+    sellerAssignMode: updated.sellerAssignMode,
   });
 }

@@ -1,43 +1,44 @@
-import type { LeadIntent, LeadSource, SellerLeadAssignMode } from "@prisma/client";
+import type { LeadIntent, LeadSource } from "@prisma/client";
 import {
   resolveDefaultOrganizationId,
   resolveOrganizationIdForAssignee,
 } from "@/lib/agent";
+import {
+  ensureCrmRoutingSettings,
+  listLegacyRoutableAgents,
+  listRoutableAgents,
+  listRoutableAgentsForSettings,
+} from "@/lib/crm-routing-config";
 import {
   resolveChildCrmOwnership,
   resolveLeadCrmOwnership,
 } from "@/lib/crm-ownership";
 import { notifyNewLeadCaptured, scheduleNewLeadStaffEmail } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
-
-export { CRM_ROUTING_SETTINGS_ID, type RoutableAgent } from "@/lib/agent/routing-types";
-
-export const CALL_NEW_LEAD_TASK_TITLE = "Call new lead";
-export const CALL_NEW_LEAD_DUE_MS = 12 * 60 * 60 * 1000;
-export const ATTEMPTED_CONTACT_REMINDER_TITLE =
-  "Follow up — attempted contact";
-export const ATTEMPTED_CONTACT_REMINDER_MS = 24 * 60 * 60 * 1000;
-import {
-  CRM_ROUTING_SETTINGS_ID,
-  type RoutableAgent,
-} from "@/lib/agent/routing-types";
 import {
   resolveDefaultWorkspaceIdForRouting,
   resolveWorkspaceRoutedAssignee,
   shouldUseWorkspaceRouting,
 } from "@/lib/workspace-routing";
 
-/** Active field agents used for auto-routing counts and weights. */
-export async function listRoutableAgents(): Promise<RoutableAgent[]> {
-  return prisma.user.findMany({
-    where: {
-      role: "AGENT",
-      disabledAt: null,
-    },
-    select: { id: true, name: true, email: true },
-    orderBy: [{ name: "asc" }, { email: "asc" }],
-  });
-}
+export { CRM_ROUTING_SETTINGS_ID, type RoutableAgent } from "@/lib/agent/routing-types";
+export {
+  ensureCrmRoutingSettings,
+  listLegacyRoutableAgents,
+  listRoutableAgents,
+  listRoutableAgentsForSettings,
+  syncCrmRoutingSettingsForWorkspace,
+  syncRoutingWeightsForSettings,
+  usesWorkspaceRoutingForSettings,
+  validateListingAgentForSettings,
+  validateWeightsForSettings,
+} from "@/lib/crm-routing-config";
+
+export const CALL_NEW_LEAD_TASK_TITLE = "Call new lead";
+export const CALL_NEW_LEAD_DUE_MS = 12 * 60 * 60 * 1000;
+export const ATTEMPTED_CONTACT_REMINDER_TITLE =
+  "Follow up — attempted contact";
+export const ATTEMPTED_CONTACT_REMINDER_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Buyer+seller → seller desk. Seller-only → seller. Otherwise buyer.
@@ -48,104 +49,6 @@ export function resolveLeadIntent(flags: {
 }): LeadIntent {
   if (flags.isSeller) return "SELLER";
   return "BUYER";
-}
-
-export async function ensureCrmRoutingSettings() {
-  const agents = await listRoutableAgents();
-  let settings = await prisma.crmRoutingSettings.findUnique({
-    where: { id: CRM_ROUTING_SETTINGS_ID },
-    include: { weights: true },
-  });
-
-  if (!settings) {
-    const listingAgentId = agents[0]?.id ?? null;
-    settings = await prisma.crmRoutingSettings.create({
-      data: {
-        id: CRM_ROUTING_SETTINGS_ID,
-        listingAgentId,
-        sellerAssignMode: "LISTING_AGENT",
-      },
-      include: { weights: true },
-    });
-  } else if (!settings.listingAgentId && agents[0]) {
-    settings = await prisma.crmRoutingSettings.update({
-      where: { id: CRM_ROUTING_SETTINGS_ID },
-      data: { listingAgentId: agents[0].id },
-      include: { weights: true },
-    });
-  }
-
-  await syncRoutingWeights(
-    agents.map((a) => a.id),
-    settings.weights,
-  );
-
-  return prisma.crmRoutingSettings.findUniqueOrThrow({
-    where: { id: CRM_ROUTING_SETTINGS_ID },
-    include: {
-      listingAgent: { select: { id: true, name: true, email: true } },
-      weights: {
-        include: {
-          agent: { select: { id: true, name: true, email: true } },
-        },
-      },
-    },
-  });
-}
-
-async function syncRoutingWeights(
-  agentIds: string[],
-  existing: {
-    id: string;
-    agentId: string;
-    lane: "BUYER" | "SELLER";
-    percent: number;
-  }[],
-) {
-  const lanes = ["BUYER", "SELLER"] as const;
-  const equal =
-    agentIds.length === 0 ? 0 : Math.floor(100 / agentIds.length);
-  const remainder =
-    agentIds.length === 0 ? 0 : 100 - equal * agentIds.length;
-
-  for (const lane of lanes) {
-    const laneWeights = existing.filter((w) => w.lane === lane);
-    const known = new Set(laneWeights.map((w) => w.agentId));
-
-    for (const agentId of agentIds) {
-      if (known.has(agentId)) continue;
-      const index = agentIds.indexOf(agentId);
-      const percent = equal + (index === 0 ? remainder : 0);
-      await prisma.crmRoutingWeight.create({
-        data: {
-          settingsId: CRM_ROUTING_SETTINGS_ID,
-          agentId,
-          lane,
-          percent,
-        },
-      });
-    }
-
-    for (const weight of laneWeights) {
-      if (!agentIds.includes(weight.agentId)) {
-        await prisma.crmRoutingWeight.delete({ where: { id: weight.id } });
-      }
-    }
-
-    const refreshed = await prisma.crmRoutingWeight.findMany({
-      where: { settingsId: CRM_ROUTING_SETTINGS_ID, lane },
-    });
-    const sum = refreshed.reduce((s, w) => s + w.percent, 0);
-    if (refreshed.length > 0 && sum === 0) {
-      for (let i = 0; i < refreshed.length; i++) {
-        const row = refreshed[i]!;
-        await prisma.crmRoutingWeight.update({
-          where: { id: row.id },
-          data: { percent: equal + (i === 0 ? remainder : 0) },
-        });
-      }
-    }
-  }
 }
 
 /**
@@ -160,14 +63,13 @@ export async function resolveRoutedAssignee(
     return resolveWorkspaceRoutedAssignee(workspaceId, intent);
   }
 
-  const agents = await listRoutableAgents();
+  const settings = await ensureCrmRoutingSettings();
+  const agents = await listRoutableAgentsForSettings(settings);
   if (agents.length === 0) return null;
   if (agents.length === 1) return agents[0]!.id;
 
-  const settings = await ensureCrmRoutingSettings();
-
   if (intent === "SELLER") {
-    const mode: SellerLeadAssignMode = settings.sellerAssignMode;
+    const mode = settings.sellerAssignMode;
     if (mode === "LISTING_AGENT") {
       if (
         settings.listingAgentId &&
@@ -179,8 +81,9 @@ export async function resolveRoutedAssignee(
   }
 
   const lane = intent === "SELLER" ? "SELLER" : "BUYER";
+  const agentIds = new Set(agents.map((a) => a.id));
   const weights = settings.weights.filter(
-    (w) => w.lane === lane && w.percent > 0,
+    (w) => w.lane === lane && w.percent > 0 && agentIds.has(w.agentId),
   );
   if (weights.length === 0) {
     return agents[0]?.id ?? null;
