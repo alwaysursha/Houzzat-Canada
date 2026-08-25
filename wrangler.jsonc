@@ -34,6 +34,10 @@
       "head_sampling_rate": 1
     }
   },
+  // Preserve Cloudflare dashboard plain vars that are NOT listed below.
+  // Secrets are never deleted by deploy. Vars listed in `vars` are still
+  // applied from this file on every deploy (source of truth for those keys).
+  "keep_vars": true,
   "vars": {
     "NEXTAUTH_URL": "https://houzzat.com",
     "NEXT_PUBLIC_SITE_URL": "https://houzzat.com",
@@ -53,6 +57,10 @@
     "TYPESENSE_AUTOCOMPLETE": "1",
     "TYPESENSE_SEARCH": "1",
     // Worker does not upsert — sync Mac / Actions use ADMIN key locally
-    "TYPESENSE_SYNC": "0"
+    "TYPESENSE_SYNC": "0",
+    // Non-secret SaaS read-scope mode — must survive deploys (do not rely on
+    // dashboard-only). Leave routing/notification/team flags UNSET here so
+    // they stay legacy until explicitly activated.
+    "WORKSPACE_READ_SCOPE": "shadow"
   }
 }
