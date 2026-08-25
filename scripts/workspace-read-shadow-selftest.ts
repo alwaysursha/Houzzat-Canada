@@ -53,13 +53,14 @@ function testNoHotPathDoubleQueries() {
 function testFeatureFlagNotEnabled() {
   const wrangler = read("wrangler.jsonc");
   const deployYml = read(".github/workflows/deploy.yml");
-  // Persistence: READ_SCOPE=shadow may live in wrangler so deploys do not wipe it.
+  // Dashboard is SoT for READ — must not be hardcoded in wrangler.
   assert.ok(
-    /"WORKSPACE_READ_SCOPE"\s*:\s*"shadow"/.test(wrangler),
-    "wrangler must persist WORKSPACE_READ_SCOPE=shadow",
+    !wrangler.includes("WORKSPACE_READ_SCOPE"),
+    "WORKSPACE_READ_SCOPE must not be hardcoded in wrangler",
   );
   // Activation flags must stay dashboard/secret-only — never baked into deploy config.
   for (const flag of [
+    "WORKSPACE_READ_SCOPE",
     "WORKSPACE_ROUTING_SCOPE",
     "WORKSPACE_NOTIFICATION_SCOPE",
     "WORKSPACE_TEAM_SCOPE",

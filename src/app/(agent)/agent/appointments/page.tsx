@@ -17,28 +17,30 @@ export default async function AgentAppointmentsPage({
   if (!ctx) redirect(await staffSignInRedirectUrl("/agent/appointments"));
   const params = await searchParams;
 
-  const orgLeadIds = (
+  const tenantLeadIds = (
     await prisma.lead.findMany({
       where: leadTenantWhere(ctx),
       select: { id: true },
     })
   ).map((l) => l.id);
 
+  // Never match agentId-null / agent-owned rows without a tenant lead bound —
+  // bare `{ agentId: null }` would leak cross-workspace appointments.
   const appointments = await prisma.appointment.findMany({
     where: {
       AND: [
         ctx.canSeeTeamLeads || ctx.isPlatformAdmin
           ? {
               OR: [
-                { agentId: ctx.user.id },
-                { agentId: null },
-                { leadId: { in: orgLeadIds } },
+                { leadId: { in: tenantLeadIds } },
+                { agentId: ctx.user.id, leadId: null },
               ],
             }
           : {
               OR: [
-                { agentId: ctx.user.id },
-                { agentId: null, leadId: { in: orgLeadIds } },
+                { agentId: ctx.user.id, leadId: { in: tenantLeadIds } },
+                { agentId: ctx.user.id, leadId: null },
+                { agentId: null, leadId: { in: tenantLeadIds } },
               ],
             },
         params.type === "VIRTUAL_VIEWING"

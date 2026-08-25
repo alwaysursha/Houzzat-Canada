@@ -11,6 +11,7 @@ import {
   type LeadRow,
 } from "@/components/agent/LeadsTableClient";
 import { leadScopeWhere, requireAgentContext } from "@/lib/agent";
+import { listAssignableCrmAgents } from "@/lib/agent/assignable-agents";
 import { resolveDeskView } from "@/lib/agent/brokerage";
 import { computeHotnessMap, findOnlineUserIds } from "@/lib/agent/hotness";
 import { loadLeadsDashboardEngagement } from "@/lib/agent/leads-dashboard";
@@ -206,27 +207,7 @@ export default async function AgentLeadsPage({
     ...(ctx.canSeeTeamLeads ? [{ id: "team", label: "All team" }] : []),
   ] as const;
 
-  const teamMembers = ctx.canSeeTeamLeads
-    ? ctx.isPlatformAdmin
-      ? (
-          await prisma.user.findMany({
-            where: {
-              role: { in: ["AGENT", "ADMIN"] },
-              disabledAt: null,
-            },
-            select: { id: true, name: true, email: true },
-            orderBy: [{ name: "asc" }, { email: "asc" }],
-            take: 100,
-          })
-        ).map((user) => ({ user }))
-      : await prisma.organizationMembership.findMany({
-          where: { organizationId: { in: ctx.organizationIds } },
-          select: {
-            user: { select: { id: true, name: true, email: true } },
-          },
-          orderBy: { createdAt: "asc" },
-        })
-    : [];
+  const teamMembers = await listAssignableCrmAgents(ctx);
 
   // Dedupe by user id when pulling across orgs.
   const assignableAgents = Array.from(

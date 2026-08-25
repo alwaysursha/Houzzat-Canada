@@ -37,6 +37,8 @@
   // Preserve Cloudflare dashboard plain vars that are NOT listed below.
   // Secrets are never deleted by deploy. Vars listed in `vars` are still
   // applied from this file on every deploy (source of truth for those keys).
+  // Workspace SaaS scopes (READ/ROUTING/NOTIFICATION/TEAM/DUAL_WRITE) are
+  // intentionally omitted so dashboard remains their runtime source of truth.
   "keep_vars": true,
   "vars": {
     "NEXTAUTH_URL": "https://houzzat.com",
@@ -57,10 +59,10 @@
     "TYPESENSE_AUTOCOMPLETE": "1",
     "TYPESENSE_SEARCH": "1",
     // Worker does not upsert — sync Mac / Actions use ADMIN key locally
-    "TYPESENSE_SYNC": "0",
-    // Non-secret SaaS read-scope mode — must survive deploys (do not rely on
-    // dashboard-only). Leave routing/notification/team flags UNSET here so
-    // they stay legacy until explicitly activated.
-    "WORKSPACE_READ_SCOPE": "shadow"
+    "TYPESENSE_SYNC": "0"
+    // Workspace SaaS activation flags (READ / ROUTING / NOTIFICATION / TEAM /
+    // DUAL_WRITE) stay OUT of wrangler vars. With keep_vars=true, Cloudflare
+    // dashboard is the runtime source of truth so a deploy cannot reset them.
   }
 }
+

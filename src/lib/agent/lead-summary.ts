@@ -1,6 +1,7 @@
 import type { LeadStatus } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
 import { canAccessLead } from "@/lib/agent";
+import { listAssignableCrmAgents } from "@/lib/agent/assignable-agents";
 import { loadBuyerIntent } from "@/lib/agent/buyer-intent";
 import { loadCustomerTimeline } from "@/lib/agent/customer-timeline";
 import { computeHotness } from "@/lib/agent/hotness";
@@ -292,24 +293,7 @@ export async function loadLeadSummary(
       take: 100,
     }),
     ctx.canSeeTeamLeads
-      ? ctx.isPlatformAdmin
-        ? prisma.user
-            .findMany({
-              where: {
-                role: { in: ["AGENT", "ADMIN"] },
-                disabledAt: null,
-              },
-              select: { id: true, name: true, email: true },
-              orderBy: [{ name: "asc" }, { email: "asc" }],
-              take: 100,
-            })
-            .then((users) => users.map((user) => ({ user })))
-        : prisma.organizationMembership.findMany({
-            where: { organizationId: { in: ctx.organizationIds } },
-            include: {
-              user: { select: { id: true, name: true, email: true } },
-            },
-          })
+      ? listAssignableCrmAgents(ctx)
       : Promise.resolve([]),
   ]);
 

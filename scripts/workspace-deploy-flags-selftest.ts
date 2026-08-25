@@ -1,5 +1,6 @@
 /**
- * Structural: Wrangler must persist WORKSPACE_READ_SCOPE across deploys.
+ * Structural: dashboard is source of truth for WORKSPACE_READ_SCOPE.
+ * keep_vars preserves dashboard vars not listed in wrangler.
  * Run: pnpm workspace-deploy-flags:selftest
  */
 import assert from "node:assert/strict";
@@ -16,11 +17,10 @@ function testKeepVarsEnabled() {
   assert.match(wrangler, /"keep_vars"\s*:\s*true/);
 }
 
-function testReadScopePersistedInVars() {
-  assert.match(
-    wrangler,
-    /"WORKSPACE_READ_SCOPE"\s*:\s*"shadow"/,
-    "WORKSPACE_READ_SCOPE=shadow must live in wrangler vars",
+function testReadScopeNotHardcodedInWrangler() {
+  assert.ok(
+    !wrangler.includes("WORKSPACE_READ_SCOPE"),
+    "WORKSPACE_READ_SCOPE must not be hardcoded in wrangler (dashboard SoT)",
   );
 }
 
@@ -29,10 +29,11 @@ function testActivationFlagsNotInWrangler() {
     "WORKSPACE_ROUTING_SCOPE",
     "WORKSPACE_NOTIFICATION_SCOPE",
     "WORKSPACE_TEAM_SCOPE",
+    "WORKSPACE_DUAL_WRITE",
   ]) {
     assert.ok(
       !wrangler.includes(`"${key}"`),
-      `${key} must remain unset/legacy (not in wrangler vars)`,
+      `${key} must remain unset in wrangler vars`,
     );
   }
 }
@@ -68,7 +69,7 @@ function testDeployUsesOpennextWrangler() {
 }
 
 testKeepVarsEnabled();
-testReadScopePersistedInVars();
+testReadScopeNotHardcodedInWrangler();
 testActivationFlagsNotInWrangler();
 testNoSecretsInWranglerVars();
 testDeployUsesOpennextWrangler();
