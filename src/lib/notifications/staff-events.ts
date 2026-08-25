@@ -1,5 +1,5 @@
 import { ONLINE_MS } from "@/lib/agent/hotness";
-import { openLeadProfileHref } from "@/lib/agent/lead-profile-query";
+import { openLeadHandoffHref } from "@/lib/agent/lead-profile-query";
 import { SITE_URL } from "@/lib/constants";
 import { sendNotification } from "@/lib/notifications";
 import {
@@ -36,7 +36,7 @@ export type NewLeadEmailSourceKind =
   | "other";
 
 function absoluteLeadCrmUrl(leadId: string): string {
-  const path = openLeadProfileHref(leadId);
+  const path = openLeadHandoffHref(leadId);
   const base = SITE_URL.replace(/\/$/, "");
   return `${base}${path}`;
 }
@@ -236,7 +236,7 @@ export function notifyLeadAssignedToAgent(
         type: "lead_reassigned",
         title: "Lead assigned to you",
         body: input.label,
-        href: openLeadProfileHref(input.leadId),
+        href: openLeadHandoffHref(input.leadId),
       });
     })().catch((error) => {
       console.error("[staff-notify] lead_reassigned failed", {
@@ -284,7 +284,7 @@ export function notifyNewLeadCapturedToStaff(input: {
         type: "new_lead",
         title: input.title ?? "New lead",
         body: input.label,
-        href: openLeadProfileHref(input.leadId),
+        href: openLeadHandoffHref(input.leadId),
       });
     })().catch((error) => {
       console.error("[staff-notify] new_lead push failed", {
@@ -349,7 +349,7 @@ export async function notifyCustomerCameOnline(
       type: "lead_online",
       title: "Lead is online",
       body: name,
-      href: openLeadProfileHref(lead.id),
+      href: openLeadHandoffHref(lead.id),
     });
   }
 
@@ -382,7 +382,7 @@ export async function notifyCustomerCameOnline(
       type: "hot_pipeline",
       title: "Hot pipeline",
       body: `${name} viewed ${distinct} homes today`,
-      href: openLeadProfileHref(lead.id),
+      href: openLeadHandoffHref(lead.id),
     });
   }
 }
@@ -439,7 +439,7 @@ export async function notifyOpenTasksDue() {
       type: "task_due",
       title: list.length === 1 ? "Task due" : `${list.length} tasks due`,
       body: first.title,
-      href: first.leadId ? openLeadProfileHref(first.leadId) : "/agent/tasks",
+      href: first.leadId ? openLeadHandoffHref(first.leadId) : "/agent/tasks",
     });
   }
 }

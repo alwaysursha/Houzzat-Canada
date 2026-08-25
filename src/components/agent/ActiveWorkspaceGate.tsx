@@ -13,6 +13,8 @@ export function ActiveWorkspaceGate() {
 
   useEffect(() => {
     if (pathname === "/agent/workspace") return;
+    // Stage 3I: deep-link handoff sets the cookie itself — do not bounce to chooser first.
+    if (pathname?.startsWith("/agent/open-lead/")) return;
 
     let cancelled = false;
     (async () => {

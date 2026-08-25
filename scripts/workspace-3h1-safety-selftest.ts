@@ -126,10 +126,12 @@ function testRemovedMembershipInvalidatesSelection() {
   assert.ok(ctx.includes("requiresWorkspaceSelection"));
 }
 
-function testTeamWorkspaceWritesDisabled() {
+function testTeamWorkspaceWritesEnabled() {
   const route = read("src/app/api/agent/team/route.ts");
-  assert.ok(route.includes("WORKSPACE_TEAM_WRITES_DISABLED"));
-  assert.ok(route.includes("status: 501"));
+  assert.ok(route.includes("handleWorkspaceTeamPost"));
+  assert.ok(route.includes("createWorkspaceInvite"));
+  assert.ok(route.includes("suspendWorkspaceMember"));
+  assert.ok(!route.includes("WORKSPACE_TEAM_WRITES_DISABLED"));
   assert.ok(route.includes("usesWorkspaceTeamScope(ctx)"));
 }
 
@@ -164,7 +166,7 @@ async function main() {
   testOriginCheck();
   testActiveADeniesLeadB();
   testRemovedMembershipInvalidatesSelection();
-  testTeamWorkspaceWritesDisabled();
+  testTeamWorkspaceWritesEnabled();
   testMigrationAdditiveOnly();
   testNotificationIsolationMatrixLogic();
   console.log("workspace-3h1-safety:selftest: ok");

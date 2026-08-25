@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openLeadProfileHref } from "../src/lib/agent/lead-profile-query";
+import { openLeadHandoffHref, openLeadProfileHref } from "../src/lib/agent/lead-profile-query";
 import { sanitizePushHref } from "../src/lib/notifications/push-href";
 import { resolveProPostSignInHref } from "../src/lib/auth/pro-sign-in-routing";
 
@@ -62,10 +62,13 @@ async function main() {
   assert.equal(sanitizePushHref("/search?q=1"), "/search?q=1");
   assert.equal(sanitizePushHref("/share/homes/abc"), "/share/homes/abc");
 
-  // Staff CRM deep-links (canonical query + legacy path) must pass.
+  // Staff CRM deep-links (canonical query + handoff + legacy path) must pass.
   const leadHref = openLeadProfileHref("lead_abc");
   assert.equal(leadHref, "/agent/leads?lead=lead_abc");
   assert.equal(sanitizePushHref(leadHref), leadHref);
+  const handoffHref = openLeadHandoffHref("lead_abc");
+  assert.equal(handoffHref, "/agent/open-lead/lead_abc");
+  assert.equal(sanitizePushHref(handoffHref), handoffHref);
   assert.equal(
     sanitizePushHref("/agent/leads/lead_abc"),
     "/agent/leads/lead_abc",
@@ -133,14 +136,14 @@ async function main() {
     "/agent",
   );
 
-  // --- structural: staff senders use profile href helper ---
-  assert.ok(staffEvents.includes("openLeadProfileHref"));
-  assert.ok(staffEvents.includes("href: openLeadProfileHref(input.leadId)"));
+  // --- structural: staff senders use handoff href helper ---
+  assert.ok(staffEvents.includes("openLeadHandoffHref"));
+  assert.ok(staffEvents.includes("href: openLeadHandoffHref(input.leadId)"));
   assert.ok(staffEvents.includes('type: "new_lead"'));
   assert.ok(staffEvents.includes('type: "lead_reassigned"'));
   assert.ok(staffEvents.includes('type: "task_due"'));
   assert.ok(
-    staffEvents.includes('href: first.leadId ? openLeadProfileHref(first.leadId) : "/agent/tasks"'),
+    staffEvents.includes('href: first.leadId ? openLeadHandoffHref(first.leadId) : "/agent/tasks"'),
   );
   assert.ok(
     pushHrefFile.includes('path.startsWith("/agent/")'),

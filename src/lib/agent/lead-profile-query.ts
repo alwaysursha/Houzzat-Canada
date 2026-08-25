@@ -38,6 +38,14 @@ export function openLeadProfileHref(
   return `/agent/leads?${q.toString()}`;
 }
 
+/**
+ * Stage 3I — push/email deep-link handoff.
+ * Server resolves Lead.workspaceId, validates membership, switches active Workspace, then opens profile.
+ */
+export function openLeadHandoffHref(leadId: string) {
+  return `/agent/open-lead/${encodeURIComponent(leadId)}`;
+}
+
 export function readLeadQueryParam(): string | null {
   if (typeof window === "undefined") return null;
   return new URLSearchParams(window.location.search).get("lead");

@@ -78,7 +78,8 @@ function testTeamApiBranchesOnFlag() {
   );
   assert.ok(route.includes("usesWorkspaceTeamScope"));
   assert.ok(route.includes("getWorkspaceTeamPayload"));
-  assert.ok(route.includes("WORKSPACE_TEAM_WRITES_DISABLED"));
+  assert.ok(route.includes("handleWorkspaceTeamPost"));
+  assert.ok(route.includes("createWorkspaceInvite"));
 }
 
 async function main() {

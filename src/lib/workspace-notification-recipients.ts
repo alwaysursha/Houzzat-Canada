@@ -231,24 +231,43 @@ export async function authorizeStaffRecipientForTask(input: {
   return true;
 }
 
-/** Filter candidate userIds to ACTIVE members of the lead's workspace. */
+/** Filter candidate userIds to ACTIVE members of the lead's workspace (batched). */
 export async function filterStaffRecipientsForLead(
   leadId: string,
   userIds: string[],
   event?: string,
 ): Promise<string[]> {
   if (!isWorkspaceNotificationScope()) return userIds;
-  const allowed: string[] = [];
-  for (const userId of userIds) {
-    if (
-      await authorizeStaffRecipientForLead({
-        userId,
-        leadId,
-        event,
-      })
-    ) {
-      allowed.push(userId);
-    }
+  const unique = [...new Set(userIds.filter(Boolean))];
+  if (unique.length === 0) return [];
+
+  const workspaceId = await resolveLeadEventWorkspaceId(leadId);
+  if (!workspaceId) {
+    console.warn("[staff-notify] skip: lead missing workspaceId", {
+      event: event ?? "unknown",
+      leadIdPrefix: leadId.slice(0, 8),
+    });
+    return [];
   }
-  return allowed;
+
+  const members = await prisma.workspaceMember.findMany({
+    where: {
+      workspaceId,
+      userId: { in: unique },
+      status: "ACTIVE",
+    },
+    select: { userId: true },
+  });
+  const allowed = new Set(members.map((m) => m.userId));
+  const denied = unique.filter((id) => !allowed.has(id));
+  for (const userId of denied) {
+    console.warn("[staff-notify] skip: foreign/non-member recipient", {
+      event: event ?? "unknown",
+      leadIdPrefix: leadId.slice(0, 8),
+      workspaceIdPrefix: workspaceId.slice(0, 8),
+      userIdPrefix: userId.slice(0, 8),
+    });
+  }
+  // Preserve caller order, drop unauthorized.
+  return unique.filter((id) => allowed.has(id));
 }

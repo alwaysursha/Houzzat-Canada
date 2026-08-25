@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
-import { openLeadProfileHref } from "@/lib/agent/lead-profile-query";
+import { openLeadHandoffHref } from "@/lib/agent/lead-profile-query";
 import { emailEnv } from "@/lib/email/env";
 import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
@@ -66,7 +66,7 @@ async function notifyAlertEngagement(input: {
     type: "alert_engagement",
     title: input.title,
     body: input.body,
-    href: openLeadProfileHref(input.leadId),
+    href: openLeadHandoffHref(input.leadId),
   });
 }
 

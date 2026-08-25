@@ -3,12 +3,70 @@ import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { TeamAdminClient } from "@/components/agent/TeamAdminClient";
 import { requireAgentContext } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
+import {
+  getWorkspaceTeamPayload,
+  usesWorkspaceTeamScope,
+} from "@/lib/workspace-team";
 
 export const metadata = { title: "Team · Agent CRM" };
 
 export default async function AgentTeamPage() {
   const ctx = await requireAgentContext();
   if (!ctx) redirect(await staffSignInRedirectUrl("/agent/team"));
+
+  if (usesWorkspaceTeamScope(ctx)) {
+    const payload = await getWorkspaceTeamPayload(ctx);
+    if (!payload?.workspace) {
+      redirect("/agent/workspace");
+    }
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-display text-4xl text-ink">Team</h1>
+          <p className="mt-2 text-sm text-ink/60">
+            {payload.workspace.name}
+            {payload.workspace.brokerageAffiliation
+              ? ` · ${payload.workspace.brokerageAffiliation}`
+              : ""}
+            {" · "}
+            manage seats for this Workspace only. Platform Admin stays separate
+            (Houzzat HQ).
+          </p>
+        </div>
+
+        <TeamAdminClient
+          scope="workspace"
+          workspaceName={payload.workspace.name}
+          canManage={payload.canManage}
+          seatLimit={payload.seats.seatLimit}
+          billingDeferred={payload.seats.billingDeferred}
+          memberCount={payload.seats.activeSeatCount}
+          currentUserId={ctx.user.id}
+          primaryAgentUserId={payload.primaryAgentId}
+          canSetPrimaryAgent={ctx.workspaceRole === "OWNER"}
+          members={payload.members.map((m) => ({
+            id: m.id,
+            role: m.role,
+            status: m.status,
+            isPrimaryAgent: m.isPrimaryAgent,
+            user: {
+              id: m.user.id,
+              name: m.user.name,
+              email: m.user.email,
+              agentActive: m.status === "ACTIVE",
+            },
+          }))}
+          invites={payload.invites.map((i) => ({
+            id: i.id,
+            email: i.email,
+            role: i.role,
+            expiresAt: i.expiresAt.toISOString(),
+          }))}
+        />
+      </div>
+    );
+  }
 
   const [org, members, invites] = await Promise.all([
     prisma.organization.findUniqueOrThrow({
@@ -50,6 +108,7 @@ export default async function AgentTeamPage() {
       </div>
 
       <TeamAdminClient
+        scope="organization"
         canManage={ctx.canSeeTeamLeads}
         seatLimit={org.seatLimit}
         memberCount={members.length}

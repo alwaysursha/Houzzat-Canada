@@ -35,7 +35,7 @@ function testCentralHelpersExist() {
   assert.ok(staffEvents.includes("export function scheduleNewLeadStaffEmail"));
   assert.ok(staffEvents.includes("export function scheduleNotifyCustomerCameOnline"));
   assert.ok(staffEvents.includes("scheduleWorkerSideEffect"));
-  assert.ok(staffEvents.includes("openLeadProfileHref"));
+  assert.ok(staffEvents.includes("openLeadHandoffHref"));
 }
 
 function testSignupUnchangedPattern() {
@@ -108,7 +108,7 @@ function testReassignmentDedupe() {
   assert.ok(assignAgent.includes("!createdLead"));
   assert.ok(assignAgent.includes("notifyLeadAssignedToAgent"));
   assert.ok(staffEvents.includes('type: "lead_reassigned"'));
-  assert.ok(staffEvents.includes("openLeadProfileHref(input.leadId)"));
+  assert.ok(staffEvents.includes("openLeadHandoffHref(input.leadId)"));
 }
 
 function testBeaconWorkerOwnership() {
@@ -122,7 +122,7 @@ function testBeaconWorkerOwnership() {
 function testAlertEngagementHref() {
   assert.ok(resendWebhook.includes("notifyAlertEngagement"));
   assert.ok(resendWebhook.includes("authorizeStaffRecipientForLead"));
-  assert.ok(resendWebhook.includes("openLeadProfileHref(input.leadId)"));
+  assert.ok(resendWebhook.includes("openLeadHandoffHref(input.leadId)"));
   assert.ok(resendWebhook.includes('type: "alert_engagement"'));
 }
 
@@ -136,10 +136,10 @@ function testMissingToolsNotWired() {
 }
 
 function testExactHrefsInHelpers() {
-  assert.ok(staffEvents.includes("href: openLeadProfileHref"));
+  assert.ok(staffEvents.includes("href: openLeadHandoffHref"));
   assert.ok(
     staffEvents.includes(
-      'href: first.leadId ? openLeadProfileHref(first.leadId) : "/agent/tasks"',
+      'href: first.leadId ? openLeadHandoffHref(first.leadId) : "/agent/tasks"',
     ),
   );
 }

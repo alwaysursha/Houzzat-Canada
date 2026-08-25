@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openLeadProfileHref } from "../src/lib/agent/lead-profile-query";
+import { openLeadHandoffHref, openLeadProfileHref } from "../src/lib/agent/lead-profile-query";
 import { isPushTypeEnabled } from "../src/lib/notifications/catalog";
 import {
   isStaffCategoryPushEnabled,
@@ -47,9 +47,11 @@ function testHelperOwnsDedupePrefCtaWorker() {
 }
 
 function testExactCta() {
-  const href = openLeadProfileHref("lead_abc123");
-  assert.equal(href, "/agent/leads?lead=lead_abc123");
-  assert.ok(staffEvents.includes("openLeadProfileHref(leadId)"));
+  const deskHref = openLeadProfileHref("lead_abc123");
+  assert.equal(deskHref, "/agent/leads?lead=lead_abc123");
+  const href = openLeadHandoffHref("lead_abc123");
+  assert.equal(href, "/agent/open-lead/lead_abc123");
+  assert.ok(staffEvents.includes("openLeadHandoffHref(leadId)"));
   assert.ok(staffEvents.includes("SITE_URL"));
 }
 

@@ -10,6 +10,8 @@ import {
 type Member = {
   id: string;
   role: string;
+  status?: string;
+  isPrimaryAgent?: boolean;
   user: {
     id: string;
     name: string | null;
@@ -26,19 +28,29 @@ type Invite = {
 };
 
 export function TeamAdminClient({
+  scope = "organization",
+  workspaceName,
   canManage,
   seatLimit,
+  billingDeferred,
   memberCount,
   members,
   invites,
   currentUserId,
+  primaryAgentUserId,
+  canSetPrimaryAgent = false,
 }: {
+  scope?: "organization" | "workspace";
+  workspaceName?: string | null;
   canManage: boolean;
-  seatLimit: number;
+  seatLimit: number | null;
+  billingDeferred?: boolean;
   memberCount: number;
   members: Member[];
   invites: Invite[];
   currentUserId: string;
+  primaryAgentUserId?: string | null;
+  canSetPrimaryAgent?: boolean;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -55,10 +67,17 @@ export function TeamAdminClient({
       members.filter(
         (m) =>
           m.user.id !== deleteTarget?.user.id &&
-          m.user.agentActive !== false,
+          m.user.agentActive !== false &&
+          (m.status ? m.status === "ACTIVE" : true),
       ),
     [members, deleteTarget],
   );
+
+  const isWorkspace = scope === "workspace";
+  const seatLabel =
+    seatLimit == null
+      ? `${memberCount} active`
+      : `${memberCount} / ${seatLimit} used`;
 
   useStaffOverlay({
     open: Boolean(deleteTarget),
@@ -116,14 +135,16 @@ export function TeamAdminClient({
         setMsg(json.error || "Action failed");
         return;
       }
-      if (action === "disable_member") setMsg("Agent seat disabled.");
-      else if (action === "enable_member") setMsg("Agent seat re-enabled.");
+      if (action === "disable_member")
+        setMsg(isWorkspace ? "Member suspended." : "Agent seat disabled.");
+      else if (action === "enable_member")
+        setMsg(isWorkspace ? "Member reactivated." : "Agent seat re-enabled.");
       else {
         const t = json.transferred;
         setMsg(
           t
-            ? `Agent removed. Transferred ${t.leads ?? 0} leads, ${t.tasks ?? 0} tasks.`
-            : "Agent removed.",
+            ? `Member removed. Transferred ${t.leads ?? 0} leads, ${t.tasks ?? 0} tasks.`
+            : "Member removed.",
         );
         setDeleteTarget(null);
         setTransferToUserId("");
@@ -137,7 +158,8 @@ export function TeamAdminClient({
   if (!canManage) {
     return (
       <p className="text-sm text-ink/55">
-        Only team owners/admins can invite seats. You are an agent on this team.
+        Only workspace owners/admins can invite seats. You are an agent on this
+        {isWorkspace ? " Workspace" : " team"}.
       </p>
     );
   }
@@ -145,10 +167,16 @@ export function TeamAdminClient({
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-line bg-surface p-5">
-        <h2 className="font-semibold text-ink">Seats</h2>
+        <h2 className="font-semibold text-ink">
+          Seats{workspaceName ? ` · ${workspaceName}` : ""}
+        </h2>
         <p className="mt-1 text-sm text-ink/55">
-          {memberCount} / {seatLimit} used. Invites email a secure link so the
-          agent can create an account or sign in and join the team. Existing
+          {seatLabel}
+          {billingDeferred
+            ? " (billing seat limits coming later)."
+            : "."}{" "}
+          Invites email a secure link so the agent can create an account or sign
+          in and join this {isWorkspace ? "Workspace" : "team"} only. Existing
           buyer/seller accounts are warned that those profiles will be disabled.
         </p>
         <form
@@ -166,15 +194,18 @@ export function TeamAdminClient({
               const json = (await res.json()) as {
                 error?: string;
                 convertsConsumerAccount?: boolean;
+                alreadyMember?: boolean;
               };
               if (!res.ok) {
                 setMsg(json.error || "Invite failed");
               } else {
                 setEmail("");
                 setMsg(
-                  json.convertsConsumerAccount
-                    ? "Invite sent — they already have a buyer/seller account and will be asked to switch to agent."
-                    : "Invite sent.",
+                  json.alreadyMember
+                    ? "Added to Workspace — they were already a staff account."
+                    : json.convertsConsumerAccount
+                      ? "Invite sent — they already have a buyer/seller account and will be asked to switch to agent."
+                      : "Invite sent.",
                 );
                 router.refresh();
               }
@@ -198,7 +229,7 @@ export function TeamAdminClient({
           >
             <option value="AGENT">Agent</option>
             <option value="ADMIN">Team admin</option>
-            <option value="OWNER">Owner</option>
+            {!isWorkspace ? <option value="OWNER">Owner</option> : null}
           </select>
           <button
             type="submit"
@@ -218,6 +249,8 @@ export function TeamAdminClient({
             const busy = memberActionId === m.id;
             const isSelf = m.user.id === currentUserId;
             const disabled = !m.user.agentActive;
+            const isPrimary =
+              m.isPrimaryAgent || m.user.id === primaryAgentUserId;
             return (
               <li
                 key={m.id}
@@ -226,9 +259,14 @@ export function TeamAdminClient({
                 <div className="min-w-0">
                   <p className="font-medium text-ink">
                     {m.user.name || m.user.email}
+                    {isPrimary ? (
+                      <span className="ml-2 rounded bg-[#ecfdf5] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#0f766e]">
+                        Primary Agent
+                      </span>
+                    ) : null}
                     {disabled ? (
                       <span className="ml-2 rounded bg-[#fee2e2] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#b91c1c]">
-                        Disabled
+                        {isWorkspace ? "Suspended" : "Disabled"}
                       </span>
                     ) : null}
                   </p>
@@ -240,6 +278,102 @@ export function TeamAdminClient({
                   </span>
                   {!isSelf ? (
                     <>
+                      {isWorkspace &&
+                      canSetPrimaryAgent &&
+                      !isPrimary &&
+                      !disabled ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                `Set ${m.user.name || m.user.email} as Primary Agent for this Workspace?`,
+                              )
+                            ) {
+                              return;
+                            }
+                            void (async () => {
+                              setMemberActionId(m.id);
+                              setMsg(null);
+                              try {
+                                const res = await fetch("/api/agent/team", {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    action: "set_primary_agent",
+                                    userId: m.user.id,
+                                  }),
+                                });
+                                const json = (await res.json()) as {
+                                  error?: string;
+                                };
+                                if (!res.ok) {
+                                  setMsg(json.error || "Action failed");
+                                  return;
+                                }
+                                setMsg("Primary Agent updated.");
+                                router.refresh();
+                              } finally {
+                                setMemberActionId(null);
+                              }
+                            })();
+                          }}
+                          className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#0f766e] hover:bg-[#ecfdf5] disabled:opacity-50"
+                        >
+                          Make primary
+                        </button>
+                      ) : null}
+                      {isWorkspace &&
+                      m.role === "AGENT" &&
+                      !disabled ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                `Promote ${m.user.name || m.user.email} to ADMIN?`,
+                              )
+                            ) {
+                              return;
+                            }
+                            void (async () => {
+                              setMemberActionId(m.id);
+                              setMsg(null);
+                              try {
+                                const res = await fetch("/api/agent/team", {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    action: "change_role",
+                                    membershipId: m.id,
+                                    role: "ADMIN",
+                                  }),
+                                });
+                                const json = (await res.json()) as {
+                                  error?: string;
+                                };
+                                if (!res.ok) {
+                                  setMsg(json.error || "Action failed");
+                                  return;
+                                }
+                                setMsg("Role updated.");
+                                router.refresh();
+                              } finally {
+                                setMemberActionId(null);
+                              }
+                            })();
+                          }}
+                          className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[12px] font-semibold text-ink/70 hover:bg-mist disabled:opacity-50"
+                        >
+                          Make admin
+                        </button>
+                      ) : null}
                       {disabled ? (
                         <button
                           type="button"
@@ -249,7 +383,7 @@ export function TeamAdminClient({
                           }
                           className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#0f766e] hover:bg-[#ecfdf5] disabled:opacity-50"
                         >
-                          {busy ? "…" : "Enable"}
+                          {busy ? "…" : isWorkspace ? "Reactivate" : "Enable"}
                         </button>
                       ) : (
                         <button
@@ -258,7 +392,9 @@ export function TeamAdminClient({
                           onClick={() => {
                             if (
                               !window.confirm(
-                                `Disable CRM access for ${m.user.name || m.user.email}?`,
+                                isWorkspace
+                                  ? `Suspend ${m.user.name || m.user.email} in this Workspace?`
+                                  : `Disable CRM access for ${m.user.name || m.user.email}?`,
                               )
                             ) {
                               return;
@@ -267,7 +403,7 @@ export function TeamAdminClient({
                           }}
                           className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#b45309] hover:bg-[#fffbeb] disabled:opacity-50"
                         >
-                          {busy ? "…" : "Disable"}
+                          {busy ? "…" : isWorkspace ? "Suspend" : "Disable"}
                         </button>
                       )}
                       <button
@@ -284,7 +420,7 @@ export function TeamAdminClient({
                         }}
                         className="rounded-lg border border-[#fecdd3] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#be123c] hover:bg-[#fff1f2] disabled:opacity-50"
                       >
-                        Delete
+                        Remove
                       </button>
                     </>
                   ) : null}
@@ -360,16 +496,17 @@ export function TeamAdminClient({
           />
           <div className="relative z-10 w-full max-w-md rounded-xl border border-[#d8dee6] bg-white p-5 shadow-xl">
             <h3 className="text-[16px] font-bold text-[#1e2a38]">
-              Delete agent seat
+              Remove {isWorkspace ? "Workspace member" : "agent seat"}
             </h3>
             <p className="mt-2 text-[13px] leading-relaxed text-[#475569]">
               Remove{" "}
               <strong className="text-[#0f172a]">
                 {deleteTarget.user.name || deleteTarget.user.email}
               </strong>{" "}
-              from the team. Their agent profile will be deactivated and their
-              buyer profile restored. Choose who should receive their leads,
-              tasks, and appointments.
+              from this {isWorkspace ? "Workspace" : "team"}.
+              {isWorkspace
+                ? " Their other Workspace memberships (if any) stay intact. Choose who should receive their leads and tasks in this Workspace."
+                : " Their agent profile will be deactivated and their buyer profile restored. Choose who should receive their leads, tasks, and appointments."}
             </p>
             <label className="mt-4 block text-[12px] font-semibold text-[#334155]">
               Transfer data to
@@ -409,8 +546,8 @@ export function TeamAdminClient({
                 className="rounded-lg bg-[#be123c] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
               >
                 {memberActionId === deleteTarget.id
-                  ? "Deleting…"
-                  : "Transfer & delete"}
+                  ? "Removing…"
+                  : "Transfer & remove"}
               </button>
             </div>
           </div>

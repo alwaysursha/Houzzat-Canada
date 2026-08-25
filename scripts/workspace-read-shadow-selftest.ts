@@ -51,14 +51,24 @@ function testNoHotPathDoubleQueries() {
 }
 
 function testFeatureFlagNotEnabled() {
-  const deploy = [
-    read("wrangler.jsonc"),
-    read(".github/workflows/deploy.yml"),
-  ].join("\n");
+  const wrangler = read("wrangler.jsonc");
+  const deployYml = read(".github/workflows/deploy.yml");
+  // Persistence: READ_SCOPE=shadow may live in wrangler so deploys do not wipe it.
   assert.ok(
-    !deploy.includes("WORKSPACE_READ_SCOPE"),
-    "WORKSPACE_READ_SCOPE must not be set in deploy config until user enables it",
+    /"WORKSPACE_READ_SCOPE"\s*:\s*"shadow"/.test(wrangler),
+    "wrangler must persist WORKSPACE_READ_SCOPE=shadow",
   );
+  // Activation flags must stay dashboard/secret-only — never baked into deploy config.
+  for (const flag of [
+    "WORKSPACE_ROUTING_SCOPE",
+    "WORKSPACE_NOTIFICATION_SCOPE",
+    "WORKSPACE_TEAM_SCOPE",
+  ]) {
+    assert.ok(
+      !wrangler.includes(flag) && !deployYml.includes(flag),
+      `${flag} must not be set in deploy config`,
+    );
+  }
 }
 
 async function testLiveShadowWhenAvailable() {

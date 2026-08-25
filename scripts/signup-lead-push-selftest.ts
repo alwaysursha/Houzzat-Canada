@@ -70,7 +70,7 @@ function testNewLeadPayloadShape() {
   assert.ok(staffEvents.includes('type: "new_lead"'));
   assert.ok(staffEvents.includes('title: input.title ?? "New lead"'));
   assert.ok(
-    staffEvents.includes("href: openLeadProfileHref(input.leadId)"),
+    staffEvents.includes("href: openLeadHandoffHref(input.leadId)"),
     "new_lead must deep-link to lead profile query (?lead=)",
   );
   assert.ok(
