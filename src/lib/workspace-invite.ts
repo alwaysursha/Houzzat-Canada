@@ -10,6 +10,7 @@ import { sendRenderedEmail } from "@/lib/email/send";
 import { renderTeamInviteEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
 import { reconcileUserPlatformStaffState } from "@/lib/reconcile-user-platform-staff";
+import bcrypt from "bcryptjs";
 import {
   createWorkspaceInviteRawToken,
   hashWorkspaceInviteToken,
@@ -41,6 +42,8 @@ export type WorkspaceInvitePreview = {
   kind: "workspace";
   email: string;
   role: WorkspaceMemberRole;
+  /** Alias for TeamInviteClient (org invite UI). */
+  orgName: string;
   workspaceName: string;
   workspaceIdPrefix: string;
   invitedByName: string | null;
@@ -50,6 +53,8 @@ export type WorkspaceInvitePreview = {
   expired: boolean;
   cancelled: boolean;
   accountExists: boolean;
+  /** Existing staff user with null password — accept with password form. */
+  needsPasswordActivation: boolean;
   convertsConsumerAccount: boolean;
   consumerLabels: Array<"buyer" | "seller">;
 };
@@ -110,7 +115,13 @@ export async function loadWorkspaceInvitePreview(
 
   const existing = await prisma.user.findUnique({
     where: { email: invite.email },
-    select: { id: true, role: true, isBuyer: true, isSeller: true },
+    select: {
+      id: true,
+      role: true,
+      password: true,
+      isBuyer: true,
+      isSeller: true,
+    },
   });
 
   const consumerLabels: Array<"buyer" | "seller"> = [];
@@ -119,10 +130,17 @@ export async function loadWorkspaceInvitePreview(
     if (existing.isSeller) consumerLabels.push("seller");
   }
 
+  const needsPasswordActivation = Boolean(
+    existing &&
+      !existing.password &&
+      (existing.role === "AGENT" || existing.role === "ADMIN"),
+  );
+
   return {
     kind: "workspace",
     email: invite.email,
     role: invite.role,
+    orgName: invite.workspace.name,
     workspaceName: invite.workspace.name,
     workspaceIdPrefix: invite.workspace.id.slice(0, 8),
     invitedByName: invitedBy?.name?.trim() || invitedBy?.email || null,
@@ -133,6 +151,7 @@ export async function loadWorkspaceInvitePreview(
       invite.status === "EXPIRED" || invite.expiresAt.getTime() < Date.now(),
     cancelled: invite.status === "CANCELLED",
     accountExists: Boolean(existing),
+    needsPasswordActivation,
     convertsConsumerAccount: consumerLabels.length > 0,
     consumerLabels,
   };
@@ -428,10 +447,6 @@ export async function acceptWorkspaceInvite(input: {
   if (invite.workspace.status !== "ACTIVE") {
     return { ok: false, error: "This Workspace is not accepting members." };
   }
-  // Invite role must never grant platform ADMIN / OWNER via accept.
-  if (invite.role === "OWNER") {
-    return { ok: false, error: "Invalid invite role." };
-  }
 
   const inviteEmail = normalizeEmail(invite.email);
 
@@ -441,6 +456,7 @@ export async function acceptWorkspaceInvite(input: {
       id: true,
       email: true,
       role: true,
+      password: true,
       disabledAt: true,
       isBuyer: true,
       isSeller: true,
@@ -449,6 +465,83 @@ export async function acceptWorkspaceInvite(input: {
 
   if (existing?.disabledAt) {
     return { ok: false, error: "This account is disabled." };
+  }
+
+  const password = input.password ?? "";
+  const canActivatePasswordlessExisting = Boolean(
+    existing &&
+      !existing.password &&
+      password.length >= 8 &&
+      !input.actingUserId &&
+      (existing.role === "AGENT" || existing.role === "ADMIN"),
+  );
+
+  // Invite role must never grant OWNER via *new* account accept.
+  // Passwordless activation of an existing ACTIVE OWNER seat is allowed.
+  if (invite.role === "OWNER" && !canActivatePasswordlessExisting) {
+    return { ok: false, error: "Invalid invite role." };
+  }
+
+  if (canActivatePasswordlessExisting && existing) {
+    const hashed = await bcrypt.hash(password, 10);
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: { password: hashed, emailVerified: new Date() },
+    });
+
+    const priorMembership = await prisma.workspaceMember.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId: invite.workspaceId,
+          userId: existing.id,
+        },
+      },
+      select: { role: true, status: true },
+    });
+    const memberRole =
+      priorMembership?.status === "ACTIVE"
+        ? priorMembership.role
+        : invite.role;
+
+    const priorMemberships = await prisma.workspaceMember.count({
+      where: { userId: existing.id, status: "ACTIVE" },
+    });
+
+    await prisma.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: invite.workspaceId,
+          userId: existing.id,
+        },
+      },
+      create: {
+        workspaceId: invite.workspaceId,
+        userId: existing.id,
+        role: memberRole,
+        status: "ACTIVE",
+        invitedById: invite.invitedById,
+        joinedAt: new Date(),
+      },
+      update: {
+        role: memberRole,
+        status: "ACTIVE",
+        joinedAt: new Date(),
+      },
+    });
+    await reconcileUserPlatformStaffState(existing.id);
+    await prisma.workspaceInvite.update({
+      where: { id: invite.id },
+      data: { status: "ACCEPTED", acceptedAt: new Date() },
+    });
+
+    return {
+      ok: true,
+      userId: existing.id,
+      workspaceId: invite.workspaceId,
+      createdAccount: false,
+      convertedConsumer: false,
+      secondMembership: priorMemberships >= 1,
+    };
   }
 
   if (existing) {
@@ -528,11 +621,11 @@ export async function acceptWorkspaceInvite(input: {
   // New email: invite proves join permission, but identity requires password signup.
   // Possession of URL alone cannot create a session — credentials required.
   const name = input.name?.trim();
-  const password = input.password ?? "";
+  const newAccountPassword = input.password ?? "";
   if (!name || name.length < 1) {
     return { ok: false, error: "Name is required to create your account." };
   }
-  if (password.length < 8) {
+  if (newAccountPassword.length < 8) {
     return { ok: false, error: "Password must be at least 8 characters." };
   }
 
@@ -542,7 +635,7 @@ export async function acceptWorkspaceInvite(input: {
   const { userId } = await createAgentAccountFromInvite(prisma, {
     name,
     email: inviteEmail,
-    password,
+    password: newAccountPassword,
   });
 
   const now = new Date();

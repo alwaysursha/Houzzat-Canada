@@ -285,9 +285,11 @@ function testMemberRemovalScopedPerWorkspace() {
 }
 
 function testProvisionerUsesWorkspaceScopedSync() {
-  const provision = read("scripts/provision-tenant-canary.ts");
-  assert.ok(provision.includes("syncCrmRoutingSettingsForWorkspace"));
-  assert.ok(!provision.includes("ensureCrmRoutingSettings()"));
+  const lib = read("scripts/lib/tenant-canary-provision.ts");
+  assert.ok(lib.includes("CANARY_ROUTING_SETTINGS_ID"));
+  assert.ok(lib.includes("crmRoutingWeight.create"));
+  assert.ok(!lib.includes("ensureCrmRoutingSettings"));
+  assert.ok(!lib.includes("syncCrmRoutingSettingsForWorkspace"));
 }
 
 function testAgentPoolHelper() {

@@ -1,114 +1,129 @@
 /**
- * Stage 3J-REV — provision Workspace #2 (tenant-canary) PRE-FLIGHT stub.
+ * Stage 3J.2 — guarded Workspace #2 (tenant-canary) provisioner.
  *
- * Dry-run by default. Planning unlocked under READ=workspace.
- * --apply remains REFUSED until user explicitly enables provisioning implementation.
+ *   pnpm workspace:provision-canary
+ *   pnpm workspace:provision-canary -- --apply --confirm=tenant-canary
  *
- * Run: pnpm workspace:provision-canary
- * Apply (user-gated): pnpm workspace:provision-canary -- --apply
- *
- * Routing: uses syncCrmRoutingSettingsForWorkspace(B) — never global ensureCrmRoutingSettings.
+ * Dry-run by default. Never touches Houzzat or id=default routing.
  */
 import { config } from "dotenv";
 
 config({ path: ".env.local", quiet: true });
 config({ quiet: true });
 
-const CANARY_SLUG = "tenant-canary";
-const CANARY_NAME = "Houzzat Tenant Canary";
-const CANARY_AFFILIATION = "Sun Realty (CANARY)";
-const ROUTING_SETTINGS_ID = "tenant-canary-routing";
-const HOUZZAT_ROUTING_ID = "default";
-
-function parseArgs(argv: string[]) {
-  return {
-    apply: argv.includes("--apply"),
-  };
-}
-
-function readScope(): string {
-  return (process.env.WORKSPACE_READ_SCOPE ?? "legacy").trim().toLowerCase();
-}
-
-function planRows() {
-  return {
-    workspace: {
-      slug: CANARY_SLUG,
-      name: CANARY_NAME,
-      status: "ACTIVE",
-      brokerageAffiliation: CANARY_AFFILIATION,
-      primaryAgentId: "<AGENT_B — UI badge only; NOT listingAgentId>",
-    },
-    users: [
-      "OWNER_B (controlled email, no Houzzat membership)",
-      "AGENT_B (controlled email, active AgentProfile, future Primary Agent B)",
-    ],
-    members: [
-      { role: "OWNER", user: "OWNER_B" },
-      { role: "AGENT", user: "AGENT_B" },
-    ],
-    organizationBridge:
-      "NONE — no Org B. Lead/Task/Note/EmailLog.organizationId = demo-agent (compat metadata only). workspaceId = B is authority.",
-    routingSettings: {
-      id: ROUTING_SETTINGS_ID,
-      workspaceId: "<Workspace B id>",
-      listingAgentId: "<AGENT_B>",
-      sellerAssignMode: "LISTING_AGENT",
-      neverTouch: HOUZZAT_ROUTING_ID,
-      weightSync: "syncCrmRoutingSettingsForWorkspace(B) after create",
-    },
-    weights: [
-      { lane: "BUYER", percent: 100, agent: "AGENT_B" },
-      { lane: "SELLER", percent: 100, agent: "AGENT_B" },
-    ],
-    leadCreation: {
-      method:
-        "Privileged local script: resolveWorkspaceRoutedAssignee(B) + explicit Lead create (workspaceId=B) + notifyNewLeadCaptured — NOT public /api/leads, NOT captureWebsiteLead as-is",
-      source: "OTHER",
-      notesTag: "[CANARY]",
-    },
-  };
-}
+import {
+  buildProvisionPlan,
+  captureHouzzatBaseline,
+  executeProvisionApply,
+  formatProvisionReport,
+  parseCanaryCliArgs,
+  requireCanaryEmailsForApply,
+  resolveCanaryIdentityFromEnv,
+  validateApplyConfirmation,
+  verifyScopeGates,
+} from "./lib/tenant-canary-provision";
 
 async function main() {
-  const { apply } = parseArgs(process.argv.slice(2));
-  const scope = readScope();
+  const { apply, confirm } = parseCanaryCliArgs(process.argv.slice(2));
+  const confirmError = validateApplyConfirmation({ apply, confirm });
+  if (confirmError) {
+    console.error(`[provision-tenant-canary] REFUSE: ${confirmError}`);
+    process.exit(2);
+  }
 
-  console.log(
-    JSON.stringify(
-      {
-        mode: apply ? "apply" : "dry-run",
-        WORKSPACE_READ_SCOPE: scope || "(unset/legacy — dashboard may still be workspace)",
-        note: "Local env may differ from Cloudflare dashboard; production READ is USER-CONFIRMED workspace.",
-        plan: planRows(),
-      },
-      null,
-      2,
-    ),
-  );
+  const identity = resolveCanaryIdentityFromEnv();
 
-  if (!apply) {
+  if (!process.env.DATABASE_URL) {
     console.log(
       [
+        "CANARY PROVISION PLAN",
         "",
-        "[provision-tenant-canary] dry-run ok — routing config isolation closed.",
-        "Pass --apply only after user review (apply path not implemented in stub).",
+        "DATABASE_URL: not set — read-only inspection skipped",
         "",
+        `Workspace: CREATE slug=tenant-canary`,
+        `OWNER_B: ${identity.ownerEmail ? "inspect/create" : "USER INPUT REQUIRED (CANARY_OWNER_B_EMAIL)"}`,
+        `AGENT_B: ${identity.agentEmail ? "inspect/create" : "USER INPUT REQUIRED (CANARY_AGENT_B_EMAIL)"}`,
+        "",
+        "Houzzat baseline: UNCHANGED EXPECTED (not captured)",
+        "",
+        "Mutation count if --apply: unknown",
+        "",
+        "DRY RUN — NO PRODUCTION MUTATIONS",
       ].join("\n"),
     );
+    if (apply) {
+      console.error("[provision-tenant-canary] REFUSE --apply without DATABASE_URL");
+      process.exit(2);
+    }
     process.exit(0);
   }
 
-  console.error(
-    [
-      "",
-      "[provision-tenant-canary] REFUSE --apply",
-      "Apply path not enabled — user must review plan and implement explicit provisioning.",
-      "Routing will use syncCrmRoutingSettingsForWorkspace(B), not ensureCrmRoutingSettings.",
-      "",
-    ].join("\n"),
-  );
-  process.exit(2);
+  const { prisma } = await import("../src/lib/prisma");
+
+  try {
+    const plan = await buildProvisionPlan(prisma, identity);
+    console.log(formatProvisionReport(plan, apply ? "apply-preview" : "dry-run"));
+
+    if (!apply) {
+      process.exit(0);
+    }
+
+    const scopeGates = verifyScopeGates();
+    if (!scopeGates.ok) {
+      console.error(
+        "[provision-tenant-canary] REFUSE --apply: scope gates not satisfied",
+      );
+      console.error(scopeGates.failures.join("; "));
+      process.exit(2);
+    }
+
+    const emailError = requireCanaryEmailsForApply(identity);
+    if (emailError) {
+      console.error(`[provision-tenant-canary] REFUSE --apply: ${emailError}`);
+      process.exit(2);
+    }
+
+    if (plan.driftStops.length > 0) {
+      console.error(
+        `[provision-tenant-canary] REFUSE --apply: ${plan.driftStops.length} DRIFT_STOP`,
+      );
+      for (const stop of plan.driftStops) {
+        console.error(`  - ${stop.object}: ${stop.detail}`);
+      }
+      process.exit(2);
+    }
+
+    if (!plan.houzzatBaseline) {
+      console.error(
+        "[provision-tenant-canary] REFUSE --apply: Houzzat baseline not captured",
+      );
+      process.exit(2);
+    }
+
+    const applied = await executeProvisionApply(
+      prisma,
+      identity,
+      plan.houzzatBaseline,
+    );
+    const baselineAfter = await captureHouzzatBaseline(prisma);
+    console.log("");
+    console.log("APPLY COMPLETE — PRODUCTION MUTATIONS APPLIED");
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          appliedSteps: applied.length,
+          houzzatBaselineUnchanged:
+            baselineAfter.memberCount === plan.houzzatBaseline.memberCount &&
+            baselineAfter.crm.leadCount === plan.houzzatBaseline.crm.leadCount,
+        },
+        null,
+        2,
+      ),
+    );
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
 main().catch((error) => {

@@ -4,6 +4,11 @@ import {
   DESK_AGENT_ALL,
   DESK_AGENT_COOKIE,
 } from "@/lib/agent/desk-constants";
+import {
+  isWorkspaceScopedBrokerageSeatSync,
+  resolveHouzzatWorkspaceIdForOrgRewrite,
+  resolveLegacyBrokerageSeatTargets,
+} from "@/lib/agent/brokerage-seat-sync";
 import { SITE_NAME } from "@/lib/constants";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 
@@ -76,46 +81,63 @@ async function resolveBrokerageOrg(): Promise<{ id: string; name: string }> {
 }
 
 async function syncBrokerageSeats(brokerageId: string): Promise<void> {
-  const admins = await prisma.user.findMany({
-    where: { role: "ADMIN", disabledAt: null },
-    select: { id: true },
-  });
-  for (const admin of admins) {
+  const seatTargets = await resolveLegacyBrokerageSeatTargets();
+  for (const target of seatTargets) {
     await prisma.organizationMembership.upsert({
       where: {
         organizationId_userId: {
           organizationId: brokerageId,
-          userId: admin.id,
+          userId: target.userId,
         },
       },
       create: {
         organizationId: brokerageId,
-        userId: admin.id,
-        role: "OWNER",
+        userId: target.userId,
+        role: target.orgRole,
       },
-      update: { role: "OWNER" },
+      update:
+        target.orgRole === "OWNER" ? { role: "OWNER" } : {},
     });
   }
 
-  const agents = await prisma.user.findMany({
-    where: { role: "AGENT", disabledAt: null },
-    select: { id: true },
-  });
-  for (const agent of agents) {
-    await prisma.organizationMembership.upsert({
-      where: {
-        organizationId_userId: {
-          organizationId: brokerageId,
-          userId: agent.id,
+  if (isWorkspaceScopedBrokerageSeatSync()) {
+    const houzzatWorkspaceId = await resolveHouzzatWorkspaceIdForOrgRewrite();
+    if (houzzatWorkspaceId) {
+      await prisma.lead.updateMany({
+        where: {
+          OR: [
+            {
+              workspaceId: null,
+              OR: [
+                { organizationId: null },
+                { organizationId: { not: brokerageId } },
+              ],
+            },
+            {
+              workspaceId: houzzatWorkspaceId,
+              organizationId: { not: brokerageId },
+            },
+          ],
         },
-      },
-      create: {
-        organizationId: brokerageId,
-        userId: agent.id,
-        role: "AGENT",
-      },
-      update: {},
-    });
+        data: { organizationId: brokerageId },
+      });
+      await prisma.agentTask.updateMany({
+        where: {
+          OR: [
+            {
+              workspaceId: null,
+              organizationId: { not: brokerageId },
+            },
+            {
+              workspaceId: houzzatWorkspaceId,
+              organizationId: { not: brokerageId },
+            },
+          ],
+        },
+        data: { organizationId: brokerageId },
+      });
+    }
+    return;
   }
 
   await prisma.lead.updateMany({

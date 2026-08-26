@@ -231,13 +231,16 @@ function testDualWriteRemains() {
 function testSyncBrokerageSeatsDocumentedRisk() {
   const brokerage = read("src/lib/agent/brokerage.ts");
   assert.ok(brokerage.includes("syncBrokerageSeats"));
-  assert.ok(brokerage.includes("organizationId: { not: brokerageId }"));
-  // Does not rewrite workspaceId (read authority independent)
+  assert.ok(brokerage.includes("resolveLegacyBrokerageSeatTargets"));
+  assert.ok(brokerage.includes("houzzatWorkspaceId"));
+  // Scopes orgId rewrite by workspace — never mutates workspaceId column
   const syncBody = brokerage.slice(
     brokerage.indexOf("async function syncBrokerageSeats"),
     brokerage.indexOf("export const ensureBrokerageOrganization"),
   );
-  assert.ok(!syncBody.includes("workspaceId:"));
+  assert.ok(syncBody.includes("workspaceId: houzzatWorkspaceId"));
+  assert.ok(!syncBody.includes("data: { workspaceId"));
+  assert.ok(!syncBody.includes("workspaceId: brokerageId"));
 }
 
 async function main() {

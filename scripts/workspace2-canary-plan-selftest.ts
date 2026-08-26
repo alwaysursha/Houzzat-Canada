@@ -144,11 +144,12 @@ function testSingleBrokerageContext() {
 function testSeatSyncRewriteRiskDocumented() {
   const brokerage = read("src/lib/agent/brokerage.ts");
   assert.ok(brokerage.includes("syncBrokerageSeats"));
-  assert.ok(brokerage.includes("organizationId: { not: brokerageId }"));
+  assert.ok(brokerage.includes("resolveLegacyBrokerageSeatTargets"));
   assert.ok(brokerage.includes("data: { organizationId: brokerageId }"));
-  // Does not rewrite workspaceId today — but rewrites foreign/null organizationId
+  // Workspace mode scopes seat sync + orgId rewrite to Houzzat — never rewrites workspaceId
   const syncFn = brokerage.slice(brokerage.indexOf("async function syncBrokerageSeats"));
-  assert.ok(!syncFn.includes("workspaceId"));
+  assert.ok(syncFn.includes("houzzatWorkspaceId"));
+  assert.ok(!syncFn.includes("data: { workspaceId"));
 }
 
 function testRoutingConfigIsolated() {
@@ -229,21 +230,23 @@ function testIsolationMatricesEncoded() {
 
 function testProvisionRollbackSafetyStubs() {
   const provision = read("scripts/provision-tenant-canary.ts");
-  assert.ok(provision.includes("WORKSPACE_READ_SCOPE"));
-  assert.ok(provision.includes("refuse") || provision.includes("REFUSE"));
+  const lib = read("scripts/lib/tenant-canary-provision.ts");
+  assert.ok(provision.includes("WORKSPACE_READ_SCOPE") || lib.includes("WORKSPACE_READ_SCOPE"));
+  assert.ok(provision.includes("REFUSE") || lib.includes("DRIFT_STOP"));
   assert.ok(provision.includes("--apply"));
-  assert.ok(provision.includes("dry"));
-  assert.ok(provision.includes(CANARY_PLAN.workspaceSlug));
-  assert.ok(provision.includes(CANARY_PLAN.routingSettingsId));
-  assert.ok(provision.includes("syncCrmRoutingSettingsForWorkspace"));
-  assert.ok(!provision.includes("ensureCrmRoutingSettings()"));
+  assert.ok(provision.includes("formatProvisionReport"));
+  assert.ok(lib.includes(CANARY_PLAN.workspaceSlug));
+  assert.ok(lib.includes(CANARY_PLAN.routingSettingsId));
+  assert.ok(lib.includes("flat AgentProfile create"));
+  assert.ok(!lib.includes("ensureCrmRoutingSettings"));
+  assert.ok(!lib.includes("syncCrmRoutingSettingsForWorkspace"));
 
   const rollback = read("scripts/rollback-tenant-canary.ts");
   assert.ok(rollback.includes("tenant-canary"));
-  assert.ok(rollback.includes("houzzat"));
-  assert.ok(rollback.includes("default"));
-  assert.ok(rollback.includes(CANARY_PLAN.routingSettingsId));
-  assert.ok(rollback.includes("neverTouch") || rollback.includes("Never touch"));
+  assert.ok(rollback.includes("HOUZZAT_WORKSPACE_SLUG") || rollback.includes("houzzat"));
+  assert.ok(rollback.includes("default") || rollback.includes("HOUZZAT_ROUTING_ID"));
+  assert.ok(lib.includes(CANARY_PLAN.routingSettingsId));
+  assert.ok(lib.includes("refuse to touch Houzzat routing id"));
 }
 
 function testWranglerDoesNotHardcodeReadScope() {

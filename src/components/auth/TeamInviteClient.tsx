@@ -10,6 +10,10 @@ import { staffHardNavigate } from "@/components/site/StaffHardLink";
 import type { InvitePreview } from "@/lib/agent/accept-invite";
 import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
 
+type InviteClientPreview = InvitePreview & {
+  needsPasswordActivation?: boolean;
+};
+
 function roleLabel(role: string) {
   if (role === "OWNER") return "Owner";
   if (role === "ADMIN") return "Team admin";
@@ -25,7 +29,7 @@ function consumerLabelText(labels: Array<"buyer" | "seller">) {
 export function TeamInviteClient({ token }: { token: string }) {
   const router = useRouter();
   const { update } = useSession();
-  const [invite, setInvite] = useState<InvitePreview | null>(null);
+  const [invite, setInvite] = useState<InviteClientPreview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -38,7 +42,7 @@ export function TeamInviteClient({ token }: { token: string }) {
     (async () => {
       const res = await fetch(`/api/auth/invite/${encodeURIComponent(token)}`);
       const json = (await res.json()) as {
-        invite?: InvitePreview;
+        invite?: InviteClientPreview;
         error?: string;
       };
       if (cancelled) return;
@@ -99,6 +103,21 @@ export function TeamInviteClient({ token }: { token: string }) {
         if (signInResult?.error) {
           setDone(true);
           setError("Account created — please sign in to open the CRM.");
+          return;
+        }
+      } else if (opts?.password && invite) {
+        await rememberLoginCredentials({
+          email: invite.email,
+          password: opts.password,
+        });
+        const signInResult = await signIn("credentials", {
+          email: invite.email,
+          password: opts.password,
+          redirect: false,
+        });
+        if (signInResult?.error) {
+          setDone(true);
+          setError("Password set — please sign in to open the CRM.");
           return;
         }
       } else {
@@ -202,7 +221,49 @@ export function TeamInviteClient({ token }: { token: string }) {
       </p>
       {convertBanner}
 
-      {invite.accountExists ? (
+      {invite.accountExists && invite.needsPasswordActivation ? (
+        <form
+          className="mt-6 space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void accept({ password });
+          }}
+        >
+          <p className="text-sm text-ink/65">
+            Your workspace seat is ready. Create a password to activate HouzzatPro
+            login for {invite.email}.
+          </p>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium" htmlFor="invite-email">
+              Email
+            </label>
+            <Input
+              id="invite-email"
+              type="email"
+              value={invite.email}
+              disabled
+              readOnly
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium" htmlFor="invite-password">
+              Password
+            </label>
+            <Input
+              id="invite-password"
+              type="password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </div>
+          <Button type="submit" disabled={pending} className="w-full">
+            {pending ? "Activating…" : "Set password & open CRM"}
+          </Button>
+        </form>
+      ) : invite.accountExists ? (
         <div className="mt-6 space-y-3">
           <p className="text-sm text-ink/65">
             An account already exists for this email. Sign in, then accept the

@@ -2,6 +2,7 @@ import type { OrgMembershipRole, Prisma, Role, WorkspaceMemberRole, WorkspaceMem
 import { cache } from "react";
 import { auth } from "@/lib/auth";
 import { ensureBrokerageOrganization } from "@/lib/agent/brokerage";
+import { userQualifiesForLegacyBrokerageOrgSeat } from "@/lib/agent/brokerage-seat-sync";
 import {
   canAccessLead as canAccessLeadScoped,
   leadScopeWhere as leadScopeWhereScoped,
@@ -182,7 +183,10 @@ export const requireAgentContext = cache(
     });
 
     let membership = existing;
-    if (!existing) {
+    const qualifiesForOrgSeat = await userQualifiesForLegacyBrokerageOrgSeat(
+      user.id,
+    );
+    if (!existing && qualifiesForOrgSeat) {
       membership = await prisma.organizationMembership.create({
         data: {
           organizationId: brokerage.id,
@@ -191,7 +195,13 @@ export const requireAgentContext = cache(
         },
         select: { role: true },
       });
-    } else if (isPlatformAdmin && existing.role !== "OWNER") {
+    } else if (!existing) {
+      membership = { role: membershipRole };
+    } else if (
+      qualifiesForOrgSeat &&
+      isPlatformAdmin &&
+      existing.role !== "OWNER"
+    ) {
       membership = await prisma.organizationMembership.update({
         where: {
           organizationId_userId: {

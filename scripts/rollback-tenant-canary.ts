@@ -1,117 +1,91 @@
 /**
- * Stage 3J-REV — rollback Workspace #2 (tenant-canary) PRE-FLIGHT stub.
+ * Stage 3J.2 — guarded Workspace #2 (tenant-canary) rollback.
  *
- * Dry-run by default. Never touches Houzzat (slug=houzzat) or CrmRoutingSettings id=default.
- * Exact workspace/resource IDs only — no prefix/email/createdAt deletion.
+ *   pnpm workspace:rollback-canary
+ *   pnpm workspace:rollback-canary -- --apply --confirm=tenant-canary
  *
- * Run: pnpm workspace:rollback-canary
- * Apply (blocked in pre-flight): pnpm workspace:rollback-canary -- --apply
+ * Dry-run by default. Never touches Houzzat or CrmRoutingSettings id=default.
  */
 import { config } from "dotenv";
 
 config({ path: ".env.local", quiet: true });
 config({ quiet: true });
 
-const CANARY_SLUG = "tenant-canary";
-const HOUZZAT_SLUG = "houzzat";
-const HOUZZAT_ROUTING_ID = "default";
-const CANARY_ROUTING_ID = "tenant-canary-routing";
-
-function parseArgs(argv: string[]) {
-  return { apply: argv.includes("--apply") };
-}
-
-function cleanupOrder() {
-  return [
-    {
-      order: 1,
-      object: "Lead_B children (AgentTask / LeadNote / LeadEmailLog / LeadActivity)",
-      guard: "parent Lead.workspaceId === B OR child.workspaceId === B (exact B id)",
-    },
-    {
-      order: 2,
-      object: "Lead_B",
-      guard: "Lead.workspaceId === B AND notes contains [CANARY] (defense)",
-    },
-    {
-      order: 3,
-      object: "CrmRoutingWeight",
-      guard: "settingsId === tenant-canary-routing",
-    },
-    {
-      order: 4,
-      object: "CrmRoutingSettings",
-      guard: "id === tenant-canary-routing (NOT id=default)",
-    },
-    {
-      order: 5,
-      object: "WorkspaceInvite",
-      guard: "workspaceId === B",
-    },
-    {
-      order: 6,
-      object: "WorkspaceMember",
-      guard: "workspaceId === B",
-    },
-    {
-      order: 7,
-      object: "Workspace",
-      guard: "slug === tenant-canary (exact)",
-    },
-    {
-      order: 8,
-      object: "Organization bridge",
-      guard: "N/A — none created",
-    },
-    {
-      order: 9,
-      object: "Canary Users",
-      guard: "optional disable only if zero other WorkspaceMembers and no non-canary CRM refs",
-    },
-  ];
-}
+import {
+  buildRollbackPlan,
+  CANARY_SLUG,
+  executeRollbackApply,
+  formatRollbackReport,
+  HOUZZAT_ROUTING_ID,
+  parseCanaryCliArgs,
+  resolveCanaryIdentityFromEnv,
+  validateApplyConfirmation,
+} from "./lib/tenant-canary-provision";
+import { HOUZZAT_WORKSPACE_SLUG } from "../src/lib/crm-ownership";
 
 async function main() {
-  const { apply } = parseArgs(process.argv.slice(2));
+  const { apply, confirm } = parseCanaryCliArgs(process.argv.slice(2));
+  const confirmError = validateApplyConfirmation({ apply, confirm });
+  if (confirmError) {
+    console.error(`[rollback-tenant-canary] REFUSE: ${confirmError}`);
+    process.exit(2);
+  }
 
-  console.log(
-    JSON.stringify(
-      {
-        mode: apply ? "apply" : "dry-run",
-        targetSlug: CANARY_SLUG,
-        neverTouch: {
-          workspaceSlug: HOUZZAT_SLUG,
-          routingSettingsId: HOUZZAT_ROUTING_ID,
-        },
-        canaryRoutingSettingsId: CANARY_ROUTING_ID,
-        cleanupOrder: cleanupOrder(),
-      },
-      null,
-      2,
-    ),
-  );
-
-  if (CANARY_SLUG === HOUZZAT_SLUG) {
+  if (CANARY_SLUG === HOUZZAT_WORKSPACE_SLUG) {
     console.error("[rollback-tenant-canary] REFUSE: canary slug collides with Houzzat");
     process.exit(2);
   }
 
-  if (CANARY_ROUTING_ID === HOUZZAT_ROUTING_ID) {
-    console.error("[rollback-tenant-canary] REFUSE: canary routing id collides with default");
-    process.exit(2);
-  }
+  const identity = resolveCanaryIdentityFromEnv();
 
-  if (!apply) {
+  if (!process.env.DATABASE_URL) {
     console.log(
-      "[rollback-tenant-canary] dry-run ok — no rows deleted. Pass --apply only after Workspace B exists and blockers are clear.",
+      [
+        "CANARY ROLLBACK PLAN",
+        "",
+        "DATABASE_URL: not set — read-only inspection skipped",
+        "",
+        "Houzzat protected:",
+        `  - workspace slug ${HOUZZAT_WORKSPACE_SLUG}`,
+        `  - routing id ${HOUZZAT_ROUTING_ID}`,
+        "",
+        "DRY RUN — NO PRODUCTION MUTATIONS",
+      ].join("\n"),
     );
+    if (apply) {
+      console.error("[rollback-tenant-canary] REFUSE --apply without DATABASE_URL");
+      process.exit(2);
+    }
     process.exit(0);
   }
 
-  console.error(
-    "[rollback-tenant-canary] REFUSE --apply: apply path not enabled (Workspace B not provisioned / pre-flight stub).",
-  );
-  process.exit(2);
+  const { prisma } = await import("../src/lib/prisma");
+
+  try {
+    const plan = await buildRollbackPlan(prisma, identity);
+    console.log(formatRollbackReport(plan, apply ? "apply-preview" : "dry-run"));
+
+    if (!apply) {
+      process.exit(0);
+    }
+
+    if (plan.driftStops.length > 0) {
+      console.error(
+        `[rollback-tenant-canary] REFUSE --apply: ${plan.driftStops.length} DRIFT_STOP`,
+      );
+      for (const stop of plan.driftStops) {
+        console.error(`  - ${stop.object}: ${stop.detail}`);
+      }
+      process.exit(2);
+    }
+
+    const applied = await executeRollbackApply(prisma, identity);
+    console.log(
+      JSON.stringify({ ok: true, appliedSteps: applied.length }, null, 2),
+    );
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
 main().catch((error) => {
