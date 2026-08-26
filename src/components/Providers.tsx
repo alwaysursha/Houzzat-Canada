@@ -7,6 +7,7 @@ import { RecentViewsSync } from "@/components/account/RecentViewsSync";
 import { SavedListingsProvider } from "@/components/account/SavedListingsProvider";
 import { PropertyWatchesProvider } from "@/components/account/PropertyWatchesProvider";
 import { ActivityBeacon } from "@/components/analytics/ActivityBeacon";
+import { isActivityBeaconEnabled } from "@/lib/analytics/activity-beacon-enabled";
 import { AuthModalProvider } from "@/components/auth/AuthModalProvider";
 import { RememberClientSession } from "@/components/auth/RememberClientSession";
 import { NavigationRecovery } from "@/components/feedback/NavigationRecovery";
@@ -43,7 +44,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               <NavigationRecovery />
               <RecentViewsSync />
               <Suspense fallback={null}>
-                <ActivityBeacon />
+                {isActivityBeaconEnabled() ? <ActivityBeacon /> : null}
               </Suspense>
               <ContactUpdateReminder />
               <HouzzatPullToRefresh>{children}</HouzzatPullToRefresh>

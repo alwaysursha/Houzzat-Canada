@@ -142,6 +142,32 @@ enum WorkspaceInviteStatus {
   EXPIRED
 }
 
+/** Stage 3K.2 — hostname role within kind (CUSTOM primary/alias). PLATFORM uses PRIMARY. */
+enum WorkspaceDomainRole {
+  PRIMARY
+  ALIAS
+}
+
+/** Stage 3K.4.2 — platform-managed vs customer-owned hostname. */
+enum WorkspaceDomainKind {
+  PLATFORM
+  CUSTOM
+}
+
+/** Stage 3K.2 — hostname lifecycle. */
+enum WorkspaceDomainStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+}
+
+/** Stage 3K.2 — tenant web branding tier (entitlements wired later). */
+enum BrandingTier {
+  GENERIC
+  SEMI_BRANDED
+  FULL_BRANDED
+}
+
 enum AgentTaskType {
   CALL
   EMAIL
@@ -230,8 +256,62 @@ model Workspace {
   leadNotes    LeadNote[]
   leadEmailLogs LeadEmailLog[]
   crmRoutingSettings CrmRoutingSettings?
+  domains       WorkspaceDomain[]
+  branding      WorkspaceBranding?
 
   @@index([status])
+}
+
+/**
+ * Stage 3K.2 — trusted hostname → workspace mapping.
+ * Constraints (partial unique indexes in migration SQL):
+ * - one PLATFORM hostname per workspace
+ * - one CUSTOM PRIMARY per workspace
+ * - hostname globally unique
+ */
+model WorkspaceDomain {
+  id                String                @id @default(cuid())
+  workspaceId       String
+  hostname          String                @unique
+  kind              WorkspaceDomainKind   @default(CUSTOM)
+  role              WorkspaceDomainRole
+  status            WorkspaceDomainStatus @default(PENDING)
+  verificationToken String?
+  verifiedAt        DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@index([workspaceId, kind])
+}
+
+/** Stage 3K.2 — per-workspace public/staff branding configuration. */
+model WorkspaceBranding {
+  workspaceId         String       @id
+  tier                BrandingTier @default(SEMI_BRANDED)
+  displayName         String
+  tagline             String?
+  logoUrl             String?
+  brokerageLogoUrl    String?
+  faviconUrl          String?
+  primaryColor        String?
+  secondaryColor      String?
+  accentColor         String?
+  contactEmail        String?
+  contactPhone        String?
+  footerLegalText     String?
+  /** @deprecated Product invariant — resolver always forces true; tenants cannot disable. */
+  poweredByHouzzatPro Boolean      @default(true)
+  seoDescription      String?
+  ogImageUrl          String?
+  version             Int          @default(1)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 model WorkspaceMember {

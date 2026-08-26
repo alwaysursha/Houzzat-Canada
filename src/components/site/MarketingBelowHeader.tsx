@@ -8,13 +8,16 @@ import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersona
 import { SeoFooterLinks } from "@/components/site/SeoFooterLinks";
 import { SeoLocationProvider } from "@/components/site/SeoLocationContext";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import type { MarketingChromeBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 
 /** Hides marketing chrome on immersive routes like /search and listing sheet. */
 export function MarketingBelowHeader({
   cities,
+  chromeBrand,
   children,
 }: {
   cities: string[];
+  chromeBrand: MarketingChromeBrand;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -60,7 +63,7 @@ export function MarketingBelowHeader({
         {children}
       </main>
       {!hideChrome ? <SeoFooterLinks fallbackCities={cities} /> : null}
-      {!hideChrome ? <SiteFooter /> : null}
+      {!hideChrome ? <SiteFooter chromeBrand={chromeBrand} /> : null}
     </SeoLocationProvider>
   );
 }

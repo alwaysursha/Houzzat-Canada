@@ -20,6 +20,11 @@ import {
   resolveWorkspaceRoutedAssignee,
   shouldUseWorkspaceRouting,
 } from "@/lib/workspace-routing";
+import {
+  detectClientWorkspaceOverride,
+  resolvePublicLeadWorkspaceIdFromRequest,
+} from "@/lib/tenancy/public-lead-workspace";
+import type { HostResolutionDeps } from "@/lib/tenancy/resolve-workspace-host";
 
 export { CRM_ROUTING_SETTINGS_ID, type RoutableAgent } from "@/lib/agent/routing-types";
 export {
@@ -244,15 +249,41 @@ export async function applyLeadAssignment(input: {
 export async function resolveLeadDeskAssignment(
   intent: LeadIntent,
   workspaceId?: string | null,
+  request?: Request | null,
+  deps?: HostResolutionDeps,
 ) {
-  const trustedWorkspaceId =
-    workspaceId ?? (await resolveDefaultWorkspaceIdForRouting());
+  let trustedWorkspaceId: string | null;
+
+  if (request) {
+    trustedWorkspaceId = await resolvePublicLeadWorkspaceIdFromRequest(
+      request,
+      deps,
+    );
+  } else {
+    trustedWorkspaceId =
+      workspaceId ?? (await resolveDefaultWorkspaceIdForRouting());
+  }
+
   const assigneeId = await resolveRoutedAssignee(intent, trustedWorkspaceId);
   const organizationId =
     (await resolveOrganizationIdForAssignee(assigneeId)) ??
     (await resolveDefaultOrganizationId());
   return { assigneeId, organizationId, workspaceId: trustedWorkspaceId };
 }
+
+/**
+ * Lead desk assignment using trusted request tenancy when workspace lead scope is enabled.
+ * Client workspace overrides must be rejected separately via detectClientWorkspaceOverride.
+ */
+export async function resolveLeadDeskAssignmentForRequest(
+  request: Request,
+  intent: LeadIntent,
+  deps?: HostResolutionDeps,
+) {
+  return resolveLeadDeskAssignment(intent, null, request, deps);
+}
+
+export { detectClientWorkspaceOverride };
 
 /**
  * Create a signup / simple website lead with routing + 12h call task.

@@ -3,13 +3,12 @@ import { z } from "zod";
 import {
   activeWorkspaceCookieOptions,
   ACTIVE_WORKSPACE_COOKIE,
-  isTrustedStaffMutationOrigin,
+  isTrustedStaffMutationOriginForRequest,
   isValidWorkspaceIdShape,
   readActiveWorkspaceIdFromCookies,
   signActiveWorkspaceId,
 } from "@/lib/active-workspace";
 import { requireAgentUser } from "@/lib/agent";
-import { SITE_URL } from "@/lib/constants";
 import { listActiveWorkspaceMemberships } from "@/lib/workspace-context";
 
 export const runtime = "nodejs";
@@ -62,7 +61,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!isTrustedStaffMutationOrigin(request, SITE_URL)) {
+  if (!isTrustedStaffMutationOriginForRequest(request)) {
     return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   }
 
@@ -102,7 +101,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!isTrustedStaffMutationOrigin(request, SITE_URL)) {
+  if (!isTrustedStaffMutationOriginForRequest(request)) {
     return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   }
 

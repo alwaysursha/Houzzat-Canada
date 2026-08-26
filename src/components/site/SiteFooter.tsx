@@ -1,5 +1,10 @@
 import Link from "next/link";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/constants";
+import type { MarketingChromeBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
+import {
+  HOUZZATPRO_PLATFORM_URL,
+  POWERED_BY_HOUZZATPRO_LABEL,
+} from "@/lib/tenancy/platform-footer";
 import { cn } from "@/lib/utils";
 
 const EXPLORE_LINKS = [
@@ -29,11 +34,18 @@ const LEGAL_LINKS = [
 export function SiteFooter({
   className,
   embedded = false,
+  chromeBrand,
 }: {
   className?: string;
   /** Tighter padding when nested inside listing scroll (sheet / panel / iframe). */
   embedded?: boolean;
+  chromeBrand?: MarketingChromeBrand;
 }) {
+  const siteName = chromeBrand?.displayName ?? SITE_NAME;
+  const tagline = chromeBrand?.tagline ?? SITE_DESCRIPTION;
+  const isHouzzatTenant =
+    !chromeBrand || chromeBrand.workspaceSlug === "houzzat";
+
   return (
     <footer
       className={cn(
@@ -57,16 +69,16 @@ export function SiteFooter({
                 aria-hidden
               />
               <p className="font-display text-2xl font-semibold leading-none tracking-tight text-ink">
-                {SITE_NAME}
+                {siteName}
               </p>
             </div>
-            <p className="text-sm leading-relaxed text-ink/60">
-              {SITE_DESCRIPTION}
-            </p>
-            <p className="text-sm leading-relaxed text-ink/55">
-              MLS® listing data via TRREB / PropTx (IDX). Sold prices and history
-              are shown to registered Houzzat clients only (VOW).
-            </p>
+            <p className="text-sm leading-relaxed text-ink/60">{tagline}</p>
+            {isHouzzatTenant ? (
+              <p className="text-sm leading-relaxed text-ink/55">
+                MLS® listing data via TRREB / PropTx (IDX). Sold prices and history
+                are shown to registered Houzzat clients only (VOW).
+              </p>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 sm:gap-10 lg:min-w-[28rem]">
@@ -81,42 +93,56 @@ export function SiteFooter({
         </div>
 
         <div className="mt-10 flex max-w-3xl flex-col gap-4 border-t border-line/60 pt-8 sm:flex-row sm:items-start sm:gap-5">
-          <div className="inline-flex shrink-0 self-start">
-            {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
-            <img
-              src="/images/royal-lepage-logo.png"
-              alt="Royal LePage"
-              width={140}
-              height={52}
-              className="block h-9 w-[140px] object-contain object-left"
-            />
-          </div>
-          <address className="not-italic text-sm leading-relaxed text-ink/70">
-            <p className="font-semibold text-ink">Ali Syed</p>
-            <p>Sales Representative</p>
-            <p>Royal LePage Credit Valley Real Estate</p>
-            <p>
-              Direct:{" "}
-              <a
-                href="tel:+16472214949"
-                className="inline-flex min-h-11 items-center text-ink/80 underline-offset-2 hover:underline"
-              >
-                647 - 221 - 4949
-              </a>
-            </p>
-            <p>
-              Office:{" "}
-              <a
-                href="tel:+19057935000"
-                className="inline-flex min-h-11 items-center text-ink/80 underline-offset-2 hover:underline"
-              >
-                905 - 793 - 5000
-              </a>
-            </p>
-            <p>1-10045 Hurontario St.</p>
-            <p>Brampton, ON, L6Z 0E6</p>
-          </address>
+          {isHouzzatTenant ? (
+            <>
+              <div className="inline-flex shrink-0 self-start">
+                {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
+                <img
+                  src="/images/royal-lepage-logo.png"
+                  alt="Royal LePage"
+                  width={140}
+                  height={52}
+                  className="block h-9 w-[140px] object-contain object-left"
+                />
+              </div>
+              <address className="not-italic text-sm leading-relaxed text-ink/70">
+                <p className="font-semibold text-ink">Ali Syed</p>
+                <p>Sales Representative</p>
+                <p>Royal LePage Credit Valley Real Estate</p>
+                <p>
+                  Direct:{" "}
+                  <a
+                    href="tel:+16472214949"
+                    className="inline-flex min-h-11 items-center text-ink/80 underline-offset-2 hover:underline"
+                  >
+                    647 - 221 - 4949
+                  </a>
+                </p>
+                <p>
+                  Office:{" "}
+                  <a
+                    href="tel:+19057935000"
+                    className="inline-flex min-h-11 items-center text-ink/80 underline-offset-2 hover:underline"
+                  >
+                    905 - 793 - 5000
+                  </a>
+                </p>
+                <p>1-10045 Hurontario St.</p>
+                <p>Brampton, ON, L6Z 0E6</p>
+              </address>
+            </>
+          ) : null}
         </div>
+
+        <p className="mt-8 text-center text-xs text-ink/50 sm:text-left">
+          <a
+            href={HOUZZATPRO_PLATFORM_URL}
+            className="font-medium text-ink/60 underline-offset-2 hover:text-canopy hover:underline"
+            rel="noopener noreferrer"
+          >
+            {POWERED_BY_HOUZZATPRO_LABEL}
+          </a>
+        </p>
       </div>
     </footer>
   );

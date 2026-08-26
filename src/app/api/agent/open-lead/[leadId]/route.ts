@@ -4,7 +4,7 @@ import { openLeadProfileHref } from "@/lib/agent/lead-profile-query";
 import {
   ACTIVE_WORKSPACE_COOKIE,
   activeWorkspaceCookieOptions,
-  isTrustedStaffMutationOrigin,
+  isTrustedStaffMutationOriginForRequest,
   readActiveWorkspaceIdFromCookies,
   signActiveWorkspaceId,
 } from "@/lib/active-workspace";
@@ -93,7 +93,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ leadId: string }> },
 ) {
-  if (!isTrustedStaffMutationOrigin(request, SITE_URL)) {
+  if (!isTrustedStaffMutationOriginForRequest(request)) {
     return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   }
 

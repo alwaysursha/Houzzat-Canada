@@ -4,6 +4,7 @@
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { resolveTrustedRequestOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 
 export const ACTIVE_WORKSPACE_COOKIE = "houzzat_active_workspace";
 const SEP = ".";
@@ -73,33 +74,80 @@ export function activeWorkspaceCookieOptions() {
   };
 }
 
-/**
- * Reject cross-site cookie mutation. SameSite=lax already blocks most CSRF;
- * Origin/Referer check adds defense-in-depth for credentialed same-site abuse.
- */
-export function isTrustedStaffMutationOrigin(
-  request: Request,
-  siteUrl: string,
-): boolean {
-  const expected = new URL(siteUrl);
+function extractOriginOrRefererOrigin(request: Request): string | null {
   const origin = request.headers.get("origin");
   if (origin) {
     try {
-      const o = new URL(origin);
-      return o.host === expected.host && o.protocol === expected.protocol;
+      return new URL(origin).origin;
     } catch {
-      return false;
+      return null;
     }
   }
   const referer = request.headers.get("referer");
   if (referer) {
     try {
-      const r = new URL(referer);
-      return r.host === expected.host && r.protocol === expected.protocol;
+      const parsed = new URL(referer);
+      return parsed.origin;
     } catch {
-      return false;
+      return null;
     }
   }
-  // No Origin/Referer: allow same-origin navigations from older clients only in non-prod.
-  return process.env.NODE_ENV !== "production";
+  return null;
+}
+
+/**
+ * Request-host-aware staff mutation origin check.
+ * Normalized Origin must exactly match trusted request origin (host + protocol).
+ */
+export function isTrustedStaffMutationOriginForRequest(
+  request: Request,
+): boolean {
+  const trusted = resolveTrustedRequestOrigin(request);
+  if (!trusted.ok) {
+    return process.env.NODE_ENV !== "production";
+  }
+
+  const sourceOrigin = extractOriginOrRefererOrigin(request);
+  if (!sourceOrigin) {
+    return process.env.NODE_ENV !== "production";
+  }
+
+  return sourceOrigin === trusted.origin;
+}
+
+/**
+ * Reject cross-site cookie mutation. SameSite=lax already blocks most CSRF;
+ * Origin/Referer check adds defense-in-depth for credentialed same-site abuse.
+ *
+ * When legacySiteUrl is provided (pre-3K.5.2 callers), compares Origin to that
+ * pinned site URL for backward compatibility while TENANT_* flags remain legacy.
+ */
+export function isTrustedStaffMutationOrigin(
+  request: Request,
+  legacySiteUrl?: string,
+): boolean {
+  if (legacySiteUrl) {
+    const expected = new URL(legacySiteUrl);
+    const origin = request.headers.get("origin");
+    if (origin) {
+      try {
+        const o = new URL(origin);
+        return o.host === expected.host && o.protocol === expected.protocol;
+      } catch {
+        return false;
+      }
+    }
+    const referer = request.headers.get("referer");
+    if (referer) {
+      try {
+        const r = new URL(referer);
+        return r.host === expected.host && r.protocol === expected.protocol;
+      } catch {
+        return false;
+      }
+    }
+    return process.env.NODE_ENV !== "production";
+  }
+
+  return isTrustedStaffMutationOriginForRequest(request);
 }

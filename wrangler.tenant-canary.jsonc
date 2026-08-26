@@ -1,0 +1,52 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Stage 3K.5.4 — isolated Tenant B canary Worker (standalone; no inheritance from wrangler.jsonc).
+  "name": "houzzat-tenant-canary",
+  "main": "cloudflare/worker.js",
+  "compatibility_date": "2024-12-30",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "houzzat-tenant-canary"
+    }
+  ],
+  "limits": {
+    "cpu_ms": 60000
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    }
+  },
+  "keep_vars": true,
+  "vars": {
+    "NEXT_PUBLIC_SITE_URL": "https://tenant-canary.houzzatpro.com",
+    "TENANT_DOMAIN_SCOPE": "workspace",
+    "TENANT_BRANDING_SCOPE": "workspace",
+    "TENANT_PUBLIC_LEAD_SCOPE": "legacy",
+    "TENANT_ADMIN_HOST_LOCK": "off",
+    "ACTIVITY_BEACON_DISABLED": "1",
+    "NEXT_PUBLIC_WHATSAPP_EXPERT": "16472214949",
+    "COMING_SOON": "0",
+    "LISTING_PROVIDER": "proptx",
+    "PROPTX_FEED": "idx",
+    "PROPTX_ENDPOINT_URL": "https://query.ampre.ca/odata/",
+    "TYPESENSE_PORT": "443",
+    "TYPESENSE_PROTOCOL": "https",
+    "TYPESENSE_COLLECTION": "listings",
+    "TYPESENSE_AUTOCOMPLETE": "1",
+    "TYPESENSE_SEARCH": "1",
+    "TYPESENSE_SYNC": "0"
+  }
+}

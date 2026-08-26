@@ -9,6 +9,11 @@ import type { Provider } from "next-auth/providers";
 import type { ActiveMode } from "@prisma/client";
 import { Role } from "@prisma/client";
 import { authConfig } from "@/lib/auth.config";
+import {
+  buildSyntheticRequestFromHeaders,
+  resolveAuthBaseOriginForRequest,
+  resolveAuthRedirectUrl,
+} from "@/lib/tenancy/auth-origin";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import {
   authorizeEmailVerificationToken,
@@ -179,20 +184,9 @@ export const {
   callbacks: {
     ...authConfig.callbacks,
     async redirect({ url, baseUrl }) {
-      if (url.startsWith("/")) {
-        return `${baseUrl}${url}`;
-      }
-
-      try {
-        const parsed = new URL(url);
-        if (parsed.origin === new URL(baseUrl).origin) {
-          return url;
-        }
-      } catch {
-        return baseUrl;
-      }
-
-      return baseUrl;
+      const synthetic = await buildSyntheticRequestFromHeaders();
+      const requestOrigin = await resolveAuthBaseOriginForRequest(synthetic);
+      return resolveAuthRedirectUrl(url, requestOrigin || baseUrl);
     },
     async jwt({ token, user, trigger, session }) {
       const emailFromUser =
