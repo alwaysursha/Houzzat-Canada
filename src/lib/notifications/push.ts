@@ -223,6 +223,7 @@ async function deliverFcm(token: string, payload: PushPayload) {
       console.error("[push:fcm]", res.status, text);
       if (isUnregisteredToken(res.status, text)) {
         await prisma.pushDevice.deleteMany({ where: { token } }).catch(() => null);
+        return "unregistered" as const;
       }
       return "failed" as const;
     }
@@ -233,16 +234,37 @@ async function deliverFcm(token: string, payload: PushPayload) {
   }
 }
 
+export type PushDeliveryStatus =
+  | "sent"
+  | "failed"
+  | "skipped"
+  | "unregistered"
+  | "no_device"
+  | "pref_off"
+  | "disabled";
+
+export type PushDeliveryResult = {
+  userId: string;
+  status: PushDeliveryStatus;
+};
+
+/** True when Firebase service-account JSON is available (Worker binding or env). */
+export function isFirebasePushConfigured(): boolean {
+  return Boolean(readServiceAccountJson());
+}
+
 async function deliverPushToUser(
   userId: string,
   payload: PushPayload,
-): Promise<void> {
+): Promise<PushDeliveryStatus> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, disabledAt: true, pushNotificationPrefs: true },
   });
-  if (!user || user.disabledAt) return;
-  if (!isPushTypeEnabled(user.pushNotificationPrefs, payload.type)) return;
+  if (!user || user.disabledAt) return "disabled";
+  if (!isPushTypeEnabled(user.pushNotificationPrefs, payload.type)) {
+    return "pref_off";
+  }
 
   const shell = shellForAudience(audienceForPushType(payload.type));
   const devices = await prisma.pushDevice.findMany({
@@ -252,10 +274,14 @@ async function deliverPushToUser(
 
   if (devices.length === 0) {
     console.info("[push:no-device]", userId, payload.type);
-    return;
+    return "no_device";
   }
 
-  await Promise.all(devices.map((d) => deliverFcm(d.token, payload)));
+  const results = await Promise.all(devices.map((d) => deliverFcm(d.token, payload)));
+  if (results.some((r) => r === "sent")) return "sent";
+  if (results.every((r) => r === "skipped")) return "skipped";
+  if (results.some((r) => r === "unregistered")) return "unregistered";
+  return "failed";
 }
 
 /**
@@ -279,6 +305,25 @@ export function sendPushToUsers(
   if (unique.length === 0) return;
   scheduleWorkerSideEffect(
     Promise.all(unique.map((id) => deliverPushToUser(id, payload))),
+  );
+}
+
+/**
+ * Awaitable staff/consumer push for guarded CLI canaries (Node scripts).
+ * Same preference + device + FCM path as sendPushToUsers; does not schedule waitUntil.
+ * Returns per-user outcomes so canaries can distinguish stub/skip vs sent.
+ */
+export async function deliverPushToUsersNow(
+  userIds: Array<string | null | undefined>,
+  payload: PushPayload,
+): Promise<PushDeliveryResult[]> {
+  const unique = [...new Set(userIds.filter((id): id is string => Boolean(id)))];
+  if (unique.length === 0) return [];
+  return Promise.all(
+    unique.map(async (userId) => ({
+      userId,
+      status: await deliverPushToUser(userId, payload),
+    })),
   );
 }
 
