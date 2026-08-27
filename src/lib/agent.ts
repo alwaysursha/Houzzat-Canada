@@ -19,7 +19,10 @@ import {
 import { isAdminRole, isAgentRole } from "@/lib/constants";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
-import { tryTenantStaffContext } from "@/lib/tenancy/tenant-staff-context";
+import {
+  shouldUseHostnameBoundStaffContext,
+  tryTenantStaffContext,
+} from "@/lib/tenancy/tenant-staff-context";
 import { resolveWorkspaceStaffContext } from "@/lib/workspace-context";
 import { readActiveWorkspaceIdFromCookies } from "@/lib/active-workspace";
 
@@ -273,7 +276,7 @@ export async function requireAgentContextForRequest(
   const user = await requireAgentUser();
   if (!user) return null;
 
-  if (parseCrmReadScope() === "workspace") {
+  if (shouldUseHostnameBoundStaffContext()) {
     return buildHostnameBoundAgentContext(user, request);
   }
 
@@ -295,7 +298,7 @@ export const requireAgentContext = cache(
 
     const readScope = parseCrmReadScope();
 
-    if (readScope === "workspace") {
+    if (shouldUseHostnameBoundStaffContext()) {
       const request = await buildSyntheticRequestFromHeaders();
       if (!request) return null;
       return buildHostnameBoundAgentContext(user, request);

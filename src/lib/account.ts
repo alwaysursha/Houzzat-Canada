@@ -4,6 +4,7 @@ import { needsEmailVerification } from "@/lib/account-access";
 import { auth } from "@/lib/auth";
 import { DatabaseUnavailableError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
+import { isStaffRole } from "@/lib/roles";
 
 /** Fields account + API routes actually need from User. */
 export const customerUserSelect = {
@@ -152,6 +153,10 @@ export function denyUnlessFullCustomerAccess(
       { error: "Sign in required.", requiresAuth: true },
       { status: 401 },
     );
+  }
+  // Staff CRM accounts are not subject to consumer email-verify product lock.
+  if (isStaffRole(user.role)) {
+    return null;
   }
   if (needsEmailVerification(user)) {
     return NextResponse.json(

@@ -13,8 +13,17 @@ import {
 } from "@/lib/tenancy/resolve-request-tenancy";
 import type { RequestWorkspaceAuthDenyReason } from "@/lib/tenancy/request-workspace-auth";
 import { RequestWorkspaceAuthError } from "@/lib/tenancy/request-workspace-auth";
+import { isActiveHostnameBoundReadMode } from "@/lib/crm-read-scope";
 import { isTenantDomainScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
 import { isHouzzatProPlatformRoot } from "@/lib/tenancy/reserved-domains";
+
+/**
+ * Hostname-bound staff CRM only when BOTH domain + read scopes are workspace.
+ * Partial dashboard flips (READ without DOMAIN) must keep legacy Houzzat behavior.
+ */
+export function shouldUseHostnameBoundStaffContext(): boolean {
+  return isActiveHostnameBoundReadMode();
+}
 
 export type TenantStaffContext = RequestTenancySuccess & {
   userId: string;

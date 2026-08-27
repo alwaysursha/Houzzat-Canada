@@ -159,6 +159,7 @@ function testStructuralWiring() {
   const wrangler = read("wrangler.tenant-canary.jsonc");
   const adminLayout = read("src/app/(admin)/admin/layout.tsx");
 
+  assert.ok(agent.includes("shouldUseHostnameBoundStaffContext"));
   assert.ok(agent.includes("buildHostnameBoundAgentContext"));
   assert.ok(agent.includes("tryTenantStaffContext"));
   assert.ok(agent.includes("isPlatformAdmin: false"));
@@ -173,7 +174,9 @@ function testStructuralWiring() {
 
 async function main() {
   const prevRead = process.env.WORKSPACE_READ_SCOPE;
+  const prevDomain = process.env.TENANT_DOMAIN_SCOPE;
   process.env.WORKSPACE_READ_SCOPE = "workspace";
+  process.env.TENANT_DOMAIN_SCOPE = "workspace";
   try {
     assert.equal(parseCrmReadScope(), "workspace");
     await testHostnameClassification();
@@ -185,6 +188,8 @@ async function main() {
   } finally {
     if (prevRead === undefined) delete process.env.WORKSPACE_READ_SCOPE;
     else process.env.WORKSPACE_READ_SCOPE = prevRead;
+    if (prevDomain === undefined) delete process.env.TENANT_DOMAIN_SCOPE;
+    else process.env.TENANT_DOMAIN_SCOPE = prevDomain;
   }
 }
 

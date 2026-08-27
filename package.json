@@ -94,6 +94,7 @@
     "tenant-branding-theme-coherence:selftest": "node --import tsx scripts/tenant-branding-theme-coherence-selftest.ts",
     "tenant-listing-popup-branding:selftest": "node --import tsx scripts/tenant-listing-popup-branding-selftest.ts",
     "tenant-favicon:selftest": "node --import tsx scripts/tenant-favicon-selftest.ts",
+    "houzzat-legacy-auth-regression:selftest": "node --import tsx scripts/houzzat-legacy-auth-regression-selftest.ts",
     "tenant-cutover-readiness:selftest": "node --import tsx scripts/tenant-cutover-readiness-selftest.ts",
     "tenant-lead-cutover-preflight:selftest": "node --import tsx scripts/tenant-lead-cutover-preflight-selftest.ts",
     "tenant-canary-push-delivery:dry-run": "node --import tsx scripts/tenant-canary-push-delivery-canary.ts",

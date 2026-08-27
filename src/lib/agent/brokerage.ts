@@ -9,7 +9,7 @@ import {
   resolveHouzzatWorkspaceIdForOrgRewrite,
   resolveLegacyBrokerageSeatTargets,
 } from "@/lib/agent/brokerage-seat-sync";
-import { isWorkspaceReadMode } from "@/lib/crm-read-scope";
+import { isActiveHostnameBoundReadMode } from "@/lib/crm-read-scope";
 import { SITE_NAME } from "@/lib/constants";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 
@@ -181,7 +181,7 @@ export const listTeamAgents = cache(async function listTeamAgents(
   organizationId: string,
   workspaceId?: string | null,
 ): Promise<TeamAgentOption[]> {
-  if (isWorkspaceReadMode() && workspaceId) {
+  if (isActiveHostnameBoundReadMode() && workspaceId) {
     const members = await prisma.workspaceMember.findMany({
       where: {
         workspaceId,

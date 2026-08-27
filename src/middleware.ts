@@ -241,6 +241,6 @@ export const config = {
      * Exclude /api/auth/logout — Auth.js middleware re-issues session cookies
      * on Cloudflare Workers, which undoes hard cookie clears on sign-out.
      */
-    "/((?!_next/static|_next/image|api/auth/logout|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|api/auth/logout|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

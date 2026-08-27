@@ -7,7 +7,7 @@ import {
   requireAgentContextFromRequest,
 } from "@/lib/agent";
 import { resolveChildCrmOwnership } from "@/lib/crm-ownership";
-import { agentTaskTenantWhere, isWorkspaceReadMode } from "@/lib/crm-read-scope";
+import { agentTaskTenantWhere, isActiveHostnameBoundReadMode } from "@/lib/crm-read-scope";
 import { prisma } from "@/lib/prisma";
 
 const createSchema = z.object({
@@ -139,7 +139,7 @@ export async function PATCH(request: Request) {
   const existing = await prisma.agentTask.findUnique({
     where: { id: parsed.data.taskId },
   });
-  const tenantMatch = isWorkspaceReadMode()
+  const tenantMatch = isActiveHostnameBoundReadMode()
     ? existing?.workspaceId === ctx.workspaceId
     : existing?.organizationId === ctx.organizationId;
   if (

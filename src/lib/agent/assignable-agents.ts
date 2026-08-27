@@ -3,7 +3,7 @@
  * Workspace read mode → ACTIVE WorkspaceMembers only (no org-wide / platform-wide).
  */
 import type { AgentOrgContext } from "@/lib/agent";
-import { isWorkspaceReadMode } from "@/lib/crm-read-scope";
+import { isActiveHostnameBoundReadMode } from "@/lib/crm-read-scope";
 import { prisma } from "@/lib/prisma";
 
 export type AssignableAgentOption = {
@@ -15,7 +15,7 @@ export async function listAssignableCrmAgents(
 ): Promise<AssignableAgentOption[]> {
   if (!ctx.canSeeTeamLeads) return [];
 
-  if (isWorkspaceReadMode()) {
+  if (isActiveHostnameBoundReadMode()) {
     if (!ctx.workspaceId || !ctx.isWorkspaceCrmAllowed) return [];
     const members = await prisma.workspaceMember.findMany({
       where: {

@@ -6,7 +6,7 @@
  */
 import type { WorkspaceMemberRole } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
-import { isWorkspaceReadMode } from "@/lib/crm-read-scope";
+import { isActiveHostnameBoundReadMode, isWorkspaceReadMode } from "@/lib/crm-read-scope";
 import { isWorkspaceTeamScope } from "@/lib/workspace-scope-flags";
 import { prisma } from "@/lib/prisma";
 
@@ -20,7 +20,7 @@ export type TeamAuthority =
  * Workspace flag without a resolved workspaceId → unavailable (fail closed).
  */
 export function resolveTeamAuthority(ctx: AgentOrgContext): TeamAuthority {
-  const useWorkspaceTeam = isWorkspaceTeamScope() || isWorkspaceReadMode();
+  const useWorkspaceTeam = isWorkspaceTeamScope() || isActiveHostnameBoundReadMode();
   if (useWorkspaceTeam) {
     if (!ctx.workspaceId) {
       return { mode: "unavailable", reason: "WORKSPACE_CONTEXT_REQUIRED" };

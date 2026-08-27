@@ -6,7 +6,7 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { StaffRouteConsumerGate } from "@/components/mobile/StaffRouteConsumerGate";
 import { TenantBrandProvider } from "@/components/tenancy/TenantBrandProvider";
 import { TenantThemeStyle } from "@/components/tenancy/TenantThemeStyle";
-import { isWorkspaceReadMode } from "@/lib/crm-read-scope";
+import { shouldUseHostnameBoundStaffContext } from "@/lib/tenancy/tenant-staff-context";
 import { auth } from "@/lib/auth";
 import {
   redirectNonAdminFromAdminShell,
@@ -108,7 +108,7 @@ export default async function AdminLayout({
     await redirectNonAdminFromAdminShell(user.role);
   }
 
-  if (isWorkspaceReadMode()) {
+  if (shouldUseHostnameBoundStaffContext()) {
     // Defense in depth: platform surface already required above.
     if (!hostname || surface !== "platform") {
       redirect("/agent");

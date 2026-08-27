@@ -9,7 +9,7 @@ import {
   signActiveWorkspaceId,
 } from "@/lib/active-workspace";
 import { SITE_URL } from "@/lib/constants";
-import { isWorkspaceReadMode } from "@/lib/crm-read-scope";
+import { isActiveHostnameBoundReadMode } from "@/lib/crm-read-scope";
 import { resolveOpenLeadHandoff } from "@/lib/open-lead-handoff";
 import { prisma } from "@/lib/prisma";
 import { isAgentRole } from "@/lib/roles";
@@ -75,7 +75,7 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (isWorkspaceReadMode()) {
+  if (isActiveHostnameBoundReadMode()) {
     const tenant = await tryTenantStaffContext(request, user);
     if (!tenant || tenant.workspaceId !== handoff.workspaceId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -125,7 +125,7 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (isWorkspaceReadMode()) {
+  if (isActiveHostnameBoundReadMode()) {
     const tenant = await tryTenantStaffContext(request, user);
     if (!tenant || tenant.workspaceId !== handoff.workspaceId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });

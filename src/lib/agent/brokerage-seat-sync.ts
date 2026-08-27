@@ -3,9 +3,9 @@
  * Workspace mode: only ACTIVE Houzzat WorkspaceMembers qualify — not platform role alone.
  */
 import type { OrgMembershipRole } from "@prisma/client";
-import { parseCrmReadScope } from "@/lib/crm-read-scope";
 import { HOUZZAT_WORKSPACE_SLUG } from "@/lib/crm-ownership";
 import { prisma } from "@/lib/prisma";
+import { shouldUseHostnameBoundStaffContext } from "@/lib/tenancy/tenant-staff-context";
 
 export type BrokerageSeatTarget = {
   userId: string;
@@ -14,7 +14,7 @@ export type BrokerageSeatTarget = {
 
 /** When true, org seat sync is limited to Houzzat workspace membership. */
 export function isWorkspaceScopedBrokerageSeatSync(): boolean {
-  return parseCrmReadScope() === "workspace";
+  return shouldUseHostnameBoundStaffContext();
 }
 
 async function resolveHouzzatWorkspaceId(): Promise<string | null> {

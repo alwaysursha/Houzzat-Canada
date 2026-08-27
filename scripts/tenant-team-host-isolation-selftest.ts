@@ -59,9 +59,11 @@ function withWorkspaceFlags(fn: () => void) {
   const prev = {
     read: process.env.WORKSPACE_READ_SCOPE,
     team: process.env.WORKSPACE_TEAM_SCOPE,
+    domain: process.env.TENANT_DOMAIN_SCOPE,
   };
   process.env.WORKSPACE_READ_SCOPE = "workspace";
   process.env.WORKSPACE_TEAM_SCOPE = "workspace";
+  process.env.TENANT_DOMAIN_SCOPE = "workspace";
   try {
     fn();
   } finally {
@@ -69,6 +71,8 @@ function withWorkspaceFlags(fn: () => void) {
     else process.env.WORKSPACE_READ_SCOPE = prev.read;
     if (prev.team === undefined) delete process.env.WORKSPACE_TEAM_SCOPE;
     else process.env.WORKSPACE_TEAM_SCOPE = prev.team;
+    if (prev.domain === undefined) delete process.env.TENANT_DOMAIN_SCOPE;
+    else process.env.TENANT_DOMAIN_SCOPE = prev.domain;
   }
 }
 
@@ -110,21 +114,25 @@ function testLegacyTeamWhenFlagsUnset() {
   }
 }
 
-function testReadScopeWithoutTeamScopeStillWorkspaceTeam() {
+function testPartialReadWithoutDomainScopeUsesLegacyTeam() {
   const prev = {
     read: process.env.WORKSPACE_READ_SCOPE,
     team: process.env.WORKSPACE_TEAM_SCOPE,
+    domain: process.env.TENANT_DOMAIN_SCOPE,
   };
   process.env.WORKSPACE_READ_SCOPE = "workspace";
   delete process.env.WORKSPACE_TEAM_SCOPE;
+  delete process.env.TENANT_DOMAIN_SCOPE;
   try {
     const authority = resolveTeamAuthority(ctxFixture());
-    assert.equal(authority.mode, "workspace");
+    assert.equal(authority.mode, "legacy");
   } finally {
     if (prev.read === undefined) delete process.env.WORKSPACE_READ_SCOPE;
     else process.env.WORKSPACE_READ_SCOPE = prev.read;
     if (prev.team === undefined) delete process.env.WORKSPACE_TEAM_SCOPE;
     else process.env.WORKSPACE_TEAM_SCOPE = prev.team;
+    if (prev.domain === undefined) delete process.env.TENANT_DOMAIN_SCOPE;
+    else process.env.TENANT_DOMAIN_SCOPE = prev.domain;
   }
 }
 
@@ -148,7 +156,7 @@ function testStructuralWiring() {
   assert.ok(teamPage.includes("getWorkspaceTeamPayload"));
   assert.ok(teamApi.includes("getWorkspaceTeamPayload"));
   assert.ok(teamApi.includes("workspaceMember.findFirst"));
-  assert.ok(teamLib.includes("isWorkspaceReadMode"));
+  assert.ok(teamLib.includes("isActiveHostnameBoundReadMode"));
   assert.ok(teamLib.includes('status: "ACTIVE"'));
   assert.ok(teamLib.includes("workspaceId: ctx.workspaceId"));
 }
@@ -157,7 +165,7 @@ function main() {
   testTeamAuthorityUsesWorkspaceOnCanaryFlags();
   testTeamAuthorityFailsClosedWithoutWorkspace();
   testLegacyTeamWhenFlagsUnset();
-  testReadScopeWithoutTeamScopeStillWorkspaceTeam();
+  testPartialReadWithoutDomainScopeUsesLegacyTeam();
   testCanaryWranglerBundle();
   testStructuralWiring();
   console.log("tenant-team-host-isolation:selftest: ok");

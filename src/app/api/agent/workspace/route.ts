@@ -9,9 +9,11 @@ import {
   signActiveWorkspaceId,
 } from "@/lib/active-workspace";
 import { requireAgentUser } from "@/lib/agent";
-import { isWorkspaceReadMode } from "@/lib/crm-read-scope";
 import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
-import { tryTenantStaffContext } from "@/lib/tenancy/tenant-staff-context";
+import {
+  shouldUseHostnameBoundStaffContext,
+  tryTenantStaffContext,
+} from "@/lib/tenancy/tenant-staff-context";
 import { listActiveWorkspaceMemberships } from "@/lib/workspace-context";
 
 export const runtime = "nodejs";
@@ -25,7 +27,7 @@ export async function GET() {
 
   const memberships = await listActiveWorkspaceMemberships(user.id);
 
-  if (isWorkspaceReadMode()) {
+  if (shouldUseHostnameBoundStaffContext()) {
     const request = await buildSyntheticRequestFromHeaders();
     if (!request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -89,7 +91,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (isWorkspaceReadMode()) {
+  if (shouldUseHostnameBoundStaffContext()) {
     return NextResponse.json(
       { error: "Workspace selection is hostname-bound" },
       { status: 403 },
@@ -136,7 +138,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (isWorkspaceReadMode()) {
+  if (shouldUseHostnameBoundStaffContext()) {
     return NextResponse.json(
       { error: "Workspace selection is hostname-bound" },
       { status: 403 },

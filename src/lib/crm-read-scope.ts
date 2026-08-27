@@ -5,6 +5,7 @@
 import type { Prisma } from "@prisma/client";
 import { Prisma as PrismaNs } from "@prisma/client";
 import { scheduleWorkerSideEffect } from "@/lib/prisma";
+import { isTenantDomainScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
 
 export type CrmReadScopeMode = "legacy" | "shadow" | "workspace";
 
@@ -35,10 +36,13 @@ export function isWorkspaceReadMode(): boolean {
   return parseCrmReadScope() === "workspace";
 }
 
-export function leadTenantWhere(ctx: CrmScopeContext): Prisma.LeadWhereInput {
-  const mode = parseCrmReadScope();
+/** Workspace reads + hostname-bound CRM — both scopes must be workspace. */
+export function isActiveHostnameBoundReadMode(): boolean {
+  return isWorkspaceReadMode() && isTenantDomainScopeWorkspace();
+}
 
-  if (mode === "workspace") {
+export function leadTenantWhere(ctx: CrmScopeContext): Prisma.LeadWhereInput {
+  if (isActiveHostnameBoundReadMode()) {
     if (
       ctx.hasAmbiguousWorkspaceMembership ||
       !ctx.isWorkspaceMember ||
@@ -56,9 +60,7 @@ export function leadTenantWhere(ctx: CrmScopeContext): Prisma.LeadWhereInput {
 export function agentTaskTenantWhere(
   ctx: CrmScopeContext,
 ): Prisma.AgentTaskWhereInput {
-  const mode = parseCrmReadScope();
-
-  if (mode === "workspace") {
+  if (isActiveHostnameBoundReadMode()) {
     if (
       ctx.hasAmbiguousWorkspaceMembership ||
       !ctx.isWorkspaceMember ||
@@ -116,9 +118,7 @@ export function leadDeskSql(
   ctx: CrmScopeContext,
   focusAgentId: string | null,
 ): PrismaNs.Sql {
-  const mode = parseCrmReadScope();
-
-  if (mode === "workspace") {
+  if (isActiveHostnameBoundReadMode()) {
     if (
       ctx.hasAmbiguousWorkspaceMembership ||
       !ctx.isWorkspaceMember ||
@@ -207,7 +207,7 @@ export function canAccessLead(
 ): boolean {
   const mode = parseCrmReadScope();
 
-  if (mode === "workspace") {
+  if (isActiveHostnameBoundReadMode()) {
     return workspaceCanAccessLead(ctx, lead);
   }
 
