@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { resolveMarketingCanonicalOrigin } from "@/lib/tenancy/marketing-page-metadata";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -25,9 +26,12 @@ export default async function LandingPublicPage({
   const utmSource =
     typeof query.utm_source === "string" ? query.utm_source : null;
 
+  const canonicalOrigin =
+    (await resolveMarketingCanonicalOrigin()) ?? "https://example.invalid";
+
   const ctaHref = (() => {
     const base = page.ctaHref || "/home-valuation";
-    const url = new URL(base, "https://houzzat.com");
+    const url = new URL(base, canonicalOrigin.endsWith("/") ? canonicalOrigin : `${canonicalOrigin}/`);
     if (page.utmCampaign) url.searchParams.set("utm_campaign", page.utmCampaign);
     if (utmSource) url.searchParams.set("utm_source", utmSource);
     return `${url.pathname}${url.search}`;
@@ -38,7 +42,7 @@ export default async function LandingPublicPage({
       <section
         className="relative min-h-[70vh] bg-cover bg-center"
         style={{
-          backgroundImage: `linear-gradient(120deg, rgb(20 32 28 / 0.82), rgb(15 107 76 / 0.45)), url('${
+          backgroundImage: `linear-gradient(120deg, rgb(20 32 28 / 0.82), rgb(var(--tenant-primary-rgb) / 0.45)), url('${
             page.heroImageUrl ||
             "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=2000&q=80"
           }')`,

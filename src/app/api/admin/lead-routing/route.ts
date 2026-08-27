@@ -3,12 +3,18 @@ import { z } from "zod";
 import { writeAuditLog } from "@/lib/admin/audit";
 import { CRM_ROUTING_SETTINGS_ID } from "@/lib/agent/routing-types";
 import {
+  authorizeTenantCommandCentre,
+  resolveAdminSurfaceMode,
+} from "@/lib/admin/tenant-command-centre-auth";
+import {
   ensureCrmRoutingSettings,
   listRoutableAgentsForSettings,
+  loadCrmRoutingSettingsForWorkspace,
   validateListingAgentForSettings,
   validateWeightsForSettings,
 } from "@/lib/crm-routing-config";
 import { auth } from "@/lib/auth";
+import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -25,16 +31,13 @@ const patchSchema = z.object({
   sellerWeights: z.array(weightSchema).optional(),
 });
 
-export async function GET() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const settings = await ensureCrmRoutingSettings();
-  const agents = await listRoutableAgentsForSettings(settings);
-
-  return NextResponse.json({
+function serializeSettings(
+  settings: NonNullable<
+    Awaited<ReturnType<typeof loadCrmRoutingSettingsForWorkspace>>
+  >,
+  agents: Awaited<ReturnType<typeof listRoutableAgentsForSettings>>,
+) {
+  return {
     agents,
     listingAgentId: settings.listingAgentId,
     listingAgent: settings.listingAgent,
@@ -55,12 +58,51 @@ export async function GET() {
         assignedCount: w.assignedCount,
         agent: w.agent,
       })),
-  });
+  };
+}
+
+export async function GET(request: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const hostname = extractTrustedRequestHostname(request);
+  const surface = resolveAdminSurfaceMode(hostname);
+
+  if (surface === "tenant") {
+    const tenant = await authorizeTenantCommandCentre(request, {
+      id: session.user.id,
+      role: session.user.role ?? "",
+    });
+    if (!tenant) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const settings = await loadCrmRoutingSettingsForWorkspace(
+      tenant.workspaceId,
+    );
+    if (!settings) {
+      return NextResponse.json(
+        { error: "Routing not provisioned for workspace" },
+        { status: 404 },
+      );
+    }
+    const agents = await listRoutableAgentsForSettings(settings);
+    return NextResponse.json(serializeSettings(settings, agents));
+  }
+
+  if (surface !== "platform" || session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const settings = await ensureCrmRoutingSettings();
+  const agents = await listRoutableAgentsForSettings(settings);
+  return NextResponse.json(serializeSettings(settings, agents));
 }
 
 export async function PATCH(request: Request) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -70,7 +112,37 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const settings = await ensureCrmRoutingSettings();
+  const hostname = extractTrustedRequestHostname(request);
+  const surface = resolveAdminSurfaceMode(hostname);
+
+  let settingsId = CRM_ROUTING_SETTINGS_ID;
+  let settings =
+    surface === "platform" ? await ensureCrmRoutingSettings() : null;
+
+  if (surface === "tenant") {
+    const tenant = await authorizeTenantCommandCentre(request, {
+      id: session.user.id,
+      role: session.user.role ?? "",
+    });
+    if (!tenant) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    settings = await loadCrmRoutingSettingsForWorkspace(tenant.workspaceId);
+    if (!settings) {
+      return NextResponse.json(
+        { error: "Routing not provisioned for workspace" },
+        { status: 404 },
+      );
+    }
+    settingsId = settings.id;
+  } else if (surface !== "platform" || session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!settings) {
+    return NextResponse.json({ error: "Settings missing" }, { status: 404 });
+  }
+
   const agents = await listRoutableAgentsForSettings(settings);
 
   const listingErr = validateListingAgentForSettings(
@@ -99,7 +171,7 @@ export async function PATCH(request: Request) {
   }
 
   await prisma.crmRoutingSettings.update({
-    where: { id: CRM_ROUTING_SETTINGS_ID },
+    where: { id: settingsId },
     data: {
       ...(parsed.data.listingAgentId !== undefined
         ? { listingAgentId: parsed.data.listingAgentId }
@@ -118,13 +190,13 @@ export async function PATCH(request: Request) {
       await prisma.crmRoutingWeight.upsert({
         where: {
           settingsId_agentId_lane: {
-            settingsId: CRM_ROUTING_SETTINGS_ID,
+            settingsId,
             agentId: row.agentId,
             lane,
           },
         },
         create: {
-          settingsId: CRM_ROUTING_SETTINGS_ID,
+          settingsId,
           agentId: row.agentId,
           lane,
           percent: row.percent,
@@ -145,15 +217,19 @@ export async function PATCH(request: Request) {
     actorId: session.user.id,
     action: "crm.routing.update",
     entityType: "CrmRoutingSettings",
-    entityId: CRM_ROUTING_SETTINGS_ID,
+    entityId: settingsId,
     summary: "Updated lead routing settings",
     meta: parsed.data,
   });
 
-  const updated = await ensureCrmRoutingSettings();
+  const updated =
+    surface === "tenant"
+      ? await loadCrmRoutingSettingsForWorkspace(settings.workspaceId!)
+      : await ensureCrmRoutingSettings();
+
   return NextResponse.json({
     ok: true,
-    listingAgentId: updated.listingAgentId,
-    sellerAssignMode: updated.sellerAssignMode,
+    listingAgentId: updated?.listingAgentId ?? null,
+    sellerAssignMode: updated?.sellerAssignMode ?? null,
   });
 }

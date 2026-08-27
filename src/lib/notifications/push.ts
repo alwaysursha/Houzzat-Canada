@@ -23,10 +23,57 @@ type FirebaseBindings = {
 };
 
 type ServiceAccount = {
+  type?: string;
   project_id: string;
   client_email: string;
   private_key: string;
 };
+
+export type FcmFailureCategory =
+  | "firebase_service_account_missing"
+  | "firebase_service_account_invalid"
+  | "firebase_project_mismatch"
+  | "firebase_oauth_failed"
+  | "firebase_private_key_invalid"
+  | "fcm_permission_denied"
+  | "fcm_api_not_enabled"
+  | "fcm_invalid_argument"
+  | "fcm_sender_id_mismatch"
+  | "fcm_unregistered"
+  | "fcm_internal_error"
+  | "fcm_unknown"
+  | "fcm_stubbed";
+
+export type FirebaseServiceAccountInspect = {
+  bindingPresent: boolean;
+  jsonParseOk: boolean;
+  typeIsServiceAccount: boolean;
+  hasProjectId: boolean;
+  hasClientEmail: boolean;
+  hasPrivateKey: boolean;
+  privateKeyLooksPem: boolean;
+  projectIdMatchesExpected: boolean;
+  expectedProjectId: string;
+  /** Masked prefix only — never full project beyond exact match check. */
+  projectIdPrefix: string | null;
+};
+
+export type PushDeliveryStatus =
+  | "sent"
+  | "failed"
+  | "skipped"
+  | "unregistered"
+  | "no_device"
+  | "pref_off"
+  | "disabled";
+
+export type PushDeliveryDetail = {
+  status: PushDeliveryStatus;
+  failureCategory?: FcmFailureCategory;
+  providerHttpStatus?: number;
+};
+
+const EXPECTED_FIREBASE_PROJECT_ID = "houzzat-aa1b0";
 
 type CachedAccessToken = {
   value: string;
@@ -60,6 +107,7 @@ function parseServiceAccount(raw: string): ServiceAccount | null {
       return null;
     }
     return {
+      type: typeof parsed.type === "string" ? parsed.type : undefined,
       project_id: parsed.project_id,
       client_email: parsed.client_email,
       private_key: parsed.private_key,
@@ -67,6 +115,130 @@ function parseServiceAccount(raw: string): ServiceAccount | null {
   } catch {
     return null;
   }
+}
+
+/** Normalize common Wrangler-secret newline escaping for PEM keys. */
+function normalizePrivateKeyPem(pem: string): string {
+  return pem.includes("\\n") ? pem.replace(/\\n/g, "\n") : pem;
+}
+
+/**
+ * Sanitized service-account shape check. Never returns secret material.
+ * Expected secret format: one JSON string (raw service-account object),
+ * not base64, not double-encoded.
+ */
+export function inspectFirebaseServiceAccountShape(
+  expectedProjectId: string = EXPECTED_FIREBASE_PROJECT_ID,
+): FirebaseServiceAccountInspect {
+  const raw = readServiceAccountJson();
+  const bindingPresent = Boolean(raw);
+  if (!bindingPresent) {
+    return {
+      bindingPresent: false,
+      jsonParseOk: false,
+      typeIsServiceAccount: false,
+      hasProjectId: false,
+      hasClientEmail: false,
+      hasPrivateKey: false,
+      privateKeyLooksPem: false,
+      projectIdMatchesExpected: false,
+      expectedProjectId,
+      projectIdPrefix: null,
+    };
+  }
+
+  let parsed: Partial<ServiceAccount> | null = null;
+  let jsonParseOk = false;
+  try {
+    parsed = JSON.parse(raw) as Partial<ServiceAccount>;
+    jsonParseOk = true;
+  } catch {
+    parsed = null;
+  }
+
+  const projectId =
+    typeof parsed?.project_id === "string" ? parsed.project_id : null;
+  const privateKey =
+    typeof parsed?.private_key === "string" ? parsed.private_key : null;
+  const normalizedKey = privateKey ? normalizePrivateKeyPem(privateKey) : null;
+
+  return {
+    bindingPresent: true,
+    jsonParseOk,
+    typeIsServiceAccount: parsed?.type === "service_account",
+    hasProjectId: Boolean(projectId),
+    hasClientEmail: Boolean(parsed?.client_email),
+    hasPrivateKey: Boolean(privateKey),
+    privateKeyLooksPem: Boolean(
+      normalizedKey?.includes("BEGIN PRIVATE KEY") &&
+        normalizedKey.includes("END PRIVATE KEY"),
+    ),
+    projectIdMatchesExpected: projectId === expectedProjectId,
+    expectedProjectId,
+    projectIdPrefix: projectId ? projectId.slice(0, 8) : null,
+  };
+}
+
+/**
+ * Classify Google FCM / OAuth error text into a non-secret category.
+ * Never include tokens, emails, or raw keys.
+ */
+export function classifyFcmProviderError(
+  httpStatus: number | null,
+  bodyText: string,
+): FcmFailureCategory {
+  const lower = bodyText.toLowerCase();
+
+  if (
+    httpStatus === 404 ||
+    lower.includes("unregistered") ||
+    lower.includes("notregistered") ||
+    lower.includes('"not_found"') ||
+    lower.includes("not found")
+  ) {
+    return "fcm_unregistered";
+  }
+  if (
+    lower.includes("senderidmismatch") ||
+    lower.includes("sender_id_mismatch") ||
+    lower.includes("mismatched_credential")
+  ) {
+    return "fcm_sender_id_mismatch";
+  }
+  if (
+    lower.includes("permission_denied") ||
+    lower.includes("permission denied") ||
+    httpStatus === 403
+  ) {
+    if (
+      lower.includes("firebasecloudmessaging") ||
+      lower.includes("has not been used") ||
+      lower.includes("api has not been enabled") ||
+      lower.includes("service_disabled")
+    ) {
+      return "fcm_api_not_enabled";
+    }
+    return "fcm_permission_denied";
+  }
+  if (
+    lower.includes("invalid_argument") ||
+    lower.includes("invalid argument") ||
+    httpStatus === 400
+  ) {
+    return "fcm_invalid_argument";
+  }
+  if (httpStatus === 401 || lower.includes("unauthorized")) {
+    return "firebase_oauth_failed";
+  }
+  if (
+    httpStatus === 500 ||
+    httpStatus === 503 ||
+    lower.includes("internal") ||
+    lower.includes("unavailable")
+  ) {
+    return "fcm_internal_error";
+  }
+  return "fcm_unknown";
 }
 
 function base64UrlEncode(bytes: Uint8Array): string {
@@ -80,7 +252,7 @@ function encodeJson(value: unknown): string {
 }
 
 async function importPrivateKey(pem: string): Promise<CryptoKey> {
-  const cleaned = pem
+  const cleaned = normalizePrivateKeyPem(pem)
     .replace(/-----BEGIN PRIVATE KEY-----/g, "")
     .replace(/-----END PRIVATE KEY-----/g, "")
     .replace(/\s+/g, "");
@@ -94,10 +266,20 @@ async function importPrivateKey(pem: string): Promise<CryptoKey> {
   );
 }
 
-async function getAccessToken(account: ServiceAccount): Promise<string | null> {
+async function getAccessToken(
+  account: ServiceAccount,
+): Promise<{ token: string } | { error: FcmFailureCategory }> {
   const now = Math.floor(Date.now() / 1000);
   if (cachedAccessToken && cachedAccessToken.exp - 60 > now) {
-    return cachedAccessToken.value;
+    return { token: cachedAccessToken.value };
+  }
+
+  let key: CryptoKey;
+  try {
+    key = await importPrivateKey(account.private_key);
+  } catch (error) {
+    console.error("[push:fcm] private_key import failed", error instanceof Error ? error.name : "error");
+    return { error: "firebase_private_key_invalid" };
   }
 
   const header = encodeJson({ alg: "RS256", typ: "JWT" });
@@ -110,7 +292,6 @@ async function getAccessToken(account: ServiceAccount): Promise<string | null> {
     exp: now + 3600,
   });
   const unsigned = `${header}.${claims}`;
-  const key = await importPrivateKey(account.private_key);
   const signature = await crypto.subtle.sign(
     "RSASSA-PKCS1-v1_5",
     key,
@@ -127,47 +308,61 @@ async function getAccessToken(account: ServiceAccount): Promise<string | null> {
     }),
   });
   if (!res.ok) {
-    console.error("[push:fcm] token", res.status, await res.text());
-    return null;
+    const text = await res.text();
+    console.error("[push:fcm] token", res.status, text.slice(0, 200));
+    return { error: "firebase_oauth_failed" };
   }
   const body = (await res.json()) as {
     access_token?: string;
     expires_in?: number;
   };
-  if (!body.access_token) return null;
+  if (!body.access_token) return { error: "firebase_oauth_failed" };
   cachedAccessToken = {
     value: body.access_token,
     exp: now + (body.expires_in ?? 3600),
   };
-  return body.access_token;
+  return { token: body.access_token };
 }
 
 function isUnregisteredToken(status: number, body: string): boolean {
-  if (status === 404) return true;
-  const lower = body.toLowerCase();
-  return (
-    lower.includes("unregistered") ||
-    lower.includes("notregistered") ||
-    lower.includes("not_found")
-  );
+  return classifyFcmProviderError(status, body) === "fcm_unregistered";
 }
 
-async function deliverFcm(token: string, payload: PushPayload) {
+async function deliverFcm(
+  token: string,
+  payload: PushPayload,
+): Promise<PushDeliveryDetail> {
   const raw = readServiceAccountJson();
   if (!raw) {
     console.info("[push:stub]", payload.type, payload.title);
-    return "skipped" as const;
+    return { status: "skipped", failureCategory: "fcm_stubbed" };
   }
 
   const account = parseServiceAccount(raw);
   if (!account) {
     console.error("[push:fcm] invalid FIREBASE_SERVICE_ACCOUNT JSON");
-    return "failed" as const;
+    return {
+      status: "failed",
+      failureCategory: "firebase_service_account_invalid",
+    };
+  }
+
+  if (account.project_id !== EXPECTED_FIREBASE_PROJECT_ID) {
+    console.error(
+      "[push:fcm] project_id mismatch",
+      account.project_id.slice(0, 8),
+    );
+    return {
+      status: "failed",
+      failureCategory: "firebase_project_mismatch",
+    };
   }
 
   try {
-    const accessToken = await getAccessToken(account);
-    if (!accessToken) return "failed" as const;
+    const access = await getAccessToken(account);
+    if ("error" in access) {
+      return { status: "failed", failureCategory: access.error };
+    }
 
     const shell = shellForAudience(audienceForPushType(payload.type));
     const androidConfig =
@@ -199,7 +394,7 @@ async function deliverFcm(token: string, payload: PushPayload) {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${access.token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -220,32 +415,37 @@ async function deliverFcm(token: string, payload: PushPayload) {
     );
     if (!res.ok) {
       const text = await res.text();
-      console.error("[push:fcm]", res.status, text);
+      const category = classifyFcmProviderError(res.status, text);
+      console.error("[push:fcm]", res.status, category, text.slice(0, 240));
       if (isUnregisteredToken(res.status, text)) {
         await prisma.pushDevice.deleteMany({ where: { token } }).catch(() => null);
-        return "unregistered" as const;
+        return {
+          status: "unregistered",
+          failureCategory: "fcm_unregistered",
+          providerHttpStatus: res.status,
+        };
       }
-      return "failed" as const;
+      return {
+        status: "failed",
+        failureCategory: category,
+        providerHttpStatus: res.status,
+      };
     }
-    return "sent" as const;
+    return { status: "sent" };
   } catch (error) {
-    console.error("[push:fcm]", error);
-    return "failed" as const;
+    console.error(
+      "[push:fcm]",
+      error instanceof Error ? error.name : "error",
+    );
+    return { status: "failed", failureCategory: "fcm_unknown" };
   }
 }
-
-export type PushDeliveryStatus =
-  | "sent"
-  | "failed"
-  | "skipped"
-  | "unregistered"
-  | "no_device"
-  | "pref_off"
-  | "disabled";
 
 export type PushDeliveryResult = {
   userId: string;
   status: PushDeliveryStatus;
+  failureCategory?: FcmFailureCategory;
+  providerHttpStatus?: number;
 };
 
 /** True when Firebase service-account JSON is available (Worker binding or env). */
@@ -253,17 +453,33 @@ export function isFirebasePushConfigured(): boolean {
   return Boolean(readServiceAccountJson());
 }
 
+/** True when binding parses and matches expected Firebase project shape. */
+export function isFirebaseServiceAccountReady(
+  expectedProjectId: string = EXPECTED_FIREBASE_PROJECT_ID,
+): boolean {
+  const inspect = inspectFirebaseServiceAccountShape(expectedProjectId);
+  return (
+    inspect.bindingPresent &&
+    inspect.jsonParseOk &&
+    inspect.hasProjectId &&
+    inspect.hasClientEmail &&
+    inspect.hasPrivateKey &&
+    inspect.privateKeyLooksPem &&
+    inspect.projectIdMatchesExpected
+  );
+}
+
 async function deliverPushToUser(
   userId: string,
   payload: PushPayload,
-): Promise<PushDeliveryStatus> {
+): Promise<PushDeliveryDetail> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, disabledAt: true, pushNotificationPrefs: true },
   });
-  if (!user || user.disabledAt) return "disabled";
+  if (!user || user.disabledAt) return { status: "disabled" };
   if (!isPushTypeEnabled(user.pushNotificationPrefs, payload.type)) {
-    return "pref_off";
+    return { status: "pref_off" };
   }
 
   const shell = shellForAudience(audienceForPushType(payload.type));
@@ -274,14 +490,28 @@ async function deliverPushToUser(
 
   if (devices.length === 0) {
     console.info("[push:no-device]", userId, payload.type);
-    return "no_device";
+    return { status: "no_device" };
   }
 
   const results = await Promise.all(devices.map((d) => deliverFcm(d.token, payload)));
-  if (results.some((r) => r === "sent")) return "sent";
-  if (results.every((r) => r === "skipped")) return "skipped";
-  if (results.some((r) => r === "unregistered")) return "unregistered";
-  return "failed";
+  if (results.some((r) => r.status === "sent")) return { status: "sent" };
+  if (results.every((r) => r.status === "skipped")) {
+    return { status: "skipped", failureCategory: "fcm_stubbed" };
+  }
+  const unregistered = results.find((r) => r.status === "unregistered");
+  if (unregistered) {
+    return {
+      status: "unregistered",
+      failureCategory: "fcm_unregistered",
+      providerHttpStatus: unregistered.providerHttpStatus,
+    };
+  }
+  const failed = results.find((r) => r.status === "failed");
+  return {
+    status: "failed",
+    failureCategory: failed?.failureCategory ?? "fcm_unknown",
+    providerHttpStatus: failed?.providerHttpStatus,
+  };
 }
 
 /**
@@ -320,10 +550,15 @@ export async function deliverPushToUsersNow(
   const unique = [...new Set(userIds.filter((id): id is string => Boolean(id)))];
   if (unique.length === 0) return [];
   return Promise.all(
-    unique.map(async (userId) => ({
-      userId,
-      status: await deliverPushToUser(userId, payload),
-    })),
+    unique.map(async (userId) => {
+      const detail = await deliverPushToUser(userId, payload);
+      return {
+        userId,
+        status: detail.status,
+        failureCategory: detail.failureCategory,
+        providerHttpStatus: detail.providerHttpStatus,
+      };
+    }),
   );
 }
 

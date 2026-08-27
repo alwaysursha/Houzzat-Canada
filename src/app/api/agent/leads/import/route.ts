@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAgentContext } from "@/lib/agent";
+import { requireAgentContextFromRequest } from "@/lib/agent";
 import {
   createManualLead,
   findOpenOrgLeadForEmail,
@@ -35,8 +35,8 @@ const bodySchema = z
     message: "Provide leads[] or csv",
   });
 
-export async function GET() {
-  const ctx = await requireAgentContext();
+export async function GET(request: Request) {
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -49,7 +49,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

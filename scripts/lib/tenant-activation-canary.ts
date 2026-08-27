@@ -9,7 +9,8 @@
  *   --rotate → cancel exact PENDING invite(s) for target, then create one fresh invite
  *
  * Production URL safety:
- *   CANARY_ACK_PRODUCTION_SCOPES=1 requires https://houzzat.com (never localhost).
+ *   CANARY_ACK_PRODUCTION_SCOPES=1 requires exact host per --user target:
+ *   agent → https://houzzat.com | owner → derived tenant-canary platform hostname.
  */
 import type { PrismaClient, WorkspaceMemberRole } from "@prisma/client";
 import { LEGACY_CRM_ORGANIZATION_SLUG } from "../../src/lib/crm-ownership";
@@ -24,10 +25,11 @@ import {
   type ReportMode,
   verifyScopeGates,
 } from "./tenant-canary-provision";
+import { platformHostnameForWorkspaceSlug } from "../../src/lib/tenancy/platform-hostname";
 import {
   type CanaryBContext,
   requireScopeAckForApply,
-  resolveTrustedCanaryBContext,
+  resolveActivationCanaryContext,
 } from "./tenant-lead-canary";
 
 export const CANARY_ACTIVATION_CONFIRM_TOKEN = "tenant-canary-activation";
@@ -85,12 +87,62 @@ function isLocalhostHost(hostname: string): boolean {
   );
 }
 
+function isInfrastructureHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host.endsWith(".workers.dev") ||
+    host.endsWith(".pages.dev") ||
+    host.endsWith(".trycloudflare.com")
+  );
+}
+
+/** Exact platform hostname for Tenant Canary activation (--user=owner). */
+export function expectedTenantCanaryPlatformActivationHostname(): string {
+  const derived = platformHostnameForWorkspaceSlug(CANARY_SLUG);
+  if (!derived.ok) {
+    throw new Error(
+      `Cannot derive Tenant Canary platform hostname: ${derived.error}`,
+    );
+  }
+  return derived.hostname;
+}
+
+/**
+ * Production-ack activation hosts — exact allowlist only (no suffix/wildcard trust).
+ * owner → tenant-canary.houzzatpro.com (derived from workspace slug)
+ * agent → houzzat.com | www.houzzat.com
+ */
+export function isProductionAckAllowedActivationHost(
+  hostname: string,
+  userTarget: ActivationUserTarget,
+): boolean {
+  const host = hostname.toLowerCase();
+  if (isLocalhostHost(host) || isInfrastructureHost(host)) {
+    return false;
+  }
+  if (host === "houzzatpro.com" || host === "www.houzzatpro.com") {
+    return false;
+  }
+
+  if (userTarget === "owner") {
+    return host === expectedTenantCanaryPlatformActivationHostname();
+  }
+
+  return (
+    host === CANARY_ACTIVATION_PRODUCTION_HOST ||
+    host === `www.${CANARY_ACTIVATION_PRODUCTION_HOST}`
+  );
+}
+
 /**
  * Resolve canonical activation base URL for canary CLI.
  * Prefer CANARY_SITE_URL → NEXT_PUBLIC_SITE_URL → NEXTAUTH_URL → https://houzzat.com
  * Localhost candidates are ignored (never used for production canary URLs).
  */
-export function resolveCanaryActivationBaseUrl(env: NodeJS.ProcessEnv = process.env): {
+export function resolveCanaryActivationBaseUrl(
+  env: NodeJS.ProcessEnv = process.env,
+  userTarget: ActivationUserTarget = "agent",
+): {
   baseUrl: string | null;
   error: string | null;
 } {
@@ -147,13 +199,14 @@ export function resolveCanaryActivationBaseUrl(env: NodeJS.ProcessEnv = process.
       };
     }
     const host = parsed.hostname.toLowerCase();
-    if (
-      host !== CANARY_ACTIVATION_PRODUCTION_HOST &&
-      host !== `www.${CANARY_ACTIVATION_PRODUCTION_HOST}`
-    ) {
+    if (!isProductionAckAllowedActivationHost(host, userTarget)) {
+      const expected =
+        userTarget === "owner"
+          ? expectedTenantCanaryPlatformActivationHostname()
+          : `${CANARY_ACTIVATION_PRODUCTION_HOST} (or www)`;
       return {
         baseUrl: null,
-        error: `Production activation host must be ${CANARY_ACTIVATION_PRODUCTION_HOST} (got ${host})`,
+        error: `Production activation host not allowed for --user=${userTarget}: got ${host}, expected ${expected}`,
       };
     }
   }
@@ -433,7 +486,7 @@ export async function buildActivationCanaryPlan(
 ): Promise<ActivationCanaryPlan> {
   const rotate = Boolean(options.rotate);
   const steps: PlanStep[] = [];
-  const urlResolved = resolveCanaryActivationBaseUrl();
+  const urlResolved = resolveCanaryActivationBaseUrl(process.env, userTarget);
 
   const scopeGates = verifyScopeGates();
   if (scopeGates.missingAck) {
@@ -472,15 +525,20 @@ export async function buildActivationCanaryPlan(
 
   let context: CanaryBContext | null = null;
   try {
-    context = await resolveTrustedCanaryBContext(prisma);
+    context = await resolveActivationCanaryContext(prisma, userTarget);
     steps.push({
-      object: "Workspace B",
+      object:
+        userTarget === "owner" ? "Workspace B (owner activation)" : "Workspace B",
       action: "ALREADY_MATCHES",
-      detail: `slug=${CANARY_SLUG}`,
+      detail:
+        userTarget === "owner"
+          ? `slug=${CANARY_SLUG} · AGENT_B routing pollution ignored`
+          : `slug=${CANARY_SLUG}`,
     });
   } catch (error) {
     steps.push({
-      object: "Workspace B",
+      object:
+        userTarget === "owner" ? "Workspace B (owner activation)" : "Workspace B",
       action: "DRIFT_STOP",
       detail: error instanceof Error ? error.message : String(error),
     });
@@ -508,9 +566,14 @@ export async function buildActivationCanaryPlan(
     }
   }
 
+  const activationHost =
+    urlResolved.baseUrl ??
+    (userTarget === "owner"
+      ? `https://${expectedTenantCanaryPlatformActivationHostname()}`
+      : `https://${CANARY_ACTIVATION_PRODUCTION_HOST}`);
   const futureAcceptBehavior = [
     "DO NOT paste activation URL/token into chat/logs",
-    "User opens https://houzzat.com/auth/invite/{rawToken}",
+    `User opens ${activationHost}/auth/invite/{rawToken}`,
     "UI shows password form (needsPasswordActivation)",
     "acceptWorkspaceInvite sets bcrypt password, reuses User + WorkspaceMember",
     "sets ACTIVE workspace cookie to tenant-canary",
@@ -587,7 +650,7 @@ export async function executeActivationCanaryApply(
     activationUrl: string;
   }> = [];
 
-  const urlResolved = resolveCanaryActivationBaseUrl();
+  const urlResolved = resolveCanaryActivationBaseUrl(process.env, userTarget);
   if (urlResolved.error || !urlResolved.baseUrl) {
     throw new Error(`DRIFT_STOP: ${urlResolved.error ?? "activation base URL missing"}`);
   }

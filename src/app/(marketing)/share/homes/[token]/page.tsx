@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
-import { SITE_NAME } from "@/lib/constants";
 import { toCard } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
 import { noIndexMetadata } from "@/lib/seo";
+import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -53,8 +53,10 @@ function decodeSharePayload(token: string): SharePayload | null {
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { token } = await params;
   const payload = decodeSharePayload(token);
+  const brand = await resolveMarketingPresentationBrand();
+  const siteName = brand?.displayName ?? "Real Estate";
   const title = payload
-    ? `${payload.title ?? "Homes for you"} · ${SITE_NAME}`
+    ? `${payload.title ?? "Homes for you"} · ${siteName}`
     : "Homes for you";
   return noIndexMetadata(title);
 }
@@ -63,6 +65,8 @@ export default async function ListingSharePage({ params }: Params) {
   const { token } = await params;
   const payload = decodeSharePayload(token);
   if (!payload) notFound();
+  const brand = await resolveMarketingPresentationBrand();
+  const siteName = brand?.displayName ?? "Real Estate";
 
   const listings = await prisma.listing.findMany({
     where: { mlsNumber: { in: payload.mls } },
@@ -89,7 +93,7 @@ export default async function ListingSharePage({ params }: Params) {
           </p>
         ) : (
           <p className="mt-3 text-[15px] text-ink/60">
-            Your agent picked these homes for you on {SITE_NAME}.
+            Your agent picked these homes for you on {siteName}.
           </p>
         )}
         <p className="mt-2 text-sm text-ink/45">

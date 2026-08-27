@@ -16,7 +16,7 @@ export default async function AgentCmaPage() {
       <div>
         <h1 className="font-display text-4xl text-ink">One-click CMA</h1>
         <p className="mt-2 text-sm text-ink/60">
-          Pull nearby comps from Houzzat inventory and share an internal draft
+          Pull nearby comps from listing inventory and share an internal draft
           link.
         </p>
       </div>

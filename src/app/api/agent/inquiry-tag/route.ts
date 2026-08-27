@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   canAccessLead,
   markLeadFirstResponse,
-  requireAgentContext,
+  requireAgentContextFromRequest,
 } from "@/lib/agent";
 import {
   INQUIRY_TAGS,
@@ -21,7 +21,7 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const ctx = await requireAgentContext();
+    const ctx = await requireAgentContextFromRequest(request);
     if (!ctx) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

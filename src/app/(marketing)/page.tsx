@@ -1,40 +1,19 @@
 import Link from "next/link";
-import type { Metadata } from "next";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { HomeAreaRailLive } from "@/components/home/HomeAreaRailLive";
 import { HomeBrowseChips } from "@/components/home/HomeBrowseChips";
 import { HomeDeferredBody } from "@/components/home/HomeDeferredBody";
 import { HomeHeroSearch } from "@/components/home/HomeHeroSearch";
-import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/constants";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
-import { absoluteUrl, DEFAULT_OG_IMAGE } from "@/lib/seo";
 
-/** Public homepage shell — signed-in tools/rails hydrate after paint. */
-export const revalidate = 300;
+/** Title/metadata owned by marketing layout generateMetadata(). */
 
-export const metadata: Metadata = {
-  title: {
-    absolute: `${SITE_NAME} | GTA Homes for Sale & Open Houses`,
-  },
-  description: SITE_DESCRIPTION,
-  alternates: { canonical: absoluteUrl("/") },
-  openGraph: {
-    title: `${SITE_NAME} | GTA Homes for Sale & Open Houses`,
-    description: SITE_DESCRIPTION,
-    url: absoluteUrl("/"),
-    siteName: SITE_NAME,
-    type: "website",
-    locale: "en_CA",
-    images: [DEFAULT_OG_IMAGE],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: `${SITE_NAME} | GTA Homes for Sale & Open Houses`,
-    description: SITE_DESCRIPTION,
-    images: [DEFAULT_OG_IMAGE.url],
-  },
-};
+const HERO_DESKTOP_GRADIENT =
+  "linear-gradient(90deg, rgb(var(--tenant-primary-rgb) / 0.97) 0%, rgb(var(--tenant-primary-rgb) / 0.88) 22%, rgb(var(--tenant-primary-rgb) / 0.55) 48%, rgb(var(--tenant-primary-rgb) / 0.18) 72%, transparent 100%)";
+
+const HERO_MOBILE_GRADIENT =
+  "linear-gradient(180deg, rgb(var(--tenant-primary-rgb) / 0.2) 0%, rgb(var(--tenant-primary-rgb) / 0.08) 45%, rgb(var(--tenant-primary-rgb) / 0) 100%)";
 
 export default function HomePage() {
   const suggestionCities = suggestedCitiesForLocation({ limit: 8 });
@@ -56,20 +35,14 @@ export default function HomePage() {
           />
           <div
             className="absolute inset-0"
-            style={{
-              backgroundImage:
-                "linear-gradient(90deg, rgb(15 107 76 / 0.97) 0%, rgb(15 107 76 / 0.88) 22%, rgb(15 107 76 / 0.55) 48%, rgb(15 107 76 / 0.18) 72%, transparent 100%)",
-            }}
+            style={{ backgroundImage: HERO_DESKTOP_GRADIENT }}
           />
         </div>
 
         {/* Mobile: compact search + section shortcuts (no tall hero) */}
         <div
           className="relative px-4 pb-4 pt-3 sm:hidden"
-          style={{
-            backgroundImage:
-              "linear-gradient(180deg, rgb(15 107 76 / 0.2) 0%, rgb(15 107 76 / 0.08) 45%, rgb(15 107 76 / 0) 100%)",
-          }}
+          style={{ backgroundImage: HERO_MOBILE_GRADIENT }}
         >
           <h1 className="sr-only">
             Find homes in Ontario — search GTA residential and commercial

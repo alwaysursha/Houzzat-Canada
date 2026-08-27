@@ -1,0 +1,174 @@
+/**
+ * Stage 3K.5.5 — request-aware SEO/metadata from workspace branding.
+ */
+import type { Metadata } from "next";
+import type { MarketingPresentationBrand } from "@/lib/tenancy/marketing-presentation-brand";
+import type { RequestTenancySuccess } from "@/lib/tenancy/resolve-request-tenancy";
+import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
+import { toMarketingPresentationBrand } from "@/lib/tenancy/marketing-presentation-brand";
+import { resolveTenantFaviconMetadata } from "@/lib/tenancy/tenant-favicon";
+
+function metadataBase(origin: string): URL {
+  return new URL(origin.endsWith("/") ? origin : `${origin}/`);
+}
+
+function defaultOgImage(brand: MarketingPresentationBrand) {
+  const imagePath =
+    brand.ogImageUrl ??
+    brand.logoUrl ??
+    (brand.isHouzzatWorkspace ? "/icon.png" : null);
+  if (!imagePath) {
+    return null;
+  }
+  const url =
+    imagePath.startsWith("http")
+      ? imagePath
+      : absoluteUrlForOrigin(brand.canonicalOrigin, imagePath) ??
+        absoluteUrlForOrigin(brand.publicOrigin, imagePath);
+  return {
+    url: url ?? imagePath,
+    width: 512,
+    height: 512,
+    alt: `${brand.displayName} — GTA homes for sale`,
+  };
+}
+
+export function buildMarketingRootMetadata(
+  tenancy: RequestTenancySuccess,
+  canonicalOrigin: string,
+): Metadata {
+  const brand = toMarketingPresentationBrand(tenancy, canonicalOrigin);
+  const base = metadataBase(canonicalOrigin);
+  const homeUrl = absoluteUrlForOrigin(canonicalOrigin, "/") ?? canonicalOrigin;
+  const defaultTitle = `${brand.displayName} | GTA Homes for Sale & Open Houses`;
+  const ogImage = defaultOgImage(brand);
+
+  return {
+    metadataBase: base,
+    title: {
+      default: defaultTitle,
+      absolute: defaultTitle,
+      template: `%s | ${brand.displayName}`,
+    },
+    description: brand.seoDescription,
+    applicationName: brand.displayName,
+    alternates: { canonical: homeUrl },
+    icons: resolveTenantFaviconMetadata(brand, canonicalOrigin),
+    openGraph: {
+      type: "website",
+      locale: "en_CA",
+      siteName: brand.displayName,
+      title: defaultTitle,
+      description: brand.seoDescription,
+      url: homeUrl,
+      images: ogImage ? [ogImage] : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: defaultTitle,
+      description: brand.seoDescription,
+      images: ogImage ? [ogImage.url] : undefined,
+    },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
+    },
+  };
+}
+
+export function buildTenantPublicPageMetadata(input: {
+  tenancy: RequestTenancySuccess;
+  canonicalOrigin: string;
+  title: string;
+  description: string;
+  path: string;
+}): Metadata {
+  const brand = toMarketingPresentationBrand(
+    input.tenancy,
+    input.canonicalOrigin,
+  );
+  const url =
+    absoluteUrlForOrigin(input.canonicalOrigin, input.path) ??
+    absoluteUrlForOrigin(brand.publicOrigin, input.path);
+  const ogImage = defaultOgImage(brand);
+
+  return {
+    title: input.title,
+    description: input.description,
+    alternates: url ? { canonical: url } : undefined,
+    icons: resolveTenantFaviconMetadata(brand, input.canonicalOrigin),
+    openGraph: {
+      title: input.title,
+      description: input.description,
+      url: url ?? undefined,
+      siteName: brand.displayName,
+      type: "website",
+      locale: "en_CA",
+      images: ogImage ? [ogImage] : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: input.title,
+      description: input.description,
+      images: ogImage ? [ogImage.url] : undefined,
+    },
+  };
+}
+
+export function organizationJsonLdForTenancy(
+  tenancy: RequestTenancySuccess,
+  canonicalOrigin: string,
+  input?: { telephone?: string | null },
+) {
+  const brand = tenancy.brand;
+  const presentation = toMarketingPresentationBrand(tenancy, canonicalOrigin);
+  const origin = canonicalOrigin;
+  const home = absoluteUrlForOrigin(origin, "/") ?? origin;
+  const logoPath =
+    brand.logoUrl ??
+    brand.ogImageUrl ??
+    (presentation.isHouzzatWorkspace ? "/icon.png" : null);
+  const logo = logoPath
+    ? logoPath.startsWith("http")
+      ? logoPath
+      : absoluteUrlForOrigin(origin, logoPath) ?? logoPath
+    : undefined;
+  const telephone = input?.telephone?.trim() || brand.contact.phone || undefined;
+
+  return {
+    "@context": "https://schema.org",
+    "@type": ["Organization", "RealEstateAgent"],
+    "@id": `${home}#organization`,
+    name: brand.displayName,
+    url: home,
+    ...(logo ? { logo, image: logo } : {}),
+    description: brand.seoDescription,
+    areaServed: [
+      { "@type": "AdministrativeArea", name: "Greater Toronto Area" },
+      { "@type": "AdministrativeArea", name: "Ontario" },
+    ],
+    ...(telephone
+      ? {
+          telephone: telephone.startsWith("+")
+            ? telephone
+            : `+${telephone.replace(/\D/g, "")}`,
+          contactPoint: {
+            "@type": "ContactPoint",
+            contactType: "customer service",
+            telephone: telephone.startsWith("+")
+              ? telephone
+              : `+${telephone.replace(/\D/g, "")}`,
+            areaServed: "CA",
+            availableLanguage: ["English"],
+          },
+        }
+      : {}),
+  };
+}

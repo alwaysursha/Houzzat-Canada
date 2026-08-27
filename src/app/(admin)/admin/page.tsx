@@ -4,10 +4,20 @@ import {
   AdminDeferredMlsSync,
   AdminDeferredSecondarySidebar,
 } from "@/components/admin/AdminHqDeferredSections";
+import { TenantCommandCentreOverview } from "@/components/admin/TenantCommandCentreOverview";
 import { PoiSyncClient } from "@/components/admin/PoiSyncClient";
 import { loadAdminCriticalStats } from "@/lib/admin/hq-deferred";
+import { loadTenantCommandCentreStats } from "@/lib/admin/tenant-hq-deferred";
+import {
+  authorizeTenantCommandCentre,
+  resolveAdminSurfaceMode,
+} from "@/lib/admin/tenant-command-centre-auth";
+import { auth } from "@/lib/auth";
+import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
+import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
+import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 
-export const metadata = { title: "Admin HQ" };
+export const metadata = { title: "Command Centre" };
 
 function StatCard({
   label,
@@ -47,6 +57,34 @@ function StatCard({
 }
 
 export default async function AdminPage() {
+  const request = await buildSyntheticRequestFromHeaders();
+  const hostname = request
+    ? extractTrustedRequestHostname(request)
+    : null;
+  const surface = resolveAdminSurfaceMode(hostname);
+
+  if (surface === "tenant" && request) {
+    const session = await auth();
+    const user = session?.user;
+    if (!user?.id) {
+      return null;
+    }
+    const tenantAuth = await authorizeTenantCommandCentre(request, {
+      id: user.id,
+      role: user.role ?? "",
+    });
+    if (!tenantAuth) {
+      return null;
+    }
+    const stats = await loadTenantCommandCentreStats(tenantAuth.workspaceId);
+    return (
+      <TenantCommandCentreOverview
+        displayName={tenantAuth.brand.displayName}
+        stats={stats}
+      />
+    );
+  }
+
   // Critical path: first-row stats only. Feed / MLS / landings stream after paint.
   const {
     liveVisitors,
@@ -62,10 +100,11 @@ export default async function AdminPage() {
     <div className="space-y-8">
       <div>
         <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">
-          Command center
+          Command centre
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-ink/60">
-          Live pulse across people, visitors, leads, and growth systems.
+          Live pulse across people, visitors, leads, and growth systems on{" "}
+          {PLATFORM_PRODUCT_NAME}.
         </p>
       </div>
 

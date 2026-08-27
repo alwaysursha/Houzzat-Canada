@@ -1,0 +1,267 @@
+/**
+ * Stage 3K.5.10 — one-time cross-host mobile workspace session handoff.
+ * Uses existing VerificationToken storage (no new schema).
+ */
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import type { ActiveMode, Role, WorkspaceMemberRole } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
+import { normalizeWorkspaceHostname } from "@/lib/tenancy/normalize-workspace-hostname";
+import { isValidWorkspaceIdShape } from "@/lib/active-workspace";
+import {
+  HOUZZATPRO_MOBILE_HANDOFF_PATH,
+  isPlatformMobileBootstrapHost,
+} from "@/lib/mobile/platform-bootstrap";
+import {
+  isStaffWorkspaceMemberRole,
+  resolveWorkspaceMemberMobileDestination,
+} from "@/lib/mobile/workspace-destination";
+import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
+
+export const MOBILE_HANDOFF_PROVIDER_ID = "mobile-workspace-handoff";
+export const MOBILE_HANDOFF_TTL_MS = 2 * 60 * 1000;
+const IDENTIFIER_PREFIX = "mobile-handoff:";
+
+export type MobileHandoffIdentifier = {
+  userId: string;
+  workspaceId: string;
+  targetHostname: string;
+};
+
+export type MobileWorkspaceHandoffRow = {
+  code: string;
+  handoffUrl: string;
+  targetOrigin: string;
+  targetHostname: string;
+  workspaceId: string;
+  destination: "/admin" | "/agent" | "/pro/for-staff";
+  expiresAt: Date;
+};
+
+function hashHandoffCode(rawCode: string): string {
+  return createHash("sha256").update(rawCode, "utf8").digest("hex");
+}
+
+export function buildMobileHandoffIdentifier(input: MobileHandoffIdentifier): string {
+  if (!isValidWorkspaceIdShape(input.userId)) {
+    throw new Error("[mobile-handoff] invalid userId shape");
+  }
+  if (!isValidWorkspaceIdShape(input.workspaceId)) {
+    throw new Error("[mobile-handoff] invalid workspaceId shape");
+  }
+  const host = normalizeWorkspaceHostname(input.targetHostname);
+  if (!host.ok) throw new Error("[mobile-handoff] invalid target hostname");
+  return `${IDENTIFIER_PREFIX}${input.userId}:${input.workspaceId}:${host.hostname}`;
+}
+
+export function parseMobileHandoffIdentifier(
+  identifier: string,
+): MobileHandoffIdentifier | null {
+  if (!identifier.startsWith(IDENTIFIER_PREFIX)) return null;
+  const rest = identifier.slice(IDENTIFIER_PREFIX.length);
+  const parts = rest.split(":");
+  if (parts.length < 3) return null;
+  const userId = parts[0] ?? "";
+  const workspaceId = parts[1] ?? "";
+  const targetHostname = parts.slice(2).join(":");
+  if (!isValidWorkspaceIdShape(userId) || !isValidWorkspaceIdShape(workspaceId)) {
+    return null;
+  }
+  const host = normalizeWorkspaceHostname(targetHostname);
+  if (!host.ok) return null;
+  return { userId, workspaceId, targetHostname: host.hostname };
+}
+
+export async function resolveMobileWorkspaceCanonicalHost(
+  workspaceId: string,
+  workspaceSlug: string,
+): Promise<string | null> {
+  const fallback = `${workspaceSlug}.houzzatpro.com`;
+  try {
+    const origin = await resolveCanonicalPublicOrigin(workspaceId, fallback);
+    return new URL(origin).hostname;
+  } catch {
+    return null;
+  }
+}
+
+export async function createMobileWorkspaceHandoff(input: {
+  userId: string;
+  workspaceId: string;
+  workspaceRole: WorkspaceMemberRole;
+  requestHostname: string;
+}): Promise<
+  | { ok: true; handoff: MobileWorkspaceHandoffRow }
+  | { ok: false; error: string; status: number }
+> {
+  if (!isPlatformMobileBootstrapHost(input.requestHostname)) {
+    return {
+      ok: false,
+      error: "Handoff may only be issued from the HouzzatPRO platform bootstrap host",
+      status: 403,
+    };
+  }
+  if (!isStaffWorkspaceMemberRole(input.workspaceRole)) {
+    return { ok: false, error: "Workspace role cannot access staff mobile CRM", status: 403 };
+  }
+
+  const member = await prisma.workspaceMember.findFirst({
+    where: {
+      userId: input.userId,
+      workspaceId: input.workspaceId,
+      status: "ACTIVE",
+      workspace: { status: "ACTIVE" },
+    },
+    select: { role: true, workspace: { select: { slug: true } } },
+  });
+  if (!member || member.role !== input.workspaceRole) {
+    return { ok: false, error: "Forbidden", status: 403 };
+  }
+
+  const targetHostname = await resolveMobileWorkspaceCanonicalHost(
+    input.workspaceId,
+    member.workspace.slug,
+  );
+  if (!targetHostname) {
+    return { ok: false, error: "Workspace hostname unavailable", status: 422 };
+  }
+
+  const rawCode = randomBytes(32).toString("base64url");
+  const token = hashHandoffCode(rawCode);
+  const identifier = buildMobileHandoffIdentifier({
+    userId: input.userId,
+    workspaceId: input.workspaceId,
+    targetHostname,
+  });
+  const expiresAt = new Date(Date.now() + MOBILE_HANDOFF_TTL_MS);
+
+  await prisma.verificationToken.deleteMany({ where: { identifier } });
+  await prisma.verificationToken.create({ data: { identifier, token, expires: expiresAt } });
+
+  const targetOrigin = `https://${targetHostname}`;
+  const handoffPath = `${HOUZZATPRO_MOBILE_HANDOFF_PATH}?code=${encodeURIComponent(rawCode)}`;
+  const handoffUrl = absoluteUrlForOrigin(targetOrigin, handoffPath);
+  if (!handoffUrl) return { ok: false, error: "Invalid handoff URL", status: 500 };
+
+  return {
+    ok: true,
+    handoff: {
+      code: rawCode,
+      handoffUrl,
+      targetOrigin,
+      targetHostname,
+      workspaceId: input.workspaceId,
+      destination: resolveWorkspaceMemberMobileDestination(member.role),
+      expiresAt,
+    },
+  };
+}
+
+type HandoffUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+  role: Role;
+  isBuyer: boolean;
+  isSeller: boolean;
+  activeMode: ActiveMode;
+};
+
+export async function consumeMobileWorkspaceHandoff(input: {
+  rawCode: string;
+  requestHostname: string;
+}): Promise<
+  | {
+      ok: true;
+      user: HandoffUser;
+      workspaceId: string;
+      destination: "/admin" | "/agent" | "/pro/for-staff";
+    }
+  | { ok: false; error: string }
+> {
+  const trimmed = input.rawCode.trim();
+  if (!trimmed) return { ok: false, error: "Missing handoff code" };
+
+  const requestHost = normalizeWorkspaceHostname(input.requestHostname);
+  if (!requestHost.ok) return { ok: false, error: "Invalid request host" };
+
+  const token = hashHandoffCode(trimmed);
+  const row = await prisma.verificationToken.findUnique({ where: { token } });
+  if (!row) return { ok: false, error: "Handoff expired or invalid" };
+  if (row.expires.getTime() < Date.now()) {
+    await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
+    return { ok: false, error: "Handoff expired or invalid" };
+  }
+
+  const parsed = parseMobileHandoffIdentifier(row.identifier);
+  if (!parsed) {
+    await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
+    return { ok: false, error: "Handoff expired or invalid" };
+  }
+  if (parsed.targetHostname !== requestHost.hostname) {
+    return { ok: false, error: "Handoff host mismatch" };
+  }
+
+  const member = await prisma.workspaceMember.findFirst({
+    where: {
+      userId: parsed.userId,
+      workspaceId: parsed.workspaceId,
+      status: "ACTIVE",
+      workspace: { status: "ACTIVE" },
+    },
+    select: { role: true },
+  });
+  if (!member || !isStaffWorkspaceMemberRole(member.role)) {
+    await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
+    return { ok: false, error: "Forbidden" };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: parsed.userId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      image: true,
+      role: true,
+      isBuyer: true,
+      isSeller: true,
+      activeMode: true,
+      disabledAt: true,
+    },
+  });
+  if (!user || user.disabledAt) {
+    await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
+    return { ok: false, error: "Account unavailable" };
+  }
+
+  await prisma.verificationToken.delete({ where: { token } });
+
+  return {
+    ok: true,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      image: user.image,
+      role: user.role,
+      isBuyer: user.isBuyer,
+      isSeller: user.isSeller,
+      activeMode: user.activeMode,
+    },
+    workspaceId: parsed.workspaceId,
+    destination: resolveWorkspaceMemberMobileDestination(member.role),
+  };
+}
+
+export function handoffCodesEqual(a: string, b: string): boolean {
+  try {
+    const bufA = Buffer.from(a, "utf8");
+    const bufB = Buffer.from(b, "utf8");
+    if (bufA.length !== bufB.length || bufA.length === 0) return false;
+    return timingSafeEqual(bufA, bufB);
+  } catch {
+    return false;
+  }
+}

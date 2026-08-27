@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireAgentContext } from "@/lib/agent";
+import { requireAgentContextFromRequest } from "@/lib/agent";
 import { loadLeadSummary } from "@/lib/agent/lead-summary";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
-  const ctx = await requireAgentContext();
+export async function GET(request: Request, { params }: Params) {
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

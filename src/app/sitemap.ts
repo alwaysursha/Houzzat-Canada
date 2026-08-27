@@ -3,6 +3,7 @@ import { SITE_URL } from "@/lib/constants";
 import { homesForSalePath } from "@/lib/geo/area-seo";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
+import { resolveMarketingCanonicalOrigin } from "@/lib/tenancy/marketing-page-metadata";
 
 /** Google allows 50k URLs/file; keep headroom for static + area rows. */
 const LISTING_CHUNK = 4_000;
@@ -18,6 +19,8 @@ export default async function sitemap(props: {
 }): Promise<MetadataRoute.Sitemap> {
   const id = Number(await props.id);
   const skip = id * LISTING_CHUNK;
+  const canonicalOrigin = await resolveMarketingCanonicalOrigin();
+  const siteUrl = (canonicalOrigin ?? SITE_URL).replace(/\/$/, "");
 
   const [listings, areas, landings] = await Promise.all([
     prisma.listing.findMany({
@@ -64,7 +67,7 @@ export default async function sitemap(props: {
           "/partners",
           "/route-planner",
         ].map((path) => ({
-          url: `${SITE_URL}${path}`,
+          url: `${siteUrl}${path}`,
           changeFrequency: "daily" as const,
           priority: path === "" ? 1 : 0.7,
         }))
@@ -73,13 +76,13 @@ export default async function sitemap(props: {
   return [
     ...staticRoutes,
     ...listings.map((l) => ({
-      url: `${SITE_URL}${listingPath(l)}`,
+      url: `${siteUrl}${listingPath(l)}`,
       lastModified: l.updatedAt,
       changeFrequency: "daily" as const,
       priority: 0.8,
     })),
     ...areas.map((a) => ({
-      url: `${SITE_URL}${homesForSalePath({
+      url: `${siteUrl}${homesForSalePath({
         city: a.city,
         community: a.community,
       })}`,
@@ -88,7 +91,7 @@ export default async function sitemap(props: {
       priority: a.community ? 0.65 : 0.75,
     })),
     ...landings.map((l) => ({
-      url: `${SITE_URL}/lp/${l.slug}`,
+      url: `${siteUrl}/lp/${l.slug}`,
       lastModified: l.updatedAt,
       changeFrequency: "weekly" as const,
       priority: 0.5,

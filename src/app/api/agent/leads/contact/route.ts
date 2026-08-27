@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canAccessLead, requireAgentContext } from "@/lib/agent";
+import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
 
 const nullableText = (max: number) =>
@@ -25,7 +25,7 @@ const schema = z
   );
 
 export async function PATCH(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

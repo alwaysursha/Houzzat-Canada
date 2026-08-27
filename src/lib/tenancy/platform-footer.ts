@@ -5,7 +5,7 @@ import type { WorkspaceBrandPublic } from "@/lib/tenancy/brand-dto";
 import { enforcePoweredByHouzzatPro } from "@/lib/tenancy/brand-capabilities";
 
 export const HOUZZATPRO_PLATFORM_URL = "https://houzzatpro.com";
-export const POWERED_BY_HOUZZATPRO_LABEL = "Powered by HouzzatPro";
+export const POWERED_BY_HOUZZATPRO_LABEL = "Powered by HouzzatPRO";
 
 export type TenantFooterModel = {
   tenantDisplayName: string;

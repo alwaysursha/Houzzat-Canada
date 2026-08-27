@@ -10,10 +10,9 @@ import {
   loadRememberedLogin,
   rememberLoginCredentials,
 } from "@/lib/auth/remembered-login";
-import { resolveProPostSignInHref } from "@/lib/auth/pro-sign-in-routing";
-import { hardGo } from "@/lib/mobile/nav-back";
 import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
+import { hardGo } from "@/lib/mobile/nav-back";
 
 export function HouzzatProSignInForm({
   callbackUrl = null,
@@ -78,7 +77,7 @@ export function HouzzatProSignInForm({
     });
 
     setPending(false);
-    hardGo(resolveProPostSignInHref(callbackUrl, session?.user?.role));
+    hardGo("/pro");
   }
 
   return (

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAgentContext } from "@/lib/agent";
+import { requireAgentContextFromRequest } from "@/lib/agent";
 import {
   isDeskActivityCategory,
   loadDeskActivityFeed,
@@ -8,7 +8,7 @@ import {
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -4,7 +4,7 @@ import type { LeadStatus } from "@prisma/client";
 import {
   canAccessLead,
   markLeadFirstResponse,
-  requireAgentContext,
+  requireAgentContextFromRequest,
 } from "@/lib/agent";
 import { createManualLead } from "@/lib/agent/create-manual-lead";
 import {
@@ -33,7 +33,7 @@ const createSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -93,8 +93,8 @@ export async function PATCH(request: Request) {
     data.assignedAgentId = ctx.user.id;
     data.organizationId = lead.organizationId ?? ctx.organizationId;
   }
-  if (parsed.data.assignedAgentId !== undefined) {
-    if (!ctx.isPlatformAdmin) {
+    if (parsed.data.assignedAgentId !== undefined) {
+    if (!ctx.canSeeTeamLeads) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     data.assignedAgentId = parsed.data.assignedAgentId;

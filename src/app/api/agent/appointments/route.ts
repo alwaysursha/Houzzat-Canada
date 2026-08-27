@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { AppointmentStatus } from "@prisma/client";
-import { requireAgentContext } from "@/lib/agent";
+import { requireAgentContextFromRequest } from "@/lib/agent";
 import { canMutateAppointment } from "@/lib/crm-read-scope";
 import { sendNotification } from "@/lib/notifications";
 import { sendPushToUser } from "@/lib/notifications/push";
@@ -25,7 +25,7 @@ const leadAuthSelect = {
 } as const;
 
 export async function PATCH(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

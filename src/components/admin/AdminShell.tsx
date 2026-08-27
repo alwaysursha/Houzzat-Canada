@@ -19,6 +19,7 @@ import {
   Percent,
   Search,
   Users,
+  UsersRound,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -28,7 +29,8 @@ import {
   StaffHardLink,
   isStaffCrossLayoutHref,
 } from "@/components/site/StaffHardLink";
-import { SITE_NAME } from "@/lib/constants";
+import { BrandLogoMark } from "@/components/tenancy/BrandLogoMark";
+import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import { resolveAppShell } from "@/lib/mobile/app-shell";
 import {
   STAFF_OVERLAY_PRIORITY,
@@ -36,7 +38,14 @@ import {
 } from "@/lib/mobile/use-staff-overlay";
 import { cn } from "@/lib/utils";
 
-const NAV = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+};
+
+const PLATFORM_NAV: NavItem[] = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
   { href: "/admin/people", label: "People", icon: Users },
   { href: "/admin/lead-routing", label: "Lead routing", icon: Percent },
@@ -54,13 +63,32 @@ const NAV = [
   { href: "/agent", label: "CRM desk", icon: Briefcase },
   { href: "/admin/search", label: "Search", icon: Search },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
+];
+
+const TENANT_NAV: NavItem[] = [
+  { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/admin/mls", label: "MLS Sync", icon: Activity },
+  { href: "/admin/lead-routing", label: "Lead routing", icon: Percent },
+  { href: "/admin/people", label: "People", icon: Users },
+  { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/agent", label: "CRM desk", icon: Briefcase },
+  { href: "/agent/team", label: "Team", icon: UsersRound },
+  { href: "/admin/notifications", label: "Notifications", icon: Bell },
+  { href: "/admin/search", label: "Search", icon: Search },
+];
+
+const PLATFORM_MOBILE_TABS = [
+  PLATFORM_NAV[0],
+  PLATFORM_NAV[1],
+  PLATFORM_NAV[3],
+  PLATFORM_NAV[10],
 ] as const;
 
-const MOBILE_TABS = [
-  NAV[0],
-  NAV[1],
-  NAV[3],
-  NAV[10],
+const TENANT_MOBILE_TABS = [
+  TENANT_NAV[0],
+  TENANT_NAV[2],
+  TENANT_NAV[3],
+  TENANT_NAV[5],
 ] as const;
 
 function navActive(pathname: string, href: string, exact?: boolean) {
@@ -68,29 +96,31 @@ function navActive(pathname: string, href: string, exact?: boolean) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function pageTitle(pathname: string) {
+function pageTitle(pathname: string, nav: NavItem[]) {
   if (pathname === "/admin") return "Overview";
-  const match = NAV.find(
+  const match = nav.find(
     (item) =>
       item.href !== "/admin" &&
       (pathname === item.href || pathname.startsWith(`${item.href}/`)),
   );
-  return match?.label ?? "Admin HQ";
+  return match?.label ?? "Command Centre";
 }
 
 function NavLinks({
   pathname,
   collapsed,
   onNavigate,
+  nav,
 }: {
   pathname: string;
   collapsed?: boolean;
   onNavigate?: () => void;
+  nav: NavItem[];
 }) {
   return (
     <>
-      {NAV.map((item) => {
-        const exact = "exact" in item && item.exact;
+      {nav.map((item) => {
+        const exact = Boolean(item.exact);
         const active = navActive(pathname, item.href, exact);
         const Icon = item.icon;
         const className = cn(
@@ -137,17 +167,24 @@ function NavLinks({
 
 export function AdminShell({
   email,
+  mode = "platform",
+  brandDisplayName,
+  brandLogoUrl = null,
+  brandPrimaryColor = "#0F6B4C",
+  platformProductName = PLATFORM_PRODUCT_NAME,
   deskSlot = null,
   deskSlotCompact = null,
   mobileDeskSlot = null,
   children,
 }: {
   email: string;
-  /** Desktop sidebar desk picker (may be a Suspense boundary). */
+  mode?: "platform" | "tenant";
+  brandDisplayName: string;
+  brandLogoUrl?: string | null;
+  brandPrimaryColor?: string;
+  platformProductName?: string;
   deskSlot?: React.ReactNode;
-  /** Collapsed sidebar variant. */
   deskSlotCompact?: React.ReactNode;
-  /** Mobile drawer desk picker (separate Suspense — request-cached). */
   mobileDeskSlot?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -155,12 +192,23 @@ export function AdminShell({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [hidePublicSiteLinks, setHidePublicSiteLinks] = useState(false);
-  const title = pageTitle(pathname);
-  const moreActive = NAV.filter(
-    (item) =>
-      !MOBILE_TABS.some((tab) => tab.href === item.href) &&
-      item.href !== "/admin",
-  ).some((item) => navActive(pathname, item.href));
+  const nav = mode === "tenant" ? TENANT_NAV : PLATFORM_NAV;
+  const mobileTabs =
+    mode === "tenant" ? TENANT_MOBILE_TABS : PLATFORM_MOBILE_TABS;
+  const title = pageTitle(pathname, nav);
+  const hqLabel =
+    mode === "tenant" ? `${brandDisplayName} Command Centre` : "Admin HQ";
+  const controlCenterLabel =
+    mode === "tenant"
+      ? `${brandDisplayName} Command Centre`
+      : `${platformProductName} control center`;
+  const moreActive = nav
+    .filter(
+      (item) =>
+        !mobileTabs.some((tab) => tab.href === item.href) &&
+        item.href !== "/admin",
+    )
+    .some((item) => navActive(pathname, item.href));
 
   useEffect(() => {
     setMobileOpen(false);
@@ -183,10 +231,18 @@ export function AdminShell({
     onClose: () => setMobileOpen(false),
   });
 
+  const brandMark = (
+    <BrandLogoMark
+      displayName={brandDisplayName}
+      logoUrl={brandLogoUrl}
+      primaryColor={brandPrimaryColor}
+      size="sm"
+    />
+  );
+
   return (
     <div className="min-h-dvh bg-[linear-gradient(165deg,rgb(238_243_240)_0%,rgb(255_255_255)_45%,rgb(244_247_245)_100%)]">
       <div className="mx-auto flex min-h-dvh max-w-[1600px]">
-        {/* Desktop sidebar */}
         <aside
           className={cn(
             "sticky top-0 z-40 hidden h-dvh shrink-0 flex-col border-r border-line/80 bg-surface/95 backdrop-blur-md transition-[width] duration-200 lg:flex",
@@ -196,20 +252,29 @@ export function AdminShell({
           <div className="flex items-center justify-between gap-2 border-b border-line/70 px-3 py-4">
             {!collapsed ? (
               <div className="min-w-0">
-                <Link href="/admin" className="font-display text-xl text-ink">
-                  {SITE_NAME}
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-2 font-display text-xl text-ink"
+                >
+                  {brandMark}
+                  <span className="truncate">{brandDisplayName}</span>
                 </Link>
                 <p className="truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-canopy">
-                  Admin HQ
+                  {mode === "tenant" ? "Command Centre" : "Admin HQ"}
                 </p>
+                {mode === "tenant" ? (
+                  <p className="mt-1 truncate text-[10px] text-ink/40">
+                    {platformProductName}
+                  </p>
+                ) : null}
               </div>
             ) : (
               <Link
                 href="/admin"
-                className="mx-auto flex size-9 items-center justify-center rounded-xl bg-canopy/12 font-display text-lg text-canopy"
-                aria-label="Admin HQ"
+                className="mx-auto"
+                aria-label={hqLabel}
               >
-                H
+                {brandMark}
               </Link>
             )}
             <button
@@ -226,7 +291,7 @@ export function AdminShell({
             </button>
           </div>
 
-          {deskSlot || deskSlotCompact ? (
+          {mode === "platform" && (deskSlot || deskSlotCompact) ? (
             <div
               className={cn(
                 "border-b border-line/70",
@@ -241,7 +306,11 @@ export function AdminShell({
           ) : null}
 
           <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
-            <NavLinks pathname={pathname} collapsed={collapsed} />
+            <NavLinks
+              pathname={pathname}
+              collapsed={collapsed}
+              nav={nav}
+            />
           </nav>
 
           <div className="border-t border-line/70 p-3">
@@ -252,7 +321,6 @@ export function AdminShell({
           </div>
         </aside>
 
-        {/* Mobile drawer */}
         <div
           className={cn(
             "fixed inset-0 z-[70] lg:hidden",
@@ -278,15 +346,18 @@ export function AdminShell({
             <div className="flex items-center gap-2 border-b border-line/70 px-4 py-4">
               <Link
                 href="/admin"
-                className="min-w-0 flex-1"
+                className="flex min-w-0 flex-1 items-center gap-2"
                 onClick={() => setMobileOpen(false)}
               >
-                <p className="truncate font-display text-xl text-ink">
-                  {SITE_NAME}
-                </p>
-                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-canopy">
-                  Admin HQ
-                </p>
+                {brandMark}
+                <div className="min-w-0">
+                  <p className="truncate font-display text-xl text-ink">
+                    {brandDisplayName}
+                  </p>
+                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-canopy">
+                    {mode === "tenant" ? "Command Centre" : "Admin HQ"}
+                  </p>
+                </div>
               </Link>
               <button
                 type="button"
@@ -298,7 +369,7 @@ export function AdminShell({
               </button>
             </div>
 
-            {mobileDeskSlot ? (
+            {mode === "platform" && mobileDeskSlot ? (
               <div className="border-b border-line/70 px-3 py-3">
                 {mobileDeskSlot}
               </div>
@@ -308,11 +379,17 @@ export function AdminShell({
               <NavLinks
                 pathname={pathname}
                 onNavigate={() => setMobileOpen(false)}
+                nav={nav}
               />
             </nav>
 
             <div className="border-t border-line/70 p-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
               <p className="mb-2 truncate text-xs text-ink/45">{email}</p>
+              {mode === "tenant" ? (
+                <p className="mb-3 text-[10px] text-ink/40">
+                  Powered by {platformProductName}
+                </p>
+              ) : null}
               <div className="flex flex-col gap-2">
                 {!hidePublicSiteLinks ? (
                   <StaffHardLink
@@ -330,7 +407,6 @@ export function AdminShell({
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Mobile top bar */}
           <header className="sticky top-0 z-50 flex items-center gap-2 border-b border-line/80 bg-surface/95 px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur-md lg:hidden">
             <button
               type="button"
@@ -345,7 +421,7 @@ export function AdminShell({
                 {title}
               </p>
               <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-canopy">
-                Admin HQ
+                {mode === "tenant" ? brandDisplayName : "Admin HQ"}
               </p>
             </div>
             <StaffHardLink
@@ -356,15 +432,16 @@ export function AdminShell({
             </StaffHardLink>
           </header>
 
-          {/* Desktop top bar */}
           <header className="sticky top-0 z-20 hidden border-b border-line/70 bg-surface/80 px-4 py-3 backdrop-blur-md sm:px-6 lg:block">
-              <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/40">
-                  Houzzat control center
+                  {controlCenterLabel}
                 </p>
                 <p className="truncate text-sm text-ink/60">
-                  People · visitors · growth · operations
+                  {mode === "tenant"
+                    ? "Leads · tasks · team · CRM"
+                    : "People · visitors · growth · operations"}
                 </p>
               </div>
               {!hidePublicSiteLinks ? (
@@ -379,19 +456,16 @@ export function AdminShell({
           </header>
 
           <main className="min-w-0 flex-1 overflow-x-hidden px-3 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-5 lg:px-8 lg:pb-8">
-            <StaffPullToRefresh>
-              {children}
-            </StaffPullToRefresh>
+            <StaffPullToRefresh>{children}</StaffPullToRefresh>
           </main>
 
-          {/* Mobile bottom tabs */}
           <nav
             className="fixed inset-x-0 bottom-0 z-50 border-t border-line/80 bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
             aria-label="Primary"
           >
             <div className="grid grid-cols-5">
-              {MOBILE_TABS.map((item) => {
-                const exact = "exact" in item && item.exact;
+              {mobileTabs.map((item) => {
+                const exact = Boolean(item.exact);
                 const active = navActive(pathname, item.href, exact);
                 const Icon = item.icon;
                 const shortLabel =

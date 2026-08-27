@@ -71,6 +71,16 @@ if [[ "$RESOLVED_ID" != "$EXPECT_ID" ]]; then
 fi
 
 echo "→ Capacitor target: $ASSERT_TARGET (appId=$EXPECT_ID, HOUZZAT_CAP_TARGET=$HOUZZAT_CAP_TARGET)"
+if [[ "$ASSERT_TARGET" == "pro" ]]; then
+  RESOLVED_SERVER_URL="$(
+    HOUZZAT_CAP_TARGET="$HOUZZAT_CAP_TARGET" node --import tsx -e \
+      'import mod from "./capacitor.config.ts"; const c = mod?.default ?? mod; process.stdout.write(String(c.server?.url ?? ""));'
+  )"
+  echo "→ resolved pro server.url: $RESOLVED_SERVER_URL"
+  if [[ -n "${HOUZZAT_CAP_PRO_SERVER_URL:-}" ]]; then
+    echo "→ HOUZZAT_CAP_PRO_SERVER_URL=$HOUZZAT_CAP_PRO_SERVER_URL"
+  fi
+fi
 
 CMD="${1:-}"
 npx --yes cap "$@"

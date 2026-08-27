@@ -2,6 +2,13 @@ import type { OrgMembershipRole, Prisma, Role, WorkspaceMemberRole, WorkspaceMem
 import { cache } from "react";
 import { auth } from "@/lib/auth";
 import { ensureBrokerageOrganization } from "@/lib/agent/brokerage";
+import {
+  assertAssigneeEligibleForWorkspace,
+  isWorkspacePublicLeadScope,
+  PublicLeadRoutingError,
+  resolveOrganizationForWorkspaceLeadDesk,
+  resolveTrustedPublicLeadWorkspaceId,
+} from "@/lib/workspace-lead-desk";
 import { userQualifiesForLegacyBrokerageOrgSeat } from "@/lib/agent/brokerage-seat-sync";
 import {
   canAccessLead as canAccessLeadScoped,
@@ -11,6 +18,8 @@ import {
 } from "@/lib/crm-read-scope";
 import { isAdminRole, isAgentRole } from "@/lib/constants";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
+import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
+import { tryTenantStaffContext } from "@/lib/tenancy/tenant-staff-context";
 import { resolveWorkspaceStaffContext } from "@/lib/workspace-context";
 import { readActiveWorkspaceIdFromCookies } from "@/lib/active-workspace";
 
@@ -155,9 +164,128 @@ function healAgentSeatFlags(userId: string): Promise<unknown> {
   })();
 }
 
+async function resolveLegacyOrgMembership(
+  user: AgentUser,
+  brokerageId: string,
+): Promise<{ role: OrgMembershipRole }> {
+  const isPlatformAdmin = isAdminRole(user.role);
+  const membershipRole: OrgMembershipRole = isPlatformAdmin ? "OWNER" : "AGENT";
+
+  const existing = await prisma.organizationMembership.findUnique({
+    where: {
+      organizationId_userId: {
+        organizationId: brokerageId,
+        userId: user.id,
+      },
+    },
+    select: { role: true },
+  });
+
+  let membership = existing;
+  const qualifiesForOrgSeat = await userQualifiesForLegacyBrokerageOrgSeat(
+    user.id,
+  );
+  if (!existing && qualifiesForOrgSeat) {
+    membership = await prisma.organizationMembership.create({
+      data: {
+        organizationId: brokerageId,
+        userId: user.id,
+        role: membershipRole,
+      },
+      select: { role: true },
+    });
+  } else if (!existing) {
+    membership = { role: membershipRole };
+  } else if (
+    qualifiesForOrgSeat &&
+    isPlatformAdmin &&
+    existing.role !== "OWNER"
+  ) {
+    membership = await prisma.organizationMembership.update({
+      where: {
+        organizationId_userId: {
+          organizationId: brokerageId,
+          userId: user.id,
+        },
+      },
+      data: { role: "OWNER" },
+      select: { role: true },
+    });
+  }
+
+  return { role: membership?.role ?? membershipRole };
+}
+
+async function buildHostnameBoundAgentContext(
+  user: AgentUser,
+  request: Request,
+): Promise<AgentOrgContext | null> {
+  const tenant = await tryTenantStaffContext(request, user);
+  if (!tenant) return null;
+
+  const brokerage = await ensureBrokerageOrganization();
+  const orgMembership = await resolveLegacyOrgMembership(user, brokerage.id);
+
+  const workspaceRow = await prisma.workspace.findUnique({
+    where: { id: tenant.workspaceId },
+    select: { name: true, status: true },
+  });
+  if (!workspaceRow || workspaceRow.status !== "ACTIVE") {
+    return null;
+  }
+
+  scheduleWorkerSideEffect(
+    healAgentSeatFlags(user.id).catch((error) => {
+      console.error("[agent] seat heal failed", error);
+    }),
+  );
+
+  return {
+    user,
+    organizationId: brokerage.id,
+    organizationName: brokerage.name,
+    organizationIds: [brokerage.id],
+    membershipRole: orgMembership.role,
+    canSeeTeamLeads: tenant.canSeeTeamLeads,
+    isPlatformAdmin: false,
+    workspaceId: tenant.workspaceId,
+    workspaceRole: tenant.workspaceRole,
+    workspaceMemberStatus: "ACTIVE",
+    workspaceStatus: workspaceRow.status,
+    workspaceName: workspaceRow.name,
+    isWorkspaceMember: true,
+    isWorkspaceCrmAllowed: true,
+    hasAmbiguousWorkspaceMembership: false,
+    hasMultipleWorkspaces: false,
+    requiresWorkspaceSelection: false,
+    canManageWorkspace: tenant.canManageWorkspace,
+    readScope: "workspace",
+  };
+}
+
+/**
+ * CRM context for an explicit Request (API routes).
+ * Workspace read mode: hostname-bound tenant staff context only.
+ */
+export async function requireAgentContextForRequest(
+  request: Request,
+): Promise<AgentOrgContext | null> {
+  const user = await requireAgentUser();
+  if (!user) return null;
+
+  if (parseCrmReadScope() === "workspace") {
+    return buildHostnameBoundAgentContext(user, request);
+  }
+
+  return requireAgentContext();
+}
+
+/** Alias for API route handlers. */
+export const requireAgentContextFromRequest = requireAgentContextForRequest;
+
 /**
  * CRM context: one brokerage team. Admin = Team Leader; agents are members.
- * Personal “My team” orgs are not used for the desk.
+ * Workspace read mode: hostname is authoritative — cookie/org/ADMIN never override.
  * Cached per RSC request so layout + page share one auth/org round-trip.
  */
 export const requireAgentContext = cache(
@@ -165,68 +293,32 @@ export const requireAgentContext = cache(
     const user = await requireAgentUser();
     if (!user) return null;
 
+    const readScope = parseCrmReadScope();
+
+    if (readScope === "workspace") {
+      const request = await buildSyntheticRequestFromHeaders();
+      if (!request) return null;
+      return buildHostnameBoundAgentContext(user, request);
+    }
+
     const isPlatformAdmin = isAdminRole(user.role);
     const brokerage = await ensureBrokerageOrganization();
-
-    const membershipRole: OrgMembershipRole = isPlatformAdmin
-      ? "OWNER"
-      : "AGENT";
-
-    const existing = await prisma.organizationMembership.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId: brokerage.id,
-          userId: user.id,
-        },
-      },
-      select: { role: true },
-    });
-
-    let membership = existing;
-    const qualifiesForOrgSeat = await userQualifiesForLegacyBrokerageOrgSeat(
-      user.id,
+    const orgMembership = await resolveLegacyOrgMembership(
+      user,
+      brokerage.id,
     );
-    if (!existing && qualifiesForOrgSeat) {
-      membership = await prisma.organizationMembership.create({
-        data: {
-          organizationId: brokerage.id,
-          userId: user.id,
-          role: membershipRole,
-        },
-        select: { role: true },
-      });
-    } else if (!existing) {
-      membership = { role: membershipRole };
-    } else if (
-      qualifiesForOrgSeat &&
-      isPlatformAdmin &&
-      existing.role !== "OWNER"
-    ) {
-      membership = await prisma.organizationMembership.update({
-        where: {
-          organizationId_userId: {
-            organizationId: brokerage.id,
-            userId: user.id,
-          },
-        },
-        data: { role: "OWNER" },
-        select: { role: true },
-      });
-    }
 
     const canSeeTeamLeads =
       isPlatformAdmin ||
-      membership?.role === "OWNER" ||
-      membership?.role === "ADMIN";
+      orgMembership.role === "OWNER" ||
+      orgMembership.role === "ADMIN";
 
     const activeWorkspaceId = await readActiveWorkspaceIdFromCookies();
     const workspace = await resolveWorkspaceStaffContext(
       user.id,
       activeWorkspaceId,
     );
-    const readScope = parseCrmReadScope();
 
-    // Seat flag healing is not required to authorize the response.
     if (!isPlatformAdmin) {
       scheduleWorkerSideEffect(
         healAgentSeatFlags(user.id).catch((error) => {
@@ -240,7 +332,7 @@ export const requireAgentContext = cache(
       organizationId: brokerage.id,
       organizationName: brokerage.name,
       organizationIds: [brokerage.id],
-      membershipRole: membership?.role ?? membershipRole,
+      membershipRole: orgMembership.role,
       canSeeTeamLeads,
       isPlatformAdmin,
       workspaceId: workspace.workspaceId,
@@ -323,10 +415,31 @@ export async function resolveDefaultOrganizationId(): Promise<string | null> {
  * Org backfill for stray leads runs in ensureBrokerageOrganization side effects —
  * do not updateMany on every public lead POST (Worker hot path).
  */
-export async function resolvePublicLeadDesk(): Promise<{
+export async function resolvePublicLeadDesk(
+  request?: Request | null,
+): Promise<{
   assignedAgentId: null;
   organizationId: string | null;
+  workspaceId?: string | null;
 }> {
+  if (isWorkspacePublicLeadScope() && request) {
+    const workspaceId = await resolveTrustedPublicLeadWorkspaceId(request);
+    if (!workspaceId) {
+      throw new PublicLeadRoutingError(
+        "workspace_not_resolved",
+        "Public lead desk requires a verified tenant hostname",
+      );
+    }
+    const organizationId = await resolveOrganizationForWorkspaceLeadDesk(
+      workspaceId,
+    );
+    return {
+      assignedAgentId: null,
+      organizationId,
+      workspaceId,
+    };
+  }
+
   const organizationId = await resolveDefaultOrganizationId();
   return {
     assignedAgentId: null,
@@ -334,10 +447,17 @@ export async function resolvePublicLeadDesk(): Promise<{
   };
 }
 
-/** Resolve org for a new lead from assignee — always the brokerage desk. */
+/** Resolve org for a new lead from assignee — workspace-aware when lead scope is workspace. */
 export async function resolveOrganizationIdForAssignee(
-  _assigneeId: string | null | undefined,
+  assigneeId: string | null | undefined,
+  workspaceId?: string | null,
 ): Promise<string | null> {
+  if (isWorkspacePublicLeadScope() && workspaceId) {
+    if (assigneeId) {
+      await assertAssigneeEligibleForWorkspace(workspaceId, assigneeId);
+    }
+    return resolveOrganizationForWorkspaceLeadDesk(workspaceId);
+  }
   return resolveDefaultOrganizationId();
 }
 

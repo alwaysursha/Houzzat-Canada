@@ -100,7 +100,31 @@ case "$ARTIFACT" in
 esac
 
 echo "→ syncing Capacitor ($ASSERT) before Android release build"
+if [[ "$ASSERT" == "pro" && -n "${HOUZZAT_CAP_PRO_SERVER_URL:-}" ]]; then
+  echo "→ HOUZZAT_CAP_PRO_SERVER_URL=$HOUZZAT_CAP_PRO_SERVER_URL"
+fi
 bash "$ROOT/scripts/cap-target.sh" "$ASSERT" sync
+
+if [[ "$ASSERT" == "pro" ]]; then
+  PRO_CAP_CONFIG="$DIR/app/src/main/assets/capacitor.config.json"
+  if [[ -f "$PRO_CAP_CONFIG" ]]; then
+    EMBEDDED_URL="$(
+      python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("server",{}).get("url",""))' \
+        "$PRO_CAP_CONFIG"
+    )"
+    echo "→ embedded pro server.url: $EMBEDDED_URL"
+    if [[ -n "${HOUZZAT_CAP_PRO_SERVER_URL:-}" && "$EMBEDDED_URL" != "$HOUZZAT_CAP_PRO_SERVER_URL" ]]; then
+      echo "ERROR: embedded server.url='$EMBEDDED_URL' != HOUZZAT_CAP_PRO_SERVER_URL='$HOUZZAT_CAP_PRO_SERVER_URL'" >&2
+      echo "ERROR: cap sync did not embed the requested cold-start origin — aborting release build." >&2
+      exit 1
+    fi
+    if [[ -z "${HOUZZAT_CAP_PRO_SERVER_URL:-}" && "$EMBEDDED_URL" != "https://houzzatpro.com/pro" ]]; then
+      echo "ERROR: production pro release requires server.url=https://houzzatpro.com/pro (got '$EMBEDDED_URL')" >&2
+      echo "ERROR: set HOUZZAT_CAP_PRO_SERVER_URL only for explicit dev/QA overrides." >&2
+      exit 1
+    fi
+  fi
+fi
 
 GRADLE_TASKS=()
 if [[ "$ARTIFACT" == "aab" || "$ARTIFACT" == "both" ]]; then

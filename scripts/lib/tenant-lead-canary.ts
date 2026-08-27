@@ -266,6 +266,126 @@ export async function resolveTrustedCanaryBContext(
   };
 }
 
+/**
+ * Stage 3K.5.8E.2 — OWNER_B password activation context only.
+ * Does not validate AGENT_B routing weights or Houzzat default routing pollution.
+ */
+export async function resolveTrustedCanaryBOwnerActivationContext(
+  prisma: PrismaClient,
+): Promise<CanaryBContext> {
+  const [workspace, houzzat, compatOrg] = await Promise.all([
+    prisma.workspace.findUnique({
+      where: { slug: CANARY_SLUG },
+      select: {
+        id: true,
+        slug: true,
+        status: true,
+        primaryAgentId: true,
+      },
+    }),
+    prisma.workspace.findUnique({
+      where: { slug: HOUZZAT_WORKSPACE_SLUG },
+      select: { id: true },
+    }),
+    prisma.organization.findUnique({
+      where: { slug: LEGACY_CRM_ORGANIZATION_SLUG },
+      select: { id: true, slug: true },
+    }),
+  ]);
+
+  if (!houzzat) {
+    throw new Error(`Houzzat workspace slug "${HOUZZAT_WORKSPACE_SLUG}" not found`);
+  }
+  if (!workspace) {
+    throw new Error(`Workspace B slug "${CANARY_SLUG}" not found`);
+  }
+  if (workspace.id === houzzat.id) {
+    throw new Error("DRIFT_STOP: tenant-canary workspace id equals Houzzat id");
+  }
+  if (workspace.status !== "ACTIVE") {
+    throw new Error(`Workspace B status=${workspace.status} (expected ACTIVE)`);
+  }
+  if (!compatOrg) {
+    throw new Error(
+      `Compatibility org "${LEGACY_CRM_ORGANIZATION_SLUG}" not found`,
+    );
+  }
+
+  const members = await prisma.workspaceMember.findMany({
+    where: { workspaceId: workspace.id, status: "ACTIVE" },
+    select: {
+      role: true,
+      userId: true,
+      user: {
+        select: {
+          email: true,
+          role: true,
+          password: true,
+          disabledAt: true,
+        },
+      },
+    },
+  });
+
+  const owner = members.find((m) => m.role === "OWNER");
+  const agent = members.find((m) => m.role === "AGENT");
+  if (!owner) {
+    throw new Error("DRIFT_STOP: Workspace B missing ACTIVE OWNER member");
+  }
+  if (!agent) {
+    throw new Error("DRIFT_STOP: Workspace B missing ACTIVE AGENT member");
+  }
+  if (owner.user.disabledAt) {
+    throw new Error("DRIFT_STOP: OWNER_B account is disabled");
+  }
+  if (owner.user.role !== "ADMIN") {
+    throw new Error("DRIFT_STOP: OWNER_B platform role must be ADMIN");
+  }
+  if (owner.user.password) {
+    throw new Error("DRIFT_STOP: OWNER_B password already set");
+  }
+
+  const houzzatOwnerMember = await prisma.workspaceMember.findFirst({
+    where: {
+      workspaceId: houzzat.id,
+      userId: owner.userId,
+      status: "ACTIVE",
+    },
+    select: { id: true },
+  });
+  if (houzzatOwnerMember) {
+    throw new Error("DRIFT_STOP: OWNER_B has ACTIVE Houzzat WorkspaceMember");
+  }
+
+  return {
+    workspaceId: workspace.id,
+    workspaceSlug: workspace.slug,
+    houzzatWorkspaceId: houzzat.id,
+    compatOrgId: compatOrg.id,
+    compatOrgSlug: compatOrg.slug,
+    agentBId: agent.userId,
+    agentBPrefix: prefix(agent.userId)!,
+    ownerBId: owner.userId,
+    ownerBPrefix: prefix(owner.userId),
+    primaryAgentId: workspace.primaryAgentId ?? agent.userId,
+    routingSettingsId: CANARY_ROUTING_SETTINGS_ID,
+    buyerTotal: 0,
+    sellerTotal: 0,
+  };
+}
+
+/** Activation CLI — full Tenant B context for agent; narrowed context for owner. */
+export async function resolveActivationCanaryContext(
+  prisma: PrismaClient,
+  userTarget: "agent" | "owner",
+  agentEmail?: string | null,
+): Promise<CanaryBContext> {
+  if (userTarget === "owner") {
+    return resolveTrustedCanaryBOwnerActivationContext(prisma);
+  }
+  return resolveTrustedCanaryBContext(prisma, agentEmail);
+}
+
 async function findExistingCanaryLead(
   prisma: PrismaClient,
   workspaceId: string,

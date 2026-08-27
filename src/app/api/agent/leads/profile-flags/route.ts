@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canAccessLead, requireAgentContext } from "@/lib/agent";
+import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { PURCHASE_TIMEFRAMES } from "@/lib/agent/timeframe";
 import { prisma } from "@/lib/prisma";
 
@@ -25,7 +25,7 @@ const schema = z
   );
 
 export async function POST(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

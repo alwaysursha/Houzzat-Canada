@@ -5,13 +5,15 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
-import { resolvePublicLeadDesk } from "@/lib/agent";
+import {
+  publicLeadNotificationCopy,
+  publicLeadRoutingErrorResponse,
+  resolvePublicLeadRoutingContext,
+} from "@/lib/agent/public-lead-api";
 import {
   createCallNewLeadTask,
-  resolveLeadDeskAssignment,
   resolveLeadIntent,
 } from "@/lib/agent/lead-intake";
-import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
 import { estimateHomeValue } from "@/lib/market/home-value-estimate";
 import { sendNotification } from "@/lib/notifications";
@@ -19,7 +21,6 @@ import {
   notifyNewLeadCapturedToStaff,
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
-import { resolveLeadDeskNotifiers } from "@/lib/workspace-notification-recipients";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { VOW_VERSION } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
@@ -326,21 +327,24 @@ export async function POST(request: Request) {
       accountCreated = ensured.accountCreated;
     }
 
-    const desk = await resolvePublicLeadDesk();
     const intent = resolveLeadIntent({
       isBuyer: data.intent !== "sell",
       isSeller: data.intent === "sell",
     });
-    // Home valuation / sell-a-home → seller desk when selling intent.
     const routedIntent =
       data.intent === "sell" || isQuick ? ("SELLER" as const) : intent;
-    const routed = await resolveLeadDeskAssignment(routedIntent);
-    const organizationId = routed.organizationId ?? desk.organizationId;
-    const assignedAgentId = routed.assigneeId;
-    const deskNotifiers = await resolveLeadDeskNotifiers({
+    const routing = await resolvePublicLeadRoutingContext(request, routedIntent);
+    const {
       organizationId,
-      workspaceId: routed.workspaceId,
-    });
+      assignedAgentId,
+      brand,
+      deskNotifiers,
+      ownership,
+    } = routing;
+    const notify = publicLeadNotificationCopy(
+      brand,
+      isQuick ? "homepage sell estimate" : "valuation",
+    );
 
     const utm = pickUtm(data);
     const adCampaignId = await resolveAdCampaignId(utm);
@@ -364,7 +368,8 @@ export async function POST(request: Request) {
         score: data.intent === "sell" ? 72 : data.intent === "buy" ? 40 : 45,
         customerId,
         assignedAgentId,
-        ...(await resolveLeadCrmOwnership(organizationId)),
+        organizationId: ownership.organizationId ?? organizationId ?? undefined,
+        workspaceId: ownership.workspaceId,
         contactConsentAt: new Date(),
         statusChangedAt: new Date(),
         ...utmLeadFields(utm, adCampaignId),
@@ -442,7 +447,7 @@ export async function POST(request: Request) {
     notifyNewLeadCapturedToStaff({
       leadId: lead.id,
       label: data.address,
-      title: "Valuation lead",
+      title: notify.pushTitle,
       assigneeId: assignedAgentId,
       deskUserIds,
     });
@@ -450,9 +455,7 @@ export async function POST(request: Request) {
     scheduleNewLeadStaffEmail({
       leadId: lead.id,
       source: "valuation",
-      subject: isQuick
-        ? "New homepage sell estimate lead"
-        : "New valuation lead",
+      subject: notify.emailSubject,
       detailLines: [
         `Address: ${data.address}`,
         `Contact: ${contactName}`,
@@ -466,7 +469,7 @@ export async function POST(request: Request) {
         email: row.user.email,
         phone: row.user.phone,
       })),
-      smsText: `Houzzat valuation lead: ${data.address}`,
+      smsText: `${notify.smsPrefix}: ${data.address}`,
     });
 
     if (assignedAgentId && organizationId) {
@@ -491,6 +494,8 @@ export async function POST(request: Request) {
       estimate: estimatePayload(estimate),
     });
   } catch (error) {
+    const routingError = publicLeadRoutingErrorResponse(error);
+    if (routingError) return routingError;
     console.error("[valuation]", error);
     return NextResponse.json(
       { error: "Could not submit valuation." },

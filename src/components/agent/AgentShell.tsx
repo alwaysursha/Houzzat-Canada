@@ -10,8 +10,9 @@ import {
   StaffHardLink,
   isStaffCrossLayoutHref,
 } from "@/components/site/StaffHardLink";
+import { BrandLogoMark } from "@/components/tenancy/BrandLogoMark";
+import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import { setNativeStatusBarLightOverlay } from "@/lib/mobile/native-status-bar";
-import { SITE_NAME } from "@/lib/constants";
 import {
   STAFF_OVERLAY_PRIORITY,
   useStaffOverlay,
@@ -86,14 +87,14 @@ function NavLinks({
         const className = cn(
           "relative flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-[13px] font-medium transition",
           active
-            ? "bg-[#2b6cb0] text-white"
+            ? "bg-canopy text-white"
             : "text-white/70 hover:bg-white/8 hover:text-white",
           collapsed && "justify-center px-2",
         );
         const body = (
           <>
             {active ? (
-              <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-[#7dd3fc]" />
+              <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-white/80" />
             ) : null}
             <Icon className="size-4 shrink-0" strokeWidth={1.85} />
             {!collapsed ? <span>{label}</span> : null}
@@ -132,11 +133,21 @@ export function AgentShell({
   email,
   orgName,
   membershipRole,
+  brandDisplayName,
+  brandLogoUrl = null,
+  brandPrimaryColor = "#0F6B4C",
+  platformProductName = PLATFORM_PRODUCT_NAME,
+  showCommandCentreLink = false,
   children,
 }: {
   email: string;
   orgName: string;
   membershipRole: string;
+  brandDisplayName: string;
+  brandLogoUrl?: string | null;
+  brandPrimaryColor?: string;
+  platformProductName?: string;
+  showCommandCentreLink?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -174,8 +185,17 @@ export function AgentShell({
     onClose: () => setActivityOpen(false),
   });
 
+  const brandMark = (
+    <BrandLogoMark
+      displayName={brandDisplayName}
+      logoUrl={brandLogoUrl}
+      primaryColor={brandPrimaryColor}
+      size="sm"
+    />
+  );
+
   return (
-    <div className="flex min-h-dvh bg-[#eef1f4] text-ink">
+    <div className="flex min-h-dvh bg-mist text-ink">
       {/* Desktop sidebar */}
       <aside
         className={cn(
@@ -185,21 +205,27 @@ export function AgentShell({
       >
         <div className="flex items-center gap-2 border-b border-white/10 px-3 py-4">
           {!collapsed ? (
-            <Link href="/agent" className="min-w-0 flex-1">
-              <p className="truncate font-display text-lg tracking-tight text-white">
-                {SITE_NAME}
-              </p>
-              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
-                {orgName}
-              </p>
+            <Link href="/agent" className="flex min-w-0 flex-1 items-center gap-2">
+              {brandMark}
+              <div className="min-w-0">
+                <p className="truncate font-display text-lg tracking-tight text-white">
+                  {brandDisplayName}
+                </p>
+                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
+                  {orgName}
+                </p>
+                <p className="truncate text-[10px] text-white/35">
+                  {platformProductName}
+                </p>
+              </div>
             </Link>
           ) : (
             <Link
               href="/agent"
-              className="mx-auto flex size-9 items-center justify-center rounded-md bg-canopy font-display text-sm text-white"
-              aria-label={SITE_NAME}
+              className="mx-auto"
+              aria-label={brandDisplayName}
             >
-              H
+              {brandMark}
             </Link>
           )}
           <button
@@ -218,6 +244,14 @@ export function AgentShell({
 
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
           <NavLinks pathname={pathname} collapsed={collapsed} />
+          {showCommandCentreLink && !collapsed ? (
+            <StaffHardLink
+              href="/admin"
+              className="mt-2 flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-[13px] font-medium text-white/70 transition hover:bg-white/8 hover:text-white"
+            >
+              Command Centre
+            </StaffHardLink>
+          ) : null}
         </nav>
 
         <div className="border-t border-white/10 p-3">
@@ -256,15 +290,18 @@ export function AgentShell({
           <div className="flex items-center gap-2 border-b border-white/10 px-4 py-4">
             <Link
               href="/agent"
-              className="min-w-0 flex-1"
+              className="flex min-w-0 flex-1 items-center gap-2"
               onClick={() => setMobileOpen(false)}
             >
-              <p className="truncate font-display text-lg tracking-tight text-white">
-                {SITE_NAME}
-              </p>
-              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
-                {orgName}
-              </p>
+              {brandMark}
+              <div className="min-w-0">
+                <p className="truncate font-display text-lg tracking-tight text-white">
+                  {brandDisplayName}
+                </p>
+                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
+                  {orgName}
+                </p>
+              </div>
             </Link>
             <button
               type="button"
@@ -281,10 +318,22 @@ export function AgentShell({
               onNavigate={() => setMobileOpen(false)}
               compactLabels
             />
+            {showCommandCentreLink ? (
+              <StaffHardLink
+                href="/admin"
+                onClick={() => setMobileOpen(false)}
+                className="mt-2 flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-[13px] font-medium text-white/70 transition hover:bg-white/8 hover:text-white"
+              >
+                Command Centre
+              </StaffHardLink>
+            ) : null}
           </nav>
           <div className="border-t border-white/10 p-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
             <p className="mb-2 truncate text-[11px] text-white/45">
               {membershipRole} · {email}
+            </p>
+            <p className="mb-2 text-[10px] text-white/35">
+              Powered by {platformProductName}
             </p>
             <SignOutButton className="text-xs text-white/70 hover:text-white" />
           </div>
@@ -312,7 +361,7 @@ export function AgentShell({
           </button>
           <div className="min-w-0 flex-1">
             <p className="truncate font-display text-base tracking-tight">
-              {SITE_NAME}
+              {brandDisplayName}
             </p>
             <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-white/45">
               {orgName}
@@ -324,7 +373,7 @@ export function AgentShell({
           />
           <Link
             href="/agent/leads?view=mine&pipeline=NEW_LEAD"
-            className="inline-flex min-h-10 items-center rounded-lg bg-[#e11d48] px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm active:scale-[0.98]"
+            className="inline-flex min-h-10 items-center rounded-lg bg-rose-600 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm active:scale-[0.98]"
           >
             Call new
           </Link>
@@ -347,7 +396,7 @@ export function AgentShell({
 
         {/* Mobile bottom tabs */}
         <nav
-          className="fixed inset-x-0 bottom-0 z-50 border-t border-[#d8dee6] bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-50 border-t border-line/80 bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
           aria-label="Primary"
         >
           <div className="grid grid-cols-5">
@@ -361,13 +410,13 @@ export function AgentShell({
                   href={item.href}
                   className={cn(
                     "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition",
-                    active ? "text-[#2b6cb0]" : "text-[#64748b]",
+                    active ? "text-canopy" : "text-ink/45",
                   )}
                 >
                   <span
                     className={cn(
                       "flex size-8 items-center justify-center rounded-xl transition",
-                      active ? "bg-[#2b6cb0]/12" : "bg-transparent",
+                      active ? "bg-canopy/12" : "bg-transparent",
                     )}
                   >
                     <Icon className="size-[18px]" strokeWidth={active ? 2.2 : 1.85} />
@@ -381,13 +430,13 @@ export function AgentShell({
               onClick={() => setMobileOpen(true)}
               className={cn(
                 "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition",
-                moreActive || mobileOpen ? "text-[#2b6cb0]" : "text-[#64748b]",
+                moreActive || mobileOpen ? "text-canopy" : "text-ink/45",
               )}
             >
               <span
                 className={cn(
                   "flex size-8 items-center justify-center rounded-xl transition",
-                  moreActive || mobileOpen ? "bg-[#2b6cb0]/12" : "bg-transparent",
+                  moreActive || mobileOpen ? "bg-canopy/12" : "bg-transparent",
                 )}
               >
                 <Menu className="size-[18px]" strokeWidth={moreActive ? 2.2 : 1.85} />

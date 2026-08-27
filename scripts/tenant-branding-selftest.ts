@@ -112,13 +112,12 @@ function testSafeDto() {
   assert.equal(pub.displayName, "Houzzat");
 }
 
-function testNoSiteRenderingWiringYet() {
-  const layout = read("src/app/layout.tsx");
-  assert.ok(layout.includes("SITE_NAME") || layout.includes("buildRootMetadata"));
-  assert.ok(!layout.includes("resolveWorkspaceBrand"));
+function testMarketingLayoutWiring() {
+  const layout = read("src/app/(marketing)/layout.tsx");
+  assert.ok(layout.includes("generateMetadata"));
+  assert.ok(layout.includes("resolveMarketingTenancy"));
   const footer = read("src/components/site/SiteFooter.tsx");
-  assert.ok(footer.includes("SITE_NAME"));
-  assert.ok(!footer.includes("resolveWorkspaceBrand"));
+  assert.ok(footer.includes("isHouzzatWorkspace"));
 }
 
 async function main() {
@@ -129,7 +128,7 @@ async function main() {
   testColors();
   testReservedDomains();
   testSafeDto();
-  testNoSiteRenderingWiringYet();
+  testMarketingLayoutWiring();
   console.log("tenant-branding:selftest ok");
 }
 

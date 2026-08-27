@@ -9,9 +9,11 @@ import {
   signActiveWorkspaceId,
 } from "@/lib/active-workspace";
 import { SITE_URL } from "@/lib/constants";
+import { isWorkspaceReadMode } from "@/lib/crm-read-scope";
 import { resolveOpenLeadHandoff } from "@/lib/open-lead-handoff";
 import { prisma } from "@/lib/prisma";
 import { isAgentRole } from "@/lib/roles";
+import { tryTenantStaffContext } from "@/lib/tenancy/tenant-staff-context";
 
 function deskRedirect(leadId: string) {
   return NextResponse.redirect(
@@ -29,7 +31,10 @@ function withWorkspaceCookie(response: NextResponse, workspaceId: string) {
   return response;
 }
 
-async function requireAgentUserId(): Promise<string | null> {
+async function requireAgentUserId(): Promise<{
+  id: string;
+  role: string;
+} | null> {
   const session = await auth();
   if (!session?.user?.id) return null;
   const user = await prisma.user.findUnique({
@@ -37,7 +42,7 @@ async function requireAgentUserId(): Promise<string | null> {
     select: { id: true, role: true, disabledAt: true },
   });
   if (!user || user.disabledAt || !isAgentRole(user.role)) return null;
-  return user.id;
+  return user;
 }
 
 /**
@@ -45,11 +50,11 @@ async function requireAgentUserId(): Promise<string | null> {
  * Rejects true cross-workspace switches — those require POST after confirm UI.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ leadId: string }> },
 ) {
-  const userId = await requireAgentUserId();
-  if (!userId) {
+  const user = await requireAgentUserId();
+  if (!user) {
     const { leadId } = await context.params;
     const signIn = new URL("/pro/sign-in", SITE_URL);
     signIn.searchParams.set(
@@ -62,12 +67,19 @@ export async function GET(
   const { leadId } = await context.params;
   const cookieWorkspaceId = await readActiveWorkspaceIdFromCookies();
   const handoff = await resolveOpenLeadHandoff({
-    userId,
+    userId: user.id,
     leadId,
     cookieWorkspaceId,
   });
   if (!handoff.ok) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (isWorkspaceReadMode()) {
+    const tenant = await tryTenantStaffContext(request, user);
+    if (!tenant || tenant.workspaceId !== handoff.workspaceId) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
   }
 
   if (handoff.needsConfirm) {
@@ -97,20 +109,27 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   }
 
-  const userId = await requireAgentUserId();
-  if (!userId) {
+  const user = await requireAgentUserId();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { leadId } = await context.params;
   const cookieWorkspaceId = await readActiveWorkspaceIdFromCookies();
   const handoff = await resolveOpenLeadHandoff({
-    userId,
+    userId: user.id,
     leadId,
     cookieWorkspaceId,
   });
   if (!handoff.ok) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (isWorkspaceReadMode()) {
+    const tenant = await tryTenantStaffContext(request, user);
+    if (!tenant || tenant.workspaceId !== handoff.workspaceId) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
   }
 
   return withWorkspaceCookie(deskRedirect(handoff.leadId), handoff.workspaceId);

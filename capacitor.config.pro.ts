@@ -1,7 +1,13 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 /**
- * HouzzatPro staff shell — same houzzat.com backend as the consumer app.
+ * HouzzatPRO staff shell.
+ *
+ * Stage 3K.5.9.1 — allowNavigation includes HouzzatPRO platform tenant hosts
+ * so the WebView can open tenant Command Centres (e.g. tenant-canary).
+ *
+ * Default cold-start is houzzatpro.com (neutral platform bootstrap).
+ * Dev/QA may override with HOUZZAT_CAP_PRO_SERVER_URL (e.g. tenant-canary).
  *
  * Selected when `HOUZZAT_CAP_TARGET=pro` (see capacitor.config.ts +
  * scripts/cap-target.sh). Never activated by a bare `npx cap …`.
@@ -9,18 +15,23 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * Marker must match `nativeUserAgentMarker("com.houzzat.pro")` in
  * src/lib/mobile/app-shell.ts.
  */
+const proServerUrl =
+  process.env.HOUZZAT_CAP_PRO_SERVER_URL?.trim() ||
+  "https://houzzatpro.com/pro";
+
 const config: CapacitorConfig = {
   appId: "com.houzzat.pro",
   appName: "HouzzatPro",
   webDir: "mobile/www",
   appendUserAgent: "HouzzatNative/1 (com.houzzat.pro)",
   server: {
-    // Cold-start into the Pro router; Auth.js + Neon remain shared.
-    url: "https://houzzat.com/pro",
+    url: proServerUrl,
     cleartext: false,
     allowNavigation: [
       "houzzat.com",
       "*.houzzat.com",
+      "houzzatpro.com",
+      "*.houzzatpro.com",
       "accounts.google.com",
       "*.google.com",
       "*.googleapis.com",
@@ -29,14 +40,11 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchAutoHide: true,
-      // Light mint mid-tone (matches Pro splash gradient; distinct from
-      // consumer canopy #1A7B59). Keep lightweight — color only, no animation.
+      // Splash is platform chrome (HouzzatPRO), not tenant branding.
       backgroundColor: "#63D9BD",
       showSpinner: false,
     },
     StatusBar: {
-      // Dark CRM chrome ⇒ light/white status icons. Runtime
-      // CapacitorBootstrap retunes per route (mint sign-in vs navy CRM).
       style: "DARK",
       backgroundColor: "#1e2a38",
     },

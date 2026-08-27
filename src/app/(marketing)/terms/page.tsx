@@ -1,20 +1,26 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalDocument } from "@/components/site/LegalDocument";
-import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
+import { resolveMarketingLegalSiteContext } from "@/lib/tenancy/marketing-legal-context";
 
-export const metadata: Metadata = {
-  title: "Terms of Use",
-  description: `Terms governing use of ${SITE_NAME} websites and mobile apps.`,
-  alternates: { canonical: `${SITE_URL}/terms` },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMarketingPageMetadata({
+    title: "Terms of Use",
+    description: `Terms governing use of our websites and mobile apps.`,
+    path: "/terms",
+  });
+}
 
-export default function TermsPage() {
+export default async function TermsPage() {
+  const { siteName, supportEmail, isHouzzatWorkspace } =
+    await resolveMarketingLegalSiteContext();
+
   return (
     <LegalDocument title="Terms of Use" updated="August 8, 2026">
       <p>
         These Terms of Use (“Terms”) govern your access to and use of{" "}
-        <strong>{SITE_NAME}</strong> websites, mobile applications, and related
+        <strong>{siteName}</strong> websites, mobile applications, and related
         services (the “Services”). By using the Services, creating an account,
         or clicking to accept these Terms, you agree to be bound by them.
       </p>
@@ -23,18 +29,21 @@ export default function TermsPage() {
         our <Link href="/privacy">Privacy Policy</Link>.
       </p>
 
-      <h2>1. About {SITE_NAME}</h2>
+      <h2>1. About {siteName}</h2>
       <p>
-        {SITE_NAME} provides online real estate search, alerts, saved homes,
+        {siteName} provides online real estate search, alerts, saved homes,
         neighbourhood tools, and ways to connect with licensed real estate
-        professionals. Brokerage services are provided through Royal LePage
-        Credit Valley Real Estate and its registrants, subject to applicable
-        real estate law and brokerage policies.
+        professionals.
+        {isHouzzatWorkspace
+          ? " Brokerage services are provided through Royal LePage Credit Valley Real Estate and its registrants, subject to applicable real estate law and brokerage policies."
+          : " Brokerage services are provided through participating licensed professionals, subject to applicable real estate law and brokerage policies."}
       </p>
       <p>
         Contact:{" "}
-        <a href="mailto:notify@houzzat.com">notify@houzzat.com</a> · 647-221-4949
-        · 1-10045 Hurontario St., Brampton, ON L6Z 0E6
+        <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
+        {isHouzzatWorkspace
+          ? " · 647-221-4949 · 1-10045 Hurontario St., Brampton, ON L6Z 0E6"
+          : null}
       </p>
 
       <h2>2. Eligibility and accounts</h2>
@@ -45,7 +54,7 @@ export default function TermsPage() {
           your login credentials secure.
         </li>
         <li>
-          Creating an account may register you as a {SITE_NAME} client for
+          Creating an account may register you as a {siteName} client for
           Virtual Office Website (VOW) access to certain sold/leased and history
           data, as required by board rules.
         </li>
@@ -113,7 +122,7 @@ export default function TermsPage() {
 
       <h2>8. Intellectual property</h2>
       <p>
-        {SITE_NAME} branding, software, and original content are owned by us or
+        {siteName} branding, software, and original content are owned by us or
         our licensors. MLS® trademarks and listing content remain the property of
         their respective owners. You receive a limited, revocable license to use
         the Services for personal real-estate research.
@@ -129,7 +138,7 @@ export default function TermsPage() {
 
       <h2>10. Limitation of liability</h2>
       <p>
-        TO THE MAXIMUM EXTENT PERMITTED BY LAW, {SITE_NAME.toUpperCase()} AND ITS
+        TO THE MAXIMUM EXTENT PERMITTED BY LAW, {siteName.toUpperCase()} AND ITS
         AFFILIATES, BROKERAGE, AGENTS, AND SUPPLIERS WILL NOT BE LIABLE FOR
         INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY
         LOSS OF PROFITS, DATA, OR GOODWILL, ARISING FROM YOUR USE OF THE
@@ -140,7 +149,7 @@ export default function TermsPage() {
 
       <h2>11. Indemnity</h2>
       <p>
-        You agree to indemnify and hold harmless {SITE_NAME}, the brokerage, and
+        You agree to indemnify and hold harmless {siteName}, the brokerage, and
         their personnel from claims arising out of your misuse of the Services,
         your breach of these Terms, or your violation of law or third-party
         rights.
@@ -172,7 +181,7 @@ export default function TermsPage() {
       <h2>15. Contact</h2>
       <p>
         Questions about these Terms:{" "}
-        <a href="mailto:notify@houzzat.com">notify@houzzat.com</a>
+        <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
       </p>
       <p className="text-sm text-ink/50">
         This page is a practical starting template for website and app-store

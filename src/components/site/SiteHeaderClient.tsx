@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -26,7 +26,7 @@ const SITE_NAV = [
 const ACCOUNT_SLOT_CLASS =
   "inline-flex size-10 shrink-0 items-center justify-center rounded-full";
 
-function resolvePortal(role: string | undefined): {
+function resolvePortal(role: string | undefined, accountLabel: string): {
   href: string | null;
   label: string;
 } {
@@ -39,7 +39,7 @@ function resolvePortal(role: string | undefined): {
   if (role === "AGENT") {
     return { href: "/agent", label: "Agent desk" };
   }
-  return { href: "/account", label: "Your Houzzat" };
+  return { href: "/account", label: accountLabel };
 }
 
 /**
@@ -260,7 +260,17 @@ function BuySearchControls({
  * Mobile: buy search is fixed below the header after the hero scrolls away
  * (out of document flow so show/hide cannot thrash scroll on iOS).
  */
-export function SiteHeaderClient({ siteName }: { siteName: string }) {
+export function SiteHeaderClient({
+  siteName,
+  primaryColor = "#1A7B59",
+  accountLabel = "Your Houzzat",
+  brandMark = null,
+}: {
+  siteName: string;
+  primaryColor?: string;
+  accountLabel?: string;
+  brandMark?: ReactNode;
+}) {
   const { status, data } = useSession();
   const pathname = usePathname();
   const visible = useHomeHeroSearchVisible();
@@ -271,8 +281,8 @@ export function SiteHeaderClient({ siteName }: { siteName: string }) {
     if (status !== "authenticated" || !data?.user) {
       return { href: null as string | null, label: "Sign in" };
     }
-    return resolvePortal(data.user.role);
-  }, [status, data?.user]);
+    return resolvePortal(data.user.role, accountLabel);
+  }, [status, data?.user, accountLabel]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -321,15 +331,17 @@ export function SiteHeaderClient({ siteName }: { siteName: string }) {
         {/* Android 15+ edge-to-edge: keep system status icons on a brand bar. */}
         <div
           aria-hidden
-          className="bg-[#1A7B59] [height:env(safe-area-inset-top,0px)]"
+          className="[height:env(safe-area-inset-top,0px)]"
+          style={{ backgroundColor: primaryColor }}
         />
         <div className="border-b border-line/80 bg-mist/95">
         <div className="flex h-16 w-full items-center gap-2 px-4 sm:px-6 lg:px-10">
           <Link
             href="/"
-            className="shrink-0 font-display text-2xl tracking-tight text-ink"
+            className="flex shrink-0 items-center gap-2 font-display text-2xl tracking-tight text-ink"
           >
-            {siteName}
+            {brandMark}
+            <span>{siteName}</span>
           </Link>
 
           {/* Desktop only — search stays inside the header row */}

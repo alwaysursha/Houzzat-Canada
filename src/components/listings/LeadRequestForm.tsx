@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -21,6 +22,7 @@ export function LeadRequestForm({
     message?: string;
   };
 }) {
+  const tenantName = useTenantDisplayName("Houzzat");
   const [name, setName] = useState(defaults?.name ?? "");
   const [email, setEmail] = useState(defaults?.email ?? "");
   const [phone, setPhone] = useState(defaults?.phone ?? "");
@@ -43,7 +45,7 @@ export function LeadRequestForm({
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!contactConsent) {
-      setError("Please confirm you agree to be contacted by a Houzzat agent.");
+      setError(`Please confirm you agree to be contacted by a ${tenantName} agent.`);
       return;
     }
 
@@ -96,7 +98,7 @@ export function LeadRequestForm({
       {isVirtual ? (
         <p className="rounded-lg bg-signal/10 px-3 py-2 text-xs text-ink/70">
           An agent goes to the property and walks you through live on video —
-          Houzzat’s Virtual Viewing.
+          {tenantName}&apos;s Virtual Viewing.
         </p>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -156,7 +158,7 @@ export function LeadRequestForm({
           className="mt-0.5 h-4 w-4 shrink-0 rounded border-line accent-canopy"
         />
         <span>
-          I agree to be contacted by a Houzzat agent about this request by
+          I agree to be contacted by a {tenantName} agent about this request by
           phone, email, or text. I can unsubscribe anytime.
         </span>
       </label>

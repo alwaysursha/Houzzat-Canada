@@ -6,13 +6,21 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
 import type { NearbyPoi } from "@/lib/poi/nearby";
 
-const TYPE_COLOR: Record<string, string> = {
+import { readThemeColor } from "@/lib/tenancy/read-theme-color";
+
+const BASE_TYPE_COLOR: Record<string, string> = {
   SCHOOL: "#1F7A8C",
-  PARK: "#0F6B4C",
   TRANSIT: "#C4891A",
   GROCERY: "#14201C",
   OTHER: "#6B7280",
 };
+
+function poiTypeColor(type: string): string {
+  if (type === "PARK") {
+    return readThemeColor("--canopy", "#0F6B4C");
+  }
+  return BASE_TYPE_COLOR[type] ?? BASE_TYPE_COLOR.OTHER;
+}
 
 /** Listing-centered; slightly closer than city overview so streets/amenities read. */
 const NEARBY_INITIAL_ZOOM = 14;
@@ -80,7 +88,7 @@ export function NearbyMap({
       if (!types.includes(poi.type)) continue;
       const el = document.createElement("div");
       el.className = "h-2.5 w-2.5 rounded-full border border-white shadow";
-      el.style.background = TYPE_COLOR[poi.type] ?? TYPE_COLOR.OTHER;
+      el.style.background = poiTypeColor(poi.type);
       el.title = `${poi.name} · ${poi.distanceKm.toFixed(1)} km`;
       markersRef.current.push(
         new maplibregl.Marker({ element: el })

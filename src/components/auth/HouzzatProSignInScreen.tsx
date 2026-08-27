@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { HouzzatProMark } from "@/components/auth/HouzzatProMark";
 import { HouzzatProSignInForm } from "@/components/auth/HouzzatProSignInForm";
 import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
-import { resolveProPostSignInHref } from "@/lib/auth/pro-sign-in-routing";
 import { hardGo } from "@/lib/mobile/nav-back";
 
 function HouzzatProSignInInner() {
@@ -23,7 +22,7 @@ function HouzzatProSignInInner() {
       if (!session?.user) return;
       const me = await fetch("/api/me", { cache: "no-store" }).catch(() => null);
       if (!me?.ok) return;
-      hardGo(resolveProPostSignInHref(callbackUrl, session.user.role));
+      hardGo("/pro");
     })();
   }, [callbackUrl, router]);
 

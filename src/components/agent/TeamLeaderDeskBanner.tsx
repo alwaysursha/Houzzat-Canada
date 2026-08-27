@@ -13,7 +13,7 @@ export function TeamLeaderDeskBanner({ deskLabel }: { deskLabel: string }) {
         href="/admin"
         className="font-semibold text-[#2b6cb0] underline-offset-2 hover:underline"
       >
-        Change desk in Admin HQ
+        Change desk in Command Centre
       </StaffHardLink>
     </div>
   );

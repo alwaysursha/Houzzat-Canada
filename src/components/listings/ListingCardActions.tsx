@@ -5,7 +5,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { Check, Heart, Link2, Share2 } from "lucide-react";
 import { useSavedListingToggle } from "@/components/account/useSavedListingToggle";
 import { RoutePlannerToggleButton } from "@/components/route-planner/RoutePlannerToggleButton";
-import { SITE_NAME } from "@/lib/constants";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { cn } from "@/lib/utils";
 
 function listingUrl(mlsNumber: string, path?: string) {
@@ -30,6 +30,7 @@ export function ListingCardActions({
   path?: string;
   className?: string;
 }) {
+  const siteName = useTenantDisplayName("Houzzat");
   const { saved, pending, ready, toggle } = useSavedListingToggle({
     mlsNumber,
     authCallbackUrl: path ?? `/listing/${mlsNumber}`,
@@ -85,7 +86,7 @@ export function ListingCardActions({
 
   const url = listingUrl(mlsNumber, path);
   const encoded = encodeURIComponent(url);
-  const encodedTitle = encodeURIComponent(`${title} | ${SITE_NAME}`);
+  const encodedTitle = encodeURIComponent(`${title} | ${siteName}`);
 
   return (
     <div

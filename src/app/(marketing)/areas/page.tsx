@@ -8,14 +8,16 @@ import {
 } from "@/lib/geo/area-seo";
 import { staticOntarioHubCities } from "@/lib/geo/regions";
 import { prisma } from "@/lib/prisma";
-import { publicPageMetadata } from "@/lib/seo";
+import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
 
-export const metadata: Metadata = publicPageMetadata({
-  title: "GTA Homes for Sale by City & Neighbourhood",
-  description:
-    "Browse Greater Toronto Area city and neighbourhood guides with live MLS inventory, market pulse, and local amenities.",
-  path: "/areas",
-});
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMarketingPageMetadata({
+    title: "GTA Homes for Sale by City & Neighbourhood",
+    description:
+      "Browse Greater Toronto Area city and neighbourhood guides with live MLS inventory, market pulse, and local amenities.",
+    path: "/areas",
+  });
+}
 
 export default async function AreasIndexPage() {
   const hubCities = staticOntarioHubCities();

@@ -3,6 +3,7 @@
 import { Lock } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { cn } from "@/lib/utils";
 
 /** HouseSigma-style gate over locked listing media. */
@@ -16,6 +17,7 @@ export function ListingLockedGateOverlay({
   /** Signed-in but past grace / unverified. */
   needsEmailVerification?: boolean;
 }) {
+  const tenantName = useTenantDisplayName("Houzzat");
   return (
     <div
       className={cn(
@@ -52,7 +54,7 @@ export function ListingLockedGateOverlay({
                 Sign in required
               </p>
               <p className="mx-auto max-w-sm text-sm leading-relaxed text-ink/60 sm:text-[15px]">
-                Sign in as a Houzzat client to view sold, leased, and unlisted
+                Sign in as a {tenantName} client to view sold, leased, and unlisted
                 property details.
               </p>
             </div>

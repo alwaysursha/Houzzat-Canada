@@ -1,70 +1,99 @@
-import { PeopleAdminClient } from "@/components/admin/PeopleAdminClient";
+import { redirect } from "next/navigation";
+import { resolveAdminPageSurface } from "@/lib/admin/resolve-admin-page-surface";
+import { loadTenantPeopleSnapshot } from "@/lib/admin/tenant-hq-deferred";
 import { prisma } from "@/lib/prisma";
 
-export const metadata = { title: "People · Admin HQ" };
+export const metadata = { title: "People" };
 
 export default async function AdminPeoplePage() {
-  const [users, agents] = await Promise.all([
-    prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 500,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        isBuyer: true,
-        isSeller: true,
-        disabledAt: true,
-        createdAt: true,
-        _count: { select: { leads: true } },
-        siteVisitors: {
-          orderBy: { lastSeenAt: "desc" },
-          take: 1,
-          select: { lastSeenAt: true },
-        },
-        leads: {
-          orderBy: { updatedAt: "desc" },
-          take: 1,
-          select: {
-            assignedAgentId: true,
-            assignedAgent: { select: { id: true, name: true, email: true } },
-          },
-        },
-      },
-    }),
-    prisma.user.findMany({
-      where: {
-        role: { in: ["AGENT", "ADMIN"] },
-        disabledAt: null,
-      },
-      select: { id: true, name: true, email: true },
-      orderBy: [{ name: "asc" }, { email: "asc" }],
-      take: 100,
-    }),
-  ]);
+  const surface = await resolveAdminPageSurface();
+  if (surface.kind === "deny") redirect("/agent");
 
-  const people = users.map((u) => {
-    const latestLead = u.leads[0];
-    const assigned = latestLead?.assignedAgent ?? null;
-    return {
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      role: u.role,
-      isBuyer: u.isBuyer,
-      isSeller: u.isSeller,
-      disabledAt: u.disabledAt?.toISOString() ?? null,
-      createdAt: u.createdAt.toISOString(),
-      leadCount: u._count.leads,
-      lastSeenAt: u.siteVisitors[0]?.lastSeenAt.toISOString() ?? null,
-      assignedAgentId: latestLead?.assignedAgentId ?? null,
-      assignedAgentLabel: assigned
-        ? assigned.name || assigned.email
-        : u._count.leads > 0
-          ? "Pond (unassigned)"
-          : null,
-    };
+  if (surface.kind === "tenant") {
+    const snap = await loadTenantPeopleSnapshot(surface.auth.workspaceId);
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">
+            People
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-ink/60">
+            ACTIVE WorkspaceMembers and pending invites for{" "}
+            {surface.auth.brand.displayName}. Organization membership is not
+            used.
+          </p>
+        </div>
+
+        <section className="overflow-hidden rounded-2xl border border-line/80 bg-surface/90">
+          <div className="border-b border-line/70 px-4 py-3">
+            <h2 className="text-sm font-semibold text-ink">Team members</h2>
+          </div>
+          <ul className="divide-y divide-line/60">
+            {snap.members.map((m) => (
+              <li
+                key={m.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
+              >
+                <div>
+                  <p className="font-medium text-ink">
+                    {m.name || m.email || m.userId.slice(0, 8)}
+                  </p>
+                  <p className="text-xs text-ink/45">{m.email}</p>
+                </div>
+                <span className="rounded-full bg-canopy/12 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-canopy">
+                  {m.role}
+                </span>
+              </li>
+            ))}
+            {snap.members.length === 0 ? (
+              <li className="px-4 py-6 text-sm text-ink/50">No members.</li>
+            ) : null}
+          </ul>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-line/80 bg-surface/90">
+          <div className="border-b border-line/70 px-4 py-3">
+            <h2 className="text-sm font-semibold text-ink">Pending invites</h2>
+          </div>
+          <ul className="divide-y divide-line/60">
+            {snap.pendingInvites.map((inv) => (
+              <li
+                key={inv.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
+              >
+                <div>
+                  <p className="font-medium text-ink">{inv.email}</p>
+                  <p className="text-xs text-ink/45">
+                    {inv.createdAt.toLocaleString("en-CA")}
+                  </p>
+                </div>
+                <span className="text-[11px] font-bold uppercase tracking-wide text-ink/50">
+                  {inv.role}
+                </span>
+              </li>
+            ))}
+            {snap.pendingInvites.length === 0 ? (
+              <li className="px-4 py-6 text-sm text-ink/50">
+                No pending invites.
+              </li>
+            ) : null}
+          </ul>
+        </section>
+      </div>
+    );
+  }
+
+  // Platform surface — legacy global people directory (HouzzatPRO ops only).
+  const people = await prisma.user.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      createdAt: true,
+    },
   });
 
   return (
@@ -73,12 +102,20 @@ export default async function AdminPeoplePage() {
         <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">
           People
         </h1>
-        <p className="mt-2 text-sm text-ink/60">
-          Buyers, sellers, agents, and admins — roles, lead assignment,
-          suspension, and journeys.
+        <p className="mt-2 max-w-2xl text-sm text-ink/60">
+          HouzzatPRO platform directory (not a tenant CRM roster).
         </p>
       </div>
-      <PeopleAdminClient people={people} agents={agents} />
+      <ul className="divide-y divide-line/60 rounded-2xl border border-line/80 bg-surface/90">
+        {people.map((p) => (
+          <li key={p.id} className="px-4 py-3 text-sm">
+            <p className="font-medium text-ink">{p.name || p.email}</p>
+            <p className="text-xs text-ink/45">
+              {p.role} · {p.email}
+            </p>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

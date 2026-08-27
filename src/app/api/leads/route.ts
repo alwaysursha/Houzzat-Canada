@@ -3,13 +3,15 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
-import { resolvePublicLeadDesk } from "@/lib/agent";
+import {
+  publicLeadNotificationCopy,
+  publicLeadRoutingErrorResponse,
+  resolvePublicLeadRoutingContext,
+} from "@/lib/agent/public-lead-api";
 import {
   createCallNewLeadTask,
-  resolveLeadDeskAssignment,
   resolveLeadIntent,
 } from "@/lib/agent/lead-intake";
-import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import {
   AGENT_CONTACT_CONSENT_KIND,
   AGENT_CONTACT_CONSENT_VERSION,
@@ -18,7 +20,6 @@ import {
   notifyNewLeadCapturedToStaff,
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
-import { resolveLeadDeskNotifiers } from "@/lib/workspace-notification-recipients";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -84,7 +85,6 @@ export async function POST(request: Request) {
     const score =
       data.kind === "virtual_viewing" ? 55 : data.kind === "showing" ? 40 : 25;
 
-    const desk = await resolvePublicLeadDesk();
     let customerFlags = { isBuyer: true, isSeller: false };
     if (session?.user?.id) {
       const customer = await prisma.user.findUnique({
@@ -94,13 +94,16 @@ export async function POST(request: Request) {
       if (customer) customerFlags = customer;
     }
     const intent = resolveLeadIntent(customerFlags);
-    const routed = await resolveLeadDeskAssignment(intent);
-    const organizationId = routed.organizationId ?? desk.organizationId;
-    const assignedAgentId = routed.assigneeId;
-    const deskNotifiers = await resolveLeadDeskNotifiers({
+
+    const routing = await resolvePublicLeadRoutingContext(request, intent);
+    const {
       organizationId,
-      workspaceId: routed.workspaceId,
-    });
+      assignedAgentId,
+      brand,
+      deskNotifiers,
+      ownership,
+    } = routing;
+    const notify = publicLeadNotificationCopy(brand, source.replaceAll("_", " "));
 
     const utm = pickUtm(data);
     const adCampaignId = await resolveAdCampaignId(utm);
@@ -110,7 +113,6 @@ export async function POST(request: Request) {
     const userAgent = request.headers.get("user-agent");
 
     const lead = await prisma.$transaction(async (tx) => {
-      const ownership = await resolveLeadCrmOwnership(organizationId);
       const created = await tx.lead.create({
         data: {
           source,
@@ -215,6 +217,7 @@ export async function POST(request: Request) {
     notifyNewLeadCapturedToStaff({
       leadId: lead.id,
       label: pushLabel,
+      title: notify.pushTitle,
       assigneeId: assignedAgentId,
       deskUserIds,
     });
@@ -222,7 +225,7 @@ export async function POST(request: Request) {
     scheduleNewLeadStaffEmail({
       leadId: lead.id,
       source: "listing_inquiry",
-      subject: `New Houzzat lead: ${source.replaceAll("_", " ")}`,
+      subject: notify.emailSubject,
       detailLines: [
         `Listing: ${listing.addressLine}, ${listing.city} (MLS® ${listing.mlsNumber})`,
         `Contact: ${data.name}`,
@@ -239,9 +242,9 @@ export async function POST(request: Request) {
         email: row.user.email,
         phone: row.user.phone,
       })),
-      smsText: `Houzzat lead: ${listing.addressLine} — ${data.name}. Check agent desk.`,
+      smsText: `${notify.smsPrefix}: ${listing.addressLine} — ${data.name}. Check agent desk.`,
       whatsappText: hotRequest
-        ? `Hot Houzzat lead (${data.kind.replaceAll("_", " ")}): ${listing.addressLine} — ${data.name}.`
+        ? `Hot ${notify.smsPrefix} (${data.kind.replaceAll("_", " ")}): ${listing.addressLine} — ${data.name}.`
         : undefined,
       preferWhatsApp: hotRequest,
     });
@@ -263,6 +266,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, leadId: lead.id });
   } catch (error) {
+    const routingError = publicLeadRoutingErrorResponse(error);
+    if (routingError) return routingError;
     console.error("[leads]", error);
     return NextResponse.json(
       { error: "Could not submit request." },

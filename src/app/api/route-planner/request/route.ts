@@ -2,13 +2,15 @@ import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireFullCustomerUser } from "@/lib/account";
-import { resolvePublicLeadDesk } from "@/lib/agent";
+import {
+  publicLeadNotificationCopy,
+  publicLeadRoutingErrorResponse,
+  resolvePublicLeadRoutingContext,
+} from "@/lib/agent/public-lead-api";
 import {
   createCallNewLeadTask,
-  resolveLeadDeskAssignment,
   resolveLeadIntent,
 } from "@/lib/agent/lead-intake";
-import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import {
   AGENT_CONTACT_CONSENT_KIND,
@@ -18,7 +20,6 @@ import {
   notifyNewLeadCapturedToStaff,
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
-import { resolveLeadDeskNotifiers } from "@/lib/workspace-notification-recipients";
 import { prisma } from "@/lib/prisma";
 import {
   enrichTourStops,
@@ -43,6 +44,7 @@ function formatTime(iso: string | null | undefined) {
 }
 
 export async function POST(request: Request) {
+  try {
   const access = await requireFullCustomerUser();
   if (access.denied) return access.denied;
   const user = access.user;
@@ -107,7 +109,6 @@ export async function POST(request: Request) {
     .filter(Boolean)
     .join("\n");
 
-  const desk = await resolvePublicLeadDesk();
   const customerFlags = await prisma.user.findUnique({
     where: { id: user.id },
     select: { isBuyer: true, isSeller: true },
@@ -116,13 +117,16 @@ export async function POST(request: Request) {
     isBuyer: customerFlags?.isBuyer ?? true,
     isSeller: customerFlags?.isSeller ?? false,
   });
-  const routed = await resolveLeadDeskAssignment(intent);
-  const organizationId = routed.organizationId ?? desk.organizationId;
-  const assignedAgentId = routed.assigneeId;
-  const deskNotifiers = await resolveLeadDeskNotifiers({
+
+  const routing = await resolvePublicLeadRoutingContext(request, intent);
+  const {
     organizationId,
-    workspaceId: routed.workspaceId,
-  });
+    assignedAgentId,
+    brand,
+    deskNotifiers,
+    ownership,
+  } = routing;
+  const notify = publicLeadNotificationCopy(brand, "route planner");
 
   const consentAt = new Date();
   const firstMls = tour.stops[0]!.mlsNumber;
@@ -131,7 +135,6 @@ export async function POST(request: Request) {
   const userAgent = request.headers.get("user-agent");
 
   const { leadId, shareToken } = await prisma.$transaction(async (tx) => {
-    const ownership = await resolveLeadCrmOwnership(organizationId);
     const lead = await tx.lead.create({
       data: {
         source: "SHOWING_REQUEST",
@@ -206,7 +209,7 @@ export async function POST(request: Request) {
   notifyNewLeadCapturedToStaff({
     leadId,
     label: `${tour.stops.length} homes to tour`,
-    title: "Route Planner request",
+    title: notify.pushTitle,
     assigneeId: assignedAgentId,
     deskUserIds,
   });
@@ -214,7 +217,7 @@ export async function POST(request: Request) {
   scheduleNewLeadStaffEmail({
     leadId,
     source: "route_planner",
-    subject: "New route planner lead",
+    subject: notify.emailSubject,
     detailLines: [
       `Tour request: ${tour.stops.length} homes`,
       itineraryText,
@@ -225,7 +228,7 @@ export async function POST(request: Request) {
       email: row.user.email,
       phone: row.user.phone,
     })),
-    smsText: `Houzzat Route Planner: ${tour.stops.length} homes — check agent desk.`,
+    smsText: `${notify.smsPrefix} Route Planner: ${tour.stops.length} homes — check agent desk.`,
     whatsappText: `Route Planner request (${tour.stops.length} homes).`,
     preferWhatsApp: true,
   });
@@ -265,4 +268,9 @@ export async function POST(request: Request) {
     shareToken,
     tour: serializeTour(refreshed, refreshedCards),
   });
+  } catch (error) {
+    const routingError = publicLeadRoutingErrorResponse(error);
+    if (routingError) return routingError;
+    throw error;
+  }
 }

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Link2, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SITE_NAME } from "@/lib/constants";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { cn } from "@/lib/utils";
 
 function listingUrl(mlsNumber: string, path?: string) {
@@ -26,6 +26,7 @@ export function ShareListingButton({
   path?: string;
   className?: string;
 }) {
+  const siteName = useTenantDisplayName("Houzzat");
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -60,7 +61,7 @@ export function ShareListingButton({
 
   const url = listingUrl(mlsNumber, path);
   const encoded = encodeURIComponent(url);
-  const encodedTitle = encodeURIComponent(`${title} | ${SITE_NAME}`);
+  const encodedTitle = encodeURIComponent(`${title} | ${siteName}`);
 
   return (
     <div ref={menuRef} className={cn("relative", className)}>

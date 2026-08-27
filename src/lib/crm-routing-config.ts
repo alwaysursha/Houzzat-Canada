@@ -279,6 +279,25 @@ export async function ensureCrmRoutingSettings() {
 }
 
 /**
+ * Load / sync CrmRoutingSettings for an explicit workspace (tenant Command Centre).
+ * Never falls back to the Houzzat legacy singleton.
+ */
+export async function loadCrmRoutingSettingsForWorkspace(workspaceId: string) {
+  const settings = await prisma.crmRoutingSettings.findFirst({
+    where: { workspaceId },
+    include: settingsInclude,
+  });
+  if (!settings) {
+    return null;
+  }
+  await syncCrmRoutingSettingsForWorkspace(workspaceId);
+  return prisma.crmRoutingSettings.findFirst({
+    where: { workspaceId },
+    include: settingsInclude,
+  });
+}
+
+/**
  * Sync weights for an explicit workspace settings row (provisioning / admin).
  * Never reads platform-wide agents.
  */

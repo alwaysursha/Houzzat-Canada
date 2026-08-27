@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSavedListingToggle } from "@/components/account/useSavedListingToggle";
 import { LazyAddressAutocomplete } from "@/components/listings/LazyAddressAutocomplete";
 import { mlsNumberFromListingHref } from "@/lib/listings/gallery-client";
-import { SITE_NAME } from "@/lib/constants";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { leaveListingSheetThenGo } from "@/lib/listings/navigate-listing";
 import {
   backListingSheet,
@@ -71,6 +71,7 @@ function SheetShareButton({
   title: string;
   path?: string;
 }) {
+  const siteName = useTenantDisplayName();
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -110,7 +111,7 @@ function SheetShareButton({
 
   const url = listingUrl(mlsNumber, path);
   const encoded = encodeURIComponent(url);
-  const encodedTitle = encodeURIComponent(`${title} | ${SITE_NAME}`);
+  const encodedTitle = encodeURIComponent(`${title} | ${siteName}`);
 
   return (
     <div ref={menuRef} className="relative flex-1">
@@ -347,12 +348,13 @@ export function ListingSheetChrome({
   usePanel?: boolean;
   loading?: boolean;
 }) {
+  const tenantDisplayName = useTenantDisplayName();
   const isDesktop = useIsDesktopChrome();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const mlsNumber = href ? mlsNumberFromListingHref(href) : null;
   const callbackPath =
     href?.split("?")[0] ?? (mlsNumber ? `/listing/${mlsNumber}` : "/");
-  const shareTitle = mlsNumber ? `MLS® ${mlsNumber}` : SITE_NAME;
+  const shareTitle = mlsNumber ? `MLS® ${mlsNumber}` : tenantDisplayName;
 
   const closeMobileSearch = useCallback(() => {
     setMobileSearchOpen(false);
@@ -459,7 +461,7 @@ export function ListingSheetChrome({
         aria-hidden={mobileSearchOpen}
       >
         <span className="font-display text-[1.7rem] font-semibold leading-none tracking-tight text-white sm:text-[1.85rem]">
-          {SITE_NAME}
+          {tenantDisplayName}
         </span>
       </div>
 

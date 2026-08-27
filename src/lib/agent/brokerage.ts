@@ -9,6 +9,7 @@ import {
   resolveHouzzatWorkspaceIdForOrgRewrite,
   resolveLegacyBrokerageSeatTargets,
 } from "@/lib/agent/brokerage-seat-sync";
+import { isWorkspaceReadMode } from "@/lib/crm-read-scope";
 import { SITE_NAME } from "@/lib/constants";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 
@@ -178,7 +179,35 @@ export const ensureBrokerageOrganization = cache(
 
 export const listTeamAgents = cache(async function listTeamAgents(
   organizationId: string,
+  workspaceId?: string | null,
 ): Promise<TeamAgentOption[]> {
+  if (isWorkspaceReadMode() && workspaceId) {
+    const members = await prisma.workspaceMember.findMany({
+      where: {
+        workspaceId,
+        status: "ACTIVE",
+        user: {
+          disabledAt: null,
+          role: { in: ["AGENT", "ADMIN"] },
+        },
+      },
+      select: {
+        user: {
+          select: { id: true, name: true, email: true, role: true },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    return members
+      .filter((m) => m.user.role === "AGENT" || m.user.role === "ADMIN")
+      .map((m) => ({
+        id: m.user.id,
+        name: m.user.name,
+        email: m.user.email,
+        role: m.user.role as "AGENT" | "ADMIN",
+      }));
+  }
+
   const members = await prisma.organizationMembership.findMany({
     where: {
       organizationId,
@@ -212,6 +241,7 @@ export const listTeamAgents = cache(async function listTeamAgents(
 const resolveDeskViewCached = cache(
   async (
     organizationId: string,
+    workspaceId: string | null | undefined,
     userId: string,
     canSeeTeamLeads: boolean,
     deskCookie: string | null,
@@ -220,7 +250,7 @@ const resolveDeskViewCached = cache(
     teamAgents: TeamAgentOption[];
     deskLabel: string;
   }> => {
-    const teamAgents = await listTeamAgents(organizationId);
+    const teamAgents = await listTeamAgents(organizationId, workspaceId);
     const fieldAgents = teamAgents.filter((a) => a.role === "AGENT");
 
     if (!canSeeTeamLeads) {
@@ -266,6 +296,7 @@ const resolveDeskViewCached = cache(
 export async function resolveDeskView(ctx: {
   user: { id: string };
   organizationId: string;
+  workspaceId?: string | null;
   canSeeTeamLeads: boolean;
   /** Pass from the layout after reading cookies() — avoids cookies() after Prisma I/O. */
   deskCookie?: string | null;
@@ -282,6 +313,7 @@ export async function resolveDeskView(ctx: {
 
   return resolveDeskViewCached(
     ctx.organizationId,
+    ctx.workspaceId,
     ctx.user.id,
     ctx.canSeeTeamLeads,
     deskCookie,

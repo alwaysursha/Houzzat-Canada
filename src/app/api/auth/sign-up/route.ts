@@ -226,6 +226,7 @@ export async function POST(request: Request) {
             isBuyer: true,
             isSeller: asSeller,
             score: asSeller ? 40 : 20,
+            request,
           });
         } catch (err) {
           console.error("[sign-up] lead capture failed", err);

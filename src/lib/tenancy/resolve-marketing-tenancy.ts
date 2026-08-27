@@ -7,41 +7,59 @@ import { cache } from "react";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/constants";
 import type { WorkspaceBrandPublic } from "@/lib/tenancy/brand-dto";
 import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
+import {
+  toMarketingPresentationBrand,
+  type MarketingPresentationBrand,
+} from "@/lib/tenancy/marketing-presentation-brand";
 import {
   resolveRequestTenancy,
   type RequestTenancySuccess,
 } from "@/lib/tenancy/resolve-request-tenancy";
 import { isTenantDomainScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
 
-export type MarketingChromeBrand = {
-  displayName: string;
-  tagline: string;
-  workspaceSlug: string;
-  workspaceId: string;
-  poweredByHouzzatPro: true;
-};
+export type MarketingChromeBrand = MarketingPresentationBrand;
 
 export function toMarketingChromeBrand(
   tenancy: RequestTenancySuccess,
+  canonicalOrigin: string,
 ): MarketingChromeBrand {
-  return {
-    displayName: tenancy.brand.displayName,
-    tagline: tenancy.brand.tagline || SITE_DESCRIPTION,
-    workspaceSlug: tenancy.workspaceSlug,
-    workspaceId: tenancy.workspaceId,
-    poweredByHouzzatPro: true,
-  };
+  return toMarketingPresentationBrand(tenancy, canonicalOrigin);
 }
 
 export function legacyMarketingChromeBrand(
   brand?: WorkspaceBrandPublic,
+  origin?: string,
 ): MarketingChromeBrand {
+  const displayName = brand?.displayName ?? SITE_NAME;
+  const canonicalOrigin =
+    origin ??
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ??
+    "http://127.0.0.1:3000";
   return {
-    displayName: brand?.displayName ?? SITE_NAME,
+    displayName,
     tagline: brand?.tagline ?? SITE_DESCRIPTION,
     workspaceSlug: "houzzat",
     workspaceId: brand?.workspaceId ?? "legacy",
     poweredByHouzzatPro: true,
+    isHouzzatWorkspace: true,
+    logoUrl: brand?.logoUrl ?? null,
+    brokerageLogoUrl: brand?.brokerageLogoUrl ?? null,
+    faviconUrl: brand?.faviconUrl ?? null,
+    ogImageUrl: brand?.ogImageUrl ?? null,
+    colors: brand?.colors ?? {
+      primary: "#0F6B4C",
+      secondary: "#0A4D38",
+      accent: "#1F7A8C",
+      surface: "#FFFFFF",
+      ink: "#14201C",
+    },
+    contact: brand?.contact ?? { email: null, phone: null },
+    footerLegalText: brand?.footerLegalText ?? null,
+    seoDescription: brand?.seoDescription ?? SITE_DESCRIPTION,
+    version: brand?.version ?? 0,
+    publicOrigin: canonicalOrigin.replace(/\/$/, ""),
+    canonicalOrigin: canonicalOrigin.replace(/\/$/, ""),
   };
 }
 
@@ -75,7 +93,16 @@ export const resolveMarketingTenancy = cache(
 );
 
 export async function resolveMarketingChromeBrand(): Promise<MarketingChromeBrand | null> {
+  return resolveMarketingPresentationBrand();
+}
+
+export async function resolveMarketingPresentationBrand(): Promise<MarketingPresentationBrand | null> {
   const tenancy = await resolveMarketingTenancy();
   if (!tenancy) return null;
-  return toMarketingChromeBrand(tenancy);
+  const canonicalOrigin = await resolveCanonicalPublicOrigin(
+    tenancy.workspaceId,
+    tenancy.hostname,
+    tenancy.origin.startsWith("http://") ? "http:" : "https:",
+  );
+  return toMarketingPresentationBrand(tenancy, canonicalOrigin);
 }

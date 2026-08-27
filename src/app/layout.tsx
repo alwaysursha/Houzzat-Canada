@@ -3,7 +3,6 @@ import localFont from "next/font/local";
 import { Providers } from "@/components/Providers";
 import { getHouzzatAndroidBootScript } from "@/lib/mobile/houzzat-android-boot";
 import { getStaleBuildBootScript } from "@/lib/navigation/stale-build-recovery";
-import { buildRootMetadata } from "@/lib/seo";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -26,7 +25,10 @@ const fraunces = localFont({
   display: "swap",
 });
 
-export const metadata: Metadata = buildRootMetadata();
+/** Minimal root metadata — hostname-aware layouts own tenant/Houzzat titles. */
+export const metadata: Metadata = {
+  title: "Real Estate",
+};
 
 export default function RootLayout({
   children,

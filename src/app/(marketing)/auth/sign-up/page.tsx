@@ -1,7 +1,11 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { AuthRouteBridge } from "@/components/auth/AuthRouteBridge";
+import { buildMarketingAuthPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
 
-export const metadata = { title: "Sign up" };
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMarketingAuthPageMetadata("Sign up");
+}
 
 export default function SignUpPage() {
   return (

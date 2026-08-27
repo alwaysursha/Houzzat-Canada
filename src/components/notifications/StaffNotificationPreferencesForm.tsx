@@ -152,7 +152,7 @@ export function StaffNotificationPreferencesForm({
               <div className="divide-y divide-line/70">
                 <ChannelRow
                   label="Push"
-                  hint="HouzzatPro lock-screen alerts"
+                  hint="HouzzatPRO lock-screen alerts"
                   enabled={item.pushEnabled}
                   pending={pushPending}
                   disabled={Boolean(pending) && !pushPending}

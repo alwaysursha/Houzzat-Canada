@@ -26,7 +26,7 @@ import {
   validateActivationUserTarget,
   type ActivationUserTarget,
 } from "./lib/tenant-activation-canary";
-import { resolveTrustedCanaryBContext } from "./lib/tenant-lead-canary";
+import { resolveActivationCanaryContext } from "./lib/tenant-lead-canary";
 import { verifyScopeGates } from "./lib/tenant-canary-provision";
 
 async function main() {
@@ -82,7 +82,10 @@ async function main() {
       process.exit(2);
     }
 
-    const context = await resolveTrustedCanaryBContext(prisma);
+    const context = await resolveActivationCanaryContext(
+      prisma,
+      resolvedTarget,
+    );
     const { applied, rawTokens } = await executeActivationCanaryApply(
       prisma,
       context,

@@ -1,21 +1,27 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalDocument } from "@/components/site/LegalDocument";
-import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
+import { resolveMarketingLegalSiteContext } from "@/lib/tenancy/marketing-legal-context";
 
-export const metadata: Metadata = {
-  title: "Privacy Policy",
-  description: `How ${SITE_NAME} collects, uses, and protects your personal information.`,
-  alternates: { canonical: `${SITE_URL}/privacy` },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMarketingPageMetadata({
+    title: "Privacy Policy",
+    description: `How we collect, use, and protect your personal information.`,
+    path: "/privacy",
+  });
+}
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const { siteName, siteHost, supportEmail, isHouzzatWorkspace } =
+    await resolveMarketingLegalSiteContext();
+
   return (
     <LegalDocument title="Privacy Policy" updated="August 22, 2026">
       <p>
-        This Privacy Policy explains how <strong>{SITE_NAME}</strong> (“we”,
+        This Privacy Policy explains how <strong>{siteName}</strong> (“we”,
         “us”, “our”) collects, uses, discloses, and protects personal
-        information when you use houzzat.com, our mobile applications
+        information when you use {siteHost}, our mobile applications
         (including HouzzatPro), and related services (the “Services”).
       </p>
       <p>
@@ -27,14 +33,16 @@ export default function PrivacyPage() {
 
       <h2>1. Who we are</h2>
       <p>
-        {SITE_NAME} is a real estate search and client-engagement platform
-        associated with licensed brokerage activity through Royal LePage Credit
-        Valley Real Estate. For privacy questions, contact:
+        {siteName} is a real estate search and client-engagement platform
+        {isHouzzatWorkspace
+          ? " associated with licensed brokerage activity through Royal LePage Credit Valley Real Estate."
+          : " operated in connection with licensed real estate professionals."}{" "}
+        For privacy questions, contact:
       </p>
       <ul>
         <li>
           Email:{" "}
-          <a href="mailto:notify@houzzat.com">notify@houzzat.com</a>
+          <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
         </li>
         <li>Phone: 647-221-4949</li>
         <li>Mail: 1-10045 Hurontario St., Brampton, ON L6Z 0E6</li>
@@ -79,7 +87,7 @@ export default function PrivacyPage() {
       <ul>
         <li>Provide and improve search, alerts, saved homes, and account features</li>
         <li>
-          Register you as a {SITE_NAME} client where required for VOW access to
+          Register you as a {siteName} client where required for VOW access to
           sold/leased prices and listing history
         </li>
         <li>
@@ -182,7 +190,7 @@ export default function PrivacyPage() {
       <p>
         <strong>Staff account deletion.</strong> Staff may request deletion or
         deactivation of their Houzzat account by contacting{" "}
-        <a href="mailto:notify@houzzat.com">notify@houzzat.com</a>.
+        <a href={`mailto:${supportEmail}`}>{supportEmail}</a>.
         Organization-managed access may also be disabled by an authorized
         brokerage administrator. We process deletion or deactivation requests
         subject to applicable legal, security, MLS/board, and record-retention
@@ -212,7 +220,7 @@ export default function PrivacyPage() {
         deletion of your personal information, and you may withdraw consent where
         consent is the basis for processing (without affecting prior lawful
         processing). Contact{" "}
-        <a href="mailto:notify@houzzat.com">notify@houzzat.com</a>. We may need
+        <a href={`mailto:${supportEmail}`}>{supportEmail}</a>. We may need
         to verify your identity before fulfilling a request.
       </p>
 

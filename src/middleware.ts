@@ -18,6 +18,11 @@ import {
 } from "@/lib/roles";
 import { NextResponse, type NextRequest } from "next/server";
 
+function isHouzzatProPlatformRootHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase().split(":")[0] ?? "";
+  return normalized === "houzzatpro.com" || normalized === "www.houzzatpro.com";
+}
+
 function redirectToSignIn(
   request: NextRequest,
   callbackPath: string,
@@ -78,6 +83,15 @@ export default auth((request) => {
   const session = request.auth;
   const shellHint = readShellHint(request);
 
+  if (pathname === "/favicon.ico") {
+    const host = request.headers.get("host")?.split(":")[0] ?? "";
+    if (host && !isHouzzatProPlatformRootHost(host)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/api/tenancy/favicon";
+      return NextResponse.rewrite(url);
+    }
+  }
+
   if (isComingSoonEnabled() && !isComingSoonBypass(pathname)) {
     return redirectToPath(request, "/coming-soon");
   }
@@ -105,7 +119,7 @@ export default auth((request) => {
     return redirectToPath(request, OPEN_HOUZZAT_PRO_PATH);
   }
 
-  // HouzzatPro cold-start: route from /pro using existing session role (no extra DB).
+  // HouzzatPro cold-start: workspace bootstrap handles authenticated routing.
   if (
     shellHint === "houzzatpro" &&
     (pathname === HOUZZATPRO_START_PATH || pathname === `${HOUZZATPRO_START_PATH}/`)
@@ -113,13 +127,7 @@ export default auth((request) => {
     if (!session?.user) {
       return redirectToSignIn(request, HOUZZATPRO_START_PATH, { pro: true });
     }
-    if (session.user.role === "ADMIN") {
-      return redirectToPath(request, "/admin");
-    }
-    if (session.user.role === "AGENT") {
-      return redirectToPath(request, "/agent");
-    }
-    return redirectToPath(request, HOUZZATPRO_STAFF_ONLY_PATH);
+    return NextResponse.next();
   }
 
   if (pathname.startsWith("/admin")) {
@@ -129,16 +137,33 @@ export default auth((request) => {
         pro: shellHint === "houzzatpro",
       });
     }
-    if (!isAdminRole(session.user.role)) {
-      // Pro: staff without admin go to CRM they can use; only unsupported roles
-      // see the staff-only screen. Web keeps the existing /account bounce.
+    // Staff only at middleware. Platform vs tenant Command Centre auth is
+    // enforced in admin layout (hostname + WorkspaceMember OWNER/ADMIN).
+    if (!isAgentRole(session.user.role)) {
       if (shellHint === "houzzatpro") {
-        if (isAgentRole(session.user.role)) {
-          return redirectToPath(request, "/agent");
-        }
         return redirectToPath(request, HOUZZATPRO_STAFF_ONLY_PATH);
       }
       return redirectToPath(request, "/account");
+    }
+
+    // Non-platform hosts: only tenant-safe /admin modules (layout enforces membership).
+    const host =
+      request.headers.get("host")?.split(":")[0]?.trim().toLowerCase() ?? "";
+    const isPlatformRoot =
+      host === "houzzatpro.com" || host === "www.houzzatpro.com";
+    if (host && !isPlatformRoot) {
+      const pathOnly = pathname.split("?")[0] || "/";
+      const tenantAdminAllowed =
+        pathOnly === "/admin" ||
+        pathOnly === "/admin/mls" ||
+        pathOnly === "/admin/lead-routing" ||
+        pathOnly === "/admin/people" ||
+        pathOnly === "/admin/analytics" ||
+        pathOnly === "/admin/notifications" ||
+        pathOnly === "/admin/search";
+      if (!tenantAdminAllowed) {
+        return redirectToPath(request, "/admin");
+      }
     }
   }
 
@@ -202,7 +227,9 @@ export default auth((request) => {
     }
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  response.headers.set("x-houzzat-request-path", pathname);
+  return response;
 });
 
 export const config = {

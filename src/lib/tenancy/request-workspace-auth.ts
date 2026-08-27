@@ -2,7 +2,6 @@
  * Stage 3K.5.2 — hostname ↔ workspace authorization primitives.
  */
 import type { WorkspaceMemberRole } from "@prisma/client";
-import { isAdminRole } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import {
   resolveRequestTenancy,
@@ -10,8 +9,7 @@ import {
   type RequestTenancySuccess,
 } from "@/lib/tenancy/resolve-request-tenancy";
 import type { HostResolutionDenyReason } from "@/lib/tenancy/host-resolution-types";
-import { resolveWorkspaceStaffContext } from "@/lib/workspace-context";
-import { readActiveWorkspaceIdFromCookies } from "@/lib/active-workspace";
+import { requireTenantStaffContext } from "@/lib/tenancy/tenant-staff-context";
 
 export type RequestWorkspaceAuthDenyReason =
   | HostResolutionDenyReason
@@ -57,9 +55,7 @@ export async function requireWorkspaceForRequest(
 
 /**
  * Verify authenticated user may act on the workspace bound to request hostname.
- *
- * Order: hostname → workspace → user → membership/platform authority.
- * Platform ADMIN may access any resolved workspace host (TENANT_ADMIN_HOST_LOCK remains off).
+ * Delegates to requireTenantStaffContext — no platform ADMIN bypass, cookie ignored.
  */
 export async function requireStaffAccessForRequestWorkspace(
   request: Request,
@@ -71,37 +67,14 @@ export async function requireStaffAccessForRequestWorkspace(
   }
 
   const tenancy = await requireWorkspaceForRequest(request, deps);
-  const isPlatformAdmin = isAdminRole(user.role);
-
-  if (isPlatformAdmin) {
-    return {
-      ...tenancy,
-      userId: user.id,
-      isPlatformAdmin: true,
-      workspaceRole: null,
-      canManageWorkspace: true,
-    };
-  }
-
-  const activeWorkspaceId = await readActiveWorkspaceIdFromCookies();
-  const membership = await resolveWorkspaceStaffContext(user.id, activeWorkspaceId);
-
-  if (
-    !membership.isWorkspaceCrmAllowed ||
-    membership.workspaceId !== tenancy.workspaceId
-  ) {
-    throw new RequestWorkspaceAuthError(
-      "workspace_membership_required",
-      "User is not an ACTIVE member of the request workspace",
-    );
-  }
+  const tenant = await requireTenantStaffContext(request, user, deps);
 
   return {
     ...tenancy,
-    userId: user.id,
+    userId: tenant.userId,
     isPlatformAdmin: false,
-    workspaceRole: membership.workspaceRole,
-    canManageWorkspace: membership.canManageWorkspace,
+    workspaceRole: tenant.workspaceRole,
+    canManageWorkspace: tenant.canManageWorkspace,
   };
 }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canAccessLead, requireAgentContext } from "@/lib/agent";
+import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import { renderAgentMessageEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
@@ -22,7 +22,7 @@ const massSchema = z.object({
 const schema = z.union([singleSchema, massSchema]);
 
 export async function POST(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { HouzzatInsights } from "@/components/listings/insights/HouzzatInsights";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import type { ListingInsightsPayload } from "@/lib/market/listing-insights";
 
-function InsightsSkeleton() {
+function InsightsSkeleton({ brandDisplayName }: { brandDisplayName: string }) {
   return (
     <section
       id="listing-insights"
       aria-busy="true"
-      aria-label="Loading Houzzat Insights"
+      aria-label={`Loading ${brandDisplayName} Insights`}
       className="scroll-mt-[calc(var(--site-header-stack,4rem)+3.25rem)] overflow-hidden rounded-[1.75rem] border border-line bg-surface/90 p-4 sm:p-6"
     >
       <div className="h-3 w-28 animate-pulse rounded bg-mist" />
@@ -40,6 +41,7 @@ export function ListingInsightsDeferred({
   callbackPath: string;
   needsEmailVerification?: boolean;
 }) {
+  const brandDisplayName = useTenantDisplayName("Houzzat");
   const [insights, setInsights] = useState<ListingInsightsPayload | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -78,6 +80,7 @@ export function ListingInsightsDeferred({
         insights={insights}
         callbackPath={callbackPath}
         needsEmailVerification={needsEmailVerification}
+        brandDisplayName={brandDisplayName}
       />
     );
   }
@@ -89,7 +92,7 @@ export function ListingInsightsDeferred({
         className="scroll-mt-[calc(var(--site-header-stack,4rem)+3.25rem)] rounded-[1.75rem] border border-line bg-surface/90 p-5 sm:p-6"
       >
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
-          Houzzat Insights
+          {brandDisplayName} Insights
         </p>
         <h2 className="mt-1 font-display text-xl text-ink">
           Market insights unavailable
@@ -103,5 +106,5 @@ export function ListingInsightsDeferred({
     );
   }
 
-  return <InsightsSkeleton />;
+  return <InsightsSkeleton brandDisplayName={brandDisplayName} />;
 }

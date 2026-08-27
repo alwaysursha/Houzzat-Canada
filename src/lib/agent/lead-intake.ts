@@ -4,6 +4,18 @@ import {
   resolveOrganizationIdForAssignee,
 } from "@/lib/agent";
 import {
+  formatNewLeadEmailSubject,
+  formatNewLeadPushTitle,
+  formatSignupLeadDetailLine,
+  formatSignupLeadEmailSubject,
+  resolveLeadNotificationBrandFromRequest,
+} from "@/lib/tenancy/lead-notification-brand";
+import {
+  isWorkspacePublicLeadScope,
+  PublicLeadRoutingError,
+  resolveWorkspaceModeLeadDeskAssignment,
+} from "@/lib/workspace-lead-desk";
+import {
   ensureCrmRoutingSettings,
   listLegacyRoutableAgents,
   listRoutableAgents,
@@ -13,7 +25,7 @@ import {
   resolveChildCrmOwnership,
   resolveLeadCrmOwnership,
 } from "@/lib/crm-ownership";
-import { notifyNewLeadCaptured, scheduleNewLeadStaffEmail } from "@/lib/notifications/staff-events";
+import { notifyNewLeadCapturedToStaff, scheduleNewLeadStaffEmail } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 import {
   resolveDefaultWorkspaceIdForRouting,
@@ -259,16 +271,47 @@ export async function resolveLeadDeskAssignment(
       request,
       deps,
     );
+    if (isWorkspacePublicLeadScope() && !trustedWorkspaceId) {
+      throw new PublicLeadRoutingError(
+        "workspace_not_resolved",
+        "Public lead routing requires a verified tenant hostname",
+      );
+    }
+  } else if (isWorkspacePublicLeadScope()) {
+    throw new PublicLeadRoutingError(
+      "workspace_not_resolved",
+      "Public lead routing requires a trusted request hostname",
+    );
   } else {
     trustedWorkspaceId =
       workspaceId ?? (await resolveDefaultWorkspaceIdForRouting());
   }
 
+  if (isWorkspacePublicLeadScope() && trustedWorkspaceId) {
+    const desk = await resolveWorkspaceModeLeadDeskAssignment({
+      workspaceId: trustedWorkspaceId,
+      intent,
+    });
+    return {
+      assigneeId: desk.assigneeId,
+      organizationId: desk.organizationId,
+      workspaceId: desk.workspaceId,
+      workspaceSlug: desk.workspaceSlug,
+      isHouzzatWorkspace: desk.isHouzzatWorkspace,
+    };
+  }
+
   const assigneeId = await resolveRoutedAssignee(intent, trustedWorkspaceId);
   const organizationId =
-    (await resolveOrganizationIdForAssignee(assigneeId)) ??
+    (await resolveOrganizationIdForAssignee(assigneeId, trustedWorkspaceId)) ??
     (await resolveDefaultOrganizationId());
-  return { assigneeId, organizationId, workspaceId: trustedWorkspaceId };
+  return {
+    assigneeId,
+    organizationId,
+    workspaceId: trustedWorkspaceId,
+    workspaceSlug: trustedWorkspaceId ? "houzzat" : null,
+    isHouzzatWorkspace: true,
+  };
 }
 
 /**
@@ -283,7 +326,22 @@ export async function resolveLeadDeskAssignmentForRequest(
   return resolveLeadDeskAssignment(intent, null, request, deps);
 }
 
+export { PublicLeadRoutingError } from "@/lib/workspace-lead-desk";
+export { httpStatusForPublicLeadRoutingError } from "@/lib/workspace-lead-desk";
 export { detectClientWorkspaceOverride };
+
+export async function resolveLeadCreateOwnership(input: {
+  organizationId: string | null;
+  workspaceId: string | null;
+}) {
+  if (isWorkspacePublicLeadScope() && input.workspaceId) {
+    return {
+      organizationId: input.organizationId ?? undefined,
+      workspaceId: input.workspaceId,
+    };
+  }
+  return resolveLeadCrmOwnership(input.organizationId);
+}
 
 /**
  * Create a signup / simple website lead with routing + 12h call task.
@@ -302,6 +360,8 @@ export async function captureWebsiteLead(input: {
   actorId?: string | null;
   /** Skip auto-routing and use this assignee (null = pond). */
   forceAssigneeId?: string | null;
+  request?: Request | null;
+  deps?: HostResolutionDeps;
 }) {
   const intent =
     input.intent ??
@@ -312,16 +372,58 @@ export async function captureWebsiteLead(input: {
 
   const routed =
     input.forceAssigneeId !== undefined
-      ? {
-          assigneeId: input.forceAssigneeId,
-          organizationId:
-            (await resolveOrganizationIdForAssignee(input.forceAssigneeId)) ??
-            (await resolveDefaultOrganizationId()),
-        }
-      : await resolveLeadDeskAssignment(intent);
+      ? await (async () => {
+          const desk = input.request
+            ? await resolveLeadDeskAssignmentForRequest(
+                input.request,
+                intent,
+                input.deps,
+              )
+            : await resolveLeadDeskAssignment(intent);
+          if (
+            input.forceAssigneeId &&
+            desk.workspaceId &&
+            isWorkspacePublicLeadScope()
+          ) {
+            const organizationId =
+              (await resolveOrganizationIdForAssignee(
+                input.forceAssigneeId,
+                desk.workspaceId,
+              )) ?? desk.organizationId;
+            return {
+              assigneeId: input.forceAssigneeId,
+              organizationId,
+              workspaceId: desk.workspaceId,
+              workspaceSlug: desk.workspaceSlug,
+              isHouzzatWorkspace: desk.isHouzzatWorkspace,
+            };
+          }
+          return {
+            assigneeId: input.forceAssigneeId,
+            organizationId:
+              (await resolveOrganizationIdForAssignee(
+                input.forceAssigneeId,
+                desk.workspaceId,
+              )) ?? desk.organizationId,
+            workspaceId: desk.workspaceId,
+            workspaceSlug: desk.workspaceSlug,
+            isHouzzatWorkspace: desk.isHouzzatWorkspace,
+          };
+        })()
+      : input.request
+        ? await resolveLeadDeskAssignmentForRequest(
+            input.request,
+            intent,
+            input.deps,
+          )
+        : await resolveLeadDeskAssignment(intent);
 
   const { assigneeId, organizationId } = routed;
-  const ownership = await resolveLeadCrmOwnership(organizationId);
+  const ownership = await resolveLeadCreateOwnership({
+    organizationId,
+    workspaceId: routed.workspaceId,
+  });
+  const brand = await resolveLeadNotificationBrandFromRequest(input.request);
 
   const lead = await prisma.lead.create({
     data: {
@@ -367,9 +469,11 @@ export async function captureWebsiteLead(input: {
       input.source === "SIGNUP"
         ? `${contactLabel} · signup`
         : contactLabel;
-    notifyNewLeadCaptured(assigneeId, {
+    notifyNewLeadCapturedToStaff({
       leadId: lead.id,
       label: bodyLabel,
+      title: formatNewLeadPushTitle(brand),
+      assigneeId,
     });
 
     const intentLabel = intent === "SELLER" ? "Seller" : "Buyer";
@@ -382,11 +486,11 @@ export async function captureWebsiteLead(input: {
       source: sourceKind,
       subject:
         input.source === "SIGNUP"
-          ? "New signup lead"
-          : "New Houzzat lead",
+          ? formatSignupLeadEmailSubject(brand)
+          : formatNewLeadEmailSubject(brand, input.source),
       detailLines: [
         input.source === "SIGNUP"
-          ? "A new customer signed up on Houzzat."
+          ? formatSignupLeadDetailLine(brand)
           : `A new lead was captured (${input.source}).`,
         `Contact: ${contactLabel}`,
         input.email ? `Email: ${input.email}` : null,

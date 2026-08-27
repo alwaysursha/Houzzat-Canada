@@ -123,14 +123,14 @@ function EstimatePreviewWindow({
         className="pointer-events-none absolute inset-0"
         style={{
           backgroundImage:
-            "linear-gradient(165deg, #e8f2ee 0%, #f7faf8 42%, #ffffff 100%)",
+            "linear-gradient(165deg, var(--mist) 0%, var(--surface) 42%, #ffffff 100%)",
         }}
       />
       <div
         className="pointer-events-none absolute -right-8 top-0 h-40 w-40 rounded-full opacity-50"
         style={{
           background:
-            "radial-gradient(circle, rgb(15 107 76 / 0.18), transparent 70%)",
+            "radial-gradient(circle, rgb(var(--tenant-primary-rgb) / 0.18), transparent 70%)",
         }}
       />
 
@@ -169,13 +169,13 @@ function EstimatePreviewWindow({
             width="36"
             height="28"
             rx="3"
-            fill="rgb(15 107 76 / 0.12)"
-            stroke="#0f6b4c"
+            fill="rgb(var(--tenant-primary-rgb) / 0.12)"
+            stroke="var(--canopy)"
             strokeWidth="1.5"
           />
           <path
             d="M96 68v-8l10-7 10 7v8h-6v-5h-8v5z"
-            fill="#0f6b4c"
+            fill="var(--canopy)"
             opacity="0.9"
           />
           <circle cx="230" cy="36" r="10" fill="rgb(31 122 140 / 0.15)" />

@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { BrandLogoMark } from "@/components/tenancy/BrandLogoMark";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/constants";
 import type { MarketingChromeBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 import {
+  buildTenantFooterModel,
   HOUZZATPRO_PLATFORM_URL,
   POWERED_BY_HOUZZATPRO_LABEL,
 } from "@/lib/tenancy/platform-footer";
@@ -27,9 +29,7 @@ const LEGAL_LINKS = [
 ] as const;
 
 /**
- * Shared Houzzat site footer.
- * Used by marketing layout and embedded at the end of listing sheet/panel/iframe
- * (full `/listing/...` keeps a single instance via MarketingBelowHeader).
+ * Shared site footer — tenant-aware in workspace branding scope.
  */
 export function SiteFooter({
   className,
@@ -37,14 +37,15 @@ export function SiteFooter({
   chromeBrand,
 }: {
   className?: string;
-  /** Tighter padding when nested inside listing scroll (sheet / panel / iframe). */
   embedded?: boolean;
   chromeBrand?: MarketingChromeBrand;
 }) {
   const siteName = chromeBrand?.displayName ?? SITE_NAME;
   const tagline = chromeBrand?.tagline ?? SITE_DESCRIPTION;
-  const isHouzzatTenant =
-    !chromeBrand || chromeBrand.workspaceSlug === "houzzat";
+  const isHouzzatTenant = chromeBrand?.isHouzzatWorkspace ?? true;
+  const footerModel = chromeBrand
+    ? buildTenantFooterModel(chromeBrand)
+    : null;
 
   return (
     <footer
@@ -63,11 +64,21 @@ export function SiteFooter({
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between lg:gap-12">
           <div className="max-w-md space-y-3">
             <div className="flex items-center gap-2">
-              {/* White PNG mark → canopy via CSS mask (readable on mist footer). */}
-              <span
-                className="block size-7 shrink-0 bg-canopy [mask-image:url(/images/houzzat-house-mark.png)] [mask-position:center] [mask-repeat:no-repeat] [mask-size:contain] [-webkit-mask-image:url(/images/houzzat-house-mark.png)] [-webkit-mask-position:center] [-webkit-mask-repeat:no-repeat] [-webkit-mask-size:contain]"
-                aria-hidden
-              />
+              {chromeBrand ? (
+                <BrandLogoMark
+                  displayName={chromeBrand.displayName}
+                  logoUrl={chromeBrand.logoUrl}
+                  primaryColor={chromeBrand.colors.primary}
+                  size="sm"
+                />
+              ) : (
+                <span
+                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-canopy/15 font-display text-sm font-bold text-canopy"
+                  aria-hidden
+                >
+                  {siteName.charAt(0).toUpperCase()}
+                </span>
+              )}
               <p className="font-display text-2xl font-semibold leading-none tracking-tight text-ink">
                 {siteName}
               </p>
@@ -78,7 +89,12 @@ export function SiteFooter({
                 MLS® listing data via TRREB / PropTx (IDX). Sold prices and history
                 are shown to registered Houzzat clients only (VOW).
               </p>
-            ) : null}
+            ) : (
+              <p className="text-sm leading-relaxed text-ink/55">
+                MLS® listing data via TRREB / PropTx (IDX). Sold prices and history
+                may require client registration (VOW).
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 sm:gap-10 lg:min-w-[28rem]">
@@ -131,7 +147,56 @@ export function SiteFooter({
                 <p>Brampton, ON, L6Z 0E6</p>
               </address>
             </>
-          ) : null}
+          ) : (
+            <>
+              {chromeBrand?.brokerageLogoUrl ? (
+                <div className="inline-flex shrink-0 self-start">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- tenant asset */}
+                  <img
+                    src={chromeBrand.brokerageLogoUrl}
+                    alt=""
+                    width={140}
+                    height={52}
+                    className="block h-9 w-[140px] object-contain object-left"
+                  />
+                </div>
+              ) : null}
+              {footerModel?.tenantLegalText ||
+              chromeBrand?.contact.email ||
+              chromeBrand?.contact.phone ? (
+                <address className="not-italic text-sm leading-relaxed text-ink/70">
+                  {footerModel?.tenantLegalText
+                    ? footerModel.tenantLegalText
+                        .split("\n")
+                        .filter(Boolean)
+                        .map((line) => <p key={line}>{line}</p>)
+                    : null}
+                  {chromeBrand?.contact.phone ? (
+                    <p>
+                      Phone:{" "}
+                      <a
+                        href={`tel:${chromeBrand.contact.phone}`}
+                        className="inline-flex min-h-11 items-center text-ink/80 underline-offset-2 hover:underline"
+                      >
+                        {chromeBrand.contact.phone}
+                      </a>
+                    </p>
+                  ) : null}
+                  {chromeBrand?.contact.email ? (
+                    <p>
+                      Email:{" "}
+                      <a
+                        href={`mailto:${chromeBrand.contact.email}`}
+                        className="inline-flex min-h-11 items-center text-ink/80 underline-offset-2 hover:underline"
+                      >
+                        {chromeBrand.contact.email}
+                      </a>
+                    </p>
+                  ) : null}
+                </address>
+              ) : null}
+            </>
+          )}
         </div>
 
         <p className="mt-8 text-center text-xs text-ink/50 sm:text-left">

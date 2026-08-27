@@ -3,6 +3,7 @@
 import type { MouseEvent } from "react";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { useTenantBrand } from "@/components/tenancy/TenantBrandProvider";
 import { interceptListingSheetExitClick } from "@/lib/listings/navigate-listing";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ export function ListingDetailFooter({
   isListingSheet: boolean;
   className?: string;
 }) {
+  const chromeBrand = useTenantBrand();
   function onNavClickCapture(event: MouseEvent<HTMLElement>) {
     if (!isListingSheet) return;
     const anchor = (event.target as Element | null)?.closest?.("a");
@@ -47,7 +49,9 @@ export function ListingDetailFooter({
       <div className="px-4 sm:px-6 lg:px-10">
         <MlsDisclaimer />
       </div>
-      {isListingSheet ? <SiteFooter embedded /> : null}
+      {isListingSheet ? (
+        <SiteFooter embedded chromeBrand={chromeBrand ?? undefined} />
+      ) : null}
     </div>
   );
 }

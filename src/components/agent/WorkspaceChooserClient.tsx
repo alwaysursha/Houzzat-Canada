@@ -58,7 +58,7 @@ export function WorkspaceChooserClient({
           Choose your workspace
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          You have access to multiple HouzzatPro workspaces. Select one to
+          You have access to multiple HouzzatPRO workspaces. Select one to
           continue.
         </p>
       </div>

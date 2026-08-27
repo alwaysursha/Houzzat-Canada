@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canAccessLead, requireAgentContext } from "@/lib/agent";
+import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { loadBuyerIntent } from "@/lib/agent/buyer-intent";
 import {
   buyerIntentSearchName,
@@ -32,7 +32,7 @@ const createSchema = z.object({
 });
 
 export async function PATCH(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -90,7 +90,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

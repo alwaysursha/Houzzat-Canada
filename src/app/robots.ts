@@ -1,7 +1,11 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/constants";
+import { resolveMarketingCanonicalOrigin } from "@/lib/tenancy/marketing-page-metadata";
 
-export default function robots(): MetadataRoute.Robots {
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const canonicalOrigin = await resolveMarketingCanonicalOrigin();
+  const siteUrl = (canonicalOrigin ?? SITE_URL).replace(/\/$/, "");
+
   return {
     rules: {
       userAgent: "*",
@@ -20,6 +24,6 @@ export default function robots(): MetadataRoute.Robots {
         "/coming-soon",
       ],
     },
-    sitemap: `${SITE_URL}/sitemap.xml`,
+    sitemap: `${siteUrl}/sitemap.xml`,
   };
 }

@@ -15,6 +15,7 @@ import {
   resolveAuthRedirectUrl,
 } from "@/lib/tenancy/auth-origin";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
+import { mobileWorkspaceHandoffProvider } from "@/lib/auth/mobile-handoff-provider";
 import {
   authorizeEmailVerificationToken,
 } from "@/lib/auth/verify-email-provider";
@@ -108,6 +109,7 @@ const providers: Provider[] = [
       };
     },
   }),
+  mobileWorkspaceHandoffProvider,
 ];
 
 function cleanEnv(value: string | undefined): string | undefined {

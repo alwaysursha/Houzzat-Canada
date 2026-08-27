@@ -5,6 +5,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { decodeGooglePolyline } from "@/lib/maps/decode-polyline";
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
+import { readThemeColor } from "@/lib/tenancy/read-theme-color";
 
 type MapPoint = { lat: number; lng: number; label: string };
 
@@ -170,7 +171,7 @@ export function RoutePlannerMap({
           type: "line",
           source: "route-line",
           paint: {
-            "line-color": "#0f6b4c",
+            "line-color": readThemeColor("--canopy", "#0f6b4c"),
             "line-width": 4,
             "line-opacity": 0.85,
           },

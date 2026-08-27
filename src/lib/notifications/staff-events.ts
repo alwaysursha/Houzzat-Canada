@@ -298,11 +298,12 @@ export function notifyNewLeadCapturedToStaff(input: {
 /** Signup / single-assignee convenience — same push as desk fan-out with one id. */
 export function notifyNewLeadCaptured(
   agentId: string | null | undefined,
-  input: { leadId: string; label: string },
+  input: { leadId: string; label: string; title?: string },
 ) {
   notifyNewLeadCapturedToStaff({
     leadId: input.leadId,
     label: input.label,
+    title: input.title,
     assigneeId: agentId,
   });
 }

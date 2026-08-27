@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canAccessLead, requireAgentContext, requireAgentUser } from "@/lib/agent";
+import { canAccessLead, requireAgentContextFromRequest, requireAgentUser } from "@/lib/agent";
 import { SITE_URL } from "@/lib/constants";
 import { sendNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -44,7 +44,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

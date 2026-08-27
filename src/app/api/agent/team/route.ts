@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  requireAgentContext,
+  requireAgentContextFromRequest,
   resolveOrganizationIdForAssignee,
 } from "@/lib/agent";
 import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
@@ -92,8 +92,8 @@ async function sendTeamInviteEmail(input: {
   });
 }
 
-export async function GET() {
-  const ctx = await requireAgentContext();
+export async function GET(request: Request) {
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -164,7 +164,7 @@ export async function GET() {
 }
 
 async function handleWorkspaceTeamPost(
-  ctx: NonNullable<Awaited<ReturnType<typeof requireAgentContext>>>,
+  ctx: NonNullable<Awaited<ReturnType<typeof requireAgentContextFromRequest>>>,
   body: unknown,
 ) {
   if (!ctx.workspaceId) {
@@ -181,7 +181,7 @@ async function handleWorkspaceTeamPost(
       ? (body as { action?: unknown }).action
       : null;
 
-  // Ignore client-supplied workspaceId — authority is active Workspace cookie only.
+  // Ignore client-supplied workspaceId — authority is request hostname workspace only.
   if (
     typeof body === "object" &&
     body !== null &&
@@ -413,7 +413,7 @@ async function handleWorkspaceTeamPost(
 }
 
 export async function POST(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

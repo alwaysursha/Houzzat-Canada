@@ -18,7 +18,7 @@ async function TeamLeaderBannerBody() {
   const deskCookie =
     (await cookies()).get(DESK_AGENT_COOKIE)?.value ?? null;
   const ctx = await requireAgentContext();
-  if (!ctx?.isPlatformAdmin) return null;
+  if (!ctx?.canSeeTeamLeads) return null;
 
   const desk = await resolveDeskView({ ...ctx, deskCookie });
   return <TeamLeaderDeskBanner deskLabel={desk.deskLabel} />;

@@ -8,6 +8,7 @@ import type { PropertyType } from "@prisma/client";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { useLoginAgainLabel } from "@/components/auth/useLoginAgainLabel";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { ListingSection } from "@/components/listings/ListingSection";
 import {
   formatListPrice,
@@ -318,6 +319,7 @@ export function ListingHistoryPanel({
 }) {
   const { openAuth } = useAuthModal();
   const loginAgainLabel = useLoginAgainLabel("Sign in");
+  const tenantName = useTenantDisplayName("Houzzat");
   const [tab, setTab] = useState<Tab>("history");
   const [expanded, setExpanded] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
@@ -447,7 +449,7 @@ export function ListingHistoryPanel({
             >
               {loginAgainLabel}
             </button>{" "}
-            as a Houzzat client to unlock{" "}
+            as a {tenantName} client to unlock{" "}
             {tab === "prices" ? "prices" : "full history"}.
           </>
         )}

@@ -25,13 +25,13 @@ export default async function AgentNotificationsPage() {
           Notifications
         </h1>
         <p className="mt-1 max-w-xl text-sm text-[#64748b]">
-          Choose push and email alerts for your HouzzatPro desk. Push and email
+          Choose push and email alerts for your HouzzatPRO desk. Push and email
           are independent — turning one off does not change the other.
         </p>
       </div>
       <StaffNotificationPreferencesForm
         categories={categories}
-        intro="Push alerts appear on the HouzzatPro app when this device is registered. Email alerts use your staff account email."
+        intro="Push alerts appear on the HouzzatPRO app when this device is registered. Email alerts use your staff account email."
       />
     </div>
   );

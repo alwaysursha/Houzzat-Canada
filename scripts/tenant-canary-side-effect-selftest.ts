@@ -7,21 +7,19 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isActivityBeaconEnabled } from "../src/lib/analytics/activity-beacon-enabled";
+import {
+  assertCanaryLeadCutoverBundle,
+  assertProductionIsolatedFromCanaryLeadCutover,
+  isCanaryLeadCutoverBundleComplete,
+  isUnsafePartialCanaryLeadCutover,
+  parseJsoncVar,
+  configHasKey,
+} from "./lib/canary-lead-cutover-config";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 function read(rel: string) {
   return readFileSync(join(root, rel), "utf8");
-}
-
-function parseJsoncVar(configText: string, key: string): string | null {
-  const re = new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`);
-  const match = configText.match(re);
-  return match ? match[1]! : null;
-}
-
-function configHasKey(configText: string, key: string): boolean {
-  return new RegExp(`"${key}"\\s*:`).test(configText);
 }
 
 function testActivityBeaconGate() {
@@ -65,9 +63,18 @@ function testCanaryAnalyticsDisabledProductionUnchanged() {
   );
 }
 
-function testPublicLeadScopeLegacy() {
+function testPublicLeadScopeWorkspaceCutoverBundle() {
   const canary = read("wrangler.tenant-canary.jsonc");
-  assert.equal(parseJsoncVar(canary, "TENANT_PUBLIC_LEAD_SCOPE"), "legacy");
+  const production = read("wrangler.jsonc");
+  assertCanaryLeadCutoverBundle(canary);
+  assertProductionIsolatedFromCanaryLeadCutover(production);
+
+  const partialLeadOnly = canary.replace(
+    '"WORKSPACE_NOTIFICATION_SCOPE": "workspace",',
+    "",
+  );
+  assert.equal(isUnsafePartialCanaryLeadCutover(partialLeadOnly), true);
+  assert.equal(isCanaryLeadCutoverBundleComplete(partialLeadOnly), false);
 
   const leadIntake = read("src/lib/agent/lead-intake.ts");
   const publicLead = read("src/lib/tenancy/public-lead-workspace.ts");
@@ -176,7 +183,7 @@ function testNoDeployInSelftest() {
 function main() {
   testActivityBeaconGate();
   testCanaryAnalyticsDisabledProductionUnchanged();
-  testPublicLeadScopeLegacy();
+  testPublicLeadScopeWorkspaceCutoverBundle();
   testNoPushEmailFirebaseRequiredInCanaryConfig();
   testNoBrokerageSyncOnAnonymousBrowse();
   testTypesenseReadOnlyOnCanary();

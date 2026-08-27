@@ -123,10 +123,12 @@ export function HouzzatInsights({
   insights,
   callbackPath,
   needsEmailVerification = false,
+  brandDisplayName = "Houzzat",
 }: {
   insights: ListingInsightsPayload;
   callbackPath: string;
   needsEmailVerification?: boolean;
+  brandDisplayName?: string;
 }) {
   const {
     placeLabel,
@@ -168,7 +170,7 @@ export function HouzzatInsights({
           <div className="max-w-2xl">
             <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-canopy">
               <Sparkles className="size-3.5" aria-hidden />
-              Houzzat Insights
+              {brandDisplayName} Insights
             </p>
             <h2
               id="houzzat-insights-heading"
@@ -261,7 +263,7 @@ export function HouzzatInsights({
         {/* Houzzat Estimated Value — above price timeline */}
         <Panel id="listing-estimated-value">
           <PanelTitle
-            eyebrow="Houzzat Estimated Value"
+            eyebrow={`${brandDisplayName} Estimated Value`}
             title="What this home looks worth today"
             hint="Value is just an estimate using AI technology, not an appraisal."
           />
@@ -275,7 +277,7 @@ export function HouzzatInsights({
               body={
                 needsEmailVerification
                   ? "Verify your email to unlock the low–mid–high estimate built from nearby solds and actives."
-                  : "Sign in as a Houzzat client to unlock the low–mid–high estimate built from nearby solds and actives."
+                  : `Sign in as a ${brandDisplayName} client to unlock the low–mid–high estimate built from nearby solds and actives.`
               }
               callbackPath={callbackPath}
               needsEmailVerification={needsEmailVerification}
@@ -499,7 +501,7 @@ export function HouzzatInsights({
               body={
                 needsEmailVerification
                   ? "Verify your email to unlock nearby sold comparable homes."
-                  : "Sign in as a Houzzat client to unlock nearby sold comparable homes."
+                  : `Sign in as a ${brandDisplayName} client to unlock nearby sold comparable homes.`
               }
               callbackPath={callbackPath}
               needsEmailVerification={needsEmailVerification}
@@ -746,7 +748,7 @@ export function HouzzatInsights({
         </div>
 
         <p className="text-center text-[11px] leading-relaxed text-ink/40">
-          Insights use Houzzat’s listing inventory and public map amenities.
+          Insights use {brandDisplayName}&apos;s listing inventory and public map amenities.
           Board rules restrict sold/leased detail to registered clients.
         </p>
       </div>

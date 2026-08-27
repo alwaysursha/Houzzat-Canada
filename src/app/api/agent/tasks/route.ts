@@ -4,7 +4,7 @@ import type { Prisma } from "@prisma/client";
 import {
   canAccessLead,
   markLeadFirstResponse,
-  requireAgentContext,
+  requireAgentContextFromRequest,
 } from "@/lib/agent";
 import { resolveChildCrmOwnership } from "@/lib/crm-ownership";
 import { agentTaskTenantWhere, isWorkspaceReadMode } from "@/lib/crm-read-scope";
@@ -28,7 +28,7 @@ const patchSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -126,7 +126,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -7,6 +7,7 @@ import { Check, ListFilter, Pencil, Trash2, X } from "lucide-react";
 import type { ListingCard } from "@/lib/listings/types";
 import { formatListPrice } from "@/lib/listings/constants";
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
+import { readThemeColor } from "@/lib/tenancy/read-theme-color";
 import { SearchMapPopupCard } from "@/components/listings/SearchMapPopupCard";
 import { cn } from "@/lib/utils";
 
@@ -204,6 +205,7 @@ export function SearchMap({
     );
 
     map.on("load", () => {
+      const brandColor = readThemeColor("--canopy", "#0f6b4c");
       map.addSource(DRAW_SOURCE, {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -213,7 +215,7 @@ export function SearchMap({
         type: "fill",
         source: DRAW_SOURCE,
         paint: {
-          "fill-color": "#0f6b4c",
+          "fill-color": brandColor,
           "fill-opacity": 0.12,
         },
       });
@@ -222,7 +224,7 @@ export function SearchMap({
         type: "line",
         source: DRAW_SOURCE,
         paint: {
-          "line-color": "#0f6b4c",
+          "line-color": brandColor,
           "line-width": 2.5,
         },
       });
@@ -233,7 +235,7 @@ export function SearchMap({
         filter: ["==", "$type", "Point"],
         paint: {
           "circle-radius": 5,
-          "circle-color": "#0f6b4c",
+          "circle-color": brandColor,
           "circle-stroke-width": 2,
           "circle-stroke-color": "#ffffff",
         },

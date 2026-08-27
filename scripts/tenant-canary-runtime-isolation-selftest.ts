@@ -37,9 +37,18 @@ import { workspaceBrandingRowToBrand } from "../src/lib/tenancy/resolve-workspac
 import {
   TENANT_B_TEST_BRANDING_ROW,
   TENANT_B_TEST_DISPLAY_NAME,
+  TENANT_B_TEST_PRIMARY_COLOR,
   TENANT_B_TEST_WORKSPACE_ID,
 } from "../src/lib/tenancy/test-fixtures/tenant-b-brand";
 import { resolveTrustedRequestOrigin } from "../src/lib/tenancy/resolve-trusted-request-origin";
+import {
+  assertCanaryLeadCutoverBundle,
+  assertProductionIsolatedFromCanaryLeadCutover,
+  isCanaryLeadCutoverBundleComplete,
+  isUnsafePartialCanaryLeadCutover,
+  parseJsoncVar,
+  configHasKey,
+} from "./lib/canary-lead-cutover-config";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -105,16 +114,6 @@ function parseJsoncName(configText: string): string {
   return match[1]!;
 }
 
-function parseJsoncVar(configText: string, key: string): string | null {
-  const re = new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`);
-  const match = configText.match(re);
-  return match ? match[1]! : null;
-}
-
-function configHasKey(configText: string, key: string): boolean {
-  return new RegExp(`"${key}"\\s*:`).test(configText);
-}
-
 function testWranglerIsolation() {
   const production = read("wrangler.jsonc");
   const canary = read("wrangler.tenant-canary.jsonc");
@@ -139,11 +138,10 @@ function testWranglerIsolation() {
   );
   assert.equal(parseJsoncVar(canary, "TENANT_DOMAIN_SCOPE"), "workspace");
   assert.equal(parseJsoncVar(canary, "TENANT_BRANDING_SCOPE"), "workspace");
-  assert.equal(parseJsoncVar(canary, "TENANT_PUBLIC_LEAD_SCOPE"), "legacy");
+  assertCanaryLeadCutoverBundle(canary);
   assert.equal(parseJsoncVar(canary, "TENANT_ADMIN_HOST_LOCK"), "off");
 
-  assert.ok(!configHasKey(production, "TENANT_DOMAIN_SCOPE"));
-  assert.ok(!configHasKey(production, "TENANT_BRANDING_SCOPE"));
+  assertProductionIsolatedFromCanaryLeadCutover(production);
 }
 
 function testWorkerSelfBinding() {
@@ -236,9 +234,21 @@ function testAuthConfigIsolation() {
   assert.ok(!configHasKey(canary, "AUTH_URL"));
 }
 
-function testPublicLeadScopeLegacyOnCanary() {
+function testCanaryLeadCutoverAtomicBundle() {
   const canary = read("wrangler.tenant-canary.jsonc");
-  assert.equal(parseJsoncVar(canary, "TENANT_PUBLIC_LEAD_SCOPE"), "legacy");
+  assertCanaryLeadCutoverBundle(canary);
+  assert.equal(isCanaryLeadCutoverBundleComplete(canary), true);
+
+  const partialLeadOnly = canary
+    .replace('"WORKSPACE_ROUTING_SCOPE": "workspace",', "")
+    .replace('"WORKSPACE_NOTIFICATION_SCOPE": "workspace",', "");
+  assert.equal(
+    isUnsafePartialCanaryLeadCutover(partialLeadOnly),
+    true,
+    "lead-only flip must be detected as unsafe partial cutover",
+  );
+  assert.equal(isCanaryLeadCutoverBundleComplete(partialLeadOnly), false);
+
   const leadIntake = read("src/lib/agent/lead-intake.ts");
   assert.ok(leadIntake.includes("resolvePublicLeadWorkspaceIdFromRequest"));
 }
@@ -359,9 +369,14 @@ function testMarketingChromeMapping() {
     brand: workspaceBrandingRowToBrand(WS_B, TENANT_B_TEST_BRANDING_ROW),
     resolutionMode: "workspace" as const,
   };
-  const chrome = toMarketingChromeBrand(tenancy);
+  const chrome = toMarketingChromeBrand(
+    tenancy,
+    "https://tenant-canary.houzzatpro.com",
+  );
   assert.equal(chrome.displayName, TENANT_B_TEST_DISPLAY_NAME);
   assert.equal(chrome.workspaceSlug, "tenant-canary");
+  assert.equal(chrome.isHouzzatWorkspace, false);
+  assert.equal(chrome.colors.primary, TENANT_B_TEST_PRIMARY_COLOR);
 }
 
 function testNoDeployInSelftest() {
@@ -378,7 +393,7 @@ async function main() {
   testStaffMutationRoutesMigrated();
   testStaffOriginCrossHost();
   testAuthConfigIsolation();
-  testPublicLeadScopeLegacyOnCanary();
+  testCanaryLeadCutoverAtomicBundle();
   testRunbooksExist();
   testTrustedOriginRejection();
   testMarketingChromeMapping();

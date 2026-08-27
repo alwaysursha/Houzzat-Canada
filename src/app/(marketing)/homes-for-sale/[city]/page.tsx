@@ -7,7 +7,7 @@ import {
 } from "@/lib/geo/area-seo";
 import { getMarketPulse } from "@/lib/market/pulse";
 import { prisma } from "@/lib/prisma";
-import { publicPageMetadata } from "@/lib/seo";
+import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
 
 type Params = { params: Promise<{ city: string }> };
 
@@ -33,7 +33,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     amenityCounts: {},
   });
 
-  return publicPageMetadata({
+  return buildMarketingPageMetadata({
     title: copy.h1,
     description: copy.metaDescription,
     path: place.path,

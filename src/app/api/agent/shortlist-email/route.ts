@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canAccessLead, requireAgentContext } from "@/lib/agent";
+import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import { sendPushToUser } from "@/lib/notifications/push";
@@ -36,7 +36,7 @@ function encodeSharePayload(input: {
 }
 
 export async function POST(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

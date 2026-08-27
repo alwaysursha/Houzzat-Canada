@@ -1,4 +1,10 @@
+/** Houzzat = the Houzzat real-estate tenant/brand (consumer marketplace). */
 export const SITE_NAME = "Houzzat";
+/**
+ * HouzzatPRO = the SaaS platform/product (staff CRM / Command Centre chrome).
+ * Do not use for WorkspaceBranding.displayName or Houzzat tenant identity.
+ */
+export const PLATFORM_PRODUCT_NAME = "HouzzatPRO";
 export const SITE_DESCRIPTION =
   "Search GTA homes, open houses, and neighbourhood insights — then connect with a local agent when you’re ready.";
 export const SITE_URL =

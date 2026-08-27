@@ -13,7 +13,12 @@ import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
 import { auth } from "@/lib/auth";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { needsEmailVerification } from "@/lib/account-access";
-import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import {
+  resolveMarketingTenancy,
+} from "@/lib/tenancy/resolve-marketing-tenancy";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
+import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
+import { buildTenantPublicPageMetadata } from "@/lib/tenancy/tenant-seo";
 import {
   homesForSaleCityPath,
   homesForSaleCommunityPath,
@@ -75,7 +80,18 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const title = listingPageTitle(listing);
   const description = listing.description.slice(0, 160);
   const canonicalPath = listingPath(listing);
-  const url = `${SITE_URL}${canonicalPath}`;
+  const tenancy = await resolveMarketingTenancy();
+  if (!tenancy) {
+    return { title: { absolute: title }, description };
+  }
+  const canonicalOrigin = await resolveCanonicalPublicOrigin(
+    tenancy.workspaceId,
+    tenancy.hostname,
+    tenancy.origin.startsWith("http://") ? "http:" : "https:",
+  );
+  const url =
+    absoluteUrlForOrigin(canonicalOrigin, canonicalPath) ??
+    absoluteUrlForOrigin(tenancy.origin, canonicalPath);
   const images = cover?.url
     ? [
         {
@@ -87,23 +103,24 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       ]
     : [];
 
-  return {
-    title: { absolute: title },
+  const pageMeta = buildTenantPublicPageMetadata({
+    tenancy,
+    canonicalOrigin,
+    title,
     description,
-    alternates: { canonical: url },
+    path: canonicalPath,
+  });
+
+  return {
+    ...pageMeta,
+    title: { absolute: title },
     openGraph: {
-      title,
-      description,
-      url,
-      siteName: SITE_NAME,
-      type: "website",
-      locale: "en_CA",
+      ...pageMeta.openGraph,
+      url: url ?? undefined,
       images,
     },
     twitter: {
-      card: "summary_large_image",
-      title,
-      description,
+      ...pageMeta.twitter,
       images: cover?.url ? [cover.url] : [],
     },
   };
@@ -130,6 +147,19 @@ export default async function ListingDetailPage({
   if (slug == null || slug !== expectedSlug) {
     permanentRedirect(canonicalPath);
   }
+
+  const tenancy = await resolveMarketingTenancy();
+  const canonicalOrigin = tenancy
+    ? await resolveCanonicalPublicOrigin(
+        tenancy.workspaceId,
+        tenancy.hostname,
+        tenancy.origin.startsWith("http://") ? "http:" : "https:",
+      )
+    : process.env.NEXT_PUBLIC_SITE_URL?.trim() ?? "http://127.0.0.1:3000";
+  const siteName = tenancy?.brand.displayName ?? "Houzzat";
+  const absoluteListingUrl = (path: string) =>
+    absoluteUrlForOrigin(canonicalOrigin, path) ??
+    `${canonicalOrigin.replace(/\/$/, "")}${path}`;
 
   const session = await auth();
   // Access fields only on SSR — save/watch/note/phone/prefs load after paint.
@@ -228,7 +258,7 @@ export default async function ListingDetailPage({
     "@context": "https://schema.org",
     "@type": "RealEstateListing",
     name: addressLabel,
-    url: `${SITE_URL}${canonicalPath}`,
+    url: absoluteListingUrl(canonicalPath),
     description: listing.description.slice(0, 300),
     datePosted: listing.listedAt.toISOString(),
     ...(coverUrl ? { image: [coverUrl] } : {}),
@@ -266,8 +296,8 @@ export default async function ListingDetailPage({
       : undefined,
     provider: {
       "@type": "RealEstateAgent",
-      name: SITE_NAME,
-      url: SITE_URL,
+      name: siteName,
+      url: absoluteListingUrl("/"),
     },
   };
   const breadcrumbLd = {
@@ -278,13 +308,13 @@ export default async function ListingDetailPage({
         "@type": "ListItem",
         position: 1,
         name: "Home",
-        item: SITE_URL,
+        item: absoluteListingUrl("/"),
       },
       {
         "@type": "ListItem",
         position: 2,
         name: listing.city,
-        item: `${SITE_URL}${homesForSaleCityPath(listing.city)}`,
+        item: absoluteListingUrl(homesForSaleCityPath(listing.city)),
       },
       ...(listing.community
         ? [
@@ -292,16 +322,18 @@ export default async function ListingDetailPage({
               "@type": "ListItem" as const,
               position: 3,
               name: listing.community,
-              item: `${SITE_URL}${homesForSaleCommunityPath(
-                listing.city,
-                listing.community,
-              )}`,
+              item: absoluteListingUrl(
+                homesForSaleCommunityPath(
+                  listing.city,
+                  listing.community,
+                ),
+              ),
             },
             {
               "@type": "ListItem" as const,
               position: 4,
               name: addressLabel,
-              item: `${SITE_URL}${canonicalPath}`,
+              item: absoluteListingUrl(canonicalPath),
             },
           ]
         : [
@@ -309,7 +341,7 @@ export default async function ListingDetailPage({
               "@type": "ListItem" as const,
               position: 3,
               name: addressLabel,
-              item: `${SITE_URL}${canonicalPath}`,
+              item: absoluteListingUrl(canonicalPath),
             },
           ]),
     ],

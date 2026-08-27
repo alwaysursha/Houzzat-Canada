@@ -1,29 +1,46 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AccountVerifiedSuccessSlot } from "@/components/account/AccountVerifiedSuccessSlot";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { MobileBottomNav } from "@/components/site/MobileBottomNav";
+import { ListingSheetHostLazy } from "@/components/mobile/ListingSheetHostLazy";
+import { TenantBrandProvider } from "@/components/tenancy/TenantBrandProvider";
+import { TenantThemeStyle } from "@/components/tenancy/TenantThemeStyle";
 import { requireCustomerUser } from "@/lib/account";
 import { auth } from "@/lib/auth";
-import { SITE_NAME } from "@/lib/constants";
 import { isDatabaseUnavailableError } from "@/lib/errors";
 import { getRequestAppShell } from "@/lib/mobile/app-shell-server";
 import { shouldRedirectStaffAccountToCrm } from "@/lib/mobile/app-shell";
+import { tenantAccountLabel } from "@/lib/tenancy/marketing-presentation-brand";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
+import {
+  resolveMarketingPresentationBrand,
+  resolveMarketingTenancy,
+} from "@/lib/tenancy/resolve-marketing-tenancy";
+import { buildMarketingRootMetadata } from "@/lib/tenancy/tenant-seo";
 
 export const dynamic = "force-dynamic";
 
-const nav = [
-  { href: "/account", label: "Your Houzzat" },
-  { href: "/account/notifications", label: "Notifications" },
-  { href: "/route-planner", label: "Route Planner" },
-  { href: "/account/saved", label: "Saved" },
-  { href: "/account/notes", label: "Notes" },
-  { href: "/account/searches", label: "Searches" },
-  { href: "/account/watchlist", label: "Watchlist" },
-  { href: "/account/activity", label: "Activity" },
-  { href: "/search", label: "Search" },
-  { href: "/", label: "Home" },
-];
+export async function generateMetadata(): Promise<Metadata> {
+  const tenancy = await resolveMarketingTenancy();
+  if (!tenancy) {
+    return { title: "Account" };
+  }
+  const canonicalOrigin = await resolveCanonicalPublicOrigin(
+    tenancy.workspaceId,
+    tenancy.hostname,
+    tenancy.origin.startsWith("http://") ? "http:" : "https:",
+  );
+  const root = buildMarketingRootMetadata(tenancy, canonicalOrigin);
+  return {
+    ...root,
+    title: {
+      default: `Account | ${tenancy.brand.displayName}`,
+      template: `%s | ${tenancy.brand.displayName}`,
+    },
+  };
+}
 
 export default async function AccountLayout({
   children,
@@ -42,9 +59,6 @@ export default async function AccountLayout({
     redirect("/auth/sign-in?callbackUrl=/account");
   }
 
-  // JWT may still decrypt after a DB rebuild while the user id is gone.
-  // Clear it so we don't bounce /account ↔ /auth/sign-in forever.
-  // If the DB is down, do NOT log them out — surface the error boundary instead.
   let customer;
   try {
     customer = await requireCustomerUser();
@@ -58,8 +72,6 @@ export default async function AccountLayout({
     redirect("/auth/sign-out");
   }
 
-  // Web + HouzzatPro send staff to their CRM; consumer/unrecognized native
-  // shells keep staff on their own /account instead of loading a staff shell.
   if (shouldRedirectStaffAccountToCrm(await getRequestAppShell())) {
     if (session.user.role === "ADMIN") {
       redirect("/admin");
@@ -69,25 +81,47 @@ export default async function AccountLayout({
     }
   }
 
-  return (
+  const chromeBrand = await resolveMarketingPresentationBrand();
+
+  const nav = [
+    {
+      href: "/account",
+      label: chromeBrand ? tenantAccountLabel(chromeBrand) : "Your account",
+    },
+    { href: "/account/notifications", label: "Notifications" },
+    { href: "/route-planner", label: "Route Planner" },
+    { href: "/account/saved", label: "Saved" },
+    { href: "/account/notes", label: "Notes" },
+    { href: "/account/searches", label: "Searches" },
+    { href: "/account/watchlist", label: "Watchlist" },
+    { href: "/account/activity", label: "Activity" },
+    { href: "/search", label: "Search" },
+    { href: "/", label: "Home" },
+  ];
+
+  const displayName = chromeBrand?.displayName ?? "Account";
+  const primaryColor = chromeBrand?.colors.primary ?? "#1A7B59";
+
+  const shell = (
     <div className="min-h-full bg-mist">
       <header className="sticky top-0 z-40">
-        {/* Android edge-to-edge: brand bar under system status icons. */}
         <div
           aria-hidden
-          className="bg-[#1A7B59] [height:env(safe-area-inset-top,0px)]"
+          className="[height:env(safe-area-inset-top,0px)]"
+          style={{ backgroundColor: primaryColor }}
         />
         <div className="border-b border-line/80 bg-mist/85 backdrop-blur-md">
           <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
             <div>
               <Link href="/" className="font-display text-2xl text-ink">
-                {SITE_NAME}
+                {displayName}
               </Link>
               <p className="text-xs uppercase tracking-[0.14em] text-ink/45">
-                Your Houzzat
+                {chromeBrand
+                  ? tenantAccountLabel(chromeBrand)
+                  : "Your account"}
               </p>
             </div>
-            {/* Desktop account nav — mobile uses bottom nav + More sheet. */}
             <nav className="hidden flex-wrap items-center gap-3 text-sm font-medium md:flex">
               {nav.map((item) => (
                 <Link
@@ -107,7 +141,22 @@ export default async function AccountLayout({
         <AccountVerifiedSuccessSlot />
         {children}
       </main>
-      <MobileBottomNav />
+      <MobileBottomNav chromeBrand={chromeBrand ?? undefined} />
     </div>
+  );
+
+  if (!chromeBrand) {
+    return shell;
+  }
+
+  return (
+    <TenantBrandProvider brand={chromeBrand}>
+      <TenantThemeStyle
+        colors={chromeBrand.colors}
+        isHouzzatWorkspace={chromeBrand.isHouzzatWorkspace}
+      />
+      {shell}
+      <ListingSheetHostLazy />
+    </TenantBrandProvider>
   );
 }

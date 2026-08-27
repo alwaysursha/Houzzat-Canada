@@ -6,6 +6,7 @@
  */
 import type { WorkspaceMemberRole } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
+import { isWorkspaceReadMode } from "@/lib/crm-read-scope";
 import { isWorkspaceTeamScope } from "@/lib/workspace-scope-flags";
 import { prisma } from "@/lib/prisma";
 
@@ -19,7 +20,8 @@ export type TeamAuthority =
  * Workspace flag without a resolved workspaceId → unavailable (fail closed).
  */
 export function resolveTeamAuthority(ctx: AgentOrgContext): TeamAuthority {
-  if (isWorkspaceTeamScope()) {
+  const useWorkspaceTeam = isWorkspaceTeamScope() || isWorkspaceReadMode();
+  if (useWorkspaceTeam) {
     if (!ctx.workspaceId) {
       return { mode: "unavailable", reason: "WORKSPACE_CONTEXT_REQUIRED" };
     }
@@ -101,7 +103,7 @@ export async function getWorkspaceTeamPayload(ctx: AgentOrgContext) {
 
   const [members, invites, workspace] = await Promise.all([
     prisma.workspaceMember.findMany({
-      where: { workspaceId: ctx.workspaceId },
+      where: { workspaceId: ctx.workspaceId, status: "ACTIVE" },
       include: {
         user: {
           select: {

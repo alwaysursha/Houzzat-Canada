@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
-import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { TeamAdminClient } from "@/components/agent/TeamAdminClient";
-import { requireAgentContext } from "@/lib/agent";
+import { requireAgentPageContext } from "@/lib/agent/agent-context-request";
 import { prisma } from "@/lib/prisma";
 import {
   getWorkspaceTeamPayload,
@@ -11,8 +10,7 @@ import {
 export const metadata = { title: "Team · Agent CRM" };
 
 export default async function AgentTeamPage() {
-  const ctx = await requireAgentContext();
-  if (!ctx) redirect(await staffSignInRedirectUrl("/agent/team"));
+  const ctx = await requireAgentPageContext("/agent/team");
 
   const authority = resolveTeamAuthority(ctx);
   if (authority.mode === "unavailable") {
@@ -36,7 +34,7 @@ export default async function AgentTeamPage() {
               : ""}
             {" · "}
             manage seats for this Workspace only. Platform Admin stays separate
-            (Houzzat HQ).
+            (HouzzatPRO HQ).
           </p>
         </div>
 
@@ -108,7 +106,7 @@ export default async function AgentTeamPage() {
         <h1 className="font-display text-4xl text-ink">Team</h1>
         <p className="mt-2 text-sm text-ink/60">
           {org.name} · team leads manage seats; agents work their book. Platform
-          Admin stays separate (Houzzat HQ).
+          Admin stays separate (HouzzatPRO HQ).
         </p>
       </div>
 

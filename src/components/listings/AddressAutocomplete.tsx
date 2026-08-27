@@ -1220,7 +1220,7 @@ export function AddressAutocomplete({
             )}
             style={{
               background:
-                "radial-gradient(1600px 1100px at 8% -12%, rgb(15 107 76 / 0.12), rgb(15 107 76 / 0) 72%), radial-gradient(1400px 1000px at 92% -8%, rgb(31 122 140 / 0.1), rgb(31 122 140 / 0) 70%), #eef3f0",
+                "radial-gradient(1600px 1100px at 8% -12%, rgb(var(--tenant-primary-rgb) / 0.12), rgb(var(--tenant-primary-rgb) / 0) 72%), radial-gradient(1400px 1000px at 92% -8%, rgb(var(--tenant-accent-rgb) / 0.1), rgb(var(--tenant-accent-rgb) / 0) 70%), var(--mist)",
             }}
             role="dialog"
             aria-modal="true"

@@ -37,7 +37,7 @@ export function TemperatureGauge({
         />
         <defs>
           <linearGradient id="tempGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#0f6b4c" />
+            <stop offset="0%" stopColor="var(--canopy)" />
             <stop offset="55%" stopColor="#c4a35a" />
             <stop offset="100%" stopColor="#c45c26" />
           </linearGradient>
@@ -159,17 +159,17 @@ export function PriceTimelineChart({
       <svg viewBox={`0 0 ${w} ${h}`} className="h-auto w-full" role="img" aria-label="Price timeline">
         <defs>
           <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgb(15 107 76 / 0.22)" />
-            <stop offset="100%" stopColor="rgb(15 107 76 / 0)" />
+            <stop offset="0%" stopColor="rgb(var(--tenant-primary-rgb) / 0.22)" />
+            <stop offset="100%" stopColor="rgb(var(--tenant-primary-rgb) / 0)" />
           </linearGradient>
         </defs>
         <path
           d={`${path} L ${coords[coords.length - 1]!.x} ${h - 4} L ${coords[0]!.x} ${h - 4} Z`}
           fill="url(#priceFill)"
         />
-        <path d={path} fill="none" stroke="#0f6b4c" strokeWidth="2.5" strokeLinejoin="round" />
+        <path d={path} fill="none" stroke="var(--canopy)" strokeWidth="2.5" strokeLinejoin="round" />
         {coords.map((c) => (
-          <circle key={`${c.date}-${c.price}`} cx={c.x} cy={c.y} r="3.5" fill="#0f6b4c" />
+          <circle key={`${c.date}-${c.price}`} cx={c.x} cy={c.y} r="3.5" fill="var(--canopy)" />
         ))}
       </svg>
       <div className="mt-1 flex justify-between text-[10px] font-medium text-ink/40">
@@ -236,7 +236,7 @@ export function OwnershipDonut({
 }) {
   const total = Math.max(mortgage + tax + maint, 1);
   const parts = [
-    { key: "mortgage", value: mortgage, color: "#0f6b4c" },
+    { key: "mortgage", value: mortgage, color: "var(--canopy)" },
     { key: "tax", value: tax, color: "#c4a35a" },
     { key: "maint", value: maint, color: "#6b8f85" },
   ].filter((p) => p.value > 0);

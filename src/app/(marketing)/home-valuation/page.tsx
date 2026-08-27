@@ -7,40 +7,27 @@ import {
   ESTIMATOR_FAQS,
   SELLING_FAQS,
 } from "@/components/valuation/valuation-faqs";
-import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
+import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
+import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 
-const title = "What's Your Home Worth? Free Home Value Estimate";
-const description =
-  "Enter your address for a free home value estimate based on Houzzat’s Ontario market data. See a personalized range, recent nearby sales context, and optional Market Pulse updates.";
+const PAGE_TITLE = "What's Your Home Worth? Free Home Value Estimate";
+const PAGE_DESCRIPTION =
+  "Enter your address for a free home value estimate based on local Ontario market data. See a personalized range, recent nearby sales context, and optional Market Pulse updates.";
 
-export const metadata: Metadata = {
-  title,
-  description,
-  alternates: { canonical: `${SITE_URL}/home-valuation` },
-  openGraph: {
-    title,
-    description,
-    url: `${SITE_URL}/home-valuation`,
-    siteName: SITE_NAME,
-    type: "website",
-    locale: "en_CA",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title,
-    description,
-  },
-  robots: { index: true, follow: true },
-  keywords: [
-    "home value estimate",
-    "how much is my house worth",
-    "free home valuation Ontario",
-    "property value estimate",
-    "Houzzat home worth",
-  ],
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMarketingPageMetadata({
+    title: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
+    path: "/home-valuation",
+  });
+}
 
-function faqJsonLd() {
+function faqJsonLd(input: {
+  siteName: string;
+  pageUrl: string;
+  siteUrl: string;
+}) {
   const entities = [...ESTIMATOR_FAQS, ...SELLING_FAQS].map((faq) => ({
     "@type": "Question",
     name: faq.question,
@@ -51,45 +38,62 @@ function faqJsonLd() {
     "@graph": [
       {
         "@type": "WebPage",
-        url: `${SITE_URL}/home-valuation`,
-        name: title,
-        description,
-        isPartOf: { "@type": "WebSite", name: SITE_NAME, url: SITE_URL },
+        url: input.pageUrl,
+        name: PAGE_TITLE,
+        description: PAGE_DESCRIPTION,
+        isPartOf: {
+          "@type": "WebSite",
+          name: input.siteName,
+          url: input.siteUrl,
+        },
       },
       {
         "@type": "WebApplication",
-        name: `${SITE_NAME} Home Value Estimate`,
-        url: `${SITE_URL}/home-valuation`,
+        name: `${input.siteName} Home Value Estimate`,
+        url: input.pageUrl,
         applicationCategory: "BusinessApplication",
         operatingSystem: "Web",
         offers: { "@type": "Offer", price: "0", priceCurrency: "CAD" },
-        description,
+        description: PAGE_DESCRIPTION,
       },
       { "@type": "FAQPage", mainEntity: entities },
     ],
   };
 }
 
-export default function HomeValuationPage() {
+export default async function HomeValuationPage() {
+  const brand = await resolveMarketingPresentationBrand();
+  const siteName = brand?.displayName ?? "Real Estate";
+  const siteUrl =
+    brand?.canonicalOrigin ??
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ??
+    "http://127.0.0.1:3000";
+  const pageUrl =
+    absoluteUrlForOrigin(siteUrl, "/home-valuation") ??
+    `${siteUrl.replace(/\/$/, "")}/home-valuation`;
+
   return (
     <div className="pb-20">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd()) }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(
+            faqJsonLd({ siteName, pageUrl, siteUrl: siteUrl.replace(/\/$/, "") }),
+          ),
+        }}
       />
 
-      {/* Focused estimate hero — clean, high-contrast, form-first */}
       <section className="relative overflow-hidden border-b border-line/60">
         <div
           className="absolute inset-0"
           style={{
             backgroundImage:
-              "radial-gradient(1200px 600px at 10% -20%, rgb(15 107 76 / 0.14), transparent 55%), radial-gradient(900px 500px at 100% 0%, rgb(31 122 140 / 0.1), transparent 50%), linear-gradient(180deg, #f7faf8 0%, #eef3f0 100%)",
+              "radial-gradient(1200px 600px at 10% -20%, rgb(var(--tenant-primary-rgb) / 0.14), transparent 55%), radial-gradient(900px 500px at 100% 0%, rgb(var(--tenant-accent-rgb) / 0.1), transparent 50%), linear-gradient(180deg, var(--mist) 0%, var(--surface) 100%)",
           }}
         />
         <div className="relative mx-auto max-w-5xl px-4 pb-14 pt-12 sm:px-6 sm:pb-16 sm:pt-16">
           <p className="text-center font-display text-3xl tracking-tight text-canopy sm:text-4xl">
-            {SITE_NAME}
+            {siteName}
           </p>
           <h1 className="mt-4 text-center font-display text-3xl leading-tight tracking-tight text-ink sm:text-5xl">
             What&apos;s your home worth?
@@ -112,7 +116,7 @@ export default function HomeValuationPage() {
           </div>
 
           <p className="mx-auto mt-5 max-w-lg text-center text-xs leading-relaxed text-ink/45">
-            Stay in the know in under a minute. Your estimate uses Houzzat
+            Stay in the know in under a minute. Your estimate uses {siteName}{" "}
             inventory and is not a formal appraisal.
           </p>
         </div>

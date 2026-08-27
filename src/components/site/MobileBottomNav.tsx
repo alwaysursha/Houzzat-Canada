@@ -28,6 +28,8 @@ import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
+import { tenantAccountLabel } from "@/lib/tenancy/marketing-presentation-brand";
+import type { MarketingChromeBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { parseHomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
 import { resolveAppShell } from "@/lib/mobile/app-shell";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
@@ -55,7 +57,13 @@ function isAccountHref(href: string) {
  * session confirms ADMIN/AGENT. Account /account/* use full document loads
  * so Capacitor avoids soft RSC into the force-dynamic account layout.
  */
-export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
+export function MobileBottomNav({
+  cities = [],
+  chromeBrand,
+}: {
+  cities?: string[];
+  chromeBrand?: MarketingChromeBrand;
+}) {
   const { status, data } = useSession();
   const role = data?.user?.role;
   const pathname = usePathname() || "/";
@@ -71,6 +79,9 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
     query: Record<string, unknown>;
   } | null>(null);
   const [houzzatProShell, setHouzzatProShell] = useState(false);
+  const accountLabel = chromeBrand
+    ? tenantAccountLabel(chromeBrand)
+    : "Your Houzzat";
   const [pressedTab, setPressedTab] = useState<string | null>(null);
   const moreHistoryPushedRef = useRef(false);
   const searchPrefetchedRef = useRef(false);
@@ -244,6 +255,7 @@ export function MobileBottomNav({ cities = [] }: { cities?: string[] }) {
         <MoreSheet
           menuId={menuId}
           moreVisible={moreVisible}
+          accountLabel={accountLabel}
           onClose={closeMore}
           onNavigateAway={dismissMoreForNavigate}
           onPersonalize={() => {
@@ -471,12 +483,14 @@ const NavItem = memo(function NavItem({
 function MoreSheet({
   menuId,
   moreVisible,
+  accountLabel,
   onClose,
   onNavigateAway,
   onPersonalize,
 }: {
   menuId: string;
   moreVisible: boolean;
+  accountLabel: string;
   onClose: () => void;
   onNavigateAway: () => void;
   onPersonalize: () => void;
@@ -491,7 +505,7 @@ function MoreSheet({
       id={menuId}
       role="dialog"
       aria-modal="true"
-      aria-label="Your Houzzat tools"
+      aria-label={`${accountLabel} tools`}
       className={cn(
         "fixed inset-x-0 z-[56] mx-auto max-w-lg md:hidden",
         "bottom-[var(--mobile-bottom-nav)]",
@@ -503,7 +517,7 @@ function MoreSheet({
       )}
     >
       <div className="flex items-center justify-between border-b border-line/70 px-4 py-3">
-        <p className="font-display text-lg text-ink">Your Houzzat</p>
+        <p className="font-display text-lg text-ink">{accountLabel}</p>
         <button
           type="button"
           onClick={onClose}

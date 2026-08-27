@@ -4,7 +4,7 @@ import {
   DESK_AGENT_ALL,
   DESK_AGENT_COOKIE,
 } from "@/lib/agent/desk-constants";
-import { requireAgentContext } from "@/lib/agent";
+import { requireAgentContextFromRequest } from "@/lib/agent";
 
 export const runtime = "nodejs";
 
@@ -14,12 +14,12 @@ const schema = z.object({
 
 /** Team Leader picks which agent's desk to view (cookie). */
 export async function POST(request: Request) {
-  const ctx = await requireAgentContext();
+  const ctx = await requireAgentContextFromRequest(request);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Only Team Leaders (platform Admin) may switch desks.
-  if (!ctx.isPlatformAdmin) {
+  // Team leaders (workspace OWNER/ADMIN or legacy platform Admin) may switch desks.
+  if (!ctx.canSeeTeamLeads) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
