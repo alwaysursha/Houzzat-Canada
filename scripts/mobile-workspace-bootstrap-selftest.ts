@@ -11,6 +11,8 @@ import {
   HOUZZATPRO_BOOTSTRAP_SERVER_URL,
   isApprovedProCapacitorServerUrl,
   isPlatformMobileBootstrapHost,
+  shouldRedirectUnauthenticatedProToSignIn,
+  shouldRunProWorkspaceBootstrap,
 } from "../src/lib/mobile/platform-bootstrap";
 import {
   findMembershipForHostname,
@@ -55,6 +57,97 @@ function testPlatformBootstrapHost() {
   );
   assert.equal(isApprovedProCapacitorServerUrl("https://houzzatpro.com/pro"), false);
   assert.equal(isApprovedProCapacitorServerUrl("https://houzzat.com/pro"), false);
+}
+
+/**
+ * Stage 3K.5.10.7 — unauthenticated platform bootstrap must redirect to /pro/sign-in.
+ * platformBootstrap=true, authenticated=false, kind=platform_sign_in, normal /pro.
+ */
+function testUnauthenticatedPlatformProRedirect() {
+  assert.deepEqual(
+    resolveMobileWorkspaceBootstrapState({
+      authenticated: false,
+      requestHostname: "app.houzzatpro.com",
+      memberships: [],
+      currentHostMembership: null,
+    }),
+    { kind: "platform_sign_in" },
+  );
+
+  assert.equal(
+    shouldRedirectUnauthenticatedProToSignIn({
+      pathname: "/pro",
+      hostname: "app.houzzatpro.com",
+      authenticated: false,
+      diagParam: null,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldRedirectUnauthenticatedProToSignIn({
+      pathname: "/pro",
+      hostname: "app.houzzatpro.com",
+      authenticated: false,
+      diagParam: "1",
+    }),
+    false,
+    "diag=1 must not auto-redirect",
+  );
+  assert.equal(
+    shouldRedirectUnauthenticatedProToSignIn({
+      pathname: "/pro",
+      hostname: "app.houzzatpro.com",
+      authenticated: true,
+      diagParam: null,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRedirectUnauthenticatedProToSignIn({
+      pathname: "/pro",
+      hostname: "houzzatpro.com",
+      authenticated: false,
+      diagParam: null,
+    }),
+    false,
+    "sales apex is not the app bootstrap host",
+  );
+  assert.equal(
+    shouldRedirectUnauthenticatedProToSignIn({
+      pathname: "/pro/sign-in",
+      hostname: "app.houzzatpro.com",
+      authenticated: false,
+      diagParam: null,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldRunProWorkspaceBootstrap({
+      pathname: "/pro",
+      hostname: "app.houzzatpro.com",
+      isNative: false,
+    }),
+    true,
+    "browser on app host must run bootstrap (not native-only)",
+  );
+  assert.equal(
+    shouldRunProWorkspaceBootstrap({
+      pathname: "/pro",
+      hostname: "houzzatpro.com",
+      isNative: false,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRunProWorkspaceBootstrap({
+      pathname: "/pro",
+      hostname: "tenant-canary.houzzatpro.com",
+      isNative: true,
+    }),
+    true,
+    "native Capacitor still runs on any host /pro",
+  );
 }
 
 function testCanonicalHostPolicy() {
@@ -214,14 +307,18 @@ function testRoutingWiring() {
   const middleware = readFileSync(join(root, "src/middleware.ts"), "utf8");
   const capPro = readFileSync(join(root, "capacitor.config.pro.ts"), "utf8");
   assert.ok(startup.includes("ProWorkspaceBootstrap"));
-  assert.ok(bootstrap.includes("onNativeProColdStart"));
+  assert.ok(bootstrap.includes("onProBootstrapSurface"));
+  assert.ok(bootstrap.includes("shouldRunProWorkspaceBootstrap"));
   assert.ok(bootstrap.includes("return null"));
   assert.ok(bootstrap.includes("isMobileDiagnosticFreezePath"));
   assert.ok(bootstrap.includes("DIAGNOSTIC FREEZE"));
+  assert.ok(bootstrap.includes('kind: "platform_sign_in"'));
+  assert.ok(bootstrap.includes("REDIRECT_SIGN_IN"));
   assert.ok(!providers.includes("HouzzatProStartup"));
   assert.ok(proPage.includes("HouzzatProStartup"));
   assert.ok(proPage.includes("ProShellRuntimeDiagnostic"));
   assert.ok(middleware.includes("workspace bootstrap handles authenticated routing"));
+  assert.ok(middleware.includes("shouldRedirectUnauthenticatedProToSignIn"));
   assert.ok(middleware.includes("x-houzzat-request-path"));
   const marketingLayout = readFileSync(
     join(root, "src/app/(marketing)/layout.tsx"),
@@ -381,6 +478,7 @@ function testHandoffRouteRevalidatesMembership() {
 
 function main() {
   testPlatformBootstrapHost();
+  testUnauthenticatedPlatformProRedirect();
   testCanonicalHostPolicy();
   testBootstrapStateMatrix();
   testAbaNoWorkspaceBleed();

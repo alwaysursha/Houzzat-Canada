@@ -10,6 +10,10 @@ import {
   shouldGateStaffRoutesForConsumerShell,
   shouldRedirectStaffAccountToCrm,
 } from "@/lib/mobile/app-shell";
+import {
+  isPlatformMobileBootstrapHost,
+  shouldRedirectUnauthenticatedProToSignIn,
+} from "@/lib/mobile/platform-bootstrap";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import {
   canAccessSellerTools,
@@ -117,6 +121,24 @@ export default auth((request) => {
     pathname !== OPEN_HOUZZAT_PRO_PATH
   ) {
     return redirectToPath(request, OPEN_HOUZZAT_PRO_PATH);
+  }
+
+  // Application bootstrap host (app.houzzatpro.com): unauthenticated /pro → sign-in.
+  // Browser has no HouzzatPRO UA shell; do not wait for client Capacitor bootstrap.
+  // ?diag=1 freezes auto-redirect for on-device diagnostics.
+  {
+    const host =
+      request.headers.get("host")?.split(":")[0]?.trim().toLowerCase() ?? "";
+    if (
+      shouldRedirectUnauthenticatedProToSignIn({
+        pathname,
+        hostname: host,
+        authenticated: Boolean(session?.user),
+        diagParam: request.nextUrl.searchParams.get("diag"),
+      })
+    ) {
+      return redirectToSignIn(request, HOUZZATPRO_START_PATH, { pro: true });
+    }
   }
 
   // HouzzatPro cold-start: workspace bootstrap handles authenticated routing.

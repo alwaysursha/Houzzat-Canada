@@ -12,6 +12,10 @@ import {
   resolveAppShell,
   syncAppShellCookie,
 } from "@/lib/mobile/app-shell";
+import {
+  isPlatformMobileBootstrapHost,
+  shouldRunProWorkspaceBootstrap,
+} from "@/lib/mobile/platform-bootstrap";
 import { hardGo } from "@/lib/mobile/nav-back";
 import { peekPendingPushNavigation } from "@/lib/notifications/pending-push-nav";
 import {
@@ -39,8 +43,9 @@ type FrozenDecision = {
   hostStopReason: string | null;
 };
 
-function isProRouterPath(pathname: string): boolean {
-  return pathname === HOUZZATPRO_START_PATH || pathname === `${HOUZZATPRO_START_PATH}/`;
+function currentHostname(): string {
+  if (typeof window === "undefined") return "";
+  return window.location.hostname;
 }
 
 async function fetchBootstrap(): Promise<BootstrapResponse | null> {
@@ -152,8 +157,12 @@ export function ProWorkspaceBootstrap() {
   const pathname = usePathname() || "/";
   const searchParams = useSearchParams();
   const diagnosticFreeze = isMobileDiagnosticFreezePath(pathname, searchParams);
-  const onNativeProColdStart =
-    Capacitor.isNativePlatform() && isProRouterPath(pathname);
+  const [host, setHost] = useState("");
+  const onProBootstrapSurface = shouldRunProWorkspaceBootstrap({
+    pathname,
+    hostname: host || (typeof window !== "undefined" ? window.location.hostname : ""),
+    isNative: Capacitor.isNativePlatform(),
+  });
   const routed = useRef(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,7 +174,11 @@ export function ProWorkspaceBootstrap() {
   const [freezeReleased, setFreezeReleased] = useState(false);
 
   useEffect(() => {
-    if (!onNativeProColdStart) return;
+    setHost(currentHostname());
+  }, []);
+
+  useEffect(() => {
+    if (!onProBootstrapSurface) return;
     if (routed.current) return;
     if (status === "loading") return;
 
@@ -175,18 +188,35 @@ export function ProWorkspaceBootstrap() {
       const shell = await resolveAppShell();
       if (cancelled) return;
       syncAppShellCookie(shell);
-      if (shell !== "houzzatpro") return;
+      const onAppBootstrapHost = isPlatformMobileBootstrapHost(
+        currentHostname(),
+      );
+      // Native Pro shell OR browser on dedicated app.houzzatpro.com bootstrap host.
+      if (shell !== "houzzatpro" && !onAppBootstrapHost) return;
 
       const pendingHref = peekPendingPushNavigation()?.href ?? null;
       if (status !== "authenticated") {
-        // Sign-in redirect allowed even in freeze (need a session to diagnose).
-        // Preserve diag=1 in callback when possible.
+        if (diagnosticFreeze && !freezeReleased) {
+          // Explicit ?diag=1: do not auto-redirect; operator inspects frozen state.
+          routed.current = true;
+          recordMobileDiagEvent("PLATFORM_SESSION_MISSING");
+          setPending(false);
+          setFrozen({
+            kind: "platform_sign_in",
+            membership: null,
+            memberships: [],
+            destination: "/pro/sign-in",
+            hostStopReason: null,
+          });
+          return;
+        }
         routed.current = true;
         recordMobileDiagEvent("PLATFORM_SESSION_MISSING");
         recordMobileDiagEvent("REDIRECT_SIGN_IN");
-        const callback = diagnosticFreeze
-          ? "/pro?diag=1"
-          : sanitizeStaffCallbackPath(pendingHref, HOUZZATPRO_START_PATH);
+        const callback = sanitizeStaffCallbackPath(
+          pendingHref,
+          HOUZZATPRO_START_PATH,
+        );
         hardGo(
           `/pro/sign-in?callbackUrl=${encodeURIComponent(callback)}`,
         );
@@ -206,8 +236,7 @@ export function ProWorkspaceBootstrap() {
       }
 
       const { bootstrap } = payload;
-      const host =
-        typeof window !== "undefined" ? window.location.hostname : "";
+      const requestHost = currentHostname();
 
       if (diagnosticFreeze && !freezeReleased) {
         routed.current = true;
@@ -220,7 +249,7 @@ export function ProWorkspaceBootstrap() {
         } else if (bootstrap.kind === "handoff" || bootstrap.kind === "tenant_destination") {
           recordMobileDiagEvent("WORKSPACE_COUNT_1", bootstrap.membership.slug);
         }
-        setFrozen(freezeDecisionFromBootstrap(bootstrap, host));
+        setFrozen(freezeDecisionFromBootstrap(bootstrap, requestHost));
         return;
       }
 
@@ -291,14 +320,15 @@ export function ProWorkspaceBootstrap() {
       cancelled = true;
     };
   }, [
-    onNativeProColdStart,
+    onProBootstrapSurface,
     pathname,
     status,
     diagnosticFreeze,
     freezeReleased,
+    host,
   ]);
 
-  if (!onNativeProColdStart) {
+  if (!onProBootstrapSurface) {
     return null;
   }
 
@@ -310,6 +340,13 @@ export function ProWorkspaceBootstrap() {
     setPending(true);
     setError(null);
 
+    if (frozen.kind === "platform_sign_in") {
+      recordMobileDiagEvent("REDIRECT_SIGN_IN");
+      hardGo(
+        `/pro/sign-in?callbackUrl=${encodeURIComponent("/pro?diag=1")}`,
+      );
+      return;
+    }
     if (frozen.kind === "no_workspace") {
       setPending(false);
       setNoWorkspace(true);

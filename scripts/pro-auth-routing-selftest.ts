@@ -8,6 +8,11 @@ import {
   sanitizeStaffCallbackPath,
   staffSignInHref,
 } from "../src/lib/auth/pro-sign-in-routing";
+import {
+  shouldRedirectUnauthenticatedProToSignIn,
+  shouldRunProWorkspaceBootstrap,
+} from "../src/lib/mobile/platform-bootstrap";
+import { resolveMobileWorkspaceBootstrapState } from "../src/lib/mobile/workspace-bootstrap";
 
 function testSanitize() {
   assert.equal(sanitizeStaffCallbackPath(null), "/pro");
@@ -60,7 +65,50 @@ function testStaffSignInHref() {
   );
 }
 
+/**
+ * Stage 3K.5.10.7 — platformBootstrap + unauthenticated → /pro/sign-in;
+ * /pro?diag=1 must not auto-redirect.
+ */
+function testPlatformUnauthenticatedProRedirect() {
+  assert.equal(
+    resolveMobileWorkspaceBootstrapState({
+      authenticated: false,
+      requestHostname: "app.houzzatpro.com",
+      memberships: [],
+      currentHostMembership: null,
+    }).kind,
+    "platform_sign_in",
+  );
+  assert.equal(
+    shouldRedirectUnauthenticatedProToSignIn({
+      pathname: "/pro",
+      hostname: "app.houzzatpro.com",
+      authenticated: false,
+      diagParam: null,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldRedirectUnauthenticatedProToSignIn({
+      pathname: "/pro",
+      hostname: "app.houzzatpro.com",
+      authenticated: false,
+      diagParam: "1",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRunProWorkspaceBootstrap({
+      pathname: "/pro",
+      hostname: "app.houzzatpro.com",
+      isNative: false,
+    }),
+    true,
+  );
+}
+
 testSanitize();
 testPostSignInDeepLinks();
 testStaffSignInHref();
+testPlatformUnauthenticatedProRedirect();
 console.log("pro-auth-routing-selftest: ok");

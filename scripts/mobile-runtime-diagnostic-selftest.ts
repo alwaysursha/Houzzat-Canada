@@ -274,6 +274,12 @@ function testDiagnosticFreeze() {
   assert.ok(bootstrap.includes("DIAGNOSTIC FREEZE"));
   assert.ok(bootstrap.includes("Continue bootstrap"));
   assert.ok(bootstrap.includes("diagnosticFreeze && !freezeReleased"));
+  // Stage 3K.5.10.7: unauthenticated ?diag=1 freezes — must NOT hardGo to sign-in.
+  assert.ok(bootstrap.includes("do not auto-redirect"));
+  assert.ok(bootstrap.includes('kind: "platform_sign_in"'));
+  const middleware = read("src/middleware.ts");
+  assert.ok(middleware.includes("shouldRedirectUnauthenticatedProToSignIn"));
+  assert.ok(middleware.includes('diagParam: request.nextUrl.searchParams.get("diag")'));
 }
 
 function testWrongHostClassification() {
