@@ -3,21 +3,22 @@ import type { CapacitorConfig } from "@capacitor/cli";
 /**
  * HouzzatPRO staff shell.
  *
- * Stage 3K.5.9.1 — allowNavigation includes HouzzatPRO platform tenant hosts
- * so the WebView can open tenant Command Centres (e.g. tenant-canary).
+ * Stage 3K.5.10.6 — cold-start is app.houzzatpro.com (application bootstrap).
+ * houzzatpro.com remains the public sales / marketing centre — not Capacitor URL.
+ * Keep in sync with HOUZZATPRO_BOOTSTRAP_SERVER_URL in
+ * src/lib/mobile/platform-bootstrap.ts.
  *
- * Default cold-start is houzzatpro.com (neutral platform bootstrap).
- * Dev/QA may override with HOUZZAT_CAP_PRO_SERVER_URL (e.g. tenant-canary).
+ * Dev/QA may override with HOUZZAT_CAP_PRO_SERVER_URL (never ship tenant hosts).
  *
  * Selected when `HOUZZAT_CAP_TARGET=pro` (see capacitor.config.ts +
  * scripts/cap-target.sh). Never activated by a bare `npx cap …`.
  *
- * Marker must match `nativeUserAgentMarker("com.houzzat.pro")` in
- * src/lib/mobile/app-shell.ts.
+ * Android + iOS share this same bootstrap URL and handoff protocol.
  */
+const PRODUCTION_PRO_SERVER_URL = "https://app.houzzatpro.com/pro";
+
 const proServerUrl =
-  process.env.HOUZZAT_CAP_PRO_SERVER_URL?.trim() ||
-  "https://houzzatpro.com/pro";
+  process.env.HOUZZAT_CAP_PRO_SERVER_URL?.trim() || PRODUCTION_PRO_SERVER_URL;
 
 const config: CapacitorConfig = {
   appId: "com.houzzat.pro",
@@ -28,6 +29,7 @@ const config: CapacitorConfig = {
     url: proServerUrl,
     cleartext: false,
     allowNavigation: [
+      "app.houzzatpro.com",
       "houzzat.com",
       "*.houzzat.com",
       "houzzatpro.com",

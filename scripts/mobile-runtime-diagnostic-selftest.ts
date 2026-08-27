@@ -11,8 +11,10 @@ import {
   appendDiagnosticEvent,
   appendNavStep,
   classifyBootstrapHost,
+  classifyWrongHostBootstrap,
   detectRefreshLoop,
   expectedMobileDestination,
+  isMobileDiagnosticFreezePath,
   isPlatformBootstrapHostOk,
   isSecretQueryKey,
   maskEmail,
@@ -79,7 +81,7 @@ function testTraceCap() {
   for (let i = 0; i < MOBILE_DIAG_MAX_EVENTS + 10; i++) {
     events = appendDiagnosticEvent(events, {
       type: "APP_BOOT",
-      host: "houzzatpro.com",
+      host: "app.houzzatpro.com",
       path: "/pro",
       reason: String(i),
       at: i,
@@ -94,7 +96,7 @@ function testRefreshLoopDetection() {
   let steps = parseDiagnosticEvents(null); // wrong type — use nav
   void steps;
   let nav = appendNavStep([], {
-    origin: "https://houzzatpro.com",
+    origin: "https://app.houzzatpro.com",
     path: "/pro",
     at: 1,
   });
@@ -109,7 +111,7 @@ function testRefreshLoopDetection() {
     at: 3,
   });
   nav = appendNavStep(nav, {
-    origin: "https://houzzatpro.com",
+    origin: "https://app.houzzatpro.com",
     path: "/pro",
     at: 4,
   });
@@ -119,12 +121,12 @@ function testRefreshLoopDetection() {
     at: 5,
   });
   nav = appendNavStep(nav, {
-    origin: "https://houzzatpro.com",
+    origin: "https://app.houzzatpro.com",
     path: "/pro",
     at: 6,
   });
   nav = appendNavStep(nav, {
-    origin: "https://houzzatpro.com",
+    origin: "https://app.houzzatpro.com",
     path: "/pro",
     at: 7,
   });
@@ -135,14 +137,14 @@ function testRefreshLoopDetection() {
     at: 8,
   });
   nav = appendNavStep(nav, {
-    origin: "https://houzzatpro.com",
+    origin: "https://app.houzzatpro.com",
     path: "/pro",
     at: 9,
   });
   const loop = detectRefreshLoop(nav, 4);
   assert.equal(loop.possible, true);
-  assert.ok(loop.chain.includes("houzzatpro.com/pro"));
-  assert.ok(loop.repeatingKey === "houzzatpro.com/pro");
+  assert.ok(loop.chain.includes("app.houzzatpro.com/pro"));
+  assert.ok(loop.repeatingKey === "app.houzzatpro.com/pro");
 }
 
 function testTenantCanaryExpectedTrace() {
@@ -160,9 +162,12 @@ function testTenantCanaryExpectedTrace() {
   });
   assert.equal(agent?.path, "/agent");
 
-  assert.equal(isPlatformBootstrapHostOk("houzzatpro.com"), true);
+  assert.equal(isPlatformBootstrapHostOk("houzzatpro.com"), false);
+  assert.equal(isPlatformBootstrapHostOk("app.houzzatpro.com"), true);
   assert.equal(isPlatformBootstrapHostOk("tenant-canary.houzzatpro.com"), false);
   assert.equal(classifyBootstrapHost("tenant-canary.houzzatpro.com").label, "tenant_canary");
+  assert.equal(classifyBootstrapHost("houzzatpro.com").label, "sales_centre");
+  assert.equal(classifyBootstrapHost("app.houzzatpro.com").label, "platform_bootstrap");
 }
 
 function testHouzzatExpectedTrace() {
@@ -256,6 +261,46 @@ function testInstrumentationWiring() {
   assert.ok(exchange.includes('searchParams.delete("code")'));
 }
 
+function testDiagnosticFreeze() {
+  assert.equal(isMobileDiagnosticFreezePath("/pro", "diag=1"), true);
+  assert.equal(isMobileDiagnosticFreezePath("/pro", "?diag=1"), true);
+  assert.equal(isMobileDiagnosticFreezePath("/pro/", "diag=1"), true);
+  assert.equal(isMobileDiagnosticFreezePath("/pro", ""), false);
+  assert.equal(isMobileDiagnosticFreezePath("/pro/mobile/diag", ""), true);
+  assert.equal(isMobileDiagnosticFreezePath("/agent", "diag=1"), false);
+
+  const bootstrap = read("src/components/mobile/ProWorkspaceBootstrap.tsx");
+  assert.ok(bootstrap.includes("isMobileDiagnosticFreezePath"));
+  assert.ok(bootstrap.includes("DIAGNOSTIC FREEZE"));
+  assert.ok(bootstrap.includes("Continue bootstrap"));
+  assert.ok(bootstrap.includes("diagnosticFreeze && !freezeReleased"));
+}
+
+function testWrongHostClassification() {
+  const onCanary = classifyWrongHostBootstrap({
+    requestHostname: "tenant-canary.houzzatpro.com",
+    membershipSlugs: ["houzzat"],
+  });
+  assert.equal(onCanary.platformHostOk, false);
+  assert.equal(onCanary.handoffMintAllowed, false);
+  assert.ok(onCanary.stopReason?.includes("Tenant Canary"));
+
+  const onPlatform = classifyWrongHostBootstrap({
+    requestHostname: "app.houzzatpro.com",
+    membershipSlugs: ["houzzat"],
+  });
+  assert.equal(onPlatform.platformHostOk, true);
+  assert.equal(onPlatform.handoffMintAllowed, true);
+  assert.equal(onPlatform.stopReason, null);
+
+  const onSales = classifyWrongHostBootstrap({
+    requestHostname: "houzzatpro.com",
+    membershipSlugs: ["houzzat"],
+  });
+  assert.equal(onSales.platformHostOk, false);
+  assert.ok(onSales.stopReason?.toLowerCase().includes("sales"));
+}
+
 function main() {
   testHiddenWithoutDiag();
   testNativeGate();
@@ -269,6 +314,8 @@ function main() {
   testSessionSummaryMasked();
   testNoMutatingDiagnosticRoutes();
   testInstrumentationWiring();
+  testDiagnosticFreeze();
+  testWrongHostClassification();
   console.log("mobile-runtime-diagnostic:selftest passed");
 }
 

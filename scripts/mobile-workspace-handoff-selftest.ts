@@ -44,7 +44,8 @@ function testHandoffHostBinding() {
 }
 
 function testPlatformOnlyIssuancePolicy() {
-  assert.equal(isPlatformMobileBootstrapHost("houzzatpro.com"), true);
+  assert.equal(isPlatformMobileBootstrapHost("app.houzzatpro.com"), true);
+  assert.equal(isPlatformMobileBootstrapHost("houzzatpro.com"), false);
   assert.equal(isPlatformMobileBootstrapHost("houzzat.com"), false);
 }
 

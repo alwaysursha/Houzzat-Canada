@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import {
   HOUZZATPRO_PLATFORM_ZONE,
+  isHouzzatProAppBootstrapHost,
   isHouzzatProPlatformRoot,
   isPlatformTenantHostname,
   parsePlatformTenantHostname,
@@ -15,6 +16,7 @@ import {
   blocksTenantHostnameResolution,
   isReservedPlatformHostname,
 } from "../src/lib/tenancy/reserved-domains";
+import { isPlatformMobileBootstrapHost } from "../src/lib/mobile/platform-bootstrap";
 
 function testDeterministicPlatformHostname() {
   const houzzat = platformHostnameForWorkspaceSlug("houzzat");
@@ -45,6 +47,31 @@ function testPlatformRootDenied() {
   assert.ok(isHouzzatProPlatformRoot("HOUZZATPRO.COM"));
   assert.equal(blocksTenantHostnameResolution("houzzatpro.com"), "platform_houzzatpro_root");
   assert.ok(isReservedPlatformHostname("houzzatpro.com").reserved);
+  // Sales apex is NOT application bootstrap.
+  assert.equal(isPlatformMobileBootstrapHost("houzzatpro.com"), false);
+  assert.equal(isPlatformMobileBootstrapHost("www.houzzatpro.com"), false);
+}
+
+function testAppBootstrapHostReserved() {
+  assert.ok(isHouzzatProAppBootstrapHost("app.houzzatpro.com"));
+  assert.equal(isHouzzatProPlatformRoot("app.houzzatpro.com"), false);
+  assert.equal(isPlatformMobileBootstrapHost("app.houzzatpro.com"), true);
+  assert.equal(
+    blocksTenantHostnameResolution("app.houzzatpro.com"),
+    "platform_houzzatpro_app_bootstrap",
+  );
+  assert.equal(isPlatformTenantHostname("app.houzzatpro.com"), false);
+  assert.equal(parsePlatformTenantHostname("app.houzzatpro.com"), null);
+  // Reserved slug "app" cannot become a tenant platform host.
+  assert.equal(platformHostnameForWorkspaceSlug("app").ok, false);
+}
+
+function testFutureTenantCNoMobileConfigChange() {
+  const tenantC = platformHostnameForWorkspaceSlug("tenant-c");
+  assert.ok(tenantC.ok);
+  assert.equal(tenantC.hostname, "tenant-c.houzzatpro.com");
+  assert.equal(blocksTenantHostnameResolution("tenant-c.houzzatpro.com"), null);
+  // Capacitor allowNavigation already includes *.houzzatpro.com — no AAB rebuild.
 }
 
 function testUnknownPlatformTenantDeniedWithoutDbRow() {
@@ -67,6 +94,8 @@ async function main() {
   testDeterministicPlatformHostname();
   testReservedSlugsRejected();
   testPlatformRootDenied();
+  testAppBootstrapHostReserved();
+  testFutureTenantCNoMobileConfigChange();
   testUnknownPlatformTenantDeniedWithoutDbRow();
   testParsePlatformTenantHostname();
   console.log("tenant-platform-hostname:selftest ok");

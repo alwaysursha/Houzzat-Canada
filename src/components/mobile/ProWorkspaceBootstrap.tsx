@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Capacitor } from "@capacitor/core";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { HouzzatProMark } from "@/components/auth/HouzzatProMark";
 import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { sanitizeStaffCallbackPath } from "@/lib/auth/pro-sign-in-routing";
@@ -15,6 +15,8 @@ import {
 import { hardGo } from "@/lib/mobile/nav-back";
 import { peekPendingPushNavigation } from "@/lib/notifications/pending-push-nav";
 import {
+  classifyWrongHostBootstrap,
+  isMobileDiagnosticFreezePath,
   recordMobileDiagEvent,
   recordMobileDiagNav,
   sanitizeDiagnosticHref,
@@ -27,6 +29,14 @@ import type {
 type BootstrapResponse = {
   authenticated: boolean;
   bootstrap: MobileWorkspaceBootstrapState;
+};
+
+type FrozenDecision = {
+  kind: MobileWorkspaceBootstrapState["kind"];
+  membership: MobileBootstrapMembership | null;
+  memberships: MobileBootstrapMembership[];
+  destination: string | null;
+  hostStopReason: string | null;
 };
 
 function isProRouterPath(pathname: string): boolean {
@@ -105,12 +115,43 @@ function WorkspaceCard({
   );
 }
 
+function freezeDecisionFromBootstrap(
+  bootstrap: MobileWorkspaceBootstrapState,
+  requestHostname: string,
+): FrozenDecision {
+  const memberships =
+    bootstrap.kind === "select_workspace"
+      ? bootstrap.memberships
+      : bootstrap.kind === "handoff" || bootstrap.kind === "tenant_destination"
+        ? [bootstrap.membership]
+        : [];
+  const membership =
+    bootstrap.kind === "handoff" || bootstrap.kind === "tenant_destination"
+      ? bootstrap.membership
+      : memberships[0] ?? null;
+  const hostStop = classifyWrongHostBootstrap({
+    requestHostname,
+    membershipSlugs: memberships.map((m) => m.slug),
+  });
+  return {
+    kind: bootstrap.kind,
+    membership,
+    memberships,
+    destination:
+      bootstrap.kind === "tenant_destination" ? bootstrap.destination : null,
+    hostStopReason: hostStop.stopReason,
+  };
+}
+
 /**
  * HouzzatPRO platform bootstrap — resolves workspace membership then handoffs.
+ * Diagnostic freeze (?diag=1 / /pro/mobile/diag): observe without auto-nav.
  */
 export function ProWorkspaceBootstrap() {
   const { status } = useSession();
   const pathname = usePathname() || "/";
+  const searchParams = useSearchParams();
+  const diagnosticFreeze = isMobileDiagnosticFreezePath(pathname, searchParams);
   const onNativeProColdStart =
     Capacitor.isNativePlatform() && isProRouterPath(pathname);
   const routed = useRef(false);
@@ -120,6 +161,8 @@ export function ProWorkspaceBootstrap() {
     null,
   );
   const [noWorkspace, setNoWorkspace] = useState(false);
+  const [frozen, setFrozen] = useState<FrozenDecision | null>(null);
+  const [freezeReleased, setFreezeReleased] = useState(false);
 
   useEffect(() => {
     if (!onNativeProColdStart) return;
@@ -136,13 +179,14 @@ export function ProWorkspaceBootstrap() {
 
       const pendingHref = peekPendingPushNavigation()?.href ?? null;
       if (status !== "authenticated") {
+        // Sign-in redirect allowed even in freeze (need a session to diagnose).
+        // Preserve diag=1 in callback when possible.
         routed.current = true;
         recordMobileDiagEvent("PLATFORM_SESSION_MISSING");
         recordMobileDiagEvent("REDIRECT_SIGN_IN");
-        const callback = sanitizeStaffCallbackPath(
-          pendingHref,
-          HOUZZATPRO_START_PATH,
-        );
+        const callback = diagnosticFreeze
+          ? "/pro?diag=1"
+          : sanitizeStaffCallbackPath(pendingHref, HOUZZATPRO_START_PATH);
         hardGo(
           `/pro/sign-in?callbackUrl=${encodeURIComponent(callback)}`,
         );
@@ -162,6 +206,24 @@ export function ProWorkspaceBootstrap() {
       }
 
       const { bootstrap } = payload;
+      const host =
+        typeof window !== "undefined" ? window.location.hostname : "";
+
+      if (diagnosticFreeze && !freezeReleased) {
+        routed.current = true;
+        setPending(false);
+        if (bootstrap.kind === "no_workspace") {
+          recordMobileDiagEvent("WORKSPACE_COUNT_0");
+          setNoWorkspace(true);
+        } else if (bootstrap.kind === "select_workspace") {
+          recordMobileDiagEvent("WORKSPACE_SELECTOR");
+        } else if (bootstrap.kind === "handoff" || bootstrap.kind === "tenant_destination") {
+          recordMobileDiagEvent("WORKSPACE_COUNT_1", bootstrap.membership.slug);
+        }
+        setFrozen(freezeDecisionFromBootstrap(bootstrap, host));
+        return;
+      }
+
       if (bootstrap.kind === "no_workspace") {
         routed.current = true;
         recordMobileDiagEvent("WORKSPACE_COUNT_0");
@@ -213,7 +275,10 @@ export function ProWorkspaceBootstrap() {
             `${target.hostname}${target.pathname}`,
           );
         } catch {
-          recordMobileDiagEvent("NAVIGATE_TENANT", sanitizeDiagnosticHref(handoffUrl));
+          recordMobileDiagEvent(
+            "NAVIGATE_TENANT",
+            sanitizeDiagnosticHref(handoffUrl),
+          );
         }
         hardGo(handoffUrl);
         return;
@@ -225,10 +290,68 @@ export function ProWorkspaceBootstrap() {
     return () => {
       cancelled = true;
     };
-  }, [onNativeProColdStart, pathname, status]);
+  }, [
+    onNativeProColdStart,
+    pathname,
+    status,
+    diagnosticFreeze,
+    freezeReleased,
+  ]);
 
   if (!onNativeProColdStart) {
     return null;
+  }
+
+  async function continueFromFreeze() {
+    if (!frozen) return;
+    setFreezeReleased(true);
+    setFrozen(null);
+    routed.current = false;
+    setPending(true);
+    setError(null);
+
+    if (frozen.kind === "no_workspace") {
+      setPending(false);
+      setNoWorkspace(true);
+      return;
+    }
+    if (frozen.kind === "select_workspace") {
+      setPending(false);
+      setSelector(frozen.memberships);
+      return;
+    }
+    if (frozen.kind === "tenant_destination" && frozen.destination) {
+      if (frozen.destination === "/admin") {
+        recordMobileDiagEvent("DESTINATION_ADMIN");
+      } else if (frozen.destination === "/agent") {
+        recordMobileDiagEvent("DESTINATION_AGENT");
+      }
+      hardGo(frozen.destination);
+      return;
+    }
+    if (frozen.kind === "handoff" && frozen.membership) {
+      const handoffUrl = await requestHandoff(frozen.membership.workspaceId);
+      setPending(false);
+      if (!handoffUrl) {
+        setError("Workspace handoff failed. Try again.");
+        return;
+      }
+      try {
+        const target = new URL(handoffUrl);
+        recordMobileDiagEvent(
+          "NAVIGATE_TENANT",
+          `${target.hostname}${target.pathname}`,
+        );
+      } catch {
+        recordMobileDiagEvent(
+          "NAVIGATE_TENANT",
+          sanitizeDiagnosticHref(handoffUrl),
+        );
+      }
+      hardGo(handoffUrl);
+      return;
+    }
+    setPending(false);
   }
 
   async function onSelectWorkspace(workspaceId: string) {
@@ -254,6 +377,51 @@ export function ProWorkspaceBootstrap() {
       );
     }
     hardGo(handoffUrl);
+  }
+
+  if (frozen) {
+    const m = frozen.membership;
+    return (
+      <div className="mx-auto w-full max-w-md px-5 py-10">
+        <p className="text-center text-sm font-bold text-amber-900">
+          DIAGNOSTIC FREEZE — auto-handoff paused
+        </p>
+        <p className="mt-2 text-center text-xs text-ink/60">
+          Read the diagnostic panel below. No navigation until you continue.
+        </p>
+        <div className="mt-4 space-y-1 rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 font-mono text-[11px] text-amber-950">
+          <p>bootstrap_kind: {frozen.kind}</p>
+          <p>membership_count: {frozen.memberships.length}</p>
+          <p>
+            slugs:{" "}
+            {frozen.memberships.map((x) => x.slug).join(", ") || "(none)"}
+          </p>
+          <p>roles: {frozen.memberships.map((x) => x.role).join(", ") || "(none)"}</p>
+          <p>selected_slug: {m?.slug ?? "(none)"}</p>
+          <p>selected_role: {m?.role ?? "(none)"}</p>
+          <p>canonical_host: {m?.canonicalHostname ?? "(none)"}</p>
+          <p>intended_destination: {frozen.destination ?? "(handoff)"}</p>
+          {frozen.hostStopReason ? (
+            <p className="pt-2 font-semibold text-danger">
+              STOP: {frozen.hostStopReason}
+            </p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => void continueFromFreeze()}
+          className="mt-4 w-full rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {pending ? "Continuing…" : "Continue bootstrap"}
+        </button>
+        {error ? (
+          <p className="mt-3 text-center text-sm font-medium text-danger">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    );
   }
 
   if (noWorkspace) {

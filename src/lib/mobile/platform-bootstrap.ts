@@ -1,16 +1,26 @@
-/** Stage 3K.5.10 — HouzzatPRO platform mobile bootstrap surface. */
-import { isHouzzatProPlatformRoot } from "@/lib/tenancy/reserved-domains";
+/** Stage 3K.5.10.6 — HouzzatPRO application bootstrap (not sales marketing). */
+import {
+  HOUZZATPRO_APP_BOOTSTRAP_HOSTNAME,
+  HOUZZATPRO_APP_BOOTSTRAP_ORIGIN,
+  isHouzzatProAppBootstrapHost,
+} from "@/lib/tenancy/platform-hostname";
 
 export const HOUZZATPRO_BOOTSTRAP_PATH = "/pro";
-export const HOUZZATPRO_BOOTSTRAP_ORIGIN = "https://houzzatpro.com";
-export const HOUZZATPRO_BOOTSTRAP_SERVER_URL = `${HOUZZATPRO_BOOTSTRAP_ORIGIN}${HOUZZATPRO_BOOTSTRAP_PATH}`;
+/** @deprecated Prefer HOUZZATPRO_APP_BOOTSTRAP_ORIGIN — sales apex is not the app host. */
+export const HOUZZATPRO_BOOTSTRAP_ORIGIN = HOUZZATPRO_APP_BOOTSTRAP_ORIGIN;
+export const HOUZZATPRO_BOOTSTRAP_SERVER_URL = `${HOUZZATPRO_APP_BOOTSTRAP_ORIGIN}${HOUZZATPRO_BOOTSTRAP_PATH}`;
 export const HOUZZATPRO_MOBILE_HANDOFF_PATH = "/pro/mobile/handoff";
 
+export { HOUZZATPRO_APP_BOOTSTRAP_HOSTNAME, HOUZZATPRO_APP_BOOTSTRAP_ORIGIN };
+
+/**
+ * Neutral SaaS / mobile application bootstrap host.
+ * NOT houzzatpro.com (sales centre) and NOT any tenant hostname.
+ */
 export function isPlatformMobileBootstrapHost(
   hostname: string | null | undefined,
 ): boolean {
-  if (!hostname) return false;
-  return isHouzzatProPlatformRoot(hostname);
+  return isHouzzatProAppBootstrapHost(hostname);
 }
 
 export function isApprovedProCapacitorServerUrl(url: string): boolean {

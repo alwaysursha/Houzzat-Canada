@@ -199,7 +199,7 @@ function testCapacitorProTenancyAllowlist() {
   const cap = read("capacitor.config.pro.ts");
   assert.ok(cap.includes("*.houzzatpro.com"));
   assert.ok(cap.includes("HOUZZAT_CAP_PRO_SERVER_URL"));
-  assert.ok(cap.includes("https://houzzatpro.com/pro"));
+  assert.ok(cap.includes("https://app.houzzatpro.com/pro"));
 }
 
 function main() {

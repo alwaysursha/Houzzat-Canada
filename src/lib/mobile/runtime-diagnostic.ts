@@ -126,21 +126,25 @@ export function maskEmail(email: string | null | undefined): string | null {
 
 export function isPlatformBootstrapHostOk(hostname: string): boolean {
   const host = hostname.trim().toLowerCase().split(":")[0] ?? "";
-  return host === "houzzatpro.com" || host === "www.houzzatpro.com";
+  return host === "app.houzzatpro.com";
 }
 
 export function classifyBootstrapHost(hostname: string): {
   ok: boolean;
   label:
     | "platform_bootstrap"
+    | "sales_centre"
     | "houzzat_tenant"
     | "tenant_canary"
     | "godaddy_lander"
     | "unknown";
 } {
   const host = hostname.trim().toLowerCase().split(":")[0] ?? "";
-  if (host === "houzzatpro.com" || host === "www.houzzatpro.com") {
+  if (host === "app.houzzatpro.com") {
     return { ok: true, label: "platform_bootstrap" };
+  }
+  if (host === "houzzatpro.com" || host === "www.houzzatpro.com") {
+    return { ok: false, label: "sales_centre" };
   }
   if (host === "houzzat.com" || host === "www.houzzat.com" || host === "houzzat.houzzatpro.com") {
     return { ok: false, label: "houzzat_tenant" };
@@ -533,4 +537,97 @@ export function expectedMobileDestination(input: {
     return { hostHint: "houzzat.com", path };
   }
   return { hostHint: "(canonical host)", path };
+}
+
+/**
+ * Diagnostic freeze — when true, ProWorkspaceBootstrap must not auto-redirect/handoff.
+ * Entry: /pro?diag=1 or /pro/mobile/diag (native observation only).
+ */
+export function isMobileDiagnosticFreezePath(
+  pathname: string,
+  search: string | URLSearchParams | null | undefined,
+): boolean {
+  const path = pathname.split("?")[0] || "/";
+  if (path === "/pro/mobile/diag" || path === "/pro/mobile/diag/") return true;
+  const params =
+    typeof search === "string"
+      ? new URLSearchParams(
+          search.startsWith("?") ? search.slice(1) : search,
+        )
+      : search instanceof URLSearchParams
+        ? search
+        : null;
+  if (
+    (path === "/pro" || path === "/pro/") &&
+    params?.get("diag") === "1"
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Client helper — reads window location. */
+export function isMobileDiagnosticFreezeActive(): boolean {
+  if (typeof window === "undefined") return false;
+  return isMobileDiagnosticFreezePath(
+    window.location.pathname,
+    window.location.search,
+  );
+}
+
+/**
+ * Safe classification when Houzzat memberships exist but WebView is on canary.
+ * Used by diagnostics — not a runtime auth change.
+ */
+export function classifyWrongHostBootstrap(input: {
+  requestHostname: string;
+  membershipSlugs: string[];
+}): {
+  platformHostOk: boolean;
+  handoffMintAllowed: boolean;
+  stopReason: string | null;
+} {
+  const platformHostOk = isPlatformBootstrapHostOk(input.requestHostname);
+  const handoffMintAllowed = platformHostOk;
+  if (platformHostOk) {
+    return { platformHostOk, handoffMintAllowed, stopReason: null };
+  }
+  const hostClass = classifyBootstrapHost(input.requestHostname);
+  if (hostClass.label === "tenant_canary") {
+    return {
+      platformHostOk: false,
+      handoffMintAllowed: false,
+      stopReason:
+        "WebView is on Tenant Canary host — not houzzatpro.com platform bootstrap. Handoff mint is platform-only and will fail.",
+    };
+  }
+  if (hostClass.label === "houzzat_tenant") {
+    return {
+      platformHostOk: false,
+      handoffMintAllowed: false,
+      stopReason:
+        "WebView is on Houzzat tenant host — cold-start should be app.houzzatpro.com/pro.",
+    };
+  }
+  if (hostClass.label === "sales_centre") {
+    return {
+      platformHostOk: false,
+      handoffMintAllowed: false,
+      stopReason:
+        "WebView is on HouzzatPRO sales centre (houzzatpro.com) — application bootstrap is app.houzzatpro.com.",
+    };
+  }
+  if (hostClass.label === "godaddy_lander" || hostClass.label === "unknown") {
+    return {
+      platformHostOk: false,
+      handoffMintAllowed: false,
+      stopReason:
+        "Application bootstrap host app.houzzatpro.com is not serving the Houzzat Worker. Attach Custom Domain / route in Cloudflare.",
+    };
+  }
+  return {
+    platformHostOk: false,
+    handoffMintAllowed: false,
+    stopReason: "Not on application bootstrap host (app.houzzatpro.com).",
+  };
 }

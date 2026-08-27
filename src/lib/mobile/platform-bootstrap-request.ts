@@ -3,7 +3,7 @@ import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
 
 const PLATFORM_PRO_PREFIX = "/pro";
 
-/** True when request is HouzzatPRO platform bootstrap (/pro on houzzatpro.com root). */
+/** True when request is HouzzatPRO application bootstrap (/pro on app.houzzatpro.com). */
 export async function isHouzzatProPlatformBootstrapRequest(): Promise<boolean> {
   const headerStore = await headers();
   const pathname =

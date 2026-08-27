@@ -13,6 +13,7 @@ import {
 import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
 import { hardGo } from "@/lib/mobile/nav-back";
+import { sanitizeStaffCallbackPath } from "@/lib/auth/pro-sign-in-routing";
 
 export function HouzzatProSignInForm({
   callbackUrl = null,
@@ -77,7 +78,12 @@ export function HouzzatProSignInForm({
     });
 
     setPending(false);
-    hardGo("/pro");
+    // Honor safe staff callback (e.g. /pro?diag=1 freeze). Default /pro.
+    const next =
+      callbackUrl && callbackUrl.includes("diag=1")
+        ? "/pro?diag=1"
+        : sanitizeStaffCallbackPath(callbackUrl, "/pro");
+    hardGo(next);
   }
 
   return (

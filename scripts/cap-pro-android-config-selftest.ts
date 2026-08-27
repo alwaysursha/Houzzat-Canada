@@ -21,7 +21,7 @@ const PRO_ASSETS_CONFIG = join(
   "android-pro/app/src/main/assets/capacitor.config.json",
 );
 
-const DEFAULT_PRO_URL = "https://houzzatpro.com/pro";
+const DEFAULT_PRO_URL = "https://app.houzzatpro.com/pro";
 const CANARY_OVERRIDE_URL = "https://tenant-canary.houzzatpro.com/pro";
 
 function resolveProServer(env: Record<string, string | undefined>) {
@@ -73,6 +73,7 @@ function withWorkspaceMode(fn: () => void) {
 function testResolvedConfigDefaults() {
   const server = resolveProServer({ HOUZZAT_CAP_TARGET: "pro" });
   assert.equal(server.url, DEFAULT_PRO_URL);
+  assert.ok(server.allowNavigation.includes("app.houzzatpro.com"));
   assert.ok(server.allowNavigation.includes("houzzat.com"));
   assert.ok(server.allowNavigation.includes("*.houzzatpro.com"));
 }
@@ -93,6 +94,7 @@ function testEmbeddedArtifactTracksEnvAtSync() {
   let embedded = readEmbeddedProConfig();
   assert.equal(embedded.server.url, CANARY_OVERRIDE_URL);
   assert.deepEqual(embedded.server.allowNavigation, [
+    "app.houzzatpro.com",
     "houzzat.com",
     "*.houzzat.com",
     "houzzatpro.com",

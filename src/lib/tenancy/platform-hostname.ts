@@ -6,6 +6,13 @@ import { normalizeWorkspaceHostname } from "@/lib/tenancy/normalize-workspace-ho
 
 export const HOUZZATPRO_PLATFORM_ZONE = "houzzatpro.com";
 
+/**
+ * Neutral HouzzatPRO application bootstrap host (Stage 3K.5.10.6).
+ * Distinct from sales apex houzzatpro.com / www.houzzatpro.com.
+ */
+export const HOUZZATPRO_APP_BOOTSTRAP_HOSTNAME = "app.houzzatpro.com";
+export const HOUZZATPRO_APP_BOOTSTRAP_ORIGIN = `https://${HOUZZATPRO_APP_BOOTSTRAP_HOSTNAME}`;
+
 /** Slugs that must never become platform tenant hostnames. */
 export const RESERVED_PLATFORM_WORKSPACE_SLUGS = [
   "www",
@@ -82,6 +89,16 @@ export function isHouzzatProPlatformRoot(rawHostname: string): boolean {
     normalized.hostname === HOUZZATPRO_PLATFORM_ZONE ||
     normalized.hostname === `www.${HOUZZATPRO_PLATFORM_ZONE}`
   );
+}
+
+/** Application bootstrap host — auth, workspace discovery, handoff mint. */
+export function isHouzzatProAppBootstrapHost(
+  rawHostname: string | null | undefined,
+): boolean {
+  if (!rawHostname) return false;
+  const normalized = normalizeWorkspaceHostname(rawHostname);
+  if (!normalized.ok) return false;
+  return normalized.hostname === HOUZZATPRO_APP_BOOTSTRAP_HOSTNAME;
 }
 
 export function isPlatformTenantHostname(rawHostname: string): boolean {

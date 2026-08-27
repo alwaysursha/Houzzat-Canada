@@ -118,9 +118,19 @@ if [[ "$ASSERT" == "pro" ]]; then
       echo "ERROR: cap sync did not embed the requested cold-start origin — aborting release build." >&2
       exit 1
     fi
-    if [[ -z "${HOUZZAT_CAP_PRO_SERVER_URL:-}" && "$EMBEDDED_URL" != "https://houzzatpro.com/pro" ]]; then
-      echo "ERROR: production pro release requires server.url=https://houzzatpro.com/pro (got '$EMBEDDED_URL')" >&2
+    if [[ -z "${HOUZZAT_CAP_PRO_SERVER_URL:-}" && "$EMBEDDED_URL" != "https://app.houzzatpro.com/pro" ]]; then
+      echo "ERROR: production pro release requires server.url=https://app.houzzatpro.com/pro (got '$EMBEDDED_URL')" >&2
       echo "ERROR: set HOUZZAT_CAP_PRO_SERVER_URL only for explicit dev/QA overrides." >&2
+      echo "ERROR: do not embed tenant hosts (houzzat.com, tenant-canary.*, etc.)." >&2
+      exit 1
+    fi
+    # Fail-fast: never ship a production AAB that cold-starts on a tenant host.
+    if [[ "$EMBEDDED_URL" == *"tenant-canary"* ]] || [[ "$EMBEDDED_URL" == "https://houzzat.com/pro" ]] || [[ "$EMBEDDED_URL" == "https://houzzat.com/pro/" ]]; then
+      echo "ERROR: embedded server.url='$EMBEDDED_URL' is a tenant host — refuse release" >&2
+      exit 1
+    fi
+    if [[ "$EMBEDDED_URL" == "https://houzzatpro.com/pro" ]] || [[ "$EMBEDDED_URL" == "https://www.houzzatpro.com/pro" ]]; then
+      echo "ERROR: embedded server.url='$EMBEDDED_URL' is sales apex — use https://app.houzzatpro.com/pro" >&2
       exit 1
     fi
   fi

@@ -3,17 +3,25 @@
  */
 import { normalizeWorkspaceHostname } from "@/lib/tenancy/normalize-workspace-hostname";
 import {
+  HOUZZATPRO_APP_BOOTSTRAP_HOSTNAME,
+  HOUZZATPRO_APP_BOOTSTRAP_ORIGIN,
   HOUZZATPRO_PLATFORM_ZONE,
+  isHouzzatProAppBootstrapHost,
   isHouzzatProPlatformRoot,
   isPlatformTenantHostname,
   parsePlatformTenantHostname,
   platformHostnameForWorkspaceSlug,
 } from "@/lib/tenancy/platform-hostname";
 
-/** Exact hostnames reserved for HouzzatPro SaaS root (marketing/billing). */
+/** Exact hostnames reserved for HouzzatPro SaaS sales / marketing centre. */
 export const HOUZZATPRO_PLATFORM_ROOT_HOSTNAMES = [
   "houzzatpro.com",
   "www.houzzatpro.com",
+] as const;
+
+/** Application bootstrap host — never a tenant workspace. */
+export const HOUZZATPRO_APP_BOOTSTRAP_HOSTNAMES = [
+  "app.houzzatpro.com",
 ] as const;
 
 /** Houzzat tenant #1 custom domains (seeded via trusted migration only). */
@@ -31,6 +39,7 @@ export const RESERVED_HOSTNAME_SUFFIXES = [
 
 export type ReservedHostnameReason =
   | "platform_houzzatpro_root"
+  | "platform_houzzatpro_app_bootstrap"
   | "platform_houzzat_tenant"
   | "platform_infrastructure"
   | "platform_hostname_slug_mismatch";
@@ -65,6 +74,10 @@ export function isReservedPlatformHostname(
     return { reserved: true, reason: "platform_houzzatpro_root" };
   }
 
+  if (isHouzzatProAppBootstrapHost(hostname)) {
+    return { reserved: true, reason: "platform_houzzatpro_app_bootstrap" };
+  }
+
   if ((HOUZZAT_TENANT_HOSTNAMES as readonly string[]).includes(hostname)) {
     return { reserved: true, reason: "platform_houzzat_tenant" };
   }
@@ -90,6 +103,10 @@ export function blocksTenantHostnameResolution(
 
   if (isHouzzatProPlatformRoot(hostname)) {
     return "platform_houzzatpro_root";
+  }
+
+  if (isHouzzatProAppBootstrapHost(hostname)) {
+    return "platform_houzzatpro_app_bootstrap";
   }
 
   for (const suffix of RESERVED_HOSTNAME_SUFFIXES) {
@@ -147,7 +164,10 @@ export function assertHostnameClaimable(
     return "hostname reserved for Houzzat tenant #1 migration";
   }
   if (check.reason === "platform_houzzatpro_root") {
-    return "hostname reserved for HouzzatPro platform root";
+    return "hostname reserved for HouzzatPro sales / marketing centre";
+  }
+  if (check.reason === "platform_houzzatpro_app_bootstrap") {
+    return "hostname reserved for HouzzatPro application bootstrap";
   }
   return "hostname reserved for platform infrastructure";
 }
@@ -168,6 +188,9 @@ export function assertPlatformDomainMatchesSlug(input: {
 
 export {
   HOUZZATPRO_PLATFORM_ZONE,
+  HOUZZATPRO_APP_BOOTSTRAP_HOSTNAME,
+  HOUZZATPRO_APP_BOOTSTRAP_ORIGIN,
+  isHouzzatProAppBootstrapHost,
   isHouzzatProPlatformRoot,
   isPlatformTenantHostname,
   parsePlatformTenantHostname,

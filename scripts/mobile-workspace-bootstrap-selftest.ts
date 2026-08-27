@@ -43,10 +43,17 @@ function membership(
 }
 
 function testPlatformBootstrapHost() {
-  assert.equal(isPlatformMobileBootstrapHost("houzzatpro.com"), true);
+  assert.equal(isPlatformMobileBootstrapHost("app.houzzatpro.com"), true);
+  assert.equal(isPlatformMobileBootstrapHost("houzzatpro.com"), false);
+  assert.equal(isPlatformMobileBootstrapHost("www.houzzatpro.com"), false);
   assert.equal(isPlatformMobileBootstrapHost("tenant-canary.houzzatpro.com"), false);
   assert.equal(isPlatformMobileBootstrapHost("houzzat.com"), false);
   assert.equal(isApprovedProCapacitorServerUrl(HOUZZATPRO_BOOTSTRAP_SERVER_URL), true);
+  assert.equal(
+    isApprovedProCapacitorServerUrl("https://app.houzzatpro.com/pro"),
+    true,
+  );
+  assert.equal(isApprovedProCapacitorServerUrl("https://houzzatpro.com/pro"), false);
   assert.equal(isApprovedProCapacitorServerUrl("https://houzzat.com/pro"), false);
 }
 
@@ -105,7 +112,7 @@ function testBootstrapStateMatrix() {
   assert.deepEqual(
     resolveMobileWorkspaceBootstrapState({
       authenticated: false,
-      requestHostname: "houzzatpro.com",
+      requestHostname: "app.houzzatpro.com",
       memberships: [canary],
       currentHostMembership: null,
     }),
@@ -115,7 +122,7 @@ function testBootstrapStateMatrix() {
   assert.deepEqual(
     resolveMobileWorkspaceBootstrapState({
       authenticated: true,
-      requestHostname: "houzzatpro.com",
+      requestHostname: "app.houzzatpro.com",
       memberships: [],
       currentHostMembership: null,
     }),
@@ -125,7 +132,7 @@ function testBootstrapStateMatrix() {
   assert.deepEqual(
     resolveMobileWorkspaceBootstrapState({
       authenticated: true,
-      requestHostname: "houzzatpro.com",
+      requestHostname: "app.houzzatpro.com",
       memberships: [canary],
       currentHostMembership: null,
     }),
@@ -135,7 +142,7 @@ function testBootstrapStateMatrix() {
   assert.deepEqual(
     resolveMobileWorkspaceBootstrapState({
       authenticated: true,
-      requestHostname: "houzzatpro.com",
+      requestHostname: "app.houzzatpro.com",
       memberships: [houzzat],
       currentHostMembership: null,
     }),
@@ -145,7 +152,7 @@ function testBootstrapStateMatrix() {
   assert.equal(
     resolveMobileWorkspaceBootstrapState({
       authenticated: true,
-      requestHostname: "houzzatpro.com",
+      requestHostname: "app.houzzatpro.com",
       memberships: [canary, houzzat],
       currentHostMembership: null,
     }).kind,
@@ -209,8 +216,11 @@ function testRoutingWiring() {
   assert.ok(startup.includes("ProWorkspaceBootstrap"));
   assert.ok(bootstrap.includes("onNativeProColdStart"));
   assert.ok(bootstrap.includes("return null"));
+  assert.ok(bootstrap.includes("isMobileDiagnosticFreezePath"));
+  assert.ok(bootstrap.includes("DIAGNOSTIC FREEZE"));
   assert.ok(!providers.includes("HouzzatProStartup"));
   assert.ok(proPage.includes("HouzzatProStartup"));
+  assert.ok(proPage.includes("ProShellRuntimeDiagnostic"));
   assert.ok(middleware.includes("workspace bootstrap handles authenticated routing"));
   assert.ok(middleware.includes("x-houzzat-request-path"));
   const marketingLayout = readFileSync(
@@ -218,7 +228,8 @@ function testRoutingWiring() {
     "utf8",
   );
   assert.ok(marketingLayout.includes("isHouzzatProPlatformBootstrapRequest"));
-  assert.ok(capPro.includes("https://houzzatpro.com/pro"));
+  assert.ok(capPro.includes("https://app.houzzatpro.com/pro"));
+  assert.ok(!capPro.includes('"https://houzzatpro.com/pro"'));
 }
 
 function testFixtureDomains() {
@@ -246,10 +257,135 @@ function testHostnameMembershipLookup() {
   assert.equal(findMembershipForHostname([canary], "houzzat.com"), null);
 }
 
+function testAbaNoWorkspaceBleed() {
+  const canary = membership({
+    workspaceId: TENANT_B_TEST_WORKSPACE_ID,
+    role: "OWNER",
+    slug: "tenant-canary",
+    canonicalHostname: "tenant-canary.houzzatpro.com",
+  });
+  const houzzat = membership({
+    workspaceId: HOUZZAT_FIXTURE_WORKSPACE_ID,
+    role: "OWNER",
+    slug: "houzzat",
+    canonicalHostname: "houzzat.com",
+  });
+
+  // Simulate sequential users in the same process — pure function, no globals.
+  const canaryBoot = resolveMobileWorkspaceBootstrapState({
+    authenticated: true,
+    requestHostname: "app.houzzatpro.com",
+    memberships: [canary],
+    currentHostMembership: null,
+  });
+  assert.equal(canaryBoot.kind, "handoff");
+  if (canaryBoot.kind === "handoff") {
+    assert.equal(canaryBoot.membership.slug, "tenant-canary");
+    assert.equal(
+      canaryBoot.membership.canonicalHostname,
+      "tenant-canary.houzzatpro.com",
+    );
+  }
+
+  const houzzatBoot = resolveMobileWorkspaceBootstrapState({
+    authenticated: true,
+    requestHostname: "app.houzzatpro.com",
+    memberships: [houzzat],
+    currentHostMembership: null,
+  });
+  assert.equal(houzzatBoot.kind, "handoff");
+  if (houzzatBoot.kind === "handoff") {
+    assert.equal(houzzatBoot.membership.slug, "houzzat");
+    assert.equal(houzzatBoot.membership.canonicalHostname, "houzzat.com");
+    assert.notEqual(
+      houzzatBoot.membership.canonicalHostname,
+      "tenant-canary.houzzatpro.com",
+    );
+  }
+
+  const canaryAgain = resolveMobileWorkspaceBootstrapState({
+    authenticated: true,
+    requestHostname: "app.houzzatpro.com",
+    memberships: [canary],
+    currentHostMembership: null,
+  });
+  assert.equal(canaryAgain.kind, "handoff");
+  if (canaryAgain.kind === "handoff") {
+    assert.equal(canaryAgain.membership.slug, "tenant-canary");
+  }
+
+  // Reverse then A again: Houzzat → Canary → Houzzat
+  const a = resolveMobileWorkspaceBootstrapState({
+    authenticated: true,
+    requestHostname: "app.houzzatpro.com",
+    memberships: [houzzat],
+    currentHostMembership: null,
+  });
+  const b = resolveMobileWorkspaceBootstrapState({
+    authenticated: true,
+    requestHostname: "app.houzzatpro.com",
+    memberships: [canary],
+    currentHostMembership: null,
+  });
+  const a2 = resolveMobileWorkspaceBootstrapState({
+    authenticated: true,
+    requestHostname: "app.houzzatpro.com",
+    memberships: [houzzat],
+    currentHostMembership: null,
+  });
+  assert.equal(a.kind === "handoff" && a.membership.slug, "houzzat");
+  assert.equal(b.kind === "handoff" && b.membership.slug, "tenant-canary");
+  assert.equal(a2.kind === "handoff" && a2.membership.slug, "houzzat");
+}
+
+function testHouzzatUserOnCanaryHostStillSelectsHouzzat() {
+  const houzzat = membership({
+    workspaceId: HOUZZAT_FIXTURE_WORKSPACE_ID,
+    role: "OWNER",
+    slug: "houzzat",
+    canonicalHostname: "houzzat.com",
+  });
+  // Wrong WebView host (canary) + Houzzat-only memberships → handoff to houzzat.com
+  // (never tenant_destination for canary; never invents canary membership).
+  const state = resolveMobileWorkspaceBootstrapState({
+    authenticated: true,
+    requestHostname: "tenant-canary.houzzatpro.com",
+    memberships: [houzzat],
+    currentHostMembership: null,
+  });
+  assert.equal(state.kind, "handoff");
+  if (state.kind === "handoff") {
+    assert.equal(state.membership.slug, "houzzat");
+    assert.equal(state.membership.canonicalHostname, "houzzat.com");
+  }
+}
+
+function testHandoffRouteRevalidatesMembership() {
+  const route = readFileSync(
+    join(root, "src/app/api/mobile/workspace-handoff/route.ts"),
+    "utf8",
+  );
+  const lib = readFileSync(
+    join(root, "src/lib/mobile/mobile-workspace-handoff.ts"),
+    "utf8",
+  );
+  assert.ok(route.includes("loadMobileBootstrapMemberships(session.user.id)"));
+  assert.ok(route.includes("memberships.find"));
+  assert.ok(route.includes("createMobileWorkspaceHandoff"));
+  assert.ok(lib.includes("isPlatformMobileBootstrapHost"));
+  assert.ok(lib.includes("workspaceMember.findFirst"));
+  assert.ok(lib.includes("resolveMobileWorkspaceCanonicalHost"));
+  // No client-provided hostname accepted on mint.
+  assert.ok(!route.includes("targetHostname"));
+}
+
 function main() {
   testPlatformBootstrapHost();
   testCanonicalHostPolicy();
   testBootstrapStateMatrix();
+  testAbaNoWorkspaceBleed();
+  testHouzzatUserOnCanaryHostStillSelectsHouzzat();
+  testHandoffRouteRevalidatesMembership();
   testHandoffIdentifier();
   testRoutingWiring();
   testFixtureDomains();

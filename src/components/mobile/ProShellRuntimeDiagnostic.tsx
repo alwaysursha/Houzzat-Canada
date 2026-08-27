@@ -359,7 +359,7 @@ export function ProShellRuntimeDiagnostic({
       trace,
       loop,
       logoutNote:
-        "Logout clears Auth.js cookies on the CURRENT host only. Sign out on tenant host AND relaunch/sign out on houzzatpro.com/pro for a clean A/B test.",
+        "Logout clears Auth.js cookies on the CURRENT host only. Sign out on tenant host AND relaunch/sign out on app.houzzatpro.com/pro for a clean A/B test.",
     });
     setBusy(false);
   }, [enabled, data?.user?.role, data?.user?.id, data?.user?.email, sessionStatus]);
@@ -563,6 +563,18 @@ export function ProShellRuntimeDiagnostic({
       <Section title="Logout note">
         <p>{snap.logoutNote}</p>
       </Section>
+
+      {!snap.platformHostOk ? (
+        <Section title="CRITICAL — wrong bootstrap host">
+          <p className="font-semibold text-danger">
+            PLATFORM_BOOTSTRAP_HOST_OK=false. Handoff mint is platform-only
+            (app.houzzatpro.com). If you are on Tenant Canary / Houzzat tenant /
+            sales apex / GoDaddy lander after a Houzzat login, the WebView never
+            reached the application bootstrap Worker — this is not a
+            WorkspaceMember mix-up.
+          </p>
+        </Section>
+      ) : null}
     </aside>
   );
 }
