@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { HouzzatProStartup } from "@/components/mobile/HouzzatProStartup";
 import { ProShellRuntimeDiagnostic } from "@/components/mobile/ProShellRuntimeDiagnostic";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
 export default function HouzzatProStartPage() {
   return (
     <>
+      <HouzzatProStartup />
       <Suspense fallback={null}>
         <ProShellRuntimeDiagnostic />
       </Suspense>

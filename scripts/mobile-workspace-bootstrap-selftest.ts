@@ -192,9 +192,25 @@ function testRoutingWiring() {
     join(root, "src/components/mobile/HouzzatProStartup.tsx"),
     "utf8",
   );
+  const bootstrap = readFileSync(
+    join(root, "src/components/mobile/ProWorkspaceBootstrap.tsx"),
+    "utf8",
+  );
+  const providers = readFileSync(
+    join(root, "src/components/Providers.tsx"),
+    "utf8",
+  );
+  const proPage = readFileSync(
+    join(root, "src/app/(marketing)/pro/page.tsx"),
+    "utf8",
+  );
   const middleware = readFileSync(join(root, "src/middleware.ts"), "utf8");
   const capPro = readFileSync(join(root, "capacitor.config.pro.ts"), "utf8");
   assert.ok(startup.includes("ProWorkspaceBootstrap"));
+  assert.ok(bootstrap.includes("onNativeProColdStart"));
+  assert.ok(bootstrap.includes("return null"));
+  assert.ok(!providers.includes("HouzzatProStartup"));
+  assert.ok(proPage.includes("HouzzatProStartup"));
   assert.ok(middleware.includes("workspace bootstrap handles authenticated routing"));
   assert.ok(middleware.includes("x-houzzat-request-path"));
   const marketingLayout = readFileSync(

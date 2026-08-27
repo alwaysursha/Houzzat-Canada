@@ -91,6 +91,8 @@ function WorkspaceCard({
 export function ProWorkspaceBootstrap() {
   const { status } = useSession();
   const pathname = usePathname() || "/";
+  const onNativeProColdStart =
+    Capacitor.isNativePlatform() && isProRouterPath(pathname);
   const routed = useRef(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,8 +102,7 @@ export function ProWorkspaceBootstrap() {
   const [noWorkspace, setNoWorkspace] = useState(false);
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-    if (!isProRouterPath(pathname)) return;
+    if (!onNativeProColdStart) return;
     if (routed.current) return;
     if (status === "loading") return;
 
@@ -181,7 +182,11 @@ export function ProWorkspaceBootstrap() {
     return () => {
       cancelled = true;
     };
-  }, [pathname, status]);
+  }, [onNativeProColdStart, pathname, status]);
+
+  if (!onNativeProColdStart) {
+    return null;
+  }
 
   async function onSelectWorkspace(workspaceId: string) {
     setPending(true);
