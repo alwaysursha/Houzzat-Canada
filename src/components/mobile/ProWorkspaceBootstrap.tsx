@@ -14,6 +14,11 @@ import {
 } from "@/lib/mobile/app-shell";
 import { hardGo } from "@/lib/mobile/nav-back";
 import { peekPendingPushNavigation } from "@/lib/notifications/pending-push-nav";
+import {
+  recordMobileDiagEvent,
+  recordMobileDiagNav,
+  sanitizeDiagnosticHref,
+} from "@/lib/mobile/runtime-diagnostic";
 import type {
   MobileBootstrapMembership,
   MobileWorkspaceBootstrapState,
@@ -38,15 +43,30 @@ async function fetchBootstrap(): Promise<BootstrapResponse | null> {
 }
 
 async function requestHandoff(workspaceId: string): Promise<string | null> {
+  recordMobileDiagEvent("HANDOFF_MINT_START");
   const res = await fetch("/api/mobile/workspace-handoff", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ workspaceId }),
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    recordMobileDiagEvent("HANDOFF_MINT_FAILED", `http_${res.status}`);
+    return null;
+  }
   const data = (await res.json()) as { handoffUrl?: string };
-  return data.handoffUrl ?? null;
+  const handoffUrl = data.handoffUrl ?? null;
+  if (!handoffUrl) {
+    recordMobileDiagEvent("HANDOFF_MINT_FAILED", "missing_url");
+    return null;
+  }
+  try {
+    const host = new URL(handoffUrl).hostname;
+    recordMobileDiagEvent("HANDOFF_MINT_SUCCESS", host);
+  } catch {
+    recordMobileDiagEvent("HANDOFF_MINT_SUCCESS", "url_ok");
+  }
+  return handoffUrl;
 }
 
 function WorkspaceCard({
@@ -108,6 +128,7 @@ export function ProWorkspaceBootstrap() {
 
     let cancelled = false;
     void (async () => {
+      recordMobileDiagNav();
       const shell = await resolveAppShell();
       if (cancelled) return;
       syncAppShellCookie(shell);
@@ -116,6 +137,8 @@ export function ProWorkspaceBootstrap() {
       const pendingHref = peekPendingPushNavigation()?.href ?? null;
       if (status !== "authenticated") {
         routed.current = true;
+        recordMobileDiagEvent("PLATFORM_SESSION_MISSING");
+        recordMobileDiagEvent("REDIRECT_SIGN_IN");
         const callback = sanitizeStaffCallbackPath(
           pendingHref,
           HOUZZATPRO_START_PATH,
@@ -126,6 +149,8 @@ export function ProWorkspaceBootstrap() {
         return;
       }
 
+      recordMobileDiagEvent("PLATFORM_SESSION_FOUND");
+      recordMobileDiagEvent("WORKSPACE_BOOTSTRAP_START");
       setPending(true);
       setError(null);
       const payload = await fetchBootstrap();
@@ -139,6 +164,7 @@ export function ProWorkspaceBootstrap() {
       const { bootstrap } = payload;
       if (bootstrap.kind === "no_workspace") {
         routed.current = true;
+        recordMobileDiagEvent("WORKSPACE_COUNT_0");
         setPending(false);
         setNoWorkspace(true);
         return;
@@ -146,6 +172,7 @@ export function ProWorkspaceBootstrap() {
 
       if (bootstrap.kind === "select_workspace") {
         routed.current = true;
+        recordMobileDiagEvent("WORKSPACE_SELECTOR");
         setPending(false);
         setSelector(bootstrap.memberships);
         return;
@@ -153,6 +180,12 @@ export function ProWorkspaceBootstrap() {
 
       if (bootstrap.kind === "tenant_destination") {
         routed.current = true;
+        recordMobileDiagEvent("WORKSPACE_COUNT_1", bootstrap.membership.slug);
+        if (bootstrap.destination === "/admin") {
+          recordMobileDiagEvent("DESTINATION_ADMIN");
+        } else if (bootstrap.destination === "/agent") {
+          recordMobileDiagEvent("DESTINATION_AGENT");
+        }
         setPending(false);
         if (pendingHref) {
           hardGo(pendingHref);
@@ -164,6 +197,7 @@ export function ProWorkspaceBootstrap() {
 
       if (bootstrap.kind === "handoff") {
         routed.current = true;
+        recordMobileDiagEvent("WORKSPACE_COUNT_1", bootstrap.membership.slug);
         const handoffUrl = await requestHandoff(bootstrap.membership.workspaceId);
         if (cancelled) return;
         setPending(false);
@@ -171,6 +205,15 @@ export function ProWorkspaceBootstrap() {
           setError("Workspace handoff failed. Try again.");
           routed.current = false;
           return;
+        }
+        try {
+          const target = new URL(handoffUrl);
+          recordMobileDiagEvent(
+            "NAVIGATE_TENANT",
+            `${target.hostname}${target.pathname}`,
+          );
+        } catch {
+          recordMobileDiagEvent("NAVIGATE_TENANT", sanitizeDiagnosticHref(handoffUrl));
         }
         hardGo(handoffUrl);
         return;
@@ -191,11 +234,24 @@ export function ProWorkspaceBootstrap() {
   async function onSelectWorkspace(workspaceId: string) {
     setPending(true);
     setError(null);
+    recordMobileDiagEvent("WORKSPACE_SELECTOR", "user_pick");
     const handoffUrl = await requestHandoff(workspaceId);
     setPending(false);
     if (!handoffUrl) {
       setError("Workspace handoff failed. Try again.");
       return;
+    }
+    try {
+      const target = new URL(handoffUrl);
+      recordMobileDiagEvent(
+        "NAVIGATE_TENANT",
+        `${target.hostname}${target.pathname}`,
+      );
+    } catch {
+      recordMobileDiagEvent(
+        "NAVIGATE_TENANT",
+        sanitizeDiagnosticHref(handoffUrl),
+      );
     }
     hardGo(handoffUrl);
   }

@@ -85,6 +85,8 @@
     "cap-pro-android-config:selftest": "node --import tsx scripts/cap-pro-android-config-selftest.ts",
     "mobile-workspace-bootstrap:selftest": "node --import tsx scripts/mobile-workspace-bootstrap-selftest.ts",
     "mobile-workspace-handoff:selftest": "node --import tsx scripts/mobile-workspace-handoff-selftest.ts",
+    "mobile-runtime-diagnostic:selftest": "node --import tsx scripts/mobile-runtime-diagnostic-selftest.ts",
+    "pro-auth-routing:selftest": "node --import tsx scripts/pro-auth-routing-selftest.ts",
     "tenant-team-host-isolation:selftest": "node --import tsx scripts/tenant-team-host-isolation-selftest.ts",
     "tenant-canary-side-effect:selftest": "node --import tsx scripts/tenant-canary-side-effect-selftest.ts",
     "tenant-domain-model:selftest": "node --import tsx scripts/tenant-domain-model-selftest.ts",

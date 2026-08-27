@@ -11,7 +11,8 @@ export const metadata: Metadata = {
 /**
  * Capacitor Pro cold-start surface (`server.url` → /pro).
  * Routing is handled by HouzzatProStartup in Providers (session role only).
- * Append ?diag=1 for safe native runtime origin inspection (no secrets).
+ * Append ?diag=1 for safe in-app runtime diagnostic (Stage 3K.5.10.4).
+ * Full page: /pro/mobile/diag
  */
 export default function HouzzatProStartPage() {
   return (

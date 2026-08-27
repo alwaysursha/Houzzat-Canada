@@ -3,6 +3,10 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { hardGo } from "@/lib/mobile/nav-back";
+import {
+  recordMobileDiagEvent,
+  recordMobileDiagNav,
+} from "@/lib/mobile/runtime-diagnostic";
 
 function HandoffExchangeInner() {
   const searchParams = useSearchParams();
@@ -13,6 +17,8 @@ function HandoffExchangeInner() {
   useEffect(() => {
     if (started.current || !code) return;
     started.current = true;
+    recordMobileDiagNav();
+    recordMobileDiagEvent("HANDOFF_EXCHANGE_START");
 
     void (async () => {
       const res = await fetch("/api/mobile/workspace-handoff", {
@@ -22,11 +28,23 @@ function HandoffExchangeInner() {
         body: JSON.stringify({ code }),
       });
       if (!res.ok) {
-        setError("Workspace sign-in expired. Open HouzzatPro and sign in again.");
+        recordMobileDiagEvent("HANDOFF_EXCHANGE_FAILED", `http_${res.status}`);
+        setError(
+          "Workspace sign-in expired. Open HouzzatPro and sign in again.",
+        );
         return;
       }
       const data = (await res.json()) as { destination?: string };
       const destination = data.destination ?? "/pro";
+      recordMobileDiagEvent("HANDOFF_EXCHANGE_SUCCESS", destination);
+      recordMobileDiagEvent("TENANT_SESSION_FOUND");
+      if (destination === "/admin") {
+        recordMobileDiagEvent("DESTINATION_ADMIN");
+      } else if (destination === "/agent") {
+        recordMobileDiagEvent("DESTINATION_AGENT");
+      } else if (destination === "/pro" || destination.startsWith("/pro/")) {
+        recordMobileDiagEvent("REDIRECT_PRO", destination);
+      }
       hardGo(destination);
       if (typeof window !== "undefined") {
         const clean = new URL(window.location.href);
@@ -49,7 +67,9 @@ function HandoffExchangeInner() {
   }
 
   return (
-    <p className="text-sm font-medium text-ink/50">Connecting to your workspace…</p>
+    <p className="text-sm font-medium text-ink/50">
+      Connecting to your workspace…
+    </p>
   );
 }
 
