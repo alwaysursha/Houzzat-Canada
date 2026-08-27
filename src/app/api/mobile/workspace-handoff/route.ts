@@ -3,7 +3,11 @@ import { z } from "zod";
 import { auth, signIn } from "@/lib/auth";
 import { isValidWorkspaceIdShape } from "@/lib/active-workspace";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
-import { createMobileWorkspaceHandoff } from "@/lib/mobile/mobile-workspace-handoff";
+import {
+  createMobileWorkspaceHandoff,
+  isMobileHandoffSignInErrorResult,
+  peekMobileWorkspaceHandoff,
+} from "@/lib/mobile/mobile-workspace-handoff";
 import { loadMobileBootstrapMemberships } from "@/lib/mobile/load-bootstrap-memberships";
 import { isTrustedStaffMutationOriginForRequest } from "@/lib/active-workspace";
 
@@ -63,7 +67,13 @@ export async function POST(request: Request) {
   });
 }
 
-/** Exchange handoff code for host-local session (tenant host only). */
+/**
+ * Exchange handoff code for host-local session (tenant host only).
+ *
+ * Destination comes from ACTIVE WorkspaceMember.role (peek before consume),
+ * not global User.role and not a post-signIn auth() re-read (cookies are often
+ * unread in the same request after signIn).
+ */
 export async function PUT(request: Request) {
   const hostname = extractTrustedRequestHostname(request);
   if (!hostname) {
@@ -77,33 +87,34 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
+  const peeked = await peekMobileWorkspaceHandoff({
+    rawCode: body.data.code,
+    requestHostname: hostname,
+  });
+  if (!peeked.ok) {
+    return NextResponse.json({ error: "Handoff expired or invalid" }, { status: 401 });
+  }
+
+  // Fail closed: only staff CRM destinations after a successful exchange.
+  if (peeked.destination !== "/admin" && peeked.destination !== "/agent") {
+    return NextResponse.json({ error: "Handoff expired or invalid" }, { status: 401 });
+  }
+
   const signInResult = await signIn("mobile-workspace-handoff", {
     code: body.data.code,
     hostname,
     redirect: false,
+    redirectTo: peeked.destination,
   });
 
-  if (!signInResult || (typeof signInResult === "object" && "error" in signInResult && signInResult.error)) {
+  if (isMobileHandoffSignInErrorResult(signInResult)) {
     return NextResponse.json({ error: "Handoff expired or invalid" }, { status: 401 });
   }
 
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Session not established" }, { status: 401 });
-  }
-
-  const memberships = await loadMobileBootstrapMemberships(session.user.id);
-  const membership = memberships.find((m) => m.canonicalHostname === hostname);
-  if (!membership) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const destination =
-    membership.role === "AGENT"
-      ? "/agent"
-      : membership.role === "OWNER" || membership.role === "ADMIN"
-        ? "/admin"
-        : "/pro/for-staff";
-
-  return NextResponse.json({ ok: true, destination });
+  return NextResponse.json({
+    ok: true,
+    destination: peeked.destination,
+    workspaceId: peeked.workspaceId,
+    workspaceRole: peeked.workspaceRole,
+  });
 }

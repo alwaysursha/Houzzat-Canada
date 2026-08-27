@@ -15,12 +15,15 @@ import {
 import {
   isStaffWorkspaceMemberRole,
   resolveWorkspaceMemberMobileDestination,
+  type MobileStaffPathDestination,
 } from "@/lib/mobile/workspace-destination";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 
 export const MOBILE_HANDOFF_PROVIDER_ID = "mobile-workspace-handoff";
 export const MOBILE_HANDOFF_TTL_MS = 2 * 60 * 1000;
 const IDENTIFIER_PREFIX = "mobile-handoff:";
+
+export type MobileStaffDestination = MobileStaffPathDestination;
 
 export type MobileHandoffIdentifier = {
   userId: string;
@@ -34,7 +37,7 @@ export type MobileWorkspaceHandoffRow = {
   targetOrigin: string;
   targetHostname: string;
   workspaceId: string;
-  destination: "/admin" | "/agent" | "/pro/for-staff";
+  destination: MobileStaffDestination;
   expiresAt: Date;
 };
 
@@ -168,18 +171,47 @@ type HandoffUser = {
   activeMode: ActiveMode;
 };
 
-export async function consumeMobileWorkspaceHandoff(input: {
+type HandoffLookupOk = {
+  ok: true;
+  token: string;
+  parsed: MobileHandoffIdentifier;
+  memberRole: WorkspaceMemberRole;
+  destination: MobileStaffDestination;
+  user: HandoffUser;
+};
+
+/**
+ * Read-only handoff validation (does not consume the one-time code).
+ * Destination is always from ACTIVE WorkspaceMember.role for the bound workspace.
+ */
+export async function peekMobileWorkspaceHandoff(input: {
   rawCode: string;
   requestHostname: string;
 }): Promise<
   | {
       ok: true;
-      user: HandoffUser;
       workspaceId: string;
-      destination: "/admin" | "/agent" | "/pro/for-staff";
+      destination: MobileStaffDestination;
+      workspaceRole: WorkspaceMemberRole;
     }
   | { ok: false; error: string }
 > {
+  const looked = await lookupMobileWorkspaceHandoff(input);
+  if (!looked.ok) return looked;
+  return {
+    ok: true,
+    workspaceId: looked.parsed.workspaceId,
+    destination: looked.destination,
+    workspaceRole: looked.memberRole,
+  };
+}
+
+async function lookupMobileWorkspaceHandoff(input: {
+  rawCode: string;
+  requestHostname: string;
+  /** When true, delete invalid/expired rows (consume path). */
+  deleteOnInvalid?: boolean;
+}): Promise<HandoffLookupOk | { ok: false; error: string }> {
   const trimmed = input.rawCode.trim();
   if (!trimmed) return { ok: false, error: "Missing handoff code" };
 
@@ -190,13 +222,17 @@ export async function consumeMobileWorkspaceHandoff(input: {
   const row = await prisma.verificationToken.findUnique({ where: { token } });
   if (!row) return { ok: false, error: "Handoff expired or invalid" };
   if (row.expires.getTime() < Date.now()) {
-    await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
+    if (input.deleteOnInvalid) {
+      await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
+    }
     return { ok: false, error: "Handoff expired or invalid" };
   }
 
   const parsed = parseMobileHandoffIdentifier(row.identifier);
   if (!parsed) {
-    await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
+    if (input.deleteOnInvalid) {
+      await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
+    }
     return { ok: false, error: "Handoff expired or invalid" };
   }
   if (parsed.targetHostname !== requestHost.hostname) {
@@ -213,7 +249,9 @@ export async function consumeMobileWorkspaceHandoff(input: {
     select: { role: true },
   });
   if (!member || !isStaffWorkspaceMemberRole(member.role)) {
-    await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
+    if (input.deleteOnInvalid) {
+      await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
+    }
     return { ok: false, error: "Forbidden" };
   }
 
@@ -232,14 +270,18 @@ export async function consumeMobileWorkspaceHandoff(input: {
     },
   });
   if (!user || user.disabledAt) {
-    await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
+    if (input.deleteOnInvalid) {
+      await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
+    }
     return { ok: false, error: "Account unavailable" };
   }
 
-  await prisma.verificationToken.delete({ where: { token } });
-
   return {
     ok: true,
+    token,
+    parsed,
+    memberRole: member.role,
+    destination: resolveWorkspaceMemberMobileDestination(member.role),
     user: {
       id: user.id,
       email: user.email,
@@ -250,8 +292,45 @@ export async function consumeMobileWorkspaceHandoff(input: {
       isSeller: user.isSeller,
       activeMode: user.activeMode,
     },
-    workspaceId: parsed.workspaceId,
-    destination: resolveWorkspaceMemberMobileDestination(member.role),
+  };
+}
+
+/** True when Auth.js credentials signIn returned an error URL (redirect:false). */
+export function isMobileHandoffSignInErrorResult(result: unknown): boolean {
+  if (typeof result !== "string" || !result) return true;
+  try {
+    const url = new URL(result, "https://houzzat.invalid");
+    return url.searchParams.has("error");
+  } catch {
+    return true;
+  }
+}
+
+export async function consumeMobileWorkspaceHandoff(input: {
+  rawCode: string;
+  requestHostname: string;
+}): Promise<
+  | {
+      ok: true;
+      user: HandoffUser;
+      workspaceId: string;
+      destination: MobileStaffDestination;
+    }
+  | { ok: false; error: string }
+> {
+  const looked = await lookupMobileWorkspaceHandoff({
+    ...input,
+    deleteOnInvalid: true,
+  });
+  if (!looked.ok) return looked;
+
+  await prisma.verificationToken.delete({ where: { token: looked.token } });
+
+  return {
+    ok: true,
+    user: looked.user,
+    workspaceId: looked.parsed.workspaceId,
+    destination: looked.destination,
   };
 }
 

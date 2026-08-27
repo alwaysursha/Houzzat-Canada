@@ -258,7 +258,8 @@ function testInstrumentationWiring() {
   assert.ok(bootstrap.includes("NAVIGATE_TENANT"));
   assert.ok(exchange.includes("HANDOFF_EXCHANGE_START"));
   assert.ok(exchange.includes("HANDOFF_EXCHANGE_SUCCESS"));
-  assert.ok(exchange.includes('searchParams.delete("code")'));
+  assert.ok(exchange.includes("isStaffRoleDestination"));
+  assert.ok(!exchange.includes("searchParams.delete(\"code\")"));
 }
 
 function testDiagnosticFreeze() {

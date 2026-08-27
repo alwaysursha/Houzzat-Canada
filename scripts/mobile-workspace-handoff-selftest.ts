@@ -1,5 +1,5 @@
 /**
- * Stage 3K.5.10 — mobile workspace handoff selftest (pure logic).
+ * Stage 3K.5.10 / 3K.5.10.8 — mobile workspace handoff selftest (pure logic).
  * Run: pnpm mobile-workspace-handoff:selftest
  */
 import assert from "node:assert/strict";
@@ -9,11 +9,16 @@ import { fileURLToPath } from "node:url";
 import {
   buildMobileHandoffIdentifier,
   handoffCodesEqual,
+  isMobileHandoffSignInErrorResult,
   MOBILE_HANDOFF_TTL_MS,
   parseMobileHandoffIdentifier,
 } from "../src/lib/mobile/mobile-workspace-handoff";
 import { isPlatformMobileBootstrapHost } from "../src/lib/mobile/platform-bootstrap";
-import { resolveWorkspaceMemberMobileDestination } from "../src/lib/mobile/workspace-destination";
+import {
+  isSuccessfulHandoffClientDestination,
+  resolveTenantHostRoleDestinationUrl,
+  resolveWorkspaceMemberMobileDestination,
+} from "../src/lib/mobile/workspace-destination";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -55,6 +60,66 @@ function testRoleDestinations() {
   assert.equal(resolveWorkspaceMemberMobileDestination("AGENT"), "/agent");
 }
 
+/**
+ * Stage 3K.5.10.8 — post-handoff must land on role CRM path, never /pro.
+ */
+function testPostHandoffRoleMatrix() {
+  assert.equal(
+    resolveTenantHostRoleDestinationUrl("houzzat.com", "OWNER"),
+    "https://houzzat.com/admin",
+  );
+  assert.equal(
+    resolveTenantHostRoleDestinationUrl("houzzat.com", "ADMIN"),
+    "https://houzzat.com/admin",
+  );
+  assert.equal(
+    resolveTenantHostRoleDestinationUrl("houzzat.com", "AGENT"),
+    "https://houzzat.com/agent",
+  );
+  assert.equal(
+    resolveTenantHostRoleDestinationUrl("tenant-canary.houzzatpro.com", "OWNER"),
+    "https://tenant-canary.houzzatpro.com/admin",
+  );
+  assert.equal(
+    resolveTenantHostRoleDestinationUrl("tenant-canary.houzzatpro.com", "AGENT"),
+    "https://tenant-canary.houzzatpro.com/agent",
+  );
+  assert.equal(
+    resolveTenantHostRoleDestinationUrl("future-tenant.houzzatpro.com", "OWNER"),
+    "https://future-tenant.houzzatpro.com/admin",
+  );
+  assert.equal(
+    resolveTenantHostRoleDestinationUrl("future-tenant.houzzatpro.com", "AGENT"),
+    "https://future-tenant.houzzatpro.com/agent",
+  );
+  assert.equal(
+    resolveTenantHostRoleDestinationUrl("custom.example.com", "ADMIN"),
+    "https://custom.example.com/admin",
+  );
+
+  assert.equal(isSuccessfulHandoffClientDestination("/admin"), true);
+  assert.equal(isSuccessfulHandoffClientDestination("/agent"), true);
+  assert.equal(isSuccessfulHandoffClientDestination("/pro"), false);
+  assert.equal(isSuccessfulHandoffClientDestination("/pro/for-staff"), false);
+  assert.equal(isSuccessfulHandoffClientDestination(undefined), false);
+}
+
+function testSignInErrorDetection() {
+  assert.equal(isMobileHandoffSignInErrorResult("/admin"), false);
+  assert.equal(
+    isMobileHandoffSignInErrorResult("https://houzzat.com/admin"),
+    false,
+  );
+  assert.equal(
+    isMobileHandoffSignInErrorResult(
+      "https://houzzat.com/api/auth/callback/mobile-workspace-handoff?error=CredentialsSignin",
+    ),
+    true,
+  );
+  assert.equal(isMobileHandoffSignInErrorResult(null), true);
+  assert.equal(isMobileHandoffSignInErrorResult({ error: "x" }), true);
+}
+
 function testSecurityWiring() {
   const route = readFileSync(
     join(root, "src/app/api/mobile/workspace-handoff/route.ts"),
@@ -65,10 +130,19 @@ function testSecurityWiring() {
     "utf8",
   );
   assert.ok(route.includes("createMobileWorkspaceHandoff"));
-  assert.ok(route.includes("signIn(\"mobile-workspace-handoff\""));
+  assert.ok(route.includes("peekMobileWorkspaceHandoff"));
+  assert.ok(route.includes('signIn("mobile-workspace-handoff"'));
+  assert.ok(route.includes("isMobileHandoffSignInErrorResult"));
   assert.ok(route.includes("isTrustedStaffMutationOriginForRequest"));
+  // Must not re-auth() after signIn for destination (cookie race → wrong /pro).
+  assert.ok(!route.includes("const session = await auth();\n  if (!session?.user?.id) {\n    return NextResponse.json({ error: \"Session not established\""));
+  assert.ok(route.includes('redirectTo: peeked.destination'));
   assert.ok(exchange.includes('method: "PUT"'));
-  assert.ok(exchange.includes("searchParams.delete(\"code\")"));
+  assert.ok(exchange.includes("isStaffRoleDestination"));
+  assert.ok(exchange.includes("Workspace handoff failed"));
+  assert.ok(!exchange.includes('?? "/pro"'));
+  assert.ok(!exchange.includes("window.history.replaceState"));
+  assert.ok(exchange.includes("hardGo(destination)"));
 }
 
 function testTimingSafeCompare() {
@@ -86,6 +160,8 @@ function main() {
   testHandoffHostBinding();
   testPlatformOnlyIssuancePolicy();
   testRoleDestinations();
+  testPostHandoffRoleMatrix();
+  testSignInErrorDetection();
   testSecurityWiring();
   testTimingSafeCompare();
   testTtlSanity();
