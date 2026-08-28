@@ -30,10 +30,11 @@ export function MarketingBelowHeader({
       return true;
     }
   });
+  const isPro = pathname === "/pro" || pathname?.startsWith("/pro/");
   const immersive =
     pathname === "/search" ||
     pathname.startsWith("/search?") ||
-    pathname === "/pro/sign-in";
+    isPro;
   const listingSheet = params.get("sheet") === "1";
 
   useEffect(() => {
@@ -43,6 +44,10 @@ export function MarketingBelowHeader({
       setFramed(true);
     }
   }, []);
+
+  if (isPro) {
+    return <main className="min-h-0">{children}</main>;
+  }
 
   const hideChrome = immersive || listingSheet || framed;
 

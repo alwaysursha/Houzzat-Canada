@@ -136,7 +136,17 @@ function testTenantCanaryAdminSurface() {
   });
 }
 
+function testGradleProReleaseConfig() {
+  const gradle = readFileSync(join(root, "android-pro/app/build.gradle"), "utf8");
+  assert.ok(gradle.includes('applicationId "com.houzzat.pro"'));
+  const codeMatch = gradle.match(/versionCode\s+(\d+)/);
+  assert.ok(codeMatch && parseInt(codeMatch[1], 10) >= 7, "versionCode must be >= 7");
+  const nameMatch = gradle.match(/versionName\s+"([^"]+)"/);
+  assert.ok(nameMatch && nameMatch[1] === "1.0.5", "versionName must be 1.0.5");
+}
+
 function main() {
+  testGradleProReleaseConfig();
   testResolvedConfigDefaults();
   testResolvedConfigCanaryOverride();
   testEmbeddedArtifactTracksEnvAtSync();

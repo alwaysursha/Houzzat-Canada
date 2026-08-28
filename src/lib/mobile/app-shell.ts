@@ -187,6 +187,15 @@ export async function resolveAppShell(): Promise<AppShell> {
   if (resolvePromise) return resolvePromise;
 
   resolvePromise = (async () => {
+    // 1. Check User-Agent marker first (synchronous & reliable on all hosts/WebViews)
+    const uaMarker = nativeAppIdFromUserAgent(
+      typeof navigator !== "undefined" ? navigator.userAgent : null,
+    );
+    if (uaMarker) {
+      cachedShell = mapNativeAppId(uaMarker);
+      return cachedShell;
+    }
+
     try {
       const { Capacitor } = await import("@capacitor/core");
       if (!Capacitor.isNativePlatform()) {
@@ -198,7 +207,7 @@ export async function resolveAppShell(): Promise<AppShell> {
         const info = await App.getInfo();
         cachedShell = mapNativeAppId(info.id);
       } catch {
-        // Native but identity unavailable — conservative, never Pro.
+        // Native but bridge info unavailable — check UA or fallback
         cachedShell = "unknown-native";
       }
       return cachedShell;

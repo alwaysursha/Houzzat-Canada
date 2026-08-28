@@ -476,6 +476,16 @@ function testHandoffRouteRevalidatesMembership() {
   assert.ok(!route.includes("targetHostname"));
 }
 
+function testNativeAppShellCrossHostResolution() {
+  const appShellFile = readFileSync(
+    join(root, "src/lib/mobile/app-shell.ts"),
+    "utf8",
+  );
+  assert.ok(appShellFile.includes("nativeAppIdFromUserAgent"));
+  assert.ok(appShellFile.includes("const uaMarker = nativeAppIdFromUserAgent"));
+  assert.ok(appShellFile.includes("cachedShell = mapNativeAppId(uaMarker)"));
+}
+
 function main() {
   testPlatformBootstrapHost();
   testUnauthenticatedPlatformProRedirect();
@@ -488,6 +498,7 @@ function main() {
   testRoutingWiring();
   testFixtureDomains();
   testHostnameMembershipLookup();
+  testNativeAppShellCrossHostResolution();
   console.log("mobile-workspace-bootstrap:selftest OK");
 }
 

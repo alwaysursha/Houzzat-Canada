@@ -249,7 +249,13 @@ export default auth((request) => {
     }
   }
 
-  const response = NextResponse.next();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-houzzat-request-path", pathname);
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
   response.headers.set("x-houzzat-request-path", pathname);
   return response;
 });

@@ -194,6 +194,9 @@ function testTransitionUiWiring() {
   assert.ok(transition.includes("HouzzatProWordmark"));
   assert.ok(transition.includes("proWorkspaceProgress"));
   assert.ok(transition.includes("prefers-reduced-motion"));
+  assert.ok(transition.includes("fixed inset-0"));
+  assert.ok(transition.includes("h-dvh w-full"));
+  assert.ok(transition.includes("document.body.style.overflow = \"hidden\""));
   assert.ok(proPage.includes("ProWorkspaceTransition"));
   assert.ok(!proPage.includes("Opening HouzzatPro…"));
   assert.ok(bootstrap.includes("ProWorkspaceTransition"));
@@ -209,6 +212,7 @@ function testChromeFreeHandoffWiring() {
   const bootstrapRequest = read("src/lib/mobile/platform-bootstrap-request.ts");
   const marketingLayout = read("src/app/(marketing)/layout.tsx");
   const marketingChromeGate = read("src/components/site/MarketingChromeGate.tsx");
+  const marketingBelowHeader = read("src/components/site/MarketingBelowHeader.tsx");
   const adminLayout = read("src/app/(admin)/admin/layout.tsx");
   const agentLayout = read("src/app/(agent)/agent/layout.tsx");
 
@@ -218,6 +222,8 @@ function testChromeFreeHandoffWiring() {
   assert.ok(marketingLayout.includes("isHouzzatProPlatformBootstrapRequest"));
   assert.ok(marketingLayout.includes("if (await isHouzzatProPlatformBootstrapRequest())"));
   assert.ok(marketingChromeGate.includes('pathname === "/pro" || pathname?.startsWith("/pro/")'));
+  assert.ok(marketingBelowHeader.includes('const isPro = pathname === "/pro" || pathname?.startsWith("/pro/")'));
+  assert.ok(marketingBelowHeader.includes('if (isPro)'));
 
   // Admin and Agent dashboards retain their staff layouts
   assert.ok(adminLayout.includes("AdminShell") || adminLayout.includes("TenantBrandProvider"));
