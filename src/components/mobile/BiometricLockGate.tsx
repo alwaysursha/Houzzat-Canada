@@ -13,6 +13,7 @@ import {
 } from "@/lib/mobile/biometric-policy";
 import {
   clearForegroundSessionUnlocked,
+  disableBiometrics,
   getBiometricAvailability,
   isBiometricsEnabled,
   markForegroundSessionUnlocked,
@@ -24,6 +25,7 @@ import {
   verifyBiometricIdentity,
   wasIntentionalSignOut,
 } from "@/lib/mobile/biometrics";
+import { resolveAppShell } from "@/lib/mobile/app-shell";
 import { consumePendingPushNavigation } from "@/lib/notifications/push-client";
 import { performHardSignOut } from "@/lib/auth/hard-sign-out";
 import { SITE_NAME } from "@/lib/constants";
@@ -48,7 +50,21 @@ export function BiometricLockGate() {
   const { status, data } = useSession();
   const sessionUserId = data?.user?.id ?? null;
 
-  const earlySync = readBiometricEarlyGateSync();
+  const [isProShell, setIsProShell] = useState(false);
+
+  // Synchronously check if running in HouzzatPRO shell (UA marker or hostname)
+  const isHouzzatProSync = () => {
+    if (typeof window === "undefined") return false;
+    const ua = navigator.userAgent || "";
+    if (ua.includes("com.houzzat.pro")) return true;
+    const host = window.location.hostname;
+    if (host.includes("houzzatpro.com")) return true;
+    return false;
+  };
+
+  const proShellActive = isHouzzatProSync() || isProShell;
+
+  const earlySync = proShellActive ? false : readBiometricEarlyGateSync();
   const initialFgUnlocked = readForegroundUnlockedSync();
   const [native] = useState(() => {
     try {
@@ -57,15 +73,17 @@ export function BiometricLockGate() {
       return false;
     }
   });
-  const [enabled, setEnabled] = useState(earlySync);
+  const [enabled, setEnabled] = useState(() => (proShellActive ? false : earlySync));
   const [intentionalOut, setIntentionalOut] = useState(false);
   const [prefsReady, setPrefsReady] = useState(false);
   const [fgUnlocked, setFgUnlocked] = useState(initialFgUnlocked);
   const [locked, setLocked] = useState(() =>
-    shouldStartBiometricLocked({
-      biometricsEnabledHint: Boolean(native && earlySync),
-      foregroundSessionUnlocked: initialFgUnlocked,
-    }),
+    proShellActive
+      ? false
+      : shouldStartBiometricLocked({
+          biometricsEnabledHint: Boolean(native && earlySync),
+          foregroundSessionUnlocked: initialFgUnlocked,
+        }),
   );
   const [privacyCover, setPrivacyCover] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -137,6 +155,20 @@ export function BiometricLockGate() {
     if (!native) return;
     let cancelled = false;
     void (async () => {
+      const shell = await resolveAppShell();
+      if (shell === "houzzatpro" || isHouzzatProSync()) {
+        setIsProShell(true);
+        await disableBiometrics();
+        if (cancelled) return;
+        setEnabled(false);
+        setPrefsReady(true);
+        clearForegroundSessionUnlocked();
+        setFgUnlocked(false);
+        setLocked(false);
+        setBiometricGateLocked(false);
+        return;
+      }
+
       await migrateLegacyBiometricCredentialsOnce();
       if (cancelled) return;
       const intentional = await wasIntentionalSignOut();

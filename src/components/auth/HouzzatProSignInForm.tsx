@@ -11,7 +11,6 @@ import {
   loadRememberedLogin,
   rememberLoginCredentials,
 } from "@/lib/auth/remembered-login";
-import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
 import { hardGo } from "@/lib/mobile/nav-back";
 import { sanitizeStaffCallbackPath } from "@/lib/auth/pro-sign-in-routing";
@@ -73,12 +72,6 @@ export function HouzzatProSignInForm({
     await rememberLoginCredentials({ email: normalizedEmail, password });
     const session = await getSession();
     await clearIntentionalSignOut({ userId: session?.user?.id });
-    await offerBiometricsAfterCredentialsSignIn({
-      email: normalizedEmail,
-      password,
-      confirm,
-      userId: session?.user?.id,
-    });
 
     // One continuous transition into bootstrap / handoff / dashboard.
     setNativeNavStage("BOOTSTRAPPING");
