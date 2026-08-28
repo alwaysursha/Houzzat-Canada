@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  isSafeSignOutReturnUrl,
   PRO_SIGNED_OUT_SIGN_IN_PATH,
   resolveCompleteSignOutDestination,
   WEB_SIGNED_OUT_HOME_PATH,
@@ -22,8 +23,9 @@ import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hos
  * Only clear cookies present on the request (plus a tiny always-clear set).
  * Pre-emitting hundreds of chunk variants blows CF header limits → 502.
  *
- * Stage 3K.5.10.9: clears THIS host only. Complete Pro logout is a two-step
- * client navigation (tenant clear → app.houzzatpro.com/api/auth/logout GET).
+ * Stage 3K.5.10.10: clears THIS host only. Complete Pro logout is a two-step
+ * client navigation (tenant clear → app.houzzatpro.com/api/auth/logout GET
+ * with optional safe returnTo redirect).
  */
 
 function expireCookie(response: NextResponse, name: string) {
@@ -56,6 +58,13 @@ function applyClears(response: NextResponse, request: Request) {
 
 function signOutDestination(request: Request): string {
   const hostname = extractTrustedRequestHostname(request);
+  const url = new URL(request.url);
+  const returnTo = url.searchParams.get("returnTo");
+
+  if (returnTo && isSafeSignOutReturnUrl(returnTo)) {
+    return returnTo;
+  }
+
   const dest = resolveCompleteSignOutDestination({
     hostname,
     userAgent: request.headers.get("user-agent"),
@@ -82,10 +91,17 @@ function clearedHtml(request: Request) {
 
 function clearedJson(request: Request) {
   const hostname = extractTrustedRequestHostname(request);
-  const destination = resolveCompleteSignOutDestination({
-    hostname,
-    userAgent: request.headers.get("user-agent"),
-  });
+  const url = new URL(request.url);
+  const returnTo = url.searchParams.get("returnTo");
+  let destination: string;
+  if (returnTo && isSafeSignOutReturnUrl(returnTo)) {
+    destination = returnTo;
+  } else {
+    destination = resolveCompleteSignOutDestination({
+      hostname,
+      userAgent: request.headers.get("user-agent"),
+    });
+  }
   const response = NextResponse.json({
     ok: true,
     destination,

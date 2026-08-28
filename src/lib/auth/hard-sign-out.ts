@@ -25,14 +25,23 @@ export type HardSignOutResult = {
   destination: string;
 };
 
-async function resolveDestination(): Promise<string> {
+async function resolveDestination(options?: {
+  destination?: string;
+  isStaff?: boolean;
+}): Promise<string> {
+  if (options?.destination && isSafeSignOutDestination(options.destination)) {
+    return options.destination;
+  }
   try {
     const shell = await resolveAppShell();
     return resolveCompleteSignOutDestination({
       hostname:
         typeof window !== "undefined" ? window.location.hostname : "",
+      pathname:
+        typeof window !== "undefined" ? window.location.pathname : "",
       shell,
       userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+      isStaff: options?.isStaff,
     });
   } catch {
     return WEB_SIGNED_OUT_HOME_PATH;
@@ -86,12 +95,9 @@ async function getLogoutClearFetch(): Promise<void> {
  */
 export async function performHardSignOut(options?: {
   destination?: string;
+  isStaff?: boolean;
 }): Promise<HardSignOutResult> {
-  const resolved = await resolveDestination();
-  const destination =
-    options?.destination && isSafeSignOutDestination(options.destination)
-      ? options.destination
-      : resolved;
+  const destination = await resolveDestination(options);
 
   // Clear cookies on the *current* host (tenant or platform).
   await postLogoutClear();

@@ -51,9 +51,18 @@ export function SignOutButton({
       // Auth logout is the priority — biometric cleanup must not block it.
     }
 
+    const role = data?.user?.role;
+    const isStaff =
+      role === "ADMIN" ||
+      role === "AGENT" ||
+      (typeof window !== "undefined" &&
+        (window.location.pathname.startsWith("/admin") ||
+          window.location.pathname.startsWith("/agent") ||
+          window.location.pathname.startsWith("/pro")));
+
     // POST clears cookies (WebView-safe). Avoid next-auth client signOut on
     // Cloudflare Workers (can re-issue the session cookie after a blank clear).
-    await performHardSignOut();
+    await performHardSignOut({ isStaff });
     setPending(false);
   }
 

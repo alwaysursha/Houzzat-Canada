@@ -27,7 +27,7 @@ export function MarketingChromeGate({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  if (pathname === "/pro/sign-in") return null;
+  if (pathname === "/pro" || pathname?.startsWith("/pro/")) return null;
   if (params.get("sheet") === "1" || framed) return null;
   return children;
 }

@@ -3,7 +3,11 @@ import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
 
 const PLATFORM_PRO_PREFIX = "/pro";
 
-/** True when request is HouzzatPRO application bootstrap (/pro on app.houzzatpro.com). */
+/**
+ * True when request is HouzzatPRO application bootstrap or a technical staff/handoff
+ * route (/pro* on any host, or any route on app.houzzatpro.com).
+ * Suppresses tenant public marketing chrome (SiteHeader, search, footer).
+ */
 export async function isHouzzatProPlatformBootstrapRequest(): Promise<boolean> {
   const headerStore = await headers();
   const pathname =
@@ -14,7 +18,6 @@ export async function isHouzzatProPlatformBootstrapRequest(): Promise<boolean> {
     headerStore.get("x-forwarded-host")?.split(":")[0]?.trim() ??
     headerStore.get("host")?.split(":")[0]?.trim() ??
     null;
-  if (!isPlatformMobileBootstrapHost(host)) return false;
   const path = pathname.startsWith("http")
     ? (() => {
         try {
@@ -24,5 +27,7 @@ export async function isHouzzatProPlatformBootstrapRequest(): Promise<boolean> {
         }
       })()
     : pathname;
-  return path === PLATFORM_PRO_PREFIX || path.startsWith(`${PLATFORM_PRO_PREFIX}/`);
+  const isPro = path === PLATFORM_PRO_PREFIX || path.startsWith(`${PLATFORM_PRO_PREFIX}/`);
+  if (isPro) return true;
+  return isPlatformMobileBootstrapHost(host);
 }
