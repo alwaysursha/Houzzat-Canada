@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransition";
 import { hardGo } from "@/lib/mobile/nav-back";
 import {
   recordMobileDiagEvent,
@@ -44,7 +45,6 @@ function HandoffExchangeInner() {
         destination?: string;
       } | null;
       const destination = data?.destination;
-      // Fail closed: never default to /pro — that left authenticated users stuck.
       if (!isStaffRoleDestination(destination)) {
         recordMobileDiagEvent(
           "HANDOFF_EXCHANGE_FAILED",
@@ -62,37 +62,34 @@ function HandoffExchangeInner() {
       } else {
         recordMobileDiagEvent("DESTINATION_AGENT");
       }
-      // Do not history.replaceState after navigation — it can cancel hardGo.
       hardGo(destination);
     })();
   }, [code]);
 
   if (!code) {
     return (
-      <p className="text-sm font-medium text-ink/60">
-        Missing workspace handoff code.
-      </p>
+      <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center px-5 text-center">
+        <p className="text-sm font-medium text-ink/60">
+          Missing workspace handoff code.
+        </p>
+      </div>
     );
   }
 
   if (error) {
-    return <p className="text-sm font-medium text-danger">{error}</p>;
+    return (
+      <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center px-5 text-center">
+        <p className="text-sm font-medium text-danger">{error}</p>
+      </div>
+    );
   }
 
-  return (
-    <p className="text-sm font-medium text-ink/50">
-      Connecting to your workspace…
-    </p>
-  );
+  return <ProWorkspaceTransition />;
 }
 
 export function ProMobileHandoffExchange() {
   return (
-    <Suspense
-      fallback={
-        <p className="text-sm font-medium text-ink/50">Connecting…</p>
-      }
-    >
+    <Suspense fallback={<ProWorkspaceTransition />}>
       <HandoffExchangeInner />
     </Suspense>
   );

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ProMobileHandoffExchange } from "@/components/mobile/ProMobileHandoffExchange";
 import { ProShellRuntimeDiagnostic } from "@/components/mobile/ProShellRuntimeDiagnostic";
+import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransition";
 
 export const metadata: Metadata = {
   title: "Connecting — HouzzatPro",
@@ -15,9 +16,9 @@ export default function ProMobileHandoffPage() {
       <Suspense fallback={null}>
         <ProShellRuntimeDiagnostic />
       </Suspense>
-      <main className="mx-auto flex min-h-[50dvh] w-full max-w-md flex-col items-center justify-center px-5 py-16 text-center">
+      <Suspense fallback={<ProWorkspaceTransition />}>
         <ProMobileHandoffExchange />
-      </main>
+      </Suspense>
     </>
   );
 }

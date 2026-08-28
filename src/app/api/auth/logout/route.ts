@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { collectAuthCookieNamesToClear } from "@/lib/auth/logout-cookies";
 import {
-  HOUZZATPRO_APP_ID,
-  nativeAppIdFromUserAgent,
-} from "@/lib/mobile/app-shell";
+  PRO_SIGNED_OUT_SIGN_IN_PATH,
+  resolveCompleteSignOutDestination,
+  WEB_SIGNED_OUT_HOME_PATH,
+} from "@/lib/auth/complete-pro-logout";
+import { collectAuthCookieNamesToClear } from "@/lib/auth/logout-cookies";
+import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 
 /**
  * Hard logout for Cloudflare Workers / OpenNext + Capacitor WebView.
@@ -19,6 +21,9 @@ import {
  *
  * Only clear cookies present on the request (plus a tiny always-clear set).
  * Pre-emitting hundreds of chunk variants blows CF header limits → 502.
+ *
+ * Stage 3K.5.10.9: clears THIS host only. Complete Pro logout is a two-step
+ * client navigation (tenant clear → app.houzzatpro.com/api/auth/logout GET).
  */
 
 function expireCookie(response: NextResponse, name: string) {
@@ -49,18 +54,21 @@ function applyClears(response: NextResponse, request: Request) {
   response.headers.set("Pragma", "no-cache");
 }
 
-function signOutDestinationPath(request: Request): string {
-  const ua = request.headers.get("user-agent");
-  const appId = nativeAppIdFromUserAgent(ua);
-  const path = appId === HOUZZATPRO_APP_ID ? "/pro/sign-in" : "/";
-  const dest = new URL(path, "https://houzzat.local");
-  dest.searchParams.set("signedOut", "1");
-  return `${dest.pathname}${dest.search}`;
+function signOutDestination(request: Request): string {
+  const hostname = extractTrustedRequestHostname(request);
+  const dest = resolveCompleteSignOutDestination({
+    hostname,
+    userAgent: request.headers.get("user-agent"),
+  });
+  // GET HTML on the platform host must land on local sign-in (not recurse).
+  if (dest.includes("/api/auth/logout")) {
+    return PRO_SIGNED_OUT_SIGN_IN_PATH;
+  }
+  return dest || WEB_SIGNED_OUT_HOME_PATH;
 }
 
 function clearedHtml(request: Request) {
-  const destPath = signOutDestinationPath(request);
-  // Destination is always same-origin path we control (no user input).
+  const destPath = signOutDestination(request);
   const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="refresh" content="0;url=${destPath}"/><title>Signing out</title><script>location.replace(${JSON.stringify(destPath)});</script></head><body>Signing out…</body></html>`;
   const response = new NextResponse(html, {
     status: 200,
@@ -73,9 +81,14 @@ function clearedHtml(request: Request) {
 }
 
 function clearedJson(request: Request) {
+  const hostname = extractTrustedRequestHostname(request);
+  const destination = resolveCompleteSignOutDestination({
+    hostname,
+    userAgent: request.headers.get("user-agent"),
+  });
   const response = NextResponse.json({
     ok: true,
-    destination: signOutDestinationPath(request),
+    destination,
   });
   applyClears(response, request);
   return response;

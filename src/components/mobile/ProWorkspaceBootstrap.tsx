@@ -6,6 +6,7 @@ import { Capacitor } from "@capacitor/core";
 import { usePathname, useSearchParams } from "next/navigation";
 import { HouzzatProMark } from "@/components/auth/HouzzatProMark";
 import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
+import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransition";
 import { sanitizeStaffCallbackPath } from "@/lib/auth/pro-sign-in-routing";
 import {
   HOUZZATPRO_START_PATH,
@@ -157,14 +158,15 @@ export function ProWorkspaceBootstrap() {
   const pathname = usePathname() || "/";
   const searchParams = useSearchParams();
   const diagnosticFreeze = isMobileDiagnosticFreezePath(pathname, searchParams);
-  const [host, setHost] = useState("");
+  const hostname =
+    typeof window !== "undefined" ? window.location.hostname : "";
   const onProBootstrapSurface = shouldRunProWorkspaceBootstrap({
     pathname,
-    hostname: host || (typeof window !== "undefined" ? window.location.hostname : ""),
+    hostname,
     isNative: Capacitor.isNativePlatform(),
   });
   const routed = useRef(false);
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selector, setSelector] = useState<MobileBootstrapMembership[] | null>(
     null,
@@ -172,10 +174,6 @@ export function ProWorkspaceBootstrap() {
   const [noWorkspace, setNoWorkspace] = useState(false);
   const [frozen, setFrozen] = useState<FrozenDecision | null>(null);
   const [freezeReleased, setFreezeReleased] = useState(false);
-
-  useEffect(() => {
-    setHost(currentHostname());
-  }, []);
 
   useEffect(() => {
     if (!onProBootstrapSurface) return;
@@ -186,7 +184,7 @@ export function ProWorkspaceBootstrap() {
     void (async () => {
       recordMobileDiagNav();
       const shell = await resolveAppShell();
-      if (cancelled) return;
+      if (cancelled || routed.current) return;
       syncAppShellCookie(shell);
       const onAppBootstrapHost = isPlatformMobileBootstrapHost(
         currentHostname(),
@@ -223,6 +221,8 @@ export function ProWorkspaceBootstrap() {
         return;
       }
 
+      // Latch before awaits so host/status churn cannot double-fetch.
+      routed.current = true;
       recordMobileDiagEvent("PLATFORM_SESSION_FOUND");
       recordMobileDiagEvent("WORKSPACE_BOOTSTRAP_START");
       setPending(true);
@@ -230,6 +230,7 @@ export function ProWorkspaceBootstrap() {
       const payload = await fetchBootstrap();
       if (cancelled) return;
       if (!payload) {
+        routed.current = false;
         setPending(false);
         setError("Unable to load workspaces. Try again.");
         return;
@@ -239,7 +240,6 @@ export function ProWorkspaceBootstrap() {
       const requestHost = currentHostname();
 
       if (diagnosticFreeze && !freezeReleased) {
-        routed.current = true;
         setPending(false);
         if (bootstrap.kind === "no_workspace") {
           recordMobileDiagEvent("WORKSPACE_COUNT_0");
@@ -254,7 +254,6 @@ export function ProWorkspaceBootstrap() {
       }
 
       if (bootstrap.kind === "no_workspace") {
-        routed.current = true;
         recordMobileDiagEvent("WORKSPACE_COUNT_0");
         setPending(false);
         setNoWorkspace(true);
@@ -262,7 +261,6 @@ export function ProWorkspaceBootstrap() {
       }
 
       if (bootstrap.kind === "select_workspace") {
-        routed.current = true;
         recordMobileDiagEvent("WORKSPACE_SELECTOR");
         setPending(false);
         setSelector(bootstrap.memberships);
@@ -270,14 +268,12 @@ export function ProWorkspaceBootstrap() {
       }
 
       if (bootstrap.kind === "tenant_destination") {
-        routed.current = true;
         recordMobileDiagEvent("WORKSPACE_COUNT_1", bootstrap.membership.slug);
         if (bootstrap.destination === "/admin") {
           recordMobileDiagEvent("DESTINATION_ADMIN");
         } else if (bootstrap.destination === "/agent") {
           recordMobileDiagEvent("DESTINATION_AGENT");
         }
-        setPending(false);
         if (pendingHref) {
           hardGo(pendingHref);
           return;
@@ -287,12 +283,12 @@ export function ProWorkspaceBootstrap() {
       }
 
       if (bootstrap.kind === "handoff") {
-        routed.current = true;
+        // Single-workspace fast path: mint + cross-host without intermediate stop.
         recordMobileDiagEvent("WORKSPACE_COUNT_1", bootstrap.membership.slug);
         const handoffUrl = await requestHandoff(bootstrap.membership.workspaceId);
         if (cancelled) return;
-        setPending(false);
         if (!handoffUrl) {
+          setPending(false);
           setError("Workspace handoff failed. Try again.");
           routed.current = false;
           return;
@@ -314,6 +310,7 @@ export function ProWorkspaceBootstrap() {
       }
 
       setPending(false);
+      routed.current = false;
     })();
 
     return () => {
@@ -325,7 +322,6 @@ export function ProWorkspaceBootstrap() {
     status,
     diagnosticFreeze,
     freezeReleased,
-    host,
   ]);
 
   if (!onProBootstrapSurface) {
@@ -512,11 +508,6 @@ export function ProWorkspaceBootstrap() {
     );
   }
 
-  return (
-    <div className="mx-auto flex min-h-[50dvh] w-full max-w-md flex-col items-center justify-center px-5 py-16 text-center">
-      <p className="text-sm font-medium text-ink/50">
-        {pending ? "Opening your workspace…" : "Opening HouzzatPro…"}
-      </p>
-    </div>
-  );
+  // One continuous transition surface (bootstrap + handoff share branding).
+  return <ProWorkspaceTransition />;
 }

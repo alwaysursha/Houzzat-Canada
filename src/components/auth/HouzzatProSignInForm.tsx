@@ -5,6 +5,7 @@ import { getSession, signIn } from "next-auth/react";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransition";
 import {
   hadClientSession,
   loadRememberedLogin,
@@ -26,6 +27,7 @@ export function HouzzatProSignInForm({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
   const [loginAgain, setLoginAgain] = useState(false);
 
   useEffect(() => {
@@ -77,13 +79,17 @@ export function HouzzatProSignInForm({
       userId: session?.user?.id,
     });
 
-    setPending(false);
-    // Honor safe staff callback (e.g. /pro?diag=1 freeze). Default /pro.
+    // One continuous transition into bootstrap / handoff / dashboard.
+    setTransitioning(true);
     const next =
       callbackUrl && callbackUrl.includes("diag=1")
         ? "/pro?diag=1"
         : sanitizeStaffCallbackPath(callbackUrl, "/pro");
     hardGo(next);
+  }
+
+  if (transitioning) {
+    return <ProWorkspaceTransition />;
   }
 
   return (

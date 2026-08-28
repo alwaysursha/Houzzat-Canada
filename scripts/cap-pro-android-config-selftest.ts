@@ -120,7 +120,7 @@ function testMobileRoutingIntent() {
     "utf8",
   );
 
-  assert.ok(proPage.includes("ProShellRuntimeDiagnostic") || proPage.includes("Opening HouzzatPro"));
+  assert.ok(proPage.includes("ProShellRuntimeDiagnostic") || proPage.includes("ProWorkspaceTransition"));
   assert.ok(startup.includes("ProWorkspaceBootstrap"));
   assert.ok(middleware.includes("workspace bootstrap handles authenticated routing"));
 }

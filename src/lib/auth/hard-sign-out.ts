@@ -6,23 +6,37 @@
  * (200 + Set-Cookie), verify `/api/auth/session` is empty, then hard-navigate.
  * If the session is still present, repeat via GET fetch (never navigate the
  * WebView to `/api/auth/logout` — that surfaces a raw API page / 502).
+ *
+ * Stage 3K.5.10.9: HouzzatPRO completes logout by clearing the current host,
+ * then navigating to app.houzzatpro.com/api/auth/logout (GET) so the platform
+ * session is cleared too — without widening cookie Domain.
  */
 
+import {
+  isSafeSignOutDestination,
+  resolveCompleteSignOutDestination,
+  WEB_SIGNED_OUT_HOME_PATH,
+} from "@/lib/auth/complete-pro-logout";
 import { authSessionLooksAuthenticated } from "@/lib/auth/logout-cookies";
+import { resolveAppShell } from "@/lib/mobile/app-shell";
 
 export type HardSignOutResult = {
   sessionCleared: boolean;
   destination: string;
 };
 
-function defaultDestinationFromUa(): string {
-  if (
-    typeof navigator !== "undefined" &&
-    /com\.houzzat\.pro/i.test(navigator.userAgent)
-  ) {
-    return "/pro/sign-in?signedOut=1";
+async function resolveDestination(): Promise<string> {
+  try {
+    const shell = await resolveAppShell();
+    return resolveCompleteSignOutDestination({
+      hostname:
+        typeof window !== "undefined" ? window.location.hostname : "",
+      shell,
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+    });
+  } catch {
+    return WEB_SIGNED_OUT_HOME_PATH;
   }
-  return "/?signedOut=1";
 }
 
 export async function fetchAuthSessionUser(): Promise<boolean> {
@@ -40,30 +54,17 @@ export async function fetchAuthSessionUser(): Promise<boolean> {
   }
 }
 
-async function postLogoutClear(): Promise<string | null> {
+async function postLogoutClear(): Promise<void> {
   try {
-    const res = await fetch("/api/auth/logout", {
+    await fetch("/api/auth/logout", {
       method: "POST",
       credentials: "same-origin",
       cache: "no-store",
       headers: { Accept: "application/json" },
     });
-    if (!res.ok) return null;
-    try {
-      const body = (await res.json()) as { destination?: string };
-      if (
-        typeof body.destination === "string" &&
-        body.destination.startsWith("/")
-      ) {
-        return body.destination;
-      }
-    } catch {
-      // ignore body parse
-    }
   } catch {
-    // network blip
+    // network blip — still attempt navigation
   }
-  return null;
 }
 
 /** GET clear via fetch so Set-Cookie applies without loading the API URL as a page. */
@@ -86,10 +87,14 @@ async function getLogoutClearFetch(): Promise<void> {
 export async function performHardSignOut(options?: {
   destination?: string;
 }): Promise<HardSignOutResult> {
-  let destination = options?.destination ?? defaultDestinationFromUa();
+  const resolved = await resolveDestination();
+  const destination =
+    options?.destination && isSafeSignOutDestination(options.destination)
+      ? options.destination
+      : resolved;
 
-  const fromPost = await postLogoutClear();
-  if (fromPost) destination = fromPost;
+  // Clear cookies on the *current* host (tenant or platform).
+  await postLogoutClear();
 
   let stillAuthed = await fetchAuthSessionUser();
   if (stillAuthed) {
@@ -97,8 +102,8 @@ export async function performHardSignOut(options?: {
     stillAuthed = await fetchAuthSessionUser();
   }
 
-  // Always leave the API route — land on the signed-out shell even if WebView
-  // was stubborn about cookie clears (user can retry sign-in).
+  // Pro on tenant → absolute platform /api/auth/logout (GET clears platform + lands on sign-in).
+  // Web → tenant homepage. Platform host → /pro/sign-in?signedOut=1.
   window.location.assign(destination);
   return { sessionCleared: !stillAuthed, destination };
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { HouzzatProStartup } from "@/components/mobile/HouzzatProStartup";
 import { ProShellRuntimeDiagnostic } from "@/components/mobile/ProShellRuntimeDiagnostic";
+import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransition";
 
 export const metadata: Metadata = {
   title: "HouzzatPro",
@@ -10,20 +11,17 @@ export const metadata: Metadata = {
 
 /**
  * Capacitor Pro cold-start surface (`server.url` → /pro).
- * Routing is handled by HouzzatProStartup in Providers (session role only).
- * Append ?diag=1 for safe in-app runtime diagnostic (Stage 3K.5.10.4).
- * Full page: /pro/mobile/diag
+ * Transition UI is owned solely by HouzzatProStartup (no stacked loading copy).
  */
 export default function HouzzatProStartPage() {
   return (
     <>
-      <HouzzatProStartup />
+      <Suspense fallback={<ProWorkspaceTransition />}>
+        <HouzzatProStartup />
+      </Suspense>
       <Suspense fallback={null}>
         <ProShellRuntimeDiagnostic />
       </Suspense>
-      <main className="mx-auto flex min-h-[50dvh] w-full max-w-md flex-col items-center justify-center px-5 py-16 text-center">
-        <p className="text-sm font-medium text-ink/50">Opening HouzzatPro…</p>
-      </main>
     </>
   );
 }
