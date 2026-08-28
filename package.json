@@ -81,6 +81,8 @@
     "request-host-tenancy-foundation:selftest": "node --import tsx scripts/request-host-tenancy-foundation-selftest.ts",
     "tenant-canary-runtime-isolation:selftest": "node --import tsx scripts/tenant-canary-runtime-isolation-selftest.ts",
     "tenant-crm-host-isolation:selftest": "node --import tsx scripts/tenant-crm-host-isolation-selftest.ts",
+    "tenant-auth-isolation:selftest": "node --import tsx scripts/tenant-auth-isolation-selftest.ts",
+    "platform-bootstrap:selftest": "node --import tsx scripts/platform-bootstrap-regression-selftest.ts",
     "tenant-command-centre:selftest": "node --import tsx scripts/tenant-command-centre-selftest.ts",
     "cap-pro-android-config:selftest": "node --import tsx scripts/cap-pro-android-config-selftest.ts",
     "mobile-workspace-bootstrap:selftest": "node --import tsx scripts/mobile-workspace-bootstrap-selftest.ts",

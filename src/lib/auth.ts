@@ -22,6 +22,7 @@ import {
 import { VERIFY_EMAIL_PROVIDER_ID } from "@/lib/auth/verify-email-constants";
 import { isAdminRole, isAgentRole, resolveActiveMode } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
+import { validateTenantCredentialsAuth } from "@/lib/tenancy/tenant-auth-boundary";
 
 const providers: Provider[] = [
   Credentials({
@@ -30,7 +31,7 @@ const providers: Provider[] = [
       email: { label: "Email", type: "email" },
       password: { label: "Password", type: "password" },
     },
-    async authorize(credentials) {
+    async authorize(credentials, request) {
       const email = credentials?.email?.toString().trim().toLowerCase();
       const password = credentials?.password?.toString() ?? "";
 
@@ -68,6 +69,17 @@ const providers: Provider[] = [
           return null;
         }
 
+        // Stage 3K.5.13: Hard Tenant Workspace Membership Boundary
+        const synthetic =
+          request ?? (await buildSyntheticRequestFromHeaders());
+        const authCheck = await validateTenantCredentialsAuth({
+          userId: user.id,
+          request: synthetic,
+        });
+        if (!authCheck.ok) {
+          return null;
+        }
+
         return {
           id: user.id,
           email: user.email,
@@ -90,10 +102,20 @@ const providers: Provider[] = [
     credentials: {
       token: { label: "Token", type: "text" },
     },
-    async authorize(credentials) {
+    async authorize(credentials, request) {
       const token = credentials?.token?.toString() ?? "";
       const user = await authorizeEmailVerificationToken(token);
       if (!user) {
+        return null;
+      }
+
+      const synthetic =
+        request ?? (await buildSyntheticRequestFromHeaders());
+      const authCheck = await validateTenantCredentialsAuth({
+        userId: user.id,
+        request: synthetic,
+      });
+      if (!authCheck.ok) {
         return null;
       }
 
@@ -185,6 +207,21 @@ export const {
   providers,
   callbacks: {
     ...authConfig.callbacks,
+    async signIn({ user, account }) {
+      if (!user?.id) return false;
+      if (account?.provider === "mobile-workspace-handoff") {
+        return true;
+      }
+      const synthetic = await buildSyntheticRequestFromHeaders();
+      const authCheck = await validateTenantCredentialsAuth({
+        userId: user.id,
+        request: synthetic,
+      });
+      if (!authCheck.ok) {
+        return false;
+      }
+      return true;
+    },
     async redirect({ url, baseUrl }) {
       const synthetic = await buildSyntheticRequestFromHeaders();
       const requestOrigin = await resolveAuthBaseOriginForRequest(synthetic);

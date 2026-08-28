@@ -16,6 +16,7 @@ import { RequestWorkspaceAuthError } from "@/lib/tenancy/request-workspace-auth"
 import { isActiveHostnameBoundReadMode } from "@/lib/crm-read-scope";
 import { isTenantDomainScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
 import { isHouzzatProPlatformRoot } from "@/lib/tenancy/reserved-domains";
+import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
 
 /**
  * Hostname-bound staff CRM only when BOTH domain + read scopes are workspace.
@@ -52,6 +53,7 @@ export function isPlatformAdminSurfaceHostname(hostname: string): boolean {
 export function isTenantHostnameBoundCrmHost(hostname: string): boolean {
   const host = hostname.trim().toLowerCase();
   if (isHouzzatProPlatformRoot(host)) return false;
+  if (isPlatformMobileBootstrapHost(host)) return false;
   if (!isTenantDomainScopeWorkspace()) return false;
   // Platform tenant subdomains (*.houzzatpro.com) and verified custom domains
   // (e.g. houzzat.com) are candidate tenant hosts; membership proves access.

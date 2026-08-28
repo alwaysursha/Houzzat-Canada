@@ -19,7 +19,9 @@ import {
 import { isAdminRole, isAgentRole } from "@/lib/constants";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
+import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 import {
+  isPlatformAdminSurfaceHostname,
   shouldUseHostnameBoundStaffContext,
   tryTenantStaffContext,
 } from "@/lib/tenancy/tenant-staff-context";
@@ -276,6 +278,11 @@ export async function requireAgentContextForRequest(
   const user = await requireAgentUser();
   if (!user) return null;
 
+  const hostname = extractTrustedRequestHostname(request);
+  if (hostname && !isPlatformAdminSurfaceHostname(hostname)) {
+    return buildHostnameBoundAgentContext(user, request);
+  }
+
   if (shouldUseHostnameBoundStaffContext()) {
     return buildHostnameBoundAgentContext(user, request);
   }
@@ -298,8 +305,15 @@ export const requireAgentContext = cache(
 
     const readScope = parseCrmReadScope();
 
+    const request = await buildSyntheticRequestFromHeaders();
+    if (request) {
+      const hostname = extractTrustedRequestHostname(request);
+      if (hostname && !isPlatformAdminSurfaceHostname(hostname)) {
+        return buildHostnameBoundAgentContext(user, request);
+      }
+    }
+
     if (shouldUseHostnameBoundStaffContext()) {
-      const request = await buildSyntheticRequestFromHeaders();
       if (!request) return null;
       return buildHostnameBoundAgentContext(user, request);
     }
