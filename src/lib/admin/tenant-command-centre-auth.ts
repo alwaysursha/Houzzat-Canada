@@ -14,6 +14,7 @@ import {
 } from "@/lib/tenancy/tenant-staff-context";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 import { isTenantDomainScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
+import { executeTenantAuthorityShadow } from "@/lib/tenancy/tenant-authority-shadow";
 
 export type AdminSurfaceMode = "platform" | "tenant" | "deny";
 
@@ -98,8 +99,41 @@ export async function authorizeTenantCommandCentre(
   if (resolveAdminSurfaceMode(hostname) !== "tenant") return null;
 
   const ctx = await tryTenantStaffContext(request, user);
-  if (!ctx) return null;
-  if (!canAccessTenantCommandCentreRole(ctx.workspaceRole)) return null;
+  if (!ctx) {
+    await executeTenantAuthorityShadow({
+      location: "authorizeTenantCommandCentre",
+      request,
+      user,
+      currentDecision: { allowed: false, hostname },
+    });
+    return null;
+  }
+  if (!canAccessTenantCommandCentreRole(ctx.workspaceRole)) {
+    await executeTenantAuthorityShadow({
+      location: "authorizeTenantCommandCentre",
+      request,
+      user,
+      currentDecision: {
+        allowed: false,
+        workspaceId: ctx.workspaceId,
+        workspaceRole: ctx.workspaceRole,
+        hostname,
+      },
+    });
+    return null;
+  }
+
+  await executeTenantAuthorityShadow({
+    location: "authorizeTenantCommandCentre",
+    request,
+    user,
+    currentDecision: {
+      allowed: true,
+      workspaceId: ctx.workspaceId,
+      workspaceRole: ctx.workspaceRole,
+      hostname,
+    },
+  });
 
   return {
     ...ctx,

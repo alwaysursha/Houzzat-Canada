@@ -21,12 +21,12 @@ import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 import {
-  isPlatformAdminSurfaceHostname,
   shouldUseHostnameBoundStaffContext,
   tryTenantStaffContext,
 } from "@/lib/tenancy/tenant-staff-context";
 import { resolveWorkspaceStaffContext } from "@/lib/workspace-context";
 import { readActiveWorkspaceIdFromCookies } from "@/lib/active-workspace";
+import { executeTenantAuthorityShadow } from "@/lib/tenancy/tenant-authority-shadow";
 
 const agentUserSelect = {
   id: true,
@@ -245,6 +245,17 @@ async function buildHostnameBoundAgentContext(
     }),
   );
 
+  await executeTenantAuthorityShadow({
+    location: "buildHostnameBoundAgentContext",
+    request,
+    user,
+    currentDecision: {
+      allowed: true,
+      workspaceId: tenant.workspaceId,
+      workspaceRole: tenant.workspaceRole,
+    },
+  });
+
   return {
     user,
     organizationId: brokerage.id,
@@ -278,11 +289,6 @@ export async function requireAgentContextForRequest(
   const user = await requireAgentUser();
   if (!user) return null;
 
-  const hostname = extractTrustedRequestHostname(request);
-  if (hostname && !isPlatformAdminSurfaceHostname(hostname)) {
-    return buildHostnameBoundAgentContext(user, request);
-  }
-
   if (shouldUseHostnameBoundStaffContext()) {
     return buildHostnameBoundAgentContext(user, request);
   }
@@ -306,12 +312,6 @@ export const requireAgentContext = cache(
     const readScope = parseCrmReadScope();
 
     const request = await buildSyntheticRequestFromHeaders();
-    if (request) {
-      const hostname = extractTrustedRequestHostname(request);
-      if (hostname && !isPlatformAdminSurfaceHostname(hostname)) {
-        return buildHostnameBoundAgentContext(user, request);
-      }
-    }
 
     if (shouldUseHostnameBoundStaffContext()) {
       if (!request) return null;
@@ -342,6 +342,19 @@ export const requireAgentContext = cache(
           console.error("[agent] seat heal failed", error);
         }),
       );
+    }
+
+    if (request) {
+      await executeTenantAuthorityShadow({
+        location: "requireAgentContext_legacy",
+        request,
+        user,
+        currentDecision: {
+          allowed: true,
+          workspaceId: workspace.workspaceId,
+          workspaceRole: workspace.workspaceRole,
+        },
+      });
     }
 
     return {

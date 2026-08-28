@@ -17,6 +17,7 @@ import { isActiveHostnameBoundReadMode } from "@/lib/crm-read-scope";
 import { isTenantDomainScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
 import { isHouzzatProPlatformRoot } from "@/lib/tenancy/reserved-domains";
 import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
+import { executeTenantAuthorityShadow } from "@/lib/tenancy/tenant-authority-shadow";
 
 /**
  * Hostname-bound staff CRM only when BOTH domain + read scopes are workspace.
@@ -93,10 +94,34 @@ export async function resolveTenantStaffContext(
     select: { role: true },
   });
 
-  if (!member) return null;
+  if (!member) {
+    await executeTenantAuthorityShadow({
+      location: "resolveTenantStaffContext",
+      request,
+      user,
+      currentDecision: {
+        allowed: false,
+        workspaceId: tenancy.workspaceId,
+        hostname: tenancy.hostname,
+      },
+    });
+    return null;
+  }
 
   const canSeeTeamLeads =
     member.role === "OWNER" || member.role === "ADMIN";
+
+  await executeTenantAuthorityShadow({
+    location: "resolveTenantStaffContext",
+    request,
+    user,
+    currentDecision: {
+      allowed: true,
+      workspaceId: tenancy.workspaceId,
+      workspaceRole: member.role,
+      hostname: tenancy.hostname,
+    },
+  });
 
   return {
     ...tenancy,

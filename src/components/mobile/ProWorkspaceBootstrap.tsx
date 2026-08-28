@@ -20,12 +20,17 @@ import {
 import { hardGo } from "@/lib/mobile/nav-back";
 import { peekPendingPushNavigation } from "@/lib/notifications/pending-push-nav";
 import {
-  classifyWrongHostBootstrap,
   isMobileDiagnosticFreezePath,
   recordMobileDiagEvent,
   recordMobileDiagNav,
   sanitizeDiagnosticHref,
+  classifyWrongHostBootstrap,
 } from "@/lib/mobile/runtime-diagnostic";
+import {
+  setNativeNavStage,
+  getNativeNavStage,
+  clearNativeNavStage,
+} from "@/lib/mobile/native-route-latch";
 import type {
   MobileBootstrapMembership,
   MobileWorkspaceBootstrapState,
@@ -223,6 +228,7 @@ export function ProWorkspaceBootstrap() {
 
       // Latch before awaits so host/status churn cannot double-fetch.
       routed.current = true;
+      setNativeNavStage("BOOTSTRAPPING");
       recordMobileDiagEvent("PLATFORM_SESSION_FOUND");
       recordMobileDiagEvent("WORKSPACE_BOOTSTRAP_START");
       setPending(true);
@@ -230,6 +236,7 @@ export function ProWorkspaceBootstrap() {
       const payload = await fetchBootstrap();
       if (cancelled) return;
       if (!payload) {
+        clearNativeNavStage();
         routed.current = false;
         setPending(false);
         setError("Unable to load workspaces. Try again.");
@@ -268,6 +275,7 @@ export function ProWorkspaceBootstrap() {
       }
 
       if (bootstrap.kind === "tenant_destination") {
+        setNativeNavStage("FINAL_DESTINATION");
         recordMobileDiagEvent("WORKSPACE_COUNT_1", bootstrap.membership.slug);
         if (bootstrap.destination === "/admin") {
           recordMobileDiagEvent("DESTINATION_ADMIN");
@@ -284,10 +292,12 @@ export function ProWorkspaceBootstrap() {
 
       if (bootstrap.kind === "handoff") {
         // Single-workspace fast path: mint + cross-host without intermediate stop.
+        setNativeNavStage("HANDOFF_STARTED");
         recordMobileDiagEvent("WORKSPACE_COUNT_1", bootstrap.membership.slug);
         const handoffUrl = await requestHandoff(bootstrap.membership.workspaceId);
         if (cancelled) return;
         if (!handoffUrl) {
+          clearNativeNavStage();
           setPending(false);
           setError("Workspace handoff failed. Try again.");
           routed.current = false;
@@ -390,10 +400,12 @@ export function ProWorkspaceBootstrap() {
   async function onSelectWorkspace(workspaceId: string) {
     setPending(true);
     setError(null);
+    setNativeNavStage("HANDOFF_STARTED");
     recordMobileDiagEvent("WORKSPACE_SELECTOR", "user_pick");
     const handoffUrl = await requestHandoff(workspaceId);
     setPending(false);
     if (!handoffUrl) {
+      clearNativeNavStage();
       setError("Workspace handoff failed. Try again.");
       return;
     }

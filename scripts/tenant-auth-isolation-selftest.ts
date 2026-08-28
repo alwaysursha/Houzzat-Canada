@@ -270,7 +270,7 @@ function testSourceWiring() {
   assert.ok(adminLayoutSource.includes("resolveAdminSurfaceMode"));
 
   // Agent context binds to hostname
-  assert.ok(agentLibSource.includes("!isPlatformAdminSurfaceHostname(hostname)"));
+  assert.ok(agentLibSource.includes("shouldUseHostnameBoundStaffContext"));
   assert.ok(agentLibSource.includes("buildHostnameBoundAgentContext"));
 }
 

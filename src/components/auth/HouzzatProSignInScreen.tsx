@@ -8,6 +8,7 @@ import { HouzzatProSignInForm } from "@/components/auth/HouzzatProSignInForm";
 import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransition";
 import { hardGo } from "@/lib/mobile/nav-back";
+import { clearNativeNavStage } from "@/lib/mobile/native-route-latch";
 
 function HouzzatProSignInInner() {
   const searchParams = useSearchParams();
@@ -19,6 +20,9 @@ function HouzzatProSignInInner() {
   useEffect(() => {
     if (checked.current) return;
     checked.current = true;
+    if (signedOut) {
+      clearNativeNavStage();
+    }
     // After complete logout, stay on sign-in even if a stale client cache flickers.
     if (signedOut) return;
     void (async () => {

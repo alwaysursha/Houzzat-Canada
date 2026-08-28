@@ -15,6 +15,7 @@ import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biomet
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
 import { hardGo } from "@/lib/mobile/nav-back";
 import { sanitizeStaffCallbackPath } from "@/lib/auth/pro-sign-in-routing";
+import { setNativeNavStage } from "@/lib/mobile/native-route-latch";
 
 export function HouzzatProSignInForm({
   callbackUrl = null,
@@ -80,6 +81,7 @@ export function HouzzatProSignInForm({
     });
 
     // One continuous transition into bootstrap / handoff / dashboard.
+    setNativeNavStage("BOOTSTRAPPING");
     setTransitioning(true);
     const next =
       callbackUrl && callbackUrl.includes("diag=1")

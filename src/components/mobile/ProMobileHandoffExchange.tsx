@@ -8,6 +8,10 @@ import {
   recordMobileDiagEvent,
   recordMobileDiagNav,
 } from "@/lib/mobile/runtime-diagnostic";
+import {
+  setNativeNavStage,
+  clearNativeNavStage,
+} from "@/lib/mobile/native-route-latch";
 
 function isStaffRoleDestination(
   value: string | null | undefined,
@@ -35,6 +39,7 @@ function HandoffExchangeInner() {
         body: JSON.stringify({ code }),
       });
       if (!res.ok) {
+        clearNativeNavStage();
         recordMobileDiagEvent("HANDOFF_EXCHANGE_FAILED", `http_${res.status}`);
         setError(
           "Workspace handoff failed. Open HouzzatPro and sign in again.",
@@ -46,6 +51,7 @@ function HandoffExchangeInner() {
       } | null;
       const destination = data?.destination;
       if (!isStaffRoleDestination(destination)) {
+        clearNativeNavStage();
         recordMobileDiagEvent(
           "HANDOFF_EXCHANGE_FAILED",
           "missing_staff_destination",
@@ -55,6 +61,7 @@ function HandoffExchangeInner() {
         );
         return;
       }
+      setNativeNavStage("FINAL_DESTINATION");
       recordMobileDiagEvent("HANDOFF_EXCHANGE_SUCCESS", destination);
       recordMobileDiagEvent("TENANT_SESSION_FOUND");
       if (destination === "/admin") {
