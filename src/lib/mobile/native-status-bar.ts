@@ -15,7 +15,8 @@ function surfaceFor(pathname: string, shell: AppShell, lightOverlay: boolean): S
   if (shell === "houzzatpro") {
     if (lightOverlay) return "pro-light";
     if (pathname.startsWith("/pro/sign-in")) return "pro-mint";
-    if (pathname.startsWith("/agent")) return "pro-agent";
+    // Admin and Agent shells both use the dark header (#1e2a38), so they need light/white icons
+    if (pathname.startsWith("/admin") || pathname.startsWith("/agent")) return "pro-agent";
     return "pro-light";
   }
   return "consumer";
