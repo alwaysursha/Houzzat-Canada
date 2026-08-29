@@ -24,6 +24,11 @@ import { isAdminRole, isAgentRole, resolveActiveMode } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { validateTenantCredentialsAuth } from "@/lib/tenancy/tenant-auth-boundary";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
+import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
+import {
+  AUTH_BUILD_MARKER,
+  recordAuthServerDiagnostic,
+} from "@/lib/auth/auth-diagnostic-buffer";
 
 const providers: Provider[] = [
   Credentials({
@@ -39,6 +44,29 @@ const providers: Provider[] = [
       if (!email || !password) {
         return null;
       }
+
+      const diagId = `auth_diag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const synthetic =
+        (await buildSyntheticRequestFromHeaders().catch(() => null)) ?? request;
+      const incomingHost =
+        synthetic?.headers.get("host") ?? request?.headers?.get?.("host") ?? null;
+      const requestUrlHost = request
+        ? (() => {
+            try {
+              return new URL(request.url).hostname;
+            } catch {
+              return null;
+            }
+          })()
+        : null;
+      const resolvedAuthHostname = synthetic
+        ? extractTrustedRequestHostname(synthetic)
+        : null;
+      const isPlatform = isPlatformMobileBootstrapHost(resolvedAuthHostname);
+      const userAgent = synthetic?.headers.get("user-agent") ?? "";
+      const isNative =
+        userAgent.includes("HouzzatNative/1") ||
+        userAgent.includes("com.houzzat.pro");
 
       try {
         const user = await prisma.user.findUnique({
@@ -58,31 +86,83 @@ const providers: Provider[] = [
         });
 
         if (!user?.password || user.disabledAt) {
+          recordAuthServerDiagnostic({
+            diagId,
+            timestamp: new Date().toISOString(),
+            buildMarker: AUTH_BUILD_MARKER,
+            incomingHost,
+            requestUrlHost,
+            resolvedAuthHostname,
+            isPlatformHost: isPlatform,
+            nativeShell: isNative,
+            userAgentSnippet: userAgent ? `${userAgent.slice(0, 40)}...` : null,
+            userFound: !!user,
+            passwordMatch: "SKIPPED",
+            tenantValidationInvoked: false,
+            tenantValidationReason: !user ? "user_not_found" : "disabled_or_no_password",
+            authorizeResult: "REJECT",
+            signInCallbackResult: "NOT_REACHED",
+            userIdMasked: user?.id ? `***${user.id.slice(-3)}` : null,
+          });
           return null;
         }
 
         const valid = await bcrypt.compare(password, user.password);
         if (!valid) {
+          recordAuthServerDiagnostic({
+            diagId,
+            timestamp: new Date().toISOString(),
+            buildMarker: AUTH_BUILD_MARKER,
+            incomingHost,
+            requestUrlHost,
+            resolvedAuthHostname,
+            isPlatformHost: isPlatform,
+            nativeShell: isNative,
+            userAgentSnippet: userAgent ? `${userAgent.slice(0, 40)}...` : null,
+            userFound: true,
+            passwordMatch: "NO_MATCH",
+            tenantValidationInvoked: false,
+            tenantValidationReason: "password_mismatch",
+            authorizeResult: "REJECT",
+            signInCallbackResult: "NOT_REACHED",
+            userIdMasked: `***${user.id.slice(-3)}`,
+          });
           return null;
         }
 
         // Stage 3K.5.13 / Stage 3K.5.21: Hard Tenant Workspace Membership Boundary with Trusted Host Precedence
-        const synthetic =
-          (await buildSyntheticRequestFromHeaders().catch(() => null)) ?? request;
         const authCheck = await validateTenantCredentialsAuth({
           userId: user.id,
           userRole: user.role,
           request: synthetic,
         });
 
+        recordAuthServerDiagnostic({
+          diagId,
+          timestamp: new Date().toISOString(),
+          buildMarker: AUTH_BUILD_MARKER,
+          incomingHost,
+          requestUrlHost,
+          resolvedAuthHostname,
+          isPlatformHost: isPlatform,
+          nativeShell: isNative,
+          userAgentSnippet: userAgent ? `${userAgent.slice(0, 40)}...` : null,
+          userFound: true,
+          passwordMatch: "MATCH",
+          tenantValidationInvoked: true,
+          tenantValidationReason: authCheck.ok ? "AUTHORIZED" : authCheck.reason,
+          authorizeResult: authCheck.ok ? "ACCEPT" : "REJECT",
+          signInCallbackResult: authCheck.ok ? "ALLOW" : "NOT_REACHED",
+          userIdMasked: `***${user.id.slice(-3)}`,
+        });
+
         if (!authCheck.ok) {
           const rawHost = synthetic ? extractTrustedRequestHostname(synthetic) : null;
-          const userAgent = synthetic?.headers.get("user-agent") ?? "";
-          const isNative = userAgent.includes("HouzzatNative/1") || userAgent.includes("com.houzzat.pro");
           console.error("[auth] validateTenantCredentialsAuth denied authorize", {
+            diagId,
             host: rawHost,
             nativeShell: isNative ? "yes" : "no",
-            userIdMasked: user.id ? `***${user.id.slice(-3)}` : null,
+            userIdMasked: `***${user.id.slice(-3)}`,
             reason: authCheck.reason,
           });
           return null;

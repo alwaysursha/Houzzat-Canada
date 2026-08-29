@@ -14,6 +14,7 @@ import {
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
 import { setNativeNavStage } from "@/lib/mobile/native-route-latch";
 import { proNativeAuthController } from "@/lib/mobile/pro-native-auth-controller";
+import { NativeAuthDiagnosticOverlay } from "@/components/mobile/NativeAuthDiagnosticOverlay";
 
 export function HouzzatProSignInForm({
   callbackUrl = null,
@@ -28,6 +29,11 @@ export function HouzzatProSignInForm({
   const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loginAgain, setLoginAgain] = useState(false);
+  const [submitCount, setSubmitCount] = useState(0);
+  const [lastSignInResult, setLastSignInResult] = useState<{
+    ok?: boolean;
+    error?: string | null;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +57,7 @@ export function HouzzatProSignInForm({
     if (pending) return;
     setPending(true);
     setError(null);
+    setSubmitCount((prev) => prev + 1);
 
     const normalizedEmail = email.trim().toLowerCase();
     setNativeNavStage("BOOTSTRAPPING");
@@ -60,6 +67,8 @@ export function HouzzatProSignInForm({
       password,
       callbackUrl,
     });
+
+    setLastSignInResult(result);
 
     if (!result.ok) {
       setPending(false);
@@ -145,6 +154,11 @@ export function HouzzatProSignInForm({
       <p className="text-center text-xs leading-relaxed text-[#0B5C49]/65">
         Contact Houzzatpro support for assistance
       </p>
+
+      <NativeAuthDiagnosticOverlay
+        submitCount={submitCount}
+        lastSignInResult={lastSignInResult}
+      />
     </form>
   );
 }
