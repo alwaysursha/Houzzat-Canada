@@ -294,7 +294,7 @@ function testSourceWiring() {
 
   // Auth.js credentials authorize + signIn callback wire boundary
   assert.ok(authSource.includes("validateTenantCredentialsAuth"));
-  assert.ok(authSource.includes("Stage 3K.5.13: Hard Tenant Workspace Membership Boundary"));
+  assert.ok(authSource.includes("Stage 3K.5.13"));
   assert.ok(authSource.includes("callbacks:"));
   assert.ok(authSource.includes("async signIn({ user, account })"));
 
@@ -312,10 +312,61 @@ function testSourceWiring() {
   assert.ok(agentLibSource.includes("buildHostnameBoundAgentContext"));
 }
 
+async function testPlatformHostAuthRequestSemantics() {
+  const { extractTrustedRequestHostname } = await import("../src/lib/tenancy/extract-request-hostname");
+
+  // 1. Browser on app.houzzatpro.com with NextAuth synthetic request.url pointing to houzzat.com
+  const browserPlatformReq = new Request("https://houzzat.com/api/auth/callback/credentials", {
+    headers: {
+      host: "app.houzzatpro.com",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
+  });
+  const browserHost = extractTrustedRequestHostname(browserPlatformReq);
+  assert.equal(browserHost, "app.houzzatpro.com");
+  const browserAuth = await validateTenantCredentialsAuth({
+    userId: "owner_b",
+    userRole: "AGENT",
+    request: browserPlatformReq,
+    deps: fixtureDeps,
+  });
+  assert.equal(browserAuth.ok, true);
+  assert.equal(browserAuth.isPlatform, true);
+
+  // 2. Android Native on app.houzzatpro.com with NextAuth synthetic request.url pointing to houzzat.com
+  const androidPlatformReq = new Request("https://houzzat.com/api/auth/callback/credentials", {
+    headers: {
+      host: "app.houzzatpro.com",
+      "user-agent": "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/UD1A.230803.041) AppleWebKit/537.36 HouzzatNative/1 (com.houzzat.pro)",
+    },
+  });
+  const androidHost = extractTrustedRequestHostname(androidPlatformReq);
+  assert.equal(androidHost, "app.houzzatpro.com");
+  const androidAuth = await validateTenantCredentialsAuth({
+    userId: "owner_b",
+    userRole: "AGENT",
+    request: androidPlatformReq,
+    deps: fixtureDeps,
+  });
+  assert.equal(androidAuth.ok, true);
+  assert.equal(androidAuth.isPlatform, true);
+
+  // 3. Direct Houzzat tenant request with NextAuth synthetic request.url pointing to houzzat.com
+  const houzzatTenantReq = new Request("https://houzzat.com/api/auth/callback/credentials", {
+    headers: {
+      host: "houzzat.com",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+    },
+  });
+  const houzzatHost = extractTrustedRequestHostname(houzzatTenantReq);
+  assert.equal(houzzatHost, "houzzat.com");
+}
+
 async function main() {
   await testCrossTenantAuthenticationMatrix();
   testTenantDataAuthorizationIsolation();
   testSourceWiring();
+  await testPlatformHostAuthRequestSemantics();
   console.log("tenant-auth-isolation:selftest OK");
 }
 

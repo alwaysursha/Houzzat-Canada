@@ -13,20 +13,30 @@ import {
 
 /** Build a Request from Next.js incoming headers when redirect callback lacks Request. */
 export async function buildSyntheticRequestFromHeaders(): Promise<Request | null> {
-  const headerStore = await headers();
-  const host = headerStore.get("host");
-  if (!host) return null;
-
-  const protoHeader = headerStore.get("x-forwarded-proto");
-  const protocol =
-    protoHeader === "http" || protoHeader === "https"
-      ? protoHeader
-      : process.env.NODE_ENV === "production"
-        ? "https"
-        : "http";
-
   try {
-    return new Request(`${protocol}://${host}/`);
+    const headerStore = await headers();
+    const host = headerStore.get("host");
+    if (!host) return null;
+
+    const protoHeader = headerStore.get("x-forwarded-proto");
+    const protocol =
+      protoHeader === "http" || protoHeader === "https"
+        ? protoHeader
+        : process.env.NODE_ENV === "production"
+          ? "https"
+          : "http";
+
+    const requestHeaders = new Headers();
+    headerStore.forEach((value, key) => {
+      requestHeaders.set(key, value);
+    });
+    if (!requestHeaders.has("host")) {
+      requestHeaders.set("host", host);
+    }
+
+    return new Request(`${protocol}://${host}/`, {
+      headers: requestHeaders,
+    });
   } catch {
     return null;
   }

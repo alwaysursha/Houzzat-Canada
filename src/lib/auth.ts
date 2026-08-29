@@ -57,11 +57,7 @@ const providers: Provider[] = [
           },
         });
 
-        if (!user?.password) {
-          return null;
-        }
-
-        if (user.disabledAt) {
+        if (!user?.password || user.disabledAt) {
           return null;
         }
 
@@ -70,7 +66,7 @@ const providers: Provider[] = [
           return null;
         }
 
-        // Stage 3K.5.13: Hard Tenant Workspace Membership Boundary
+        // Stage 3K.5.13 / Stage 3K.5.21: Hard Tenant Workspace Membership Boundary with Trusted Host Precedence
         const synthetic =
           (await buildSyntheticRequestFromHeaders().catch(() => null)) ?? request;
         const authCheck = await validateTenantCredentialsAuth({
@@ -78,10 +74,11 @@ const providers: Provider[] = [
           userRole: user.role,
           request: synthetic,
         });
+
         if (!authCheck.ok) {
           const rawHost = synthetic ? extractTrustedRequestHostname(synthetic) : null;
           const userAgent = synthetic?.headers.get("user-agent") ?? "";
-          const isNative = userAgent.includes("HouzzatNative/1");
+          const isNative = userAgent.includes("HouzzatNative/1") || userAgent.includes("com.houzzat.pro");
           console.error("[auth] validateTenantCredentialsAuth denied authorize", {
             host: rawHost,
             nativeShell: isNative ? "yes" : "no",
@@ -230,6 +227,7 @@ export const {
         userRole: user.role,
         request: synthetic,
       });
+
       if (!authCheck.ok) {
         return false;
       }
