@@ -78,9 +78,27 @@ const MEMBERSHIP_DB: MemberRow[] = [
   { userId: "suspended_user", workspaceId: WS_HOUZZAT, role: "AGENT", status: "SUSPENDED" },
 ];
 
+type UserRow = {
+  id: string;
+  role: "BUYER" | "SELLER" | "ADMIN" | "AGENT";
+};
+
+const USER_DB: UserRow[] = [
+  { id: "houzzat_admin", role: "ADMIN" },
+  { id: "houzzat_agent", role: "AGENT" },
+  { id: "owner_b", role: "AGENT" },
+  { id: "agent_b", role: "AGENT" },
+  { id: "multi_user", role: "AGENT" },
+  { id: "suspended_user", role: "AGENT" },
+  { id: "stranger_user", role: "AGENT" },
+  { id: "customer_buyer", role: "BUYER" },
+  { id: "customer_seller", role: "SELLER" },
+];
+
 function mockValidateCredentialsAuth(
   userId: string,
   hostname: string,
+  userRole?: string,
 ) {
   // Test implementation of tenant auth boundary against mock membership db
   if (!userId) return { ok: false, reason: "unauthenticated" as const };
@@ -98,16 +116,25 @@ function mockValidateCredentialsAuth(
   const member = MEMBERSHIP_DB.find(
     (m) => m.userId === userId && m.workspaceId === domain.workspaceId && m.status === "ACTIVE",
   );
-  if (!member) {
-    return { ok: false, reason: "no_active_membership" as const };
+  if (member) {
+    return {
+      ok: true,
+      isPlatform: false,
+      workspaceId: domain.workspaceId,
+      workspaceRole: member.role,
+    };
   }
 
-  return {
-    ok: true,
-    isPlatform: false,
-    workspaceId: domain.workspaceId,
-    workspaceRole: member.role,
-  };
+  const role = userRole ?? USER_DB.find((u) => u.id === userId)?.role;
+  if (role === "BUYER" || role === "SELLER") {
+    return {
+      ok: true,
+      isPlatform: false,
+      workspaceId: domain.workspaceId,
+    };
+  }
+
+  return { ok: false, reason: "no_active_membership" as const };
 }
 
 async function testCrossTenantAuthenticationMatrix() {
@@ -175,6 +202,17 @@ async function testCrossTenantAuthenticationMatrix() {
   const houzzatOnPlatform = mockValidateCredentialsAuth("houzzat_admin", "app.houzzatpro.com");
   assert.equal(houzzatOnPlatform.ok, true);
   assert.equal(houzzatOnPlatform.isPlatform, true);
+
+  // 8. Consumers (BUYER / SELLER) -> PASS on active tenant hosts without staff WorkspaceMember
+  const buyerOnHouzzat = mockValidateCredentialsAuth("customer_buyer", "houzzat.com");
+  assert.equal(buyerOnHouzzat.ok, true);
+  assert.equal(buyerOnHouzzat.workspaceId, WS_HOUZZAT);
+  assert.equal(buyerOnHouzzat.workspaceRole, undefined);
+
+  const sellerOnCanary = mockValidateCredentialsAuth("customer_seller", "tenant-canary.houzzatpro.com");
+  assert.equal(sellerOnCanary.ok, true);
+  assert.equal(sellerOnCanary.workspaceId, WS_CANARY);
+  assert.equal(sellerOnCanary.workspaceRole, undefined);
 }
 
 function testTenantDataAuthorizationIsolation() {

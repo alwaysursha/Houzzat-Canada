@@ -74,6 +74,7 @@ const providers: Provider[] = [
           request ?? (await buildSyntheticRequestFromHeaders());
         const authCheck = await validateTenantCredentialsAuth({
           userId: user.id,
+          userRole: user.role,
           request: synthetic,
         });
         if (!authCheck.ok) {
@@ -113,6 +114,7 @@ const providers: Provider[] = [
         request ?? (await buildSyntheticRequestFromHeaders());
       const authCheck = await validateTenantCredentialsAuth({
         userId: user.id,
+        userRole: user.role,
         request: synthetic,
       });
       if (!authCheck.ok) {
@@ -215,6 +217,7 @@ export const {
       const synthetic = await buildSyntheticRequestFromHeaders();
       const authCheck = await validateTenantCredentialsAuth({
         userId: user.id,
+        userRole: user.role,
         request: synthetic,
       });
       if (!authCheck.ok) {

@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
 import { isHouzzatProPlatformRoot } from "@/lib/tenancy/reserved-domains";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
+import { isConsumerRole } from "@/lib/roles";
 import {
   resolveRequestTenancy,
   type RequestTenancyDeps,
@@ -45,6 +46,7 @@ export type TenantAuthValidationResult =
  */
 export async function validateTenantCredentialsAuth(input: {
   userId: string;
+  userRole?: string | null;
   request?: Request | null;
   requestHostname?: string | null;
   deps?: RequestTenancyDeps;
@@ -94,7 +96,7 @@ export async function validateTenantCredentialsAuth(input: {
     return { ok: false, reason: "unknown_tenant_workspace" };
   }
 
-  // Must have an ACTIVE WorkspaceMember row for the exact resolved workspace.
+  // Check for an ACTIVE WorkspaceMember row for the exact resolved workspace.
   const membership = await prisma.workspaceMember.findFirst({
     where: {
       userId: input.userId,
@@ -108,16 +110,35 @@ export async function validateTenantCredentialsAuth(input: {
     },
   });
 
-  if (!membership) {
-    return { ok: false, reason: "no_active_membership" };
+  if (membership) {
+    return {
+      ok: true,
+      isPlatform: false,
+      workspaceId: resolvedWorkspaceId,
+      workspaceRole: membership.role,
+    };
   }
 
-  return {
-    ok: true,
-    isPlatform: false,
-    workspaceId: resolvedWorkspaceId,
-    workspaceRole: membership.role,
-  };
+  // If no staff WorkspaceMember exists, verify if the user is a consumer (BUYER / SELLER).
+  // Consumers are authorized to sign in on active tenant websites.
+  let role = input.userRole;
+  if (role === undefined) {
+    const user = await prisma.user.findUnique({
+      where: { id: input.userId },
+      select: { role: true },
+    });
+    role = user?.role ?? null;
+  }
+
+  if (isConsumerRole(role)) {
+    return {
+      ok: true,
+      isPlatform: false,
+      workspaceId: resolvedWorkspaceId,
+    };
+  }
+
+  return { ok: false, reason: "no_active_membership" };
 }
 
 /**
