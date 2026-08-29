@@ -40,9 +40,13 @@ function HandoffExchangeInner() {
       });
       if (!res.ok) {
         clearNativeNavStage();
-        recordMobileDiagEvent("HANDOFF_EXCHANGE_FAILED", `http_${res.status}`);
+        const errJson = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        const errDetail = errJson?.error ?? `http_${res.status}`;
+        recordMobileDiagEvent("HANDOFF_EXCHANGE_FAILED", errDetail);
         setError(
-          "Workspace handoff failed. Open HouzzatPro and sign in again.",
+          `Workspace handoff failed (${errDetail}). Open HouzzatPro and sign in again.`,
         );
         return;
       }

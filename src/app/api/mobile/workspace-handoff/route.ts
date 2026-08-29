@@ -77,6 +77,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   const hostname = extractTrustedRequestHostname(request);
   if (!hostname) {
+    console.error("[mobile-handoff-exchange] PUT failed: missing/invalid trusted request hostname");
     return NextResponse.json({ error: "Invalid host" }, { status: 400 });
   }
 
@@ -84,6 +85,7 @@ export async function PUT(request: Request) {
     .object({ code: z.string().min(8).max(256) })
     .safeParse(await request.json().catch(() => null));
   if (!body.success) {
+    console.error("[mobile-handoff-exchange] PUT failed: invalid body payload");
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
@@ -92,12 +94,17 @@ export async function PUT(request: Request) {
     requestHostname: hostname,
   });
   if (!peeked.ok) {
-    return NextResponse.json({ error: "Handoff expired or invalid" }, { status: 401 });
+    console.error("[mobile-handoff-exchange] PUT peek failed:", {
+      hostname,
+      reason: peeked.error,
+    });
+    return NextResponse.json({ error: peeked.error }, { status: 401 });
   }
 
   // Fail closed: only staff CRM destinations after a successful exchange.
   if (peeked.destination !== "/admin" && peeked.destination !== "/agent") {
-    return NextResponse.json({ error: "Handoff expired or invalid" }, { status: 401 });
+    console.error("[mobile-handoff-exchange] PUT invalid destination:", peeked.destination);
+    return NextResponse.json({ error: "Invalid staff destination" }, { status: 401 });
   }
 
   const signInResult = await signIn("mobile-workspace-handoff", {
@@ -108,7 +115,11 @@ export async function PUT(request: Request) {
   });
 
   if (isMobileHandoffSignInErrorResult(signInResult)) {
-    return NextResponse.json({ error: "Handoff expired or invalid" }, { status: 401 });
+    console.error("[mobile-handoff-exchange] PUT signIn returned error:", {
+      signInResult,
+      hostname,
+    });
+    return NextResponse.json({ error: "Handoff sign-in failed" }, { status: 401 });
   }
 
   return NextResponse.json({
