@@ -209,8 +209,6 @@ export async function peekMobileWorkspaceHandoff(input: {
 async function lookupMobileWorkspaceHandoff(input: {
   rawCode: string;
   requestHostname: string;
-  /** When true, delete invalid/expired rows (consume path). */
-  deleteOnInvalid?: boolean;
 }): Promise<HandoffLookupOk | { ok: false; error: string }> {
   const trimmed = input.rawCode.trim();
   if (!trimmed) return { ok: false, error: "Missing handoff code" };
@@ -233,18 +231,12 @@ async function lookupMobileWorkspaceHandoff(input: {
       now: new Date().toISOString(),
       requestHostname: requestHost.hostname,
     });
-    if (input.deleteOnInvalid) {
-      await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
-    }
     return { ok: false, error: "Handoff expired" };
   }
 
   const parsed = parseMobileHandoffIdentifier(row.identifier);
   if (!parsed) {
     console.error("[mobile-handoff-lookup] invalid identifier shape:", row.identifier);
-    if (input.deleteOnInvalid) {
-      await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
-    }
     return { ok: false, error: "Invalid handoff record" };
   }
   if (parsed.targetHostname !== requestHost.hostname) {
@@ -265,9 +257,6 @@ async function lookupMobileWorkspaceHandoff(input: {
     select: { role: true },
   });
   if (!member || !isStaffWorkspaceMemberRole(member.role)) {
-    if (input.deleteOnInvalid) {
-      await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
-    }
     return { ok: false, error: "Forbidden" };
   }
 
@@ -286,9 +275,6 @@ async function lookupMobileWorkspaceHandoff(input: {
     },
   });
   if (!user || user.disabledAt) {
-    if (input.deleteOnInvalid) {
-      await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
-    }
     return { ok: false, error: "Account unavailable" };
   }
 
@@ -336,11 +322,8 @@ export async function consumeMobileWorkspaceHandoff(input: {
 > {
   const looked = await lookupMobileWorkspaceHandoff({
     ...input,
-    deleteOnInvalid: true,
   });
   if (!looked.ok) return looked;
-
-  await prisma.verificationToken.delete({ where: { token: looked.token } });
 
   return {
     ok: true,

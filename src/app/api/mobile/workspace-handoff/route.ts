@@ -5,9 +5,11 @@ import { isValidWorkspaceIdShape } from "@/lib/active-workspace";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 import {
   createMobileWorkspaceHandoff,
+  hashHandoffCode,
   isMobileHandoffSignInErrorResult,
   peekMobileWorkspaceHandoff,
 } from "@/lib/mobile/mobile-workspace-handoff";
+import { prisma } from "@/lib/prisma";
 import { loadMobileBootstrapMemberships } from "@/lib/mobile/load-bootstrap-memberships";
 import { isTrustedStaffMutationOriginForRequest } from "@/lib/active-workspace";
 
@@ -121,6 +123,11 @@ export async function PUT(request: Request) {
     });
     return NextResponse.json({ error: "Handoff sign-in failed" }, { status: 401 });
   }
+
+  // Delete consumed token after successful signIn
+  await prisma.verificationToken
+    .delete({ where: { token: hashHandoffCode(body.data.code.trim()) } })
+    .catch(() => undefined);
 
   return NextResponse.json({
     ok: true,
