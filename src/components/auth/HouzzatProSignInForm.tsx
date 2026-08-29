@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
+import { Eye, EyeOff } from "lucide-react";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransition";
 import {
   hadClientSession,
   loadRememberedLogin,
@@ -27,7 +27,7 @@ export function HouzzatProSignInForm({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [transitioning, setTransitioning] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [loginAgain, setLoginAgain] = useState(false);
 
   useEffect(() => {
@@ -75,16 +75,11 @@ export function HouzzatProSignInForm({
 
     // One continuous transition into bootstrap / handoff / dashboard.
     setNativeNavStage("BOOTSTRAPPING");
-    setTransitioning(true);
     const next =
       callbackUrl && callbackUrl.includes("diag=1")
         ? "/pro?diag=1"
         : sanitizeStaffCallbackPath(callbackUrl, "/pro");
     hardGo(next);
-  }
-
-  if (transitioning) {
-    return <ProWorkspaceTransition />;
   }
 
   return (
@@ -123,16 +118,30 @@ export function HouzzatProSignInForm({
         >
           Password
         </label>
-        <Input
-          id="pro-signin-password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="h-12 border-white/70 bg-white/95 text-ink shadow-sm backdrop-blur-sm focus-visible:border-[#0B5C49]/35 focus-visible:ring-[#0B5C49]/25"
-        />
+        <div className="relative">
+          <Input
+            id="pro-signin-password"
+            name="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="h-12 border-white/70 bg-white/95 pr-11 text-ink shadow-sm backdrop-blur-sm focus-visible:border-[#0B5C49]/35 focus-visible:ring-[#0B5C49]/25"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-[#0B5C49]/60 transition-colors hover:text-[#0B5C49] focus:outline-none"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? (
+              <EyeOff className="size-5 stroke-[1.8]" />
+            ) : (
+              <Eye className="size-5 stroke-[1.8]" />
+            )}
+          </button>
+        </div>
       </div>
       {error ? <p className="text-sm font-medium text-danger">{error}</p> : null}
       <Button

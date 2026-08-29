@@ -29,7 +29,11 @@ export function isPlatformMobileBootstrapHost(
 }
 
 export function isApprovedProCapacitorServerUrl(url: string): boolean {
-  return url.trim().replace(/\/$/, "") === HOUZZATPRO_BOOTSTRAP_SERVER_URL;
+  const normalized = url.trim().replace(/\/$/, "");
+  return (
+    normalized === HOUZZATPRO_BOOTSTRAP_SERVER_URL ||
+    normalized === `${HOUZZATPRO_APP_BOOTSTRAP_ORIGIN}/pro/sign-in`
+  );
 }
 
 /** Exact /pro cold-start path (no trailing query). */

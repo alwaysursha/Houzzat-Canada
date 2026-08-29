@@ -205,7 +205,7 @@ function testTransitionUiWiring() {
   assert.ok(!exchange.includes("Connecting to your workspace"));
   assert.ok(signIn.includes('get("signedOut") === "1"'));
   assert.ok(signIn.includes("if (signedOut) return"));
-  assert.ok(form.includes("setTransitioning(true)"));
+  assert.ok(form.includes("setNativeNavStage(\"BOOTSTRAPPING\")"));
 }
 
 function testChromeFreeHandoffWiring() {

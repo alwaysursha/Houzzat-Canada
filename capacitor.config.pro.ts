@@ -15,7 +15,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
  *
  * Android + iOS share this same bootstrap URL and handoff protocol.
  */
-const PRODUCTION_PRO_SERVER_URL = "https://app.houzzatpro.com/pro";
+const PRODUCTION_PRO_SERVER_URL = "https://app.houzzatpro.com/pro/sign-in";
 
 const proServerUrl =
   process.env.HOUZZAT_CAP_PRO_SERVER_URL?.trim() || PRODUCTION_PRO_SERVER_URL;
