@@ -41,7 +41,7 @@ export type MobileWorkspaceHandoffRow = {
   expiresAt: Date;
 };
 
-function hashHandoffCode(rawCode: string): string {
+export function hashHandoffCode(rawCode: string): string {
   return createHash("sha256").update(rawCode, "utf8").digest("hex");
 }
 
