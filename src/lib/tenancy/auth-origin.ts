@@ -40,7 +40,7 @@ export async function resolveAuthBaseOriginForRequest(
   request?: Request | null,
 ): Promise<string> {
   const req =
-    request ?? (await buildSyntheticRequestFromHeaders());
+    (await buildSyntheticRequestFromHeaders().catch(() => null)) ?? request;
   if (req) {
     const trusted = resolveTrustedRequestOrigin(req);
     if (trusted.ok) return trusted.origin;

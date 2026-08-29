@@ -21,7 +21,7 @@ const PRO_ASSETS_CONFIG = join(
   "android-pro/app/src/main/assets/capacitor.config.json",
 );
 
-const DEFAULT_PRO_URL = "https://app.houzzatpro.com/pro";
+const DEFAULT_PRO_URL = "https://app.houzzatpro.com/pro/sign-in";
 const CANARY_OVERRIDE_URL = "https://tenant-canary.houzzatpro.com/pro";
 
 function resolveProServer(env: Record<string, string | undefined>) {

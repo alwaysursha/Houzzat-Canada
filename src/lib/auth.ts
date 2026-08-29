@@ -23,6 +23,7 @@ import { VERIFY_EMAIL_PROVIDER_ID } from "@/lib/auth/verify-email-constants";
 import { isAdminRole, isAgentRole, resolveActiveMode } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { validateTenantCredentialsAuth } from "@/lib/tenancy/tenant-auth-boundary";
+import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 
 const providers: Provider[] = [
   Credentials({
@@ -71,13 +72,22 @@ const providers: Provider[] = [
 
         // Stage 3K.5.13: Hard Tenant Workspace Membership Boundary
         const synthetic =
-          request ?? (await buildSyntheticRequestFromHeaders());
+          (await buildSyntheticRequestFromHeaders().catch(() => null)) ?? request;
         const authCheck = await validateTenantCredentialsAuth({
           userId: user.id,
           userRole: user.role,
           request: synthetic,
         });
         if (!authCheck.ok) {
+          const rawHost = synthetic ? extractTrustedRequestHostname(synthetic) : null;
+          const userAgent = synthetic?.headers.get("user-agent") ?? "";
+          const isNative = userAgent.includes("HouzzatNative/1");
+          console.error("[auth] validateTenantCredentialsAuth denied authorize", {
+            host: rawHost,
+            nativeShell: isNative ? "yes" : "no",
+            userIdMasked: user.id ? `***${user.id.slice(-3)}` : null,
+            reason: authCheck.reason,
+          });
           return null;
         }
 
@@ -111,7 +121,7 @@ const providers: Provider[] = [
       }
 
       const synthetic =
-        request ?? (await buildSyntheticRequestFromHeaders());
+        (await buildSyntheticRequestFromHeaders().catch(() => null)) ?? request;
       const authCheck = await validateTenantCredentialsAuth({
         userId: user.id,
         userRole: user.role,
