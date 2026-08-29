@@ -578,7 +578,7 @@ class ProNativeAuthController {
     if (isPlatform) {
       hardGo(HOUZZATPRO_START_PATH);
     } else {
-      hardGo("https://app.houzzatpro.com/pro");
+      hardGo("https://app.houzzatpro.com/pro/sign-in");
     }
   }
 

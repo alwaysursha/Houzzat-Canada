@@ -65,33 +65,6 @@ async function fetchBootstrap(): Promise<BootstrapResponse | null> {
   return (await res.json()) as BootstrapResponse;
 }
 
-async function requestHandoff(workspaceId: string): Promise<string | null> {
-  recordMobileDiagEvent("HANDOFF_MINT_START");
-  const res = await fetch("/api/mobile/workspace-handoff", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ workspaceId }),
-  });
-  if (!res.ok) {
-    recordMobileDiagEvent("HANDOFF_MINT_FAILED", `http_${res.status}`);
-    return null;
-  }
-  const data = (await res.json()) as { handoffUrl?: string };
-  const handoffUrl = data.handoffUrl ?? null;
-  if (!handoffUrl) {
-    recordMobileDiagEvent("HANDOFF_MINT_FAILED", "missing_url");
-    return null;
-  }
-  try {
-    const host = new URL(handoffUrl).hostname;
-    recordMobileDiagEvent("HANDOFF_MINT_SUCCESS", host);
-  } catch {
-    recordMobileDiagEvent("HANDOFF_MINT_SUCCESS", "url_ok");
-  }
-  return handoffUrl;
-}
-
 function WorkspaceCard({
   membership,
   pending,
@@ -296,7 +269,9 @@ export function ProWorkspaceBootstrap() {
         // Single-workspace fast path: mint + cross-host without intermediate stop.
         setNativeNavStage("HANDOFF_STARTED");
         recordMobileDiagEvent("WORKSPACE_COUNT_1", bootstrap.membership.slug);
-        const handoffUrl = await requestHandoff(bootstrap.membership.workspaceId);
+        const handoffUrl = await proNativeAuthController.createHandoff(
+          bootstrap.membership.workspaceId,
+        );
         if (cancelled) return;
         if (!handoffUrl) {
           clearNativeNavStage();
@@ -305,19 +280,6 @@ export function ProWorkspaceBootstrap() {
           routed.current = false;
           return;
         }
-        try {
-          const target = new URL(handoffUrl);
-          recordMobileDiagEvent(
-            "NAVIGATE_TENANT",
-            `${target.hostname}${target.pathname}`,
-          );
-        } catch {
-          recordMobileDiagEvent(
-            "NAVIGATE_TENANT",
-            sanitizeDiagnosticHref(handoffUrl),
-          );
-        }
-        hardGo(handoffUrl);
         return;
       }
 
@@ -375,25 +337,14 @@ export function ProWorkspaceBootstrap() {
       return;
     }
     if (frozen.kind === "handoff" && frozen.membership) {
-      const handoffUrl = await requestHandoff(frozen.membership.workspaceId);
+      const handoffUrl = await proNativeAuthController.createHandoff(
+        frozen.membership.workspaceId,
+      );
       setPending(false);
       if (!handoffUrl) {
         setError("Workspace handoff failed. Try again.");
         return;
       }
-      try {
-        const target = new URL(handoffUrl);
-        recordMobileDiagEvent(
-          "NAVIGATE_TENANT",
-          `${target.hostname}${target.pathname}`,
-        );
-      } catch {
-        recordMobileDiagEvent(
-          "NAVIGATE_TENANT",
-          sanitizeDiagnosticHref(handoffUrl),
-        );
-      }
-      hardGo(handoffUrl);
       return;
     }
     setPending(false);

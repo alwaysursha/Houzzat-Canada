@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   isSafeSignOutReturnUrl,
   PRO_SIGNED_OUT_SIGN_IN_PATH,
+  PRO_SIGNED_OUT_SIGN_IN_URL,
   resolveCompleteSignOutDestination,
   WEB_SIGNED_OUT_HOME_PATH,
 } from "@/lib/auth/complete-pro-logout";
@@ -71,7 +72,7 @@ function signOutDestination(request: Request): string {
   });
   // GET HTML on the platform host must land on local sign-in (not recurse).
   if (dest.includes("/api/auth/logout")) {
-    return PRO_SIGNED_OUT_SIGN_IN_PATH;
+    return PRO_SIGNED_OUT_SIGN_IN_URL;
   }
   return dest || WEB_SIGNED_OUT_HOME_PATH;
 }

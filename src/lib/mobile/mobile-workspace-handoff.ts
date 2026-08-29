@@ -138,7 +138,12 @@ export async function createMobileWorkspaceHandoff(input: {
   });
   const expiresAt = new Date(Date.now() + MOBILE_HANDOFF_TTL_MS);
 
-  await prisma.verificationToken.deleteMany({ where: { identifier } });
+  await prisma.verificationToken.deleteMany({
+    where: {
+      identifier,
+      expires: { lt: new Date() },
+    },
+  });
   await prisma.verificationToken.create({ data: { identifier, token, expires: expiresAt } });
 
   const targetOrigin = `https://${targetHostname}`;

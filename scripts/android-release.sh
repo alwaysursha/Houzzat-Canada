@@ -118,8 +118,8 @@ if [[ "$ASSERT" == "pro" ]]; then
       echo "ERROR: cap sync did not embed the requested cold-start origin — aborting release build." >&2
       exit 1
     fi
-    if [[ -z "${HOUZZAT_CAP_PRO_SERVER_URL:-}" && "$EMBEDDED_URL" != "https://app.houzzatpro.com/pro" ]]; then
-      echo "ERROR: production pro release requires server.url=https://app.houzzatpro.com/pro (got '$EMBEDDED_URL')" >&2
+    if [[ -z "${HOUZZAT_CAP_PRO_SERVER_URL:-}" && "$EMBEDDED_URL" != "https://app.houzzatpro.com/pro/sign-in" && "$EMBEDDED_URL" != "https://app.houzzatpro.com/pro" ]]; then
+      echo "ERROR: production pro release requires server.url=https://app.houzzatpro.com/pro/sign-in (got '$EMBEDDED_URL')" >&2
       echo "ERROR: set HOUZZAT_CAP_PRO_SERVER_URL only for explicit dev/QA overrides." >&2
       echo "ERROR: do not embed tenant hosts (houzzat.com, tenant-canary.*, etc.)." >&2
       exit 1

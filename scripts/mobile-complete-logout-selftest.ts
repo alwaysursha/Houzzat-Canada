@@ -63,7 +63,7 @@ function testCompleteLogoutDestinations() {
       hostname: "app.houzzatpro.com",
       shell: "houzzatpro",
     }),
-    PRO_SIGNED_OUT_SIGN_IN_PATH,
+    `${HOUZZATPRO_APP_BOOTSTRAP_ORIGIN}/pro/sign-in?signedOut=1`,
   );
 
   // 3. Desktop HouzzatPRO staff flow on tenant (/admin, /agent, /pro) → cross-host platform logout with returnTo tenant home.
@@ -239,7 +239,7 @@ function testLogoutWiring() {
   assert.ok(hard.includes("resolveDestination"));
   assert.ok(route.includes("resolveCompleteSignOutDestination"));
   assert.ok(route.includes("isSafeSignOutReturnUrl"));
-  assert.ok(route.includes("PRO_SIGNED_OUT_SIGN_IN_PATH"));
+  assert.ok(route.includes("PRO_SIGNED_OUT_SIGN_IN_URL") || route.includes("PRO_SIGNED_OUT_SIGN_IN_PATH"));
   assert.ok(button.includes("unregisterCurrentPushDevice"));
   assert.ok(button.includes("performHardSignOut"));
   // Must not widen cookie Domain.

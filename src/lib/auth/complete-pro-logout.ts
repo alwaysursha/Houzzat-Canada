@@ -13,6 +13,7 @@ import {
 } from "@/lib/mobile/platform-bootstrap";
 
 export const PRO_SIGNED_OUT_SIGN_IN_PATH = "/pro/sign-in?signedOut=1";
+export const PRO_SIGNED_OUT_SIGN_IN_URL = `${HOUZZATPRO_APP_BOOTSTRAP_ORIGIN}/pro/sign-in?signedOut=1`;
 export const WEB_SIGNED_OUT_HOME_PATH = "/?signedOut=1";
 
 /**
@@ -110,13 +111,13 @@ export function resolveCompleteSignOutDestination(input: {
 
   if (isNativePro) {
     if (onPlatformHost) {
-      return PRO_SIGNED_OUT_SIGN_IN_PATH;
+      return PRO_SIGNED_OUT_SIGN_IN_URL;
     }
     return platformCompleteLogoutUrl();
   }
 
   if (onPlatformHost) {
-    return PRO_SIGNED_OUT_SIGN_IN_PATH;
+    return PRO_SIGNED_OUT_SIGN_IN_URL;
   }
 
   const isStaff = isStaffSignOutContext(input);
