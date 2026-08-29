@@ -4,6 +4,15 @@ import { useEffect, useState } from "react";
 import { proNativeAuthController, type NativeAuthSnapshot } from "@/lib/mobile/pro-native-auth-controller";
 import type { SafeAuthServerDiagnosticEvent } from "@/lib/auth/auth-diagnostic-buffer";
 
+type ServerDiagPayload = {
+  build?: string;
+  serverTimestamp?: string;
+  incomingHost?: string | null;
+  isPlatformHost?: boolean;
+  nativeShellDetected?: boolean;
+  recentEvents?: SafeAuthServerDiagnosticEvent[];
+};
+
 export function NativeAuthDiagnosticOverlay({
   submitCount = 0,
   lastSignInResult = null,
@@ -15,14 +24,7 @@ export function NativeAuthDiagnosticOverlay({
   const [snapshot, setSnapshot] = useState<NativeAuthSnapshot>(() =>
     proNativeAuthController.getSnapshot(),
   );
-  const [serverDiag, setServerDiag] = useState<{
-    build?: string;
-    serverTimestamp?: string;
-    incomingHost?: string | null;
-    isPlatformHost?: boolean;
-    nativeShellDetected?: boolean;
-    recentEvents?: SafeAuthServerDiagnosticEvent[];
-  } | null>(null);
+  const [serverDiag, setServerDiag] = useState<ServerDiagPayload | null>(null);
 
   useEffect(() => {
     const unsub = proNativeAuthController.subscribe(setSnapshot);
@@ -39,7 +41,7 @@ export function NativeAuthDiagnosticOverlay({
           cache: "no-store",
         });
         if (res.ok && !cancelled) {
-          const data = await res.json();
+          const data = (await res.json()) as ServerDiagPayload;
           setServerDiag(data);
         }
       } catch {
