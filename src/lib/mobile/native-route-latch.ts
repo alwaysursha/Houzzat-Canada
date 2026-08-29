@@ -1,17 +1,13 @@
 /**
- * Stage 3K.5.18.2 — Native-only monotonic navigation latch.
+ * Stage 3K.5.18.2 / Stage 3K.5.19 — Native Route Latch Adapter.
  *
- * Guarantees that in the HouzzatPRO native shell (HouzzatNative/1):
- * BOOTSTRAPPING → HANDOFF_STARTED → TENANT_SESSION_ESTABLISHED → FINAL_DESTINATION
- * is strictly monotonic.
- *
- * Once terminal navigation begins (hardGo to tenant host or final CRM destination),
- * further duplicate bootstrap requests, retry timers, and hydration redirects become
- * inert.
- *
- * Scoped to sessionStorage so it automatically clears across browser sessions
- * and intentional sign-out.
+ * Synchronizes with and delegates to the authoritative ProNativeAuthController.
  */
+
+import {
+  proNativeAuthController,
+  type NativeAuthState,
+} from "@/lib/mobile/pro-native-auth-controller";
 
 export type NativeRouteStage =
   | "IDLE"
@@ -20,41 +16,54 @@ export type NativeRouteStage =
   | "TENANT_SESSION_ESTABLISHED"
   | "FINAL_DESTINATION";
 
-const LATCH_KEY = "houzzat_pro_native_nav_latch";
-
 export function getNativeNavStage(): NativeRouteStage {
-  if (typeof window === "undefined") return "IDLE";
-  try {
-    const raw = sessionStorage.getItem(LATCH_KEY);
-    if (
-      raw === "BOOTSTRAPPING" ||
-      raw === "HANDOFF_STARTED" ||
-      raw === "TENANT_SESSION_ESTABLISHED" ||
-      raw === "FINAL_DESTINATION"
-    ) {
-      return raw;
-    }
-  } catch {
-    // ignore
+  const snapshot = proNativeAuthController.getSnapshot();
+  switch (snapshot.state) {
+    case "SIGNED_OUT":
+    case "ERROR":
+      return "IDLE";
+    case "AUTHENTICATING":
+    case "PLATFORM_SESSION_READY":
+    case "DISCOVERING_WORKSPACE":
+      return "BOOTSTRAPPING";
+    case "HANDOFF_CREATING":
+    case "HANDOFF_CREATED":
+    case "HANDOFF_NAVIGATING":
+    case "HANDOFF_EXCHANGING":
+      return "HANDOFF_STARTED";
+    case "TENANT_SESSION_READY":
+      return "TENANT_SESSION_ESTABLISHED";
+    case "FINAL_NAVIGATION":
+    case "COMPLETE":
+      return "FINAL_DESTINATION";
+    default:
+      return "IDLE";
   }
-  return "IDLE";
 }
 
 export function setNativeNavStage(stage: NativeRouteStage): void {
-  if (typeof window === "undefined") return;
-  try {
-    if (stage === "IDLE") {
-      sessionStorage.removeItem(LATCH_KEY);
-    } else {
-      sessionStorage.setItem(LATCH_KEY, stage);
-    }
-  } catch {
-    // ignore
+  // Map legacy stage back to auth controller state if needed
+  switch (stage) {
+    case "IDLE":
+      proNativeAuthController.reset("SIGNED_OUT");
+      break;
+    case "BOOTSTRAPPING":
+      // Managed by controller internally
+      break;
+    case "HANDOFF_STARTED":
+      // Managed by controller internally
+      break;
+    case "TENANT_SESSION_ESTABLISHED":
+      // Managed by controller internally
+      break;
+    case "FINAL_DESTINATION":
+      // Managed by controller internally
+      break;
   }
 }
 
 export function clearNativeNavStage(): void {
-  setNativeNavStage("IDLE");
+  proNativeAuthController.reset("SIGNED_OUT");
 }
 
 export function isNativeHandoffInFlight(): boolean {

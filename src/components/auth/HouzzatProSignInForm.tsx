@@ -12,9 +12,8 @@ import {
   rememberLoginCredentials,
 } from "@/lib/auth/remembered-login";
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
-import { hardGo } from "@/lib/mobile/nav-back";
-import { sanitizeStaffCallbackPath } from "@/lib/auth/pro-sign-in-routing";
 import { setNativeNavStage } from "@/lib/mobile/native-route-latch";
+import { proNativeAuthController } from "@/lib/mobile/pro-native-auth-controller";
 
 export function HouzzatProSignInForm({
   callbackUrl = null,
@@ -49,37 +48,28 @@ export function HouzzatProSignInForm({
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (pending) return;
     setPending(true);
     setError(null);
 
     const normalizedEmail = email.trim().toLowerCase();
-    const result = await signIn("credentials", {
+    setNativeNavStage("BOOTSTRAPPING");
+
+    const result = await proNativeAuthController.submitCredentials({
       email: normalizedEmail,
       password,
-      redirect: false,
+      callbackUrl,
     });
 
-    if (result?.error) {
+    if (!result.ok) {
       setPending(false);
-      if (result.error === "Configuration") {
-        setError("Sign-in is temporarily unavailable. Please try again shortly.");
-      } else {
-        setError("Invalid email or password.");
-      }
+      setError(result.error ?? "Invalid email or password.");
       return;
     }
 
     await rememberLoginCredentials({ email: normalizedEmail, password });
     const session = await getSession();
     await clearIntentionalSignOut({ userId: session?.user?.id });
-
-    // One continuous transition into bootstrap / handoff / dashboard.
-    setNativeNavStage("BOOTSTRAPPING");
-    const next =
-      callbackUrl && callbackUrl.includes("diag=1")
-        ? "/pro?diag=1"
-        : sanitizeStaffCallbackPath(callbackUrl, "/pro");
-    hardGo(next);
   }
 
   return (

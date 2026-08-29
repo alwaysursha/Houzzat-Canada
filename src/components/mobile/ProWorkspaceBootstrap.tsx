@@ -31,6 +31,8 @@ import {
   getNativeNavStage,
   clearNativeNavStage,
 } from "@/lib/mobile/native-route-latch";
+import { proNativeAuthController } from "@/lib/mobile/pro-native-auth-controller";
+import { Button } from "@/components/ui/button";
 import type {
   MobileBootstrapMembership,
   MobileWorkspaceBootstrapState,
@@ -402,26 +404,13 @@ export function ProWorkspaceBootstrap() {
     setError(null);
     setNativeNavStage("HANDOFF_STARTED");
     recordMobileDiagEvent("WORKSPACE_SELECTOR", "user_pick");
-    const handoffUrl = await requestHandoff(workspaceId);
+    const handoffUrl = await proNativeAuthController.createHandoff(workspaceId);
     setPending(false);
     if (!handoffUrl) {
       clearNativeNavStage();
       setError("Workspace handoff failed. Try again.");
       return;
     }
-    try {
-      const target = new URL(handoffUrl);
-      recordMobileDiagEvent(
-        "NAVIGATE_TENANT",
-        `${target.hostname}${target.pathname}`,
-      );
-    } catch {
-      recordMobileDiagEvent(
-        "NAVIGATE_TENANT",
-        sanitizeDiagnosticHref(handoffUrl),
-      );
-    }
-    hardGo(handoffUrl);
   }
 
   if (frozen) {
@@ -514,8 +503,42 @@ export function ProWorkspaceBootstrap() {
 
   if (error) {
     return (
-      <div className="mx-auto flex min-h-[50dvh] w-full max-w-md flex-col items-center justify-center px-5 py-16 text-center">
-        <p className="text-sm font-medium text-danger">{error}</p>
+      <div className="fixed inset-0 z-[99999] flex h-dvh w-full flex-col items-center justify-center bg-[linear-gradient(165deg,#96F0D8_0%,#63D9BD_42%,#2FC3A2_100%)] px-6 text-center">
+        <HouzzatProMark className="mx-auto" size={88} />
+        <div className="mt-3">
+          <HouzzatProWordmark size="lg" className="text-ink" />
+        </div>
+        <p className="mt-5 text-lg font-bold text-[#0B5C49]">
+          Unable to open your Workspace
+        </p>
+        <p className="mt-2 max-w-sm text-sm font-medium text-[#0B5C49]/80">
+          {error}
+        </p>
+
+        <div className="mt-8 flex w-full max-w-xs flex-col gap-3">
+          <Button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              proNativeAuthController.retry();
+            }}
+            className="h-12 w-full bg-[#0B5C49] text-base font-semibold text-white hover:bg-[#094a3b] disabled:opacity-60"
+          >
+            Retry
+          </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending}
+            onClick={async () => {
+              await proNativeAuthController.signOut();
+            }}
+            className="h-12 w-full border-white/50 bg-white/25 text-[#0B5C49] hover:bg-white/40 disabled:opacity-60"
+          >
+            Sign out
+          </Button>
+        </div>
       </div>
     );
   }
