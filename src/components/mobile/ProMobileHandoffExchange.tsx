@@ -72,6 +72,12 @@ function HandoffExchangeInner() {
           {error}
         </p>
 
+        <div className="mt-3 max-w-sm rounded-lg border border-[#0B5C49]/20 bg-white/20 p-2 text-left font-mono text-[10px] text-[#0B5C49]">
+          <p>host: {typeof window !== "undefined" ? window.location.hostname : ""}</p>
+          <p>codePresent: {code ? "yes" : "no"}</p>
+          <p>codePrefix: {code ? code.substring(0, 6) : "(none)"}</p>
+        </div>
+
         <div className="mt-8 flex w-full max-w-xs flex-col gap-3">
           <Button
             type="button"
