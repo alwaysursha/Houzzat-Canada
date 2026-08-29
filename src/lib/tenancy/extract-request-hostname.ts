@@ -12,17 +12,17 @@ import { normalizeWorkspaceHostname } from "@/lib/tenancy/normalize-workspace-ho
 export function extractTrustedRequestHostname(request: Request): string | null {
   let candidate: string | null = null;
 
-  try {
-    const fromUrl = new URL(request.url).hostname;
-    if (fromUrl) candidate = fromUrl;
-  } catch {
-    // fall through
+  const hostHeader = request.headers.get("host");
+  if (hostHeader) {
+    candidate = hostHeader;
   }
 
   if (!candidate) {
-    const hostHeader = request.headers.get("host");
-    if (hostHeader) {
-      candidate = hostHeader;
+    try {
+      const fromUrl = new URL(request.url).hostname;
+      if (fromUrl) candidate = fromUrl;
+    } catch {
+      // fall through
     }
   }
 

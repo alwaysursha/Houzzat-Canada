@@ -144,7 +144,7 @@ export function HouzzatProSignInForm({
         {pending ? "Signing in…" : loginAgain ? "Sign in again" : "Sign in"}
       </Button>
       <p className="text-center text-xs leading-relaxed text-[#0B5C49]/65">
-        Contact Houzzat support for assistance
+        Contact Houzzatpro support for assistance
       </p>
     </form>
   );

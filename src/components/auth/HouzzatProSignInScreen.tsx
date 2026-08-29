@@ -53,11 +53,6 @@ function HouzzatProSignInInner() {
           <p className="mt-1.5 text-sm leading-relaxed text-[#0B5C49]/75">
             Login to the most powerful CRM &amp; Leadgen system.
           </p>
-          {signedOut ? (
-            <p className="mt-3 text-sm font-medium text-[#0B5C49]/85">
-              Signed out of HouzzatPRO.
-            </p>
-          ) : null}
         </div>
 
         <div className="mt-8 rounded-2xl border border-white/35 bg-white/20 p-5 shadow-[0_18px_50px_rgb(11_92_73_/0.12)] backdrop-blur-md sm:p-6">
@@ -65,8 +60,7 @@ function HouzzatProSignInInner() {
         </div>
 
         <p className="mt-6 text-center text-xs leading-relaxed text-[#0B5C49]/60">
-          HouzzatPRO is the realtors CRM &amp; LeadGen Platform. Buyers/Sellers
-          visit Houzzat.com
+          HouzzatPRO is a realtors Trusted CRM &amp; LeadGen Platform.
         </p>
       </div>
     </div>
