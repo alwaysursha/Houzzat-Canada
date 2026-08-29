@@ -220,23 +220,39 @@ async function lookupMobileWorkspaceHandoff(input: {
 
   const token = hashHandoffCode(trimmed);
   const row = await prisma.verificationToken.findUnique({ where: { token } });
-  if (!row) return { ok: false, error: "Handoff expired or invalid" };
+  if (!row) {
+    console.error("[mobile-handoff-lookup] token not found in database:", {
+      tokenPrefix: token.slice(0, 8),
+      requestHostname: requestHost.hostname,
+    });
+    return { ok: false, error: "Handoff code not found or already consumed" };
+  }
   if (row.expires.getTime() < Date.now()) {
+    console.error("[mobile-handoff-lookup] token expired:", {
+      expiresAt: row.expires.toISOString(),
+      now: new Date().toISOString(),
+      requestHostname: requestHost.hostname,
+    });
     if (input.deleteOnInvalid) {
       await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
     }
-    return { ok: false, error: "Handoff expired or invalid" };
+    return { ok: false, error: "Handoff expired" };
   }
 
   const parsed = parseMobileHandoffIdentifier(row.identifier);
   if (!parsed) {
+    console.error("[mobile-handoff-lookup] invalid identifier shape:", row.identifier);
     if (input.deleteOnInvalid) {
       await prisma.verificationToken.delete({ where: { token } }).catch(() => undefined);
     }
-    return { ok: false, error: "Handoff expired or invalid" };
+    return { ok: false, error: "Invalid handoff record" };
   }
   if (parsed.targetHostname !== requestHost.hostname) {
-    return { ok: false, error: "Handoff host mismatch" };
+    console.error("[mobile-handoff-lookup] hostname mismatch:", {
+      targetHostname: parsed.targetHostname,
+      requestHostname: requestHost.hostname,
+    });
+    return { ok: false, error: `Handoff host mismatch (${parsed.targetHostname} !== ${requestHost.hostname})` };
   }
 
   const member = await prisma.workspaceMember.findFirst({
