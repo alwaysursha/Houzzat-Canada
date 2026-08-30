@@ -253,13 +253,14 @@ function testNoMutatingDiagnosticRoutes() {
 function testInstrumentationWiring() {
   const bootstrap = read("src/components/mobile/ProWorkspaceBootstrap.tsx");
   const exchange = read("src/components/mobile/ProMobileHandoffExchange.tsx");
+  const controller = read("src/lib/mobile/pro-native-auth-controller.ts");
   assert.ok(bootstrap.includes("recordMobileDiagEvent"));
-  assert.ok(bootstrap.includes("HANDOFF_MINT_START"));
-  assert.ok(bootstrap.includes("NAVIGATE_TENANT"));
-  assert.ok(exchange.includes("HANDOFF_EXCHANGE_START"));
-  assert.ok(exchange.includes("HANDOFF_EXCHANGE_SUCCESS"));
+  assert.ok(controller.includes("HANDOFF_MINT_START"));
+  assert.ok(controller.includes("NAVIGATE_TENANT"));
+  assert.ok(controller.includes("HANDOFF_EXCHANGE_STARTED"));
+  assert.ok(controller.includes("HANDOFF_EXCHANGE_SUCCESS"));
   assert.ok(exchange.includes("isStaffRoleDestination"));
-  assert.ok(!exchange.includes("searchParams.delete(\"code\")"));
+  assert.ok(!exchange.includes('searchParams.delete("code")'));
 }
 
 function testDiagnosticFreeze() {
