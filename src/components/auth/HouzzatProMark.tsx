@@ -1,9 +1,9 @@
-import Image from "next/image";
+import { HOUZZAT_PRO_MARK_DATA_URI } from "@/components/auth/houzzat-pro-mark-data";
 import { cn } from "@/lib/utils";
 
 /**
  * White house + agent mark only (Pro launcher foreground, no gradient plate).
- * Asset: /images/houzzat-pro-mark.png ← mobile/resources-pro/icon-foreground.png
+ * Inlined data URI ensures synchronous 0ms paint with zero flashing or network latency across hosts.
  */
 export function HouzzatProMark({
   className,
@@ -15,13 +15,14 @@ export function HouzzatProMark({
   size?: number;
 }) {
   return (
-    <Image
-      src="/images/houzzat-pro-mark.png"
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={HOUZZAT_PRO_MARK_DATA_URI}
       alt={title}
       width={size}
       height={size}
-      priority
-      className={cn("drop-shadow-sm", className)}
+      className={cn("drop-shadow-sm select-none pointer-events-none", className)}
+      style={{ width: size, height: size }}
     />
   );
 }

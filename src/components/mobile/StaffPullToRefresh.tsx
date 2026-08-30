@@ -6,8 +6,8 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { hasStaffOverlay } from "@/lib/mobile/staff-overlay-stack";
 
-const PULL_THRESHOLD_PX = 72;
-const MAX_PULL_PX = 112;
+const PULL_THRESHOLD_PX = 96;
+const MAX_PULL_PX = 120;
 const LAST_REFRESH_KEY = "houzzat:staff-last-refresh";
 
 function formatLastRefresh(iso: string | null): string {
@@ -55,6 +55,7 @@ export function StaffPullToRefresh({
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
   const [pullPx, setPullPx] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const startXRef = useRef<number | null>(null);
   const startYRef = useRef<number | null>(null);
   const pullingRef = useRef(false);
   const scrollParentRef = useRef<HTMLElement | null>(null);
@@ -94,21 +95,25 @@ export function StaffPullToRefresh({
           "[data-snap-rail], [data-staff-overlay], [data-lead-profile-popup]",
         )
       ) {
+        startXRef.current = null;
         startYRef.current = null;
         pullingRef.current = false;
         return;
       }
       if (hasStaffOverlay()) {
+        startXRef.current = null;
         startYRef.current = null;
         pullingRef.current = false;
         return;
       }
       scrollParentRef.current = parent;
       if (parent.scrollTop > 2) {
+        startXRef.current = null;
         startYRef.current = null;
         pullingRef.current = false;
         return;
       }
+      startXRef.current = touch.clientX;
       startYRef.current = touch.clientY;
       pullingRef.current = true;
     },
@@ -117,6 +122,7 @@ export function StaffPullToRefresh({
 
   const onTouchMove = useCallback((event: React.TouchEvent) => {
     if (hasStaffOverlay()) {
+      startXRef.current = null;
       startYRef.current = null;
       pullingRef.current = false;
       setPullPx(0);
@@ -127,17 +133,27 @@ export function StaffPullToRefresh({
     if (!touch) return;
     const parent = scrollParentRef.current;
     if (parent && parent.scrollTop > 2) {
+      startXRef.current = null;
       startYRef.current = null;
       pullingRef.current = false;
       setPullPx(0);
       return;
     }
-    const delta = touch.clientY - startYRef.current;
-    if (delta <= 0) {
+    const deltaX = Math.abs(touch.clientX - (startXRef.current ?? touch.clientX));
+    const deltaY = touch.clientY - startYRef.current;
+    if (deltaX > deltaY && deltaX > 10) {
+      // Horizontal swipe detected — cancel pull to refresh
+      startXRef.current = null;
+      startYRef.current = null;
+      pullingRef.current = false;
       setPullPx(0);
       return;
     }
-    const damped = Math.min(MAX_PULL_PX, delta * 0.55);
+    if (deltaY <= 0) {
+      setPullPx(0);
+      return;
+    }
+    const damped = Math.min(MAX_PULL_PX, deltaY * 0.5);
     setPullPx(damped);
   }, [refreshing]);
 
@@ -154,6 +170,7 @@ export function StaffPullToRefresh({
     } finally {
       setRefreshing(false);
       setPullPx(0);
+      startXRef.current = null;
       startYRef.current = null;
       pullingRef.current = false;
     }
@@ -162,6 +179,7 @@ export function StaffPullToRefresh({
   const onTouchEnd = useCallback(() => {
     if (hasStaffOverlay()) {
       setPullPx(0);
+      startXRef.current = null;
       startYRef.current = null;
       pullingRef.current = false;
       return;
@@ -173,6 +191,7 @@ export function StaffPullToRefresh({
       return;
     }
     setPullPx(0);
+    startXRef.current = null;
     startYRef.current = null;
     pullingRef.current = false;
   }, [finishRefresh, pullPx, refreshing]);

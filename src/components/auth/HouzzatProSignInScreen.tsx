@@ -9,6 +9,7 @@ import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransition";
 import { hardGo } from "@/lib/mobile/nav-back";
 import { clearNativeNavStage } from "@/lib/mobile/native-route-latch";
+import { proNativeAuthController } from "@/lib/mobile/pro-native-auth-controller";
 
 function HouzzatProSignInInner() {
   const searchParams = useSearchParams();
@@ -31,7 +32,11 @@ function HouzzatProSignInInner() {
       const me = await fetch("/api/me", { cache: "no-store" }).catch(() => null);
       if (!me?.ok) return;
       setBootstrapping(true);
-      hardGo("/pro");
+      void proNativeAuthController.discoverWorkspace().then((res) => {
+        if (!res.ok || res.state?.kind === "select_workspace") {
+          hardGo("/pro");
+        }
+      });
     })();
   }, [callbackUrl, signedOut]);
 

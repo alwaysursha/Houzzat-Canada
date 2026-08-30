@@ -293,12 +293,24 @@ class ProNativeAuthController {
         this.transitionTo("PLATFORM_SESSION_READY");
         this.logDiagnostic("AUTH_SUBMIT_SUCCESS");
 
-        const next =
-          input.callbackUrl && input.callbackUrl.includes("diag=1")
-            ? "/pro?diag=1"
-            : sanitizeStaffCallbackPath(input.callbackUrl, HOUZZATPRO_START_PATH);
+        if (input.callbackUrl && input.callbackUrl.includes("diag=1")) {
+          hardGo("/pro?diag=1");
+          return { ok: true };
+        }
 
-        hardGo(next);
+        // Fast-path: immediately discover workspace and mint handoff code in the same session,
+        // avoiding an unnecessary intermediate full-page reload on /pro.
+        try {
+          const disc = await this.discoverWorkspace();
+          if (disc.ok && disc.state?.kind === "select_workspace") {
+            hardGo(HOUZZATPRO_START_PATH);
+          } else if (!disc.ok) {
+            hardGo(HOUZZATPRO_START_PATH);
+          }
+        } catch {
+          hardGo(HOUZZATPRO_START_PATH);
+        }
+
         return { ok: true };
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Authentication failed";
