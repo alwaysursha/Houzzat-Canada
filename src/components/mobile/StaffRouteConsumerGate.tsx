@@ -13,14 +13,20 @@ import { hardGo } from "@/lib/mobile/nav-back";
  * Second line of defence for native shells whose binary predates the native
  * User-Agent marker (middleware handles marker-equipped requests before SSR).
  *
- * Any native shell gets an opaque cover as soon as hydration runs, so a cold
- * `/admin` or `/agent` load stops showing staff UI while Capacitor identity
- * resolves. The cover is removed only for HouzzatPro.
+ * Any native shell gets an opaque cover only if identity cannot be synchronously
+ * determined from User-Agent. The cover is removed immediately for HouzzatPro.
  * Web renders nothing and is completely unaffected. No Neon/API calls.
  */
 export function StaffRouteConsumerGate() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
+
+    // Fast path: if User-Agent already proves HouzzatPro, do not flash cover or freeze DOM.
+    const uaAppId = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    if (uaAppId.includes("com.houzzat.pro")) {
+      syncAppShellCookie("houzzatpro");
+      return;
+    }
 
     const cover = document.createElement("div");
     cover.dataset.staffShellCover = "";

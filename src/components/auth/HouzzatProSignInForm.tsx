@@ -76,9 +76,12 @@ export function HouzzatProSignInForm({
       return;
     }
 
-    await rememberLoginCredentials({ email: normalizedEmail, password });
-    const session = await getSession();
-    await clearIntentionalSignOut({ userId: session?.user?.id });
+    void rememberLoginCredentials({ email: normalizedEmail, password });
+    void getSession().then((session) => {
+      if (session?.user?.id) {
+        void clearIntentionalSignOut({ userId: session.user.id });
+      }
+    });
   }
 
   return (

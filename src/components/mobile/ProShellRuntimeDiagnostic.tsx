@@ -227,6 +227,23 @@ export function ProShellRuntimeDiagnostic({
   const onDiagPage =
     pathname === "/pro/mobile/diag" || pathname === "/pro/mobile/diag/";
   const enabled = forceEnabled || diagParam || onDiagPage;
+
+  if (!enabled) return null;
+
+  return <ProShellRuntimeDiagnosticActive forceEnabled={forceEnabled} />;
+}
+
+function ProShellRuntimeDiagnosticActive({
+  forceEnabled = false,
+}: {
+  forceEnabled?: boolean;
+}) {
+  const searchParams = useSearchParams();
+  const pathname = usePathname() || "/";
+  const diagParam = searchParams.get("diag") === "1";
+  const onDiagPage =
+    pathname === "/pro/mobile/diag" || pathname === "/pro/mobile/diag/";
+  const enabled = forceEnabled || diagParam || onDiagPage;
   const { data, status: sessionStatus } = useSession();
   const [snap, setSnap] = useState<DiagSnapshot | null>(null);
   const [denied, setDenied] = useState<string | null>(null);

@@ -79,7 +79,7 @@ export default async function AgentLayout({
         platformProductName={PLATFORM_PRODUCT_NAME}
         showCommandCentreLink={membershipRole === "OWNER"}
       >
-        <ActiveWorkspaceGate />
+        {ctx.requiresWorkspaceSelection ? <ActiveWorkspaceGate /> : null}
         <StaffRouteConsumerGate />
         {ctx.canSeeTeamLeads ? <AgentDeferredLeaderBanner /> : null}
         <Suspense fallback={null}>{children}</Suspense>
