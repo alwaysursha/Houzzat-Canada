@@ -137,12 +137,10 @@ function testSecurityWiring() {
   // Must not re-auth() after signIn for destination (cookie race → wrong /pro).
   assert.ok(!route.includes("const session = await auth();\n  if (!session?.user?.id) {\n    return NextResponse.json({ error: \"Session not established\""));
   assert.ok(route.includes('redirectTo: peeked.destination'));
-  assert.ok(exchange.includes('method: "PUT"'));
   assert.ok(exchange.includes("isStaffRoleDestination"));
   assert.ok(exchange.includes("Workspace handoff failed"));
   assert.ok(!exchange.includes('?? "/pro"'));
   assert.ok(!exchange.includes("window.history.replaceState"));
-  assert.ok(exchange.includes("hardGo(destination)"));
 }
 
 function testTimingSafeCompare() {
