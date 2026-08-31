@@ -48,6 +48,37 @@ declare module "react-native" {
     [key: string]: any;
   }>;
 
+  export const Image: React.FC<{
+    source: { uri?: string } | number;
+    style?: any;
+    resizeMode?: "cover" | "contain" | "stretch" | "repeat" | "center";
+    [key: string]: any;
+  }>;
+
+  export const SafeAreaView: React.FC<{
+    style?: any;
+    children?: React.ReactNode;
+    [key: string]: any;
+  }>;
+
+  export const ScrollView: React.FC<{
+    style?: any;
+    contentContainerStyle?: any;
+    children?: React.ReactNode;
+    showsVerticalScrollIndicator?: boolean;
+    showsHorizontalScrollIndicator?: boolean;
+    refreshControl?: React.ReactElement;
+    [key: string]: any;
+  }>;
+
+  export const RefreshControl: React.FC<{
+    refreshing: boolean;
+    onRefresh: () => void;
+    colors?: string[];
+    tintColor?: string;
+    [key: string]: any;
+  }>;
+
   export const TextInput: React.FC<{
     style?: any;
     value?: string;
@@ -57,38 +88,42 @@ declare module "react-native" {
     secureTextEntry?: boolean;
     autoCapitalize?: "none" | "sentences" | "words" | "characters";
     keyboardType?: "default" | "email-address" | "numeric" | "phone-pad";
+    editable?: boolean;
     [key: string]: any;
   }>;
 
   export const TouchableOpacity: React.FC<{
     style?: any;
-    activeOpacity?: number;
-    onPress?: () => void;
     children?: React.ReactNode;
+    onPress?: () => void;
+    activeOpacity?: number;
+    disabled?: boolean;
     [key: string]: any;
   }>;
 
   export const ActivityIndicator: React.FC<{
     size?: "small" | "large" | number;
     color?: string;
-    style?: any;
   }>;
 
   export const KeyboardAvoidingView: React.FC<{
     style?: any;
     behavior?: "height" | "position" | "padding";
     children?: React.ReactNode;
-    [key: string]: any;
   }>;
 
-  export const FlatList: <ItemT>(props: {
-    data: ReadonlyArray<ItemT> | null | undefined;
-    renderItem: (info: { item: ItemT; index: number }) => React.ReactElement | null;
-    keyExtractor?: (item: ItemT, index: number) => string;
+  export const FlatList: React.FC<{
+    data: any[];
+    keyExtractor: (item: any, index: number) => string;
+    renderItem: (info: { item: any; index: number }) => React.ReactElement | null;
+    style?: any;
     contentContainerStyle?: any;
     showsVerticalScrollIndicator?: boolean;
-    style?: any;
-    ListEmptyComponent?: React.ComponentType<any> | React.ReactElement | null;
-    [key: string]: any;
-  }) => React.ReactElement;
+    refreshing?: boolean;
+    onRefresh?: () => void;
+    refreshControl?: React.ReactElement;
+    ListEmptyComponent?: React.ReactElement | null;
+    ListHeaderComponent?: React.ReactElement | null;
+    ListFooterComponent?: React.ReactElement | null;
+  }>;
 }

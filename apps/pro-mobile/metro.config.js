@@ -1,4 +1,5 @@
 const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
+const exclusionList = require('metro-config/src/defaults/exclusionList');
 const path = require('path');
 
 /**
@@ -13,6 +14,12 @@ const monorepoRoot = path.resolve(__dirname, '../..');
 const config = {
   watchFolders: [monorepoRoot],
   resolver: {
+    blockList: exclusionList([
+      /.*\/android\/.*/,
+      /.*\/android-pro\/.*/,
+      /.*\.git\/.*/,
+      /.*\.next\/.*/,
+    ]),
     nodeModulesPaths: [
       path.resolve(projectRoot, 'node_modules'),
       path.resolve(monorepoRoot, 'node_modules'),
@@ -21,4 +28,3 @@ const config = {
 };
 
 module.exports = mergeConfig(getDefaultConfig(__dirname), config);
-

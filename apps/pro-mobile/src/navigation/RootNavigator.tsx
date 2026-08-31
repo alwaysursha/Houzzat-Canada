@@ -1,13 +1,20 @@
 /**
- * Stage 4.0 — HouzzatPRO Mobile v2 Root Navigator.
+ * Stage 4.2 — HouzzatPRO Mobile v2 Root Navigator.
  *
- * Implements native state-driven screen transitions:
- * BOOTING -> SIGNED_OUT (Welcome/SignIn) -> WORKSPACE_SELECTION -> WORKSPACE_ACTIVE (AppReady)
+ * Implements native state-driven & role-aware screen transitions:
+ * - BOOTING -> SplashScreen
+ * - SIGNED_OUT -> WelcomeScreen | SignInScreen
+ * - PLATFORM_AUTHENTICATED / WORKSPACE_SELECTION -> WorkspaceSelectionScreen
+ * - WORKSPACE_ACTIVE:
+ *     - role === "AGENT" (or "MEMBER") -> AgentShell (Home, Leads, Tasks, More)
+ *     - role === "OWNER" | "ADMIN" -> CommandCentreShell (Overview, Team, Leads, More)
+ *     - otherwise -> AccessUnavailableScreen
  */
 
 import React, { useState } from "react";
-import { View } from "react-native";
-import { AppReadyScreen } from "../screens/AppReadyScreen";
+import { AccessUnavailableScreen } from "../screens/AccessUnavailableScreen";
+import { AgentShell } from "../screens/AgentShell";
+import { CommandCentreShell } from "../screens/CommandCentreShell";
 import { SignInScreen } from "../screens/SignInScreen";
 import { SplashScreen } from "../screens/SplashScreen";
 import { WelcomeScreen } from "../screens/WelcomeScreen";
@@ -15,7 +22,7 @@ import { WorkspaceSelectionScreen } from "../screens/WorkspaceSelectionScreen";
 import { useAuth } from "../state/AuthContext";
 
 export function RootNavigator() {
-  const { state } = useAuth();
+  const { state, activeMembership } = useAuth();
   const [inSignInFlow, setInSignInFlow] = useState(false);
 
   switch (state) {
@@ -32,8 +39,16 @@ export function RootNavigator() {
     case "WORKSPACE_SELECTION":
       return <WorkspaceSelectionScreen />;
 
-    case "WORKSPACE_ACTIVE":
-      return <AppReadyScreen />;
+    case "WORKSPACE_ACTIVE": {
+      const role = activeMembership?.role;
+      if (role === "AGENT" || role === "MEMBER" as any) {
+        return <AgentShell />;
+      }
+      if (role === "OWNER" || role === "ADMIN") {
+        return <CommandCentreShell />;
+      }
+      return <AccessUnavailableScreen />;
+    }
 
     default:
       return <SplashScreen />;

@@ -1,36 +1,63 @@
 /**
- * Stage 4.0 — HouzzatPRO Mobile v2 Native Brand Marks.
- * Pure native vector / styled view representations matching the HouzzatPRO visual identity.
+ * Stage 4.2 — HouzzatPRO Mobile v2 Native Brand Marks.
+ * Restores the original HouzzatPRO logo/wordmark and PRO badge treatment.
  */
 
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
+import { HOUZZAT_PRO_MARK_DATA_URI } from "../assets/houzzat-pro-mark-data";
+
+export { HOUZZAT_PRO_MARK_DATA_URI };
 
 export function HouzzatProMark({ size = 80 }: { size?: number }) {
-  const outerSize = size;
-  const innerSize = Math.round(size * 0.44);
+  return (
+    <View style={[styles.markWrapper, { width: size, height: size }]}>
+      <Image
+        source={{ uri: HOUZZAT_PRO_MARK_DATA_URI }}
+        style={{ width: size, height: size }}
+        resizeMode="contain"
+      />
+    </View>
+  );
+}
+
+export function HouzzatProBadge({
+  size = "md",
+  dark = false,
+}: {
+  size?: "sm" | "md" | "lg";
+  dark?: boolean;
+}) {
+  const isSm = size === "sm";
+  const isLg = size === "lg";
+
+  const paddingHorizontal = isSm ? 5 : isLg ? 8 : 6;
+  const paddingVertical = isSm ? 1 : isLg ? 3 : 2;
+  const fontSize = isSm ? 9 : isLg ? 13 : 11;
 
   return (
     <View
       style={[
-        styles.markContainer,
+        styles.badgeContainer,
         {
-          width: outerSize,
-          height: outerSize,
-          borderRadius: Math.round(outerSize * 0.28),
+          paddingHorizontal,
+          paddingVertical,
+          borderColor: dark ? "#D4B04A" : "#6E4F0C",
+          backgroundColor: dark ? "rgba(212, 176, 74, 0.15)" : "#0B5C49",
         },
       ]}
     >
-      <View
+      <Text
         style={[
-          styles.innerDiamond,
+          styles.badgeText,
           {
-            width: innerSize,
-            height: innerSize,
-            borderRadius: Math.round(innerSize * 0.2),
+            fontSize,
+            color: dark ? "#F5DE7B" : "#96F0D8",
           },
         ]}
-      />
+      >
+        PRO
+      </Text>
     </View>
   );
 }
@@ -42,7 +69,7 @@ export function HouzzatProWordmark({
   size?: "sm" | "md" | "lg";
   dark?: boolean;
 }) {
-  const fontSize = size === "lg" ? 28 : size === "md" ? 22 : 16;
+  const fontSize = size === "lg" ? 26 : size === "md" ? 20 : 15;
 
   return (
     <View style={styles.wordmarkRow}>
@@ -57,63 +84,40 @@ export function HouzzatProWordmark({
       >
         HOUZZAT
       </Text>
-      <View
-        style={[
-          styles.proPill,
-          {
-            backgroundColor: dark ? "#0B5C49" : "#FFFFFF",
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.proText,
-            {
-              fontSize: Math.round(fontSize * 0.5),
-              color: dark ? "#96F0D8" : "#0B5C49",
-            },
-          ]}
-        >
-          PRO
-        </Text>
+      <View style={styles.badgeWrapper}>
+        <HouzzatProBadge size={size} dark={!dark} />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  markContainer: {
-    backgroundColor: "#0B5C49",
-    alignItems: "center",
+  markWrapper: {
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  innerDiamond: {
-    backgroundColor: "#96F0D8",
-    transform: [{ rotate: "45deg" }],
+    alignItems: "center",
   },
   wordmarkRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
     gap: 6,
   },
   wordmarkTitle: {
     fontWeight: "900",
-    letterSpacing: -0.5,
+    letterSpacing: 0.8,
+    fontFamily: "System",
   },
-  proPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginLeft: 2,
+  badgeWrapper: {
+    justifyContent: "center",
+    alignItems: "center",
   },
-  proText: {
-    fontWeight: "800",
-    letterSpacing: 0.5,
+  badgeContainer: {
+    borderRadius: 5,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: {
+    fontWeight: "900",
+    letterSpacing: 0.6,
   },
 });

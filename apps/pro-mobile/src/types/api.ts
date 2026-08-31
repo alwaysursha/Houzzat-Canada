@@ -1,5 +1,5 @@
 /**
- * Stage 4.0 — HouzzatPRO Mobile v2 API Contracts.
+ * Stage 4.0 & 4.3A — HouzzatPRO Mobile v2 API Contracts.
  *
  * MOBILE API ORIGIN:
  * All native mobile v2 backend communication targets:
@@ -8,6 +8,9 @@
 
 import type { MobileUser, MobileAuthTokens } from "./auth";
 import type { MobileWorkspace, MobileWorkspaceMembership } from "./workspace";
+import type { LeadsResponseData, MobileLeadSummary, LeadStatus, LeadSource, LeadIntent } from "./lead";
+
+export * from "./lead";
 
 export const MOBILE_V2_API_BASE_URL = "https://app.houzzatpro.com/api/mobile/v2";
 
