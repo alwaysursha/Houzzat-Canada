@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { AgentMobileInstantShell } from "@/components/agent/AgentMobileInstantShell";
 import {
   Bell,
   CalendarDays,
@@ -36,7 +37,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const NAV = [
   { href: "/agent", label: "Launchpad", icon: LayoutDashboard, exact: true },
@@ -165,10 +166,13 @@ export function AgentShell({
   const router = useRouter();
   const prefetchedRoutesRef = useRef<Set<string>>(new Set());
 
+  const [isProNative, setIsProNative] = useState(false);
+
   useEffect(() => {
     if (typeof navigator === "undefined") return;
-    const isProNative = navigator.userAgent.includes("com.houzzat.pro");
-    if (!isProNative) return;
+    const isNative = navigator.userAgent.includes("com.houzzat.pro");
+    setIsProNative(isNative);
+    if (!isNative) return;
 
     // Idle prefetch of primary CRM routes once current page stabilizes
     const timer = setTimeout(() => {
@@ -219,6 +223,16 @@ export function AgentShell({
       size="sm"
     />
   );
+
+  // If running inside the HouzzatPro Native Android/iOS Shell, switch to the 0ms instant mobile client engine
+  if (isProNative) {
+    return (
+      <AgentMobileInstantShell
+        brandDisplayName={brandDisplayName}
+        orgName={orgName}
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-dvh bg-mist text-ink">
@@ -434,8 +448,9 @@ export function AgentShell({
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={true}
                   className={cn(
-                    "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition",
+                    "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition active:opacity-70",
                     active ? "text-canopy" : "text-ink/45",
                   )}
                 >
@@ -455,7 +470,7 @@ export function AgentShell({
               type="button"
               onClick={() => setMobileOpen(true)}
               className={cn(
-                "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition",
+                "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition active:opacity-70",
                 moreActive || mobileOpen ? "text-canopy" : "text-ink/45",
               )}
             >
