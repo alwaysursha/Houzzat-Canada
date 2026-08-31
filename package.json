@@ -100,6 +100,8 @@
     "shared-hotness-pipeline:selftest": "node --import tsx scripts/shared-hotness-pipeline-selftest.ts",
     "agent-deferred-render:selftest": "node --import tsx scripts/agent-deferred-render-selftest.ts",
     "agent-route-prefetch:selftest": "node --import tsx scripts/agent-route-prefetch-selftest.ts",
+    "pro-mobile:selftest": "node --import tsx apps/pro-mobile/test/mobile-v2-foundation.test.ts",
+    "pro-mobile:auth-selftest": "node --import tsx apps/pro-mobile/test/tenant-isolation.test.ts",
     "pro-auth-routing:selftest": "node --import tsx scripts/pro-auth-routing-selftest.ts",
     "pro-native-auth-controller:selftest": "node --import tsx scripts/pro-native-auth-controller-selftest.ts",
     "tenant-team-host-isolation:selftest": "node --import tsx scripts/tenant-team-host-isolation-selftest.ts",

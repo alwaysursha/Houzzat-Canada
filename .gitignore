@@ -71,3 +71,13 @@ firebase-adminsdk*.json
 *.keystore
 keystore.properties
 
+# Mobile v2 Android build outputs & local config
+apps/pro-mobile/android/.gradle/
+apps/pro-mobile/android/build/
+apps/pro-mobile/android/app/build/
+apps/pro-mobile/android/local.properties
+apps/pro-mobile/node_modules/
+*.apk
+*.aab
+
+

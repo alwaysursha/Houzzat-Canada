@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Small status-bar / tray icon for HouzzatPro FCM notifications.
+  White silhouette on transparent background (system tints the glyph).
+  Do not use the full-color launcher icon as the small notification icon.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,3L2.8,10.4c-0.35,0.28-0.35,0.8,0,1.08l0.85,0.68c0.32,0.26,0.78,0.22,1.04-0.08L12,5.55l7.31,6.53c0.26,0.3,0.72,0.34,1.04,0.08l0.85-0.68c0.35-0.28,0.35-0.8,0-1.08L12,3z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5.5,11.75h13v8.5c0,0.69-0.56,1.25-1.25,1.25H6.75c-0.69,0-1.25-0.56-1.25-1.25v-8.5z" />
+</vector>
