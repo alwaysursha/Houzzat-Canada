@@ -194,6 +194,7 @@ export function CommandCentreShell() {
 
         {activeTab === "leads" && (
           <LeadsScreen
+            selectedLeadId={selectedLeadId}
             onSelectLead={(leadId, leadIds) => {
               setLeadNavIds(leadIds);
               setSelectedLeadId(leadId);

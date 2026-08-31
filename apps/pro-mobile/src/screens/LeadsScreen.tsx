@@ -33,6 +33,7 @@ import {
   View,
 } from "react-native";
 import { mobileApiClient } from "../api/client";
+import { leadCacheStore, setLeadCacheStore } from "../lib/lead-list-cache";
 import { useAuth } from "../state/AuthContext";
 import type { BackendEnvelope, LeadsResponseData, MobileLeadSummary, LeadStatus } from "../types/api";
 import { LeadDetailScreen } from "./LeadDetailScreen";
@@ -122,13 +123,7 @@ function formatDate(iso: string): string {
   }
 }
 
-// In-memory cache for fast tab-switching
-let leadCacheStore: {
-  workspaceId: string;
-  leads: MobileLeadSummary[];
-  totalCount: number;
-  timestamp: number;
-} | null = null;
+// Lead list cache lives in ../lib/lead-list-cache (shared with LeadDetailScreen).
 
 interface LeadsScreenProps {
   initialStatusFilter?: string;
@@ -188,6 +183,15 @@ export function LeadsScreen({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // After Lead Detail closes, rehydrate list from cache (status patches applied there).
+  useEffect(() => {
+    if (controlledLeadId !== null && controlledLeadId !== undefined) return;
+    if (leadCacheStore && leadCacheStore.workspaceId === workspaceId) {
+      setLeads(leadCacheStore.leads);
+      setTotalCount(leadCacheStore.totalCount);
+    }
+  }, [controlledLeadId, workspaceId]);
+
   const fetchLeads = useCallback(
     async (isPullToRefresh = false) => {
       if (!isPullToRefresh && (!leadCacheStore || leadCacheStore.workspaceId !== workspaceId)) {
@@ -224,12 +228,12 @@ export function LeadsScreen({
         setTotalCount(count);
 
         if (workspaceId && selectedStatus === "ALL" && debouncedSearch === "") {
-          leadCacheStore = {
+          setLeadCacheStore({
             workspaceId,
             leads: fetchedLeads,
             totalCount: count,
             timestamp: Date.now(),
-          };
+          });
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Network error loading leads";

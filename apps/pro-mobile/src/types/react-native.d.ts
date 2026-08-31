@@ -118,6 +118,11 @@ declare module "react-native" {
     [key: string]: any;
   }>;
 
+  export const Linking: {
+    openURL(url: string): Promise<void>;
+    canOpenURL(url: string): Promise<boolean>;
+  };
+
   export const TextInput: React.FC<{
     style?: any;
     value?: string;

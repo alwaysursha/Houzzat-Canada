@@ -142,6 +142,7 @@ export function AgentShell({
         {activeTab === "leads" && (
           <LeadsScreen
             initialStatusFilter={leadsInitialFilter}
+            selectedLeadId={selectedLeadId}
             onSelectLead={(leadId, leadIds) => {
               setLeadNavIds(leadIds);
               setSelectedLeadId(leadId);

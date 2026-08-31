@@ -1,0 +1,51 @@
+/**
+ * Stage 4.5 — Shared in-memory Leads list cache helpers.
+ * Kept outside LeadsScreen to avoid circular imports with LeadDetailScreen.
+ */
+
+import type { LeadStatus, MobileLeadSummary } from "../types/api";
+
+export let leadCacheStore: {
+  workspaceId: string;
+  leads: MobileLeadSummary[];
+  totalCount: number;
+  timestamp: number;
+} | null = null;
+
+export function setLeadCacheStore(
+  next: {
+    workspaceId: string;
+    leads: MobileLeadSummary[];
+    totalCount: number;
+    timestamp: number;
+  } | null,
+) {
+  leadCacheStore = next;
+}
+
+/** Patch a lead row after status mutation so Back reflects the new status. */
+export function updateLeadStatusInListCache(
+  workspaceId: string | undefined,
+  leadId: string,
+  status: LeadStatus,
+  statusChangedAt?: string,
+) {
+  if (!workspaceId || !leadCacheStore || leadCacheStore.workspaceId !== workspaceId) {
+    return;
+  }
+  const ts = statusChangedAt || new Date().toISOString();
+  leadCacheStore = {
+    ...leadCacheStore,
+    leads: leadCacheStore.leads.map((l) =>
+      l.id === leadId
+        ? {
+            ...l,
+            status,
+            statusChangedAt: ts,
+            updatedAt: ts,
+          }
+        : l,
+    ),
+    timestamp: Date.now(),
+  };
+}

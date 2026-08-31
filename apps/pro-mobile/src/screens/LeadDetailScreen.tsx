@@ -1,25 +1,28 @@
 /**
- * Stage 4.4B — Native Lead Detail visual parity with web mobile CustomerProfile.
+ * Stage 4.4B / 4.5 — Native Lead Detail (web-mobile visual parity + lead actions).
  *
  * Visual authority: src/components/agent/CustomerProfile.tsx (variant="modal")
  * + LeadQuickPopup mobile shell.
  *
- * Data engine unchanged: GET /api/mobile/v2/leads/[leadId]
- * Missing engagement fields (hotness rings, views24h, etc.) render as safe empty/"—" states.
- * Mutations (status, notes, call/SMS) are visual-only / disabled.
+ * Data: GET /api/mobile/v2/leads/[leadId]
+ * Actions: native tel/sms/mailto + POST notes + PATCH status.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
+  Modal,
   Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { mobileApiClient } from "../api/client";
@@ -31,6 +34,7 @@ import type {
   MobileLeadActivity,
   MobileLeadDetail,
 } from "../types/api";
+import { updateLeadStatusInListCache } from "../lib/lead-list-cache";
 
 const detailCache = new Map<string, { data: MobileLeadDetail; timestamp: number }>();
 
@@ -45,6 +49,32 @@ export function clearLeadDetailCache(workspaceId?: string) {
     }
   }
 }
+
+function patchLeadDetailCache(
+  cacheKey: string,
+  patch: Partial<MobileLeadDetail> & {
+    recentActivities?: MobileLeadActivity[];
+    counts?: MobileLeadDetail["counts"];
+  },
+) {
+  const existing = detailCache.get(cacheKey);
+  if (!existing) return;
+  detailCache.set(cacheKey, {
+    data: { ...existing.data, ...patch },
+    timestamp: Date.now(),
+  });
+}
+
+const PIPELINE_STATUSES: LeadStatus[] = [
+  "NEW_LEAD",
+  "ATTEMPTED_CONTACT",
+  "CONTACTED",
+  "APPT_SET",
+  "APPT_MET",
+  "ACTIVE_CLIENT",
+  "PENDING_CLIENT",
+  "PAST_CLIENT",
+];
 
 type TabId =
   | "activity"
@@ -560,6 +590,13 @@ export function LeadDetailScreen({
   const [tab, setTab] = useState<TabId>("activity");
   const [activityCategory, setActivityCategory] =
     useState<ActivityQuickCategory>("all");
+  const [noteBody, setNoteBody] = useState("");
+  const [noteCategory, setNoteCategory] = useState<"GENERAL" | "CALL">("GENERAL");
+  const [notePinned, setNotePinned] = useState(false);
+  const [notePending, setNotePending] = useState(false);
+  const [noteMessage, setNoteMessage] = useState<string | null>(null);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [statusPending, setStatusPending] = useState(false);
 
   const navIndex =
     leadIds && leadIds.length > 1 ? leadIds.indexOf(leadId) : -1;
@@ -578,6 +615,198 @@ export function LeadDetailScreen({
       "This action will arrive in an upcoming stage. Visual control matches the web mobile CRM.",
       [{ text: "OK" }],
     );
+  };
+
+  const openNativeUrl = async (url: string, unavailableTitle: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert(unavailableTitle, "No compatible app is available on this device.");
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(unavailableTitle, "Could not open the device app.");
+    }
+  };
+
+  const handleCall = () => {
+    const phone = lead?.customer?.phone?.trim();
+    if (!phone) return;
+    void openNativeUrl(`tel:${phone}`, "Call unavailable");
+  };
+
+  const handleSms = () => {
+    const phone = lead?.customer?.phone?.trim();
+    if (!phone) return;
+    // Native SMS composer only — no canned body invented.
+    void openNativeUrl(`sms:${phone}`, "SMS unavailable");
+  };
+
+  const handleEmail = () => {
+    const email = lead?.customer?.email?.trim();
+    if (!email) return;
+    void openNativeUrl(`mailto:${encodeURIComponent(email)}`, "Email unavailable");
+  };
+
+  const handleSaveNote = async () => {
+    const trimmed = noteBody.trim();
+    if (!trimmed || notePending || !lead) return;
+    setNotePending(true);
+    setNoteMessage(null);
+    try {
+      const res = await mobileApiClient.post<{
+        ok: boolean;
+        note?: { id: string; body: string; category: string; pinned: boolean; createdAt: string };
+        message?: string;
+      }>(`/leads/${encodeURIComponent(leadId)}/notes`, {
+        body: trimmed,
+        category: noteCategory,
+        pinned: notePinned,
+      });
+
+      if (!res.ok) {
+        setNoteMessage(res.message || "Could not save note");
+        return;
+      }
+
+      const created = (res.data as { note?: MobileLeadActivity & { category?: string; pinned?: boolean } })?.note;
+      const activityItem: MobileLeadActivity = {
+        id: created?.id || `note_${Date.now()}`,
+        type: "note",
+        body: trimmed.slice(0, 500),
+        createdAt: created?.createdAt || new Date().toISOString(),
+      };
+
+      setLead((prev) => {
+        if (!prev) return prev;
+        const next: MobileLeadDetail = {
+          ...prev,
+          recentActivities: [activityItem, ...(prev.recentActivities || [])].slice(0, 10),
+          counts: {
+            ...prev.counts,
+            notes: prev.counts.notes + 1,
+          },
+        };
+        if (cacheKey) patchLeadDetailCache(cacheKey, next);
+        return next;
+      });
+
+      setNoteBody("");
+      setNotePinned(false);
+      setNoteMessage(
+        notePinned
+          ? `${noteCategory === "CALL" ? "Call" : "General"} note pinned`
+          : `${noteCategory === "CALL" ? "Call" : "General"} note saved`,
+      );
+      setTimeout(() => setNoteMessage(null), 2000);
+      // Background reconcile with server detail (activities + counts).
+      void fetchLeadDetail(true);
+    } catch (err: unknown) {
+      setNoteMessage(err instanceof Error ? err.message : "Could not save note");
+    } finally {
+      setNotePending(false);
+    }
+  };
+
+  const handleSelectStatus = async (next: LeadStatus) => {
+    if (!lead || statusPending || next === lead.status) {
+      setStatusMenuOpen(false);
+      return;
+    }
+    setStatusPending(true);
+    const previous = lead.status;
+    const previousChangedAt = lead.statusChangedAt;
+    const optimisticAt = new Date().toISOString();
+
+    // Optimistic local update
+    setLead((prev) => {
+      if (!prev) return prev;
+      const patched = { ...prev, status: next, statusChangedAt: optimisticAt };
+      if (cacheKey) patchLeadDetailCache(cacheKey, patched);
+      return patched;
+    });
+    setStatusMenuOpen(false);
+
+    try {
+      const res = await mobileApiClient.patch<{
+        ok: boolean;
+        lead?: {
+          id: string;
+          status: LeadStatus;
+          statusChangedAt: string;
+          firstRespondedAt: string | null;
+        };
+        message?: string;
+      }>(`/leads/${encodeURIComponent(leadId)}/status`, { status: next });
+
+      if (!res.ok) {
+        setLead((prev) => {
+          if (!prev) return prev;
+          const rolled = {
+            ...prev,
+            status: previous,
+            statusChangedAt: previousChangedAt,
+          };
+          if (cacheKey) patchLeadDetailCache(cacheKey, rolled);
+          return rolled;
+        });
+        Alert.alert("Status update failed", res.message || "Could not update pipeline status");
+        return;
+      }
+
+      const serverLead = (res.data as { lead?: {
+        status: LeadStatus;
+        statusChangedAt: string;
+        firstRespondedAt: string | null;
+      } })?.lead;
+
+      setLead((prev) => {
+        if (!prev) return prev;
+        const activityItem: MobileLeadActivity = {
+          id: `status_${Date.now()}`,
+          type: "status_change",
+          body: serverLead?.status || next,
+          createdAt: serverLead?.statusChangedAt || optimisticAt,
+        };
+        const patched: MobileLeadDetail = {
+          ...prev,
+          status: serverLead?.status || next,
+          statusChangedAt: serverLead?.statusChangedAt || optimisticAt,
+          firstRespondedAt:
+            serverLead?.firstRespondedAt !== undefined
+              ? serverLead.firstRespondedAt
+              : prev.firstRespondedAt,
+          recentActivities: [activityItem, ...(prev.recentActivities || [])].slice(0, 10),
+        };
+        if (cacheKey) patchLeadDetailCache(cacheKey, patched);
+        return patched;
+      });
+
+      updateLeadStatusInListCache(
+        workspaceId,
+        leadId,
+        serverLead?.status || next,
+        serverLead?.statusChangedAt || optimisticAt,
+      );
+    } catch (err: unknown) {
+      setLead((prev) => {
+        if (!prev) return prev;
+        const rolled = {
+          ...prev,
+          status: previous,
+          statusChangedAt: previousChangedAt,
+        };
+        if (cacheKey) patchLeadDetailCache(cacheKey, rolled);
+        return rolled;
+      });
+      Alert.alert(
+        "Status update failed",
+        err instanceof Error ? err.message : "Network error",
+      );
+    } finally {
+      setStatusPending(false);
+    }
   };
 
   const fetchLeadDetail = useCallback(
@@ -861,27 +1090,61 @@ export function LeadDetailScreen({
               />
             </View>
 
-            {/* Quick actions — visual parity; disabled (no call/SMS/email wiring yet) */}
+            {/* Quick actions — Call / Dial / Text / Email via native OS composers */}
             <View style={styles.actionRow}>
               {[
-                { label: "Call", bg: "#0D9488", icon: "📞" },
-                { label: "Dial", bg: "#14B8A6", icon: "📱" },
-                { label: "Text", bg: "#0EA5E9", icon: "💬" },
-                { label: "Email", bg: "#38BDF8", icon: "✉" },
-                { label: "More", bg: "#64748B", icon: "⋯" },
+                {
+                  label: "Call",
+                  bg: "#0D9488",
+                  icon: "📞",
+                  enabled: Boolean(phone),
+                  onPress: handleCall,
+                },
+                {
+                  label: "Dial",
+                  bg: "#14B8A6",
+                  icon: "📱",
+                  enabled: Boolean(phone),
+                  onPress: handleCall,
+                },
+                {
+                  label: "Text",
+                  bg: "#0EA5E9",
+                  icon: "💬",
+                  enabled: Boolean(phone),
+                  onPress: handleSms,
+                },
+                {
+                  label: "Email",
+                  bg: "#38BDF8",
+                  icon: "✉",
+                  enabled: Boolean(email),
+                  onPress: handleEmail,
+                },
+                {
+                  label: "More",
+                  bg: "#64748B",
+                  icon: "⋯",
+                  enabled: true,
+                  onPress: () => setTab("conversations"),
+                },
               ].map((action) => (
                 <TouchableOpacity
                   key={action.label}
-                  style={[styles.actionCircle, { backgroundColor: action.bg }, styles.actionDisabled]}
-                  disabled
-                  activeOpacity={1}
-                  accessibilityLabel={`${action.label} (coming next)`}
+                  style={[
+                    styles.actionCircle,
+                    { backgroundColor: action.bg },
+                    !action.enabled && styles.actionDisabled,
+                  ]}
+                  disabled={!action.enabled}
+                  activeOpacity={0.85}
+                  onPress={action.onPress}
+                  accessibilityLabel={action.label}
                 >
                   <Text style={styles.actionIcon}>{action.icon}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={styles.actionHint}>Call · Text · Email — coming next</Text>
 
             {/* Buyer / Seller radio presentation (read-only) */}
             <View style={styles.buyerSellerRow}>
@@ -936,14 +1199,23 @@ export function LeadDetailScreen({
               </View>
             </View>
 
-            {/* Pipeline banner — read-only visual of PipelineStatusMenu */}
+            {/* Pipeline banner — functional status selector (read+write) */}
             {banner ? (
-              <View style={[styles.pipelineBanner, { backgroundColor: banner.bg }]}>
+              <TouchableOpacity
+                style={[
+                  styles.pipelineBanner,
+                  { backgroundColor: banner.bg },
+                  statusPending && { opacity: 0.7 },
+                ]}
+                activeOpacity={0.9}
+                disabled={statusPending}
+                onPress={() => setStatusMenuOpen(true)}
+              >
                 <Text style={styles.pipelineBannerText} numberOfLines={1}>
                   {banner.label} ({pipelineStatusDate(lead.statusChangedAt, lead.createdAt)})
                 </Text>
                 <Text style={styles.pipelineChevron}>▾</Text>
-              </View>
+              </TouchableOpacity>
             ) : null}
 
             <Text style={styles.assignedText}>
@@ -1014,30 +1286,81 @@ export function LeadDetailScreen({
 
           {/* ===== RIGHT COLUMN (tabs + content) ===== */}
           <View style={styles.rightColumn}>
-            {/* Note composer — visual shell, disabled */}
+            {/* Note composer — functional */}
             <View style={styles.noteForm}>
               <View style={styles.noteCategoryRow}>
                 <View style={styles.noteCategoryGroup}>
-                  <View style={[styles.noteCategoryChip, styles.noteCategoryChipActive]}>
-                    <Text style={styles.noteCategoryChipTextActive}>General</Text>
-                  </View>
-                  <View style={styles.noteCategoryChip}>
-                    <Text style={styles.noteCategoryChipText}>Call</Text>
-                  </View>
+                  {(
+                    [
+                      ["GENERAL", "General"],
+                      ["CALL", "Call"],
+                    ] as const
+                  ).map(([value, label]) => {
+                    const active = noteCategory === value;
+                    return (
+                      <TouchableOpacity
+                        key={value}
+                        style={[
+                          styles.noteCategoryChip,
+                          active && styles.noteCategoryChipActive,
+                        ]}
+                        onPress={() => setNoteCategory(value)}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={
+                            active
+                              ? styles.noteCategoryChipTextActive
+                              : styles.noteCategoryChipText
+                          }
+                        >
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
-                <View style={styles.pinChip}>
-                  <Text style={styles.pinChipText}>📌 Pin</Text>
-                </View>
+                <TouchableOpacity
+                  style={[styles.pinChip, notePinned && styles.pinChipActive]}
+                  onPress={() => setNotePinned((v) => !v)}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[styles.pinChipText, notePinned && styles.pinChipTextActive]}
+                  >
+                    📌 {notePinned ? "Pinned" : "Pin"}
+                  </Text>
+                </TouchableOpacity>
               </View>
               <View style={styles.noteInputRow}>
-                <View style={styles.noteInput}>
-                  <Text style={styles.notePlaceholder}>Add a note…</Text>
-                </View>
-                <View style={[styles.noteSaveBtn, styles.noteSaveDisabled]}>
-                  <Text style={styles.noteSaveText}>Save</Text>
-                </View>
+                <TextInput
+                  style={styles.noteInput}
+                  value={noteBody}
+                  onChangeText={setNoteBody}
+                  placeholder={
+                    noteCategory === "CALL" ? "Add a call note..." : "Add a note..."
+                  }
+                  placeholderTextColor="#94A3B8"
+                  editable={!notePending}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.noteSaveBtn,
+                    (notePending || !noteBody.trim()) && styles.noteSaveDisabled,
+                  ]}
+                  disabled={notePending || !noteBody.trim()}
+                  onPress={() => void handleSaveNote()}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.noteSaveText}>
+                    {notePending ? "…" : "Save"}
+                  </Text>
+                </TouchableOpacity>
               </View>
-              <Text style={styles.noteComingSoon}>Note creation — coming next</Text>
+              {noteMessage ? (
+                <Text style={styles.noteMessage}>{noteMessage}</Text>
+              ) : null}
             </View>
 
             {/* Tabs */}
@@ -1345,6 +1668,55 @@ export function LeadDetailScreen({
           </View>
         </ScrollView>
       )}
+
+      {/* Pipeline status selector — matches web PipelineStatusMenu list */}
+      <Modal
+        visible={statusMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setStatusMenuOpen(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setStatusMenuOpen(false)}>
+          <View style={styles.statusMenuOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.statusMenuCard}>
+                <Text style={styles.statusMenuTitle}>Pipeline status</Text>
+                <ScrollView style={styles.statusMenuList}>
+                  {PIPELINE_STATUSES.map((s) => {
+                    const meta = pipelineBanner(s);
+                    const current = lead?.status === s;
+                    return (
+                      <TouchableOpacity
+                        key={s}
+                        style={[
+                          styles.statusMenuItem,
+                          current && styles.statusMenuItemCurrent,
+                        ]}
+                        disabled={statusPending}
+                        onPress={() => void handleSelectStatus(s)}
+                        activeOpacity={0.75}
+                      >
+                        <View
+                          style={[styles.statusMenuDot, { backgroundColor: meta.bg }]}
+                        />
+                        <Text style={styles.statusMenuItemText}>
+                          {meta.label}
+                          {current
+                            ? ` (${pipelineStatusDate(
+                                lead!.statusChangedAt,
+                                lead!.createdAt,
+                              )})`
+                            : ""}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
@@ -1901,17 +2273,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     paddingVertical: 10,
-    opacity: 0.7,
-  },
-  notePlaceholder: {
     fontSize: 13,
-    color: "#94A3B8",
+    color: "#1E2A38",
+    maxHeight: 88,
   },
   noteSaveBtn: {
     backgroundColor: "#1E2A38",
     borderRadius: 8,
     paddingHorizontal: 14,
     justifyContent: "center",
+    minHeight: 40,
   },
   noteSaveDisabled: {
     opacity: 0.4,
@@ -1921,11 +2292,71 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-  noteComingSoon: {
+  noteMessage: {
     marginTop: 6,
     fontSize: 11,
-    color: "#94A3B8",
-    fontStyle: "italic",
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  pinChipActive: {
+    borderColor: "#FCD34D",
+    backgroundColor: "#FFFBEB",
+  },
+  pinChipTextActive: {
+    color: "#92400E",
+  },
+  statusMenuOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  statusMenuCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    maxHeight: "70%",
+    overflow: "hidden",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  statusMenuTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    color: "#64748B",
+    textTransform: "uppercase",
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 8,
+  },
+  statusMenuList: {
+    paddingBottom: 8,
+  },
+  statusMenuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  statusMenuItemCurrent: {
+    backgroundColor: "#F8FAFC",
+  },
+  statusMenuDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  statusMenuItemText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0F172A",
   },
   tabBar: {
     backgroundColor: "#FFFFFF",
