@@ -20,7 +20,7 @@
  * - Real V2 backend data, server-side pagination, search, caching, pull-to-refresh
  */
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -36,6 +36,13 @@ import { mobileApiClient } from "../api/client";
 import { useAuth } from "../state/AuthContext";
 import type { BackendEnvelope, LeadsResponseData, MobileLeadSummary, LeadStatus } from "../types/api";
 import { LeadDetailScreen } from "./LeadDetailScreen";
+
+/**
+ * Lead row tap opens Lead Detail.
+ * Prefer parent-controlled overlay (AgentShell / CommandCentreShell) so the
+ * white web-mobile modal chrome covers the shell — matching LeadQuickPopup.
+ * Falls back to inline detail when used without onSelectLead.
+ */
 
 const STATUS_FILTERS: { key: LeadStatus | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },
@@ -126,7 +133,8 @@ let leadCacheStore: {
 interface LeadsScreenProps {
   initialStatusFilter?: string;
   selectedLeadId?: string | null;
-  onSelectLead?: (leadId: string) => void;
+  /** Called with lead id + ordered list ids for prev/next navigation (web modal parity). */
+  onSelectLead?: (leadId: string, leadIds: string[]) => void;
   onBackFromDetail?: () => void;
 }
 
@@ -171,8 +179,6 @@ export function LeadsScreen({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
-  const noticeTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Debounce search query changes
   useEffect(() => {
@@ -246,20 +252,24 @@ export function LeadsScreen({
   };
 
   const handleSelectLead = (leadId: string) => {
+    const leadIds = leads.map((l) => l.id);
     if (onSelectLead) {
-      onSelectLead(leadId);
-    } else {
-      setInternalSelectedLeadId(leadId);
+      onSelectLead(leadId, leadIds);
+      return;
     }
+    setInternalSelectedLeadId(leadId);
   };
 
   const handleBackFromDetail = () => {
     if (onBackFromDetail) {
       onBackFromDetail();
-    } else {
-      setInternalSelectedLeadId(null);
+      return;
     }
+    setInternalSelectedLeadId(null);
   };
+
+  // Parent-controlled: list stays mounted under shell overlay (preserves scroll/filter).
+  const showInlineDetail = !onSelectLead && Boolean(activeLeadId);
 
   const renderLeadCard = ({ item }: { item: MobileLeadSummary }) => {
     const statusStyle = getStatusStyle(item.status);
@@ -357,10 +367,12 @@ export function LeadsScreen({
     );
   };
 
-  if (activeLeadId) {
+  if (showInlineDetail && activeLeadId) {
     return (
       <LeadDetailScreen
         leadId={activeLeadId}
+        leadIds={leads.map((l) => l.id)}
+        onNavigateLead={(id) => setInternalSelectedLeadId(id)}
         onBack={handleBackFromDetail}
       />
     );
@@ -428,13 +440,6 @@ export function LeadsScreen({
           })}
         </ScrollView>
       </View>
-
-      {/* Temporary Tap Notice Toast */}
-      {noticeMessage ? (
-        <View style={styles.noticeToast}>
-          <Text style={styles.noticeToastText}>{noticeMessage}</Text>
-        </View>
-      ) : null}
 
       {/* Body Area */}
       <View style={styles.listContainer}>
@@ -606,20 +611,6 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: "#FFFFFF",
     fontWeight: "700",
-  },
-  noticeToast: {
-    backgroundColor: "#1E2A38",
-    marginHorizontal: 16,
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  noticeToastText: {
-    color: "#96F0D8",
-    fontSize: 12,
-    fontWeight: "600",
   },
   listContainer: {
     flex: 1,

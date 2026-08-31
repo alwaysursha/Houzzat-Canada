@@ -26,6 +26,7 @@ import { HouzzatProWordmark } from "../components/BrandMark";
 import { NativeDrawer, type DrawerItem } from "../components/NativeDrawer";
 import { useAuth } from "../state/AuthContext";
 import { LaunchpadScreen } from "./LaunchpadScreen";
+import { LeadDetailScreen } from "./LeadDetailScreen";
 import { LeadsScreen } from "./LeadsScreen";
 
 type AgentTab = "launchpad" | "leads" | "tasks" | "calendar" | "more";
@@ -48,6 +49,8 @@ export function AgentShell({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeDrawerId, setActiveDrawerId] = useState("launchpad");
   const [leadsInitialFilter, setLeadsInitialFilter] = useState<string | undefined>(undefined);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [leadNavIds, setLeadNavIds] = useState<string[]>([]);
 
   const hasMultipleWorkspaces = memberships.length > 1;
   const brandDisplayName = activeWorkspace?.displayName || "HouzzatPRO";
@@ -137,7 +140,13 @@ export function AgentShell({
         )}
 
         {activeTab === "leads" && (
-          <LeadsScreen initialStatusFilter={leadsInitialFilter} />
+          <LeadsScreen
+            initialStatusFilter={leadsInitialFilter}
+            onSelectLead={(leadId, leadIds) => {
+              setLeadNavIds(leadIds);
+              setSelectedLeadId(leadId);
+            }}
+          />
         )}
 
         {activeTab === "tasks" && (
@@ -343,6 +352,21 @@ export function AgentShell({
         }}
         onSignOut={() => signOut()}
       />
+
+      {/* Lead Detail overlay — matches web LeadQuickPopup full-screen modal */}
+      {selectedLeadId ? (
+        <View style={styles.leadDetailOverlay}>
+          <LeadDetailScreen
+            leadId={selectedLeadId}
+            leadIds={leadNavIds}
+            onNavigateLead={(id) => setSelectedLeadId(id)}
+            onBack={() => {
+              setSelectedLeadId(null);
+              setLeadNavIds([]);
+            }}
+          />
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -354,6 +378,12 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#1E2A38", // Header color
+  },
+  leadDetailOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100,
+    elevation: 100,
+    backgroundColor: "#FFFFFF",
   },
   header: {
     backgroundColor: "#1E2A38",

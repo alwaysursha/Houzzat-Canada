@@ -25,6 +25,7 @@ import { HouzzatProWordmark } from "../components/BrandMark";
 import { NativeDrawer, type DrawerItem } from "../components/NativeDrawer";
 import { useAuth } from "../state/AuthContext";
 import { AgentShell } from "./AgentShell";
+import { LeadDetailScreen } from "./LeadDetailScreen";
 import { LeadsScreen } from "./LeadsScreen";
 
 type CommandCentreTab = "overview" | "team" | "leads" | "calendar" | "more";
@@ -43,6 +44,8 @@ export function CommandCentreShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeDrawerId, setActiveDrawerId] = useState("launchpad");
   const [inAgentMode, setInAgentMode] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [leadNavIds, setLeadNavIds] = useState<string[]>([]);
 
   const hasMultipleWorkspaces = memberships.length > 1;
   const brandDisplayName = activeWorkspace?.displayName || "HouzzatPRO";
@@ -189,7 +192,14 @@ export function CommandCentreShell() {
           </View>
         )}
 
-        {activeTab === "leads" && <LeadsScreen />}
+        {activeTab === "leads" && (
+          <LeadsScreen
+            onSelectLead={(leadId, leadIds) => {
+              setLeadNavIds(leadIds);
+              setSelectedLeadId(leadId);
+            }}
+          />
+        )}
 
         {activeTab === "calendar" && (
           <View style={styles.placeholderContainer}>
@@ -378,6 +388,20 @@ export function CommandCentreShell() {
         onSignOut={() => signOut()}
         onSwitchToAgentMode={() => setInAgentMode(true)}
       />
+
+      {selectedLeadId ? (
+        <View style={styles.leadDetailOverlay}>
+          <LeadDetailScreen
+            leadId={selectedLeadId}
+            leadIds={leadNavIds}
+            onNavigateLead={(id) => setSelectedLeadId(id)}
+            onBack={() => {
+              setSelectedLeadId(null);
+              setLeadNavIds([]);
+            }}
+          />
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -389,6 +413,12 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#1E2A38",
+  },
+  leadDetailOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100,
+    elevation: 100,
+    backgroundColor: "#FFFFFF",
   },
   header: {
     backgroundColor: "#1E2A38",
