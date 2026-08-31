@@ -22,7 +22,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { StaffPullToRefresh } from "@/components/mobile/StaffPullToRefresh";
 import {
@@ -189,6 +189,7 @@ export function AdminShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const prevPathnameRef = useRef(pathname);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [hidePublicSiteLinks, setHidePublicSiteLinks] = useState(false);
@@ -211,7 +212,10 @@ export function AdminShell({
     .some((item) => navActive(pathname, item.href));
 
   useEffect(() => {
-    setMobileOpen(false);
+    if (prevPathnameRef.current !== pathname) {
+      prevPathnameRef.current = pathname;
+      setMobileOpen(false);
+    }
   }, [pathname]);
 
   useEffect(() => {

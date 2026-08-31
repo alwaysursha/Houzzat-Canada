@@ -19,7 +19,7 @@ import {
 } from "@/lib/mobile/use-staff-overlay";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   CalendarDays,
@@ -36,7 +36,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const NAV = [
   { href: "/agent", label: "Launchpad", icon: LayoutDashboard, exact: true },
@@ -151,6 +151,7 @@ export function AgentShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const prevPathnameRef = useRef(pathname);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
@@ -161,9 +162,34 @@ export function AgentShell({
       !mobileTabHrefs.has(item.href) && navActive(pathname, item.href),
   );
 
+  const router = useRouter();
+  const prefetchedRoutesRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
-    setMobileOpen(false);
-    setActivityOpen(false);
+    if (typeof navigator === "undefined") return;
+    const isProNative = navigator.userAgent.includes("com.houzzat.pro");
+    if (!isProNative) return;
+
+    // Idle prefetch of primary CRM routes once current page stabilizes
+    const timer = setTimeout(() => {
+      const HIGH_VALUE_ROUTES = ["/agent", "/agent/leads", "/agent/tasks"];
+      for (const route of HIGH_VALUE_ROUTES) {
+        if (route !== pathname && !prefetchedRoutesRef.current.has(route)) {
+          prefetchedRoutesRef.current.add(route);
+          router.prefetch(route);
+        }
+      }
+    }, 1200);
+
+    return () => clearTimeout(timer);
+  }, [pathname, router]);
+
+  useEffect(() => {
+    if (prevPathnameRef.current !== pathname) {
+      prevPathnameRef.current = pathname;
+      setMobileOpen(false);
+      setActivityOpen(false);
+    }
   }, [pathname]);
 
   useEffect(() => {

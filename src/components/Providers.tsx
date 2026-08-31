@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 import { SessionProvider } from "next-auth/react";
 import { ContactUpdateReminder } from "@/components/account/ContactUpdateReminder";
 import { RecentViewsSync } from "@/components/account/RecentViewsSync";
@@ -18,12 +18,18 @@ import { CapacitorBootstrap } from "@/components/mobile/CapacitorBootstrap";
 import { HouzzatAndroidBootCover } from "@/components/mobile/HouzzatAndroidBootCover";
 import { HouzzatPullToRefresh } from "@/components/mobile/HouzzatPullToRefresh";
 import { PushNotificationsBootstrap } from "@/components/mobile/PushNotificationsBootstrap";
+import { shouldRefetchSessionOnWindowFocus } from "@/lib/mobile/session-revalidate-policy";
 import { RoutePlannerProvider } from "@/components/route-planner/RoutePlannerProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const refetchOnWindowFocus = useMemo(() => {
+    if (typeof navigator === "undefined") return true;
+    return shouldRefetchSessionOnWindowFocus(navigator.userAgent);
+  }, []);
+
   return (
     <SessionProvider
-      refetchOnWindowFocus
+      refetchOnWindowFocus={refetchOnWindowFocus}
       // Keep rolling the 48h idle session while the tab is open.
       refetchInterval={30 * 60}
     >

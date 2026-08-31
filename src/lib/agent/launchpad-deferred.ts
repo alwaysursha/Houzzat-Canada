@@ -3,7 +3,7 @@ import type { LeadStatus } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
 import { leadScopeWhere } from "@/lib/agent";
 import { leadWhereForDesk } from "@/lib/crm-read-scope";
-import { computeHotnessMap, findOnlineUserIds } from "@/lib/agent/hotness";
+import { computeHotnessMap, ONLINE_MS } from "@/lib/agent/hotness";
 import { prisma } from "@/lib/prisma";
 
 /** Recent responses only — enough for a Launchpad avg, not a full history scan. */
@@ -47,13 +47,18 @@ export async function loadLaunchpadOnlineLeads(input: {
   deskView: "mine" | "team";
   focusAgentId: string | null;
 }) {
-  const onlineUserIds = await findOnlineUserIds();
-  if (onlineUserIds.length === 0) return [];
+  const since = new Date(Date.now() - ONLINE_MS);
 
   const onlineLeadsRaw = await prisma.lead.findMany({
     where: {
       ...leadScopeWhere(input.ctx, input.deskView),
-      customerId: { in: onlineUserIds },
+      customer: {
+        siteVisitors: {
+          some: {
+            lastSeenAt: { gte: since },
+          },
+        },
+      },
       ...(input.focusAgentId
         ? { assignedAgentId: input.focusAgentId }
         : {}),
@@ -70,6 +75,8 @@ export async function loadLaunchpadOnlineLeads(input: {
       customer: { select: { name: true, email: true } },
     },
   });
+
+  if (onlineLeadsRaw.length === 0) return [];
 
   const onlineHotMap = await computeHotnessMap(
     onlineLeadsRaw.map((l) => ({

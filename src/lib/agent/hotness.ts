@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { cache } from "react";
 
 /** Presence window used for ONLINE badge + Online Leads desk. */
 export const ONLINE_MS = 3 * 60 * 1000;
@@ -143,39 +144,31 @@ export async function computeHotness(
   );
 }
 
+export type CustomerActivitySignals = {
+  views24h: number;
+  distinctListings24h: number;
+  lastSeenAt: Date | null;
+};
+
 /**
- * Batch hotness for Launchpad / leads table — a few queries instead of 3×N.
- *
- * Listing views use groupBy (userId, mlsNumber) inside the 24h window instead of
- * an unbounded findMany of every raw view row (production: thousands of re-views
- * collapse to tens of groups).
+ * Request-scoped loader for customer activity signals.
+ * Takes a normalized (sorted, deduplicated) comma-delimited string of customer IDs as cache key.
+ * Deduplicates concurrent and sequential hotness activity passes across all deferred panels within the same request.
  */
-export async function computeHotnessMap(
-  leads: Array<{
-    id: string;
-    customerId: string | null;
-    status: string;
-    score: number;
-    createdAt: Date;
-    firstRespondedAt: Date | null;
-  }>,
-): Promise<Map<string, HotnessSnapshot>> {
-  const map = new Map<string, HotnessSnapshot>();
-  if (leads.length === 0) return map;
+export const loadRequestScopedCustomerSignals = cache(
+  async function loadRequestScopedCustomerSignals(
+    normalizedCustomerIdsKey: string,
+  ): Promise<Map<string, CustomerActivitySignals>> {
+    const resultMap = new Map<string, CustomerActivitySignals>();
+    if (!normalizedCustomerIdsKey) return resultMap;
 
-  const customerIds = [
-    ...new Set(
-      leads
-        .map((l) => l.customerId)
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ];
+    const customerIds = normalizedCustomerIdsKey.split(",").filter(Boolean);
+    if (customerIds.length === 0) return resultMap;
 
-  const viewsByUser = new Map<string, { count: number; mls: Set<string> }>();
-  const lastEventByUser = new Map<string, Date>();
-  const lastSessionByUser = new Map<string, Date>();
+    const viewsByUser = new Map<string, { count: number; mls: Set<string> }>();
+    const lastEventByUser = new Map<string, Date>();
+    const lastSessionByUser = new Map<string, Date>();
 
-  if (customerIds.length > 0) {
     const viewSince = new Date(Date.now() - HOT_VIEW_WINDOW_MS);
     const eventSince = new Date(Date.now() - LAST_EVENT_WINDOW_MS);
 
@@ -231,19 +224,63 @@ export async function computeHotnessMap(
       const prev = lastSessionByUser.get(visitor.userId);
       if (!prev || at > prev) lastSessionByUser.set(visitor.userId, at);
     }
-  }
+
+    for (const cid of customerIds) {
+      const viewBucket = viewsByUser.get(cid);
+      const sessionAt = lastSessionByUser.get(cid) ?? null;
+      const eventAt = lastEventByUser.get(cid) ?? null;
+      const lastSeenAt =
+        sessionAt && eventAt
+          ? sessionAt > eventAt
+            ? sessionAt
+            : eventAt
+          : (sessionAt ?? eventAt);
+
+      resultMap.set(cid, {
+        views24h: viewBucket?.count ?? 0,
+        distinctListings24h: viewBucket?.mls.size ?? 0,
+        lastSeenAt,
+      });
+    }
+
+    return resultMap;
+  },
+);
+
+/**
+ * Batch hotness for Launchpad / leads table — a few queries instead of 3×N.
+ *
+ * Listing views use groupBy (userId, mlsNumber) inside the 24h window instead of
+ * an unbounded findMany of every raw view row (production: thousands of re-views
+ * collapse to tens of groups).
+ */
+export async function computeHotnessMap(
+  leads: Array<{
+    id: string;
+    customerId: string | null;
+    status: string;
+    score: number;
+    createdAt: Date;
+    firstRespondedAt: Date | null;
+  }>,
+): Promise<Map<string, HotnessSnapshot>> {
+  const map = new Map<string, HotnessSnapshot>();
+  if (leads.length === 0) return map;
+
+  const rawCustomerIds = leads
+    .map((l) => l.customerId)
+    .filter((id): id is string => Boolean(id));
+
+  const sortedUniqueCustomerIds = Array.from(new Set(rawCustomerIds)).sort();
+  const cacheKey = sortedUniqueCustomerIds.join(",");
+
+  const signalsMap = await loadRequestScopedCustomerSignals(cacheKey);
 
   for (const lead of leads) {
     const cid = lead.customerId;
-    const viewBucket = cid ? viewsByUser.get(cid) : undefined;
-    const sessionAt = cid ? (lastSessionByUser.get(cid) ?? null) : null;
-    const eventAt = cid ? (lastEventByUser.get(cid) ?? null) : null;
-    const lastSeenAt =
-      sessionAt && eventAt
-        ? sessionAt > eventAt
-          ? sessionAt
-          : eventAt
-        : (sessionAt ?? eventAt);
+    const signals = cid
+      ? signalsMap.get(cid)
+      : undefined;
 
     map.set(
       lead.id,
@@ -257,9 +294,9 @@ export async function computeHotnessMap(
           firstRespondedAt: lead.firstRespondedAt,
         },
         {
-          views24h: viewBucket?.count ?? 0,
-          distinctListings24h: viewBucket?.mls.size ?? 0,
-          lastSeenAt,
+          views24h: signals?.views24h ?? 0,
+          distinctListings24h: signals?.distinctListings24h ?? 0,
+          lastSeenAt: signals?.lastSeenAt ?? null,
         },
       ),
     );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown,
@@ -188,49 +188,56 @@ export function ContactRequestedPanel({
     goTo(0);
   }, [typeFilter, statusFilter, goTo]);
 
-  async function tagLead(leadId: string, inquiryTag: InquiryTagValue) {
-    setPendingId(leadId);
-    setMessage(null);
-    try {
-      const res = await fetch("/api/agent/inquiry-tag", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadId, inquiryTag }),
-      });
-      const raw = await res.text();
-      let json: {
-        ok?: boolean;
-        label?: string;
-        reminderDueAt?: string;
-        error?: string;
-      } = {};
+  const handleOpenLead = useCallback((id: string) => {
+    setOpenLeadId(id);
+  }, []);
+
+  const tagLead = useCallback(
+    async function tagLead(leadId: string, inquiryTag: InquiryTagValue) {
+      setPendingId(leadId);
+      setMessage(null);
       try {
-        json = raw ? (JSON.parse(raw) as typeof json) : {};
-      } catch {
-        showToast(
-          "Tag failed — server returned an empty response. Reload and try again.",
-        );
-        return;
+        const res = await fetch("/api/agent/inquiry-tag", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leadId, inquiryTag }),
+        });
+        const raw = await res.text();
+        let json: {
+          ok?: boolean;
+          label?: string;
+          reminderDueAt?: string;
+          error?: string;
+        } = {};
+        try {
+          json = raw ? (JSON.parse(raw) as typeof json) : {};
+        } catch {
+          showToast(
+            "Tag failed — server returned an empty response. Reload and try again.",
+          );
+          return;
+        }
+        if (!res.ok) {
+          showToast(json.error || "Could not tag inquiry");
+          return;
+        }
+        setDismissed((prev) => [...prev, leadId]);
+        const due = json.reminderDueAt
+          ? new Date(json.reminderDueAt).toLocaleString("en-CA", {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            })
+          : "";
+        showToast(`${json.label} tagged · moved to To Do · due ${due}`);
+        router.refresh();
+      } finally {
+        setPendingId(null);
       }
-      if (!res.ok) {
-        showToast(json.error || "Could not tag inquiry");
-        return;
-      }
-      setDismissed((prev) => [...prev, leadId]);
-      const due = json.reminderDueAt
-        ? new Date(json.reminderDueAt).toLocaleString("en-CA", {
-            month: "short",
-            day: "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-          })
-        : "";
-      showToast(`${json.label} tagged · moved to To Do · due ${due}`);
-      router.refresh();
-    } finally {
-      setPendingId(null);
-    }
-  }
+    },
+    [router],
+  );
 
   return (
     <section className="relative z-20 min-w-0 overflow-hidden rounded-xl border border-[#d8dee6] bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)] sm:rounded-md">
@@ -290,7 +297,7 @@ export function ContactRequestedPanel({
               key={item.id}
               lead={item}
               pendingId={pendingId}
-              onOpen={setOpenLeadId}
+              onOpen={handleOpenLead}
               onTag={tagLead}
             />
           ))}
@@ -345,7 +352,7 @@ export function ContactRequestedPanel({
   );
 }
 
-function ContactSlide({
+const ContactSlide = memo(function ContactSlide({
   lead,
   pendingId,
   onOpen,
@@ -445,4 +452,4 @@ function ContactSlide({
       </div>
     </div>
   );
-}
+});

@@ -1,13 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { hasStaffOverlay } from "@/lib/mobile/staff-overlay-stack";
+import {
+  createInitialGestureState,
+  evaluatePullMove,
+  shouldCommitRefresh,
+  STAFF_PULL_THRESHOLD_PX,
+  type StaffPullGestureState,
+} from "@/lib/mobile/staff-pull-gesture";
 
-const PULL_THRESHOLD_PX = 96;
-const MAX_PULL_PX = 120;
 const LAST_REFRESH_KEY = "houzzat:staff-last-refresh";
 
 function formatLastRefresh(iso: string | null): string {
@@ -52,17 +57,24 @@ export function StaffPullToRefresh({
   className?: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
   const [pullPx, setPullPx] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const startXRef = useRef<number | null>(null);
-  const startYRef = useRef<number | null>(null);
-  const pullingRef = useRef(false);
+  const gestureStateRef = useRef<StaffPullGestureState | null>(null);
+  const lastRefreshTimeRef = useRef<number>(0);
   const scrollParentRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setLastRefresh(readStoredRefresh());
   }, []);
+
+  // Reset state whenever route changes or component unmounts
+  useEffect(() => {
+    gestureStateRef.current = null;
+    setPullPx(0);
+    setRefreshing(false);
+  }, [pathname]);
 
   const findScrollParent = useCallback((el: EventTarget | null) => {
     let node = el instanceof HTMLElement ? el : null;
@@ -92,112 +104,98 @@ export function StaffPullToRefresh({
           : ((event.target as Node | null)?.parentElement ?? null);
       if (
         origin?.closest(
-          "[data-snap-rail], [data-staff-overlay], [data-lead-profile-popup]",
+          "[data-snap-rail], [data-staff-overlay], [data-lead-profile-popup], input, textarea, select, button, a",
         )
       ) {
-        startXRef.current = null;
-        startYRef.current = null;
-        pullingRef.current = false;
+        gestureStateRef.current = null;
         return;
       }
       if (hasStaffOverlay()) {
-        startXRef.current = null;
-        startYRef.current = null;
-        pullingRef.current = false;
+        gestureStateRef.current = null;
         return;
       }
       scrollParentRef.current = parent;
-      if (parent.scrollTop > 2) {
-        startXRef.current = null;
-        startYRef.current = null;
-        pullingRef.current = false;
+      if (parent.scrollTop > 1) {
+        gestureStateRef.current = null;
         return;
       }
-      startXRef.current = touch.clientX;
-      startYRef.current = touch.clientY;
-      pullingRef.current = true;
+      gestureStateRef.current = createInitialGestureState(touch.clientX, touch.clientY);
     },
     [findScrollParent, refreshing],
   );
 
   const onTouchMove = useCallback((event: React.TouchEvent) => {
     if (hasStaffOverlay()) {
-      startXRef.current = null;
-      startYRef.current = null;
-      pullingRef.current = false;
+      gestureStateRef.current = null;
       setPullPx(0);
       return;
     }
-    if (!pullingRef.current || startYRef.current == null || refreshing) return;
+    if (!gestureStateRef.current || refreshing) return;
     const touch = event.touches[0];
     if (!touch) return;
     const parent = scrollParentRef.current;
-    if (parent && parent.scrollTop > 2) {
-      startXRef.current = null;
-      startYRef.current = null;
-      pullingRef.current = false;
-      setPullPx(0);
-      return;
-    }
-    const deltaX = Math.abs(touch.clientX - (startXRef.current ?? touch.clientX));
-    const deltaY = touch.clientY - startYRef.current;
-    if (deltaX > deltaY && deltaX > 10) {
-      // Horizontal swipe detected — cancel pull to refresh
-      startXRef.current = null;
-      startYRef.current = null;
-      pullingRef.current = false;
-      setPullPx(0);
-      return;
-    }
-    if (deltaY <= 0) {
-      setPullPx(0);
-      return;
-    }
-    const damped = Math.min(MAX_PULL_PX, deltaY * 0.5);
-    setPullPx(damped);
+    const scrollTop = parent?.scrollTop ?? 0;
+
+    const nextState = evaluatePullMove(
+      gestureStateRef.current,
+      touch.clientX,
+      touch.clientY,
+      { scrollTop },
+    );
+    gestureStateRef.current = nextState;
+
+    setPullPx(nextState.pullPx);
   }, [refreshing]);
 
   const finishRefresh = useCallback(async () => {
     setRefreshing(true);
-    setPullPx(PULL_THRESHOLD_PX * 0.65);
+    setPullPx(STAFF_PULL_THRESHOLD_PX * 0.65);
+    lastRefreshTimeRef.current = Date.now();
     try {
       router.refresh();
       // Let RSC stream settle briefly so the indicator feels intentional.
-      await new Promise((r) => window.setTimeout(r, 450));
+      await new Promise((r) => window.setTimeout(r, 600));
       const iso = new Date().toISOString();
       writeStoredRefresh(iso);
       setLastRefresh(iso);
     } finally {
       setRefreshing(false);
       setPullPx(0);
-      startXRef.current = null;
-      startYRef.current = null;
-      pullingRef.current = false;
+      gestureStateRef.current = null;
     }
   }, [router]);
 
   const onTouchEnd = useCallback(() => {
     if (hasStaffOverlay()) {
       setPullPx(0);
-      startXRef.current = null;
-      startYRef.current = null;
-      pullingRef.current = false;
+      gestureStateRef.current = null;
       return;
     }
-    if (!pullingRef.current) return;
+    if (!gestureStateRef.current) return;
     if (refreshing) return;
-    if (pullPx >= PULL_THRESHOLD_PX) {
+
+    if (
+      shouldCommitRefresh(
+        gestureStateRef.current,
+        refreshing,
+        lastRefreshTimeRef.current,
+      )
+    ) {
       void finishRefresh();
       return;
     }
+
     setPullPx(0);
-    startXRef.current = null;
-    startYRef.current = null;
-    pullingRef.current = false;
-  }, [finishRefresh, pullPx, refreshing]);
+    gestureStateRef.current = null;
+  }, [finishRefresh, refreshing]);
+
+  const onTouchCancel = useCallback(() => {
+    setPullPx(0);
+    gestureStateRef.current = null;
+  }, []);
 
   const visible = pullPx > 8 || refreshing;
-  const armed = pullPx >= PULL_THRESHOLD_PX || refreshing;
+  const armed = pullPx >= STAFF_PULL_THRESHOLD_PX || refreshing;
 
   return (
     <div
@@ -205,7 +203,7 @@ export function StaffPullToRefresh({
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
-      onTouchCancel={onTouchEnd}
+      onTouchCancel={onTouchCancel}
     >
       <div
         className={cn(
@@ -237,7 +235,7 @@ export function StaffPullToRefresh({
         className="min-w-0"
         style={{
           transform: pullPx > 0 || refreshing ? `translateY(${Math.min(pullPx, 56)}px)` : undefined,
-          transition: pullingRef.current && !refreshing ? undefined : "transform 160ms ease-out",
+          transition: gestureStateRef.current && !refreshing ? undefined : "transform 160ms ease-out",
         }}
       >
         {children}

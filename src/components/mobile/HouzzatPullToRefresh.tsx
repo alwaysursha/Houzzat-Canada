@@ -36,6 +36,12 @@ function isConsumerHome(pathname: string) {
   return pathname === "/";
 }
 
+function isHouzzatProNative(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return ua.includes("com.houzzat.pro");
+}
+
 function isHorizontalGestureTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
   if (
@@ -74,7 +80,7 @@ export function HouzzatPullToRefresh({
   const router = useRouter();
   const pathname = usePathname() || "/";
   const [native, setNative] = useState(false);
-  const enabled = native && isConsumerHome(pathname);
+  const enabled = native && !isHouzzatProNative() && isConsumerHome(pathname);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const startXRef = useRef(0);

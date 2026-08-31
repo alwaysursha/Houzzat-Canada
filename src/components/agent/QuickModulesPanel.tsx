@@ -104,6 +104,7 @@ export function QuickModulesPanel({
   hotLeads: QuickModuleLead[];
 }) {
   const [openId, setOpenId] = useState<ModuleId | null>(null);
+  const [openedIds, setOpenedIds] = useState<Set<ModuleId>>(() => new Set());
   const [profileId, setProfileId] = useState<string | null>(null);
   const cardRefs = useRef<Partial<Record<ModuleId, HTMLDivElement | null>>>({});
 
@@ -132,6 +133,12 @@ export function QuickModulesPanel({
   })();
 
   function toggle(id: ModuleId) {
+    setOpenedIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
     setOpenId((prev) => (prev === id ? null : id));
   }
 
@@ -269,6 +276,7 @@ export function QuickModulesPanel({
       <div className="flex flex-col gap-2.5">
         {modules.map((mod) => {
           const open = openId === mod.id;
+          const hasBeenOpened = open || openedIds.has(mod.id);
           return (
             <div
               key={mod.id}
@@ -322,7 +330,7 @@ export function QuickModulesPanel({
                     )}
                   >
                     <div className="max-h-[min(50vh,360px)] overflow-y-auto overscroll-contain px-1.5 py-1.5 sm:px-2">
-                      {mod.body}
+                      {hasBeenOpened ? mod.body : null}
                     </div>
                     <div className="border-t border-[#eef2f6] bg-white px-3 py-2.5">
                       <Link
