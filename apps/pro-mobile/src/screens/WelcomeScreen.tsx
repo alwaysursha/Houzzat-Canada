@@ -4,16 +4,17 @@
  */
 
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { HouzzatProMark, HouzzatProWordmark } from "../components/BrandMark";
 
 export function WelcomeScreen({ onStartSignIn }: { onStartSignIn: () => void }) {
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#63D9BD" />
       <View style={styles.content}>
         <HouzzatProMark size={88} />
         <View style={styles.wordmarkWrapper}>
-          <HouzzatProWordmark size="lg" dark={true} />
+          <HouzzatProWordmark size="xl" dark={true} />
         </View>
         <Text style={styles.tagline}>The modern workspace for high-performing real estate teams</Text>
       </View>
@@ -33,12 +34,15 @@ export function WelcomeScreen({ onStartSignIn }: { onStartSignIn: () => void }) 
   );
 }
 
+const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 0;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#63D9BD",
     justifyContent: "space-between",
-    paddingVertical: 56,
+    paddingTop: statusBarHeight + 24,
+    paddingBottom: Platform.OS === "android" ? 36 : 24,
     paddingHorizontal: 24,
   },
   content: {

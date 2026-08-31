@@ -7,8 +7,10 @@
 
 import React from "react";
 import {
+  Alert,
   FlatList,
   Platform,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -20,6 +22,17 @@ import type { MobileWorkspaceMembership } from "../types/workspace";
 
 export function WorkspaceSelectionScreen() {
   const { user, memberships, selectWorkspace, signOut } = useAuth();
+
+  const handleSignOut = () => {
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out of HouzzatPRO?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign Out", style: "destructive", onPress: () => signOut() },
+      ]
+    );
+  };
 
   const renderItem = ({ item }: { item: MobileWorkspaceMembership }) => {
     const ws = item.workspace;
@@ -56,9 +69,10 @@ export function WorkspaceSelectionScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
       <View style={styles.topBar}>
         <HouzzatProWordmark size="sm" dark={true} />
-        <TouchableOpacity onPress={signOut}>
+        <TouchableOpacity onPress={handleSignOut}>
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
       </View>
@@ -87,13 +101,15 @@ export function WorkspaceSelectionScreen() {
   );
 }
 
+const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 0;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8FAFC",
-    paddingTop: 54,
+    paddingTop: statusBarHeight + 16,
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingBottom: Platform.OS === "android" ? 36 : 24,
   },
   topBar: {
     flexDirection: "row",

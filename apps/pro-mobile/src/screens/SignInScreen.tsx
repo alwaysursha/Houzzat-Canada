@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -22,6 +23,7 @@ export function SignInScreen({ onBack }: { onBack: () => void }) {
   const { login, isLoading, error } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
@@ -47,6 +49,7 @@ export function SignInScreen({ onBack }: { onBack: () => void }) {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
+      <StatusBar barStyle="dark-content" backgroundColor="#63D9BD" />
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Text style={styles.backButtonText}>← Back</Text>
@@ -86,18 +89,28 @@ export function SignInScreen({ onBack }: { onBack: () => void }) {
 
         <View style={styles.formGroup}>
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={(t) => {
-              setPassword(t);
-              if (localError) setLocalError(null);
-            }}
-            placeholder="••••••••"
-            placeholderTextColor="#94A3B8"
-            secureTextEntry={true}
-            editable={!isLoading}
-          />
+          <View style={styles.passwordWrapper}>
+            <TextInput
+              style={styles.passwordInput}
+              value={password}
+              onChangeText={(t) => {
+                setPassword(t);
+                if (localError) setLocalError(null);
+              }}
+              placeholder="••••••••"
+              placeholderTextColor="#94A3B8"
+              secureTextEntry={!showPassword}
+              editable={!isLoading}
+            />
+            <TouchableOpacity
+              style={styles.eyeButton}
+              activeOpacity={0.7}
+              onPress={() => setShowPassword((prev) => !prev)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.eyeIcon}>{showPassword ? "👁" : "👁‍🗨"}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {isLoading ? (
@@ -127,12 +140,15 @@ export function SignInScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
+const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 0;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#63D9BD",
     justifyContent: "space-between",
-    paddingVertical: 48,
+    paddingTop: statusBarHeight + 16,
+    paddingBottom: Platform.OS === "android" ? 36 : 24,
     paddingHorizontal: 20,
   },
   header: {
@@ -208,6 +224,29 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#1E2A38",
     backgroundColor: "#F8FAFC",
+  },
+  passwordWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    paddingRight: 12,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#1E2A38",
+  },
+  eyeButton: {
+    padding: 4,
+  },
+  eyeIcon: {
+    fontSize: 18,
+    color: "#64748B",
   },
   loadingContainer: {
     flexDirection: "row",

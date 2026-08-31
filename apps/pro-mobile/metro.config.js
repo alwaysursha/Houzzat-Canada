@@ -1,30 +1,35 @@
 const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
-const exclusionList = require('metro-config/src/defaults/exclusionList');
 const path = require('path');
 
-/**
- * Metro configuration
- * https://reactnative.dev/docs/metro
- *
- * @type {import('metro-config').MetroConfig}
- */
 const projectRoot = __dirname;
 const monorepoRoot = path.resolve(__dirname, '../..');
 
+const defaultConfig = getDefaultConfig(__dirname);
+
 const config = {
-  watchFolders: [monorepoRoot],
+  projectRoot,
+  watchFolders: [
+    monorepoRoot,
+  ],
   resolver: {
-    blockList: exclusionList([
-      /.*\/android\/.*/,
-      /.*\/android-pro\/.*/,
-      /.*\.git\/.*/,
-      /.*\.next\/.*/,
-    ]),
+    useWatchman: false,
+    sourceExts: [...defaultConfig.resolver.sourceExts, 'cjs', 'mjs'],
     nodeModulesPaths: [
-      path.resolve(projectRoot, 'node_modules'),
       path.resolve(monorepoRoot, 'node_modules'),
     ],
   },
+  server: {
+    enhanceMiddleware: (middleware) => middleware,
+  },
 };
 
-module.exports = mergeConfig(getDefaultConfig(__dirname), config);
+module.exports = mergeConfig(defaultConfig, config);
+
+
+
+
+
+
+
+
+

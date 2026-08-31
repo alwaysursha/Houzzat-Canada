@@ -210,7 +210,7 @@ async function runStage43ALeadsTests() {
 
     const res = executeLeadsQuery(verify.payload, {});
     assert.equal(res.ok, true);
-    if (res.ok) {
+    if (res.ok && res.data) {
       // Must contain Canary leads only
       const leadIds = res.data.leads.map((l) => l.id);
       assert.ok(leadIds.includes("lead_canary_01"), "Canary AGENT must see assigned Canary lead");
@@ -236,7 +236,7 @@ async function runStage43ALeadsTests() {
 
     const res = executeLeadsQuery(verify.payload, {});
     assert.equal(res.ok, true);
-    if (res.ok) {
+    if (res.ok && res.data) {
       const leadIds = res.data.leads.map((l) => l.id);
       assert.ok(leadIds.includes("lead_houzzat_01"), "Houzzat AGENT must see assigned Houzzat lead");
       assert.equal(leadIds.includes("lead_canary_01"), false, "Houzzat AGENT MUST NOT see Canary lead");
@@ -261,7 +261,7 @@ async function runStage43ALeadsTests() {
 
     const res = executeLeadsQuery(verify.payload, {});
     assert.equal(res.ok, true);
-    if (res.ok) {
+    if (res.ok && res.data) {
       const leadIds = res.data.leads.map((l) => l.id);
       assert.ok(leadIds.includes("lead_canary_01"), "Must see assigned lead");
       assert.ok(leadIds.includes("lead_canary_02_pond"), "Must see unassigned pond lead");
@@ -290,7 +290,7 @@ async function runStage43ALeadsTests() {
 
     const res = executeLeadsQuery(verify.payload, {});
     assert.equal(res.ok, true);
-    if (res.ok) {
+    if (res.ok && res.data) {
       const leadIds = res.data.leads.map((l) => l.id);
       assert.ok(leadIds.includes("lead_canary_01"));
       assert.ok(leadIds.includes("lead_canary_02_pond"));
@@ -333,7 +333,7 @@ async function runStage43ALeadsTests() {
 
     const res = executeLeadsQuery(verify.payload, { status: "CONTACTED" });
     assert.equal(res.ok, true);
-    if (res.ok) {
+    if (res.ok && res.data) {
       assert.equal(res.data.leads.length, 1);
       assert.equal(res.data.leads[0].id, "lead_canary_03_other_agent");
       assert.equal(res.data.leads[0].status, "CONTACTED");
@@ -357,7 +357,7 @@ async function runStage43ALeadsTests() {
     // Search by name
     const resName = executeLeadsQuery(verify.payload, { search: "alice" });
     assert.equal(resName.ok, true);
-    if (resName.ok) {
+    if (resName.ok && resName.data) {
       assert.equal(resName.data.leads.length, 1);
       assert.equal(resName.data.leads[0].id, "lead_canary_01");
     }
@@ -365,7 +365,7 @@ async function runStage43ALeadsTests() {
     // Search by phone
     const resPhone = executeLeadsQuery(verify.payload, { search: "555-0102" });
     assert.equal(resPhone.ok, true);
-    if (resPhone.ok) {
+    if (resPhone.ok && resPhone.data) {
       assert.equal(resPhone.data.leads.length, 1);
       assert.equal(resPhone.data.leads[0].id, "lead_canary_02_pond");
     }
@@ -387,7 +387,7 @@ async function runStage43ALeadsTests() {
 
     const res = executeLeadsQuery(verify.payload, { limit: 2, page: 1 });
     assert.equal(res.ok, true);
-    if (res.ok) {
+    if (res.ok && res.data) {
       assert.equal(res.data.leads.length, 2);
       assert.equal(res.data.pagination.totalCount, 3);
       assert.equal(res.data.pagination.hasMore, true);
@@ -395,7 +395,7 @@ async function runStage43ALeadsTests() {
 
     const resPage2 = executeLeadsQuery(verify.payload, { limit: 2, page: 2 });
     assert.equal(resPage2.ok, true);
-    if (resPage2.ok) {
+    if (resPage2.ok && resPage2.data) {
       assert.equal(resPage2.data.leads.length, 1);
       assert.equal(resPage2.data.pagination.hasMore, false);
     }

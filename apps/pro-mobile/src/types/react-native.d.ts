@@ -30,10 +30,42 @@ declare module "react-native" {
     registerComponent(appKey: string, componentProvider: () => React.ComponentType<any>): void;
   };
 
+  export interface AlertButton {
+    text?: string;
+    onPress?: (value?: string) => void;
+    style?: "default" | "cancel" | "destructive";
+  }
+
+  export const Alert: {
+    alert(
+      title: string,
+      message?: string,
+      buttons?: AlertButton[],
+      options?: { cancelable?: boolean }
+    ): void;
+  };
+
+  export const LayoutAnimation: {
+    configureNext(config: any, onAnimationDidEnd?: () => void): void;
+    create(duration: number, type?: any, creationProp?: any): any;
+    Presets: {
+      easeInEaseOut: any;
+      linear: any;
+      spring: any;
+    };
+  };
+
+  export const UIManager: {
+    setLayoutAnimationEnabledExperimental?: (enabled: boolean) => void;
+    [key: string]: any;
+  };
+
   export const StatusBar: React.FC<{
     barStyle?: "default" | "light-content" | "dark-content";
     backgroundColor?: string;
-  }>;
+  }> & {
+    currentHeight?: number;
+  };
 
   export const View: React.FC<{
     style?: any;
@@ -110,6 +142,21 @@ declare module "react-native" {
     style?: any;
     behavior?: "height" | "position" | "padding";
     children?: React.ReactNode;
+  }>;
+
+  export const Modal: React.FC<{
+    visible?: boolean;
+    transparent?: boolean;
+    animationType?: "none" | "slide" | "fade";
+    onRequestClose?: () => void;
+    children?: React.ReactNode;
+    [key: string]: any;
+  }>;
+
+  export const TouchableWithoutFeedback: React.FC<{
+    onPress?: () => void;
+    children?: React.ReactNode;
+    [key: string]: any;
   }>;
 
   export const FlatList: React.FC<{

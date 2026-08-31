@@ -1,19 +1,18 @@
 /**
- * Stage 4.2 — Native Agent Application Shell.
+ * Stage 4.3B — Native Agent Shell with Visual Restoration.
  *
- * Dedicated native navigation shell for AGENT workspace role.
- * Bottom Tabs: Home | Leads | Tasks | More
- *
- * Features:
- * - Immediate 0ms native tab switching (pure React state)
- * - Safe area handling for Samsung Fold6 and Android/iOS devices
- * - Tenant workspace identity & branding
- * - Workspace switching (only if multiple memberships)
- * - Controlled logout
+ * Faithfully matches the original HouzzatPRO Agent experience:
+ * - Top Navigation Bar in Dark Slate (#1E2A38) with Hamburger Menu, Brand Title, Workspace Subtitle, and Call New Action
+ * - Native Slide-in Drawer with complete previous navigation list
+ * - Bottom Navigation Tabs matching original mobile layout (Launchpad, Leads, Tasks, Calendar, More)
+ * - 0ms instant tab switching and drawer opening (pure React state, no network, no self-closing bug)
+ * - Launchpad screen with Quick Modules, Todo status, and Contact Requested cards
+ * - Leads screen with real Stage 4.3A workspace data, search, and status filters
  */
 
 import React, { useState } from "react";
 import {
+  Alert,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -23,11 +22,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { HouzzatProBadge, HouzzatProWordmark } from "../components/BrandMark";
+import { HouzzatProWordmark } from "../components/BrandMark";
+import { NativeDrawer, type DrawerItem } from "../components/NativeDrawer";
 import { useAuth } from "../state/AuthContext";
+import { LaunchpadScreen } from "./LaunchpadScreen";
 import { LeadsScreen } from "./LeadsScreen";
 
-type AgentTab = "home" | "leads" | "tasks" | "more";
+type AgentTab = "launchpad" | "leads" | "tasks" | "calendar" | "more";
 
 export function AgentShell({
   onReturnToCommandCentre,
@@ -43,128 +44,142 @@ export function AgentShell({
     signOut,
   } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<AgentTab>("home");
+  const [activeTab, setActiveTab] = useState<AgentTab>("launchpad");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeDrawerId, setActiveDrawerId] = useState("launchpad");
+  const [leadsInitialFilter, setLeadsInitialFilter] = useState<string | undefined>(undefined);
 
   const hasMultipleWorkspaces = memberships.length > 1;
-  const agentDisplayName = user?.email?.split("@")[0] || "Agent";
-  const primaryBrandColor = activeWorkspace?.brand?.primaryColor || "#0B5C49";
+  const brandDisplayName = activeWorkspace?.displayName || "HouzzatPRO";
+  const orgName = activeWorkspace?.slug ? `${activeWorkspace.slug}.houzzatpro.com` : "Agent Desk";
+  const userRole = activeMembership?.role || "AGENT";
+  const userEmail = user?.email || "";
+
+  const handleSelectDrawerItem = (item: DrawerItem) => {
+    setActiveDrawerId(item.id);
+    if (item.tabKey) {
+      setActiveTab(item.tabKey);
+    }
+  };
+
+  const handleCallNewAction = () => {
+    setLeadsInitialFilter("NEW_LEAD");
+    setActiveTab("leads");
+    setActiveDrawerId("leads");
+  };
+
+  const handleNavigateToLeads = (statusFilter?: string) => {
+    setLeadsInitialFilter(statusFilter);
+    setActiveTab("leads");
+    setActiveDrawerId("leads");
+  };
+
+  const handleNavigateToTasks = () => {
+    setActiveTab("tasks");
+    setActiveDrawerId("tasks");
+  };
+
+  const handleSignOut = () => {
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out of HouzzatPRO?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign Out", style: "destructive", onPress: () => signOut() },
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#102A22" />
+      <StatusBar barStyle="light-content" backgroundColor="#1E2A38" />
 
-      {/* Top Header */}
+      {/* Top Header matching original HouzzatPRO */}
       <View style={styles.header}>
-        <View style={styles.headerBrandRow}>
-          <HouzzatProWordmark size="sm" dark={false} />
-          <View style={styles.roleTag}>
-            <Text style={styles.roleTagText}>{activeMembership?.role || "AGENT"}</Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={() => setDrawerOpen(true)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={styles.menuIcon}>☰</Text>
+          </TouchableOpacity>
+
+          <View style={styles.headerTitleGroup}>
+            <Text style={styles.brandTitle} numberOfLines={1}>
+              {brandDisplayName}
+            </Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>
+              {activeTab.toUpperCase()} · {orgName}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.workspaceBanner}>
-          <View style={[styles.workspaceAvatar, { backgroundColor: primaryBrandColor }]}>
-            <Text style={styles.workspaceAvatarText}>
-              {activeWorkspace?.displayName?.charAt(0).toUpperCase() || "W"}
-            </Text>
-          </View>
-          <View style={styles.workspaceInfo}>
-            <Text style={styles.workspaceTitle} numberOfLines={1}>
-              {activeWorkspace?.displayName || "Houzzat Workspace"}
-            </Text>
-            <Text style={styles.workspaceSubtitle} numberOfLines={1}>
-              {activeWorkspace?.slug ? `${activeWorkspace.slug}.houzzatpro.com` : "Active Tenant"}
-            </Text>
-          </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.callNewBtn}
+            onPress={handleCallNewAction}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.callNewBtnText}>CALL NEW</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Tab Content Body */}
+      {/* Body Content Area */}
       <View style={styles.body}>
-        {activeTab === "home" && (
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Welcome Greeting */}
-            <View style={styles.welcomeCard}>
-              <Text style={styles.welcomeGreeting}>Welcome back,</Text>
-              <Text style={styles.agentName}>{agentDisplayName}</Text>
-              <Text style={styles.welcomeSubtext}>
-                Your HouzzatPRO Agent desk is active and connected to your workspace.
-              </Text>
-            </View>
-
-            {/* Quick Status Card */}
-            <View style={styles.card}>
-              <View style={styles.cardHeaderRow}>
-                <Text style={styles.cardSectionTitle}>Agent Launchpad</Text>
-                <View style={styles.onlineBadge}>
-                  <View style={styles.onlineDot} />
-                  <Text style={styles.onlineBadgeText}>CONNECTED</Text>
-                </View>
-              </View>
-
-              <View style={styles.metricRow}>
-                <View style={styles.metricBox}>
-                  <Text style={styles.metricValue}>0</Text>
-                  <Text style={styles.metricLabel}>New Leads</Text>
-                </View>
-                <View style={styles.metricBox}>
-                  <Text style={styles.metricValue}>0</Text>
-                  <Text style={styles.metricLabel}>Active Tasks</Text>
-                </View>
-                <View style={styles.metricBox}>
-                  <Text style={styles.metricValue}>100%</Text>
-                  <Text style={styles.metricLabel}>Response Rate</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Tenant Security Info Card */}
-            <View style={styles.card}>
-              <Text style={styles.cardSectionTitle}>Workspace Isolation</Text>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>Workspace ID:</Text>
-                <Text style={styles.infoValMono} numberOfLines={1}>
-                  {activeWorkspace?.id}
-                </Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>Authority:</Text>
-                <Text style={styles.infoVal}>WorkspaceMember.role = AGENT</Text>
-              </View>
-            </View>
-          </ScrollView>
+        {activeTab === "launchpad" && (
+          <LaunchpadScreen
+            onNavigateToLeads={handleNavigateToLeads}
+            onNavigateToTasks={handleNavigateToTasks}
+          />
         )}
 
-        {activeTab === "leads" && <LeadsScreen />}
+        {activeTab === "leads" && (
+          <LeadsScreen initialStatusFilter={leadsInitialFilter} />
+        )}
 
         {activeTab === "tasks" && (
           <View style={styles.placeholderContainer}>
             <View style={styles.placeholderIconBox}>
               <Text style={styles.placeholderIconText}>✓</Text>
             </View>
-            <Text style={styles.placeholderTitle}>Tasks</Text>
+            <Text style={styles.placeholderTitle}>Tasks & Reminders</Text>
             <Text style={styles.placeholderSubtitle}>
-              Your tasks will appear here.
+              All open follow-up actions and scheduled tasks.
             </Text>
             <View style={styles.placeholderTag}>
-              <Text style={styles.placeholderTagText}>STAGE 4.2 NATIVE SHELL</Text>
+              <Text style={styles.placeholderTagText}>ALL CAUGHT UP</Text>
             </View>
+          </View>
+        )}
+
+        {activeTab === "calendar" && (
+          <View style={styles.placeholderContainer}>
+            <View style={styles.placeholderIconBox}>
+              <Text style={styles.placeholderIconText}>📅</Text>
+            </View>
+            <Text style={styles.placeholderTitle}>Appointments & Calendar</Text>
+            <Text style={styles.placeholderSubtitle}>
+              Sync showing schedules and client appointments.
+            </Text>
           </View>
         )}
 
         {activeTab === "more" && (
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* User Account Details */}
+            {/* User Profile */}
             <View style={styles.card}>
               <Text style={styles.cardSectionTitle}>User Profile</Text>
               <View style={styles.infoRow}>
                 <Text style={styles.infoKey}>Email:</Text>
-                <Text style={styles.infoVal}>{user?.email}</Text>
+                <Text style={styles.infoVal}>{userEmail}</Text>
               </View>
               <View style={styles.infoRow}>
                 <Text style={styles.infoKey}>Role:</Text>
                 <View style={styles.rolePillSmall}>
-                  <Text style={styles.rolePillSmallText}>{activeMembership?.role}</Text>
+                  <Text style={styles.rolePillSmallText}>{userRole}</Text>
                 </View>
               </View>
             </View>
@@ -174,7 +189,7 @@ export function AgentShell({
               <Text style={styles.cardSectionTitle}>Active Workspace</Text>
               <View style={styles.infoRow}>
                 <Text style={styles.infoKey}>Name:</Text>
-                <Text style={styles.infoVal}>{activeWorkspace?.displayName}</Text>
+                <Text style={styles.infoVal}>{brandDisplayName}</Text>
               </View>
               <View style={styles.infoRow}>
                 <Text style={styles.infoKey}>Workspace ID:</Text>
@@ -197,246 +212,247 @@ export function AgentShell({
               </TouchableOpacity>
             ) : null}
 
-            {/* Workspace Switcher (ONLY if user belongs to multiple workspaces) */}
-            {hasMultipleWorkspaces ? (
+            {/* Switch Workspace */}
+            {hasMultipleWorkspaces && (
               <TouchableOpacity
                 style={styles.actionBtnSecondary}
                 activeOpacity={0.85}
-                onPress={changeWorkspace}
+                onPress={() => {
+                  changeWorkspace();
+                }}
               >
                 <Text style={styles.actionBtnSecondaryText}>⇄ Switch Workspace</Text>
               </TouchableOpacity>
-            ) : null}
+            )}
 
-            {/* Logout CTA */}
+            {/* Sign Out Button */}
             <TouchableOpacity
-              style={styles.actionBtnDanger}
+              style={styles.signOutBtn}
               activeOpacity={0.85}
-              onPress={signOut}
+              onPress={handleSignOut}
             >
-              <Text style={styles.actionBtnDangerText}>Sign Out</Text>
+              <Text style={styles.signOutBtnText}>Sign Out of HouzzatPRO</Text>
             </TouchableOpacity>
-
-            <Text style={styles.footerVersion}>HouzzatPRO Native v2.0</Text>
           </ScrollView>
         )}
       </View>
 
-      {/* Bottom Navigation Bar */}
+      {/* Bottom Navigation matching original HouzzatPRO */}
       <View style={styles.bottomNav}>
         <TouchableOpacity
           style={styles.navItem}
           activeOpacity={0.7}
-          onPress={() => setActiveTab("home")}
+          onPress={() => {
+            setActiveTab("launchpad");
+            setActiveDrawerId("launchpad");
+          }}
         >
-          <Text style={[styles.navIcon, activeTab === "home" && styles.navIconActive]}>⌂</Text>
-          <Text style={[styles.navLabel, activeTab === "home" && styles.navLabelActive]}>Home</Text>
+          <View style={[styles.navIconBox, activeTab === "launchpad" && styles.navIconBoxActive]}>
+            <Text style={[styles.navIcon, activeTab === "launchpad" && styles.navIconActive]}>
+              ⌂
+            </Text>
+          </View>
+          <Text style={[styles.navLabel, activeTab === "launchpad" && styles.navLabelActive]}>
+            Launchpad
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.navItem}
           activeOpacity={0.7}
-          onPress={() => setActiveTab("leads")}
+          onPress={() => {
+            setActiveTab("leads");
+            setActiveDrawerId("leads");
+          }}
         >
-          <Text style={[styles.navIcon, activeTab === "leads" && styles.navIconActive]}>👥</Text>
-          <Text style={[styles.navLabel, activeTab === "leads" && styles.navLabelActive]}>Leads</Text>
+          <View style={[styles.navIconBox, activeTab === "leads" && styles.navIconBoxActive]}>
+            <Text style={[styles.navIcon, activeTab === "leads" && styles.navIconActive]}>
+              👥
+            </Text>
+          </View>
+          <Text style={[styles.navLabel, activeTab === "leads" && styles.navLabelActive]}>
+            Leads
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.navItem}
           activeOpacity={0.7}
-          onPress={() => setActiveTab("tasks")}
+          onPress={() => {
+            setActiveTab("tasks");
+            setActiveDrawerId("tasks");
+          }}
         >
-          <Text style={[styles.navIcon, activeTab === "tasks" && styles.navIconActive]}>✓</Text>
-          <Text style={[styles.navLabel, activeTab === "tasks" && styles.navLabelActive]}>Tasks</Text>
+          <View style={[styles.navIconBox, activeTab === "tasks" && styles.navIconBoxActive]}>
+            <Text style={[styles.navIcon, activeTab === "tasks" && styles.navIconActive]}>
+              ✓
+            </Text>
+          </View>
+          <Text style={[styles.navLabel, activeTab === "tasks" && styles.navLabelActive]}>
+            Tasks
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.navItem}
           activeOpacity={0.7}
-          onPress={() => setActiveTab("more")}
+          onPress={() => {
+            setActiveTab("calendar");
+            setActiveDrawerId("calendar");
+          }}
         >
-          <Text style={[styles.navIcon, activeTab === "more" && styles.navIconActive]}>•••</Text>
-          <Text style={[styles.navLabel, activeTab === "more" && styles.navLabelActive]}>More</Text>
+          <View style={[styles.navIconBox, activeTab === "calendar" && styles.navIconBoxActive]}>
+            <Text style={[styles.navIcon, activeTab === "calendar" && styles.navIconActive]}>
+              📅
+            </Text>
+          </View>
+          <Text style={[styles.navLabel, activeTab === "calendar" && styles.navLabelActive]}>
+            Calendar
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navItem}
+          activeOpacity={0.7}
+          onPress={() => setDrawerOpen(true)}
+        >
+          <View style={[styles.navIconBox, drawerOpen && styles.navIconBoxActive]}>
+            <Text style={[styles.navIcon, drawerOpen && styles.navIconActive]}>
+              ☰
+            </Text>
+          </View>
+          <Text style={[styles.navLabel, drawerOpen && styles.navLabelActive]}>
+            More
+          </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Native Slide-in Navigation Drawer */}
+      <NativeDrawer
+        visible={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        activeItemId={activeDrawerId}
+        onSelectItem={handleSelectDrawerItem}
+        brandDisplayName={brandDisplayName}
+        orgName={orgName}
+        userEmail={userEmail}
+        membershipRole={userRole}
+        hasMultipleWorkspaces={hasMultipleWorkspaces}
+        onChangeWorkspace={() => {
+          changeWorkspace();
+        }}
+        onSignOut={() => signOut()}
+      />
     </SafeAreaView>
   );
 }
 
+const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 0;
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#102A22",
+    backgroundColor: "#1E2A38", // Header color
   },
   header: {
-    backgroundColor: "#102A22",
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === "android" ? 14 : 6,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.08)",
-  },
-  headerBrandRow: {
+    backgroundColor: "#1E2A38",
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingTop: statusBarHeight > 0 ? statusBarHeight + 6 : 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
   },
-  roleTag: {
-    backgroundColor: "rgba(150, 240, 216, 0.16)",
-    borderColor: "#96F0D8",
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  roleTagText: {
-    color: "#96F0D8",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  workspaceBanner: {
+  headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    padding: 10,
-    borderRadius: 12,
+    flex: 1,
+    gap: 10,
   },
-  workspaceAvatar: {
+  menuButton: {
     width: 36,
     height: 36,
     borderRadius: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 10,
   },
-  workspaceAvatarText: {
+  menuIcon: {
+    fontSize: 18,
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
+    fontWeight: "bold",
   },
-  workspaceInfo: {
+  headerTitleGroup: {
     flex: 1,
   },
-  workspaceTitle: {
+  brandTitle: {
+    fontSize: 15,
+    fontWeight: "800",
     color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "700",
+    letterSpacing: -0.2,
   },
-  workspaceSubtitle: {
-    color: "rgba(255, 255, 255, 0.6)",
-    fontSize: 11,
+  headerSubtitle: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "rgba(255, 255, 255, 0.5)",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  headerRight: {
+    marginLeft: 8,
+  },
+  callNewBtn: {
+    backgroundColor: "#E11D48", // Rose / red from original app
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    shadowColor: "#E11D48",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  callNewBtnText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
   body: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F4F6F8",
   },
   scrollContent: {
-    padding: 18,
+    padding: 16,
+    paddingBottom: Platform.OS === "android" ? 36 : 24,
     gap: 14,
-  },
-  welcomeCard: {
-    backgroundColor: "#0B5C49",
-    borderRadius: 16,
-    padding: 18,
-    shadowColor: "#0B5C49",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  welcomeGreeting: {
-    color: "rgba(255, 255, 255, 0.75)",
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  agentName: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "800",
-    marginTop: 2,
-    marginBottom: 6,
-  },
-  welcomeSubtext: {
-    color: "rgba(255, 255, 255, 0.85)",
-    fontSize: 12,
-    lineHeight: 18,
   },
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#000",
+    borderColor: "#D8DEE6",
+    shadowColor: "rgba(15, 23, 42, 0.04)",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOpacity: 1,
+    shadowRadius: 2,
     elevation: 1,
-  },
-  cardHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
+    gap: 8,
   },
   cardSectionTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
-    color: "#1E293B",
-  },
-  onlineBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#DCFCE7",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    gap: 5,
-  },
-  onlineDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#16A34A",
-  },
-  onlineBadgeText: {
-    color: "#16A34A",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  metricRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  metricBox: {
-    flex: 1,
-    backgroundColor: "#F1F5F9",
-    borderRadius: 10,
-    padding: 12,
-    alignItems: "center",
-  },
-  metricValue: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#0B5C49",
-  },
-  metricLabel: {
-    fontSize: 11,
-    color: "#64748B",
-    marginTop: 4,
-    fontWeight: "500",
+    color: "#1E2A38",
+    marginBottom: 4,
   },
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    paddingVertical: 2,
   },
   infoKey: {
     fontSize: 13,
@@ -445,25 +461,24 @@ const styles = StyleSheet.create({
   },
   infoVal: {
     fontSize: 13,
-    color: "#1E293B",
+    color: "#1E2A38",
     fontWeight: "600",
   },
   infoValMono: {
     fontSize: 12,
-    color: "#0F172A",
+    color: "#475569",
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontWeight: "600",
   },
   rolePillSmall: {
-    backgroundColor: "#E0F2FE",
+    backgroundColor: "#ECFDF5",
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 4,
   },
   rolePillSmallText: {
-    color: "#0369A1",
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0F6B4C",
   },
   placeholderContainer: {
     flex: 1,
@@ -475,105 +490,107 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#F1F5F9",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
   },
   placeholderIconText: {
-    fontSize: 28,
+    fontSize: 26,
+    color: "#64748B",
   },
   placeholderTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#1E293B",
-    marginBottom: 8,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1E2A38",
+    marginBottom: 6,
   },
   placeholderSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#64748B",
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 18,
     marginBottom: 16,
   },
   placeholderTag: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#ECFDF5",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderRadius: 6,
   },
   placeholderTagText: {
-    color: "#475569",
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.5,
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0F6B4C",
+    letterSpacing: 0.8,
   },
   actionBtnSecondary: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    paddingVertical: 14,
-    borderRadius: 12,
+    borderColor: "#D8DEE6",
+    borderRadius: 10,
+    paddingVertical: 13,
     alignItems: "center",
-    marginTop: 4,
   },
   actionBtnSecondaryText: {
-    color: "#0B5C49",
-    fontSize: 14,
+    color: "#1E2A38",
+    fontSize: 13,
     fontWeight: "700",
   },
-  actionBtnDanger: {
-    backgroundColor: "#FEE2E2",
-    paddingVertical: 14,
-    borderRadius: 12,
+  signOutBtn: {
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    borderRadius: 10,
+    paddingVertical: 13,
     alignItems: "center",
     marginTop: 8,
   },
-  actionBtnDangerText: {
+  signOutBtnText: {
     color: "#DC2626",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
-  },
-  footerVersion: {
-    textAlign: "center",
-    color: "#94A3B8",
-    fontSize: 11,
-    fontWeight: "500",
-    marginTop: 8,
-    marginBottom: 16,
   },
   bottomNav: {
     flexDirection: "row",
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
-    paddingTop: 10,
+    paddingTop: 8,
     paddingBottom: Platform.OS === "android" ? 36 : 20,
   },
   navItem: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 4,
-    gap: 2,
+    paddingVertical: 2,
+    gap: 3,
+  },
+  navIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  navIconBoxActive: {
+    backgroundColor: "rgba(15, 107, 76, 0.12)",
   },
   navIcon: {
-    fontSize: 18,
-    color: "#94A3B8",
+    fontSize: 16,
+    color: "#5B6775",
   },
   navIconActive: {
-    color: "#0B5C49",
-    fontWeight: "800",
+    color: "#0F6B4C", // Canopy green
+    fontWeight: "bold",
   },
   navLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "600",
-    color: "#94A3B8",
+    color: "#5B6775",
   },
   navLabelActive: {
-    color: "#0B5C49",
-    fontWeight: "800",
+    color: "#0F6B4C",
+    fontWeight: "700",
   },
 });

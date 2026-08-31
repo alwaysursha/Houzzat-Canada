@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, Platform, StyleSheet, Text, View } from "react-native";
 import { HOUZZAT_PRO_MARK_DATA_URI } from "../assets/houzzat-pro-mark-data";
 
 export { HOUZZAT_PRO_MARK_DATA_URI };
@@ -25,15 +25,16 @@ export function HouzzatProBadge({
   size = "md",
   dark = false,
 }: {
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   dark?: boolean;
 }) {
   const isSm = size === "sm";
   const isLg = size === "lg";
+  const isXl = size === "xl";
 
-  const paddingHorizontal = isSm ? 5 : isLg ? 8 : 6;
-  const paddingVertical = isSm ? 1 : isLg ? 3 : 2;
-  const fontSize = isSm ? 9 : isLg ? 13 : 11;
+  const paddingHorizontal = isSm ? 5 : isXl ? 10 : isLg ? 8 : 6;
+  const paddingVertical = isSm ? 1 : isXl ? 3 : isLg ? 2.5 : 2;
+  const fontSize = isSm ? 9 : isXl ? 15 : isLg ? 13 : 11;
 
   return (
     <View
@@ -42,8 +43,9 @@ export function HouzzatProBadge({
         {
           paddingHorizontal,
           paddingVertical,
-          borderColor: dark ? "#D4B04A" : "#6E4F0C",
-          backgroundColor: dark ? "rgba(212, 176, 74, 0.15)" : "#0B5C49",
+          borderColor: "#C9A227",
+          borderWidth: 1.2,
+          backgroundColor: dark ? "rgba(90, 64, 16, 0.45)" : "#3D2B08",
         },
       ]}
     >
@@ -52,7 +54,7 @@ export function HouzzatProBadge({
           styles.badgeText,
           {
             fontSize,
-            color: dark ? "#F5DE7B" : "#96F0D8",
+            color: "#F5DE7B",
           },
         ]}
       >
@@ -66,10 +68,10 @@ export function HouzzatProWordmark({
   size = "md",
   dark = false,
 }: {
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   dark?: boolean;
 }) {
-  const fontSize = size === "lg" ? 26 : size === "md" ? 20 : 15;
+  const fontSize = size === "xl" ? 34 : size === "lg" ? 26 : size === "md" ? 20 : 15;
 
   return (
     <View style={styles.wordmarkRow}>
@@ -82,10 +84,10 @@ export function HouzzatProWordmark({
           },
         ]}
       >
-        HOUZZAT
+        Houzzat
       </Text>
       <View style={styles.badgeWrapper}>
-        <HouzzatProBadge size={size} dark={!dark} />
+        <HouzzatProBadge size={size} dark={dark} />
       </View>
     </View>
   );
@@ -99,25 +101,27 @@ const styles = StyleSheet.create({
   wordmarkRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
   },
   wordmarkTitle: {
-    fontWeight: "900",
-    letterSpacing: 0.8,
-    fontFamily: "System",
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    fontFamily: Platform.OS === "ios" ? "System" : "sans-serif-medium",
   },
   badgeWrapper: {
     justifyContent: "center",
     alignItems: "center",
+    marginTop: 1,
   },
   badgeContainer: {
-    borderRadius: 5,
-    borderWidth: 1,
+    borderRadius: 4,
+    borderWidth: 1.2,
     alignItems: "center",
     justifyContent: "center",
   },
   badgeText: {
-    fontWeight: "900",
-    letterSpacing: 0.6,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    fontFamily: Platform.OS === "ios" ? "System" : "sans-serif-bold",
   },
 });
