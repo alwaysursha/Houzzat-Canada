@@ -347,7 +347,8 @@ export function AgentShell({
   );
 }
 
-const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 0;
+const topHeaderPadding = Platform.OS === "android" ? Math.max(StatusBar.currentHeight || 0, 42) + 8 : 10;
+const bottomNavPadding = Platform.OS === "android" ? 54 : 20;
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -359,9 +360,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingTop: statusBarHeight > 0 ? statusBarHeight + 6 : 10,
-    paddingBottom: 10,
+    paddingHorizontal: 14,
+    paddingTop: topHeaderPadding,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255, 255, 255, 0.1)",
   },
@@ -556,8 +557,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
-    paddingTop: 8,
-    paddingBottom: Platform.OS === "android" ? 36 : 20,
+    paddingTop: 10,
+    paddingBottom: bottomNavPadding,
+    minHeight: Platform.OS === "android" ? 102 : 64,
   },
   navItem: {
     flex: 1,

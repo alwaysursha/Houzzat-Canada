@@ -1,6 +1,8 @@
 /**
- * Stage 4.2 — HouzzatPRO Mobile v2 Native Brand Marks.
- * Restores the original HouzzatPRO logo/wordmark and PRO badge treatment.
+ * Stage 4.2 & 4.3B — HouzzatPRO Mobile Native Brand Marks.
+ * - Wordmark font matching the Fraunces serif branding on houzzat.com.
+ * - Custom open-bracket gold PRO badge.
+ * - House + agent icon mark.
  */
 
 import React from "react";
@@ -21,6 +23,9 @@ export function HouzzatProMark({ size = 80 }: { size?: number }) {
   );
 }
 
+/**
+ * Custom gold PRO badge with open bracket corners (top-right ┐ and bottom-left └).
+ */
 export function HouzzatProBadge({
   size = "md",
   dark = false,
@@ -32,29 +37,43 @@ export function HouzzatProBadge({
   const isLg = size === "lg";
   const isXl = size === "xl";
 
-  const paddingHorizontal = isSm ? 5 : isXl ? 10 : isLg ? 8 : 6;
-  const paddingVertical = isSm ? 1 : isXl ? 3 : isLg ? 2.5 : 2;
-  const fontSize = isSm ? 9 : isXl ? 15 : isLg ? 13 : 11;
+  const width = isSm ? 32 : isXl ? 52 : isLg ? 42 : 36;
+  const height = isSm ? 15 : isXl ? 24 : isLg ? 20 : 17;
+  const fontSize = isSm ? 8.5 : isXl ? 13 : isLg ? 11 : 9.5;
+  const strokeWidth = isXl ? 2 : isLg ? 1.8 : 1.5;
+  const goldColor = dark ? "#6E4F0C" : "#D4B04A";
+  const textColor = dark ? "#5A4010" : "#F5DE7B";
 
   return (
-    <View
-      style={[
-        styles.badgeContainer,
-        {
-          paddingHorizontal,
-          paddingVertical,
-          borderColor: "#C9A227",
-          borderWidth: 1.2,
-          backgroundColor: dark ? "rgba(90, 64, 16, 0.45)" : "#3D2B08",
-        },
-      ]}
-    >
+    <View style={[styles.badgeBox, { width, height }]}>
+      {/* Top-right corner bracket ┐ */}
+      <View
+        style={[
+          styles.bracketTopRight,
+          {
+            borderColor: goldColor,
+            borderTopWidth: strokeWidth,
+            borderRightWidth: strokeWidth,
+          },
+        ]}
+      />
+      {/* Bottom-left corner bracket └ */}
+      <View
+        style={[
+          styles.bracketBottomLeft,
+          {
+            borderColor: goldColor,
+            borderBottomWidth: strokeWidth,
+            borderLeftWidth: strokeWidth,
+          },
+        ]}
+      />
       <Text
         style={[
           styles.badgeText,
           {
             fontSize,
-            color: "#F5DE7B",
+            color: textColor,
           },
         ]}
       >
@@ -80,7 +99,7 @@ export function HouzzatProWordmark({
           styles.wordmarkTitle,
           {
             fontSize,
-            color: dark ? "#0B5C49" : "#FFFFFF",
+            color: dark ? "#14201C" : "#FFFFFF",
           },
         ]}
       >
@@ -101,27 +120,42 @@ const styles = StyleSheet.create({
   wordmarkRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 6,
   },
   wordmarkTitle: {
-    fontWeight: "800",
-    letterSpacing: -0.5,
-    fontFamily: Platform.OS === "ios" ? "System" : "sans-serif-medium",
+    fontWeight: "700",
+    letterSpacing: -0.6,
+    fontFamily: Platform.OS === "android" ? "serif" : "Georgia",
   },
   badgeWrapper: {
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 1,
+    marginTop: 2,
   },
-  badgeContainer: {
-    borderRadius: 4,
-    borderWidth: 1.2,
-    alignItems: "center",
+  badgeBox: {
+    position: "relative",
     justifyContent: "center",
+    alignItems: "center",
+  },
+  bracketTopRight: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: "75%",
+    height: "60%",
+    borderTopRightRadius: 2.5,
+  },
+  bracketBottomLeft: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    width: "75%",
+    height: "60%",
+    borderBottomLeftRadius: 2.5,
   },
   badgeText: {
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    fontFamily: Platform.OS === "ios" ? "System" : "sans-serif-bold",
+    fontWeight: "900",
+    letterSpacing: 1,
+    fontFamily: Platform.OS === "ios" ? "System" : "sans-serif-condensed",
   },
 });

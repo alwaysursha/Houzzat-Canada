@@ -209,7 +209,8 @@ export function NativeDrawer({
   );
 }
 
-const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 0;
+const topPadding = Platform.OS === "android" ? Math.max(StatusBar.currentHeight || 0, 42) + 10 : 16;
+const bottomPadding = Platform.OS === "android" ? 36 : 16;
 
 const styles = StyleSheet.create({
   overlay: {
@@ -235,14 +236,15 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 20,
     justifyContent: "space-between",
-    paddingTop: statusBarHeight,
+    paddingTop: topPadding,
+    paddingBottom: bottomPadding,
   },
   drawerHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingTop: 8,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255, 255, 255, 0.1)",

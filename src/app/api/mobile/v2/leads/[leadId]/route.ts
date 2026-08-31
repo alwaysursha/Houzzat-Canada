@@ -1,0 +1,259 @@
+/**
+ * Stage 4.4 — GET /api/mobile/v2/leads/[leadId]
+ *
+ * Workspace-scoped Mobile v2 Lead Detail API for HouzzatPRO Native CRM.
+ *
+ * TENANCY & AUTHORIZATION RULES:
+ * - Requires a valid mobile_workspace_access token.
+ * - Workspace authority is derived STRICTLY from validated token claim (wsId).
+ * - Never accepts workspaceId from query params, body, headers, or hostname.
+ * - Server re-validates that WorkspaceMember is ACTIVE in the database.
+ * - Lead access requires lead.workspaceId === token.wsId.
+ * - AGENT role: Can only access leads assigned to self (assignedAgentId === userId)
+ *   or unassigned leads in the workspace pond (assignedAgentId === null).
+ *   Cannot access another agent's assigned lead.
+ * - OWNER / ADMIN role: Full workspace-wide lead visibility.
+ * - Returns a compact, performance-optimized DTO avoiding oversized payloads.
+ */
+
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { authenticateMobileRequest } from "@/lib/mobile/v2/auth-guard";
+
+export const runtime = "nodejs";
+
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ leadId: string }> },
+) {
+  try {
+    const authResult = authenticateMobileRequest(request, "mobile_workspace_access");
+    if (!authResult.ok) {
+      return NextResponse.json(
+        { ok: false, code: "AUTH_REQUIRED", message: authResult.error },
+        { status: authResult.status },
+      );
+    }
+
+    const { sub: userId, wsId: workspaceId } = authResult.payload;
+
+    if (!workspaceId || authResult.payload.type !== "mobile_workspace_access") {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "WORKSPACE_FORBIDDEN",
+          message: "A valid workspace session token is required to access lead details",
+        },
+        { status: 403 },
+      );
+    }
+
+    const { leadId } = await context.params;
+    if (!leadId) {
+      return NextResponse.json(
+        { ok: false, code: "VALIDATION_ERROR", message: "Missing leadId parameter" },
+        { status: 400 },
+      );
+    }
+
+    // Validate server-authoritative ACTIVE membership
+    const membership = await prisma.workspaceMember.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId,
+          userId,
+        },
+      },
+      select: {
+        role: true,
+        status: true,
+        workspace: {
+          select: {
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (
+      !membership ||
+      membership.status !== "ACTIVE" ||
+      membership.workspace.status !== "ACTIVE"
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "WORKSPACE_FORBIDDEN",
+          message: "Inactive or unauthorized workspace membership",
+        },
+        { status: 403 },
+      );
+    }
+
+    const role = membership.role;
+
+    // Single selective Prisma query with relations
+    const lead = await prisma.lead.findUnique({
+      where: {
+        id: leadId,
+      },
+      select: {
+        id: true,
+        workspaceId: true,
+        status: true,
+        source: true,
+        intent: true,
+        score: true,
+        notes: true,
+        listingMls: true,
+        inquiryTag: true,
+        assignedAgentId: true,
+        firstRespondedAt: true,
+        statusChangedAt: true,
+        contactConsentAt: true,
+        lostReason: true,
+        winReason: true,
+        utmSource: true,
+        utmCampaign: true,
+        createdAt: true,
+        updatedAt: true,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            isBuyer: true,
+            isSeller: true,
+            purchaseTimeframe: true,
+            homeAddress: true,
+            createdAt: true,
+          },
+        },
+        assignedAgent: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        activities: {
+          take: 10,
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            type: true,
+            body: true,
+            createdAt: true,
+          },
+        },
+        _count: {
+          select: {
+            leadNotes: true,
+            appointments: true,
+            tasks: true,
+          },
+        },
+      },
+    });
+
+    // Tenant boundary check: lead must exist and belong to the verified workspace
+    if (!lead || lead.workspaceId !== workspaceId) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "LEAD_NOT_FOUND",
+          message: "Lead not found in current workspace",
+        },
+        { status: 404 },
+      );
+    }
+
+    // Role-based visibility check
+    if (role === "AGENT") {
+      const isAssignedToAgent = lead.assignedAgentId === userId;
+      const isPondLead = lead.assignedAgentId === null;
+
+      if (!isAssignedToAgent && !isPondLead) {
+        // Safe 404 to avoid leaking existence of other agents' private leads
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "LEAD_NOT_FOUND",
+            message: "Lead not found or access restricted",
+          },
+          { status: 404 },
+        );
+      }
+    }
+
+    const isPond = lead.assignedAgentId === null;
+
+    const formattedLead = {
+      id: lead.id,
+      status: lead.status,
+      source: lead.source,
+      intent: lead.intent,
+      score: lead.score,
+      inquiryTag: lead.inquiryTag,
+      notes: lead.notes,
+      listingMls: lead.listingMls,
+      firstRespondedAt: lead.firstRespondedAt ? lead.firstRespondedAt.toISOString() : null,
+      statusChangedAt: lead.statusChangedAt.toISOString(),
+      contactConsentAt: lead.contactConsentAt ? lead.contactConsentAt.toISOString() : null,
+      lostReason: lead.lostReason,
+      winReason: lead.winReason,
+      utmSource: lead.utmSource,
+      utmCampaign: lead.utmCampaign,
+      createdAt: lead.createdAt.toISOString(),
+      updatedAt: lead.updatedAt.toISOString(),
+      customer: lead.customer
+        ? {
+            id: lead.customer.id,
+            name: lead.customer.name,
+            email: lead.customer.email,
+            phone: lead.customer.phone,
+            isBuyer: lead.customer.isBuyer,
+            isSeller: lead.customer.isSeller,
+            purchaseTimeframe: lead.customer.purchaseTimeframe,
+            homeAddress: lead.customer.homeAddress,
+            createdAt: lead.customer.createdAt.toISOString(),
+          }
+        : null,
+      assignedAgent: lead.assignedAgent
+        ? {
+            id: lead.assignedAgent.id,
+            name: lead.assignedAgent.name,
+            email: lead.assignedAgent.email,
+          }
+        : null,
+      isPond,
+      recentActivities: lead.activities.map((act) => ({
+        id: act.id,
+        type: act.type,
+        body: act.body,
+        createdAt: act.createdAt.toISOString(),
+      })),
+      counts: {
+        notes: lead._count.leadNotes,
+        appointments: lead._count.appointments,
+        tasks: lead._count.tasks,
+      },
+    };
+
+    return NextResponse.json({
+      ok: true,
+      lead: formattedLead,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Internal server error";
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "SERVER_ERROR",
+        message,
+      },
+      { status: 500 },
+    );
+  }
+}

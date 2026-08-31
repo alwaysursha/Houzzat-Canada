@@ -35,6 +35,7 @@ import {
 import { mobileApiClient } from "../api/client";
 import { useAuth } from "../state/AuthContext";
 import type { BackendEnvelope, LeadsResponseData, MobileLeadSummary, LeadStatus } from "../types/api";
+import { LeadDetailScreen } from "./LeadDetailScreen";
 
 const STATUS_FILTERS: { key: LeadStatus | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },
@@ -124,11 +125,22 @@ let leadCacheStore: {
 
 interface LeadsScreenProps {
   initialStatusFilter?: string;
+  selectedLeadId?: string | null;
+  onSelectLead?: (leadId: string) => void;
+  onBackFromDetail?: () => void;
 }
 
-export function LeadsScreen({ initialStatusFilter }: LeadsScreenProps) {
+export function LeadsScreen({
+  initialStatusFilter,
+  selectedLeadId: controlledLeadId,
+  onSelectLead,
+  onBackFromDetail,
+}: LeadsScreenProps) {
   const { activeWorkspace } = useAuth();
   const workspaceId = activeWorkspace?.id;
+
+  const [internalSelectedLeadId, setInternalSelectedLeadId] = useState<string | null>(null);
+  const activeLeadId = controlledLeadId !== undefined ? controlledLeadId : internalSelectedLeadId;
 
   const [leads, setLeads] = useState<MobileLeadSummary[]>(() => {
     if (leadCacheStore && leadCacheStore.workspaceId === workspaceId) {
@@ -233,13 +245,20 @@ export function LeadsScreen({ initialStatusFilter }: LeadsScreenProps) {
     fetchLeads(true);
   };
 
-  const showTapNotice = (lead: MobileLeadSummary) => {
-    const name = lead.customer?.name || "Lead";
-    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
-    setNoticeMessage(`${name} • Details coming next in Stage 4.3B`);
-    noticeTimerRef.current = setTimeout(() => {
-      setNoticeMessage(null);
-    }, 2800);
+  const handleSelectLead = (leadId: string) => {
+    if (onSelectLead) {
+      onSelectLead(leadId);
+    } else {
+      setInternalSelectedLeadId(leadId);
+    }
+  };
+
+  const handleBackFromDetail = () => {
+    if (onBackFromDetail) {
+      onBackFromDetail();
+    } else {
+      setInternalSelectedLeadId(null);
+    }
   };
 
   const renderLeadCard = ({ item }: { item: MobileLeadSummary }) => {
@@ -254,7 +273,7 @@ export function LeadsScreen({ initialStatusFilter }: LeadsScreenProps) {
       <TouchableOpacity
         style={styles.leadCard}
         activeOpacity={0.8}
-        onPress={() => showTapNotice(item)}
+        onPress={() => handleSelectLead(item.id)}
       >
         {/* Top Card Row: Name + Status Pill */}
         <View style={styles.cardTopRow}>
@@ -337,6 +356,15 @@ export function LeadsScreen({ initialStatusFilter }: LeadsScreenProps) {
       </TouchableOpacity>
     );
   };
+
+  if (activeLeadId) {
+    return (
+      <LeadDetailScreen
+        leadId={activeLeadId}
+        onBack={handleBackFromDetail}
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>

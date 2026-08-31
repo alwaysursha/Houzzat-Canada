@@ -34,15 +34,16 @@ export function WelcomeScreen({ onStartSignIn }: { onStartSignIn: () => void }) 
   );
 }
 
-const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 0;
+const topPadding = Platform.OS === "android" ? Math.max(StatusBar.currentHeight || 0, 42) + 20 : 36;
+const bottomPadding = Platform.OS === "android" ? 44 : 24;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#63D9BD",
     justifyContent: "space-between",
-    paddingTop: statusBarHeight + 24,
-    paddingBottom: Platform.OS === "android" ? 36 : 24,
+    paddingTop: topPadding,
+    paddingBottom: bottomPadding,
     paddingHorizontal: 24,
   },
   content: {

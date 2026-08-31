@@ -101,15 +101,16 @@ export function WorkspaceSelectionScreen() {
   );
 }
 
-const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 0;
+const topPadding = Platform.OS === "android" ? Math.max(StatusBar.currentHeight || 0, 42) + 12 : 24;
+const bottomPadding = Platform.OS === "android" ? 56 : 24;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8FAFC",
-    paddingTop: statusBarHeight + 16,
+    paddingTop: topPadding,
     paddingHorizontal: 20,
-    paddingBottom: Platform.OS === "android" ? 36 : 24,
+    paddingBottom: bottomPadding,
   },
   topBar: {
     flexDirection: "row",

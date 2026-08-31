@@ -23,17 +23,13 @@ import { useAuth } from "../state/AuthContext";
 
 export function RootNavigator() {
   const { state, activeMembership } = useAuth();
-  const [inSignInFlow, setInSignInFlow] = useState(false);
 
   switch (state) {
     case "BOOTING":
       return <SplashScreen />;
 
     case "SIGNED_OUT":
-      if (inSignInFlow) {
-        return <SignInScreen onBack={() => setInSignInFlow(false)} />;
-      }
-      return <WelcomeScreen onStartSignIn={() => setInSignInFlow(true)} />;
+      return <SignInScreen />;
 
     case "PLATFORM_AUTHENTICATED":
     case "WORKSPACE_SELECTION":
@@ -41,7 +37,7 @@ export function RootNavigator() {
 
     case "WORKSPACE_ACTIVE": {
       const role = activeMembership?.role;
-      if (role === "AGENT" || role === "MEMBER" as any) {
+      if (role === "AGENT" || (role as any) === "MEMBER") {
         return <AgentShell />;
       }
       if (role === "OWNER" || role === "ADMIN") {

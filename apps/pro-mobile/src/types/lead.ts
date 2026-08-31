@@ -1,5 +1,5 @@
 /**
- * Stage 4.3A — HouzzatPRO Mobile v2 Lead Domain Models.
+ * Stage 4.3A & 4.4 — HouzzatPRO Mobile v2 Lead Domain Models.
  * Reuses canonical Prisma enum values and schemas.
  */
 
@@ -35,6 +35,11 @@ export interface MobileLeadCustomer {
   name: string | null;
   email: string | null;
   phone: string | null;
+  isBuyer?: boolean;
+  isSeller?: boolean;
+  purchaseTimeframe?: string | null;
+  homeAddress?: string | null;
+  createdAt?: string;
 }
 
 export interface MobileLeadAssignedAgent {
@@ -56,6 +61,42 @@ export interface MobileLeadSummary {
   assignedAgent: MobileLeadAssignedAgent | null;
 }
 
+export interface MobileLeadActivity {
+  id: string;
+  type: string;
+  body: string | null;
+  createdAt: string;
+}
+
+export interface MobileLeadDetail {
+  id: string;
+  status: LeadStatus;
+  source: LeadSource;
+  intent: LeadIntent;
+  score: number;
+  inquiryTag: string | null;
+  notes: string | null;
+  listingMls: string | null;
+  firstRespondedAt: string | null;
+  statusChangedAt: string;
+  contactConsentAt: string | null;
+  lostReason: string | null;
+  winReason: string | null;
+  utmSource: string | null;
+  utmCampaign: string | null;
+  createdAt: string;
+  updatedAt: string;
+  customer: MobileLeadCustomer | null;
+  assignedAgent: MobileLeadAssignedAgent | null;
+  isPond: boolean;
+  recentActivities: MobileLeadActivity[];
+  counts: {
+    notes: number;
+    appointments: number;
+    tasks: number;
+  };
+}
+
 export interface LeadsPagination {
   page: number;
   limit: number;
@@ -66,4 +107,8 @@ export interface LeadsPagination {
 export interface LeadsResponseData {
   leads: MobileLeadSummary[];
   pagination: LeadsPagination;
+}
+
+export interface LeadDetailResponseData {
+  lead: MobileLeadDetail;
 }
