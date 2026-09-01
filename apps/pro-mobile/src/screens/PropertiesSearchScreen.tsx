@@ -69,6 +69,11 @@ const PropertyListingCard = memo(function PropertyListingCard({
         onPress={() => onToggle(listing.mlsNumber)}
         activeOpacity={0.85}
       >
+        <View style={[styles.checkBadgeInline, isSelected && styles.checkBadgeOn]}>
+          <Text style={[styles.checkBadgeText, isSelected && styles.checkBadgeTextOn]}>
+            {isSelected ? "✓" : ""}
+          </Text>
+        </View>
         <View style={styles.cardCompactBody}>
           <Text style={styles.cardAddress} numberOfLines={1}>
             {formatListingAddress(listing)}
@@ -79,11 +84,6 @@ const PropertyListingCard = memo(function PropertyListingCard({
           <Text style={styles.cardMeta}>
             {formatListingBeds(listing)} bed · {listing.baths} bath · MLS{" "}
             {listing.mlsNumber}
-          </Text>
-        </View>
-        <View style={[styles.checkBadge, isSelected && styles.checkBadgeOn]}>
-          <Text style={[styles.checkBadgeText, isSelected && styles.checkBadgeTextOn]}>
-            {isSelected ? "✓" : ""}
           </Text>
         </View>
       </TouchableOpacity>
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
   },
   cardCompact: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 10,
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
@@ -807,6 +807,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
+  },
+  checkBadgeInline: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    marginTop: 2,
   },
   checkBadgeOn: {
     borderColor: "#2B6CB0",
