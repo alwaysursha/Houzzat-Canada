@@ -62,20 +62,13 @@ export async function GET(
       );
     }
 
+    // Canonical web CustomerProfile loads tasks via Lead.tasks (leadId only)
+    // after the lead itself is authorized. Do not over-filter by workspaceId —
+    // that can hide legitimate lead-scoped tasks. Tenant safety is from
+    // authorizeMobileLeadAccess (lead.workspaceId === token.wsId).
     const tasks = await prisma.agentTask.findMany({
       where: {
         leadId: access.lead.id,
-        OR: [
-          { workspaceId: access.workspaceId },
-          ...(access.lead.organizationId
-            ? [
-                {
-                  organizationId: access.lead.organizationId,
-                  workspaceId: null as string | null,
-                },
-              ]
-            : []),
-        ],
       },
       orderBy: [{ status: "asc" }, { dueAt: "asc" }],
       take: 40,

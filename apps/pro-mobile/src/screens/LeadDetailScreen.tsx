@@ -8,7 +8,7 @@
  * Actions: native tel/sms/mailto + POST notes + PATCH status + tasks.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -598,6 +598,25 @@ export function LeadDetailScreen({
   const [noteMessage, setNoteMessage] = useState<string | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [statusPending, setStatusPending] = useState(false);
+  const mainScrollRef = useRef<{
+    scrollTo: (opts: { y: number; animated?: boolean }) => void;
+  } | null>(null);
+  const rightColumnOffsetY = useRef(0);
+  const tabSectionOffsetY = useRef(0);
+
+  const selectTab = (next: TabId) => {
+    setTab(next);
+    // After leaving a long Activity timeline, scroll offset can sit past the
+    // shorter Task & Reminders content — bring the tab section into view.
+    if (next === "reminders") {
+      requestAnimationFrame(() => {
+        mainScrollRef.current?.scrollTo({
+          y: Math.max(0, tabSectionOffsetY.current - 12),
+          animated: true,
+        });
+      });
+    }
+  };
 
   const navIndex =
     leadIds && leadIds.length > 1 ? leadIds.indexOf(leadId) : -1;
@@ -1049,6 +1068,7 @@ export function LeadDetailScreen({
         </View>
       ) : (
         <ScrollView
+          ref={mainScrollRef as any}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -1299,7 +1319,12 @@ export function LeadDetailScreen({
           </View>
 
           {/* ===== RIGHT COLUMN (tabs + content) ===== */}
-          <View style={styles.rightColumn}>
+          <View
+            style={styles.rightColumn}
+            onLayout={(e: { nativeEvent: { layout: { y: number } } }) => {
+              rightColumnOffsetY.current = e.nativeEvent.layout.y;
+            }}
+          >
             {/* Note composer — functional */}
             <View style={styles.noteForm}>
               <View style={styles.noteCategoryRow}>
@@ -1378,6 +1403,12 @@ export function LeadDetailScreen({
             </View>
 
             {/* Tabs */}
+            <View
+              onLayout={(e: { nativeEvent: { layout: { y: number } } }) => {
+                tabSectionOffsetY.current =
+                  rightColumnOffsetY.current + e.nativeEvent.layout.y;
+              }}
+            >
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -1390,7 +1421,7 @@ export function LeadDetailScreen({
                   <TouchableOpacity
                     key={item.id}
                     style={styles.tabItem}
-                    onPress={() => setTab(item.id)}
+                    onPress={() => selectTab(item.id)}
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
@@ -1702,6 +1733,7 @@ export function LeadDetailScreen({
                   hint="Saved searches, listing views, and matchboard arrive in a later stage."
                 />
               ) : null}
+            </View>
             </View>
           </View>
         </ScrollView>

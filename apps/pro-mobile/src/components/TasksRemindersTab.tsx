@@ -16,11 +16,10 @@ import {
   View,
 } from "react-native";
 import { mobileApiClient } from "../api/client";
+import { unwrapCreatedTask, unwrapTasksList } from "../lib/task-response";
 import type {
   AgentTaskStatus,
   AgentTaskType,
-  BackendEnvelope,
-  LeadTasksResponseData,
   MobileLeadTask,
 } from "../types/api";
 
@@ -110,47 +109,44 @@ export function TasksRemindersTab({
     [cacheKey],
   );
 
-  const fetchTasks = useCallback(
-    async (quiet = false) => {
-      if (!quiet && !cached) setLoading(true);
-      setError(null);
-      try {
-        const res = await mobileApiClient.get<
-          BackendEnvelope<LeadTasksResponseData> & {
-            ok?: boolean;
-            tasks?: MobileLeadTask[];
-          }
-        >(`/leads/${encodeURIComponent(leadId)}/tasks`);
+  const fetchTasks = useCallback(async () => {
+    setError(null);
+    try {
+      const res = await mobileApiClient.get<unknown>(
+        `/leads/${encodeURIComponent(leadId)}/tasks`,
+      );
 
-        if (!res.ok) {
-          setError(res.message || "Could not load tasks");
-          return;
-        }
-
-        const payload = res.data as {
-          tasks?: MobileLeadTask[];
-          data?: { tasks?: MobileLeadTask[] };
-        };
-        const list = payload.tasks ?? payload.data?.tasks ?? [];
-        setTasks(list);
-        persistCache(list);
-        publishCount(list);
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Could not load tasks");
-      } finally {
+      if (!res.ok) {
+        setError(res.message || "Could not load tasks");
         setLoading(false);
+        return;
       }
-    },
-    [cached, leadId, persistCache, publishCount],
-  );
+
+      // Always replace cache — including replacing a prior empty [] with server data.
+      const list = unwrapTasksList(res.data);
+      setTasks(list);
+      persistCache(list);
+      publishCount(list);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not load tasks");
+    } finally {
+      setLoading(false);
+    }
+  }, [leadId, persistCache, publishCount]);
 
   useEffect(() => {
-    if (cached?.tasks) {
-      publishCount(cached.tasks);
+    // Instant paint from cache, then always revalidate against production.
+    const entry = cacheKey ? taskCache.get(cacheKey) : undefined;
+    if (entry) {
+      setTasks(entry.tasks);
+      setLoading(false);
+      publishCount(entry.tasks);
+    } else {
+      setTasks([]);
+      setLoading(true);
     }
-    void fetchTasks(Boolean(cached));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch on lead change
-  }, [leadId, workspaceId]);
+    void fetchTasks();
+  }, [leadId, workspaceId, cacheKey, fetchTasks, publishCount]);
 
   const handleCreate = async () => {
     const trimmed = title.trim();
@@ -163,22 +159,21 @@ export function TasksRemindersTab({
     setCreatePending(true);
     setCreateError(null);
     try {
-      const res = await mobileApiClient.post<{
-        ok: boolean;
-        task?: MobileLeadTask;
-        message?: string;
-      }>(`/leads/${encodeURIComponent(leadId)}/tasks`, {
-        type: taskType,
-        title: trimmed,
-        dueAt,
-      });
+      const res = await mobileApiClient.post<unknown>(
+        `/leads/${encodeURIComponent(leadId)}/tasks`,
+        {
+          type: taskType,
+          title: trimmed,
+          dueAt,
+        },
+      );
 
       if (!res.ok) {
         setCreateError(res.message || "Could not create task");
         return;
       }
 
-      const created = (res.data as { task?: MobileLeadTask })?.task;
+      const created = unwrapCreatedTask(res.data);
       if (created) {
         setTasks((prev) => {
           const next = [created, ...prev.filter((t) => t.id !== created.id)].sort(
@@ -194,7 +189,7 @@ export function TasksRemindersTab({
           return next;
         });
       } else {
-        void fetchTasks(true);
+        void fetchTasks();
       }
       setTitle("");
       setDueLocal(defaultDueLocalValue());
@@ -231,11 +226,7 @@ export function TasksRemindersTab({
     });
 
     try {
-      const res = await mobileApiClient.patch<{
-        ok: boolean;
-        task?: MobileLeadTask;
-        message?: string;
-      }>(
+      const res = await mobileApiClient.patch<unknown>(
         `/leads/${encodeURIComponent(leadId)}/tasks/${encodeURIComponent(task.id)}`,
         { status },
       );
@@ -248,7 +239,7 @@ export function TasksRemindersTab({
         return;
       }
 
-      const updated = (res.data as { task?: MobileLeadTask })?.task;
+      const updated = unwrapCreatedTask(res.data);
       if (updated) {
         setTasks((prev) => {
           const next = prev.map((t) => (t.id === updated.id ? updated : t));
@@ -269,8 +260,12 @@ export function TasksRemindersTab({
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.panel}>
+      {/* Web CustomerProfile: Panel "Set reminder" + TaskForm compact */}
+      <View style={styles.panel} accessibilityLabel="Set reminder form">
         <Text style={styles.panelTitle}>Set reminder</Text>
+        <Text style={styles.panelHint}>
+          Choose type, enter a title, set due time, then tap Add.
+        </Text>
         <View style={styles.formRow}>
           {(["CALL", "EMAIL", "TODO"] as const).map((t) => {
             const active = taskType === t;
@@ -280,6 +275,8 @@ export function TasksRemindersTab({
                 style={[styles.typeChip, active && styles.typeChipActive]}
                 onPress={() => setTaskType(t)}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
               >
                 <Text style={active ? styles.typeChipTextActive : styles.typeChipText}>
                   {t === "TODO" ? "To-do" : t === "CALL" ? "Call" : "Email"}
@@ -288,16 +285,15 @@ export function TasksRemindersTab({
             );
           })}
         </View>
-        <View style={styles.formRow}>
-          <TextInput
-            style={styles.titleInput}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Follow up…"
-            placeholderTextColor="#94A3B8"
-            editable={!createPending}
-          />
-        </View>
+        <TextInput
+          style={styles.titleInputFull}
+          value={title}
+          onChangeText={setTitle}
+          placeholder="Follow up…"
+          placeholderTextColor="#94A3B8"
+          editable={!createPending}
+          accessibilityLabel="Reminder title"
+        />
         <View style={styles.formRow}>
           <TextInput
             style={styles.dueInput}
@@ -307,12 +303,15 @@ export function TasksRemindersTab({
             placeholderTextColor="#94A3B8"
             editable={!createPending}
             autoCapitalize="none"
+            accessibilityLabel="Due date and time"
           />
           <TouchableOpacity
             style={[styles.addBtn, (createPending || !title.trim()) && styles.addBtnDisabled]}
             disabled={createPending || !title.trim()}
             onPress={() => void handleCreate()}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Add reminder"
           >
             <Text style={styles.addBtnText}>{createPending ? "…" : "Add"}</Text>
           </TouchableOpacity>
@@ -429,7 +428,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#1E2A38",
+    marginBottom: 4,
+  },
+  panelHint: {
+    fontSize: 11,
+    color: "#64748B",
     marginBottom: 10,
+    lineHeight: 15,
   },
   formRow: {
     flexDirection: "row",
@@ -476,6 +481,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#1E2A38",
     backgroundColor: "#FFFFFF",
+  },
+  titleInputFull: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#D8DEE6",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: "#1E2A38",
+    backgroundColor: "#FFFFFF",
+    marginBottom: 8,
   },
   dueInput: {
     flex: 1,
