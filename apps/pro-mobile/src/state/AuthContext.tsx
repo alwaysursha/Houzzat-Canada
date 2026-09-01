@@ -3,8 +3,9 @@
  */
 
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 import { mobileAuthController, MobileAuthController } from "./auth-controller";
-import type { MobileAuthState, MobileNavigationState, MobileUser } from "../types/auth";
+import type { MobileAuthState } from "../types/auth";
 import type { MobileWorkspace, MobileWorkspaceMembership } from "../types/workspace";
 
 interface AuthContextValue extends MobileAuthState {
@@ -26,6 +27,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     void mobileAuthController.bootstrap();
     return unsubscribe;
+  }, []);
+
+  // WhatsApp-style keep-alive: when the agent returns to the app after idle,
+  // silently refresh before the next Leads/detail request can fail.
+  useEffect(() => {
+    let last: AppStateStatus = AppState.currentState;
+    const onChange = (next: AppStateStatus) => {
+      if (last.match(/inactive|background/) && next === "active") {
+        void mobileAuthController.onAppForeground();
+      }
+      last = next;
+    };
+    const sub = AppState.addEventListener("change", onChange);
+    return () => {
+      sub.remove();
+    };
   }, []);
 
   const value: AuthContextValue = {

@@ -67,6 +67,8 @@ export interface RefreshResponseData {
   tokens: {
     accessToken: string;
     expiresAt: number;
+    /** Present when server rotates the refresh session (sliding keep-alive). */
+    refreshToken?: string;
   };
 }
 
@@ -75,4 +77,6 @@ export interface RequestOptions extends RequestInit {
   workspaceId?: string; // Multi-tenant scope parameter
   token?: string;
   skipAuth?: boolean;
+  /** Internal: set after one silent 401→refresh→retry cycle. */
+  _authRetried?: boolean;
 }

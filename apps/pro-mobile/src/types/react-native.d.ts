@@ -37,6 +37,16 @@ declare module "react-native" {
     registerComponent(appKey: string, componentProvider: () => React.ComponentType<any>): void;
   };
 
+  export type AppStateStatus = "active" | "background" | "inactive" | "unknown" | "extension";
+
+  export const AppState: {
+    currentState: AppStateStatus;
+    addEventListener(
+      type: "change",
+      listener: (state: AppStateStatus) => void,
+    ): { remove: () => void };
+  };
+
   export interface AlertButton {
     text?: string;
     onPress?: (value?: string) => void;

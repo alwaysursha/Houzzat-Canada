@@ -24,8 +24,9 @@ export interface MobileTokenPayload {
   role?: WorkspaceMemberRole; // WorkspaceMember.role (only for mobile_workspace_access)
 }
 
-const ACCESS_TOKEN_TTL_SEC = 15 * 60; // 15 minutes
-const REFRESH_TOKEN_TTL_SEC = 30 * 24 * 60 * 60; // 30 days
+const ACCESS_TOKEN_TTL_SEC = 15 * 60; // 15 minutes (silently refreshed by the app)
+/** Sliding refresh lifetime — each successful refresh extends another year. */
+const REFRESH_TOKEN_TTL_SEC = 365 * 24 * 60 * 60; // 365 days
 
 function getAuthSecret(): string {
   const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;

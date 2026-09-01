@@ -19,7 +19,7 @@ export interface MobileTokenPayload {
 }
 
 const ACCESS_TOKEN_TTL_SEC = 15 * 60;
-const REFRESH_TOKEN_TTL_SEC = 30 * 24 * 60 * 60;
+const REFRESH_TOKEN_TTL_SEC = 365 * 24 * 60 * 60;
 
 function getAuthSecret(): string {
   return process.env.AUTH_SECRET || "dev_houzzatpro_mobile_v2_fallback_secret_32bytes_min!";

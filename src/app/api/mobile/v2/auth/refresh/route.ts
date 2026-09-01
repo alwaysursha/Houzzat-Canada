@@ -2,6 +2,8 @@
  * Stage 4.1 — POST /api/mobile/v2/auth/refresh
  *
  * Rotates access token using a valid, non-revoked refresh token.
+ * Also rotates + slides the refresh session so CRM agents can stay signed in
+ * indefinitely as long as the app refreshes at least once within the TTL window.
  */
 
 import { NextResponse } from "next/server";
@@ -11,8 +13,13 @@ import {
   verifyMobileToken,
   createPlatformAccessToken,
   createWorkspaceAccessToken,
+  createMobileRefreshToken,
 } from "@/lib/mobile/v2/tokens";
-import { validateMobileSession } from "@/lib/mobile/v2/session-store";
+import {
+  validateMobileSession,
+  storeMobileSession,
+  revokeMobileSession,
+} from "@/lib/mobile/v2/session-store";
 
 export const runtime = "nodejs";
 
@@ -104,12 +111,23 @@ export async function POST(request: Request) {
       newAccessToken = createPlatformAccessToken({ id: userId, email });
     }
 
+    // 5. Rotate + slide refresh session (WhatsApp-style keep-alive).
+    const rotatedRefresh = createMobileRefreshToken({ id: userId, email });
+    await revokeMobileSession({ userId, jti });
+    await storeMobileSession({
+      userId,
+      jti: rotatedRefresh.jti,
+      refreshToken: rotatedRefresh.token,
+      expiresAt: new Date(rotatedRefresh.expiresAt),
+    });
+
     return NextResponse.json({
       ok: true,
       data: {
         tokens: {
           accessToken: newAccessToken.token,
           expiresAt: newAccessToken.expiresAt,
+          refreshToken: rotatedRefresh.token,
         },
       },
     });

@@ -6,6 +6,7 @@
  * - Bearer token authorization
  * - Workspace isolation via header (x-workspace-id)
  * - Timeout handling & typed errors
+ * - Silent 401 → refresh → retry (WhatsApp-style keep-alive)
  */
 
 import {
@@ -20,6 +21,8 @@ export class MobileApiClient {
   private baseUrl: string;
   private tokenProvider?: () => Promise<string | null>;
   private workspaceIdProvider?: () => string | null;
+  /** Returns true when a fresh access token was obtained. */
+  private unauthorizedHandler?: () => Promise<boolean>;
 
   constructor(options?: {
     baseUrl?: string;
@@ -37,6 +40,10 @@ export class MobileApiClient {
 
   public setWorkspaceIdProvider(provider: () => string | null): void {
     this.workspaceIdProvider = provider;
+  }
+
+  public setUnauthorizedHandler(handler: () => Promise<boolean>): void {
+    this.unauthorizedHandler = handler;
   }
 
   public async request<T>(
@@ -89,7 +96,26 @@ export class MobileApiClient {
       }
 
       if (!res.ok) {
-        return this.mapHttpError(res.status, payload);
+        const mapped = this.mapHttpError(res.status, payload);
+
+        // Silent keep-alive: refresh once, then retry the original request.
+        if (
+          mapped.code === "AUTH_REQUIRED" &&
+          !options.skipAuth &&
+          !options._authRetried &&
+          this.unauthorizedHandler
+        ) {
+          const refreshed = await this.unauthorizedHandler();
+          if (refreshed) {
+            return this.request<T>(endpoint, {
+              ...options,
+              token: undefined,
+              _authRetried: true,
+            });
+          }
+        }
+
+        return mapped;
       }
 
       return {

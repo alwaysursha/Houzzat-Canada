@@ -59,10 +59,15 @@ export class MobileAuthController {
   };
 
   private listeners = new Set<StateListener>();
+  /** Single-flight silent refresh — avoids stampedes after idle. */
+  private refreshInFlight: Promise<boolean> | null = null;
+  /** Refresh access token this many ms before hard expiry. */
+  private static readonly ACCESS_SKEW_MS = 2 * 60 * 1000;
 
   constructor() {
-    mobileApiClient.setTokenProvider(async () => this.state.tokens?.accessToken ?? null);
+    mobileApiClient.setTokenProvider(async () => this.ensureFreshAccessToken());
     mobileApiClient.setWorkspaceIdProvider(() => this.state.activeWorkspace?.id ?? null);
+    mobileApiClient.setUnauthorizedHandler(async () => this.refreshAccessToken({ force: true }));
   }
 
   public getSnapshot(): MobileAuthState {
@@ -93,6 +98,126 @@ export class MobileAuthController {
   }
 
   /**
+   * Return a usable access token, silently refreshing when near/past expiry.
+   * Used by every authenticated API call via the token provider.
+   */
+  public async ensureFreshAccessToken(): Promise<string | null> {
+    const tokens = this.state.tokens;
+    if (!tokens?.accessToken) return null;
+
+    const expiresAt = tokens.expiresAt;
+    const needsRefresh =
+      typeof expiresAt !== "number" ||
+      !Number.isFinite(expiresAt) ||
+      Date.now() >= expiresAt - MobileAuthController.ACCESS_SKEW_MS;
+
+    if (!needsRefresh) return tokens.accessToken;
+
+    const refreshed = await this.refreshAccessToken({ force: false });
+    if (refreshed && this.state.tokens?.accessToken) {
+      return this.state.tokens.accessToken;
+    }
+
+    // Refresh failed — still return the existing token; request may 401 and retry once.
+    return this.state.tokens?.accessToken ?? null;
+  }
+
+  /**
+   * Called when the app returns to the foreground after background/idle.
+   * Keeps the session warm without user-visible login prompts.
+   */
+  public async onAppForeground(): Promise<void> {
+    if (this.state.state !== "WORKSPACE_ACTIVE" && this.state.state !== "PLATFORM_AUTHENTICATED") {
+      return;
+    }
+    if (!this.state.tokens?.refreshToken) return;
+    await this.refreshAccessToken({ force: false });
+  }
+
+  /**
+   * Silent refresh using the long-lived refresh credential.
+   * Rotates refresh token when the server returns a new one (sliding keep-alive).
+   */
+  public async refreshAccessToken(opts?: { force?: boolean }): Promise<boolean> {
+    const tokens = this.state.tokens;
+    if (!tokens?.refreshToken) return false;
+
+    if (!opts?.force) {
+      const expiresAt = tokens.expiresAt;
+      const stillFresh =
+        typeof expiresAt === "number" &&
+        Number.isFinite(expiresAt) &&
+        Date.now() < expiresAt - MobileAuthController.ACCESS_SKEW_MS;
+      if (stillFresh) return true;
+    }
+
+    if (this.refreshInFlight) return this.refreshInFlight;
+
+    this.refreshInFlight = (async () => {
+      try {
+        const activeWorkspaceId =
+          this.state.activeWorkspace?.id ||
+          (await SecureStorage.getItem(SECURE_STORAGE_KEYS.ACTIVE_WORKSPACE_ID)) ||
+          undefined;
+
+        const refreshRes = await mobileApiClient.post<BackendEnvelope<RefreshResponseData>>(
+          "/auth/refresh",
+          {
+            refreshToken: tokens.refreshToken,
+            activeWorkspaceId: activeWorkspaceId || undefined,
+          },
+          { skipAuth: true },
+        );
+
+        if (!refreshRes.ok) {
+          // Only hard sign-out when the refresh credential itself is dead.
+          if (refreshRes.code === "AUTH_REQUIRED") {
+            await this.signOut();
+          }
+          return false;
+        }
+
+        const refreshData = unwrapResponse<RefreshResponseData>(refreshRes.data);
+        if (
+          !refreshData ||
+          !refreshData.tokens ||
+          typeof refreshData.tokens.accessToken !== "string" ||
+          refreshData.tokens.accessToken.trim().length === 0 ||
+          typeof refreshData.tokens.expiresAt !== "number" ||
+          !Number.isFinite(refreshData.tokens.expiresAt)
+        ) {
+          return false;
+        }
+
+        const nextRefresh =
+          typeof refreshData.tokens.refreshToken === "string" &&
+          refreshData.tokens.refreshToken.trim().length > 0
+            ? refreshData.tokens.refreshToken
+            : tokens.refreshToken;
+
+        const activeTokens: MobileAuthTokens = {
+          accessToken: refreshData.tokens.accessToken,
+          refreshToken: nextRefresh,
+          expiresAt: refreshData.tokens.expiresAt,
+        };
+
+        await SecureStorage.setItem(
+          SECURE_STORAGE_KEYS.AUTH_TOKENS,
+          JSON.stringify(activeTokens),
+        );
+        this.updateState({ tokens: activeTokens });
+        return true;
+      } catch {
+        return false;
+      }
+    })().finally(() => {
+      this.refreshInFlight = null;
+    });
+
+    return this.refreshInFlight;
+  }
+
+  /**
    * Cold-start session restore.
    * Checks secure storage -> verifies/refreshes tokens -> re-queries active memberships -> restores WORKSPACE_ACTIVE.
    */
@@ -120,51 +245,21 @@ export class MobileAuthController {
       const tokens = JSON.parse(rawTokens) as MobileAuthTokens;
       const user = JSON.parse(rawUser) as MobileUser;
 
-      // 1. Check if access token needs refresh
-      let activeTokens = tokens;
-      const isExpired = tokens.expiresAt && Date.now() > tokens.expiresAt;
-
-      if (isExpired && tokens.refreshToken) {
-        const refreshRes = await mobileApiClient.post<BackendEnvelope<RefreshResponseData>>(
-          "/auth/refresh",
-          {
-            refreshToken: tokens.refreshToken,
-            activeWorkspaceId: savedActiveWsId || undefined,
-          },
-          { skipAuth: true },
-        );
-
-        if (!refreshRes.ok) {
-          // Refresh revoked or invalid -> clear credentials and sign out
-          await this.signOut();
-          return;
-        }
-
-        const refreshData = unwrapResponse<RefreshResponseData>(refreshRes.data);
-        if (
-          !refreshData ||
-          !refreshData.tokens ||
-          typeof refreshData.tokens.accessToken !== "string" ||
-          refreshData.tokens.accessToken.trim().length === 0 ||
-          typeof refreshData.tokens.expiresAt !== "number" ||
-          !Number.isFinite(refreshData.tokens.expiresAt)
-        ) {
-          await this.signOut();
-          return;
-        }
-
-        activeTokens = {
-          accessToken: refreshData.tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-          expiresAt: refreshData.tokens.expiresAt,
-        };
-        await SecureStorage.setItem(SECURE_STORAGE_KEYS.AUTH_TOKENS, JSON.stringify(activeTokens));
-      }
-
       this.updateState({
         user,
-        tokens: activeTokens,
+        tokens,
       });
+
+      // Silent keep-alive before any authenticated calls.
+      const refreshed = await this.refreshAccessToken({ force: true });
+      const activeTokens = this.state.tokens;
+      if (!refreshed || !activeTokens?.accessToken) {
+        // refreshAccessToken already signed out on AUTH_REQUIRED; otherwise stay signed out cleanly.
+        if (this.state.state !== "SIGNED_OUT") {
+          await this.signOut();
+        }
+        return;
+      }
 
       // 2. Discover and re-validate active memberships
       const wsRes = await mobileApiClient.get<BackendEnvelope<WorkspacesResponseData>>(
@@ -523,6 +618,7 @@ export class MobileAuthController {
           refreshToken: this.state.tokens.refreshToken,
         }, {
           token: this.state.tokens.accessToken,
+          _authRetried: true,
         }).catch(() => {});
       }
     } finally {
