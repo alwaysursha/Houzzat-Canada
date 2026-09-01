@@ -20,7 +20,10 @@ import {
   View,
 } from "react-native";
 import { ShortlistEmailSheet } from "../components/ShortlistEmailSheet";
+import { PropertyDetailModal } from "../components/PropertyDetailModal";
+import { ShortlistButton } from "../components/ShortlistButton";
 import { mobileApiClient } from "../api/client";
+import { usePropertySavedListings } from "../hooks/usePropertySavedListings";
 import {
   buildPropertiesSearchQuery,
   formatListingAddress,
@@ -55,25 +58,39 @@ const PropertyListingCard = memo(function PropertyListingCard({
   listing,
   isSelected,
   showImage,
-  onToggle,
+  isSaved,
+  shortlistPending,
+  onOpen,
+  onToggleSelect,
+  onToggleShortlist,
 }: {
   listing: MobileListingCard;
   isSelected: boolean;
   showImage: boolean;
-  onToggle: (mls: string) => void;
+  isSaved: boolean;
+  shortlistPending: boolean;
+  onOpen: (listing: MobileListingCard) => void;
+  onToggleSelect: (mls: string) => void;
+  onToggleShortlist: (mls: string) => void;
 }) {
+  const timing = listing.timingLabel?.trim();
+
   if (!showImage) {
     return (
       <TouchableOpacity
         style={[styles.cardCompact, isSelected && styles.cardSelected]}
-        onPress={() => onToggle(listing.mlsNumber)}
+        onPress={() => onOpen(listing)}
         activeOpacity={0.85}
       >
-        <View style={[styles.checkBadgeInline, isSelected && styles.checkBadgeOn]}>
+        <TouchableOpacity
+          style={[styles.checkBadgeInline, isSelected && styles.checkBadgeOn]}
+          onPress={() => onToggleSelect(listing.mlsNumber)}
+          activeOpacity={0.85}
+        >
           <Text style={[styles.checkBadgeText, isSelected && styles.checkBadgeTextOn]}>
             {isSelected ? "✓" : ""}
           </Text>
-        </View>
+        </TouchableOpacity>
         <View style={styles.cardCompactBody}>
           <Text style={styles.cardAddress} numberOfLines={1}>
             {formatListingAddress(listing)}
@@ -85,7 +102,14 @@ const PropertyListingCard = memo(function PropertyListingCard({
             {formatListingBeds(listing)} bed · {listing.baths} bath · MLS{" "}
             {listing.mlsNumber}
           </Text>
+          {timing ? <Text style={styles.cardTiming}>{timing}</Text> : null}
         </View>
+        <ShortlistButton
+          saved={isSaved}
+          pending={shortlistPending}
+          compact
+          onPress={() => onToggleShortlist(listing.mlsNumber)}
+        />
       </TouchableOpacity>
     );
   }
@@ -93,7 +117,7 @@ const PropertyListingCard = memo(function PropertyListingCard({
   return (
     <TouchableOpacity
       style={[styles.card, isSelected && styles.cardSelected]}
-      onPress={() => onToggle(listing.mlsNumber)}
+      onPress={() => onOpen(listing)}
       activeOpacity={0.85}
     >
       <View style={styles.cardImageWrap}>
@@ -109,10 +133,22 @@ const PropertyListingCard = memo(function PropertyListingCard({
             <Text style={styles.cardImagePlaceholderText}>No photo</Text>
           </View>
         )}
-        <View style={[styles.checkBadge, isSelected && styles.checkBadgeOn]}>
+        <TouchableOpacity
+          style={[styles.checkBadge, isSelected && styles.checkBadgeOn]}
+          onPress={() => onToggleSelect(listing.mlsNumber)}
+          activeOpacity={0.85}
+        >
           <Text style={[styles.checkBadgeText, isSelected && styles.checkBadgeTextOn]}>
             {isSelected ? "✓" : ""}
           </Text>
+        </TouchableOpacity>
+        <View style={styles.shortlistOverlay}>
+          <ShortlistButton
+            saved={isSaved}
+            pending={shortlistPending}
+            compact
+            onPress={() => onToggleShortlist(listing.mlsNumber)}
+          />
         </View>
       </View>
       <View style={styles.cardBody}>
@@ -126,6 +162,7 @@ const PropertyListingCard = memo(function PropertyListingCard({
           {formatListingBeds(listing)} bed · {listing.baths} bath · MLS{" "}
           {listing.mlsNumber}
         </Text>
+        {timing ? <Text style={styles.cardTiming}>{timing}</Text> : null}
       </View>
     </TouchableOpacity>
   );
@@ -162,6 +199,14 @@ export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [emailOpen, setEmailOpen] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [detailListing, setDetailListing] = useState<MobileListingCard | null>(null);
+
+  const {
+    isSaved,
+    toggleSaved,
+    pendingMls,
+    setSavedLocal,
+  } = usePropertySavedListings(workspaceId);
 
   const fetchGenRef = useRef(0);
 
@@ -250,16 +295,31 @@ export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) 
     });
   }, []);
 
+  const openDetail = useCallback((listing: MobileListingCard) => {
+    setDetailListing(listing);
+  }, []);
+
+  const handleToggleShortlist = useCallback(
+    (mls: string) => {
+      void toggleSaved(mls);
+    },
+    [toggleSaved],
+  );
+
   const renderListing = useCallback(
     ({ item, index }: { item: MobileListingCard; index: number }) => (
       <PropertyListingCard
         listing={item}
         isSelected={selected.has(item.mlsNumber)}
         showImage={index < LISTING_IMAGE_LIMIT}
-        onToggle={toggleMls}
+        isSaved={isSaved(item.mlsNumber)}
+        shortlistPending={pendingMls === item.mlsNumber}
+        onOpen={openDetail}
+        onToggleSelect={toggleMls}
+        onToggleShortlist={handleToggleShortlist}
       />
     ),
-    [selected, toggleMls],
+    [selected, openDetail, toggleMls, handleToggleShortlist, isSaved, pendingMls],
   );
 
   const keyExtractor = useCallback(
@@ -594,6 +654,19 @@ export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) 
           handleEmailSuccess();
         }}
       />
+
+      <PropertyDetailModal
+        visible={detailListing != null}
+        preview={detailListing}
+        workspaceId={workspaceId}
+        saved={detailListing ? isSaved(detailListing.mlsNumber) : false}
+        savedPending={
+          detailListing != null && pendingMls === detailListing.mlsNumber
+        }
+        onClose={() => setDetailListing(null)}
+        onToggleShortlist={handleToggleShortlist}
+        onSavedChange={(mls, saved) => setSavedLocal(mls, saved)}
+      />
     </View>
   );
 }
@@ -851,6 +924,17 @@ const styles = StyleSheet.create({
   cardMeta: {
     fontSize: 11,
     color: "#64748B",
+  },
+  cardTiming: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  shortlistOverlay: {
+    position: "absolute",
+    bottom: 6,
+    right: 6,
   },
   selectionBar: {
     position: "absolute",

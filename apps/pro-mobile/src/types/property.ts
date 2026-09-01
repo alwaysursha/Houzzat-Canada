@@ -23,7 +23,10 @@ export interface MobileListingCard {
   community: string | null;
   primaryImageUrl: string | null;
   daysOnMarket: number;
-  openHouses: { startsAt: string; endsAt: string }[];
+  listedAt: string;
+  soldAt: string | null;
+  updatedAtMls?: string | null;
+  timingLabel?: string;
 }
 
 export interface PropertiesSearchData {
@@ -73,3 +76,43 @@ export const PROPERTY_TYPE_OPTIONS = [
 ] as const;
 
 export const MAX_SHORTLIST_SIZE = 24;
+
+export interface MobilePropertyDetail {
+  mlsNumber: string;
+  listingId: string;
+  status: string;
+  transactionType: string;
+  segment: string | null;
+  propertyType: string;
+  propertyTypeLabel: string;
+  statusLabel: string;
+  listPrice: number;
+  soldPrice: number | null;
+  priceLabel: string;
+  addressLine: string;
+  unitNumber: string | null;
+  city: string;
+  community: string | null;
+  province: string | null;
+  postalCode: string | null;
+  beds: number;
+  baths: number;
+  bedsLabel: string | null;
+  sqftLabel: string | null;
+  parkingSpaces: number;
+  daysOnMarket: number;
+  timingLabel: string;
+  listedAt: string;
+  soldAt: string | null;
+  description: string;
+  brokerageName: string | null;
+  taxes: number | null;
+  maintenanceFee: number | null;
+  yearBuilt: number | null;
+  lat: number;
+  lng: number;
+  imageUrls: string[];
+  primaryImageUrl: string | null;
+  openHouses: { startsAt: string; endsAt: string }[];
+  mlsDisclaimer: string;
+}

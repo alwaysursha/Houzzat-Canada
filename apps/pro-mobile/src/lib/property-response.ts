@@ -4,6 +4,7 @@
 
 import type {
   MobileListingCard,
+  MobilePropertyDetail,
   PropertiesSearchData,
   ShortlistEmailData,
 } from "../types/property";
@@ -111,4 +112,35 @@ export function formatListingAddress(listing: MobileListingCard): string {
 export function formatListingBeds(listing: MobileListingCard): string {
   if (listing.bedsLabel?.trim()) return listing.bedsLabel;
   return String(listing.beds);
+}
+
+export function unwrapPropertyDetail(
+  data: unknown,
+): { detail: MobilePropertyDetail; saved: boolean } | null {
+  if (!data || typeof data !== "object") return null;
+  const env = data as BackendEnvelope<{
+    detail: MobilePropertyDetail;
+    saved: boolean;
+  }>;
+  if (env.ok && env.data?.detail) {
+    return { detail: env.data.detail, saved: Boolean(env.data.saved) };
+  }
+  const direct = data as {
+    detail?: MobilePropertyDetail;
+    saved?: boolean;
+  };
+  if (direct.detail) {
+    return { detail: direct.detail, saved: Boolean(direct.saved) };
+  }
+  return null;
+}
+
+export function unwrapSavedListingsBulk(data: unknown): string[] {
+  if (!data || typeof data !== "object") return [];
+  const env = data as BackendEnvelope<{ mlsNumbers: string[] }>;
+  if (env.ok && Array.isArray(env.data?.mlsNumbers)) {
+    return env.data.mlsNumbers;
+  }
+  const direct = data as { mlsNumbers?: string[] };
+  return direct.mlsNumbers ?? [];
 }

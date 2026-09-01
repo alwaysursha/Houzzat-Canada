@@ -11,7 +11,7 @@ import type {
   MobileGlobalTask,
   MobileLeadTask,
 } from "../types/api";
-import type { MobileListingCard } from "../types/property";
+import type { MobileListingCard, MobilePropertyDetail } from "../types/property";
 
 export const taskCache = new Map<
   string,
@@ -62,6 +62,18 @@ export const engagementCache = new Map<
 export const propertySearchCache = new Map<
   string,
   { listings: MobileListingCard[]; queryKey: string; timestamp: number }
+>();
+
+/** Stage 5.4 — workspace-scoped saved listing MLS set (canonical SavedListing). */
+export const savedListingsCache = new Map<
+  string,
+  { mlsNumbers: Set<string>; timestamp: number }
+>();
+
+/** Stage 5.4 — property detail by workspace + MLS. */
+export const propertyDetailCache = new Map<
+  string,
+  { detail: MobilePropertyDetail; saved: boolean; timestamp: number }
 >();
 
 export function clearLeadTasksCache(workspaceId?: string) {
@@ -192,6 +204,30 @@ export function clearPropertySearchCache(workspaceId?: string) {
   }
 }
 
+export function clearSavedListingsCache(workspaceId?: string) {
+  if (!workspaceId) {
+    savedListingsCache.clear();
+    return;
+  }
+  for (const key of savedListingsCache.keys()) {
+    if (key.startsWith(`${workspaceId}:`)) {
+      savedListingsCache.delete(key);
+    }
+  }
+}
+
+export function clearPropertyDetailCache(workspaceId?: string) {
+  if (!workspaceId) {
+    propertyDetailCache.clear();
+    return;
+  }
+  for (const key of propertyDetailCache.keys()) {
+    if (key.startsWith(`${workspaceId}:`)) {
+      propertyDetailCache.delete(key);
+    }
+  }
+}
+
 /**
  * Stage 5.2 — Single path to clear every workspace-scoped native cache.
  * Used by workspace switch + logout. Pass workspaceId to scope; omit to clear all.
@@ -215,5 +251,7 @@ export function clearAllWorkspaceCaches(workspaceId?: string) {
   clearLeadConversationsCache(workspaceId);
   clearLeadEngagementCache(workspaceId);
   clearPropertySearchCache(workspaceId);
+  clearSavedListingsCache(workspaceId);
+  clearPropertyDetailCache(workspaceId);
   leadDetailCacheClearer?.(workspaceId);
 }

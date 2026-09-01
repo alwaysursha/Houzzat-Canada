@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { getListingProvider } from "@/lib/listings/provider";
 import { parseListingSearchQueryParams } from "@/lib/listings/parse-search-query-params";
+import { enrichListingCardForMobile } from "@/lib/mobile/v2/build-property-detail";
 import { authorizeMobileWorkspaceAccess } from "@/lib/mobile/v2/workspace-access";
 
 export const runtime = "nodejs";
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       data: {
-        listings: result.items,
+        listings: result.items.map((item) => enrichListingCardForMobile(item)),
         total: result.total ?? result.items.length,
         nextCursor: result.nextCursor ?? null,
         limit: params.limit ?? 60,
