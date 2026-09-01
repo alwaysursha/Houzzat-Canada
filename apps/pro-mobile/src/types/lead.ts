@@ -237,6 +237,20 @@ export interface MobileLeadEngagementMatch {
   listPrice: number | null;
   bedsLabel: string | null;
   imageUrl: string | null;
+  primaryImageUrl: string | null;
+  beds: number;
+  baths: number;
+  transactionType: "SALE" | "LEASE";
+  status: string;
+  propertyType: string;
+  addressLine: string;
+  unitNumber: string | null;
+  city: string;
+  community: string | null;
+  listedAt: string;
+  soldAt: string | null;
+  daysOnMarket: number;
+  timingLabel: string;
 }
 
 export interface MobileLeadEngagement {

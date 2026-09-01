@@ -18,6 +18,7 @@ import {
 } from "@/lib/listings/constants";
 import { getListingProvider } from "@/lib/listings/provider";
 import type { ListingSearchParams } from "@/lib/listings/types";
+import { enrichListingCardForMobile } from "@/lib/mobile/v2/build-property-detail";
 import { prisma } from "@/lib/prisma";
 
 const MATCH_LIMIT = 24;
@@ -28,6 +29,20 @@ export type MobileLeadEngagementMatch = {
   listPrice: number | null;
   bedsLabel: string | null;
   imageUrl: string | null;
+  primaryImageUrl: string | null;
+  beds: number;
+  baths: number;
+  transactionType: "SALE" | "LEASE";
+  status: string;
+  propertyType: string;
+  addressLine: string;
+  unitNumber: string | null;
+  city: string;
+  community: string | null;
+  listedAt: string;
+  soldAt: string | null;
+  daysOnMarket: number;
+  timingLabel: string;
 };
 
 export type MobileLeadEngagementPayload = {
@@ -160,14 +175,30 @@ async function loadMatchingListings(
       ...searchParams,
       limit: MATCH_LIMIT,
     });
-    return result.items.slice(0, MATCH_LIMIT).map((card, index) => ({
-      mlsNumber: card.mlsNumber,
-      address: formatListingAddressOneLine(card),
-      listPrice: card.listPrice ?? null,
-      bedsLabel: formatListingBedsLabel(card) || null,
-      // Cap remote photos in the DTO — native only renders a few images.
-      imageUrl: index < 6 ? (card.imageUrls[0] ?? null) : null,
-    }));
+    return result.items.slice(0, MATCH_LIMIT).map((card, index) => {
+      const enriched = enrichListingCardForMobile(card);
+      return {
+        mlsNumber: enriched.mlsNumber,
+        address: formatListingAddressOneLine(enriched),
+        listPrice: enriched.listPrice ?? null,
+        bedsLabel: formatListingBedsLabel(enriched) || null,
+        imageUrl: index < 6 ? (enriched.primaryImageUrl ?? null) : null,
+        primaryImageUrl: enriched.primaryImageUrl ?? null,
+        beds: enriched.beds,
+        baths: enriched.baths,
+        transactionType: enriched.transactionType,
+        status: enriched.status,
+        propertyType: enriched.propertyType,
+        addressLine: enriched.addressLine,
+        unitNumber: enriched.unitNumber,
+        city: enriched.city,
+        community: enriched.community,
+        listedAt: enriched.listedAt,
+        soldAt: enriched.soldAt,
+        daysOnMarket: enriched.daysOnMarket,
+        timingLabel: enriched.timingLabel,
+      };
+    });
   } catch {
     return [];
   }

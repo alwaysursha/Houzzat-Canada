@@ -16,6 +16,7 @@ import {
 import { mobileApiClient } from "../api/client";
 import { unwrapShortlistEmail } from "../lib/property-response";
 import { withQuery } from "../lib/query-string";
+import { isLeadEmailEligible } from "../lib/lead-email-eligibility";
 import { clearLeadEngagementCache } from "../lib/lead-tab-cache";
 import { invalidateLeadDetailCacheEntry } from "../screens/LeadDetailScreen";
 import { useAuth } from "../state/AuthContext";
@@ -36,26 +37,6 @@ function leadDisplayName(lead: MobileLeadSummary): string {
     lead.customer?.phone?.trim() ||
     "Lead"
   );
-}
-
-function isLeadEmailEligible(detail: MobileLeadDetail): {
-  ok: boolean;
-  reason: string | null;
-} {
-  const email = detail.customer?.email?.trim();
-  if (!email) {
-    return { ok: false, reason: "No email on file" };
-  }
-  const consented =
-    Boolean(detail.contactConsentAt) ||
-    Boolean(detail.customer?.caslConsentAt);
-  if (!consented) {
-    return { ok: false, reason: "Needs CASL consent" };
-  }
-  if (detail.customer?.emailAlertsEnabled === false) {
-    return { ok: false, reason: "Email alerts are off" };
-  }
-  return { ok: true, reason: null };
 }
 
 export function ShortlistEmailSheet({

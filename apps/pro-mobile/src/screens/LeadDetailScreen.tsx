@@ -1869,6 +1869,10 @@ export function LeadDetailScreen({
                 <EngagementTab
                   leadId={leadId}
                   workspaceId={workspaceId}
+                  customerEmail={lead.customer?.email}
+                  contactConsentAt={lead.contactConsentAt}
+                  customerCaslConsentAt={lead.customer?.caslConsentAt}
+                  emailAlertsEnabled={lead.customer?.emailAlertsEnabled}
                   onEngagementLoaded={handleEngagementLoaded}
                 />
               ) : null}

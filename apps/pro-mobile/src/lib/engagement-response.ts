@@ -2,7 +2,71 @@
  * Stage 4.9 — unwrap Mobile v2 engagement API responses.
  */
 
-import type { MobileLeadEngagement } from "../types/api";
+import type { MobileLeadEngagement, MobileLeadEngagementMatch } from "../types/lead";
+
+function mapMatchRow(r: Record<string, unknown>): MobileLeadEngagementMatch {
+  const transactionType =
+    r.transactionType === "LEASE" ? "LEASE" : "SALE";
+  return {
+    mlsNumber: typeof r.mlsNumber === "string" ? r.mlsNumber : "",
+    address: typeof r.address === "string" ? r.address : "",
+    listPrice:
+      typeof r.listPrice === "number" && Number.isFinite(r.listPrice)
+        ? r.listPrice
+        : null,
+    bedsLabel:
+      typeof r.bedsLabel === "string"
+        ? r.bedsLabel
+        : r.bedsLabel === null
+          ? null
+          : null,
+    imageUrl:
+      typeof r.imageUrl === "string"
+        ? r.imageUrl
+        : r.imageUrl === null
+          ? null
+          : null,
+    primaryImageUrl:
+      typeof r.primaryImageUrl === "string"
+        ? r.primaryImageUrl
+        : typeof r.imageUrl === "string"
+          ? r.imageUrl
+          : null,
+    beds: typeof r.beds === "number" ? r.beds : 0,
+    baths: typeof r.baths === "number" ? r.baths : 0,
+    transactionType,
+    status: typeof r.status === "string" ? r.status : "ACTIVE",
+    propertyType: typeof r.propertyType === "string" ? r.propertyType : "DETACHED",
+    addressLine:
+      typeof r.addressLine === "string"
+        ? r.addressLine
+        : typeof r.address === "string"
+          ? r.address
+          : "",
+    unitNumber:
+      typeof r.unitNumber === "string"
+        ? r.unitNumber
+        : r.unitNumber === null
+          ? null
+          : null,
+    city: typeof r.city === "string" ? r.city : "",
+    community:
+      typeof r.community === "string"
+        ? r.community
+        : r.community === null
+          ? null
+          : null,
+    listedAt: typeof r.listedAt === "string" ? r.listedAt : "",
+    soldAt:
+      typeof r.soldAt === "string"
+        ? r.soldAt
+        : r.soldAt === null
+          ? null
+          : null,
+    daysOnMarket: typeof r.daysOnMarket === "number" ? r.daysOnMarket : 0,
+    timingLabel: typeof r.timingLabel === "string" ? r.timingLabel : "",
+  };
+}
 
 export function unwrapEngagement(data: unknown): MobileLeadEngagement | null {
   if (!data || typeof data !== "object") return null;
@@ -97,16 +161,7 @@ export function unwrapEngagement(data: unknown): MobileLeadEngagement | null {
   const matches = Array.isArray(engagement.matches)
     ? engagement.matches
         .filter((r): r is Record<string, unknown> => Boolean(r && typeof r === "object"))
-        .map((r) => ({
-          mlsNumber: str(r.mlsNumber),
-          address: str(r.address),
-          listPrice:
-            typeof r.listPrice === "number" && Number.isFinite(r.listPrice)
-              ? r.listPrice
-              : null,
-          bedsLabel: strOrNull(r.bedsLabel),
-          imageUrl: strOrNull(r.imageUrl),
-        }))
+        .map(mapMatchRow)
     : [];
 
   return {
