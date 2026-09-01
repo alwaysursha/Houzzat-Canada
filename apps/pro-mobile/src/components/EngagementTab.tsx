@@ -3,13 +3,16 @@
  *
  * Observational read-only — same canonical data as web loadLeadSummary engagement fields.
  * Data: GET /api/mobile/v2/leads/[leadId]/engagement
+ *
+ * Performance:
+ * - No nested ScrollView (parent LeadDetail ScrollView owns scrolling)
+ * - Cap remote listing images (decode cost); remaining matches render as compact rows
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -21,19 +24,53 @@ import {
   engagementCache,
   clearLeadEngagementCache,
 } from "../lib/lead-tab-cache";
-import type { MobileLeadEngagement } from "../types/api";
+import type { MobileLeadEngagement, MobileLeadEngagementMatch } from "../types/api";
 
 export { clearLeadEngagementCache };
+
+/** Keep Lead Detail profile strip lightweight — not the full engagement payload. */
+export type EngagementProfileSummary = {
+  views24h: number;
+  saves: number;
+  alerts: number;
+  emails: number;
+  savedSearchCount: number;
+  lastTouchAt: string;
+  lastSeenAt: string | null;
+  isOnline: boolean;
+  rings: {
+    emailOpens: number;
+    emailClicks: number;
+    alertOpens: number;
+  };
+};
+
+/** Max remote photos decoded at once — remaining matches are text rows. */
+const MATCH_IMAGE_LIMIT = 6;
 
 function formatPrice(value: number | null): string {
   if (value == null) return "—";
   return `$${value.toLocaleString("en-CA")}`;
 }
 
+function toProfileSummary(data: MobileLeadEngagement): EngagementProfileSummary {
+  return {
+    views24h: data.hot.views24h,
+    saves: data.stats.saves,
+    alerts: data.stats.alerts,
+    emails: data.stats.emails,
+    savedSearchCount: data.stats.savedSearchCount,
+    lastTouchAt: data.lastTouchAt,
+    lastSeenAt: data.hot.lastSeenAt,
+    isOnline: data.hot.isOnline,
+    rings: data.rings,
+  };
+}
+
 type EngagementTabProps = {
   leadId: string;
   workspaceId: string | undefined;
-  onEngagementLoaded?: (engagement: MobileLeadEngagement) => void;
+  onEngagementLoaded?: (summary: EngagementProfileSummary) => void;
 };
 
 function Panel({
@@ -59,7 +96,53 @@ function MlsChip({ mlsNumber }: { mlsNumber: string }) {
   );
 }
 
-export function EngagementTab({
+const MatchCard = memo(function MatchCard({
+  match,
+  showImage,
+}: {
+  match: MobileLeadEngagementMatch;
+  showImage: boolean;
+}) {
+  if (!showImage) {
+    return (
+      <View style={styles.matchRowCompact}>
+        <Text style={styles.matchPrice}>{formatPrice(match.listPrice)}</Text>
+        <Text style={styles.matchAddress} numberOfLines={1}>
+          {match.address}
+        </Text>
+        <Text style={styles.matchMls}>MLS {match.mlsNumber}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.matchCard}>
+      {match.imageUrl ? (
+        <Image
+          source={{ uri: match.imageUrl }}
+          style={styles.matchImage}
+          resizeMode="cover"
+          // Avoid blocking first paint with huge decode work.
+          fadeDuration={0}
+        />
+      ) : (
+        <View style={[styles.matchImage, styles.matchImagePlaceholder]}>
+          <Text style={styles.matchImagePlaceholderText}>No photo</Text>
+        </View>
+      )}
+      <Text style={styles.matchPrice}>{formatPrice(match.listPrice)}</Text>
+      <Text style={styles.matchAddress} numberOfLines={2}>
+        {match.address}
+      </Text>
+      {match.bedsLabel ? (
+        <Text style={styles.matchMeta}>{match.bedsLabel}</Text>
+      ) : null}
+      <Text style={styles.matchMls}>MLS {match.mlsNumber}</Text>
+    </View>
+  );
+});
+
+function EngagementTabInner({
   leadId,
   workspaceId,
   onEngagementLoaded,
@@ -85,6 +168,13 @@ export function EngagementTab({
     [cacheKey],
   );
 
+  const publishSummary = useCallback(
+    (data: MobileLeadEngagement) => {
+      onEngagementLoaded?.(toProfileSummary(data));
+    },
+    [onEngagementLoaded],
+  );
+
   const fetchEngagement = useCallback(
     async (opts?: { background?: boolean }) => {
       if (!opts?.background) setLoading(true);
@@ -102,7 +192,7 @@ export function EngagementTab({
         if (parsed) {
           setEngagement(parsed);
           persistCache(parsed);
-          onEngagementLoaded?.(parsed);
+          publishSummary(parsed);
         } else {
           setError("Invalid engagement response");
         }
@@ -115,18 +205,27 @@ export function EngagementTab({
         setRefreshing(false);
       }
     },
-    [leadId, persistCache, onEngagementLoaded],
+    [leadId, persistCache, publishSummary],
   );
 
   useEffect(() => {
     const entry = cacheKey ? engagementCache.get(cacheKey) : undefined;
     if (entry?.engagement) {
       setEngagement(entry.engagement);
-      onEngagementLoaded?.(entry.engagement);
+      publishSummary(entry.engagement);
     }
     void fetchEngagement({ background: Boolean(entry) });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tab mount / lead change
   }, [leadId, workspaceId]);
+
+  const photoMatches = useMemo(
+    () => (engagement?.matches ?? []).slice(0, MATCH_IMAGE_LIMIT),
+    [engagement?.matches],
+  );
+  const compactMatches = useMemo(
+    () => (engagement?.matches ?? []).slice(MATCH_IMAGE_LIMIT),
+    [engagement?.matches],
+  );
 
   if (loading && !engagement) {
     return (
@@ -175,11 +274,7 @@ export function EngagementTab({
           .join(" · ");
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.wrap}
-      keyboardShouldPersistTaps="handled"
-    >
+    <View style={styles.wrap}>
       {refreshing ? (
         <Text style={styles.refreshHint}>Refreshing engagement…</Text>
       ) : null}
@@ -232,30 +327,19 @@ export function EngagementTab({
                 : "Not enough browsing signal yet."}
             </Text>
           ) : (
-            <View style={styles.matchGrid}>
-              {engagement.matches.map((m) => (
-                <View key={m.mlsNumber} style={styles.matchCard}>
-                  {m.imageUrl ? (
-                    <Image
-                      source={{ uri: m.imageUrl }}
-                      style={styles.matchImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={[styles.matchImage, styles.matchImagePlaceholder]}>
-                      <Text style={styles.matchImagePlaceholderText}>No photo</Text>
-                    </View>
-                  )}
-                  <Text style={styles.matchPrice}>{formatPrice(m.listPrice)}</Text>
-                  <Text style={styles.matchAddress} numberOfLines={2}>
-                    {m.address}
-                  </Text>
-                  {m.bedsLabel ? (
-                    <Text style={styles.matchMeta}>{m.bedsLabel}</Text>
-                  ) : null}
-                  <Text style={styles.matchMls}>MLS {m.mlsNumber}</Text>
+            <View style={styles.matchSection}>
+              <View style={styles.matchGrid}>
+                {photoMatches.map((m) => (
+                  <MatchCard key={m.mlsNumber} match={m} showImage />
+                ))}
+              </View>
+              {compactMatches.length > 0 ? (
+                <View style={styles.compactList}>
+                  {compactMatches.map((m) => (
+                    <MatchCard key={m.mlsNumber} match={m} showImage={false} />
+                  ))}
                 </View>
-              ))}
+              ) : null}
             </View>
           )}
         </Panel>
@@ -361,17 +445,16 @@ export function EngagementTab({
           {refreshing ? "Refreshing…" : "Refresh engagement"}
         </Text>
       </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 }
 
+export const EngagementTab = memo(EngagementTabInner);
+
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-  },
   wrap: {
     gap: 12,
-    paddingBottom: 24,
+    paddingBottom: 8,
   },
   loadingBox: {
     paddingVertical: 32,
@@ -490,6 +573,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#0F766E",
   },
+  matchSection: {
+    gap: 8,
+  },
   matchGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -541,6 +627,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
     color: "#2B6CB0",
+  },
+  compactList: {
+    gap: 6,
+  },
+  matchRowCompact: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 8,
+    paddingHorizontal: 2,
   },
   stackGap: {
     gap: 8,

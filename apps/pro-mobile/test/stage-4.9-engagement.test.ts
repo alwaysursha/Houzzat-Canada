@@ -222,12 +222,12 @@ async function runStage49Tests() {
   console.log("[2/16] EngagementTab mounted (ComingSoon gone)...");
   {
     const src = readFileSync(DETAIL_SCREEN, "utf8");
-    assert.ok(src.includes("import { EngagementTab }"));
+    assert.ok(src.includes("EngagementTab"));
+    assert.ok(src.includes('from "../components/EngagementTab"'));
     assert.ok(src.includes("<EngagementTab"));
     const idx = src.indexOf('{tab === "engagement"');
     assert.ok(idx > 0);
-    const end = src.indexOf("{tab === \"info\"", idx);
-    const block = src.slice(idx, end > idx ? end : idx + 250);
+    const block = src.slice(idx, idx + 350);
     assert.equal(block.includes("ComingSoonPanel"), false);
     assert.ok(block.includes("EngagementTab"));
     const tab = readFileSync(ENG_TAB, "utf8");
@@ -236,6 +236,8 @@ async function runStage49Tests() {
     assert.ok(tab.includes("Property watches"));
     assert.ok(tab.includes("Alerts inbox"));
     assert.ok(tab.includes("engagementCache"));
+    assert.ok(!tab.includes("<ScrollView"), "Engagement must not nest ScrollView");
+    assert.ok(tab.includes("MATCH_IMAGE_LIMIT"));
     console.log("  -> PASS");
   }
 
@@ -431,10 +433,13 @@ async function runStage49Tests() {
   {
     const src = readFileSync(DETAIL_SCREEN, "utf8");
     assert.ok(src.includes("engagementProfile"));
-    assert.ok(src.includes("engagementProfile.stats.saves"));
-    assert.ok(src.includes("engagementProfile.hot.views24h"));
+    assert.ok(src.includes("engagementProfile.saves"));
+    assert.ok(src.includes("engagementProfile.views24h"));
     assert.ok(src.includes("engagementProfile?.rings.emailClicks"));
     assert.ok(src.includes("handleEngagementLoaded"));
+    const tab = readFileSync(ENG_TAB, "utf8");
+    assert.ok(!tab.includes("<ScrollView"), "Engagement must not nest ScrollView");
+    assert.ok(tab.includes("MATCH_IMAGE_LIMIT"));
     console.log("  -> PASS");
   }
 

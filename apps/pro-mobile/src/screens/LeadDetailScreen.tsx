@@ -26,7 +26,10 @@ import {
   View,
 } from "react-native";
 import { mobileApiClient } from "../api/client";
-import { EngagementTab } from "../components/EngagementTab";
+import {
+  EngagementTab,
+  type EngagementProfileSummary,
+} from "../components/EngagementTab";
 import { AppointmentsTab } from "../components/AppointmentsTab";
 import { ConversationsTab } from "../components/ConversationsTab";
 import { TasksRemindersTab } from "../components/TasksRemindersTab";
@@ -38,7 +41,6 @@ import type {
   LeadStatus,
   MobileLeadActivity,
   MobileLeadDetail,
-  MobileLeadEngagement,
 } from "../types/api";
 import { engagementCache } from "../lib/lead-tab-cache";
 
@@ -596,7 +598,21 @@ export function LeadDetailScreen({
 
   const [lead, setLead] = useState<MobileLeadDetail | null>(cachedEntry?.data || null);
   const [engagementProfile, setEngagementProfile] =
-    useState<MobileLeadEngagement | null>(cachedEngagement?.engagement ?? null);
+    useState<EngagementProfileSummary | null>(() => {
+      const e = cachedEngagement?.engagement;
+      if (!e) return null;
+      return {
+        views24h: e.hot.views24h,
+        saves: e.stats.saves,
+        alerts: e.stats.alerts,
+        emails: e.stats.emails,
+        savedSearchCount: e.stats.savedSearchCount,
+        lastTouchAt: e.lastTouchAt,
+        lastSeenAt: e.hot.lastSeenAt,
+        isOnline: e.hot.isOnline,
+        rings: e.rings,
+      };
+    });
   const [isLoading, setIsLoading] = useState(!cachedEntry);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -921,13 +937,49 @@ export function LeadDetailScreen({
     const nextEngagement = engagementCacheKey
       ? engagementCache.get(engagementCacheKey)
       : undefined;
-    setEngagementProfile(nextEngagement?.engagement ?? null);
+    const e = nextEngagement?.engagement;
+    setEngagementProfile(
+      e
+        ? {
+            views24h: e.hot.views24h,
+            saves: e.stats.saves,
+            alerts: e.stats.alerts,
+            emails: e.stats.emails,
+            savedSearchCount: e.stats.savedSearchCount,
+            lastTouchAt: e.lastTouchAt,
+            lastSeenAt: e.hot.lastSeenAt,
+            isOnline: e.hot.isOnline,
+            rings: e.rings,
+          }
+        : null,
+    );
     fetchLeadDetail();
   }, [fetchLeadDetail, cacheKey, engagementCacheKey]);
 
-  const handleEngagementLoaded = useCallback((data: MobileLeadEngagement) => {
-    setEngagementProfile(data);
-  }, []);
+  const handleEngagementLoaded = useCallback(
+    (summary: EngagementProfileSummary) => {
+      setEngagementProfile((prev) => {
+        if (
+          prev &&
+          prev.views24h === summary.views24h &&
+          prev.saves === summary.saves &&
+          prev.alerts === summary.alerts &&
+          prev.emails === summary.emails &&
+          prev.savedSearchCount === summary.savedSearchCount &&
+          prev.lastTouchAt === summary.lastTouchAt &&
+          prev.lastSeenAt === summary.lastSeenAt &&
+          prev.isOnline === summary.isOnline &&
+          prev.rings.emailOpens === summary.rings.emailOpens &&
+          prev.rings.emailClicks === summary.rings.emailClicks &&
+          prev.rings.alertOpens === summary.rings.alertOpens
+        ) {
+          return prev;
+        }
+        return summary;
+      });
+    },
+    [],
+  );
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -1247,20 +1299,20 @@ export function LeadDetailScreen({
               <View style={styles.microStat}>
                 <Text style={styles.microStatIcon}>♥</Text>
                 <Text style={styles.microStatValue}>
-                  {engagementProfile ? engagementProfile.stats.saves : "—"}
+                  {engagementProfile ? engagementProfile.saves : "—"}
                 </Text>
               </View>
               <View style={styles.microStat}>
                 <Text style={styles.microStatIcon}>👁</Text>
                 <Text style={styles.microStatValue}>
-                  {engagementProfile ? engagementProfile.hot.views24h : "—"}
+                  {engagementProfile ? engagementProfile.views24h : "—"}
                 </Text>
               </View>
               <View style={styles.microStat}>
                 <Text style={styles.microStatIcon}>🔍</Text>
                 <Text style={styles.microStatValue}>
                   {engagementProfile
-                    ? engagementProfile.stats.savedSearchCount
+                    ? engagementProfile.savedSearchCount
                     : "—"}
                 </Text>
               </View>
@@ -1325,9 +1377,9 @@ export function LeadDetailScreen({
                   (Last Touch)
                 </Text>
                 <Text style={styles.touchMeta}>
-                  {engagementProfile?.hot.lastSeenAt
-                    ? `${relativeAgo(engagementProfile.hot.lastSeenAt)} (Last Visit)${
-                        engagementProfile.hot.isOnline ? " · Online" : ""
+                  {engagementProfile?.lastSeenAt
+                    ? `${relativeAgo(engagementProfile.lastSeenAt)} (Last Visit)${
+                        engagementProfile.isOnline ? " · Online" : ""
                       }`
                     : "— (Last Visit)"}
                 </Text>
@@ -1335,10 +1387,10 @@ export function LeadDetailScreen({
               <View style={styles.touchCounts}>
                 {(
                   [
-                    ["Views", engagementProfile?.hot.views24h],
-                    ["Saves", engagementProfile?.stats.saves],
-                    ["Alerts", engagementProfile?.stats.alerts],
-                    ["Emails", engagementProfile?.stats.emails],
+                    ["Views", engagementProfile?.views24h],
+                    ["Saves", engagementProfile?.saves],
+                    ["Alerts", engagementProfile?.alerts],
+                    ["Emails", engagementProfile?.emails],
                   ] as const
                 ).map(([label, value]) => (
                   <View key={label} style={styles.touchCountItem}>

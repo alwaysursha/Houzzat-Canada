@@ -160,12 +160,13 @@ async function loadMatchingListings(
       ...searchParams,
       limit: MATCH_LIMIT,
     });
-    return result.items.slice(0, MATCH_LIMIT).map((card) => ({
+    return result.items.slice(0, MATCH_LIMIT).map((card, index) => ({
       mlsNumber: card.mlsNumber,
       address: formatListingAddressOneLine(card),
       listPrice: card.listPrice ?? null,
       bedsLabel: formatListingBedsLabel(card) || null,
-      imageUrl: card.imageUrls[0] ?? null,
+      // Cap remote photos in the DTO — native only renders a few images.
+      imageUrl: index < 6 ? (card.imageUrls[0] ?? null) : null,
     }));
   } catch {
     return [];
