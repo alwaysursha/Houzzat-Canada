@@ -54,7 +54,7 @@ export const MORE_UTILITY_META: Record<
     title: "Properties",
     webPath: "/agent/search",
     summary:
-      "MLS property search inside CRM. Full search/cards/pagination deserve a dedicated native module.",
-    nextStage: "Native Properties Search",
+      "MLS search, multi-select shortlist, and email-to-lead from native Properties.",
+    nextStage: "Stage 5.3 — Native Properties Search",
   },
 };

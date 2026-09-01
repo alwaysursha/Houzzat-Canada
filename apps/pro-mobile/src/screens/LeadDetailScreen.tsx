@@ -61,6 +61,13 @@ export function clearLeadDetailCache(workspaceId?: string) {
   }
 }
 
+export function invalidateLeadDetailCacheEntry(
+  workspaceId: string,
+  leadId: string,
+) {
+  detailCache.delete(`${workspaceId}:${leadId}`);
+}
+
 registerLeadDetailCacheClearer(clearLeadDetailCache);
 
 function patchLeadDetailCache(

@@ -11,6 +11,7 @@ import type {
   MobileGlobalTask,
   MobileLeadTask,
 } from "../types/api";
+import type { MobileListingCard } from "../types/property";
 
 export const taskCache = new Map<
   string,
@@ -55,6 +56,12 @@ export const conversationCache = new Map<string, ConversationCacheEntry>();
 export const engagementCache = new Map<
   string,
   { engagement: MobileLeadEngagement; timestamp: number }
+>();
+
+/** Stage 5.3 — workspace-scoped property search results cache. */
+export const propertySearchCache = new Map<
+  string,
+  { listings: MobileListingCard[]; queryKey: string; timestamp: number }
 >();
 
 export function clearLeadTasksCache(workspaceId?: string) {
@@ -173,6 +180,18 @@ export function clearLeadEngagementCache(workspaceId?: string) {
   }
 }
 
+export function clearPropertySearchCache(workspaceId?: string) {
+  if (!workspaceId) {
+    propertySearchCache.clear();
+    return;
+  }
+  for (const key of propertySearchCache.keys()) {
+    if (key.startsWith(`${workspaceId}:`)) {
+      propertySearchCache.delete(key);
+    }
+  }
+}
+
 /**
  * Stage 5.2 — Single path to clear every workspace-scoped native cache.
  * Used by workspace switch + logout. Pass workspaceId to scope; omit to clear all.
@@ -195,5 +214,6 @@ export function clearAllWorkspaceCaches(workspaceId?: string) {
   clearGlobalAppointmentsCache(workspaceId);
   clearLeadConversationsCache(workspaceId);
   clearLeadEngagementCache(workspaceId);
+  clearPropertySearchCache(workspaceId);
   leadDetailCacheClearer?.(workspaceId);
 }

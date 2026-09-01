@@ -31,6 +31,7 @@ import {
   MoreUtilityScreen,
   type MoreUtilityId,
 } from "./MoreUtilityScreen";
+import { PropertiesSearchScreen } from "./PropertiesSearchScreen";
 
 type CommandCentreTab = "overview" | "team" | "leads" | "calendar" | "more";
 type ActiveUtility = Exclude<MoreUtilityId, "account"> | null;
@@ -222,13 +223,22 @@ export function CommandCentreShell() {
 
         {activeTab === "more" && (
           activeUtility ? (
-            <MoreUtilityScreen
-              utilityId={activeUtility}
-              onBack={() => {
-                setActiveUtility(null);
-                setActiveDrawerId("account");
-              }}
-            />
+            activeUtility === "search" ? (
+              <PropertiesSearchScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+              />
+            ) : (
+              <MoreUtilityScreen
+                utilityId={activeUtility}
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+              />
+            )
           ) : (
             <MoreHubScreen
               userEmail={userEmail}

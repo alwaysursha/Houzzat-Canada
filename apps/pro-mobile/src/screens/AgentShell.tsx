@@ -33,6 +33,7 @@ import {
   MoreUtilityScreen,
   type MoreUtilityId,
 } from "./MoreUtilityScreen";
+import { PropertiesSearchScreen } from "./PropertiesSearchScreen";
 
 type AgentTab = "launchpad" | "leads" | "tasks" | "calendar" | "more";
 type ActiveUtility = Exclude<MoreUtilityId, "account"> | null;
@@ -180,13 +181,22 @@ export function AgentShell({
 
         {activeTab === "more" && (
           activeUtility ? (
-            <MoreUtilityScreen
-              utilityId={activeUtility}
-              onBack={() => {
-                setActiveUtility(null);
-                setActiveDrawerId("account");
-              }}
-            />
+            activeUtility === "search" ? (
+              <PropertiesSearchScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+              />
+            ) : (
+              <MoreUtilityScreen
+                utilityId={activeUtility}
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+              />
+            )
           ) : (
             <MoreHubScreen
               userEmail={userEmail}
