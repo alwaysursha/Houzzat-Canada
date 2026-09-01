@@ -88,8 +88,21 @@ export interface MobileLeadTask {
   updatedAt: string;
 }
 
+/** Stage 5.0 — Global Tasks list item (web /agent/tasks + Instant Shell). */
+export interface MobileGlobalTask extends MobileLeadTask {
+  leadId: string | null;
+  lead: {
+    id: string;
+    customer: { name: string | null; email: string | null };
+  } | null;
+}
+
 export interface LeadTasksResponseData {
   tasks: MobileLeadTask[];
+}
+
+export interface GlobalTasksResponseData {
+  tasks: MobileGlobalTask[];
 }
 
 export type AppointmentType =

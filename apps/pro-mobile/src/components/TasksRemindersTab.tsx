@@ -19,6 +19,7 @@ import { mobileApiClient } from "../api/client";
 import { unwrapCreatedTask, unwrapTasksList } from "../lib/task-response";
 import {
   clearLeadTasksCache,
+  invalidateGlobalTasksCacheForWorkspace,
   taskCache,
 } from "../lib/lead-tab-cache";
 import type {
@@ -180,8 +181,10 @@ export function TasksRemindersTab({
           publishCount(next);
           return next;
         });
+        invalidateGlobalTasksCacheForWorkspace(workspaceId);
       } else {
         void fetchTasks();
+        invalidateGlobalTasksCacheForWorkspace(workspaceId);
       }
       setTitle("");
       setDueLocal(defaultDueLocalValue());
@@ -240,6 +243,7 @@ export function TasksRemindersTab({
           return next;
         });
       }
+      invalidateGlobalTasksCacheForWorkspace(workspaceId);
     } catch (err: unknown) {
       setTasks(previous);
       persistCache(previous);

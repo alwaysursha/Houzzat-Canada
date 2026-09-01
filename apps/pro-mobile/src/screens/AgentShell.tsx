@@ -28,6 +28,7 @@ import { useAuth } from "../state/AuthContext";
 import { LaunchpadScreen } from "./LaunchpadScreen";
 import { LeadDetailScreen } from "./LeadDetailScreen";
 import { LeadsScreen } from "./LeadsScreen";
+import { GlobalTasksScreen } from "./GlobalTasksScreen";
 
 type AgentTab = "launchpad" | "leads" | "tasks" | "calendar" | "more";
 
@@ -151,18 +152,12 @@ export function AgentShell({
         )}
 
         {activeTab === "tasks" && (
-          <View style={styles.placeholderContainer}>
-            <View style={styles.placeholderIconBox}>
-              <Text style={styles.placeholderIconText}>✓</Text>
-            </View>
-            <Text style={styles.placeholderTitle}>Tasks & Reminders</Text>
-            <Text style={styles.placeholderSubtitle}>
-              All open follow-up actions and scheduled tasks.
-            </Text>
-            <View style={styles.placeholderTag}>
-              <Text style={styles.placeholderTagText}>ALL CAUGHT UP</Text>
-            </View>
-          </View>
+          <GlobalTasksScreen
+            onOpenLead={(leadId) => {
+              setLeadNavIds([leadId]);
+              setSelectedLeadId(leadId);
+            }}
+          />
         )}
 
         {activeTab === "calendar" && (

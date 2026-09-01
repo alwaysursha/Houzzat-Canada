@@ -7,12 +7,19 @@ import type {
   MobileLeadAppointment,
   MobileLeadEmail,
   MobileLeadEngagement,
+  MobileGlobalTask,
   MobileLeadTask,
 } from "../types/api";
 
 export const taskCache = new Map<
   string,
   { tasks: MobileLeadTask[]; timestamp: number }
+>();
+
+/** Stage 5.0 — workspace-scoped global Tasks inbox. */
+export const globalTaskCache = new Map<
+  string,
+  { tasks: MobileGlobalTask[]; timestamp: number }
 >();
 
 export const appointmentCache = new Map<
@@ -48,6 +55,38 @@ export function clearLeadTasksCache(workspaceId?: string) {
       taskCache.delete(key);
     }
   }
+}
+
+export function clearGlobalTasksCache(workspaceId?: string) {
+  if (!workspaceId) {
+    globalTaskCache.clear();
+    return;
+  }
+  for (const key of globalTaskCache.keys()) {
+    if (key.startsWith(`${workspaceId}:`)) {
+      globalTaskCache.delete(key);
+    }
+  }
+}
+
+/** After global Done/create — drop lead-scoped cache so Lead Detail Tasks revalidate. */
+export function invalidateLeadTasksCacheForLead(
+  workspaceId: string | undefined,
+  leadId: string | null | undefined,
+) {
+  if (!workspaceId || !leadId) return;
+  taskCache.delete(`${workspaceId}:${leadId}:tasks`);
+}
+
+/** After Lead Detail task mutation — drop global inbox so it revalidates. */
+export function invalidateGlobalTasksCacheForWorkspace(
+  workspaceId: string | undefined,
+) {
+  if (!workspaceId) {
+    globalTaskCache.clear();
+    return;
+  }
+  clearGlobalTasksCache(workspaceId);
 }
 
 export function clearLeadAppointmentsCache(workspaceId?: string) {

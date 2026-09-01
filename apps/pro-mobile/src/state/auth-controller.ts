@@ -18,6 +18,7 @@ import {
   clearLeadConversationsCache,
   clearLeadEngagementCache,
   clearLeadTasksCache,
+  clearGlobalTasksCache,
 } from "../lib/lead-tab-cache";
 import { SecureStorage, SECURE_STORAGE_KEYS } from "../storage/secure-storage";
 import "../storage/hardware-secure-storage"; // initialize hardware engine
@@ -594,6 +595,7 @@ export class MobileAuthController {
     await SecureStorage.removeItem(SECURE_STORAGE_KEYS.ACTIVE_WORKSPACE_ID);
     // Stage 4.6 / 4.7 — clear workspace-scoped lead tab caches on switch.
     clearLeadTasksCache(priorWs);
+    clearGlobalTasksCache(priorWs);
     clearLeadAppointmentsCache(priorWs);
     clearLeadConversationsCache(priorWs);
     clearLeadEngagementCache(priorWs);
@@ -624,6 +626,7 @@ export class MobileAuthController {
     } finally {
       await SecureStorage.clear();
       clearLeadTasksCache();
+      clearGlobalTasksCache();
       clearLeadAppointmentsCache();
       clearLeadConversationsCache();
       clearLeadEngagementCache();
