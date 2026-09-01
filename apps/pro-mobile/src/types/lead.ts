@@ -70,6 +70,26 @@ export interface MobileLeadActivity {
   pinned?: boolean;
 }
 
+export type AgentTaskType = "CALL" | "EMAIL" | "TODO";
+export type AgentTaskStatus = "OPEN" | "DONE" | "CANCELLED";
+
+/** Stage 4.6 — compact AgentTask DTO for Lead Detail Task & Reminders. */
+export interface MobileLeadTask {
+  id: string;
+  type: AgentTaskType;
+  status: AgentTaskStatus;
+  title: string;
+  body: string | null;
+  dueAt: string;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeadTasksResponseData {
+  tasks: MobileLeadTask[];
+}
+
 export interface MobileLeadDetail {
   id: string;
   status: LeadStatus;

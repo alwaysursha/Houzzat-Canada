@@ -1,11 +1,11 @@
 /**
- * Stage 4.4B / 4.5 — Native Lead Detail (web-mobile visual parity + lead actions).
+ * Stage 4.4B / 4.5 / 4.6 — Native Lead Detail (web-mobile visual parity + actions).
  *
  * Visual authority: src/components/agent/CustomerProfile.tsx (variant="modal")
  * + LeadQuickPopup mobile shell.
  *
  * Data: GET /api/mobile/v2/leads/[leadId]
- * Actions: native tel/sms/mailto + POST notes + PATCH status.
+ * Actions: native tel/sms/mailto + POST notes + PATCH status + tasks.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -26,6 +26,8 @@ import {
   View,
 } from "react-native";
 import { mobileApiClient } from "../api/client";
+import { TasksRemindersTab } from "../components/TasksRemindersTab";
+import { updateLeadStatusInListCache } from "../lib/lead-list-cache";
 import { useAuth } from "../state/AuthContext";
 import type {
   BackendEnvelope,
@@ -34,7 +36,6 @@ import type {
   MobileLeadActivity,
   MobileLeadDetail,
 } from "../types/api";
-import { updateLeadStatusInListCache } from "../lib/lead-list-cache";
 
 const detailCache = new Map<string, { data: MobileLeadDetail; timestamp: number }>();
 
@@ -1664,9 +1665,20 @@ export function LeadDetailScreen({
               ) : null}
 
               {tab === "reminders" ? (
-                <ComingSoonPanel
-                  title="Task & Reminders"
-                  hint={`${lead.counts.tasks} task(s) on record. Full task desk arrives in a later stage.`}
+                <TasksRemindersTab
+                  leadId={leadId}
+                  workspaceId={workspaceId}
+                  onTaskCountChange={(totalCount) => {
+                    setLead((prev) => {
+                      if (!prev || prev.counts.tasks === totalCount) return prev;
+                      const next = {
+                        ...prev,
+                        counts: { ...prev.counts, tasks: totalCount },
+                      };
+                      if (cacheKey) patchLeadDetailCache(cacheKey, next);
+                      return next;
+                    });
+                  }}
                 />
               ) : null}
 
