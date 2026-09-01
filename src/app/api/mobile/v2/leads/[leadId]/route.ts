@@ -145,6 +145,7 @@ export async function GET(
             type: true,
             body: true,
             createdAt: true,
+            meta: true,
           },
         },
         _count: {
@@ -228,12 +229,27 @@ export async function GET(
           }
         : null,
       isPond,
-      recentActivities: lead.activities.map((act) => ({
-        id: act.id,
-        type: act.type,
-        body: act.body,
-        createdAt: act.createdAt.toISOString(),
-      })),
+      recentActivities: (() => {
+        const mapped = lead.activities.map((act) => {
+          const meta =
+            act.meta && typeof act.meta === "object" && !Array.isArray(act.meta)
+              ? (act.meta as Record<string, unknown>)
+              : null;
+          const pinned = meta?.pinned === true;
+          return {
+            id: act.id,
+            type: act.type,
+            body: act.body,
+            createdAt: act.createdAt.toISOString(),
+            // Stage 4.5.2 — expose canonical LeadNote pin (stored on activity meta)
+            ...(pinned ? { pinned: true as const } : {}),
+          };
+        });
+        // Float pinned notes to top (web CrmTimeline / customer-timeline parity)
+        const pinnedItems = mapped.filter((a) => a.pinned);
+        const rest = mapped.filter((a) => !a.pinned);
+        return [...pinnedItems, ...rest];
+      })(),
       counts: {
         notes: lead._count.leadNotes,
         appointments: lead._count.appointments,

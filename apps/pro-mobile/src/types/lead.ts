@@ -66,6 +66,8 @@ export interface MobileLeadActivity {
   type: string;
   body: string | null;
   createdAt: string;
+  /** Present when activity is a pinned LeadNote (canonical LeadNote.pinned). */
+  pinned?: boolean;
 }
 
 export interface MobileLeadDetail {

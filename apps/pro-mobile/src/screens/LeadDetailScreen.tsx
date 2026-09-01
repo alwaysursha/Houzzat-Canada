@@ -670,19 +670,32 @@ export function LeadDetailScreen({
         return;
       }
 
-      const created = (res.data as { note?: MobileLeadActivity & { category?: string; pinned?: boolean } })?.note;
+      const created = (res.data as {
+        note?: {
+          id: string;
+          body: string;
+          category?: string;
+          pinned?: boolean;
+          createdAt: string;
+        };
+      })?.note;
+      const wasPinned = Boolean(created?.pinned ?? notePinned);
       const activityItem: MobileLeadActivity = {
         id: created?.id || `note_${Date.now()}`,
         type: "note",
         body: trimmed.slice(0, 500),
         createdAt: created?.createdAt || new Date().toISOString(),
+        ...(wasPinned ? { pinned: true } : {}),
       };
 
       setLead((prev) => {
         if (!prev) return prev;
+        const merged = [activityItem, ...(prev.recentActivities || [])];
+        const pinnedItems = merged.filter((a) => a.pinned);
+        const rest = merged.filter((a) => !a.pinned);
         const next: MobileLeadDetail = {
           ...prev,
-          recentActivities: [activityItem, ...(prev.recentActivities || [])].slice(0, 10),
+          recentActivities: [...pinnedItems, ...rest].slice(0, 10),
           counts: {
             ...prev.counts,
             notes: prev.counts.notes + 1,
@@ -695,7 +708,7 @@ export function LeadDetailScreen({
       setNoteBody("");
       setNotePinned(false);
       setNoteMessage(
-        notePinned
+        wasPinned
           ? `${noteCategory === "CALL" ? "Call" : "General"} note pinned`
           : `${noteCategory === "CALL" ? "Call" : "General"} note saved`,
       );
@@ -1468,7 +1481,13 @@ export function LeadDetailScreen({
                                 act.type,
                               );
                             return (
-                              <View key={act.id} style={styles.timelineItem}>
+                              <View
+                                key={act.id}
+                                style={[
+                                  styles.timelineItem,
+                                  act.pinned && styles.timelineItemPinned,
+                                ]}
+                              >
                                 <View
                                   style={[
                                     styles.timelineDot,
@@ -1481,6 +1500,13 @@ export function LeadDetailScreen({
                                 </View>
                                 <View style={styles.timelineContent}>
                                   <View style={styles.timelineChipRow}>
+                                    {act.pinned ? (
+                                      <View style={styles.pinnedBadge}>
+                                        <Text style={styles.pinnedBadgeText}>
+                                          📌 Pinned
+                                        </Text>
+                                      </View>
+                                    ) : null}
                                     <View
                                       style={[
                                         styles.activityTypeChip,
@@ -2254,7 +2280,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    opacity: 0.55,
   },
   pinChipText: {
     fontSize: 11,
@@ -2303,6 +2328,27 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFBEB",
   },
   pinChipTextActive: {
+    color: "#92400E",
+    fontWeight: "700",
+  },
+  timelineItemPinned: {
+    backgroundColor: "rgba(255, 251, 235, 0.85)",
+    borderRadius: 10,
+    marginHorizontal: -4,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  pinnedBadge: {
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  pinnedBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
     color: "#92400E",
   },
   statusMenuOverlay: {
