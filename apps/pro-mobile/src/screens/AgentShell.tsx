@@ -12,10 +12,8 @@
 
 import React, { useState } from "react";
 import {
-  Alert,
   Platform,
   SafeAreaView,
-  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -30,8 +28,14 @@ import { LeadDetailScreen } from "./LeadDetailScreen";
 import { LeadsScreen } from "./LeadsScreen";
 import { GlobalTasksScreen } from "./GlobalTasksScreen";
 import { GlobalCalendarScreen } from "./GlobalCalendarScreen";
+import { MoreHubScreen } from "./MoreHubScreen";
+import {
+  MoreUtilityScreen,
+  type MoreUtilityId,
+} from "./MoreUtilityScreen";
 
 type AgentTab = "launchpad" | "leads" | "tasks" | "calendar" | "more";
+type ActiveUtility = Exclude<MoreUtilityId, "account"> | null;
 
 export function AgentShell({
   onReturnToCommandCentre,
@@ -50,6 +54,7 @@ export function AgentShell({
   const [activeTab, setActiveTab] = useState<AgentTab>("launchpad");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeDrawerId, setActiveDrawerId] = useState("launchpad");
+  const [activeUtility, setActiveUtility] = useState<ActiveUtility>(null);
   const [leadsInitialFilter, setLeadsInitialFilter] = useState<string | undefined>(undefined);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [leadNavIds, setLeadNavIds] = useState<string[]>([]);
@@ -59,9 +64,16 @@ export function AgentShell({
   const orgName = activeWorkspace?.slug ? `${activeWorkspace.slug}.houzzatpro.com` : "Agent Desk";
   const userRole = activeMembership?.role || "AGENT";
   const userEmail = user?.email || "";
+  const userName = user?.name ?? null;
 
   const handleSelectDrawerItem = (item: DrawerItem) => {
     setActiveDrawerId(item.id);
+    if (item.utilityId && item.utilityId !== "account") {
+      setActiveUtility(item.utilityId);
+      setActiveTab("more");
+      return;
+    }
+    setActiveUtility(null);
     if (item.tabKey) {
       setActiveTab(item.tabKey);
     }
@@ -71,28 +83,24 @@ export function AgentShell({
     setLeadsInitialFilter("NEW_LEAD");
     setActiveTab("leads");
     setActiveDrawerId("leads");
+    setActiveUtility(null);
   };
 
   const handleNavigateToLeads = (statusFilter?: string) => {
     setLeadsInitialFilter(statusFilter);
     setActiveTab("leads");
     setActiveDrawerId("leads");
+    setActiveUtility(null);
   };
 
   const handleNavigateToTasks = () => {
     setActiveTab("tasks");
     setActiveDrawerId("tasks");
+    setActiveUtility(null);
   };
 
   const handleSignOut = () => {
-    Alert.alert(
-      "Sign Out",
-      "Are you sure you want to sign out of HouzzatPRO?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Sign Out", style: "destructive", onPress: () => signOut() },
-      ]
-    );
+    void signOut();
   };
 
   return (
@@ -171,72 +179,34 @@ export function AgentShell({
         )}
 
         {activeTab === "more" && (
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* User Profile */}
-            <View style={styles.card}>
-              <Text style={styles.cardSectionTitle}>User Profile</Text>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>Email:</Text>
-                <Text style={styles.infoVal}>{userEmail}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>Role:</Text>
-                <View style={styles.rolePillSmall}>
-                  <Text style={styles.rolePillSmallText}>{userRole}</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Workspace Identity */}
-            <View style={styles.card}>
-              <Text style={styles.cardSectionTitle}>Active Workspace</Text>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>Name:</Text>
-                <Text style={styles.infoVal}>{brandDisplayName}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>Workspace ID:</Text>
-                <Text style={styles.infoValMono}>{activeWorkspace?.id}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>Tenant Slug:</Text>
-                <Text style={styles.infoValMono}>{activeWorkspace?.slug}</Text>
-              </View>
-            </View>
-
-            {/* Return to Command Centre if opened by OWNER/ADMIN */}
-            {onReturnToCommandCentre ? (
-              <TouchableOpacity
-                style={styles.actionBtnSecondary}
-                activeOpacity={0.85}
-                onPress={onReturnToCommandCentre}
-              >
-                <Text style={styles.actionBtnSecondaryText}>← Return to Command Centre</Text>
-              </TouchableOpacity>
-            ) : null}
-
-            {/* Switch Workspace */}
-            {hasMultipleWorkspaces && (
-              <TouchableOpacity
-                style={styles.actionBtnSecondary}
-                activeOpacity={0.85}
-                onPress={() => {
-                  changeWorkspace();
-                }}
-              >
-                <Text style={styles.actionBtnSecondaryText}>⇄ Switch Workspace</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Sign Out Button */}
-            <TouchableOpacity
-              style={styles.signOutBtn}
-              activeOpacity={0.85}
-              onPress={handleSignOut}
-            >
-              <Text style={styles.signOutBtnText}>Sign Out of HouzzatPRO</Text>
-            </TouchableOpacity>
-          </ScrollView>
+          activeUtility ? (
+            <MoreUtilityScreen
+              utilityId={activeUtility}
+              onBack={() => {
+                setActiveUtility(null);
+                setActiveDrawerId("account");
+              }}
+            />
+          ) : (
+            <MoreHubScreen
+              userEmail={userEmail}
+              userName={userName}
+              userRole={userRole}
+              brandDisplayName={brandDisplayName}
+              workspaceId={activeWorkspace?.id}
+              workspaceSlug={activeWorkspace?.slug}
+              hasMultipleWorkspaces={hasMultipleWorkspaces}
+              onChangeWorkspace={() => {
+                void changeWorkspace();
+              }}
+              onSignOut={handleSignOut}
+              onReturnToCommandCentre={onReturnToCommandCentre}
+              onOpenUtility={(id) => {
+                setActiveUtility(id);
+                setActiveDrawerId(id);
+              }}
+            />
+          )
         )}
       </View>
 
@@ -248,6 +218,7 @@ export function AgentShell({
           onPress={() => {
             setActiveTab("launchpad");
             setActiveDrawerId("launchpad");
+            setActiveUtility(null);
           }}
         >
           <View style={[styles.navIconBox, activeTab === "launchpad" && styles.navIconBoxActive]}>
@@ -266,6 +237,7 @@ export function AgentShell({
           onPress={() => {
             setActiveTab("leads");
             setActiveDrawerId("leads");
+            setActiveUtility(null);
           }}
         >
           <View style={[styles.navIconBox, activeTab === "leads" && styles.navIconBoxActive]}>
@@ -284,6 +256,7 @@ export function AgentShell({
           onPress={() => {
             setActiveTab("tasks");
             setActiveDrawerId("tasks");
+            setActiveUtility(null);
           }}
         >
           <View style={[styles.navIconBox, activeTab === "tasks" && styles.navIconBoxActive]}>
@@ -302,6 +275,7 @@ export function AgentShell({
           onPress={() => {
             setActiveTab("calendar");
             setActiveDrawerId("calendar");
+            setActiveUtility(null);
           }}
         >
           <View style={[styles.navIconBox, activeTab === "calendar" && styles.navIconBoxActive]}>

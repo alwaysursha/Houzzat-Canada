@@ -11,10 +11,9 @@
 
 import React, { useState } from "react";
 import {
-  Alert,
   Platform,
-  SafeAreaView,
   ScrollView,
+  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
@@ -27,8 +26,14 @@ import { useAuth } from "../state/AuthContext";
 import { AgentShell } from "./AgentShell";
 import { LeadDetailScreen } from "./LeadDetailScreen";
 import { LeadsScreen } from "./LeadsScreen";
+import { MoreHubScreen } from "./MoreHubScreen";
+import {
+  MoreUtilityScreen,
+  type MoreUtilityId,
+} from "./MoreUtilityScreen";
 
 type CommandCentreTab = "overview" | "team" | "leads" | "calendar" | "more";
+type ActiveUtility = Exclude<MoreUtilityId, "account"> | null;
 
 export function CommandCentreShell() {
   const {
@@ -43,6 +48,7 @@ export function CommandCentreShell() {
   const [activeTab, setActiveTab] = useState<CommandCentreTab>("overview");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeDrawerId, setActiveDrawerId] = useState("launchpad");
+  const [activeUtility, setActiveUtility] = useState<ActiveUtility>(null);
   const [inAgentMode, setInAgentMode] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [leadNavIds, setLeadNavIds] = useState<string[]>([]);
@@ -52,6 +58,7 @@ export function CommandCentreShell() {
   const orgName = activeWorkspace?.slug ? `${activeWorkspace.slug}.houzzatpro.com` : "Command Centre";
   const userRole = activeMembership?.role || "OWNER";
   const userEmail = user?.email || "";
+  const userName = user?.name ?? null;
 
   // If the owner/admin entered Agent Mode, render the AgentShell with return callback
   if (inAgentMode) {
@@ -60,6 +67,12 @@ export function CommandCentreShell() {
 
   const handleSelectDrawerItem = (item: DrawerItem) => {
     setActiveDrawerId(item.id);
+    if (item.utilityId && item.utilityId !== "account") {
+      setActiveUtility(item.utilityId);
+      setActiveTab("more");
+      return;
+    }
+    setActiveUtility(null);
     if (item.tabKey === "launchpad") setActiveTab("overview");
     else if (item.tabKey === "leads") setActiveTab("leads");
     else if (item.tabKey === "tasks") setActiveTab("team");
@@ -68,14 +81,7 @@ export function CommandCentreShell() {
   };
 
   const handleSignOut = () => {
-    Alert.alert(
-      "Sign Out",
-      "Are you sure you want to sign out of HouzzatPRO?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Sign Out", style: "destructive", onPress: () => signOut() },
-      ]
-    );
+    void signOut();
   };
 
   return (
@@ -215,70 +221,34 @@ export function CommandCentreShell() {
         )}
 
         {activeTab === "more" && (
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* User Profile */}
-            <View style={styles.card}>
-              <Text style={styles.cardSectionTitle}>Executive Profile</Text>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>Email:</Text>
-                <Text style={styles.infoVal}>{userEmail}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>Role:</Text>
-                <View style={styles.rolePillSmall}>
-                  <Text style={styles.rolePillSmallText}>{userRole}</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Workspace Identity */}
-            <View style={styles.card}>
-              <Text style={styles.cardSectionTitle}>Active Workspace</Text>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>Name:</Text>
-                <Text style={styles.infoVal}>{brandDisplayName}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>Workspace ID:</Text>
-                <Text style={styles.infoValMono}>{activeWorkspace?.id}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>Tenant Slug:</Text>
-                <Text style={styles.infoValMono}>{activeWorkspace?.slug}</Text>
-              </View>
-            </View>
-
-            {/* Agent Mode Switch */}
-            <TouchableOpacity
-              style={styles.actionBtnPrimary}
-              activeOpacity={0.85}
-              onPress={() => setInAgentMode(true)}
-            >
-              <Text style={styles.actionBtnPrimaryText}>👤 Open Personal Agent Desk</Text>
-            </TouchableOpacity>
-
-            {/* Switch Workspace */}
-            {hasMultipleWorkspaces && (
-              <TouchableOpacity
-                style={styles.actionBtnSecondary}
-                activeOpacity={0.85}
-                onPress={() => {
-                  changeWorkspace();
-                }}
-              >
-                <Text style={styles.actionBtnSecondaryText}>⇄ Switch Workspace</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Sign Out Button */}
-            <TouchableOpacity
-              style={styles.signOutBtn}
-              activeOpacity={0.85}
-              onPress={handleSignOut}
-            >
-              <Text style={styles.signOutBtnText}>Sign Out of HouzzatPRO</Text>
-            </TouchableOpacity>
-          </ScrollView>
+          activeUtility ? (
+            <MoreUtilityScreen
+              utilityId={activeUtility}
+              onBack={() => {
+                setActiveUtility(null);
+                setActiveDrawerId("account");
+              }}
+            />
+          ) : (
+            <MoreHubScreen
+              userEmail={userEmail}
+              userName={userName}
+              userRole={userRole}
+              brandDisplayName={brandDisplayName}
+              workspaceId={activeWorkspace?.id}
+              workspaceSlug={activeWorkspace?.slug}
+              hasMultipleWorkspaces={hasMultipleWorkspaces}
+              onChangeWorkspace={() => {
+                void changeWorkspace();
+              }}
+              onSignOut={handleSignOut}
+              onOpenAgentDesk={() => setInAgentMode(true)}
+              onOpenUtility={(id) => {
+                setActiveUtility(id);
+                setActiveDrawerId(id);
+              }}
+            />
+          )
         )}
       </View>
 
@@ -290,6 +260,7 @@ export function CommandCentreShell() {
           onPress={() => {
             setActiveTab("overview");
             setActiveDrawerId("launchpad");
+            setActiveUtility(null);
           }}
         >
           <View style={[styles.navIconBox, activeTab === "overview" && styles.navIconBoxActive]}>
@@ -308,6 +279,7 @@ export function CommandCentreShell() {
           onPress={() => {
             setActiveTab("team");
             setActiveDrawerId("tasks");
+            setActiveUtility(null);
           }}
         >
           <View style={[styles.navIconBox, activeTab === "team" && styles.navIconBoxActive]}>
@@ -326,6 +298,7 @@ export function CommandCentreShell() {
           onPress={() => {
             setActiveTab("leads");
             setActiveDrawerId("leads");
+            setActiveUtility(null);
           }}
         >
           <View style={[styles.navIconBox, activeTab === "leads" && styles.navIconBoxActive]}>
@@ -344,6 +317,7 @@ export function CommandCentreShell() {
           onPress={() => {
             setActiveTab("calendar");
             setActiveDrawerId("calendar");
+            setActiveUtility(null);
           }}
         >
           <View style={[styles.navIconBox, activeTab === "calendar" && styles.navIconBoxActive]}>

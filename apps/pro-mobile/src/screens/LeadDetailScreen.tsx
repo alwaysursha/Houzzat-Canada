@@ -42,7 +42,10 @@ import type {
   MobileLeadActivity,
   MobileLeadDetail,
 } from "../types/api";
-import { engagementCache } from "../lib/lead-tab-cache";
+import {
+  engagementCache,
+  registerLeadDetailCacheClearer,
+} from "../lib/lead-tab-cache";
 
 const detailCache = new Map<string, { data: MobileLeadDetail; timestamp: number }>();
 
@@ -57,6 +60,8 @@ export function clearLeadDetailCache(workspaceId?: string) {
     }
   }
 }
+
+registerLeadDetailCacheClearer(clearLeadDetailCache);
 
 function patchLeadDetailCache(
   cacheKey: string,

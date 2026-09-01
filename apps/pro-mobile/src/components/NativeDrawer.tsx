@@ -23,26 +23,12 @@ import {
   View,
 } from "react-native";
 import { HouzzatProWordmark } from "../components/BrandMark";
+import {
+  DRAWER_NAV_ITEMS,
+  type DrawerItem,
+} from "../lib/drawer-nav-items";
 
-export interface DrawerItem {
-  id: string;
-  label: string;
-  icon: string;
-  tabKey?: "launchpad" | "leads" | "tasks" | "calendar" | "more";
-}
-
-export const DRAWER_NAV_ITEMS: DrawerItem[] = [
-  { id: "launchpad", label: "Launchpad", icon: "⌂", tabKey: "launchpad" },
-  { id: "leads", label: "Leads", icon: "👥", tabKey: "leads" },
-  { id: "tasks", label: "Tasks", icon: "✓", tabKey: "tasks" },
-  { id: "calendar", label: "Calendar", icon: "📅", tabKey: "calendar" },
-  { id: "statistics", label: "Statistics", icon: "📊", tabKey: "more" },
-  { id: "inbox", label: "Communications", icon: "✉", tabKey: "more" },
-  { id: "cma", label: "CMA", icon: "📈", tabKey: "more" },
-  { id: "team", label: "Team", icon: "👥", tabKey: "more" },
-  { id: "notifications", label: "Notifications", icon: "🔔", tabKey: "more" },
-  { id: "search", label: "Properties", icon: "🔍", tabKey: "more" },
-];
+export { DRAWER_NAV_ITEMS, type DrawerItem };
 
 interface NativeDrawerProps {
   visible: boolean;

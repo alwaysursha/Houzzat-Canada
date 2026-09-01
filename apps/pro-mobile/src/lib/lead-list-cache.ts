@@ -23,6 +23,17 @@ export function setLeadCacheStore(
   leadCacheStore = next;
 }
 
+/** Stage 5.2 — clear leads list cache on workspace switch / logout. */
+export function clearLeadListCache(workspaceId?: string) {
+  if (!workspaceId) {
+    leadCacheStore = null;
+    return;
+  }
+  if (leadCacheStore?.workspaceId === workspaceId) {
+    leadCacheStore = null;
+  }
+}
+
 /** Patch a lead row after status mutation so Back reflects the new status. */
 export function updateLeadStatusInListCache(
   workspaceId: string | undefined,

@@ -119,7 +119,11 @@ export function clearGlobalAppointmentsCache(workspaceId?: string) {
     return;
   }
   for (const key of globalAppointmentCache.keys()) {
-    if (key.startsWith(`${workspaceId}:calendar:`)) {
+    // Keys are `${workspaceId}:calendar` (Stage 5.1) — match prefix safely.
+    if (
+      key === `${workspaceId}:calendar` ||
+      key.startsWith(`${workspaceId}:calendar:`)
+    ) {
       globalAppointmentCache.delete(key);
     }
   }
@@ -167,4 +171,29 @@ export function clearLeadEngagementCache(workspaceId?: string) {
       engagementCache.delete(key);
     }
   }
+}
+
+/**
+ * Stage 5.2 — Single path to clear every workspace-scoped native cache.
+ * Used by workspace switch + logout. Pass workspaceId to scope; omit to clear all.
+ *
+ * Lead Detail cache is cleared via optional callback registered by LeadDetailScreen
+ * to avoid circular imports — see registerLeadDetailCacheClearer.
+ */
+let leadDetailCacheClearer: ((workspaceId?: string) => void) | null = null;
+
+export function registerLeadDetailCacheClearer(
+  clearer: (workspaceId?: string) => void,
+) {
+  leadDetailCacheClearer = clearer;
+}
+
+export function clearAllWorkspaceCaches(workspaceId?: string) {
+  clearLeadTasksCache(workspaceId);
+  clearGlobalTasksCache(workspaceId);
+  clearLeadAppointmentsCache(workspaceId);
+  clearGlobalAppointmentsCache(workspaceId);
+  clearLeadConversationsCache(workspaceId);
+  clearLeadEngagementCache(workspaceId);
+  leadDetailCacheClearer?.(workspaceId);
 }

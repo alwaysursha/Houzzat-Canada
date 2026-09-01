@@ -13,14 +13,8 @@
  */
 
 import { mobileApiClient } from "../api/client";
-import {
-  clearLeadAppointmentsCache,
-  clearGlobalAppointmentsCache,
-  clearLeadConversationsCache,
-  clearLeadEngagementCache,
-  clearLeadTasksCache,
-  clearGlobalTasksCache,
-} from "../lib/lead-tab-cache";
+import { clearAllWorkspaceCaches } from "../lib/lead-tab-cache";
+import { clearLeadListCache } from "../lib/lead-list-cache";
 import { SecureStorage, SECURE_STORAGE_KEYS } from "../storage/secure-storage";
 import "../storage/hardware-secure-storage"; // initialize hardware engine
 import type {
@@ -594,13 +588,9 @@ export class MobileAuthController {
   public async changeWorkspace(): Promise<void> {
     const priorWs = this.state.activeWorkspace?.id;
     await SecureStorage.removeItem(SECURE_STORAGE_KEYS.ACTIVE_WORKSPACE_ID);
-    // Stage 4.6 / 4.7 — clear workspace-scoped lead tab caches on switch.
-    clearLeadTasksCache(priorWs);
-    clearGlobalTasksCache(priorWs);
-    clearGlobalAppointmentsCache(priorWs);
-    clearLeadAppointmentsCache(priorWs);
-    clearLeadConversationsCache(priorWs);
-    clearLeadEngagementCache(priorWs);
+    // Stage 5.2 — one central clear for all workspace-scoped native caches.
+    clearAllWorkspaceCaches(priorWs);
+    clearLeadListCache(priorWs);
     this.updateState({
       state: "WORKSPACE_SELECTION",
       activeMembership: null,
@@ -627,12 +617,8 @@ export class MobileAuthController {
       }
     } finally {
       await SecureStorage.clear();
-      clearLeadTasksCache();
-      clearGlobalTasksCache();
-      clearGlobalAppointmentsCache();
-      clearLeadAppointmentsCache();
-      clearLeadConversationsCache();
-      clearLeadEngagementCache();
+      clearAllWorkspaceCaches();
+      clearLeadListCache();
       this.updateState({
         state: "SIGNED_OUT",
         user: null,
