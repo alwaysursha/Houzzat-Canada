@@ -17,25 +17,17 @@ import {
 } from "react-native";
 import { mobileApiClient } from "../api/client";
 import { unwrapCreatedTask, unwrapTasksList } from "../lib/task-response";
+import {
+  clearLeadTasksCache,
+  taskCache,
+} from "../lib/lead-tab-cache";
 import type {
   AgentTaskStatus,
   AgentTaskType,
   MobileLeadTask,
 } from "../types/api";
 
-const taskCache = new Map<string, { tasks: MobileLeadTask[]; timestamp: number }>();
-
-export function clearLeadTasksCache(workspaceId?: string) {
-  if (!workspaceId) {
-    taskCache.clear();
-    return;
-  }
-  for (const key of taskCache.keys()) {
-    if (key.startsWith(`${workspaceId}:`)) {
-      taskCache.delete(key);
-    }
-  }
-}
+export { clearLeadTasksCache };
 
 function defaultDueLocalValue(): string {
   const d = new Date();

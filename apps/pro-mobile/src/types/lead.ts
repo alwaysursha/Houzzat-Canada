@@ -90,6 +90,37 @@ export interface LeadTasksResponseData {
   tasks: MobileLeadTask[];
 }
 
+export type AppointmentType =
+  | "SHOWING"
+  | "VIRTUAL_VIEWING"
+  | "BUYER_SESSION"
+  | "VALUATION_CALL";
+
+export type AppointmentStatus =
+  | "REQUESTED"
+  | "CONFIRMED"
+  | "RESCHEDULED"
+  | "COMPLETED"
+  | "CANCELLED";
+
+/** Stage 4.7 — compact Appointment DTO for Lead Detail Appointments tab. */
+export interface MobileLeadAppointment {
+  id: string;
+  type: AppointmentType;
+  status: AppointmentStatus;
+  startsAt: string | null;
+  endsAt: string | null;
+  listingMls: string | null;
+  notes: string | null;
+  videoJoinUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeadAppointmentsResponseData {
+  appointments: MobileLeadAppointment[];
+}
+
 export interface MobileLeadDetail {
   id: string;
   status: LeadStatus;

@@ -13,6 +13,10 @@
  */
 
 import { mobileApiClient } from "../api/client";
+import {
+  clearLeadAppointmentsCache,
+  clearLeadTasksCache,
+} from "../lib/lead-tab-cache";
 import { SecureStorage, SECURE_STORAGE_KEYS } from "../storage/secure-storage";
 import "../storage/hardware-secure-storage"; // initialize hardware engine
 import type {
@@ -489,7 +493,11 @@ export class MobileAuthController {
    * Switch workspace back to selection state.
    */
   public async changeWorkspace(): Promise<void> {
+    const priorWs = this.state.activeWorkspace?.id;
     await SecureStorage.removeItem(SECURE_STORAGE_KEYS.ACTIVE_WORKSPACE_ID);
+    // Stage 4.6 / 4.7 — clear workspace-scoped lead tab caches on switch.
+    clearLeadTasksCache(priorWs);
+    clearLeadAppointmentsCache(priorWs);
     this.updateState({
       state: "WORKSPACE_SELECTION",
       activeMembership: null,
@@ -515,6 +523,8 @@ export class MobileAuthController {
       }
     } finally {
       await SecureStorage.clear();
+      clearLeadTasksCache();
+      clearLeadAppointmentsCache();
       this.updateState({
         state: "SIGNED_OUT",
         user: null,

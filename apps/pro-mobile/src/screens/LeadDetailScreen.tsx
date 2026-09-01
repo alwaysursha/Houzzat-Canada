@@ -26,6 +26,7 @@ import {
   View,
 } from "react-native";
 import { mobileApiClient } from "../api/client";
+import { AppointmentsTab } from "../components/AppointmentsTab";
 import { TasksRemindersTab } from "../components/TasksRemindersTab";
 import { updateLeadStatusInListCache } from "../lib/lead-list-cache";
 import { useAuth } from "../state/AuthContext";
@@ -607,8 +608,8 @@ export function LeadDetailScreen({
   const selectTab = (next: TabId) => {
     setTab(next);
     // After leaving a long Activity timeline, scroll offset can sit past the
-    // shorter Task & Reminders content — bring the tab section into view.
-    if (next === "reminders") {
+    // shorter Appointments / Task & Reminders content — bring the tab into view.
+    if (next === "reminders" || next === "appointments") {
       requestAnimationFrame(() => {
         mainScrollRef.current?.scrollTo({
           y: Math.max(0, tabSectionOffsetY.current - 12),
@@ -1714,9 +1715,22 @@ export function LeadDetailScreen({
               ) : null}
 
               {tab === "appointments" ? (
-                <ComingSoonPanel
-                  title="Appointments"
-                  hint={`${lead.counts.appointments} appointment(s) on record. Scheduling arrives in a later stage.`}
+                <AppointmentsTab
+                  leadId={leadId}
+                  workspaceId={workspaceId}
+                  onAppointmentCountChange={(totalCount) => {
+                    setLead((prev) => {
+                      if (!prev || prev.counts.appointments === totalCount) {
+                        return prev;
+                      }
+                      const next = {
+                        ...prev,
+                        counts: { ...prev.counts, appointments: totalCount },
+                      };
+                      if (cacheKey) patchLeadDetailCache(cacheKey, next);
+                      return next;
+                    });
+                  }}
                 />
               ) : null}
 
