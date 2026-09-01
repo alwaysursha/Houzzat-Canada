@@ -132,8 +132,28 @@ export interface MobileLeadAppointment {
   updatedAt: string;
 }
 
+/** Stage 5.1 — Global Calendar list item (web /agent/appointments). */
+export interface MobileGlobalAppointment extends MobileLeadAppointment {
+  leadId: string | null;
+  customer: {
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null;
+  lead: {
+    id: string;
+    customer: { name: string | null; email: string | null };
+  } | null;
+}
+
 export interface LeadAppointmentsResponseData {
   appointments: MobileLeadAppointment[];
+}
+
+export interface GlobalAppointmentsResponseData {
+  from: string;
+  to: string;
+  appointments: MobileGlobalAppointment[];
 }
 
 /** Stage 4.8 — LeadEmailLog DTO (web Conversations tab = CRM emails). */

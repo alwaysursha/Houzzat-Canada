@@ -15,6 +15,7 @@
 import { mobileApiClient } from "../api/client";
 import {
   clearLeadAppointmentsCache,
+  clearGlobalAppointmentsCache,
   clearLeadConversationsCache,
   clearLeadEngagementCache,
   clearLeadTasksCache,
@@ -596,6 +597,7 @@ export class MobileAuthController {
     // Stage 4.6 / 4.7 — clear workspace-scoped lead tab caches on switch.
     clearLeadTasksCache(priorWs);
     clearGlobalTasksCache(priorWs);
+    clearGlobalAppointmentsCache(priorWs);
     clearLeadAppointmentsCache(priorWs);
     clearLeadConversationsCache(priorWs);
     clearLeadEngagementCache(priorWs);
@@ -627,6 +629,7 @@ export class MobileAuthController {
       await SecureStorage.clear();
       clearLeadTasksCache();
       clearGlobalTasksCache();
+      clearGlobalAppointmentsCache();
       clearLeadAppointmentsCache();
       clearLeadConversationsCache();
       clearLeadEngagementCache();

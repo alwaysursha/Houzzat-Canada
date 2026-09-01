@@ -2,7 +2,7 @@
  * Stage 4.7 — Appointment API envelope helpers (no React Native imports).
  */
 
-import type { MobileLeadAppointment } from "../types/lead";
+import type { MobileGlobalAppointment, MobileLeadAppointment } from "../types/lead";
 
 export function unwrapAppointmentsList(payload: unknown): MobileLeadAppointment[] {
   if (!payload) return [];
@@ -36,4 +36,16 @@ export function unwrapAppointment(
     }
   }
   return null;
+}
+
+export function unwrapGlobalAppointmentsList(
+  payload: unknown,
+): MobileGlobalAppointment[] {
+  return unwrapAppointmentsList(payload) as MobileGlobalAppointment[];
+}
+
+export function unwrapGlobalAppointment(
+  payload: unknown,
+): MobileGlobalAppointment | null {
+  return unwrapAppointment(payload) as MobileGlobalAppointment | null;
 }

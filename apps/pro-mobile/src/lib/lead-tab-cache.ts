@@ -7,6 +7,7 @@ import type {
   MobileLeadAppointment,
   MobileLeadEmail,
   MobileLeadEngagement,
+  MobileGlobalAppointment,
   MobileGlobalTask,
   MobileLeadTask,
 } from "../types/api";
@@ -25,6 +26,17 @@ export const globalTaskCache = new Map<
 export const appointmentCache = new Map<
   string,
   { appointments: MobileLeadAppointment[]; timestamp: number }
+>();
+
+/** Stage 5.1 — workspace-scoped global Calendar / appointments book. */
+export const globalAppointmentCache = new Map<
+  string,
+  {
+    appointments: MobileGlobalAppointment[];
+    from: string;
+    to: string;
+    timestamp: number;
+  }
 >();
 
 export type ConversationCacheEntry = {
@@ -99,6 +111,38 @@ export function clearLeadAppointmentsCache(workspaceId?: string) {
       appointmentCache.delete(key);
     }
   }
+}
+
+export function clearGlobalAppointmentsCache(workspaceId?: string) {
+  if (!workspaceId) {
+    globalAppointmentCache.clear();
+    return;
+  }
+  for (const key of globalAppointmentCache.keys()) {
+    if (key.startsWith(`${workspaceId}:calendar:`)) {
+      globalAppointmentCache.delete(key);
+    }
+  }
+}
+
+/** After global appointment mutation — drop lead-scoped cache. */
+export function invalidateLeadAppointmentsCacheForLead(
+  workspaceId: string | undefined,
+  leadId: string | null | undefined,
+) {
+  if (!workspaceId || !leadId) return;
+  appointmentCache.delete(`${workspaceId}:${leadId}:appointments`);
+}
+
+/** After Lead Detail appointment mutation — drop global calendar cache. */
+export function invalidateGlobalAppointmentsCacheForWorkspace(
+  workspaceId: string | undefined,
+) {
+  if (!workspaceId) {
+    globalAppointmentCache.clear();
+    return;
+  }
+  clearGlobalAppointmentsCache(workspaceId);
 }
 
 export function clearLeadConversationsCache(workspaceId?: string) {

@@ -28,6 +28,7 @@ import {
 import {
   appointmentCache,
   clearLeadAppointmentsCache,
+  invalidateGlobalAppointmentsCacheForWorkspace,
 } from "../lib/lead-tab-cache";
 import type {
   AppointmentStatus,
@@ -208,6 +209,7 @@ export function AppointmentsTab({
           publishCount(next);
           return next;
         });
+        invalidateGlobalAppointmentsCacheForWorkspace(workspaceId);
       } else {
         void fetchAppointments();
       }
@@ -278,6 +280,7 @@ export function AppointmentsTab({
           return next;
         });
       }
+      invalidateGlobalAppointmentsCacheForWorkspace(workspaceId);
     } catch (err: unknown) {
       setAppointments(previous);
       persistCache(previous);

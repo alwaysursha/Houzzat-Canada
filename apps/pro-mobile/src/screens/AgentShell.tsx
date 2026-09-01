@@ -29,6 +29,7 @@ import { LaunchpadScreen } from "./LaunchpadScreen";
 import { LeadDetailScreen } from "./LeadDetailScreen";
 import { LeadsScreen } from "./LeadsScreen";
 import { GlobalTasksScreen } from "./GlobalTasksScreen";
+import { GlobalCalendarScreen } from "./GlobalCalendarScreen";
 
 type AgentTab = "launchpad" | "leads" | "tasks" | "calendar" | "more";
 
@@ -161,15 +162,12 @@ export function AgentShell({
         )}
 
         {activeTab === "calendar" && (
-          <View style={styles.placeholderContainer}>
-            <View style={styles.placeholderIconBox}>
-              <Text style={styles.placeholderIconText}>📅</Text>
-            </View>
-            <Text style={styles.placeholderTitle}>Appointments & Calendar</Text>
-            <Text style={styles.placeholderSubtitle}>
-              Sync showing schedules and client appointments.
-            </Text>
-          </View>
+          <GlobalCalendarScreen
+            onOpenLead={(leadId) => {
+              setLeadNavIds([leadId]);
+              setSelectedLeadId(leadId);
+            }}
+          />
         )}
 
         {activeTab === "more" && (
