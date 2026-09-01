@@ -6,6 +6,7 @@
 import type {
   MobileLeadAppointment,
   MobileLeadEmail,
+  MobileLeadEngagement,
   MobileLeadTask,
 } from "../types/api";
 
@@ -31,6 +32,11 @@ export type ConversationCacheEntry = {
 };
 
 export const conversationCache = new Map<string, ConversationCacheEntry>();
+
+export const engagementCache = new Map<
+  string,
+  { engagement: MobileLeadEngagement; timestamp: number }
+>();
 
 export function clearLeadTasksCache(workspaceId?: string) {
   if (!workspaceId) {
@@ -64,6 +70,18 @@ export function clearLeadConversationsCache(workspaceId?: string) {
   for (const key of conversationCache.keys()) {
     if (key.startsWith(`${workspaceId}:`)) {
       conversationCache.delete(key);
+    }
+  }
+}
+
+export function clearLeadEngagementCache(workspaceId?: string) {
+  if (!workspaceId) {
+    engagementCache.clear();
+    return;
+  }
+  for (const key of engagementCache.keys()) {
+    if (key.startsWith(`${workspaceId}:`)) {
+      engagementCache.delete(key);
     }
   }
 }

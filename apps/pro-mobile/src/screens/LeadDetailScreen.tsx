@@ -26,6 +26,7 @@ import {
   View,
 } from "react-native";
 import { mobileApiClient } from "../api/client";
+import { EngagementTab } from "../components/EngagementTab";
 import { AppointmentsTab } from "../components/AppointmentsTab";
 import { ConversationsTab } from "../components/ConversationsTab";
 import { TasksRemindersTab } from "../components/TasksRemindersTab";
@@ -37,7 +38,9 @@ import type {
   LeadStatus,
   MobileLeadActivity,
   MobileLeadDetail,
+  MobileLeadEngagement,
 } from "../types/api";
+import { engagementCache } from "../lib/lead-tab-cache";
 
 const detailCache = new Map<string, { data: MobileLeadDetail; timestamp: number }>();
 
@@ -584,8 +587,16 @@ export function LeadDetailScreen({
 
   const cacheKey = workspaceId ? `${workspaceId}:${leadId}` : "";
   const cachedEntry = cacheKey ? detailCache.get(cacheKey) : undefined;
+  const engagementCacheKey = workspaceId
+    ? `${workspaceId}:${leadId}:engagement`
+    : "";
+  const cachedEngagement = engagementCacheKey
+    ? engagementCache.get(engagementCacheKey)
+    : undefined;
 
   const [lead, setLead] = useState<MobileLeadDetail | null>(cachedEntry?.data || null);
+  const [engagementProfile, setEngagementProfile] =
+    useState<MobileLeadEngagement | null>(cachedEngagement?.engagement ?? null);
   const [isLoading, setIsLoading] = useState(!cachedEntry);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -613,7 +624,8 @@ export function LeadDetailScreen({
     if (
       next === "reminders" ||
       next === "appointments" ||
-      next === "conversations"
+      next === "conversations" ||
+      next === "engagement"
     ) {
       requestAnimationFrame(() => {
         mainScrollRef.current?.scrollTo({
@@ -906,8 +918,16 @@ export function LeadDetailScreen({
       setLead(null);
       setIsLoading(true);
     }
+    const nextEngagement = engagementCacheKey
+      ? engagementCache.get(engagementCacheKey)
+      : undefined;
+    setEngagementProfile(nextEngagement?.engagement ?? null);
     fetchLeadDetail();
-  }, [fetchLeadDetail, cacheKey]);
+  }, [fetchLeadDetail, cacheKey, engagementCacheKey]);
+
+  const handleEngagementLoaded = useCallback((data: MobileLeadEngagement) => {
+    setEngagementProfile(data);
+  }, []);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -1222,20 +1242,27 @@ export function LeadDetailScreen({
               </View>
             ) : null}
 
-            {/* Engagement micro-stats — web shows saves / views / searches.
-                DTO has counts.notes / tasks / appointments; engagement metrics absent → 0. */}
+            {/* Engagement micro-stats — web: saves / views24h / savedSearches.length */}
             <View style={styles.microStats}>
               <View style={styles.microStat}>
                 <Text style={styles.microStatIcon}>♥</Text>
-                <Text style={styles.microStatValue}>{lead.counts.notes}</Text>
+                <Text style={styles.microStatValue}>
+                  {engagementProfile ? engagementProfile.stats.saves : "—"}
+                </Text>
               </View>
               <View style={styles.microStat}>
                 <Text style={styles.microStatIcon}>👁</Text>
-                <Text style={styles.microStatValue}>—</Text>
+                <Text style={styles.microStatValue}>
+                  {engagementProfile ? engagementProfile.hot.views24h : "—"}
+                </Text>
               </View>
               <View style={styles.microStat}>
                 <Text style={styles.microStatIcon}>🔍</Text>
-                <Text style={styles.microStatValue}>{lead.counts.tasks}</Text>
+                <Text style={styles.microStatValue}>
+                  {engagementProfile
+                    ? engagementProfile.stats.savedSearchCount
+                    : "—"}
+                </Text>
               </View>
             </View>
 
@@ -1292,34 +1319,57 @@ export function LeadDetailScreen({
             <View style={styles.touchBox}>
               <View style={styles.touchMetaRow}>
                 <Text style={styles.touchMeta}>
-                  {relativeAgo(lead.updatedAt)} (Last Touch)
+                  {relativeAgo(
+                    engagementProfile?.lastTouchAt ?? lead.updatedAt,
+                  )}{" "}
+                  (Last Touch)
                 </Text>
                 <Text style={styles.touchMeta}>
-                  {relativeAgo(lead.firstRespondedAt || lead.createdAt)} (Created)
+                  {engagementProfile?.hot.lastSeenAt
+                    ? `${relativeAgo(engagementProfile.hot.lastSeenAt)} (Last Visit)${
+                        engagementProfile.hot.isOnline ? " · Online" : ""
+                      }`
+                    : "— (Last Visit)"}
                 </Text>
               </View>
               <View style={styles.touchCounts}>
-                {[
-                  ["Views", "—"],
-                  ["Saves", "—"],
-                  ["Alerts", "—"],
-                  ["Emails", "—"],
-                ].map(([label, value]) => (
+                {(
+                  [
+                    ["Views", engagementProfile?.hot.views24h],
+                    ["Saves", engagementProfile?.stats.saves],
+                    ["Alerts", engagementProfile?.stats.alerts],
+                    ["Emails", engagementProfile?.stats.emails],
+                  ] as const
+                ).map(([label, value]) => (
                   <View key={label} style={styles.touchCountItem}>
-                    <Text style={styles.touchCountValue}>{value}</Text>
+                    <Text style={styles.touchCountValue}>
+                      {value != null ? value : "—"}
+                    </Text>
                     <Text style={styles.touchCountLabel}>{label}</Text>
                   </View>
                 ))}
               </View>
             </View>
 
-            {/* Email information rings — cosmetic empty until hotness DTO exists */}
+            {/* Email information rings — web heuristic proxies from hotness/stats */}
             <View style={styles.emailInfoBox}>
               <Text style={styles.emailInfoTitle}>EMAIL INFORMATION</Text>
               <View style={styles.ringRow}>
-                <RingStat label="Email Clicks" value={0} tone="#0EA5E9" />
-                <RingStat label="Email Opens" value={0} tone="#0284C7" />
-                <RingStat label="Alert Opens" value={0} tone="#0369A1" />
+                <RingStat
+                  label="Email Clicks"
+                  value={engagementProfile?.rings.emailClicks ?? 0}
+                  tone="#0EA5E9"
+                />
+                <RingStat
+                  label="Email Opens"
+                  value={engagementProfile?.rings.emailOpens ?? 0}
+                  tone="#0284C7"
+                />
+                <RingStat
+                  label="Alert Opens"
+                  value={engagementProfile?.rings.alertOpens ?? 0}
+                  tone="#0369A1"
+                />
               </View>
             </View>
           </View>
@@ -1752,9 +1802,10 @@ export function LeadDetailScreen({
               ) : null}
 
               {tab === "engagement" ? (
-                <ComingSoonPanel
-                  title="Engagement"
-                  hint="Saved searches, listing views, and matchboard arrive in a later stage."
+                <EngagementTab
+                  leadId={leadId}
+                  workspaceId={workspaceId}
+                  onEngagementLoaded={handleEngagementLoaded}
                 />
               ) : null}
             </View>

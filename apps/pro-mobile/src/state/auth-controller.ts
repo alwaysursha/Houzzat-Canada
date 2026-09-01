@@ -16,6 +16,7 @@ import { mobileApiClient } from "../api/client";
 import {
   clearLeadAppointmentsCache,
   clearLeadConversationsCache,
+  clearLeadEngagementCache,
   clearLeadTasksCache,
 } from "../lib/lead-tab-cache";
 import { SecureStorage, SECURE_STORAGE_KEYS } from "../storage/secure-storage";
@@ -500,6 +501,7 @@ export class MobileAuthController {
     clearLeadTasksCache(priorWs);
     clearLeadAppointmentsCache(priorWs);
     clearLeadConversationsCache(priorWs);
+    clearLeadEngagementCache(priorWs);
     this.updateState({
       state: "WORKSPACE_SELECTION",
       activeMembership: null,
@@ -528,6 +530,7 @@ export class MobileAuthController {
       clearLeadTasksCache();
       clearLeadAppointmentsCache();
       clearLeadConversationsCache();
+      clearLeadEngagementCache();
       this.updateState({
         state: "SIGNED_OUT",
         user: null,

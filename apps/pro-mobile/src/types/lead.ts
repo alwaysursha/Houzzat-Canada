@@ -197,6 +197,70 @@ export interface LeadsResponseData {
   pagination: LeadsPagination;
 }
 
+/** Stage 4.9 — Lead engagement DTO (web CustomerProfile Engagement tab parity). */
+export interface MobileLeadEngagementMatch {
+  mlsNumber: string;
+  address: string;
+  listPrice: number | null;
+  bedsLabel: string | null;
+  imageUrl: string | null;
+}
+
+export interface MobileLeadEngagement {
+  hot: {
+    hotness: number;
+    views24h: number;
+    distinctListings24h: number;
+    isOnline: boolean;
+    binge: boolean;
+    lastSeenAt: string | null;
+  };
+  stats: {
+    saves: number;
+    alerts: number;
+    emails: number;
+    savedSearchCount: number;
+  };
+  lastTouchAt: string;
+  rings: {
+    emailOpens: number;
+    emailClicks: number;
+    alertOpens: number;
+  };
+  buyerIntent: {
+    summary: string;
+    chips: string[];
+    source: string;
+    sourceLabel: string;
+    headline: string | null;
+  };
+  savedSearches: Array<{
+    id: string;
+    name: string;
+    emailAlerts: boolean;
+    smsAlerts: boolean;
+    isHomepageActive: boolean;
+    query: unknown;
+  }>;
+  savedListings: Array<{ id: string; mlsNumber: string }>;
+  propertyMonitors: Array<{ id: string; mlsNumber: string }>;
+  areaMonitors: Array<{ id: string; name: string; city: string }>;
+  listingNotes: Array<{ id: string; mlsNumber: string; body: string }>;
+  tours: Array<{
+    id: string;
+    name: string;
+    status: string;
+    stops: Array<{ mlsNumber: string }>;
+  }>;
+  alerts: Array<{ id: string; title: string; kind: string }>;
+  matches: MobileLeadEngagementMatch[];
+  matchesLoaded: boolean;
+}
+
+export interface LeadEngagementResponseData {
+  engagement: MobileLeadEngagement;
+}
+
 export interface LeadDetailResponseData {
   lead: MobileLeadDetail;
 }
