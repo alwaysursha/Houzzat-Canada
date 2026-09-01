@@ -6,6 +6,8 @@ buildscript {
         targetSdkVersion = 36
         ndkVersion = "26.1.10909125"
         kotlinVersion = "1.9.24"
+        webkitVersion = "1.4.0"
+        reactNativeVersion = "0.76.7"
     }
     repositories {
         google()
@@ -21,5 +23,38 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url(new File(["node", "--print", "require.resolve('react-native/package.json')"]
+                .execute(null, rootDir.parentFile).text.trim(), "../android"))
+        }
+    }
+}
+
+subprojects { subproject ->
+    subproject.configurations.configureEach {
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("com.facebook.react:react-native"))
+                .using(module("com.facebook.react:react-android:${rootProject.ext.reactNativeVersion}"))
+                .because("RN 0.76+ publishes react-android to Maven Central")
+        }
+    }
+
+    subproject.afterEvaluate {
+        if (subproject.plugins.hasPlugin("kotlin-android")) {
+            subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                kotlinOptions {
+                    jvmTarget = "17"
+                }
+            }
+        }
+        if (subproject.plugins.hasPlugin("com.android.library")
+                || subproject.plugins.hasPlugin("com.android.application")) {
+            subproject.android {
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+            }
+        }
     }
 }

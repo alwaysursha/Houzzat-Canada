@@ -1,18 +1,22 @@
 /**
  * Stage 4.8 — Render stored LeadEmailLog htmlBody (web EmailPreviewModal iframe parity).
  * Local HTML only — not CRM WebView navigation.
+ *
+ * react-native-webview must be lazy-loaded: its module calls
+ * TurboModuleRegistry.getEnforcing('RNCWebViewModule') at import time.
  */
 
 import React from "react";
 import { StyleSheet, View } from "react-native";
-import { WebView as RNWebView } from "react-native-webview";
+import { isEmailHtmlPreviewSupported } from "./email-html-preview-support";
+
+export { isEmailHtmlPreviewSupported } from "./email-html-preview-support";
 
 type EmailHtmlPreviewProps = {
   htmlBody: string;
 };
 
-/** RN WebView + React 18 type shim */
-const WebView = RNWebView as unknown as React.ComponentType<{
+type WebViewComponent = React.ComponentType<{
   originWhitelist?: string[];
   source: { html: string };
   style?: object;
@@ -23,8 +27,23 @@ const WebView = RNWebView as unknown as React.ComponentType<{
   domStorageEnabled?: boolean;
 }>;
 
+function loadWebView(): WebViewComponent | null {
+  if (!isEmailHtmlPreviewSupported()) return null;
+  try {
+    return require("react-native-webview").WebView as WebViewComponent;
+  } catch {
+    return null;
+  }
+}
+
+const PREVIEW_HEIGHT = 420;
+
 export function EmailHtmlPreview({ htmlBody }: EmailHtmlPreviewProps) {
+  const WebView = loadWebView();
   const html = htmlBody.trim();
+
+  if (!WebView) return null;
+
   return (
     <View style={styles.wrap}>
       <WebView
@@ -43,10 +62,8 @@ export function EmailHtmlPreview({ htmlBody }: EmailHtmlPreviewProps) {
 
 const styles = StyleSheet.create({
   wrap: {
-    flex: 1,
-    minHeight: 320,
+    height: PREVIEW_HEIGHT,
     backgroundColor: "#FFFFFF",
-    borderRadius: 8,
     overflow: "hidden",
   },
   webview: {

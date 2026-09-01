@@ -22,6 +22,7 @@ import {
   View,
 } from "react-native";
 import { EmailHtmlPreview } from "./EmailHtmlPreview";
+import { isEmailHtmlPreviewSupported } from "./email-html-preview-support";
 import { mobileApiClient } from "../api/client";
 import {
   unwrapComposer,
@@ -593,14 +594,22 @@ export function ConversationsTab({
                     <Text style={styles.previewBody}>{preview.body}</Text>
                   ) : null}
                 </View>
-              ) : preview?.htmlBody?.trim() ? (
+              ) : preview?.htmlBody?.trim() && isEmailHtmlPreviewSupported() ? (
                 <EmailHtmlPreview htmlBody={preview.htmlBody.trim()} />
               ) : (
                 <ScrollView
                   style={styles.modalBodyScroll}
                   contentContainerStyle={styles.modalBodyPad}
                 >
-                  <Text style={styles.previewBody}>{preview?.body ?? ""}</Text>
+                  {preview?.htmlBody?.trim() && !isEmailHtmlPreviewSupported() ? (
+                    <Text style={styles.fallbackHint}>
+                      Styled template preview requires the latest app build.
+                      Showing plain-text version.
+                    </Text>
+                  ) : null}
+                  <Text style={styles.previewBody}>
+                    {preview?.body ?? preview?.htmlBody ?? ""}
+                  </Text>
                 </ScrollView>
               )}
             </View>
