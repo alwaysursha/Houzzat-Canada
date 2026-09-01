@@ -8,7 +8,7 @@
  *        PATCH /api/mobile/v2/tasks/[taskId]
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -96,6 +96,11 @@ export function GlobalTasksScreen({ onOpenLead }: GlobalTasksScreenProps) {
   const [createError, setCreateError] = useState<string | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
 
+  /** Invalidate in-flight list GETs so they cannot restore a just-completed task. */
+  const fetchGenRef = useRef(0);
+  /** Task ids dismissed locally until a later GET confirms they are gone. */
+  const dismissedIdsRef = useRef<Set<string>>(new Set());
+
   const persistCache = useCallback(
     (list: MobileGlobalTask[]) => {
       if (!cacheKey) return;
@@ -106,29 +111,40 @@ export function GlobalTasksScreen({ onOpenLead }: GlobalTasksScreenProps) {
 
   const fetchTasks = useCallback(
     async (opts?: { background?: boolean }) => {
+      const gen = ++fetchGenRef.current;
       if (!opts?.background) setLoading(true);
       else setRefreshing(true);
       setError(null);
       try {
         const res = await mobileApiClient.get<unknown>("/tasks");
+        if (gen !== fetchGenRef.current) return;
         if (!res.ok) {
           setError(res.message || "Could not load tasks");
           return;
         }
-        const list = unwrapTasksList(res.data) as MobileGlobalTask[];
+        const raw = unwrapTasksList(res.data) as MobileGlobalTask[];
+        const dismissed = dismissedIdsRef.current;
+        for (const id of [...dismissed]) {
+          if (!raw.some((t) => t.id === id)) dismissed.delete(id);
+        }
+        const list = raw.filter((t) => !dismissed.has(t.id));
         setTasks(list);
         persistCache(list);
       } catch (err: unknown) {
+        if (gen !== fetchGenRef.current) return;
         setError(err instanceof Error ? err.message : "Could not load tasks");
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (gen === fetchGenRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
     [persistCache],
   );
 
   useEffect(() => {
+    dismissedIdsRef.current.clear();
     const entry = cacheKey ? globalTaskCache.get(cacheKey) : undefined;
     if (entry?.tasks) {
       setTasks(entry.tasks as MobileGlobalTask[]);
@@ -199,6 +215,10 @@ export function GlobalTasksScreen({ onOpenLead }: GlobalTasksScreenProps) {
   const handleComplete = async (task: MobileGlobalTask) => {
     if (mutatingId) return;
     setMutatingId(task.id);
+    setError(null);
+    // Drop any in-flight list response that still contains this OPEN task.
+    fetchGenRef.current += 1;
+    dismissedIdsRef.current.add(task.id);
     const previous = tasks;
     setTasks((prev) => {
       const next = prev.filter((t) => t.id !== task.id);
@@ -206,11 +226,15 @@ export function GlobalTasksScreen({ onOpenLead }: GlobalTasksScreenProps) {
       return next;
     });
     try {
-      const res = await mobileApiClient.patch<unknown>(
-        `/tasks/${encodeURIComponent(task.id)}`,
-        { status: "DONE" },
-      );
+      // Prefer Stage 4.6 lead-scoped PATCH when linked — same AgentTask row.
+      const endpoint = task.leadId
+        ? `/leads/${encodeURIComponent(task.leadId)}/tasks/${encodeURIComponent(task.id)}`
+        : `/tasks/${encodeURIComponent(task.id)}`;
+      const res = await mobileApiClient.patch<unknown>(endpoint, {
+        status: "DONE",
+      });
       if (!res.ok) {
+        dismissedIdsRef.current.delete(task.id);
         setTasks(previous);
         persistCache(previous);
         setError(res.message || "Could not complete task");
@@ -218,6 +242,7 @@ export function GlobalTasksScreen({ onOpenLead }: GlobalTasksScreenProps) {
       }
       invalidateLeadTasksCacheForLead(workspaceId, task.leadId);
     } catch (err: unknown) {
+      dismissedIdsRef.current.delete(task.id);
       setTasks(previous);
       persistCache(previous);
       setError(err instanceof Error ? err.message : "Could not complete task");
