@@ -1,8 +1,7 @@
 /**
  * Stage 4.8 — GET /api/mobile/v2/leads/[leadId]/conversations/[emailId]
  *
- * Preview payload matching GET /api/agent/emails/[id] (plain body for native;
- * htmlBody included but native must not render via WebView).
+ * Preview payload matching GET /api/agent/emails/[id] (htmlBody for native template).
  */
 
 import { NextResponse } from "next/server";

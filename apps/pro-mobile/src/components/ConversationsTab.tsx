@@ -21,6 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { EmailHtmlPreview } from "./EmailHtmlPreview";
 import { mobileApiClient } from "../api/client";
 import {
   unwrapComposer,
@@ -372,10 +373,6 @@ export function ConversationsTab({
   const openPreview = async (email: MobileLeadEmail) => {
     setPreview(email);
     setPreviewError(null);
-    if (usingLeadDetailFallback) {
-      setPreviewLoading(false);
-      return;
-    }
     setPreviewLoading(true);
     try {
       const res = await mobileApiClient.get<unknown>(
@@ -383,10 +380,12 @@ export function ConversationsTab({
       );
       if (!res.ok) {
         if (res.code === "NOT_FOUND") {
-          setPreviewLoading(false);
-          return;
+          setPreviewError(
+            "Full template preview requires the conversations API on production.",
+          );
+        } else {
+          setPreviewError(res.message || "Failed to load email");
         }
-        setPreviewError(res.message || "Failed to load email");
         return;
       }
       const full = unwrapEmail(res.data);
@@ -562,8 +561,12 @@ export function ConversationsTab({
                 {preview ? (
                   <Text style={styles.modalMeta}>
                     To {preview.toEmail}
+                    {preview.customerName ? ` · ${preview.customerName}` : ""}
                     {" · "}
                     {formatWhen(preview.createdAt)}
+                    {preview.sentByName
+                      ? ` · by ${preview.sentByName}`
+                      : " · automated"}
                   </Text>
                 ) : null}
               </View>
@@ -576,17 +579,31 @@ export function ConversationsTab({
                 <Text style={styles.modalCloseText}>Close</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyPad}>
+            <View style={styles.modalBody}>
               {previewLoading ? (
-                <Text style={styles.loadingText}>
-                  Loading what the client received…
-                </Text>
+                <View style={styles.modalBodyPad}>
+                  <Text style={styles.loadingText}>
+                    Loading what the client received…
+                  </Text>
+                </View>
               ) : previewError ? (
-                <Text style={styles.errorText}>{previewError}</Text>
+                <View style={styles.modalBodyPad}>
+                  <Text style={styles.errorText}>{previewError}</Text>
+                  {preview?.body ? (
+                    <Text style={styles.previewBody}>{preview.body}</Text>
+                  ) : null}
+                </View>
+              ) : preview?.htmlBody?.trim() ? (
+                <EmailHtmlPreview htmlBody={preview.htmlBody.trim()} />
               ) : (
-                <Text style={styles.previewBody}>{preview?.body ?? ""}</Text>
+                <ScrollView
+                  style={styles.modalBodyScroll}
+                  contentContainerStyle={styles.modalBodyPad}
+                >
+                  <Text style={styles.previewBody}>{preview?.body ?? ""}</Text>
+                </ScrollView>
               )}
-            </ScrollView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -824,6 +841,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalSheet: {
+    flex: 1,
     maxHeight: "88%",
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 16,
@@ -877,7 +895,12 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
   modalBody: {
+    flex: 1,
+    minHeight: 320,
     backgroundColor: "#F1F5F9",
+  },
+  modalBodyScroll: {
+    flex: 1,
   },
   modalBodyPad: {
     padding: 16,

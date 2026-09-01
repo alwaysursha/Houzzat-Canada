@@ -136,6 +136,10 @@ export interface MobileLeadEmail {
   clickCount: number;
   lastClickedUrl: string | null;
   createdAt: string;
+  /** Populated on preview fetch — full client HTML template. */
+  htmlBody?: string | null;
+  customerName?: string | null;
+  sentByName?: string | null;
 }
 
 export interface LeadConversationsResponseData {

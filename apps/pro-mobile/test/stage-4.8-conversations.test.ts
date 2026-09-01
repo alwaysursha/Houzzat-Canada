@@ -294,7 +294,7 @@ async function runStage48Tests() {
     assert.ok(tab.includes("Send email"));
     assert.ok(tab.includes("No emails logged yet."));
     assert.ok(tab.includes("Preview"));
-    assert.ok(!tab.includes("WebView"));
+    assert.ok(tab.includes("EmailHtmlPreview") || tab.includes("htmlBody"));
     console.log("  -> PASS");
   }
 
