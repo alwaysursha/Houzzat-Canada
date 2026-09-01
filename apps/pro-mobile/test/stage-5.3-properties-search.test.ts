@@ -96,6 +96,9 @@ async function runStage53Tests() {
     assert.ok(screen.includes("Email to lead"));
     assert.ok(screen.includes("ShortlistEmailSheet"));
     assert.ok(screen.includes(String(MAX_SHORTLIST_SIZE)));
+    assert.ok(screen.includes("LISTING_IMAGE_LIMIT"));
+    assert.ok(screen.includes("FlatList"));
+    assert.ok(screen.includes("fadeDuration={0}"));
     assert.ok(sheet.includes("/properties/shortlist-email"));
     assert.ok(sheet.includes("CASL"));
     console.log("  -> PASS");

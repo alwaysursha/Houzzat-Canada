@@ -5,9 +5,10 @@
  * EngagementMatchboard multi-select + shortlist email.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Image,
   Modal,
   RefreshControl,
@@ -46,6 +47,89 @@ const SORT_OPTIONS = [
   { key: "price_asc", label: "Price ↑" },
   { key: "price_desc", label: "Price ↓" },
 ] as const;
+
+/** Max remote photos decoded at once — same strategy as EngagementTab. */
+export const LISTING_IMAGE_LIMIT = 12;
+
+const PropertyListingCard = memo(function PropertyListingCard({
+  listing,
+  isSelected,
+  showImage,
+  onToggle,
+}: {
+  listing: MobileListingCard;
+  isSelected: boolean;
+  showImage: boolean;
+  onToggle: (mls: string) => void;
+}) {
+  if (!showImage) {
+    return (
+      <TouchableOpacity
+        style={[styles.cardCompact, isSelected && styles.cardSelected]}
+        onPress={() => onToggle(listing.mlsNumber)}
+        activeOpacity={0.85}
+      >
+        <View style={styles.cardCompactBody}>
+          <Text style={styles.cardAddress} numberOfLines={1}>
+            {formatListingAddress(listing)}
+          </Text>
+          <Text style={styles.cardPrice}>
+            {formatListingPrice(listing.listPrice, listing.transactionType)}
+          </Text>
+          <Text style={styles.cardMeta}>
+            {formatListingBeds(listing)} bed · {listing.baths} bath · MLS{" "}
+            {listing.mlsNumber}
+          </Text>
+        </View>
+        <View style={[styles.checkBadge, isSelected && styles.checkBadgeOn]}>
+          <Text style={[styles.checkBadgeText, isSelected && styles.checkBadgeTextOn]}>
+            {isSelected ? "✓" : ""}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      style={[styles.card, isSelected && styles.cardSelected]}
+      onPress={() => onToggle(listing.mlsNumber)}
+      activeOpacity={0.85}
+    >
+      <View style={styles.cardImageWrap}>
+        {listing.primaryImageUrl ? (
+          <Image
+            source={{ uri: listing.primaryImageUrl }}
+            style={styles.cardImage}
+            resizeMode="cover"
+            fadeDuration={0}
+          />
+        ) : (
+          <View style={styles.cardImagePlaceholder}>
+            <Text style={styles.cardImagePlaceholderText}>No photo</Text>
+          </View>
+        )}
+        <View style={[styles.checkBadge, isSelected && styles.checkBadgeOn]}>
+          <Text style={[styles.checkBadgeText, isSelected && styles.checkBadgeTextOn]}>
+            {isSelected ? "✓" : ""}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.cardBody}>
+        <Text style={styles.cardAddress} numberOfLines={2}>
+          {formatListingAddress(listing)}
+        </Text>
+        <Text style={styles.cardPrice}>
+          {formatListingPrice(listing.listPrice, listing.transactionType)}
+        </Text>
+        <Text style={styles.cardMeta}>
+          {formatListingBeds(listing)} bed · {listing.baths} bath · MLS{" "}
+          {listing.mlsNumber}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 function filtersQueryKey(q: string, filters: PropertySearchFilters): string {
   return JSON.stringify({ q: q.trim(), ...filters });
@@ -153,7 +237,7 @@ export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) 
     return n;
   }, [filters]);
 
-  const toggleMls = (mls: string) => {
+  const toggleMls = useCallback((mls: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(mls)) {
@@ -164,7 +248,50 @@ export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) 
       }
       return next;
     });
-  };
+  }, []);
+
+  const renderListing = useCallback(
+    ({ item, index }: { item: MobileListingCard; index: number }) => (
+      <PropertyListingCard
+        listing={item}
+        isSelected={selected.has(item.mlsNumber)}
+        showImage={index < LISTING_IMAGE_LIMIT}
+        onToggle={toggleMls}
+      />
+    ),
+    [selected, toggleMls],
+  );
+
+  const keyExtractor = useCallback(
+    (item: MobileListingCard) => item.mlsNumber,
+    [],
+  );
+
+  const listEmpty = useMemo(() => {
+    if (loading) {
+      return (
+        <View style={styles.centerBox}>
+          <ActivityIndicator color="#0F766E" size="large" />
+          <Text style={styles.centerText}>Searching listings…</Text>
+        </View>
+      );
+    }
+    if (error) {
+      return (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity onPress={() => void runSearch()}>
+            <Text style={styles.retryText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.centerBox}>
+        <Text style={styles.centerText}>No listings match your search.</Text>
+      </View>
+    );
+  }, [loading, error, runSearch]);
 
   const handleSubmitSearch = () => {
     setSubmittedQuery(query.trim());
@@ -271,11 +398,16 @@ export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) 
         </View>
       ) : null}
 
-      <ScrollView
+      <FlatList
         style={styles.list}
+        data={listings}
+        keyExtractor={keyExtractor}
+        renderItem={renderListing}
+        extraData={selected}
         contentContainerStyle={[
           styles.listContent,
           selected.size > 0 && styles.listContentWithBar,
+          listings.length === 0 && styles.listContentEmpty,
         ]}
         refreshControl={
           <RefreshControl
@@ -285,72 +417,13 @@ export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) 
           />
         }
         keyboardShouldPersistTaps="handled"
-      >
-        {loading && listings.length === 0 ? (
-          <View style={styles.centerBox}>
-            <ActivityIndicator color="#0F766E" size="large" />
-            <Text style={styles.centerText}>Searching listings…</Text>
-          </View>
-        ) : null}
-
-        {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={() => void runSearch()}>
-              <Text style={styles.retryText}>Try again</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {!loading && !error && listings.length === 0 ? (
-          <View style={styles.centerBox}>
-            <Text style={styles.centerText}>No listings match your search.</Text>
-          </View>
-        ) : null}
-
-        {listings.map((listing) => {
-          const on = selected.has(listing.mlsNumber);
-          return (
-            <TouchableOpacity
-              key={listing.mlsNumber}
-              style={[styles.card, on && styles.cardSelected]}
-              onPress={() => toggleMls(listing.mlsNumber)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.cardImageWrap}>
-                {listing.primaryImageUrl ? (
-                  <Image
-                    source={{ uri: listing.primaryImageUrl }}
-                    style={styles.cardImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.cardImagePlaceholder}>
-                    <Text style={styles.cardImagePlaceholderText}>No photo</Text>
-                  </View>
-                )}
-                <View style={[styles.checkBadge, on && styles.checkBadgeOn]}>
-                  <Text style={[styles.checkBadgeText, on && styles.checkBadgeTextOn]}>
-                    {on ? "✓" : ""}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.cardBody}>
-                <Text style={styles.cardAddress} numberOfLines={2}>
-                  {formatListingAddress(listing)}
-                </Text>
-                <Text style={styles.cardPrice}>
-                  {formatListingPrice(listing.listPrice, listing.transactionType)}
-                </Text>
-                <Text style={styles.cardMeta}>
-                  {formatListingBeds(listing)} bed · {listing.baths} bath · MLS{" "}
-                  {listing.mlsNumber}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+        ListEmptyComponent={listEmpty}
+        removeClippedSubviews
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={9}
+        showsVerticalScrollIndicator={false}
+      />
 
       {selected.size > 0 ? (
         <View style={styles.selectionBar}>
@@ -637,6 +710,9 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingBottom: 24,
   },
+  listContentEmpty: {
+    flexGrow: 1,
+  },
   listContentWithBar: {
     paddingBottom: 120,
   },
@@ -675,6 +751,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E2E8F0",
     padding: 10,
+    marginBottom: 10,
+  },
+  cardCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 12,
+    marginBottom: 8,
+  },
+  cardCompactBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
   cardSelected: {
     borderColor: "#2B6CB0",

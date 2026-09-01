@@ -194,5 +194,11 @@ declare module "react-native" {
     ListEmptyComponent?: React.ReactElement | null;
     ListHeaderComponent?: React.ReactElement | null;
     ListFooterComponent?: React.ReactElement | null;
+    extraData?: unknown;
+    removeClippedSubviews?: boolean;
+    initialNumToRender?: number;
+    maxToRenderPerBatch?: number;
+    windowSize?: number;
+    keyboardShouldPersistTaps?: "always" | "never" | "handled" | boolean;
   }>;
 }
