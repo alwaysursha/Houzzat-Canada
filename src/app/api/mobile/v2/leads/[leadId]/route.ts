@@ -128,6 +128,8 @@ export async function GET(
             purchaseTimeframe: true,
             homeAddress: true,
             createdAt: true,
+            caslConsentAt: true,
+            emailAlertsEnabled: true,
           },
         },
         assignedAgent: {
@@ -153,6 +155,24 @@ export async function GET(
             leadNotes: true,
             appointments: true,
             tasks: true,
+            emailLogs: true,
+          },
+        },
+        emailLogs: {
+          orderBy: { createdAt: "desc" },
+          take: 40,
+          select: {
+            id: true,
+            subject: true,
+            body: true,
+            toEmail: true,
+            kind: true,
+            openedAt: true,
+            clickedAt: true,
+            openCount: true,
+            clickCount: true,
+            lastClickedUrl: true,
+            createdAt: true,
           },
         },
       },
@@ -219,6 +239,10 @@ export async function GET(
             purchaseTimeframe: lead.customer.purchaseTimeframe,
             homeAddress: lead.customer.homeAddress,
             createdAt: lead.customer.createdAt.toISOString(),
+            caslConsentAt: lead.customer.caslConsentAt
+              ? lead.customer.caslConsentAt.toISOString()
+              : null,
+            emailAlertsEnabled: lead.customer.emailAlertsEnabled,
           }
         : null,
       assignedAgent: lead.assignedAgent
@@ -254,7 +278,21 @@ export async function GET(
         notes: lead._count.leadNotes,
         appointments: lead._count.appointments,
         tasks: lead._count.tasks,
+        emails: lead._count.emailLogs,
       },
+      emails: lead.emailLogs.map((e) => ({
+        id: e.id,
+        subject: e.subject,
+        body: e.body,
+        toEmail: e.toEmail,
+        kind: e.kind,
+        openedAt: e.openedAt ? e.openedAt.toISOString() : null,
+        clickedAt: e.clickedAt ? e.clickedAt.toISOString() : null,
+        openCount: e.openCount,
+        clickCount: e.clickCount,
+        lastClickedUrl: e.lastClickedUrl,
+        createdAt: e.createdAt.toISOString(),
+      })),
     };
 
     return NextResponse.json({

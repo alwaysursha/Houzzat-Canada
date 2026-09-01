@@ -15,6 +15,7 @@
 import { mobileApiClient } from "../api/client";
 import {
   clearLeadAppointmentsCache,
+  clearLeadConversationsCache,
   clearLeadTasksCache,
 } from "../lib/lead-tab-cache";
 import { SecureStorage, SECURE_STORAGE_KEYS } from "../storage/secure-storage";
@@ -498,6 +499,7 @@ export class MobileAuthController {
     // Stage 4.6 / 4.7 — clear workspace-scoped lead tab caches on switch.
     clearLeadTasksCache(priorWs);
     clearLeadAppointmentsCache(priorWs);
+    clearLeadConversationsCache(priorWs);
     this.updateState({
       state: "WORKSPACE_SELECTION",
       activeMembership: null,
@@ -525,6 +527,7 @@ export class MobileAuthController {
       await SecureStorage.clear();
       clearLeadTasksCache();
       clearLeadAppointmentsCache();
+      clearLeadConversationsCache();
       this.updateState({
         state: "SIGNED_OUT",
         user: null,

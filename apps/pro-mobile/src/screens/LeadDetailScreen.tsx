@@ -27,6 +27,7 @@ import {
 } from "react-native";
 import { mobileApiClient } from "../api/client";
 import { AppointmentsTab } from "../components/AppointmentsTab";
+import { ConversationsTab } from "../components/ConversationsTab";
 import { TasksRemindersTab } from "../components/TasksRemindersTab";
 import { updateLeadStatusInListCache } from "../lib/lead-list-cache";
 import { useAuth } from "../state/AuthContext";
@@ -608,8 +609,12 @@ export function LeadDetailScreen({
   const selectTab = (next: TabId) => {
     setTab(next);
     // After leaving a long Activity timeline, scroll offset can sit past the
-    // shorter Appointments / Task & Reminders content — bring the tab into view.
-    if (next === "reminders" || next === "appointments") {
+    // shorter tab content — bring the tab into view.
+    if (
+      next === "reminders" ||
+      next === "appointments" ||
+      next === "conversations"
+    ) {
       requestAnimationFrame(() => {
         mainScrollRef.current?.scrollTo({
           y: Math.max(0, tabSectionOffsetY.current - 12),
@@ -1735,9 +1740,14 @@ export function LeadDetailScreen({
               ) : null}
 
               {tab === "conversations" ? (
-                <ComingSoonPanel
-                  title="Conversations"
-                  hint="Email and SMS threads will appear here in a later stage."
+                <ConversationsTab
+                  leadId={leadId}
+                  workspaceId={workspaceId}
+                  customerEmail={lead.customer?.email}
+                  contactConsentAt={lead.contactConsentAt}
+                  customerCaslConsentAt={lead.customer?.caslConsentAt}
+                  emailAlertsEnabled={lead.customer?.emailAlertsEnabled}
+                  seedEmails={lead.emails}
                 />
               ) : null}
 

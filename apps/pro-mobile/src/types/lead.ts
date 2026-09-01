@@ -40,6 +40,8 @@ export interface MobileLeadCustomer {
   purchaseTimeframe?: string | null;
   homeAddress?: string | null;
   createdAt?: string;
+  caslConsentAt?: string | null;
+  emailAlertsEnabled?: boolean;
 }
 
 export interface MobileLeadAssignedAgent {
@@ -121,6 +123,32 @@ export interface LeadAppointmentsResponseData {
   appointments: MobileLeadAppointment[];
 }
 
+/** Stage 4.8 — LeadEmailLog DTO (web Conversations tab = CRM emails). */
+export interface MobileLeadEmail {
+  id: string;
+  subject: string;
+  body: string;
+  toEmail: string;
+  kind: string | null;
+  openedAt: string | null;
+  clickedAt: string | null;
+  openCount: number;
+  clickCount: number;
+  lastClickedUrl: string | null;
+  createdAt: string;
+}
+
+export interface LeadConversationsResponseData {
+  emails: MobileLeadEmail[];
+  nextCursor?: string | null;
+  hasMore?: boolean;
+  composer?: {
+    toEmail: string | null;
+    consented: boolean;
+    alertsEnabled: boolean;
+  };
+}
+
 export interface MobileLeadDetail {
   id: string;
   status: LeadStatus;
@@ -147,7 +175,10 @@ export interface MobileLeadDetail {
     notes: number;
     appointments: number;
     tasks: number;
+    emails?: number;
   };
+  /** Stage 4.8 — LeadEmailLog rows (web Conversations tab parity). */
+  emails?: MobileLeadEmail[];
 }
 
 export interface LeadsPagination {
