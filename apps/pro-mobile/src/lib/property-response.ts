@@ -8,6 +8,7 @@ import type {
   ShortlistEmailData,
 } from "../types/property";
 import type { BackendEnvelope } from "../types/api";
+import { withQuery } from "./query-string";
 
 export function unwrapPropertiesSearch(data: unknown): PropertiesSearchData {
   if (!data || typeof data !== "object") {
@@ -66,36 +67,24 @@ export function buildPropertiesSearchQuery(input: {
   };
   cursor?: string | null;
 }): string {
-  const params = new URLSearchParams();
   const q = input.q.trim();
-  if (q) params.set("q", q);
-  params.set("transactionType", input.filters.transactionType);
-  params.set("sort", input.filters.sort);
-  params.set("limit", "60");
-  params.set("status", "ACTIVE");
-  if (input.filters.minPrice.trim()) {
-    params.set("minPrice", input.filters.minPrice.trim());
-  }
-  if (input.filters.maxPrice.trim()) {
-    params.set("maxPrice", input.filters.maxPrice.trim());
-  }
-  if (input.filters.minBeds.trim()) {
-    params.set("minBeds", input.filters.minBeds.trim());
-  }
-  if (input.filters.minBaths.trim()) {
-    params.set("minBaths", input.filters.minBaths.trim());
-  }
-  if (input.filters.openHouseOnly) {
-    params.set("openHouseOnly", "1");
-  }
-  if (input.filters.propertyTypes.length > 0) {
-    params.set("propertyTypes", input.filters.propertyTypes.join(","));
-  }
-  if (input.cursor) {
-    params.set("cursor", input.cursor);
-  }
-  const qs = params.toString();
-  return qs ? `/properties/search?${qs}` : "/properties/search";
+  return withQuery("/properties/search", {
+    q: q || undefined,
+    transactionType: input.filters.transactionType,
+    sort: input.filters.sort,
+    limit: "60",
+    status: "ACTIVE",
+    minPrice: input.filters.minPrice.trim() || undefined,
+    maxPrice: input.filters.maxPrice.trim() || undefined,
+    minBeds: input.filters.minBeds.trim() || undefined,
+    minBaths: input.filters.minBaths.trim() || undefined,
+    openHouseOnly: input.filters.openHouseOnly ? "1" : undefined,
+    propertyTypes:
+      input.filters.propertyTypes.length > 0
+        ? input.filters.propertyTypes.join(",")
+        : undefined,
+    cursor: input.cursor || undefined,
+  });
 }
 
 export function formatListingPrice(

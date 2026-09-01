@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { mobileApiClient } from "../api/client";
 import { unwrapShortlistEmail } from "../lib/property-response";
+import { withQuery } from "../lib/query-string";
 import { clearLeadEngagementCache } from "../lib/lead-tab-cache";
 import { invalidateLeadDetailCacheEntry } from "../screens/LeadDetailScreen";
 import { useAuth } from "../state/AuthContext";
@@ -98,12 +99,11 @@ export function ShortlistEmailSheet({
     setLeadsLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      params.set("limit", "25");
-      if (q.trim()) params.set("search", q.trim());
-      const res = await mobileApiClient.get<unknown>(
-        `/leads?${params.toString()}`,
-      );
+      const endpoint = withQuery("/leads", {
+        limit: "25",
+        search: q.trim() || undefined,
+      });
+      const res = await mobileApiClient.get<unknown>(endpoint);
       if (!res.ok) {
         setError(res.message || "Could not load leads");
         return;
