@@ -1,8 +1,11 @@
 /**
- * Stage 4.5 — POST /api/mobile/v2/leads/[leadId]/notes
+ * Stage 4.5 / 4.5.1 — POST /api/mobile/v2/leads/[leadId]/notes
  *
  * Creates a LeadNote using the same canonical model and side effects as
  * POST /api/agent/notes (LeadNote row + LeadActivity + legacy notes blob sync).
+ *
+ * HTTP-mode safe: flat sequential Prisma writes only (no nested relations,
+ * no $transaction, no updateMany). PrismaNeonHttp rejects internal txns.
  *
  * Authorization: same Stage 4.3A / 4.4 mobile lead visibility rules.
  * Workspace authority: token.wsId ONLY.
@@ -10,9 +13,9 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { markLeadFirstResponse } from "@/lib/agent";
 import { resolveChildCrmOwnership, resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { authorizeMobileLeadAccess } from "@/lib/mobile/v2/lead-access";
+import { markLeadFirstResponseHttpSafe } from "@/lib/mobile/v2/lead-write-effects";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -85,6 +88,7 @@ export async function POST(
       leadWorkspaceId: lead.workspaceId,
     });
 
+    // 1) LeadNote — flat create
     const note = await prisma.leadNote.create({
       data: {
         organizationId: ownership.organizationId,
@@ -98,7 +102,13 @@ export async function POST(
       },
     });
 
-    await markLeadFirstResponse(lead.id, userId);
+    // 2) Response SLA (idempotent) — flat update when applicable
+    await markLeadFirstResponseHttpSafe(lead.id, {
+      status: lead.status,
+      firstRespondedAt: lead.firstRespondedAt,
+    });
+
+    // 3) LeadActivity — flat create (single activity; no duplicate)
     await prisma.leadActivity.create({
       data: {
         leadId: lead.id,
@@ -113,7 +123,7 @@ export async function POST(
       },
     });
 
-    // Keep legacy blob in sync (canonical web behavior).
+    // 4) Legacy notes blob sync — flat update
     const stamp = new Date().toLocaleString("en-CA");
     const kind = category === "CALL" ? "Call" : "General";
     const pinMark = pinned ? " · pinned" : "";

@@ -1,9 +1,14 @@
 /**
- * Stage 4.5 — PATCH /api/mobile/v2/leads/[leadId]/status
+ * Stage 4.5 / 4.5.1 — PATCH /api/mobile/v2/leads/[leadId]/status
  *
  * Updates pipeline status using the same canonical LeadStatus enum and
  * side effects as PATCH /api/agent/leads (statusChangedAt, activity,
  * firstRespondedAt, Attempted Contact reminders, Call New task cancel).
+ *
+ * HTTP-mode safe: flat sequential Prisma writes only.
+ * Nested `activities: { create }` is intentionally avoided — Prisma wraps
+ * nested writes in an internal transaction that PrismaNeonHttp rejects with
+ * "Transactions are not supported in HTTP mode".
  *
  * Authorization: same Stage 4.3A / 4.4 mobile lead visibility rules.
  * Workspace authority: token.wsId ONLY.
@@ -12,13 +17,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { LeadStatus } from "@prisma/client";
-import { markLeadFirstResponse } from "@/lib/agent";
-import {
-  CALL_NEW_LEAD_TASK_TITLE,
-  onLeadAttemptedContact,
-} from "@/lib/agent/lead-intake";
+import { CALL_NEW_LEAD_TASK_TITLE } from "@/lib/agent/lead-intake";
 import { LEAD_STATUS_ZOD } from "@/lib/agent/pipeline";
 import { authorizeMobileLeadAccess } from "@/lib/mobile/v2/lead-access";
+import {
+  cancelOpenAgentTasksByTitleHttpSafe,
+  onLeadAttemptedContactHttpSafe,
+} from "@/lib/mobile/v2/lead-write-effects";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -87,7 +92,6 @@ export async function PATCH(
       status: LeadStatus;
       statusChangedAt: Date;
       firstRespondedAt?: Date;
-      assignedAgentId?: string;
     } = {
       status: nextStatus,
       statusChangedAt,
@@ -102,22 +106,10 @@ export async function PATCH(
       data.firstRespondedAt = new Date();
     }
 
+    // 1) Lead status — flat update (no nested activities.create)
     const updated = await prisma.lead.update({
       where: { id: lead.id },
-      data: {
-        ...data,
-        activities: {
-          create: {
-            type: "status_change",
-            userId,
-            body: nextStatus,
-            meta: {
-              status: nextStatus,
-              previousStatus: prevStatus,
-            },
-          },
-        },
-      },
+      data,
       select: {
         id: true,
         status: true,
@@ -127,9 +119,19 @@ export async function PATCH(
       },
     });
 
-    if (movedToAttempted) {
-      await markLeadFirstResponse(lead.id, userId);
-    }
+    // 2) Status activity — separate flat create (single activity; no duplicate)
+    await prisma.leadActivity.create({
+      data: {
+        leadId: lead.id,
+        userId,
+        type: "status_change",
+        body: nextStatus,
+        meta: {
+          status: nextStatus,
+          previousStatus: prevStatus,
+        },
+      },
+    });
 
     const organizationId = lead.organizationId;
     const nextAssignee = updated.assignedAgentId ?? userId;
@@ -137,7 +139,7 @@ export async function PATCH(
     // Attempted Contact → leave Call New Leads, create 24h follow-up reminder.
     if (nextStatus === "ATTEMPTED_CONTACT" && prevStatus !== "ATTEMPTED_CONTACT") {
       if (nextAssignee && organizationId) {
-        await onLeadAttemptedContact({
+        await onLeadAttemptedContactHttpSafe({
           leadId: lead.id,
           assigneeId: nextAssignee,
           organizationId,
@@ -153,14 +155,10 @@ export async function PATCH(
       }
     } else if (nextStatus !== "NEW_LEAD" && prevStatus === "NEW_LEAD") {
       // Any other exit from New Lead cancels the call-new task.
-      await prisma.agentTask.updateMany({
-        where: {
-          leadId: lead.id,
-          status: "OPEN",
-          title: CALL_NEW_LEAD_TASK_TITLE,
-        },
-        data: { status: "CANCELLED" },
-      });
+      await cancelOpenAgentTasksByTitleHttpSafe(
+        lead.id,
+        CALL_NEW_LEAD_TASK_TITLE,
+      );
     }
 
     return NextResponse.json({
