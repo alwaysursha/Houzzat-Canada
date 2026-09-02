@@ -208,6 +208,16 @@ export function LeadsScreen({
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
+  // Launchpad / CALL NEW / VIEW CRM can re-enter Leads with a new filter.
+  useEffect(() => {
+    if (!initialStatusFilter) return;
+    if (initialStatusFilter === "ALL") {
+      setSelectedStatus("ALL");
+      return;
+    }
+    setSelectedStatus(initialStatusFilter as LeadStatus);
+  }, [initialStatusFilter]);
+
   // Debounce search query changes
   useEffect(() => {
     const timer = setTimeout(() => {

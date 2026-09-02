@@ -174,6 +174,40 @@ export function clearTeamCache(workspaceId?: string) {
   teamCache.delete(teamCacheKey(workspaceId));
 }
 
+export type MobileLaunchpadCachePayload = {
+  workspaceId: string;
+  deskView: "mine" | "team";
+  dueTodayCount: number;
+  overdueTaskCount: number;
+  newLeadCount: number;
+  contactedCount: number;
+  avgResponseMins: number;
+  hotCount: number;
+  callNewLeads: Array<Record<string, unknown>>;
+  contactedLeads: Array<Record<string, unknown>>;
+  openTasks: Array<Record<string, unknown>>;
+  onlineLeads: Array<Record<string, unknown>>;
+  hotLeads: Array<Record<string, unknown>>;
+  contactRequested: Array<Record<string, unknown>>;
+};
+
+export const launchpadCache = new Map<
+  string,
+  { launchpad: MobileLaunchpadCachePayload; timestamp: number }
+>();
+
+export function launchpadCacheKey(workspaceId: string): string {
+  return `${workspaceId}:launchpad`;
+}
+
+export function clearLaunchpadCache(workspaceId?: string) {
+  if (!workspaceId) {
+    launchpadCache.clear();
+    return;
+  }
+  launchpadCache.delete(launchpadCacheKey(workspaceId));
+}
+
 export function clearNotificationPrefsCache(userId?: string) {
   if (!userId) {
     notificationPrefsCache.clear();
@@ -398,6 +432,7 @@ export function clearAllWorkspaceCaches(workspaceId?: string) {
   clearCommunicationsCache(workspaceId);
   clearStatisticsCache(workspaceId);
   clearTeamCache(workspaceId);
+  clearLaunchpadCache(workspaceId);
   // Notification prefs are user-global — clear all on logout / full wipe;
   // workspace-only switch should not wipe them (caller passes workspaceId).
   if (!workspaceId) {

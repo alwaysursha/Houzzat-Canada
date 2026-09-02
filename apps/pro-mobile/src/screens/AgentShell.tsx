@@ -241,6 +241,18 @@ export function AgentShell({
           <LaunchpadScreen
             onNavigateToLeads={handleNavigateToLeads}
             onNavigateToTasks={handleNavigateToTasks}
+            onNavigateToStatistics={() => {
+              setActiveTab("more");
+              setActiveUtility("statistics");
+              setActiveDrawerId("statistics");
+            }}
+            onOpenLead={(leadId, leadIds) => {
+              setLeadNavIds(leadIds?.length ? leadIds : [leadId]);
+              setSelectedLeadId(leadId);
+              setActiveTab("leads");
+              setActiveDrawerId("leads");
+              setActiveUtility(null);
+            }}
           />
         )}
 
