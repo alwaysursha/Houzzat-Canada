@@ -40,6 +40,7 @@ import { ShortlistScreen } from "./ShortlistScreen";
 import { CommunicationsScreen } from "./CommunicationsScreen";
 import { StatisticsScreen } from "./StatisticsScreen";
 import { NotificationPreferencesScreen } from "./NotificationPreferencesScreen";
+import { CmaScreen } from "./CmaScreen";
 import { ViewingsPlannerScreen } from "./ViewingsPlannerScreen";
 import { ViewingsLeadPickerSheet } from "../components/ViewingsLeadPickerSheet";
 
@@ -310,6 +311,13 @@ export function AgentShell({
               />
             ) : activeUtility === "statistics" ? (
               <StatisticsScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+              />
+            ) : activeUtility === "cma" ? (
+              <CmaScreen
                 onBack={() => {
                   setActiveUtility(null);
                   setActiveDrawerId("account");

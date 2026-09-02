@@ -20,6 +20,13 @@
       "service": "houzzat"
     }
   ],
+  // Stage 5.12B — Browser Rendering PDF (optional binding).
+  // Prefer enabling when account has Browser Rendering:
+  //   "browser": { "binding": "BROWSER" }
+  // Until then, set Worker secrets:
+  //   CLOUDFLARE_ACCOUNT_ID
+  //   CLOUDFLARE_BROWSER_RENDERING_API_TOKEN  (Browser Rendering — Edit)
+  // Code falls back to REST /accounts/{id}/browser-rendering/pdf.
   // Extra CPU headroom for paid Workers (default 30s). Does not fix PropTx-on-SSR;
   // listing HTML still must stay light — this is a safety net only.
   "limits": {

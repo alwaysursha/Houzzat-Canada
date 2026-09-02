@@ -39,7 +39,13 @@ function testWorkspaceInverseRelations() {
   const workspaceStart = schema.indexOf("model Workspace ");
   const workspaceEnd = schema.indexOf("\nmodel ", workspaceStart + 1);
   const workspaceBlock = schema.slice(workspaceStart, workspaceEnd);
-  for (const field of ["leads", "agentTasks", "leadNotes", "leadEmailLogs"]) {
+  for (const field of [
+    "leads",
+    "agentTasks",
+    "leadNotes",
+    "leadEmailLogs",
+    "cmaReports",
+  ]) {
     assert.ok(workspaceBlock.includes(field), `Workspace.${field}`);
   }
 }
@@ -77,7 +83,6 @@ function testDeferredModelsHaveNoWorkspaceId() {
     "Appointment",
     "LandingPage",
     "AdCampaign",
-    "CmaReport",
     "ReferralHandoff",
     "SavedListing",
   ]) {
@@ -90,6 +95,24 @@ function testDeferredModelsHaveNoWorkspaceId() {
       `${model} must not have workspaceId`,
     );
   }
+}
+
+function testCmaReportHasNullableWorkspaceId() {
+  const start = schema.indexOf("model CmaReport ");
+  assert.ok(start > 0, "model CmaReport");
+  const end = schema.indexOf("\nmodel ", start + 1);
+  const block = schema.slice(start, end > 0 ? end : start + 3500);
+  assert.match(block, /workspaceId\s+String\?/);
+  assert.match(block, /leadId\s+String\?/);
+  assert.match(
+    block,
+    /workspace\s+Workspace\?\s+@relation\(fields: \[workspaceId\], references: \[id\], onDelete: Restrict\)/,
+  );
+  assert.ok(block.includes("@@index([workspaceId, updatedAt])"));
+  assert.ok(block.includes("revokedAt"));
+  assert.ok(block.includes("selectedComps"));
+  assert.ok(block.includes("subjectSnapshot"));
+  assert.ok(block.includes("analysis"));
 }
 
 function testRoutingSettingsHasNullableWorkspaceId() {
@@ -133,6 +156,7 @@ testFkRestrictOnDelete();
 testApprovedIndexes();
 testOrganizationIndexesPreserved();
 testDeferredModelsHaveNoWorkspaceId();
+testCmaReportHasNullableWorkspaceId();
 testRoutingSettingsHasNullableWorkspaceId();
 testRuntimeWorkspaceOwnershipReadFoundation();
 testStage3bMigrationSql();

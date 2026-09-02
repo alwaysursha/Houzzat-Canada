@@ -21,6 +21,7 @@ class MainApplication : Application(), ReactApplication {
                 MainReactPackage(),
                 SecureKeystorePackage(),
                 FcmPackage(),
+                PdfSharePackage(),
                 RNCWebViewPackage(),
                 RNDateTimePickerPackage(),
             )

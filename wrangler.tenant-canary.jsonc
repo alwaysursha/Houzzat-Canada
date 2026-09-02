@@ -17,6 +17,7 @@
       "service": "houzzat-tenant-canary"
     }
   ],
+  // Stage 5.12B — same Browser Rendering config as wrangler.jsonc (binding or REST secrets).
   "limits": {
     "cpu_ms": 60000
   },

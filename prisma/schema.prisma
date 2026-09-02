@@ -259,6 +259,7 @@ model Workspace {
   domains       WorkspaceDomain[]
   branding      WorkspaceBranding?
   viewingTours  ViewingTour[]
+  cmaReports    CmaReport[]
 
   @@index([status])
 }
@@ -560,6 +561,7 @@ model Lead {
   tasks         AgentTask[]
   leadNotes     LeadNote[]
   emailLogs     LeadEmailLog[]
+  cmaReports    CmaReport[]
 
   @@index([status, assignedAgentId])
   @@index([organizationId, status])
@@ -1423,10 +1425,31 @@ model CmaReport {
   agentId        String
   createdAt      DateTime @default(now())
 
-  agent User @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  /**
+   * Stage 5.12A — Advanced CMA tenancy.
+   * Nullable for legacy rows. NEW Advanced CMA requires workspaceId in app logic.
+   */
+  workspaceId           String?
+  leadId                String?
+  subjectMls            String?
+  subjectSnapshot       Json?
+  selectedComps         Json?
+  analysis              Json?
+  recommendedListPrice  Int?
+  recommendationNote    String?  @db.Text
+  narrative             String?  @db.Text
+  updatedAt             DateTime @updatedAt
+  revokedAt             DateTime?
+
+  agent     User       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  lead      Lead?      @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   @@index([agentId, createdAt])
   @@index([listingMls])
+  @@index([workspaceId, updatedAt])
+  @@index([workspaceId, agentId])
+  @@index([leadId])
 }
 
 enum PartnerType {

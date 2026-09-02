@@ -33,6 +33,10 @@ declare module "react-native" {
       addListener(eventName: string): void;
       removeListeners(count: number): void;
     };
+    HouzzatProPdf?: {
+      savePdf(filename: string, base64: string): Promise<string>;
+      sharePdf(filename: string, base64: string): Promise<string>;
+    };
   };
 
   export class NativeEventEmitter {

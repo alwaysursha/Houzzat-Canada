@@ -34,8 +34,8 @@ export const MORE_UTILITY_META: Record<
     title: "CMA",
     webPath: "/agent/cma",
     summary:
-      "Comparative market analysis tools. Substantial listing/comp workflows belong in a later stage.",
-    nextStage: "Native CMA",
+      "Advanced comparative market analysis: sold comps, competition, agent recommendation, and tenant-branded client link/email.",
+    nextStage: "PDF download (Worker-compatible PDF engine approval)",
   },
   team: {
     title: "Team",

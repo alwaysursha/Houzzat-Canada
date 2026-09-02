@@ -752,3 +752,71 @@ export function renderNeighborhoodWeeklyEmail(input: {
   });
   return { subject, text, html, kind: "neighborhood_weekly" };
 }
+
+/** Stage 5.12A — tenant-branded CMA ready email (client-facing). */
+export function renderCmaEmail(input: {
+  recipientName?: string | null;
+  agentName: string;
+  agentEmail?: string | null;
+  agentPhone?: string | null;
+  tenantDisplayName: string;
+  tenantPrimaryColor?: string | null;
+  subjectAddress: string;
+  subjectCity: string;
+  cmaUrl: string;
+  recommendedListPrice?: number | null;
+}): RenderedEmail {
+  const greet = input.recipientName?.trim()
+    ? `Hi ${input.recipientName.trim()},`
+    : "Hi there,";
+  const brand = input.tenantDisplayName.trim() || "your brokerage";
+  const accent = input.tenantPrimaryColor?.trim() || "#0F766E";
+  const subject = `Your Comparative Market Analysis is ready`;
+  const priceLine =
+    input.recommendedListPrice != null
+      ? `Recommended list price: ${money(input.recommendedListPrice)}`
+      : null;
+  const text = [
+    greet,
+    "",
+    `${input.agentName} at ${brand} prepared a Comparative Market Analysis for ${input.subjectAddress}, ${input.subjectCity}.`,
+    "",
+    "It reviews recent comparable sales and current competition to help you understand how the property is positioned today.",
+    priceLine ? `\n${priceLine}\n` : "",
+    `View your CMA: ${input.cmaUrl}`,
+    "",
+    input.agentName,
+    input.agentPhone ? input.agentPhone : "",
+    input.agentEmail ? input.agentEmail : "",
+    "",
+    "Powered by HouzzatPRO",
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+
+  const html = emailLayout({
+    title: "Your market analysis is ready",
+    subtitle: `${brand} · Comparative Market Analysis`,
+    preheader: `CMA for ${input.subjectAddress}`,
+    footerNote: `Prepared by ${input.agentName} · Powered by HouzzatPRO`,
+    bodyHtml: `
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      <p style="margin:0 0 12px;color:#115e59">I've prepared a Comparative Market Analysis for <strong style="color:#064e3b">${escapeHtml(input.subjectAddress)}</strong>${input.subjectCity ? `, ${escapeHtml(input.subjectCity)}` : ""} using recent comparable sales and current competition.</p>
+      ${infoCard(`
+        <p style="margin:0 0 6px;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#047857;font-weight:700">${escapeHtml(brand)}</p>
+        <p style="margin:0;font-size:17px;color:#064e3b;font-weight:700">${escapeHtml(input.subjectAddress)}</p>
+        ${priceLine ? `<p style="margin:10px 0 0;color:#115e59">${escapeHtml(priceLine)}</p>` : ""}
+      `)}
+      <p style="margin:16px 0 0;color:#115e59">This is a market analysis for discussion — not a formal appraisal.</p>
+      <p style="margin:22px 0 8px;text-align:center">
+        <a href="${escapeAttr(input.cmaUrl)}" style="display:inline-block;background:${escapeAttr(accent)};color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;padding:12px 22px;border-radius:999px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">View Your CMA</a>
+      </p>
+      <p style="margin:20px 0 0;color:#115e59">
+        <strong style="color:#064e3b">${escapeHtml(input.agentName)}</strong><br/>
+        ${input.agentPhone ? `${escapeHtml(input.agentPhone)}<br/>` : ""}
+        ${input.agentEmail ? escapeHtml(input.agentEmail) : ""}
+      </p>
+    `,
+  });
+  return { subject, text, html, kind: "cma_share" };
+}
