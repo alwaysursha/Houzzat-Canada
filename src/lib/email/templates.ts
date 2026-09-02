@@ -124,12 +124,19 @@ export function renderTeamInviteEmail(input: {
   convertsConsumerAccount?: boolean;
   consumerLabels?: Array<"buyer" | "seller">;
   expiresAt?: Date | string | null;
+  /** Tenant display name (primary brand). Defaults to orgName. */
+  tenantDisplayName?: string | null;
+  tenantLogoUrl?: string | null;
+  tenantPrimaryColor?: string | null;
 }): RenderedEmail {
   const roleLabel = orgRoleLabel(input.role);
   const inviter = input.invitedByName?.trim() || null;
+  const brand =
+    input.tenantDisplayName?.trim() || input.orgName.trim() || "your brokerage";
+  const accent = input.tenantPrimaryColor?.trim() || "#0F766E";
   const subject = input.alreadyMember
-    ? `You’re on the ${input.orgName} team on ${SITE_NAME}`
-    : `You’re invited to join ${input.orgName} on ${SITE_NAME}`;
+    ? `You’re on the ${brand} team`
+    : `You’re invited to join ${brand}`;
   const expireLabel = input.expiresAt
     ? new Date(input.expiresAt).toLocaleDateString("en-CA", {
         year: "numeric",
@@ -152,17 +159,21 @@ export function renderTeamInviteEmail(input: {
 
   const text = input.alreadyMember
     ? [
-        `You’ve been added to ${input.orgName} as ${roleLabel}${inviter ? ` by ${inviter}` : ""}.`,
+        `You’ve been added to ${brand} as ${roleLabel}${inviter ? ` by ${inviter}` : ""}.`,
         "",
         `Open your CRM: ${SITE_URL}/agent`,
+        "",
+        "Powered by HouzzatPRO",
       ].join("\n")
     : [
-        `You’ve been invited to join ${input.orgName} as ${roleLabel}${inviter ? ` by ${inviter}` : ""}.`,
+        `You’ve been invited to join ${brand} as ${roleLabel}${inviter ? ` by ${inviter}` : ""}.`,
         convertNotice ?? "",
         "",
         `Accept your invite (create an account or sign in):`,
         input.inviteUrl,
         expireLabel ? `\nThis invite expires ${expireLabel}.` : "",
+        "",
+        "Powered by HouzzatPRO",
       ]
         .filter(Boolean)
         .join("\n");
@@ -170,19 +181,23 @@ export function renderTeamInviteEmail(input: {
   const html = emailLayout({
     title: input.alreadyMember ? "Welcome to the team" : "You’re invited",
     subtitle: input.alreadyMember
-      ? `Your ${SITE_NAME} CRM seat is ready.`
-      : `Join ${input.orgName} on ${SITE_NAME}.`,
+      ? `Your ${brand} CRM seat is ready.`
+      : `Join ${brand}.`,
     preheader: subject,
+    brandLabel: brand,
+    brandLogoUrl: input.tenantLogoUrl,
+    brandPrimaryColor: accent,
+    footerNote: "Powered by HouzzatPRO",
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">
         ${
           input.alreadyMember
-            ? `You’ve been added to <strong style="color:#064e3b">${escapeHtml(input.orgName)}</strong> as <strong style="color:#064e3b">${escapeHtml(roleLabel)}</strong>${inviter ? ` by ${escapeHtml(inviter)}` : ""}.`
-            : `${inviter ? `<strong style="color:#064e3b">${escapeHtml(inviter)}</strong> invited you` : "You’ve been invited"} to join <strong style="color:#064e3b">${escapeHtml(input.orgName)}</strong> as <strong style="color:#064e3b">${escapeHtml(roleLabel)}</strong>.`
+            ? `You’ve been added to <strong style="color:#064e3b">${escapeHtml(brand)}</strong> as <strong style="color:#064e3b">${escapeHtml(roleLabel)}</strong>${inviter ? ` by ${escapeHtml(inviter)}` : ""}.`
+            : `${inviter ? `<strong style="color:#064e3b">${escapeHtml(inviter)}</strong> invited you` : "You’ve been invited"} to join <strong style="color:#064e3b">${escapeHtml(brand)}</strong> as <strong style="color:#064e3b">${escapeHtml(roleLabel)}</strong>.`
         }
       </p>
       ${infoCard(`
-        <p style="margin:0;font-size:14px;color:#115e59"><strong style="color:#064e3b">Team:</strong> ${escapeHtml(input.orgName)}</p>
+        <p style="margin:0;font-size:14px;color:#115e59"><strong style="color:#064e3b">Team:</strong> ${escapeHtml(brand)}</p>
         <p style="margin:8px 0 0;font-size:14px;color:#115e59"><strong style="color:#064e3b">Role:</strong> ${escapeHtml(roleLabel)}</p>
         ${expireLabel && !input.alreadyMember ? `<p style="margin:8px 0 0;font-size:13px;color:#047857">Invite expires ${escapeHtml(expireLabel)}</p>` : ""}
       `)}

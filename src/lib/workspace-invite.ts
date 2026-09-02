@@ -10,6 +10,7 @@ import { sendRenderedEmail } from "@/lib/email/send";
 import { renderTeamInviteEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
 import { reconcileUserPlatformStaffState } from "@/lib/reconcile-user-platform-staff";
+import { resolveWorkspaceBrand } from "@/lib/tenancy/resolve-workspace-brand";
 import bcrypt from "bcryptjs";
 import {
   createWorkspaceInviteRawToken,
@@ -61,6 +62,7 @@ export type WorkspaceInvitePreview = {
 
 async function sendWorkspaceInviteEmail(input: {
   to: string;
+  workspaceId: string;
   workspaceName: string;
   role: string;
   token: string;
@@ -70,8 +72,21 @@ async function sendWorkspaceInviteEmail(input: {
   convertsConsumerAccount?: boolean;
   consumerLabels?: Array<"buyer" | "seller">;
 }) {
+  const brand = await resolveWorkspaceBrand(input.workspaceId);
+  const tenantDisplayName = brand.displayName?.trim() || input.workspaceName;
+  const logoRaw = brand.logoUrl?.trim() || null;
+  const tenantLogoUrl =
+    logoRaw && /^https?:\/\//i.test(logoRaw)
+      ? logoRaw
+      : logoRaw?.startsWith("/")
+        ? `${SITE_URL.replace(/\/$/, "")}${logoRaw}`
+        : null;
+
   const rendered = renderTeamInviteEmail({
     orgName: input.workspaceName,
+    tenantDisplayName,
+    tenantLogoUrl,
+    tenantPrimaryColor: brand.colors.primary,
     role: input.role,
     inviteUrl: `${SITE_URL}/auth/invite/${input.token}`,
     invitedByName: input.invitedByName,
@@ -301,6 +316,7 @@ export async function createWorkspaceInvite(input: {
 
   const sendResult = await sendWorkspaceInviteEmail({
     to: email,
+    workspaceId: workspace.id,
     workspaceName: workspace.name,
     role: input.role,
     token: rawToken,
@@ -370,6 +386,7 @@ export async function resendWorkspaceInvite(
 
   const sendResult = await sendWorkspaceInviteEmail({
     to: invite.email,
+    workspaceId: invite.workspaceId,
     workspaceName: invite.workspace.name,
     role: invite.role,
     token: rawToken,

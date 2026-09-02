@@ -140,6 +140,40 @@ export function notificationPrefsCacheKey(userId: string): string {
   return `user:${userId}:notification-preferences`;
 }
 
+/** Stage 5.13 — workspace-scoped Team roster. */
+export type MobileTeamCachePayload = {
+  workspace: { id: string; name: string; primaryAgentId: string | null };
+  memberCount: number;
+  capabilities: {
+    canInvite: boolean;
+    canManageMembers: boolean;
+    canSuspend: boolean;
+    canRemove: boolean;
+    canSetPrimaryAgent: boolean;
+    allowedInviteRoles: Array<"ADMIN" | "AGENT">;
+    canOpenStatistics: boolean;
+  };
+  members: Array<Record<string, unknown>>;
+  pendingInvites: Array<Record<string, unknown>>;
+};
+
+export const teamCache = new Map<
+  string,
+  { team: MobileTeamCachePayload; timestamp: number }
+>();
+
+export function teamCacheKey(workspaceId: string): string {
+  return `${workspaceId}:team`;
+}
+
+export function clearTeamCache(workspaceId?: string) {
+  if (!workspaceId) {
+    teamCache.clear();
+    return;
+  }
+  teamCache.delete(teamCacheKey(workspaceId));
+}
+
 export function clearNotificationPrefsCache(userId?: string) {
   if (!userId) {
     notificationPrefsCache.clear();
@@ -363,6 +397,7 @@ export function clearAllWorkspaceCaches(workspaceId?: string) {
   clearLeadConversationsCache(workspaceId);
   clearCommunicationsCache(workspaceId);
   clearStatisticsCache(workspaceId);
+  clearTeamCache(workspaceId);
   // Notification prefs are user-global — clear all on logout / full wipe;
   // workspace-only switch should not wipe them (caller passes workspaceId).
   if (!workspaceId) {

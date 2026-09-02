@@ -41,6 +41,7 @@ import { CommunicationsScreen } from "./CommunicationsScreen";
 import { StatisticsScreen } from "./StatisticsScreen";
 import { NotificationPreferencesScreen } from "./NotificationPreferencesScreen";
 import { CmaScreen } from "./CmaScreen";
+import { TeamScreen } from "./TeamScreen";
 import { ViewingsPlannerScreen } from "./ViewingsPlannerScreen";
 import { ViewingsLeadPickerSheet } from "../components/ViewingsLeadPickerSheet";
 
@@ -321,6 +322,17 @@ export function AgentShell({
                 onBack={() => {
                   setActiveUtility(null);
                   setActiveDrawerId("account");
+                }}
+              />
+            ) : activeUtility === "team" ? (
+              <TeamScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+                onOpenStatistics={() => {
+                  setActiveUtility("statistics");
+                  setActiveDrawerId("statistics");
                 }}
               />
             ) : activeUtility === "notifications" ? (

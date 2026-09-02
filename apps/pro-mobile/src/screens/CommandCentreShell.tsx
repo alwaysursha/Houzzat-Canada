@@ -39,6 +39,7 @@ import { CommunicationsScreen } from "./CommunicationsScreen";
 import { StatisticsScreen } from "./StatisticsScreen";
 import { NotificationPreferencesScreen } from "./NotificationPreferencesScreen";
 import { CmaScreen } from "./CmaScreen";
+import { TeamScreen } from "./TeamScreen";
 import { ViewingsPlannerScreen } from "./ViewingsPlannerScreen";
 import { ViewingsLeadPickerSheet } from "../components/ViewingsLeadPickerSheet";
 
@@ -275,18 +276,17 @@ export function CommandCentreShell() {
         )}
 
         {activeTab === "team" && (
-          <View style={styles.placeholderContainer}>
-            <View style={styles.placeholderIconBox}>
-              <Text style={styles.placeholderIconText}>👥</Text>
-            </View>
-            <Text style={styles.placeholderTitle}>Brokerage Team</Text>
-            <Text style={styles.placeholderSubtitle}>
-              Agent roster, lead routing, and performance metrics.
-            </Text>
-            <View style={styles.placeholderTag}>
-              <Text style={styles.placeholderTagText}>ALL AGENTS ACTIVE</Text>
-            </View>
-          </View>
+          <TeamScreen
+            onOpenStatistics={
+              userRole === "OWNER" || userRole === "ADMIN"
+                ? () => {
+                    setActiveTab("more");
+                    setActiveUtility("statistics");
+                    setActiveDrawerId("statistics");
+                  }
+                : undefined
+            }
+          />
         )}
 
         {activeTab === "leads" && (
@@ -360,6 +360,17 @@ export function CommandCentreShell() {
                 onBack={() => {
                   setActiveUtility(null);
                   setActiveDrawerId("account");
+                }}
+              />
+            ) : activeUtility === "team" ? (
+              <TeamScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+                onOpenStatistics={() => {
+                  setActiveUtility("statistics");
+                  setActiveDrawerId("statistics");
                 }}
               />
             ) : activeUtility === "notifications" ? (

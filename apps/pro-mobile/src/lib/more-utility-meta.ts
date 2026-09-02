@@ -41,8 +41,8 @@ export const MORE_UTILITY_META: Record<
     title: "Team",
     webPath: "/agent/team",
     summary:
-      "Team seats and brokerage roster. OWNER/ADMIN Team is partly available in Command Centre.",
-    nextStage: "Native Team Desk",
+      "Workspace roster, invites, roles, and membership management (WorkspaceMember).",
+    nextStage: "Native Team Desk (Stage 5.13)",
   },
   notifications: {
     title: "Notifications",

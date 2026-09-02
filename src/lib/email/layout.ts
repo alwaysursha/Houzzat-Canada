@@ -11,7 +11,18 @@ export function emailLayout(input: {
   bodyHtml: string;
   footerNote?: string;
   unsubscribeUrl?: string | null;
+  /** Tenant/workspace brand label for hero (defaults to SITE_NAME). */
+  brandLabel?: string | null;
+  /** Absolute tenant logo URL when available. */
+  brandLogoUrl?: string | null;
+  /** Tenant primary accent for hero text (optional). */
+  brandPrimaryColor?: string | null;
 }): string {
+  const brandLabel = input.brandLabel?.trim() || SITE_NAME;
+  const brandColor = input.brandPrimaryColor?.trim() || "#047857";
+  const logo = input.brandLogoUrl?.trim()
+    ? `<img src="${escapeAttr(input.brandLogoUrl.trim())}" alt="${escapeHtml(brandLabel)}" width="140" style="display:block;max-width:140px;height:auto;margin:0 0 14px;border:0" />`
+    : "";
   const preheader = input.preheader
     ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(input.preheader)}</div>`
     : "";
@@ -40,7 +51,8 @@ export function emailLayout(input: {
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:680px;border-radius:20px;overflow:hidden;background:#ecfdf5;background-image:${EMAIL_MINT_GRADIENT};border:1px solid #a7f3d0">
           <tr>
             <td style="width:100%;background:#d1fae5;background-image:${EMAIL_MINT_GRADIENT};padding:32px 24px 28px;text-align:left;border-radius:20px 20px 0 0">
-              <p style="margin:0;font-size:11px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#047857">${escapeHtml(SITE_NAME)}</p>
+              ${logo}
+              <p style="margin:0;font-size:11px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:${escapeAttr(brandColor)}">${escapeHtml(brandLabel)}</p>
               <h1 style="margin:10px 0 0;font-size:28px;line-height:1.15;font-weight:800;color:#064e3b;letter-spacing:-0.02em">${escapeHtml(input.title)}</h1>
               ${subtitle}
             </td>
