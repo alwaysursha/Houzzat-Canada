@@ -137,7 +137,13 @@ export const ACTIVITY_FILTER_GROUPS: ActivityFilterGroup[] = [
       {
         id: "appointments",
         label: "Appointments",
-        types: ["APPOINTMENT"],
+        types: [
+          "APPOINTMENT",
+          "viewing_plan_created",
+          "viewing_plan_updated",
+          "viewing_appointment_scheduled",
+          "viewing_plan_shared",
+        ],
       },
       {
         id: "assigned_agent",

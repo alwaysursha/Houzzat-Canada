@@ -133,6 +133,15 @@ declare module "react-native" {
     canOpenURL(url: string): Promise<boolean>;
   };
 
+  export const Clipboard: {
+    setString(text: string): void;
+    getString(): Promise<string>;
+  };
+
+  export const Share: {
+    share(options: { message?: string; url?: string; title?: string }): Promise<{ action: string }>;
+  };
+
   export const TextInput: React.FC<{
     style?: any;
     value?: string;

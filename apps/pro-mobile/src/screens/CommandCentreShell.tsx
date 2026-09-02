@@ -33,9 +33,17 @@ import {
 } from "./MoreUtilityScreen";
 import { PropertiesSearchScreen } from "./PropertiesSearchScreen";
 import { ShortlistScreen } from "./ShortlistScreen";
+import { ViewingsPlannerScreen } from "./ViewingsPlannerScreen";
+import { ViewingsLeadPickerSheet } from "../components/ViewingsLeadPickerSheet";
 
 type CommandCentreTab = "overview" | "team" | "leads" | "calendar" | "more";
 type ActiveUtility = Exclude<MoreUtilityId, "account"> | null;
+
+type ViewingsPlannerState = {
+  leadId: string;
+  mlsNumbers: string[];
+  leadName?: string;
+} | null;
 
 export function CommandCentreShell() {
   const {
@@ -54,6 +62,10 @@ export function CommandCentreShell() {
   const [inAgentMode, setInAgentMode] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [leadNavIds, setLeadNavIds] = useState<string[]>([]);
+  const [viewingsPlanner, setViewingsPlanner] = useState<ViewingsPlannerState>(null);
+  const [viewingsLeadPicker, setViewingsLeadPicker] = useState<{ mlsNumbers: string[] } | null>(
+    null,
+  );
 
   const hasMultipleWorkspaces = memberships.length > 1;
   const brandDisplayName = activeWorkspace?.displayName || "HouzzatPRO";
@@ -241,6 +253,9 @@ export function CommandCentreShell() {
                   setActiveUtility("search");
                   setActiveDrawerId("search");
                 }}
+                onPlanViewings={(mlsNumbers) => {
+                  setViewingsLeadPicker({ mlsNumbers });
+                }}
               />
             ) : (
               <MoreUtilityScreen
@@ -396,6 +411,35 @@ export function CommandCentreShell() {
               setSelectedLeadId(null);
               setLeadNavIds([]);
             }}
+            onPlanViewings={(id, name) => {
+              setViewingsPlanner({ leadId: id, mlsNumbers: [], leadName: name });
+            }}
+          />
+        </View>
+      ) : null}
+
+      {viewingsLeadPicker ? (
+        <ViewingsLeadPickerSheet
+          visible
+          onClose={() => setViewingsLeadPicker(null)}
+          onSelect={(leadId, leadName) => {
+            setViewingsPlanner({
+              leadId,
+              leadName,
+              mlsNumbers: viewingsLeadPicker.mlsNumbers,
+            });
+            setViewingsLeadPicker(null);
+          }}
+        />
+      ) : null}
+
+      {viewingsPlanner ? (
+        <View style={styles.viewingsPlannerOverlay}>
+          <ViewingsPlannerScreen
+            leadId={viewingsPlanner.leadId}
+            leadName={viewingsPlanner.leadName}
+            initialMlsNumbers={viewingsPlanner.mlsNumbers}
+            onBack={() => setViewingsPlanner(null)}
           />
         </View>
       ) : null}
@@ -415,6 +459,12 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 100,
     elevation: 100,
+    backgroundColor: "#FFFFFF",
+  },
+  viewingsPlannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 110,
+    elevation: 110,
     backgroundColor: "#FFFFFF",
   },
   header: {

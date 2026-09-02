@@ -35,6 +35,7 @@ import type { MobileListingCard } from "../types/property";
 type ShortlistScreenProps = {
   onBack: () => void;
   onBrowseProperties?: () => void;
+  onPlanViewings?: (mlsNumbers: string[]) => void;
 };
 
 /** Exported for cross-screen cache invalidation after shortlist mutations. */
@@ -42,7 +43,11 @@ export function invalidateShortlistListForWorkspace(workspaceId: string | undefi
   clearShortlistListCache(workspaceId);
 }
 
-export function ShortlistScreen({ onBack, onBrowseProperties }: ShortlistScreenProps) {
+export function ShortlistScreen({
+  onBack,
+  onBrowseProperties,
+  onPlanViewings,
+}: ShortlistScreenProps) {
   const { activeWorkspace } = useAuth();
   const workspaceId = activeWorkspace?.id;
   const cacheKey = workspaceId ? `${workspaceId}:shortlist` : "";
@@ -343,10 +348,21 @@ export function ShortlistScreen({ onBack, onBrowseProperties }: ShortlistScreenP
 
       {selected.size > 0 ? (
         <View style={styles.selectionBar}>
-          <Text style={styles.selectionCount}>{selected.size} selected</Text>
-          <TouchableOpacity onPress={() => setSelected(new Set())}>
-            <Text style={styles.clearText}>Clear selection</Text>
-          </TouchableOpacity>
+          <View style={styles.selectionTop}>
+            <Text style={styles.selectionCount}>{selected.size} selected</Text>
+            <TouchableOpacity onPress={() => setSelected(new Set())}>
+              <Text style={styles.clearText}>Clear selection</Text>
+            </TouchableOpacity>
+          </View>
+          {onPlanViewings ? (
+            <TouchableOpacity
+              style={styles.planBtn}
+              onPress={() => onPlanViewings([...selected])}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.planBtnText}>Plan Viewings</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : null}
 
@@ -531,14 +547,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#93C5FD",
     padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    gap: 10,
     shadowColor: "#0F172A",
     shadowOpacity: 0.12,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
+  },
+  selectionTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   selectionCount: {
     fontSize: 14,
@@ -549,5 +568,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#2B6CB0",
+  },
+  planBtn: {
+    backgroundColor: "#0F766E",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  planBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 });

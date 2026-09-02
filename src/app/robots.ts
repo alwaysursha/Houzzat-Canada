@@ -20,6 +20,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
         "/cma/",
         "/partners/portal/",
         "/route-planner/share/",
+        "/viewings/share/",
         "/r/",
         "/coming-soon",
       ],

@@ -258,6 +258,7 @@ model Workspace {
   crmRoutingSettings CrmRoutingSettings?
   domains       WorkspaceDomain[]
   branding      WorkspaceBranding?
+  viewingTours  ViewingTour[]
 
   @@index([status])
 }
@@ -434,7 +435,8 @@ model User {
   reviewedOwnerListings Listing[]    @relation("OwnerListingReviewer")
   waivedOwnerOrders OwnerListingOrder[] @relation("OwnerOrderAdmin")
   ownerConsents OwnerListingConsent[]
-  viewingTours  ViewingTour[]
+  viewingTours       ViewingTour[] @relation("CustomerViewingTours")
+  agentViewingTours  ViewingTour[] @relation("AgentViewingTours")
   assignedTasks AgentTask[]       @relation("TaskAssignee")
   createdTasks  AgentTask[]       @relation("TaskCreator")
   leadNotesAuthored LeadNote[]    @relation("LeadNoteAuthor")
@@ -554,6 +556,7 @@ model Lead {
   adCampaign    AdCampaign?    @relation(fields: [adCampaignId], references: [id], onDelete: SetNull)
   activities    LeadActivity[]
   appointments  Appointment[]
+  viewingTours  ViewingTour[]
   tasks         AgentTask[]
   leadNotes     LeadNote[]
   emailLogs     LeadEmailLog[]
@@ -725,7 +728,8 @@ model Appointment {
 
   customer User? @relation("CustomerAppointments", fields: [customerId], references: [id], onDelete: SetNull)
   agent    User? @relation("AgentAppointments", fields: [agentId], references: [id], onDelete: SetNull)
-  lead     Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead            Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  viewingTourStop ViewingTourStop?
 
   @@index([status, startsAt])
   @@index([agentId, status])
@@ -805,10 +809,16 @@ enum ViewingTourStatus {
   ARCHIVED
 }
 
-/** Ordered Route Planner itinerary for a customer. */
+/** Ordered viewing itinerary — consumer Route Planner or HouzzatPRO Viewings Planner. */
 model ViewingTour {
   id                  String            @id @default(cuid())
-  userId              String
+  /** Consumer tours: customer user. PRO tours: lead.customerId when present. */
+  userId              String?
+  /** HouzzatPRO Viewings Planner — every saved plan belongs to a lead. */
+  leadId              String?
+  agentId             String?
+  workspaceId         String?
+  viewingDate         DateTime?
   name                String            @default("Route Planner")
   status              ViewingTourStatus @default(DRAFT)
   /** At most one active draft tour is used as the client bucket. */
@@ -824,11 +834,16 @@ model ViewingTour {
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 
-  user  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stops ViewingTourStop[]
+  user      User?             @relation("CustomerViewingTours", fields: [userId], references: [id], onDelete: Cascade)
+  lead      Lead?             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agent     User?             @relation("AgentViewingTours", fields: [agentId], references: [id], onDelete: SetNull)
+  workspace Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  stops     ViewingTourStop[]
 
   @@index([userId, isActive])
   @@index([userId, status, updatedAt])
+  @@index([leadId, isActive])
+  @@index([workspaceId, agentId, status])
 }
 
 model ViewingTourStop {
@@ -843,10 +858,12 @@ model ViewingTourStop {
   driveFromPrevMeters  Int?
   suggestedArriveAt    DateTime?
   suggestedLeaveAt     DateTime?
+  appointmentId        String?   @unique
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  tour ViewingTour @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  tour        ViewingTour  @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
   @@unique([tourId, mlsNumber])
   @@index([tourId, sortOrder])

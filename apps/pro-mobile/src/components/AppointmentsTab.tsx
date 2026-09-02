@@ -77,6 +77,35 @@ function formatStarts(iso: string | null): string {
   }
 }
 
+function isShowingUpcoming(a: MobileLeadAppointment, nowMs: number): boolean {
+  if (!a.startsAt) return true;
+  return new Date(a.startsAt).getTime() >= nowMs;
+}
+
+function compareStartsAsc(a: MobileLeadAppointment, b: MobileLeadAppointment): number {
+  if (!a.startsAt && !b.startsAt) return 0;
+  if (!a.startsAt) return 1;
+  if (!b.startsAt) return -1;
+  return new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
+}
+
+function compareStartsDesc(a: MobileLeadAppointment, b: MobileLeadAppointment): number {
+  return compareStartsAsc(b, a);
+}
+
+function partitionAppointments(appointments: MobileLeadAppointment[]) {
+  const nowMs = Date.now();
+  const showings = appointments.filter((a) => a.type === "SHOWING");
+  const otherAppointments = appointments.filter((a) => a.type !== "SHOWING");
+  const upcomingShowings = showings
+    .filter((a) => isShowingUpcoming(a, nowMs))
+    .sort(compareStartsAsc);
+  const pastShowings = showings
+    .filter((a) => !isShowingUpcoming(a, nowMs))
+    .sort(compareStartsDesc);
+  return { upcomingShowings, pastShowings, otherAppointments };
+}
+
 type AppointmentsTabProps = {
   leadId: string;
   workspaceId: string | undefined;
@@ -299,6 +328,127 @@ export function AppointmentsTab({
     });
   };
 
+  const { upcomingShowings, pastShowings, otherAppointments } =
+    partitionAppointments(appointments);
+
+  const renderAppointmentCard = (a: MobileLeadAppointment) => {
+    const pending = mutatingId === a.id;
+    const confirmLocal = confirmStarts[a.id] ?? "";
+    return (
+      <View key={a.id} style={styles.card}>
+        {/* Web CustomerProfile card hierarchy */}
+        <Text style={styles.cardTitle}>
+          {typeLabel(a.type)} · {a.status}
+        </Text>
+        <Text style={styles.cardMeta}>
+          {formatStarts(a.startsAt)}
+          {a.listingMls ? ` · ${a.listingMls}` : ""}
+        </Text>
+        {a.videoJoinUrl ? (
+          <TouchableOpacity
+            onPress={() => openJoinUrl(a.videoJoinUrl!)}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.joinLink}>Join link</Text>
+          </TouchableOpacity>
+        ) : null}
+        {a.notes ? (
+          <Text style={styles.cardNotes} numberOfLines={4}>
+            {a.notes}
+          </Text>
+        ) : null}
+
+        {/* AppointmentActions — Confirm / Complete / Cancel */}
+        {a.status !== "CANCELLED" && a.status !== "COMPLETED" ? (
+          <View style={styles.actionsBox}>
+            <View style={styles.actionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  styles.actionPrimary,
+                  (pending || a.status === "CONFIRMED") &&
+                    styles.addBtnDisabled,
+                ]}
+                disabled={pending || a.status === "CONFIRMED"}
+                onPress={() => {
+                  const startsAtIso = confirmLocal.trim()
+                    ? localInputToIso(confirmLocal)
+                    : undefined;
+                  if (confirmLocal.trim() && !startsAtIso) {
+                    setError("Enter a valid confirm time (YYYY-MM-DDTHH:mm)");
+                    return;
+                  }
+                  void handlePatch(a, {
+                    status: "CONFIRMED",
+                    ...(startsAtIso ? { startsAt: startsAtIso } : {}),
+                  });
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm appointment"
+              >
+                <Text style={styles.actionPrimaryText}>
+                  {pending ? "…" : "Confirm"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionSecondary]}
+                disabled={pending}
+                onPress={() =>
+                  void handlePatch(a, { status: "COMPLETED" })
+                }
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Mark appointment complete"
+              >
+                <Text style={styles.actionSecondaryText}>
+                  Mark complete
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionGhost]}
+                disabled={pending}
+                onPress={() =>
+                  void handlePatch(a, { status: "CANCELLED" })
+                }
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel appointment"
+              >
+                <Text style={styles.actionGhostText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.confirmTimeInput}
+              value={confirmLocal}
+              onChangeText={(v) =>
+                setConfirmStarts((prev) => ({ ...prev, [a.id]: v }))
+              }
+              placeholder="YYYY-MM-DDTHH:mm (optional for Confirm)"
+              placeholderTextColor="#94A3B8"
+              editable={!pending}
+              autoCapitalize="none"
+              accessibilityLabel="Confirm start date and time"
+            />
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
+  const renderSection = (
+    title: string,
+    items: MobileLeadAppointment[],
+  ) => {
+    if (items.length === 0) return null;
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {items.map(renderAppointmentCard)}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.wrap}>
       {/* Schedule control — obvious create (canonical Appointment fields) */}
@@ -404,110 +554,9 @@ export function AppointmentsTab({
         <Text style={styles.errorText}>{error}</Text>
       ) : null}
 
-      {appointments.map((a) => {
-        const pending = mutatingId === a.id;
-        const confirmLocal = confirmStarts[a.id] ?? "";
-        return (
-          <View key={a.id} style={styles.card}>
-            {/* Web CustomerProfile card hierarchy */}
-            <Text style={styles.cardTitle}>
-              {typeLabel(a.type)} · {a.status}
-            </Text>
-            <Text style={styles.cardMeta}>
-              {formatStarts(a.startsAt)}
-              {a.listingMls ? ` · ${a.listingMls}` : ""}
-            </Text>
-            {a.videoJoinUrl ? (
-              <TouchableOpacity
-                onPress={() => openJoinUrl(a.videoJoinUrl!)}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.joinLink}>Join link</Text>
-              </TouchableOpacity>
-            ) : null}
-            {a.notes ? (
-              <Text style={styles.cardNotes} numberOfLines={4}>
-                {a.notes}
-              </Text>
-            ) : null}
-
-            {/* AppointmentActions — Confirm / Complete / Cancel */}
-            {a.status !== "CANCELLED" && a.status !== "COMPLETED" ? (
-              <View style={styles.actionsBox}>
-                <View style={styles.actionsRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.actionBtn,
-                      styles.actionPrimary,
-                      (pending || a.status === "CONFIRMED") &&
-                        styles.addBtnDisabled,
-                    ]}
-                    disabled={pending || a.status === "CONFIRMED"}
-                    onPress={() => {
-                      const startsAtIso = confirmLocal.trim()
-                        ? localInputToIso(confirmLocal)
-                        : undefined;
-                      if (confirmLocal.trim() && !startsAtIso) {
-                        setError("Enter a valid confirm time (YYYY-MM-DDTHH:mm)");
-                        return;
-                      }
-                      void handlePatch(a, {
-                        status: "CONFIRMED",
-                        ...(startsAtIso ? { startsAt: startsAtIso } : {}),
-                      });
-                    }}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityLabel="Confirm appointment"
-                  >
-                    <Text style={styles.actionPrimaryText}>
-                      {pending ? "…" : "Confirm"}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.actionSecondary]}
-                    disabled={pending}
-                    onPress={() =>
-                      void handlePatch(a, { status: "COMPLETED" })
-                    }
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityLabel="Mark appointment complete"
-                  >
-                    <Text style={styles.actionSecondaryText}>
-                      Mark complete
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.actionGhost]}
-                    disabled={pending}
-                    onPress={() =>
-                      void handlePatch(a, { status: "CANCELLED" })
-                    }
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityLabel="Cancel appointment"
-                  >
-                    <Text style={styles.actionGhostText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-                <TextInput
-                  style={styles.confirmTimeInput}
-                  value={confirmLocal}
-                  onChangeText={(v) =>
-                    setConfirmStarts((prev) => ({ ...prev, [a.id]: v }))
-                  }
-                  placeholder="YYYY-MM-DDTHH:mm (optional for Confirm)"
-                  placeholderTextColor="#94A3B8"
-                  editable={!pending}
-                  autoCapitalize="none"
-                  accessibilityLabel="Confirm start date and time"
-                />
-              </View>
-            ) : null}
-          </View>
-        );
-      })}
+      {renderSection("UPCOMING VIEWINGS", upcomingShowings)}
+      {renderSection("PAST VIEWINGS", pastShowings)}
+      {renderSection("APPOINTMENTS", otherAppointments)}
     </View>
   );
 }
@@ -645,6 +694,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#0F766E",
+  },
+  section: {
+    gap: 12,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    color: "#64748B",
   },
   card: {
     backgroundColor: "#FFFFFF",

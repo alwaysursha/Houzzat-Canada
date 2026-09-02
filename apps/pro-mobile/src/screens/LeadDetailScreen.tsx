@@ -590,11 +590,13 @@ export function LeadDetailScreen({
   leadIds,
   onNavigateLead,
   onBack,
+  onPlanViewings,
 }: {
   leadId: string;
   leadIds?: string[];
   onNavigateLead?: (leadId: string) => void;
   onBack: () => void;
+  onPlanViewings?: (leadId: string, leadName?: string) => void;
 }) {
   const { activeWorkspace } = useAuth();
   const workspaceId = activeWorkspace?.id;
@@ -1269,6 +1271,21 @@ export function LeadDetailScreen({
                 </TouchableOpacity>
               ))}
             </View>
+
+            {onPlanViewings ? (
+              <TouchableOpacity
+                style={styles.planViewingsBtn}
+                activeOpacity={0.85}
+                onPress={() =>
+                  onPlanViewings(
+                    leadId,
+                    lead.customer?.name?.trim() || undefined,
+                  )
+                }
+              >
+                <Text style={styles.planViewingsBtnText}>Plan Viewings</Text>
+              </TouchableOpacity>
+            ) : null}
 
             {/* Buyer / Seller radio presentation (read-only) */}
             <View style={styles.buyerSellerRow}>
@@ -2183,6 +2200,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#94A3B8",
     fontStyle: "italic",
+  },
+  planViewingsBtn: {
+    marginTop: 14,
+    backgroundColor: "#0F766E",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  planViewingsBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   buyerSellerRow: {
     marginTop: 18,
