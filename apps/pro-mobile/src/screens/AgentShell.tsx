@@ -171,6 +171,9 @@ export function AgentShell({
               setLeadNavIds(leadIds);
               setSelectedLeadId(leadId);
             }}
+            onPlanViewings={(id, name) => {
+              setViewingsPlanner({ leadId: id, mlsNumbers: [], leadName: name });
+            }}
           />
         )}
 

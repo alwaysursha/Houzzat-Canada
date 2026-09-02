@@ -456,20 +456,20 @@ export function AppointmentsTab({
   return (
     <View style={styles.wrap}>
       {onPlanViewings ? (
-        <View style={styles.planViewingsPanel} accessibilityLabel="Plan viewings tour">
-          <Text style={styles.planViewingsTitle}>Viewings tour</Text>
+        <View style={styles.planViewingsPanel} accessibilityLabel="Viewings Planner">
+          <Text style={styles.planViewingsTitle}>Viewings Planner</Text>
           <Text style={styles.planViewingsHint}>
-            Plan a multi-property route with drive times
-            {leadName ? ` for ${leadName}` : ""}, then share with your client.
+            Build a multi-property route with drive times
+            {leadName ? ` for ${leadName}` : ""}, save showings, and share with your client.
           </Text>
           <TouchableOpacity
             style={styles.planViewingsBtn}
             onPress={() => onPlanViewings(leadId, leadName)}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Plan viewings"
+            accessibilityLabel="Open Viewings Planner"
           >
-            <Text style={styles.planViewingsBtnText}>Plan Viewings</Text>
+            <Text style={styles.planViewingsBtnText}>Open Viewings Planner</Text>
           </TouchableOpacity>
         </View>
       ) : null}

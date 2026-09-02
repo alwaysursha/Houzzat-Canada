@@ -131,6 +131,7 @@ interface LeadsScreenProps {
   /** Called with lead id + ordered list ids for prev/next navigation (web modal parity). */
   onSelectLead?: (leadId: string, leadIds: string[]) => void;
   onBackFromDetail?: () => void;
+  onPlanViewings?: (leadId: string, leadName?: string) => void;
 }
 
 export function LeadsScreen({
@@ -138,6 +139,7 @@ export function LeadsScreen({
   selectedLeadId: controlledLeadId,
   onSelectLead,
   onBackFromDetail,
+  onPlanViewings,
 }: LeadsScreenProps) {
   const { activeWorkspace } = useAuth();
   const workspaceId = activeWorkspace?.id;
@@ -378,6 +380,7 @@ export function LeadsScreen({
         leadIds={leads.map((l) => l.id)}
         onNavigateLead={(id) => setInternalSelectedLeadId(id)}
         onBack={handleBackFromDetail}
+        onPlanViewings={onPlanViewings}
       />
     );
   }

@@ -1,5 +1,8 @@
 /**
  * Stage 5.6 — GET/POST/PATCH /api/mobile/v2/leads/[leadId]/viewings-planner
+ *
+ * HTTP-mode safe: flat sequential Prisma writes only (no $transaction,
+ * no nested relation creates, no updateMany). PrismaNeonHttp rejects internal txns.
  */
 
 import { NextResponse } from "next/server";

@@ -2,7 +2,7 @@
  * Stage 5.6 — HouzzatPRO Viewings Planner server logic.
  *
  * Reuses consumer route-planner optimization (Google Routes + optimize.ts).
- * Neon-safe: no prisma.$transaction().
+ * Neon-safe: flat sequential writes only (no interactive transactions).
  */
 import { randomBytes } from "crypto";
 import { computeDriveRoute } from "@/lib/google/routes";
@@ -57,7 +57,8 @@ export async function getOrCreateProDraftTour(input: {
     return loadProViewingsTourById(existing.id);
   }
 
-  const tour = await prisma.viewingTour.create({
+  // Flat create only — no `include` (PrismaNeonHttp can wrap include writes in txns).
+  await prisma.viewingTour.create({
     data: {
       name: "Viewings Planner",
       status: "DRAFT",
@@ -69,6 +70,16 @@ export async function getOrCreateProDraftTour(input: {
       defaultDwellMinutes: ROUTE_PLANNER_DEFAULT_DWELL_MINUTES,
       bufferMinutes: ROUTE_PLANNER_DEFAULT_BUFFER_MINUTES,
     },
+  });
+
+  const tour = await prisma.viewingTour.findFirstOrThrow({
+    where: {
+      leadId: input.leadId,
+      workspaceId: input.workspaceId,
+      isActive: true,
+      status: "DRAFT",
+    },
+    orderBy: { updatedAt: "desc" },
     include: TOUR_INCLUDE,
   });
 
