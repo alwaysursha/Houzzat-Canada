@@ -9,6 +9,8 @@ import {
   Clipboard,
   Linking,
   Modal,
+  Platform,
+  SafeAreaView,
   ScrollView,
   Share,
   StyleSheet,
@@ -18,6 +20,11 @@ import {
   View,
 } from "react-native";
 import { mobileApiClient } from "../api/client";
+import {
+  AddressAutocompleteField,
+  type ResolvedAddress,
+} from "../components/AddressAutocompleteField";
+import { NativeDateTimeField } from "../components/NativeDateTimeField";
 import { PropertyDetailModal } from "../components/PropertyDetailModal";
 import { formatListingPrice } from "../lib/property-response";
 import { unwrapViewingsPlannerTour } from "../lib/viewings-planner-response";
@@ -43,6 +50,24 @@ type StopTimeDraft = {
   startsAt: string;
   endsAt: string;
 };
+
+type StartLocation = {
+  id: string;
+  address: string;
+  lat: number;
+  lng: number;
+};
+
+function combineDateAndTime(date: Date | null, time: Date | null): Date | null {
+  if (!date) return null;
+  const combined = new Date(date);
+  if (time) {
+    combined.setHours(time.getHours(), time.getMinutes(), 0, 0);
+  } else {
+    combined.setHours(9, 0, 0, 0);
+  }
+  return combined;
+}
 
 function stopListingToCard(listing: MobileViewingsPlannerStopListing): MobileListingCard {
   return {
@@ -197,8 +222,11 @@ export function ViewingsPlannerScreen({
   const [savePending, setSavePending] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [viewingDateInput, setViewingDateInput] = useState("");
-  const [startAddressInput, setStartAddressInput] = useState("");
+  const [viewingDate, setViewingDate] = useState<Date | null>(null);
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  const [startLocations, setStartLocations] = useState<StartLocation[]>([]);
+  const [activeStartId, setActiveStartId] = useState<string | null>(null);
+  const [showAddAddress, setShowAddAddress] = useState(true);
   const [stopTimes, setStopTimes] = useState<Record<string, StopTimeDraft>>({});
   const [detailListing, setDetailListing] = useState<MobileListingCard | null>(null);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
@@ -210,8 +238,30 @@ export function ViewingsPlannerScreen({
 
   const applyTour = useCallback((next: MobileViewingsPlannerTour) => {
     setTour(next);
-    setViewingDateInput(isoToDateInput(next.viewingDate));
-    setStartAddressInput(next.startAddress ?? "");
+    if (next.viewingDate) {
+      setViewingDate(new Date(next.viewingDate));
+    }
+    if (next.startAt) {
+      const start = new Date(next.startAt);
+      setStartTime(start);
+      if (!next.viewingDate) {
+        setViewingDate(start);
+      }
+    }
+    if (next.startAddress && next.startLat != null && next.startLng != null) {
+      const loc: StartLocation = {
+        id: "tour-start",
+        address: next.startAddress,
+        lat: next.startLat,
+        lng: next.startLng,
+      };
+      setStartLocations((prev) => {
+        const others = prev.filter((p) => p.id !== loc.id && p.address !== loc.address);
+        return [loc, ...others];
+      });
+      setActiveStartId(loc.id);
+      setShowAddAddress(false);
+    }
     setStopTimes(stopTimesFromTour(next.stops));
     if (next.sharePath) {
       setSaved(true);
@@ -272,47 +322,73 @@ export function ViewingsPlannerScreen({
     [tour, leadId, applyTour],
   );
 
-  const handleViewingDateBlur = useCallback(async () => {
-    const iso = dateInputToIso(viewingDateInput);
-    if (!iso && viewingDateInput.trim()) {
-      setError("Use YYYY-MM-DD for viewing date");
-      return;
-    }
-    setError(null);
-    await patchTour({ viewingDate: iso });
-  }, [viewingDateInput, patchTour]);
-
-  const handleStartAddressBlur = useCallback(async () => {
-    const trimmed = startAddressInput.trim();
-    if (tour && trimmed === (tour.startAddress ?? "")) return;
-    setError(null);
-    if (!trimmed) {
-      await patchTour({ startAddress: null, startLat: null, startLng: null });
-      return;
-    }
-    const geoRes = await mobileApiClient.post<unknown>("/places/geocode", {
-      query: trimmed,
-    });
-    if (!geoRes.ok) {
-      setError(geoRes.message || "Could not geocode starting address");
-      await patchTour({ startAddress: trimmed });
-      return;
-    }
-    const geo = geoRes.data as {
-      ok?: boolean;
-      result?: { startAddress: string; startLat: number; startLng: number };
-    };
-    if (geo.result) {
-      setStartAddressInput(geo.result.startAddress);
+  const handleViewingDateChange = useCallback(
+    async (date: Date | null) => {
+      setViewingDate(date);
+      setError(null);
+      const startAt = combineDateAndTime(date, startTime);
       await patchTour({
-        startAddress: geo.result.startAddress,
-        startLat: geo.result.startLat,
-        startLng: geo.result.startLng,
+        viewingDate: date ? date.toISOString() : null,
+        startAt: startAt ? startAt.toISOString() : null,
       });
-      return;
-    }
-    await patchTour({ startAddress: trimmed });
-  }, [startAddressInput, tour, patchTour]);
+    },
+    [startTime, patchTour],
+  );
+
+  const handleStartTimeChange = useCallback(
+    async (time: Date | null) => {
+      setStartTime(time);
+      setError(null);
+      const startAt = combineDateAndTime(viewingDate, time);
+      await patchTour({
+        startAt: startAt ? startAt.toISOString() : null,
+      });
+    },
+    [viewingDate, patchTour],
+  );
+
+  const applyStartLocation = useCallback(
+    async (resolved: ResolvedAddress) => {
+      setError(null);
+      const loc: StartLocation = {
+        id: `start-${Date.now()}`,
+        address: resolved.startAddress,
+        lat: resolved.startLat,
+        lng: resolved.startLng,
+      };
+      setStartLocations((prev) => {
+        const dup = prev.find(
+          (p) => p.address === loc.address && p.lat === loc.lat && p.lng === loc.lng,
+        );
+        if (dup) {
+          setActiveStartId(dup.id);
+          return prev;
+        }
+        return [...prev, loc];
+      });
+      setActiveStartId(loc.id);
+      setShowAddAddress(false);
+      await patchTour({
+        startAddress: resolved.startAddress,
+        startLat: resolved.startLat,
+        startLng: resolved.startLng,
+      });
+    },
+    [patchTour],
+  );
+
+  const selectStartLocation = useCallback(
+    async (loc: StartLocation) => {
+      setActiveStartId(loc.id);
+      setError(null);
+      await patchTour({
+        startAddress: loc.address,
+        startLat: loc.lat,
+        startLng: loc.lng,
+      });
+    },
+    [patchTour],
+  );
 
   const handleStopTimeBlur = useCallback(
     async (stopId: string) => {
@@ -497,9 +573,9 @@ export function ViewingsPlannerScreen({
   }, [tour]);
 
   return (
-    <View style={styles.root}>
+    <SafeAreaView style={styles.root}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={onBack} activeOpacity={0.75}>
+        <TouchableOpacity onPress={onBack} activeOpacity={0.75} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.topTitle} numberOfLines={1}>
@@ -533,53 +609,98 @@ export function ViewingsPlannerScreen({
           <Text style={styles.centerText}>Loading viewing plan…</Text>
         </View>
       ) : (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Viewing date</Text>
-            <TextInput
-              value={viewingDateInput}
-              onChangeText={setViewingDateInput}
-              onBlur={() => void handleViewingDateBlur()}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#94A3B8"
-              style={styles.fieldInput}
-              autoCapitalize="none"
-            />
-          </View>
+        <View style={styles.body}>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.section}>
+              <NativeDateTimeField
+                label="Viewing date"
+                mode="date"
+                value={viewingDate}
+                placeholder="Select viewing date"
+                onChange={(d) => void handleViewingDateChange(d)}
+              />
+            </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Starting address</Text>
-            <TextInput
-              value={startAddressInput}
-              onChangeText={setStartAddressInput}
-              onBlur={() => void handleStartAddressBlur()}
-              placeholder="Where you'll start the tour…"
-              placeholderTextColor="#94A3B8"
-              style={styles.fieldInput}
-              multiline
-            />
-          </View>
+            <View style={styles.section}>
+              <NativeDateTimeField
+                label="First viewing starts"
+                mode="time"
+                value={startTime}
+                placeholder="Select start time"
+                onChange={(d) => void handleStartTimeChange(d)}
+              />
+            </View>
 
-          {tour ? (
-            <>
-              <View style={styles.summaryCard}>
-                <Text style={styles.summaryTitle}>Route summary</Text>
-                <Text style={styles.summaryValue}>{routeSummaryLabel}</Text>
-                {routePending ? (
-                  <View style={styles.routeOverlay}>
-                    <ActivityIndicator color="#0F766E" />
-                    <Text style={styles.routeOverlayText}>Recalculating route…</Text>
-                  </View>
-                ) : null}
-              </View>
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Starting from</Text>
+              {startLocations.length > 0 ? (
+                <View style={styles.startLocationList}>
+                  {startLocations.map((loc) => {
+                    const active = loc.id === activeStartId;
+                    return (
+                      <TouchableOpacity
+                        key={loc.id}
+                        style={[styles.startLocationChip, active && styles.startLocationChipActive]}
+                        onPress={() => void selectStartLocation(loc)}
+                        activeOpacity={0.85}
+                      >
+                        <Text
+                          style={[
+                            styles.startLocationText,
+                            active && styles.startLocationTextActive,
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {loc.address}
+                        </Text>
+                        {active ? (
+                          <Text style={styles.startLocationBadge}>Active</Text>
+                        ) : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : null}
 
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Stops</Text>
+              {showAddAddress || startLocations.length === 0 ? (
+                <AddressAutocompleteField
+                  placeholder="Search for a starting address…"
+                  onResolved={(resolved) => void applyStartLocation(resolved)}
+                  onError={(msg) => setError(msg)}
+                />
+              ) : null}
+
+              {startLocations.length > 0 && !showAddAddress ? (
+                <TouchableOpacity
+                  style={styles.addAddressBtn}
+                  onPress={() => setShowAddAddress(true)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.addAddressBtnText}>+ Add another address</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {tour ? (
+              <>
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryTitle}>Route summary</Text>
+                  <Text style={styles.summaryValue}>{routeSummaryLabel}</Text>
+                  {routePending ? (
+                    <View style={styles.routeOverlay}>
+                      <ActivityIndicator color="#0F766E" />
+                      <Text style={styles.routeOverlayText}>Recalculating route…</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>Stops</Text>
                 {tour.stops.length === 0 ? (
                   <Text style={styles.emptyStops}>
                     Add properties from Shortlist or property search to build a route.
@@ -695,7 +816,12 @@ export function ViewingsPlannerScreen({
                   })
                 )}
               </View>
+              </>
+            ) : null}
+          </ScrollView>
 
+          {tour ? (
+            <View style={styles.footer}>
               <TouchableOpacity
                 style={[styles.secondaryBtn, routePending && styles.btnDisabled]}
                 disabled={routePending || tour.stops.length === 0}
@@ -733,9 +859,9 @@ export function ViewingsPlannerScreen({
                   <Text style={styles.shareBtnText}>Share with Client</Text>
                 </TouchableOpacity>
               ) : null}
-            </>
+            </View>
           ) : null}
-        </ScrollView>
+        </View>
       )}
 
       <Modal
@@ -790,7 +916,7 @@ export function ViewingsPlannerScreen({
           Alert.alert("Shortlist", "Open property search to manage shortlist.");
         }}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -799,12 +925,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F4F7F5",
   },
+  body: {
+    flex: 1,
+  },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: Platform.OS === "android" ? 8 : 4,
+    paddingBottom: 14,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#E2E8F0",
@@ -830,7 +960,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#BFDBFE",
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   leadBannerLabel: {
     fontSize: 11,
@@ -884,12 +1014,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 12,
-    paddingBottom: 32,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    gap: 16,
   },
   section: {
-    gap: 6,
+    gap: 8,
   },
   sectionLabel: {
     fontSize: 12,
@@ -904,11 +1035,66 @@ const styles = StyleSheet.create({
     borderColor: "#D8DEE6",
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     fontSize: 14,
     color: "#1E2A38",
     backgroundColor: "#FFFFFF",
-    minHeight: 44,
+    minHeight: 48,
+  },
+  startLocationList: {
+    gap: 8,
+  },
+  startLocationChip: {
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  startLocationChipActive: {
+    borderColor: "#0F766E",
+    backgroundColor: "#ECFDF5",
+  },
+  startLocationText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#475569",
+  },
+  startLocationTextActive: {
+    color: "#1E2A38",
+    fontWeight: "600",
+  },
+  startLocationBadge: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0F766E",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  addAddressBtn: {
+    marginTop: 4,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  addAddressBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#2B6CB0",
+  },
+  footer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "android" ? 16 : 12,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
   },
   summaryCard: {
     backgroundColor: "#FFFFFF",

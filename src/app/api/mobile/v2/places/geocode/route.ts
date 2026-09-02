@@ -10,7 +10,10 @@ import { authenticateMobileRequest } from "@/lib/mobile/v2/auth-guard";
 export const runtime = "nodejs";
 
 const schema = z.object({
-  query: z.string().trim().min(3).max(240),
+  query: z.string().trim().min(3).max(240).optional(),
+  placeId: z.string().trim().min(3).max(128).optional(),
+}).refine((v) => Boolean(v.query || v.placeId), {
+  message: "query or placeId required",
 });
 
 export async function POST(request: Request) {
@@ -41,7 +44,29 @@ export async function POST(request: Request) {
   }
 
   try {
-    const suggestions = await googlePlacesAutocomplete(parsed.data.query);
+    if (parsed.data.placeId) {
+      const details = await googlePlaceDetails(parsed.data.placeId);
+      if (!details || details.lat == null || details.lng == null) {
+        return NextResponse.json(
+          { ok: false, code: "NOT_FOUND", message: "Could not resolve coordinates" },
+          { status: 404 },
+        );
+      }
+      const address =
+        details.subtitle ||
+        [details.label, details.city, details.province].filter(Boolean).join(", ");
+      return NextResponse.json({
+        ok: true,
+        result: {
+          startAddress: address,
+          startLat: details.lat,
+          startLng: details.lng,
+        },
+      });
+    }
+
+    const query = parsed.data.query!;
+    const suggestions = await googlePlacesAutocomplete(query);
     const first = suggestions[0];
     if (!first?.placeId) {
       return NextResponse.json(
