@@ -20,15 +20,15 @@ export const MORE_UTILITY_META: Record<
     title: "Statistics",
     webPath: "/agent/statistics",
     summary:
-      "Desk KPIs and performance charts for your book. This module needs a dedicated native stage.",
-    nextStage: "Native Statistics",
+      "Desk KPIs from canonical agent Statistics: leads, pipeline, sources, response time, emails, appointments, and tasks.",
+    nextStage: "Statistics desk picker / SHOWING split (optional)",
   },
   inbox: {
     title: "Communications",
     webPath: "/agent/inbox",
     summary:
-      "Workspace communications inbox. Lead-scoped Conversations already work inside Lead Detail.",
-    nextStage: "Native Communications Inbox",
+      "Sent email activity across your leads (LeadEmailLog). Same records as Lead Profile → Conversations. Inbound email is not canonical yet.",
+    nextStage: "Inbound email / Phase 3.5",
   },
   cma: {
     title: "CMA",
@@ -48,8 +48,8 @@ export const MORE_UTILITY_META: Record<
     title: "Notifications",
     webPath: "/agent/notifications",
     summary:
-      "Staff push/email preference controls. No mobile-only inbox and no biometrics in this stage.",
-    nextStage: "Native Notification Preferences",
+      "Staff push and email preference controls for your desk. Same User.pushNotificationPrefs as web. No biometrics.",
+    nextStage: "Notification push device registration on RN (optional)",
   },
   search: {
     title: "Properties",

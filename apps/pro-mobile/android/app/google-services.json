@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "200998455563",
+    "project_id": "houzzat-aa1b0",
+    "storage_bucket": "houzzat-aa1b0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:200998455563:android:da00dd3b90202dfd697a0e",
+        "android_client_info": {
+          "package_name": "com.houzzat.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_WrBd4Ws8NHuS8FtMpszhvqsCQBBnxPQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:200998455563:android:879b3289c90b44ff697a0e",
+        "android_client_info": {
+          "package_name": "com.houzzat.pro"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_WrBd4Ws8NHuS8FtMpszhvqsCQBBnxPQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

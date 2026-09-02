@@ -182,8 +182,17 @@ export type StatisticsScope = {
 
 export async function resolveStatisticsScope(
   ctx: AgentOrgContext,
+  options?: { deskCookie?: string | null },
 ): Promise<StatisticsScope> {
-  const desk = await resolveDeskView(ctx);
+  const desk = await resolveDeskView({
+    user: ctx.user,
+    organizationId: ctx.organizationId,
+    workspaceId: ctx.workspaceId,
+    canSeeTeamLeads: ctx.canSeeTeamLeads,
+    ...(options && "deskCookie" in options
+      ? { deskCookie: options.deskCookie ?? null }
+      : {}),
+  });
   const focusAgentId = desk.deskAgentId;
   const leadWhere = leadWhereForDesk(ctx, focusAgentId);
 
@@ -208,6 +217,7 @@ export async function resolveStatisticsScope(
 export async function loadAgentStatisticsKpis(
   ctx: AgentOrgContext,
   rangeDays = 30,
+  options?: { deskCookie?: string | null },
 ): Promise<
   Pick<AgentStatistics, "scopeLabel" | "rangeDays" | "kpis" | "responseBuckets"> & {
     pipeline: AgentStatistics["pipeline"];
@@ -218,7 +228,7 @@ export async function loadAgentStatisticsKpis(
     funnel: AgentStatistics["funnel"];
   }
 > {
-  const scope = await resolveStatisticsScope(ctx);
+  const scope = await resolveStatisticsScope(ctx, options);
   const { leadWhere, deskSql, scopeLabel, focusAgentId } = scope;
 
   const now = new Date();
@@ -475,8 +485,9 @@ export async function loadAgentStatisticsKpis(
 export async function loadAgentStatisticsSeries(
   ctx: AgentOrgContext,
   rangeDays = 30,
+  options?: { deskCookie?: string | null },
 ): Promise<Pick<AgentStatistics, "leadsByDay">> {
-  const scope = await resolveStatisticsScope(ctx);
+  const scope = await resolveStatisticsScope(ctx, options);
   const now = new Date();
   const periodStart = new Date(now);
   periodStart.setDate(periodStart.getDate() - (rangeDays - 1));
@@ -511,10 +522,11 @@ export async function loadAgentStatisticsSeries(
 export async function loadAgentStatistics(
   ctx: AgentOrgContext,
   rangeDays = 30,
+  options?: { deskCookie?: string | null },
 ): Promise<AgentStatistics> {
   const [kpisPart, seriesPart] = await Promise.all([
-    loadAgentStatisticsKpis(ctx, rangeDays),
-    loadAgentStatisticsSeries(ctx, rangeDays),
+    loadAgentStatisticsKpis(ctx, rangeDays, options),
+    loadAgentStatisticsSeries(ctx, rangeDays, options),
   ]);
 
   return {

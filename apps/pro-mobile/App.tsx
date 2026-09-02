@@ -4,6 +4,7 @@
 
 import React from "react";
 import { StatusBar, StyleSheet, View } from "react-native";
+import { PushRegistrationBootstrap } from "./src/components/PushRegistrationBootstrap";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { AuthProvider } from "./src/state/AuthContext";
 
@@ -12,6 +13,7 @@ export default function App() {
     <AuthProvider>
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#1E2A38" />
+        <PushRegistrationBootstrap />
         <RootNavigator />
       </View>
     </AuthProvider>

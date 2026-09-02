@@ -35,6 +35,7 @@ import {
 import {
   conversationCache,
   clearLeadConversationsCache,
+  invalidateCommunicationsCachesAfterSend,
 } from "../lib/lead-tab-cache";
 import type { MobileLeadEmail } from "../types/api";
 
@@ -364,6 +365,7 @@ export function ConversationsTab({
         setSendMessage("Email sent and logged.");
         void fetchEmails();
       }
+      invalidateCommunicationsCachesAfterSend(workspaceId, leadId);
     } catch (err: unknown) {
       setSendMessage(err instanceof Error ? err.message : "Send failed.");
     } finally {

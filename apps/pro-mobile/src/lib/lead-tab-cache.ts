@@ -10,8 +10,11 @@ import type {
   MobileGlobalAppointment,
   MobileGlobalTask,
   MobileLeadTask,
+  MobileCommunicationItem,
 } from "../types/api";
 import type { MobileListingCard, MobilePropertyDetail } from "../types/property";
+import type { MobileAgentStatistics } from "./statistics-response";
+import type { MobileNotificationPreferences } from "./notification-preferences-response";
 
 export const taskCache = new Map<
   string,
@@ -53,6 +56,16 @@ export type ConversationCacheEntry = {
 
 export const conversationCache = new Map<string, ConversationCacheEntry>();
 
+/** Stage 5.8 — workspace-scoped global Communications (LeadEmailLog). */
+export type CommunicationsCacheEntry = {
+  items: MobileCommunicationItem[];
+  nextCursor: string | null;
+  queryKey: string;
+  timestamp: number;
+};
+
+export const communicationsCache = new Map<string, CommunicationsCacheEntry>();
+
 export const engagementCache = new Map<
   string,
   { engagement: MobileLeadEngagement; timestamp: number }
@@ -87,6 +100,53 @@ export const propertyDetailCache = new Map<
   string,
   { detail: MobilePropertyDetail; saved: boolean; timestamp: number }
 >();
+
+/** Stage 5.9 — workspace+user+range Statistics snapshot. */
+export type StatisticsCacheEntry = {
+  statistics: MobileAgentStatistics;
+  rangeDays: number;
+  timestamp: number;
+};
+
+export const statisticsCache = new Map<string, StatisticsCacheEntry>();
+
+export function statisticsCacheKey(
+  workspaceId: string,
+  userId: string,
+  rangeDays: number,
+): string {
+  return `${workspaceId}:${userId}:statistics:${rangeDays}`;
+}
+
+export function clearStatisticsCache(workspaceId?: string) {
+  if (!workspaceId) {
+    statisticsCache.clear();
+    return;
+  }
+  for (const key of statisticsCache.keys()) {
+    if (key.startsWith(`${workspaceId}:`)) {
+      statisticsCache.delete(key);
+    }
+  }
+}
+
+/** Stage 5.10 — user-global notification prefs (keyed by userId). */
+export const notificationPrefsCache = new Map<
+  string,
+  { prefs: MobileNotificationPreferences; timestamp: number }
+>();
+
+export function notificationPrefsCacheKey(userId: string): string {
+  return `user:${userId}:notification-preferences`;
+}
+
+export function clearNotificationPrefsCache(userId?: string) {
+  if (!userId) {
+    notificationPrefsCache.clear();
+    return;
+  }
+  notificationPrefsCache.delete(notificationPrefsCacheKey(userId));
+}
 
 export function clearLeadTasksCache(workspaceId?: string) {
   if (!workspaceId) {
@@ -192,6 +252,34 @@ export function clearLeadConversationsCache(workspaceId?: string) {
   }
 }
 
+export function clearCommunicationsCache(workspaceId?: string) {
+  if (!workspaceId) {
+    communicationsCache.clear();
+    return;
+  }
+  for (const key of communicationsCache.keys()) {
+    if (key === `${workspaceId}:communications` || key.startsWith(`${workspaceId}:communications:`)) {
+      communicationsCache.delete(key);
+    }
+  }
+}
+
+/** After send — drop global inbox + lead Conversations for that lead. */
+export function invalidateCommunicationsCachesAfterSend(
+  workspaceId: string | undefined,
+  leadId: string | null | undefined,
+) {
+  if (!workspaceId) {
+    communicationsCache.clear();
+    conversationCache.clear();
+    return;
+  }
+  clearCommunicationsCache(workspaceId);
+  if (leadId) {
+    conversationCache.delete(`${workspaceId}:${leadId}:conversations`);
+  }
+}
+
 export function clearLeadEngagementCache(workspaceId?: string) {
   if (!workspaceId) {
     engagementCache.clear();
@@ -273,6 +361,13 @@ export function clearAllWorkspaceCaches(workspaceId?: string) {
   clearLeadAppointmentsCache(workspaceId);
   clearGlobalAppointmentsCache(workspaceId);
   clearLeadConversationsCache(workspaceId);
+  clearCommunicationsCache(workspaceId);
+  clearStatisticsCache(workspaceId);
+  // Notification prefs are user-global — clear all on logout / full wipe;
+  // workspace-only switch should not wipe them (caller passes workspaceId).
+  if (!workspaceId) {
+    clearNotificationPrefsCache();
+  }
   clearLeadEngagementCache(workspaceId);
   clearPropertySearchCache(workspaceId);
   clearSavedListingsCache(workspaceId);

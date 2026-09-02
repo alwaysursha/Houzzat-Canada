@@ -10,7 +10,7 @@
  * - Leads screen with real Stage 4.3A workspace data, search, and status filters
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Platform,
   SafeAreaView,
@@ -23,6 +23,7 @@ import {
 import { HouzzatProWordmark } from "../components/BrandMark";
 import { NativeDrawer, type DrawerItem } from "../components/NativeDrawer";
 import { useAndroidHardwareBack } from "../hooks/useAndroidHardwareBack";
+import { subscribePushNavigation } from "../lib/push-navigation";
 import { useAuth } from "../state/AuthContext";
 import { LaunchpadScreen } from "./LaunchpadScreen";
 import { LeadDetailScreen } from "./LeadDetailScreen";
@@ -36,6 +37,9 @@ import {
 } from "./MoreUtilityScreen";
 import { PropertiesSearchScreen } from "./PropertiesSearchScreen";
 import { ShortlistScreen } from "./ShortlistScreen";
+import { CommunicationsScreen } from "./CommunicationsScreen";
+import { StatisticsScreen } from "./StatisticsScreen";
+import { NotificationPreferencesScreen } from "./NotificationPreferencesScreen";
 import { ViewingsPlannerScreen } from "./ViewingsPlannerScreen";
 import { ViewingsLeadPickerSheet } from "../components/ViewingsLeadPickerSheet";
 
@@ -117,6 +121,33 @@ export function AgentShell({
   const handleSignOut = () => {
     void signOut();
   };
+
+  useEffect(() => {
+    return subscribePushNavigation((target) => {
+      setActiveUtility(null);
+      setDrawerOpen(false);
+      setViewingsPlanner(null);
+      setViewingsLeadPicker(null);
+      if (target.kind === "lead") {
+        setActiveTab("leads");
+        setActiveDrawerId("leads");
+        setLeadNavIds([target.leadId]);
+        setSelectedLeadId(target.leadId);
+        return;
+      }
+      if (target.kind === "tasks") {
+        setSelectedLeadId(null);
+        setLeadNavIds([]);
+        setActiveTab("tasks");
+        setActiveDrawerId("tasks");
+        return;
+      }
+      setSelectedLeadId(null);
+      setLeadNavIds([]);
+      setActiveTab("launchpad");
+      setActiveDrawerId("launchpad");
+    });
+  }, []);
 
   useAndroidHardwareBack({
     onBack: () => {
@@ -264,6 +295,31 @@ export function AgentShell({
                 }}
                 onPlanViewings={(mlsNumbers) => {
                   setViewingsLeadPicker({ mlsNumbers });
+                }}
+              />
+            ) : activeUtility === "inbox" ? (
+              <CommunicationsScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+                onOpenLead={(leadId) => {
+                  setLeadNavIds([leadId]);
+                  setSelectedLeadId(leadId);
+                }}
+              />
+            ) : activeUtility === "statistics" ? (
+              <StatisticsScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+              />
+            ) : activeUtility === "notifications" ? (
+              <NotificationPreferencesScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
                 }}
               />
             ) : (

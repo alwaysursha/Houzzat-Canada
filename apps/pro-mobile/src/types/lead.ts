@@ -180,6 +180,50 @@ export interface MobileLeadEmail {
   sentByName?: string | null;
 }
 
+/**
+ * Stage 5.8 — Global Communications inbox row (LeadEmailLog, outbound-only).
+ * Same canonical record as Lead Profile → Conversations.
+ */
+export interface MobileCommunicationItem {
+  id: string;
+  channel: "email";
+  direction: "outbound";
+  subject: string;
+  snippet: string;
+  toEmail: string;
+  kind: string;
+  openedAt: string | null;
+  openCount: number;
+  clickedAt: string | null;
+  clickCount: number;
+  lastClickedUrl: string | null;
+  createdAt: string;
+  leadId: string;
+  customerName: string | null;
+  customerEmail: string | null;
+  sentByName: string | null;
+}
+
+export interface MobileCommunicationDetail extends Omit<
+  MobileCommunicationItem,
+  "snippet"
+> {
+  body: string;
+  htmlBody?: string | null;
+  mlsNumber?: string | null;
+}
+
+export interface CommunicationsListResponseData {
+  communications: MobileCommunicationItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  meta: {
+    mode: "outbound_email_activity";
+    inboundEmailCanonical: false;
+    channels: readonly ["email"];
+  };
+}
+
 export interface LeadConversationsResponseData {
   emails: MobileLeadEmail[];
   nextCursor?: string | null;

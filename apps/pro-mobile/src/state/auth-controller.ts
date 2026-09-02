@@ -15,6 +15,7 @@
 import { mobileApiClient } from "../api/client";
 import { clearAllWorkspaceCaches } from "../lib/lead-tab-cache";
 import { clearLeadListCache } from "../lib/lead-list-cache";
+import { unregisterHouzzatProPushForLogout } from "../lib/push-registration";
 import { SecureStorage, SECURE_STORAGE_KEYS } from "../storage/secure-storage";
 import "../storage/hardware-secure-storage"; // initialize hardware engine
 import type {
@@ -606,6 +607,13 @@ export class MobileAuthController {
    * - Returns to SIGNED_OUT state
    */
   public async signOut(): Promise<void> {
+    const priorUserId = this.state.user?.id ?? null;
+    const priorAccess = this.state.tokens?.accessToken ?? null;
+    try {
+      await unregisterHouzzatProPushForLogout(priorUserId, priorAccess);
+    } catch {
+      // best-effort
+    }
     try {
       if (this.state.tokens?.accessToken) {
         await mobileApiClient.post("/auth/logout", {

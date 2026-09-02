@@ -20,6 +20,7 @@ class MainApplication : Application(), ReactApplication {
             return listOf(
                 MainReactPackage(),
                 SecureKeystorePackage(),
+                FcmPackage(),
                 RNCWebViewPackage(),
                 RNDateTimePickerPackage(),
             )

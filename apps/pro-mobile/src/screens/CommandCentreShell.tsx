@@ -9,7 +9,7 @@
  * - Preserves Leads screen with real Stage 4.3A workspace data
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Platform,
   ScrollView,
@@ -23,6 +23,7 @@ import {
 import { HouzzatProWordmark } from "../components/BrandMark";
 import { NativeDrawer, type DrawerItem } from "../components/NativeDrawer";
 import { useAndroidHardwareBack } from "../hooks/useAndroidHardwareBack";
+import { subscribePushNavigation } from "../lib/push-navigation";
 import { useAuth } from "../state/AuthContext";
 import { AgentShell } from "./AgentShell";
 import { LeadDetailScreen } from "./LeadDetailScreen";
@@ -34,6 +35,9 @@ import {
 } from "./MoreUtilityScreen";
 import { PropertiesSearchScreen } from "./PropertiesSearchScreen";
 import { ShortlistScreen } from "./ShortlistScreen";
+import { CommunicationsScreen } from "./CommunicationsScreen";
+import { StatisticsScreen } from "./StatisticsScreen";
+import { NotificationPreferencesScreen } from "./NotificationPreferencesScreen";
 import { ViewingsPlannerScreen } from "./ViewingsPlannerScreen";
 import { ViewingsLeadPickerSheet } from "../components/ViewingsLeadPickerSheet";
 
@@ -74,6 +78,32 @@ export function CommandCentreShell() {
   const userRole = activeMembership?.role || "OWNER";
   const userEmail = user?.email || "";
   const userName = user?.name ?? null;
+
+  useEffect(() => {
+    if (inAgentMode) return;
+    return subscribePushNavigation((target) => {
+      setActiveUtility(null);
+      setDrawerOpen(false);
+      setViewingsPlanner(null);
+      setViewingsLeadPicker(null);
+      if (target.kind === "lead") {
+        setActiveTab("leads");
+        setActiveDrawerId("leads");
+        setLeadNavIds([target.leadId]);
+        setSelectedLeadId(target.leadId);
+        return;
+      }
+      if (target.kind === "tasks") {
+        // Command Centre has no personal Tasks tab — open Agent Desk.
+        setInAgentMode(true);
+        return;
+      }
+      setSelectedLeadId(null);
+      setLeadNavIds([]);
+      setActiveTab("overview");
+      setActiveDrawerId("launchpad");
+    });
+  }, [inAgentMode]);
 
   const handleSelectDrawerItem = (item: DrawerItem) => {
     setActiveDrawerId(item.id);
@@ -304,6 +334,31 @@ export function CommandCentreShell() {
                 }}
                 onPlanViewings={(mlsNumbers) => {
                   setViewingsLeadPicker({ mlsNumbers });
+                }}
+              />
+            ) : activeUtility === "inbox" ? (
+              <CommunicationsScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+                onOpenLead={(leadId) => {
+                  setLeadNavIds([leadId]);
+                  setSelectedLeadId(leadId);
+                }}
+              />
+            ) : activeUtility === "statistics" ? (
+              <StatisticsScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+              />
+            ) : activeUtility === "notifications" ? (
+              <NotificationPreferencesScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
                 }}
               />
             ) : (

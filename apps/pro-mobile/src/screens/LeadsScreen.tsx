@@ -479,40 +479,43 @@ export function LeadsScreen({
         </View>
       </View>
 
-      {/* Status Filter Chips + Filters button */}
+      {/* Pipeline status chips — full width; Filters lives on the summary row */}
       <View style={styles.filterScrollContainer}>
-        <View style={styles.filterBar}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterRow}
-            style={styles.filterChipsScroll}
-          >
-            {STATUS_FILTERS.map((f) => {
-              const isSelected = selectedStatus === f.key;
-              return (
-                <TouchableOpacity
-                  key={f.key}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+        >
+          {STATUS_FILTERS.map((f) => {
+            const isSelected = selectedStatus === f.key;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                style={[
+                  styles.filterChip,
+                  isSelected && styles.filterChipActive,
+                  f.key === "NEW_LEAD" && isSelected && styles.filterChipRedActive,
+                ]}
+                onPress={() => setSelectedStatus(f.key)}
+                activeOpacity={0.7}
+              >
+                <Text
                   style={[
-                    styles.filterChip,
-                    isSelected && styles.filterChipActive,
-                    f.key === "NEW_LEAD" && isSelected && styles.filterChipRedActive,
+                    styles.filterChipText,
+                    isSelected && styles.filterChipTextActive,
                   ]}
-                  onPress={() => setSelectedStatus(f.key)}
-                  activeOpacity={0.7}
                 >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      isSelected && styles.filterChipTextActive,
-                    ]}
-                  >
-                    {f.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        <View style={styles.sortSummaryRow}>
+          <Text style={styles.sortSummaryText} numberOfLines={1}>
+            {viewLabel} · Sorted by {sortLabel}
+          </Text>
           <TouchableOpacity
             style={[
               styles.filtersBtn,
@@ -520,6 +523,7 @@ export function LeadsScreen({
             ]}
             onPress={() => setFiltersOpen(true)}
             activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
           >
             <Text
               style={[
@@ -530,11 +534,6 @@ export function LeadsScreen({
               Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
             </Text>
           </TouchableOpacity>
-        </View>
-        <View style={styles.sortSummaryRow}>
-          <Text style={styles.sortSummaryText}>
-            {viewLabel} · Sorted by {sortLabel}
-          </Text>
         </View>
       </View>
 
@@ -758,26 +757,19 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
   },
-  filterBar: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  filterChipsScroll: {
-    flex: 1,
-  },
   filterRow: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     gap: 8,
   },
   filtersBtn: {
-    marginRight: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#D8DEE6",
+    flexShrink: 0,
   },
   filtersBtnActive: {
     backgroundColor: "#0F6B4C",
@@ -792,10 +784,15 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   sortSummaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingBottom: 10,
   },
   sortSummaryText: {
+    flex: 1,
     fontSize: 11,
     fontWeight: "600",
     color: "#64748B",

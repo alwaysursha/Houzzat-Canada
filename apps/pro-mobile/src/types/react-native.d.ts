@@ -26,12 +26,54 @@ declare module "react-native" {
 
   export const NativeModules: {
     [key: string]: any;
+    HouzzatProFcm?: {
+      ensureProAlertsChannel(): Promise<boolean>;
+      getToken(): Promise<string>;
+      getInitialNotification(): Promise<{ href?: string; type?: string } | null>;
+      addListener(eventName: string): void;
+      removeListeners(count: number): void;
+    };
   };
+
+  export class NativeEventEmitter {
+    constructor(_nativeModule?: any) {}
+    addListener(
+      _eventType: string,
+      listener: (event: any) => void,
+    ): { remove(): void } {
+      return { remove() {} };
+    }
+    removeAllListeners(_eventType?: string): void {}
+  }
 
   export const Platform: {
     OS: "ios" | "android" | "windows" | "macos" | "web";
+    Version: number | string;
     select<T>(specifics: { [platform in "ios" | "android" | "default"]?: T }): T;
   };
+
+  export const PermissionsAndroid: {
+    PERMISSIONS: {
+      POST_NOTIFICATIONS: string;
+      [key: string]: string;
+    };
+    RESULTS: {
+      GRANTED: string;
+      DENIED: string;
+      NEVER_ASK_AGAIN: string;
+    };
+    check(permission: string): Promise<boolean>;
+    request(permission: string): Promise<string>;
+  };
+
+  export const Switch: React.FC<{
+    value?: boolean;
+    onValueChange?: (value: boolean) => void;
+    disabled?: boolean;
+    trackColor?: { false?: string; true?: string };
+    thumbColor?: string;
+    [key: string]: any;
+  }>;
 
   export const AppRegistry: {
     registerComponent(appKey: string, componentProvider: () => React.ComponentType<any>): void;
@@ -131,6 +173,7 @@ declare module "react-native" {
   export const Linking: {
     openURL(url: string): Promise<void>;
     canOpenURL(url: string): Promise<boolean>;
+    openSettings(): Promise<void>;
   };
 
   export const Clipboard: {

@@ -48,6 +48,10 @@ dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.coordinatorlayout:coordinatorlayout:1.2.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging")
     implementation project(':react-native-webview')
     implementation project(':react-native-community_datetimepicker')
 }
+
+apply plugin: "com.google.gms.google-services"
