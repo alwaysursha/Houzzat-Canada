@@ -9,6 +9,7 @@ export type MoreUtilityId =
   | "team"
   | "notifications"
   | "search"
+  | "shortlist"
   | "account";
 
 export const MORE_UTILITY_META: Record<
@@ -56,5 +57,12 @@ export const MORE_UTILITY_META: Record<
     summary:
       "MLS search, multi-select shortlist, and email-to-lead from native Properties.",
     nextStage: "Stage 5.3 — Native Properties Search",
+  },
+  shortlist: {
+    title: "Shortlist",
+    webPath: "/account/saved",
+    summary:
+      "Your saved homes — same canonical SavedListing records as Houzzat consumer.",
+    nextStage: "Stage 5.5 — Native Shortlist",
   },
 };

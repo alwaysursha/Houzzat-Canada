@@ -144,3 +144,60 @@ export function unwrapSavedListingsBulk(data: unknown): string[] {
   const direct = data as { mlsNumbers?: string[] };
   return direct.mlsNumbers ?? [];
 }
+
+export interface ShortlistListData {
+  listings: MobileListingCard[];
+  total: number;
+  hasMore: boolean;
+  limit: number;
+  offset: number;
+}
+
+export function unwrapShortlistList(data: unknown): ShortlistListData {
+  const empty: ShortlistListData = {
+    listings: [],
+    total: 0,
+    hasMore: false,
+    limit: 60,
+    offset: 0,
+  };
+  if (!data || typeof data !== "object") return empty;
+  const env = data as BackendEnvelope<{
+    listings?: MobileListingCard[];
+    total?: number;
+    hasMore?: boolean;
+    limit?: number;
+    offset?: number;
+  }>;
+  if (env.ok && env.data) {
+    return {
+      listings: (env.data.listings ?? []) as MobileListingCard[],
+      total: env.data.total ?? env.data.listings?.length ?? 0,
+      hasMore: Boolean(env.data.hasMore),
+      limit: env.data.limit ?? 60,
+      offset: env.data.offset ?? 0,
+    };
+  }
+  const direct = data as Partial<ShortlistListData>;
+  if (direct.listings) {
+    return {
+      listings: direct.listings,
+      total: direct.total ?? direct.listings.length,
+      hasMore: Boolean(direct.hasMore),
+      limit: direct.limit ?? 60,
+      offset: direct.offset ?? 0,
+    };
+  }
+  return empty;
+}
+
+export function buildShortlistListQuery(opts?: {
+  limit?: number;
+  offset?: number;
+}): string {
+  return withQuery("/properties/saved", {
+    enrich: "cards",
+    limit: String(opts?.limit ?? 60),
+    offset: String(opts?.offset ?? 0),
+  });
+}

@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mobileApiClient } from "../api/client";
-import { savedListingsCache } from "../lib/lead-tab-cache";
+import { savedListingsCache, clearShortlistListCache } from "../lib/lead-tab-cache";
 import { unwrapSavedListingsBulk } from "../lib/property-response";
 
 function cacheKeyFor(workspaceId: string | undefined): string | null {
@@ -95,6 +95,7 @@ export function usePropertySavedListings(workspaceId: string | undefined) {
           setSavedLocal(normalized, wasSaved);
           return false;
         }
+        clearShortlistListCache(workspaceId);
         return true;
       } catch {
         setSavedLocal(normalized, wasSaved);
@@ -103,7 +104,7 @@ export function usePropertySavedListings(workspaceId: string | undefined) {
         setPendingMls(null);
       }
     },
-    [savedSet, pendingMls, setSavedLocal],
+    [savedSet, pendingMls, setSavedLocal, workspaceId],
   );
 
   return {

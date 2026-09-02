@@ -32,6 +32,7 @@ import {
   type MoreUtilityId,
 } from "./MoreUtilityScreen";
 import { PropertiesSearchScreen } from "./PropertiesSearchScreen";
+import { ShortlistScreen } from "./ShortlistScreen";
 
 type CommandCentreTab = "overview" | "team" | "leads" | "calendar" | "more";
 type ActiveUtility = Exclude<MoreUtilityId, "account"> | null;
@@ -228,6 +229,17 @@ export function CommandCentreShell() {
                 onBack={() => {
                   setActiveUtility(null);
                   setActiveDrawerId("account");
+                }}
+              />
+            ) : activeUtility === "shortlist" ? (
+              <ShortlistScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+                onBrowseProperties={() => {
+                  setActiveUtility("search");
+                  setActiveDrawerId("search");
                 }}
               />
             ) : (

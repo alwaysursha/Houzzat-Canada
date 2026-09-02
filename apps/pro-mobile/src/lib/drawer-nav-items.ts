@@ -19,7 +19,8 @@ export interface DrawerItem {
     | "cma"
     | "team"
     | "notifications"
-    | "search";
+    | "search"
+    | "shortlist";
 }
 
 export const DRAWER_NAV_ITEMS: DrawerItem[] = [
@@ -44,4 +45,5 @@ export const DRAWER_NAV_ITEMS: DrawerItem[] = [
     utilityId: "notifications",
   },
   { id: "search", label: "Properties", icon: "🔍", utilityId: "search" },
+  { id: "shortlist", label: "Shortlist", icon: "♥", utilityId: "shortlist" },
 ];

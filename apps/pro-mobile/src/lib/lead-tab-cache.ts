@@ -70,6 +70,18 @@ export const savedListingsCache = new Map<
   { mlsNumbers: Set<string>; timestamp: number }
 >();
 
+/** Stage 5.5 — workspace-scoped shortlist list (enriched cards). */
+export const shortlistListCache = new Map<
+  string,
+  {
+    listings: MobileListingCard[];
+    total: number;
+    hasMore: boolean;
+    offset: number;
+    timestamp: number;
+  }
+>();
+
 /** Stage 5.4 — property detail by workspace + MLS. */
 export const propertyDetailCache = new Map<
   string,
@@ -216,6 +228,18 @@ export function clearSavedListingsCache(workspaceId?: string) {
   }
 }
 
+export function clearShortlistListCache(workspaceId?: string) {
+  if (!workspaceId) {
+    shortlistListCache.clear();
+    return;
+  }
+  for (const key of shortlistListCache.keys()) {
+    if (key.startsWith(`${workspaceId}:`)) {
+      shortlistListCache.delete(key);
+    }
+  }
+}
+
 export function clearPropertyDetailCache(workspaceId?: string) {
   if (!workspaceId) {
     propertyDetailCache.clear();
@@ -252,6 +276,7 @@ export function clearAllWorkspaceCaches(workspaceId?: string) {
   clearLeadEngagementCache(workspaceId);
   clearPropertySearchCache(workspaceId);
   clearSavedListingsCache(workspaceId);
+  clearShortlistListCache(workspaceId);
   clearPropertyDetailCache(workspaceId);
   leadDetailCacheClearer?.(workspaceId);
 }

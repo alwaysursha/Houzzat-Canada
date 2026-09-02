@@ -46,9 +46,9 @@ const DETAIL_MODAL = join(
   REPO_ROOT,
   "apps/pro-mobile/src/components/PropertyDetailModal.tsx",
 );
-const SHORTLIST_BTN = join(
+const PROPERTY_CARD = join(
   REPO_ROOT,
-  "apps/pro-mobile/src/components/ShortlistButton.tsx",
+  "apps/pro-mobile/src/components/PropertyListingCard.tsx",
 );
 const SAVED_HOOK = join(
   REPO_ROOT,
@@ -148,14 +148,19 @@ async function runStage54Tests() {
   {
     const screen = readFileSync(PROPERTIES_SCREEN, "utf8");
     const hook = readFileSync(SAVED_HOOK, "utf8");
-    const btn = readFileSync(SHORTLIST_BTN, "utf8");
+    const card = readFileSync(PROPERTY_CARD, "utf8");
     assert.ok(screen.includes("PropertyDetailModal"));
-    assert.ok(screen.includes("ShortlistButton"));
+    assert.ok(screen.includes("PropertyListingCard"));
     assert.ok(screen.includes("usePropertySavedListings"));
-    assert.ok(screen.includes("timingLabel"));
+    assert.ok(card.includes("timingLabel"));
+    assert.ok(card.includes("ShortlistButton"));
     assert.ok(screen.includes("onOpen"));
     assert.ok(hook.includes("/properties/saved"));
     assert.ok(hook.includes("/saved"));
+    const btn = readFileSync(
+      join(REPO_ROOT, "apps/pro-mobile/src/components/ShortlistButton.tsx"),
+      "utf8",
+    );
     assert.ok(btn.includes("Shortlisted"));
     console.log("  -> PASS");
   }

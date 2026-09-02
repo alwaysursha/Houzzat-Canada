@@ -34,6 +34,7 @@ import {
   type MoreUtilityId,
 } from "./MoreUtilityScreen";
 import { PropertiesSearchScreen } from "./PropertiesSearchScreen";
+import { ShortlistScreen } from "./ShortlistScreen";
 
 type AgentTab = "launchpad" | "leads" | "tasks" | "calendar" | "more";
 type ActiveUtility = Exclude<MoreUtilityId, "account"> | null;
@@ -186,6 +187,17 @@ export function AgentShell({
                 onBack={() => {
                   setActiveUtility(null);
                   setActiveDrawerId("account");
+                }}
+              />
+            ) : activeUtility === "shortlist" ? (
+              <ShortlistScreen
+                onBack={() => {
+                  setActiveUtility(null);
+                  setActiveDrawerId("account");
+                }}
+                onBrowseProperties={() => {
+                  setActiveUtility("search");
+                  setActiveDrawerId("search");
                 }}
               />
             ) : (
