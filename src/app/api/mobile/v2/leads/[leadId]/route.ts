@@ -261,6 +261,10 @@ export async function GET(
               ? (act.meta as Record<string, unknown>)
               : null;
           const pinned = meta?.pinned === true;
+          const noteId =
+            typeof meta?.noteId === "string" && meta.noteId.trim()
+              ? meta.noteId.trim()
+              : undefined;
           return {
             id: act.id,
             type: act.type,
@@ -268,6 +272,7 @@ export async function GET(
             createdAt: act.createdAt.toISOString(),
             // Stage 4.5.2 — expose canonical LeadNote pin (stored on activity meta)
             ...(pinned ? { pinned: true as const } : {}),
+            ...(noteId ? { noteId } : {}),
           };
         });
         // Float pinned notes to top (web CrmTimeline / customer-timeline parity)

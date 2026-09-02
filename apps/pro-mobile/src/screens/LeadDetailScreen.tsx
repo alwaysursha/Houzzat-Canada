@@ -439,17 +439,43 @@ function activityCategoryMeta(type: string): {
       label: t === "CALL_NOTE" ? "Call note" : "Call",
     };
   }
-  if (t.includes("NOTE")) {
+  // Must run before the generic VIEW catch-all — VIEWING_PLAN contains "VIEW".
+  if (t.startsWith("VIEWING_PLAN") || t === "VIEWING_APPOINTMENT_SCHEDULED") {
+    const label =
+      t === "VIEWING_PLAN_CREATED"
+        ? "Viewing plan created"
+        : t === "VIEWING_PLAN_UPDATED"
+          ? "Viewing plan updated"
+          : t === "VIEWING_PLAN_SHARED"
+            ? "Viewing plan shared"
+            : t === "VIEWING_APPOINTMENT_SCHEDULED"
+              ? "Viewing scheduled"
+              : "Viewing plan";
+    return {
+      icon: "🗓",
+      chipBg: "#CCFBF1",
+      chipText: "#0F766E",
+      chipRing: "#5EEAD4",
+      dot: "#0D9488",
+      label,
+    };
+  }
+  if (t.includes("NOTE") || t === "NOTE_PIN") {
     return {
       icon: "📝",
       chipBg: "#E2E8F0",
       chipText: "#334155",
       chipRing: "#CBD5E1",
       dot: "#64748B",
-      label: "Note",
+      label: t === "NOTE_PIN" ? "Pin update" : "Note",
     };
   }
-  if (t === "LISTING_VIEW" || t === "PROPERTY_ALERT_VIEW" || t.includes("VIEW")) {
+  if (
+    t === "LISTING_VIEW" ||
+    t === "PROPERTY_ALERT_VIEW" ||
+    t === "PROPERTY_VIEW" ||
+    (t.includes("VIEW") && !t.includes("VIEWING"))
+  ) {
     return {
       icon: "👁",
       chipBg: "#E2E8F0",
@@ -651,6 +677,7 @@ export function LeadDetailScreen({
   const [notePinned, setNotePinned] = useState(false);
   const [notePending, setNotePending] = useState(false);
   const [noteMessage, setNoteMessage] = useState<string | null>(null);
+  const [unpinPendingId, setUnpinPendingId] = useState<string | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [statusPending, setStatusPending] = useState(false);
   const mainScrollRef = useRef<{
@@ -729,6 +756,62 @@ export function LeadDetailScreen({
     void openNativeUrl(`mailto:${encodeURIComponent(email)}`, "Email unavailable");
   };
 
+  const handleUnpinNote = async (activity: MobileLeadActivity) => {
+    const noteId = activity.noteId?.trim();
+    if (!noteId || !lead || unpinPendingId) return;
+    setUnpinPendingId(noteId);
+    setNoteMessage(null);
+    try {
+      const res = await mobileApiClient.patch<{
+        ok?: boolean;
+        note?: { id: string; pinned: boolean };
+        message?: string;
+      }>(
+        `/leads/${encodeURIComponent(leadId)}/notes/${encodeURIComponent(noteId)}`,
+        { pinned: false },
+      );
+      if (!res.ok) {
+        setNoteMessage(res.message || "Could not unpin note");
+        return;
+      }
+
+      setLead((prev) => {
+        if (!prev) return prev;
+        const nextActivities = (prev.recentActivities || []).map((a) => {
+          if (a.noteId === noteId || (a.type === "note" && a.id === noteId)) {
+            return {
+              id: a.id,
+              type: a.type,
+              body: a.body,
+              createdAt: a.createdAt,
+              noteId: a.noteId,
+            };
+          }
+          return a;
+        });
+        const unpinActivity: MobileLeadActivity = {
+          id: `unpin_${Date.now()}`,
+          type: "note_pin",
+          body: `Unpinned note: ${(activity.body || "").slice(0, 120)}`,
+          createdAt: new Date().toISOString(),
+          noteId,
+        };
+        const next: MobileLeadDetail = {
+          ...prev,
+          recentActivities: [unpinActivity, ...nextActivities].slice(
+            0,
+            ACTIVITY_TIMELINE_LIMIT,
+          ),
+        };
+        if (cacheKey) patchLeadDetailCache(cacheKey, next);
+        return next;
+      });
+      setNoteMessage("Note unpinned");
+    } finally {
+      setUnpinPendingId(null);
+    }
+  };
+
   const handleSaveNote = async () => {
     const trimmed = noteBody.trim();
     if (!trimmed || notePending || !lead) return;
@@ -760,11 +843,13 @@ export function LeadDetailScreen({
         };
       })?.note;
       const wasPinned = Boolean(created?.pinned ?? notePinned);
+      const noteId = created?.id;
       const activityItem: MobileLeadActivity = {
-        id: created?.id || `note_${Date.now()}`,
+        id: noteId ? `note_act_${noteId}` : `note_${Date.now()}`,
         type: "note",
         body: trimmed.slice(0, 500),
         createdAt: created?.createdAt || new Date().toISOString(),
+        ...(noteId ? { noteId } : {}),
         ...(wasPinned ? { pinned: true } : {}),
       };
 
@@ -1676,6 +1761,22 @@ export function LeadDetailScreen({
                                         </Text>
                                       </View>
                                     ) : null}
+                                    {act.pinned && act.noteId ? (
+                                      <TouchableOpacity
+                                        style={styles.unpinBtn}
+                                        disabled={unpinPendingId === act.noteId}
+                                        onPress={() => void handleUnpinNote(act)}
+                                        activeOpacity={0.8}
+                                        accessibilityRole="button"
+                                        accessibilityLabel="Unpin note"
+                                      >
+                                        <Text style={styles.unpinBtnText}>
+                                          {unpinPendingId === act.noteId
+                                            ? "…"
+                                            : "Unpin"}
+                                        </Text>
+                                      </TouchableOpacity>
+                                    ) : null}
                                     <View
                                       style={[
                                         styles.activityTypeChip,
@@ -2557,6 +2658,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: "#92400E",
+  },
+  unpinBtn: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+  },
+  unpinBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#475569",
   },
   statusMenuOverlay: {
     flex: 1,

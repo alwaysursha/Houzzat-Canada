@@ -70,6 +70,8 @@ export interface MobileLeadActivity {
   createdAt: string;
   /** Present when activity is a pinned LeadNote (canonical LeadNote.pinned). */
   pinned?: boolean;
+  /** Canonical LeadNote id when this activity is a note (from activity.meta.noteId). */
+  noteId?: string;
 }
 
 export type AgentTaskType = "CALL" | "EMAIL" | "TODO";
