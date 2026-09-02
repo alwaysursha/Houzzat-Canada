@@ -9,12 +9,11 @@ import { computeDriveRoute } from "@/lib/google/routes";
 import { prisma } from "@/lib/prisma";
 import {
   buildDurationLookup,
-  buildTimeline,
-  optimizeStopOrder,
+  buildTimelineFromFirstStop,
+  optimizeStopOrderOpenPath,
   ROUTE_PLANNER_DEFAULT_BUFFER_MINUTES,
   ROUTE_PLANNER_DEFAULT_DWELL_MINUTES,
   ROUTE_PLANNER_MAX_STOPS,
-  timelineForFixedOrder,
   type TourStopPoint,
 } from "@/lib/route-planner/optimize";
 import {
@@ -229,16 +228,8 @@ export async function optimizeProTour(input: {
   }
 
   const startAt = resolveTourStartAt(tour);
-  const start =
-    tour.startLat != null && tour.startLng != null
-      ? { lat: tour.startLat, lng: tour.startLng }
-      : null;
 
-  if (!start) {
-    throw new Error("START_LOCATION_REQUIRED");
-  }
-
-  const points = [start, ...stopPoints.map((s) => ({ lat: s.lat, lng: s.lng }))];
+  const points = stopPoints.map((s) => ({ lat: s.lat, lng: s.lng }));
   const durationCache = await buildDurationLookup(points, async (from, to) => {
     const route = await computeDriveRoute({
       originLat: from.lat,
@@ -253,26 +244,42 @@ export async function optimizeProTour(input: {
   });
 
   const ordered = input.reorder
-    ? optimizeStopOrder({ start, stops: stopPoints, durationCache })
+    ? optimizeStopOrderOpenPath({ stops: stopPoints, durationCache })
     : stopPoints;
 
   const timeline =
     startAt != null
-      ? buildTimeline({
+      ? buildTimelineFromFirstStop({
           startAt,
-          start,
           stops: ordered,
           durationCache,
           defaultDwellMinutes: tour.defaultDwellMinutes,
           bufferMinutes: tour.bufferMinutes,
         })
-      : timelineForFixedOrder({
-          startAt: null,
-          start,
-          stops: ordered,
-          durationCache,
-          defaultDwellMinutes: tour.defaultDwellMinutes,
-          bufferMinutes: tour.bufferMinutes,
+      : ordered.map((stop, i) => {
+          const dwell =
+            stop.dwellMinutes && stop.dwellMinutes > 0
+              ? stop.dwellMinutes
+              : tour.defaultDwellMinutes;
+          let driveFromPrevSeconds: number | null = null;
+          let driveFromPrevMeters: number | null = null;
+          if (i > 0) {
+            const prev = ordered[i - 1]!;
+            const key = `${prev.lat.toFixed(5)},${prev.lng.toFixed(5)}|${stop.lat.toFixed(5)},${stop.lng.toFixed(5)}`;
+            const leg = durationCache.get(key);
+            driveFromPrevSeconds = leg?.durationSeconds ?? null;
+            driveFromPrevMeters = leg?.distanceMeters ?? null;
+          }
+          return {
+            id: stop.id,
+            mlsNumber: stop.mlsNumber,
+            sortOrder: i,
+            dwellMinutes: dwell,
+            driveFromPrevSeconds,
+            driveFromPrevMeters,
+            suggestedArriveAt: null as Date | null,
+            suggestedLeaveAt: null as Date | null,
+          };
         });
 
   for (const row of timeline) {
@@ -289,12 +296,16 @@ export async function optimizeProTour(input: {
     });
   }
 
-  if (startAt && !tour.startAt) {
-    await prisma.viewingTour.update({
-      where: { id: tour.id },
-      data: { startAt },
-    });
-  }
+  // Pro plans do not use a separate start address — clear any legacy values.
+  await prisma.viewingTour.update({
+    where: { id: tour.id },
+    data: {
+      startAddress: null,
+      startLat: null,
+      startLng: null,
+      ...(startAt && !tour.startAt ? { startAt } : {}),
+    },
+  });
 
   return loadProViewingsTourById(tour.id);
 }

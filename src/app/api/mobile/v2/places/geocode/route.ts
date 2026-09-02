@@ -52,6 +52,7 @@ export async function POST(request: Request) {
           { status: 404 },
         );
       }
+      // Prefer full formatted address (subtitle) when present.
       const address =
         details.subtitle ||
         [details.label, details.city, details.province].filter(Boolean).join(", ");
@@ -84,6 +85,7 @@ export async function POST(request: Request) {
     }
 
     const address =
+      details.subtitle ||
       details.label ||
       [first.label, first.city, first.province].filter(Boolean).join(", ");
 

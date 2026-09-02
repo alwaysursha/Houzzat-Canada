@@ -240,6 +240,144 @@ export function buildTimeline(input: {
   return result;
 }
 
+/**
+ * HouzzatPRO Viewings Planner — first stop is the first viewing (arrive at startAt).
+ * Drive times are stop→stop only; no separate home/start address.
+ */
+export function buildTimelineFromFirstStop(input: {
+  startAt: Date;
+  stops: TourStopPoint[];
+  durationCache: Map<string, DurationLeg>;
+  defaultDwellMinutes: number;
+  bufferMinutes: number;
+}): TimelineStop[] {
+  const result: TimelineStop[] = [];
+  let leaveCursor: Date | null = null;
+
+  for (let i = 0; i < input.stops.length; i++) {
+    const stop = input.stops[i]!;
+    const dwell =
+      stop.dwellMinutes && stop.dwellMinutes > 0
+        ? stop.dwellMinutes
+        : input.defaultDwellMinutes;
+
+    let arrive: Date;
+    let driveFromPrevSeconds: number | null = null;
+    let driveFromPrevMeters: number | null = null;
+
+    if (i === 0 || !leaveCursor) {
+      arrive = new Date(input.startAt);
+    } else {
+      const prev = input.stops[i - 1]!;
+      const leg = durationBetween(input.durationCache, prev, stop);
+      driveFromPrevSeconds = leg.durationSeconds;
+      driveFromPrevMeters = leg.distanceMeters;
+      const driveWithBuffer =
+        leg.durationSeconds + Math.max(0, input.bufferMinutes) * 60;
+      arrive = new Date(leaveCursor.getTime() + driveWithBuffer * 1000);
+    }
+
+    const leave = new Date(arrive.getTime() + dwell * 60 * 1000);
+    result.push({
+      id: stop.id,
+      mlsNumber: stop.mlsNumber,
+      sortOrder: i,
+      dwellMinutes: dwell,
+      driveFromPrevSeconds,
+      driveFromPrevMeters,
+      suggestedArriveAt: arrive,
+      suggestedLeaveAt: leave,
+    });
+    leaveCursor = leave;
+  }
+
+  return result;
+}
+
+/** Open-path order among stops only (no external start address). */
+export function optimizeStopOrderOpenPath(input: {
+  stops: TourStopPoint[];
+  durationCache: Map<string, DurationLeg>;
+}): TourStopPoint[] {
+  const stops = [...input.stops];
+  if (stops.length <= 1) return stops;
+
+  let bestOrder = stops;
+  let bestCost = Number.POSITIVE_INFINITY;
+
+  for (let seed = 0; seed < stops.length; seed++) {
+    const remaining = [...stops];
+    const ordered: TourStopPoint[] = [remaining.splice(seed, 1)[0]!];
+    let cursor = ordered[0]!;
+    while (remaining.length > 0) {
+      let bestIdx = 0;
+      let bestSec = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < remaining.length; i++) {
+        const sec = durationBetween(
+          input.durationCache,
+          cursor,
+          remaining[i]!,
+        ).durationSeconds;
+        if (sec < bestSec) {
+          bestSec = sec;
+          bestIdx = i;
+        }
+      }
+      const next = remaining.splice(bestIdx, 1)[0]!;
+      ordered.push(next);
+      cursor = next;
+    }
+
+    let cost = 0;
+    for (let i = 1; i < ordered.length; i++) {
+      cost += durationBetween(
+        input.durationCache,
+        ordered[i - 1]!,
+        ordered[i]!,
+      ).durationSeconds;
+    }
+    if (cost < bestCost) {
+      bestCost = cost;
+      bestOrder = ordered;
+    }
+  }
+
+  // Light 2-opt on the open path
+  const ordered = [...bestOrder];
+  let improved = true;
+  let guard = 0;
+  while (improved && guard < 40) {
+    improved = false;
+    guard += 1;
+    for (let i = 0; i < ordered.length - 1; i++) {
+      for (let k = i + 1; k < ordered.length; k++) {
+        const before = openPathCost(ordered, input.durationCache);
+        const next = [...ordered];
+        const slice = next.slice(i, k + 1).reverse();
+        next.splice(i, k - i + 1, ...slice);
+        const after = openPathCost(next, input.durationCache);
+        if (after + 1 < before) {
+          ordered.splice(0, ordered.length, ...next);
+          improved = true;
+        }
+      }
+    }
+  }
+
+  return ordered;
+}
+
+function openPathCost(
+  stops: TourStopPoint[],
+  cache: Map<string, DurationLeg>,
+) {
+  let total = 0;
+  for (let i = 1; i < stops.length; i++) {
+    total += durationBetween(cache, stops[i - 1]!, stops[i]!).durationSeconds;
+  }
+  return total;
+}
+
 /** Recompute legs for a fixed order (no reordering). */
 export function timelineForFixedOrder(input: {
   startAt: Date | null;

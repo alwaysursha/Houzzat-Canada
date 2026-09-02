@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Clipboard,
   Linking,
   Modal,
@@ -20,13 +21,13 @@ import {
   View,
 } from "react-native";
 import { mobileApiClient } from "../api/client";
-import {
-  AddressAutocompleteField,
-  type ResolvedAddress,
-} from "../components/AddressAutocompleteField";
 import { NativeDateTimeField } from "../components/NativeDateTimeField";
 import { PropertyDetailModal } from "../components/PropertyDetailModal";
-import { formatListingPrice } from "../lib/property-response";
+import {
+  buildShortlistListQuery,
+  formatListingPrice,
+  unwrapShortlistList,
+} from "../lib/property-response";
 import { unwrapViewingsPlannerTour } from "../lib/viewings-planner-response";
 import { useAuth } from "../state/AuthContext";
 import type { MobileListingCard } from "../types/property";
@@ -49,13 +50,6 @@ type ViewingsPlannerScreenProps = {
 type StopTimeDraft = {
   startsAt: string;
   endsAt: string;
-};
-
-type StartLocation = {
-  id: string;
-  address: string;
-  lat: number;
-  lng: number;
 };
 
 function combineDateAndTime(date: Date | null, time: Date | null): Date | null {
@@ -224,13 +218,17 @@ export function ViewingsPlannerScreen({
   const [error, setError] = useState<string | null>(null);
   const [viewingDate, setViewingDate] = useState<Date | null>(null);
   const [startTime, setStartTime] = useState<Date | null>(null);
-  const [startLocations, setStartLocations] = useState<StartLocation[]>([]);
-  const [activeStartId, setActiveStartId] = useState<string | null>(null);
-  const [showAddAddress, setShowAddAddress] = useState(true);
   const [stopTimes, setStopTimes] = useState<Record<string, StopTimeDraft>>({});
   const [detailListing, setDetailListing] = useState<MobileListingCard | null>(null);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [shortlistPickerOpen, setShortlistPickerOpen] = useState(false);
+  const [shortlistItems, setShortlistItems] = useState<MobileListingCard[]>([]);
+  const [shortlistLoading, setShortlistLoading] = useState(false);
+  const [shortlistSelected, setShortlistSelected] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [addingStops, setAddingStops] = useState(false);
 
   const manualReorderRef = useRef(false);
   const hasOptimizedRef = useRef(false);
@@ -247,20 +245,6 @@ export function ViewingsPlannerScreen({
       if (!next.viewingDate) {
         setViewingDate(start);
       }
-    }
-    if (next.startAddress && next.startLat != null && next.startLng != null) {
-      const loc: StartLocation = {
-        id: "tour-start",
-        address: next.startAddress,
-        lat: next.startLat,
-        lng: next.startLng,
-      };
-      setStartLocations((prev) => {
-        const others = prev.filter((p) => p.id !== loc.id && p.address !== loc.address);
-        return [loc, ...others];
-      });
-      setActiveStartId(loc.id);
-      setShowAddAddress(false);
     }
     setStopTimes(stopTimesFromTour(next.stops));
     if (next.sharePath) {
@@ -301,6 +285,27 @@ export function ViewingsPlannerScreen({
     setSaved(false);
     void initTour();
   }, [initTour]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (shortlistPickerOpen) {
+        setShortlistPickerOpen(false);
+        return true;
+      }
+      if (shareMenuOpen) {
+        setShareMenuOpen(false);
+        return true;
+      }
+      if (detailListing) {
+        setDetailListing(null);
+        return true;
+      }
+      onBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [shortlistPickerOpen, shareMenuOpen, detailListing, onBack]);
 
   const patchTour = useCallback(
     async (body: Record<string, unknown>) => {
@@ -347,49 +352,6 @@ export function ViewingsPlannerScreen({
     [viewingDate, patchTour],
   );
 
-  const applyStartLocation = useCallback(
-    async (resolved: ResolvedAddress) => {
-      setError(null);
-      const loc: StartLocation = {
-        id: `start-${Date.now()}`,
-        address: resolved.startAddress,
-        lat: resolved.startLat,
-        lng: resolved.startLng,
-      };
-      setStartLocations((prev) => {
-        const dup = prev.find(
-          (p) => p.address === loc.address && p.lat === loc.lat && p.lng === loc.lng,
-        );
-        if (dup) {
-          setActiveStartId(dup.id);
-          return prev;
-        }
-        return [...prev, loc];
-      });
-      setActiveStartId(loc.id);
-      setShowAddAddress(false);
-      await patchTour({
-        startAddress: resolved.startAddress,
-        startLat: resolved.startLat,
-        startLng: resolved.startLng,
-      });
-    },
-    [patchTour],
-  );
-
-  const selectStartLocation = useCallback(
-    async (loc: StartLocation) => {
-      setActiveStartId(loc.id);
-      setError(null);
-      await patchTour({
-        startAddress: loc.address,
-        startLat: loc.lat,
-        startLng: loc.lng,
-      });
-    },
-    [patchTour],
-  );
-
   const handleStopTimeBlur = useCallback(
     async (stopId: string) => {
       const draft = stopTimes[stopId];
@@ -428,6 +390,20 @@ export function ViewingsPlannerScreen({
 
   const handleRecalculateRoute = useCallback(async () => {
     if (!tour) return;
+    if (tour.stops.length === 0) {
+      Alert.alert(
+        "Add properties first",
+        "Add at least one property from Shortlist before recalculating the route.",
+      );
+      return;
+    }
+    if (!tour.startAt && !combineDateAndTime(viewingDate, startTime)) {
+      Alert.alert(
+        "Set viewing time",
+        "Choose a viewing date and first viewing start time, then recalculate.",
+      );
+      return;
+    }
     setRoutePending(true);
     setError(null);
     try {
@@ -438,6 +414,7 @@ export function ViewingsPlannerScreen({
       );
       if (!res.ok) {
         setError(res.message || "Route calculation failed");
+        Alert.alert("Route failed", res.message || "Could not recalculate route");
         return;
       }
       const parsed = unwrapViewingsPlannerTour(res.data);
@@ -445,14 +422,23 @@ export function ViewingsPlannerScreen({
         applyTour(parsed);
         hasOptimizedRef.current = true;
         setStatusMsg("Route updated");
+      } else {
+        setError("Unexpected response from server");
       }
     } finally {
       setRoutePending(false);
     }
-  }, [tour, leadId, applyTour]);
+  }, [tour, leadId, applyTour, viewingDate, startTime]);
 
   const handleSave = useCallback(async () => {
     if (!tour) return;
+    if (tour.stops.length === 0) {
+      Alert.alert(
+        "Add properties first",
+        "Add at least one property from Shortlist before saving viewings.",
+      );
+      return;
+    }
     setSavePending(true);
     setError(null);
     try {
@@ -462,6 +448,7 @@ export function ViewingsPlannerScreen({
       );
       if (!res.ok) {
         setError(res.message || "Could not save viewing plan");
+        Alert.alert("Save failed", res.message || "Could not save viewing plan");
         return;
       }
       const parsed = unwrapViewingsPlannerTour(res.data);
@@ -470,11 +457,64 @@ export function ViewingsPlannerScreen({
         setSaved(true);
         setShareMenuOpen(true);
         setStatusMsg("Viewing plan saved");
+      } else {
+        setError("Unexpected response from server");
       }
     } finally {
       setSavePending(false);
     }
   }, [tour, leadId, applyTour]);
+
+  const openShortlistPicker = useCallback(async () => {
+    setShortlistPickerOpen(true);
+    setShortlistSelected(new Set());
+    setShortlistLoading(true);
+    try {
+      const res = await mobileApiClient.get<unknown>(
+        buildShortlistListQuery({ limit: 40 }),
+      );
+      if (!res.ok) {
+        setError(res.message || "Could not load shortlist");
+        return;
+      }
+      const list = unwrapShortlistList(res.data);
+      setShortlistItems(list.listings);
+      // Pre-select stops already on the tour
+      const already = new Set((tour?.stops ?? []).map((s) => s.mlsNumber));
+      setShortlistSelected(already);
+    } finally {
+      setShortlistLoading(false);
+    }
+  }, [tour]);
+
+  const addStopsFromShortlist = useCallback(async () => {
+    const mlsNumbers = [...shortlistSelected];
+    if (mlsNumbers.length === 0) {
+      Alert.alert("Select properties", "Choose at least one shortlisted property.");
+      return;
+    }
+    setAddingStops(true);
+    setError(null);
+    try {
+      const res = await mobileApiClient.post<unknown>(
+        `/leads/${encodeURIComponent(leadId)}/viewings-planner`,
+        { mlsNumbers },
+      );
+      if (!res.ok) {
+        setError(res.message || "Could not add properties");
+        Alert.alert("Add failed", res.message || "Could not add properties");
+        return;
+      }
+      const parsed = unwrapViewingsPlannerTour(res.data);
+      if (parsed) {
+        applyTour(parsed);
+        setShortlistPickerOpen(false);
+        setStatusMsg(`Added ${parsed.stops.length} stop${parsed.stops.length === 1 ? "" : "s"}`);
+      }
+    } finally {
+      setAddingStops(false);
+    }
+  }, [shortlistSelected, leadId, applyTour]);
 
   const shareUrl = useMemo(() => {
     if (!tour?.sharePath) return null;
@@ -634,56 +674,9 @@ export function ViewingsPlannerScreen({
                 placeholder="Select start time"
                 onChange={(d) => void handleStartTimeChange(d)}
               />
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Starting from</Text>
-              {startLocations.length > 0 ? (
-                <View style={styles.startLocationList}>
-                  {startLocations.map((loc) => {
-                    const active = loc.id === activeStartId;
-                    return (
-                      <TouchableOpacity
-                        key={loc.id}
-                        style={[styles.startLocationChip, active && styles.startLocationChipActive]}
-                        onPress={() => void selectStartLocation(loc)}
-                        activeOpacity={0.85}
-                      >
-                        <Text
-                          style={[
-                            styles.startLocationText,
-                            active && styles.startLocationTextActive,
-                          ]}
-                          numberOfLines={2}
-                        >
-                          {loc.address}
-                        </Text>
-                        {active ? (
-                          <Text style={styles.startLocationBadge}>Active</Text>
-                        ) : null}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              ) : null}
-
-              {showAddAddress || startLocations.length === 0 ? (
-                <AddressAutocompleteField
-                  placeholder="Search for a starting address…"
-                  onResolved={(resolved) => void applyStartLocation(resolved)}
-                  onError={(msg) => setError(msg)}
-                />
-              ) : null}
-
-              {startLocations.length > 0 && !showAddAddress ? (
-                <TouchableOpacity
-                  style={styles.addAddressBtn}
-                  onPress={() => setShowAddAddress(true)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.addAddressBtnText}>+ Add another address</Text>
-                </TouchableOpacity>
-              ) : null}
+              <Text style={styles.fieldHint}>
+                Arrive time at the first property. Drive times continue to the next stops.
+              </Text>
             </View>
 
             {tour ? (
@@ -700,11 +693,29 @@ export function ViewingsPlannerScreen({
                 </View>
 
                 <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>Stops</Text>
+                  <View style={styles.stopsHeaderRow}>
+                    <Text style={styles.sectionLabel}>Stops</Text>
+                    <TouchableOpacity
+                      onPress={() => void openShortlistPicker()}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.addStopsLink}>+ Add from Shortlist</Text>
+                    </TouchableOpacity>
+                  </View>
                 {tour.stops.length === 0 ? (
-                  <Text style={styles.emptyStops}>
-                    Add properties from Shortlist or property search to build a route.
-                  </Text>
+                  <View style={styles.emptyStopsBox}>
+                    <Text style={styles.emptyStops}>
+                      No properties on this route yet. Add homes from your Shortlist
+                      to enable Recalculate and Save.
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.addStopsBtn}
+                      onPress={() => void openShortlistPicker()}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.addStopsBtnText}>Add from Shortlist</Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : (
                   tour.stops.map((stop, index) => {
                     const times = stopTimes[stop.id] ?? { startsAt: "", endsAt: "" };
@@ -822,9 +833,17 @@ export function ViewingsPlannerScreen({
 
           {tour ? (
             <View style={styles.footer}>
+              {tour.stops.length === 0 ? (
+                <Text style={styles.footerHint}>
+                  Add properties from Shortlist to recalculate and save.
+                </Text>
+              ) : null}
               <TouchableOpacity
-                style={[styles.secondaryBtn, routePending && styles.btnDisabled]}
-                disabled={routePending || tour.stops.length === 0}
+                style={[
+                  styles.secondaryBtn,
+                  (routePending || tour.stops.length === 0) && styles.btnDisabled,
+                ]}
+                disabled={routePending}
                 onPress={() => void handleRecalculateRoute()}
                 activeOpacity={0.85}
               >
@@ -836,8 +855,11 @@ export function ViewingsPlannerScreen({
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.primaryBtn, savePending && styles.btnDisabled]}
-                disabled={savePending || tour.stops.length === 0}
+                style={[
+                  styles.primaryBtn,
+                  (savePending || tour.stops.length === 0) && styles.btnDisabled,
+                ]}
+                disabled={savePending}
                 onPress={() => void handleSave()}
                 activeOpacity={0.85}
               >
@@ -900,6 +922,91 @@ export function ViewingsPlannerScreen({
               onPress={() => setShareMenuOpen(false)}
             >
               <Text style={styles.shareCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={shortlistPickerOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShortlistPickerOpen(false)}
+      >
+        <View style={styles.shareBackdrop}>
+          <View style={styles.shortlistSheet}>
+            <View style={styles.shortlistSheetHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.shareEyebrow}>Viewings Planner</Text>
+                <Text style={styles.shareTitle}>Add from Shortlist</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShortlistPickerOpen(false)}>
+                <Text style={styles.shareCancelText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            {shortlistLoading ? (
+              <View style={styles.shortlistLoader}>
+                <ActivityIndicator color="#0F766E" />
+              </View>
+            ) : shortlistItems.length === 0 ? (
+              <Text style={styles.emptyStops}>
+                No shortlisted properties yet. Save homes from Property Search first.
+              </Text>
+            ) : (
+              <ScrollView
+                style={styles.shortlistScroll}
+                contentContainerStyle={styles.shortlistScrollContent}
+              >
+                {shortlistItems.map((item) => {
+                  const selected = shortlistSelected.has(item.mlsNumber);
+                  return (
+                    <TouchableOpacity
+                      key={item.mlsNumber}
+                      style={[
+                        styles.shortlistRow,
+                        selected && styles.shortlistRowSelected,
+                      ]}
+                      onPress={() => {
+                        setShortlistSelected((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(item.mlsNumber)) next.delete(item.mlsNumber);
+                          else next.add(item.mlsNumber);
+                          return next;
+                        });
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.shortlistCheck}>
+                        {selected ? "✓" : "○"}
+                      </Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.shortlistAddress} numberOfLines={2}>
+                          {item.addressLine}
+                          {item.city ? `, ${item.city}` : ""}
+                        </Text>
+                        <Text style={styles.shortlistMeta}>
+                          {formatListingPrice(item.listPrice, item.transactionType)} ·{" "}
+                          {item.mlsNumber}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+            <TouchableOpacity
+              style={[styles.primaryBtn, addingStops && styles.btnDisabled]}
+              disabled={addingStops || shortlistLoading}
+              onPress={() => void addStopsFromShortlist()}
+              activeOpacity={0.85}
+            >
+              {addingStops ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.primaryBtnText}>
+                  Add {shortlistSelected.size || ""} to route
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -1037,6 +1144,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     paddingHorizontal: 2,
   },
+  fieldHint: {
+    fontSize: 12,
+    color: "#64748B",
+    lineHeight: 16,
+    paddingHorizontal: 2,
+  },
   fieldInput: {
     borderWidth: 1,
     borderColor: "#D8DEE6",
@@ -1146,6 +1259,106 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
     paddingVertical: 8,
     paddingHorizontal: 2,
+    lineHeight: 18,
+  },
+  emptyStopsBox: {
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  stopsHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  addStopsLink: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2B6CB0",
+  },
+  addStopsBtn: {
+    backgroundColor: "#0F766E",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  addStopsBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  footerHint: {
+    fontSize: 12,
+    color: "#64748B",
+    textAlign: "center",
+    marginBottom: 2,
+  },
+  shortlistSheet: {
+    maxHeight: "78%",
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: 16,
+    paddingBottom: 28,
+    gap: 12,
+  },
+  shortlistSheetHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  shareEyebrow: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: "#0F766E",
+  },
+  shortlistLoader: {
+    paddingVertical: 24,
+    alignItems: "center",
+  },
+  shortlistScroll: {
+    maxHeight: 360,
+  },
+  shortlistScrollContent: {
+    gap: 8,
+    paddingBottom: 8,
+  },
+  shortlistRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  shortlistRowSelected: {
+    borderColor: "#0F766E",
+    backgroundColor: "#ECFDF5",
+  },
+  shortlistCheck: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F766E",
+    width: 22,
+  },
+  shortlistAddress: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1E2A38",
+  },
+  shortlistMeta: {
+    marginTop: 2,
+    fontSize: 12,
+    color: "#64748B",
   },
   stopCard: {
     backgroundColor: "#FFFFFF",

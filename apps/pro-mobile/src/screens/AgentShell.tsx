@@ -22,6 +22,7 @@ import {
 } from "react-native";
 import { HouzzatProWordmark } from "../components/BrandMark";
 import { NativeDrawer, type DrawerItem } from "../components/NativeDrawer";
+import { useAndroidHardwareBack } from "../hooks/useAndroidHardwareBack";
 import { useAuth } from "../state/AuthContext";
 import { LaunchpadScreen } from "./LaunchpadScreen";
 import { LeadDetailScreen } from "./LeadDetailScreen";
@@ -116,6 +117,53 @@ export function AgentShell({
   const handleSignOut = () => {
     void signOut();
   };
+
+  useAndroidHardwareBack({
+    onBack: () => {
+      if (viewingsPlanner) {
+        setViewingsPlanner(null);
+        return true;
+      }
+      if (viewingsLeadPicker) {
+        setViewingsLeadPicker(null);
+        return true;
+      }
+      if (selectedLeadId) {
+        setSelectedLeadId(null);
+        setLeadNavIds([]);
+        return true;
+      }
+      if (drawerOpen) {
+        setDrawerOpen(false);
+        return true;
+      }
+      if (activeUtility) {
+        setActiveUtility(null);
+        setActiveDrawerId("account");
+        setActiveTab("more");
+        return true;
+      }
+      if (activeTab !== "launchpad") {
+        setActiveTab("launchpad");
+        setActiveDrawerId("launchpad");
+        setActiveUtility(null);
+        return true;
+      }
+      if (onReturnToCommandCentre) {
+        onReturnToCommandCentre();
+        return true;
+      }
+      return false;
+    },
+    isAtRoot: () =>
+      !viewingsPlanner &&
+      !viewingsLeadPicker &&
+      !selectedLeadId &&
+      !drawerOpen &&
+      !activeUtility &&
+      activeTab === "launchpad" &&
+      !onReturnToCommandCentre,
+  });
 
   return (
     <SafeAreaView style={styles.safeArea}>

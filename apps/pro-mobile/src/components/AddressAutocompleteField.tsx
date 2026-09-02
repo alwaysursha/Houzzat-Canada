@@ -34,6 +34,15 @@ type AddressAutocompleteFieldProps = {
   onError?: (message: string) => void;
 };
 
+function formatSuggestionAddress(item: AddressSuggestion): string {
+  const label = item.label?.trim() || "";
+  const subtitle = item.subtitle?.trim() || "";
+  if (label && subtitle && !label.includes(subtitle) && !subtitle.includes(label)) {
+    return `${label}, ${subtitle}`;
+  }
+  return label || subtitle;
+}
+
 export function AddressAutocompleteField({
   placeholder = "Search for an address…",
   onResolved,
@@ -75,40 +84,82 @@ export function AddressAutocompleteField({
     };
   }, [draft, fetchSuggestions]);
 
+  const geocodeQuery = useCallback(
+    async (query: string, placeId?: string | null) => {
+      const cleanedPlaceId = placeId?.trim() || undefined;
+      const res = await mobileApiClient.post<unknown>("/places/geocode", {
+        placeId: cleanedPlaceId,
+        query: cleanedPlaceId ? undefined : query,
+      });
+      if (!res.ok) {
+        onError?.(res.message || "Could not resolve address");
+        return null;
+      }
+      const data = res.data as { result?: ResolvedAddress };
+      return data.result ?? null;
+    },
+    [onError],
+  );
+
   const resolveSuggestion = useCallback(
     async (item: AddressSuggestion) => {
       setResolving(true);
       setSuggestions([]);
-      setDraft(item.label);
+      const display = formatSuggestionAddress(item);
+      setDraft(display);
       try {
+        const placeId = item.placeId?.trim() || null;
+
+        // Prefer Google Place Details when we have a placeId (exact formatted address).
+        if (placeId) {
+          const result = await geocodeQuery(display, placeId);
+          if (result) {
+            setDraft(result.startAddress);
+            onResolved(result);
+          }
+          return;
+        }
+
+        // Photon / OSM suggestions already include coordinates — keep street + locality.
         if (item.lat != null && item.lng != null) {
           onResolved({
-            startAddress: item.subtitle || item.label,
+            startAddress: display,
             startLat: item.lat,
             startLng: item.lng,
           });
           return;
         }
 
-        const res = await mobileApiClient.post<unknown>("/places/geocode", {
-          placeId: item.placeId ?? undefined,
-          query: item.placeId ? undefined : item.label,
-        });
-        if (!res.ok) {
-          onError?.(res.message || "Could not resolve address");
-          return;
-        }
-        const data = res.data as { result?: ResolvedAddress };
-        if (data.result) {
-          setDraft(data.result.startAddress);
-          onResolved(data.result);
+        const result = await geocodeQuery(display);
+        if (result) {
+          setDraft(result.startAddress);
+          onResolved(result);
         }
       } finally {
         setResolving(false);
       }
     },
-    [onResolved, onError],
+    [geocodeQuery, onResolved],
   );
+
+  const useTypedAddress = useCallback(async () => {
+    const q = draft.trim();
+    if (q.length < 3) {
+      onError?.("Enter at least 3 characters to use this address");
+      return;
+    }
+    setResolving(true);
+    setSuggestions([]);
+    try {
+      const result = await geocodeQuery(q);
+      if (result) {
+        setDraft(result.startAddress);
+        onResolved(result);
+      }
+    } finally {
+      setResolving(false);
+    }
+  }, [draft, geocodeQuery, onError, onResolved]);
 
   return (
     <View style={styles.wrap}>
@@ -121,6 +172,8 @@ export function AddressAutocompleteField({
           style={styles.input}
           autoCapitalize="words"
           autoCorrect={false}
+          returnKeyType="search"
+          onSubmitEditing={() => void useTypedAddress()}
         />
         {loading || resolving ? (
           <View style={styles.spinner}>
@@ -133,10 +186,11 @@ export function AddressAutocompleteField({
         <View style={styles.suggestions}>
           {suggestions.slice(0, 6).map((item, index) => (
             <TouchableOpacity
-              key={`${item.placeId ?? item.label}-${index}`}
+              key={`${item.placeId || item.label}-${index}`}
               style={[
                 styles.suggestionRow,
-                index === suggestions.length - 1 && styles.suggestionRowLast,
+                index === Math.min(suggestions.length, 6) - 1 &&
+                  styles.suggestionRowLast,
               ]}
               onPress={() => void resolveSuggestion(item)}
               activeOpacity={0.75}
@@ -152,6 +206,15 @@ export function AddressAutocompleteField({
             </TouchableOpacity>
           ))}
         </View>
+      ) : draft.trim().length >= 3 ? (
+        <TouchableOpacity
+          style={styles.useTypedBtn}
+          onPress={() => void useTypedAddress()}
+          disabled={resolving}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.useTypedText}>Use “{draft.trim()}”</Text>
+        </TouchableOpacity>
       ) : null}
     </View>
   );
@@ -207,5 +270,19 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 12,
     color: "#64748B",
+  },
+  useTypedBtn: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    backgroundColor: "#EFF6FF",
+  },
+  useTypedText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1D4ED8",
   },
 });

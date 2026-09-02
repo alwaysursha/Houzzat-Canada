@@ -210,4 +210,18 @@ declare module "react-native" {
     windowSize?: number;
     keyboardShouldPersistTaps?: "always" | "never" | "handled" | boolean;
   }>;
+
+  export const BackHandler: {
+    addEventListener(
+      eventName: "hardwareBackPress",
+      handler: () => boolean | null | undefined,
+    ): { remove: () => void };
+    exitApp(): void;
+  };
+
+  export const ToastAndroid: {
+    SHORT: number;
+    LONG: number;
+    show(message: string, duration: number): void;
+  };
 }

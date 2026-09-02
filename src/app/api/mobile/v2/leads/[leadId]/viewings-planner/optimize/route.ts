@@ -67,12 +67,12 @@ export async function POST(
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Optimize failed";
-      if (message === "START_LOCATION_REQUIRED") {
+      if (message === "NO_STOPS") {
         return NextResponse.json(
           {
             ok: false,
-            code: "START_LOCATION_REQUIRED",
-            message: "Set a starting location before calculating the route.",
+            code: "NO_STOPS",
+            message: "Add at least one property before calculating the route.",
           },
           { status: 400 },
         );

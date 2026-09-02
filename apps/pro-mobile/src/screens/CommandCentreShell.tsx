@@ -22,6 +22,7 @@ import {
 } from "react-native";
 import { HouzzatProWordmark } from "../components/BrandMark";
 import { NativeDrawer, type DrawerItem } from "../components/NativeDrawer";
+import { useAndroidHardwareBack } from "../hooks/useAndroidHardwareBack";
 import { useAuth } from "../state/AuthContext";
 import { AgentShell } from "./AgentShell";
 import { LeadDetailScreen } from "./LeadDetailScreen";
@@ -74,11 +75,6 @@ export function CommandCentreShell() {
   const userEmail = user?.email || "";
   const userName = user?.name ?? null;
 
-  // If the owner/admin entered Agent Mode, render the AgentShell with return callback
-  if (inAgentMode) {
-    return <AgentShell onReturnToCommandCentre={() => setInAgentMode(false)} />;
-  }
-
   const handleSelectDrawerItem = (item: DrawerItem) => {
     setActiveDrawerId(item.id);
     if (item.utilityId && item.utilityId !== "account") {
@@ -97,6 +93,56 @@ export function CommandCentreShell() {
   const handleSignOut = () => {
     void signOut();
   };
+
+  useAndroidHardwareBack({
+    onBack: () => {
+      // Agent Mode mounts its own shell with its own back handler.
+      if (inAgentMode) return false;
+      if (viewingsPlanner) {
+        setViewingsPlanner(null);
+        return true;
+      }
+      if (viewingsLeadPicker) {
+        setViewingsLeadPicker(null);
+        return true;
+      }
+      if (selectedLeadId) {
+        setSelectedLeadId(null);
+        setLeadNavIds([]);
+        return true;
+      }
+      if (drawerOpen) {
+        setDrawerOpen(false);
+        return true;
+      }
+      if (activeUtility) {
+        setActiveUtility(null);
+        setActiveDrawerId("account");
+        setActiveTab("more");
+        return true;
+      }
+      if (activeTab !== "overview") {
+        setActiveTab("overview");
+        setActiveDrawerId("launchpad");
+        setActiveUtility(null);
+        return true;
+      }
+      return false;
+    },
+    isAtRoot: () =>
+      !inAgentMode &&
+      !viewingsPlanner &&
+      !viewingsLeadPicker &&
+      !selectedLeadId &&
+      !drawerOpen &&
+      !activeUtility &&
+      activeTab === "overview",
+  });
+
+  // If the owner/admin entered Agent Mode, render the AgentShell with return callback
+  if (inAgentMode) {
+    return <AgentShell onReturnToCommandCentre={() => setInAgentMode(false)} />;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
