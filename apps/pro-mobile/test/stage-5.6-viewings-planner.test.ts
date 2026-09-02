@@ -54,6 +54,14 @@ const SHORTLIST_SCREEN = join(
   REPO_ROOT,
   "apps/pro-mobile/src/screens/ShortlistScreen.tsx",
 );
+const APPOINTMENTS_TAB = join(
+  REPO_ROOT,
+  "apps/pro-mobile/src/components/AppointmentsTab.tsx",
+);
+const LEAD_DETAIL_SCREEN = join(
+  REPO_ROOT,
+  "apps/pro-mobile/src/screens/LeadDetailScreen.tsx",
+);
 const CONSUMER_SHARE_PAGE = join(
   REPO_ROOT,
   "src/app/(marketing)/route-planner/share/[token]/page.tsx",
@@ -69,7 +77,7 @@ async function runStage56Tests() {
   console.log("STAGE 5.6 — VIEWINGS PLANNER + PUBLIC SHARE BRANDING TESTS");
   console.log("=================================================================\n");
 
-  console.log("[1/8] Stage 5.6 migration columns...");
+  console.log("[1/9] Stage 5.6 migration columns...");
   {
     const sql = readFileSync(MIGRATION, "utf8");
     assert.ok(sql.includes('"leadId"'));
@@ -80,7 +88,7 @@ async function runStage56Tests() {
     console.log("  -> PASS");
   }
 
-  console.log("[2/8] resolvePublicViewingShareBrand bypasses legacy scope...");
+  console.log("[2/9] resolvePublicViewingShareBrand bypasses legacy scope...");
   {
     const resolver = readFileSync(RESOLVER, "utf8");
     assert.ok(resolver.includes("resolvePublicViewingShareBrand"));
@@ -96,7 +104,7 @@ async function runStage56Tests() {
     console.log("  -> PASS");
   }
 
-  console.log("[3/8] Mobile v2 viewings-planner API routes...");
+  console.log("[3/9] Mobile v2 viewings-planner API routes...");
   {
     const main = readFileSync(PLANNER_ROUTE, "utf8");
     const optimize = readFileSync(OPTIMIZE_ROUTE, "utf8");
@@ -112,7 +120,7 @@ async function runStage56Tests() {
     console.log("  -> PASS");
   }
 
-  console.log("[4/8] Public viewings share page uses workspace brand resolver...");
+  console.log("[4/9] Public viewings share page uses workspace brand resolver...");
   {
     const page = readFileSync(PUBLIC_SHARE_PAGE, "utf8");
     assert.ok(page.includes("resolvePublicViewingShareBrand"));
@@ -123,7 +131,7 @@ async function runStage56Tests() {
     console.log("  -> PASS");
   }
 
-  console.log("[5/8] ViewingsPlannerScreen affordances...");
+  console.log("[5/9] ViewingsPlannerScreen affordances...");
   {
     const screen = readFileSync(PLANNER_SCREEN, "utf8");
     assert.ok(screen.includes("ViewingsPlannerScreen"));
@@ -135,14 +143,25 @@ async function runStage56Tests() {
     console.log("  -> PASS");
   }
 
-  console.log("[6/8] ShortlistScreen Plan Viewings entry...");
+  console.log("[6/9] ShortlistScreen Plan Viewings entry...");
   {
     const screen = readFileSync(SHORTLIST_SCREEN, "utf8");
     assert.ok(screen.includes("Plan Viewings"));
     console.log("  -> PASS");
   }
 
-  console.log("[7/8] Consumer /route-planner/share unchanged...");
+  console.log("[7/9] AppointmentsTab Plan Viewings entry (not header row)...");
+  {
+    const tab = readFileSync(APPOINTMENTS_TAB, "utf8");
+    const leadDetail = readFileSync(LEAD_DETAIL_SCREEN, "utf8");
+    assert.ok(tab.includes("onPlanViewings"));
+    assert.ok(tab.includes("Plan Viewings"));
+    assert.ok(leadDetail.includes("onPlanViewings={onPlanViewings}"));
+    assert.equal(leadDetail.includes('label: "Viewings"'), false);
+    console.log("  -> PASS");
+  }
+
+  console.log("[8/9] Consumer /route-planner/share unchanged...");
   {
     const page = readFileSync(CONSUMER_SHARE_PAGE, "utf8");
     const api = readFileSync(CONSUMER_SHARE_API, "utf8");
@@ -157,7 +176,7 @@ async function runStage56Tests() {
     console.log("  -> PASS");
   }
 
-  console.log("[8/8] Tenant Canary vs Houzzat brand isolation...");
+  console.log("[9/9] Tenant Canary vs Houzzat brand isolation...");
   {
     const canary = workspaceBrandingRowToBrand(
       TENANT_B_TEST_WORKSPACE_ID,

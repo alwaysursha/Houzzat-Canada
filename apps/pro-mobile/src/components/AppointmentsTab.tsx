@@ -109,12 +109,16 @@ function partitionAppointments(appointments: MobileLeadAppointment[]) {
 type AppointmentsTabProps = {
   leadId: string;
   workspaceId: string | undefined;
+  leadName?: string;
+  onPlanViewings?: (leadId: string, leadName?: string) => void;
   onAppointmentCountChange?: (totalCount: number) => void;
 };
 
 export function AppointmentsTab({
   leadId,
   workspaceId,
+  leadName,
+  onPlanViewings,
   onAppointmentCountChange,
 }: AppointmentsTabProps) {
   const cacheKey = workspaceId ? `${workspaceId}:${leadId}:appointments` : "";
@@ -451,6 +455,25 @@ export function AppointmentsTab({
 
   return (
     <View style={styles.wrap}>
+      {onPlanViewings ? (
+        <View style={styles.planViewingsPanel} accessibilityLabel="Plan viewings tour">
+          <Text style={styles.planViewingsTitle}>Viewings tour</Text>
+          <Text style={styles.planViewingsHint}>
+            Plan a multi-property route with drive times
+            {leadName ? ` for ${leadName}` : ""}, then share with your client.
+          </Text>
+          <TouchableOpacity
+            style={styles.planViewingsBtn}
+            onPress={() => onPlanViewings(leadId, leadName)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Plan viewings"
+          >
+            <Text style={styles.planViewingsBtnText}>Plan Viewings</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
       {/* Schedule control — obvious create (canonical Appointment fields) */}
       <View style={styles.panel} accessibilityLabel="Schedule appointment form">
         <Text style={styles.panelTitle}>Schedule appointment</Text>
@@ -564,6 +587,36 @@ export function AppointmentsTab({
 const styles = StyleSheet.create({
   wrap: {
     gap: 12,
+  },
+  planViewingsPanel: {
+    backgroundColor: "#F0FDFA",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#99F6E4",
+    padding: 12,
+  },
+  planViewingsTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F766E",
+    marginBottom: 4,
+  },
+  planViewingsHint: {
+    fontSize: 11,
+    color: "#64748B",
+    marginBottom: 10,
+    lineHeight: 16,
+  },
+  planViewingsBtn: {
+    backgroundColor: "#0F766E",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  planViewingsBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   panel: {
     backgroundColor: "#FFFFFF",

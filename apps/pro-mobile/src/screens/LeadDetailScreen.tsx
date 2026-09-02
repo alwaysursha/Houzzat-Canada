@@ -1247,21 +1247,6 @@ export function LeadDetailScreen({
                   enabled: Boolean(email),
                   onPress: handleEmail,
                 },
-                ...(onPlanViewings
-                  ? [
-                      {
-                        label: "Viewings",
-                        bg: "#0F766E",
-                        icon: "🗓",
-                        enabled: true,
-                        onPress: () =>
-                          onPlanViewings(
-                            leadId,
-                            lead.customer?.name?.trim() || undefined,
-                          ),
-                      },
-                    ]
-                  : []),
                 {
                   label: "More",
                   bg: "#64748B",
@@ -1854,6 +1839,8 @@ export function LeadDetailScreen({
                 <AppointmentsTab
                   leadId={leadId}
                   workspaceId={workspaceId}
+                  leadName={lead.customer?.name?.trim() || undefined}
+                  onPlanViewings={onPlanViewings}
                   onAppointmentCountChange={(totalCount) => {
                     setLead((prev) => {
                       if (!prev || prev.counts.appointments === totalCount) {
@@ -2201,18 +2188,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#94A3B8",
     fontStyle: "italic",
-  },
-  planViewingsBtn: {
-    marginTop: 14,
-    backgroundColor: "#0F766E",
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  planViewingsBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#FFFFFF",
   },
   buyerSellerRow: {
     marginTop: 18,
