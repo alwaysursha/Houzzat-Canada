@@ -10,9 +10,9 @@ import {
   Linking,
   Modal,
   Platform,
-  SafeAreaView,
   ScrollView,
   Share,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -573,7 +573,7 @@ export function ViewingsPlannerScreen({
   }, [tour]);
 
   return (
-    <SafeAreaView style={styles.root}>
+    <View style={styles.root}>
       <View style={styles.topBar}>
         <TouchableOpacity onPress={onBack} activeOpacity={0.75} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Text style={styles.backText}>← Back</Text>
@@ -916,9 +916,16 @@ export function ViewingsPlannerScreen({
           Alert.alert("Shortlist", "Open property search to manage shortlist.");
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
+
+/** Match AgentShell insets — RN SafeAreaView does not pad Android status/nav bars. */
+const topBarPadding =
+  Platform.OS === "android"
+    ? Math.max(StatusBar.currentHeight || 0, 28) + 8
+    : 12;
+const footerBottomPadding = Platform.OS === "android" ? 54 : 20;
 
 const styles = StyleSheet.create({
   root: {
@@ -933,7 +940,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === "android" ? 8 : 4,
+    paddingTop: topBarPadding,
     paddingBottom: 14,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
@@ -1090,7 +1097,7 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: Platform.OS === "android" ? 16 : 12,
+    paddingBottom: footerBottomPadding,
     gap: 10,
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",

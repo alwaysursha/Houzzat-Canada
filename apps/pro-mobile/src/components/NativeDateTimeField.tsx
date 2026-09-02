@@ -94,7 +94,7 @@ export function NativeDateTimeField({
         <DateTimePickerNative
           value={draft}
           mode={mode}
-          display={mode === "date" ? "calendar" : "default"}
+          display="default"
           onChange={onPickerChange}
         />
       ) : null}
