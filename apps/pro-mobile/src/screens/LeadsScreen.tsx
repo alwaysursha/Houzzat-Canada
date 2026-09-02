@@ -20,9 +20,10 @@
  * - Real V2 backend data, server-side pagination, search, caching, pull-to-refresh
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Platform,
   RefreshControl,
   ScrollView,
@@ -37,6 +38,30 @@ import { leadCacheStore, setLeadCacheStore } from "../lib/lead-list-cache";
 import { useAuth } from "../state/AuthContext";
 import type { BackendEnvelope, LeadsResponseData, MobileLeadSummary, LeadStatus } from "../types/api";
 import { LeadDetailScreen } from "./LeadDetailScreen";
+
+type LeadViewFilter = "all" | "mine" | "pond";
+type LeadSortKey =
+  | "lastLogin"
+  | "updated"
+  | "created"
+  | "score"
+  | "name"
+  | "status";
+
+const VIEW_FILTERS: Array<{ id: LeadViewFilter; label: string }> = [
+  { id: "all", label: "All leads" },
+  { id: "mine", label: "Mine" },
+  { id: "pond", label: "Pond" },
+];
+
+const SORT_OPTIONS: Array<{ id: LeadSortKey; label: string }> = [
+  { id: "lastLogin", label: "Last Login" },
+  { id: "updated", label: "Recently Updated" },
+  { id: "created", label: "Newest" },
+  { id: "score", label: "Score" },
+  { id: "name", label: "Name" },
+  { id: "status", label: "Status" },
+];
 
 /**
  * Lead row tap opens Lead Detail.
@@ -99,9 +124,11 @@ function formatSource(source: string): string {
   }
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "Never";
   try {
     const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) return "—";
     const now = new Date();
     const diffMs = now.getTime() - d.getTime();
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -119,7 +146,7 @@ function formatDate(iso: string): string {
     }
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   } catch {
-    return "";
+    return "—";
   }
 }
 
@@ -174,6 +201,10 @@ export function LeadsScreen({
     return "ALL";
   });
 
+  const [viewFilter, setViewFilter] = useState<LeadViewFilter>("all");
+  const [sortKey, setSortKey] = useState<LeadSortKey>("lastLogin");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -202,14 +233,19 @@ export function LeadsScreen({
       setError(null);
 
       try {
-        const queryParts: string[] = [];
+        const queryParts: string[] = [
+          "limit=50",
+          "page=1",
+          `sort=${encodeURIComponent(sortKey)}`,
+          "dir=desc",
+          `view=${encodeURIComponent(viewFilter)}`,
+        ];
         if (selectedStatus !== "ALL") {
           queryParts.push(`status=${encodeURIComponent(selectedStatus)}`);
         }
         if (debouncedSearch.length > 0) {
           queryParts.push(`q=${encodeURIComponent(debouncedSearch)}`);
         }
-        queryParts.push("limit=50");
 
         const endpoint = `/leads?${queryParts.join("&")}`;
 
@@ -229,7 +265,15 @@ export function LeadsScreen({
         setLeads(fetchedLeads);
         setTotalCount(count);
 
-        if (workspaceId && selectedStatus === "ALL" && debouncedSearch === "") {
+        // Only cache the default dashboard query so stale sorted/filtered lists
+        // are not shown as the default Last Login view on cold start.
+        if (
+          workspaceId &&
+          selectedStatus === "ALL" &&
+          debouncedSearch === "" &&
+          viewFilter === "all" &&
+          sortKey === "lastLogin"
+        ) {
           setLeadCacheStore({
             workspaceId,
             leads: fetchedLeads,
@@ -245,7 +289,7 @@ export function LeadsScreen({
         setIsRefreshing(false);
       }
     },
-    [workspaceId, selectedStatus, debouncedSearch],
+    [workspaceId, selectedStatus, debouncedSearch, viewFilter, sortKey],
   );
 
   useEffect(() => {
@@ -277,13 +321,27 @@ export function LeadsScreen({
   // Parent-controlled: list stays mounted under shell overlay (preserves scroll/filter).
   const showInlineDetail = !onSelectLead && Boolean(activeLeadId);
 
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    if (viewFilter !== "all") n += 1;
+    if (sortKey !== "lastLogin") n += 1;
+    return n;
+  }, [viewFilter, sortKey]);
+
+  const sortLabel =
+    SORT_OPTIONS.find((o) => o.id === sortKey)?.label ?? "Last Login";
+  const viewLabel =
+    VIEW_FILTERS.find((o) => o.id === viewFilter)?.label ?? "All leads";
+
   const renderLeadCard = ({ item }: { item: MobileLeadSummary }) => {
     const statusStyle = getStatusStyle(item.status);
     const customerName = item.customer?.name?.trim() || "Inquiry (No Name)";
     const contactEmail = item.customer?.email;
     const contactPhone = item.customer?.phone;
     const isBuyer = item.intent === "BUYER";
-    const dateText = formatDate(item.updatedAt || item.createdAt);
+    const lastLoginText = item.isOnline
+      ? "Online"
+      : formatDate(item.lastSeenAt);
 
     return (
       <TouchableOpacity
@@ -336,7 +394,14 @@ export function LeadsScreen({
             </View>
           </View>
 
-          <Text style={styles.dateText}>{dateText}</Text>
+          {item.isOnline ? (
+            <View style={styles.onlinePill}>
+              <View style={styles.onlineDot} />
+              <Text style={styles.onlineText}>Online</Text>
+            </View>
+          ) : (
+            <Text style={styles.dateText}>Login {lastLoginText}</Text>
+          )}
         </View>
 
         {/* Contact info row */}
@@ -414,39 +479,139 @@ export function LeadsScreen({
         </View>
       </View>
 
-      {/* Status Filter Chips */}
+      {/* Status Filter Chips + Filters button */}
       <View style={styles.filterScrollContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
-        >
-          {STATUS_FILTERS.map((f) => {
-            const isSelected = selectedStatus === f.key;
-            return (
-              <TouchableOpacity
-                key={f.key}
-                style={[
-                  styles.filterChip,
-                  isSelected && styles.filterChipActive,
-                  f.key === "NEW_LEAD" && isSelected && styles.filterChipRedActive,
-                ]}
-                onPress={() => setSelectedStatus(f.key)}
-                activeOpacity={0.7}
-              >
-                <Text
+        <View style={styles.filterBar}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
+            style={styles.filterChipsScroll}
+          >
+            {STATUS_FILTERS.map((f) => {
+              const isSelected = selectedStatus === f.key;
+              return (
+                <TouchableOpacity
+                  key={f.key}
                   style={[
-                    styles.filterChipText,
-                    isSelected && styles.filterChipTextActive,
+                    styles.filterChip,
+                    isSelected && styles.filterChipActive,
+                    f.key === "NEW_LEAD" && isSelected && styles.filterChipRedActive,
                   ]}
+                  onPress={() => setSelectedStatus(f.key)}
+                  activeOpacity={0.7}
                 >
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      isSelected && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          <TouchableOpacity
+            style={[
+              styles.filtersBtn,
+              activeFilterCount > 0 && styles.filtersBtnActive,
+            ]}
+            onPress={() => setFiltersOpen(true)}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.filtersBtnText,
+                activeFilterCount > 0 && styles.filtersBtnTextActive,
+              ]}
+            >
+              Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.sortSummaryRow}>
+          <Text style={styles.sortSummaryText}>
+            {viewLabel} · Sorted by {sortLabel}
+          </Text>
+        </View>
       </View>
+
+      <Modal
+        visible={filtersOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setFiltersOpen(false)}
+      >
+        <View style={styles.modalRoot}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setFiltersOpen(false)}
+          />
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Filters</Text>
+
+            <Text style={styles.modalSectionLabel}>View</Text>
+            <View style={styles.modalOptions}>
+              {VIEW_FILTERS.map((opt) => {
+                const active = viewFilter === opt.id;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[styles.modalOption, active && styles.modalOptionActive]}
+                    onPress={() => setViewFilter(opt.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        active && styles.modalOptionTextActive,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.modalSectionLabel}>Sort by</Text>
+            <View style={styles.modalOptions}>
+              {SORT_OPTIONS.map((opt) => {
+                const active = sortKey === opt.id;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[styles.modalOption, active && styles.modalOptionActive]}
+                    onPress={() => setSortKey(opt.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        active && styles.modalOptionTextActive,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalDone}
+              onPress={() => setFiltersOpen(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Body Area */}
       <View style={styles.listContainer}>
@@ -480,18 +645,22 @@ export function LeadsScreen({
                   <Text style={styles.clearFilterBtnText}>Clear Search</Text>
                 </TouchableOpacity>
               </>
-            ) : selectedStatus !== "ALL" ? (
+            ) : selectedStatus !== "ALL" || viewFilter !== "all" ? (
               <>
                 <Text style={styles.emptyIcon}>📋</Text>
-                <Text style={styles.emptyTitle}>No leads in this stage</Text>
+                <Text style={styles.emptyTitle}>No leads match filters</Text>
                 <Text style={styles.emptySubtitle}>
-                  There are currently no leads with status "{selectedStatus}".
+                  Try another status, view, or clear filters.
                 </Text>
                 <TouchableOpacity
                   style={styles.clearFilterBtn}
-                  onPress={() => setSelectedStatus("ALL")}
+                  onPress={() => {
+                    setSelectedStatus("ALL");
+                    setViewFilter("all");
+                    setSortKey("lastLogin");
+                  }}
                 >
-                  <Text style={styles.clearFilterBtnText}>View All Leads</Text>
+                  <Text style={styles.clearFilterBtnText}>Reset Filters</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -589,10 +758,145 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
   },
+  filterBar: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  filterChipsScroll: {
+    flex: 1,
+  },
   filterRow: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     gap: 8,
+  },
+  filtersBtn: {
+    marginRight: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8DEE6",
+  },
+  filtersBtnActive: {
+    backgroundColor: "#0F6B4C",
+    borderColor: "#0F6B4C",
+  },
+  filtersBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0F6B4C",
+  },
+  filtersBtnTextActive: {
+    color: "#FFFFFF",
+  },
+  sortSummaryRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  sortSummaryText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  modalRoot: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+  },
+  modalSheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === "android" ? 28 : 36,
+    paddingTop: 10,
+  },
+  modalHandle: {
+    alignSelf: "center",
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#CBD5E1",
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#1E2A38",
+    marginBottom: 16,
+  },
+  modalSectionLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  modalOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+  },
+  modalOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  modalOptionActive: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#0F6B4C",
+  },
+  modalOptionText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  modalOptionTextActive: {
+    color: "#0F6B4C",
+    fontWeight: "700",
+  },
+  modalDone: {
+    marginTop: 4,
+    backgroundColor: "#0F6B4C",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  modalDoneText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  onlinePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#16A34A",
+  },
+  onlineText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#15803D",
   },
   filterChip: {
     paddingHorizontal: 12,

@@ -59,6 +59,9 @@ export interface MobileLeadSummary {
   createdAt: string;
   updatedAt: string;
   statusChangedAt: string;
+  /** Most recent consumer site presence / activity (hotness lastSeen). */
+  lastSeenAt?: string | null;
+  isOnline?: boolean;
   customer: MobileLeadCustomer | null;
   assignedAgent: MobileLeadAssignedAgent | null;
 }

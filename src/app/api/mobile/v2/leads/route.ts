@@ -11,17 +11,47 @@
  * - AGENT role: Can access leads assigned to them (assignedAgentId == userId)
  *   and unassigned leads in the workspace pond (assignedAgentId == null).
  * - OWNER / ADMIN role: Can access all leads in the workspace.
- * - Supports server-side pagination (limit, page), status filtering, and search.
+ * - Supports server-side pagination (limit, page), status filtering, search,
+ *   view (all|mine|pond), and sort (default: lastLogin desc — web CRM parity).
  */
 
 import { NextResponse } from "next/server";
 import { LeadStatus } from "@prisma/client";
+import { computeHotnessMap } from "@/lib/agent/hotness";
 import { prisma } from "@/lib/prisma";
 import { authenticateMobileRequest } from "@/lib/mobile/v2/auth-guard";
 
 export const runtime = "nodejs";
 
 const VALID_LEAD_STATUSES = new Set<string>(Object.values(LeadStatus));
+
+const SORT_KEYS = [
+  "lastLogin",
+  "updated",
+  "created",
+  "score",
+  "name",
+  "status",
+] as const;
+type LeadSortKey = (typeof SORT_KEYS)[number];
+
+const PIPELINE_STATUS_ORDER: Record<string, number> = {
+  NEW_LEAD: 0,
+  ATTEMPTED_CONTACT: 1,
+  CONTACTED: 2,
+  APPT_SET: 3,
+  APPT_MET: 4,
+  ACTIVE_CLIENT: 5,
+  PENDING_CLIENT: 6,
+  PAST_CLIENT: 7,
+};
+
+function parseSort(raw: string | null): LeadSortKey {
+  const v = (raw || "lastLogin").trim();
+  return (SORT_KEYS as readonly string[]).includes(v)
+    ? (v as LeadSortKey)
+    : "lastLogin";
+}
 
 export async function GET(request: Request) {
   try {
@@ -46,7 +76,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // Validate server-authoritative ACTIVE membership and workspace status
     const membership = await prisma.workspaceMember.findUnique({
       where: {
         workspaceId_userId: {
@@ -83,39 +112,44 @@ export async function GET(request: Request) {
     const role = membership.role;
     const url = new URL(request.url);
 
-    // 1. Pagination parameters
     const limitParam = parseInt(url.searchParams.get("limit") || "25", 10);
-    const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 100) : 25;
+    const limit =
+      Number.isFinite(limitParam) && limitParam > 0
+        ? Math.min(limitParam, 100)
+        : 25;
     const pageParam = parseInt(url.searchParams.get("page") || "1", 10);
     const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
     const skip = (page - 1) * limit;
 
-    // 2. View filter (all | mine | pond)
     const viewParam = url.searchParams.get("view")?.trim().toLowerCase();
+    const sortKey = parseSort(url.searchParams.get("sort"));
+    const sortDir =
+      url.searchParams.get("dir")?.trim().toLowerCase() === "asc"
+        ? "asc"
+        : "desc";
 
-    // 3. Status filter
     const statusParam = url.searchParams.get("status")?.trim().toUpperCase();
     const statusFilter: LeadStatus | null =
       statusParam && VALID_LEAD_STATUSES.has(statusParam)
         ? (statusParam as LeadStatus)
         : null;
 
-    // 4. Search query (searches customer name, email, phone)
-    const searchQuery = (url.searchParams.get("search") || url.searchParams.get("q") || "").trim();
+    const searchQuery = (
+      url.searchParams.get("search") ||
+      url.searchParams.get("q") ||
+      ""
+    ).trim();
 
-    // Construct tenant & role-scoped WHERE clause
-    const whereConditions: any = {
+    const whereConditions: Record<string, unknown> = {
       workspaceId,
     };
 
-    // Role visibility rules
     if (role === "AGENT") {
       if (viewParam === "pond") {
         whereConditions.assignedAgentId = null;
       } else if (viewParam === "mine") {
         whereConditions.assignedAgentId = userId;
       } else {
-        // Default agent view: Assigned to agent OR unassigned pond leads
         whereConditions.OR = [
           { assignedAgentId: userId },
           { assignedAgentId: null },
@@ -127,7 +161,6 @@ export async function GET(request: Request) {
       } else if (viewParam === "pond") {
         whereConditions.assignedAgentId = null;
       }
-      // Otherwise OWNER/ADMIN sees all workspace leads
     } else {
       return NextResponse.json(
         {
@@ -139,12 +172,10 @@ export async function GET(request: Request) {
       );
     }
 
-    // Status condition
     if (statusFilter) {
       whereConditions.status = statusFilter;
     }
 
-    // Search condition
     if (searchQuery.length > 0) {
       const searchOr = [
         { customer: { name: { contains: searchQuery, mode: "insensitive" } } },
@@ -153,7 +184,6 @@ export async function GET(request: Request) {
       ];
 
       if (whereConditions.OR) {
-        // Combine role OR and search OR with AND
         whereConditions.AND = [
           { OR: whereConditions.OR },
           { OR: searchOr },
@@ -164,25 +194,47 @@ export async function GET(request: Request) {
       }
     }
 
-    // Execute query with summary projection & count
+    // lastLogin / name / status need post-fetch sort → load a capped cohort first.
+    const needsMemorySort =
+      sortKey === "lastLogin" || sortKey === "name" || sortKey === "status";
+    const cohortTake = needsMemorySort ? 500 : limit;
+    const cohortSkip = needsMemorySort ? 0 : skip;
+
+    const dbOrderBy =
+      sortKey === "created"
+        ? [{ createdAt: sortDir as "asc" | "desc" }]
+        : sortKey === "score"
+          ? [
+              { score: sortDir as "asc" | "desc" },
+              { updatedAt: "desc" as const },
+            ]
+          : sortKey === "updated"
+            ? [
+                { updatedAt: sortDir as "asc" | "desc" },
+                { createdAt: "desc" as const },
+              ]
+            : [
+                { updatedAt: "desc" as const },
+                { createdAt: "desc" as const },
+              ];
+
     const [leads, totalCount] = await Promise.all([
       prisma.lead.findMany({
         where: whereConditions,
-        orderBy: [
-          { updatedAt: "desc" },
-          { createdAt: "desc" },
-        ],
-        skip,
-        take: limit,
+        orderBy: dbOrderBy,
+        skip: cohortSkip,
+        take: cohortTake,
         select: {
           id: true,
           status: true,
           source: true,
           intent: true,
           score: true,
+          customerId: true,
           createdAt: true,
           updatedAt: true,
           statusChangedAt: true,
+          firstRespondedAt: true,
           customer: {
             select: {
               id: true,
@@ -203,31 +255,101 @@ export async function GET(request: Request) {
       prisma.lead.count({ where: whereConditions }),
     ]);
 
-    const formattedLeads = leads.map((lead) => ({
-      id: lead.id,
-      status: lead.status,
-      source: lead.source,
-      intent: lead.intent,
-      score: lead.score,
-      createdAt: lead.createdAt.toISOString(),
-      updatedAt: lead.updatedAt.toISOString(),
-      statusChangedAt: lead.statusChangedAt.toISOString(),
-      customer: lead.customer
-        ? {
-            id: lead.customer.id,
-            name: lead.customer.name,
-            email: lead.customer.email,
-            phone: lead.customer.phone,
-          }
-        : null,
-      assignedAgent: lead.assignedAgent
-        ? {
-            id: lead.assignedAgent.id,
-            name: lead.assignedAgent.name,
-            email: lead.assignedAgent.email,
-          }
-        : null,
-    }));
+    const hotMap = await computeHotnessMap(
+      leads.map((l) => ({
+        id: l.id,
+        customerId: l.customerId,
+        status: l.status,
+        score: l.score,
+        createdAt: l.createdAt,
+        firstRespondedAt: l.firstRespondedAt,
+      })),
+    );
+
+    type Row = {
+      id: string;
+      status: string;
+      source: string;
+      intent: string;
+      score: number;
+      createdAt: string;
+      updatedAt: string;
+      statusChangedAt: string;
+      lastSeenAt: string | null;
+      isOnline: boolean;
+      customer: {
+        id: string;
+        name: string | null;
+        email: string | null;
+        phone: string | null;
+      } | null;
+      assignedAgent: {
+        id: string;
+        name: string | null;
+        email: string | null;
+      } | null;
+      _sortName: string;
+    };
+
+    let rows: Row[] = leads.map((lead) => {
+      const hot = hotMap.get(lead.id);
+      return {
+        id: lead.id,
+        status: lead.status,
+        source: lead.source,
+        intent: lead.intent,
+        score: lead.score,
+        createdAt: lead.createdAt.toISOString(),
+        updatedAt: lead.updatedAt.toISOString(),
+        statusChangedAt: lead.statusChangedAt.toISOString(),
+        lastSeenAt: hot?.lastSeenAt?.toISOString() ?? null,
+        isOnline: Boolean(hot?.isOnline),
+        customer: lead.customer
+          ? {
+              id: lead.customer.id,
+              name: lead.customer.name,
+              email: lead.customer.email,
+              phone: lead.customer.phone,
+            }
+          : null,
+        assignedAgent: lead.assignedAgent
+          ? {
+              id: lead.assignedAgent.id,
+              name: lead.assignedAgent.name,
+              email: lead.assignedAgent.email,
+            }
+          : null,
+        _sortName: (
+          lead.customer?.name ||
+          lead.customer?.email ||
+          lead.source
+        ).toLowerCase(),
+      };
+    });
+
+    if (needsMemorySort) {
+      rows.sort((a, b) => {
+        let cmp = 0;
+        if (sortKey === "lastLogin") {
+          const at = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
+          const bt = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
+          cmp = at - bt;
+        } else if (sortKey === "name") {
+          cmp = a._sortName.localeCompare(b._sortName);
+        } else if (sortKey === "status") {
+          cmp =
+            (PIPELINE_STATUS_ORDER[a.status] ?? 99) -
+            (PIPELINE_STATUS_ORDER[b.status] ?? 99);
+        }
+        if (cmp !== 0) return sortDir === "asc" ? cmp : -cmp;
+        return (
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        );
+      });
+      rows = rows.slice(skip, skip + limit);
+    }
+
+    const formattedLeads = rows.map(({ _sortName: _omit, ...lead }) => lead);
 
     return NextResponse.json({
       ok: true,
@@ -237,8 +359,9 @@ export async function GET(request: Request) {
           page,
           limit,
           totalCount,
-          hasMore: skip + leads.length < totalCount,
+          hasMore: skip + formattedLeads.length < totalCount,
         },
+        sort: { key: sortKey, dir: sortDir },
       },
     });
   } catch (err: unknown) {
