@@ -323,7 +323,14 @@ const ACTIVITY_QUICK_CATEGORIES: Array<{
     label: "Views",
     match: (t) => {
       const u = t.toUpperCase();
-      return u === "LISTING_VIEW" || u === "PROPERTY_ALERT_VIEW" || u.includes("VIEW");
+      // Exact listing/property views only — do not match viewing_plan_*.
+      return (
+        u === "LISTING_VIEW" ||
+        u === "PROPERTY_ALERT_VIEW" ||
+        u === "PROPERTY_VIEW" ||
+        u.endsWith("_VIEW") ||
+        (u.includes("VIEW") && !u.includes("VIEWING"))
+      );
     },
   },
   {
@@ -361,11 +368,16 @@ const ACTIVITY_QUICK_CATEGORIES: Array<{
         u === "APPOINTMENT" ||
         u === "TODO" ||
         u === "REMINDER_SET" ||
-        u.includes("STATUS")
+        u.includes("STATUS") ||
+        u.includes("VIEWING_PLAN") ||
+        u.includes("VIEWING_APPOINTMENT")
       );
     },
   },
 ];
+
+/** Keep optimistic Activity inserts aligned with lead-detail API take. */
+const ACTIVITY_TIMELINE_LIMIT = 100;
 
 /** Mirrors src/components/agent/CrmTimeline categoryMeta for native chips/icons. */
 function activityCategoryMeta(type: string): {
@@ -763,7 +775,7 @@ export function LeadDetailScreen({
         const rest = merged.filter((a) => !a.pinned);
         const next: MobileLeadDetail = {
           ...prev,
-          recentActivities: [...pinnedItems, ...rest].slice(0, 10),
+          recentActivities: [...pinnedItems, ...rest].slice(0, ACTIVITY_TIMELINE_LIMIT),
           counts: {
             ...prev.counts,
             notes: prev.counts.notes + 1,
@@ -858,7 +870,10 @@ export function LeadDetailScreen({
             serverLead?.firstRespondedAt !== undefined
               ? serverLead.firstRespondedAt
               : prev.firstRespondedAt,
-          recentActivities: [activityItem, ...(prev.recentActivities || [])].slice(0, 10),
+          recentActivities: [activityItem, ...(prev.recentActivities || [])].slice(
+            0,
+            ACTIVITY_TIMELINE_LIMIT,
+          ),
         };
         if (cacheKey) patchLeadDetailCache(cacheKey, patched);
         return patched;

@@ -140,7 +140,8 @@ export async function GET(
           },
         },
         activities: {
-          take: 10,
+          // Match web CRM timeline depth (loadCustomerTimeline take ~100).
+          take: 100,
           orderBy: { createdAt: "desc" },
           select: {
             id: true,
