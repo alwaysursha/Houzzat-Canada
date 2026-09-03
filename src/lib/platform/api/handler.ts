@@ -5,6 +5,7 @@ import {
   type PlatformOperatorContext,
 } from "@/lib/platform/auth/require-platform-operator";
 import { platformError } from "@/lib/platform/api/response";
+import { PlatformProspectActionError } from "@/lib/platform/prospects/manage";
 import { WorkspaceStatusActionError } from "@/lib/platform/workspaces/status";
 
 export class PlatformApiError extends Error {
@@ -29,7 +30,8 @@ export async function withPlatformOperator<T>(
     if (
       error instanceof PlatformOperatorAuthError ||
       error instanceof PlatformApiError ||
-      error instanceof WorkspaceStatusActionError
+      error instanceof WorkspaceStatusActionError ||
+      error instanceof PlatformProspectActionError
     ) {
       throw error;
     }
@@ -50,6 +52,9 @@ export function toPlatformHttpError(error: unknown) {
     return platformError(error.status, error.code, error.message);
   }
   if (error instanceof WorkspaceStatusActionError) {
+    return platformError(error.status, error.code, error.message);
+  }
+  if (error instanceof PlatformProspectActionError) {
     return platformError(error.status, error.code, error.message);
   }
   if (error instanceof Prisma.PrismaClientKnownRequestError) {

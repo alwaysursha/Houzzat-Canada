@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PlatformDetailGrid } from "@/components/platform/PlatformDetailGrid";
+import { PlatformProspectActions } from "@/components/platform/PlatformProspectActions";
 import {
   PlatformBadge,
   PlatformErrorState,
@@ -28,6 +29,32 @@ function asArray(value: unknown): JsonRecord[] {
 function str(value: unknown): string {
   if (value == null || value === "") return "—";
   return String(value);
+}
+
+function rawStr(value: unknown): string {
+  if (value == null) return "";
+  return String(value);
+}
+
+function activityTitle(type: string): string {
+  switch (type) {
+    case "NOTE":
+      return "Internal note";
+    case "STATUS_CHANGE":
+      return "Status change";
+    case "DEMO_SCHEDULED":
+      return "Demo scheduled";
+    case "DEMO_COMPLETED":
+      return "Demo completed";
+    case "DEMO_NO_SHOW":
+      return "Demo no-show";
+    case "DEMO_CANCELLED":
+      return "Demo cancelled";
+    case "OFFER_LINKED":
+      return "Offer linked";
+    default:
+      return titleCaseStatus(type);
+  }
 }
 
 export default async function PlatformProspectDetailPage({ params }: PageProps) {
@@ -59,15 +86,34 @@ export default async function PlatformProspectDetailPage({ params }: PageProps) 
   if (!prospect) notFound();
 
   const owner = prospect.ownerOperator as JsonRecord | null;
+  const title =
+    rawStr(prospect.businessName) ||
+    rawStr(prospect.contactName) ||
+    "Platform prospect";
 
   return (
     <>
       <PlatformPageHeader
-        title={str(prospect.businessName)}
+        title={title}
         description="Platform sales prospect — distinct from tenant CRM leads."
       />
 
       <div className="space-y-6">
+        <PlatformProspectActions
+          prospectId={rawStr(prospect.id)}
+          contactName={rawStr(prospect.contactName)}
+          email={rawStr(prospect.email)}
+          businessName={rawStr(prospect.businessName)}
+          phone={rawStr(prospect.phone)}
+          brokerageName={rawStr(prospect.brokerageName)}
+          estimatedTeamSize={rawStr(prospect.estimatedTeamSize)}
+          region={rawStr(prospect.region)}
+          website={rawStr(prospect.website)}
+          source={rawStr(prospect.source)}
+          status={rawStr(prospect.status)}
+          notesInternal={rawStr(prospect.notesInternal)}
+        />
+
         <PlatformPanel title="Prospect information">
           <PlatformDetailGrid
             items={[
@@ -108,7 +154,7 @@ export default async function PlatformProspectDetailPage({ params }: PageProps) 
           </p>
         </PlatformPanel>
 
-        <PlatformPanel title="Activities">
+        <PlatformPanel title="Activity timeline">
           {asArray(prospect.activities).length === 0 ? (
             <p className="text-sm text-slate-400">No activities recorded.</p>
           ) : (
@@ -119,12 +165,28 @@ export default async function PlatformProspectDetailPage({ params }: PageProps) 
                   className="rounded-lg border border-slate-800 bg-slate-900/40 p-3"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <PlatformBadge tone="neutral">{str(activity.type)}</PlatformBadge>
+                    <PlatformBadge tone="neutral">
+                      {activityTitle(str(activity.type))}
+                    </PlatformBadge>
                     <span className="text-xs text-slate-500">
                       {formatPlatformDate(str(activity.createdAt))}
                     </span>
                   </div>
-                  <p className="mt-2 text-slate-300">{str(activity.body)}</p>
+                  {activity.scheduledAt ? (
+                    <p className="mt-2 text-xs text-slate-400">
+                      Scheduled: {formatPlatformDate(str(activity.scheduledAt))}
+                    </p>
+                  ) : null}
+                  {activity.completedAt ? (
+                    <p className="mt-1 text-xs text-slate-400">
+                      Completed: {formatPlatformDate(str(activity.completedAt))}
+                    </p>
+                  ) : null}
+                  {activity.body ? (
+                    <p className="mt-2 whitespace-pre-wrap text-slate-300">
+                      {str(activity.body)}
+                    </p>
+                  ) : null}
                 </li>
               ))}
             </ul>

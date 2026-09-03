@@ -131,7 +131,42 @@ export {
   type WorkspaceStatusActionResult,
 } from "./workspaces";
 
-export { normalizeProspectEmail } from "./prospects/normalize-email";
+export {
+  normalizeProspectEmail,
+  PlatformProspectActionError,
+  createOrReopenPlatformProspect,
+  updatePlatformProspect,
+  changePlatformProspectStatus,
+  schedulePlatformProspectDemo,
+  completePlatformProspectDemo,
+  markPlatformProspectDemoNoShow,
+  cancelPlatformProspectDemo,
+  applyPlatformProspectDemoAction,
+  addPlatformProspectInternalNote,
+  validateContactName,
+  validateProspectEmail,
+  validateProspectSource,
+  validateProspectStatus,
+  validateEstimatedTeamSize,
+  validateWebsite,
+  validateNotesInternal,
+  validateNoteBody,
+  validateScheduledAt,
+  validateDemoAction,
+  PROSPECT_STATUSES,
+  PROSPECT_SOURCES,
+  PROSPECT_DEMO_ACTIONS,
+  PROSPECT_CONTACT_NAME_MIN,
+  PROSPECT_CONTACT_NAME_MAX,
+  PROSPECT_NOTE_BODY_MIN,
+  PROSPECT_NOTE_BODY_MAX,
+  PROSPECT_NOTES_INTERNAL_MAX,
+  type CreateOrReopenProspectResult,
+  type ProspectMutationResult,
+  type ProspectStatusValue,
+  type ProspectSourceValue,
+  type ProspectDemoActionValue,
+} from "./prospects";
 
 export { platformOk, platformError } from "./api/response";
 export {

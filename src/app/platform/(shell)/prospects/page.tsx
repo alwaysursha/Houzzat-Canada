@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PlatformProspectCreateForm } from "@/components/platform/PlatformProspectCreateForm";
 import {
   PlatformBadge,
   PlatformEmptyState,
@@ -49,6 +50,8 @@ export default async function PlatformProspectsPage({ searchParams }: PageProps)
         title="Platform prospects"
         description="Sales pipeline prospects for HouzzatPRO — not tenant CRM leads."
       />
+
+      <PlatformProspectCreateForm />
 
       {errorMessage ? (
         <PlatformErrorState title="Prospects unavailable" message={errorMessage} />

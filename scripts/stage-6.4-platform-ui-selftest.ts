@@ -97,12 +97,10 @@ console.log("\n=== STAGE 6.4 — PLATFORM READ-ONLY UI ===\n");
   console.log("[4] CRM/tenant lead imports absent from platform UI... PASS");
 }
 
-// 5. No write action controls in UI
+// 5. No offer/secret controls in UI (prospect writes arrive in Stage 6.6A)
 {
   const writePatterns = [
-    /\bRetry\b/,
     /Create offer/i,
-    /Edit prospect/i,
     /tokenHash/,
     /sk_live_/,
     /sk_test_/,
@@ -116,7 +114,7 @@ console.log("\n=== STAGE 6.4 — PLATFORM READ-ONLY UI ===\n");
       assert.ok(!re.test(src), `${file} contains forbidden write/secret pattern ${re}`);
     }
   }
-  console.log("[5] No write controls or secret fields in UI... PASS");
+  console.log("[5] No offer/secret fields in UI... PASS");
 }
 
 // 6. Shell navigation excludes CRM
