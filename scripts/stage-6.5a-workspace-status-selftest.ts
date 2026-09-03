@@ -433,7 +433,20 @@ async function main() {
     console.log("[12] Selftest avoids Houzzat production slug... PASS");
   }
 
-  // 13. Existing SUSPENDED tenant runtime enforcement (fixture)
+  // 13. Platform API handler passes through typed action errors
+  {
+    const handlerSrc = read("src/lib/platform/api/handler.ts");
+    assert.ok(handlerSrc.includes("instanceof WorkspaceStatusActionError"));
+    assert.ok(handlerSrc.includes("instanceof PlatformApiError"));
+    const suspendRoute = read(
+      "src/app/api/platform/v1/workspaces/[workspaceId]/suspend/route.ts",
+    );
+    assert.ok(suspendRoute.includes("readPlatformJsonBody"));
+    assert.ok(!suspendRoute.includes("getPlatformWorkspaceDetail"));
+    console.log("[13] Platform handler and suspend route error handling... PASS");
+  }
+
+  // 14. Existing SUSPENDED tenant runtime enforcement (fixture)
   {
     const suspended = await resolveStrictTenantWorkspace("suspended-tenant.houzzatpro.com", {
       lookupActiveDomain: async () => ({
@@ -450,7 +463,7 @@ async function main() {
     if (!suspended.ok) {
       assert.equal(suspended.reason, "workspace_inactive");
     }
-    console.log("[13] SUSPENDED blocks tenant strict host resolution... PASS");
+    console.log("[14] SUSPENDED blocks tenant strict host resolution... PASS");
   }
 
   console.log("\nSTAGE 6.5A — ALL TESTS PASSED\n");

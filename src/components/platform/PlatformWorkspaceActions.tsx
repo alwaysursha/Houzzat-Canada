@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { WORKSPACE_SUSPEND_REASON_MIN } from "@/lib/platform/workspaces/status";
 
 type StatusEvent = {
   toStatus: string;
@@ -48,6 +49,7 @@ export function PlatformWorkspaceActions({
   const canSuspend =
     normalizedStatus === "ACTIVE" || normalizedStatus === "TRIAL";
   const canReactivate = normalizedStatus === "SUSPENDED" && !billingControlled;
+  const suspendReasonValid = reason.trim().length >= WORKSPACE_SUSPEND_REASON_MIN;
 
   async function submitAction(action: Exclude<PendingAction, null>) {
     setSubmitting(true);
@@ -187,10 +189,18 @@ export function PlatformWorkspaceActions({
                 }
               />
             </label>
+            {pendingAction === "suspend" && reason.trim().length > 0 && !suspendReasonValid ? (
+              <p className="mt-2 text-xs text-amber-200/90">
+                Reason must be at least {WORKSPACE_SUSPEND_REASON_MIN} characters.
+              </p>
+            ) : null}
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
-                disabled={submitting}
+                disabled={
+                  submitting ||
+                  (pendingAction === "suspend" && !suspendReasonValid)
+                }
                 onClick={() => submitAction(pendingAction)}
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-60"
               >

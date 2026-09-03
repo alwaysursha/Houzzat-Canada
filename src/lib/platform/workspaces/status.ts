@@ -168,46 +168,61 @@ export async function suspendWorkspace(input: {
     data: { status: "SUSPENDED" },
   });
 
-  const statusEvent = await db.workspaceStatusEvent.create({
-    data: {
+  try {
+    const statusEvent = await db.workspaceStatusEvent.create({
+      data: {
+        workspaceId: workspace.id,
+        fromStatus,
+        toStatus: "SUSPENDED",
+        reasonCode: "MANUAL",
+        reasonDetail: reason,
+        actorType: "PLATFORM_OPERATOR",
+        actorOperatorId: input.operatorId,
+      },
+      select: { id: true },
+    });
+
+    const auditEvent = await writePlatformAuditEvent(
+      {
+        actorOperatorId: input.operatorId,
+        actorType: "OPERATOR",
+        action: "WORKSPACE_SUSPENDED",
+        entityType: "Workspace",
+        entityId: workspace.id,
+        summary: `Workspace ${workspace.slug} suspended (${fromStatus} → SUSPENDED)`,
+        metadata: {
+          workspaceId: workspace.id,
+          operatorId: input.operatorId,
+          fromStatus,
+          toStatus: "SUSPENDED",
+          reasonSummary: reason.slice(0, 200),
+        },
+      },
+      db,
+    );
+
+    return {
+      outcome: "changed",
       workspaceId: workspace.id,
       fromStatus,
       toStatus: "SUSPENDED",
-      reasonCode: "MANUAL",
-      reasonDetail: reason,
-      actorType: "PLATFORM_OPERATOR",
-      actorOperatorId: input.operatorId,
-    },
-    select: { id: true },
-  });
-
-  const auditEvent = await writePlatformAuditEvent(
-    {
-      actorOperatorId: input.operatorId,
-      actorType: "OPERATOR",
-      action: "WORKSPACE_SUSPENDED",
-      entityType: "Workspace",
-      entityId: workspace.id,
-      summary: `Workspace ${workspace.slug} suspended (${fromStatus} → SUSPENDED)`,
-      metadata: {
-        workspaceId: workspace.id,
-        operatorId: input.operatorId,
-        fromStatus,
-        toStatus: "SUSPENDED",
-        reasonSummary: reason.slice(0, 200),
-      },
-    },
-    db,
-  );
-
-  return {
-    outcome: "changed",
-    workspaceId: workspace.id,
-    fromStatus,
-    toStatus: "SUSPENDED",
-    statusEventId: statusEvent.id,
-    auditEventId: auditEvent.id,
-  };
+      statusEventId: statusEvent.id,
+      auditEventId: auditEvent.id,
+    };
+  } catch (error) {
+    await db.workspace
+      .update({
+        where: { id: workspace.id, status: "SUSPENDED" },
+        data: { status: fromStatus },
+      })
+      .catch((revertError) => {
+        console.error(
+          "[platform] failed to revert workspace after suspend error",
+          revertError,
+        );
+      });
+    throw error;
+  }
 }
 
 export async function reactivateWorkspace(input: {
@@ -287,46 +302,61 @@ export async function reactivateWorkspace(input: {
     data: { status: "ACTIVE" },
   });
 
-  const statusEvent = await db.workspaceStatusEvent.create({
-    data: {
+  try {
+    const statusEvent = await db.workspaceStatusEvent.create({
+      data: {
+        workspaceId: workspace.id,
+        fromStatus,
+        toStatus: "ACTIVE",
+        reasonCode: "REACTIVATION",
+        reasonDetail: reason,
+        actorType: "PLATFORM_OPERATOR",
+        actorOperatorId: input.operatorId,
+      },
+      select: { id: true },
+    });
+
+    const auditEvent = await writePlatformAuditEvent(
+      {
+        actorOperatorId: input.operatorId,
+        actorType: "OPERATOR",
+        action: "WORKSPACE_REACTIVATED",
+        entityType: "Workspace",
+        entityId: workspace.id,
+        summary: `Workspace ${workspace.slug} reactivated (SUSPENDED → ACTIVE)`,
+        metadata: {
+          workspaceId: workspace.id,
+          operatorId: input.operatorId,
+          fromStatus,
+          toStatus: "ACTIVE",
+          reasonSummary: reason ? reason.slice(0, 200) : null,
+        },
+      },
+      db,
+    );
+
+    return {
+      outcome: "changed",
       workspaceId: workspace.id,
       fromStatus,
       toStatus: "ACTIVE",
-      reasonCode: "REACTIVATION",
-      reasonDetail: reason,
-      actorType: "PLATFORM_OPERATOR",
-      actorOperatorId: input.operatorId,
-    },
-    select: { id: true },
-  });
-
-  const auditEvent = await writePlatformAuditEvent(
-    {
-      actorOperatorId: input.operatorId,
-      actorType: "OPERATOR",
-      action: "WORKSPACE_REACTIVATED",
-      entityType: "Workspace",
-      entityId: workspace.id,
-      summary: `Workspace ${workspace.slug} reactivated (SUSPENDED → ACTIVE)`,
-      metadata: {
-        workspaceId: workspace.id,
-        operatorId: input.operatorId,
-        fromStatus,
-        toStatus: "ACTIVE",
-        reasonSummary: reason ? reason.slice(0, 200) : null,
-      },
-    },
-    db,
-  );
-
-  return {
-    outcome: "changed",
-    workspaceId: workspace.id,
-    fromStatus,
-    toStatus: "ACTIVE",
-    statusEventId: statusEvent.id,
-    auditEventId: auditEvent.id,
-  };
+      statusEventId: statusEvent.id,
+      auditEventId: auditEvent.id,
+    };
+  } catch (error) {
+    await db.workspace
+      .update({
+        where: { id: workspace.id, status: "ACTIVE" },
+        data: { status: fromStatus },
+      })
+      .catch((revertError) => {
+        console.error(
+          "[platform] failed to revert workspace after reactivate error",
+          revertError,
+        );
+      });
+    throw error;
+  }
 }
 
 export async function getLatestSuspensionReasonCodeForWorkspace(

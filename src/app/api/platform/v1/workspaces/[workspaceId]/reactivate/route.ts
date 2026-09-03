@@ -1,6 +1,5 @@
-import { PlatformApiError } from "@/lib/platform/api/handler";
+import { readPlatformJsonBody } from "@/lib/platform/api/body";
 import { runPlatformRouteWithOperator } from "@/lib/platform/api/route";
-import { getPlatformWorkspaceDetail } from "@/lib/platform/read/workspaces";
 import { reactivateWorkspace } from "@/lib/platform/workspaces/status";
 
 export const runtime = "nodejs";
@@ -12,15 +11,7 @@ type RouteContext = {
 export async function POST(request: Request, context: RouteContext) {
   const { workspaceId } = await context.params;
   return runPlatformRouteWithOperator(async (operator) => {
-    let body: { reason?: unknown } = {};
-    try {
-      const text = await request.text();
-      if (text.trim()) {
-        body = JSON.parse(text) as { reason?: unknown };
-      }
-    } catch {
-      throw new PlatformApiError("Invalid JSON body", 400, "INVALID_BODY");
-    }
+    const body = await readPlatformJsonBody<{ reason?: unknown }>(request);
 
     const result = await reactivateWorkspace({
       workspaceId,
@@ -28,11 +19,6 @@ export async function POST(request: Request, context: RouteContext) {
       operatorId: operator.operatorId,
     });
 
-    const workspace = await getPlatformWorkspaceDetail(workspaceId);
-    if (!workspace) {
-      throw new PlatformApiError("Workspace not found", 404, "NOT_FOUND");
-    }
-
-    return { action: result, workspace };
+    return { action: result };
   });
 }

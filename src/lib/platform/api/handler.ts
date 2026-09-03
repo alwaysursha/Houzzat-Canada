@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import {
   PlatformOperatorAuthError,
   requirePlatformOperator,
@@ -25,7 +26,11 @@ export async function withPlatformOperator<T>(
     const operator = await requirePlatformOperator();
     return await handler(operator);
   } catch (error) {
-    if (error instanceof PlatformOperatorAuthError) {
+    if (
+      error instanceof PlatformOperatorAuthError ||
+      error instanceof PlatformApiError ||
+      error instanceof WorkspaceStatusActionError
+    ) {
       throw error;
     }
     console.error("[platform-api] unhandled error", error);
@@ -46,6 +51,25 @@ export function toPlatformHttpError(error: unknown) {
   }
   if (error instanceof WorkspaceStatusActionError) {
     return platformError(error.status, error.code, error.message);
+  }
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    console.error("[platform-api] prisma error", error.code, error.meta);
+    switch (error.code) {
+      case "P2021":
+        return platformError(
+          503,
+          "SCHEMA_OUT_OF_DATE",
+          "Platform database schema is missing required tables. Apply platform migrations.",
+        );
+      case "P2003":
+        return platformError(
+          500,
+          "DATABASE_CONSTRAINT",
+          "Database constraint violation while completing the request.",
+        );
+      default:
+        break;
+    }
   }
   return platformError(500, "INTERNAL_ERROR", "Internal server error");
 }
