@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import type { PrivateOfferPresentation } from "@/lib/platform/offers/private-offer";
 import {
@@ -49,16 +49,7 @@ export function PrivateOfferUnavailable() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-[#07111f] px-4 py-16 text-center">
       <div className="w-full max-w-md">
-        <div className="mx-auto inline-flex rounded-xl border border-white/10 bg-white px-3.5 py-2.5">
-          <Image
-            src="/images/houzzat-pro-mark.png"
-            alt={PLATFORM_PRODUCT_NAME}
-            width={168}
-            height={40}
-            className="h-8 w-auto"
-            priority
-          />
-        </div>
+        <HouzzatProWordmark size="lg" className="text-white" />
         <h1 className="mt-10 font-display text-3xl font-semibold tracking-tight text-white">
           {PRIVATE_OFFER_UNAVAILABLE_TITLE}
         </h1>
@@ -98,16 +89,7 @@ export function PrivateOfferProposal({
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(16,185,129,0.18),_transparent_45%)]"
         />
         <div className="relative mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
-          <div className="inline-flex rounded-xl border border-white/10 bg-white px-3.5 py-2.5 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.55)]">
-            <Image
-              src="/images/houzzat-pro-mark.png"
-              alt={PLATFORM_PRODUCT_NAME}
-              width={168}
-              height={40}
-              className="h-8 w-auto sm:h-9"
-              priority
-            />
-          </div>
+          <HouzzatProWordmark size="lg" className="text-white" />
           <p className="mt-8 text-[11px] font-semibold tracking-[0.2em] text-emerald-300/90 uppercase">
             {PRIVATE_OFFER_EYEBROW}
           </p>
