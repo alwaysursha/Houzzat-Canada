@@ -1,6 +1,6 @@
-import Image from "next/image";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { BookDemoForm } from "@/components/platform/public/BookDemoForm";
 import { BookDemoProductVisual } from "@/components/platform/public/BookDemoProductVisual";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
@@ -59,16 +59,7 @@ export default async function BookADemoPage() {
           />
 
           <div className="relative z-10">
-            <div className="inline-flex rounded-xl border border-white/10 bg-white px-3.5 py-2.5 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.55)]">
-              <Image
-                src="/images/houzzat-pro-mark.png"
-                alt={PLATFORM_PRODUCT_NAME}
-                width={176}
-                height={42}
-                className="h-8 w-auto sm:h-9"
-                priority
-              />
-            </div>
+            <HouzzatProWordmark size="lg" className="text-white" />
 
             <p className="mt-8 text-[11px] font-semibold tracking-[0.2em] text-emerald-300/90 uppercase sm:mt-10">
               {BOOK_DEMO_EYEBROW}

@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { HouzzatProMark } from "@/components/auth/HouzzatProMark";
 import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransition";
 import { Button } from "@/components/ui/button";
@@ -40,10 +39,7 @@ function HandoffExchangeInner() {
   if (!code) {
     return (
       <div className="fixed inset-0 z-[99999] flex h-dvh w-full flex-col items-center justify-center bg-[linear-gradient(165deg,#96F0D8_0%,#63D9BD_42%,#2FC3A2_100%)] px-6 text-center">
-        <HouzzatProMark className="mx-auto" size={88} />
-        <div className="mt-3">
-          <HouzzatProWordmark size="lg" className="text-ink" />
-        </div>
+        <HouzzatProWordmark size="lg" className="text-ink" />
         <p className="mt-4 text-base font-semibold text-[#0B5C49]">
           Missing workspace handoff code.
         </p>
@@ -61,10 +57,7 @@ function HandoffExchangeInner() {
   if (error) {
     return (
       <div className="fixed inset-0 z-[99999] flex h-dvh w-full flex-col items-center justify-center bg-[linear-gradient(165deg,#96F0D8_0%,#63D9BD_42%,#2FC3A2_100%)] px-6 text-center">
-        <HouzzatProMark className="mx-auto" size={88} />
-        <div className="mt-3">
-          <HouzzatProWordmark size="lg" className="text-ink" />
-        </div>
+        <HouzzatProWordmark size="lg" className="text-ink" />
         <p className="mt-5 text-lg font-bold text-[#0B5C49]">
           Unable to open your Workspace
         </p>

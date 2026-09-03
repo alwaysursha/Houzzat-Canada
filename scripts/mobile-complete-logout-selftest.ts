@@ -190,7 +190,6 @@ function testTransitionUiWiring() {
   const form = read("src/components/auth/HouzzatProSignInForm.tsx");
 
   assert.ok(transition.includes("Opening your Workspace..."));
-  assert.ok(transition.includes("HouzzatProMark"));
   assert.ok(transition.includes("HouzzatProWordmark"));
   assert.ok(transition.includes("proWorkspaceProgress"));
   assert.ok(transition.includes("prefers-reduced-motion"));

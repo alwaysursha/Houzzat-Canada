@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Capacitor } from "@capacitor/core";
 import { usePathname, useSearchParams } from "next/navigation";
-import { HouzzatProMark } from "@/components/auth/HouzzatProMark";
 import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransition";
 import { sanitizeStaffCallbackPath } from "@/lib/auth/pro-sign-in-routing";
@@ -425,10 +424,7 @@ export function ProWorkspaceBootstrap() {
     return (
       <div className="mx-auto w-full max-w-md px-5 py-10">
         <div className="text-center">
-          <HouzzatProMark className="mx-auto" size={88} />
-          <div className="mt-3">
-            <HouzzatProWordmark size="lg" className="text-ink" />
-          </div>
+          <HouzzatProWordmark size="lg" className="text-ink" />
           <p className="mt-3 text-sm font-medium text-ink/70">
             Choose your workspace
           </p>
@@ -455,10 +451,7 @@ export function ProWorkspaceBootstrap() {
   if (error) {
     return (
       <div className="fixed inset-0 z-[99999] flex h-dvh w-full flex-col items-center justify-center bg-[linear-gradient(165deg,#96F0D8_0%,#63D9BD_42%,#2FC3A2_100%)] px-6 text-center">
-        <HouzzatProMark className="mx-auto" size={88} />
-        <div className="mt-3">
-          <HouzzatProWordmark size="lg" className="text-ink" />
-        </div>
+        <HouzzatProWordmark size="lg" className="text-ink" />
         <p className="mt-5 text-lg font-bold text-[#0B5C49]">
           Unable to open your Workspace
         </p>

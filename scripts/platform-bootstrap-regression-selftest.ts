@@ -212,7 +212,7 @@ function testSafeUiNoBlankScreens() {
   // Transition UI is styled and viewport locked
   assert.ok(transitionCode.includes("ProWorkspaceTransition"));
   assert.ok(transitionCode.includes("overflow-hidden"));
-  assert.ok(transitionCode.includes("HouzzatProMark"));
+  assert.ok(transitionCode.includes("HouzzatProWordmark"));
 
   // Bootstrap returns transition UI on loading/handoff and explicit error views on failure
   assert.ok(bootstrapCode.includes("<ProWorkspaceTransition />"));

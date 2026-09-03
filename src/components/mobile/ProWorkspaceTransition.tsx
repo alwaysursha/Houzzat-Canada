@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { HouzzatProMark } from "@/components/auth/HouzzatProMark";
 import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 
 /**
@@ -50,10 +49,7 @@ export function ProWorkspaceTransition({
         }
       `}</style>
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center text-center">
-        <HouzzatProMark className="mx-auto" size={112} />
-        <div className="mt-4">
-          <HouzzatProWordmark size="xl" className="text-ink" />
-        </div>
+        <HouzzatProWordmark size="xl" className="text-ink" />
         <p className="mt-5 text-base font-semibold tracking-tight text-[#0B5C49]">
           {message}
         </p>

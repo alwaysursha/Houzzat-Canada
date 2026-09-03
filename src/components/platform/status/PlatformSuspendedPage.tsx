@@ -1,5 +1,5 @@
-import Image from "next/image";
 import type { Metadata } from "next";
+import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import {
   PLATFORM_SUSPENDED_DOCUMENT_TITLE,
@@ -23,14 +23,7 @@ export function PlatformSuspendedPage() {
       <main className="flex flex-1 items-center justify-center px-4 py-12 sm:px-6">
         <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.28)] sm:p-10">
           <div className="flex flex-col items-center text-center">
-            <Image
-              src="/images/houzzat-pro-mark.png"
-              alt={PLATFORM_PRODUCT_NAME}
-              width={168}
-              height={40}
-              className="h-9 w-auto"
-              priority
-            />
+            <HouzzatProWordmark size="lg" className="text-ink" />
 
             <div
               className="mt-8 flex size-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-700"

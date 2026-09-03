@@ -391,7 +391,7 @@ async function main() {
     const form = read("src/components/platform/public/BookDemoForm.tsx");
     const copy = read("src/lib/platform/public/book-demo-copy.ts");
     assert.ok(page.includes("BookDemoForm"));
-    assert.ok(page.includes("houzzat-pro-mark.png"));
+    assert.ok(page.includes("HouzzatProWordmark"));
     assert.ok(form.includes("BOOK_DEMO_CTA_LABEL") || form.includes("Book My Private Demo"));
     assert.ok(copy.includes("Book My Private Demo"));
     assert.ok(form.includes("type=\"tel\""));
