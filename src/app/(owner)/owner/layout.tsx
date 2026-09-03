@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "@/components/auth/SignOutButton";
-import { requireOwnerUser } from "@/lib/owner/auth";
+import { PlatformSuspendedPage } from "@/components/platform/status/PlatformSuspendedPage";
 import { SITE_NAME } from "@/lib/constants";
+import { requireOwnerUser } from "@/lib/owner/auth";
+import { resolvePlatformSuspendedHost } from "@/lib/platform/status/resolve-suspended-host";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,10 @@ export default async function OwnerLayout({
 }: {
   children: React.ReactNode;
 }) {
+  if (await resolvePlatformSuspendedHost()) {
+    return <PlatformSuspendedPage />;
+  }
+
   const user = await requireOwnerUser();
   if (!user) {
     redirect("/auth/sign-in?callbackUrl=/owner");

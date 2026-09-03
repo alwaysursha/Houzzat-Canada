@@ -116,6 +116,10 @@ async function runTests() {
 
   // 3. Suspended page copy is public-safe
   {
+    const resolver = read("src/lib/platform/status/resolve-suspended-host.ts");
+    assert.ok(resolver.includes("workspaceStatus"));
+    assert.ok(resolver.includes("lookupActiveWorkspaceDomainRow"));
+    assert.ok(read("src/app/not-found.tsx").includes("PlatformSuspendedPage"));
     const page = read("src/components/platform/status/PlatformSuspendedPage.tsx");
     const copy = read("src/lib/platform/status/copy.ts");
     assert.ok(page.includes("PLATFORM_SUSPENDED_PAGE_TITLE"));
@@ -167,7 +171,8 @@ async function runTests() {
     const marketing = read("src/app/(marketing)/layout.tsx");
     const agent = read("src/app/(agent)/agent/layout.tsx");
     const admin = read("src/app/(admin)/admin/layout.tsx");
-    for (const src of [marketing, agent, admin]) {
+    const notFound = read("src/app/not-found.tsx");
+    for (const src of [marketing, agent, admin, notFound]) {
       assert.ok(src.includes("resolvePlatformSuspendedHost"));
       assert.ok(src.includes("PlatformSuspendedPage"));
     }
