@@ -37,3 +37,19 @@ export {
   type OfferTermsInput,
   type SendCommercialOfferResult,
 } from "./manage";
+
+export {
+  resolvePrivateOfferByRawToken,
+  type PrivateOfferPresentation,
+  type PrivateOfferLineView,
+  type ResolvePrivateOfferResult,
+} from "./private-offer";
+
+export { isHouzzatProPlatformPrivateOfferRequest } from "./private-offer-request";
+
+export {
+  PRIVATE_OFFER_DOCUMENT_TITLE,
+  PRIVATE_OFFER_UNAVAILABLE_TITLE,
+  PRIVATE_OFFER_PLAN_VALUE_LABELS,
+} from "./private-offer-copy";
+

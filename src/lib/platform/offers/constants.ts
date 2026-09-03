@@ -5,11 +5,12 @@ export const COMMERCIAL_OFFER_AUDIT = {
   UPDATED: "COMMERCIAL_OFFER_UPDATED",
   SENT: "COMMERCIAL_OFFER_SENT",
   CANCELLED: "COMMERCIAL_OFFER_CANCELLED",
+  VIEWED: "COMMERCIAL_OFFER_VIEWED",
 } as const;
 
 export const COMMERCIAL_OFFER_ENTITY_TYPE = "CommercialOffer";
 
-/** Conceptual private subscribe path — public page is a later stage. */
+/** Private prospect subscribe path on HouzzatPRO platform root only. */
 export const PRIVATE_OFFER_PATH_PREFIX = "/subscribe";
 
 export const PRIVATE_OFFER_PUBLIC_ORIGIN = "https://houzzatpro.com";

@@ -35,6 +35,8 @@ import {
   BOOK_DEMO_DOCUMENT_TITLE,
   isHouzzatProPlatformBookDemoRequest,
 } from "@/lib/platform/public";
+import { isHouzzatProPlatformPrivateOfferRequest } from "@/lib/platform/offers/private-offer-request";
+import { PRIVATE_OFFER_DOCUMENT_TITLE } from "@/lib/platform/offers/private-offer-copy";
 import { resolvePlatformSuspendedHost } from "@/lib/platform/status/resolve-suspended-host";
 import {
   PlatformSuspendedPage,
@@ -57,6 +59,17 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
       title: BOOK_DEMO_DOCUMENT_TITLE,
       robots: { index: true, follow: true },
+    };
+  }
+  if (await isHouzzatProPlatformPrivateOfferRequest()) {
+    return {
+      title: PRIVATE_OFFER_DOCUMENT_TITLE,
+      robots: {
+        index: false,
+        follow: false,
+        nocache: true,
+        googleBot: { index: false, follow: false, noimageindex: true },
+      },
     };
   }
   if (await resolvePlatformSuspendedHost()) {
@@ -91,6 +104,10 @@ export default async function MarketingLayout({
   }
 
   if (await isHouzzatProPlatformBookDemoRequest()) {
+    return <>{children}</>;
+  }
+
+  if (await isHouzzatProPlatformPrivateOfferRequest()) {
     return <>{children}</>;
   }
 

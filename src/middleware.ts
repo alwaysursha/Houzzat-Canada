@@ -56,6 +56,7 @@ function isComingSoonBypass(pathname: string) {
   if (pathname.startsWith("/platform")) return true;
   if (pathname === "/support") return true;
   if (pathname === "/book-a-demo") return true;
+  if (pathname.startsWith("/subscribe/")) return true;
   if (pathname.startsWith("/agent")) return true;
   if (pathname.startsWith("/account")) return true;
   if (pathname.startsWith("/owner")) return true;
@@ -260,6 +261,15 @@ export default auth((request) => {
     },
   });
   response.headers.set("x-houzzat-request-path", pathname);
+  // Private commercial proposals must never be shared-cacheable across users.
+  if (pathname.startsWith("/subscribe/")) {
+    response.headers.set(
+      "Cache-Control",
+      "private, no-store, no-cache, max-age=0, must-revalidate",
+    );
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Vary", "Cookie, Authorization, Host");
+  }
   return response;
 });
 
