@@ -465,7 +465,8 @@ export async function sendCommercialOffer(input: {
   }
 
   // Revoke any orphan draft tokens from a prior partial failure.
-  const orphanTokens = offer.tokens.filter((t) => !t.revokedAt);
+  // Prefer per-row update — Neon HTTP rejects Prisma bulk updates (internal txn).
+  const orphanTokens = (offer.tokens ?? []).filter((t) => !t.revokedAt);
   for (const token of orphanTokens) {
     await db.commercialOfferToken.update({
       where: { id: token.id },
@@ -484,20 +485,23 @@ export async function sendCommercialOffer(input: {
     },
   });
 
-  const updated = await db.commercialOffer.updateMany({
+  // Claim DRAFT→SENT with find+update (not bulk update) for Neon HTTP compatibility.
+  const stillDraft = await db.commercialOffer.findFirst({
     where: { id: offer.id, status: "DRAFT" },
-    data: {
-      status: "SENT",
-      sentAt: new Date(),
-    },
+    select: { id: true },
   });
 
-  if (updated.count === 0) {
-    // Concurrent send won — revoke the token we just created and return idempotent already_sent.
-    await db.commercialOfferToken.updateMany({
+  if (!stillDraft) {
+    const createdToken = await db.commercialOfferToken.findFirst({
       where: { offerId: offer.id, tokenHash },
-      data: { revokedAt: new Date() },
+      select: { id: true },
     });
+    if (createdToken) {
+      await db.commercialOfferToken.update({
+        where: { id: createdToken.id },
+        data: { revokedAt: new Date() },
+      });
+    }
     const side = await ensureProspectOfferSentSideEffects({
       db,
       prospectId: offer.prospectId,
@@ -515,6 +519,14 @@ export async function sendCommercialOffer(input: {
       activityId: side.activityId,
     };
   }
+
+  await db.commercialOffer.update({
+    where: { id: offer.id },
+    data: {
+      status: "SENT",
+      sentAt: new Date(),
+    },
+  });
 
   const side = await ensureProspectOfferSentSideEffects({
     db,
@@ -594,10 +606,17 @@ export async function cancelCommercialOffer(input: {
     data: { status: "CANCELLED" },
   });
 
-  await db.commercialOfferToken.updateMany({
+  const activeTokens = await db.commercialOfferToken.findMany({
     where: { offerId: offer.id, revokedAt: null },
-    data: { revokedAt: new Date() },
+    select: { id: true },
   });
+  const revokedAt = new Date();
+  for (const token of activeTokens) {
+    await db.commercialOfferToken.update({
+      where: { id: token.id },
+      data: { revokedAt },
+    });
+  }
 
   const audit = await writePlatformAuditEvent(
     {

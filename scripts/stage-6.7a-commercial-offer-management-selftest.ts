@@ -212,6 +212,17 @@ function createFakePrisma(state: FakeState) {
             .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
         };
       },
+      async findFirst({
+        where,
+      }: {
+        where: { id: string; status?: string };
+        select?: unknown;
+      }) {
+        const offer = state.offers.get(where.id);
+        if (!offer) return null;
+        if (where.status && offer.status !== where.status) return null;
+        return { id: offer.id };
+      },
       async update({
         where,
         data,
@@ -292,6 +303,34 @@ function createFakePrisma(state: FakeState) {
         state.tokens.push(row);
         return row;
       },
+      async findFirst({
+        where,
+      }: {
+        where: { offerId: string; tokenHash?: string };
+        select?: unknown;
+      }) {
+        return (
+          state.tokens.find(
+            (t) =>
+              t.offerId === where.offerId &&
+              (where.tokenHash ? t.tokenHash === where.tokenHash : true),
+          ) ?? null
+        );
+      },
+      async findMany({
+        where,
+      }: {
+        where: { offerId: string; revokedAt?: null };
+        select?: unknown;
+      }) {
+        return state.tokens
+          .filter((t) => {
+            if (t.offerId !== where.offerId) return false;
+            if (where.revokedAt === null && t.revokedAt !== null) return false;
+            return true;
+          })
+          .map((t) => ({ id: t.id }));
+      },
       async update({
         where,
         data,
@@ -303,27 +342,6 @@ function createFakePrisma(state: FakeState) {
         if (!tok) throw new Error("missing token");
         tok.revokedAt = data.revokedAt;
         return tok;
-      },
-      async updateMany({
-        where,
-        data,
-      }: {
-        where: {
-          offerId: string;
-          tokenHash?: string;
-          revokedAt?: null;
-        };
-        data: { revokedAt: Date };
-      }) {
-        let count = 0;
-        for (const tok of state.tokens) {
-          if (tok.offerId !== where.offerId) continue;
-          if (where.tokenHash && tok.tokenHash !== where.tokenHash) continue;
-          if (where.revokedAt === null && tok.revokedAt !== null) continue;
-          tok.revokedAt = data.revokedAt;
-          count += 1;
-        }
-        return { count };
       },
     },
     platformAuditEvent: {
@@ -715,6 +733,7 @@ async function main() {
     assert.ok(cancelRoute.includes("cancelCommercialOffer"));
     assert.ok(manage.includes("hashCommercialOfferToken"));
     assert.ok(manage.includes("COMMERCIAL_OFFER_AUDIT.SENT"));
+    assert.ok(!manage.includes("updateMany"));
     assert.ok(!manage.includes("$transaction"));
     assert.ok(manage.includes("OFFER_SENT"));
     assert.ok(manage.includes("OFFER_LINKED"));

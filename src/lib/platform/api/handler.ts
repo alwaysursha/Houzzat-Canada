@@ -33,7 +33,14 @@ export async function withPlatformOperator<T>(
       error instanceof PlatformApiError ||
       error instanceof WorkspaceStatusActionError ||
       error instanceof PlatformProspectActionError ||
-      error instanceof CommercialOfferActionError
+      error instanceof CommercialOfferActionError ||
+      error instanceof Prisma.PrismaClientKnownRequestError
+    ) {
+      throw error;
+    }
+    if (
+      error instanceof Error &&
+      /Transactions are not supported in HTTP mode/i.test(error.message)
     ) {
       throw error;
     }
@@ -80,6 +87,17 @@ export function toPlatformHttpError(error: unknown) {
       default:
         break;
     }
+  }
+  if (
+    error instanceof Error &&
+    /Transactions are not supported in HTTP mode/i.test(error.message)
+  ) {
+    console.error("[platform-api] neon http transaction error", error);
+    return platformError(
+      500,
+      "DATABASE_ADAPTER",
+      "Database adapter rejected the write. Retry shortly.",
+    );
   }
   return platformError(500, "INTERNAL_ERROR", "Internal server error");
 }
