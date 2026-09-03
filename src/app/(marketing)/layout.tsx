@@ -31,6 +31,10 @@ import {
   isHouzzatProPlatformSupportRequest,
   PLATFORM_SUSPENDED_DOCUMENT_TITLE,
 } from "@/lib/platform/status";
+import {
+  BOOK_DEMO_DOCUMENT_TITLE,
+  isHouzzatProPlatformBookDemoRequest,
+} from "@/lib/platform/public";
 import { resolvePlatformSuspendedHost } from "@/lib/platform/status/resolve-suspended-host";
 import {
   PlatformSuspendedPage,
@@ -47,6 +51,12 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
       title: HOUZZATPRO_SUPPORT_DOCUMENT_TITLE,
       robots: { index: false, follow: false },
+    };
+  }
+  if (await isHouzzatProPlatformBookDemoRequest()) {
+    return {
+      title: BOOK_DEMO_DOCUMENT_TITLE,
+      robots: { index: true, follow: true },
     };
   }
   if (await resolvePlatformSuspendedHost()) {
@@ -77,6 +87,10 @@ export default async function MarketingLayout({
   }
 
   if (await isHouzzatProPlatformSupportRequest()) {
+    return <>{children}</>;
+  }
+
+  if (await isHouzzatProPlatformBookDemoRequest()) {
     return <>{children}</>;
   }
 

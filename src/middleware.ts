@@ -55,6 +55,7 @@ function isComingSoonBypass(pathname: string) {
   if (pathname.startsWith("/admin")) return true;
   if (pathname.startsWith("/platform")) return true;
   if (pathname === "/support") return true;
+  if (pathname === "/book-a-demo") return true;
   if (pathname.startsWith("/agent")) return true;
   if (pathname.startsWith("/account")) return true;
   if (pathname.startsWith("/owner")) return true;

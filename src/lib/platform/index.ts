@@ -131,8 +131,9 @@ export {
   type WorkspaceStatusActionResult,
 } from "./workspaces";
 
+export { normalizeProspectEmail } from "./prospects/normalize-email";
+
 export {
-  normalizeProspectEmail,
   PlatformProspectActionError,
   createOrReopenPlatformProspect,
   updatePlatformProspect,
@@ -167,6 +168,29 @@ export {
   type ProspectSourceValue,
   type ProspectDemoActionValue,
 } from "./prospects";
+
+export {
+  BOOK_DEMO_PATH,
+  BOOK_DEMO_PAGE_TITLE,
+  BOOK_DEMO_ACTIVITY_SUMMARY,
+  BOOK_DEMO_HONEYPOT_FIELD,
+  isHouzzatProPlatformBookDemoRequest,
+  BookDemoPublicError,
+  assertBookDemoPlatformHostname,
+  receiveWebsiteDemoRequest,
+  allowBookDemoRequest,
+  clearBookDemoRateLimitsForTests,
+  clientIpFromPublicRequest,
+  BOOK_DEMO_TURNSTILE_ACTION,
+  BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
+  verifyTurnstileToken,
+  assertTurnstileSiteverifyContext,
+  readTurnstileSiteKey,
+  TURNSTILE_TEST_SITE_KEY_PASS,
+  TURNSTILE_TEST_SECRET_KEY_PASS,
+  TURNSTILE_TEST_SECRET_KEY_FAIL,
+  TURNSTILE_TEST_DUMMY_TOKEN,
+} from "./public";
 
 export { platformOk, platformError } from "./api/response";
 export {
