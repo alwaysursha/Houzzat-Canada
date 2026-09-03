@@ -10,10 +10,17 @@ import type {
 } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 import { writePlatformAuditEvent } from "@/lib/platform/audit";
+import {
+  WORKSPACE_REACTIVATE_REASON_MAX,
+  WORKSPACE_SUSPEND_REASON_MAX,
+  WORKSPACE_SUSPEND_REASON_MIN,
+} from "./status-constants";
 
-export const WORKSPACE_SUSPEND_REASON_MIN = 3;
-export const WORKSPACE_SUSPEND_REASON_MAX = 500;
-export const WORKSPACE_REACTIVATE_REASON_MAX = 500;
+export {
+  WORKSPACE_REACTIVATE_REASON_MAX,
+  WORKSPACE_SUSPEND_REASON_MAX,
+  WORKSPACE_SUSPEND_REASON_MIN,
+};
 
 export class WorkspaceStatusActionError extends Error {
   readonly status: number;

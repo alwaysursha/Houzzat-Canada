@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { WORKSPACE_SUSPEND_REASON_MIN } from "@/lib/platform/workspaces/status";
+import { WORKSPACE_SUSPEND_REASON_MIN } from "@/lib/platform/workspaces/status-constants";
 
 type StatusEvent = {
   toStatus: string;

@@ -419,6 +419,8 @@ async function main() {
     const ui = read("src/components/platform/PlatformWorkspaceActions.tsx");
     assert.ok(ui.includes("Suspend workspace"));
     assert.ok(ui.includes("Reactivate workspace"));
+    assert.ok(ui.includes("status-constants"));
+    assert.ok(!ui.includes('from "@/lib/platform/workspaces/status"'));
     assert.ok(!/\bRetry\b/.test(ui));
     assert.ok(!/Create offer/i.test(ui));
     assert.ok(!/tokenHash/.test(ui));
