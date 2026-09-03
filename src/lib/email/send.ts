@@ -31,6 +31,8 @@ export async function sendRenderedEmail(input: {
   rendered: RenderedEmail;
   stream?: EmailStream;
   replyTo?: string | null;
+  /** Optional absolute From override (e.g. HouzzatPRO platform sales). */
+  from?: string | null;
 }): Promise<SendEmailResult> {
   if (!isResendConfigured()) {
     console.info(
@@ -47,7 +49,7 @@ export async function sendRenderedEmail(input: {
 
   try {
     const { data, error } = await resend.emails.send({
-      from: fromForStream(input.stream ?? "notify"),
+      from: input.from?.trim() || fromForStream(input.stream ?? "notify"),
       to: [input.to],
       subject: input.rendered.subject,
       html: input.rendered.html,

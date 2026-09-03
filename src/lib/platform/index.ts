@@ -183,6 +183,8 @@ export {
   allowBookDemoRequest,
   clearBookDemoRateLimitsForTests,
   clientIpFromPublicRequest,
+  notifyBookDemoEmails,
+  BOOK_DEMO_EMAIL_AUDIT,
   BOOK_DEMO_TURNSTILE_ACTION,
   BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
   verifyTurnstileToken,

@@ -7,6 +7,10 @@ type EmailBindings = {
   EMAIL_FROM_NOTIFY?: string;
   EMAIL_FROM_ALERTS?: string;
   EMAIL_ADMIN_TO?: string;
+  /** Stage 6.6C — internal Book a Demo notification recipient. */
+  HOUZZATPRO_DEMO_NOTIFICATION_EMAIL?: string;
+  /** Optional HouzzatPRO platform From identity (verified domain required). */
+  HOUZZATPRO_EMAIL_FROM?: string;
 };
 
 function readBindings(): EmailBindings {

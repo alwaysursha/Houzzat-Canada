@@ -60,6 +60,17 @@ export type BookDemoInternalResult = {
   activityId: string;
   auditEventId: string;
   outcome: "created" | "updated" | "reopened" | "honeypot";
+  /** Validated form fields for post-persist notification emails (null on honeypot). */
+  emailPayload: {
+    contactName: string;
+    email: string;
+    phone: string;
+    brokerageName: string;
+    teamSize: number;
+    website: string | null;
+    region: string | null;
+    message: string | null;
+  } | null;
 };
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -253,6 +264,7 @@ export async function receiveWebsiteDemoRequest(
       activityId: "honeypot",
       auditEventId: "honeypot",
       outcome: "honeypot",
+      emailPayload: null,
     };
   }
 
@@ -273,6 +285,16 @@ export async function receiveWebsiteDemoRequest(
 
   const fields = validatePublicBookDemoFields(input);
   const db = input.prisma ?? defaultPrisma;
+  const emailPayload = {
+    contactName: fields.contactName,
+    email: fields.email,
+    phone: fields.phone,
+    brokerageName: fields.brokerageName,
+    teamSize: fields.estimatedTeamSize,
+    website: fields.website,
+    region: fields.region,
+    message: fields.message,
+  };
 
   const existing = await db.platformProspect.findUnique({
     where: { email: fields.email },
@@ -316,6 +338,7 @@ export async function receiveWebsiteDemoRequest(
       activityId: activity.id,
       auditEventId: audit.id,
       outcome: "created",
+      emailPayload,
     };
   }
 
@@ -352,6 +375,7 @@ export async function receiveWebsiteDemoRequest(
       activityId: activity.id,
       auditEventId: audit.id,
       outcome: "reopened",
+      emailPayload,
     };
   }
 
@@ -375,6 +399,7 @@ export async function receiveWebsiteDemoRequest(
     activityId: activity.id,
     auditEventId: audit.id,
     outcome: "updated",
+    emailPayload,
   };
 }
 

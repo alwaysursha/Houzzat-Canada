@@ -40,6 +40,21 @@ export {
 } from "./book-demo";
 
 export {
+  notifyBookDemoEmails,
+  BOOK_DEMO_EMAIL_AUDIT,
+  type BookDemoNotifyInput,
+  type BookDemoNotifyResult,
+} from "./book-demo-emails";
+
+export {
+  renderBookDemoInternalNotificationEmail,
+  renderBookDemoConfirmationEmail,
+  buildMasterAdminProspectUrl,
+  HOUZZATPRO_PUBLIC_ORIGIN,
+  type BookDemoEmailFields,
+} from "./book-demo-email-templates";
+
+export {
   BOOK_DEMO_TURNSTILE_ACTION,
   BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
   BOOK_DEMO_TURNSTILE_ALLOWED_HOSTNAMES,

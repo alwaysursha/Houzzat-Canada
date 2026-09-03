@@ -7,6 +7,7 @@ import {
   clientIpFromPublicRequest,
   receiveWebsiteDemoRequest,
 } from "@/lib/platform/public";
+import { notifyBookDemoEmails } from "@/lib/platform/public/book-demo-emails";
 import { BOOK_DEMO_TURNSTILE_ERROR_MESSAGE } from "@/lib/platform/public/turnstile-constants";
 import { verifyTurnstileToken } from "@/lib/platform/public/turnstile-verify";
 import { normalizeProspectEmail } from "@/lib/platform/prospects/normalize-email";
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
           ? Number(teamSizeRaw)
           : Number.NaN;
 
-    await receiveWebsiteDemoRequest({
+    const intake = await receiveWebsiteDemoRequest({
       fullName: typeof body.fullName === "string" ? body.fullName : "",
       email: typeof body.email === "string" ? body.email : "",
       phone: typeof body.phone === "string" ? body.phone : "",
@@ -102,7 +103,23 @@ export async function POST(request: Request) {
           : null,
     });
 
-    // Always identical success — no existence / outcome leak.
+    // Persistence is authoritative. Email failures must never fail intake.
+    if (intake.outcome !== "honeypot" && intake.emailPayload) {
+      try {
+        await notifyBookDemoEmails({
+          prospectId: intake.prospectId,
+          activityId: intake.activityId,
+          fields: intake.emailPayload,
+        });
+      } catch (error) {
+        console.error(
+          "[platform-public-book-demo] notification side-effect failed",
+          error instanceof Error ? error.message : "error",
+        );
+      }
+    }
+
+    // Always identical success — no existence / outcome / email-status leak.
     return publicOk();
   } catch (error) {
     if (error instanceof BookDemoPublicError) {
