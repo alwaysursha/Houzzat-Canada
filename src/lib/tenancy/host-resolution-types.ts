@@ -11,7 +11,8 @@ export type HostResolutionDenyReason =
   | "platform_surface"
   | "domain_not_found"
   | "domain_inactive"
-  | "workspace_inactive";
+  | "workspace_inactive"
+  | "workspace_suspended";
 
 export type ResolvedWorkspaceHostSuccess = {
   ok: true;

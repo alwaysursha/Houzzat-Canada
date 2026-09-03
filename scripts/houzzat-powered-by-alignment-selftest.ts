@@ -31,6 +31,7 @@ function houzzatRow(
     primaryColor: HOUZZAT_BRANDING_SEED.primaryColor,
     secondaryColor: HOUZZAT_BRANDING_SEED.secondaryColor,
     accentColor: HOUZZAT_BRANDING_SEED.accentColor,
+    themeId: null,
     contactEmail: HOUZZAT_BRANDING_SEED.contactEmail,
     contactPhone: HOUZZAT_BRANDING_SEED.contactPhone,
     footerLegalText: HOUZZAT_BRANDING_SEED.footerLegalText,

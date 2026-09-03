@@ -16,6 +16,8 @@ import { toMarketingPresentationBrand } from "@/lib/tenancy/marketing-presentati
 import { legacyMarketingChromeBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
 import { buildStaffChromeMetadata } from "@/lib/tenancy/staff-chrome-metadata";
+import { resolvePlatformSuspendedHost } from "@/lib/platform/status/resolve-suspended-host";
+import { PlatformSuspendedPage } from "@/components/platform/status/PlatformSuspendedPage";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,14 @@ export default async function AgentLayout({
 }: {
   children: React.ReactNode;
 }) {
+  if (await resolvePlatformSuspendedHost()) {
+    return <PlatformSuspendedPage />;
+  }
+
+  if (await resolvePlatformSuspendedHost()) {
+    return <PlatformSuspendedPage />;
+  }
+
   const gate = await requireAgentGate();
   if (!gate) {
     redirect(await staffSignInRedirectUrl("/agent"));

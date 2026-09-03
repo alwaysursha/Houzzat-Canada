@@ -168,6 +168,153 @@ enum BrandingTier {
   FULL_BRANDED
 }
 
+/** Stage 6.1 — HouzzatPRO SaaS control-plane enums. */
+
+enum PlatformOperatorRole {
+  MASTER_ADMIN
+  SALES
+  BILLING
+}
+
+enum PlatformOperatorStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum ProspectStatus {
+  NEW
+  CONTACTED
+  DEMO_SCHEDULED
+  DEMO_COMPLETED
+  OFFER_SENT
+  WON
+  LOST
+}
+
+enum ProspectActivityType {
+  NOTE
+  DEMO_SCHEDULED
+  DEMO_COMPLETED
+  DEMO_NO_SHOW
+  DEMO_CANCELLED
+  STATUS_CHANGE
+  OFFER_LINKED
+}
+
+enum ProspectSource {
+  WEBSITE_DEMO
+  REFERRAL
+  OUTBOUND
+  OTHER
+}
+
+enum PlanCode {
+  SOLO
+  TEAM
+  BROKERAGE
+}
+
+enum BillingCadence {
+  MONTHLY
+  ANNUAL
+}
+
+enum OfferStatus {
+  DRAFT
+  SENT
+  VIEWED
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
+enum OfferLineKind {
+  PLAN_BASE
+  SETUP_FEE
+  ADDITIONAL_SEAT
+  ADDON
+  DISCOUNT
+  CUSTOM
+}
+
+enum SubscriptionSource {
+  STRIPE
+  INTERNAL
+  GRANDFATHERED
+}
+
+/** Billing/sync axis only — never Workspace operational status. */
+enum SubscriptionStatus {
+  PENDING_PAYMENT
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  INCOMPLETE
+}
+
+enum AddOnCode {
+  ADDITIONAL_AGENT
+  CUSTOM_CONSUMER_APP
+  GOOGLE_PPC
+  META_ADS
+}
+
+enum AddOnGrantStatus {
+  PENDING_FULFILLMENT
+  ACTIVE
+  CANCELLED
+}
+
+enum EntitlementSource {
+  PLAN
+  ADDON
+  MANUAL_GRANT
+  PROMOTION
+}
+
+enum ProvisioningRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum ProvisioningStepStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
+
+enum WorkspaceStatusReasonCode {
+  BILLING_PAST_DUE
+  MANUAL
+  CANCELLATION
+  REACTIVATION
+  PROVISION
+  OTHER
+}
+
+enum WorkspaceStatusActorType {
+  SYSTEM
+  PLATFORM_OPERATOR
+}
+
+enum PlatformAuditActorType {
+  SYSTEM
+  OPERATOR
+  WEBHOOK
+}
+
+enum WorkspaceEmailDomainStatus {
+  NONE
+  PENDING
+  VERIFIED
+  FAILED
+}
+
 enum AgentTaskType {
   CALL
   EMAIL
@@ -244,11 +391,18 @@ model Workspace {
   primaryAgentId       String?
   /** Display/compliance metadata only — NOT a tenant isolation key. */
   brokerageAffiliation String?
+  /**
+   * Stage 6.1 — explicit current Subscription pointer (0/1).
+   * Historical subscriptions remain via Subscription.workspaceId (1→many).
+   */
+  currentSubscriptionId String?        @unique
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 
   billingOwner User?             @relation("WorkspaceBillingOwner", fields: [billingOwnerUserId], references: [id], onDelete: SetNull)
   primaryAgent User?             @relation("WorkspacePrimaryAgent", fields: [primaryAgentId], references: [id], onDelete: SetNull)
+  currentSubscription Subscription? @relation("WorkspaceCurrentSubscription", fields: [currentSubscriptionId], references: [id], onDelete: SetNull)
+  subscriptions Subscription[]   @relation("WorkspaceSubscriptions")
   members      WorkspaceMember[]
   invites      WorkspaceInvite[]
   leads        Lead[]
@@ -260,6 +414,14 @@ model Workspace {
   branding      WorkspaceBranding?
   viewingTours  ViewingTour[]
   cmaReports    CmaReport[]
+  seatQuota     WorkspaceSeatQuota?
+  entitlements  WorkspaceEntitlement[]
+  addOnGrants   AddOnGrant[]
+  emailIdentity WorkspaceEmailIdentity?
+  statusEvents  WorkspaceStatusEvent[]
+  billingCustomer BillingCustomer?
+  commercialOffers CommercialOffer[]
+  provisioningRuns ProvisioningRun[]
 
   @@index([status])
 }
@@ -302,6 +464,8 @@ model WorkspaceBranding {
   primaryColor        String?
   secondaryColor      String?
   accentColor         String?
+  /** Stage 6.1 — code-catalog ThemeId (theme definitions are not DB rows). */
+  themeId             String?
   contactEmail        String?
   contactPhone        String?
   footerLegalText     String?
@@ -450,6 +614,8 @@ model User {
   workspaceInvitesSent     WorkspaceInvite[] @relation("WorkspaceInviteInvitedBy")
   workspacesBillingOwned   Workspace[]       @relation("WorkspaceBillingOwner")
   workspacesPrimaryAgentFor Workspace[]      @relation("WorkspacePrimaryAgent")
+  /** Stage 6.1 — SaaS control-plane operator identity (NOT CRM / WorkspaceMember). */
+  platformOperator         PlatformOperator?
 }
 
 /** FCM/APNs token for Houzzat or HouzzatPro native shells. */
@@ -1618,4 +1784,362 @@ model AuditLog {
   @@index([createdAt])
   @@index([actorId, createdAt])
   @@index([entityType, entityId])
+}
+
+/**
+ * Stage 6.1 — HouzzatPRO SaaS control plane.
+ * HARD RULE: PlatformOperator does NOT authorize tenant CRM access and must
+ * never auto-create WorkspaceMember. Isolation is via platform services only.
+ */
+
+model PlatformOperator {
+  id                   String                 @id @default(cuid())
+  userId               String                 @unique
+  role                 PlatformOperatorRole   @default(MASTER_ADMIN)
+  status               PlatformOperatorStatus @default(ACTIVE)
+  createdByOperatorId  String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdByOperator    PlatformOperator?      @relation("PlatformOperatorCreatedBy", fields: [createdByOperatorId], references: [id], onDelete: SetNull)
+  createdOperators     PlatformOperator[]     @relation("PlatformOperatorCreatedBy")
+  ownedProspects       PlatformProspect[]     @relation("ProspectOwner")
+  prospectActivities   PlatformProspectActivity[]
+  offersCreated        CommercialOffer[]      @relation("OfferCreator")
+  statusEvents         WorkspaceStatusEvent[]
+  auditEvents          PlatformAuditEvent[]
+
+  @@index([status, role])
+}
+
+model PlatformProspect {
+  id                String         @id @default(cuid())
+  businessName      String?
+  contactName       String
+  /** Normalized lowercase email — globally unique; reopen LOST rather than duplicate. */
+  email             String         @unique
+  phone             String?
+  brokerageName     String?
+  estimatedTeamSize Int?
+  region            String?
+  website           String?
+  source            ProspectSource @default(WEBSITE_DEMO)
+  status            ProspectStatus @default(NEW)
+  ownerOperatorId   String?
+  notesInternal     String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  ownerOperator    PlatformOperator? @relation("ProspectOwner", fields: [ownerOperatorId], references: [id], onDelete: SetNull)
+  activities       PlatformProspectActivity[]
+  offers           CommercialOffer[]
+  billingCustomers BillingCustomer[]
+
+  @@index([status, email])
+  @@index([ownerOperatorId])
+}
+
+model PlatformProspectActivity {
+  id          String               @id @default(cuid())
+  prospectId  String
+  type        ProspectActivityType
+  scheduledAt DateTime?
+  completedAt DateTime?
+  operatorId  String?
+  body        String?
+  createdAt   DateTime             @default(now())
+
+  prospect PlatformProspect  @relation(fields: [prospectId], references: [id], onDelete: Restrict)
+  operator PlatformOperator? @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([prospectId, createdAt])
+}
+
+model CommercialOffer {
+  id                             String         @id @default(cuid())
+  prospectId                     String
+  createdByOperatorId            String
+  status                         OfferStatus    @default(DRAFT)
+  planCode                       PlanCode
+  billingCadence                 BillingCadence
+  currency                       String         @default("CAD")
+  standardRecurringAmountCents   Int
+  negotiatedRecurringAmountCents Int
+  setupFeeCents                  Int
+  includedSeats                  Int
+  additionalSeats                Int            @default(0)
+  trialDays                      Int?
+  proposedStartDate              DateTime?
+  expiresAt                      DateTime?
+  version                        Int            @default(1)
+  acceptedSnapshotJson           Json?
+  sentAt                         DateTime?
+  viewedAt                       DateTime?
+  acceptedAt                     DateTime?
+  acceptedByEmail                String?
+  /** Set only after provisioning creates the workspace (unique when present). */
+  workspaceId                    String?        @unique
+  createdAt                      DateTime       @default(now())
+  updatedAt                      DateTime       @updatedAt
+
+  prospect          PlatformProspect          @relation(fields: [prospectId], references: [id], onDelete: Restrict)
+  createdByOperator PlatformOperator          @relation("OfferCreator", fields: [createdByOperatorId], references: [id], onDelete: Restrict)
+  workspace         Workspace?                @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  lineItems         CommercialOfferLineItem[]
+  tokens            CommercialOfferToken[]
+  acceptance        OfferAcceptance?
+  subscription      Subscription?
+  addOnGrants       AddOnGrant[]
+  provisioningRun   ProvisioningRun?
+
+  @@index([status, expiresAt])
+  @@index([prospectId, status])
+}
+
+model CommercialOfferLineItem {
+  id          String        @id @default(cuid())
+  offerId     String
+  kind        OfferLineKind
+  code        String
+  description String
+  amountCents Int
+  isRecurring Boolean
+  quantity    Int           @default(1)
+  metadata    Json?
+  sortOrder   Int           @default(0)
+
+  offer CommercialOffer @relation(fields: [offerId], references: [id], onDelete: Restrict)
+
+  @@index([offerId, sortOrder])
+}
+
+model CommercialOfferToken {
+  id           String    @id @default(cuid())
+  offerId      String
+  /** SHA-256 of raw token — never store raw token. */
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  lastViewedAt DateTime?
+  createdAt    DateTime  @default(now())
+
+  offer CommercialOffer @relation(fields: [offerId], references: [id], onDelete: Restrict)
+
+  @@index([offerId])
+}
+
+model OfferAcceptance {
+  id                          String   @id @default(cuid())
+  offerId                     String   @unique
+  acceptedAt                  DateTime
+  acceptedEmail               String
+  termsVersion                String
+  privacyVersion              String
+  billingAuthorizationVersion String?
+  commercialTermsHash         String
+  ipAddress                   String?
+  userAgent                   String?
+
+  offer CommercialOffer @relation(fields: [offerId], references: [id], onDelete: Restrict)
+}
+
+model BillingCustomer {
+  id               String             @id @default(cuid())
+  prospectId       String?
+  workspaceId      String?            @unique
+  email            String
+  stripeCustomerId String?            @unique
+  source           SubscriptionSource
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  prospect      PlatformProspect? @relation(fields: [prospectId], references: [id], onDelete: SetNull)
+  workspace     Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  subscriptions Subscription[]
+
+  @@index([email])
+}
+
+/**
+ * Canonical application billing record.
+ * workspaceId is NOT unique — history of many subscriptions per workspace.
+ * Current operational sub is Workspace.currentSubscriptionId.
+ */
+model Subscription {
+  id                      String             @id @default(cuid())
+  workspaceId             String?
+  /** Originating accepted offer (unique when set). Null for grandfathered/internal. */
+  offerId                 String?            @unique
+  billingCustomerId       String
+  source                  SubscriptionSource
+  status                  SubscriptionStatus
+  /** Required logically for STRIPE SaaS; null for GRANDFATHERED/INTERNAL. */
+  planCode                PlanCode?
+  entitlementProfileCode  String?
+  billingCadence          BillingCadence?
+  currency                String             @default("CAD")
+  recurringAmountCents    Int?
+  setupFeeCents           Int?
+  includedSeats           Int
+  additionalSeats         Int                @default(0)
+  stripeSubscriptionId    String?            @unique
+  stripePriceId           String?
+  stripeCheckoutSessionId String?            @unique
+  currentPeriodStart      DateTime?
+  currentPeriodEnd        DateTime?
+  cancelAtPeriodEnd       Boolean            @default(false)
+  trialEndsAt             DateTime?
+  pastDueSince            DateTime?
+  canceledAt              DateTime?
+  commercialSnapshotJson  Json
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  workspace           Workspace?       @relation("WorkspaceSubscriptions", fields: [workspaceId], references: [id], onDelete: SetNull)
+  currentForWorkspace Workspace?       @relation("WorkspaceCurrentSubscription")
+  offer               CommercialOffer? @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  billingCustomer     BillingCustomer  @relation(fields: [billingCustomerId], references: [id], onDelete: Restrict)
+  provisioningRun     ProvisioningRun?
+
+  @@index([status, workspaceId])
+  @@index([workspaceId])
+}
+
+model WorkspaceEntitlement {
+  id          String            @id @default(cuid())
+  workspaceId String
+  featureCode String
+  enabled     Boolean           @default(true)
+  source      EntitlementSource
+  grantId     String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, featureCode])
+  @@index([workspaceId])
+}
+
+model WorkspaceSeatQuota {
+  workspaceId     String   @id
+  includedSeats   Int
+  additionalSeats Int      @default(0)
+  seatLimit       Int
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model AddOnGrant {
+  id               String           @id @default(cuid())
+  workspaceId      String
+  addOnCode        AddOnCode
+  status           AddOnGrantStatus @default(PENDING_FULFILLMENT)
+  sourceOfferId    String?
+  startsAt         DateTime?
+  endsAt           DateTime?
+  fulfillmentNotes String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sourceOffer CommercialOffer? @relation(fields: [sourceOfferId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, addOnCode])
+}
+
+model ProvisioningRun {
+  id             String                @id @default(cuid())
+  offerId        String                @unique
+  subscriptionId String                @unique
+  workspaceId    String?               @unique
+  status         ProvisioningRunStatus @default(PENDING)
+  idempotencyKey String                @unique
+  attemptCount   Int                   @default(0)
+  lastError      String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  offer        CommercialOffer    @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  subscription Subscription       @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  workspace    Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  steps        ProvisioningStep[]
+}
+
+model ProvisioningStep {
+  id           String                 @id @default(cuid())
+  runId        String
+  stepKey      String
+  status       ProvisioningStepStatus @default(PENDING)
+  attemptCount Int                    @default(0)
+  lastError    String?
+  outputRef    String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  run ProvisioningRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, stepKey])
+  @@index([runId, stepKey])
+}
+
+model WorkspaceStatusEvent {
+  id              String                    @id @default(cuid())
+  workspaceId     String
+  fromStatus      WorkspaceStatus
+  toStatus        WorkspaceStatus
+  reasonCode      WorkspaceStatusReasonCode
+  reasonDetail    String?
+  actorType       WorkspaceStatusActorType
+  actorOperatorId String?
+  createdAt       DateTime                  @default(now())
+
+  workspace     Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  actorOperator PlatformOperator? @relation(fields: [actorOperatorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+}
+
+/**
+ * Platform commercial/ops audit.
+ * NEVER STORE TENANT CRM PII OR CRM CONTENT HERE.
+ */
+model PlatformAuditEvent {
+  id              String                 @id @default(cuid())
+  actorOperatorId String?
+  actorType       PlatformAuditActorType
+  action          String
+  entityType      String
+  entityId        String
+  summary         String
+  metadata        Json?
+  createdAt       DateTime               @default(now())
+
+  actorOperator PlatformOperator? @relation(fields: [actorOperatorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([actorOperatorId, createdAt])
+}
+
+model WorkspaceEmailIdentity {
+  workspaceId       String                     @id
+  contactEmail      String?
+  replyToEmail      String?
+  senderDisplayName String?
+  customDomain      String?
+  domainStatus      WorkspaceEmailDomainStatus @default(NONE)
+  dnsRecordsJson    Json?
+  fallbackFrom      String?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }

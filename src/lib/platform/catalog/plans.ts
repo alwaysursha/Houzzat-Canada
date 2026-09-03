@@ -1,0 +1,120 @@
+/**
+ * Stage 6.2A — commercial plan catalog (approved constants).
+ * Stripe price IDs are intentionally absent until Stripe is configured.
+ */
+
+import type { PlanCode } from "@prisma/client";
+import {
+  FEATURE_AGENT_APP,
+  FEATURE_CUSTOM_CONSUMER_APP,
+  FEATURE_LIVE_CHAT,
+  FEATURE_SEO_FOUNDATION,
+  FEATURE_TEAM_MANAGEMENT,
+  type PlatformFeatureCode,
+} from "./features";
+
+export type BillingCadenceCode = "MONTHLY" | "ANNUAL";
+
+export type PlanDefinition = {
+  planCode: PlanCode;
+  includedSeats: number;
+  /** Solo forever forbids purchasing additional seats. */
+  additionalSeatsAllowed: boolean;
+  monthlyPriceCents: number;
+  annualPriceCents: number;
+  currency: "CAD";
+  features: Record<PlatformFeatureCode, boolean>;
+  /** Consumer branded app add-on availability (fulfillment / commercial, not Stripe yet). */
+  consumerBrandedApp: {
+    available: boolean;
+    /** Planned internal one-time cents when available; null when unavailable. */
+    oneTimeCents: number | null;
+  };
+};
+
+export const STANDARD_SETUP_FEE_CENTS = 49_900;
+
+/** Additional Agent add-on — TEAM / BROKERAGE only; annual. */
+export const ADDITIONAL_AGENT_ANNUAL_CENTS = 89_900;
+
+export const PLAN_DEFINITIONS: Record<PlanCode, PlanDefinition> = {
+  SOLO: {
+    planCode: "SOLO",
+    includedSeats: 1,
+    additionalSeatsAllowed: false,
+    monthlyPriceCents: 39_900,
+    annualPriceCents: 399_000,
+    currency: "CAD",
+    features: {
+      [FEATURE_LIVE_CHAT]: false,
+      [FEATURE_SEO_FOUNDATION]: true,
+      [FEATURE_AGENT_APP]: true,
+      [FEATURE_TEAM_MANAGEMENT]: false,
+      [FEATURE_CUSTOM_CONSUMER_APP]: false,
+    },
+    consumerBrandedApp: {
+      available: false,
+      oneTimeCents: null,
+    },
+  },
+  TEAM: {
+    planCode: "TEAM",
+    includedSeats: 4,
+    additionalSeatsAllowed: true,
+    monthlyPriceCents: 59_900,
+    annualPriceCents: 599_000,
+    currency: "CAD",
+    features: {
+      [FEATURE_LIVE_CHAT]: true,
+      [FEATURE_SEO_FOUNDATION]: true,
+      [FEATURE_AGENT_APP]: true,
+      [FEATURE_TEAM_MANAGEMENT]: true,
+      [FEATURE_CUSTOM_CONSUMER_APP]: false,
+    },
+    consumerBrandedApp: {
+      available: true,
+      oneTimeCents: 250_000,
+    },
+  },
+  BROKERAGE: {
+    planCode: "BROKERAGE",
+    includedSeats: 20,
+    additionalSeatsAllowed: true,
+    monthlyPriceCents: 149_900,
+    annualPriceCents: 1_499_000,
+    currency: "CAD",
+    features: {
+      [FEATURE_LIVE_CHAT]: true,
+      [FEATURE_SEO_FOUNDATION]: true,
+      [FEATURE_AGENT_APP]: true,
+      [FEATURE_TEAM_MANAGEMENT]: true,
+      [FEATURE_CUSTOM_CONSUMER_APP]: false,
+    },
+    consumerBrandedApp: {
+      available: true,
+      oneTimeCents: 199_900,
+    },
+  },
+};
+
+export function getPlanDefinition(planCode: PlanCode): PlanDefinition {
+  return PLAN_DEFINITIONS[planCode];
+}
+
+export function planAllowsAdditionalSeats(planCode: PlanCode): boolean {
+  return PLAN_DEFINITIONS[planCode].additionalSeatsAllowed;
+}
+
+export function computeSeatLimit(
+  includedSeats: number,
+  additionalSeats: number,
+): number {
+  return includedSeats + additionalSeats;
+}
+
+export function planFeatureEnabled(
+  planCode: PlanCode,
+  featureCode: PlatformFeatureCode,
+): boolean {
+  return PLAN_DEFINITIONS[planCode].features[featureCode];
+}

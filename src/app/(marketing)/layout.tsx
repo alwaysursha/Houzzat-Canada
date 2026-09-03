@@ -26,6 +26,15 @@ import {
 import { getExpertWhatsAppNumber } from "@/lib/whatsapp";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import { isHouzzatProPlatformBootstrapRequest } from "@/lib/mobile/platform-bootstrap-request";
+import {
+  HOUZZATPRO_SUPPORT_DOCUMENT_TITLE,
+  isHouzzatProPlatformSupportRequest,
+  PLATFORM_SUSPENDED_DOCUMENT_TITLE,
+} from "@/lib/platform/status";
+import { resolvePlatformSuspendedHost } from "@/lib/platform/status/resolve-suspended-host";
+import {
+  PlatformSuspendedPage,
+} from "@/components/platform/status/PlatformSuspendedPage";
 
 /** Hostname-aware tenancy — must not be statically generated (see tenancy-cache-policy). */
 export const dynamic = "force-dynamic";
@@ -33,6 +42,18 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
   if (await isHouzzatProPlatformBootstrapRequest()) {
     return { title: PLATFORM_PRODUCT_NAME, robots: { index: false, follow: false } };
+  }
+  if (await isHouzzatProPlatformSupportRequest()) {
+    return {
+      title: HOUZZATPRO_SUPPORT_DOCUMENT_TITLE,
+      robots: { index: false, follow: false },
+    };
+  }
+  if (await resolvePlatformSuspendedHost()) {
+    return {
+      title: PLATFORM_SUSPENDED_DOCUMENT_TITLE,
+      robots: { index: false, follow: false },
+    };
   }
   const tenancy = await resolveMarketingTenancy();
   if (!tenancy) {
@@ -53,6 +74,14 @@ export default async function MarketingLayout({
 }>) {
   if (await isHouzzatProPlatformBootstrapRequest()) {
     return <>{children}</>;
+  }
+
+  if (await isHouzzatProPlatformSupportRequest()) {
+    return <>{children}</>;
+  }
+
+  if (await resolvePlatformSuspendedHost()) {
+    return <PlatformSuspendedPage />;
   }
 
   const tenancy = await resolveMarketingTenancy();

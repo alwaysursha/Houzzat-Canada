@@ -91,6 +91,9 @@ function resolveFromDomainRow(
   if (row.domainStatus !== "ACTIVE") {
     return deny(normalizedHostname, "domain_inactive");
   }
+  if (row.workspaceStatus === "SUSPENDED") {
+    return deny(normalizedHostname, "workspace_suspended");
+  }
   if (row.workspaceStatus !== "ACTIVE") {
     return deny(normalizedHostname, "workspace_inactive");
   }

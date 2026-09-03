@@ -19,10 +19,19 @@ import {
   resolveMarketingTenancy,
 } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { buildMarketingRootMetadata } from "@/lib/tenancy/tenant-seo";
+import { PLATFORM_SUSPENDED_DOCUMENT_TITLE } from "@/lib/platform/status";
+import { resolvePlatformSuspendedHost } from "@/lib/platform/status/resolve-suspended-host";
+import { PlatformSuspendedPage } from "@/components/platform/status/PlatformSuspendedPage";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
+  if (await resolvePlatformSuspendedHost()) {
+    return {
+      title: PLATFORM_SUSPENDED_DOCUMENT_TITLE,
+      robots: { index: false, follow: false },
+    };
+  }
   const tenancy = await resolveMarketingTenancy();
   if (!tenancy) {
     return { title: "Account" };
@@ -47,6 +56,10 @@ export default async function AccountLayout({
 }: {
   children: React.ReactNode;
 }) {
+  if (await resolvePlatformSuspendedHost()) {
+    return <PlatformSuspendedPage />;
+  }
+
   let session;
   try {
     session = await auth();
