@@ -392,9 +392,10 @@ async function main() {
     const copy = read("src/lib/platform/public/book-demo-copy.ts");
     assert.ok(page.includes("BookDemoForm"));
     assert.ok(page.includes("houzzat-pro-mark.png"));
-    assert.ok(form.includes("Book a Demo"));
+    assert.ok(form.includes("BOOK_DEMO_CTA_LABEL") || form.includes("Book My Private Demo"));
+    assert.ok(copy.includes("Book My Private Demo"));
     assert.ok(form.includes("type=\"tel\""));
-    assert.ok(form.includes("Submitting"));
+    assert.ok(form.includes("Submitting") || form.includes("BOOK_DEMO_CTA_SUBMITTING"));
     assert.ok(copy.includes("Thank You"));
     assert.ok(!/demo time is booked|email has been sent|salesperson has been assigned/i.test(copy));
     console.log("[10] Form UX + honest success copy... PASS");

@@ -259,3 +259,31 @@ body {
   }
 }
 
+/* Stage 6.6B.2 — Book a Demo premium entrance (restrained) */
+@keyframes book-demo-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.book-demo-page aside > .relative.z-10,
+.book-demo-page main > .relative.z-10 {
+  animation: book-demo-in 0.55s ease-out both;
+}
+
+.book-demo-page main > .relative.z-10 {
+  animation-delay: 0.08s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book-demo-page aside > .relative.z-10,
+  .book-demo-page main > .relative.z-10 {
+    animation: none !important;
+  }
+}
+
