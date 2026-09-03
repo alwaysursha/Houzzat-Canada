@@ -4,7 +4,10 @@ import {
   buildCursorPage,
   type PlatformListParams,
 } from "@/lib/platform/api/pagination";
-import { serializeOfferSummary } from "@/lib/platform/read/serialize";
+import {
+  serializeOfferSummary,
+  serializeProspect,
+} from "@/lib/platform/read/serialize";
 
 const offerInclude = {
   lineItems: { orderBy: { sortOrder: "asc" as const } },
@@ -12,6 +15,7 @@ const offerInclude = {
   acceptance: true,
   subscription: true,
   provisioningRun: true,
+  prospect: true,
 } satisfies Prisma.CommercialOfferInclude;
 
 export async function listPlatformOffers(params: PlatformListParams) {
@@ -35,7 +39,10 @@ export async function listPlatformOffers(params: PlatformListParams) {
 
   const page = buildCursorPage(rows, params.limit);
   return {
-    items: page.items.map(serializeOfferSummary),
+    items: page.items.map((row) => ({
+      ...serializeOfferSummary(row),
+      prospect: serializeProspect(row.prospect),
+    })),
     nextCursor: page.nextCursor,
   };
 }
@@ -46,5 +53,8 @@ export async function getPlatformOfferDetail(offerId: string) {
     include: offerInclude,
   });
   if (!offer) return null;
-  return serializeOfferSummary(offer);
+  return {
+    ...serializeOfferSummary(offer),
+    prospect: serializeProspect(offer.prospect),
+  };
 }

@@ -18,6 +18,7 @@ import type {
   WorkspaceSeatQuota,
   WorkspaceStatusEvent,
 } from "@prisma/client";
+import { computeOfferTotals } from "@/lib/platform/offers/line-items";
 
 export function serializeStripePresence(input: {
   stripeCustomerId?: string | null;
@@ -273,6 +274,13 @@ export function serializeOfferSummary(
       quantity: item.quantity,
       sortOrder: item.sortOrder,
     })),
+    ...(() => {
+      const totals = computeOfferTotals(offer.lineItems ?? []);
+      return {
+        recurringTotalCents: totals.recurringTotalCents,
+        oneTimeTotalCents: totals.oneTimeTotalCents,
+      };
+    })(),
     tokens: (offer.tokens ?? []).map((token) => ({
       id: token.id,
       expiresAt: token.expiresAt.toISOString(),

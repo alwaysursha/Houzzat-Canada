@@ -47,8 +47,15 @@ export default async function PlatformOffersPage({ searchParams }: PageProps) {
     <>
       <PlatformPageHeader
         title="Commercial offers"
-        description="Read-only commercial offer records. Token secrets are never displayed."
-      />
+        description="Negotiated private sales offers. Token secrets are never displayed."
+      >
+        <Link
+          href="/platform/offers/new"
+          className="inline-flex rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
+        >
+          + New Offer
+        </Link>
+      </PlatformPageHeader>
 
       {errorMessage ? (
         <PlatformErrorState title="Offers unavailable" message={errorMessage} />

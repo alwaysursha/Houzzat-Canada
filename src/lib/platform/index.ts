@@ -68,6 +68,8 @@ export {
   PLAN_DEFINITIONS,
   STANDARD_SETUP_FEE_CENTS,
   ADDITIONAL_AGENT_ANNUAL_CENTS,
+  ADDITIONAL_AGENT_MONTHLY_CENTS,
+  getAdditionalAgentUnitCents,
   getPlanDefinition,
   planAllowsAdditionalSeats,
   planFeatureEnabled,
@@ -220,3 +222,19 @@ export {
   listPlatformAuditEvents,
   PLATFORM_READ_BOUNDARY,
 } from "./read";
+
+export {
+  PLATFORM_OFFERS_MODULE,
+  COMMERCIAL_OFFER_AUDIT,
+  CommercialOfferActionError,
+  createDraftCommercialOffer,
+  updateDraftCommercialOffer,
+  sendCommercialOffer,
+  cancelCommercialOffer,
+  resolveOfferCommercialTerms,
+  computeOfferTotals,
+  createCommercialOfferRawToken,
+  hashCommercialOfferToken,
+  buildPrivateOfferUrl,
+  ADS_MINIMUM_MONTHLY_BUDGET_CENTS,
+} from "./offers";

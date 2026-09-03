@@ -100,7 +100,6 @@ console.log("\n=== STAGE 6.4 — PLATFORM READ-ONLY UI ===\n");
 // 5. No offer/secret controls in UI (prospect writes arrive in Stage 6.6A)
 {
   const writePatterns = [
-    /Create offer/i,
     /tokenHash/,
     /sk_live_/,
     /sk_test_/,
@@ -114,7 +113,12 @@ console.log("\n=== STAGE 6.4 — PLATFORM READ-ONLY UI ===\n");
       assert.ok(!re.test(src), `${file} contains forbidden write/secret pattern ${re}`);
     }
   }
-  console.log("[5] No offer/secret fields in UI... PASS");
+  // Stage 6.7A introduces Create Offer UI — still must never expose tokenHash.
+  assert.ok(
+    uiFiles.some((file) => /Create Offer/i.test(read(file))),
+    "Create Offer UI expected in Stage 6.7A",
+  );
+  console.log("[5] No offer secret fields in UI (Create Offer allowed)... PASS");
 }
 
 // 6. Shell navigation excludes CRM

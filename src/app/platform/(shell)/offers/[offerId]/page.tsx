@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PlatformOfferActions } from "@/components/platform/PlatformOfferActions";
 import { PlatformDetailGrid } from "@/components/platform/PlatformDetailGrid";
 import {
   PlatformBadge,
@@ -67,15 +68,37 @@ export default async function PlatformOfferDetailPage({ params }: PageProps) {
   const acceptance = asRecord(offer.acceptance);
   const subscription = asRecord(offer.subscription);
   const provisioning = asRecord(offer.provisioning);
+  const prospect = asRecord(offer.prospect);
+  const prospectLabel = prospect
+    ? `${str(prospect.contactName) || str(prospect.businessName)} · ${str(prospect.email)}`
+    : str(offer.prospectId);
 
   return (
     <>
       <PlatformPageHeader
         title={`Offer ${str(offer.id).slice(0, 8)}…`}
-        description="Read-only commercial offer detail."
+        description="Commercial offer detail. Token secrets are never displayed."
       />
 
       <div className="space-y-6">
+        <PlatformOfferActions
+          offerId={str(offer.id)}
+          status={str(offer.status)}
+          prospectLabel={prospectLabel}
+          planCode={str(offer.planCode)}
+          billingCadence={str(offer.billingCadence)}
+          recurringTotalCents={
+            (offer.recurringTotalCents as number | undefined) ??
+            (offer.negotiatedRecurringAmountCents as number)
+          }
+          oneTimeTotalCents={(offer.oneTimeTotalCents as number | undefined) ?? 0}
+          includedSeats={Number(offer.includedSeats ?? 0)}
+          additionalSeats={Number(offer.additionalSeats ?? 0)}
+          expiresAt={
+            offer.expiresAt ? formatPlatformDate(str(offer.expiresAt)) : null
+          }
+        />
+
         <PlatformPanel title="Offer summary">
           <PlatformDetailGrid
             items={[
@@ -87,7 +110,7 @@ export default async function PlatformOfferDetailPage({ params }: PageProps) {
                     href={`/platform/prospects/${str(offer.prospectId)}`}
                     className="text-emerald-400 hover:text-emerald-300"
                   >
-                    {str(offer.prospectId)}
+                    {prospectLabel}
                   </Link>
                 ),
               },
@@ -102,11 +125,11 @@ export default async function PlatformOfferDetailPage({ params }: PageProps) {
               { label: "Plan", value: str(offer.planCode) },
               { label: "Cadence", value: str(offer.billingCadence) },
               {
-                label: "Standard amount",
+                label: "Standard recurring",
                 value: formatCents(offer.standardRecurringAmountCents as number | null),
               },
               {
-                label: "Negotiated amount",
+                label: "Negotiated recurring",
                 value: formatCents(offer.negotiatedRecurringAmountCents as number | null),
               },
               {
@@ -114,10 +137,22 @@ export default async function PlatformOfferDetailPage({ params }: PageProps) {
                 value: formatCents(offer.setupFeeCents as number | null),
               },
               {
+                label: "Recurring total",
+                value: formatCents(offer.recurringTotalCents as number | null),
+              },
+              {
+                label: "One-time total",
+                value: formatCents(offer.oneTimeTotalCents as number | null),
+              },
+              {
                 label: "Seats",
                 value: `${str(offer.includedSeats)} included + ${str(offer.additionalSeats)} additional`,
               },
               { label: "Trial days", value: str(offer.trialDays) },
+              {
+                label: "Proposed start",
+                value: formatPlatformDate(str(offer.proposedStartDate)),
+              },
               { label: "Expires", value: formatPlatformDate(str(offer.expiresAt)) },
               { label: "Sent", value: formatPlatformDate(str(offer.sentAt)) },
               { label: "Viewed", value: formatPlatformDate(str(offer.viewedAt)) },
@@ -135,6 +170,7 @@ export default async function PlatformOfferDetailPage({ params }: PageProps) {
                 <tr>
                   <th className="px-4 py-2">Description</th>
                   <th className="px-4 py-2">Kind</th>
+                  <th className="px-4 py-2">Qty</th>
                   <th className="px-4 py-2">Amount</th>
                   <th className="px-4 py-2">Recurring</th>
                 </tr>
@@ -144,6 +180,7 @@ export default async function PlatformOfferDetailPage({ params }: PageProps) {
                   <tr key={str(item.id)}>
                     <td className="px-4 py-2 text-slate-200">{str(item.description)}</td>
                     <td className="px-4 py-2 text-slate-400">{str(item.kind)}</td>
+                    <td className="px-4 py-2 text-slate-300">{str(item.quantity)}</td>
                     <td className="px-4 py-2 text-slate-300">
                       {formatCents(item.amountCents as number | null)}
                     </td>
@@ -181,7 +218,7 @@ export default async function PlatformOfferDetailPage({ params }: PageProps) {
 
           <PlatformPanel title="Token metadata">
             {asArray(offer.tokens).length === 0 ? (
-              <p className="text-sm text-slate-400">No active token metadata.</p>
+              <p className="text-sm text-slate-400">No token metadata.</p>
             ) : (
               <ul className="space-y-2 text-sm text-slate-300">
                 {asArray(offer.tokens).map((token) => (
@@ -189,6 +226,7 @@ export default async function PlatformOfferDetailPage({ params }: PageProps) {
                     <p>Token ID: {str(token.id).slice(0, 8)}…</p>
                     <p className="text-xs text-slate-500">
                       Expires {formatPlatformDate(str(token.expiresAt))}
+                      {token.revokedAt ? " · revoked" : ""}
                     </p>
                   </li>
                 ))}

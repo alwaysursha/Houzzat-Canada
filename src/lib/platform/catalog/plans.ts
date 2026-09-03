@@ -34,8 +34,12 @@ export type PlanDefinition = {
 
 export const STANDARD_SETUP_FEE_CENTS = 49_900;
 
-/** Additional Agent add-on — TEAM / BROKERAGE only; annual. */
-export const ADDITIONAL_AGENT_ANNUAL_CENTS = 89_900;
+/** @deprecated Prefer catalog/add-ons — re-exported for Stage 6.2A lock compatibility. */
+export {
+  ADDITIONAL_AGENT_ANNUAL_CENTS,
+  ADDITIONAL_AGENT_MONTHLY_CENTS,
+  getAdditionalAgentUnitCents,
+} from "./add-ons";
 
 export const PLAN_DEFINITIONS: Record<PlanCode, PlanDefinition> = {
   SOLO: {

@@ -84,6 +84,7 @@
     "stage-6.5a-workspace-status:selftest": "node --import tsx scripts/stage-6.5a-workspace-status-selftest.ts",
     "stage-6.5b-platform-suspended-page:selftest": "node --import tsx scripts/stage-6.5b-platform-suspended-page-selftest.ts",
     "stage-6.5b.1-houzzatpro-support:selftest": "node --import tsx scripts/stage-6.5b.1-houzzatpro-support-selftest.ts",
+    "stage-6.7a-commercial-offer-management:selftest": "node --import tsx scripts/stage-6.7a-commercial-offer-management-selftest.ts",
     "workspace:grandfather-houzzat": "node --import tsx scripts/grandfather-houzzat-workspace.ts",
     "platform:provision-master-admin": "node --import tsx scripts/provision-platform-master-admin.ts",
     "platform-host-pre-cutover:selftest": "node --import tsx scripts/platform-host-pre-cutover-selftest.ts",

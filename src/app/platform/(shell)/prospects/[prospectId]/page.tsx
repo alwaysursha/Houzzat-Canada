@@ -96,7 +96,14 @@ export default async function PlatformProspectDetailPage({ params }: PageProps) 
       <PlatformPageHeader
         title={title}
         description="Platform sales prospect — distinct from tenant CRM leads."
-      />
+      >
+        <Link
+          href={`/platform/offers/new?prospectId=${encodeURIComponent(rawStr(prospect.id))}`}
+          className="inline-flex rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
+        >
+          Create Offer
+        </Link>
+      </PlatformPageHeader>
 
       <div className="space-y-6">
         <PlatformProspectActions
