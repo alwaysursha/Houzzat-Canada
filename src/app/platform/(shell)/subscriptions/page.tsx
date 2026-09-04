@@ -60,6 +60,7 @@ export default async function PlatformSubscriptionsPage({ searchParams }: PagePr
           <PlatformTableWrap>
             <thead className="bg-slate-900/60 text-left text-xs uppercase tracking-wide text-slate-400">
               <tr>
+                <th className="px-4 py-3">Subscription</th>
                 <th className="px-4 py-3">Workspace</th>
                 <th className="px-4 py-3">Source</th>
                 <th className="px-4 py-3">Status</th>
@@ -82,6 +83,14 @@ export default async function PlatformSubscriptionsPage({ searchParams }: PagePr
                   .join(", ");
                 return (
                   <tr key={str(item.id)} className="hover:bg-slate-800/40">
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/platform/subscriptions/${str(item.id)}`}
+                        className="font-medium text-emerald-400 hover:text-emerald-300"
+                      >
+                        {str(item.id).slice(0, 8)}…
+                      </Link>
+                    </td>
                     <td className="px-4 py-3">
                       {item.workspaceId ? (
                         <Link

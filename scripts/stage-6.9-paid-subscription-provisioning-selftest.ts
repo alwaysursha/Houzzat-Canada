@@ -1023,6 +1023,17 @@ async function main() {
       }),
       "Acme Brokerage",
     );
+    const subscriptionsList = read(
+      "src/app/platform/(shell)/subscriptions/page.tsx",
+    );
+    assert.ok(
+      subscriptionsList.includes("/platform/subscriptions/"),
+      "subscriptions list must link to subscription detail",
+    );
+    assert.ok(
+      subscriptionsList.includes("Subscription"),
+      "subscriptions list must expose a Subscription column",
+    );
     console.log("[0] Source guards (Neon HTTP + webhook + steps)... PASS");
   }
 

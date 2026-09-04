@@ -106,7 +106,11 @@ export function PlatformSubscriptionProvisioningActions({
           onClick={() => void retryProvisioning()}
           className="rounded-lg border border-emerald-800/70 bg-emerald-950/30 px-4 py-2 text-sm font-medium text-emerald-100 hover:bg-emerald-950/50 disabled:opacity-60"
         >
-          {submitting ? "Working…" : "Retry Provisioning"}
+          {submitting
+            ? "Working…"
+            : provisioningStatus
+              ? "Retry Provisioning"
+              : "Start Provisioning"}
         </button>
       </div>
     </section>
