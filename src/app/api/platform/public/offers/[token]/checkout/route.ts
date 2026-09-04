@@ -97,8 +97,8 @@ export async function POST(request: Request, context: RouteContext) {
       {
         ok: true as const,
         data: {
-          // Only return the hosted Checkout URL — never Stripe customer/sub ids.
-          checkoutUrl: result.checkoutUrl,
+          // Embedded Checkout client secret only — never Stripe customer/sub ids.
+          clientSecret: result.clientSecret,
         },
       },
       {

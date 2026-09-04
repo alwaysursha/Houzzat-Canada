@@ -223,13 +223,16 @@ function createFakeStripe(state: FakeState) {
           const id = `cs_${state.nextId++}`;
           const session = {
             id,
-            url: `https://checkout.stripe.test/pay/${id}`,
+            client_secret: `cs_test_secret_${id}`,
+            ui_mode: params.ui_mode ?? "embedded",
             status: "open",
             metadata: params.metadata ?? {},
             subscription: null,
             customer: params.customer,
             payment_status: "unpaid",
             line_items: params.line_items,
+            return_url: params.return_url,
+            url: null,
           };
           state.stripeSessions.push(session);
           return session;
@@ -718,7 +721,7 @@ async function main() {
       prisma: db,
       stripe: stripe as never,
     });
-    assert.ok(first.checkoutUrl.startsWith("https://checkout.stripe.test/"));
+    assert.ok(first.clientSecret.startsWith("cs_test_secret_"));
     assert.equal(state.subscriptions.size, 1);
     assert.equal(state.stripeSessions.length, 1);
     assert.equal(state.workspaces, 0);
@@ -736,10 +739,16 @@ async function main() {
     );
 
     const session = state.stripeSessions[0]! as {
+      ui_mode?: string;
+      return_url?: string;
       line_items?: Array<{
         price_data?: { unit_amount?: number; recurring?: { interval: string } };
       }>;
     };
+    assert.equal(session.ui_mode, "embedded");
+    assert.ok(
+      String(session.return_url).includes("/subscribe/payment/status?session_id="),
+    );
     const recurringLine = session.line_items?.[0];
     const oneTimeLine = session.line_items?.[1];
     assert.equal(
@@ -899,10 +908,39 @@ async function main() {
     const acceptedUi = read(
       "src/components/platform/public/PrivateOfferProposal.tsx",
     );
+    const cta = read(
+      "src/components/platform/public/PrivateOfferCheckoutButton.tsx",
+    );
+    const embedded = read(
+      "src/components/platform/public/PrivateOfferEmbeddedCheckout.tsx",
+    );
+    const checkoutPage = read(
+      "src/app/(marketing)/subscribe/[token]/checkout/page.tsx",
+    );
+    const chromeGate = read(
+      "src/lib/platform/offers/private-offer-request.ts",
+    );
     const copy = read("src/lib/platform/offers/private-offer-copy.ts");
+    const checkoutSrc = read("src/lib/platform/billing/checkout.ts");
+    const apiRoute = read(
+      "src/app/api/platform/public/offers/[token]/checkout/route.ts",
+    );
     assert.ok(acceptedUi.includes("PrivateOfferCheckoutButton"));
     assert.ok(acceptedUi.includes("checkoutEligible"));
+    assert.ok(cta.includes("/checkout"));
+    assert.ok(!cta.includes("checkoutUrl"));
+    assert.ok(!cta.includes("window.location.assign"));
+    assert.ok(embedded.includes("EmbeddedCheckoutProvider"));
+    assert.ok(checkoutPage.includes("PrivateOfferEmbeddedCheckout"));
+    assert.ok(chromeGate.includes("PRIVATE_OFFER_PATH_PREFIX"));
+    assert.ok(!chromeGate.includes('tokenPart.includes("/")'));
     assert.ok(copy.includes("Complete Subscription"));
+    assert.ok(checkoutSrc.includes('ui_mode: "embedded"'));
+    assert.ok(checkoutSrc.includes("return_url"));
+    assert.ok(!checkoutSrc.includes("success_url"));
+    assert.ok(!checkoutSrc.includes("cancel_url"));
+    assert.ok(apiRoute.includes("clientSecret"));
+    assert.ok(!apiRoute.includes("checkoutUrl"));
     assert.ok(copy.includes(PRIVATE_OFFER_ACCEPTED_TITLE_SNIPPET()));
     assert.ok(
       !read("src/lib/platform/legal/content/houzzatpro-terms.ts").includes(
@@ -914,7 +952,7 @@ async function main() {
         "createCheckout",
       ),
     );
-    console.log("[6] Accepted UX CTA (minimal)... PASS");
+    console.log("[6] Accepted UX CTA + embedded chrome... PASS");
   }
 
   // 7. Metadata safety + no CRM imports in billing

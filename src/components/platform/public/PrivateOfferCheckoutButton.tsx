@@ -1,57 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   PRIVATE_OFFER_CHECKOUT_CTA,
   PRIVATE_OFFER_CHECKOUT_SUBMITTING,
 } from "@/lib/platform/offers/private-offer-copy";
+import { PRIVATE_OFFER_PATH_PREFIX } from "@/lib/platform/offers/constants";
+import { useState } from "react";
 
+/**
+ * Navigates to the on-site Embedded Checkout page.
+ * Does not redirect to checkout.stripe.com.
+ */
 export function PrivateOfferCheckoutButton({
   rawToken,
 }: {
   rawToken: string;
 }) {
+  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  async function onClick() {
-    setError(null);
+  function onClick() {
     setSubmitting(true);
-    try {
-      const response = await fetch(
-        `/api/platform/public/offers/${encodeURIComponent(rawToken)}/checkout`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-      const payload = (await response.json().catch(() => null)) as {
-        ok?: boolean;
-        message?: string;
-        data?: { checkoutUrl?: string };
-      } | null;
-      if (!response.ok || !payload?.ok || !payload.data?.checkoutUrl) {
-        setError(
-          payload?.message ||
-            "Unable to start Checkout right now. Please try again.",
-        );
-        return;
-      }
-      window.location.assign(payload.data.checkoutUrl);
-    } catch {
-      setError("Unable to start Checkout right now. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+    router.push(
+      `${PRIVATE_OFFER_PATH_PREFIX}/${encodeURIComponent(rawToken)}/checkout`,
+    );
   }
 
   return (
     <div className="mt-8">
-      {error ? (
-        <p className="mb-3 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
-          {error}
-        </p>
-      ) : null}
       <button
         type="button"
         onClick={onClick}

@@ -40,6 +40,13 @@ export const PRIVATE_OFFER_CHECKOUT_CTA = "Complete Subscription";
 export const PRIVATE_OFFER_CHECKOUT_SUBMITTING = "Starting Checkout…";
 export const PRIVATE_OFFER_CHECKOUT_PAID =
   "Subscription payment received. Workspace setup will follow shortly.";
+export const PRIVATE_OFFER_CHECKOUT_PAGE_TITLE = "Complete Subscription";
+export const PRIVATE_OFFER_CHECKOUT_PAGE_BODY =
+  "Secure payment is processed by Stripe on this HouzzatPRO page. Card details never touch HouzzatPRO servers.";
+export const PRIVATE_OFFER_CHECKOUT_BACK_LABEL = "Back to offer";
+export const PRIVATE_OFFER_CHECKOUT_LOADING = "Preparing secure Checkout…";
+export const PRIVATE_OFFER_CHECKOUT_UNAVAILABLE =
+  "Checkout is not available for this offer right now.";
 
 export const PRIVATE_OFFER_PAYMENT_STATUS_TITLE = "Subscription Payment";
 export const PRIVATE_OFFER_PAYMENT_STATUS_BODY =

@@ -1,5 +1,5 @@
 /**
- * Stage 6.8B — create Stripe-hosted Checkout for an ACCEPTED private offer.
+ * Stage 6.8B — create Stripe Embedded Checkout for an ACCEPTED private offer.
  *
  * Neon HTTP-safe: sequential findFirst/findUnique/create/update only.
  * Do not use interactive Prisma transactions or updateMany in this flow.
@@ -27,7 +27,6 @@ import {
 import { getStripeClient } from "@/lib/platform/billing/stripe-client";
 import { resolvePlanEntitlementProfile } from "@/lib/platform/entitlements/profiles";
 import { commercialTermsHashFromOfferRow } from "@/lib/platform/offers/commercial-terms-hash";
-import { PRIVATE_OFFER_PATH_PREFIX } from "@/lib/platform/offers/constants";
 import { hashCommercialOfferToken } from "@/lib/platform/offers/token";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 
@@ -53,7 +52,8 @@ export type CreateCheckoutForAcceptedOfferInput = {
 };
 
 export type CreateCheckoutForAcceptedOfferResult = {
-  checkoutUrl: string;
+  /** Stripe Checkout Session client_secret for Embedded Checkout mount. */
+  clientSecret: string;
   subscriptionId: string;
   offerId: string;
   reusedSubscription: boolean;
@@ -586,7 +586,7 @@ export async function createCheckoutForAcceptedOffer(
     commercialSnapshot,
   });
 
-  // Reuse an open Checkout Session when possible (idempotent UX).
+  // Reuse an open embedded Checkout Session when possible (idempotent UX).
   if (subscription.stripeCheckoutSessionId) {
     try {
       const existingSession = await stripe.checkout.sessions.retrieve(
@@ -594,11 +594,12 @@ export async function createCheckoutForAcceptedOffer(
       );
       if (
         existingSession.status === "open" &&
-        typeof existingSession.url === "string" &&
-        existingSession.url.length > 0
+        existingSession.ui_mode === "embedded" &&
+        typeof existingSession.client_secret === "string" &&
+        existingSession.client_secret.length > 0
       ) {
         return {
-          checkoutUrl: existingSession.url,
+          clientSecret: existingSession.client_secret,
           subscriptionId: subscription.id,
           offerId: offer.id,
           reusedSubscription: subscription.reused,
@@ -641,8 +642,7 @@ export async function createCheckoutForAcceptedOffer(
     });
   }
 
-  const successUrl = `${returnOrigin}${STRIPE_CHECKOUT_STATUS_PATH}?session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${returnOrigin}${PRIVATE_OFFER_PATH_PREFIX}/${encodeURIComponent(raw)}`;
+  const returnUrl = `${returnOrigin}${STRIPE_CHECKOUT_STATUS_PATH}?session_id={CHECKOUT_SESSION_ID}`;
 
   const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData =
     {
@@ -659,10 +659,10 @@ export async function createCheckoutForAcceptedOffer(
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
+    ui_mode: "embedded",
     customer: billingCustomer.stripeCustomerId,
     client_reference_id: subscription.id,
-    success_url: successUrl,
-    cancel_url: cancelUrl,
+    return_url: returnUrl,
     line_items: lineItems,
     subscription_data: subscriptionData,
     metadata: {
@@ -672,7 +672,7 @@ export async function createCheckoutForAcceptedOffer(
     },
   });
 
-  if (!session.url) {
+  if (!session.client_secret) {
     throw new OfferCheckoutPublicError(
       "Unable to start Checkout right now. Please try again shortly.",
       "CHECKOUT_SESSION_ERROR",
@@ -698,7 +698,7 @@ export async function createCheckoutForAcceptedOffer(
   });
 
   return {
-    checkoutUrl: session.url,
+    clientSecret: session.client_secret,
     subscriptionId: subscription.id,
     offerId: offer.id,
     reusedSubscription: subscription.reused,
