@@ -23,6 +23,15 @@ export {
   normalizeActivationEmail,
 } from "./activation/constants";
 
+export {
+  evaluateOwnerActivationEligibility,
+  sendOwnerActivationEmail,
+  resolvePublicOwnerActivation,
+  completeOwnerActivation,
+  OwnerActivationError,
+  OWNER_ACTIVATION_AUDIT,
+} from "./activation";
+
 export type { PlatformOperatorContext } from "./auth/require-platform-operator";
 export {
   requirePlatformOperator,

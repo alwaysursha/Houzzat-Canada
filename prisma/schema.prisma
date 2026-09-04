@@ -315,6 +315,23 @@ enum WorkspaceEmailDomainStatus {
   FAILED
 }
 
+/** Stage 6.10A — owner password activation token lifecycle. */
+enum WorkspaceOwnerActivationStatus {
+  PENDING
+  SENT
+  USED
+  REVOKED
+  EXPIRED
+}
+
+/** Stage 6.10A — durable onboarding step progress (no workflow engine). */
+enum WorkspaceOnboardingStepStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETE
+  SKIPPED
+}
+
 enum AgentTaskType {
   CALL
   EMAIL
@@ -422,6 +439,8 @@ model Workspace {
   billingCustomer BillingCustomer?
   commercialOffers CommercialOffer[]
   provisioningRuns ProvisioningRun[]
+  ownerActivations WorkspaceOwnerActivation[]
+  onboardingState  WorkspaceOnboardingState?
 
   @@index([status])
 }
@@ -616,6 +635,7 @@ model User {
   workspacesPrimaryAgentFor Workspace[]      @relation("WorkspacePrimaryAgent")
   /** Stage 6.1 — SaaS control-plane operator identity (NOT CRM / WorkspaceMember). */
   platformOperator         PlatformOperator?
+  ownerActivations         WorkspaceOwnerActivation[]
 }
 
 /** FCM/APNs token for Houzzat or HouzzatPro native shells. */
@@ -1809,6 +1829,7 @@ model PlatformOperator {
   offersCreated        CommercialOffer[]      @relation("OfferCreator")
   statusEvents         WorkspaceStatusEvent[]
   auditEvents          PlatformAuditEvent[]
+  ownerActivationsCreated WorkspaceOwnerActivation[] @relation("OwnerActivationCreator")
 
   @@index([status, role])
 }
@@ -2140,6 +2161,53 @@ model WorkspaceEmailIdentity {
   fallbackFrom      String?
   createdAt         DateTime                   @default(now())
   updatedAt         DateTime                   @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+/**
+ * Stage 6.10A — one-time hashed owner activation token.
+ * Raw token exists only in email/URL. At most one usable token per workspace/user
+ * is enforced in service logic (revoke prior PENDING/SENT on resend).
+ */
+model WorkspaceOwnerActivation {
+  id                    String                         @id @default(cuid())
+  workspaceId           String
+  userId                String
+  /** SHA-256 hex of raw token — never store raw token. */
+  tokenHash             String                         @unique
+  status                WorkspaceOwnerActivationStatus @default(PENDING)
+  expiresAt             DateTime
+  sentAt                DateTime?
+  usedAt                DateTime?
+  revokedAt             DateTime?
+  createdByType         PlatformAuditActorType         @default(OPERATOR)
+  createdByOperatorId   String?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+
+  workspace           Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdByOperator   PlatformOperator? @relation("OwnerActivationCreator", fields: [createdByOperatorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, userId, status])
+  @@index([userId, status])
+  @@index([expiresAt])
+}
+
+/**
+ * Stage 6.10A — durable non-design onboarding progress.
+ * templateThemeStatus stays NOT_STARTED until owner template design decision.
+ */
+model WorkspaceOnboardingState {
+  workspaceId           String                         @id
+  accountActivatedAt    DateTime?
+  businessProfileStatus WorkspaceOnboardingStepStatus  @default(NOT_STARTED)
+  brandingStatus        WorkspaceOnboardingStepStatus  @default(NOT_STARTED)
+  templateThemeStatus   WorkspaceOnboardingStepStatus  @default(NOT_STARTED)
+  emailIdentityStatus   WorkspaceOnboardingStepStatus  @default(NOT_STARTED)
+  completedAt           DateTime?
+  updatedAt             DateTime                       @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }

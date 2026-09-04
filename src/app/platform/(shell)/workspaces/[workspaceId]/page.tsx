@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PlatformDetailGrid, PlatformSection } from "@/components/platform/PlatformDetailGrid";
+import { PlatformOwnerActivationActions } from "@/components/platform/PlatformOwnerActivationActions";
 import { PlatformWorkspaceActions } from "@/components/platform/PlatformWorkspaceActions";
 import {
   PlatformBadge,
@@ -80,6 +81,16 @@ export default async function PlatformWorkspaceDetailPage({ params }: PageProps)
       />
 
       <div className="space-y-6">
+        <PlatformOwnerActivationActions
+          workspaceId={str(workspace.id)}
+          canSendOwnerActivation={Boolean(workspace.canSendOwnerActivation)}
+          activationEligibilityReason={
+            workspace.ownerActivationEligibilityReason
+              ? str(workspace.ownerActivationEligibilityReason)
+              : null
+          }
+        />
+
         <PlatformWorkspaceActions
           workspaceId={str(workspace.id)}
           workspaceName={str(workspace.name)}

@@ -5,6 +5,7 @@ import {
   type PlatformListParams,
 } from "@/lib/platform/api/pagination";
 import { getWorkspaceSeatConsumption } from "@/lib/platform/seats";
+import { evaluateOwnerActivationEligibility } from "@/lib/platform/activation";
 import {
   serializeBillingCustomerSummary,
   serializeBranding,
@@ -190,6 +191,10 @@ export async function getPlatformWorkspaceDetail(workspaceId: string) {
   if (!workspace) return null;
 
   const seatConsumption = await getWorkspaceSeatConsumption(workspace.id);
+  const activationEligibility = await evaluateOwnerActivationEligibility({
+    prisma,
+    workspaceId: workspace.id,
+  });
 
   return {
     ...(await buildWorkspaceControlPlaneRow(workspace)),
@@ -214,6 +219,8 @@ export async function getPlatformWorkspaceDetail(workspaceId: string) {
     })),
     seatConsumption,
     brandingDetail: serializeBranding(workspace.branding),
+    canSendOwnerActivation: activationEligibility.eligible,
+    ownerActivationEligibilityReason: activationEligibility.reason,
   };
 }
 
