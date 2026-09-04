@@ -21,7 +21,7 @@ import {
   PRIVATE_OFFER_CTA_SUPPORT_LABEL,
 } from "@/lib/platform/offers/private-offer-copy";
 import { PRIVATE_OFFER_PATH_PREFIX } from "@/lib/platform/offers/constants";
-import { resolveHouzzatProSupportCta } from "@/lib/platform/status";
+import { resolveHouzzatProSupportCta } from "@/lib/platform/status/support";
 
 function readPublishableKey(): string | null {
   const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() ?? "";

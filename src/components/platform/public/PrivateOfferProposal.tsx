@@ -25,7 +25,7 @@ import {
   PRIVATE_OFFER_UNAVAILABLE_SUPPORT,
   PRIVATE_OFFER_UNAVAILABLE_TITLE,
 } from "@/lib/platform/offers/private-offer-copy";
-import { resolveHouzzatProSupportCta } from "@/lib/platform/status";
+import { resolveHouzzatProSupportCta } from "@/lib/platform/status/support";
 
 function formatCad(cents: number): string {
   return new Intl.NumberFormat("en-CA", {
