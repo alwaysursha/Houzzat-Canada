@@ -154,6 +154,7 @@ function createFakePrisma(state: FakeState) {
       acceptance: state.acceptances.get(offerId)
         ? { ...state.acceptances.get(offerId) }
         : null,
+      subscription: null,
     };
   };
 

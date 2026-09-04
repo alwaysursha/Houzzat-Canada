@@ -57,7 +57,12 @@ export default async function PrivateSubscribeOfferPage({ params }: PageProps) {
   }
 
   if (result.kind === "accepted") {
-    return <PrivateOfferAccepted presentation={result.presentation} />;
+    return (
+      <PrivateOfferAccepted
+        presentation={result.presentation}
+        rawToken={token}
+      />
+    );
   }
 
   return (

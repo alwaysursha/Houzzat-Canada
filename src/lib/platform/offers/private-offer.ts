@@ -1,7 +1,7 @@
 /**
- * Stage 6.7B — resolve private commercial offer by raw token.
- * Read-only prospect experience — no Stripe / acceptance / provisioning.
- * Sequential Prisma writes only (Neon HTTP-safe: no interactive transactions / no updateMany).
+ * Stage 6.7B / 6.8B — resolve private commercial offer by raw token.
+ * Prospect experience — acceptance confirmation + checkout eligibility only.
+ * Sequential Prisma writes only (Neon HTTP-safe).
  */
 
 import type {
@@ -13,6 +13,7 @@ import type {
   PrismaClient,
 } from "@prisma/client";
 import { writePlatformAuditEvent } from "@/lib/platform/audit";
+import { evaluateAcceptedOfferCheckoutEligibility } from "@/lib/platform/billing/checkout-eligibility";
 import {
   FEATURE_AGENT_APP,
   FEATURE_LIVE_CHAT,
@@ -44,6 +45,10 @@ export type PrivateOfferAcceptedPresentation = {
     companyName: string | null;
   };
   acceptedAt: string | null;
+  /** True when Stripe Checkout may be started for this accepted offer. */
+  checkoutEligible: boolean;
+  /** True when internal Subscription is already ACTIVE/TRIALING. */
+  paymentComplete: boolean;
 };
 
 export type PrivateOfferLineView = {
@@ -304,6 +309,12 @@ export async function resolvePrivateOfferByRawToken(input: {
       offer: {
         include: {
           lineItems: { orderBy: { sortOrder: "asc" } },
+          acceptance: {
+            select: { commercialTermsHash: true },
+          },
+          subscription: {
+            select: { status: true },
+          },
           prospect: {
             select: {
               contactName: true,
@@ -333,6 +344,30 @@ export async function resolvePrivateOfferByRawToken(input: {
   // ACCEPTED: same unrevoked token may show confirmation (token not revoked on accept).
   // Expired tokens still allowed for accepted confirmation; cancelled/revoked stay opaque.
   if (offer.status === "ACCEPTED") {
+    const eligibility = evaluateAcceptedOfferCheckoutEligibility({
+      offerStatus: offer.status,
+      acceptance: offer.acceptance
+        ? { commercialTermsHash: offer.acceptance.commercialTermsHash }
+        : null,
+      offerForHash: {
+        id: offer.id,
+        version: offer.version,
+        planCode: offer.planCode,
+        billingCadence: offer.billingCadence,
+        currency: offer.currency,
+        negotiatedRecurringAmountCents: offer.negotiatedRecurringAmountCents,
+        setupFeeCents: offer.setupFeeCents,
+        includedSeats: offer.includedSeats,
+        additionalSeats: offer.additionalSeats,
+        trialDays: offer.trialDays,
+        proposedStartDate: offer.proposedStartDate,
+        expiresAt: offer.expiresAt,
+        lineItems: offer.lineItems,
+      },
+      lineItems: offer.lineItems,
+      existingSubscriptionStatus: offer.subscription?.status ?? null,
+    });
+
     return {
       ok: true,
       kind: "accepted",
@@ -347,6 +382,8 @@ export async function resolvePrivateOfferByRawToken(input: {
             null,
         },
         acceptedAt: offer.acceptedAt?.toISOString() ?? null,
+        checkoutEligible: eligibility.eligible,
+        paymentComplete: eligibility.reason === "already_paid",
       },
     };
   }

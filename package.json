@@ -90,6 +90,7 @@
     "stage-6.7a-commercial-offer-management:selftest": "node --import tsx scripts/stage-6.7a-commercial-offer-management-selftest.ts",
     "stage-6.7b-private-offer-experience:selftest": "node --import tsx scripts/stage-6.7b-private-offer-experience-selftest.ts",
     "stage-6.8a-offer-acceptance-foundation:selftest": "node --import tsx scripts/stage-6.8a-offer-acceptance-foundation-selftest.ts",
+    "stage-6.8b-stripe-checkout-foundation:selftest": "node --import tsx scripts/stage-6.8b-stripe-checkout-foundation-selftest.ts",
     "workspace:grandfather-houzzat": "node --import tsx scripts/grandfather-houzzat-workspace.ts",
     "platform:provision-master-admin": "node --import tsx scripts/provision-platform-master-admin.ts",
     "platform-host-pre-cutover:selftest": "node --import tsx scripts/platform-host-pre-cutover-selftest.ts",
@@ -213,6 +214,7 @@
     "react-dom": "19.2.4",
     "recharts": "2.15.4",
     "resend": "^6.14.0",
+    "stripe": "18.5.0",
     "tailwind-merge": "^3.6.0",
     "typesense": "^3.0.6",
     "zod": "^4.4.3"

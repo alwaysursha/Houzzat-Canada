@@ -36,6 +36,17 @@ export const PRIVATE_OFFER_ACCEPTED_BODY =
 export const PRIVATE_OFFER_ACCEPTED_NEXT =
   "The next step is to securely complete your subscription.";
 
+export const PRIVATE_OFFER_CHECKOUT_CTA = "Complete Subscription";
+export const PRIVATE_OFFER_CHECKOUT_SUBMITTING = "Starting Checkout…";
+export const PRIVATE_OFFER_CHECKOUT_PAID =
+  "Subscription payment received. Workspace setup will follow shortly.";
+
+export const PRIVATE_OFFER_PAYMENT_STATUS_TITLE = "Subscription Payment";
+export const PRIVATE_OFFER_PAYMENT_STATUS_BODY =
+  "If you completed Checkout, payment confirmation is processed securely by Stripe. This page does not activate your subscription by itself.";
+export const PRIVATE_OFFER_PAYMENT_STATUS_PENDING =
+  "Payment is being confirmed. You can safely close this page.";
+
 export const PRIVATE_OFFER_ACCEPT_EMAIL_LABEL = "Email Address";
 export const PRIVATE_OFFER_ACCEPT_EMAIL_HINT =
   "Enter the email address associated with this private offer.";

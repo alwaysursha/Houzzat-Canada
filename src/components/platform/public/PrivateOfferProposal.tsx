@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { PrivateOfferAcceptForm } from "@/components/platform/public/PrivateOfferAcceptForm";
+import { PrivateOfferCheckoutButton } from "@/components/platform/public/PrivateOfferCheckoutButton";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import type {
   PrivateOfferAcceptedPresentation,
@@ -12,6 +13,7 @@ import {
   PRIVATE_OFFER_ACCEPTED_TITLE,
   PRIVATE_OFFER_AD_BUDGET_NOTE,
   PRIVATE_OFFER_AD_SPEND_NOTE,
+  PRIVATE_OFFER_CHECKOUT_PAID,
   PRIVATE_OFFER_CTA_SUPPORT_LABEL,
   PRIVATE_OFFER_DISCLOSURE,
   PRIVATE_OFFER_EYEBROW,
@@ -77,8 +79,10 @@ export function PrivateOfferUnavailable() {
 
 export function PrivateOfferAccepted({
   presentation,
+  rawToken,
 }: {
   presentation: PrivateOfferAcceptedPresentation;
+  rawToken: string;
 }) {
   const support = resolveHouzzatProSupportCta();
   return (
@@ -92,7 +96,9 @@ export function PrivateOfferAccepted({
           {PRIVATE_OFFER_ACCEPTED_BODY}
         </p>
         <p className="mt-3 text-sm text-slate-400">
-          {PRIVATE_OFFER_ACCEPTED_NEXT}
+          {presentation.paymentComplete
+            ? PRIVATE_OFFER_CHECKOUT_PAID
+            : PRIVATE_OFFER_ACCEPTED_NEXT}
         </p>
         {presentation.preparedFor.contactName ? (
           <p className="mt-6 text-sm text-slate-500">
@@ -101,6 +107,9 @@ export function PrivateOfferAccepted({
               ? ` · ${presentation.preparedFor.companyName}`
               : ""}
           </p>
+        ) : null}
+        {presentation.checkoutEligible && !presentation.paymentComplete ? (
+          <PrivateOfferCheckoutButton rawToken={rawToken} />
         ) : null}
         <Link
           href={support.href}
