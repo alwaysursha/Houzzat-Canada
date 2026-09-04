@@ -90,13 +90,21 @@ async function buildWorkspaceControlPlaneRow(workspace: {
   };
 }
 
+const subscriptionStripeCustomerInclude = {
+  billingCustomer: {
+    select: { stripeCustomerId: true },
+  },
+} as const;
+
 const workspaceListSelect = {
   id: true,
   slug: true,
   name: true,
   status: true,
   createdAt: true,
-  currentSubscription: true,
+  currentSubscription: {
+    include: subscriptionStripeCustomerInclude,
+  },
   branding: true,
   seatQuota: true,
   entitlements: true,
@@ -150,6 +158,7 @@ export async function getPlatformWorkspaceDetail(workspaceId: string) {
       ...workspaceListSelect,
       subscriptions: {
         orderBy: { createdAt: "desc" },
+        include: subscriptionStripeCustomerInclude,
       },
       addOnGrants: {
         orderBy: { createdAt: "desc" },

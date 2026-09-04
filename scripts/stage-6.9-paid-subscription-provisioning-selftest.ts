@@ -1034,6 +1034,11 @@ async function main() {
       subscriptionsList.includes("Subscription"),
       "subscriptions list must expose a Subscription column",
     );
+    const serializeSrc = read("src/lib/platform/read/serialize.ts");
+    assert.ok(
+      serializeSrc.includes("billingCustomer?.stripeCustomerId"),
+      "subscription Stripe customer presence must read BillingCustomer.stripeCustomerId",
+    );
     console.log("[0] Source guards (Neon HTTP + webhook + steps)... PASS");
   }
 

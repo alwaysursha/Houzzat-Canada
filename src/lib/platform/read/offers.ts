@@ -13,7 +13,11 @@ const offerInclude = {
   lineItems: { orderBy: { sortOrder: "asc" as const } },
   tokens: { orderBy: { createdAt: "desc" as const } },
   acceptance: true,
-  subscription: true,
+  subscription: {
+    include: {
+      billingCustomer: { select: { stripeCustomerId: true } },
+    },
+  },
   provisioningRun: true,
   prospect: true,
 } satisfies Prisma.CommercialOfferInclude;

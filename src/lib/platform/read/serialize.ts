@@ -35,7 +35,14 @@ export function serializeStripePresence(input: {
   };
 }
 
-export function serializeSubscriptionSummary(sub: Subscription | null) {
+/** Subscription may include BillingCustomer for Stripe customer presence. */
+export type SubscriptionForSerialize = Subscription & {
+  billingCustomer?: { stripeCustomerId?: string | null } | null;
+};
+
+export function serializeSubscriptionSummary(
+  sub: SubscriptionForSerialize | null,
+) {
   if (!sub) return null;
   return {
     id: sub.id,
@@ -60,7 +67,13 @@ export function serializeSubscriptionSummary(sub: Subscription | null) {
     commercialSnapshotJson: sub.commercialSnapshotJson,
     createdAt: sub.createdAt.toISOString(),
     updatedAt: sub.updatedAt.toISOString(),
-    ...serializeStripePresence(sub),
+    // Stripe customer id lives on BillingCustomer, not Subscription.
+    ...serializeStripePresence({
+      stripeCustomerId: sub.billingCustomer?.stripeCustomerId ?? null,
+      stripeSubscriptionId: sub.stripeSubscriptionId,
+      stripePriceId: sub.stripePriceId,
+      stripeCheckoutSessionId: sub.stripeCheckoutSessionId,
+    }),
   };
 }
 
@@ -237,7 +250,7 @@ export function serializeOfferSummary(
     lineItems?: CommercialOfferLineItem[];
     tokens?: CommercialOfferToken[];
     acceptance?: OfferAcceptance | null;
-    subscription?: Subscription | null;
+    subscription?: SubscriptionForSerialize | null;
     provisioningRun?: ProvisioningRun | null;
   },
 ) {

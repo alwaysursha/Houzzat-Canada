@@ -23,6 +23,9 @@ export async function listPlatformSubscriptionsFiltered(
 
   const rows = await prisma.subscription.findMany({
     where,
+    include: {
+      billingCustomer: { select: { stripeCustomerId: true } },
+    },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: params.limit + 1,
     ...(params.cursor
@@ -43,7 +46,10 @@ export async function listPlatformSubscriptionsFiltered(
 export async function getPlatformSubscriptionDetail(subscriptionId: string) {
   const subscription = await prisma.subscription.findUnique({
     where: { id: subscriptionId },
-    include: { provisioningRun: true },
+    include: {
+      provisioningRun: true,
+      billingCustomer: { select: { stripeCustomerId: true } },
+    },
   });
   if (!subscription) return null;
 
