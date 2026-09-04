@@ -27,6 +27,13 @@ export {
 } from "./checkout-amounts";
 
 export {
+  houzzatProCheckoutBrandingSettings,
+  HOUZZATPRO_CHECKOUT_PAGE_BG,
+  HOUZZATPRO_CHECKOUT_NAVY,
+  HOUZZATPRO_CHECKOUT_EMERALD,
+} from "./checkout-branding";
+
+export {
   evaluateAcceptedOfferCheckoutEligibility,
   loadCheckoutEligibilityForOfferId,
   isPaidSubscriptionStatus,

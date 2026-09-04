@@ -79,5 +79,17 @@ export default async function PrivateOfferCheckoutPage({ params }: PageProps) {
 
   void PRIVATE_OFFER_DOCUMENT_TITLE;
 
-  return <PrivateOfferEmbeddedCheckout rawToken={rawToken} />;
+  return (
+    <PrivateOfferEmbeddedCheckout
+      rawToken={rawToken}
+      summary={{
+        planCode: result.presentation.planCode,
+        billingCadence: result.presentation.billingCadence,
+        currency: result.presentation.currency,
+        recurringTotalCents: result.presentation.recurringTotalCents,
+        oneTimeTotalCents: result.presentation.oneTimeTotalCents,
+        preparedFor: result.presentation.preparedFor,
+      }}
+    />
+  );
 }

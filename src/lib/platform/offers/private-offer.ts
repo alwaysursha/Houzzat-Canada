@@ -49,6 +49,12 @@ export type PrivateOfferAcceptedPresentation = {
   checkoutEligible: boolean;
   /** True when internal Subscription is already ACTIVE/TRIALING. */
   paymentComplete: boolean;
+  /** Commercial summary for checkout UI (safe public fields only). */
+  planCode: PlanCode;
+  billingCadence: BillingCadence;
+  currency: string;
+  recurringTotalCents: number;
+  oneTimeTotalCents: number;
 };
 
 export type PrivateOfferLineView = {
@@ -384,6 +390,11 @@ export async function resolvePrivateOfferByRawToken(input: {
         acceptedAt: offer.acceptedAt?.toISOString() ?? null,
         checkoutEligible: eligibility.eligible,
         paymentComplete: eligibility.reason === "already_paid",
+        planCode: offer.planCode,
+        billingCadence: offer.billingCadence,
+        currency: offer.currency,
+        recurringTotalCents: eligibility.recurringTotalCents ?? 0,
+        oneTimeTotalCents: eligibility.oneTimeTotalCents ?? 0,
       },
     };
   }

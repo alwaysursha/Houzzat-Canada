@@ -20,6 +20,7 @@ import {
   computeAcceptedCheckoutAmounts,
   CheckoutAmountError,
 } from "@/lib/platform/billing/checkout-amounts";
+import { houzzatProCheckoutBrandingSettings } from "@/lib/platform/billing/checkout-branding";
 import {
   evaluateAcceptedOfferCheckoutEligibility,
   isPaidSubscriptionStatus,
@@ -657,9 +658,9 @@ export async function createCheckoutForAcceptedOffer(
     subscriptionData.trial_period_days = offer.trialDays;
   }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    ui_mode: "embedded",
+  const createParams = {
+    mode: "subscription" as const,
+    ui_mode: "embedded" as const,
     customer: billingCustomer.stripeCustomerId,
     client_reference_id: subscription.id,
     return_url: returnUrl,
@@ -670,7 +671,13 @@ export async function createCheckoutForAcceptedOffer(
       [STRIPE_CHECKOUT_METADATA_KEYS.subscriptionId]: subscription.id,
       [STRIPE_CHECKOUT_METADATA_KEYS.prospectId]: offer.prospectId,
     },
-  });
+    // Blend Stripe embed with HouzzatPRO palette (same approach as theminiwear).
+    branding_settings: houzzatProCheckoutBrandingSettings(),
+  };
+
+  const session = await stripe.checkout.sessions.create(
+    createParams as Stripe.Checkout.SessionCreateParams,
+  );
 
   if (!session.client_secret) {
     throw new OfferCheckoutPublicError(

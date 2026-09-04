@@ -232,6 +232,7 @@ function createFakeStripe(state: FakeState) {
             payment_status: "unpaid",
             line_items: params.line_items,
             return_url: params.return_url,
+            branding_settings: params.branding_settings,
             url: null,
           };
           state.stripeSessions.push(session);
@@ -749,6 +750,11 @@ async function main() {
     assert.ok(
       String(session.return_url).includes("/subscribe/payment/status?session_id="),
     );
+    assert.equal(
+      (session as { branding_settings?: { button_color?: string } })
+        .branding_settings?.button_color,
+      "#059669",
+    );
     const recurringLine = session.line_items?.[0];
     const oneTimeLine = session.line_items?.[1];
     assert.equal(
@@ -937,10 +943,15 @@ async function main() {
     assert.ok(copy.includes("Complete Subscription"));
     assert.ok(checkoutSrc.includes('ui_mode: "embedded"'));
     assert.ok(checkoutSrc.includes("return_url"));
+    assert.ok(checkoutSrc.includes("branding_settings"));
+    assert.ok(checkoutSrc.includes("houzzatProCheckoutBrandingSettings"));
     assert.ok(!checkoutSrc.includes("success_url"));
     assert.ok(!checkoutSrc.includes("cancel_url"));
     assert.ok(apiRoute.includes("clientSecret"));
     assert.ok(!apiRoute.includes("checkoutUrl"));
+    assert.ok(embedded.includes("lg:grid-cols-"));
+    assert.ok(embedded.includes("Order summary"));
+    assert.ok(embedded.includes("bg-[#f4f6f5]"));
     assert.ok(copy.includes(PRIVATE_OFFER_ACCEPTED_TITLE_SNIPPET()));
     assert.ok(
       !read("src/lib/platform/legal/content/houzzatpro-terms.ts").includes(
