@@ -4,7 +4,11 @@ import {
   buildCursorPage,
   type PlatformListParams,
 } from "@/lib/platform/api/pagination";
-import { serializeSubscriptionSummary } from "@/lib/platform/read/serialize";
+import { evaluatePaidSubscriptionProvisioningEligibility } from "@/lib/platform/provisioning";
+import {
+  serializeProvisioningRunSummary,
+  serializeSubscriptionSummary,
+} from "@/lib/platform/read/serialize";
 
 export async function listPlatformSubscriptionsFiltered(
   params: PlatformListParams & {
@@ -39,7 +43,23 @@ export async function listPlatformSubscriptionsFiltered(
 export async function getPlatformSubscriptionDetail(subscriptionId: string) {
   const subscription = await prisma.subscription.findUnique({
     where: { id: subscriptionId },
+    include: { provisioningRun: true },
   });
   if (!subscription) return null;
-  return serializeSubscriptionSummary(subscription);
+
+  const eligibility = await evaluatePaidSubscriptionProvisioningEligibility({
+    prisma,
+    subscriptionId,
+  });
+
+  return {
+    ...serializeSubscriptionSummary(subscription),
+    provisioningRun: subscription.provisioningRun
+      ? serializeProvisioningRunSummary(subscription.provisioningRun)
+      : null,
+    canRetryProvisioning:
+      eligibility.eligible ||
+      (eligibility.reason === "IN_PROGRESS" && eligibility.canRetry),
+    provisioningEligibilityReason: eligibility.reason,
+  };
 }

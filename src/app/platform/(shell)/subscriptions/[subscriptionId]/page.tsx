@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PlatformDetailGrid } from "@/components/platform/PlatformDetailGrid";
+import { PlatformSubscriptionProvisioningActions } from "@/components/platform/PlatformSubscriptionProvisioningActions";
 import {
   PlatformBadge,
   PlatformErrorState,
@@ -53,11 +54,17 @@ export default async function PlatformSubscriptionDetailPage({ params }: PagePro
 
   if (!subscription) notFound();
 
+  const provisioningRun =
+    subscription.provisioningRun &&
+    typeof subscription.provisioningRun === "object"
+      ? (subscription.provisioningRun as JsonRecord)
+      : null;
+
   return (
     <>
       <PlatformPageHeader
         title={`Subscription ${str(subscription.id).slice(0, 8)}…`}
-        description="Read-only subscription detail."
+        description="Subscription detail with paid provisioning controls."
       />
 
       <div className="space-y-6">
@@ -126,6 +133,19 @@ export default async function PlatformSubscriptionDetailPage({ params }: PagePro
                 label: "Past due since",
                 value: formatPlatformDate(str(subscription.pastDueSince)),
               },
+              {
+                label: "Provisioning run",
+                value: provisioningRun ? (
+                  <Link
+                    href={`/platform/provisioning/${str(provisioningRun.id)}`}
+                    className="text-emerald-400 hover:text-emerald-300"
+                  >
+                    {titleCaseStatus(str(provisioningRun.status))}
+                  </Link>
+                ) : (
+                  "—"
+                ),
+              },
             ]}
           />
         </PlatformPanel>
@@ -152,6 +172,14 @@ export default async function PlatformSubscriptionDetailPage({ params }: PagePro
             ]}
           />
         </PlatformPanel>
+
+        <PlatformSubscriptionProvisioningActions
+          subscriptionId={str(subscription.id)}
+          canRetryProvisioning={Boolean(subscription.canRetryProvisioning)}
+          provisioningStatus={
+            provisioningRun ? str(provisioningRun.status) : null
+          }
+        />
       </div>
     </>
   );

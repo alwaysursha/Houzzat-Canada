@@ -7,6 +7,7 @@ import {
 import { platformError } from "@/lib/platform/api/response";
 import { PlatformProspectActionError } from "@/lib/platform/prospects/manage";
 import { CommercialOfferActionError } from "@/lib/platform/offers/errors";
+import { ProvisioningActionError } from "@/lib/platform/provisioning/errors";
 import { WorkspaceStatusActionError } from "@/lib/platform/workspaces/status";
 
 export class PlatformApiError extends Error {
@@ -34,6 +35,7 @@ export async function withPlatformOperator<T>(
       error instanceof WorkspaceStatusActionError ||
       error instanceof PlatformProspectActionError ||
       error instanceof CommercialOfferActionError ||
+      error instanceof ProvisioningActionError ||
       error instanceof Prisma.PrismaClientKnownRequestError
     ) {
       throw error;
@@ -67,6 +69,9 @@ export function toPlatformHttpError(error: unknown) {
     return platformError(error.status, error.code, error.message);
   }
   if (error instanceof CommercialOfferActionError) {
+    return platformError(error.status, error.code, error.message);
+  }
+  if (error instanceof ProvisioningActionError) {
     return platformError(error.status, error.code, error.message);
   }
   if (error instanceof Prisma.PrismaClientKnownRequestError) {

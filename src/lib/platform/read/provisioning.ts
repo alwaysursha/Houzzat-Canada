@@ -4,6 +4,7 @@ import {
   buildCursorPage,
   type PlatformListParams,
 } from "@/lib/platform/api/pagination";
+import { evaluatePaidSubscriptionProvisioningEligibility } from "@/lib/platform/provisioning";
 import {
   sanitizeProvisioningError,
   serializeProvisioningRunSummary,
@@ -46,9 +47,17 @@ export async function getPlatformProvisioningRunDetail(runId: string) {
   });
   if (!run) return null;
 
+  const eligibility = await evaluatePaidSubscriptionProvisioningEligibility({
+    prisma,
+    subscriptionId: run.subscriptionId,
+  });
+
   return {
     ...serializeProvisioningRunSummary(run),
     steps: run.steps.map(serializeProvisioningStep),
+    canRetryProvisioning:
+      eligibility.eligible ||
+      (eligibility.reason === "IN_PROGRESS" && eligibility.canRetry),
   };
 }
 

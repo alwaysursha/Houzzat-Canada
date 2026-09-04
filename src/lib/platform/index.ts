@@ -100,6 +100,17 @@ export {
 export { provisionPlatformMasterAdmin } from "./operators/provision-master-admin";
 
 export {
+  PLATFORM_PROVISIONING_MODULE,
+  PROVISIONING_STEP_KEYS,
+  PROVISIONING_AUDIT,
+  evaluatePaidSubscriptionProvisioningEligibility,
+  provisionPaidSubscription,
+  tryProvisionAfterBillingActivation,
+  retryPaidSubscriptionProvisioning,
+  ProvisioningActionError,
+} from "./provisioning";
+
+export {
   writePlatformAuditEvent,
   PLATFORM_AUDIT_NO_CRM_CONTENT,
 } from "./audit";

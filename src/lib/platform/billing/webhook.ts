@@ -1,5 +1,5 @@
 /**
- * Stage 6.8B — Stripe webhook reconciliation (payment authority).
+ * Stage 6.8B / 6.9 — Stripe webhook reconciliation (payment authority).
  *
  * Neon HTTP-safe: sequential findFirst/findUnique/create/update only.
  * Do not use interactive Prisma transactions or updateMany in this flow.
@@ -7,7 +7,8 @@
  * On verified successful initial payment:
  * - reconcile BillingCustomer + Subscription
  * - set ACTIVE or TRIALING only when Stripe state justifies it
- * - workspaceId remains NULL — no Workspace / entitlements / seats / ProvisioningRun
+ * - preserve Subscription.workspaceId once linked (never force null)
+ * - after ACTIVE/TRIALING, invoke provisioning best-effort (failures → FAILED run)
  */
 
 import type { PrismaClient, SubscriptionStatus } from "@prisma/client";
@@ -20,6 +21,7 @@ import {
 } from "@/lib/platform/billing/constants";
 import { getStripeClient } from "@/lib/platform/billing/stripe-client";
 import { readStripeWebhookSecret } from "@/lib/platform/billing/stripe-env";
+import { tryProvisionAfterBillingActivation } from "@/lib/platform/provisioning";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 
 export type StripeWebhookProcessResult = {
@@ -264,8 +266,8 @@ async function reconcileCheckoutCompleted(input: {
         currentPeriodEnd: period.end,
         trialEndsAt: unixToDate(stripeSubscription?.trial_end),
         cancelAtPeriodEnd: stripeSubscription?.cancel_at_period_end ?? false,
-        // Explicit: Stage 6.8B never provisions a workspace.
-        workspaceId: null,
+        // Preserve linked workspace after Stage 6.9 provisioning.
+        workspaceId: subscriptionRow.workspaceId,
       },
     });
   }
@@ -298,8 +300,15 @@ async function reconcileCheckoutCompleted(input: {
         subscriptionId: subscriptionRow.id,
         status: nextStatus,
         stripeSubscriptionId,
-        workspaceId: null,
+        workspaceId: subscriptionRow.workspaceId,
       },
+    });
+
+    // Provisioning is separate from billing reconcile: failures must not
+    // demote Subscription or cause Stripe to retry duplicate workspaces.
+    await tryProvisionAfterBillingActivation({
+      subscriptionId: subscriptionRow.id,
+      prisma: input.db,
     });
   }
 
@@ -382,7 +391,8 @@ async function reconcileSubscriptionUpdated(input: {
       trialEndsAt: unixToDate(input.stripeSubscription.trial_end),
       cancelAtPeriodEnd: input.stripeSubscription.cancel_at_period_end,
       canceledAt: unixToDate(input.stripeSubscription.canceled_at),
-      workspaceId: null,
+      // Preserve linked workspace after Stage 6.9 provisioning.
+      workspaceId: row.workspaceId,
     },
   });
 
@@ -398,8 +408,13 @@ async function reconcileSubscriptionUpdated(input: {
         subscriptionId: row.id,
         status: nextStatus,
         stripeSubscriptionId: input.stripeSubscription.id,
-        workspaceId: null,
+        workspaceId: row.workspaceId,
       },
+    });
+
+    await tryProvisionAfterBillingActivation({
+      subscriptionId: row.id,
+      prisma: input.db,
     });
   }
 
@@ -447,7 +462,7 @@ async function reconcilePaymentFailed(input: {
       data: {
         status: nextStatus,
         pastDueSince: row.pastDueSince ?? new Date(),
-        workspaceId: null,
+        workspaceId: row.workspaceId,
       },
     });
   } else {
@@ -456,7 +471,7 @@ async function reconcilePaymentFailed(input: {
       data: {
         status: "PAST_DUE",
         pastDueSince: row.pastDueSince ?? new Date(),
-        workspaceId: null,
+        workspaceId: row.workspaceId,
       },
     });
   }

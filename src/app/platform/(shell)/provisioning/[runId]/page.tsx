@@ -8,6 +8,7 @@ import {
   PlatformPanel,
   PlatformTableWrap,
 } from "@/components/platform/PlatformUi";
+import { PlatformSubscriptionProvisioningActions } from "@/components/platform/PlatformSubscriptionProvisioningActions";
 import {
   getPlatformProvisioningRun,
   PlatformApiClientError,
@@ -109,6 +110,12 @@ export default async function PlatformProvisioningDetailPage({ params }: PagePro
             ]}
           />
         </PlatformPanel>
+
+        <PlatformSubscriptionProvisioningActions
+          subscriptionId={str(run.subscriptionId)}
+          canRetryProvisioning={Boolean(run.canRetryProvisioning)}
+          provisioningStatus={str(run.status)}
+        />
 
         <PlatformPanel title="Steps">
           {asArray(run.steps).length === 0 ? (
