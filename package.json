@@ -89,6 +89,7 @@
     "stage-6.6c-demo-request-emails:selftest": "node --import tsx scripts/stage-6.6c-demo-request-emails-selftest.ts",
     "stage-6.7a-commercial-offer-management:selftest": "node --import tsx scripts/stage-6.7a-commercial-offer-management-selftest.ts",
     "stage-6.7b-private-offer-experience:selftest": "node --import tsx scripts/stage-6.7b-private-offer-experience-selftest.ts",
+    "stage-6.8a-offer-acceptance-foundation:selftest": "node --import tsx scripts/stage-6.8a-offer-acceptance-foundation-selftest.ts",
     "workspace:grandfather-houzzat": "node --import tsx scripts/grandfather-houzzat-workspace.ts",
     "platform:provision-master-admin": "node --import tsx scripts/provision-platform-master-admin.ts",
     "platform-host-pre-cutover:selftest": "node --import tsx scripts/platform-host-pre-cutover-selftest.ts",

@@ -376,6 +376,7 @@ async function main() {
     });
     assert.equal(first.ok, true);
     if (!first.ok) throw new Error("expected ok");
+    assert.equal(first.kind, "proposal");
     assert.equal(first.presentation.status, "VIEWED");
     assert.equal(first.presentation.planCode, "TEAM");
     assert.equal(first.presentation.preparedFor.contactName, "Jordan Lee");
@@ -454,10 +455,13 @@ async function main() {
       prisma: db,
     });
     assert.equal(result.ok, true);
+    if (!result.ok) throw new Error("expected ok");
+    assert.equal(result.kind, "proposal");
     console.log("[3] VIEWED continues rendering... PASS");
   }
 
-  // 4. Unknown / expired / revoked / cancelled / draft / accepted → unavailable
+  // 4. Unknown / expired / revoked / cancelled / draft → unavailable
+  // ACCEPTED with valid token renders accepted confirmation (Stage 6.8A).
   {
     const cases: Array<{
       label: string;
@@ -499,12 +503,6 @@ async function main() {
           s.offers.get(offerId)!.status = "DRAFT";
         },
       },
-      {
-        label: "accepted",
-        mutate: (s, offerId) => {
-          s.offers.get(offerId)!.status = "ACCEPTED";
-        },
-      },
     ];
 
     for (const c of cases) {
@@ -525,8 +523,25 @@ async function main() {
       assert.deepEqual(result, { ok: false, reason: "unavailable" });
       assert.equal(state.audits.length, 0, c.label);
     }
+
+    {
+      const state = emptyState();
+      const seeded = seedSentOffer(state, {
+        status: "ACCEPTED",
+        viewedAt: new Date(),
+      });
+      (state.offers.get(seeded.offerId) as { acceptedAt?: Date }).acceptedAt =
+        new Date();
+      const accepted = await resolvePrivateOfferByRawToken({
+        rawToken: seeded.raw,
+        prisma: createFakePrisma(state) as never,
+      });
+      assert.equal(accepted.ok, true);
+      if (!accepted.ok) throw new Error("expected ok");
+      assert.equal(accepted.kind, "accepted");
+    }
     console.log(
-      "[4] Unknown/expired/revoked/cancelled/draft/accepted → same unavailable... PASS",
+      "[4] Unknown/expired/revoked/cancelled/draft unavailable; ACCEPTED confirmation... PASS",
     );
   }
 
@@ -612,12 +627,11 @@ async function main() {
     assert.ok(!/\bCheckout\b/i.test(page));
 
     assert.ok(ui.includes("PRIVATE_OFFER_UNAVAILABLE_TITLE"));
-    assert.ok(ui.includes("PRIVATE_OFFER_CTA_TITLE"));
+    assert.ok(ui.includes("PrivateOfferAcceptForm") || ui.includes("PRIVATE_OFFER_ACCEPTED_TITLE"));
     assert.ok(ui.includes("resolveHouzzatProSupportCta"));
-    assert.ok(!ui.includes("Accept offer"));
     assert.ok(!/Subscribe now/i.test(ui));
     assert.ok(!/\bCheckout\b/i.test(ui));
-    assert.ok(copy.includes("Ready to move forward?"));
+    assert.ok(copy.includes("Accept this private proposal") || copy.includes("PRIVATE_OFFER_CTA_TITLE"));
 
     assert.ok(mw.includes('pathname.startsWith("/subscribe/")'));
     assert.ok(mw.includes("private, no-store"));
@@ -666,10 +680,7 @@ async function main() {
 
   console.log("\nSTAGE 6.7B selftest: ALL PASS\n");
   console.log(
-    "NOTE: ACCEPTED offers render the same opaque unavailable state for now;",
-  );
-  console.log(
-    "acceptance UX is intentionally deferred (not invented in 6.7B).\n",
+    "NOTE: ACCEPTED offers with an unrevoked token render accepted confirmation (Stage 6.8A).\n",
   );
 }
 

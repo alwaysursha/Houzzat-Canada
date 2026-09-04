@@ -41,6 +41,7 @@ export {
 export {
   resolvePrivateOfferByRawToken,
   type PrivateOfferPresentation,
+  type PrivateOfferAcceptedPresentation,
   type PrivateOfferLineView,
   type ResolvePrivateOfferResult,
 } from "./private-offer";
@@ -52,4 +53,22 @@ export {
   PRIVATE_OFFER_UNAVAILABLE_TITLE,
   PRIVATE_OFFER_PLAN_VALUE_LABELS,
 } from "./private-offer-copy";
+
+export {
+  acceptPrivateOfferByRawToken,
+  OfferAcceptPublicError,
+  type AcceptPrivateOfferInput,
+  type AcceptPrivateOfferResult,
+} from "./accept";
+
+export {
+  computeCommercialTermsHash,
+  commercialTermsHashFromOfferRow,
+  fingerprintCommercialTermsHash,
+} from "./commercial-terms-hash";
+
+export {
+  allowOfferAcceptRequest,
+  clearOfferAcceptRateLimitsForTests,
+} from "./accept-rate-limit";
 

@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
+import { PrivateOfferAcceptForm } from "@/components/platform/public/PrivateOfferAcceptForm";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
-import type { PrivateOfferPresentation } from "@/lib/platform/offers/private-offer";
+import type {
+  PrivateOfferAcceptedPresentation,
+  PrivateOfferPresentation,
+} from "@/lib/platform/offers/private-offer";
 import {
+  PRIVATE_OFFER_ACCEPTED_BODY,
+  PRIVATE_OFFER_ACCEPTED_NEXT,
+  PRIVATE_OFFER_ACCEPTED_TITLE,
   PRIVATE_OFFER_AD_BUDGET_NOTE,
   PRIVATE_OFFER_AD_SPEND_NOTE,
-  PRIVATE_OFFER_CTA_BODY,
   PRIVATE_OFFER_CTA_SUPPORT_LABEL,
-  PRIVATE_OFFER_CTA_TITLE,
   PRIVATE_OFFER_DISCLOSURE,
   PRIVATE_OFFER_EYEBROW,
   PRIVATE_OFFER_HERO_LINE,
@@ -70,12 +75,51 @@ export function PrivateOfferUnavailable() {
   );
 }
 
-export function PrivateOfferProposal({
+export function PrivateOfferAccepted({
   presentation,
 }: {
-  presentation: PrivateOfferPresentation;
+  presentation: PrivateOfferAcceptedPresentation;
 }) {
   const support = resolveHouzzatProSupportCta();
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-[#07111f] px-4 py-16 text-center">
+      <div className="w-full max-w-lg">
+        <HouzzatProWordmark size="lg" className="text-white" />
+        <h1 className="mt-10 font-display text-3xl font-semibold tracking-tight text-white">
+          {PRIVATE_OFFER_ACCEPTED_TITLE}
+        </h1>
+        <p className="mt-4 text-base text-slate-300">
+          {PRIVATE_OFFER_ACCEPTED_BODY}
+        </p>
+        <p className="mt-3 text-sm text-slate-400">
+          {PRIVATE_OFFER_ACCEPTED_NEXT}
+        </p>
+        {presentation.preparedFor.contactName ? (
+          <p className="mt-6 text-sm text-slate-500">
+            Prepared for {presentation.preparedFor.contactName}
+            {presentation.preparedFor.companyName
+              ? ` · ${presentation.preparedFor.companyName}`
+              : ""}
+          </p>
+        ) : null}
+        <Link
+          href={support.href}
+          className="mt-8 inline-flex rounded-lg border border-white/15 px-4 py-2.5 text-sm font-semibold text-emerald-200 transition hover:border-emerald-400/40 hover:bg-white/5"
+        >
+          {PRIVATE_OFFER_CTA_SUPPORT_LABEL}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export function PrivateOfferProposal({
+  presentation,
+  rawToken,
+}: {
+  presentation: PrivateOfferPresentation;
+  rawToken: string;
+}) {
   const expiry = formatDate(presentation.expiresAt);
   const start = formatDate(presentation.proposedStartDate);
   const preparedName = presentation.preparedFor.contactName;
@@ -345,20 +389,7 @@ export function PrivateOfferProposal({
           </ul>
         </section>
 
-        <section className="mt-6 rounded-[1.35rem] border border-emerald-900/20 bg-[#07111f] p-5 text-white sm:p-8">
-          <h2 className="font-display text-2xl font-semibold tracking-tight">
-            {PRIVATE_OFFER_CTA_TITLE}
-          </h2>
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-slate-300 sm:text-base">
-            {PRIVATE_OFFER_CTA_BODY}
-          </p>
-          <Link
-            href={support.href}
-            className="mt-6 inline-flex rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
-          >
-            {PRIVATE_OFFER_CTA_SUPPORT_LABEL}
-          </Link>
-        </section>
+        <PrivateOfferAcceptForm rawToken={rawToken} />
 
         <p className="mt-8 text-center text-[11px] tracking-wide text-slate-400">
           {PLATFORM_PRODUCT_NAME} · private commercial proposal

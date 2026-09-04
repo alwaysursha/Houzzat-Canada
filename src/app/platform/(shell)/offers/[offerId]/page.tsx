@@ -209,6 +209,13 @@ export default async function PlatformOfferDetailPage({ params }: PageProps) {
                     label: "Privacy version",
                     value: str(acceptance.privacyVersion),
                   },
+                  {
+                    label: "Commercial terms hash",
+                    value: str(
+                      acceptance.commercialTermsHashFingerprint ??
+                        acceptance.commercialTermsHash,
+                    ),
+                  },
                 ]}
               />
             ) : (

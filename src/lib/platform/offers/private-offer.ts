@@ -36,6 +36,16 @@ import { prisma as defaultPrisma } from "@/lib/prisma";
 
 const RENDERABLE_STATUSES: OfferStatus[] = ["SENT", "VIEWED"];
 
+export type PrivateOfferAcceptedPresentation = {
+  offerId: string;
+  status: "ACCEPTED";
+  preparedFor: {
+    contactName: string | null;
+    companyName: string | null;
+  };
+  acceptedAt: string | null;
+};
+
 export type PrivateOfferLineView = {
   kind: OfferLineKind;
   code: string;
@@ -80,7 +90,12 @@ export type PrivateOfferPresentation = {
 };
 
 export type ResolvePrivateOfferResult =
-  | { ok: true; presentation: PrivateOfferPresentation }
+  | { ok: true; kind: "proposal"; presentation: PrivateOfferPresentation }
+  | {
+      ok: true;
+      kind: "accepted";
+      presentation: PrivateOfferAcceptedPresentation;
+    }
   | { ok: false; reason: "unavailable" };
 
 function toLineView(item: CommercialOfferLineItem): PrivateOfferLineView {
@@ -309,19 +324,41 @@ export async function resolvePrivateOfferByRawToken(input: {
   if (token.revokedAt) {
     return { ok: false, reason: "unavailable" };
   }
-  if (token.expiresAt.getTime() <= now) {
-    return { ok: false, reason: "unavailable" };
-  }
 
   const offer = token.offer;
   if (!offer) {
+    return { ok: false, reason: "unavailable" };
+  }
+
+  // ACCEPTED: same unrevoked token may show confirmation (token not revoked on accept).
+  // Expired tokens still allowed for accepted confirmation; cancelled/revoked stay opaque.
+  if (offer.status === "ACCEPTED") {
+    return {
+      ok: true,
+      kind: "accepted",
+      presentation: {
+        offerId: offer.id,
+        status: "ACCEPTED",
+        preparedFor: {
+          contactName: offer.prospect.contactName?.trim() || null,
+          companyName:
+            offer.prospect.brokerageName?.trim() ||
+            offer.prospect.businessName?.trim() ||
+            null,
+        },
+        acceptedAt: offer.acceptedAt?.toISOString() ?? null,
+      },
+    };
+  }
+
+  if (token.expiresAt.getTime() <= now) {
     return { ok: false, reason: "unavailable" };
   }
   if (offer.expiresAt && offer.expiresAt.getTime() <= now) {
     return { ok: false, reason: "unavailable" };
   }
   if (!RENDERABLE_STATUSES.includes(offer.status)) {
-    // DRAFT / CANCELLED / EXPIRED / ACCEPTED → same opaque unavailable state.
+    // DRAFT / CANCELLED / EXPIRED → opaque unavailable.
     return { ok: false, reason: "unavailable" };
   }
 
@@ -341,5 +378,5 @@ export async function resolvePrivateOfferByRawToken(input: {
     prospect: offer.prospect,
   });
 
-  return { ok: true, presentation };
+  return { ok: true, kind: "proposal", presentation };
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import {
+  PrivateOfferAccepted,
   PrivateOfferProposal,
   PrivateOfferUnavailable,
 } from "@/components/platform/public/PrivateOfferProposal";
@@ -55,5 +56,14 @@ export default async function PrivateSubscribeOfferPage({ params }: PageProps) {
     return <PrivateOfferUnavailable />;
   }
 
-  return <PrivateOfferProposal presentation={result.presentation} />;
+  if (result.kind === "accepted") {
+    return <PrivateOfferAccepted presentation={result.presentation} />;
+  }
+
+  return (
+    <PrivateOfferProposal
+      presentation={result.presentation}
+      rawToken={token}
+    />
+  );
 }

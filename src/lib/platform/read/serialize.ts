@@ -18,6 +18,7 @@ import type {
   WorkspaceSeatQuota,
   WorkspaceStatusEvent,
 } from "@prisma/client";
+import { fingerprintCommercialTermsHash } from "@/lib/platform/offers/commercial-terms-hash";
 import { computeOfferTotals } from "@/lib/platform/offers/line-items";
 
 export function serializeStripePresence(input: {
@@ -297,7 +298,9 @@ export function serializeOfferSummary(
           privacyVersion: offer.acceptance.privacyVersion,
           billingAuthorizationVersion:
             offer.acceptance.billingAuthorizationVersion,
-          commercialTermsHash: offer.acceptance.commercialTermsHash,
+          commercialTermsHashFingerprint: fingerprintCommercialTermsHash(
+            offer.acceptance.commercialTermsHash,
+          ),
         }
       : null,
     subscription: serializeSubscriptionSummary(offer.subscription ?? null),

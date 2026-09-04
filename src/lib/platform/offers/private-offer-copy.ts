@@ -25,10 +25,28 @@ export const PRIVATE_OFFER_AD_SPEND_NOTE =
 export const PRIVATE_OFFER_AD_BUDGET_NOTE =
   "Minimum advertising budget: $750/month.";
 
-export const PRIVATE_OFFER_CTA_TITLE = "Ready to move forward?";
+export const PRIVATE_OFFER_CTA_TITLE = "Accept this private proposal";
 export const PRIVATE_OFFER_CTA_BODY =
-  "Our HouzzatPRO team will guide you through the next step to activate your platform.";
+  "Confirm the acknowledgements below to accept the commercial terms shown in this proposal. Subscription payment is a separate next step.";
 export const PRIVATE_OFFER_CTA_SUPPORT_LABEL = "Contact HouzzatPRO Support";
+
+export const PRIVATE_OFFER_ACCEPTED_TITLE = "Offer Accepted";
+export const PRIVATE_OFFER_ACCEPTED_BODY =
+  "Thank you. Your HouzzatPRO commercial proposal has been accepted.";
+export const PRIVATE_OFFER_ACCEPTED_NEXT =
+  "The next step is to securely complete your subscription.";
+
+export const PRIVATE_OFFER_ACCEPT_EMAIL_LABEL = "Email Address";
+export const PRIVATE_OFFER_ACCEPT_EMAIL_HINT =
+  "Enter the email address associated with this private offer.";
+export const PRIVATE_OFFER_ACCEPT_TERMS =
+  "I have reviewed and accept the HouzzatPRO Terms of Service.";
+export const PRIVATE_OFFER_ACCEPT_PRIVACY =
+  "I have reviewed and acknowledge the HouzzatPRO Privacy Policy.";
+export const PRIVATE_OFFER_ACCEPT_COMMERCIAL =
+  "I understand that submitting this acceptance confirms the commercial terms shown in this private proposal.";
+export const PRIVATE_OFFER_ACCEPT_SUBMIT = "Accept this proposal";
+export const PRIVATE_OFFER_ACCEPT_SUBMITTING = "Accepting…";
 
 /** Human-readable plan inclusions — never expose internal feature codes. */
 export const PRIVATE_OFFER_PLAN_VALUE_LABELS = {

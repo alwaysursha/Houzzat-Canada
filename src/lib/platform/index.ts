@@ -240,4 +240,6 @@ export {
   buildPrivateOfferUrl,
   ADS_MINIMUM_MONTHLY_BUDGET_CENTS,
   resolvePrivateOfferByRawToken,
+  acceptPrivateOfferByRawToken,
+  computeCommercialTermsHash,
 } from "./offers";
