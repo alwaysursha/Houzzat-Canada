@@ -1,6 +1,7 @@
 /**
  * Stage 6.9 — idempotent provisioning step handlers.
- * Sequential Neon HTTP-safe writes only — no $transaction(), no updateMany().
+ * Sequential Neon HTTP-safe writes only — no Prisma interactive transactions
+ * and no consequential updateMany on this path.
  */
 
 import type {
@@ -32,6 +33,7 @@ import {
   PROVISIONING_STEP_KEYS,
   type ProvisioningStepKey,
 } from "./constants";
+import { ensureWorkspacePlatformDomain } from "./create-platform-domain";
 import { evaluatePaidSubscriptionProvisioningEligibility } from "./eligibility";
 import {
   allocateUniqueWorkspaceSlug,
@@ -498,6 +500,35 @@ async function stepCreateBrandingFoundation(ctx: StepContext): Promise<void> {
   });
 }
 
+async function stepCreatePlatformDomain(ctx: StepContext): Promise<void> {
+  if (!ctx.workspaceId) throw new Error("workspaceId required");
+
+  const result = await ensureWorkspacePlatformDomain({
+    prisma: ctx.db,
+    workspaceId: ctx.workspaceId,
+  });
+
+  if (result.outcome === "failed") {
+    throw new Error(result.error);
+  }
+
+  if (result.outcome === "created") {
+    await writeSafeAudit(
+      ctx,
+      PROVISIONING_AUDIT.WORKSPACE_PLATFORM_DOMAIN_CREATED,
+      "Platform WorkspaceDomain created during paid provisioning",
+      {
+        workspaceId: ctx.workspaceId,
+        hostname: result.hostname,
+        domainId: result.domainId,
+        kind: "PLATFORM",
+        role: "PRIMARY",
+        status: "ACTIVE",
+      },
+    );
+  }
+}
+
 async function stepCreateEmailIdentity(ctx: StepContext): Promise<void> {
   if (!ctx.workspaceId) throw new Error("workspaceId required");
 
@@ -815,6 +846,7 @@ export const STEP_HANDLERS: Record<
   LINK_SUBSCRIPTION: stepLinkSubscription,
   CREATE_OWNER_MEMBERSHIP: stepCreateOwnerMembership,
   CREATE_BRANDING_FOUNDATION: stepCreateBrandingFoundation,
+  CREATE_PLATFORM_DOMAIN: stepCreatePlatformDomain,
   CREATE_EMAIL_IDENTITY: stepCreateEmailIdentity,
   MATERIALIZE_ENTITLEMENTS: stepMaterializeEntitlements,
   MATERIALIZE_SEAT_QUOTA: stepMaterializeSeatQuota,

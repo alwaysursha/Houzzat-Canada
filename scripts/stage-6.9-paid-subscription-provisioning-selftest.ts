@@ -108,6 +108,18 @@ type FakeStep = {
   outputRef: string | null;
 };
 
+type FakeDomain = {
+  id: string;
+  workspaceId: string;
+  hostname: string;
+  kind: string;
+  role: string;
+  status: string;
+  verifiedAt: Date | null;
+  verificationToken: string | null;
+  protected?: boolean;
+};
+
 type FakeState = {
   prospects: Map<string, Record<string, unknown>>;
   offers: Map<string, Record<string, unknown>>;
@@ -121,6 +133,7 @@ type FakeState = {
   users: Map<string, FakeUser>;
   members: FakeMember[];
   brandings: Map<string, Record<string, unknown>>;
+  domains: FakeDomain[];
   emailIdentities: Map<string, Record<string, unknown>>;
   entitlements: Array<{
     id: string;
@@ -167,6 +180,7 @@ function emptyState(): FakeState {
     users: new Map(),
     members: [],
     brandings: new Map(),
+    domains: [],
     emailIdentities: new Map(),
     entitlements: [],
     seatQuotas: new Map(),
@@ -201,6 +215,30 @@ function seedProtectedWorkspaces(state: FakeState) {
   };
   state.workspaces.set(houzzat.id, houzzat);
   state.workspaces.set(canary.id, canary);
+  state.domains.push(
+    {
+      id: "dom_houzzat_platform",
+      workspaceId: houzzat.id,
+      hostname: "houzzat.houzzatpro.com",
+      kind: "PLATFORM",
+      role: "PRIMARY",
+      status: "ACTIVE",
+      verifiedAt: new Date("2026-01-01T00:00:00.000Z"),
+      verificationToken: null,
+      protected: true,
+    },
+    {
+      id: "dom_canary_platform",
+      workspaceId: canary.id,
+      hostname: "tenant-canary.houzzatpro.com",
+      kind: "PLATFORM",
+      role: "PRIMARY",
+      status: "ACTIVE",
+      verifiedAt: new Date("2026-01-01T00:00:00.000Z"),
+      verificationToken: null,
+      protected: true,
+    },
+  );
   return { houzzat, canary };
 }
 
@@ -210,9 +248,13 @@ function snapshotProtected(state: FakeState) {
     (w) => w.slug === "tenant-canary",
   );
   assert.ok(houzzat && canary);
+  const domains = state.domains
+    .filter((d) => d.protected)
+    .map((d) => ({ ...d, verifiedAt: d.verifiedAt?.toISOString() ?? null }));
   return {
     houzzat: { ...houzzat },
     canary: { ...canary },
+    domains,
   };
 }
 
@@ -223,6 +265,7 @@ function assertProtectedUnchanged(
   const after = snapshotProtected(state);
   assert.deepEqual(after.houzzat, before.houzzat);
   assert.deepEqual(after.canary, before.canary);
+  assert.deepEqual(after.domains, before.domains);
 }
 
 type SeedOpts = {
@@ -799,6 +842,60 @@ function createFakePrisma(state: FakeState): PrismaClient {
         return { ...row };
       },
     },
+    workspaceDomain: {
+      async findUnique({
+        where,
+      }: {
+        where: { hostname?: string; id?: string };
+      }) {
+        if (where.hostname) {
+          const hit = state.domains.find((d) => d.hostname === where.hostname);
+          return hit ? { ...hit } : null;
+        }
+        if (where.id) {
+          const hit = state.domains.find((d) => d.id === where.id);
+          return hit ? { ...hit } : null;
+        }
+        return null;
+      },
+      async findFirst({
+        where,
+      }: {
+        where: { workspaceId?: string; kind?: string };
+      }) {
+        const hit = state.domains.find((d) => {
+          if (where.workspaceId && d.workspaceId !== where.workspaceId) {
+            return false;
+          }
+          if (where.kind && d.kind !== where.kind) return false;
+          return true;
+        });
+        return hit ? { ...hit } : null;
+      },
+      async create({ data }: { data: Record<string, unknown> }) {
+        const hostname = String(data.hostname);
+        if (state.domains.some((d) => d.hostname === hostname)) {
+          const err = new Error("Unique") as Error & { code: string };
+          err.code = "P2002";
+          throw err;
+        }
+        const row: FakeDomain = {
+          id: id("dom"),
+          workspaceId: String(data.workspaceId),
+          hostname,
+          kind: String(data.kind),
+          role: String(data.role),
+          status: String(data.status),
+          verifiedAt: (data.verifiedAt as Date | null) ?? null,
+          verificationToken: (data.verificationToken as string | null) ?? null,
+        };
+        state.domains.push(row);
+        return { ...row };
+      },
+      async updateMany() {
+        rejectUnsafe("updateMany");
+      },
+    },
     workspaceEmailIdentity: {
       async findUnique({
         where,
@@ -1009,7 +1106,16 @@ async function main() {
     assert.ok(!/\.\$transaction\s*\(/.test(webhook));
     assert.ok(!/\.updateMany\s*\(/.test(webhook));
     assert.ok(webhook.includes("tryProvisionAfterBillingActivation"));
-    assert.equal(PROVISIONING_STEP_KEYS.length, 11);
+    assert.equal(PROVISIONING_STEP_KEYS.length, 12);
+    assert.ok(PROVISIONING_STEP_KEYS.includes("CREATE_PLATFORM_DOMAIN"));
+    assert.equal(
+      PROVISIONING_STEP_KEYS.indexOf("CREATE_PLATFORM_DOMAIN"),
+      PROVISIONING_STEP_KEYS.indexOf("CREATE_BRANDING_FOUNDATION") + 1,
+    );
+    assert.ok(
+      PROVISIONING_STEP_KEYS.indexOf("CREATE_PLATFORM_DOMAIN") <
+        PROVISIONING_STEP_KEYS.indexOf("MARK_WORKSPACE_ACTIVE"),
+    );
     assert.ok(steps.includes("themeId: null"));
     assert.ok(!/templateCard|tenantTemplate|homepageLayout|themePreview/i.test(provisioningSrc));
     assert.ok(
@@ -1165,6 +1271,16 @@ async function main() {
     assert.equal(branding.themeId, null);
     assert.equal(branding.tier, "GENERIC");
 
+    const platformDomain = state.domains.find(
+      (d) => d.workspaceId === ws.id && d.kind === "PLATFORM",
+    );
+    assert.ok(platformDomain);
+    assert.equal(platformDomain!.hostname, `${ws.slug}.houzzatpro.com`);
+    assert.equal(platformDomain!.role, "PRIMARY");
+    assert.equal(platformDomain!.status, "ACTIVE");
+    assert.ok(platformDomain!.verifiedAt instanceof Date);
+    assert.equal(platformDomain!.verificationToken, null);
+
     const email = state.emailIdentities.get(ws.id)!;
     assert.equal(email.domainStatus, "NONE");
     assert.equal(email.customDomain, null);
@@ -1173,6 +1289,9 @@ async function main() {
     assert.ok(actions.includes(PROVISIONING_AUDIT.STARTED));
     assert.ok(actions.includes(PROVISIONING_AUDIT.WORKSPACE_CREATED));
     assert.ok(actions.includes(PROVISIONING_AUDIT.WORKSPACE_OWNER_CREATED));
+    assert.ok(
+      actions.includes(PROVISIONING_AUDIT.WORKSPACE_PLATFORM_DOMAIN_CREATED),
+    );
     assert.ok(
       actions.includes(PROVISIONING_AUDIT.WORKSPACE_ENTITLEMENTS_MATERIALIZED),
     );
@@ -1185,7 +1304,7 @@ async function main() {
     assert.equal(run.status, "SUCCEEDED");
     assert.equal(
       state.provisioningSteps.filter((s) => s.status === "SUCCEEDED").length,
-      11,
+      12,
     );
 
     // Idempotent second call
@@ -1476,6 +1595,67 @@ async function main() {
     );
     assertProtectedUnchanged(state, before);
     console.log("[8] Houzzat + tenant-canary unchanged... PASS");
+  }
+
+  // 9. CREATE_PLATFORM_DOMAIN failure — workspace stays non-ACTIVE; paid sub intact
+  {
+    const state = emptyState();
+    seedProtectedWorkspaces(state);
+    const before = snapshotProtected(state);
+    const seeded = seedPaidSubscription(state, {
+      status: "ACTIVE",
+      planCode: "TEAM",
+      businessName: "Domain Fail Realty",
+      brokerageName: "Domain Fail Brokerage",
+    });
+    // Expected slug from brokerageName → domain-fail-brokerage
+    state.domains.push({
+      id: "dom_foreign_platform",
+      workspaceId: "ws_foreign_owner",
+      hostname: "domain-fail-brokerage.houzzatpro.com",
+      kind: "PLATFORM",
+      role: "PRIMARY",
+      status: "ACTIVE",
+      verifiedAt: new Date("2026-01-01T00:00:00.000Z"),
+      verificationToken: null,
+    });
+    const prisma = createFakePrisma(state);
+    const failed = await provisionPaidSubscription({
+      subscriptionId: seeded.subscriptionId,
+      prisma,
+    });
+    assert.equal(failed.outcome, "failed");
+    assert.ok(failed.runId);
+    const ws = tenantWorkspaces(state)[0]!;
+    assert.equal(ws.slug, "domain-fail-brokerage");
+    assert.notEqual(ws.status, "ACTIVE");
+    assert.equal(ws.status, "TRIAL");
+    assert.equal(
+      state.subscriptions.get(seeded.subscriptionId)!.status,
+      "ACTIVE",
+    );
+    assert.equal(state.provisioningRuns.get(failed.runId!)!.status, "FAILED");
+    assert.ok(
+      state.provisioningSteps.some(
+        (s) =>
+          s.stepKey === "CREATE_PLATFORM_DOMAIN" && s.status === "FAILED",
+      ),
+    );
+    assert.equal(
+      state.provisioningSteps.some(
+        (s) =>
+          s.stepKey === "MARK_WORKSPACE_ACTIVE" && s.status === "SUCCEEDED",
+      ),
+      false,
+    );
+    assert.equal(
+      state.domains.filter((d) => d.workspaceId === ws.id).length,
+      0,
+    );
+    assertProtectedUnchanged(state, before);
+    console.log(
+      "[9] Domain step failure keeps workspace non-ACTIVE... PASS",
+    );
   }
 
   console.log("\nSTAGE 6.9 SELFTEST PASSED\n");

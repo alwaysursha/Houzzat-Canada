@@ -31,6 +31,11 @@ export {
 } from "./slug";
 
 export {
+  ensureWorkspacePlatformDomain,
+  type EnsurePlatformDomainResult,
+} from "./create-platform-domain";
+
+export {
   provisionPaidSubscription,
   tryProvisionAfterBillingActivation,
   retryPaidSubscriptionProvisioning,

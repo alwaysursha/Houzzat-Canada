@@ -161,12 +161,14 @@ function testDeployCommandTargeting() {
 
   assert.ok(pkg.scripts["deploy:cf"]?.includes("opennextjs-cloudflare deploy"));
   assert.ok(!pkg.scripts["deploy:cf"]?.includes("wrangler.tenant-canary.jsonc"));
+  assert.ok(!pkg.scripts["deploy:cf"]?.includes("wrangler.houzzatpro.jsonc"));
   assert.ok(!pkg.scripts["deploy:cf"]?.includes("--config"));
 
   const canaryDeploy = pkg.scripts["deploy:cf:tenant-canary"];
   assert.ok(canaryDeploy?.includes("opennextjs-cloudflare deploy --config wrangler.tenant-canary.jsonc"));
   assert.ok(canaryDeploy?.includes("NEXT_PUBLIC_SITE_URL=https://tenant-canary.houzzatpro.com"));
   assert.ok(!canaryDeploy?.includes("NEXTAUTH_URL"));
+  assert.ok(!canaryDeploy?.includes("wrangler.houzzatpro.jsonc"));
   assert.ok(pkg.scripts["build:cloudflare:tenant-canary"]);
 
   assert.equal(parseJsoncName(production), "houzzat");
