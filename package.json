@@ -94,6 +94,7 @@
     "stage-6.9-paid-subscription-provisioning:selftest": "node --import tsx scripts/stage-6.9-paid-subscription-provisioning-selftest.ts",
     "stage-6.10a-owner-activation-onboarding:selftest": "node --import tsx scripts/stage-6.10a-owner-activation-onboarding-selftest.ts",
     "stage-6.10b-platform-domain-provisioning:selftest": "node --import tsx scripts/stage-6.10b-platform-domain-provisioning-selftest.ts",
+    "stage-6.10c1-host-bound-onboarding:selftest": "node --import tsx scripts/stage-6.10c1-host-bound-onboarding-selftest.ts",
     "workspace:grandfather-houzzat": "node --import tsx scripts/grandfather-houzzat-workspace.ts",
     "platform:provision-master-admin": "node --import tsx scripts/provision-platform-master-admin.ts",
     "platform-host-pre-cutover:selftest": "node --import tsx scripts/platform-host-pre-cutover-selftest.ts",

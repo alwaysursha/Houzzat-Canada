@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import {
   OwnerActivationError,
   listOwnerOnboardingWorkspaces,
@@ -8,9 +7,9 @@ import { platformError, platformOk } from "@/lib/platform/api/response";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const items = await listOwnerOnboardingWorkspaces();
+    const items = await listOwnerOnboardingWorkspaces({ request });
     return platformOk({ items });
   } catch (error) {
     if (error instanceof OwnerActivationError) {
@@ -23,10 +22,12 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const workspaceId =
-      typeof body.workspaceId === "string" ? body.workspaceId : "";
+    // workspaceId from client is never authoritative — mismatch fails safely.
+    const clientWorkspaceId =
+      typeof body.workspaceId === "string" ? body.workspaceId : null;
     const updated = await updateOwnerOnboardingBusinessProfile({
-      workspaceId,
+      request,
+      clientWorkspaceId,
       displayName:
         typeof body.displayName === "string" ? body.displayName : "",
       contactEmail:

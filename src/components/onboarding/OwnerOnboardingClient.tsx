@@ -17,9 +17,12 @@ type WorkspaceRow = {
   };
 };
 
+/**
+ * Stage 6.10C.1 — host-bound onboarding UI.
+ * Workspace is resolved from request hostname by the API — no cross-tenant picker.
+ */
 export function OwnerOnboardingClient() {
-  const [items, setItems] = useState<WorkspaceRow[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [item, setItem] = useState<WorkspaceRow | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
@@ -44,12 +47,12 @@ export function OwnerOnboardingClient() {
       };
       if (!res.ok || !body.ok || !body.data) {
         setError(body.message ?? "Unable to load onboarding.");
+        setItem(null);
         return;
       }
-      setItems(body.data.items);
-      const first = body.data.items[0];
+      const first = body.data.items[0] ?? null;
+      setItem(first);
       if (first) {
-        setSelectedId(first.workspaceId);
         setDisplayName(first.displayName ?? first.name);
         setContactEmail(first.contactEmail ?? "");
         setContactPhone(first.contactPhone ?? "");
@@ -58,6 +61,7 @@ export function OwnerOnboardingClient() {
       }
     } catch {
       setError("Network error loading onboarding.");
+      setItem(null);
     } finally {
       setLoading(false);
     }
@@ -67,11 +71,9 @@ export function OwnerOnboardingClient() {
     void load();
   }, []);
 
-  const selected = items.find((i) => i.workspaceId === selectedId) ?? null;
-
   async function onSave(event: React.FormEvent) {
     event.preventDefault();
-    if (!selectedId) return;
+    if (!item) return;
     setSaving(true);
     setError(null);
     setMessage(null);
@@ -83,7 +85,8 @@ export function OwnerOnboardingClient() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          workspaceId: selectedId,
+          // Compatibility only — server resolves authority from hostname.
+          workspaceId: item.workspaceId,
           displayName,
           contactEmail,
           contactPhone,
@@ -112,14 +115,14 @@ export function OwnerOnboardingClient() {
     return <p className="text-sm text-slate-600">Loading onboarding…</p>;
   }
 
-  if (error && items.length === 0) {
+  if (error && !item) {
     return <p className="text-sm text-red-600">{error}</p>;
   }
 
-  if (items.length === 0) {
+  if (!item) {
     return (
       <p className="text-sm text-slate-600">
-        No OWNER workspaces available for onboarding.
+        No OWNER workspace available for this hostname.
       </p>
     );
   }
@@ -129,41 +132,15 @@ export function OwnerOnboardingClient() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Workspace setup</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Complete non-design business details for your workspace. Website
-          templates and visual themes are not available yet.
+          Complete non-design business details for{" "}
+          <span className="font-medium text-slate-800">
+            {item.displayName ?? item.name}
+          </span>
+          . Website templates and visual themes are not available yet.
         </p>
       </div>
 
-      {items.length > 1 ? (
-        <label className="block text-sm text-slate-700">
-          Workspace
-          <select
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-            value={selectedId ?? ""}
-            onChange={(e) => {
-              const next = items.find((i) => i.workspaceId === e.target.value);
-              setSelectedId(e.target.value);
-              if (next) {
-                setDisplayName(next.displayName ?? next.name);
-                setContactEmail(next.contactEmail ?? "");
-                setContactPhone(next.contactPhone ?? "");
-                setReplyToEmail(next.replyToEmail ?? next.contactEmail ?? "");
-                setSenderDisplayName(
-                  next.senderDisplayName ?? next.displayName ?? "",
-                );
-              }
-            }}
-          >
-            {items.map((item) => (
-              <option key={item.workspaceId} value={item.workspaceId}>
-                {item.displayName ?? item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-
-      {selected?.onboarding.templateThemeStatus !== "NOT_STARTED" ? (
+      {item.onboarding.templateThemeStatus !== "NOT_STARTED" ? (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           OWNER TENANT TEMPLATE DESIGN DECISION REQUIRED
         </div>
@@ -174,7 +151,10 @@ export function OwnerOnboardingClient() {
         </p>
       )}
 
-      <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-6" onSubmit={onSave}>
+      <form
+        className="space-y-4 rounded-xl border border-slate-200 bg-white p-6"
+        onSubmit={onSave}
+      >
         <label className="block text-sm text-slate-700">
           Business display name
           <input

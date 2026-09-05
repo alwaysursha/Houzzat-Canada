@@ -1,11 +1,19 @@
 /**
- * Stage 6.10A — authenticated OWNER onboarding foundation (non-design).
+ * Stage 6.10A / 6.10C.1 — authenticated OWNER onboarding (non-design).
+ * Host-bound authority: hostname → WorkspaceDomain → Workspace → OWNER membership.
  * templateThemeStatus must remain NOT_STARTED.
  */
 
 import type { PrismaClient } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma as defaultPrisma } from "@/lib/prisma";
+import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
+import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
+import { isHouzzatProPlatformRoot } from "@/lib/tenancy/reserved-domains";
+import {
+  resolveWorkspaceFromHostname,
+  type HostResolutionDeps,
+} from "@/lib/tenancy/resolve-workspace-host";
 import { OwnerActivationError } from "./errors";
 import { ensureWorkspaceOnboardingState } from "./onboarding-state";
 
@@ -29,7 +37,17 @@ export type OwnerOnboardingWorkspace = {
   };
 };
 
-async function requireOwnerSessionUserId(): Promise<string> {
+export type HostBoundOwnerOnboardingContext = {
+  userId: string;
+  workspaceId: string;
+  workspaceSlug: string;
+  hostname: string;
+};
+
+async function requireSessionUserId(input?: {
+  userId?: string;
+}): Promise<string> {
+  if (input?.userId) return input.userId;
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
@@ -38,114 +56,215 @@ async function requireOwnerSessionUserId(): Promise<string> {
   return userId;
 }
 
-export async function listOwnerOnboardingWorkspaces(input?: {
+/**
+ * Resolve onboarding authority from the request hostname only.
+ * Client workspaceId is never authoritative.
+ */
+export async function requireHostBoundOwnerOnboardingContext(input: {
+  request: Request;
   prisma?: PrismaClient;
-}): Promise<OwnerOnboardingWorkspace[]> {
-  const db = input?.prisma ?? defaultPrisma;
-  const userId = await requireOwnerSessionUserId();
+  hostDeps?: HostResolutionDeps;
+  /** Test injection — production always uses session auth(). */
+  userId?: string;
+  /** Optional client-supplied id; mismatch fails. Never used as authority. */
+  clientWorkspaceId?: string | null;
+}): Promise<HostBoundOwnerOnboardingContext> {
+  const db = input.prisma ?? defaultPrisma;
+  const userId = await requireSessionUserId({ userId: input.userId });
 
-  const memberships = await db.workspaceMember.findMany({
-    where: {
-      userId,
-      role: "OWNER",
-      status: "ACTIVE",
-      workspace: { status: { in: ["ACTIVE", "TRIAL"] } },
-    },
-    select: {
-      workspace: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          branding: {
-            select: {
-              displayName: true,
-              contactEmail: true,
-              contactPhone: true,
-            },
-          },
-          emailIdentity: {
-            select: {
-              contactEmail: true,
-              replyToEmail: true,
-              senderDisplayName: true,
-              domainStatus: true,
-            },
-          },
-          onboardingState: true,
-        },
-      },
-    },
-  });
-
-  const items: OwnerOnboardingWorkspace[] = [];
-  for (const m of memberships) {
-    await ensureWorkspaceOnboardingState(db, m.workspace.id);
-    const onboarding =
-      (await db.workspaceOnboardingState.findUnique({
-        where: { workspaceId: m.workspace.id },
-      })) ?? null;
-
-    items.push({
-      workspaceId: m.workspace.id,
-      name: m.workspace.name,
-      slug: m.workspace.slug,
-      displayName: m.workspace.branding?.displayName ?? m.workspace.name,
-      contactEmail:
-        m.workspace.branding?.contactEmail ??
-        m.workspace.emailIdentity?.contactEmail ??
-        null,
-      contactPhone: m.workspace.branding?.contactPhone ?? null,
-      replyToEmail: m.workspace.emailIdentity?.replyToEmail ?? null,
-      senderDisplayName: m.workspace.emailIdentity?.senderDisplayName ?? null,
-      emailDomainStatus: m.workspace.emailIdentity?.domainStatus ?? "NONE",
-      onboarding: {
-        accountActivatedAt: onboarding?.accountActivatedAt?.toISOString() ?? null,
-        businessProfileStatus: onboarding?.businessProfileStatus ?? "NOT_STARTED",
-        brandingStatus: onboarding?.brandingStatus ?? "NOT_STARTED",
-        templateThemeStatus: onboarding?.templateThemeStatus ?? "NOT_STARTED",
-        emailIdentityStatus: onboarding?.emailIdentityStatus ?? "NOT_STARTED",
-        completedAt: onboarding?.completedAt?.toISOString() ?? null,
-      },
-    });
+  const hostname = extractTrustedRequestHostname(input.request);
+  if (!hostname) {
+    throw new OwnerActivationError(
+      "Tenant hostname required",
+      "MALFORMED_HOSTNAME",
+      400,
+    );
   }
 
-  return items;
-}
+  if (
+    isPlatformMobileBootstrapHost(hostname) ||
+    isHouzzatProPlatformRoot(hostname)
+  ) {
+    throw new OwnerActivationError(
+      "Owner onboarding requires a tenant hostname",
+      "PLATFORM_HOST_NO_TENANT_AUTHORITY",
+      403,
+    );
+  }
 
-export async function updateOwnerOnboardingBusinessProfile(input: {
-  workspaceId: string;
-  displayName: string;
-  contactEmail: string;
-  contactPhone?: string | null;
-  replyToEmail?: string | null;
-  senderDisplayName?: string | null;
-  prisma?: PrismaClient;
-}): Promise<OwnerOnboardingWorkspace> {
-  const db = input.prisma ?? defaultPrisma;
-  const userId = await requireOwnerSessionUserId();
+  const hostResult = await resolveWorkspaceFromHostname(
+    hostname,
+    input.hostDeps,
+  );
+  if (!hostResult.ok) {
+    const code =
+      hostResult.reason === "workspace_inactive" ||
+      hostResult.reason === "workspace_suspended"
+        ? "WORKSPACE_INACTIVE"
+        : hostResult.reason === "domain_inactive"
+          ? "DOMAIN_INACTIVE"
+          : "TENANCY_DENIED";
+    throw new OwnerActivationError(
+      "Unable to resolve tenant workspace for this hostname",
+      code,
+      403,
+    );
+  }
+
+  // Stage 6.10C.1 — onboarding requires ACTIVE workspace (not TRIAL-only).
+  const workspace = await db.workspace.findUnique({
+    where: { id: hostResult.workspaceId },
+    select: { id: true, slug: true, status: true },
+  });
+  if (!workspace || workspace.status !== "ACTIVE") {
+    throw new OwnerActivationError(
+      "Workspace is not ACTIVE",
+      "WORKSPACE_INACTIVE",
+      403,
+    );
+  }
 
   const membership = await db.workspaceMember.findUnique({
     where: {
       workspaceId_userId: {
-        workspaceId: input.workspaceId,
+        workspaceId: workspace.id,
         userId,
       },
     },
     select: { role: true, status: true },
   });
 
+  // Membership role OWNER only — never User.role / PlatformOperator.
   if (
     !membership ||
-    membership.role !== "OWNER" ||
-    membership.status !== "ACTIVE"
+    membership.status !== "ACTIVE" ||
+    membership.role !== "OWNER"
   ) {
     throw new OwnerActivationError(
-      "Owner membership required",
+      "Owner membership required for this tenant",
       "FORBIDDEN",
       403,
     );
   }
+
+  if (
+    input.clientWorkspaceId &&
+    input.clientWorkspaceId.trim() &&
+    input.clientWorkspaceId !== workspace.id
+  ) {
+    throw new OwnerActivationError(
+      "workspaceId does not match request hostname workspace",
+      "WORKSPACE_HOST_MISMATCH",
+      403,
+    );
+  }
+
+  return {
+    userId,
+    workspaceId: workspace.id,
+    workspaceSlug: workspace.slug,
+    hostname: hostResult.normalizedHostname,
+  };
+}
+
+async function loadOwnerOnboardingWorkspace(
+  db: PrismaClient,
+  workspaceId: string,
+): Promise<OwnerOnboardingWorkspace> {
+  await ensureWorkspaceOnboardingState(db, workspaceId);
+
+  const workspace = await db.workspace.findUnique({
+    where: { id: workspaceId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      branding: {
+        select: {
+          displayName: true,
+          contactEmail: true,
+          contactPhone: true,
+        },
+      },
+      emailIdentity: {
+        select: {
+          contactEmail: true,
+          replyToEmail: true,
+          senderDisplayName: true,
+          domainStatus: true,
+        },
+      },
+      onboardingState: true,
+    },
+  });
+  if (!workspace) {
+    throw new OwnerActivationError("Workspace not found", "NOT_FOUND", 404);
+  }
+
+  const onboarding = workspace.onboardingState;
+  return {
+    workspaceId: workspace.id,
+    name: workspace.name,
+    slug: workspace.slug,
+    displayName: workspace.branding?.displayName ?? workspace.name,
+    contactEmail:
+      workspace.branding?.contactEmail ??
+      workspace.emailIdentity?.contactEmail ??
+      null,
+    contactPhone: workspace.branding?.contactPhone ?? null,
+    replyToEmail: workspace.emailIdentity?.replyToEmail ?? null,
+    senderDisplayName: workspace.emailIdentity?.senderDisplayName ?? null,
+    emailDomainStatus: workspace.emailIdentity?.domainStatus ?? "NONE",
+    onboarding: {
+      accountActivatedAt: onboarding?.accountActivatedAt?.toISOString() ?? null,
+      businessProfileStatus: onboarding?.businessProfileStatus ?? "NOT_STARTED",
+      brandingStatus: onboarding?.brandingStatus ?? "NOT_STARTED",
+      templateThemeStatus: onboarding?.templateThemeStatus ?? "NOT_STARTED",
+      emailIdentityStatus: onboarding?.emailIdentityStatus ?? "NOT_STARTED",
+      completedAt: onboarding?.completedAt?.toISOString() ?? null,
+    },
+  };
+}
+
+/** Host-bound read — returns the hostname workspace only (0–1 items). */
+export async function listOwnerOnboardingWorkspaces(input: {
+  request: Request;
+  prisma?: PrismaClient;
+  hostDeps?: HostResolutionDeps;
+  userId?: string;
+}): Promise<OwnerOnboardingWorkspace[]> {
+  const db = input.prisma ?? defaultPrisma;
+  const ctx = await requireHostBoundOwnerOnboardingContext({
+    request: input.request,
+    prisma: db,
+    hostDeps: input.hostDeps,
+    userId: input.userId,
+  });
+  const item = await loadOwnerOnboardingWorkspace(db, ctx.workspaceId);
+  return [item];
+}
+
+export async function updateOwnerOnboardingBusinessProfile(input: {
+  request: Request;
+  displayName: string;
+  contactEmail: string;
+  contactPhone?: string | null;
+  replyToEmail?: string | null;
+  senderDisplayName?: string | null;
+  /** Ignored as authority; mismatch fails. */
+  clientWorkspaceId?: string | null;
+  prisma?: PrismaClient;
+  hostDeps?: HostResolutionDeps;
+  userId?: string;
+}): Promise<OwnerOnboardingWorkspace> {
+  const db = input.prisma ?? defaultPrisma;
+  const ctx = await requireHostBoundOwnerOnboardingContext({
+    request: input.request,
+    prisma: db,
+    hostDeps: input.hostDeps,
+    userId: input.userId,
+    clientWorkspaceId: input.clientWorkspaceId,
+  });
 
   const displayName = input.displayName.trim().slice(0, 120);
   const contactEmail = input.contactEmail.trim().toLowerCase();
@@ -164,15 +283,15 @@ export async function updateOwnerOnboardingBusinessProfile(input: {
     );
   }
 
-  await ensureWorkspaceOnboardingState(db, input.workspaceId);
+  await ensureWorkspaceOnboardingState(db, ctx.workspaceId);
 
   const branding = await db.workspaceBranding.findUnique({
-    where: { workspaceId: input.workspaceId },
+    where: { workspaceId: ctx.workspaceId },
     select: { workspaceId: true },
   });
   if (branding) {
     await db.workspaceBranding.update({
-      where: { workspaceId: input.workspaceId },
+      where: { workspaceId: ctx.workspaceId },
       data: {
         displayName,
         contactEmail,
@@ -182,41 +301,40 @@ export async function updateOwnerOnboardingBusinessProfile(input: {
   }
 
   await db.workspace.update({
-    where: { id: input.workspaceId },
+    where: { id: ctx.workspaceId },
     data: { name: displayName },
   });
 
   const emailIdentity = await db.workspaceEmailIdentity.findUnique({
-    where: { workspaceId: input.workspaceId },
+    where: { workspaceId: ctx.workspaceId },
     select: { workspaceId: true, domainStatus: true },
   });
   if (emailIdentity) {
     await db.workspaceEmailIdentity.update({
-      where: { workspaceId: input.workspaceId },
+      where: { workspaceId: ctx.workspaceId },
       data: {
         contactEmail,
         replyToEmail:
           input.replyToEmail?.trim().toLowerCase() || contactEmail,
-        senderDisplayName:
-          input.senderDisplayName?.trim() || displayName,
-        // Never invent verified custom domains.
-        domainStatus: emailIdentity.domainStatus === "NONE"
-          ? "NONE"
-          : emailIdentity.domainStatus,
+        senderDisplayName: input.senderDisplayName?.trim() || displayName,
+        domainStatus:
+          emailIdentity.domainStatus === "NONE"
+            ? "NONE"
+            : emailIdentity.domainStatus,
       },
     });
   }
 
   const onboarding = await db.workspaceOnboardingState.findUnique({
-    where: { workspaceId: input.workspaceId },
+    where: { workspaceId: ctx.workspaceId },
   });
   if (onboarding) {
     await db.workspaceOnboardingState.update({
-      where: { workspaceId: input.workspaceId },
+      where: { workspaceId: ctx.workspaceId },
       data: {
         businessProfileStatus: "COMPLETE",
         emailIdentityStatus: "COMPLETE",
-        // Locked for Stage 6.10A — owner template design decision required later.
+        // Locked — owner template design decision required later.
         templateThemeStatus: "NOT_STARTED",
         brandingStatus:
           onboarding.brandingStatus === "COMPLETE"
@@ -226,14 +344,5 @@ export async function updateOwnerOnboardingBusinessProfile(input: {
     });
   }
 
-  const items = await listOwnerOnboardingWorkspaces({ prisma: db });
-  const hit = items.find((i) => i.workspaceId === input.workspaceId);
-  if (!hit) {
-    throw new OwnerActivationError(
-      "Workspace not found after update",
-      "NOT_FOUND",
-      404,
-    );
-  }
-  return hit;
+  return loadOwnerOnboardingWorkspace(db, ctx.workspaceId);
 }

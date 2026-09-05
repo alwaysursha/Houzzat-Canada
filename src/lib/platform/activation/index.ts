@@ -46,7 +46,9 @@ export {
 export {
   listOwnerOnboardingWorkspaces,
   updateOwnerOnboardingBusinessProfile,
+  requireHostBoundOwnerOnboardingContext,
   type OwnerOnboardingWorkspace,
+  type HostBoundOwnerOnboardingContext,
 } from "./onboarding";
 
 export { renderOwnerActivationEmail } from "./email-template";
