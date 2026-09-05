@@ -26,6 +26,20 @@ type ContactStatus = {
 
 type ViewMode = "prompt" | "minimized";
 
+/** Digits-only length check — accepts common NA / intl formats. */
+function looksLikePhone(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 10 && digits.length <= 15;
+}
+
+function readPhoneInputValue(): string {
+  if (typeof document === "undefined") return "";
+  const el = document.getElementById(
+    "contact-update-phone",
+  ) as HTMLInputElement | null;
+  return el?.value?.trim() ?? "";
+}
+
 function snoozeUntil(): number | null {
   if (typeof window === "undefined") return null;
   try {
@@ -74,6 +88,8 @@ export function ContactUpdateReminder() {
   const [promptVisible, setPromptVisible] = useState(false);
   const [chipVisible, setChipVisible] = useState(false);
   const fadeTimer = useRef<number | null>(null);
+  const autoSaveAttempted = useRef(false);
+  const saveInFlight = useRef(false);
 
   const clearFadeTimer = useCallback(() => {
     if (fadeTimer.current != null) {
@@ -108,6 +124,7 @@ export function ContactUpdateReminder() {
       setMode(null);
       setPromptVisible(false);
       setChipVisible(false);
+      autoSaveAttempted.current = false;
       return;
     }
 
@@ -115,7 +132,61 @@ export function ContactUpdateReminder() {
     setPhoneDraft(json.phone ?? "");
     setEmailDraft(json.email ?? "");
     setMode(isSnoozed() ? "minimized" : "prompt");
+    // Allow a fresh auto-save attempt when the prompt reappears.
+    autoSaveAttempted.current = false;
   }, [status, role]);
+
+  const persistContact = useCallback(
+    async (
+      payload: { phone?: string; email?: string },
+      options?: { silent?: boolean },
+    ) => {
+      if (saveInFlight.current) return false;
+      saveInFlight.current = true;
+      setPending(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/account/contact", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = (await res.json()) as {
+          error?: string;
+          needPhone?: boolean;
+          needEmail?: boolean;
+        };
+        if (!res.ok) throw new Error(json.error || "Could not save contact info");
+
+        clearSnooze();
+        if (!options?.silent) {
+          toast({
+            message: "Contact information updated.",
+            tone: "success",
+          });
+        }
+
+        if (!json.needPhone && !json.needEmail) {
+          setPromptVisible(false);
+          clearFadeTimer();
+          fadeTimer.current = window.setTimeout(() => {
+            setInfo(null);
+            setMode(null);
+          }, FADE_MS);
+        } else {
+          await load();
+        }
+        return true;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not save");
+        return false;
+      } finally {
+        saveInFlight.current = false;
+        setPending(false);
+      }
+    },
+    [clearFadeTimer, load, toast],
+  );
 
   useEffect(() => {
     if (status !== "authenticated") {
@@ -139,6 +210,52 @@ export function ContactUpdateReminder() {
   }, [load]);
 
   useEffect(() => () => clearFadeTimer(), [clearFadeTimer]);
+
+  /**
+   * When phone is missing (not an agent-forced re-request), auto-save a valid
+   * number once it appears — browser / OS autofill often fills `tel` without a
+   * React onChange. Skip agent-requested updates so the customer still confirms.
+   */
+  useEffect(() => {
+    if (mode !== "prompt" || !info) return;
+    if (!info.needPhone || info.phoneRequested || info.emailRequested) return;
+    if (info.needEmail) return;
+
+    const tryAutoSave = () => {
+      if (autoSaveAttempted.current || saveInFlight.current) return;
+      const fromState = phoneDraft.trim();
+      const fromDom = readPhoneInputValue();
+      const phone = looksLikePhone(fromState)
+        ? fromState
+        : looksLikePhone(fromDom)
+          ? fromDom
+          : "";
+      if (!phone) return;
+
+      autoSaveAttempted.current = true;
+      if (phone !== fromState) setPhoneDraft(phone);
+      void persistContact({ phone }, { silent: true }).then((ok) => {
+        if (!ok) autoSaveAttempted.current = false;
+      });
+    };
+
+    // Autofill often lands after paint / without firing React change events.
+    const t0 = window.setTimeout(tryAutoSave, 50);
+    const t1 = window.setTimeout(tryAutoSave, 400);
+    const t2 = window.setTimeout(tryAutoSave, 1200);
+
+    const onAnyInput = () => tryAutoSave();
+    window.addEventListener("input", onAnyInput, true);
+    window.addEventListener("change", onAnyInput, true);
+
+    return () => {
+      window.clearTimeout(t0);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.removeEventListener("input", onAnyInput, true);
+      window.removeEventListener("change", onAnyInput, true);
+    };
+  }, [mode, info, phoneDraft, persistContact]);
 
   // Fade the active surface in when mode changes.
   useEffect(() => {
@@ -186,53 +303,23 @@ export function ContactUpdateReminder() {
 
   async function save() {
     if (!info) return;
-    setPending(true);
-    setError(null);
-    try {
-      const payload: { phone?: string; email?: string } = {};
-      if (info.needPhone) payload.phone = phoneDraft.trim();
-      if (info.needEmail) payload.email = emailDraft.trim();
-
-      if (info.needPhone && !payload.phone) {
-        throw new Error("Please enter a phone number.");
-      }
-      if (info.needEmail && !payload.email) {
-        throw new Error("Please enter an email address.");
-      }
-
-      const res = await fetch("/api/account/contact", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const json = (await res.json()) as {
-        error?: string;
-        needPhone?: boolean;
-        needEmail?: boolean;
-      };
-      if (!res.ok) throw new Error(json.error || "Could not save contact info");
-
-      clearSnooze();
-      toast({
-        message: "Contact information updated.",
-        tone: "success",
-      });
-
-      if (!json.needPhone && !json.needEmail) {
-        setPromptVisible(false);
-        clearFadeTimer();
-        fadeTimer.current = window.setTimeout(() => {
-          setInfo(null);
-          setMode(null);
-        }, FADE_MS);
-      } else {
-        await load();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save");
-    } finally {
-      setPending(false);
+    const payload: { phone?: string; email?: string } = {};
+    if (info.needPhone) {
+      const phone = phoneDraft.trim() || readPhoneInputValue();
+      payload.phone = phone;
     }
+    if (info.needEmail) payload.email = emailDraft.trim();
+
+    if (info.needPhone && !payload.phone) {
+      setError("Please enter a phone number.");
+      return;
+    }
+    if (info.needEmail && !payload.email) {
+      setError("Please enter an email address.");
+      return;
+    }
+
+    await persistContact(payload);
   }
 
   function chooseLater() {
