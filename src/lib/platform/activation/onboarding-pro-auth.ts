@@ -2,9 +2,11 @@
  * Stage 6.10C.3 — OWNER onboarding → platform Pro sign-in + handoff return.
  * Tenant authority remains hostname → WorkspaceDomain → membership.
  * workspaceHint is never authoritative.
+ *
+ * Client-safe: must not import next/headers or other server-only modules
+ * (used from HouzzatProSignInScreen / ProWorkspaceBootstrap).
  */
 
-import { isValidWorkspaceIdShape } from "@/lib/active-workspace";
 import {
   HOUZZATPRO_APP_BOOTSTRAP_ORIGIN,
 } from "@/lib/mobile/platform-bootstrap";
@@ -27,6 +29,13 @@ export const OWNER_ONBOARDING_AUTH_QUERY = {
 const ALLOWED_OWNER_RETURN_PATHS = new Set<string>([
   OWNER_ONBOARDING_RETURN_PATH,
 ]);
+
+/** Same shape as `isValidWorkspaceIdShape` — kept local to stay client-bundle safe. */
+const WORKSPACE_ID_RE = /^[a-zA-Z0-9_-]{8,64}$/;
+
+function isWorkspaceHintIdShape(workspaceId: string): boolean {
+  return WORKSPACE_ID_RE.test(workspaceId);
+}
 
 /**
  * Sanitize a client/query return path for tenant handoff.
@@ -61,7 +70,7 @@ export function sanitizeWorkspaceHintId(
 ): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();
-  if (!isValidWorkspaceIdShape(trimmed)) return null;
+  if (!isWorkspaceHintIdShape(trimmed)) return null;
   return trimmed;
 }
 
