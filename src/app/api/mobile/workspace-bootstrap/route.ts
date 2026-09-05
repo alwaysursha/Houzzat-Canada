@@ -7,6 +7,10 @@ import {
   resolveMobileWorkspaceBootstrapState,
 } from "@/lib/mobile/workspace-bootstrap";
 import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
+import {
+  OWNER_ONBOARDING_AUTH_QUERY,
+  sanitizeWorkspaceHintId,
+} from "@/lib/platform/activation/onboarding-pro-auth";
 
 export const runtime = "nodejs";
 
@@ -14,6 +18,10 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   const session = await auth();
   const hostname = extractTrustedRequestHostname(request) ?? "";
+  const url = new URL(request.url);
+  const workspaceHint = sanitizeWorkspaceHintId(
+    url.searchParams.get(OWNER_ONBOARDING_AUTH_QUERY.workspaceHint),
+  );
 
   if (!session?.user?.id) {
     return NextResponse.json({
@@ -32,6 +40,7 @@ export async function GET(request: Request) {
     requestHostname: hostname,
     memberships,
     currentHostMembership,
+    workspaceHint,
   });
 
   return NextResponse.json({

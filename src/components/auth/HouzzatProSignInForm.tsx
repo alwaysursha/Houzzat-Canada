@@ -18,8 +18,12 @@ import { NativeAuthDiagnosticOverlay } from "@/components/mobile/NativeAuthDiagn
 
 export function HouzzatProSignInForm({
   callbackUrl = null,
+  returnPath = null,
+  workspaceHint = null,
 }: {
   callbackUrl?: string | null;
+  returnPath?: string | null;
+  workspaceHint?: string | null;
 }) {
   const { confirm } = useSiteAlert();
   const submitRef = useRef<HTMLButtonElement>(null);
@@ -66,6 +70,8 @@ export function HouzzatProSignInForm({
       email: normalizedEmail,
       password,
       callbackUrl,
+      returnPath,
+      workspaceHint,
     });
 
     setLastSignInResult(result);

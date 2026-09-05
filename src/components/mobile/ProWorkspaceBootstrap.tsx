@@ -36,6 +36,10 @@ import type {
   MobileBootstrapMembership,
   MobileWorkspaceBootstrapState,
 } from "@/lib/mobile/workspace-bootstrap";
+import {
+  OWNER_ONBOARDING_AUTH_QUERY,
+  parseOwnerOnboardingAuthSearchParams,
+} from "@/lib/platform/activation/onboarding-pro-auth";
 
 type BootstrapResponse = {
   authenticated: boolean;
@@ -55,8 +59,13 @@ function currentHostname(): string {
   return window.location.hostname;
 }
 
-async function fetchBootstrap(): Promise<BootstrapResponse | null> {
-  const res = await fetch("/api/mobile/workspace-bootstrap", {
+async function fetchBootstrap(
+  workspaceHint: string | null,
+): Promise<BootstrapResponse | null> {
+  const q = workspaceHint
+    ? `?${OWNER_ONBOARDING_AUTH_QUERY.workspaceHint}=${encodeURIComponent(workspaceHint)}`
+    : "";
+  const res = await fetch(`/api/mobile/workspace-bootstrap${q}`, {
     cache: "no-store",
     credentials: "include",
   });
@@ -137,6 +146,8 @@ export function ProWorkspaceBootstrap() {
   const pathname = usePathname() || "/";
   const searchParams = useSearchParams();
   const diagnosticFreeze = isMobileDiagnosticFreezePath(pathname, searchParams);
+  const { returnPath, workspaceHint } =
+    parseOwnerOnboardingAuthSearchParams(searchParams);
   const hostname =
     typeof window !== "undefined" ? window.location.hostname : "";
   const onProBootstrapSurface = shouldRunProWorkspaceBootstrap({
@@ -158,6 +169,11 @@ export function ProWorkspaceBootstrap() {
     if (!onProBootstrapSurface) return;
     if (routed.current) return;
     if (status === "loading") return;
+
+    proNativeAuthController.setOnboardingAuthMeta({
+      returnPath,
+      workspaceHint,
+    });
 
     let cancelled = false;
     void (async () => {
@@ -207,7 +223,7 @@ export function ProWorkspaceBootstrap() {
       recordMobileDiagEvent("WORKSPACE_BOOTSTRAP_START");
       setPending(true);
       setError(null);
-      const payload = await fetchBootstrap();
+      const payload = await fetchBootstrap(workspaceHint);
       if (cancelled) return;
       if (!payload) {
         clearNativeNavStage();
@@ -260,7 +276,7 @@ export function ProWorkspaceBootstrap() {
           hardGo(pendingHref);
           return;
         }
-        hardGo(bootstrap.destination);
+        hardGo(returnPath ?? bootstrap.destination);
         return;
       }
 
@@ -295,6 +311,8 @@ export function ProWorkspaceBootstrap() {
     status,
     diagnosticFreeze,
     freezeReleased,
+    returnPath,
+    workspaceHint,
   ]);
 
   if (!onProBootstrapSurface) {

@@ -10,8 +10,8 @@ import { proNativeAuthController } from "@/lib/mobile/pro-native-auth-controller
 
 function isStaffRoleDestination(
   value: string | null | undefined,
-): value is "/admin" | "/agent" {
-  return value === "/admin" || value === "/agent";
+): value is "/admin" | "/agent" | "/onboarding" {
+  return value === "/admin" || value === "/agent" || value === "/onboarding";
 }
 
 // Stage 3K.5.19: method: "PUT" exchange and hardGo(destination) owned by proNativeAuthController.

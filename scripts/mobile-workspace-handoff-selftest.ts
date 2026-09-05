@@ -31,10 +31,21 @@ function testHandoffIdentifierRoundTrip() {
   const parsed = parseMobileHandoffIdentifier(id);
   assert.ok(parsed);
   assert.equal(parsed?.targetHostname, "tenant-canary.houzzatpro.com");
+  assert.equal(parsed?.returnPath ?? null, null);
   assert.equal(
     parseMobileHandoffIdentifier("mobile-handoff:bad"),
     null,
   );
+
+  const withReturn = buildMobileHandoffIdentifier({
+    userId: "user_fixture_12345678",
+    workspaceId: "tenant_b_test_workspace_id",
+    targetHostname: "re-max-realty.houzzatpro.com",
+    returnPath: "/onboarding",
+  });
+  const parsedReturn = parseMobileHandoffIdentifier(withReturn);
+  assert.equal(parsedReturn?.returnPath, "/onboarding");
+  assert.equal(parsedReturn?.targetHostname, "re-max-realty.houzzatpro.com");
 }
 
 function testHandoffHostBinding() {
@@ -99,6 +110,7 @@ function testPostHandoffRoleMatrix() {
 
   assert.equal(isSuccessfulHandoffClientDestination("/admin"), true);
   assert.equal(isSuccessfulHandoffClientDestination("/agent"), true);
+  assert.equal(isSuccessfulHandoffClientDestination("/onboarding"), true);
   assert.equal(isSuccessfulHandoffClientDestination("/pro"), false);
   assert.equal(isSuccessfulHandoffClientDestination("/pro/for-staff"), false);
   assert.equal(isSuccessfulHandoffClientDestination(undefined), false);

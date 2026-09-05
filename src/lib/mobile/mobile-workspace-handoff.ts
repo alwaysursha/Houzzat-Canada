@@ -14,14 +14,19 @@ import {
 } from "@/lib/mobile/platform-bootstrap";
 import {
   isStaffWorkspaceMemberRole,
-  resolveWorkspaceMemberMobileDestination,
   type MobileStaffPathDestination,
 } from "@/lib/mobile/workspace-destination";
+import {
+  OWNER_ONBOARDING_RETURN_PATH,
+  resolveHandoffDestinationWithReturnPath,
+  sanitizeOwnerOnboardingReturnPath,
+} from "@/lib/platform/activation/onboarding-pro-auth";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 
 export const MOBILE_HANDOFF_PROVIDER_ID = "mobile-workspace-handoff";
 export const MOBILE_HANDOFF_TTL_MS = 2 * 60 * 1000;
 const IDENTIFIER_PREFIX = "mobile-handoff:";
+const RETURN_PATH_SUFFIX = "|rp=";
 
 export type MobileStaffDestination = MobileStaffPathDestination;
 
@@ -29,6 +34,8 @@ export type MobileHandoffIdentifier = {
   userId: string;
   workspaceId: string;
   targetHostname: string;
+  /** Optional allowlisted relative path (e.g. /onboarding). */
+  returnPath?: typeof OWNER_ONBOARDING_RETURN_PATH | null;
 };
 
 export type MobileWorkspaceHandoffRow = {
@@ -54,14 +61,30 @@ export function buildMobileHandoffIdentifier(input: MobileHandoffIdentifier): st
   }
   const host = normalizeWorkspaceHostname(input.targetHostname);
   if (!host.ok) throw new Error("[mobile-handoff] invalid target hostname");
-  return `${IDENTIFIER_PREFIX}${input.userId}:${input.workspaceId}:${host.hostname}`;
+  const base = `${IDENTIFIER_PREFIX}${input.userId}:${input.workspaceId}:${host.hostname}`;
+  const returnPath = sanitizeOwnerOnboardingReturnPath(input.returnPath);
+  if (!returnPath) return base;
+  return `${base}${RETURN_PATH_SUFFIX}${encodeURIComponent(returnPath)}`;
 }
 
 export function parseMobileHandoffIdentifier(
   identifier: string,
 ): MobileHandoffIdentifier | null {
   if (!identifier.startsWith(IDENTIFIER_PREFIX)) return null;
-  const rest = identifier.slice(IDENTIFIER_PREFIX.length);
+  let rest = identifier.slice(IDENTIFIER_PREFIX.length);
+  let returnPath: typeof OWNER_ONBOARDING_RETURN_PATH | null = null;
+  const rpIdx = rest.indexOf(RETURN_PATH_SUFFIX);
+  if (rpIdx >= 0) {
+    const encoded = rest.slice(rpIdx + RETURN_PATH_SUFFIX.length);
+    rest = rest.slice(0, rpIdx);
+    try {
+      returnPath = sanitizeOwnerOnboardingReturnPath(
+        decodeURIComponent(encoded),
+      );
+    } catch {
+      returnPath = null;
+    }
+  }
   const parts = rest.split(":");
   if (parts.length < 3) return null;
   const userId = parts[0] ?? "";
@@ -72,7 +95,12 @@ export function parseMobileHandoffIdentifier(
   }
   const host = normalizeWorkspaceHostname(targetHostname);
   if (!host.ok) return null;
-  return { userId, workspaceId, targetHostname: host.hostname };
+  return {
+    userId,
+    workspaceId,
+    targetHostname: host.hostname,
+    ...(returnPath ? { returnPath } : {}),
+  };
 }
 
 export async function resolveMobileWorkspaceCanonicalHost(
@@ -93,6 +121,8 @@ export async function createMobileWorkspaceHandoff(input: {
   workspaceId: string;
   workspaceRole: WorkspaceMemberRole;
   requestHostname: string;
+  /** Optional allowlisted relative path; never authoritative for workspace. */
+  returnPath?: string | null;
 }): Promise<
   | { ok: true; handoff: MobileWorkspaceHandoffRow }
   | { ok: false; error: string; status: number }
@@ -129,12 +159,19 @@ export async function createMobileWorkspaceHandoff(input: {
     return { ok: false, error: "Workspace hostname unavailable", status: 422 };
   }
 
+  const safeReturnPath = sanitizeOwnerOnboardingReturnPath(input.returnPath);
+  const destination = resolveHandoffDestinationWithReturnPath({
+    workspaceRole: member.role,
+    returnPath: safeReturnPath,
+  });
+
   const rawCode = randomBytes(32).toString("base64url");
   const token = hashHandoffCode(rawCode);
   const identifier = buildMobileHandoffIdentifier({
     userId: input.userId,
     workspaceId: input.workspaceId,
     targetHostname,
+    returnPath: safeReturnPath,
   });
   const expiresAt = new Date(Date.now() + MOBILE_HANDOFF_TTL_MS);
 
@@ -159,7 +196,7 @@ export async function createMobileWorkspaceHandoff(input: {
       targetOrigin,
       targetHostname,
       workspaceId: input.workspaceId,
-      destination: resolveWorkspaceMemberMobileDestination(member.role),
+      destination,
       expiresAt,
     },
   };
@@ -288,7 +325,10 @@ async function lookupMobileWorkspaceHandoff(input: {
     token,
     parsed,
     memberRole: member.role,
-    destination: resolveWorkspaceMemberMobileDestination(member.role),
+    destination: resolveHandoffDestinationWithReturnPath({
+      workspaceRole: member.role,
+      returnPath: parsed.returnPath,
+    }),
     user: {
       id: user.id,
       email: user.email,

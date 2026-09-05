@@ -7,6 +7,7 @@ import {
   isStaffWorkspaceMemberRole,
   resolveWorkspaceMemberMobileDestination,
 } from "@/lib/mobile/workspace-destination";
+import { selectMembershipForWorkspaceHint } from "@/lib/platform/activation/onboarding-pro-auth";
 
 export type MobileBootstrapMembership = {
   workspaceId: string;
@@ -37,7 +38,7 @@ export type MobileWorkspaceBootstrapState =
   | {
       kind: "tenant_destination";
       membership: MobileBootstrapMembership;
-      destination: "/admin" | "/agent" | "/pro/for-staff";
+      destination: "/admin" | "/agent" | "/pro/for-staff" | "/onboarding";
     };
 
 export function resolveMobileWorkspaceBootstrapState(input: {
@@ -45,6 +46,11 @@ export function resolveMobileWorkspaceBootstrapState(input: {
   requestHostname: string;
   memberships: MobileBootstrapMembership[];
   currentHostMembership: MobileBootstrapMembership | null;
+  /**
+   * Non-authoritative workspace id from owner-onboarding redirect.
+   * Only applied when it matches an ACTIVE staff membership.
+   */
+  workspaceHint?: string | null;
 }): MobileWorkspaceBootstrapState {
   if (!input.authenticated) return { kind: "platform_sign_in" };
 
@@ -65,6 +71,22 @@ export function resolveMobileWorkspaceBootstrapState(input: {
         input.currentHostMembership.role,
       ),
     };
+  }
+
+  // Validated hint: treat as the selected membership (no new picker).
+  const hinted = selectMembershipForWorkspaceHint(
+    staffMemberships,
+    input.workspaceHint,
+  );
+  if (hinted) {
+    if (hinted.canonicalHostname === input.requestHostname) {
+      return {
+        kind: "tenant_destination",
+        membership: hinted,
+        destination: resolveWorkspaceMemberMobileDestination(hinted.role),
+      };
+    }
+    return { kind: "handoff", membership: hinted };
   }
 
   if (staffMemberships.length === 1) {

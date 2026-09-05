@@ -20,6 +20,7 @@ const bodySchema = z.object({
     .string()
     .min(1)
     .refine(isValidWorkspaceIdShape, "Invalid workspaceId"),
+  returnPath: z.string().max(64).optional().nullable(),
 });
 
 /** Issue a one-time cross-host workspace handoff from platform bootstrap. */
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
     workspaceId: selected.workspaceId,
     workspaceRole: selected.role,
     requestHostname: hostname,
+    returnPath: parsed.data.returnPath,
   });
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
@@ -103,8 +105,12 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: peeked.error }, { status: 401 });
   }
 
-  // Fail closed: only staff CRM destinations after a successful exchange.
-  if (peeked.destination !== "/admin" && peeked.destination !== "/agent") {
+  // Fail closed: only allowlisted staff / onboarding destinations after exchange.
+  if (
+    peeked.destination !== "/admin" &&
+    peeked.destination !== "/agent" &&
+    peeked.destination !== "/onboarding"
+  ) {
     console.error("[mobile-handoff-exchange] PUT invalid destination:", peeked.destination);
     return NextResponse.json({ error: "Invalid staff destination" }, { status: 401 });
   }

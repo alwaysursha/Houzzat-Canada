@@ -22,6 +22,14 @@ import { HOUZZATPRO_START_PATH } from "@/lib/mobile/app-shell";
 import { performHardSignOut } from "@/lib/auth/hard-sign-out";
 import { recordMobileDiagEvent, recordMobileDiagNav, type MobileDiagEventType } from "@/lib/mobile/runtime-diagnostic";
 import type { MobileWorkspaceBootstrapState, MobileBootstrapMembership } from "@/lib/mobile/workspace-bootstrap";
+import {
+  appendOwnerOnboardingAuthQuery,
+  OWNER_ONBOARDING_AUTH_QUERY,
+  OWNER_ONBOARDING_RETURN_PATH,
+  sanitizeOwnerOnboardingReturnPath,
+  sanitizeWorkspaceHintId,
+} from "@/lib/platform/activation/onboarding-pro-auth";
+import { isSuccessfulHandoffClientDestination } from "@/lib/mobile/workspace-destination";
 
 export type NativeAuthState =
   | "SIGNED_OUT"
@@ -88,9 +96,31 @@ class ProNativeAuthController {
   private activeHandoffPromise: Promise<string | null> | null = null;
   private activeExchangePromise: Promise<{ ok: boolean; destination?: string; error?: string }> | null = null;
   private exchangedCodes = new Set<string>();
+  /** Non-authoritative onboarding return metadata (Stage 6.10C.3). */
+  private pendingReturnPath: typeof OWNER_ONBOARDING_RETURN_PATH | null = null;
+  private pendingWorkspaceHint: string | null = null;
 
   constructor() {
     this.snapshot = this.loadInitialSnapshot();
+  }
+
+  /** Capture sanitized onboarding return metadata from Pro sign-in query. */
+  public setOnboardingAuthMeta(input: {
+    returnPath?: string | null;
+    workspaceHint?: string | null;
+  }): void {
+    this.pendingReturnPath = sanitizeOwnerOnboardingReturnPath(input.returnPath);
+    this.pendingWorkspaceHint = sanitizeWorkspaceHintId(input.workspaceHint);
+  }
+
+  public getOnboardingAuthMeta(): {
+    returnPath: typeof OWNER_ONBOARDING_RETURN_PATH | null;
+    workspaceHint: string | null;
+  } {
+    return {
+      returnPath: this.pendingReturnPath,
+      workspaceHint: this.pendingWorkspaceHint,
+    };
   }
 
   private loadInitialSnapshot(): NativeAuthSnapshot {
@@ -255,6 +285,8 @@ class ProNativeAuthController {
     email: string;
     password: string;
     callbackUrl?: string | null;
+    returnPath?: string | null;
+    workspaceHint?: string | null;
   }): Promise<{ ok: boolean; error?: string }> {
     if (this.activeSubmitPromise) {
       return this.activeSubmitPromise;
@@ -263,6 +295,11 @@ class ProNativeAuthController {
     if (this.snapshot.state === "AUTHENTICATING") {
       return { ok: false, error: "Authentication in progress" };
     }
+
+    this.setOnboardingAuthMeta({
+      returnPath: input.returnPath,
+      workspaceHint: input.workspaceHint,
+    });
 
     const opId = generateOperationId();
     this.transitionTo("AUTHENTICATING", {
@@ -303,12 +340,27 @@ class ProNativeAuthController {
         try {
           const disc = await this.discoverWorkspace();
           if (disc.ok && disc.state?.kind === "select_workspace") {
-            hardGo(HOUZZATPRO_START_PATH);
+            hardGo(
+              appendOwnerOnboardingAuthQuery(HOUZZATPRO_START_PATH, {
+                returnPath: this.pendingReturnPath,
+                workspaceHint: this.pendingWorkspaceHint,
+              }),
+            );
           } else if (!disc.ok) {
-            hardGo(HOUZZATPRO_START_PATH);
+            hardGo(
+              appendOwnerOnboardingAuthQuery(HOUZZATPRO_START_PATH, {
+                returnPath: this.pendingReturnPath,
+                workspaceHint: this.pendingWorkspaceHint,
+              }),
+            );
           }
         } catch {
-          hardGo(HOUZZATPRO_START_PATH);
+          hardGo(
+            appendOwnerOnboardingAuthQuery(HOUZZATPRO_START_PATH, {
+              returnPath: this.pendingReturnPath,
+              workspaceHint: this.pendingWorkspaceHint,
+            }),
+          );
         }
 
         return { ok: true };
@@ -346,7 +398,10 @@ class ProNativeAuthController {
 
     this.activeDiscoveryPromise = (async () => {
       try {
-        const res = await fetch("/api/mobile/workspace-bootstrap", {
+        const bootstrapQuery = this.pendingWorkspaceHint
+          ? `?${OWNER_ONBOARDING_AUTH_QUERY.workspaceHint}=${encodeURIComponent(this.pendingWorkspaceHint)}`
+          : "";
+        const res = await fetch(`/api/mobile/workspace-bootstrap${bootstrapQuery}`, {
           cache: "no-store",
           credentials: "include",
         });
@@ -386,12 +441,14 @@ class ProNativeAuthController {
         }
 
         if (bootstrap.kind === "tenant_destination") {
+          const destination =
+            this.pendingReturnPath ?? bootstrap.destination;
           this.transitionTo("FINAL_NAVIGATION", {
-            destination: bootstrap.destination,
+            destination,
             activeWorkspaceId: bootstrap.membership.workspaceId,
           });
-          this.logDiagnostic("FINAL_NAVIGATION_STARTED", bootstrap.destination);
-          hardGo(bootstrap.destination);
+          this.logDiagnostic("FINAL_NAVIGATION_STARTED", destination);
+          hardGo(destination);
           return { ok: true, state: bootstrap };
         }
 
@@ -443,7 +500,12 @@ class ProNativeAuthController {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ workspaceId }),
+          body: JSON.stringify({
+            workspaceId,
+            ...(this.pendingReturnPath
+              ? { returnPath: this.pendingReturnPath }
+              : {}),
+          }),
         });
 
         if (!res.ok) {
@@ -532,7 +594,7 @@ class ProNativeAuthController {
         const data = (await res.json()) as { destination?: string } | null;
         const destination = data?.destination;
 
-        if (destination !== "/admin" && destination !== "/agent") {
+        if (!isSuccessfulHandoffClientDestination(destination)) {
           const err = "Workspace handoff returned invalid staff destination.";
           this.transitionTo("ERROR", { error: err });
           return { ok: false, error: err };

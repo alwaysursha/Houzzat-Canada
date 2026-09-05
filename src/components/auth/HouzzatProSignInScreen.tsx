@@ -9,12 +9,18 @@ import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransiti
 import { hardGo } from "@/lib/mobile/nav-back";
 import { clearNativeNavStage } from "@/lib/mobile/native-route-latch";
 import { proNativeAuthController } from "@/lib/mobile/pro-native-auth-controller";
+import {
+  OWNER_ONBOARDING_AUTH_QUERY,
+  parseOwnerOnboardingAuthSearchParams,
+} from "@/lib/platform/activation/onboarding-pro-auth";
 
 function HouzzatProSignInInner() {
   const searchParams = useSearchParams();
   const checked = useRef(false);
   const callbackUrl = searchParams.get("callbackUrl");
   const signedOut = searchParams.get("signedOut") === "1";
+  const { returnPath, workspaceHint } =
+    parseOwnerOnboardingAuthSearchParams(searchParams);
   const [bootstrapping, setBootstrapping] = useState(false);
 
   useEffect(() => {
@@ -23,6 +29,10 @@ function HouzzatProSignInInner() {
     if (signedOut) {
       clearNativeNavStage();
     }
+    proNativeAuthController.setOnboardingAuthMeta({
+      returnPath,
+      workspaceHint,
+    });
     // After complete logout, stay on sign-in even if a stale client cache flickers.
     if (signedOut) return;
     void (async () => {
@@ -33,11 +43,19 @@ function HouzzatProSignInInner() {
       setBootstrapping(true);
       void proNativeAuthController.discoverWorkspace().then((res) => {
         if (!res.ok || res.state?.kind === "select_workspace") {
-          hardGo("/pro");
+          const q = new URLSearchParams();
+          if (returnPath) {
+            q.set(OWNER_ONBOARDING_AUTH_QUERY.returnPath, returnPath);
+          }
+          if (workspaceHint) {
+            q.set(OWNER_ONBOARDING_AUTH_QUERY.workspaceHint, workspaceHint);
+          }
+          const qs = q.toString();
+          hardGo(qs ? `/pro?${qs}` : "/pro");
         }
       });
     })();
-  }, [callbackUrl, signedOut]);
+  }, [callbackUrl, signedOut, returnPath, workspaceHint]);
 
   if (bootstrapping) {
     return <ProWorkspaceTransition />;
@@ -57,7 +75,11 @@ function HouzzatProSignInInner() {
         </div>
 
         <div className="mt-8 rounded-2xl border border-white/35 bg-white/20 p-5 shadow-[0_18px_50px_rgb(11_92_73_/0.12)] backdrop-blur-md sm:p-6">
-          <HouzzatProSignInForm callbackUrl={callbackUrl} />
+          <HouzzatProSignInForm
+            callbackUrl={callbackUrl}
+            returnPath={returnPath}
+            workspaceHint={workspaceHint}
+          />
         </div>
 
         <p className="mt-6 text-center text-xs leading-relaxed text-[#0B5C49]/60">

@@ -51,4 +51,16 @@ export {
   type HostBoundOwnerOnboardingContext,
 } from "./onboarding";
 
+export {
+  OWNER_ONBOARDING_RETURN_PATH,
+  OWNER_ONBOARDING_AUTH_QUERY,
+  sanitizeOwnerOnboardingReturnPath,
+  sanitizeWorkspaceHintId,
+  buildOwnerOnboardingProSignInUrl,
+  parseOwnerOnboardingAuthSearchParams,
+  resolveHandoffDestinationWithReturnPath,
+  selectMembershipForWorkspaceHint,
+  appendOwnerOnboardingAuthQuery,
+} from "./onboarding-pro-auth";
+
 export { renderOwnerActivationEmail } from "./email-template";
