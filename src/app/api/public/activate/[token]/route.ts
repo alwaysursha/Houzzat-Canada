@@ -41,7 +41,7 @@ export async function POST(request: Request, context: RouteContext) {
     return platformOk({
       activated: true,
       workspaceId: result.workspaceId,
-      signInPath: "/auth/signin",
+      signInPath: "/auth/sign-in",
     });
   } catch (error) {
     if (error instanceof OwnerActivationError) {

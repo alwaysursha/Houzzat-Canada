@@ -5,7 +5,7 @@ import { OwnerOnboardingClient } from "@/components/onboarding/OwnerOnboardingCl
 export default async function OwnerOnboardingPage() {
   const session = await auth();
   if (!session?.user?.id) {
-    redirect("/auth/signin?callbackUrl=/onboarding");
+    redirect("/auth/sign-in?callbackUrl=/onboarding");
   }
 
   return (

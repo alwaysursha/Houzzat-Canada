@@ -91,7 +91,7 @@ export function OwnerActivationClient({ token }: Props) {
           Your password is set. Sign in to continue workspace setup.
         </p>
         <Link
-          href="/auth/signin"
+          href="/auth/sign-in"
           className="mt-6 inline-flex rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
         >
           Sign in
