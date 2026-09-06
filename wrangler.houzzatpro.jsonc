@@ -14,6 +14,15 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // Stage 6.11C.1 — tenant Website Setup brand assets (hostname-bound OWNER uploads).
+  // Bucket must be created in Cloudflare before deploy; see Stage 6.11C.1 report.
+  "r2_buckets": [
+    {
+      "binding": "BRANDING_ASSETS",
+      "bucket_name": "houzzatpro-branding-assets",
+      "preview_bucket_name": "houzzatpro-branding-assets-preview"
+    }
+  ],
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
@@ -62,5 +71,6 @@
     "TYPESENSE_AUTOCOMPLETE": "1",
     "TYPESENSE_SEARCH": "1",
     "TYPESENSE_SYNC": "0"
+    // Workspace SaaS activation flags stay OUT of wrangler vars (dashboard).
   }
 }

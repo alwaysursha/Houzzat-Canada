@@ -46,8 +46,11 @@ export {
 export {
   listOwnerOnboardingWorkspaces,
   updateOwnerOnboardingBusinessProfile,
+  updateOwnerOnboardingProfessionalIdentity,
+  updateOwnerOnboardingTemplateTheme,
   requireHostBoundOwnerOnboardingContext,
   type OwnerOnboardingWorkspace,
+  type OwnerOnboardingThemeOption,
   type HostBoundOwnerOnboardingContext,
 } from "./onboarding";
 

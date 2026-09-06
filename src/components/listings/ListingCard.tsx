@@ -3,6 +3,7 @@ import { ListingCardActions } from "@/components/listings/ListingCardActions";
 import { ListingLink } from "@/components/listings/ListingLink";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
+import { useTemplatePresentation } from "@/components/templates/TemplatePresentationProvider";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
   formatListingBedsLabel,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
 import { formatListingSqftLabel } from "@/lib/listings/facts";
+import { AGENT_SIGNATURE_TEMPLATE_ID } from "@/lib/tenancy/templates";
 import { cn } from "@/lib/utils";
 
 function formatStat(value: number) {
@@ -54,6 +56,8 @@ export function ListingCard({
   /** Only pass for near-me rails — hidden everywhere else. */
   distanceKm?: number;
 }) {
+  const { templateId } = useTemplatePresentation();
+  const signature = templateId === AGENT_SIGNATURE_TEMPLATE_ID;
   const isLocked = Boolean(lockedPreview);
   const blockInteraction = lockedPreview === true;
   const isCommercial = listing.segment === "COMMERCIAL";
@@ -67,7 +71,8 @@ export function ListingCard({
     <>
       <div
         className={cn(
-          "relative aspect-[4/3] shrink-0 bg-mist",
+          "relative shrink-0 bg-mist",
+          signature ? "aspect-[5/4]" : "aspect-[4/3]",
           isLocked && "blur-[4px] saturate-75",
         )}
       >
@@ -76,13 +81,23 @@ export function ListingCard({
             src={listing.primaryImageUrl}
             alt={listing.addressLine}
             fill
-            className="object-cover transition duration-500 group-hover:scale-[1.03]"
+            className={cn(
+              "object-cover transition duration-500 group-hover:scale-[1.03]",
+              signature && "duration-700 group-hover:scale-[1.04]",
+            )}
             sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw"
           />
         ) : null}
         <div className="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-col items-start gap-1.5">
           {listing.openHouses.length > 0 ? (
-            <div className="space-y-0 rounded-md bg-signal px-2.5 py-1.5 text-white shadow-sm">
+            <div
+              className={cn(
+                "space-y-0 px-2.5 py-1.5 text-white",
+                signature
+                  ? "bg-ink/85"
+                  : "rounded-md bg-signal shadow-sm",
+              )}
+            >
               {listing.openHouses.map((oh, index) => (
                 <p
                   key={`${oh.startsAt}-${oh.endsAt}`}
@@ -109,21 +124,38 @@ export function ListingCard({
         <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-2">
           <span
             className={cn(
-              "rounded-md px-3.5 py-1.5 text-sm font-bold tracking-wide shadow-md",
-              listingStatusBadgeClass(listing.status),
+              "px-3 py-1 text-xs font-semibold tracking-wide",
+              signature
+                ? "bg-surface/95 text-ink"
+                : cn(
+                    "rounded-md px-3.5 py-1.5 text-sm font-bold shadow-md",
+                    listingStatusBadgeClass(listing.status),
+                  ),
             )}
           >
             {listingStatusLabel(listing.status, listing.transactionType)}
           </span>
           {listing.ownerTag ? (
-            <span className="rounded-md bg-signal px-3.5 py-1.5 text-sm font-bold tracking-wide text-white shadow-md">
+            <span
+              className={cn(
+                "px-3 py-1 text-xs font-semibold tracking-wide text-white",
+                signature
+                  ? "bg-ink/80"
+                  : "rounded-md bg-signal px-3.5 py-1.5 text-sm font-bold shadow-md",
+              )}
+            >
               {listing.ownerTag}
             </span>
           ) : null}
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-col gap-2 px-4 pt-4">
+      <div
+        className={cn(
+          "flex shrink-0 flex-col gap-2 px-4 pt-4",
+          signature && "gap-2.5 pt-5",
+        )}
+      >
         <div
           className={cn(
             "flex items-start justify-between gap-3",
@@ -142,15 +174,37 @@ export function ListingCard({
               size="md"
             />
           ) : (
-            <p className="text-sm font-semibold text-ink">
-              {isLease ? "Rent:" : "Listed:"}{" "}
-              <span className="text-xl font-bold tracking-tight text-canopy">
+            <p
+              className={cn(
+                "font-semibold text-ink",
+                signature
+                  ? "text-[11px] uppercase tracking-[0.12em] text-ink/50"
+                  : "text-sm",
+              )}
+            >
+              {isLease ? "Rent" : "Listed"}
+              {signature ? "" : ":"}{" "}
+              <span
+                className={cn(
+                  "font-bold tracking-tight",
+                  signature
+                    ? "mt-1 block font-display text-2xl font-normal text-ink sm:text-3xl"
+                    : "text-xl text-canopy",
+                )}
+              >
                 {formatListPrice(listing.listPrice, listing.transactionType)}
               </span>
             </p>
           )}
-          <div className="shrink-0 space-y-0.5 pt-1 text-right text-sm font-semibold">
-            <p className="text-ink/65">{formatListingTiming(listing)}</p>
+          <div
+            className={cn(
+              "shrink-0 space-y-0.5 pt-1 text-right text-sm font-semibold",
+              signature && "text-xs font-medium text-ink/45",
+            )}
+          >
+            <p className={signature ? undefined : "text-ink/65"}>
+              {formatListingTiming(listing)}
+            </p>
             {distanceKm != null ? (
               <p className="text-canopy">{formatDistanceKm(distanceKm)}</p>
             ) : null}
@@ -160,6 +214,7 @@ export function ListingCard({
         <div
           className={cn(
             "text-[15px] leading-snug text-ink",
+            signature && "text-sm leading-relaxed text-ink/80",
             isLocked && "blur-[0.6px]",
           )}
         >
@@ -173,6 +228,7 @@ export function ListingCard({
         <p
           className={cn(
             "text-sm font-medium text-ink/75",
+            signature && "text-xs uppercase tracking-[0.1em] text-ink/45",
             isLocked && "blur-[2.5px]",
           )}
         >
@@ -182,6 +238,7 @@ export function ListingCard({
         <ul
           className={cn(
             "mt-1 flex flex-nowrap items-center gap-x-3.5 overflow-hidden text-[14px] font-semibold text-ink sm:gap-x-5 sm:text-[15px]",
+            signature && "gap-x-4 text-[13px] font-medium text-ink/70 sm:text-[13px]",
             isLocked && "blur-[2.5px]",
           )}
         >
@@ -189,7 +246,10 @@ export function ListingCard({
             <>
               <li className="flex shrink-0 items-center gap-1.5">
                 <Bed
-                  className="size-[17px] stroke-[2.25] text-canopy sm:size-[18px]"
+                  className={cn(
+                    "size-[17px] stroke-[2.25] sm:size-[18px]",
+                    signature ? "text-ink/50" : "text-canopy",
+                  )}
                   aria-hidden
                 />
                 <span className="whitespace-nowrap">
@@ -199,7 +259,10 @@ export function ListingCard({
               </li>
               <li className="flex shrink-0 items-center gap-1.5">
                 <Bath
-                  className="size-[17px] stroke-[2.25] text-canopy sm:size-[18px]"
+                  className={cn(
+                    "size-[17px] stroke-[2.25] sm:size-[18px]",
+                    signature ? "text-ink/50" : "text-canopy",
+                  )}
                   aria-hidden
                 />
                 <span className="whitespace-nowrap">
@@ -219,7 +282,10 @@ export function ListingCard({
             return (
               <li className="flex min-w-0 items-center gap-1.5">
                 <Maximize2
-                  className="size-[17px] shrink-0 stroke-[2.25] text-canopy sm:size-[18px]"
+                  className={cn(
+                    "size-[17px] shrink-0 stroke-[2.25] sm:size-[18px]",
+                    signature ? "text-ink/50" : "text-canopy",
+                  )}
                   aria-hidden
                 />
                 <span className="min-w-0 truncate whitespace-nowrap">
@@ -233,7 +299,10 @@ export function ListingCard({
           })()}
           <li className="flex shrink-0 items-center gap-1.5">
             <Car
-              className="size-[17px] stroke-[2.25] text-canopy sm:size-[18px]"
+              className={cn(
+                "size-[17px] stroke-[2.25] sm:size-[18px]",
+                signature ? "text-ink/50" : "text-canopy",
+              )}
               aria-hidden
             />
             <span className="whitespace-nowrap">{listing.parkingSpaces}</span>
@@ -247,10 +316,13 @@ export function ListingCard({
   return (
     <article
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-2xl border bg-surface transition",
+        "group relative flex flex-col overflow-hidden border bg-surface transition",
+        signature
+          ? "rounded-none border-ink/10 hover:border-ink/30"
+          : "rounded-2xl",
         active
           ? "border-canopy shadow-md ring-2 ring-canopy/20"
-          : "border-line hover:border-canopy/50 hover:shadow-sm",
+          : !signature && "border-line hover:border-canopy/50 hover:shadow-sm",
         blockInteraction && "pointer-events-none select-none",
       )}
     >
@@ -278,6 +350,7 @@ export function ListingCard({
       <div
         className={cn(
           "mt-3 flex items-center justify-between gap-3 border-t border-line px-4 py-3",
+          signature && "mt-4 border-ink/10 py-3",
           isLocked && "blur-[2.5px]",
         )}
       >
@@ -303,6 +376,7 @@ export function ListingCard({
         <p
           className={cn(
             "border-t border-line bg-mist/60 px-4 py-2 text-[11px] leading-snug text-ink/60",
+            signature && "border-ink/10 bg-transparent text-ink/45",
             isLocked && "blur-[2.5px]",
           )}
         >

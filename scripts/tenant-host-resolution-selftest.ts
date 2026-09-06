@@ -300,14 +300,13 @@ async function testProductionReadOnlyProbe() {
     assert.equal(platform.ok, false);
     if (!platform.ok) assert.equal(platform.reason, "platform_surface");
 
+    const canaryWorkspace = await prisma.workspace.findUniqueOrThrow({
+      where: { slug: "tenant-canary" },
+      select: { id: true, status: true },
+    });
     const canaryDomain = await findWorkspaceDomainForWorkspaceHostForProbe(
       prisma,
-      (
-        await prisma.workspace.findUniqueOrThrow({
-          where: { slug: "tenant-canary" },
-          select: { id: true },
-        })
-      ).id,
+      canaryWorkspace.id,
       "tenant-canary",
       "canary.houzzat.com",
     );
@@ -317,11 +316,25 @@ async function testProductionReadOnlyProbe() {
     assert.equal(canaryDomain.role, "PRIMARY");
     assert.equal(canaryDomain.status, "ACTIVE");
 
+    // Domain row may remain ACTIVE while the workspace is not.
+    // Host resolution must still fail closed on workspace status.
     const canaryHost = await resolveWorkspaceFromHostname("canary.houzzat.com");
-    assert.ok(canaryHost.ok, "prod canary.houzzat.com");
-    assert.equal(canaryHost.ok && canaryHost.workspaceSlug, "tenant-canary");
-    assert.equal(canaryHost.ok && canaryHost.domainKind, "CUSTOM");
-    assert.equal(canaryHost.ok && canaryHost.verifiedHostname, true);
+    if (canaryWorkspace.status === "ACTIVE") {
+      assert.ok(canaryHost.ok, "prod canary.houzzat.com");
+      assert.equal(canaryHost.ok && canaryHost.workspaceSlug, "tenant-canary");
+      assert.equal(canaryHost.ok && canaryHost.domainKind, "CUSTOM");
+      assert.equal(canaryHost.ok && canaryHost.verifiedHostname, true);
+    } else if (canaryWorkspace.status === "SUSPENDED") {
+      assert.equal(canaryHost.ok, false, "suspended canary must not resolve");
+      if (!canaryHost.ok) {
+        assert.equal(canaryHost.reason, "workspace_suspended");
+      }
+    } else {
+      assert.equal(canaryHost.ok, false, "inactive canary must not resolve");
+      if (!canaryHost.ok) {
+        assert.equal(canaryHost.reason, "workspace_inactive");
+      }
+    }
 
     assert.ok(!("kind" in WORKSPACE_DOMAIN_PROBE_SELECT));
 
@@ -355,6 +368,14 @@ async function main() {
 }
 
 main().catch((error) => {
+  // Neon/undici often rejects with a bare ErrorEvent (no stack) when the
+  // production probe cannot open a WebSocket — surface nested error if present.
+  const nested =
+    error &&
+    typeof error === "object" &&
+    "error" in error &&
+    (error as { error?: unknown }).error;
   console.error(error);
+  if (nested) console.error("nested error:", nested);
   process.exit(1);
 });

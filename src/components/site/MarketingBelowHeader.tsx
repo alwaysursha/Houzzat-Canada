@@ -8,7 +8,10 @@ import { HomepagePersonalizationBanner } from "@/components/home/HomepagePersona
 import { SeoFooterLinks } from "@/components/site/SeoFooterLinks";
 import { SeoLocationProvider } from "@/components/site/SeoLocationContext";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { AgentSignatureFooter } from "@/components/templates/agent-signature/AgentSignatureFooter";
 import type { MarketingChromeBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
+import { isAgentSignatureTemplateId } from "@/lib/tenancy/templates";
+import { resolveAgentSignatureView } from "@/lib/tenancy/templates/resolve-agent-signature-view";
 
 /** Hides marketing chrome on immersive routes like /search and listing sheet. */
 export function MarketingBelowHeader({
@@ -67,8 +70,20 @@ export function MarketingBelowHeader({
         ) : null}
         {children}
       </main>
-      {!hideChrome ? <SeoFooterLinks fallbackCities={cities} /> : null}
-      {!hideChrome ? <SiteFooter chromeBrand={chromeBrand} /> : null}
+      {!hideChrome &&
+      !isAgentSignatureTemplateId(chromeBrand.templateId) ? (
+        <SeoFooterLinks fallbackCities={cities} />
+      ) : null}
+      {!hideChrome ? (
+        isAgentSignatureTemplateId(chromeBrand.templateId) ? (
+          <AgentSignatureFooter
+            view={resolveAgentSignatureView(chromeBrand)}
+            fallbackCities={cities}
+          />
+        ) : (
+          <SiteFooter chromeBrand={chromeBrand} />
+        )
+      ) : null}
     </SeoLocationProvider>
   );
 }

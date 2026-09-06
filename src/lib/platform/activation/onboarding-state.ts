@@ -44,20 +44,14 @@ export async function markAccountActivatedOnboarding(
   });
   if (!row) return;
   if (row.accountActivatedAt) {
-    // Never invent template progress.
-    if (row.templateThemeStatus !== "NOT_STARTED") {
-      await db.workspaceOnboardingState.update({
-        where: { workspaceId },
-        data: { templateThemeStatus: "NOT_STARTED" },
-      });
-    }
+    // Already activated — never invent or downgrade template progress.
     return;
   }
   await db.workspaceOnboardingState.update({
     where: { workspaceId },
     data: {
       accountActivatedAt: new Date(),
-      templateThemeStatus: "NOT_STARTED",
+      // Do not overwrite templateThemeStatus (create defaults to NOT_STARTED).
     },
   });
 }

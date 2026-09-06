@@ -1,5 +1,5 @@
 /**
- * Stage 3K.5.4 — request-scoped marketing tenancy (server components only).
+ * Stage 3K.5.4 / 6.11B — request-scoped marketing tenancy (server components only).
  *
  * Uses React.cache() for per-request dedupe — NOT a cross-request global tenant.
  */
@@ -12,11 +12,21 @@ import {
   toMarketingPresentationBrand,
   type MarketingPresentationBrand,
 } from "@/lib/tenancy/marketing-presentation-brand";
+import { resolvePublicProfessionalIdentity } from "@/lib/tenancy/professional-identity/resolve";
+import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import {
   resolveRequestTenancy,
   type RequestTenancySuccess,
 } from "@/lib/tenancy/resolve-request-tenancy";
+import { resolveActiveTemplatePreviewForWorkspace } from "@/lib/tenancy/template-preview";
+import {
+  DEFAULT_TEMPLATE_ID,
+  resolveTemplateIdFromThemeId,
+  resolveThemePalette,
+  type ImplementedTemplateId,
+} from "@/lib/tenancy/templates";
 import { isTenantDomainScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
+import { prisma } from "@/lib/prisma";
 
 export type MarketingChromeBrand = MarketingPresentationBrand;
 
@@ -60,6 +70,24 @@ export function legacyMarketingChromeBrand(
     version: brand?.version ?? 0,
     publicOrigin: canonicalOrigin.replace(/\/$/, ""),
     canonicalOrigin: canonicalOrigin.replace(/\/$/, ""),
+    templateId: DEFAULT_TEMPLATE_ID,
+    agent: null,
+    professionalIdentity: {
+      agent: {
+        name: null,
+        designation: null,
+        cellPhone: null,
+        photoUrl: null,
+      },
+      brokerage: {
+        name: null,
+        address: null,
+        phone: null,
+        fax: null,
+        logoUrl: null,
+      },
+    },
+    templatePreview: null,
   };
 }
 
@@ -104,5 +132,77 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
     tenancy.hostname,
     tenancy.origin.startsWith("http://") ? "http:" : "https:",
   );
-  return toMarketingPresentationBrand(tenancy, canonicalOrigin);
+
+  const activePreview = await resolveActiveTemplatePreviewForWorkspace(
+    tenancy.workspaceId,
+  );
+  const previewThemeId = activePreview?.themeId ?? null;
+
+  let persistedThemeId: string | null = null;
+  try {
+    const row = await prisma.workspaceBranding.findUnique({
+      where: { workspaceId: tenancy.workspaceId },
+      select: { themeId: true },
+    });
+    persistedThemeId = row?.themeId ?? null;
+  } catch {
+    persistedThemeId = null;
+  }
+
+  const effectiveThemeId = previewThemeId ?? persistedThemeId;
+  const templateId: ImplementedTemplateId =
+    resolveTemplateIdFromThemeId(effectiveThemeId);
+
+  // Preview may swap template colors without writing WorkspaceBranding.
+  let presentationTenancy = tenancy;
+  if (previewThemeId) {
+    const palette = resolveThemePalette(previewThemeId);
+    if (palette) {
+      const isAgentPreview =
+        resolveTemplateIdFromThemeId(previewThemeId) ===
+        "agent-signature";
+      presentationTenancy = {
+        ...tenancy,
+        brand: {
+          ...tenancy.brand,
+          colors: {
+            ...tenancy.brand.colors,
+            primary: palette.primary,
+            secondary: palette.secondary,
+            accent: palette.accent,
+            ...(isAgentPreview
+              ? {
+                  surface: palette.surfaceTint,
+                  ink: palette.primary,
+                }
+              : {}),
+          },
+        },
+      };
+    }
+  }
+
+  // Stage 6.11D — all templates receive canonical professional identity.
+  const professionalIdentity = await resolvePublicProfessionalIdentity(
+    tenancy.workspaceId,
+  );
+
+  const agent =
+    templateId !== DEFAULT_TEMPLATE_ID
+      ? await resolvePublicAgentIdentity(tenancy.workspaceId)
+      : null;
+
+  return toMarketingPresentationBrand(presentationTenancy, canonicalOrigin, {
+    templateId,
+    agent,
+    professionalIdentity,
+    templatePreview: activePreview
+      ? {
+          active: true,
+          themeId: activePreview.themeId,
+          displayLabel: activePreview.displayLabel,
+          source: activePreview.source,
+        }
+      : null,
+  });
 }

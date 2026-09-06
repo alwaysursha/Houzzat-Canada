@@ -12,6 +12,7 @@ import { enforcePoweredByHouzzatPro } from "@/lib/tenancy/brand-capabilities";
 import { applyPlatformFooterInvariant } from "@/lib/tenancy/platform-footer";
 import { buildLegacyHouzzatBrand } from "@/lib/tenancy/legacy-houzzat-brand";
 import { buildNeutralTenantBrand } from "@/lib/tenancy/neutral-tenant-brand";
+import { resolveThemePalette, parseThemeId, AGENT_SIGNATURE_TEMPLATE_ID } from "@/lib/tenancy/templates";
 import { isTenantBrandingScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
 import { prisma } from "@/lib/prisma";
 
@@ -29,6 +30,11 @@ function mapRowToBrand(
   row: WorkspaceBranding,
 ): WorkspaceBrandInternal {
   const neutral = buildNeutralTenantBrand(workspaceId, row.displayName);
+  // Stage 6.11A — valid themeId wins over freeform brand colors.
+  // null / unknown themeId → existing primary/secondary/accent behavior (RE/MAX, Canary).
+  const themePalette = resolveThemePalette(row.themeId);
+  const isAgentSignatureTheme =
+    parseThemeId(row.themeId)?.templateId === AGENT_SIGNATURE_TEMPLATE_ID;
 
   const brand: WorkspaceBrandInternal = {
     workspaceId,
@@ -42,11 +48,24 @@ function mapRowToBrand(
     faviconUrl: row.faviconUrl,
     ogImageUrl: row.ogImageUrl,
     colors: {
-      primary: resolvedColor(row.primaryColor, neutral.colors.primary),
-      secondary: resolvedColor(row.secondaryColor, neutral.colors.secondary),
-      accent: resolvedColor(row.accentColor, neutral.colors.accent),
-      surface: neutral.colors.surface,
-      ink: neutral.colors.ink,
+      primary: themePalette
+        ? themePalette.primary
+        : resolvedColor(row.primaryColor, neutral.colors.primary),
+      secondary: themePalette
+        ? themePalette.secondary
+        : resolvedColor(row.secondaryColor, neutral.colors.secondary),
+      accent: themePalette
+        ? themePalette.accent
+        : resolvedColor(row.accentColor, neutral.colors.accent),
+      // Agent Signature themes own surface + ink so presentation tokens resolve.
+      surface:
+        themePalette && isAgentSignatureTheme
+          ? themePalette.surfaceTint
+          : neutral.colors.surface,
+      ink:
+        themePalette && isAgentSignatureTheme
+          ? themePalette.primary
+          : neutral.colors.ink,
     },
     contact: {
       email: row.contactEmail,

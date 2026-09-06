@@ -920,13 +920,14 @@ async function main() {
     assert.ok(
       activationSrc.includes('templateThemeStatus: "NOT_STARTED"') ||
         activationSrc.includes("templateThemeStatus: \"NOT_STARTED\""),
-      "templateThemeStatus must stay NOT_STARTED",
+      "onboarding create/default still seeds NOT_STARTED",
     );
+    // Stage 6.11A owns Default theme selection in onboarding — block premium invention only.
     assert.ok(
-      !/themeId\s*:|templateCard|tenantTemplate|homepageLayout|themePreview|OWNER TENANT TEMPLATE DESIGN/i.test(
+      !/agent-signature|team-signature|brokerage-signature|homepageLayout|OWNER TENANT TEMPLATE DESIGN/i.test(
         activationSrc,
       ),
-      "no template/theme design invention in activation",
+      "no premium template invention in activation",
     );
 
     assert.ok(

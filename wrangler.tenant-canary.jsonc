@@ -11,6 +11,14 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // Stage 6.11C.1 — same branding assets bucket as houzzatpro (canary tenant hosts).
+  "r2_buckets": [
+    {
+      "binding": "BRANDING_ASSETS",
+      "bucket_name": "houzzatpro-branding-assets",
+      "preview_bucket_name": "houzzatpro-branding-assets-preview"
+    }
+  ],
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",

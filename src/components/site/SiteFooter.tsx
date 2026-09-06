@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandLogoMark } from "@/components/tenancy/BrandLogoMark";
+import { BrokeragePublicIdentity } from "@/components/site/BrokeragePublicIdentity";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/constants";
 import type { MarketingChromeBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 import {
@@ -148,56 +149,59 @@ export function SiteFooter({
               </address>
             </>
           ) : (
-            <>
-              {chromeBrand?.brokerageLogoUrl ? (
-                <div className="inline-flex shrink-0 self-start">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- tenant asset */}
-                  <img
-                    src={chromeBrand.brokerageLogoUrl}
-                    alt=""
-                    width={140}
-                    height={52}
-                    className="block h-9 w-[140px] object-contain object-left"
-                  />
-                </div>
-              ) : null}
-              {footerModel?.tenantLegalText ||
-              chromeBrand?.contact.email ||
-              chromeBrand?.contact.phone ? (
-                <address className="not-italic text-sm leading-relaxed text-ink/70">
-                  {footerModel?.tenantLegalText
-                    ? footerModel.tenantLegalText
-                        .split("\n")
-                        .filter(Boolean)
-                        .map((line) => <p key={line}>{line}</p>)
-                    : null}
-                  {chromeBrand?.contact.phone ? (
-                    <p>
-                      Phone:{" "}
-                      <a
-                        href={`tel:${chromeBrand.contact.phone}`}
-                        className="inline-flex min-h-11 items-center text-ink/80 underline-offset-2 hover:underline"
-                      >
-                        {chromeBrand.contact.phone}
-                      </a>
-                    </p>
-                  ) : null}
-                  {chromeBrand?.contact.email ? (
-                    <p>
-                      Email:{" "}
-                      <a
-                        href={`mailto:${chromeBrand.contact.email}`}
-                        className="inline-flex min-h-11 items-center text-ink/80 underline-offset-2 hover:underline"
-                      >
-                        {chromeBrand.contact.email}
-                      </a>
-                    </p>
-                  ) : null}
-                </address>
-              ) : null}
-            </>
+            <BrokeragePublicIdentity
+              brokerage={
+                chromeBrand?.professionalIdentity?.brokerage ?? {
+                  name: null,
+                  address: null,
+                  phone: null,
+                  fax: null,
+                  logoUrl: chromeBrand?.brokerageLogoUrl ?? null,
+                }
+              }
+              tone="default"
+            />
           )}
         </div>
+
+        {footerModel?.tenantLegalText && !chromeBrand?.isHouzzatWorkspace ? (
+          <div className="mt-4 max-w-3xl text-sm leading-relaxed text-ink/55">
+            {footerModel.tenantLegalText
+              .split("\n")
+              .filter(Boolean)
+              .map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+          </div>
+        ) : null}
+
+        {!chromeBrand?.isHouzzatWorkspace &&
+        (chromeBrand?.contact.email || chromeBrand?.contact.phone) ? (
+          <div className="mt-4 text-sm leading-relaxed text-ink/70">
+            {chromeBrand.contact.phone ? (
+              <p>
+                Business phone:{" "}
+                <a
+                  href={`tel:${chromeBrand.contact.phone}`}
+                  className="inline-flex min-h-11 items-center text-ink/80 underline-offset-2 hover:underline"
+                >
+                  {chromeBrand.contact.phone}
+                </a>
+              </p>
+            ) : null}
+            {chromeBrand.contact.email ? (
+              <p>
+                Email:{" "}
+                <a
+                  href={`mailto:${chromeBrand.contact.email}`}
+                  className="inline-flex min-h-11 items-center text-ink/80 underline-offset-2 hover:underline"
+                >
+                  {chromeBrand.contact.email}
+                </a>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <p className="mt-8 text-center text-xs text-ink/50 sm:text-left">
           <a

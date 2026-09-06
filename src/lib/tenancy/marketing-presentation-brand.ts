@@ -1,9 +1,18 @@
 /**
- * Stage 3K.5.5 — full tenant presentation brand for marketing/public surfaces.
+ * Stage 3K.5.5 / 6.11B / 6.11D — full tenant presentation brand for marketing/public surfaces.
  */
 import { SITE_DESCRIPTION } from "@/lib/constants";
 import type { WorkspaceBrandPublic } from "@/lib/tenancy/brand-dto";
+import {
+  EMPTY_PUBLIC_PROFESSIONAL_IDENTITY,
+  type PublicProfessionalIdentity,
+} from "@/lib/tenancy/professional-identity/types";
+import type { PublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import type { RequestTenancySuccess } from "@/lib/tenancy/resolve-request-tenancy";
+import {
+  DEFAULT_TEMPLATE_ID,
+  type ImplementedTemplateId,
+} from "@/lib/tenancy/templates";
 
 export type MarketingPresentationBrand = {
   displayName: string;
@@ -23,11 +32,33 @@ export type MarketingPresentationBrand = {
   version: number;
   publicOrigin: string;
   canonicalOrigin: string;
+  /** Stage 6.11B — resolved website template (Default unless agent-signature). */
+  templateId: ImplementedTemplateId;
+  /** Stage 6.11B — primary agent identity when available (never invented). */
+  agent: PublicAgentIdentity | null;
+  /**
+   * Stage 6.11D — canonical professional + brokerage identity (all templates).
+   * Not duplicated per template; presentation may vary.
+   */
+  professionalIdentity: PublicProfessionalIdentity;
+  /** Stage 6.11B.1 — OWNER secure preview overlay (null when not previewing). */
+  templatePreview: {
+    active: true;
+    themeId: string;
+    displayLabel: string;
+    source: "owner_cookie" | "dev_only";
+  } | null;
 };
 
 export function toMarketingPresentationBrand(
   tenancy: RequestTenancySuccess,
   canonicalOrigin: string,
+  extras?: {
+    templateId?: ImplementedTemplateId;
+    agent?: PublicAgentIdentity | null;
+    professionalIdentity?: PublicProfessionalIdentity;
+    templatePreview?: MarketingPresentationBrand["templatePreview"];
+  },
 ): MarketingPresentationBrand {
   const brand = tenancy.brand;
   return {
@@ -48,6 +79,11 @@ export function toMarketingPresentationBrand(
     version: brand.version,
     publicOrigin: tenancy.origin,
     canonicalOrigin,
+    templateId: extras?.templateId ?? DEFAULT_TEMPLATE_ID,
+    agent: extras?.agent ?? null,
+    professionalIdentity:
+      extras?.professionalIdentity ?? EMPTY_PUBLIC_PROFESSIONAL_IDENTITY,
+    templatePreview: extras?.templatePreview ?? null,
   };
 }
 

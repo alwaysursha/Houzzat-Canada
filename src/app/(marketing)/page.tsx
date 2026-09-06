@@ -4,8 +4,11 @@ import { HomeAreaRailLive } from "@/components/home/HomeAreaRailLive";
 import { HomeBrowseChips } from "@/components/home/HomeBrowseChips";
 import { HomeDeferredBody } from "@/components/home/HomeDeferredBody";
 import { HomeHeroSearch } from "@/components/home/HomeHeroSearch";
+import { AgentSignatureHome } from "@/components/templates/agent-signature/AgentSignatureHome";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
+import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
+import { isAgentSignatureTemplateId } from "@/lib/tenancy/templates";
 
 /** Title/metadata owned by marketing layout generateMetadata(). */
 
@@ -15,7 +18,12 @@ const HERO_DESKTOP_GRADIENT =
 const HERO_MOBILE_GRADIENT =
   "linear-gradient(180deg, rgb(var(--tenant-primary-rgb) / 0.2) 0%, rgb(var(--tenant-primary-rgb) / 0.08) 45%, rgb(var(--tenant-primary-rgb) / 0) 100%)";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const chromeBrand = await resolveMarketingPresentationBrand();
+  if (chromeBrand && isAgentSignatureTemplateId(chromeBrand.templateId)) {
+    return <AgentSignatureHome brand={chromeBrand} />;
+  }
+
   const suggestionCities = suggestedCitiesForLocation({ limit: 8 });
   // Config-only guest shell — no session. VOW-only hides market rails for guests.
   const vowOnlyGuest = isVowOnlyMlsMode();

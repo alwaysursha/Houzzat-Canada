@@ -13,7 +13,12 @@ import { RoutePlannerFloatingChip } from "@/components/route-planner/RoutePlanne
 import { ListingSheetHostLazy } from "@/components/mobile/ListingSheetHostLazy";
 import { TenantBrandProvider } from "@/components/tenancy/TenantBrandProvider";
 import { TenantThemeStyle } from "@/components/tenancy/TenantThemeStyle";
+import { AgentSignatureHeader } from "@/components/templates/agent-signature/AgentSignatureHeader";
+import { OwnerTemplatePreviewBar } from "@/components/templates/OwnerTemplatePreviewBar";
+import { TemplatePresentationProvider } from "@/components/templates/TemplatePresentationProvider";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
+import { isAgentSignatureTemplateId } from "@/lib/tenancy/templates";
+import { resolveAgentSignatureView } from "@/lib/tenancy/templates/resolve-agent-signature-view";
 import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import {
   resolveMarketingPresentationBrand,
@@ -128,43 +133,61 @@ export default async function MarketingLayout({
   const phone =
     chromeBrand.contact.phone ?? getExpertWhatsAppNumber() ?? undefined;
 
+  const agentSignature = isAgentSignatureTemplateId(chromeBrand.templateId);
+  const agentSignatureView = agentSignature
+    ? resolveAgentSignatureView(chromeBrand)
+    : null;
+
   return (
     <TenantBrandProvider brand={chromeBrand}>
-      <TenantThemeStyle
-        colors={chromeBrand.colors}
-        isHouzzatWorkspace={chromeBrand.isHouzzatWorkspace}
-      />
-      <div className="min-h-dvh">
-        <JsonLd
-          data={organizationJsonLdForTenancy(
-            tenancy,
-            chromeBrand.canonicalOrigin,
-            { telephone: phone },
-          )}
+      <TemplatePresentationProvider templateId={chromeBrand.templateId}>
+        <TenantThemeStyle
+          colors={chromeBrand.colors}
+          isHouzzatWorkspace={chromeBrand.isHouzzatWorkspace}
+          templateId={chromeBrand.templateId}
         />
-        <AdsTrackingPixels />
-        <Suspense fallback={null}>
-          <UtmCapture />
-        </Suspense>
-        <Suspense fallback={null}>
-          <MarketingChromeGate>
-            <SiteHeader chromeBrand={chromeBrand} />
-          </MarketingChromeGate>
-        </Suspense>
-        <Suspense fallback={null}>
-          <MarketingBelowHeader cities={cities} chromeBrand={chromeBrand}>
-            {children}
-          </MarketingBelowHeader>
-        </Suspense>
-        <Suspense fallback={null}>
-          <MarketingChromeGate>
-            <RoutePlannerFloatingChip />
-            <ScrollToTopButton />
-            <MobileBottomNav cities={cities} chromeBrand={chromeBrand} />
-          </MarketingChromeGate>
-        </Suspense>
-        <ListingSheetHostLazy />
-      </div>
+        <div className="min-h-dvh">
+          {chromeBrand.templatePreview?.active ? (
+            <OwnerTemplatePreviewBar
+              displayLabel={chromeBrand.templatePreview.displayLabel}
+              themeId={chromeBrand.templatePreview.themeId}
+            />
+          ) : null}
+          <JsonLd
+            data={organizationJsonLdForTenancy(
+              tenancy,
+              chromeBrand.canonicalOrigin,
+              { telephone: phone },
+            )}
+          />
+          <AdsTrackingPixels />
+          <Suspense fallback={null}>
+            <UtmCapture />
+          </Suspense>
+          <Suspense fallback={null}>
+            <MarketingChromeGate>
+              {agentSignature && agentSignatureView ? (
+                <AgentSignatureHeader view={agentSignatureView} />
+              ) : (
+                <SiteHeader chromeBrand={chromeBrand} />
+              )}
+            </MarketingChromeGate>
+          </Suspense>
+          <Suspense fallback={null}>
+            <MarketingBelowHeader cities={cities} chromeBrand={chromeBrand}>
+              {children}
+            </MarketingBelowHeader>
+          </Suspense>
+          <Suspense fallback={null}>
+            <MarketingChromeGate>
+              <RoutePlannerFloatingChip />
+              <ScrollToTopButton />
+              <MobileBottomNav cities={cities} chromeBrand={chromeBrand} />
+            </MarketingChromeGate>
+          </Suspense>
+          <ListingSheetHostLazy />
+        </div>
+      </TemplatePresentationProvider>
     </TenantBrandProvider>
   );
 }

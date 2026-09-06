@@ -16,8 +16,8 @@ import { cn } from "@/lib/utils";
 
 type Mode = "buy" | "rent" | "sell";
 
-/** `hero` = white type on green photo; `page` = ink type on soft mint wash (mobile). */
-type SearchSurface = "hero" | "page";
+/** `hero` = white type on green photo; `page` = ink on soft wash; `agent` = Agent Signature chrome. */
+type SearchSurface = "hero" | "page" | "agent";
 
 export function HomeHeroSearch({
   surface = "hero",
@@ -30,7 +30,8 @@ export function HomeHeroSearch({
   const [selected, setSelected] = useState<AutocompleteSuggestion | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const onPage = surface === "page";
+  const onPage = surface === "page" || surface === "agent";
+  const onAgent = surface === "agent";
   const estimateLockRef = useRef(false);
 
   function txn() {
@@ -216,7 +217,12 @@ export function HomeHeroSearch({
   const isInventory = mode === "buy" || mode === "rent";
 
   return (
-    <div className="relative z-50 w-full max-w-3xl">
+    <div
+      className={cn(
+        "relative z-50 w-full",
+        onAgent ? "max-w-none" : "max-w-3xl",
+      )}
+    >
       <div className="overflow-visible">
         <div className="flex gap-1 px-1 pb-2">
           {(
@@ -237,13 +243,17 @@ export function HomeHeroSearch({
               }}
               className={cn(
                 "rounded-md px-3 py-1.5 text-sm transition",
-                onPage
+                onAgent
                   ? mode === value
                     ? "font-semibold text-ink"
-                    : "font-medium text-ink/50 hover:text-ink/80"
-                  : mode === value
-                    ? "font-semibold text-white"
-                    : "font-medium text-white/65 hover:text-white/90",
+                    : "font-medium text-ink/45 hover:text-ink/75"
+                  : onPage
+                    ? mode === value
+                      ? "font-semibold text-ink"
+                      : "font-medium text-ink/50 hover:text-ink/80"
+                    : mode === value
+                      ? "font-semibold text-white"
+                      : "font-medium text-white/65 hover:text-white/90",
               )}
             >
               {label}
@@ -251,7 +261,7 @@ export function HomeHeroSearch({
                 <span
                   className={cn(
                     "mt-1 block h-0.5 rounded-full",
-                    onPage ? "bg-canopy" : "bg-white",
+                    onAgent ? "bg-ink" : onPage ? "bg-canopy" : "bg-white",
                   )}
                 />
               ) : (
@@ -264,10 +274,12 @@ export function HomeHeroSearch({
         <div
           data-search-bar
           className={cn(
-            "flex flex-col gap-1.5 rounded-md p-1.5 sm:flex-row sm:items-stretch sm:gap-2 sm:p-2.5",
-            onPage
-              ? "border border-line bg-surface shadow-sm"
-              : "bg-white/90 shadow-lg backdrop-blur-md",
+            "flex flex-col gap-1.5 p-1.5 sm:flex-row sm:items-stretch sm:gap-2 sm:p-2.5",
+            onAgent
+              ? "rounded-none border-b border-ink/20 bg-transparent"
+              : onPage
+                ? "rounded-md border border-line bg-surface shadow-sm"
+                : "rounded-md bg-white/90 shadow-lg backdrop-blur-md",
           )}
         >
           <div className="min-w-0 flex-1">
@@ -308,11 +320,14 @@ export function HomeHeroSearch({
           </div>
           <Button
             type="button"
-            className={
+            className={cn(
               isInventory
-                ? "hidden h-9 w-full shrink-0 rounded-md sm:inline-flex sm:h-11 sm:w-[8.75rem]"
-                : "h-9 w-full shrink-0 rounded-md sm:h-11 sm:w-[8.75rem]"
-            }
+                ? "hidden h-9 w-full shrink-0 sm:inline-flex sm:h-11 sm:w-[8.75rem]"
+                : "h-9 w-full shrink-0 sm:h-11 sm:w-[8.75rem]",
+              onAgent
+                ? "rounded-none bg-ink text-surface hover:bg-canopy-deep"
+                : "rounded-md",
+            )}
             disabled={pending}
             onClick={() => {
               if (isInventory) onInventorySearch();

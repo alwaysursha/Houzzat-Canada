@@ -71,9 +71,23 @@ type FakeState = {
       accountActivatedAt: Date | null;
       businessProfileStatus: string;
       brandingStatus: string;
+      professionalIdentityStatus: string;
       templateThemeStatus: string;
       emailIdentityStatus: string;
       completedAt: Date | null;
+    }
+  >;
+  professionalIdentities: Map<
+    string,
+    {
+      workspaceId: string;
+      agentRegisteredName: string | null;
+      agentDesignation: string | null;
+      agentCellPhone: string | null;
+      brokerageRegisteredName: string | null;
+      brokerageFax: string | null;
+      brokeragePhone: string | null;
+      brokerageAddress: string | null;
     }
   >;
 };
@@ -208,6 +222,7 @@ function seedState(): FakeState {
       ],
     ]),
     onboarding: new Map(),
+    professionalIdentities: new Map(),
   };
   return state;
 }
@@ -232,11 +247,14 @@ function createFakePrisma(state: FakeState): PrismaClient {
         const branding = state.brandings.get(ws.id) ?? null;
         const emailIdentity = state.emailIdentities.get(ws.id) ?? null;
         const onboardingState = state.onboarding.get(ws.id) ?? null;
+        const professionalIdentity =
+          state.professionalIdentities.get(ws.id) ?? null;
         return {
           ...ws,
           branding,
           emailIdentity,
           onboardingState,
+          professionalIdentity,
         };
       },
       async update({
@@ -319,6 +337,7 @@ function createFakePrisma(state: FakeState): PrismaClient {
           accountActivatedAt: null,
           businessProfileStatus: "NOT_STARTED",
           brandingStatus: "NOT_STARTED",
+          professionalIdentityStatus: "NOT_STARTED",
           templateThemeStatus: String(data.templateThemeStatus ?? "NOT_STARTED"),
           emailIdentityStatus: "NOT_STARTED",
           completedAt: null,
@@ -335,6 +354,46 @@ function createFakePrisma(state: FakeState): PrismaClient {
       }) {
         const row = state.onboarding.get(where.workspaceId);
         if (!row) throw new Error("onboarding missing");
+        Object.assign(row, data);
+        return { ...row };
+      },
+    },
+    workspaceProfessionalIdentity: {
+      async findUnique({ where }: { where: { workspaceId: string } }) {
+        const row = state.professionalIdentities.get(where.workspaceId);
+        return row ? { ...row } : null;
+      },
+      async create({ data }: { data: Record<string, unknown> }) {
+        const workspaceId = String(data.workspaceId);
+        if (state.professionalIdentities.has(workspaceId)) {
+          const err = new Error("Unique") as Error & { code: string };
+          err.code = "P2002";
+          throw err;
+        }
+        const row = {
+          workspaceId,
+          agentRegisteredName: (data.agentRegisteredName as string) ?? null,
+          agentDesignation: (data.agentDesignation as string) ?? null,
+          agentCellPhone: (data.agentCellPhone as string) ?? null,
+          brokerageRegisteredName:
+            (data.brokerageRegisteredName as string) ?? null,
+          brokerageFax:
+            (data.brokerageFax as string) ?? null,
+          brokeragePhone: (data.brokeragePhone as string) ?? null,
+          brokerageAddress: (data.brokerageAddress as string) ?? null,
+        };
+        state.professionalIdentities.set(workspaceId, row);
+        return { ...row };
+      },
+      async update({
+        where,
+        data,
+      }: {
+        where: { workspaceId: string };
+        data: Record<string, unknown>;
+      }) {
+        const row = state.professionalIdentities.get(where.workspaceId);
+        if (!row) throw new Error("professional identity missing");
         Object.assign(row, data);
         return { ...row };
       },
@@ -417,9 +476,10 @@ async function main() {
       assert.ok(onboarding.includes("extractTrustedRequestHostname"));
       assert.ok(onboarding.includes("WORKSPACE_HOST_MISMATCH"));
       assert.ok(onboarding.includes('templateThemeStatus: "NOT_STARTED"'));
-      assert.ok(!onboarding.includes("themeId:"));
+      assert.ok(onboarding.includes("updateOwnerOnboardingTemplateTheme"));
       assert.ok(route.includes("clientWorkspaceId"));
       assert.ok(route.includes("listOwnerOnboardingWorkspaces({ request })"));
+      assert.ok(route.includes("template_theme"));
       assert.ok(!client.includes("<select"));
       assert.ok(client.includes("host-bound"));
       console.log("[0] Source guards... PASS");

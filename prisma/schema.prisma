@@ -441,8 +441,34 @@ model Workspace {
   provisioningRuns ProvisioningRun[]
   ownerActivations WorkspaceOwnerActivation[]
   onboardingState  WorkspaceOnboardingState?
+  /** Stage 6.11D — canonical professional + brokerage website identity. */
+  professionalIdentity WorkspaceProfessionalIdentity?
 
   @@index([status])
+}
+
+/**
+ * Stage 6.11D — workspace-scoped professional + brokerage identity (tenant data).
+ * Image assets stay on WorkspaceBranding (agentProfilePhotoUrl / brokerageLogoUrl).
+ * Not template-specific; all website templates consume via shared resolver.
+ */
+model WorkspaceProfessionalIdentity {
+  workspaceId                  String   @id
+  /** Licensed / registered agent display name for public website identity. */
+  agentRegisteredName          String?
+  /** Permitted designation (e.g. Salesperson, Broker, Broker of Record). */
+  agentDesignation             String?
+  /** Agent cell / mobile — not WorkspaceBranding.contactPhone. */
+  agentCellPhone               String?
+  /** Registered brokerage legal/trade name — not WorkspaceBranding.displayName. */
+  brokerageRegisteredName      String?
+  brokeragePhone               String?
+  brokerageFax                 String?
+  brokerageAddress             String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 /**
@@ -480,6 +506,8 @@ model WorkspaceBranding {
   logoUrl             String?
   brokerageLogoUrl    String?
   faviconUrl          String?
+  /** Stage 6.11C.1 — workspace website portrait (Agent templates); not User.image. */
+  agentProfilePhotoUrl String?
   primaryColor        String?
   secondaryColor      String?
   accentColor         String?
@@ -2204,6 +2232,8 @@ model WorkspaceOnboardingState {
   accountActivatedAt    DateTime?
   businessProfileStatus WorkspaceOnboardingStepStatus  @default(NOT_STARTED)
   brandingStatus        WorkspaceOnboardingStepStatus  @default(NOT_STARTED)
+  /** Stage 6.11D — professional + brokerage identity step (does not lock website). */
+  professionalIdentityStatus WorkspaceOnboardingStepStatus @default(NOT_STARTED)
   templateThemeStatus   WorkspaceOnboardingStepStatus  @default(NOT_STARTED)
   emailIdentityStatus   WorkspaceOnboardingStepStatus  @default(NOT_STARTED)
   completedAt           DateTime?

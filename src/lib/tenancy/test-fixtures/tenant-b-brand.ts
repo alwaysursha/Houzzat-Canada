@@ -32,6 +32,7 @@ export const TENANT_B_TEST_BRANDING_ROW: WorkspaceBranding = {
   logoUrl: null,
   brokerageLogoUrl: null,
   faviconUrl: null,
+  agentProfilePhotoUrl: null,
   primaryColor: TENANT_B_TEST_PRIMARY_COLOR,
   secondaryColor: "#1E40AF",
   accentColor: "#0EA5E9",
