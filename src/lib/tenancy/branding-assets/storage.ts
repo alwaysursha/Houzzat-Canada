@@ -66,7 +66,7 @@ async function getBrandingR2Bucket(): Promise<R2Like | null> {
   if (testDeps?.getBucket) return testDeps.getBucket();
   try {
     const { env } = await getCloudflareContext({ async: true });
-    const bucket = (env as Record<string, unknown>).BRANDING_ASSETS;
+    const bucket = (env as unknown as Record<string, unknown>).BRANDING_ASSETS;
     if (
       bucket &&
       typeof bucket === "object" &&
