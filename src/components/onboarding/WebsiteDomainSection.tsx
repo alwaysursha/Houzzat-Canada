@@ -27,6 +27,12 @@ type WebsiteDomain = {
   dnsInstructions: DnsInstructions | null;
 };
 
+type VerifyOutcome =
+  | "VERIFIED"
+  | "ALREADY_VERIFIED"
+  | "NOT_VERIFIED"
+  | "DNS_RETRYABLE_ERROR";
+
 type WebsiteDomainSectionProps = {
   workspaceId: string;
 };
@@ -41,8 +47,8 @@ async function copyText(value: string): Promise<boolean> {
 }
 
 /**
- * Stage 6.11F.1 — Custom Website Domain claim (PENDING + DNS instructions).
- * Does not activate or verify DNS.
+ * Stage 6.11F.1 / F.2A — Custom Website Domain claim + ownership TXT verify.
+ * Ownership verification does not connect or activate the website.
  */
 export function WebsiteDomainSection({
   workspaceId,
@@ -51,6 +57,7 @@ export function WebsiteDomainSection({
   const [hostnameInput, setHostnameInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -92,10 +99,11 @@ export function WebsiteDomainSection({
   const activeCustom = domains.filter(
     (d) => d.kind === "CUSTOM" && d.status === "ACTIVE",
   );
+  const ownershipVerified = Boolean(pendingCustom?.verifiedAt);
 
   async function onClaim(e: FormEvent) {
     e.preventDefault();
-    if (busy) return;
+    if (busy || verifying) return;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -117,8 +125,8 @@ export function WebsiteDomainSection({
       setHostnameInput("");
       setMessage(
         json.data.idempotent
-          ? "Existing pending claim loaded. Domain is not active yet."
-          : "Pending claim created. Add the TXT record below — domain is not active yet.",
+          ? "Existing pending claim loaded. Domain is not connected yet."
+          : "Pending claim created. Add the TXT record below — ownership is not verified yet, and the website is not connected.",
       );
       await load();
     } catch (err) {
@@ -128,8 +136,72 @@ export function WebsiteDomainSection({
     }
   }
 
+  async function onVerifyOwnership(domainId: string) {
+    if (busy || verifying) return;
+    setVerifying(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(
+        `/api/onboarding/website-domains/${encodeURIComponent(domainId)}/verify`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workspaceId }),
+        },
+      );
+      const json = (await res.json()) as {
+        ok?: boolean;
+        data?: {
+          outcome?: VerifyOutcome;
+          domain?: WebsiteDomain;
+          reason?: string;
+        };
+        message?: string;
+        code?: string;
+      };
+      if (!res.ok || !json.ok || !json.data?.outcome) {
+        throw new Error(json.message ?? "Unable to verify ownership");
+      }
+
+      const outcome = json.data.outcome;
+      if (json.data.domain) {
+        setDomains((prev) =>
+          prev.map((d) => (d.id === json.data!.domain!.id ? json.data!.domain! : d)),
+        );
+      }
+
+      if (outcome === "VERIFIED" || outcome === "ALREADY_VERIFIED") {
+        setMessage(
+          "Ownership verified. Website connection is not live yet — activation comes later.",
+        );
+        await load();
+        return;
+      }
+      if (outcome === "NOT_VERIFIED") {
+        setError(
+          "We couldn't find the verification record yet. DNS changes can take some time to appear.",
+        );
+        return;
+      }
+      if (outcome === "DNS_RETRYABLE_ERROR") {
+        setError(
+          json.data.reason === "DNS_TIMEOUT"
+            ? "DNS lookup timed out. Please try again shortly."
+            : "DNS lookup failed temporarily. Please try again shortly.",
+        );
+        return;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Verify failed");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   async function onRemovePending(domainId: string) {
-    if (busy) return;
+    if (busy || verifying) return;
     if (
       !window.confirm(
         "Remove this pending website domain claim? DNS records are not changed.",
@@ -181,8 +253,9 @@ export function WebsiteDomainSection({
           Custom Website Domain
         </h2>
         <p className="mt-1 text-sm text-slate-600">
-          Claim a customer hostname for future connection. This is separate from
-          email sending domains. Claiming does not make the site live.
+          Claim a customer hostname and prove ownership with a TXT record. This
+          is separate from email sending domains. Ownership verification does
+          not make the site live.
         </p>
       </div>
 
@@ -211,7 +284,7 @@ export function WebsiteDomainSection({
                     </span>
                     <p className="mt-1 text-xs text-slate-500">
                       Remains the live tenant hostname until a custom domain is
-                      activated in a later step.
+                      connected in a later step.
                     </p>
                   </li>
                 ))}
@@ -241,11 +314,19 @@ export function WebsiteDomainSection({
           ) : null}
 
           {pendingCustom ? (
-            <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+            <div
+              className={
+                ownershipVerified
+                  ? "space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/50 p-4"
+                  : "space-y-3 rounded-lg border border-amber-200 bg-amber-50/60 p-4"
+              }
+            >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-medium text-slate-900">
-                    Pending claim — not verified
+                    {ownershipVerified
+                      ? "Pending claim — ownership verified"
+                      : "Pending claim — ownership not verified"}
                   </h3>
                   <p className="mt-1 text-sm text-slate-800">
                     <span className="font-medium">{pendingCustom.hostname}</span>
@@ -253,25 +334,53 @@ export function WebsiteDomainSection({
                       PENDING
                     </span>
                   </p>
-                  <p className="mt-1 text-xs text-slate-600">
-                    Not active. Not connected. Ownership verification has not
-                    been checked yet.
-                  </p>
+                  {ownershipVerified ? (
+                    <ul className="mt-2 space-y-1 text-xs text-slate-700">
+                      <li>✓ Domain ownership verified</li>
+                      <li>○ Website not connected yet</li>
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-xs text-slate-600">
+                      Ownership not verified. Website is not connected. DNS
+                      changes may take time to propagate.
+                    </p>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void onRemovePending(pendingCustom.id)}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 disabled:opacity-60"
-                >
-                  Remove pending claim
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  {!ownershipVerified ? (
+                    <button
+                      type="button"
+                      disabled={busy || verifying}
+                      onClick={() => void onVerifyOwnership(pendingCustom.id)}
+                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+                      style={{ backgroundColor: "var(--canopy, #0F6B4C)" }}
+                    >
+                      {verifying ? "Checking DNS…" : "Verify DNS"}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={busy || verifying}
+                    onClick={() => void onRemovePending(pendingCustom.id)}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 disabled:opacity-60"
+                  >
+                    Remove pending claim
+                  </button>
+                </div>
               </div>
 
               {pendingCustom.dnsInstructions ? (
-                <div className="space-y-3 border-t border-amber-200/80 pt-3">
+                <div
+                  className={
+                    ownershipVerified
+                      ? "space-y-3 border-t border-emerald-200/80 pt-3"
+                      : "space-y-3 border-t border-amber-200/80 pt-3"
+                  }
+                >
                   <p className="text-xs text-slate-700">
-                    {pendingCustom.dnsInstructions.summary}
+                    {ownershipVerified
+                      ? "TXT challenge (kept for reference). Ownership is verified; website connection is still pending."
+                      : pendingCustom.dnsInstructions.summary}
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
@@ -340,12 +449,12 @@ export function WebsiteDomainSection({
                   placeholder="example.com"
                   autoComplete="off"
                   spellCheck={false}
-                  disabled={busy}
+                  disabled={busy || verifying}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 disabled:opacity-60 sm:max-w-md"
                 />
                 <button
                   type="submit"
-                  disabled={busy || !hostnameInput.trim()}
+                  disabled={busy || verifying || !hostnameInput.trim()}
                   className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
                   style={{ backgroundColor: "var(--canopy, #0F6B4C)" }}
                 >

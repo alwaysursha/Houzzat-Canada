@@ -1,5 +1,5 @@
 /**
- * Stage 6.11F.1 — custom website domain OWNER claim + DNS instructions.
+ * Stage 6.11F.1 / F.2A — custom website domain OWNER claim + ownership verify.
  */
 
 export {
@@ -21,3 +21,22 @@ export {
   type WebsiteDomainDto,
   type ClaimOwnerWebsiteDomainResult,
 } from "@/lib/tenancy/workspace-domain/manage-custom";
+
+export {
+  CLOUDFLARE_DOH_JSON_URL,
+  DNS_TXT_LOOKUP_TIMEOUT_MS,
+  createCloudflareDohTxtLookup,
+  type DnsTxtLookup,
+  type DnsTxtLookupResult,
+} from "@/lib/tenancy/workspace-domain/dns-txt-lookup";
+
+export {
+  normalizeDnsTxtAnswer,
+  ownershipTokensEqual,
+  txtAnswersMatchOwnershipToken,
+} from "@/lib/tenancy/workspace-domain/txt-match";
+
+export {
+  verifyOwnerWebsiteDomainOwnership,
+  type OwnershipVerifyResult,
+} from "@/lib/tenancy/workspace-domain/verify-ownership";
