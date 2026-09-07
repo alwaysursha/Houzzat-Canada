@@ -32,6 +32,13 @@ import {
   resolveListingAddedAt,
 } from "@/lib/listings/constants";
 import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
+import {
+  buildPrismaEntitledInventoryWhere,
+  buildPrismaListingAuthorityWhere,
+  isListingEntitlementEnforcementEnabled,
+  normalizeListingSearchStatuses,
+  type WorkspaceListingEntitlement,
+} from "@/lib/tenancy/listing-entitlement";
 import { typesenseAutocomplete } from "@/lib/typesense/autocomplete";
 import {
   typesenseOpenHouses,
@@ -140,7 +147,30 @@ export class DbListingProvider implements ListingProvider {
    */
   private inventorySourceFilter(
     dataSource?: ListingSearchParams["dataSource"],
+    entitlementCtx?: Pick<
+      ListingSearchParams,
+      "entitlement" | "entitlementFilteringEnabled" | "status" | "statuses"
+    >,
   ): Prisma.ListingWhereInput {
+    const enforce = isListingEntitlementEnforcementEnabled(
+      entitlementCtx?.entitlementFilteringEnabled,
+    );
+    if (enforce) {
+      const entitled = buildPrismaEntitledInventoryWhere({
+        entitlement: entitlementCtx?.entitlement,
+        dataSource,
+        statuses: normalizeListingSearchStatuses({
+          status: entitlementCtx?.status,
+          statuses: entitlementCtx?.statuses,
+        }),
+      });
+      if (entitled.kind === "empty") {
+        // Impossible match — fail closed for MLS (no OR: []).
+        return { id: "__entitlement_deny__" };
+      }
+      return entitled.where;
+    }
+
     if (dataSource === "fsbo") {
       return { dataSource: "fsbo", ownerStatus: "ACTIVE" };
     }
@@ -191,32 +221,40 @@ export class DbListingProvider implements ListingProvider {
       AND: [],
     };
 
-    if (params.statuses?.length) {
-      const prismaStatuses: ListingStatus[] = [];
-      for (const s of params.statuses) {
-        if (s === "UNLISTED") {
-          prismaStatuses.push("SUSPENDED", "TERMINATED", "EXPIRED");
-        } else {
-          prismaStatuses.push(s);
+    const enforce = isListingEntitlementEnforcementEnabled(
+      params.entitlementFilteringEnabled,
+    );
+    // When entitlement enforces capability-scoped status branches, status is
+    // already inside inventorySourceFilter — do not apply a second global
+    // status IN that would cross-product capabilities.
+    if (!enforce) {
+      if (params.statuses?.length) {
+        const prismaStatuses: ListingStatus[] = [];
+        for (const s of params.statuses) {
+          if (s === "UNLISTED") {
+            prismaStatuses.push("SUSPENDED", "TERMINATED", "EXPIRED");
+          } else {
+            prismaStatuses.push(s);
+          }
         }
+        where.status = {
+          in: expandOnMarketStatuses(prismaStatuses),
+        };
+      } else if (params.status === "UNLISTED") {
+        where.status = { in: ["SUSPENDED", "TERMINATED", "EXPIRED"] };
+      } else if (params.status === "ALL") {
+        // No status filter — active + sold/leased/unlisted.
+      } else if (params.status === "ACTIVE") {
+        where.status = { in: [...ON_MARKET_LISTING_STATUSES] };
+      } else if (params.status) {
+        where.status = params.status;
+      } else {
+        where.status = { in: [...ON_MARKET_LISTING_STATUSES] };
       }
-      where.status = {
-        in: expandOnMarketStatuses(prismaStatuses),
-      };
-    } else if (params.status === "UNLISTED") {
-      where.status = { in: ["SUSPENDED", "TERMINATED", "EXPIRED"] };
-    } else if (params.status === "ALL") {
-      // No status filter — active + sold/leased/unlisted.
-    } else if (params.status === "ACTIVE") {
-      where.status = { in: [...ON_MARKET_LISTING_STATUSES] };
-    } else if (params.status) {
-      where.status = params.status;
-    } else {
-      where.status = { in: [...ON_MARKET_LISTING_STATUSES] };
     }
 
     (where.AND as Prisma.ListingWhereInput[]).push(
-      this.inventorySourceFilter(params.dataSource),
+      this.inventorySourceFilter(params.dataSource, params),
     );
 
     if (params.cities?.length) {
@@ -427,16 +465,26 @@ export class DbListingProvider implements ListingProvider {
     options?: AutocompleteOptions,
   ): Promise<AutocompleteSuggestion[]> {
     const txn = options?.transactionType;
+    const enforce = isListingEntitlementEnforcementEnabled(
+      options?.entitlementFilteringEnabled,
+    );
+    const inventory = this.inventorySourceFilter(undefined, {
+      entitlement: options?.entitlement,
+      entitlementFilteringEnabled: options?.entitlementFilteringEnabled,
+      // Autocomplete listing inventory is on-market oriented.
+      status: "ACTIVE",
+    });
     const publishedWhere: Prisma.ListingWhereInput = {
       AND: [
-        this.inventorySourceFilter(),
+        inventory,
         ...(txn ? [{ transactionType: txn }] : []),
+        // When enforce ON, ACTIVE is already in inventory MLS/FSBO branches.
+        ...(enforce ? [] : [{ status: "ACTIVE" as const }]),
       ],
     };
-    /** City / community browse chips stay ACTIVE-only. */
-    const publicWhere: Prisma.ListingWhereInput = {
-      AND: [publishedWhere, { status: "ACTIVE" }],
-    };
+    const publicWhere: Prisma.ListingWhereInput = enforce
+      ? publishedWhere
+      : { AND: [publishedWhere, { status: "ACTIVE" }] };
 
     if (options?.empty) {
       return this.emptyAutocomplete(txn, {
@@ -766,6 +814,8 @@ export class DbListingProvider implements ListingProvider {
     maxPrice?: number;
     from?: Date;
     to?: Date;
+    entitlement?: WorkspaceListingEntitlement;
+    entitlementFilteringEnabled?: boolean;
   }): Promise<ListingCard[]> {
     // Default window (now → +90d) is what Typesense indexes — use it when possible.
     if (!params.from && !params.to) {
@@ -778,6 +828,8 @@ export class DbListingProvider implements ListingProvider {
         minPrice: params.minPrice,
         maxPrice: params.maxPrice,
         limit: 80,
+        entitlement: params.entitlement,
+        entitlementFilteringEnabled: params.entitlementFilteringEnabled,
       });
       if (fromTypesense) return fromTypesense;
     }
@@ -810,10 +862,27 @@ export class DbListingProvider implements ListingProvider {
       });
     }
 
+    const enforce = isListingEntitlementEnforcementEnabled(
+      params.entitlementFilteringEnabled,
+    );
+    let inventory: Prisma.ListingWhereInput;
+    if (enforce) {
+      const ohAuth = buildPrismaListingAuthorityWhere(
+        params.entitlement ?? { workspaceId: "", authorities: [] },
+        "OPEN_HOUSES",
+      );
+      if (ohAuth.kind === "empty") {
+        return [];
+      }
+      inventory = ohAuth.where;
+    } else {
+      inventory = this.inventorySourceFilter();
+    }
+
     const rows = await prisma.listing.findMany({
       where: {
         AND: [
-          this.inventorySourceFilter(),
+          inventory,
           { status: "ACTIVE" },
           { transactionType: "SALE" },
           ...(params.propertyTypes?.length

@@ -8,6 +8,7 @@ import type {
   ListingTransactionType,
   PropertyType,
 } from "@prisma/client";
+import type { WorkspaceListingEntitlement } from "@/lib/tenancy/listing-entitlement/types";
 
 export type ListingCard = {
   mlsNumber: string;
@@ -92,6 +93,17 @@ export type ListingSearchParams = {
   limit?: number;
   /** Default: price ascending. */
   sort?: "price" | "price_asc" | "price_desc" | "newest";
+  /**
+   * Server-resolved G.10A entitlement snapshot (G.10B2+ request wiring).
+   * Never accept client workspaceId / org / provider / SAK as authority.
+   */
+  entitlement?: WorkspaceListingEntitlement;
+  /**
+   * Server-only force-enable for entitlement enforcement (test/internal).
+   * Production omits this → follows G5 flag.
+   * `true` may force ON while G5 is OFF; `false` NEVER disables when G5 is ON.
+   */
+  entitlementFilteringEnabled?: boolean;
 };
 
 export type ListingSearchResult = {
@@ -174,6 +186,10 @@ export type AutocompleteOptions = {
   city?: string | null;
   lat?: number | null;
   lng?: number | null;
+  /** Server-resolved G.10A entitlement (listing suggestions only). */
+  entitlement?: WorkspaceListingEntitlement;
+  /** Server-only force-enable (see ListingSearchParams). Never a downgrade switch. */
+  entitlementFilteringEnabled?: boolean;
 };
 
 export interface ListingProvider {
@@ -196,6 +212,8 @@ export interface ListingProvider {
     maxPrice?: number;
     from?: Date;
     to?: Date;
+    entitlement?: WorkspaceListingEntitlement;
+    entitlementFilteringEnabled?: boolean;
   }): Promise<ListingCard[]>;
   syncStatus(): Promise<{
     provider: "mock" | "proptx";

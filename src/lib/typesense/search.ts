@@ -15,6 +15,15 @@ import type {
   ListingSearchResult,
 } from "@/lib/listings/types";
 import {
+  buildTypesenseCapabilityScopedStatusFilter,
+  buildTypesenseListingAuthorityFilter,
+  composeTypesenseFilterWithAuthority,
+  isListingEntitlementEnforcementEnabled,
+  normalizeListingSearchStatuses,
+  type TypesenseAuthorityFilterResult,
+  type WorkspaceListingEntitlement,
+} from "@/lib/tenancy/listing-entitlement";
+import {
   getTypesenseCollectionName,
   getTypesenseSearchClient,
 } from "@/lib/typesense/client";
@@ -84,6 +93,9 @@ function quoteFilterValue(value: string): string {
   return `\`${value.replace(/`/g, "")}\``;
 }
 
+/** @internal Exported for G.10B1 selftests — keep in sync with quoteTypesenseFilterValue. */
+export { quoteFilterValue as quoteTypesenseSearchFilterValue };
+
 function buildFilterBy(params: ListingSearchParams): string | undefined {
   const parts: string[] = [];
 
@@ -145,6 +157,41 @@ function buildFilterBy(params: ListingSearchParams): string | undefined {
   }
 
   return parts.length ? parts.join(" && ") : undefined;
+}
+
+/**
+ * G.10B1 — compose product filters with capability-scoped authority when
+ * enforcement is enabled. When OFF, returns base filters unchanged.
+ */
+export function buildEntitledTypesenseFilterBy(
+  params: ListingSearchParams,
+): TypesenseAuthorityFilterResult | { kind: "passthrough"; filterBy: string | undefined } {
+  const base = buildFilterBy(params);
+  const enforce = isListingEntitlementEnforcementEnabled(
+    params.entitlementFilteringEnabled,
+  );
+  if (!enforce) {
+    return { kind: "passthrough", filterBy: base };
+  }
+  // FSBO is not Typesense-indexed; caller already short-circuits.
+  const statuses = normalizeListingSearchStatuses(params);
+  const authority = buildTypesenseCapabilityScopedStatusFilter(
+    params.entitlement ?? { workspaceId: "", authorities: [] },
+    statuses,
+  );
+  // Missing entitlement → empty authorities → empty filter (fail closed).
+  return composeTypesenseFilterWithAuthority(base, authority);
+}
+
+function emptyTypesenseSearchResult(
+  providerName: "mock" | "proptx",
+): ListingSearchResult {
+  return {
+    items: [],
+    nextCursor: null,
+    total: 0,
+    provider: providerName,
+  };
 }
 
 function isSoldNewestSort(params: ListingSearchParams): boolean {
@@ -243,6 +290,8 @@ function docToCard(doc: TypesenseListingDoc): ListingCard {
  * Typesense-backed listing search.
  * Returns null when disabled, unsupported filters, or on hard failure
  * so the caller can fall back to Neon.
+ * When entitlement enforcement is ON and MLS authority is empty, returns a
+ * zero-result object (not null) so Neon cannot restore global MLS inventory.
  */
 export async function typesenseSearch(
   params: ListingSearchParams,
@@ -253,6 +302,13 @@ export async function typesenseSearch(
   // Not indexed yet — keep Neon path.
   if (params.openHouseOnly) return null;
   if (params.dataSource === "fsbo") return null;
+
+  const entitled = buildEntitledTypesenseFilterBy(params);
+  if (entitled.kind === "empty") {
+    return emptyTypesenseSearchResult(providerName);
+  }
+  const filterBy =
+    entitled.kind === "passthrough" ? entitled.filterBy : entitled.filterBy;
 
   try {
     const client = getTypesenseSearchClient();
@@ -278,7 +334,7 @@ export async function typesenseSearch(
         query_by:
           "mlsNumber,addressLine,unitNumber,city,community,postalCode",
         query_by_weights: "4,3,2,2,2,1",
-        filter_by: buildFilterBy(params),
+        filter_by: filterBy,
         sort_by: buildSortBy(params),
         per_page: perPage,
         page,
@@ -358,8 +414,37 @@ function openHouseFilterBy(
   return base ? `${base} && ${oh}` : oh;
 }
 
+function openHouseFilterByEntitled(
+  params: Pick<
+    ListingSearchParams,
+    | "cities"
+    | "minPrice"
+    | "maxPrice"
+    | "propertyTypes"
+    | "communities"
+    | "entitlement"
+    | "entitlementFilteringEnabled"
+  >,
+):
+  | TypesenseAuthorityFilterResult
+  | { kind: "passthrough"; filterBy: string } {
+  const withOh = openHouseFilterBy(params);
+  const enforce = isListingEntitlementEnforcementEnabled(
+    params.entitlementFilteringEnabled,
+  );
+  if (!enforce) {
+    return { kind: "passthrough", filterBy: withOh };
+  }
+  const authority = buildTypesenseListingAuthorityFilter(
+    params.entitlement ?? { workspaceId: "", authorities: [] },
+    "OPEN_HOUSES",
+  );
+  return composeTypesenseFilterWithAuthority(withOh, authority);
+}
+
 /**
  * One Typesense multi-search for homepage market rails (5 queries, 1 round-trip).
+ * G.10B1: NOT entitlement-wired — production flag must stay OFF until G.10B2+.
  */
 export async function typesenseHomeRails(options: {
   cities?: string[];
@@ -501,6 +586,8 @@ export async function typesenseOpenHouses(options: {
   minPrice?: number;
   maxPrice?: number;
   limit?: number;
+  entitlement?: WorkspaceListingEntitlement;
+  entitlementFilteringEnabled?: boolean;
 }): Promise<ListingCard[] | null> {
   if (!typesenseFlagEnabled("TYPESENSE_SEARCH")) return null;
 
@@ -514,19 +601,26 @@ export async function typesenseOpenHouses(options: {
       options.communities ??
       (options.community ? [options.community] : undefined);
 
+    const entitled = openHouseFilterByEntitled({
+      cities,
+      communities,
+      propertyTypes: options.propertyTypes,
+      minPrice: options.minPrice,
+      maxPrice: options.maxPrice,
+      entitlement: options.entitlement,
+      entitlementFilteringEnabled: options.entitlementFilteringEnabled,
+    });
+    if (entitled.kind === "empty") {
+      return [];
+    }
+
     const result = await client
       .collections(collection)
       .documents()
       .search({
         q: "*",
         query_by: "mlsNumber,addressLine,city",
-        filter_by: openHouseFilterBy({
-          cities,
-          communities,
-          propertyTypes: options.propertyTypes,
-          minPrice: options.minPrice,
-          maxPrice: options.maxPrice,
-        }),
+        filter_by: entitled.filterBy,
         sort_by: "nextOpenHouseStartsAt:asc",
         per_page: limit,
         page: 1,

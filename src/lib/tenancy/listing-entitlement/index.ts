@@ -37,3 +37,20 @@ export {
   type ListingEntitlementForHostnameSuccess,
   type ResolveListingEntitlementForHostnameInput,
 } from "./resolve-for-hostname";
+
+export {
+  buildPrismaCapabilityScopedStatusWhere,
+  buildPrismaEntitledInventoryWhere,
+  buildPrismaListingAuthorityWhere,
+  buildTypesenseCapabilityScopedStatusFilter,
+  buildTypesenseListingAuthorityFilter,
+  composeTypesenseFilterWithAuthority,
+  G10B1_HOME_RAILS_OUTSIDE_ENTITLEMENT_ENFORCEMENT,
+  isListingEntitlementEnforcementEnabled,
+  normalizeListingSearchStatuses,
+  partitionStatusesByListingCapability,
+  quoteTypesenseFilterValue,
+  resolveListingEntitlementEnforcementEnabled,
+  type PrismaAuthorityWhereResult,
+  type TypesenseAuthorityFilterResult,
+} from "./search-authority-filters";

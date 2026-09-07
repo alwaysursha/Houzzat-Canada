@@ -14,6 +14,11 @@ import type {
 } from "@/lib/listings/types";
 import { listingPath } from "@/lib/listings/listing-path";
 import {
+  buildTypesenseListingAuthorityFilter,
+  composeTypesenseFilterWithAuthority,
+  isListingEntitlementEnforcementEnabled,
+} from "@/lib/tenancy/listing-entitlement";
+import {
   getTypesenseCollectionName,
   getTypesenseSearchClient,
 } from "@/lib/typesense/client";
@@ -140,6 +145,28 @@ export async function typesenseAutocomplete(
     const collection = getTypesenseCollectionName();
     const filterParts: string[] = [];
     if (txn) filterParts.push(`transactionType:=${txn}`);
+    const baseFilter = filterParts.length
+      ? filterParts.join(" && ")
+      : undefined;
+
+    const enforce = isListingEntitlementEnforcementEnabled(
+      options?.entitlementFilteringEnabled,
+    );
+    let filterBy = baseFilter;
+    if (enforce) {
+      const authority = buildTypesenseListingAuthorityFilter(
+        options?.entitlement ?? { workspaceId: "", authorities: [] },
+        "ACTIVE_LISTINGS",
+      );
+      const composed = composeTypesenseFilterWithAuthority(
+        baseFilter,
+        authority,
+      );
+      if (composed.kind === "empty") {
+        return [];
+      }
+      filterBy = composed.filterBy;
+    }
 
     const result = await client
       .collections(collection)
@@ -153,7 +180,7 @@ export async function typesenseAutocomplete(
         prefix: true,
         num_typos: 1,
         typo_tokens_threshold: 3,
-        filter_by: filterParts.length ? filterParts.join(" && ") : undefined,
+        filter_by: filterBy,
         sort_by: "_text_match:desc,listedAt:desc",
         include_fields:
           "mlsNumber,addressLine,unitNumber,city,community,province,postalCode,transactionType,listPrice,beds,bedsLabel,baths,parkingSpaces,status,propertyType,brokerageName,listedAt,updatedAtMls,daysOnMarket,coverImageUrl,location",

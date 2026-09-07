@@ -928,7 +928,9 @@ async function main() {
     assert.ok(!all.includes("WorkspaceTeamMember"));
     assert.ok(!all.includes("professionalIdentity"));
     assert.ok(!all.includes("typesenseSearch"));
-    assert.ok(!all.includes("G5_ENTITLEMENT_FILTERING_ENABLED"));
+    // Core G.10A resolver modules must not gate on the search enforcement flag.
+    assert.ok(!resolveSrc.includes("G5_ENTITLEMENT_FILTERING_ENABLED"));
+    assert.ok(!hostSrc.includes("G5_ENTITLEMENT_FILTERING_ENABLED"));
     assert.ok(!resolveSrc.includes("$transaction"));
     assert.ok(!resolveSrc.includes("updateMany"));
     // Must not consult listing rows for authority
@@ -938,12 +940,14 @@ async function main() {
     const provider = read("src/lib/listings/provider.ts");
     assert.ok(!provider.includes("resolveWorkspaceListingEntitlement"));
     assert.ok(!provider.includes("resolveListingEntitlementForHostname"));
+    assert.ok(!provider.includes("extractTrustedRequestHostname"));
     const search = read("src/lib/typesense/search.ts");
     assert.ok(!search.includes("resolveWorkspaceListingEntitlement"));
     assert.ok(!search.includes("resolveListingEntitlementForHostname"));
-    assert.ok(!search.includes("listing-entitlement"));
+    // G.10B1 may import listing-entitlement filter helpers (flag-gated).
+    assert.equal(G5_ENTITLEMENT_FILTERING_ENABLED, false);
 
-    console.log("[12] independence + no listing behavior change... PASS");
+    console.log("[12] independence + flag OFF (G.10B1 filter helpers OK)... PASS");
   }
 
   console.log("\nstage-6.11g10a-listing-entitlement:selftest ok\n");

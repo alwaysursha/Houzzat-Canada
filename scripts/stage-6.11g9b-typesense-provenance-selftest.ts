@@ -254,10 +254,16 @@ async function main() {
   {
     assert.equal(G5_ENTITLEMENT_FILTERING_ENABLED, false);
     assert.equal(G5_TYPESENSE_REINDEX_ENABLED, false);
-    assert.ok(!searchSrc.includes("sourceAuthorityKey"));
+    // G.10B1 may reference sourceAuthorityKey behind the OFF flag.
+    // Must never authorize via independent org/provider IN lists (cross-product).
     assert.ok(!searchSrc.includes("organizationId:="));
     assert.ok(!searchSrc.includes("providerKey:="));
-    console.log("[7] no entitlement filtering / no reindex flag... PASS");
+    assert.ok(
+      searchSrc.includes("isListingEntitlementEnforcementEnabled") ||
+        searchSrc.includes("G5_ENTITLEMENT_FILTERING_ENABLED") ||
+        searchSrc.includes("buildEntitledTypesenseFilterBy"),
+    );
+    console.log("[7] entitlement flag OFF; no org×provider cross-product... PASS");
   }
 
   console.log("\nstage-6.11g9b-typesense-provenance:selftest ok\n");
