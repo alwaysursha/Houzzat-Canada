@@ -45,6 +45,7 @@ export async function GET(request: Request) {
   const provider = getListingProvider();
   const { entitlement } =
     await resolveListingEntitlementContextForRequest(request);
+  // G.10B3B: web-only force-enable for listing autocomplete (Places/geo unaffected).
   let suggestions = await provider.autocomplete(q, {
     transactionType,
     empty,
@@ -52,6 +53,7 @@ export async function GET(request: Request) {
     lat: Number.isFinite(lat) ? lat : null,
     lng: Number.isFinite(lng) ? lng : null,
     entitlement,
+    entitlementFilteringEnabled: true,
   });
 
   // Neon miss: kick off PropTx pull in the background so typing stays snappy.

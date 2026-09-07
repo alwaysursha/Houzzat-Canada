@@ -47,6 +47,8 @@ export async function GET(request: Request) {
       ? Number(searchParams.get("maxPrice"))
       : undefined,
     entitlement,
+    // G.10B3B: web-only force-enable (global G5 stays OFF).
+    entitlementFilteringEnabled: true,
   });
   return NextResponse.json({ items, provider: provider.name });
 }

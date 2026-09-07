@@ -12,10 +12,11 @@ export async function GET(request: Request) {
   const gated = await mlsClientGate();
   if (gated) return gated;
 
-  // G.10B2H: resolve trusted host → entitlement once for Typesense + Neon fallback.
-  // Do NOT pass entitlementFilteringEnabled (production G5 flag stays OFF).
+  // G.10B2H/B3B: resolve trusted host → entitlement once for Typesense + Neon fallback.
+  // Web-only force-enable; global G5 stays OFF (mobile unaffected).
   const { entitlement } =
     await resolveListingEntitlementContextForRequest(request);
+  const entitlementFilteringEnabled = true;
 
   const { searchParams } = new URL(request.url);
   const citiesParam = searchParams.get("cities");
@@ -67,10 +68,11 @@ export async function GET(request: Request) {
     propertyTypes,
     communities,
     entitlement,
+    entitlementFilteringEnabled,
   }).then(async (fromTypesense) => {
     if (fromTypesense) return fromTypesense;
 
-    // Typesense miss/error → same entitlement on provider/Neon fallback.
+    // Typesense miss/error → same entitlement + force-enable on provider/Neon fallback.
     const [newListings, sold, forLease, commercial, openHouses] =
       await Promise.all([
         provider.search({
@@ -85,6 +87,7 @@ export async function GET(request: Request) {
           propertyTypes,
           communities,
           entitlement,
+          entitlementFilteringEnabled,
         }),
         provider.search({
           status: "SOLD",
@@ -98,6 +101,7 @@ export async function GET(request: Request) {
           propertyTypes,
           communities,
           entitlement,
+          entitlementFilteringEnabled,
         }),
         provider.search({
           status: "ACTIVE",
@@ -111,6 +115,7 @@ export async function GET(request: Request) {
           propertyTypes,
           communities,
           entitlement,
+          entitlementFilteringEnabled,
         }),
         provider.search({
           status: "ACTIVE",
@@ -124,6 +129,7 @@ export async function GET(request: Request) {
           propertyTypes,
           communities,
           entitlement,
+          entitlementFilteringEnabled,
         }),
         provider.openHouses({
           cities,
@@ -132,6 +138,7 @@ export async function GET(request: Request) {
           minPrice,
           maxPrice,
           entitlement,
+          entitlementFilteringEnabled,
         }),
       ]);
 

@@ -270,9 +270,11 @@ async function main() {
         `${name} must resolve entitlement`,
       );
       assert.ok(src.includes("entitlement"), `${name} must pass entitlement`);
+      // G.10B3B: web routes force-enable server-side; still never from client.
       assert.ok(
-        !src.includes("entitlementFilteringEnabled: true"),
-        `${name} must not force-enable true`,
+        src.includes("entitlementFilteringEnabled: true") ||
+          src.includes("entitlementFilteringEnabled,"),
+        `${name} must web force-enable`,
       );
       assert.ok(
         !src.includes('searchParams.get("entitlementFilteringEnabled")'),
@@ -290,10 +292,13 @@ async function main() {
     assert.ok(!places.includes("resolveListingEntitlementContextForRequest"));
     assert.ok(!places.includes("listing-entitlement"));
 
-    // Home rails wired in G.10B2H (same request helper; still no force-enable)
+    // Home rails wired in G.10B2H; web force-enable in G.10B3B
     assert.ok(homeRails.includes("resolveListingEntitlementContextForRequest"));
     assert.ok(homeRails.includes("typesenseHomeRails"));
-    assert.ok(!homeRails.includes("entitlementFilteringEnabled: true"));
+    assert.ok(
+      homeRails.includes("entitlementFilteringEnabled: true") ||
+        homeRails.includes("entitlementFilteringEnabled,"),
+    );
     assert.ok(
       !homeRails.includes('searchParams.get("entitlementFilteringEnabled")'),
     );

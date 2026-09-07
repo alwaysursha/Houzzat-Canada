@@ -28,7 +28,7 @@ export default async function OpenHousesPage({
 }) {
   const params = await searchParams;
 
-  // G.10B3A: trusted Host → G.7C/G.10A once. Do not force-enable G5.
+  // G.10B3A/B3B: trusted Host → G.7C/G.10A once; web-only force-enable (G5 OFF).
   const { entitlement } =
     await resolveListingEntitlementContextForServerPage();
 
@@ -37,6 +37,7 @@ export default async function OpenHousesPage({
     city: params.city,
     community: params.community,
     entitlement,
+    entitlementFilteringEnabled: true,
   });
 
   const cities = [

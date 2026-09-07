@@ -125,14 +125,23 @@ async function main() {
     assert.ok(!route.includes('searchParams.get("organizationId")'));
     assert.ok(!route.includes('searchParams.get("sourceAuthorityKey")'));
     assert.ok(!route.includes('searchParams.get("entitlementFilteringEnabled")'));
-    assert.ok(!route.includes("entitlementFilteringEnabled: true"));
-    // Fallback passes same entitlement
+    // G.10B3B: web force-enable via local const (not client-controlled)
+    assert.ok(route.includes("entitlementFilteringEnabled = true"));
+    assert.ok(route.includes("entitlementFilteringEnabled,"));
+    // Fallback passes same entitlement + force-enable
     assert.ok(route.includes("provider.search({"));
     assert.ok(route.includes("provider.openHouses({"));
     const entitlementPassCount = (route.match(/entitlement,/g) ?? []).length;
     assert.ok(
       entitlementPassCount >= 6,
       "typesense + 5 provider calls must receive entitlement",
+    );
+    const forcePassCount = (
+      route.match(/entitlementFilteringEnabled,/g) ?? []
+    ).length;
+    assert.ok(
+      forcePassCount >= 6,
+      "typesense + 5 provider calls must receive force-enable",
     );
     // No Houzzat special-case
     assert.ok(!route.includes("houzzat.com"));

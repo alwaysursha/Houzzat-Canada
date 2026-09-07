@@ -155,9 +155,10 @@ export async function GET(request: Request) {
       if (s === "price") return "price_asc" as const;
       return undefined;
     })() as "newest" | "price_asc" | "price_desc" | undefined,
-    // G.10B2: server-resolved hostname entitlement (flag OFF → no visibility change).
-    // Never set entitlementFilteringEnabled from the request.
+    // G.10B3B: hostname entitlement + web-only force-enable (global G5 stays OFF).
+    // Never read entitlementFilteringEnabled from the request.
     entitlement,
+    entitlementFilteringEnabled: true,
   };
 
   // IDX: start search immediately. Guests skip auth; signed-in access runs in parallel.

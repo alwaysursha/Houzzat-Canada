@@ -422,8 +422,11 @@ async function main() {
   {
     const homeRails = read("src/app/api/listings/home-rails/route.ts");
     assert.ok(homeRails.includes("typesenseHomeRails"));
-    // G.10B2H wires entitlement; route must never force-enable from client/params.
-    assert.ok(!homeRails.includes("entitlementFilteringEnabled: true"));
+    // G.10B3B: web force-enable; must never come from client params.
+    assert.ok(
+      homeRails.includes("entitlementFilteringEnabled: true") ||
+        homeRails.includes("entitlementFilteringEnabled,"),
+    );
     assert.ok(
       !homeRails.includes('searchParams.get("entitlementFilteringEnabled")'),
     );
@@ -450,7 +453,7 @@ async function main() {
     const places = read("src/app/api/places/autocomplete/route.ts");
     assert.ok(!places.includes("listing-entitlement"));
 
-    console.log("[7] home-rails wired + no client force-enable... PASS");
+    console.log("[7] home-rails wired + web force-enable (not client)... PASS");
   }
 
   // --- ON path via buildEntitledTypesenseFilterBy ---

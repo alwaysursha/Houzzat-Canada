@@ -199,6 +199,7 @@
     "stage-6.11g10b2-request-entitlement:selftest": "node --import tsx scripts/stage-6.11g10b2-request-entitlement-selftest.ts",
     "stage-6.11g10b2h-home-rails-entitlement:selftest": "node --import tsx scripts/stage-6.11g10b2h-home-rails-entitlement-selftest.ts",
     "stage-6.11g10b3a-marketing-open-houses-entitlement:selftest": "node --import tsx scripts/stage-6.11g10b3a-marketing-open-houses-entitlement-selftest.ts",
+    "stage-6.11g10b3b-web-only-enforcement:selftest": "node --import tsx scripts/stage-6.11g10b3b-web-only-enforcement-selftest.ts",
     "poi:sync": "node --import tsx scripts/poi-sync.ts",
     "roles:migrate": "node --import tsx scripts/migrate-roles.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",

@@ -319,7 +319,9 @@ async function main() {
       1,
       "resolve once",
     );
-    assert.ok(!page.includes("entitlementFilteringEnabled: true"));
+    // G.10B3B: web force-enable present; must not come from client.
+    assert.ok(page.includes("entitlementFilteringEnabled: true"));
+    assert.ok(!page.includes('searchParams.get("entitlementFilteringEnabled")'));
     assert.ok(!page.includes('searchParams.get("workspaceId")'));
     assert.ok(!page.includes("cookies("));
     assert.ok(!page.includes("auth()"));
@@ -358,16 +360,21 @@ async function main() {
       { hostDeps, prisma: houzzatPrisma() as never },
     );
     let received: WorkspaceListingEntitlement | undefined;
+    let forceEnable: boolean | undefined;
     const fakeOpenHouses = async (params: {
       entitlement?: WorkspaceListingEntitlement;
       entitlementFilteringEnabled?: boolean;
     }) => {
       received = params.entitlement;
-      assert.equal(params.entitlementFilteringEnabled, undefined);
+      forceEnable = params.entitlementFilteringEnabled;
       return [];
     };
-    await fakeOpenHouses({ entitlement: ctx.entitlement });
+    await fakeOpenHouses({
+      entitlement: ctx.entitlement,
+      entitlementFilteringEnabled: true,
+    });
     assert.deepEqual(received, ctx.entitlement);
+    assert.equal(forceEnable, true);
     console.log("[7] provider receives same entitlement snapshot... PASS");
   }
 

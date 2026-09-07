@@ -97,7 +97,7 @@ export async function GET(request: Request) {
   const { region, browseCity } = resolveRegionFromCoords(lat, lng);
   const box = boundingBox(lat, lng, radiusKm);
   const provider = getListingProvider();
-  // G.10B2: resolve hostname entitlement once; reuse for all provider.search calls.
+  // G.10B2/B3B: resolve hostname entitlement once; reuse + force-enable all searches.
   const { entitlement } =
     await resolveListingEntitlementContextForRequest(request);
   const searchTransactionType: ListingTransactionType =
@@ -115,6 +115,8 @@ export async function GET(request: Request) {
     transactionType: searchTransactionType,
     sort: "newest" as const,
     entitlement,
+    // G.10B3B: web-only force-enable (global G5 stays OFF).
+    entitlementFilteringEnabled: true,
   };
 
   // Tight local box so older-but-close homes aren't dropped by "100 newest".
