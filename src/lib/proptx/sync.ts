@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { NEON_LISTING_MEDIA_CAP } from "@/lib/listings/gallery-constants";
 import {
   getPropTxIdxConfig,
@@ -27,6 +28,16 @@ import {
   type PropTxProperty,
 } from "@/lib/proptx/map-listing";
 import { cityAllowedForMlsSync, getMlsSyncCities, normalizeCityName } from "@/lib/proptx/sync-cities";
+import {
+  assertDurablePropTxListingKey,
+  assertListingMirrorsCompatible,
+  createPrismaPropTxProvenanceStore,
+  createPropTxProvenanceSession,
+  ensurePropTxListingProvenance,
+  logPropTxProvenanceConflict,
+  PropTxProvenanceError,
+  type PropTxListingProvenance,
+} from "@/lib/proptx/listing-provenance";
 import { syncListingToTypesense } from "@/lib/typesense/sync-listing";
 
 export type MlsSyncStats = {
@@ -572,6 +583,21 @@ function pushSyncError(stats: MlsSyncStats, message: string) {
   stats.errors.push(message);
 }
 
+function recordProvenanceSkip(
+  options: {
+    stats: MlsSyncStats;
+    skipReasons: Record<string, number>;
+  },
+  err: PropTxProvenanceError,
+  mlsNumber: string,
+): void {
+  options.stats.propertySkipped += 1;
+  const reason = `provenance:${err.code}`;
+  options.skipReasons[reason] = (options.skipReasons[reason] ?? 0) + 1;
+  logPropTxProvenanceConflict(err);
+  pushSyncError(options.stats, `provenance ${mlsNumber}: ${err.code}`);
+}
+
 async function upsertPropertyRow(
   row: PropTxProperty,
   options: {
@@ -583,6 +609,8 @@ async function upsertPropertyRow(
     skipCityAllowlist?: boolean;
     /** Bulk backfill: upsert listing row + Typesense without PropTx media pulls. */
     skipMedia?: boolean;
+    /** Feed-bound TRREB/PropTx provenance (resolved once per invocation). */
+    provenance: PropTxListingProvenance;
   },
 ): Promise<Date | null> {
   const mapped = mapPropertyToListingResult(row);
@@ -601,6 +629,22 @@ async function upsertPropertyRow(
     return null;
   }
 
+  let durableListingKey: string;
+  try {
+    durableListingKey = assertDurablePropTxListingKey(
+      typeof mapped.data.listingKey === "string"
+        ? mapped.data.listingKey
+        : null,
+      { mlsNumber: String(mapped.data.mlsNumber) },
+    );
+  } catch (err) {
+    if (err instanceof PropTxProvenanceError) {
+      recordProvenanceSkip(options, err, String(mapped.data.mlsNumber));
+      return null;
+    }
+    throw err;
+  }
+
   if (!options.skipCityAllowlist) {
     const allowlist = getMlsSyncCities();
     const cityName = String(mapped.data.city ?? "");
@@ -612,7 +656,10 @@ async function upsertPropertyRow(
     }
   }
 
-  let data = mapped.data;
+  let data = {
+    ...mapped.data,
+    listingKey: durableListingKey,
+  };
   let approximateCoords = mapped.approximateCoords;
 
   // Feed often omits lat/lng → city centroids. Preserve a prior street pin;
@@ -690,11 +737,80 @@ async function upsertPropertyRow(
   }
 
   try {
+    const existingListing = await prisma.listing.findUnique({
+      where: { mlsNumber: String(data.mlsNumber) },
+      select: {
+        id: true,
+        listingKey: true,
+        organizationId: true,
+        providerKey: true,
+        mlsNumber: true,
+      },
+    });
+
+    if (existingListing) {
+      try {
+        assertListingMirrorsCompatible(
+          options.provenance,
+          {
+            organizationId: existingListing.organizationId,
+            providerKey: existingListing.providerKey,
+          },
+          {
+            listingId: existingListing.id,
+            mlsNumber: existingListing.mlsNumber,
+          },
+        );
+      } catch (err) {
+        if (err instanceof PropTxProvenanceError) {
+          recordProvenanceSkip(options, err, String(data.mlsNumber));
+          return null;
+        }
+        throw err;
+      }
+
+      const existingSources = await prisma.listingSource.findMany({
+        where: {
+          listingId: existingListing.id,
+          providerKey: options.provenance.providerKey,
+        },
+        select: { id: true, providerListingKey: true },
+      });
+      for (const source of existingSources) {
+        if (source.providerListingKey !== durableListingKey) {
+          recordProvenanceSkip(
+            options,
+            new PropTxProvenanceError(
+              "listing_key_identity_conflict",
+              "Existing PropTx ListingSource providerListingKey differs from incoming ListingKey",
+              {
+                listingId: existingListing.id,
+                mlsNumber: String(data.mlsNumber),
+                existingProviderListingKey: source.providerListingKey,
+                incomingProviderListingKey: durableListingKey,
+              },
+            ),
+            String(data.mlsNumber),
+          );
+          return null;
+        }
+      }
+    }
+
+    // Mirrors on create only — never overwrite conflicting mirrors via update.
+    // Use unchecked create so organizationId/providerKey scalars are writable.
     const listing = await prisma.listing.upsert({
       where: { mlsNumber: data.mlsNumber },
-      create: data,
+      create: {
+        ...(data as Prisma.ListingUncheckedCreateInput),
+        listingKey: durableListingKey,
+        organizationId: options.provenance.organizationId,
+        providerKey: options.provenance.providerKey,
+        dataSource: "mls",
+        isMock: false,
+      },
       update: {
-        listingKey: data.listingKey,
+        listingKey: durableListingKey,
         status: data.status,
         segment: data.segment,
         transactionType: data.transactionType,
@@ -732,6 +848,37 @@ async function upsertPropertyRow(
         isMock: false,
       },
     });
+
+    const listingAfter = await prisma.listing.findUniqueOrThrow({
+      where: { id: listing.id },
+      select: {
+        id: true,
+        mlsNumber: true,
+        organizationId: true,
+        providerKey: true,
+      },
+    });
+
+    try {
+      await ensurePropTxListingProvenance(
+        createPrismaPropTxProvenanceStore(prisma),
+        options.provenance,
+        {
+          listingId: listingAfter.id,
+          listingKey: durableListingKey,
+          mlsNumber: listingAfter.mlsNumber,
+          organizationId: listingAfter.organizationId,
+          providerKey: listingAfter.providerKey,
+        },
+      );
+    } catch (err) {
+      if (err instanceof PropTxProvenanceError) {
+        recordProvenanceSkip(options, err, String(data.mlsNumber));
+        return null;
+      }
+      throw err;
+    }
+
     options.stats.propertyUpserted += 1;
 
     try {
@@ -835,6 +982,19 @@ export async function upsertPropTxPropertiesOnDemand(
   const skipMedia = options?.skipMedia === true;
   let index = 0;
 
+  let provenance: PropTxListingProvenance;
+  try {
+    provenance = await createPropTxProvenanceSession(
+      createPrismaPropTxProvenanceStore(prisma),
+    ).get();
+  } catch (err) {
+    if (err instanceof PropTxProvenanceError) {
+      logPropTxProvenanceConflict(err);
+      throw err;
+    }
+    throw err;
+  }
+
   async function worker() {
     while (index < rows.length) {
       const row = rows[index]!;
@@ -846,6 +1006,7 @@ export async function upsertPropTxPropertiesOnDemand(
         fetchNested: false,
         skipCityAllowlist: true,
         skipMedia,
+        provenance,
       });
       if (!mls) continue;
 
@@ -906,6 +1067,10 @@ async function syncJustListedProperties(options: {
   stats: MlsSyncStats;
   config?: PropTxConfig | null;
 }): Promise<void> {
+  const provenance = await createPropTxProvenanceSession(
+    createPrismaPropTxProvenanceStore(prisma),
+  ).get();
+
   const from = new Date();
   from.setUTCDate(from.getUTCDate() - options.days);
   const fromDate = from.toISOString().slice(0, 10);
@@ -953,6 +1118,7 @@ async function syncJustListedProperties(options: {
             stats: options.stats,
             skipReasons,
             fetchNested: false,
+            provenance,
           });
         }
       }
@@ -989,6 +1155,10 @@ async function syncRecentProperties(options: {
   stats: MlsSyncStats;
   config?: PropTxConfig | null;
 }): Promise<void> {
+  const provenance = await createPropTxProvenanceSession(
+    createPrismaPropTxProvenanceStore(prisma),
+  ).get();
+
   const from = new Date();
   from.setUTCDate(from.getUTCDate() - options.days);
   const filter = `ModificationTimestamp ge ${toODataDate(from)}`;
@@ -1013,6 +1183,7 @@ async function syncRecentProperties(options: {
         stats: options.stats,
         skipReasons,
         fetchNested: false,
+        provenance,
       });
     }
   }
@@ -1033,6 +1204,10 @@ async function syncActiveInventory(options: {
   stats: MlsSyncStats;
   config?: PropTxConfig | null;
 }): Promise<void> {
+  const provenance = await createPropTxProvenanceSession(
+    createPrismaPropTxProvenanceStore(prisma),
+  ).get();
+
   const cities = getMlsSyncCities();
   // Heavier markets first so a page budget still covers core GTA.
   const priority = new Map(
@@ -1095,6 +1270,7 @@ async function syncActiveInventory(options: {
             stats: options.stats,
             skipReasons,
             fetchNested: false,
+            provenance,
           });
         }
         if (page.length === 0) break;
@@ -1122,6 +1298,10 @@ async function syncProperties(options: {
   fetchNested?: boolean;
   config?: PropTxConfig | null;
 }): Promise<string | null> {
+  const provenance = await createPropTxProvenanceSession(
+    createPrismaPropTxProvenanceStore(prisma),
+  ).get();
+
   const since = await getCursor(RESOURCE_PROPERTY);
   const filter = propertyFilter(since, options.fullBackfillDays);
   // Ascending — advances cursor through backlog safely.
@@ -1150,6 +1330,7 @@ async function syncProperties(options: {
         stats: options.stats,
         skipReasons,
         fetchNested,
+        provenance,
       });
       if (
         updatedAtMls &&

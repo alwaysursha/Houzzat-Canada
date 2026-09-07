@@ -1,13 +1,15 @@
 /**
- * Stage 6.11A/B — static template catalog + themeId resolution.
+ * Stage 6.11A/B/E.1 — static template catalog + themeId resolution.
  */
 import { AGENT_SIGNATURE_THEMES } from "./agent-signature-themes";
 import { DEFAULT_SIGNATURE_THEMES } from "./default-signature-themes";
+import { TEAM_SIGNATURE_THEMES } from "./team-signature-themes";
 import {
   AGENT_SIGNATURE_TEMPLATE_ID,
   DEFAULT_TEMPLATE_ID,
   IMPLEMENTED_TEMPLATE_IDS,
   RESERVED_TEMPLATE_IDS,
+  TEAM_SIGNATURE_TEMPLATE_ID,
   TEMPLATE_CATEGORIES,
   buildThemeId,
   parseThemeId,
@@ -21,17 +23,20 @@ import {
 export {
   AGENT_SIGNATURE_TEMPLATE_ID,
   DEFAULT_TEMPLATE_ID,
+  TEAM_SIGNATURE_TEMPLATE_ID,
   IMPLEMENTED_TEMPLATE_IDS,
   RESERVED_TEMPLATE_IDS,
   TEMPLATE_CATEGORIES,
   DEFAULT_THEME_KEYS,
   AGENT_SIGNATURE_THEME_KEYS,
+  TEAM_SIGNATURE_THEME_KEYS,
   buildThemeId,
   parseThemeId,
 } from "./types";
 export type {
   AgentSignatureThemeKey,
   DefaultThemeKey,
+  TeamSignatureThemeKey,
   ImplementedTemplateId,
   TemplateCategory,
   TemplateDefinition,
@@ -47,6 +52,7 @@ const DEFAULT_TEMPLATE: TemplateDefinition = {
   description:
     "The current HouzzatPRO tenant website — same layout and features, six visual themes.",
   selectable: true,
+  presentationReady: true,
   themes: DEFAULT_SIGNATURE_THEMES,
 };
 
@@ -58,21 +64,47 @@ const AGENT_SIGNATURE_TEMPLATE: TemplateDefinition = {
   description:
     "High-end personal agent brand website — editorial photography, agent-first hero, and premium presentation.",
   selectable: true,
+  presentationReady: true,
   themes: AGENT_SIGNATURE_THEMES,
+};
+
+/**
+ * Stage 6.11E.2 — presentation ready for design review.
+ * OWNER selectable remains false until physical review + roster model.
+ */
+const TEAM_SIGNATURE_TEMPLATE: TemplateDefinition = {
+  id: TEAM_SIGNATURE_TEMPLATE_ID,
+  category: "TEAM",
+  categoryLabel: "Team Branded",
+  label: "Team Signature",
+  description:
+    "Premium team-brand-first website — collective brand, local market presence, and team services.",
+  selectable: false,
+  presentationReady: true,
+  themes: TEAM_SIGNATURE_THEMES,
 };
 
 const TEMPLATES_BY_ID: Record<ImplementedTemplateId, TemplateDefinition> = {
   [DEFAULT_TEMPLATE_ID]: DEFAULT_TEMPLATE,
   [AGENT_SIGNATURE_TEMPLATE_ID]: AGENT_SIGNATURE_TEMPLATE,
+  [TEAM_SIGNATURE_TEMPLATE_ID]: TEAM_SIGNATURE_TEMPLATE,
 };
 
 const THEMES_BY_ID = new Map<string, TemplateThemeDefinition>([
   ...DEFAULT_SIGNATURE_THEMES.map((theme) => [theme.id, theme] as const),
   ...AGENT_SIGNATURE_THEMES.map((theme) => [theme.id, theme] as const),
+  ...TEAM_SIGNATURE_THEMES.map((theme) => [theme.id, theme] as const),
 ]);
 
-/** Selectable templates for OWNER onboarding. */
+/** OWNER-selectable templates for onboarding Website Design. */
 export function listSelectableTemplates(): readonly TemplateDefinition[] {
+  return IMPLEMENTED_TEMPLATE_IDS.map((id) => TEMPLATES_BY_ID[id]).filter(
+    (template) => template.selectable,
+  );
+}
+
+/** All catalog-implemented templates (including non-selectable foundations). */
+export function listImplementedTemplates(): readonly TemplateDefinition[] {
   return IMPLEMENTED_TEMPLATE_IDS.map((id) => TEMPLATES_BY_ID[id]);
 }
 
@@ -108,14 +140,19 @@ export function resolveThemePalette(
   return getThemeById(themeId)?.palette ?? null;
 }
 
-/** Template id from persisted themeId; null/unknown → Default fallback for layout. */
+/**
+ * Template id from persisted themeId for public layout switching.
+ * null/unknown → Default.
+ * Templates with presentationReady=false → Default (unfinished must not activate).
+ */
 export function resolveTemplateIdFromThemeId(
   themeId: string | null | undefined,
 ): ImplementedTemplateId {
   const parsed = parseThemeId(themeId);
   if (!parsed) return DEFAULT_TEMPLATE_ID;
   const template = getTemplate(parsed.templateId);
-  return template?.id ?? DEFAULT_TEMPLATE_ID;
+  if (!template || !template.presentationReady) return DEFAULT_TEMPLATE_ID;
+  return template.id;
 }
 
 /** Category for a template id (implemented or reserved). */
@@ -154,7 +191,7 @@ export type OnboardingTemplateOption = {
   themes: OnboardingThemeOption[];
 };
 
-/** Public onboarding catalog — labels only, no reserved Team/Brokerage yet. */
+/** Public onboarding catalog — selectable templates only. */
 export function listOnboardingTemplateOptions(): OnboardingTemplateOption[] {
   return listSelectableTemplates().map((template) => ({
     id: template.id,
@@ -181,7 +218,30 @@ export function listDefaultThemeOptionsForOnboarding(): OnboardingThemeOption[] 
   }));
 }
 
-/** Fail-closed parse for OWNER mutation (any selectable template theme). */
+/**
+ * Preview-only themes: presentationReady templates (incl. non-selectable Team).
+ * Must NOT be used for persistence / apply.
+ */
+export function requireValidPreviewableThemeId(raw: unknown): string {
+  if (typeof raw !== "string") {
+    throw new Error("INVALID_THEME_ID");
+  }
+  const theme = getThemeById(raw);
+  if (!theme) {
+    throw new Error("INVALID_THEME_ID");
+  }
+  const parsed = parseThemeId(theme.id);
+  if (!parsed) {
+    throw new Error("INVALID_THEME_ID");
+  }
+  const template = getTemplate(parsed.templateId);
+  if (!template?.presentationReady) {
+    throw new Error("INVALID_THEME_ID");
+  }
+  return theme.id;
+}
+
+/** Fail-closed parse for OWNER mutation (selectable templates only). */
 export function requireValidSelectableThemeId(raw: unknown): string {
   if (typeof raw !== "string") {
     throw new Error("INVALID_THEME_ID");
@@ -191,7 +251,11 @@ export function requireValidSelectableThemeId(raw: unknown): string {
     throw new Error("INVALID_THEME_ID");
   }
   const parsed = parseThemeId(theme.id);
-  if (!parsed || !getTemplate(parsed.templateId)) {
+  if (!parsed) {
+    throw new Error("INVALID_THEME_ID");
+  }
+  const template = getTemplate(parsed.templateId);
+  if (!template?.selectable) {
     throw new Error("INVALID_THEME_ID");
   }
   return theme.id;
@@ -217,9 +281,22 @@ export function isAgentSignatureTemplateId(
   return templateId === AGENT_SIGNATURE_TEMPLATE_ID;
 }
 
+export function isTeamSignatureTemplateId(
+  templateId: string | null | undefined,
+): boolean {
+  return templateId === TEAM_SIGNATURE_TEMPLATE_ID;
+}
+
 export { AGENT_SIGNATURE_DEMO } from "./agent-signature-demo";
+export { TEAM_SIGNATURE_DEMO } from "./team-signature-demo";
+export { TEAM_SIGNATURE_THEMES } from "./team-signature-themes";
 export { formatCommunityDisplayName } from "./format-community-display-name";
 export {
   resolveAgentSignatureView,
   type AgentSignatureView,
 } from "./resolve-agent-signature-view";
+export {
+  resolveTeamSignatureView,
+  type TeamSignatureView,
+  type TeamSignatureMemberPlaceholder,
+} from "./resolve-team-signature-view";

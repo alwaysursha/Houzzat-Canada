@@ -158,9 +158,11 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
   if (previewThemeId) {
     const palette = resolveThemePalette(previewThemeId);
     if (palette) {
-      const isAgentPreview =
+      const isPremiumPreview =
         resolveTemplateIdFromThemeId(previewThemeId) ===
-        "agent-signature";
+          "agent-signature" ||
+        resolveTemplateIdFromThemeId(previewThemeId) ===
+          "team-signature";
       presentationTenancy = {
         ...tenancy,
         brand: {
@@ -170,7 +172,7 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
             primary: palette.primary,
             secondary: palette.secondary,
             accent: palette.accent,
-            ...(isAgentPreview
+            ...(isPremiumPreview
               ? {
                   surface: palette.surfaceTint,
                   ink: palette.primary,

@@ -16,8 +16,13 @@ import { cn } from "@/lib/utils";
 
 type Mode = "buy" | "rent" | "sell";
 
-/** `hero` = white type on green photo; `page` = ink on soft wash; `agent` = Agent Signature chrome. */
-type SearchSurface = "hero" | "page" | "agent";
+/**
+ * `hero` = white type on green photo;
+ * `page` = ink on soft wash;
+ * `agent` = Agent Signature chrome;
+ * `team` = Team Signature dark band (light tabs + page-style search bar).
+ */
+type SearchSurface = "hero" | "page" | "agent" | "team";
 
 export function HomeHeroSearch({
   surface = "hero",
@@ -30,8 +35,12 @@ export function HomeHeroSearch({
   const [selected, setSelected] = useState<AutocompleteSuggestion | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const onPage = surface === "page" || surface === "agent";
   const onAgent = surface === "agent";
+  const onTeam = surface === "team";
+  /** Light search chrome (white bar) — page, agent, and team. */
+  const onPage = surface === "page" || surface === "agent" || surface === "team";
+  /** Helper/error copy that sits on a light page wash (not Team dark band). */
+  const onLightCopy = surface === "page" || surface === "agent";
   const estimateLockRef = useRef(false);
 
   function txn() {
@@ -243,17 +252,21 @@ export function HomeHeroSearch({
               }}
               className={cn(
                 "rounded-md px-3 py-1.5 text-sm transition",
-                onAgent
+                onTeam
                   ? mode === value
-                    ? "font-semibold text-ink"
-                    : "font-medium text-ink/45 hover:text-ink/75"
-                  : onPage
+                    ? "font-semibold text-surface"
+                    : "font-medium text-surface/85 hover:text-surface"
+                  : onAgent
                     ? mode === value
                       ? "font-semibold text-ink"
-                      : "font-medium text-ink/50 hover:text-ink/80"
-                    : mode === value
-                      ? "font-semibold text-white"
-                      : "font-medium text-white/65 hover:text-white/90",
+                      : "font-medium text-ink/45 hover:text-ink/75"
+                    : onPage
+                      ? mode === value
+                        ? "font-semibold text-ink"
+                        : "font-medium text-ink/50 hover:text-ink/80"
+                      : mode === value
+                        ? "font-semibold text-white"
+                        : "font-medium text-white/65 hover:text-white/90",
               )}
             >
               {label}
@@ -261,7 +274,13 @@ export function HomeHeroSearch({
                 <span
                   className={cn(
                     "mt-1 block h-0.5 rounded-full",
-                    onAgent ? "bg-ink" : onPage ? "bg-canopy" : "bg-white",
+                    onTeam
+                      ? "bg-[var(--ts-accent,var(--canopy,#1F7A8C))]"
+                      : onAgent
+                        ? "bg-ink"
+                        : onPage
+                          ? "bg-canopy"
+                          : "bg-white",
                   )}
                 />
               ) : (
@@ -348,7 +367,11 @@ export function HomeHeroSearch({
           <p
             className={cn(
               "text-xs leading-relaxed",
-              onPage ? "text-ink/55" : "text-white/70",
+              onLightCopy
+                ? "text-ink/55"
+                : onTeam
+                  ? "text-surface/85"
+                  : "text-white/70",
             )}
           >
             Estimated value is pulled using technology. For a precise valuation,
@@ -358,7 +381,7 @@ export function HomeHeroSearch({
             <p
               className={cn(
                 "mt-1 text-xs font-medium",
-                onPage ? "text-amber-800" : "text-amber-200",
+                onLightCopy ? "text-amber-800" : "text-amber-200",
               )}
             >
               {error}
@@ -369,7 +392,7 @@ export function HomeHeroSearch({
         <p
           className={cn(
             "mt-2 text-xs font-medium",
-            onPage ? "text-amber-800" : "text-amber-200",
+            onLightCopy ? "text-amber-800" : "text-amber-200",
           )}
         >
           {error}

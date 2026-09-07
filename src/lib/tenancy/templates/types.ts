@@ -1,10 +1,10 @@
 /**
- * Stage 6.11A/B — HouzzatPRO website template system (static catalog).
+ * Stage 6.11A/B/E.1 — HouzzatPRO website template system (static catalog).
  *
  * CATEGORY → TEMPLATE → THEME
  * Persistence: WorkspaceBranding.themeId stores namespaced
  *   "{templateId}:{themeKey}" (e.g. default-signature:mint,
- *   agent-signature:editorial).
+ *   agent-signature:editorial, team-signature:mint).
  * No DB catalog tables — future templates add code entries only.
  */
 
@@ -19,20 +19,22 @@ export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number];
 
 export const DEFAULT_TEMPLATE_ID = "default-signature" as const;
 export const AGENT_SIGNATURE_TEMPLATE_ID = "agent-signature" as const;
+export const TEAM_SIGNATURE_TEMPLATE_ID = "team-signature" as const;
 
-/** Implemented templates (selectable). */
+/**
+ * Catalog-implemented templates (have definitions + themes).
+ * Public OWNER selection is further gated by `selectable` on each definition.
+ */
 export const IMPLEMENTED_TEMPLATE_IDS = [
   DEFAULT_TEMPLATE_ID,
   AGENT_SIGNATURE_TEMPLATE_ID,
+  TEAM_SIGNATURE_TEMPLATE_ID,
 ] as const;
 
 export type ImplementedTemplateId = (typeof IMPLEMENTED_TEMPLATE_IDS)[number];
 
-/** Future template ids (catalog-ready; not selectable yet). */
-export const RESERVED_TEMPLATE_IDS = [
-  "team-signature",
-  "brokerage-signature",
-] as const;
+/** Future template ids (catalog-ready; not implemented yet). */
+export const RESERVED_TEMPLATE_IDS = ["brokerage-signature"] as const;
 
 export const DEFAULT_THEME_KEYS = [
   "mint",
@@ -44,6 +46,10 @@ export const DEFAULT_THEME_KEYS = [
 ] as const;
 
 export type DefaultThemeKey = (typeof DEFAULT_THEME_KEYS)[number];
+
+/** Team Signature reuses Default theme keys (same product color family). */
+export const TEAM_SIGNATURE_THEME_KEYS = DEFAULT_THEME_KEYS;
+export type TeamSignatureThemeKey = DefaultThemeKey;
 
 export const AGENT_SIGNATURE_THEME_KEYS = [
   "editorial",
@@ -80,7 +86,16 @@ export type TemplateDefinition = {
   categoryLabel: string;
   label: string;
   description: string;
-  selectable: true;
+  /**
+   * OWNER Website Design picker + requireValidSelectableThemeId.
+   * False = catalog/themes exist but not offered until presentation ships.
+   */
+  selectable: boolean;
+  /**
+   * When false, resolveTemplateIdFromThemeId falls back to Default layout
+   * so unfinished templates cannot activate publicly.
+   */
+  presentationReady: boolean;
   themes: readonly TemplateThemeDefinition[];
 };
 

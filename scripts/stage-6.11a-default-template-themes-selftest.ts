@@ -426,10 +426,9 @@ async function main() {
       assert.equal(selectable[0]!.themes.length, 6);
       assert.equal(selectable[1]!.id, "agent-signature");
       assert.equal(selectable[1]!.category, "AGENT");
-      assert.deepEqual([...RESERVED_TEMPLATE_IDS], [
-        "team-signature",
-        "brokerage-signature",
-      ]);
+      assert.deepEqual([...RESERVED_TEMPLATE_IDS], ["brokerage-signature"]);
+      // Team Signature is catalog-implemented but not OWNER-selectable yet (6.11E.1).
+      assert.ok(!selectable.some((t) => t.id === "team-signature"));
       assert.ok(!read("src/lib/tenancy/templates/index.ts").includes("agent-signature-02"));
       console.log("[0] CATEGORY → TEMPLATE → THEME catalog... PASS");
     }

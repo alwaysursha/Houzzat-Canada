@@ -10,7 +10,7 @@ import {
   getTemplate,
   getThemeById,
   parseThemeId,
-  requireValidSelectableThemeId,
+  requireValidPreviewableThemeId,
   type ImplementedTemplateId,
 } from "@/lib/tenancy/templates";
 
@@ -57,7 +57,7 @@ export function signOwnerTemplatePreviewCookie(input: {
   if (!WORKSPACE_ID_RE.test(input.workspaceId)) {
     throw new Error("INVALID_WORKSPACE_ID");
   }
-  const themeId = requireValidSelectableThemeId(input.themeId);
+  const themeId = requireValidPreviewableThemeId(input.themeId);
   const now = input.nowMs ?? Date.now();
   const ttl = input.ttlSec ?? OWNER_TEMPLATE_PREVIEW_TTL_SEC;
   const exp = Math.floor(now / 1000) + ttl;
@@ -103,7 +103,8 @@ export function verifyOwnerTemplatePreviewCookie(
   const parsed = parseThemeId(theme.id);
   if (!parsed) return null;
   const template = getTemplate(parsed.templateId);
-  if (!template) return null;
+  // Preview may include presentation-ready non-selectable templates (Team design review).
+  if (!template?.presentationReady) return null;
 
   const expected = signPayload(workspaceId, theme.id, exp);
   const a = Buffer.from(sig);
@@ -159,6 +160,9 @@ export async function readOwnerTemplatePreviewCookieRaw(): Promise<string | null
 export function previewDisplayLabel(payload: OwnerTemplatePreviewPayload): string {
   if (payload.templateId === "agent-signature") {
     return `Agent Signature · ${payload.themeLabel}`;
+  }
+  if (payload.templateId === "team-signature") {
+    return `Team Signature · ${payload.themeLabel}`;
   }
   if (payload.templateId === "default-signature") {
     return `Default · ${payload.themeLabel}`;

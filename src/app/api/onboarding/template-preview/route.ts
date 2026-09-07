@@ -17,7 +17,7 @@ import {
   signOwnerTemplatePreviewCookie,
   verifyOwnerTemplatePreviewCookie,
 } from "@/lib/tenancy/owner-template-preview";
-import { requireValidSelectableThemeId } from "@/lib/tenancy/templates";
+import { requireValidPreviewableThemeId } from "@/lib/tenancy/templates";
 import { isTrustedStaffMutationOriginForRequest } from "@/lib/active-workspace";
 
 export const runtime = "nodejs";
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     if (action === "start") {
       let themeId: string;
       try {
-        themeId = requireValidSelectableThemeId(body.themeId);
+        themeId = requireValidPreviewableThemeId(body.themeId);
       } catch {
         throw new OwnerActivationError(
           "Invalid website theme",

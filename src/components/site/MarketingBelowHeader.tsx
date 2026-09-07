@@ -9,9 +9,14 @@ import { SeoFooterLinks } from "@/components/site/SeoFooterLinks";
 import { SeoLocationProvider } from "@/components/site/SeoLocationContext";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { AgentSignatureFooter } from "@/components/templates/agent-signature/AgentSignatureFooter";
+import { TeamSignatureFooter } from "@/components/templates/team-signature/TeamSignatureFooter";
 import type { MarketingChromeBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
-import { isAgentSignatureTemplateId } from "@/lib/tenancy/templates";
+import {
+  isAgentSignatureTemplateId,
+  isTeamSignatureTemplateId,
+} from "@/lib/tenancy/templates";
 import { resolveAgentSignatureView } from "@/lib/tenancy/templates/resolve-agent-signature-view";
+import { resolveTeamSignatureView } from "@/lib/tenancy/templates/resolve-team-signature-view";
 
 /** Hides marketing chrome on immersive routes like /search and listing sheet. */
 export function MarketingBelowHeader({
@@ -71,13 +76,19 @@ export function MarketingBelowHeader({
         {children}
       </main>
       {!hideChrome &&
-      !isAgentSignatureTemplateId(chromeBrand.templateId) ? (
+      !isAgentSignatureTemplateId(chromeBrand.templateId) &&
+      !isTeamSignatureTemplateId(chromeBrand.templateId) ? (
         <SeoFooterLinks fallbackCities={cities} />
       ) : null}
       {!hideChrome ? (
         isAgentSignatureTemplateId(chromeBrand.templateId) ? (
           <AgentSignatureFooter
             view={resolveAgentSignatureView(chromeBrand)}
+            fallbackCities={cities}
+          />
+        ) : isTeamSignatureTemplateId(chromeBrand.templateId) ? (
+          <TeamSignatureFooter
+            view={resolveTeamSignatureView(chromeBrand)}
             fallbackCities={cities}
           />
         ) : (

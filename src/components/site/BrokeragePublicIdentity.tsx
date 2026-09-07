@@ -22,21 +22,32 @@ export function BrokeragePublicIdentity({
   brokerage: PublicBrokerageIdentity;
   className?: string;
   /** Agent Signature mist footer vs Default mist/line footer. */
-  tone?: "default" | "agent-signature";
+  tone?: "default" | "agent-signature" | "team-signature";
 }) {
   if (!brokerageIdentityHasAnyPublicField(brokerage)) {
     return null;
   }
 
   const muted =
-    tone === "agent-signature" ? "text-ink/65" : "text-ink/70";
+    tone === "agent-signature"
+      ? "text-ink/65"
+      : tone === "team-signature"
+        ? "text-[var(--ts-ink,#0F6B4C)]/70"
+        : "text-ink/70";
   const strong =
-    tone === "agent-signature" ? "text-ink" : "text-ink";
+    tone === "agent-signature"
+      ? "text-ink"
+      : tone === "team-signature"
+        ? "text-[var(--ts-ink,#0F6B4C)]"
+        : "text-ink";
 
   return (
     <div
       className={cn(
-        "flex max-w-xl flex-col gap-4 sm:flex-row sm:items-start sm:gap-5",
+        "flex max-w-2xl flex-col gap-4 sm:flex-row sm:items-start sm:gap-6",
+        tone === "team-signature"
+          ? "border border-[var(--ts-ink,#0F6B4C)]/12 bg-[var(--ts-surface,#EEF3F0)] p-5 sm:p-6"
+          : null,
         className,
       )}
       data-brokerage-public-identity="true"
@@ -47,7 +58,12 @@ export function BrokeragePublicIdentity({
           <img
             src={brokerage.logoUrl}
             alt={brokerage.name ? `${brokerage.name} logo` : "Brokerage logo"}
-            className="block h-12 w-auto max-w-[11rem] object-contain object-left sm:h-14 sm:max-w-[14rem]"
+            className={cn(
+              "block w-auto object-contain object-left",
+              tone === "team-signature"
+                ? "h-16 max-w-[14rem] sm:h-[4.5rem] sm:max-w-[16rem]"
+                : "h-12 max-w-[11rem] sm:h-14 sm:max-w-[14rem]",
+            )}
             style={{ minHeight: LOGO_MIN_H }}
             data-brokerage-logo="true"
             data-brokerage-logo-min-h={LOGO_MIN_H}
@@ -55,10 +71,21 @@ export function BrokeragePublicIdentity({
         </div>
       ) : null}
 
-      <address className={cn("not-italic text-sm leading-relaxed", muted)}>
+      <address
+        className={cn(
+          "not-italic leading-relaxed",
+          tone === "team-signature" ? "text-sm sm:text-base" : "text-sm",
+          muted,
+        )}
+      >
         {brokerage.name ? (
           <p
-            className={cn("font-semibold", strong)}
+            className={cn(
+              tone === "team-signature"
+                ? "font-display text-xl font-normal tracking-tight sm:text-2xl"
+                : "font-semibold",
+              strong,
+            )}
             data-brokerage-name="true"
           >
             {brokerage.name}

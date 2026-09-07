@@ -5,10 +5,14 @@ import { HomeBrowseChips } from "@/components/home/HomeBrowseChips";
 import { HomeDeferredBody } from "@/components/home/HomeDeferredBody";
 import { HomeHeroSearch } from "@/components/home/HomeHeroSearch";
 import { AgentSignatureHome } from "@/components/templates/agent-signature/AgentSignatureHome";
+import { TeamSignatureHome } from "@/components/templates/team-signature/TeamSignatureHome";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
-import { isAgentSignatureTemplateId } from "@/lib/tenancy/templates";
+import {
+  isAgentSignatureTemplateId,
+  isTeamSignatureTemplateId,
+} from "@/lib/tenancy/templates";
 
 /** Title/metadata owned by marketing layout generateMetadata(). */
 
@@ -22,6 +26,9 @@ export default async function HomePage() {
   const chromeBrand = await resolveMarketingPresentationBrand();
   if (chromeBrand && isAgentSignatureTemplateId(chromeBrand.templateId)) {
     return <AgentSignatureHome brand={chromeBrand} />;
+  }
+  if (chromeBrand && isTeamSignatureTemplateId(chromeBrand.templateId)) {
+    return <TeamSignatureHome brand={chromeBrand} />;
   }
 
   const suggestionCities = suggestedCitiesForLocation({ limit: 8 });

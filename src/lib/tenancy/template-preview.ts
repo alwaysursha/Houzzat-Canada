@@ -15,6 +15,7 @@ import {
 import {
   AGENT_SIGNATURE_TEMPLATE_ID,
   DEFAULT_TEMPLATE_ID,
+  TEAM_SIGNATURE_TEMPLATE_ID,
   getTemplate,
   getThemeById,
   parseThemeId,
@@ -27,20 +28,28 @@ export const UNSAFE_ALLOW_TEMPLATE_PREVIEW_ENV = "ALLOW_TEMPLATE_PREVIEW";
 export const DEV_HOUZZAT_TEMPLATE_PREVIEW_ENV = "HOUZZAT_TEMPLATE_PREVIEW";
 
 function normalizeCatalogThemeId(raw: string): string | null {
-  if (getThemeById(raw)) return raw;
+  const direct = getThemeById(raw);
+  if (direct) {
+    const parsed = parseThemeId(direct.id);
+    if (!parsed) return null;
+    const template = getTemplate(parsed.templateId);
+    // Previewable when presentation is ready (Team may be non-selectable).
+    if (!template?.presentationReady) return null;
+    return direct.id;
+  }
   const asTemplate = raw as ImplementedTemplateId;
-  if (getTemplate(asTemplate)) {
-    return getTemplate(asTemplate)?.themes[0]?.id ?? null;
+  const byId = getTemplate(asTemplate);
+  if (byId?.presentationReady) {
+    return byId.themes[0]?.id ?? null;
   }
   if (raw === "agent") {
     return getTemplate(AGENT_SIGNATURE_TEMPLATE_ID)?.themes[0]?.id ?? null;
   }
+  if (raw === "team") {
+    return getTemplate(TEAM_SIGNATURE_TEMPLATE_ID)?.themes[0]?.id ?? null;
+  }
   if (raw === "default") {
     return getTemplate(DEFAULT_TEMPLATE_ID)?.themes[0]?.id ?? null;
-  }
-  const parsed = parseThemeId(raw);
-  if (parsed && getTemplate(parsed.templateId)) {
-    return getThemeById(raw)?.id ?? null;
   }
   return null;
 }
@@ -118,7 +127,9 @@ export async function resolveActiveTemplatePreviewForWorkspace(
       displayLabel:
         parsed.templateId === "agent-signature"
           ? "Agent Signature"
-          : theme.label,
+          : parsed.templateId === "team-signature"
+            ? "Team Signature"
+            : theme.label,
     };
   }
 

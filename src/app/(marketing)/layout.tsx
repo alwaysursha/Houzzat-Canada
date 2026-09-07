@@ -14,11 +14,16 @@ import { ListingSheetHostLazy } from "@/components/mobile/ListingSheetHostLazy";
 import { TenantBrandProvider } from "@/components/tenancy/TenantBrandProvider";
 import { TenantThemeStyle } from "@/components/tenancy/TenantThemeStyle";
 import { AgentSignatureHeader } from "@/components/templates/agent-signature/AgentSignatureHeader";
+import { TeamSignatureHeader } from "@/components/templates/team-signature/TeamSignatureHeader";
 import { OwnerTemplatePreviewBar } from "@/components/templates/OwnerTemplatePreviewBar";
 import { TemplatePresentationProvider } from "@/components/templates/TemplatePresentationProvider";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
-import { isAgentSignatureTemplateId } from "@/lib/tenancy/templates";
+import {
+  isAgentSignatureTemplateId,
+  isTeamSignatureTemplateId,
+} from "@/lib/tenancy/templates";
 import { resolveAgentSignatureView } from "@/lib/tenancy/templates/resolve-agent-signature-view";
+import { resolveTeamSignatureView } from "@/lib/tenancy/templates/resolve-team-signature-view";
 import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import {
   resolveMarketingPresentationBrand,
@@ -137,6 +142,10 @@ export default async function MarketingLayout({
   const agentSignatureView = agentSignature
     ? resolveAgentSignatureView(chromeBrand)
     : null;
+  const teamSignature = isTeamSignatureTemplateId(chromeBrand.templateId);
+  const teamSignatureView = teamSignature
+    ? resolveTeamSignatureView(chromeBrand)
+    : null;
 
   return (
     <TenantBrandProvider brand={chromeBrand}>
@@ -168,6 +177,13 @@ export default async function MarketingLayout({
             <MarketingChromeGate>
               {agentSignature && agentSignatureView ? (
                 <AgentSignatureHeader view={agentSignatureView} />
+              ) : teamSignature && teamSignatureView ? (
+                <TeamSignatureHeader
+                  view={teamSignatureView}
+                  previewBarActive={Boolean(
+                    chromeBrand.templatePreview?.active,
+                  )}
+                />
               ) : (
                 <SiteHeader chromeBrand={chromeBrand} />
               )}

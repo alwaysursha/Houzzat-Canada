@@ -15,7 +15,9 @@ enum Role {
   ADMIN
 }
 
-/** Active consumer dashboard mode (ignored for ADMIN / AGENT). */
+/**
+ * Active consumer dashboard mode (ignored for ADMIN / AGENT).
+ */
 enum ActiveMode {
   BUYER
   SELLER
@@ -53,13 +55,17 @@ enum LeadSource {
   OTHER
 }
 
-/** Buyer vs seller desk routing (buyer+seller → SELLER). */
+/**
+ * Buyer vs seller desk routing (buyer+seller → SELLER).
+ */
 enum LeadIntent {
   BUYER
   SELLER
 }
 
-/** How seller leads are auto-assigned. */
+/**
+ * How seller leads are auto-assigned.
+ */
 enum SellerLeadAssignMode {
   LISTING_AGENT
   PERCENTAGE
@@ -70,7 +76,9 @@ enum LeadRoutingLane {
   SELLER
 }
 
-/** Agent-classified inquiry type on Contact Requested (Launchpad). */
+/**
+ * Agent-classified inquiry type on Contact Requested (Launchpad).
+ */
 enum InquiryTag {
   VIEWING
   HOME_VALUE
@@ -78,7 +86,9 @@ enum InquiryTag {
   GENERAL
 }
 
-/** When the customer expects to buy or sell. */
+/**
+ * When the customer expects to buy or sell.
+ */
 enum PurchaseTimeframe {
   NOW
   ONE_TO_THREE_MONTHS
@@ -86,7 +96,9 @@ enum PurchaseTimeframe {
   TWELVE_PLUS_MONTHS
 }
 
-/** Agent CRM follow-up note category. */
+/**
+ * Agent CRM follow-up note category.
+ */
 enum LeadNoteCategory {
   GENERAL
   CALL
@@ -107,14 +119,18 @@ enum AppointmentStatus {
   CANCELLED
 }
 
-/** Seat role inside a selling Organization (team / brokerage). Not platform ADMIN. */
+/**
+ * Seat role inside a selling Organization (team / brokerage). Not platform ADMIN.
+ */
 enum OrgMembershipRole {
   OWNER
   ADMIN
   AGENT
 }
 
-/** Future multi-tenant workspace lifecycle (Stage 1 foundation — unused at runtime). */
+/**
+ * Future multi-tenant workspace lifecycle (Stage 1 foundation — unused at runtime).
+ */
 enum WorkspaceStatus {
   TRIAL
   ACTIVE
@@ -122,7 +138,9 @@ enum WorkspaceStatus {
   CANCELLED
 }
 
-/** Seat role inside a Workspace. Independent from User.role and OrgMembershipRole. */
+/**
+ * Seat role inside a Workspace. Independent from User.role and OrgMembershipRole.
+ */
 enum WorkspaceMemberRole {
   OWNER
   ADMIN
@@ -142,33 +160,43 @@ enum WorkspaceInviteStatus {
   EXPIRED
 }
 
-/** Stage 3K.2 — hostname role within kind (CUSTOM primary/alias). PLATFORM uses PRIMARY. */
+/**
+ * Stage 3K.2 — hostname role within kind (CUSTOM primary/alias). PLATFORM uses PRIMARY.
+ */
 enum WorkspaceDomainRole {
   PRIMARY
   ALIAS
 }
 
-/** Stage 3K.4.2 — platform-managed vs customer-owned hostname. */
+/**
+ * Stage 3K.4.2 — platform-managed vs customer-owned hostname.
+ */
 enum WorkspaceDomainKind {
   PLATFORM
   CUSTOM
 }
 
-/** Stage 3K.2 — hostname lifecycle. */
+/**
+ * Stage 3K.2 — hostname lifecycle.
+ */
 enum WorkspaceDomainStatus {
   PENDING
   ACTIVE
   DISABLED
 }
 
-/** Stage 3K.2 — tenant web branding tier (entitlements wired later). */
+/**
+ * Stage 3K.2 — tenant web branding tier (entitlements wired later).
+ */
 enum BrandingTier {
   GENERIC
   SEMI_BRANDED
   FULL_BRANDED
 }
 
-/** Stage 6.1 — HouzzatPRO SaaS control-plane enums. */
+/**
+ * Stage 6.1 — HouzzatPRO SaaS control-plane enums.
+ */
 
 enum PlatformOperatorRole {
   MASTER_ADMIN
@@ -243,7 +271,9 @@ enum SubscriptionSource {
   GRANDFATHERED
 }
 
-/** Billing/sync axis only — never Workspace operational status. */
+/**
+ * Billing/sync axis only — never Workspace operational status.
+ */
 enum SubscriptionStatus {
   PENDING_PAYMENT
   TRIALING
@@ -315,7 +345,9 @@ enum WorkspaceEmailDomainStatus {
   FAILED
 }
 
-/** Stage 6.10A — owner password activation token lifecycle. */
+/**
+ * Stage 6.10A — owner password activation token lifecycle.
+ */
 enum WorkspaceOwnerActivationStatus {
   PENDING
   SENT
@@ -324,12 +356,80 @@ enum WorkspaceOwnerActivationStatus {
   EXPIRED
 }
 
-/** Stage 6.10A — durable onboarding step progress (no workflow engine). */
+/**
+ * Stage 6.10A — durable onboarding step progress (no workflow engine).
+ */
 enum WorkspaceOnboardingStepStatus {
   NOT_STARTED
   IN_PROGRESS
   COMPLETE
   SKIPPED
+}
+
+/**
+ * Stage 6.11G.2 — platform directory: what kind of real-estate organization / system.
+ * BOARD does not imply ownership of a listing feed.
+ */
+enum RealEstateOrganizationKind {
+  BOARD
+  ASSOCIATION
+  MLS
+  DATA_SYSTEM
+  OTHER
+}
+
+/**
+ * Stage 6.11G.2 — whether HouzzatPRO has an integration path for this org.
+ * Does NOT mean any tenant is authorized to display that org's listings.
+ */
+enum RealEstateOrganizationSupportStatus {
+  SUPPORTED
+  PLANNED
+  UNSUPPORTED
+}
+
+/**
+ * Stage 6.11G.3 / G.3A — declared vs verified Workspace ↔ organization affiliation.
+ * Even VERIFIED grants ZERO listing rights — that requires a future
+ * ACTIVE WorkspaceDataConnection + capabilities (not this model).
+ * Workspace is the MLS/listing-access boundary (not Team members / Users).
+ */
+enum WorkspaceReoMembershipStatus {
+  DECLARED
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+  INACTIVE
+}
+
+/**
+ * Stage 6.11G.4 — Workspace listing-data connection lifecycle.
+ * Only ACTIVE may eventually contribute MLS inventory (fail closed otherwise).
+ * Connection ≠ membership ≠ listing entitlement resolver (not built yet).
+ */
+enum WorkspaceDataConnectionStatus {
+  PENDING
+  ACTIVE
+  FAILED
+  SUSPENDED
+  REVOKED
+  DISCONNECTED
+}
+
+/**
+ * Stage 6.11G.4 / G.4A — provider-neutral DATA / inventory capabilities.
+ * What datasets a connection may provide/use — NOT access/display policy.
+ * IDX/VOW and other board-specific access classes belong in provider adapters
+ * (and optional future policy persistence), not this universal enum.
+ * Presence of a capability row = granted for that dataset. Absence = not authorized.
+ * Additive enum: new values require migration; safer than free-form strings for v1.
+ */
+enum WorkspaceDataConnectionCapabilityKind {
+  ACTIVE_LISTINGS
+  SOLD
+  HISTORY
+  OPEN_HOUSES
+  MEDIA
 }
 
 enum AgentTaskType {
@@ -348,7 +448,9 @@ model Organization {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
-  /** Soft seat cap for future billing. */
+  /**
+   * Soft seat cap for future billing.
+   */
   seatLimit Int      @default(5)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -398,51 +500,76 @@ model OrganizationInvite {
  * Parallel to Organization — no runtime wiring yet.
  */
 model Workspace {
-  id                   String          @id @default(cuid())
-  slug                 String          @unique
-  name                 String
-  status               WorkspaceStatus @default(ACTIVE)
-  /** Subscription purchaser / billing admin (future). */
-  billingOwnerUserId   String?
-  /** Designated business-facing agent (future badge/routing UI — not wired). */
-  primaryAgentId       String?
-  /** Display/compliance metadata only — NOT a tenant isolation key. */
-  brokerageAffiliation String?
+  id                    String          @id @default(cuid())
+  slug                  String          @unique
+  name                  String
+  status                WorkspaceStatus @default(ACTIVE)
+  /**
+   * Subscription purchaser / billing admin (future).
+   */
+  billingOwnerUserId    String?
+  /**
+   * Designated business-facing agent (future badge/routing UI — not wired).
+   */
+  primaryAgentId        String?
+  /**
+   * Display/compliance metadata only — NOT a tenant isolation key.
+   */
+  brokerageAffiliation  String?
   /**
    * Stage 6.1 — explicit current Subscription pointer (0/1).
    * Historical subscriptions remain via Subscription.workspaceId (1→many).
    */
-  currentSubscriptionId String?        @unique
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  currentSubscriptionId String?         @unique
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
 
-  billingOwner User?             @relation("WorkspaceBillingOwner", fields: [billingOwnerUserId], references: [id], onDelete: SetNull)
-  primaryAgent User?             @relation("WorkspacePrimaryAgent", fields: [primaryAgentId], references: [id], onDelete: SetNull)
-  currentSubscription Subscription? @relation("WorkspaceCurrentSubscription", fields: [currentSubscriptionId], references: [id], onDelete: SetNull)
-  subscriptions Subscription[]   @relation("WorkspaceSubscriptions")
-  members      WorkspaceMember[]
-  invites      WorkspaceInvite[]
-  leads        Lead[]
-  agentTasks   AgentTask[]
-  leadNotes    LeadNote[]
-  leadEmailLogs LeadEmailLog[]
-  crmRoutingSettings CrmRoutingSettings?
-  domains       WorkspaceDomain[]
-  branding      WorkspaceBranding?
-  viewingTours  ViewingTour[]
-  cmaReports    CmaReport[]
-  seatQuota     WorkspaceSeatQuota?
-  entitlements  WorkspaceEntitlement[]
-  addOnGrants   AddOnGrant[]
-  emailIdentity WorkspaceEmailIdentity?
-  statusEvents  WorkspaceStatusEvent[]
-  billingCustomer BillingCustomer?
-  commercialOffers CommercialOffer[]
-  provisioningRuns ProvisioningRun[]
-  ownerActivations WorkspaceOwnerActivation[]
-  onboardingState  WorkspaceOnboardingState?
-  /** Stage 6.11D — canonical professional + brokerage website identity. */
-  professionalIdentity WorkspaceProfessionalIdentity?
+  billingOwner                      User?                                       @relation("WorkspaceBillingOwner", fields: [billingOwnerUserId], references: [id], onDelete: SetNull)
+  primaryAgent                      User?                                       @relation("WorkspacePrimaryAgent", fields: [primaryAgentId], references: [id], onDelete: SetNull)
+  currentSubscription               Subscription?                               @relation("WorkspaceCurrentSubscription", fields: [currentSubscriptionId], references: [id], onDelete: SetNull)
+  subscriptions                     Subscription[]                              @relation("WorkspaceSubscriptions")
+  members                           WorkspaceMember[]
+  invites                           WorkspaceInvite[]
+  leads                             Lead[]
+  agentTasks                        AgentTask[]
+  leadNotes                         LeadNote[]
+  leadEmailLogs                     LeadEmailLog[]
+  crmRoutingSettings                CrmRoutingSettings?
+  domains                           WorkspaceDomain[]
+  branding                          WorkspaceBranding?
+  viewingTours                      ViewingTour[]
+  cmaReports                        CmaReport[]
+  seatQuota                         WorkspaceSeatQuota?
+  entitlements                      WorkspaceEntitlement[]
+  addOnGrants                       AddOnGrant[]
+  emailIdentity                     WorkspaceEmailIdentity?
+  statusEvents                      WorkspaceStatusEvent[]
+  billingCustomer                   BillingCustomer?
+  commercialOffers                  CommercialOffer[]
+  provisioningRuns                  ProvisioningRun[]
+  ownerActivations                  WorkspaceOwnerActivation[]
+  onboardingState                   WorkspaceOnboardingState?
+  /**
+   * Stage 6.11D — canonical professional + brokerage website identity.
+   */
+  professionalIdentity              WorkspaceProfessionalIdentity?
+  /**
+   * Stage 6.11E.3A — TEAM public profile (about / service areas / leader pointer).
+   */
+  teamProfile                       WorkspaceTeamProfile?
+  /**
+   * Stage 6.11E.3A — TEAM public roster (independent of User / seats).
+   */
+  teamMembers                       WorkspaceTeamMember[]
+  /**
+   * Stage 6.11G.3 — declared/verified org membership(s). NOT listing entitlement.
+   */
+  realEstateOrganizationMemberships WorkspaceRealEstateOrganizationMembership[]
+  /**
+   * Stage 6.11G.4 — authorized listing-data connection(s). NOT membership.
+   * Only ACTIVE + capabilities eventually feed entitlement (resolver not built).
+   */
+  dataConnections                   WorkspaceDataConnection[]
 
   @@index([status])
 }
@@ -453,22 +580,90 @@ model Workspace {
  * Not template-specific; all website templates consume via shared resolver.
  */
 model WorkspaceProfessionalIdentity {
-  workspaceId                  String   @id
-  /** Licensed / registered agent display name for public website identity. */
-  agentRegisteredName          String?
-  /** Permitted designation (e.g. Salesperson, Broker, Broker of Record). */
-  agentDesignation             String?
-  /** Agent cell / mobile — not WorkspaceBranding.contactPhone. */
-  agentCellPhone               String?
-  /** Registered brokerage legal/trade name — not WorkspaceBranding.displayName. */
-  brokerageRegisteredName      String?
-  brokeragePhone               String?
-  brokerageFax                 String?
-  brokerageAddress             String?
-  createdAt                    DateTime @default(now())
-  updatedAt                    DateTime @updatedAt
+  workspaceId             String   @id
+  /**
+   * Licensed / registered agent display name for public website identity.
+   */
+  agentRegisteredName     String?
+  /**
+   * Permitted designation (e.g. Salesperson, Broker, Broker of Record).
+   */
+  agentDesignation        String?
+  /**
+   * Agent cell / mobile — not WorkspaceBranding.contactPhone.
+   */
+  agentCellPhone          String?
+  /**
+   * Registered brokerage legal/trade name — not WorkspaceBranding.displayName.
+   */
+  brokerageRegisteredName String?
+  brokeragePhone          String?
+  brokerageFax            String?
+  brokerageAddress        String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+/**
+ * Stage 6.11E.3A / 6.11E.3A.2 — workspace-scoped TEAM public profile (tenant brand data).
+ * Does NOT duplicate Team Name / Logo / Phone / Email / Tagline — those stay on
+ * WorkspaceBranding. Brokerage stays on WorkspaceProfessionalIdentity + branding logos.
+ * Leader authority is leaderMemberId only (no isLeader on members).
+ * Composite FK (workspaceId, leaderMemberId) enforces same-workspace leader;
+ * ON DELETE Restrict — app must clear leader before deleting that member.
+ */
+model WorkspaceTeamProfile {
+  workspaceId    String   @id
+  aboutText      String?
+  /**
+   * Runtime: string[]. Validated in app layer — not a normalized table.
+   */
+  serviceAreas   Json?
+  /**
+   * Single Team Leader pointer. Cleared by app before leader member delete/hide.
+   * DB Restrict fails closed if clear is skipped.
+   */
+  leaderMemberId String?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leaderMember WorkspaceTeamMember? @relation("WorkspaceTeamLeader", fields: [workspaceId, leaderMemberId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, leaderMemberId])
+}
+
+/**
+ * Stage 6.11E.3A / 6.11E.3A.2 — public Team roster member (presentation data only).
+ * Not a User / WorkspaceMember / paid seat. No account linkage in this stage.
+ * name / designation / photoUrl nullable for draft editing; public publication
+ * and TEAM completion rules require all three when isVisible=true.
+ */
+model WorkspaceTeamMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String?
+  designation String?
+  photoUrl    String?
+  cellPhone   String?
+  email       String?
+  bio         String?
+  sortOrder   Int      @default(0)
+  /**
+   * Defaults false so incomplete drafts are not public until OWNER shows them.
+   */
+  isVisible   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace          Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leadingTeamProfile WorkspaceTeamProfile? @relation("WorkspaceTeamLeader")
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, sortOrder])
+  @@index([workspaceId, isVisible])
 }
 
 /**
@@ -497,32 +692,40 @@ model WorkspaceDomain {
   @@index([workspaceId, kind])
 }
 
-/** Stage 3K.2 — per-workspace public/staff branding configuration. */
+/**
+ * Stage 3K.2 — per-workspace public/staff branding configuration.
+ */
 model WorkspaceBranding {
-  workspaceId         String       @id
-  tier                BrandingTier @default(SEMI_BRANDED)
-  displayName         String
-  tagline             String?
-  logoUrl             String?
-  brokerageLogoUrl    String?
-  faviconUrl          String?
-  /** Stage 6.11C.1 — workspace website portrait (Agent templates); not User.image. */
+  workspaceId          String       @id
+  tier                 BrandingTier @default(SEMI_BRANDED)
+  displayName          String
+  tagline              String?
+  logoUrl              String?
+  brokerageLogoUrl     String?
+  faviconUrl           String?
+  /**
+   * Stage 6.11C.1 — workspace website portrait (Agent templates); not User.image.
+   */
   agentProfilePhotoUrl String?
-  primaryColor        String?
-  secondaryColor      String?
-  accentColor         String?
-  /** Stage 6.1 — code-catalog ThemeId (theme definitions are not DB rows). */
-  themeId             String?
-  contactEmail        String?
-  contactPhone        String?
-  footerLegalText     String?
-  /** @deprecated Product invariant — resolver always forces true; tenants cannot disable. */
-  poweredByHouzzatPro Boolean      @default(true)
-  seoDescription      String?
-  ogImageUrl          String?
-  version             Int          @default(1)
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  primaryColor         String?
+  secondaryColor       String?
+  accentColor          String?
+  /**
+   * Stage 6.1 — code-catalog ThemeId (theme definitions are not DB rows).
+   */
+  themeId              String?
+  contactEmail         String?
+  contactPhone         String?
+  footerLegalText      String?
+  /**
+   * @deprecated Product invariant — resolver always forces true; tenants cannot disable.
+   */
+  poweredByHouzzatPro  Boolean      @default(true)
+  seoDescription       String?
+  ogImageUrl           String?
+  version              Int          @default(1)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
@@ -569,104 +772,130 @@ model WorkspaceInvite {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  password      String?
-  image         String?
-  role          Role      @default(BUYER)
-  /** Consumer can use buyer dashboard / buyer search prefs. */
-  isBuyer       Boolean   @default(true)
-  /** Consumer can use seller dashboard (/owner) / seller search prefs. */
-  isSeller      Boolean   @default(false)
-  /** Buy/sell horizon — set by customer popup or agent in CRM. */
-  purchaseTimeframe PurchaseTimeframe?
-  /** Which consumer dashboard + search context is active. */
-  activeMode    ActiveMode @default(BUYER)
-  phone         String?
-  /** Agent-confirmed phone on CRM lead desk (not SMS OTP). */
-  phoneVerifiedAt DateTime?
-  /** Agent requested customer to update email on next visit. */
+  id                     String              @id @default(cuid())
+  name                   String?
+  email                  String              @unique
+  emailVerified          DateTime?
+  password               String?
+  image                  String?
+  role                   Role                @default(BUYER)
+  /**
+   * Consumer can use buyer dashboard / buyer search prefs.
+   */
+  isBuyer                Boolean             @default(true)
+  /**
+   * Consumer can use seller dashboard (/owner) / seller search prefs.
+   */
+  isSeller               Boolean             @default(false)
+  /**
+   * Buy/sell horizon — set by customer popup or agent in CRM.
+   */
+  purchaseTimeframe      PurchaseTimeframe?
+  /**
+   * Which consumer dashboard + search context is active.
+   */
+  activeMode             ActiveMode          @default(BUYER)
+  phone                  String?
+  /**
+   * Agent-confirmed phone on CRM lead desk (not SMS OTP).
+   */
+  phoneVerifiedAt        DateTime?
+  /**
+   * Agent requested customer to update email on next visit.
+   */
   emailUpdateRequestedAt DateTime?
-  /** Agent requested customer to update phone on next visit. */
+  /**
+   * Agent requested customer to update phone on next visit.
+   */
   phoneUpdateRequestedAt DateTime?
-  /** Client home / location address — used as Route Planner start + admin CRM. */
-  homeAddress   String?
-  homeLat       Float?
-  homeLng       Float?
-  caslConsentAt DateTime?
-  vowAcceptedAt DateTime?
-  vowVersion    String?
-  termsAcceptedAt DateTime?
-  termsVersion    String?
-  emailAlertsEnabled Boolean @default(true)
-  smsAlertsEnabled   Boolean @default(false)
-  relatedListingsMode RelatedListingsMode @default(SAME_AREA)
-  /** Last successful daily Saved Search Digest send. */
-  lastBuyerDigestAt  DateTime?
-  /** Last successful Neighborhood Weekly Report send. */
-  lastSellerReportAt DateTime?
+  /**
+   * Client home / location address — used as Route Planner start + admin CRM.
+   */
+  homeAddress            String?
+  homeLat                Float?
+  homeLng                Float?
+  caslConsentAt          DateTime?
+  vowAcceptedAt          DateTime?
+  vowVersion             String?
+  termsAcceptedAt        DateTime?
+  termsVersion           String?
+  emailAlertsEnabled     Boolean             @default(true)
+  smsAlertsEnabled       Boolean             @default(false)
+  relatedListingsMode    RelatedListingsMode @default(SAME_AREA)
+  /**
+   * Last successful daily Saved Search Digest send.
+   */
+  lastBuyerDigestAt      DateTime?
+  /**
+   * Last successful Neighborhood Weekly Report send.
+   */
+  lastSellerReportAt     DateTime?
   /**
    * Per-type push toggles (+ nested staffEmail category prefs for HouzzatPro).
    * Missing push key = on. Missing staffEmail category = on.
    * Keys: src/lib/notifications/catalog.ts + staff-categories.ts
    */
-  pushNotificationPrefs Json?
-  /** Soft-suspend: blocked from signing in / using the product. */
-  disabledAt    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  pushNotificationPrefs  Json?
+  /**
+   * Soft-suspend: blocked from signing in / using the product.
+   */
+  disabledAt             DateTime?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
-  agentProfile  AgentProfile?
-  siteVisitors  SiteVisitor[]
-  activityEvents ActivityEvent[]
-  auditLogs     AuditLog[]       @relation("AuditActor")
-  orgMemberships OrganizationMembership[]
-  leads         Lead[]            @relation("CustomerLeads")
-  assignedLeads Lead[]            @relation("AssignedLeads")
-  activities    LeadActivity[]
-  appointments  Appointment[]     @relation("CustomerAppointments")
-  agentAppointments Appointment[] @relation("AgentAppointments")
-  landingPages  LandingPage[]
-  consentEvents ConsentEvent[]
-  savedListings SavedListing[]
-  savedSearches SavedSearch[]
-  listingViews  ListingView[]
-  listingNotes  ListingNote[]
-  propertyMonitors PropertyMonitor[]
-  areaMonitors  AreaMonitor[]
-  customerAlerts CustomerAlert[]
-  adCampaigns   AdCampaign[]
-  cmaReports    CmaReport[]
-  referralHandoffs ReferralHandoff[] @relation("AgentHandoffs")
-  ownedListings Listing[]            @relation("OwnerListings")
-  ownerOrders   OwnerListingOrder[]  @relation("OwnerOrders")
-  reviewedOwnerListings Listing[]    @relation("OwnerListingReviewer")
-  waivedOwnerOrders OwnerListingOrder[] @relation("OwnerOrderAdmin")
-  ownerConsents OwnerListingConsent[]
-  viewingTours       ViewingTour[] @relation("CustomerViewingTours")
-  agentViewingTours  ViewingTour[] @relation("AgentViewingTours")
-  assignedTasks AgentTask[]       @relation("TaskAssignee")
-  createdTasks  AgentTask[]       @relation("TaskCreator")
-  leadNotesAuthored LeadNote[]    @relation("LeadNoteAuthor")
-  leadEmailsSent LeadEmailLog[]   @relation("LeadEmailSender")
-  listingAgentFor CrmRoutingSettings[] @relation("ListingAgentSettings")
-  routingWeights  CrmRoutingWeight[]
-  pushDevices   PushDevice[]
-  workspaceMemberships     WorkspaceMember[]
-  workspaceMembersInvited  WorkspaceMember[] @relation("WorkspaceMemberInvitedBy")
-  workspaceInvitesSent     WorkspaceInvite[] @relation("WorkspaceInviteInvitedBy")
-  workspacesBillingOwned   Workspace[]       @relation("WorkspaceBillingOwner")
-  workspacesPrimaryAgentFor Workspace[]      @relation("WorkspacePrimaryAgent")
-  /** Stage 6.1 — SaaS control-plane operator identity (NOT CRM / WorkspaceMember). */
-  platformOperator         PlatformOperator?
-  ownerActivations         WorkspaceOwnerActivation[]
+  accounts                  Account[]
+  sessions                  Session[]
+  agentProfile              AgentProfile?
+  siteVisitors              SiteVisitor[]
+  activityEvents            ActivityEvent[]
+  auditLogs                 AuditLog[]                 @relation("AuditActor")
+  orgMemberships            OrganizationMembership[]
+  leads                     Lead[]                     @relation("CustomerLeads")
+  assignedLeads             Lead[]                     @relation("AssignedLeads")
+  activities                LeadActivity[]
+  appointments              Appointment[]              @relation("CustomerAppointments")
+  agentAppointments         Appointment[]              @relation("AgentAppointments")
+  landingPages              LandingPage[]
+  consentEvents             ConsentEvent[]
+  savedListings             SavedListing[]
+  savedSearches             SavedSearch[]
+  listingViews              ListingView[]
+  listingNotes              ListingNote[]
+  propertyMonitors          PropertyMonitor[]
+  areaMonitors              AreaMonitor[]
+  customerAlerts            CustomerAlert[]
+  adCampaigns               AdCampaign[]
+  cmaReports                CmaReport[]
+  referralHandoffs          ReferralHandoff[]          @relation("AgentHandoffs")
+  ownedListings             Listing[]                  @relation("OwnerListings")
+  ownerOrders               OwnerListingOrder[]        @relation("OwnerOrders")
+  reviewedOwnerListings     Listing[]                  @relation("OwnerListingReviewer")
+  waivedOwnerOrders         OwnerListingOrder[]        @relation("OwnerOrderAdmin")
+  ownerConsents             OwnerListingConsent[]
+  viewingTours              ViewingTour[]              @relation("CustomerViewingTours")
+  agentViewingTours         ViewingTour[]              @relation("AgentViewingTours")
+  assignedTasks             AgentTask[]                @relation("TaskAssignee")
+  createdTasks              AgentTask[]                @relation("TaskCreator")
+  leadNotesAuthored         LeadNote[]                 @relation("LeadNoteAuthor")
+  leadEmailsSent            LeadEmailLog[]             @relation("LeadEmailSender")
+  listingAgentFor           CrmRoutingSettings[]       @relation("ListingAgentSettings")
+  routingWeights            CrmRoutingWeight[]
+  pushDevices               PushDevice[]
+  workspaceMemberships      WorkspaceMember[]
+  workspaceMembersInvited   WorkspaceMember[]          @relation("WorkspaceMemberInvitedBy")
+  workspaceInvitesSent      WorkspaceInvite[]          @relation("WorkspaceInviteInvitedBy")
+  workspacesBillingOwned    Workspace[]                @relation("WorkspaceBillingOwner")
+  workspacesPrimaryAgentFor Workspace[]                @relation("WorkspacePrimaryAgent")
+  /**
+   * Stage 6.1 — SaaS control-plane operator identity (NOT CRM / WorkspaceMember).
+   */
+  platformOperator          PlatformOperator?
+  ownerActivations          WorkspaceOwnerActivation[]
 }
 
-/** FCM/APNs token for Houzzat or HouzzatPro native shells. */
+/**
+ * FCM/APNs token for Houzzat or HouzzatPro native shells.
+ */
 model PushDevice {
   id        String   @id @default(cuid())
   userId    String
@@ -730,38 +959,52 @@ model AgentProfile {
 }
 
 model Lead {
-  id              String     @id @default(cuid())
-  status          LeadStatus @default(NEW_LEAD)
-  source          LeadSource @default(OTHER)
-  /** Buyer desk vs seller desk (buyer+seller treated as SELLER). */
-  intent          LeadIntent @default(BUYER)
-  score           Int        @default(0)
-  notes           String?    @db.Text
-  listingMls      String?
-  customerId      String?
-  assignedAgentId String?
-  /** Tenant boundary for team / solo agent CRM. */
-  organizationId  String?
-  /** Future workspace tenant key (Stage 3B — nullable until backfill). */
-  workspaceId     String?
-  landingPageId   String?
-  utmSource       String?
-  utmMedium       String?
-  utmCampaign     String?
-  utmContent      String?
-  adCampaignId    String?
-  /** CASL-style consent to be contacted by a Houzzat agent about this request. */
+  id               String      @id @default(cuid())
+  status           LeadStatus  @default(NEW_LEAD)
+  source           LeadSource  @default(OTHER)
+  /**
+   * Buyer desk vs seller desk (buyer+seller treated as SELLER).
+   */
+  intent           LeadIntent  @default(BUYER)
+  score            Int         @default(0)
+  notes            String?     @db.Text
+  listingMls       String?
+  customerId       String?
+  assignedAgentId  String?
+  /**
+   * Tenant boundary for team / solo agent CRM.
+   */
+  organizationId   String?
+  /**
+   * Future workspace tenant key (Stage 3B — nullable until backfill).
+   */
+  workspaceId      String?
+  landingPageId    String?
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  utmContent       String?
+  adCampaignId     String?
+  /**
+   * CASL-style consent to be contacted by a Houzzat agent about this request.
+   */
   contactConsentAt DateTime?
-  /** When agent first moved pipeline NEW_LEAD → ATTEMPTED_CONTACT (response SLA). */
+  /**
+   * When agent first moved pipeline NEW_LEAD → ATTEMPTED_CONTACT (response SLA).
+   */
   firstRespondedAt DateTime?
-  /** When pipeline status last changed (banner date). */
-  statusChangedAt  DateTime   @default(now())
-  /** Agent-set inquiry classification (Viewing / Home Value / etc.). */
+  /**
+   * When pipeline status last changed (banner date).
+   */
+  statusChangedAt  DateTime    @default(now())
+  /**
+   * Agent-set inquiry classification (Viewing / Home Value / etc.).
+   */
   inquiryTag       InquiryTag?
   lostReason       String?
   winReason        String?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
   customer      User?          @relation("CustomerLeads", fields: [customerId], references: [id], onDelete: SetNull)
   assignedAgent User?          @relation("AssignedLeads", fields: [assignedAgentId], references: [id], onDelete: SetNull)
@@ -788,10 +1031,14 @@ model Lead {
   @@index([adCampaignId])
 }
 
-/** CRM routing config — legacy singleton (id = "default") or per-workspace row. */
+/**
+ * CRM routing config — legacy singleton (id = "default") or per-workspace row.
+ */
 model CrmRoutingSettings {
   id               String               @id @default("default")
-  /** Future per-workspace routing (Stage 3H — nullable until backfill). */
+  /**
+   * Future per-workspace routing (Stage 3H — nullable until backfill).
+   */
   workspaceId      String?              @unique
   listingAgentId   String?
   sellerAssignMode SellerLeadAssignMode @default(LISTING_AGENT)
@@ -810,7 +1057,9 @@ model CrmRoutingWeight {
   agentId       String
   lane          LeadRoutingLane
   percent       Int             @default(0)
-  /** Deficit round-robin counter for fair weighted assignment. */
+  /**
+   * Deficit round-robin counter for fair weighted assignment.
+   */
   assignedCount Int             @default(0)
 
   settings CrmRoutingSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
@@ -823,7 +1072,9 @@ model CrmRoutingWeight {
 model AgentTask {
   id             String          @id @default(cuid())
   organizationId String
-  /** Future workspace tenant key (Stage 3B — nullable until backfill). */
+  /**
+   * Future workspace tenant key (Stage 3B — nullable until backfill).
+   */
   workspaceId    String?
   leadId         String?
   assigneeId     String
@@ -852,7 +1103,9 @@ model AgentTask {
 model LeadNote {
   id             String           @id @default(cuid())
   organizationId String
-  /** Future workspace tenant key (Stage 3B — nullable until backfill). */
+  /**
+   * Future workspace tenant key (Stage 3B — nullable until backfill).
+   */
   workspaceId    String?
   leadId         String
   authorId       String
@@ -875,30 +1128,42 @@ model LeadNote {
 }
 
 model LeadEmailLog {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
-  /** Future workspace tenant key (Stage 3B — nullable until backfill). */
+  /**
+   * Future workspace tenant key (Stage 3B — nullable until backfill).
+   */
   workspaceId    String?
   leadId         String
-  /** Null for automated system emails (alerts, welcome, etc.). */
+  /**
+   * Null for automated system emails (alerts, welcome, etc.).
+   */
   sentById       String?
   toEmail        String
   subject        String
-  /** Plain-text body (and short CRM snippet). */
-  body           String   @db.Text
-  /** Full HTML for Preview Email in CRM. */
-  htmlBody       String?  @db.Text
-  /** Template key: price_reduction, just_listed, shortlist, custom, … */
-  kind           String   @default("custom")
+  /**
+   * Plain-text body (and short CRM snippet).
+   */
+  body           String    @db.Text
+  /**
+   * Full HTML for Preview Email in CRM.
+   */
+  htmlBody       String?   @db.Text
+  /**
+   * Template key: price_reduction, just_listed, shortlist, custom, …
+   */
+  kind           String    @default("custom")
   mlsNumber      String?
-  /** Resend email id — used to match open/click webhooks. */
-  providerId     String?  @unique
+  /**
+   * Resend email id — used to match open/click webhooks.
+   */
+  providerId     String?   @unique
   openedAt       DateTime?
-  openCount      Int      @default(0)
+  openCount      Int       @default(0)
   clickedAt      DateTime?
-  clickCount     Int      @default(0)
+  clickCount     Int       @default(0)
   lastClickedUrl String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace    Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
@@ -927,23 +1192,23 @@ model LeadActivity {
 }
 
 model Appointment {
-  id          String            @id @default(cuid())
-  type        AppointmentType
-  status      AppointmentStatus @default(REQUESTED)
-  startsAt    DateTime?
-  endsAt      DateTime?
-  listingMls  String?
-  notes       String?           @db.Text
-  focusNotes  String?           @db.Text
+  id           String            @id @default(cuid())
+  type         AppointmentType
+  status       AppointmentStatus @default(REQUESTED)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  listingMls   String?
+  notes        String?           @db.Text
+  focusNotes   String?           @db.Text
   videoJoinUrl String?
-  customerId  String?
-  agentId     String?
-  leadId      String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  customerId   String?
+  agentId      String?
+  leadId       String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
-  customer User? @relation("CustomerAppointments", fields: [customerId], references: [id], onDelete: SetNull)
-  agent    User? @relation("AgentAppointments", fields: [agentId], references: [id], onDelete: SetNull)
+  customer        User?            @relation("CustomerAppointments", fields: [customerId], references: [id], onDelete: SetNull)
+  agent           User?            @relation("AgentAppointments", fields: [agentId], references: [id], onDelete: SetNull)
   lead            Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
   viewingTourStop ViewingTourStop?
 
@@ -952,21 +1217,21 @@ model Appointment {
 }
 
 model LandingPage {
-  id             String   @id @default(cuid())
-  slug           String   @unique
-  title          String
-  headline       String?
-  subtitle       String?  @db.Text
-  ctaLabel       String?  @default("Get started")
-  ctaHref        String?  @default("/home-valuation")
-  heroImageUrl   String?
-  areaFocus      String?
-  utmCampaign    String?
-  content        Json?
-  published      Boolean  @default(false)
-  ownerAgentId   String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  title        String
+  headline     String?
+  subtitle     String?  @db.Text
+  ctaLabel     String?  @default("Get started")
+  ctaHref      String?  @default("/home-valuation")
+  heroImageUrl String?
+  areaFocus    String?
+  utmCampaign  String?
+  content      Json?
+  published    Boolean  @default(false)
+  ownerAgentId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   ownerAgent User?  @relation(fields: [ownerAgentId], references: [id], onDelete: SetNull)
   leads      Lead[]
@@ -988,6 +1253,170 @@ model ConsentEvent {
   @@index([userId, kind])
   @@index([leadId])
   @@index([email])
+}
+
+/**
+ * Stage 6.11G.2 — platform catalog of real-estate organizations / MLS systems
+ * (Canada boards/associations + U.S. associations/MLS/data systems).
+ * NOT tenant entitlement. NOT listing inventory. NOT credentials.
+ * Distinct from legacy CRM `Organization`.
+ * Referenced by WorkspaceRealEstateOrganizationMembership (G.3) and
+ * WorkspaceDataConnection (G.4) — membership ≠ data connection ≠ listing rights.
+ * Future provider integrations stay in separate models (not columns here).
+ * Future org↔org links (association uses MLS X) via join table — no parentId yet.
+ */
+model RealEstateOrganization {
+  id            String                              @id @default(cuid())
+  name          String
+  /**
+   * URL-safe unique catalog key, e.g. ca-on-trreb
+   */
+  slug          String                              @unique
+  /**
+   * Common short label (e.g. TRREB) when useful for search/display.
+   */
+  shortName     String?
+  /**
+   * ISO 3166-1 alpha-2 (CA | US for v1).
+   */
+  countryCode   String
+  /**
+   * Subdivision code without country prefix (e.g. ON, NY, DC).
+   * Null when organization is national / multi-region.
+   */
+  regionCode    String?
+  kind          RealEstateOrganizationKind
+  supportStatus RealEstateOrganizationSupportStatus @default(UNSUPPORTED)
+  officialUrl   String?
+  active        Boolean                             @default(true)
+  createdAt     DateTime                            @default(now())
+  updatedAt     DateTime                            @updatedAt
+
+  workspaceMemberships WorkspaceRealEstateOrganizationMembership[]
+  dataConnections      WorkspaceDataConnection[]
+  /**
+   * Stage 6.11G.5 — primary listing provenance pointer (nullable until attributed).
+   */
+  listings             Listing[]
+  listingSources       ListingSource[]
+
+  @@index([countryCode, regionCode, active])
+  @@index([countryCode, kind, active])
+  @@index([supportStatus, active])
+  @@index([countryCode, name])
+  @@index([shortName])
+}
+
+/**
+ * Stage 6.11G.3 / G.3A — Workspace ↔ RealEstateOrganization membership.
+ * "This Workspace is affiliated with / has selected this organization."
+ * MLS/listing access boundary is the Workspace (multi-board allowed).
+ * DOES NOT grant listing inventory, MLS credentials, or data-connection rights.
+ * Independent of WorkspaceTeamMember (public roster) and WorkspaceMember (SaaS seats).
+ * Team members do NOT require individual MLS membership rows.
+ * Future WorkspaceDataConnection(s) are siblings on Workspace — independently
+ * revocable; multiple ACTIVE connections may UNION into one listing universe.
+ * Enum prefix "Reo" = RealEstateOrganization (identifier length); model name is full.
+ */
+model WorkspaceRealEstateOrganizationMembership {
+  id                   String                       @id @default(cuid())
+  workspaceId          String
+  organizationId       String
+  /**
+   * Optional provider-neutral board/member/subscriber id metadata.
+   * Not credentials, authorization, feed connection, or listing entitlement.
+   */
+  membershipIdentifier String?
+  status               WorkspaceReoMembershipStatus @default(DECLARED)
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+
+  workspace    Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization RealEstateOrganization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  /**
+   * One membership row per workspace + organization (e.g. TRREB and LSTAR
+   * are two rows on the same Workspace).
+   */
+  @@unique([workspaceId, organizationId])
+  @@index([workspaceId, status])
+  @@index([organizationId, status])
+}
+
+/**
+ * Stage 6.11G.4 — Workspace authorized listing-data connection.
+ * AUTHORIZATION / integration config — not duplicate per-tenant listing ingestion.
+ * Membership ≠ this model. Even VERIFIED membership grants ZERO listing rights
+ * without an eligible ACTIVE connection + capabilities.
+ * Organization and provider are first-class and distinct (e.g. TRREB + proptx).
+ * No FK to membership — service layer requires matching membership; lifecycles
+ * remain independently revocable.
+ * No User / WorkspaceMember / WorkspaceTeamMember ownership FKs.
+ * Secrets: credentialRef only (opaque). Never apiKey/password/bearer/token columns.
+ * Shared warehouse compatible: connection authorizes provenance/use, not row ownership.
+ * Houzzat grandfathering later = explicit membership + connection (no implicit platform feed).
+ */
+model WorkspaceDataConnection {
+  id                           String                        @id @default(cuid())
+  workspaceId                  String
+  organizationId               String
+  /**
+   * Platform integration key (e.g. proptx). Not the board/MLS organization.
+   * Stable lowercase identifier — not a free-form display name.
+   */
+  providerKey                  String
+  status                       WorkspaceDataConnectionStatus @default(PENDING)
+  /**
+   * Opaque reference into future secure secret storage.
+   * NEVER a raw API key, bearer token, password, or client secret.
+   */
+  credentialRef                String?
+  /**
+   * Safe non-secret external account/subscriber/connection id at the provider.
+   */
+  externalConnectionIdentifier String?
+  lastVerifiedAt               DateTime?
+  /**
+   * Last successful authorized access or sync check (not every connection
+   * runs its own listing warehouse ingestion).
+   */
+  lastSuccessfulAccessAt       DateTime?
+  /**
+   * Short machine-readable failure code only — never raw provider payloads/secrets.
+   */
+  lastErrorCode                String?
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+
+  workspace    Workspace                           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization RealEstateOrganization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  capabilities WorkspaceDataConnectionCapability[]
+
+  /**
+   * One connection per workspace + organization + provider integration
+   * (TRREB/proptx and LSTAR/othervendor are distinct; same board may later
+   * add a second provider without redesign).
+   */
+  @@unique([workspaceId, organizationId, providerKey])
+  @@index([workspaceId, status])
+  @@index([organizationId, status])
+  @@index([providerKey, status])
+}
+
+/**
+ * Stage 6.11G.4 — granted capability on a WorkspaceDataConnection.
+ * Row presence = authorized for that capability. Delete to revoke.
+ */
+model WorkspaceDataConnectionCapability {
+  id           String                                @id @default(cuid())
+  connectionId String
+  capability   WorkspaceDataConnectionCapabilityKind
+  createdAt    DateTime                              @default(now())
+
+  connection WorkspaceDataConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, capability])
+  @@index([capability])
 }
 
 model MlsSyncCursor {
@@ -1025,19 +1454,27 @@ enum ViewingTourStatus {
   ARCHIVED
 }
 
-/** Ordered viewing itinerary — consumer Route Planner or HouzzatPRO Viewings Planner. */
+/**
+ * Ordered viewing itinerary — consumer Route Planner or HouzzatPRO Viewings Planner.
+ */
 model ViewingTour {
   id                  String            @id @default(cuid())
-  /** Consumer tours: customer user. PRO tours: lead.customerId when present. */
+  /**
+   * Consumer tours: customer user. PRO tours: lead.customerId when present.
+   */
   userId              String?
-  /** HouzzatPRO Viewings Planner — every saved plan belongs to a lead. */
+  /**
+   * HouzzatPRO Viewings Planner — every saved plan belongs to a lead.
+   */
   leadId              String?
   agentId             String?
   workspaceId         String?
   viewingDate         DateTime?
   name                String            @default("Route Planner")
   status              ViewingTourStatus @default(DRAFT)
-  /** At most one active draft tour is used as the client bucket. */
+  /**
+   * At most one active draft tour is used as the client bucket.
+   */
   isActive            Boolean           @default(true)
   startAddress        String?
   startLat            Float?
@@ -1086,19 +1523,23 @@ model ViewingTourStop {
 }
 
 model SavedSearch {
-  id                String   @id @default(cuid())
-  userId            String
-  name              String
-  query             Json
-  emailAlerts       Boolean  @default(true)
-  smsAlerts         Boolean  @default(false)
-  /** When true, homepage rails are filtered to this search (one per user). */
-  isHomepageActive  Boolean  @default(false)
-  /** Latest buyer-profile search used for alerts (one per user). Others are secondary. */
-  isPrimary         Boolean  @default(false)
-  lastAlertedAt     DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id               String    @id @default(cuid())
+  userId           String
+  name             String
+  query            Json
+  emailAlerts      Boolean   @default(true)
+  smsAlerts        Boolean   @default(false)
+  /**
+   * When true, homepage rails are filtered to this search (one per user).
+   */
+  isHomepageActive Boolean   @default(false)
+  /**
+   * Latest buyer-profile search used for alerts (one per user). Others are secondary.
+   */
+  isPrimary        Boolean   @default(false)
+  lastAlertedAt    DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1134,16 +1575,16 @@ model ListingNote {
 }
 
 model PropertyMonitor {
-  id                   String   @id @default(cuid())
+  id                   String              @id @default(cuid())
   userId               String
   mlsNumber            String
-  emailAlerts          Boolean  @default(true)
+  emailAlerts          Boolean             @default(true)
   lastKnownPrice       Int
   lastKnownStatus      ListingStatus
   lastKnownOwnerStatus OwnerListingStatus?
   lastAlertedAt        DateTime?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1158,20 +1599,20 @@ enum AreaMonitorTransaction {
 }
 
 model AreaMonitor {
-  id              String                 @id @default(cuid())
-  userId          String
-  name            String
-  city            String
-  community       String?
-  transactionType AreaMonitorTransaction @default(SALE)
-  segment         ListingSegment?
-  notifyNew       Boolean                @default(true)
-  notifySold      Boolean                @default(true)
-  emailAlerts     Boolean                @default(true)
-  lastAlertedAt   DateTime?
+  id                String                 @id @default(cuid())
+  userId            String
+  name              String
+  city              String
+  community         String?
+  transactionType   AreaMonitorTransaction @default(SALE)
+  segment           ListingSegment?
+  notifyNew         Boolean                @default(true)
+  notifySold        Boolean                @default(true)
+  emailAlerts       Boolean                @default(true)
+  lastAlertedAt     DateTime?
   lastSeenListingAt DateTime?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   alerts CustomerAlert[]
@@ -1267,69 +1708,94 @@ enum ListingSegment {
 }
 
 model Listing {
-  id               String                  @id @default(cuid())
-  mlsNumber        String                  @unique
-  /** PropTx / RESO ListingKey — used to join Media / History / OpenHouse. */
-  listingKey       String?                 @unique
-  status           ListingStatus           @default(ACTIVE)
-  segment          ListingSegment          @default(RESIDENTIAL)
-  transactionType  ListingTransactionType  @default(SALE)
-  dataSource       String                  @default("mock")
-  propertyType     PropertyType            @default(DETACHED)
-  listPrice        Int
-  soldPrice        Int?
-  beds             Float
-  baths            Float
-  sqft             Int?
-  parkingSpaces    Int                     @default(0)
-  yearBuilt        Int?
-  taxes            Int?
-  maintenanceFee   Int?
-  addressLine      String
-  unitNumber       String?
-  city             String
-  community        String?
-  postalCode       String?
-  province         String                  @default("ON")
-  lat              Float
-  lng              Float
-  description      String                  @db.Text
-  brokerageName    String
+  id                       String                 @id @default(cuid())
+  mlsNumber                String                 @unique
+  /**
+   * PropTx / RESO ListingKey — used to join Media / History / OpenHouse.
+   * For current PropTx MLS rows this is also the provider-native listing key
+   * until composite identity replaces global mlsNumber uniqueness (later stage).
+   */
+  listingKey               String?                @unique
+  status                   ListingStatus          @default(ACTIVE)
+  segment                  ListingSegment         @default(RESIDENTIAL)
+  transactionType          ListingTransactionType @default(SALE)
+  /**
+   * Inventory channel: mls | fsbo | mock | manual — NOT board/organization identity.
+   */
+  dataSource               String                 @default("mock")
+  propertyType             PropertyType           @default(DETACHED)
+  listPrice                Int
+  soldPrice                Int?
+  beds                     Float
+  baths                    Float
+  sqft                     Int?
+  parkingSpaces            Int                    @default(0)
+  yearBuilt                Int?
+  taxes                    Int?
+  maintenanceFee           Int?
+  addressLine              String
+  unitNumber               String?
+  city                     String
+  community                String?
+  postalCode               String?
+  province                 String                 @default("ON")
+  lat                      Float
+  lng                      Float
+  description              String                 @db.Text
+  brokerageName            String
   /**
    * PropTx / RESO extended fact sheet (lot, basement, heat, garage, features, etc.).
    * Shape: ListingFacts in src/lib/listings/facts.ts
    */
-  facts            Json?
-  /** PropTx VOW / RESO: ListingContractDate */
-  listedAt         DateTime
-  soldAt           DateTime?
-  /** PropTx VOW / RESO: ModificationTimestamp */
-  updatedAtMls     DateTime
-  daysOnMarket     Int                     @default(0)
+  facts                    Json?
+  /**
+   * PropTx VOW / RESO: ListingContractDate
+   */
+  listedAt                 DateTime
+  soldAt                   DateTime?
+  /**
+   * PropTx VOW / RESO: ModificationTimestamp
+   */
+  updatedAtMls             DateTime
+  daysOnMarket             Int                    @default(0)
   /**
    * Last successful PropTx address-history enrich (sibling MLS cycles).
    * Used to skip repeat pulls within TTL.
    */
   addressHistoryEnrichedAt DateTime?
-  isMock           Boolean                 @default(true)
-  ownerUserId      String?
-  ownerStatus      OwnerListingStatus?
-  listedUntil      DateTime?
-  ownerReviewedAt  DateTime?
-  ownerReviewedById String?
-  ownerReviewNote  String?
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
+  isMock                   Boolean                @default(true)
+  /**
+   * Stage 6.11G.5 / G.5A — DENORMALIZED primary provenance for hot filters.
+   * Canonical lineage is ListingSource (isPrimary=true). When a primary source
+   * exists, these must match that row's organizationId / providerKey.
+   * NOT a Workspace FK. NOT WorkspaceDataConnection ownership.
+   * FSBO/mock/manual stay null (no MLS ListingSource).
+   */
+  organizationId           String?
+  /**
+   * Stage 6.11G.5 / G.5A — DENORMALIZED primary providerKey (see organizationId).
+   */
+  providerKey              String?
+  ownerUserId              String?
+  ownerStatus              OwnerListingStatus?
+  listedUntil              DateTime?
+  ownerReviewedAt          DateTime?
+  ownerReviewedById        String?
+  ownerReviewNote          String?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
 
-  owner          User?                 @relation("OwnerListings", fields: [ownerUserId], references: [id], onDelete: SetNull)
-  reviewedBy     User?                 @relation("OwnerListingReviewer", fields: [ownerReviewedById], references: [id], onDelete: SetNull)
-  media          ListingMedia[]
-  openHouses     OpenHouse[]
-  history        ListingHistory[]
-  rooms          ListingRoom[]
-  titleParties   OwnerTitleParty[]
-  ownerOrders    OwnerListingOrder[]
-  ownerConsents  OwnerListingConsent[]
+  owner         User?                   @relation("OwnerListings", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  reviewedBy    User?                   @relation("OwnerListingReviewer", fields: [ownerReviewedById], references: [id], onDelete: SetNull)
+  organization  RealEstateOrganization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  sources       ListingSource[]
+  media         ListingMedia[]
+  openHouses    OpenHouse[]
+  history       ListingHistory[]
+  rooms         ListingRoom[]
+  titleParties  OwnerTitleParty[]
+  ownerOrders   OwnerListingOrder[]
+  ownerConsents OwnerListingConsent[]
 
   @@index([status, city, listPrice])
   @@index([status, community, listPrice])
@@ -1341,23 +1807,82 @@ model Listing {
   @@index([listedAt])
   @@index([addressLine])
   @@index([updatedAtMls])
+  @@index([organizationId, status])
+  @@index([organizationId, mlsNumber])
+  @@index([providerKey, listingKey])
+}
+
+/**
+ * Stage 6.11G.5 / G.5A — listing source lineage (supports multi-source overlap).
+ * Canonical provenance for a Listing. Not Workspace-owned.
+ * Not a WorkspaceDataConnection FK — connection authorizes use via
+ * organizationId + providerKey match against ACTIVE connections.
+ * Identity (no ambiguous NULLs):
+ * UNIQUE(listingId, providerKey, providerListingKey)
+ * providerListingKey is REQUIRED (PropTx = RESO ListingKey, not MlsNumber).
+ * Primary contract:
+ * At most one isPrimary=true per listingId (partial unique index in SQL).
+ * Listing.organizationId / Listing.providerKey are DENORMALIZED copies of the
+ * primary ListingSource only — ListingSource remains canonical lineage.
+ * Do not insert preview/demo inventory. Do not auto-merge across boards.
+ * feedKey intentionally omitted (IDX/VOW-style access classes are not source identity).
+ */
+model ListingSource {
+  id                 String   @id @default(cuid())
+  listingId          String
+  /**
+   * Null until RealEstateOrganization catalog row exists / attribution runs.
+   */
+  organizationId     String?
+  /**
+   * Integration/data-provider key (e.g. proptx). Distinct from organization.
+   */
+  providerKey        String
+  /**
+   * Durable provider-native listing id. REQUIRED.
+   * PropTx/AMPRE: RESO ListingKey (mapListingKey) — NOT ListingId/MlsNumber.
+   */
+  providerListingKey String
+  /**
+   * MLS® / board display number as reported by this source.
+   * PropTx: ListingId / MlsNumber (mapMlsNumber). Not globally unique alone.
+   */
+  sourceMlsNumber    String?
+  /**
+   * Exactly one primary source per Listing (enforced by partial unique index).
+   * Primary drives denormalized Listing.organizationId + Listing.providerKey.
+   */
+  isPrimary          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  listing      Listing                 @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  organization RealEstateOrganization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@unique([listingId, providerKey, providerListingKey])
+  @@index([listingId, isPrimary])
+  @@index([organizationId, sourceMlsNumber])
+  @@index([providerKey, providerListingKey])
+  @@index([organizationId, providerKey])
 }
 
 model ListingRoom {
-  id          String   @id @default(cuid())
-  listingId   String
-  /** PropTx / RESO RoomKey */
-  roomKey     String   @unique
-  roomType    String
-  roomLevel   String?
-  dimensions  String?
-  length      Float?
-  width       Float?
-  units       String?
-  features    String?
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  listingId  String
+  /**
+   * PropTx / RESO RoomKey
+   */
+  roomKey    String   @unique
+  roomType   String
+  roomLevel  String?
+  dimensions String?
+  length     Float?
+  width      Float?
+  units      String?
+  features   String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
@@ -1378,23 +1903,23 @@ model OwnerTitleParty {
 }
 
 model OwnerListingOrder {
-  id                     String             @id @default(cuid())
-  userId                 String
-  listingId              String
-  baseAmount             Int
-  addOns                 Json
-  discountAmount         Int                @default(0)
-  totalAmount            Int
-  currency               String             @default("CAD")
-  paymentStatus          OwnerPaymentStatus @default(PENDING)
+  id                      String             @id @default(cuid())
+  userId                  String
+  listingId               String
+  baseAmount              Int
+  addOns                  Json
+  discountAmount          Int                @default(0)
+  totalAmount             Int
+  currency                String             @default("CAD")
+  paymentStatus           OwnerPaymentStatus @default(PENDING)
   stripeCheckoutSessionId String?
-  createdByAdminId       String?
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
+  createdByAdminId        String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
 
-  user    User     @relation("OwnerOrders", fields: [userId], references: [id], onDelete: Cascade)
-  listing Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  admin   User?    @relation("OwnerOrderAdmin", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  user    User    @relation("OwnerOrders", fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  admin   User?   @relation("OwnerOrderAdmin", fields: [createdByAdminId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([listingId])
@@ -1402,12 +1927,12 @@ model OwnerListingOrder {
 }
 
 model OwnerListingConsent {
-  id        String           @id @default(cuid())
-  userId    String
-  listingId String
-  kind      OwnerConsentKind
-  version   String
-  acceptedAt DateTime        @default(now())
+  id         String           @id @default(cuid())
+  userId     String
+  listingId  String
+  kind       OwnerConsentKind
+  version    String
+  acceptedAt DateTime         @default(now())
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
@@ -1417,11 +1942,11 @@ model OwnerListingConsent {
 }
 
 model ListingMedia {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   listingId String
   url       String
-  sortOrder Int      @default(0)
-  isPrimary Boolean  @default(false)
+  sortOrder Int     @default(0)
+  isPrimary Boolean @default(false)
 
   listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
@@ -1442,14 +1967,14 @@ model OpenHouse {
 }
 
 model ListingHistory {
-  id          String    @id @default(cuid())
-  listingId   String
-  event       String
+  id            String    @id @default(cuid())
+  listingId     String
+  event         String
   /**
    * List / close price for this history event.
    * For Price Change events: the new list price (PropTx post-change ListPrice).
    */
-  price       Int?
+  price         Int?
   /**
    * Prior list price before a Price Change event.
    * PropTx VOW: previous ListPrice / HistoryTransactional prior value.
@@ -1460,20 +1985,22 @@ model ListingHistory {
    * Contract date for this history cycle.
    * PropTx VOW / RESO: ListingContractDate (or HistoryTransactional equivalent).
    */
-  contractDate DateTime
+  contractDate  DateTime
   /**
    * Last MLS update for this cycle (status/price change close-out).
    * PropTx VOW / RESO: ModificationTimestamp.
    */
   lastUpdatedAt DateTime?
-  /** Prior cycle MLS® / board ID when different from the current listing. */
-  externalMls String?
+  /**
+   * Prior cycle MLS® / board ID when different from the current listing.
+   */
+  externalMls   String?
   /**
    * public = IDX-visible (usually the current cycle).
    * restricted = VOW / client-only (past sold, expired, leased details).
    */
-  visibility  String    @default("restricted")
-  note        String?
+  visibility    String    @default("restricted")
+  note          String?
 
   listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
@@ -1524,14 +2051,14 @@ model GeoPlace {
 }
 
 model AiContentCache {
-  id         String   @id @default(cuid())
-  entityType String
-  entityId   String
+  id          String   @id @default(cuid())
+  entityType  String
+  entityId    String
   contentHash String
-  body       String   @db.Text
-  model      String   @default("template")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  body        String   @db.Text
+  model       String   @default("template")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([entityType, entityId])
   @@index([contentHash])
@@ -1579,13 +2106,13 @@ model AdCampaign {
   utmMedium       String?
   utmCampaign     String?
   utmContent      String?
-  audienceHints  Json?
+  audienceHints   Json?
   complianceNotes String[]         @default([])
   assignedAgentId String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  assignedAgent User?         @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  assignedAgent User?        @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
   creatives     AdCreative[]
   leads         Lead[]
 
@@ -1594,17 +2121,17 @@ model AdCampaign {
 }
 
 model AdCreative {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   campaignId   String
   platform     AdPlatform
   headlines    String[]
   primaryTexts String[]
   descriptions String[]
-  imageUrls    String[]  @default([])
+  imageUrls    String[]   @default([])
   imagePresets Json?
   exportBundle Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   campaign AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
@@ -1643,17 +2170,17 @@ model CmaReport {
    * Stage 5.12A — Advanced CMA tenancy.
    * Nullable for legacy rows. NEW Advanced CMA requires workspaceId in app logic.
    */
-  workspaceId           String?
-  leadId                String?
-  subjectMls            String?
-  subjectSnapshot       Json?
-  selectedComps         Json?
-  analysis              Json?
-  recommendedListPrice  Int?
-  recommendationNote    String?  @db.Text
-  narrative             String?  @db.Text
-  updatedAt             DateTime @updatedAt
-  revokedAt             DateTime?
+  workspaceId          String?
+  leadId               String?
+  subjectMls           String?
+  subjectSnapshot      Json?
+  selectedComps        Json?
+  analysis             Json?
+  recommendedListPrice Int?
+  recommendationNote   String?   @db.Text
+  narrative            String?   @db.Text
+  updatedAt            DateTime  @updatedAt
+  revokedAt            DateTime?
 
   agent     User       @relation(fields: [agentId], references: [id], onDelete: Cascade)
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
@@ -1701,19 +2228,19 @@ model ReferralPartner {
 }
 
 model ReferralHandoff {
-  id          String        @id @default(cuid())
-  token       String        @unique @default(cuid())
-  partnerId   String
-  agentId     String
-  leadId      String?
-  customerName String?
+  id            String        @id @default(cuid())
+  token         String        @unique @default(cuid())
+  partnerId     String
+  agentId       String
+  leadId        String?
+  customerName  String?
   customerEmail String?
-  listingMls  String?
-  notes       String?       @db.Text
-  status      HandoffStatus @default(SENT)
-  viewedAt    DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  listingMls    String?
+  notes         String?       @db.Text
+  status        HandoffStatus @default(SENT)
+  viewedAt      DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   partner ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   agent   User            @relation("AgentHandoffs", fields: [agentId], references: [id], onDelete: Cascade)
@@ -1722,19 +2249,23 @@ model ReferralHandoff {
   @@index([agentId, createdAt])
 }
 
-/** Anonymous or identified browser identity for site analytics. */
+/**
+ * Anonymous or identified browser identity for site analytics.
+ */
 model SiteVisitor {
-  id           String    @id @default(cuid())
-  /** Stable key in localStorage (not PII). */
-  visitorKey   String    @unique
-  userId       String?
-  firstSeenAt  DateTime  @default(now())
-  lastSeenAt   DateTime  @default(now())
-  userAgent    String?   @db.Text
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id          String   @id @default(cuid())
+  /**
+   * Stable key in localStorage (not PII).
+   */
+  visitorKey  String   @unique
+  userId      String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  userAgent   String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  user     User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user     User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   sessions SiteSession[]
   events   ActivityEvent[]
 
@@ -1742,7 +2273,9 @@ model SiteVisitor {
   @@index([lastSeenAt])
 }
 
-/** One browsing session (tab lifetime / sessionStorage key). */
+/**
+ * One browsing session (tab lifetime / sessionStorage key).
+ */
 model SiteSession {
   id              String    @id @default(cuid())
   sessionKey      String    @unique
@@ -1787,7 +2320,9 @@ enum ActivityEventType {
   OTHER
 }
 
-/** Full journey timeline events (visitors + signed-in users). */
+/**
+ * Full journey timeline events (visitors + signed-in users).
+ */
 model ActivityEvent {
   id          String            @id @default(cuid())
   type        ActivityEventType
@@ -1816,7 +2351,9 @@ model ActivityEvent {
   @@index([mlsNumber, createdAt])
 }
 
-/** Admin action audit trail. */
+/**
+ * Admin action audit trail.
+ */
 model AuditLog {
   id         String   @id @default(cuid())
   actorId    String?
@@ -1841,22 +2378,22 @@ model AuditLog {
  */
 
 model PlatformOperator {
-  id                   String                 @id @default(cuid())
-  userId               String                 @unique
-  role                 PlatformOperatorRole   @default(MASTER_ADMIN)
-  status               PlatformOperatorStatus @default(ACTIVE)
-  createdByOperatorId  String?
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
+  id                  String                 @id @default(cuid())
+  userId              String                 @unique
+  role                PlatformOperatorRole   @default(MASTER_ADMIN)
+  status              PlatformOperatorStatus @default(ACTIVE)
+  createdByOperatorId String?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
-  user                 User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
-  createdByOperator    PlatformOperator?      @relation("PlatformOperatorCreatedBy", fields: [createdByOperatorId], references: [id], onDelete: SetNull)
-  createdOperators     PlatformOperator[]     @relation("PlatformOperatorCreatedBy")
-  ownedProspects       PlatformProspect[]     @relation("ProspectOwner")
-  prospectActivities   PlatformProspectActivity[]
-  offersCreated        CommercialOffer[]      @relation("OfferCreator")
-  statusEvents         WorkspaceStatusEvent[]
-  auditEvents          PlatformAuditEvent[]
+  user                    User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdByOperator       PlatformOperator?          @relation("PlatformOperatorCreatedBy", fields: [createdByOperatorId], references: [id], onDelete: SetNull)
+  createdOperators        PlatformOperator[]         @relation("PlatformOperatorCreatedBy")
+  ownedProspects          PlatformProspect[]         @relation("ProspectOwner")
+  prospectActivities      PlatformProspectActivity[]
+  offersCreated           CommercialOffer[]          @relation("OfferCreator")
+  statusEvents            WorkspaceStatusEvent[]
+  auditEvents             PlatformAuditEvent[]
   ownerActivationsCreated WorkspaceOwnerActivation[] @relation("OwnerActivationCreator")
 
   @@index([status, role])
@@ -1866,7 +2403,9 @@ model PlatformProspect {
   id                String         @id @default(cuid())
   businessName      String?
   contactName       String
-  /** Normalized lowercase email — globally unique; reopen LOST rather than duplicate. */
+  /**
+   * Normalized lowercase email — globally unique; reopen LOST rather than duplicate.
+   */
   email             String         @unique
   phone             String?
   brokerageName     String?
@@ -1880,7 +2419,7 @@ model PlatformProspect {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
-  ownerOperator    PlatformOperator? @relation("ProspectOwner", fields: [ownerOperatorId], references: [id], onDelete: SetNull)
+  ownerOperator    PlatformOperator?          @relation("ProspectOwner", fields: [ownerOperatorId], references: [id], onDelete: SetNull)
   activities       PlatformProspectActivity[]
   offers           CommercialOffer[]
   billingCustomers BillingCustomer[]
@@ -1927,7 +2466,9 @@ model CommercialOffer {
   viewedAt                       DateTime?
   acceptedAt                     DateTime?
   acceptedByEmail                String?
-  /** Set only after provisioning creates the workspace (unique when present). */
+  /**
+   * Set only after provisioning creates the workspace (unique when present).
+   */
   workspaceId                    String?        @unique
   createdAt                      DateTime       @default(now())
   updatedAt                      DateTime       @updatedAt
@@ -1966,7 +2507,9 @@ model CommercialOfferLineItem {
 model CommercialOfferToken {
   id           String    @id @default(cuid())
   offerId      String
-  /** SHA-256 of raw token — never store raw token. */
+  /**
+   * SHA-256 of raw token — never store raw token.
+   */
   tokenHash    String    @unique
   expiresAt    DateTime
   revokedAt    DateTime?
@@ -2018,12 +2561,16 @@ model BillingCustomer {
 model Subscription {
   id                      String             @id @default(cuid())
   workspaceId             String?
-  /** Originating accepted offer (unique when set). Null for grandfathered/internal. */
+  /**
+   * Originating accepted offer (unique when set). Null for grandfathered/internal.
+   */
   offerId                 String?            @unique
   billingCustomerId       String
   source                  SubscriptionSource
   status                  SubscriptionStatus
-  /** Required logically for STRIPE SaaS; null for GRANDFATHERED/INTERNAL. */
+  /**
+   * Required logically for STRIPE SaaS; null for GRANDFATHERED/INTERNAL.
+   */
   planCode                PlanCode?
   entitlementProfileCode  String?
   billingCadence          BillingCadence?
@@ -2199,24 +2746,26 @@ model WorkspaceEmailIdentity {
  * is enforced in service logic (revoke prior PENDING/SENT on resend).
  */
 model WorkspaceOwnerActivation {
-  id                    String                         @id @default(cuid())
-  workspaceId           String
-  userId                String
-  /** SHA-256 hex of raw token — never store raw token. */
-  tokenHash             String                         @unique
-  status                WorkspaceOwnerActivationStatus @default(PENDING)
-  expiresAt             DateTime
-  sentAt                DateTime?
-  usedAt                DateTime?
-  revokedAt             DateTime?
-  createdByType         PlatformAuditActorType         @default(OPERATOR)
-  createdByOperatorId   String?
-  createdAt             DateTime                       @default(now())
-  updatedAt             DateTime                       @updatedAt
+  id                  String                         @id @default(cuid())
+  workspaceId         String
+  userId              String
+  /**
+   * SHA-256 hex of raw token — never store raw token.
+   */
+  tokenHash           String                         @unique
+  status              WorkspaceOwnerActivationStatus @default(PENDING)
+  expiresAt           DateTime
+  sentAt              DateTime?
+  usedAt              DateTime?
+  revokedAt           DateTime?
+  createdByType       PlatformAuditActorType         @default(OPERATOR)
+  createdByOperatorId String?
+  createdAt           DateTime                       @default(now())
+  updatedAt           DateTime                       @updatedAt
 
-  workspace           Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdByOperator   PlatformOperator? @relation("OwnerActivationCreator", fields: [createdByOperatorId], references: [id], onDelete: SetNull)
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdByOperator PlatformOperator? @relation("OwnerActivationCreator", fields: [createdByOperatorId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, userId, status])
   @@index([userId, status])
@@ -2228,16 +2777,18 @@ model WorkspaceOwnerActivation {
  * templateThemeStatus stays NOT_STARTED until owner template design decision.
  */
 model WorkspaceOnboardingState {
-  workspaceId           String                         @id
-  accountActivatedAt    DateTime?
-  businessProfileStatus WorkspaceOnboardingStepStatus  @default(NOT_STARTED)
-  brandingStatus        WorkspaceOnboardingStepStatus  @default(NOT_STARTED)
-  /** Stage 6.11D — professional + brokerage identity step (does not lock website). */
+  workspaceId                String                        @id
+  accountActivatedAt         DateTime?
+  businessProfileStatus      WorkspaceOnboardingStepStatus @default(NOT_STARTED)
+  brandingStatus             WorkspaceOnboardingStepStatus @default(NOT_STARTED)
+  /**
+   * Stage 6.11D — professional + brokerage identity step (does not lock website).
+   */
   professionalIdentityStatus WorkspaceOnboardingStepStatus @default(NOT_STARTED)
-  templateThemeStatus   WorkspaceOnboardingStepStatus  @default(NOT_STARTED)
-  emailIdentityStatus   WorkspaceOnboardingStepStatus  @default(NOT_STARTED)
-  completedAt           DateTime?
-  updatedAt             DateTime                       @updatedAt
+  templateThemeStatus        WorkspaceOnboardingStepStatus @default(NOT_STARTED)
+  emailIdentityStatus        WorkspaceOnboardingStepStatus @default(NOT_STARTED)
+  completedAt                DateTime?
+  updatedAt                  DateTime                      @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }

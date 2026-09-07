@@ -4,6 +4,7 @@ import { mixHexWithWhite } from "@/lib/tenancy/tenant-theme-tokens";
 import {
   AGENT_SIGNATURE_TEMPLATE_ID,
   DEFAULT_TEMPLATE_ID,
+  TEAM_SIGNATURE_TEMPLATE_ID,
   type ImplementedTemplateId,
 } from "@/lib/tenancy/templates";
 
@@ -37,6 +38,23 @@ export function TenantThemeStyle({
 }
 body{
 background:var(--as-surface);
+}
+`;
+  }
+  if (templateId === TEAM_SIGNATURE_TEMPLATE_ID) {
+    const surfaceSoft = mixHexWithWhite(colors.surface, 0.28);
+    const surfaceMuted = mixHexWithWhite(colors.primary, 0.94);
+    css += `
+:root{
+--ts-ink:${colors.primary};
+--ts-ink-deep:${colors.secondary};
+--ts-accent:${colors.accent};
+--ts-surface:${colors.surface};
+--ts-surface-soft:${surfaceSoft};
+--ts-surface-muted:${surfaceMuted};
+}
+body{
+background:var(--ts-surface);
 }
 `;
   }
