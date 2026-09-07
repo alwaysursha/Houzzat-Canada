@@ -5,7 +5,8 @@
  *
  * Neon HTTP-safe: no Prisma interactive transactions, no updateMany.
  * Leader: clear-then-hide / clear-then-delete (Restrict fail-closed).
- * photoUrl is never writable here — Stage 6.11E.5 owns R2 upload.
+ * photoUrl is never writable via generic create/update — Stage 6.11E.5
+ * dedicated upload/remove APIs own managed photo storage.
  */
 
 import { Prisma, type PrismaClient } from "@prisma/client";
@@ -16,6 +17,14 @@ import {
 } from "@/lib/platform/activation";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 import { TEAM_MEMBER_SORT_STEP } from "@/lib/tenancy/team-roster/limits";
+import {
+  BrandingStorageNotConfiguredError,
+  buildTeamMemberPhotoObjectKey,
+  deletePreviousManagedTeamMemberPhoto,
+  newTeamMemberPhotoAssetId,
+  putTeamMemberPhotoObject,
+  validateTeamMemberPhotoBytes,
+} from "@/lib/tenancy/team-roster/photo";
 import {
   assertTeamMemberPublishable,
   normalizeAboutText,
@@ -455,4 +464,93 @@ export async function reorderOwnerTeamMembers(
   }
 
   return listOwnerTeamMembers(input);
+}
+
+/**
+ * Stage 6.11E.5 — upload / replace Team member photo.
+ * photoUrl is only writable through this path (not generic create/update).
+ */
+export async function uploadOwnerTeamMemberPhoto(
+  input: AuthInput & { memberId: string; file: File },
+) {
+  const { ctx, db } = await auth(input);
+  const member = await loadMemberOrThrow(db, ctx.workspaceId, input.memberId);
+  const previousUrl = member.photoUrl;
+
+  const buffer = await input.file.arrayBuffer();
+  const validated = validateTeamMemberPhotoBytes(buffer);
+  if ("code" in validated) {
+    throw new OwnerActivationError(
+      validated.message,
+      validated.code,
+      400,
+    );
+  }
+
+  const uniqueId = newTeamMemberPhotoAssetId();
+  const objectKey = buildTeamMemberPhotoObjectKey({
+    workspaceId: ctx.workspaceId,
+    memberId: member.id,
+    uniqueId,
+    ext: validated.ext,
+  });
+
+  const put = await putTeamMemberPhotoObject({
+    objectKey,
+    bytes: validated.bytes,
+    contentType: validated.mime,
+  }).catch((error: unknown) => {
+    if (error instanceof BrandingStorageNotConfiguredError) {
+      throw new OwnerActivationError(
+        error.message,
+        error.code,
+        error.status,
+      );
+    }
+    throw error;
+  });
+
+  const updated = await db.workspaceTeamMember.update({
+    where: { id: member.id },
+    data: { photoUrl: put.publicUrl },
+  });
+
+  // Best-effort delete previous managed asset after successful persist.
+  await deletePreviousManagedTeamMemberPhoto({
+    url: previousUrl,
+    workspaceId: ctx.workspaceId,
+    memberId: member.id,
+  });
+
+  const profile = await db.workspaceTeamProfile.findUniqueOrThrow({
+    where: { workspaceId: ctx.workspaceId },
+  });
+  return toMemberDto(updated, profile.leaderMemberId);
+}
+
+/**
+ * Stage 6.11E.5 — clear Team member photoUrl + best-effort managed object delete.
+ */
+export async function removeOwnerTeamMemberPhoto(
+  input: AuthInput & { memberId: string },
+) {
+  const { ctx, db } = await auth(input);
+  const member = await loadMemberOrThrow(db, ctx.workspaceId, input.memberId);
+  const previousUrl = member.photoUrl;
+
+  const updated = await db.workspaceTeamMember.update({
+    where: { id: member.id },
+    data: { photoUrl: null },
+  });
+
+  await deletePreviousManagedTeamMemberPhoto({
+    url: previousUrl,
+    workspaceId: ctx.workspaceId,
+    memberId: member.id,
+  });
+
+  const profile = await db.workspaceTeamProfile.findUniqueOrThrow({
+    where: { workspaceId: ctx.workspaceId },
+  });
+  return toMemberDto(updated, profile.leaderMemberId);
 }

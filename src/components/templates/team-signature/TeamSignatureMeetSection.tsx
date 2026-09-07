@@ -120,8 +120,8 @@ function supportingGridClass(count: number): string {
 }
 
 /**
- * Stage 6.11E.2A — Meet The Team: featured leader + supporting roster.
- * Scales for 1 / 2 / 4 / 8 / 15+ members. Preview-only members.
+ * Stage 6.11E.2A / E.7 — Meet The Team: featured leader + supporting roster.
+ * Scales for 1 / 2 / 4 / 8 / 15+ members. Live published roster or preview demo.
  */
 export function TeamSignatureMeetSection({
   view,

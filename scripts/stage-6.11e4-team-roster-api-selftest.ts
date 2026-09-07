@@ -190,9 +190,15 @@ async function main() {
     const resolve = read(
       "src/lib/tenancy/templates/resolve-team-signature-view.ts",
     );
-    assert.ok(resolve.includes("members: null") || resolve.includes("members:"));
-    assert.ok(!resolve.includes("workspaceTeamMember"));
-    assert.ok(!resolve.includes("WorkspaceTeamMember"));
+    assert.ok(resolve.includes("brand.teamRoster") || resolve.includes("teamRoster"));
+    assert.ok(
+      read("src/lib/tenancy/resolve-marketing-tenancy.ts").includes(
+        "resolvePublicTeamRosterForWorkspace",
+      ),
+    );
+    assert.ok(
+      read("src/lib/tenancy/team-roster/public.ts").includes("isVisible: true"),
+    );
     const home = read(
       "src/components/templates/team-signature/TeamSignatureHome.tsx",
     );
@@ -202,7 +208,7 @@ async function main() {
         "src/components/templates/agent-signature/AgentSignatureHome.tsx",
       ).includes("team-roster"),
     );
-    console.log("[6] public Team Signature not wired to roster... PASS");
+    console.log("[6] public Team Signature roster wired (E.7)... PASS");
   }
 
   {

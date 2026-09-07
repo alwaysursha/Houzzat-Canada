@@ -14,9 +14,20 @@ export {
   TEAM_SERVICE_AREA_MAX_LENGTH,
 } from "@/lib/tenancy/team-roster/limits";
 export {
+  buildTeamMemberPhotoObjectKey,
+  extractManagedTeamMemberPhotoObjectKey,
   extractTeamMemberPhotoObjectKeyFromUrl,
   isAcceptedTeamMemberPhotoUrl,
+  newTeamMemberPhotoAssetId,
+  TEAM_MEMBER_PHOTO_MAX_BYTES,
+  validateTeamMemberPhotoBytes,
 } from "@/lib/tenancy/team-roster/photo";
+export {
+  loadPublicTeamRosterPresentation,
+  resolvePublicTeamRosterForWorkspace,
+  type PublicTeamMemberPresentation,
+  type PublicTeamRosterPresentation,
+} from "@/lib/tenancy/team-roster/public";
 export {
   assertTeamMemberPublishable,
   normalizeAboutText,
@@ -35,11 +46,13 @@ export {
   hideOwnerTeamMember,
   listOwnerTeamMembers,
   removeOwnerTeamMember,
+  removeOwnerTeamMemberPhoto,
   reorderOwnerTeamMembers,
   setOwnerTeamLeader,
   showOwnerTeamMember,
   updateOwnerTeamMember,
   updateOwnerTeamProfile,
+  uploadOwnerTeamMemberPhoto,
   type PublicTeamMemberDto,
   type PublicTeamProfileDto,
 } from "@/lib/tenancy/team-roster/manage";

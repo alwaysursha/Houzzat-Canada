@@ -65,6 +65,7 @@ function baseBrand(
     templateId: TEAM_SIGNATURE_TEMPLATE_ID,
     agent: null,
     professionalIdentity: EMPTY_PUBLIC_PROFESSIONAL_IDENTITY,
+    teamRoster: null,
     templatePreview: null,
     ...overrides,
   };
@@ -263,6 +264,46 @@ async function main() {
     assert.equal(live.email, "team@example.com");
     assert.equal(live.members, null);
     assert.equal(live.testimonials, null);
+
+    const liveWithRoster = resolveTeamSignatureView(
+      baseBrand({
+        teamRoster: {
+          aboutText: "We are a local team.",
+          serviceAreas: ["Toronto", "Mississauga"],
+          leaderMemberId: "m1",
+          members: [
+            {
+              id: "m1",
+              name: "Alex Lead",
+              designation: "Broker",
+              photoUrl: "/uploads/branding/x.jpg",
+              bio: "Bio",
+              cellPhone: "416-555-0001",
+              email: "alex@example.com",
+              isLeader: true,
+              sortOrder: 0,
+            },
+            {
+              id: "m2",
+              name: "Sam Agent",
+              designation: "Salesperson",
+              photoUrl: null,
+              bio: null,
+              cellPhone: null,
+              email: null,
+              isLeader: false,
+              sortOrder: 10,
+            },
+          ],
+        },
+      }),
+    );
+    assert.equal(liveWithRoster.members?.length, 2);
+    assert.equal(liveWithRoster.members?.[0]?.name, "Alex Lead");
+    assert.equal(liveWithRoster.members?.[0]?.isLeader, true);
+    assert.equal(liveWithRoster.serviceArea, "Toronto · Mississauga");
+    assert.deepEqual(liveWithRoster.markets, ["Toronto", "Mississauga"]);
+    assert.equal(liveWithRoster.testimonials, null);
 
     const demo = resolveTeamSignatureView(
       baseBrand({

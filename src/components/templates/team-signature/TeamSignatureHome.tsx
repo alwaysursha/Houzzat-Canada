@@ -14,8 +14,8 @@ import type { MarketingPresentationBrand } from "@/lib/tenancy/marketing-present
 import { resolveTeamSignatureView } from "@/lib/tenancy/templates/resolve-team-signature-view";
 
 /**
- * Stage 6.11E.2 — Team Signature Style #1 homepage.
- * Demo roster/testimonials only when template preview is active.
+ * Stage 6.11E.2 / E.7 — Team Signature Style #1 homepage.
+ * Live published roster when present; demo roster only in template preview.
  */
 export function TeamSignatureHome({
   brand,

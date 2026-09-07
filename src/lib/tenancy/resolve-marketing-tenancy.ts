@@ -19,8 +19,10 @@ import {
   type RequestTenancySuccess,
 } from "@/lib/tenancy/resolve-request-tenancy";
 import { resolveActiveTemplatePreviewForWorkspace } from "@/lib/tenancy/template-preview";
+import { resolvePublicTeamRosterForWorkspace } from "@/lib/tenancy/team-roster/public";
 import {
   DEFAULT_TEMPLATE_ID,
+  isTeamSignatureTemplateId,
   resolveTemplateIdFromThemeId,
   resolveThemePalette,
   type ImplementedTemplateId,
@@ -87,6 +89,7 @@ export function legacyMarketingChromeBrand(
         logoUrl: null,
       },
     },
+    teamRoster: null,
     templatePreview: null,
   };
 }
@@ -185,19 +188,22 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
   }
 
   // Stage 6.11D — all templates receive canonical professional identity.
-  const professionalIdentity = await resolvePublicProfessionalIdentity(
-    tenancy.workspaceId,
-  );
-
-  const agent =
+  // Stage 6.11E.7 — Team roster only when Team Signature is active.
+  const [professionalIdentity, agent, teamRoster] = await Promise.all([
+    resolvePublicProfessionalIdentity(tenancy.workspaceId),
     templateId !== DEFAULT_TEMPLATE_ID
-      ? await resolvePublicAgentIdentity(tenancy.workspaceId)
-      : null;
+      ? resolvePublicAgentIdentity(tenancy.workspaceId)
+      : Promise.resolve(null),
+    isTeamSignatureTemplateId(templateId)
+      ? resolvePublicTeamRosterForWorkspace(tenancy.workspaceId)
+      : Promise.resolve(null),
+  ]);
 
   return toMarketingPresentationBrand(presentationTenancy, canonicalOrigin, {
     templateId,
     agent,
     professionalIdentity,
+    teamRoster,
     templatePreview: activePreview
       ? {
           active: true,

@@ -80,6 +80,7 @@ function baseBrand(
         logoUrl: LOGO,
       },
     },
+    teamRoster: null,
     templatePreview: null,
     ...overrides,
   };

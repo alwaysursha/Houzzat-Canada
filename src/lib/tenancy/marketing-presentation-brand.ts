@@ -9,6 +9,7 @@ import {
 } from "@/lib/tenancy/professional-identity/types";
 import type { PublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import type { RequestTenancySuccess } from "@/lib/tenancy/resolve-request-tenancy";
+import type { PublicTeamRosterPresentation } from "@/lib/tenancy/team-roster/public";
 import {
   DEFAULT_TEMPLATE_ID,
   type ImplementedTemplateId,
@@ -41,6 +42,10 @@ export type MarketingPresentationBrand = {
    * Not duplicated per template; presentation may vary.
    */
   professionalIdentity: PublicProfessionalIdentity;
+  /**
+   * Stage 6.11E.7 — published Team roster for Team Signature (null when unused).
+   */
+  teamRoster: PublicTeamRosterPresentation | null;
   /** Stage 6.11B.1 — OWNER secure preview overlay (null when not previewing). */
   templatePreview: {
     active: true;
@@ -57,6 +62,7 @@ export function toMarketingPresentationBrand(
     templateId?: ImplementedTemplateId;
     agent?: PublicAgentIdentity | null;
     professionalIdentity?: PublicProfessionalIdentity;
+    teamRoster?: PublicTeamRosterPresentation | null;
     templatePreview?: MarketingPresentationBrand["templatePreview"];
   },
 ): MarketingPresentationBrand {
@@ -83,6 +89,7 @@ export function toMarketingPresentationBrand(
     agent: extras?.agent ?? null,
     professionalIdentity:
       extras?.professionalIdentity ?? EMPTY_PUBLIC_PROFESSIONAL_IDENTITY,
+    teamRoster: extras?.teamRoster ?? null,
     templatePreview: extras?.templatePreview ?? null,
   };
 }

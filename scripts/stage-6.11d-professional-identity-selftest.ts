@@ -271,6 +271,7 @@ function baseBrand(
           "https://branding-assets.houzzatpro.com/workspaces/ws_a/branding/brokerage-logo/y.png",
       },
     },
+    teamRoster: null,
     templatePreview: null,
     ...overrides,
   };

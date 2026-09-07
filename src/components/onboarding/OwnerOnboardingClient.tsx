@@ -6,6 +6,7 @@ import {
   ProfessionalIdentitySection,
   type ProfessionalIdentityFields,
 } from "@/components/onboarding/ProfessionalIdentitySection";
+import { TeamRosterSection } from "@/components/onboarding/TeamRosterSection";
 import { buildTenantThemeCss } from "@/lib/tenancy/brand-theme-css";
 
 type ThemeOption = {
@@ -474,6 +475,8 @@ export function OwnerOnboardingClient() {
           void load();
         }}
       />
+
+      <TeamRosterSection workspaceId={item.workspaceId} />
 
       <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-6">
         <div>

@@ -1,6 +1,7 @@
 /**
- * Stage 6.11E.2 — Team Signature presentation view (demo preview vs live tenant).
- * Team is the primary identity. No invented roster on live tenants.
+ * Stage 6.11E.2 / E.7 — Team Signature presentation view (demo preview vs live tenant).
+ * Live roster comes from published WorkspaceTeamMember rows (E.7).
+ * Demo roster/testimonials ONLY when templatePreview is active.
  */
 import type { MarketingPresentationBrand } from "@/lib/tenancy/marketing-presentation-brand";
 import type { PublicBrokerageIdentity } from "@/lib/tenancy/professional-identity";
@@ -36,8 +37,8 @@ export type TeamSignatureView = {
   markets: string[];
   brokerage: PublicBrokerageIdentity;
   /**
-   * Preview-only roster placeholders. Always null for live tenants
-   * until a real public roster model ships.
+   * Demo preview roster, or live published members.
+   * Null when live tenant has zero visible members (empty Meet shell).
    */
   members: readonly TeamSignatureMemberPlaceholder[] | null;
   /** Demo-only sample testimonials; always null for live tenants. */
@@ -77,10 +78,14 @@ export function resolveTeamSignatureView(
   }
 
   const professional = brand.professionalIdentity;
-  const markets =
+  const roster = brand.teamRoster;
+  const rosterMarkets = roster?.serviceAreas ?? [];
+  const agentMarkets =
     brand.agent?.markets && brand.agent.markets.length > 0
       ? brand.agent.markets
       : [];
+  const markets =
+    rosterMarkets.length > 0 ? rosterMarkets : agentMarkets;
 
   const brokerage: PublicBrokerageIdentity = {
     name:
@@ -93,6 +98,20 @@ export function resolveTeamSignatureView(
     logoUrl:
       professional.brokerage.logoUrl ?? brand.brokerageLogoUrl ?? null,
   };
+
+  const liveMembers =
+    roster && roster.members.length > 0
+      ? roster.members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          designation: m.designation,
+          isLeader: m.isLeader,
+          cellPhone: m.cellPhone,
+          email: m.email,
+          photoUrl: m.photoUrl,
+          bio: m.bio,
+        }))
+      : null;
 
   return {
     isDemoPreview: false,
@@ -107,7 +126,7 @@ export function resolveTeamSignatureView(
     email: brand.contact.email,
     markets,
     brokerage,
-    members: null,
+    members: liveMembers,
     testimonials: null,
   };
 }
