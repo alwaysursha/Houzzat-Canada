@@ -321,6 +321,115 @@ export type EnsurePropTxListingProvenanceInput = {
 };
 
 /**
+ * Classification for historical backfill dry-run / write planning.
+ * Safe categories may be mutated; conflict categories must be skipped.
+ */
+export const PROPTX_PROVENANCE_BACKFILL_CLASSIFICATIONS = [
+  "already_canonical",
+  "needs_full_backfill",
+  "needs_mirror_repair",
+  "needs_source_repair",
+  "conflict_mirror_organization",
+  "conflict_mirror_provider",
+  "conflict_primary_source",
+  "conflict_source_fields",
+  "conflict_listing_key_identity",
+  "invalid_listing_key",
+] as const;
+
+export type PropTxProvenanceBackfillClassification =
+  (typeof PROPTX_PROVENANCE_BACKFILL_CLASSIFICATIONS)[number];
+
+export const PROPTX_PROVENANCE_BACKFILL_WRITABLE: ReadonlySet<PropTxProvenanceBackfillClassification> =
+  new Set([
+    "already_canonical",
+    "needs_full_backfill",
+    "needs_mirror_repair",
+    "needs_source_repair",
+  ]);
+
+export function isPropTxProvenanceBackfillWritable(
+  classification: PropTxProvenanceBackfillClassification,
+): boolean {
+  return PROPTX_PROVENANCE_BACKFILL_WRITABLE.has(classification);
+}
+
+/**
+ * Classify current Listing + ListingSource state against canonical PropTx/TRREB
+ * provenance without mutating. Used by G.8C dry-run and write planning.
+ */
+export function classifyPropTxListingProvenance(
+  provenance: PropTxListingProvenance,
+  input: {
+    listingKey: string | null | undefined;
+    mlsNumber: string;
+    organizationId: string | null;
+    providerKey: string | null;
+    sources: ListingSourceProvenanceRow[];
+  },
+): PropTxProvenanceBackfillClassification {
+  const rawKey =
+    typeof input.listingKey === "string" ? input.listingKey.trim() : "";
+  if (!rawKey) return "invalid_listing_key";
+
+  const sourceMlsNumber = input.mlsNumber.trim();
+  const mirrorsCanonical =
+    input.organizationId === provenance.organizationId &&
+    input.providerKey === provenance.providerKey;
+  const mirrorsNull =
+    input.organizationId == null && input.providerKey == null;
+
+  if (
+    input.organizationId != null &&
+    input.organizationId !== provenance.organizationId
+  ) {
+    return "conflict_mirror_organization";
+  }
+  if (
+    input.providerKey != null &&
+    input.providerKey !== provenance.providerKey
+  ) {
+    return "conflict_mirror_provider";
+  }
+
+  const exactCanonical = input.sources.find((s) =>
+    isExactCanonicalSource(s, provenance, rawKey, sourceMlsNumber),
+  );
+
+  for (const source of input.sources) {
+    if (sourceConflictsWithCanonical(source, provenance, rawKey, sourceMlsNumber)) {
+      return "conflict_source_fields";
+    }
+  }
+
+  for (const source of input.sources) {
+    if (
+      source.providerKey === provenance.providerKey &&
+      source.providerListingKey !== rawKey
+    ) {
+      return "conflict_listing_key_identity";
+    }
+  }
+
+  const conflictingPrimary = input.sources.find((s) => {
+    if (!s.isPrimary) return false;
+    if (exactCanonical && s.id === exactCanonical.id) return false;
+    return true;
+  });
+  if (conflictingPrimary) return "conflict_primary_source";
+
+  if (exactCanonical && mirrorsCanonical) return "already_canonical";
+  if (exactCanonical && !mirrorsCanonical) return "needs_mirror_repair";
+  if (!exactCanonical && mirrorsCanonical) return "needs_source_repair";
+  if (!exactCanonical && mirrorsNull) return "needs_full_backfill";
+
+  // Partial mirrors (one side null) with no source — treat as full backfill
+  // after compatibility checks above (null sides are compatible).
+  if (!exactCanonical) return "needs_full_backfill";
+  return "needs_mirror_repair";
+}
+
+/**
  * Ensure canonical PRIMARY ListingSource + Listing mirrors for a PropTx listing.
  * Idempotent / self-healing for null↔canonical partial states. Never overwrites conflicts.
  */

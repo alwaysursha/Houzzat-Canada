@@ -120,6 +120,8 @@
     "stage-6.11g7c-authoritative-host-resolver:selftest": "node --import tsx scripts/stage-6.11g7c-authoritative-host-resolver-selftest.ts",
     "stage-6.11g7d-create-houzzat-trreb-authority": "node --import tsx scripts/stage-6.11g7d-create-houzzat-trreb-authority.ts",
     "stage-6.11g8b-proptx-ingestion-provenance:selftest": "node --import tsx scripts/stage-6.11g8b-proptx-ingestion-provenance-selftest.ts",
+    "stage-6.11g8c-trreb-provenance-backfill": "node --import tsx scripts/stage-6.11g8c-trreb-provenance-backfill.ts",
+    "stage-6.11g8c-trreb-provenance-backfill:selftest": "node --import tsx scripts/stage-6.11g8c-trreb-provenance-backfill-selftest.ts",
     "workspace:grandfather-houzzat": "node --import tsx scripts/grandfather-houzzat-workspace.ts",
     "platform:provision-master-admin": "node --import tsx scripts/provision-platform-master-admin.ts",
     "platform-host-pre-cutover:selftest": "node --import tsx scripts/platform-host-pre-cutover-selftest.ts",
