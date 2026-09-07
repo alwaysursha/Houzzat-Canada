@@ -3,6 +3,12 @@
  *
  * MLS property search for native Properties module.
  * Reuses getListingProvider().search() — same canonical listings as web /agent/search.
+ *
+ * Stage 6.11G.10B2: intentionally OUTSIDE request-boundary entitlement wiring.
+ * Mobile API traffic arrives on the platform bootstrap host (app.houzzatpro.com),
+ * not an authoritative tenant hostname. JWT workspaceId is membership authz only —
+ * NOT MLS listing authority. Do not invent tenant entitlement from mobile workspace
+ * selection. Wire in a later stage with a trustworthy tenant-host mapping.
  */
 
 import { NextResponse } from "next/server";

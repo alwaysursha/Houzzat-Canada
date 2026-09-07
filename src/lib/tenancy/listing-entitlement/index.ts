@@ -54,3 +54,9 @@ export {
   type PrismaAuthorityWhereResult,
   type TypesenseAuthorityFilterResult,
 } from "./search-authority-filters";
+
+export {
+  emptyListingEntitlementSnapshot,
+  resolveListingEntitlementContextForRequest,
+  type RequestListingEntitlementContext,
+} from "./resolve-for-request";

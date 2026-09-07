@@ -196,6 +196,7 @@
     "stage-6.11g9b-typesense-provenance:selftest": "node --import tsx scripts/stage-6.11g9b-typesense-provenance-selftest.ts",
     "stage-6.11g10a-listing-entitlement:selftest": "node --import tsx scripts/stage-6.11g10a-listing-entitlement-selftest.ts",
     "stage-6.11g10b1-search-entitlement:selftest": "node --import tsx scripts/stage-6.11g10b1-search-entitlement-selftest.ts",
+    "stage-6.11g10b2-request-entitlement:selftest": "node --import tsx scripts/stage-6.11g10b2-request-entitlement-selftest.ts",
     "poi:sync": "node --import tsx scripts/poi-sync.ts",
     "roles:migrate": "node --import tsx scripts/migrate-roles.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",

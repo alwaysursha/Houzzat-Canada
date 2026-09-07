@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { PropertyType } from "@prisma/client";
 import { getListingProvider } from "@/lib/listings/provider";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
+import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
 
 export async function GET(request: Request) {
   const gated = await mlsClientGate();
@@ -9,6 +10,8 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const provider = getListingProvider();
+  const { entitlement } =
+    await resolveListingEntitlementContextForRequest(request);
   const citiesParam = searchParams.get("cities");
   const cities = citiesParam
     ? citiesParam
@@ -43,6 +46,7 @@ export async function GET(request: Request) {
     maxPrice: searchParams.get("maxPrice")
       ? Number(searchParams.get("maxPrice"))
       : undefined,
+    entitlement,
   });
   return NextResponse.json({ items, provider: provider.name });
 }

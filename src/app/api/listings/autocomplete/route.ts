@@ -11,6 +11,7 @@ import {
 } from "@/lib/proptx/on-demand-lookup";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { resolveClientAccess } from "@/lib/account-access";
+import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
 
 export async function GET(request: Request) {
   const gated = await mlsClientGate();
@@ -42,12 +43,15 @@ export async function GET(request: Request) {
   const lng = lngRaw != null ? Number(lngRaw) : null;
 
   const provider = getListingProvider();
+  const { entitlement } =
+    await resolveListingEntitlementContextForRequest(request);
   let suggestions = await provider.autocomplete(q, {
     transactionType,
     empty,
     city: cityBias,
     lat: Number.isFinite(lat) ? lat : null,
     lng: Number.isFinite(lng) ? lng : null,
+    entitlement,
   });
 
   // Neon miss: kick off PropTx pull in the background so typing stays snappy.

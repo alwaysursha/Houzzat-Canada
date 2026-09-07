@@ -14,6 +14,7 @@ import {
   lookupAndUpsertOnDemand,
 } from "@/lib/proptx/on-demand-lookup";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
+import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
 import { hasClientAccess } from "@/lib/vow";
 
 /** True when a NextAuth / Auth.js session cookie may be present. */
@@ -44,6 +45,9 @@ export async function GET(request: Request) {
     dataSource: dataSourceParam,
   });
   if (gated) return gated;
+
+  const { entitlement } =
+    await resolveListingEntitlementContextForRequest(request);
 
   const provider = getListingProvider();
   const segmentParam = searchParams.get("segment");
@@ -151,6 +155,9 @@ export async function GET(request: Request) {
       if (s === "price") return "price_asc" as const;
       return undefined;
     })() as "newest" | "price_asc" | "price_desc" | undefined,
+    // G.10B2: server-resolved hostname entitlement (flag OFF → no visibility change).
+    // Never set entitlementFilteringEnabled from the request.
+    entitlement,
   };
 
   // IDX: start search immediately. Guests skip auth; signed-in access runs in parallel.
@@ -160,8 +167,11 @@ export async function GET(request: Request) {
     : Promise.resolve(false);
 
   let result: ListingSearchResult;
-  let isClient: boolean;
-  [result, isClient] = await Promise.all([searchPromise, accessPromise]);
+  const [searchResult, isClient] = await Promise.all([
+    searchPromise,
+    accessPromise,
+  ]);
+  result = searchResult;
 
   // Neon miss + MLS/address/street query → PropTx on-demand (skip when map/filters dominate)
   const lightFilters =

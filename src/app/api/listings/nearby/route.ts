@@ -11,6 +11,7 @@ import { getListingProvider } from "@/lib/listings/provider";
 import type { ListingCard } from "@/lib/listings/types";
 import { prisma } from "@/lib/prisma";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
+import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
 import { hasClientAccess } from "@/lib/vow";
 
 type Ranked = ListingCard & { distanceKm: number; inRadius: boolean };
@@ -96,6 +97,9 @@ export async function GET(request: Request) {
   const { region, browseCity } = resolveRegionFromCoords(lat, lng);
   const box = boundingBox(lat, lng, radiusKm);
   const provider = getListingProvider();
+  // G.10B2: resolve hostname entitlement once; reuse for all provider.search calls.
+  const { entitlement } =
+    await resolveListingEntitlementContextForRequest(request);
   const searchTransactionType: ListingTransactionType =
     status === "UNLISTED"
       ? "SALE"
@@ -110,6 +114,7 @@ export async function GET(request: Request) {
     segment: "RESIDENTIAL" as const,
     transactionType: searchTransactionType,
     sort: "newest" as const,
+    entitlement,
   };
 
   // Tight local box so older-but-close homes aren't dropped by "100 newest".
