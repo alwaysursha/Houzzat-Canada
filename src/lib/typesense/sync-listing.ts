@@ -90,6 +90,8 @@ export async function syncListingToTypesense(
         lng: true,
         facts: true,
         isMock: true,
+        organizationId: true,
+        providerKey: true,
         media: {
           select: { url: true, isPrimary: true, sortOrder: true },
           orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],

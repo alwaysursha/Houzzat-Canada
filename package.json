@@ -186,6 +186,8 @@
     "typesense:import": "node --import tsx scripts/typesense-import-listings.ts",
     "typesense:oh-fields": "node --import tsx scripts/typesense-ensure-open-house-fields.ts",
     "typesense:oh-backfill": "node --import tsx scripts/typesense-backfill-open-houses.ts",
+    "typesense:provenance-fields": "node --import tsx scripts/typesense-ensure-provenance-fields.ts",
+    "stage-6.11g9b-typesense-provenance:selftest": "node --import tsx scripts/stage-6.11g9b-typesense-provenance-selftest.ts",
     "poi:sync": "node --import tsx scripts/poi-sync.ts",
     "roles:migrate": "node --import tsx scripts/migrate-roles.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",

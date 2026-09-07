@@ -25,6 +25,10 @@ export type ListingForTypesense = {
   lat: number;
   lng: number;
   facts?: unknown;
+  /** Neon Listing.organizationId mirror — omit from Typesense when null/blank. */
+  organizationId?: string | null;
+  /** Neon Listing.providerKey mirror — omit from Typesense when null/blank. */
+  providerKey?: string | null;
   media: Array<{ url: string; isPrimary: boolean; sortOrder: number }>;
   /** Upcoming open houses (already filtered to endsAt >= now). */
   openHouses?: Array<{ startsAt: Date; endsAt: Date }>;
@@ -65,7 +69,30 @@ export type TypesenseListingDocument = {
   openHouseEndsAt: number[];
   /** Soonest upcoming start; 0 when none (excluded by filters). */
   nextOpenHouseStartsAt: number;
+  /** Board / MLS organization (cuid). Omitted when null/blank. */
+  organizationId?: string;
+  /** Data provider key (e.g. proptx). Omitted when null/blank. */
+  providerKey?: string;
+  /** Exact pair key `${organizationId}:${providerKey}` when both present. */
+  sourceAuthorityKey?: string;
 };
+
+/**
+ * Deterministic Typesense entitlement pair key.
+ * Returns undefined unless BOTH sides are non-null/nonblank after trim.
+ * No workspace, DB, or TRREB/proptx defaults.
+ */
+export function buildListingSourceAuthorityKey(
+  organizationId: string | null | undefined,
+  providerKey: string | null | undefined,
+): string | undefined {
+  const org =
+    typeof organizationId === "string" ? organizationId.trim() : "";
+  const provider =
+    typeof providerKey === "string" ? providerKey.trim() : "";
+  if (!org || !provider) return undefined;
+  return `${org}:${provider}`;
+}
 
 function toUnixSeconds(date: Date): number {
   return Math.floor(date.getTime() / 1000);
@@ -93,6 +120,17 @@ export function listingToTypesenseDocument(
     .slice(0, MAX_OPEN_HOUSES);
   const openHouseStartsAt = upcoming.map((oh) => toUnixSeconds(oh.startsAt));
   const openHouseEndsAt = upcoming.map((oh) => toUnixSeconds(oh.endsAt));
+
+  const organizationId =
+    typeof listing.organizationId === "string"
+      ? listing.organizationId.trim()
+      : "";
+  const providerKey =
+    typeof listing.providerKey === "string" ? listing.providerKey.trim() : "";
+  const sourceAuthorityKey = buildListingSourceAuthorityKey(
+    organizationId || null,
+    providerKey || null,
+  );
 
   const doc: TypesenseListingDocument = {
     id: listing.mlsNumber,
@@ -124,6 +162,11 @@ export function listingToTypesenseDocument(
   if (listing.sqft != null) doc.sqft = listing.sqft;
   if (listing.brokerageName) doc.brokerageName = listing.brokerageName;
   if (coverImageUrl) doc.coverImageUrl = coverImageUrl;
+
+  // Provenance: omit rather than empty/sentinel/TRREB defaults.
+  if (organizationId) doc.organizationId = organizationId;
+  if (providerKey) doc.providerKey = providerKey;
+  if (sourceAuthorityKey) doc.sourceAuthorityKey = sourceAuthorityKey;
 
   const facts = parseListingFacts(listing.facts);
   const bedsLabel = formatBedsPlusLabel(listing.beds, facts);

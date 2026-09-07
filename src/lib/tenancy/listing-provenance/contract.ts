@@ -66,13 +66,14 @@ export const PROPTX_PROVIDER_LISTING_KEY_FIELD = "ListingKey" as const;
 export const PROPTX_SOURCE_MLS_NUMBER_FIELD = "ListingId" as const;
 
 /**
- * Future Typesense fields (not indexed in G.5):
- * organizationId, providerKey, listingId (stable), sourceMlsNumber
+ * Future Typesense fields (G.9B mapper ready; schema ensure not applied to prod yet):
+ * organizationId, providerKey, sourceAuthorityKey, listingId (stable), sourceMlsNumber
  * Document id must eventually stop being bare mlsNumber.
  */
 export const FUTURE_TYPESENSE_PROVENANCE_FIELDS = [
   "organizationId",
   "providerKey",
+  "sourceAuthorityKey",
   "listingId",
   "sourceMlsNumber",
 ] as const;

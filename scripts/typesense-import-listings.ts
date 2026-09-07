@@ -80,6 +80,8 @@ async function main() {
         lat: true,
         lng: true,
         facts: true,
+        organizationId: true,
+        providerKey: true,
         media: {
           select: { url: true, isPrimary: true, sortOrder: true },
           orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
