@@ -3,7 +3,14 @@ import Link from "next/link";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { OpenHousePlanner } from "@/components/listings/OpenHousePlanner";
 import { getListingProvider } from "@/lib/listings/provider";
+import { resolveListingEntitlementContextForServerPage } from "@/lib/tenancy/listing-entitlement";
 import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
+
+/**
+ * Hostname-scoped MLS entitlement — must stay request-dynamic.
+ * Parent marketing layout already sets force-dynamic; reaffirm here.
+ */
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   return buildMarketingPageMetadata({
@@ -20,10 +27,16 @@ export default async function OpenHousesPage({
   searchParams: Promise<{ city?: string; community?: string }>;
 }) {
   const params = await searchParams;
+
+  // G.10B3A: trusted Host → G.7C/G.10A once. Do not force-enable G5.
+  const { entitlement } =
+    await resolveListingEntitlementContextForServerPage();
+
   const provider = getListingProvider();
   const items = await provider.openHouses({
     city: params.city,
     community: params.community,
+    entitlement,
   });
 
   const cities = [

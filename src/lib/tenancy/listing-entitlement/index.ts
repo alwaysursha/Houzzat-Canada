@@ -58,6 +58,8 @@ export {
 
 export {
   emptyListingEntitlementSnapshot,
+  resolveListingEntitlementContextForHostname,
   resolveListingEntitlementContextForRequest,
+  resolveListingEntitlementContextForServerPage,
   type RequestListingEntitlementContext,
 } from "./resolve-for-request";

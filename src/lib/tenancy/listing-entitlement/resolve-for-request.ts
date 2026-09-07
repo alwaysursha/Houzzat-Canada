@@ -8,6 +8,7 @@
  * Never invents Houzzat/global fallback.
  */
 
+import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 import {
   resolveListingEntitlementForHostname,
@@ -30,18 +31,19 @@ export type RequestListingEntitlementContext = {
   hostname: string | null;
 };
 
+type HostnameEntitlementOptions = Omit<
+  ResolveListingEntitlementForHostnameInput,
+  "hostname" | "requiredCapability"
+>;
+
 /**
- * Resolve listing entitlement once per HTTP request from the trusted Host.
- * Prisma/infra failures propagate (do not swallow into unentitled provider calls).
+ * Shared primitive: trusted hostname string → entitlement context.
+ * Used by API Request path and SSR server-page path.
  */
-export async function resolveListingEntitlementContextForRequest(
-  request: Request,
-  options?: Omit<
-    ResolveListingEntitlementForHostnameInput,
-    "hostname" | "requiredCapability"
-  >,
+export async function resolveListingEntitlementContextForHostname(
+  hostname: string | null,
+  options?: HostnameEntitlementOptions,
 ): Promise<RequestListingEntitlementContext> {
-  const hostname = extractTrustedRequestHostname(request);
   const resolution = await resolveListingEntitlementForHostname({
     hostname,
     hostDeps: options?.hostDeps,
@@ -65,4 +67,44 @@ export async function resolveListingEntitlementContextForRequest(
       authorities: [...resolution.entitlement.authorities],
     },
   };
+}
+
+/**
+ * Resolve listing entitlement once per HTTP request from the trusted Host.
+ * Prisma/infra failures propagate (do not swallow into unentitled provider calls).
+ */
+export async function resolveListingEntitlementContextForRequest(
+  request: Request,
+  options?: HostnameEntitlementOptions,
+): Promise<RequestListingEntitlementContext> {
+  const hostname = extractTrustedRequestHostname(request);
+  return resolveListingEntitlementContextForHostname(hostname, options);
+}
+
+/**
+ * Stage 6.11G.10B3A — RSC / marketing SSR path.
+ *
+ * Next.js `headers()` → synthetic Request → same trusted Host extraction as APIs.
+ * Missing Host → empty entitlement (never Houzzat default).
+ * Prisma/infra failures propagate (do not catch into unentitled MLS).
+ *
+ * Requires request-scoped rendering (marketing layout is `force-dynamic`).
+ */
+export async function resolveListingEntitlementContextForServerPage(
+  options?: HostnameEntitlementOptions,
+): Promise<RequestListingEntitlementContext> {
+  const request = await buildSyntheticRequestFromHeaders();
+  if (!request) {
+    return {
+      hostname: null,
+      resolution: {
+        ok: false,
+        reason: "missing_hostname",
+        hostname: null,
+        verifiedHostname: false,
+      },
+      entitlement: emptyListingEntitlementSnapshot(""),
+    };
+  }
+  return resolveListingEntitlementContextForRequest(request, options);
 }
