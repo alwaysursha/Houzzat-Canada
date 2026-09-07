@@ -290,9 +290,13 @@ async function main() {
     assert.ok(!places.includes("resolveListingEntitlementContextForRequest"));
     assert.ok(!places.includes("listing-entitlement"));
 
-    // Home rails still unwired
-    assert.ok(!homeRails.includes("resolveListingEntitlementContextForRequest"));
+    // Home rails wired in G.10B2H (same request helper; still no force-enable)
+    assert.ok(homeRails.includes("resolveListingEntitlementContextForRequest"));
     assert.ok(homeRails.includes("typesenseHomeRails"));
+    assert.ok(!homeRails.includes("entitlementFilteringEnabled: true"));
+    assert.ok(
+      !homeRails.includes('searchParams.get("entitlementFilteringEnabled")'),
+    );
 
     // Mobile explicitly outside G.10B2
     assert.ok(mobile.includes("OUTSIDE request-boundary entitlement"));

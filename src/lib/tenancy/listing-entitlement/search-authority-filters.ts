@@ -6,7 +6,7 @@
  * (and vice versa) in mixed-status queries.
  *
  * Production gate: G5_ENTITLEMENT_FILTERING_ENABLED (must stay false until
- * home-rails + request hostname wiring — G.10B2/B3).
+ * G.10B3 after home-rails enforcement is verified — G.10B2H).
  */
 
 import type { ListingStatus, Prisma } from "@prisma/client";
@@ -73,8 +73,14 @@ export function isListingEntitlementEnforcementEnabled(
   });
 }
 
-/** Home-rails Typesense path is outside G.10B1 — flag must stay OFF until wired. */
-export const G10B1_HOME_RAILS_OUTSIDE_ENTITLEMENT_ENFORCEMENT = true as const;
+/**
+ * Historical G.10B1 marker. G.10B2H wires home-rails entitlement (flag still OFF).
+ * Kept false so regressions detect accidental reversion to the unwired path.
+ */
+export const G10B1_HOME_RAILS_OUTSIDE_ENTITLEMENT_ENFORCEMENT = false as const;
+
+/** G.10B2H — home-rails Typesense + Neon fallback accept entitlement snapshots. */
+export const G10B2H_HOME_RAILS_ENTITLEMENT_WIRED = true as const;
 
 function authoritiesWithCapability(
   entitlement: WorkspaceListingEntitlement,

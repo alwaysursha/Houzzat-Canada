@@ -84,7 +84,7 @@ async function main() {
   // --- Flag compatibility + monotonic gate truth table ---
   {
     assert.equal(G5_ENTITLEMENT_FILTERING_ENABLED, false);
-    assert.equal(G10B1_HOME_RAILS_OUTSIDE_ENTITLEMENT_ENFORCEMENT, true);
+    assert.equal(G10B1_HOME_RAILS_OUTSIDE_ENTITLEMENT_ENFORCEMENT, false);
 
     // Pure helper truth table (does not flip production G5 constant).
     const truth: Array<{
@@ -422,11 +422,15 @@ async function main() {
   {
     const homeRails = read("src/app/api/listings/home-rails/route.ts");
     assert.ok(homeRails.includes("typesenseHomeRails"));
-    assert.ok(!homeRails.includes("entitlementFilteringEnabled"));
-    assert.ok(!homeRails.includes("resolveListingEntitlementForHostname"));
+    // G.10B2H wires entitlement; route must never force-enable from client/params.
+    assert.ok(!homeRails.includes("entitlementFilteringEnabled: true"));
+    assert.ok(
+      !homeRails.includes('searchParams.get("entitlementFilteringEnabled")'),
+    );
+    assert.ok(homeRails.includes("resolveListingEntitlementContextForRequest"));
 
     const searchTs = read("src/lib/typesense/search.ts");
-    assert.ok(searchTs.includes("G.10B1: NOT entitlement-wired"));
+    assert.ok(searchTs.includes("planTypesenseHomeRailsSearches"));
     assert.ok(searchTs.includes("buildEntitledTypesenseFilterBy"));
 
     const provider = read("src/lib/listings/provider.ts");
@@ -446,7 +450,7 @@ async function main() {
     const places = read("src/app/api/places/autocomplete/route.ts");
     assert.ok(!places.includes("listing-entitlement"));
 
-    console.log("[7] home-rails guard + no request wiring... PASS");
+    console.log("[7] home-rails wired + no client force-enable... PASS");
   }
 
   // --- ON path via buildEntitledTypesenseFilterBy ---

@@ -442,24 +442,67 @@ function openHouseFilterByEntitled(
   return composeTypesenseFilterWithAuthority(withOh, authority);
 }
 
-/**
- * One Typesense multi-search for homepage market rails (5 queries, 1 round-trip).
- * G.10B1: NOT entitlement-wired — production flag must stay OFF until G.10B2+.
- */
-export async function typesenseHomeRails(options: {
+export type HomeRailsRailKey =
+  | "newListings"
+  | "sold"
+  | "forLease"
+  | "commercial"
+  | "openHouses";
+
+export type HomeRailsSearchPlan = {
+  rail: HomeRailsRailKey;
+  /** empty → do not issue Typesense query for this rail (fail closed). */
+  kind: "empty" | "query";
+  filterBy?: string;
+  sortBy: string;
+  perPage: number;
+  rankNewest: boolean;
+  take: number;
+  /** Required capability for MLS authority on this rail (selftests / audits). */
+  requiredCapability: "ACTIVE_LISTINGS" | "SOLD" | "OPEN_HOUSES";
+};
+
+export type HomeRailsTypesenseOptions = {
   cities?: string[];
   limit?: number;
   minPrice?: number;
   maxPrice?: number;
   propertyTypes?: PropertyType[];
   communities?: string[];
-}): Promise<HomeRailsPayload | null> {
-  if (!typesenseFlagEnabled("TYPESENSE_SEARCH")) return null;
+  /** Server-resolved G.10A entitlement (G.10B2H). Never from the client. */
+  entitlement?: WorkspaceListingEntitlement;
+  /**
+   * Server-only force-enable for tests. Production route must omit this.
+   * Never force-enable from public request params.
+   */
+  entitlementFilteringEnabled?: boolean;
+};
 
+function emptyHomeRailsPayload(): HomeRailsPayload {
+  return {
+    newListings: [],
+    sold: [],
+    forLease: [],
+    commercial: [],
+    openHouses: [],
+  };
+}
+
+/**
+ * Pure planner for homepage multi-search rails.
+ * Each rail independently applies capability-scoped authority when enforcement ON.
+ * Flag OFF → identical product filters to pre-G.10B2H (no sourceAuthorityKey).
+ */
+export function planTypesenseHomeRailsSearches(
+  options: HomeRailsTypesenseOptions,
+): HomeRailsSearchPlan[] {
   const limit = Math.min(options.limit ?? 12, 24);
   const overFetch = Math.min(Math.max(limit * 3, 36), 72);
   const openHouseLimit = 80;
-  const collection = getTypesenseCollectionName();
+  const entitlementCtx = {
+    entitlement: options.entitlement,
+    entitlementFilteringEnabled: options.entitlementFilteringEnabled,
+  };
   const shared: Pick<
     ListingSearchParams,
     "cities" | "minPrice" | "maxPrice" | "propertyTypes" | "communities" | "sort"
@@ -472,63 +515,197 @@ export async function typesenseHomeRails(options: {
     sort: "newest",
   };
 
-  const specs: ListingSearchParams[] = [
+  const listingRails: Array<{
+    rail: Exclude<HomeRailsRailKey, "openHouses">;
+    params: ListingSearchParams;
+    rankNewest: boolean;
+    take: number;
+    requiredCapability: "ACTIVE_LISTINGS" | "SOLD";
+  }> = [
     {
-      ...shared,
-      status: "ACTIVE",
-      segment: "RESIDENTIAL",
-      transactionType: "SALE",
-      limit: overFetch,
+      rail: "newListings",
+      params: {
+        ...shared,
+        ...entitlementCtx,
+        status: "ACTIVE",
+        segment: "RESIDENTIAL",
+        transactionType: "SALE",
+        limit: overFetch,
+      },
+      rankNewest: true,
+      take: limit,
+      requiredCapability: "ACTIVE_LISTINGS",
     },
     {
-      ...shared,
-      status: "SOLD",
-      segment: "ALL",
-      transactionType: "SALE",
-      limit,
+      rail: "sold",
+      params: {
+        ...shared,
+        ...entitlementCtx,
+        status: "SOLD",
+        segment: "ALL",
+        transactionType: "SALE",
+        limit,
+      },
+      rankNewest: false,
+      take: limit,
+      requiredCapability: "SOLD",
     },
     {
-      ...shared,
-      status: "ACTIVE",
-      segment: "ALL",
-      transactionType: "LEASE",
-      limit: overFetch,
+      rail: "forLease",
+      params: {
+        ...shared,
+        ...entitlementCtx,
+        status: "ACTIVE",
+        segment: "ALL",
+        transactionType: "LEASE",
+        limit: overFetch,
+      },
+      rankNewest: true,
+      take: limit,
+      requiredCapability: "ACTIVE_LISTINGS",
     },
     {
-      ...shared,
-      status: "ACTIVE",
-      segment: "COMMERCIAL",
-      transactionType: "SALE",
-      limit: overFetch,
+      rail: "commercial",
+      params: {
+        ...shared,
+        ...entitlementCtx,
+        status: "ACTIVE",
+        segment: "COMMERCIAL",
+        transactionType: "SALE",
+        limit: overFetch,
+      },
+      rankNewest: true,
+      take: limit,
+      requiredCapability: "ACTIVE_LISTINGS",
     },
   ];
+
+  const plans: HomeRailsSearchPlan[] = [];
+
+  for (const rail of listingRails) {
+    const entitled = buildEntitledTypesenseFilterBy(rail.params);
+    if (entitled.kind === "empty") {
+      plans.push({
+        rail: rail.rail,
+        kind: "empty",
+        sortBy: buildSortBy(rail.params),
+        perPage: rail.params.limit ?? limit,
+        rankNewest: rail.rankNewest,
+        take: rail.take,
+        requiredCapability: rail.requiredCapability,
+      });
+      continue;
+    }
+    plans.push({
+      rail: rail.rail,
+      kind: "query",
+      filterBy: entitled.filterBy,
+      sortBy: buildSortBy(rail.params),
+      perPage: rail.params.limit ?? limit,
+      rankNewest: rail.rankNewest,
+      take: rail.take,
+      requiredCapability: rail.requiredCapability,
+    });
+  }
+
+  const ohEntitled = openHouseFilterByEntitled({
+    ...shared,
+    ...entitlementCtx,
+  });
+  if (ohEntitled.kind === "empty") {
+    plans.push({
+      rail: "openHouses",
+      kind: "empty",
+      sortBy: "nextOpenHouseStartsAt:asc",
+      perPage: openHouseLimit,
+      rankNewest: false,
+      take: openHouseLimit,
+      requiredCapability: "OPEN_HOUSES",
+    });
+  } else {
+    plans.push({
+      rail: "openHouses",
+      kind: "query",
+      filterBy: ohEntitled.filterBy,
+      sortBy: "nextOpenHouseStartsAt:asc",
+      perPage: openHouseLimit,
+      rankNewest: false,
+      take: openHouseLimit,
+      requiredCapability: "OPEN_HOUSES",
+    });
+  }
+
+  return plans;
+}
+
+/**
+ * Map Typesense multi-search result slots onto rails using stable plan metadata.
+ * Empty (unauthorized) rails consume no result index — prevents index-shift when
+ * a middle rail is omitted from the multi-search request.
+ */
+export function reassembleTypesenseHomeRailsResults<T>(
+  plans: readonly HomeRailsSearchPlan[],
+  results: ReadonlyArray<{ hits?: ReadonlyArray<T> }>,
+): {
+  byRail: Record<HomeRailsRailKey, T[]>;
+  consumedResultCount: number;
+} {
+  const byRail: Record<HomeRailsRailKey, T[]> = {
+    newListings: [],
+    sold: [],
+    forLease: [],
+    commercial: [],
+    openHouses: [],
+  };
+  let resultIndex = 0;
+  for (const plan of plans) {
+    if (plan.kind === "empty") {
+      byRail[plan.rail] = [];
+      continue;
+    }
+    const hits = results[resultIndex]?.hits ?? [];
+    resultIndex += 1;
+    byRail[plan.rail] = [...hits];
+  }
+  return { byRail, consumedResultCount: resultIndex };
+}
+
+/**
+ * One Typesense multi-search for homepage market rails (up to 5 queries).
+ * G.10B2H: each rail is independently capability-scoped when enforcement ON.
+ * Production flag remains OFF → identical filters to pre-wiring.
+ */
+export async function typesenseHomeRails(
+  options: HomeRailsTypesenseOptions,
+): Promise<HomeRailsPayload | null> {
+  if (!typesenseFlagEnabled("TYPESENSE_SEARCH")) return null;
+
+  const plans = planTypesenseHomeRailsSearches(options);
+  const collection = getTypesenseCollectionName();
+  const queryPlans = plans.filter(
+    (p): p is HomeRailsSearchPlan & { kind: "query"; filterBy: string } =>
+      p.kind === "query" && typeof p.filterBy === "string",
+  );
+
+  // All rails denied under enforcement → empty payload (never unfiltered query).
+  if (queryPlans.length === 0) {
+    return emptyHomeRailsPayload();
+  }
 
   try {
     const client = getTypesenseSearchClient();
     const result = await client.multiSearch.perform(
       {
-        searches: [
-          ...specs.map((params) => ({
-            collection,
-            q: "*",
-            query_by: "mlsNumber,addressLine,city",
-            filter_by: buildFilterBy(params),
-            sort_by: buildSortBy(params),
-            per_page: params.limit ?? limit,
-            page: 1,
-            num_typos: 0,
-          })),
-          {
-            collection,
-            q: "*",
-            query_by: "mlsNumber,addressLine,city",
-            filter_by: openHouseFilterBy(shared),
-            sort_by: "nextOpenHouseStartsAt:asc",
-            per_page: openHouseLimit,
-            page: 1,
-            num_typos: 0,
-          },
-        ],
+        searches: queryPlans.map((plan) => ({
+          collection,
+          q: "*",
+          query_by: "mlsNumber,addressLine,city",
+          filter_by: plan.filterBy,
+          sort_by: plan.sortBy,
+          per_page: plan.perPage,
+          page: 1,
+          num_typos: 0,
+        })),
       },
       {},
     );
@@ -537,21 +714,19 @@ export async function typesenseHomeRails(options: {
       hits?: Array<{ document: TypesenseListingDoc }>;
     }>;
 
-    const toItems = (index: number, rankNewest: boolean, take = limit) => {
-      const hits = results[index]?.hits ?? [];
-      const cards = hits.map((h) => docToCard(h.document));
-      return rankNewest
-        ? rankCardsByAddedAt(cards, take)
-        : cards.slice(0, take);
-    };
+    const { byRail } = reassembleTypesenseHomeRailsResults(plans, results);
 
-    const payload = {
-      newListings: toItems(0, true),
-      sold: toItems(1, false),
-      forLease: toItems(2, true),
-      commercial: toItems(3, true),
-      openHouses: toItems(4, false, openHouseLimit),
-    };
+    const payload = emptyHomeRailsPayload();
+    for (const plan of plans) {
+      if (plan.kind === "empty") {
+        payload[plan.rail] = [];
+        continue;
+      }
+      const cards = byRail[plan.rail].map((h) => docToCard(h.document));
+      payload[plan.rail] = plan.rankNewest
+        ? rankCardsByAddedAt(cards, plan.take)
+        : cards.slice(0, plan.take);
+    }
 
     const neonByMls = await loadNeonListingStatusesByMls(
       [

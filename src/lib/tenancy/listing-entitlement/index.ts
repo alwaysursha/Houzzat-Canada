@@ -46,6 +46,7 @@ export {
   buildTypesenseListingAuthorityFilter,
   composeTypesenseFilterWithAuthority,
   G10B1_HOME_RAILS_OUTSIDE_ENTITLEMENT_ENFORCEMENT,
+  G10B2H_HOME_RAILS_ENTITLEMENT_WIRED,
   isListingEntitlementEnforcementEnabled,
   normalizeListingSearchStatuses,
   partitionStatusesByListingCapability,

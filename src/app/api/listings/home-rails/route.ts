@@ -4,12 +4,18 @@ import { auth } from "@/lib/auth";
 import { getListingProvider } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
+import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
 import { typesenseHomeRails } from "@/lib/typesense/search";
 import { hasClientAccess } from "@/lib/vow";
 
 export async function GET(request: Request) {
   const gated = await mlsClientGate();
   if (gated) return gated;
+
+  // G.10B2H: resolve trusted host → entitlement once for Typesense + Neon fallback.
+  // Do NOT pass entitlementFilteringEnabled (production G5 flag stays OFF).
+  const { entitlement } =
+    await resolveListingEntitlementContextForRequest(request);
 
   const { searchParams } = new URL(request.url);
   const citiesParam = searchParams.get("cities");
@@ -60,9 +66,11 @@ export async function GET(request: Request) {
     maxPrice,
     propertyTypes,
     communities,
+    entitlement,
   }).then(async (fromTypesense) => {
     if (fromTypesense) return fromTypesense;
 
+    // Typesense miss/error → same entitlement on provider/Neon fallback.
     const [newListings, sold, forLease, commercial, openHouses] =
       await Promise.all([
         provider.search({
@@ -76,6 +84,7 @@ export async function GET(request: Request) {
           maxPrice,
           propertyTypes,
           communities,
+          entitlement,
         }),
         provider.search({
           status: "SOLD",
@@ -88,6 +97,7 @@ export async function GET(request: Request) {
           maxPrice,
           propertyTypes,
           communities,
+          entitlement,
         }),
         provider.search({
           status: "ACTIVE",
@@ -100,6 +110,7 @@ export async function GET(request: Request) {
           maxPrice,
           propertyTypes,
           communities,
+          entitlement,
         }),
         provider.search({
           status: "ACTIVE",
@@ -112,6 +123,7 @@ export async function GET(request: Request) {
           maxPrice,
           propertyTypes,
           communities,
+          entitlement,
         }),
         provider.openHouses({
           cities,
@@ -119,6 +131,7 @@ export async function GET(request: Request) {
           propertyTypes: propertyTypes?.length ? propertyTypes : undefined,
           minPrice,
           maxPrice,
+          entitlement,
         }),
       ]);
 
