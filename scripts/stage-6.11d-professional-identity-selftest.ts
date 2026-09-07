@@ -103,8 +103,19 @@ function createFakePrisma(state: {
           brokerageAffiliation: null,
           onboardingState: state.onboarding.get(ws.id) ?? null,
           emailIdentity: null,
+          teamProfile: null,
           name: ws.slug,
         };
+      },
+    },
+    workspaceTeamMember: {
+      async findMany() {
+        return [];
+      },
+    },
+    workspaceTeamProfile: {
+      async findUnique() {
+        return null;
       },
     },
     workspaceMember: {

@@ -255,6 +255,7 @@ function createFakePrisma(state: FakeState): PrismaClient {
           emailIdentity,
           onboardingState,
           professionalIdentity,
+          teamProfile: null,
         };
       },
       async update({
@@ -268,6 +269,16 @@ function createFakePrisma(state: FakeState): PrismaClient {
         if (!ws) throw new Error("workspace missing");
         Object.assign(ws, data);
         return { ...ws };
+      },
+    },
+    workspaceTeamMember: {
+      async findMany() {
+        return [];
+      },
+    },
+    workspaceTeamProfile: {
+      async findUnique() {
+        return null;
       },
     },
     workspaceMember: {

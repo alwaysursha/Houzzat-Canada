@@ -193,7 +193,33 @@ export type OnboardingTemplateOption = {
 
 /** Public onboarding catalog — selectable templates only. */
 export function listOnboardingTemplateOptions(): OnboardingTemplateOption[] {
-  return listSelectableTemplates().map((template) => ({
+  return listSelectableTemplates().map(toOnboardingTemplateOption);
+}
+
+/**
+ * OWNER Website Design options for configuration/QA.
+ * Includes selectable catalog plus presentation-ready Team Signature while it
+ * remains commercially non-selectable. Does not expose other non-selectable
+ * templates (e.g. future Brokerage).
+ */
+export function listOwnerWebsiteDesignTemplateOptions(): OnboardingTemplateOption[] {
+  const byId = new Map<ImplementedTemplateId, OnboardingTemplateOption>();
+  for (const template of listSelectableTemplates()) {
+    byId.set(template.id, toOnboardingTemplateOption(template));
+  }
+  const team = getTemplate(TEAM_SIGNATURE_TEMPLATE_ID);
+  if (team?.presentationReady) {
+    byId.set(team.id, toOnboardingTemplateOption(team));
+  }
+  return IMPLEMENTED_TEMPLATE_IDS.map((id) => byId.get(id)).filter(
+    (option): option is OnboardingTemplateOption => option != null,
+  );
+}
+
+function toOnboardingTemplateOption(
+  template: TemplateDefinition,
+): OnboardingTemplateOption {
+  return {
     id: template.id,
     label: template.label,
     description: template.description,
@@ -205,7 +231,7 @@ export function listOnboardingTemplateOptions(): OnboardingTemplateOption[] {
       description: theme.description,
       swatch: { ...theme.palette },
     })),
-  }));
+  };
 }
 
 /** @deprecated Prefer listOnboardingTemplateOptions — kept for 6.11A callers. */
@@ -216,6 +242,40 @@ export function listDefaultThemeOptionsForOnboarding(): OnboardingThemeOption[] 
     description: theme.description,
     swatch: { ...theme.palette },
   }));
+}
+
+/**
+ * True when themeId is a valid, presentation-ready Team Signature theme
+ * usable by the public resolver. Does NOT require selectable === true.
+ */
+export function isValidConfiguredTeamSignatureTheme(
+  themeId: string | null | undefined,
+): boolean {
+  if (!themeId?.trim()) return false;
+  const theme = getThemeById(themeId);
+  if (!theme) return false;
+  const parsed = parseThemeId(theme.id);
+  if (!parsed || parsed.templateId !== TEAM_SIGNATURE_TEMPLATE_ID) {
+    return false;
+  }
+  const template = getTemplate(parsed.templateId);
+  if (!template?.presentationReady) return false;
+  if (!template.themes.some((t) => t.id === theme.id)) return false;
+  return resolveTemplateIdFromThemeId(theme.id) === TEAM_SIGNATURE_TEMPLATE_ID;
+}
+
+/**
+ * Category from persisted theme for Website Setup evaluation.
+ * Uses presentationReady resolution (Team included while selectable=false).
+ * Invalid / null theme → DEFAULT.
+ */
+export function resolveOnboardingCategoryFromThemeId(
+  themeId: string | null | undefined,
+): TemplateCategory {
+  const templateId = resolveTemplateIdFromThemeId(themeId);
+  const template = getTemplate(templateId);
+  if (!template?.presentationReady) return "DEFAULT";
+  return template.category;
 }
 
 /**
@@ -259,6 +319,54 @@ export function requireValidSelectableThemeId(raw: unknown): string {
     throw new Error("INVALID_THEME_ID");
   }
   return theme.id;
+}
+
+/**
+ * OWNER Website Design persistence gate (6.11E.8B).
+ * - Selectable templates: unchanged (commercial catalog).
+ * - Team Signature only: presentationReady Team themes allowed while
+ *   selectable=false (pre-launch QA). No generic non-selectable bypass.
+ */
+export function requireValidOwnerPersistableThemeId(raw: unknown): string {
+  if (typeof raw !== "string") {
+    throw new Error("INVALID_THEME_ID");
+  }
+  const theme = getThemeById(raw);
+  if (!theme) {
+    throw new Error("INVALID_THEME_ID");
+  }
+  const parsed = parseThemeId(theme.id);
+  if (!parsed) {
+    throw new Error("INVALID_THEME_ID");
+  }
+  const template = getTemplate(parsed.templateId);
+  if (!template) {
+    throw new Error("INVALID_THEME_ID");
+  }
+  if (template.selectable) {
+    return theme.id;
+  }
+  if (
+    template.id === TEAM_SIGNATURE_TEMPLATE_ID &&
+    template.presentationReady &&
+    template.category === "TEAM" &&
+    template.themes.some((t) => t.id === theme.id)
+  ) {
+    return theme.id;
+  }
+  throw new Error("INVALID_THEME_ID");
+}
+
+/** True when OWNER Apply may persist this themeId (UI hint). */
+export function isOwnerPersistableThemeId(
+  themeId: string | null | undefined,
+): boolean {
+  try {
+    requireValidOwnerPersistableThemeId(themeId);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** @deprecated Prefer requireValidSelectableThemeId */

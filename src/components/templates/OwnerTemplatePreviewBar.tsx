@@ -2,12 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { getTemplate, parseThemeId } from "@/lib/tenancy/templates";
+import { isOwnerPersistableThemeId } from "@/lib/tenancy/templates";
 
 /**
- * Stage 6.11B.1 / 6.11E.2 — unmistakable OWNER preview chrome.
+ * Stage 6.11B.1 / 6.11E.2 / 6.11E.8B — unmistakable OWNER preview chrome.
  * Exit clears cookie only. Use This Design saves via authorized persistence.
- * Non-selectable templates (Team Signature design review) hide Apply.
+ * Team Signature may Apply while presentationReady and selectable=false (QA).
+ * Other non-selectable templates remain non-applyable.
  */
 export function OwnerTemplatePreviewBar({
   displayLabel,
@@ -19,9 +20,7 @@ export function OwnerTemplatePreviewBar({
   const router = useRouter();
   const [busy, setBusy] = useState<"exit" | "apply" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const parsed = parseThemeId(themeId);
-  const canApply =
-    parsed != null && getTemplate(parsed.templateId)?.selectable === true;
+  const canApply = isOwnerPersistableThemeId(themeId);
 
   async function post(action: "exit" | "apply") {
     setBusy(action);

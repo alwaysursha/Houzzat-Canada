@@ -1,5 +1,5 @@
 /**
- * Stage 6.11C.1 — category-aware branding completion (extensible, not a rules engine).
+ * Stage 6.11C.1 / 6.11E.8 — category-aware branding completion.
  */
 
 import type { TemplateCategory } from "@/lib/tenancy/templates";
@@ -12,16 +12,17 @@ export type BrandingAssetSnapshot = {
 };
 
 export type BrandingRequirement =
-  | { asset: "agent-profile"; required: true }
-  | { asset: "logo"; required: false }
-  | { asset: "brokerage-logo"; required: false }
-  | { asset: "favicon"; required: false };
+  | { asset: "agent-profile"; required: boolean }
+  | { asset: "logo"; required: boolean }
+  | { asset: "brokerage-logo"; required: boolean }
+  | { asset: "favicon"; required: boolean };
 
 /**
  * Required brand assets for a template category.
  * AGENT: profile photo required. Logos/favicon optional.
  * DEFAULT: no required assets (do not block onboarding).
- * TEAM/BROKERAGE: reserved — no requirements yet.
+ * TEAM: Team/primary logo required (Agent photo / favicon optional).
+ * BROKERAGE: reserved — no requirements yet.
  */
 export function brandingRequirementsForCategory(
   category: TemplateCategory,
@@ -41,6 +42,12 @@ export function brandingRequirementsForCategory(
         { asset: "favicon", required: false },
       ];
     case "TEAM":
+      return [
+        { asset: "logo", required: true },
+        { asset: "agent-profile", required: false },
+        { asset: "brokerage-logo", required: false },
+        { asset: "favicon", required: false },
+      ];
     case "BROKERAGE":
       return [];
     default: {
@@ -62,6 +69,21 @@ export function evaluateBrandingStatus(input: {
   for (const req of required) {
     if (req.asset === "agent-profile") {
       if (!input.assets.agentProfilePhotoUrl?.trim()) {
+        return "NOT_STARTED";
+      }
+    }
+    if (req.asset === "logo") {
+      if (!input.assets.logoUrl?.trim()) {
+        return "NOT_STARTED";
+      }
+    }
+    if (req.asset === "brokerage-logo") {
+      if (!input.assets.brokerageLogoUrl?.trim()) {
+        return "NOT_STARTED";
+      }
+    }
+    if (req.asset === "favicon") {
+      if (!input.assets.faviconUrl?.trim()) {
         return "NOT_STARTED";
       }
     }

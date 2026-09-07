@@ -61,6 +61,13 @@ type ApiEnvelope<T> = {
 
 type TeamRosterSectionProps = {
   workspaceId: string;
+  /** Server-authoritative Team Signature data readiness (E.8). */
+  teamSignatureDataReadiness?: {
+    ready: boolean;
+    missingLabels: string[];
+  } | null;
+  /** Refresh parent onboarding payload after roster mutations. */
+  onRosterChange?: () => void;
 };
 
 function memberToForm(m: TeamMember): MemberForm {
@@ -85,10 +92,14 @@ function textToAreas(text: string): string[] {
 }
 
 /**
- * Stage 6.11E.6 — OWNER Team Profile + WorkspaceTeamMember roster editor.
- * Uses E.4 roster APIs + E.5 photo endpoints. No public wiring / selectable flip.
+ * Stage 6.11E.6 / E.8 — OWNER Team Profile + WorkspaceTeamMember roster editor.
+ * Uses E.4 roster APIs + E.5 photo endpoints. Readiness is server-authoritative.
  */
-export function TeamRosterSection({ workspaceId }: TeamRosterSectionProps) {
+export function TeamRosterSection({
+  workspaceId,
+  teamSignatureDataReadiness,
+  onRosterChange,
+}: TeamRosterSectionProps) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<TeamProfile | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -108,6 +119,10 @@ export function TeamRosterSection({ workspaceId }: TeamRosterSectionProps) {
   const clearFlash = () => {
     setError(null);
     setMessage(null);
+  };
+
+  const notifyParent = () => {
+    onRosterChange?.();
   };
 
   const applyList = useCallback((nextProfile: TeamProfile, nextMembers: TeamMember[]) => {
@@ -214,6 +229,7 @@ export function TeamRosterSection({ workspaceId }: TeamRosterSectionProps) {
       setEditingId(json.data.member.id);
       setEditForm(memberToForm(json.data.member));
       setMessage("Team member added. Upload a photo before publishing.");
+      notifyParent();
     } catch {
       setError("Network error while adding Team member.");
     } finally {
@@ -246,6 +262,7 @@ export function TeamRosterSection({ workspaceId }: TeamRosterSectionProps) {
         prev.map((m) => (m.id === memberId ? json.data!.member : m)),
       );
       setMessage("Team member saved.");
+      notifyParent();
     } catch {
       setError("Network error while updating Team member.");
     } finally {
@@ -274,6 +291,7 @@ export function TeamRosterSection({ workspaceId }: TeamRosterSectionProps) {
       }
       await load();
       setMessage(isVisible ? "Team member published." : "Team member unpublished.");
+      notifyParent();
     } catch {
       setError("Network error while updating visibility.");
     } finally {
@@ -305,6 +323,7 @@ export function TeamRosterSection({ workspaceId }: TeamRosterSectionProps) {
         prev.map((m) => (m.id === memberId ? json.data!.member : m)),
       );
       setMessage("Photo saved.");
+      notifyParent();
     } catch {
       setError("Network error while uploading photo.");
     } finally {
@@ -333,6 +352,7 @@ export function TeamRosterSection({ workspaceId }: TeamRosterSectionProps) {
         prev.map((m) => (m.id === memberId ? json.data!.member : m)),
       );
       setMessage("Photo removed.");
+      notifyParent();
     } catch {
       setError("Network error while removing photo.");
     } finally {
@@ -364,6 +384,7 @@ export function TeamRosterSection({ workspaceId }: TeamRosterSectionProps) {
       if (editingId === memberId) setEditingId(null);
       await load();
       setMessage("Team member removed.");
+      notifyParent();
     } catch {
       setError("Network error while removing Team member.");
     } finally {
@@ -434,6 +455,7 @@ export function TeamRosterSection({ workspaceId }: TeamRosterSectionProps) {
       }
       await load();
       setMessage(memberId ? "Team leader updated." : "Team leader cleared.");
+      notifyParent();
     } catch {
       setError("Network error while updating team leader.");
     } finally {
@@ -512,10 +534,38 @@ export function TeamRosterSection({ workspaceId }: TeamRosterSectionProps) {
           Manage your public presentation team. This is separate from HouzzatPRO
           user access — roster members do not need logins or MLS connections.
         </p>
-        <p className="mt-2 text-xs text-slate-500">
-          Publishing prepares roster records. Public Team Signature pages are
-          not connected yet.
-        </p>
+        {teamSignatureDataReadiness ? (
+          <p className="mt-2 text-xs text-slate-500">
+            Team Signature data readiness:{" "}
+            <span className="font-medium text-slate-700">
+              {teamSignatureDataReadiness.ready ? "READY" : "NOT READY"}
+            </span>
+            {!teamSignatureDataReadiness.ready ? (
+              <span className="text-amber-700">
+                {" "}
+                — complete the items below before Team Signature can be
+                considered data-ready (catalog enable is separate).
+              </span>
+            ) : (
+              <span className="text-emerald-700">
+                {" "}
+                — workspace data meets Team Signature requirements.
+              </span>
+            )}
+          </p>
+        ) : null}
+        {teamSignatureDataReadiness &&
+        !teamSignatureDataReadiness.ready &&
+        teamSignatureDataReadiness.missingLabels.length > 0 ? (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <p className="font-semibold">Still needed:</p>
+            <ul className="mt-1 list-disc pl-4">
+              {teamSignatureDataReadiness.missingLabels.map((label) => (
+                <li key={label}>{label}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       {error ? (

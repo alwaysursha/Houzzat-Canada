@@ -62,6 +62,17 @@ type WorkspaceRow = {
     brokeragePhone: string | null;
     brokerageAddress: string | null;
   };
+  teamSignatureDataReadiness?: {
+    ready: boolean;
+    missingLabels: string[];
+    sections?: {
+      business: boolean;
+      branding: boolean;
+      brokerage: boolean;
+      roster: boolean;
+      leader: boolean;
+    };
+  };
   onboarding: {
     templateThemeStatus: string;
     businessProfileStatus: string;
@@ -460,6 +471,7 @@ export function OwnerOnboardingClient() {
         status={professionalIdentityStatus}
         initial={professionalIdentity}
         brokerageLogoUrl={brandAssets.brokerageLogoUrl}
+        templateCategory={item.templateCategory}
         onSaved={() => {
           void load();
         }}
@@ -477,7 +489,13 @@ export function OwnerOnboardingClient() {
         }}
       />
 
-      <TeamRosterSection workspaceId={item.workspaceId} />
+      <TeamRosterSection
+        workspaceId={item.workspaceId}
+        teamSignatureDataReadiness={item.teamSignatureDataReadiness ?? null}
+        onRosterChange={() => {
+          void load();
+        }}
+      />
 
       <WebsiteDomainSection workspaceId={item.workspaceId} />
 

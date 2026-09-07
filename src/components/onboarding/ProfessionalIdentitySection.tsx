@@ -28,6 +28,8 @@ type ProfessionalIdentitySectionProps = {
   status: string;
   initial: ProfessionalIdentityFields;
   brokerageLogoUrl: string | null;
+  /** When TEAM, Agent personal fields are optional (brokerage still required). */
+  templateCategory?: string;
   onSaved: () => void;
 };
 
@@ -43,11 +45,13 @@ export function ProfessionalIdentitySection({
   status,
   initial,
   brokerageLogoUrl,
+  templateCategory = "DEFAULT",
   onSaved,
 }: ProfessionalIdentitySectionProps) {
   const [fields, setFields] = useState<ProfessionalIdentityFields>(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const agentPersonalRequired = templateCategory !== "TEAM";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -131,9 +135,15 @@ export function ProfessionalIdentitySection({
           </h3>
           <label className="block text-sm text-slate-700">
             Agent name
-            <span className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
-              Required
-            </span>
+            {agentPersonalRequired ? (
+              <span className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                Required
+              </span>
+            ) : (
+              <span className="ml-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                Optional for Team
+              </span>
+            )}
             <input
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               value={fields.agentRegisteredName}
@@ -143,22 +153,28 @@ export function ProfessionalIdentitySection({
                   agentRegisteredName: e.target.value,
                 }))
               }
-              required
+              required={agentPersonalRequired}
               autoComplete="name"
             />
           </label>
           <label className="block text-sm text-slate-700">
             Designation
-            <span className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
-              Required
-            </span>
+            {agentPersonalRequired ? (
+              <span className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                Required
+              </span>
+            ) : (
+              <span className="ml-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                Optional for Team
+              </span>
+            )}
             <input
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               value={fields.agentDesignation}
               onChange={(e) =>
                 setFields((f) => ({ ...f, agentDesignation: e.target.value }))
               }
-              required
+              required={agentPersonalRequired}
               list="agent-designation-suggestions"
               placeholder="e.g. Salesperson"
             />
@@ -170,16 +186,22 @@ export function ProfessionalIdentitySection({
           </label>
           <label className="block text-sm text-slate-700">
             Cell number
-            <span className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
-              Required
-            </span>
+            {agentPersonalRequired ? (
+              <span className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                Required
+              </span>
+            ) : (
+              <span className="ml-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                Optional for Team
+              </span>
+            )}
             <input
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               value={fields.agentCellPhone}
               onChange={(e) =>
                 setFields((f) => ({ ...f, agentCellPhone: e.target.value }))
               }
-              required
+              required={agentPersonalRequired}
               inputMode="tel"
               autoComplete="tel"
             />

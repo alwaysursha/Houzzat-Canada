@@ -222,6 +222,7 @@ export function BrandAssetsSection({
   }
 
   const agentRequired = templateCategory === "AGENT";
+  const teamLogoRequired = templateCategory === "TEAM";
 
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6">
@@ -240,6 +241,12 @@ export function BrandAssetsSection({
               — add an Agent Profile Photo to complete Agent branding.
             </span>
           ) : null}
+          {teamLogoRequired && brandingStatus !== "COMPLETE" ? (
+            <span className="text-amber-700">
+              {" "}
+              — add a Team Logo to complete Team branding.
+            </span>
+          ) : null}
         </p>
       </div>
 
@@ -255,10 +262,16 @@ export function BrandAssetsSection({
         onRemove={remove}
       />
       <AssetRow
-        label="Primary Logo"
-        hint="Optional mark for header/footer where the template shows a logo."
+        label={teamLogoRequired ? "Team Logo" : "Primary Logo"}
+        hint={
+          teamLogoRequired
+            ? "Required for Team Signature header and brand mark."
+            : "Optional mark for header/footer where the template shows a logo."
+        }
         kind="logo"
         url={assets.logoUrl}
+        required={teamLogoRequired}
+        requiredLabel="Required for Team templates"
         allowRemove
         busyKind={busyKind}
         onUpload={upload}

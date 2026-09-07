@@ -6,8 +6,23 @@
 
 import type { PrismaClient } from "@prisma/client";
 import { ensureWorkspaceOnboardingState } from "@/lib/platform/activation/onboarding-state";
+import {
+  resolveOnboardingCategoryFromThemeId,
+  type TemplateCategory,
+} from "@/lib/tenancy/templates";
 import { evaluateProfessionalIdentityStatus } from "./requirements";
 import type { ProfessionalIdentitySnapshot } from "./types";
+
+async function resolveCategoryForWorkspace(
+  db: PrismaClient,
+  workspaceId: string,
+): Promise<TemplateCategory> {
+  const row = await db.workspaceBranding.findUnique({
+    where: { workspaceId },
+    select: { themeId: true },
+  });
+  return resolveOnboardingCategoryFromThemeId(row?.themeId);
+}
 
 export async function syncProfessionalIdentityStatus(
   db: PrismaClient,
@@ -30,10 +45,12 @@ export async function syncProfessionalIdentityStatus(
     where: { workspaceId },
     select: { brokerageLogoUrl: true },
   });
+  const category = await resolveCategoryForWorkspace(db, workspaceId);
 
   const status = evaluateProfessionalIdentityStatus({
     identity,
     assets: { brokerageLogoUrl: branding?.brokerageLogoUrl ?? null },
+    category,
   });
 
   await db.workspaceOnboardingState.update({
