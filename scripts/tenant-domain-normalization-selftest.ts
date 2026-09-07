@@ -51,6 +51,30 @@ function testTrailingDot() {
   assert.equal(r.hostname, "houzzat.com");
 }
 
+function testLocalDevHostsStillNormalize() {
+  // Shared normalizer must keep parsing development Host headers.
+  // CUSTOM claim rejection is claim-layer only (F.1 regression review).
+  const localhost = normalizeWorkspaceHostname("localhost:3000");
+  assert.ok(localhost.ok);
+  assert.equal(localhost.hostname, "localhost");
+
+  const loopback = normalizeWorkspaceHostname("127.0.0.1:3000");
+  assert.ok(loopback.ok);
+  assert.equal(loopback.hostname, "127.0.0.1");
+}
+
+function testIdnCanonical() {
+  const r = normalizeWorkspaceHostname("bücher.example");
+  assert.ok(r.ok);
+  assert.equal(r.hostname, "xn--bcher-kva.example");
+}
+
+function testIpv6AndWildcardStillInvalidLabels() {
+  assert.equal(normalizeWorkspaceHostname("[::1]").ok, false);
+  assert.equal(normalizeWorkspaceHostname("::1").ok, false);
+  assert.equal(normalizeWorkspaceHostname("*.example.com").ok, false);
+}
+
 async function main() {
   testDeterministic();
   testWwwPreserved();
@@ -58,6 +82,9 @@ async function main() {
   testRejectProtocolAndPath();
   testRejectMalformed();
   testTrailingDot();
+  testLocalDevHostsStillNormalize();
+  testIdnCanonical();
+  testIpv6AndWildcardStillInvalidLabels();
   console.log("tenant-domain-normalization:selftest ok");
 }
 

@@ -115,6 +115,7 @@
     "stage-6.11e5-team-member-photo:selftest": "node --import tsx scripts/stage-6.11e5-team-member-photo-selftest.ts",
     "stage-6.11e6-team-roster-ui:selftest": "node --import tsx scripts/stage-6.11e6-team-roster-ui-selftest.ts",
     "stage-6.11e7-public-team-roster:selftest": "node --import tsx scripts/stage-6.11e7-public-team-roster-selftest.ts",
+    "stage-6.11f1-owner-custom-domain-claim:selftest": "node --import tsx scripts/stage-6.11f1-owner-custom-domain-claim-selftest.ts",
     "stage-6.11g2-reo-directory:selftest": "node --import tsx scripts/stage-6.11g2-reo-directory-selftest.ts",
     "stage-6.11g3-workspace-reo-membership:selftest": "node --import tsx scripts/stage-6.11g3-workspace-reo-membership-selftest.ts",
     "stage-6.11g4-workspace-data-connection:selftest": "node --import tsx scripts/stage-6.11g4-workspace-data-connection-selftest.ts",

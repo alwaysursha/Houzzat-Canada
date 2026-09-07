@@ -3,6 +3,10 @@
  *
  * Normalization ≠ canonicalization. `www` is preserved; primary/alias rows
  * represent www vs apex explicitly.
+ *
+ * This normalizer is shared by request-host extraction and domain persistence.
+ * Claim-specific policy (reject localhost / IP / wildcards for CUSTOM website
+ * domains) lives in workspace-domain claim validation — not here.
  */
 import { toASCII } from "node:punycode";
 
