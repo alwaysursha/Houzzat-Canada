@@ -4,9 +4,10 @@
  * POST /api/mobile/v2/auth/login -> GET /api/mobile/v2/workspaces
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -26,6 +27,27 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const scrollRef = useRef<{
+    scrollTo: (opts: { y: number; animated?: boolean }) => void;
+  } | null>(null);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setKeyboardOpen(true);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardOpen(false);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const handleSubmit = async () => {
     if (!email.trim()) {
@@ -43,17 +65,32 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
     });
   };
 
+  /** Bounded scroll — keep card top visible; never scrollToEnd (clips email). */
+  const ensureCardVisible = () => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+  };
+
   const activeError = localError || error;
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
+      // Android: Manifest adjustResize already shrinks the window — competing
+      // KAV "height" + scrollToEnd was clipping the form. iOS still needs padding.
       behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
     >
       <StatusBar barStyle="dark-content" backgroundColor="#63D9BD" />
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        ref={scrollRef}
+        contentContainerStyle={[
+          styles.scrollContent,
+          keyboardOpen ? styles.scrollContentKeyboardOpen : null,
+        ]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         {onBack ? (
@@ -64,20 +101,27 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
           </View>
         ) : null}
 
-        {/* Unified Brand + Card Block */}
         <View style={styles.centerBlock}>
-          {/* Brand Header */}
-          <View style={styles.header}>
-            <HouzzatProMark size={84} />
-            <View style={styles.wordmarkWrapper}>
-              <HouzzatProWordmark size="xl" dark={true} />
-            </View>
+          <View
+            style={[styles.header, keyboardOpen && styles.headerCompact]}
+          >
+            <HouzzatProMark size={keyboardOpen ? 44 : 84} />
+            {!keyboardOpen ? (
+              <View style={styles.wordmarkWrapper}>
+                <HouzzatProWordmark size="xl" dark={true} />
+              </View>
+            ) : null}
           </View>
 
-          {/* Sign In Popup / Card */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Sign in to your account</Text>
-            <Text style={styles.cardSubtitle}>Enter your HouzzatPRO staff credentials</Text>
+            {!keyboardOpen ? (
+              <Text style={styles.cardSubtitle}>
+                Enter your HouzzatPRO staff credentials
+              </Text>
+            ) : (
+              <View style={styles.subtitleSpacer} />
+            )}
 
             {activeError ? (
               <View style={styles.errorBox}>
@@ -94,11 +138,17 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
                   setEmail(t);
                   if (localError) setLocalError(null);
                 }}
-                placeholder="name@brokerage.com"
+                onFocus={ensureCardVisible}
+                placeholder="Enter your email address"
                 placeholderTextColor="#94A3B8"
                 autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                textContentType="username"
                 keyboardType="email-address"
+                importantForAutofill="yes"
                 editable={!isLoading}
+                returnKeyType="next"
               />
             </View>
 
@@ -112,10 +162,24 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
                     setPassword(t);
                     if (localError) setLocalError(null);
                   }}
-                  placeholder="••••••••"
+                  onFocus={ensureCardVisible}
+                  placeholder="Enter your password"
                   placeholderTextColor="#94A3B8"
                   secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  autoComplete="password"
+                  textContentType="password"
+                  keyboardType={
+                    Platform.OS === "android" ? "visible-password" : "default"
+                  }
+                  importantForAutofill="yes"
                   editable={!isLoading}
+                  returnKeyType="go"
+                  onSubmitEditing={() => {
+                    void handleSubmit();
+                  }}
                 />
                 <TouchableOpacity
                   style={styles.eyeButton}
@@ -123,7 +187,9 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
                   onPress={() => setShowPassword((prev) => !prev)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Text style={styles.eyeIcon}>{showPassword ? "👁" : "👁‍🗨"}</Text>
+                  <Text style={styles.eyeIcon}>
+                    {showPassword ? "👁" : "👁‍🗨"}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -131,7 +197,9 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
             {isLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color="#0B5C49" />
-                <Text style={styles.loadingText}>Authenticating with HouzzatPRO…</Text>
+                <Text style={styles.loadingText}>
+                  Authenticating with HouzzatPRO…
+                </Text>
               </View>
             ) : (
               <View style={styles.buttonStack}>
@@ -145,20 +213,22 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
               </View>
             )}
           </View>
-        </View>
 
-        {/* Footer Notice with generous spacing above Android system bar */}
-        <View style={styles.footer}>
-          <Text style={styles.footerNotice}>
-            Multi-tenant secure platform • API v2.0
-          </Text>
+          {!keyboardOpen ? (
+            <Text style={styles.footerNotice}>
+              Multi-tenant secure platform • API v2.0
+            </Text>
+          ) : null}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const topPadding = Platform.OS === "android" ? Math.max(StatusBar.currentHeight || 0, 42) + 8 : 20;
+const topPadding =
+  Platform.OS === "android"
+    ? Math.max(StatusBar.currentHeight || 0, 42) + 8
+    : 20;
 const bottomPadding = Platform.OS === "android" ? 56 : 28;
 
 const styles = StyleSheet.create({
@@ -170,8 +240,13 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     paddingTop: topPadding,
-    paddingBottom: bottomPadding,
+    paddingBottom: bottomPadding + 40,
     paddingHorizontal: 20,
+  },
+  scrollContentKeyboardOpen: {
+    justifyContent: "flex-start",
+    paddingTop: Math.max(8, topPadding - 16),
+    paddingBottom: bottomPadding + 24,
   },
   topBar: {
     position: "absolute",
@@ -193,11 +268,13 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: "auto",
   },
   header: {
     alignItems: "center",
     marginBottom: 16,
+  },
+  headerCompact: {
+    marginBottom: 8,
   },
   wordmarkWrapper: {
     marginTop: 8,
@@ -225,6 +302,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 4,
     marginBottom: 20,
+  },
+  subtitleSpacer: {
+    height: 12,
   },
   errorBox: {
     backgroundColor: "#FEE2E2",
@@ -313,14 +393,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
-  footer: {
-    position: "absolute",
-    bottom: bottomPadding,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-  },
   footerNotice: {
+    marginTop: 20,
     fontSize: 12,
     fontWeight: "600",
     color: "#0B5C49",

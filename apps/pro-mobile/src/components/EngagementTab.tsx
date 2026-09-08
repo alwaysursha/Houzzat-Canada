@@ -54,6 +54,13 @@ export type EngagementProfileSummary = {
     emailClicks: number;
     alertOpens: number;
   };
+  buyerIntent: {
+    summary: string;
+    chips: string[];
+    source: string;
+    sourceLabel: string;
+    headline: string | null;
+  } | null;
 };
 
 /** Max remote photos decoded at once — remaining matches are text rows. */
@@ -65,6 +72,10 @@ function formatPrice(value: number | null): string {
 }
 
 function toProfileSummary(data: MobileLeadEngagement): EngagementProfileSummary {
+  const hasIntent =
+    data.buyerIntent.summary.trim().length > 0 ||
+    data.buyerIntent.chips.length > 0 ||
+    Boolean(data.buyerIntent.headline);
   return {
     views24h: data.hot.views24h,
     saves: data.stats.saves,
@@ -75,6 +86,7 @@ function toProfileSummary(data: MobileLeadEngagement): EngagementProfileSummary 
     lastSeenAt: data.hot.lastSeenAt,
     isOnline: data.hot.isOnline,
     rings: data.rings,
+    buyerIntent: hasIntent ? data.buyerIntent : null,
   };
 }
 
@@ -325,10 +337,14 @@ function EngagementTabInner({
     setDetailMatch(null);
     const entry = cacheKey ? engagementCache.get(cacheKey) : undefined;
     if (entry?.engagement) {
+      // Profile strip already loaded engagement — reuse cache; skip duplicate GET.
       setEngagement(entry.engagement);
       publishSummary(entry.engagement);
+      setLoading(false);
+      setError(null);
+      return;
     }
-    void fetchEngagement({ background: Boolean(entry) });
+    void fetchEngagement();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tab mount / lead change
   }, [leadId, workspaceId]);
 

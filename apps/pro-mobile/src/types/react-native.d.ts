@@ -197,7 +197,12 @@ declare module "react-native" {
     placeholderTextColor?: string;
     secureTextEntry?: boolean;
     autoCapitalize?: "none" | "sentences" | "words" | "characters";
-    keyboardType?: "default" | "email-address" | "numeric" | "phone-pad";
+    keyboardType?:
+      | "default"
+      | "email-address"
+      | "numeric"
+      | "phone-pad"
+      | "visible-password";
     editable?: boolean;
     [key: string]: any;
   }>;
@@ -216,9 +221,22 @@ declare module "react-native" {
     color?: string;
   }>;
 
+  export const Keyboard: {
+    addListener(
+      eventName:
+        | "keyboardWillShow"
+        | "keyboardDidShow"
+        | "keyboardWillHide"
+        | "keyboardDidHide",
+      callback: (event?: { endCoordinates?: { height: number } }) => void,
+    ): { remove: () => void };
+    dismiss(): void;
+  };
+
   export const KeyboardAvoidingView: React.FC<{
     style?: any;
     behavior?: "height" | "position" | "padding";
+    keyboardVerticalOffset?: number;
     children?: React.ReactNode;
   }>;
 

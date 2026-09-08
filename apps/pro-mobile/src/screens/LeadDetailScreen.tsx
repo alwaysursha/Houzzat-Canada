@@ -30,10 +30,15 @@ import {
   EngagementTab,
   type EngagementProfileSummary,
 } from "../components/EngagementTab";
+import {
+  ContactBellIcon,
+  ContactPencilIcon,
+} from "../components/ContactActionIcons";
 import { AppointmentsTab } from "../components/AppointmentsTab";
 import { ConversationsTab } from "../components/ConversationsTab";
 import { TasksRemindersTab } from "../components/TasksRemindersTab";
 import { updateLeadStatusInListCache } from "../lib/lead-list-cache";
+import { unwrapEngagement } from "../lib/engagement-response";
 import { useAuth } from "../state/AuthContext";
 import type {
   BackendEnvelope,
@@ -591,33 +596,37 @@ function ContactActionRow({
           styles.contactValue,
           muted && styles.contactMuted,
           multiline && styles.contactMultiline,
-          (showEdit || showBell) && styles.contactValueFlex,
+          styles.contactValueFlex,
         ]}
         numberOfLines={multiline ? 2 : 1}
       >
         {value || "N/A"}
       </Text>
-      {showEdit ? (
-        <TouchableOpacity
-          style={styles.contactActionBtn}
-          onPress={onEdit}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="Edit"
-        >
-          <Text style={styles.contactActionIcon}>✎</Text>
-        </TouchableOpacity>
-      ) : null}
-      {showBell ? (
-        <TouchableOpacity
-          style={styles.contactActionBtn}
-          onPress={onRequestUpdate}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="Request update"
-        >
-          <Text style={styles.contactBellIcon}>🔔</Text>
-        </TouchableOpacity>
+      {showEdit || showBell ? (
+        <View style={styles.contactActions}>
+          {showEdit ? (
+            <TouchableOpacity
+              style={styles.contactActionBtn}
+              onPress={onEdit}
+              activeOpacity={0.7}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              accessibilityLabel="Edit"
+            >
+              <ContactPencilIcon />
+            </TouchableOpacity>
+          ) : null}
+          {showBell ? (
+            <TouchableOpacity
+              style={styles.contactActionBtn}
+              onPress={onRequestUpdate}
+              activeOpacity={0.7}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              accessibilityLabel="Request update"
+            >
+              <ContactBellIcon />
+            </TouchableOpacity>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
@@ -653,6 +662,10 @@ export function LeadDetailScreen({
     useState<EngagementProfileSummary | null>(() => {
       const e = cachedEngagement?.engagement;
       if (!e) return null;
+      const hasIntent =
+        e.buyerIntent.summary.trim().length > 0 ||
+        e.buyerIntent.chips.length > 0 ||
+        Boolean(e.buyerIntent.headline);
       return {
         views24h: e.hot.views24h,
         saves: e.stats.saves,
@@ -663,6 +676,7 @@ export function LeadDetailScreen({
         lastSeenAt: e.hot.lastSeenAt,
         isOnline: e.hot.isOnline,
         rings: e.rings,
+        buyerIntent: hasIntent ? e.buyerIntent : null,
       };
     });
   const [isLoading, setIsLoading] = useState(!cachedEntry);
@@ -680,6 +694,12 @@ export function LeadDetailScreen({
   const [unpinPendingId, setUnpinPendingId] = useState<string | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [statusPending, setStatusPending] = useState(false);
+  const [contactEditField, setContactEditField] = useState<
+    "phone" | "email" | "address" | null
+  >(null);
+  const [contactEditValue, setContactEditValue] = useState("");
+  const [contactPending, setContactPending] = useState(false);
+  const [flagsPending, setFlagsPending] = useState(false);
   const mainScrollRef = useRef<{
     scrollTo: (opts: { y: number; animated?: boolean }) => void;
   } | null>(null);
@@ -716,12 +736,169 @@ export function LeadDetailScreen({
   const showLeadNav =
     Boolean(onNavigateLead) && navIndex >= 0 && (leadIds?.length ?? 0) > 1;
 
-  const showComingNext = (feature: string) => {
-    Alert.alert(
-      feature,
-      "This action will arrive in an upcoming stage. Visual control matches the web mobile CRM.",
-      [{ text: "OK" }],
+  const openContactEditor = (field: "phone" | "email" | "address") => {
+    if (!lead?.customer) return;
+    const current =
+      field === "phone"
+        ? lead.customer.phone ?? ""
+        : field === "email"
+          ? lead.customer.email ?? ""
+          : lead.customer.homeAddress ?? "";
+    setContactEditValue(current);
+    setContactEditField(field);
+  };
+
+  const saveContactEdit = async () => {
+    if (!contactEditField || !lead?.customer || contactPending) return;
+    const trimmed = contactEditValue.trim();
+    if (contactEditField === "email") {
+      if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        Alert.alert("Invalid email", "Enter a valid email address.");
+        return;
+      }
+    }
+
+    setContactPending(true);
+    try {
+      const body =
+        contactEditField === "phone"
+          ? { phone: trimmed || null }
+          : contactEditField === "email"
+            ? { email: trimmed.toLowerCase() }
+            : { address: trimmed || null };
+      const res = await mobileApiClient.patch<{
+        ok: boolean;
+        email?: string | null;
+        phone?: string | null;
+        address?: string | null;
+        message?: string;
+      }>(`/leads/${encodeURIComponent(leadId)}/contact`, body);
+
+      if (!res.ok) {
+        Alert.alert(
+          "Update failed",
+          res.message || "Could not update contact details.",
+        );
+        return;
+      }
+
+      const data = (res.data ?? {}) as {
+        email?: string | null;
+        phone?: string | null;
+        address?: string | null;
+      };
+      setLead((prev) => {
+        if (!prev?.customer) return prev;
+        const nextCustomer = {
+          ...prev.customer,
+          email:
+            data.email !== undefined ? data.email : prev.customer.email,
+          phone:
+            data.phone !== undefined ? data.phone : prev.customer.phone,
+          homeAddress:
+            data.address !== undefined
+              ? data.address
+              : prev.customer.homeAddress,
+        };
+        const next = { ...prev, customer: nextCustomer };
+        if (cacheKey) {
+          patchLeadDetailCache(cacheKey, { customer: nextCustomer });
+        }
+        return next;
+      });
+      setContactEditField(null);
+    } catch (err: unknown) {
+      Alert.alert(
+        "Update failed",
+        err instanceof Error ? err.message : "Network error",
+      );
+    } finally {
+      setContactPending(false);
+    }
+  };
+
+  const requestContactUpdate = async (channel: "email" | "phone") => {
+    if (!lead?.customer) return;
+    try {
+      const res = await mobileApiClient.post<{
+        ok: boolean;
+        message?: string;
+      }>(`/leads/${encodeURIComponent(leadId)}/contact-reminder`, {
+        channel,
+      });
+      if (!res.ok) {
+        Alert.alert(
+          "Request failed",
+          res.message || "Could not send update request.",
+        );
+        return;
+      }
+      Alert.alert(
+        "Request sent",
+        channel === "phone"
+          ? "The customer will be asked to provide the correct phone number."
+          : "The customer will be asked to provide the correct email.",
+      );
+    } catch (err: unknown) {
+      Alert.alert(
+        "Request failed",
+        err instanceof Error ? err.message : "Network error",
+      );
+    }
+  };
+
+  const toggleProfileFlag = async (flag: "isBuyer" | "isSeller") => {
+    if (!lead?.customer || flagsPending) return;
+    const nextValue = !(
+      flag === "isBuyer"
+        ? lead.customer.isBuyer ?? lead.intent === "BUYER"
+        : lead.customer.isSeller ?? lead.intent === "SELLER"
     );
+    setFlagsPending(true);
+    try {
+      const res = await mobileApiClient.post<{
+        ok: boolean;
+        isBuyer?: boolean;
+        isSeller?: boolean;
+        message?: string;
+      }>(`/leads/${encodeURIComponent(leadId)}/profile-flags`, {
+        [flag]: nextValue,
+      });
+      if (!res.ok) {
+        Alert.alert(
+          "Update failed",
+          res.message || "Could not update buyer/seller profile.",
+        );
+        return;
+      }
+      const data = (res.data ?? {}) as {
+        isBuyer?: boolean;
+        isSeller?: boolean;
+      };
+      setLead((prev) => {
+        if (!prev?.customer) return prev;
+        const nextCustomer = {
+          ...prev.customer,
+          isBuyer:
+            data.isBuyer !== undefined ? data.isBuyer : prev.customer.isBuyer,
+          isSeller:
+            data.isSeller !== undefined
+              ? data.isSeller
+              : prev.customer.isSeller,
+        };
+        if (cacheKey) {
+          patchLeadDetailCache(cacheKey, { customer: nextCustomer });
+        }
+        return { ...prev, customer: nextCustomer };
+      });
+    } catch (err: unknown) {
+      Alert.alert(
+        "Update failed",
+        err instanceof Error ? err.message : "Network error",
+      );
+    } finally {
+      setFlagsPending(false);
+    }
   };
 
   const openNativeUrl = async (url: string, unavailableTitle: string) => {
@@ -1001,9 +1178,18 @@ export function LeadDetailScreen({
       setErrorCode(null);
 
       try {
-        const res = await mobileApiClient.get<
+        // Detail + engagement are independent — start both together (no waterfall).
+        const detailPromise = mobileApiClient.get<
           BackendEnvelope<LeadDetailResponseData> | { ok: boolean; lead: MobileLeadDetail }
         >(`/leads/${encodeURIComponent(leadId)}`);
+        const engagementPromise = engagementCacheKey
+          ? mobileApiClient.get(`/leads/${encodeURIComponent(leadId)}/engagement`)
+          : Promise.resolve(null);
+
+        const [res, engRes] = await Promise.all([
+          detailPromise,
+          engagementPromise,
+        ]);
 
         if (!res.ok) {
           setError(res.message || "Failed to load lead details");
@@ -1027,6 +1213,32 @@ export function LeadDetailScreen({
           data: fetchedLead,
           timestamp: Date.now(),
         });
+
+        if (engRes && engRes.ok && engagementCacheKey) {
+          const engagement = unwrapEngagement(engRes.data);
+          if (engagement) {
+            engagementCache.set(engagementCacheKey, {
+              engagement,
+              timestamp: Date.now(),
+            });
+            const hasIntent =
+              engagement.buyerIntent.summary.trim().length > 0 ||
+              engagement.buyerIntent.chips.length > 0 ||
+              Boolean(engagement.buyerIntent.headline);
+            setEngagementProfile({
+              views24h: engagement.hot.views24h,
+              saves: engagement.stats.saves,
+              alerts: engagement.stats.alerts,
+              emails: engagement.stats.emails,
+              savedSearchCount: engagement.stats.savedSearchCount,
+              lastTouchAt: engagement.lastTouchAt,
+              lastSeenAt: engagement.hot.lastSeenAt,
+              isOnline: engagement.hot.isOnline,
+              rings: engagement.rings,
+              buyerIntent: hasIntent ? engagement.buyerIntent : null,
+            });
+          }
+        }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Network error loading lead details";
         setError(msg);
@@ -1035,7 +1247,7 @@ export function LeadDetailScreen({
         setIsRefreshing(false);
       }
     },
-    [workspaceId, leadId, cacheKey],
+    [workspaceId, leadId, cacheKey, engagementCacheKey],
   );
 
   useEffect(() => {
@@ -1064,6 +1276,12 @@ export function LeadDetailScreen({
             lastSeenAt: e.hot.lastSeenAt,
             isOnline: e.hot.isOnline,
             rings: e.rings,
+            buyerIntent:
+              e.buyerIntent.summary.trim().length > 0 ||
+              e.buyerIntent.chips.length > 0 ||
+              Boolean(e.buyerIntent.headline)
+                ? e.buyerIntent
+                : null,
           }
         : null,
     );
@@ -1085,7 +1303,9 @@ export function LeadDetailScreen({
           prev.isOnline === summary.isOnline &&
           prev.rings.emailOpens === summary.rings.emailOpens &&
           prev.rings.emailClicks === summary.rings.emailClicks &&
-          prev.rings.alertOpens === summary.rings.alertOpens
+          prev.rings.alertOpens === summary.rings.alertOpens &&
+          prev.buyerIntent?.summary === summary.buyerIntent?.summary &&
+          prev.buyerIntent?.headline === summary.buyerIntent?.headline
         ) {
           return prev;
         }
@@ -1290,10 +1510,10 @@ export function LeadDetailScreen({
                 muted={!phone}
                 showEdit={Boolean(lead.customer)}
                 showBell={Boolean(lead.customer)}
-                onEdit={() => showComingNext("Edit phone")}
-                onRequestUpdate={() =>
-                  showComingNext("Request phone update")
-                }
+                onEdit={() => openContactEditor("phone")}
+                onRequestUpdate={() => {
+                  void requestContactUpdate("phone");
+                }}
               />
               <ContactActionRow
                 icon="✉"
@@ -1301,10 +1521,10 @@ export function LeadDetailScreen({
                 muted={!email}
                 showEdit={Boolean(lead.customer)}
                 showBell={Boolean(lead.customer)}
-                onEdit={() => showComingNext("Edit email")}
-                onRequestUpdate={() =>
-                  showComingNext("Request email update")
-                }
+                onEdit={() => openContactEditor("email")}
+                onRequestUpdate={() => {
+                  void requestContactUpdate("email");
+                }}
               />
               <ContactActionRow
                 icon="📍"
@@ -1312,7 +1532,7 @@ export function LeadDetailScreen({
                 muted={!address}
                 multiline
                 showEdit={Boolean(lead.customer)}
-                onEdit={() => showComingNext("Edit address")}
+                onEdit={() => openContactEditor("address")}
               />
             </View>
 
@@ -1372,9 +1592,16 @@ export function LeadDetailScreen({
               ))}
             </View>
 
-            {/* Buyer / Seller radio presentation (read-only) */}
+            {/* Buyer / Seller — both may be selected (web parity) */}
             <View style={styles.buyerSellerRow}>
-              <View style={styles.buyerSellerItem}>
+              <TouchableOpacity
+                style={styles.buyerSellerItem}
+                activeOpacity={0.75}
+                disabled={flagsPending || !lead.customer}
+                onPress={() => {
+                  void toggleProfileFlag("isBuyer");
+                }}
+              >
                 <View
                   style={[
                     styles.radioOuter,
@@ -1384,8 +1611,15 @@ export function LeadDetailScreen({
                   {isBuyer ? <View style={styles.radioInner} /> : null}
                 </View>
                 <Text style={styles.buyerSellerLabel}>Buyer</Text>
-              </View>
-              <View style={styles.buyerSellerItem}>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.buyerSellerItem}
+                activeOpacity={0.75}
+                disabled={flagsPending || !lead.customer}
+                onPress={() => {
+                  void toggleProfileFlag("isSeller");
+                }}
+              >
                 <View
                   style={[
                     styles.radioOuter,
@@ -1395,7 +1629,7 @@ export function LeadDetailScreen({
                   {isSeller ? <View style={styles.radioInner} /> : null}
                 </View>
                 <Text style={styles.buyerSellerLabel}>Seller</Text>
-              </View>
+              </TouchableOpacity>
             </View>
 
             {tagStyle ? (
@@ -1460,22 +1694,48 @@ export function LeadDetailScreen({
               </Text>
             </Text>
 
-            {/* Inquiry listing context (lightweight substitute for buyerIntent card) */}
-            {lead.listingMls || lead.notes ? (
+            {/* Inquiry Context — behaviour-based buyerIntent summary (web parity) */}
+            {engagementProfile?.buyerIntent ||
+            lead.listingMls ||
+            lead.notes ? (
               <View style={styles.lookingForCard}>
                 <View style={styles.lookingForHeader}>
                   <Text style={styles.lookingForEyebrow}>INQUIRY CONTEXT</Text>
                 </View>
                 <View style={styles.lookingForBody}>
-                  {lead.listingMls ? (
+                  {engagementProfile?.buyerIntent?.sourceLabel ? (
+                    <Text style={styles.lookingForMls}>
+                      {engagementProfile.buyerIntent.sourceLabel}
+                    </Text>
+                  ) : lead.listingMls ? (
                     <Text style={styles.lookingForMls}>
                       Inquiry listing · MLS {lead.listingMls}
                     </Text>
                   ) : null}
-                  {lead.notes ? (
+                  {engagementProfile?.buyerIntent?.headline ? (
+                    <Text style={styles.lookingForMls}>
+                      {engagementProfile.buyerIntent.headline}
+                    </Text>
+                  ) : null}
+                  {engagementProfile?.buyerIntent?.summary ? (
+                    <Text style={styles.lookingForSummary} numberOfLines={6}>
+                      {engagementProfile.buyerIntent.summary}
+                    </Text>
+                  ) : lead.notes ? (
                     <Text style={styles.lookingForSummary} numberOfLines={4}>
                       {lead.notes}
                     </Text>
+                  ) : null}
+                  {engagementProfile?.buyerIntent?.chips?.length ? (
+                    <View style={styles.intentChipRow}>
+                      {engagementProfile.buyerIntent.chips
+                        .slice(0, 6)
+                        .map((chip) => (
+                          <View key={chip} style={styles.intentChip}>
+                            <Text style={styles.intentChipText}>{chip}</Text>
+                          </View>
+                        ))}
+                    </View>
                   ) : null}
                 </View>
               </View>
@@ -2050,6 +2310,75 @@ export function LeadDetailScreen({
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      <Modal
+        visible={contactEditField != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setContactEditField(null)}
+      >
+        <TouchableWithoutFeedback onPress={() => setContactEditField(null)}>
+          <View style={styles.statusMenuOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.statusMenuCard}>
+                <Text style={styles.statusMenuTitle}>
+                  {contactEditField === "phone"
+                    ? "Edit phone"
+                    : contactEditField === "email"
+                      ? "Edit email"
+                      : "Edit address"}
+                </Text>
+                <TextInput
+                  style={styles.contactEditInput}
+                  value={contactEditValue}
+                  onChangeText={setContactEditValue}
+                  autoCapitalize={
+                    contactEditField === "email" ? "none" : "sentences"
+                  }
+                  autoCorrect={contactEditField !== "email"}
+                  keyboardType={
+                    contactEditField === "email"
+                      ? "email-address"
+                      : contactEditField === "phone"
+                        ? "phone-pad"
+                        : "default"
+                  }
+                  placeholder={
+                    contactEditField === "phone"
+                      ? "Phone number"
+                      : contactEditField === "email"
+                        ? "Email address"
+                        : "Home address"
+                  }
+                  placeholderTextColor="#94A3B8"
+                  editable={!contactPending}
+                  multiline={contactEditField === "address"}
+                />
+                <View style={styles.contactEditActions}>
+                  <TouchableOpacity
+                    style={styles.contactEditCancel}
+                    disabled={contactPending}
+                    onPress={() => setContactEditField(null)}
+                  >
+                    <Text style={styles.contactEditCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.contactEditSave}
+                    disabled={contactPending}
+                    onPress={() => {
+                      void saveContactEdit();
+                    }}
+                  >
+                    <Text style={styles.contactEditSaveText}>
+                      {contactPending ? "Saving…" : "Save"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
@@ -2230,12 +2559,14 @@ const styles = StyleSheet.create({
     marginTop: 12,
     width: "100%",
     gap: 10,
+    paddingHorizontal: 4,
   },
   contactRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
     width: "100%",
+    paddingRight: 2,
   },
   contactIcon: {
     fontSize: 14,
@@ -2251,6 +2582,7 @@ const styles = StyleSheet.create({
   contactValueFlex: {
     flex: 1,
     minWidth: 0,
+    paddingRight: 4,
   },
   contactMuted: {
     color: "#94A3B8",
@@ -2258,20 +2590,19 @@ const styles = StyleSheet.create({
   contactMultiline: {
     lineHeight: 18,
   },
+  contactActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    flexShrink: 0,
+  },
   contactActionBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-  },
-  contactActionIcon: {
-    fontSize: 14,
-    color: "#64748B",
-    fontWeight: "700",
-  },
-  contactBellIcon: {
-    fontSize: 13,
+    backgroundColor: "#F1F5F9",
   },
   actionRow: {
     marginTop: 16,
@@ -2439,6 +2770,64 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 18,
     color: "#334155",
+  },
+  intentChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 10,
+  },
+  intentChip: {
+    borderRadius: 999,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  intentChipText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#0F766E",
+  },
+  contactEditInput: {
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#1E2A38",
+    backgroundColor: "#F8FAFC",
+    minHeight: 48,
+    marginTop: 12,
+    textAlignVertical: "top",
+  },
+  contactEditActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 14,
+  },
+  contactEditCancel: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  contactEditCancelText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  contactEditSave: {
+    backgroundColor: "#0F6B4C",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  contactEditSaveText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   touchBox: {
     marginTop: 12,
