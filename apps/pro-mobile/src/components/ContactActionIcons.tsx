@@ -17,12 +17,22 @@ export function ContactPencilIcon({ color = INK }: { color?: string }) {
   );
 }
 
-export function ContactBellIcon({ color = INK }: { color?: string }) {
+export function ContactBellIcon({
+  color = INK,
+  muted = false,
+}: {
+  color?: string;
+  muted?: boolean;
+}) {
+  const tone = muted ? "#94A3B8" : color;
   return (
-    <View style={styles.box} accessibilityElementsHidden>
-      <View style={[styles.bellDome, { borderColor: color }]} />
-      <View style={[styles.bellBase, { backgroundColor: color }]} />
-      <View style={[styles.bellClapper, { backgroundColor: color }]} />
+    <View
+      style={[styles.box, muted ? styles.muted : null]}
+      accessibilityElementsHidden
+    >
+      <View style={[styles.bellDome, { borderColor: tone }]} />
+      <View style={[styles.bellBase, { backgroundColor: tone }]} />
+      <View style={[styles.bellClapper, { backgroundColor: tone }]} />
     </View>
   );
 }
@@ -33,6 +43,9 @@ const styles = StyleSheet.create({
     height: 16,
     alignItems: "center",
     justifyContent: "center",
+  },
+  muted: {
+    opacity: 0.55,
   },
   pencilShaft: {
     width: 2,

@@ -130,6 +130,8 @@ export async function GET(
             createdAt: true,
             caslConsentAt: true,
             emailAlertsEnabled: true,
+            emailUpdateRequestedAt: true,
+            phoneUpdateRequestedAt: true,
           },
         },
         assignedAgent: {
@@ -244,6 +246,12 @@ export async function GET(
               ? lead.customer.caslConsentAt.toISOString()
               : null,
             emailAlertsEnabled: lead.customer.emailAlertsEnabled,
+            emailUpdateRequestedAt: lead.customer.emailUpdateRequestedAt
+              ? lead.customer.emailUpdateRequestedAt.toISOString()
+              : null,
+            phoneUpdateRequestedAt: lead.customer.phoneUpdateRequestedAt
+              ? lead.customer.phoneUpdateRequestedAt.toISOString()
+              : null,
           }
         : null,
       assignedAgent: lead.assignedAgent

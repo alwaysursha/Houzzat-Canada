@@ -576,6 +576,7 @@ function ContactActionRow({
   multiline,
   showEdit,
   showBell,
+  updateRequested,
   onEdit,
   onRequestUpdate,
 }: {
@@ -585,23 +586,30 @@ function ContactActionRow({
   multiline?: boolean;
   showEdit?: boolean;
   showBell?: boolean;
+  updateRequested?: boolean;
   onEdit?: () => void;
   onRequestUpdate?: () => void;
 }) {
   return (
     <View style={styles.contactRow}>
       <Text style={styles.contactIcon}>{icon}</Text>
-      <Text
-        style={[
-          styles.contactValue,
-          muted && styles.contactMuted,
-          multiline && styles.contactMultiline,
-          styles.contactValueFlex,
-        ]}
-        numberOfLines={multiline ? 2 : 1}
-      >
-        {value || "N/A"}
-      </Text>
+      <View style={styles.contactValueCol}>
+        <Text
+          style={[
+            styles.contactValue,
+            muted && styles.contactMuted,
+            multiline && styles.contactMultiline,
+          ]}
+          numberOfLines={multiline ? 2 : 1}
+        >
+          {value || "N/A"}
+        </Text>
+        {updateRequested ? (
+          <Text style={styles.updateRequestedBadge} numberOfLines={1}>
+            Update requested
+          </Text>
+        ) : null}
+      </View>
       {showEdit || showBell ? (
         <View style={styles.contactActions}>
           {showEdit ? (
@@ -617,13 +625,19 @@ function ContactActionRow({
           ) : null}
           {showBell ? (
             <TouchableOpacity
-              style={styles.contactActionBtn}
-              onPress={onRequestUpdate}
+              style={[
+                styles.contactActionBtn,
+                updateRequested && styles.contactActionBtnMuted,
+              ]}
+              onPress={updateRequested ? undefined : onRequestUpdate}
+              disabled={updateRequested}
               activeOpacity={0.7}
               hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-              accessibilityLabel="Request update"
+              accessibilityLabel={
+                updateRequested ? "Update already requested" : "Request update"
+              }
             >
-              <ContactBellIcon />
+              <ContactBellIcon muted={updateRequested} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -699,6 +713,10 @@ export function LeadDetailScreen({
   >(null);
   const [contactEditValue, setContactEditValue] = useState("");
   const [contactPending, setContactPending] = useState(false);
+  const [reminderPending, setReminderPending] = useState(false);
+  const [reminderNotice, setReminderNotice] = useState<{
+    channel: "phone" | "email";
+  } | null>(null);
   const [flagsPending, setFlagsPending] = useState(false);
   const mainScrollRef = useRef<{
     scrollTo: (opts: { y: number; animated?: boolean }) => void;
@@ -799,6 +817,12 @@ export function LeadDetailScreen({
             data.address !== undefined
               ? data.address
               : prev.customer.homeAddress,
+          ...(contactEditField === "email"
+            ? { emailUpdateRequestedAt: null }
+            : {}),
+          ...(contactEditField === "phone"
+            ? { phoneUpdateRequestedAt: null }
+            : {}),
         };
         const next = { ...prev, customer: nextCustomer };
         if (cacheKey) {
@@ -818,10 +842,19 @@ export function LeadDetailScreen({
   };
 
   const requestContactUpdate = async (channel: "email" | "phone") => {
-    if (!lead?.customer) return;
+    if (!lead?.customer || reminderPending) return;
+    if (
+      channel === "phone"
+        ? lead.customer.phoneUpdateRequestedAt
+        : lead.customer.emailUpdateRequestedAt
+    ) {
+      return;
+    }
+    setReminderPending(true);
     try {
       const res = await mobileApiClient.post<{
         ok: boolean;
+        requestedAt?: string;
         message?: string;
       }>(`/leads/${encodeURIComponent(leadId)}/contact-reminder`, {
         channel,
@@ -833,17 +866,30 @@ export function LeadDetailScreen({
         );
         return;
       }
-      Alert.alert(
-        "Request sent",
-        channel === "phone"
-          ? "The customer will be asked to provide the correct phone number."
-          : "The customer will be asked to provide the correct email.",
-      );
+      const stamp =
+        (res.data as { requestedAt?: string } | undefined)?.requestedAt ||
+        new Date().toISOString();
+      setLead((prev) => {
+        if (!prev?.customer) return prev;
+        const nextCustomer = {
+          ...prev.customer,
+          ...(channel === "phone"
+            ? { phoneUpdateRequestedAt: stamp }
+            : { emailUpdateRequestedAt: stamp }),
+        };
+        if (cacheKey) {
+          patchLeadDetailCache(cacheKey, { customer: nextCustomer });
+        }
+        return { ...prev, customer: nextCustomer };
+      });
+      setReminderNotice({ channel });
     } catch (err: unknown) {
       Alert.alert(
         "Request failed",
         err instanceof Error ? err.message : "Network error",
       );
+    } finally {
+      setReminderPending(false);
     }
   };
 
@@ -1510,6 +1556,7 @@ export function LeadDetailScreen({
                 muted={!phone}
                 showEdit={Boolean(lead.customer)}
                 showBell={Boolean(lead.customer)}
+                updateRequested={Boolean(lead.customer?.phoneUpdateRequestedAt)}
                 onEdit={() => openContactEditor("phone")}
                 onRequestUpdate={() => {
                   void requestContactUpdate("phone");
@@ -1521,6 +1568,7 @@ export function LeadDetailScreen({
                 muted={!email}
                 showEdit={Boolean(lead.customer)}
                 showBell={Boolean(lead.customer)}
+                updateRequested={Boolean(lead.customer?.emailUpdateRequestedAt)}
                 onEdit={() => openContactEditor("email")}
                 onRequestUpdate={() => {
                   void requestContactUpdate("email");
@@ -2318,18 +2366,37 @@ export function LeadDetailScreen({
         onRequestClose={() => setContactEditField(null)}
       >
         <TouchableWithoutFeedback onPress={() => setContactEditField(null)}>
-          <View style={styles.statusMenuOverlay}>
+          <View style={styles.premiumOverlay}>
             <TouchableWithoutFeedback>
-              <View style={styles.statusMenuCard}>
-                <Text style={styles.statusMenuTitle}>
+              <View style={styles.premiumCard}>
+                <View style={styles.premiumAccent} />
+                <Text style={styles.premiumEyebrow}>CONTACT</Text>
+                <Text style={styles.premiumTitle}>
                   {contactEditField === "phone"
                     ? "Edit phone"
                     : contactEditField === "email"
                       ? "Edit email"
                       : "Edit address"}
                 </Text>
+                <Text style={styles.premiumSubtitle}>
+                  {contactEditField === "phone"
+                    ? "Update the cell number on this lead profile."
+                    : contactEditField === "email"
+                      ? "Update the email address on this lead profile."
+                      : "Update the home address on this lead profile."}
+                </Text>
+                <Text style={styles.premiumFieldLabel}>
+                  {contactEditField === "phone"
+                    ? "PHONE NUMBER"
+                    : contactEditField === "email"
+                      ? "EMAIL ADDRESS"
+                      : "HOME ADDRESS"}
+                </Text>
                 <TextInput
-                  style={styles.contactEditInput}
+                  style={[
+                    styles.premiumInput,
+                    contactEditField === "address" && styles.premiumInputTall,
+                  ]}
                   value={contactEditValue}
                   onChangeText={setContactEditValue}
                   autoCapitalize={
@@ -2354,26 +2421,65 @@ export function LeadDetailScreen({
                   editable={!contactPending}
                   multiline={contactEditField === "address"}
                 />
-                <View style={styles.contactEditActions}>
-                  <TouchableOpacity
-                    style={styles.contactEditCancel}
-                    disabled={contactPending}
-                    onPress={() => setContactEditField(null)}
-                  >
-                    <Text style={styles.contactEditCancelText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.contactEditSave}
-                    disabled={contactPending}
-                    onPress={() => {
-                      void saveContactEdit();
-                    }}
-                  >
-                    <Text style={styles.contactEditSaveText}>
-                      {contactPending ? "Saving…" : "Save"}
-                    </Text>
-                  </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.premiumPrimaryBtn,
+                    contactPending && styles.premiumBtnDisabled,
+                  ]}
+                  disabled={contactPending}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    void saveContactEdit();
+                  }}
+                >
+                  <Text style={styles.premiumPrimaryBtnText}>
+                    {contactPending ? "Saving…" : "Save changes"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.premiumSecondaryBtn}
+                  disabled={contactPending}
+                  activeOpacity={0.7}
+                  onPress={() => setContactEditField(null)}
+                >
+                  <Text style={styles.premiumSecondaryBtnText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      <Modal
+        visible={reminderNotice != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReminderNotice(null)}
+      >
+        <TouchableWithoutFeedback onPress={() => setReminderNotice(null)}>
+          <View style={styles.premiumOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.premiumCard}>
+                <View style={styles.premiumSuccessMark}>
+                  <Text style={styles.premiumSuccessCheck}>✓</Text>
                 </View>
+                <Text style={[styles.premiumTitle, styles.premiumTitleCentered]}>
+                  {reminderNotice?.channel === "phone"
+                    ? "Cell Number update requested"
+                    : "Email update requested"}
+                </Text>
+                <Text style={styles.premiumSubtitleCentered}>
+                  {reminderNotice?.channel === "phone"
+                    ? "Customer will be requested to update the contact number."
+                    : "Customer will be requested to update the email address."}
+                </Text>
+                <TouchableOpacity
+                  style={styles.premiumPrimaryBtn}
+                  activeOpacity={0.85}
+                  onPress={() => setReminderNotice(null)}
+                >
+                  <Text style={styles.premiumPrimaryBtnText}>Done</Text>
+                </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
           </View>
@@ -2574,21 +2680,28 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   contactValue: {
-    flex: 1,
     fontSize: 13,
     color: "#2B6CB0",
     fontWeight: "500",
   },
-  contactValueFlex: {
+  contactValueCol: {
     flex: 1,
     minWidth: 0,
     paddingRight: 4,
+    gap: 3,
   },
   contactMuted: {
     color: "#94A3B8",
   },
   contactMultiline: {
     lineHeight: 18,
+  },
+  updateRequestedBadge: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    color: "#92400E",
   },
   contactActions: {
     flexDirection: "row",
@@ -2603,6 +2716,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F1F5F9",
+  },
+  contactActionBtnMuted: {
+    backgroundColor: "#F8FAFC",
+    opacity: 0.7,
   },
   actionRow: {
     marginTop: 16,
@@ -2828,6 +2945,128 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+  premiumOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.48)",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  premiumCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 18,
+    overflow: "hidden",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  premiumAccent: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: "#0F6B4C",
+  },
+  premiumEyebrow: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    color: "#0F6B4C",
+    marginBottom: 6,
+  },
+  premiumTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.3,
+  },
+  premiumTitleCentered: {
+    textAlign: "center",
+  },
+  premiumSubtitle: {
+    marginTop: 6,
+    marginBottom: 18,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#64748B",
+  },
+  premiumSubtitleCentered: {
+    marginTop: 8,
+    marginBottom: 22,
+    fontSize: 14,
+    lineHeight: 21,
+    color: "#64748B",
+    textAlign: "center",
+  },
+  premiumFieldLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    color: "#64748B",
+    marginBottom: 8,
+  },
+  premiumInput: {
+    borderWidth: 1.5,
+    borderColor: "#D6E4DD",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    fontSize: 16,
+    color: "#0F172A",
+    backgroundColor: "#F7FBFA",
+    minHeight: 52,
+  },
+  premiumInputTall: {
+    minHeight: 96,
+    textAlignVertical: "top",
+  },
+  premiumPrimaryBtn: {
+    marginTop: 18,
+    backgroundColor: "#0F6B4C",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  premiumBtnDisabled: {
+    opacity: 0.65,
+  },
+  premiumPrimaryBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  premiumSecondaryBtn: {
+    marginTop: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  premiumSecondaryBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  premiumSuccessMark: {
+    alignSelf: "center",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1.5,
+    borderColor: "#A7F3D0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  premiumSuccessCheck: {
+    fontSize: 26,
+    fontWeight: "700",
+    color: "#0F6B4C",
   },
   touchBox: {
     marginTop: 12,

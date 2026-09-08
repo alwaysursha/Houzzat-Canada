@@ -42,6 +42,10 @@ export interface MobileLeadCustomer {
   createdAt?: string;
   caslConsentAt?: string | null;
   emailAlertsEnabled?: boolean;
+  /** Agent requested customer to correct email (web ContactDisplayRow parity). */
+  emailUpdateRequestedAt?: string | null;
+  /** Agent requested customer to correct phone (web ContactDisplayRow parity). */
+  phoneUpdateRequestedAt?: string | null;
 }
 
 export interface MobileLeadAssignedAgent {
