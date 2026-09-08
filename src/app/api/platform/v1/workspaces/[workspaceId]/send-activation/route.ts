@@ -7,7 +7,7 @@ type RouteContext = {
   params: Promise<{ workspaceId: string }>;
 };
 
-/** MASTER_ADMIN — send (or rotate) owner activation email. No auto-provision hook. */
+/** MASTER_ADMIN — send (or rotate) owner activation email. Fallback after auto-send. */
 export async function POST(_request: Request, context: RouteContext) {
   const { workspaceId } = await context.params;
   return runPlatformRouteWithOperator(async (operator) => {

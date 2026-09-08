@@ -29,6 +29,8 @@ export { OwnerActivationError } from "./errors";
 
 export {
   sendOwnerActivationEmail,
+  tryAutoSendOwnerActivationAfterProvision,
+  type AutoSendOwnerActivationResult,
   type SendOwnerActivationResult,
 } from "./send";
 

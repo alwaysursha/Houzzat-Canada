@@ -12,6 +12,7 @@ import type {
   PrismaClient,
   ProvisioningRun,
 } from "@prisma/client";
+import { tryAutoSendOwnerActivationAfterProvision } from "@/lib/platform/activation";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 import {
   PROVISIONING_AUDIT,
@@ -44,6 +45,45 @@ export type ProvisionPaidSubscriptionResult = {
   reason?: string;
   lastError?: string | null;
 };
+
+/**
+ * V1: after ACTIVE provision success, auto-send owner activation (idempotent).
+ * Never throws; never affects Subscription / ProvisioningRun outcome.
+ */
+async function maybeAutoSendOwnerActivation(input: {
+  result: ProvisionPaidSubscriptionResult;
+  subscriptionId: string;
+  actorType: PlatformAuditActorType;
+  prisma: PrismaClient;
+}): Promise<ProvisionPaidSubscriptionResult> {
+  const { result } = input;
+  if (
+    (result.outcome !== "succeeded" &&
+      result.outcome !== "already_succeeded") ||
+    !result.workspaceId
+  ) {
+    return result;
+  }
+
+  const activationActor: "SYSTEM" | "WEBHOOK" =
+    input.actorType === "WEBHOOK" ? "WEBHOOK" : "SYSTEM";
+
+  await tryAutoSendOwnerActivationAfterProvision({
+    workspaceId: result.workspaceId,
+    subscriptionId: input.subscriptionId,
+    prisma: input.prisma,
+    actorType: activationActor,
+  }).catch((error) => {
+    console.error(
+      "[platform] post-provision owner activation auto-send error",
+      input.subscriptionId,
+      result.workspaceId,
+      error,
+    );
+  });
+
+  return result;
+}
 
 async function loadSubscription(
   db: PrismaClient,
@@ -188,12 +228,17 @@ export async function provisionPaidSubscription(input: {
   });
 
   if (eligibility.reason === "ALREADY_SUCCEEDED") {
-    return {
-      outcome: "already_succeeded",
-      runId: eligibility.runId,
-      workspaceId: eligibility.workspaceId,
-      reason: eligibility.reason,
-    };
+    return maybeAutoSendOwnerActivation({
+      result: {
+        outcome: "already_succeeded",
+        runId: eligibility.runId,
+        workspaceId: eligibility.workspaceId,
+        reason: eligibility.reason,
+      },
+      subscriptionId: input.subscriptionId,
+      actorType,
+      prisma: db,
+    });
   }
 
   if (eligibility.reason === "IN_PROGRESS" && !allowInProgressRetry) {
@@ -226,11 +271,16 @@ export async function provisionPaidSubscription(input: {
 
   const run = await ensureRun({ db, subscription });
   if (run.status === "SUCCEEDED") {
-    return {
-      outcome: "already_succeeded",
-      runId: run.id,
-      workspaceId: run.workspaceId,
-    };
+    return maybeAutoSendOwnerActivation({
+      result: {
+        outcome: "already_succeeded",
+        runId: run.id,
+        workspaceId: run.workspaceId,
+      },
+      subscriptionId: input.subscriptionId,
+      actorType,
+      prisma: db,
+    });
   }
 
   const ctx: StepContext = {
@@ -253,11 +303,16 @@ export async function provisionPaidSubscription(input: {
 
   try {
     await runSteps(ctx);
-    return {
-      outcome: "succeeded",
-      runId: run.id,
-      workspaceId: ctx.workspaceId,
-    };
+    return maybeAutoSendOwnerActivation({
+      result: {
+        outcome: "succeeded",
+        runId: run.id,
+        workspaceId: ctx.workspaceId,
+      },
+      subscriptionId: input.subscriptionId,
+      actorType,
+      prisma: db,
+    });
   } catch (error) {
     const message = safeErrorMessage(error);
     await db.provisioningRun.update({

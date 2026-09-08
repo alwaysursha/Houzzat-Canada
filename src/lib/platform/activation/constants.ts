@@ -11,6 +11,8 @@ export const OWNER_ACTIVATION_AUDIT = {
   EMAIL_SENT: "OWNER_ACTIVATION_EMAIL_SENT",
   EMAIL_FAILED: "OWNER_ACTIVATION_EMAIL_FAILED",
   ACCOUNT_ACTIVATED: "OWNER_ACCOUNT_ACTIVATED",
+  /** V1 auto-send after ACTIVE provision skipped (idempotent / ineligible). */
+  AUTO_SKIPPED: "OWNER_ACTIVATION_AUTO_SKIPPED",
 } as const;
 
 export const OWNER_ACTIVATION_ENTITY_TYPE = "WorkspaceOwnerActivation" as const;

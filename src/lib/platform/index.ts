@@ -26,6 +26,7 @@ export {
 export {
   evaluateOwnerActivationEligibility,
   sendOwnerActivationEmail,
+  tryAutoSendOwnerActivationAfterProvision,
   resolvePublicOwnerActivation,
   completeOwnerActivation,
   OwnerActivationError,
