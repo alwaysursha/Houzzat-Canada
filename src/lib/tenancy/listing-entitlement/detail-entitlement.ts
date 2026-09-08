@@ -53,7 +53,8 @@ export type MlsListingDetailEntitlementDenialReason =
   | "missing_provider_key"
   | "unrecognized_provider_key"
   | "authority_pair_mismatch"
-  | "missing_capability";
+  | "missing_capability"
+  | "unsupported_status";
 
 export type MlsListingDetailEntitlementDecision =
   | {
@@ -221,4 +222,113 @@ export function decideMlsListingDetailEntitlement(
     providerKey,
     capability,
   };
+}
+
+export type EvaluateWebListingDetailInventoryAccessInput = {
+  entitlement?: WorkspaceListingEntitlement | null;
+  /**
+   * Web force-enable. Same monotonic gate as G.10B1 / G.10C1.
+   * Omit / false → follows production G5 (currently OFF / mobile-safe).
+   */
+  entitlementFilteringEnabled?: boolean;
+  organizationId: string | null | undefined;
+  providerKey: string | null | undefined;
+  dataSource: string | null | undefined;
+  status: ListingStatus | string;
+  /**
+   * Override status-derived body capability (same as loader `requiredCapability`).
+   */
+  baseCapabilityOverride?: ListingDataCapability;
+  /**
+   * Extra capabilities (MEDIA / HISTORY / OPEN_HOUSES) that must also pass
+   * on the same exact authority pair. Never checked without base body cap.
+   */
+  additionalCapabilities?: readonly ListingDataCapability[];
+};
+
+export type EvaluateWebListingDetailInventoryAccessResult =
+  | {
+      allowed: true;
+      channel: MlsListingDetailInventoryChannel;
+      /**
+       * Status-derived (or override) body capability for MLS.
+       * Null when enforcement is OFF, or for FSBO/manual passthrough.
+       */
+      baseCapability: ListingDataCapability | null;
+    }
+  | {
+      allowed: false;
+      reason: MlsListingDetailEntitlementDenialReason;
+      channel: MlsListingDetailInventoryChannel;
+    };
+
+/**
+ * G.10C2 web listing-detail inventory gate (hostname entitlement already resolved).
+ *
+ * When enforcement ON:
+ * - FSBO / manual → allowed (MLS helper never authorizes them; callers keep
+ *   their explicit non-MLS behavior)
+ * - preview / other → denied
+ * - MLS → base capability (status or override) + every additionalCapability
+ *   must pass {@link decideMlsListingDetailEntitlement} on the exact pair
+ *
+ * When enforcement OFF → allowed (mobile / legacy).
+ */
+export function evaluateWebListingDetailInventoryAccess(
+  input: EvaluateWebListingDetailInventoryAccessInput,
+): EvaluateWebListingDetailInventoryAccessResult {
+  const channel = classifyListingInventoryChannel(input.dataSource);
+  const enforce = isWebListingDetailEntitlementEnforcementEnabled(
+    input.entitlementFilteringEnabled,
+  );
+  if (!enforce) {
+    return { allowed: true, channel, baseCapability: null };
+  }
+
+  switch (channel) {
+    case "fsbo":
+    case "manual":
+      return { allowed: true, channel, baseCapability: null };
+    case "preview":
+      return {
+        allowed: false,
+        reason: "non_mls_channel_preview",
+        channel,
+      };
+    case "other":
+      return { allowed: false, reason: "non_mls_channel", channel };
+    case "mls":
+      break;
+    default: {
+      const _exhaustive: never = channel;
+      return _exhaustive;
+    }
+  }
+
+  const baseCapability =
+    input.baseCapabilityOverride ??
+    listingDetailCapabilityForStatus(input.status);
+  if (!baseCapability) {
+    return { allowed: false, reason: "unsupported_status", channel };
+  }
+
+  const capabilities: ListingDataCapability[] = [
+    baseCapability,
+    ...(input.additionalCapabilities ?? []),
+  ];
+
+  for (const capability of capabilities) {
+    const decision = decideMlsListingDetailEntitlement({
+      entitlement: input.entitlement,
+      organizationId: input.organizationId,
+      providerKey: input.providerKey,
+      dataSource: "mls",
+      requiredCapability: capability,
+    });
+    if (!decision.allowed) {
+      return { allowed: false, reason: decision.reason, channel };
+    }
+  }
+
+  return { allowed: true, channel: "mls", baseCapability };
 }

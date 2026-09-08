@@ -621,17 +621,13 @@ async function main() {
     console.log("[12] mobile loader call unchanged... PASS");
   }
 
-  // --- Deferred APIs still unwired (G.10C2+) ---
+  // --- related / by-mls still outside C1 (G.10C3); C2 owns deferred APIs ---
   {
-    const gallery = read("src/app/api/listings/[mlsNumber]/gallery/route.ts");
     const related = read("src/app/api/listings/related/route.ts");
     const byMls = read("src/app/api/listings/by-mls/route.ts");
-    const raw = read("src/app/api/listings/[mlsNumber]/route.ts");
-    assert.ok(!gallery.includes("entitlementFilteringEnabled"));
     assert.ok(!related.includes("decideMlsListingDetailEntitlement"));
     assert.ok(!byMls.includes("entitlementFilteringEnabled"));
-    assert.ok(!raw.includes("entitlementFilteringEnabled"));
-    console.log("[13] deferred APIs remain outside G.10C1... PASS");
+    console.log("[13] related/by-mls remain outside G.10C1... PASS");
   }
 
   // --- SOLD_CONDITIONAL maps to ACTIVE_LISTINGS ---

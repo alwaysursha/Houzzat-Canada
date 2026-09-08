@@ -6,14 +6,45 @@ import { buildListingInsights } from "@/lib/market/listing-insights";
 import { getMarketPulse } from "@/lib/market/pulse";
 import { findNearbyPois } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
+import {
+  evaluateWebListingDetailInventoryAccess,
+  resolveListingEntitlementContextForRequest,
+} from "@/lib/tenancy/listing-entitlement";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
-  const { mlsNumber } = await params;
+/**
+ * Listing insights panel.
+ *
+ * G.10C2: Host entitlement → base listing capability before any listing
+ * context is used. Market pulse sold aggregates stay behind client/VOW
+ * signed-in (not listing HISTORY). Unauthorized → 404.
+ */
+export async function GET(request: Request, { params }: Params) {
+  const { mlsNumber: raw } = await params;
+  const mlsNumber = decodeURIComponent(raw).trim().toUpperCase();
+  if (!mlsNumber) {
+    return NextResponse.json({ error: "Missing MLS number" }, { status: 400 });
+  }
+
+  const { entitlement } =
+    await resolveListingEntitlementContextForRequest(request);
+
   const provider = getListingProvider();
   const listing = await provider.getByMls(mlsNumber);
   if (!listing) {
+    return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+  }
+
+  const board = evaluateWebListingDetailInventoryAccess({
+    entitlement,
+    entitlementFilteringEnabled: true,
+    organizationId: listing.organizationId,
+    providerKey: listing.providerKey,
+    dataSource: listing.dataSource,
+    status: listing.status,
+  });
+  if (!board.allowed) {
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
   }
 

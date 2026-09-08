@@ -6,11 +6,16 @@ type Params = { params: Promise<{ mlsNumber: string }> };
 
 /**
  * Rooms + open houses for listing detail — after paint (not SSR).
- * VOW / inactive locks match GET /api/listings/[mls]/panel.
+ *
+ * G.10C2: Host entitlement → base provenance + OPEN_HOUSES → VOW.
+ * VOW never substitutes for MLS board authority. Unauthorized → 404.
  */
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const { mlsNumber: raw } = await params;
-  const gated = await loadListingDetailApiAccess(raw);
+  const gated = await loadListingDetailApiAccess(raw, request, {
+    additionalCapabilities: ["OPEN_HOUSES"],
+    entitlementFilteringEnabled: true,
+  });
   if (!gated.ok) return gated.response;
 
   const { listing, access } = gated;

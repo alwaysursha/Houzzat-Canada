@@ -12,7 +12,9 @@ import {
   findSiblingListingsAtAddress,
 } from "@/lib/listings/address-history";
 import { loadListingDetailApiAccess } from "@/lib/listings/listing-detail-api-access";
+import { mayInvokePropTxOnDemandForDetail } from "@/lib/listings/load-listing-for-detail";
 import type { HistoryRow } from "@/lib/listings/history-rows";
+import { classifyListingInventoryChannel } from "@/lib/tenancy/listing-entitlement";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
@@ -44,9 +46,12 @@ function authorizeRows(
 }
 
 /** Current Neon address history (no PropTx). Authorized + redacted. */
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const { mlsNumber: raw } = await params;
-  const gated = await loadListingDetailApiAccess(raw);
+  const gated = await loadListingDetailApiAccess(raw, request, {
+    additionalCapabilities: ["HISTORY"],
+    entitlementFilteringEnabled: true,
+  });
   if (!gated.ok) return gated.response;
 
   const listing = await loadListingForAddressHistory(gated.listing.mlsNumber);
@@ -82,12 +87,15 @@ export async function GET(_request: Request, { params }: Params) {
 
 /**
  * Pull PropTx sibling cycles at this address into Neon.
- * VOW-gated; response history rows are redacted for non-clients.
- * Listing page / panel call this after paint — never blocks SSR.
+ * G.10C2: Host entitlement → base + HISTORY → VOW → exact PropTx pre-auth
+ * before enrichment writes. Unauthorized → 404 (no PropTx / no warehouse write).
  */
 export async function POST(request: Request, { params }: Params) {
   const { mlsNumber: raw } = await params;
-  const gated = await loadListingDetailApiAccess(raw);
+  const gated = await loadListingDetailApiAccess(raw, request, {
+    additionalCapabilities: ["HISTORY"],
+    entitlementFilteringEnabled: true,
+  });
   if (!gated.ok) return gated.response;
 
   const listing = await loadListingForAddressHistory(gated.listing.mlsNumber);
@@ -103,6 +111,45 @@ export async function POST(request: Request, { params }: Params) {
     forceRequested = false;
   }
   const force = forceRequested ? await canForceEnrich() : false;
+
+  const channel = classifyListingInventoryChannel(gated.listing.dataSource);
+  const orgId = gated.listing.organizationId?.trim() ?? "";
+  const mayPropTx =
+    channel !== "mls" ||
+    (Boolean(orgId) &&
+      mayInvokePropTxOnDemandForDetail({
+        entitlementFilteringEnabled: true,
+        entitlement: gated.entitlement,
+        requiredCapability: "HISTORY",
+        propTxOrganizationId: orgId,
+      }));
+
+  if (!mayPropTx) {
+    const siblings = await findSiblingListingsAtAddress(listing);
+    const soldPrice = gated.access.canSeeRestricted ? listing.soldPrice : null;
+    const historyRows = authorizeRows(
+      buildAddressListingHistoryRows({
+        mlsNumber: listing.mlsNumber,
+        listPrice: listing.listPrice,
+        listedAt: listing.listedAt,
+        updatedAtMls: listing.updatedAtMls,
+        soldAt: listing.soldAt,
+        soldPrice,
+        status: listing.status,
+        transactionType: listing.transactionType,
+        history: listing.history,
+        siblings,
+      }),
+      listing,
+      gated.access.canSeeRestricted,
+    );
+    return NextResponse.json({
+      ok: false,
+      skipped: true,
+      upsertedMls: [] as string[],
+      historyRows,
+    });
+  }
 
   const result = await enrichAddressListingHistory(listing, { force });
   const historyRows = authorizeRows(

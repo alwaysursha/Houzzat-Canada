@@ -203,6 +203,7 @@
     "stage-6.11g10b3b-web-only-enforcement:selftest": "node --import tsx scripts/stage-6.11g10b3b-web-only-enforcement-selftest.ts",
     "stage-6.11g10c0-detail-entitlement:selftest": "node --import tsx scripts/stage-6.11g10c0-detail-entitlement-selftest.ts",
     "stage-6.11g10c1-public-listing-detail:selftest": "node --import tsx scripts/stage-6.11g10c1-public-listing-detail-selftest.ts",
+    "stage-6.11g10c2-deferred-listing-detail:selftest": "node --import tsx scripts/stage-6.11g10c2-deferred-listing-detail-selftest.ts",
     "poi:sync": "node --import tsx scripts/poi-sync.ts",
     "roles:migrate": "node --import tsx scripts/migrate-roles.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",

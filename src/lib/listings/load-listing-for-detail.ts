@@ -8,10 +8,9 @@ import {
 } from "@/lib/proptx/listing-provenance";
 import { lookupAndUpsertOnDemand } from "@/lib/proptx/on-demand-lookup";
 import {
-  classifyListingInventoryChannel,
   decideMlsListingDetailEntitlement,
+  evaluateWebListingDetailInventoryAccess,
   isWebListingDetailEntitlementEnforcementEnabled,
-  listingDetailCapabilityForStatus,
   type ListingDataCapability,
   type WorkspaceListingEntitlement,
 } from "@/lib/tenancy/listing-entitlement";
@@ -113,32 +112,15 @@ function applyDetailEntitlementGate(
   listing: ListingDetail,
   options: LoadListingForDetailPageOptions | undefined,
 ): ListingDetail | null {
-  const enforce = isWebListingDetailEntitlementEnforcementEnabled(
-    options?.entitlementFilteringEnabled,
-  );
-  if (!enforce) return listing;
-
-  const channel = classifyListingInventoryChannel(listing.dataSource);
-
-  // Explicit non-MLS channels — never run MLS pair/capability checks.
-  if (channel === "fsbo") return listing;
-  if (channel === "manual") return listing;
-  if (channel === "preview") return null;
-  if (channel === "other") return null;
-
-  const capability =
-    options?.requiredCapability ??
-    listingDetailCapabilityForStatus(listing.status);
-  if (!capability) return null;
-
-  const decision = decideMlsListingDetailEntitlement({
+  const decision = evaluateWebListingDetailInventoryAccess({
     entitlement: options?.entitlement,
+    entitlementFilteringEnabled: options?.entitlementFilteringEnabled,
     organizationId: listing.organizationId,
     providerKey: listing.providerKey,
-    dataSource: "mls",
-    requiredCapability: capability,
+    dataSource: listing.dataSource,
+    status: listing.status,
+    baseCapabilityOverride: options?.requiredCapability,
   });
-
   return decision.allowed ? listing : null;
 }
 
