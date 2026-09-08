@@ -47,8 +47,8 @@ export default async function BookADemoPage() {
   return (
     <div className="book-demo-page min-h-dvh overflow-x-hidden bg-[#f7f8f7] text-slate-900">
       <div className="mx-auto grid min-h-dvh lg:grid-cols-2">
-        {/* LEFT — sales story */}
-        <aside className="relative flex flex-col justify-between overflow-hidden bg-[#07111f] px-5 py-8 text-white sm:px-8 sm:py-10 lg:px-12 lg:py-12 xl:px-16">
+        {/* LEFT — sales story (desktop only; mobile shows form alone) */}
+        <aside className="relative hidden flex-col justify-between overflow-hidden bg-[#07111f] px-5 py-8 text-white sm:px-8 sm:py-10 lg:flex lg:px-12 lg:py-12 xl:px-16">
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(16,185,129,0.16),_transparent_42%),radial-gradient(ellipse_at_bottom_right,_rgba(15,23,42,0.9),_transparent_55%)]"
