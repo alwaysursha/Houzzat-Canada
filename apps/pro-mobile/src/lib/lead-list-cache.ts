@@ -86,3 +86,28 @@ export function updateCustomerFlagsInListCache(
     timestamp: Date.now(),
   };
 }
+
+/** Patch email verification for every list row sharing this customer. */
+export function updateCustomerEmailVerifiedInListCache(
+  workspaceId: string | undefined,
+  customerId: string,
+  emailVerified: boolean,
+) {
+  if (!workspaceId || !leadCacheStore || leadCacheStore.workspaceId !== workspaceId) {
+    return;
+  }
+  leadCacheStore = {
+    ...leadCacheStore,
+    leads: leadCacheStore.leads.map((l) => {
+      if (!l.customer || l.customer.id !== customerId) return l;
+      return {
+        ...l,
+        customer: {
+          ...l.customer,
+          emailVerified,
+        },
+      };
+    }),
+    timestamp: Date.now(),
+  };
+}

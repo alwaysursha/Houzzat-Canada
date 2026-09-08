@@ -15,50 +15,50 @@ export function ContactPencilIcon({
   color?: string;
   size?: number;
 }) {
-  // Lucide-style pencil: shaft + tip + eraser square.
-  const shaftW = size * 0.7;
-  const shaftH = Math.max(2, size * 0.18);
+  // Lucide Pencil: thin outline body + tip (not a filled mechanical stylus).
+  const stroke = Math.max(1.4, size * 0.1);
   return (
     <View
       style={[styles.box, { width: size, height: size }]}
       accessibilityElementsHidden
     >
       <View
-        style={[
-          styles.pencilShaft,
-          {
-            width: shaftW,
-            height: shaftH,
-            backgroundColor: color,
-            borderRadius: shaftH / 2,
-          },
-        ]}
+        style={{
+          width: size * 0.28,
+          height: size * 0.62,
+          borderWidth: stroke,
+          borderColor: color,
+          borderRadius: 1.5,
+          backgroundColor: "transparent",
+          transform: [{ rotate: "-45deg" }],
+        }}
       />
       <View
-        style={[
-          styles.pencilEraser,
-          {
-            width: size * 0.28,
-            height: size * 0.28,
-            borderColor: color,
-            borderWidth: Math.max(1.25, size * 0.08),
-            top: size * 0.08,
-            right: size * 0.08,
-          },
-        ]}
+        style={{
+          position: "absolute",
+          width: 0,
+          height: 0,
+          borderLeftWidth: size * 0.14,
+          borderRightWidth: size * 0.14,
+          borderTopWidth: size * 0.2,
+          borderLeftColor: "transparent",
+          borderRightColor: "transparent",
+          borderTopColor: color,
+          bottom: size * 0.06,
+          left: size * 0.1,
+          transform: [{ rotate: "-45deg" }],
+        }}
       />
       <View
-        style={[
-          styles.pencilTip,
-          {
-            borderLeftWidth: size * 0.14,
-            borderRightWidth: size * 0.14,
-            borderTopWidth: size * 0.2,
-            borderTopColor: color,
-            bottom: size * 0.06,
-            left: size * 0.08,
-          },
-        ]}
+        style={{
+          position: "absolute",
+          width: size * 0.22,
+          height: stroke,
+          backgroundColor: color,
+          top: size * 0.16,
+          right: size * 0.14,
+          transform: [{ rotate: "-45deg" }],
+        }}
       />
     </View>
   );

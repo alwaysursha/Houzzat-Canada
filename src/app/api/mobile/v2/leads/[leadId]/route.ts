@@ -130,6 +130,7 @@ export async function GET(
             createdAt: true,
             caslConsentAt: true,
             emailAlertsEnabled: true,
+            emailVerified: true,
             emailUpdateRequestedAt: true,
             phoneUpdateRequestedAt: true,
           },
@@ -142,8 +143,8 @@ export async function GET(
           },
         },
         activities: {
-          // Match web CRM timeline depth (loadCustomerTimeline take ~100).
-          take: 100,
+          // Keep first paint light — Conversations tab loads its own emails.
+          take: 40,
           orderBy: { createdAt: "desc" },
           select: {
             id: true,
@@ -159,23 +160,6 @@ export async function GET(
             appointments: true,
             tasks: true,
             emailLogs: true,
-          },
-        },
-        emailLogs: {
-          orderBy: { createdAt: "desc" },
-          take: 40,
-          select: {
-            id: true,
-            subject: true,
-            body: true,
-            toEmail: true,
-            kind: true,
-            openedAt: true,
-            clickedAt: true,
-            openCount: true,
-            clickCount: true,
-            lastClickedUrl: true,
-            createdAt: true,
           },
         },
       },
@@ -246,6 +230,7 @@ export async function GET(
               ? lead.customer.caslConsentAt.toISOString()
               : null,
             emailAlertsEnabled: lead.customer.emailAlertsEnabled,
+            emailVerified: Boolean(lead.customer.emailVerified),
             emailUpdateRequestedAt: lead.customer.emailUpdateRequestedAt
               ? lead.customer.emailUpdateRequestedAt.toISOString()
               : null,
@@ -294,19 +279,8 @@ export async function GET(
         tasks: lead._count.tasks,
         emails: lead._count.emailLogs,
       },
-      emails: lead.emailLogs.map((e) => ({
-        id: e.id,
-        subject: e.subject,
-        body: e.body,
-        toEmail: e.toEmail,
-        kind: e.kind,
-        openedAt: e.openedAt ? e.openedAt.toISOString() : null,
-        clickedAt: e.clickedAt ? e.clickedAt.toISOString() : null,
-        openCount: e.openCount,
-        clickCount: e.clickCount,
-        lastClickedUrl: e.lastClickedUrl,
-        createdAt: e.createdAt.toISOString(),
-      })),
+      // Conversations tab fetches its own list — omit heavy email bodies here.
+      emails: [],
     };
 
     return NextResponse.json({

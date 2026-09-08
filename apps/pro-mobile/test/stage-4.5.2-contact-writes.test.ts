@@ -511,8 +511,18 @@ function assertRouteSource() {
     "emoji bell style should be removed",
   );
   assert.ok(
-    contactUi.includes("Promise.all"),
-    "Lead detail must parallelize detail + engagement",
+    contactUi.includes("engagementCache") &&
+      contactUi.includes("Looking for") &&
+      !contactUi.includes("Promise.all([\n          detailPromise"),
+    "Lead detail must paint before engagement (non-blocking background load)",
+  );
+  assert.ok(
+    contactUi.includes("premiumCard") && contactUi.includes("contactEditField"),
+    "Contact edits must use premium modal (not inline row)",
+  );
+  assert.ok(
+    contactUi.includes("LeadAccountVerifyMenu"),
+    "Lead profile must show account verify menu",
   );
 
   const signIn = readFileSync(

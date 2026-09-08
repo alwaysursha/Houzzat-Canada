@@ -42,6 +42,8 @@ export interface MobileLeadCustomer {
   createdAt?: string;
   caslConsentAt?: string | null;
   emailAlertsEnabled?: boolean;
+  /** Email verification stamp — drives Verified / Unverified lock menu. */
+  emailVerified?: boolean;
   /** Agent requested customer to correct email (web ContactDisplayRow parity). */
   emailUpdateRequestedAt?: string | null;
   /** Agent requested customer to correct phone (web ContactDisplayRow parity). */

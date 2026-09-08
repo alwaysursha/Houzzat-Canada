@@ -35,7 +35,12 @@ import {
 } from "react-native";
 import { mobileApiClient } from "../api/client";
 import { ContactMailIcon, ContactPhoneIcon } from "../components/ContactActionIcons";
-import { leadCacheStore, setLeadCacheStore } from "../lib/lead-list-cache";
+import { LeadAccountVerifyMenu } from "../components/LeadAccountVerifyMenu";
+import {
+  leadCacheStore,
+  setLeadCacheStore,
+  updateCustomerEmailVerifiedInListCache,
+} from "../lib/lead-list-cache";
 import { useAuth } from "../state/AuthContext";
 import type { BackendEnvelope, LeadsResponseData, MobileLeadSummary, LeadStatus } from "../types/api";
 import { LeadDetailScreen } from "./LeadDetailScreen";
@@ -366,9 +371,42 @@ export function LeadsScreen({
         {/* Top Card Row: Name + Status Pill */}
         <View style={styles.cardTopRow}>
           <View style={styles.nameContainer}>
-            <Text style={styles.leadName} numberOfLines={1}>
-              {customerName}
-            </Text>
+            <View style={styles.nameWithVerify}>
+              <Text style={styles.leadName} numberOfLines={1}>
+                {customerName}
+              </Text>
+              {item.customer ? (
+                <LeadAccountVerifyMenu
+                  compact
+                  leadId={item.id}
+                  emailVerified={Boolean(item.customer.emailVerified)}
+                  accountCreatedAt={item.customer.createdAt}
+                  onVerifiedChange={(verified) => {
+                    if (item.customer?.id) {
+                      updateCustomerEmailVerifiedInListCache(
+                        workspaceId,
+                        item.customer.id,
+                        verified,
+                      );
+                    }
+                    setLeads((prev) =>
+                      prev.map((row) => {
+                        if (!row.customer || row.customer.id !== item.customer?.id) {
+                          return row;
+                        }
+                        return {
+                          ...row,
+                          customer: {
+                            ...row.customer,
+                            emailVerified: verified,
+                          },
+                        };
+                      }),
+                    );
+                  }}
+                />
+              ) : null}
+            </View>
             <View style={styles.badgeRow}>
               <View
                 style={[
@@ -973,7 +1011,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: "#1E2A38",
+    flexShrink: 1,
+  },
+  nameWithVerify: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
     marginBottom: 4,
+    maxWidth: "100%",
   },
   badgeRow: {
     flexDirection: "row",

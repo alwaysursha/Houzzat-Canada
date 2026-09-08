@@ -239,6 +239,8 @@ export async function GET(request: Request) {
               phone: true,
               isBuyer: true,
               isSeller: true,
+              createdAt: true,
+              emailVerified: true,
             },
           },
           assignedAgent: {
@@ -284,6 +286,8 @@ export async function GET(request: Request) {
         phone: string | null;
         isBuyer: boolean;
         isSeller: boolean;
+        createdAt: string;
+        emailVerified: boolean;
       } | null;
       assignedAgent: {
         id: string;
@@ -314,6 +318,8 @@ export async function GET(request: Request) {
               phone: lead.customer.phone,
               isBuyer: lead.customer.isBuyer,
               isSeller: lead.customer.isSeller,
+              createdAt: lead.customer.createdAt.toISOString(),
+              emailVerified: Boolean(lead.customer.emailVerified),
             }
           : null,
         assignedAgent: lead.assignedAgent
