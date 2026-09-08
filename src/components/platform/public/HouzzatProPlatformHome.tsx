@@ -131,6 +131,14 @@ export function HouzzatProPlatformHome() {
               </li>
             ))}
           </ul>
+          <div className="mt-8 text-center">
+            <Link
+              href="/templates"
+              className="text-sm font-semibold text-emerald-700 hover:text-emerald-600"
+            >
+              View templates
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -170,12 +178,20 @@ export function HouzzatProPlatformHome() {
           <p className="mt-4 text-sm leading-relaxed text-slate-300 sm:text-base">
             {PLATFORM_HOME_PRICING_BODY}
           </p>
-          <Link
-            href={PLATFORM_HOME_PRIMARY_CTA_HREF}
-            className="mt-8 inline-flex items-center justify-center rounded-lg bg-emerald-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-400"
-          >
-            {PLATFORM_HOME_PRICING_CTA_LABEL}
-          </Link>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href={PLATFORM_HOME_PRIMARY_CTA_HREF}
+              className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-400"
+            >
+              {PLATFORM_HOME_PRICING_CTA_LABEL}
+            </Link>
+            <Link
+              href="/pricing"
+              className="inline-flex items-center justify-center rounded-lg border border-white/20 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+            >
+              View pricing
+            </Link>
+          </div>
         </div>
       </section>
 

@@ -9,12 +9,16 @@ import { isHouzzatProPlatformRoot } from "@/lib/tenancy/platform-hostname";
 export const PLATFORM_MARKETING_HOME_PATH = "/" as const;
 export const PLATFORM_MARKETING_TERMS_PATH = "/terms" as const;
 export const PLATFORM_MARKETING_PRIVACY_PATH = "/privacy" as const;
+export const PLATFORM_MARKETING_PRICING_PATH = "/pricing" as const;
+export const PLATFORM_MARKETING_TEMPLATES_PATH = "/templates" as const;
 
 /** Paths that render under the HouzzatPRO SaaS marketing shell on platform root. */
 export const PLATFORM_MARKETING_SHELL_PATHS = [
   PLATFORM_MARKETING_HOME_PATH,
   PLATFORM_MARKETING_TERMS_PATH,
   PLATFORM_MARKETING_PRIVACY_PATH,
+  PLATFORM_MARKETING_PRICING_PATH,
+  PLATFORM_MARKETING_TEMPLATES_PATH,
 ] as const;
 
 export type PlatformMarketingShellPath =
@@ -89,7 +93,8 @@ async function readRequestPathAndHost(): Promise<{
 }
 
 /**
- * True when request is HouzzatPRO platform-root / , /terms, or /privacy.
+ * True when request is HouzzatPRO platform-root
+ * / , /terms, /privacy, /pricing, or /templates.
  * Tenant hosts must not use this chrome-free SaaS shell.
  */
 export async function isHouzzatProPlatformMarketingShellRequest(): Promise<boolean> {

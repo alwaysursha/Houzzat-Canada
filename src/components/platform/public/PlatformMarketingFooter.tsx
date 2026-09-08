@@ -31,6 +31,12 @@ export function PlatformMarketingFooter() {
           >
             {PLATFORM_HOME_PRIMARY_CTA_LABEL}
           </Link>
+          <Link href="/pricing" className="hover:text-white">
+            Pricing
+          </Link>
+          <Link href="/templates" className="hover:text-white">
+            Templates
+          </Link>
           <Link href="/support" className="hover:text-white">
             Support
           </Link>

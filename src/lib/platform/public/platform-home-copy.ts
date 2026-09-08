@@ -29,8 +29,8 @@ export const PLATFORM_HOME_SECONDARY_CTA_HREF = `${HOUZZATPRO_APP_BOOTSTRAP_ORIG
 
 export const PLATFORM_HOME_NAV = [
   { label: "Features", href: "/#features" },
-  { label: "Templates", href: "/#templates" },
-  { label: "Pricing", href: "/#pricing" },
+  { label: "Templates", href: "/templates" },
+  { label: "Pricing", href: "/pricing" },
   { label: "FAQ", href: "/#faq" },
 ] as const;
 

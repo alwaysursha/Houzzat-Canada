@@ -125,7 +125,7 @@ async function main() {
     }
     assert.deepEqual(
       [...PLATFORM_MARKETING_SHELL_PATHS],
-      ["/", "/terms", "/privacy"],
+      ["/", "/terms", "/privacy", "/pricing", "/templates"],
     );
     console.log("[D] apex terms/privacy shell match... PASS");
   }

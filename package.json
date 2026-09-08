@@ -95,6 +95,7 @@
     "stage-6.10a-owner-activation-onboarding:selftest": "node --import tsx scripts/stage-6.10a-owner-activation-onboarding-selftest.ts",
     "stage-6.11-v1-owner-auto-activation:selftest": "node --import tsx scripts/stage-6.11-v1-owner-auto-activation-selftest.ts",
     "stage-6.11-v1-houzzatpro-platform-home:selftest": "node --import tsx scripts/stage-6.11-v1-houzzatpro-platform-home-selftest.ts",
+    "stage-6.11-v1-houzzatpro-pricing-templates:selftest": "node --import tsx scripts/stage-6.11-v1-houzzatpro-pricing-templates-selftest.ts",
     "stage-6.10b-platform-domain-provisioning:selftest": "node --import tsx scripts/stage-6.10b-platform-domain-provisioning-selftest.ts",
     "stage-6.10c1-host-bound-onboarding:selftest": "node --import tsx scripts/stage-6.10c1-host-bound-onboarding-selftest.ts",
     "stage-6.10c3-onboarding-pro-auth:selftest": "node --import tsx scripts/stage-6.10c3-onboarding-pro-auth-selftest.ts",
