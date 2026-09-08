@@ -19,10 +19,8 @@ import {
   Mail,
   MapPin,
   MessageSquare,
-  MoreHorizontal,
   Pencil,
   Phone,
-  PhoneCall,
   Pin,
   Search,
   X,
@@ -714,12 +712,6 @@ export function CustomerProfile({
       label: "Call",
     },
     {
-      icon: PhoneCall,
-      href: phone ? `tel:${phone}` : undefined,
-      className: "bg-[#14b8a6]",
-      label: "Dial",
-    },
-    {
       icon: MessageSquare,
       href: phone ? `sms:${phone}` : undefined,
       className: "bg-[#0ea5e9]",
@@ -730,12 +722,6 @@ export function CustomerProfile({
       href: email ? `mailto:${email}` : undefined,
       className: "bg-[#38bdf8]",
       label: "Email",
-    },
-    {
-      icon: MoreHorizontal,
-      className: "bg-[#64748b]",
-      label: "More",
-      onClick: () => setTab("conversations"),
     },
   ];
 

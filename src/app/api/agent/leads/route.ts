@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { LeadStatus } from "@prisma/client";
-import {
-  canAccessLead,
-  markLeadFirstResponse,
-  requireAgentContextFromRequest,
-} from "@/lib/agent";
+import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { createManualLead } from "@/lib/agent/create-manual-lead";
-import {
-  createCallNewLeadTask,
-  onLeadAttemptedContact,
-  CALL_NEW_LEAD_TASK_TITLE,
-} from "@/lib/agent/lead-intake";
+import { CALL_NEW_LEAD_TASK_TITLE } from "@/lib/agent/lead-intake";
 import { LEAD_STATUS_ZOD } from "@/lib/agent/pipeline";
+import {
+  cancelOpenAgentTasksByTitleHttpSafe,
+  createCallNewLeadTaskHttpSafe,
+  onLeadAttemptedContactHttpSafe,
+} from "@/lib/mobile/v2/lead-write-effects";
 import { notifyLeadAssignedToAgent } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 
@@ -93,7 +90,7 @@ export async function PATCH(request: Request) {
     data.assignedAgentId = ctx.user.id;
     data.organizationId = lead.organizationId ?? ctx.organizationId;
   }
-    if (parsed.data.assignedAgentId !== undefined) {
+  if (parsed.data.assignedAgentId !== undefined) {
     if (!ctx.canSeeTeamLeads) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -112,105 +109,107 @@ export async function PATCH(request: Request) {
     data.firstRespondedAt = new Date();
   }
 
-  const updated = await prisma.lead.update({
-    where: { id: lead.id },
-    data: {
-      ...data,
-      activities: {
-        create: {
-          type: parsed.data.claim
-            ? "claimed"
-            : parsed.data.assignedAgentId !== undefined
-              ? "reassigned"
-              : parsed.data.status
-                ? "status_change"
-                : "note",
-          userId: ctx.user.id,
-          body:
-            parsed.data.notes ??
-            parsed.data.lostReason ??
-            parsed.data.winReason ??
-            parsed.data.status ??
-            "updated",
-          meta: {
-            status: parsed.data.status,
-            claim: parsed.data.claim,
-            lostReason: parsed.data.lostReason,
-            winReason: parsed.data.winReason,
-          },
+  try {
+    // HTTP-mode safe: flat lead update, then a separate activity create.
+    // Nested activities.create wraps an internal transaction PrismaNeonHttp rejects.
+    const updated =
+      Object.keys(data).length > 0
+        ? await prisma.lead.update({
+            where: { id: lead.id },
+            data,
+          })
+        : lead;
+
+    await prisma.leadActivity.create({
+      data: {
+        leadId: lead.id,
+        userId: ctx.user.id,
+        type: parsed.data.claim
+          ? "claimed"
+          : parsed.data.assignedAgentId !== undefined
+            ? "reassigned"
+            : parsed.data.status
+              ? "status_change"
+              : "note",
+        body:
+          parsed.data.notes ??
+          parsed.data.lostReason ??
+          parsed.data.winReason ??
+          parsed.data.status ??
+          "updated",
+        meta: {
+          status: parsed.data.status,
+          claim: parsed.data.claim,
+          lostReason: parsed.data.lostReason,
+          winReason: parsed.data.winReason,
         },
       },
-    },
-  });
-
-  if (movedToAttempted) {
-    await markLeadFirstResponse(lead.id, ctx.user.id);
-  }
-
-  const nextAssignee =
-    data.assignedAgentId !== undefined
-      ? data.assignedAgentId
-      : lead.assignedAgentId;
-  const organizationId =
-    data.organizationId ?? lead.organizationId ?? ctx.organizationId;
-
-  if (
-    nextAssignee &&
-    (parsed.data.claim || parsed.data.assignedAgentId !== undefined) &&
-    nextAssignee !== lead.assignedAgentId
-  ) {
-    await createCallNewLeadTask({
-      leadId: lead.id,
-      assigneeId: nextAssignee,
-      organizationId,
-      createdById: ctx.user.id,
     });
-    if (nextAssignee !== ctx.user.id) {
-      notifyLeadAssignedToAgent(nextAssignee, {
-        leadId: lead.id,
-        label: lead.listingMls
-          ? `MLS® ${lead.listingMls}`
-          : "A lead was assigned to you",
-      });
-    }
-  }
 
-  // Attempted Contact → leave Call New Leads, create 24h follow-up reminder.
-  if (
-    parsed.data.status === "ATTEMPTED_CONTACT" &&
-    lead.status !== "ATTEMPTED_CONTACT"
-  ) {
-    const reminderAssignee = nextAssignee ?? ctx.user.id;
-    if (reminderAssignee && organizationId) {
-      await onLeadAttemptedContact({
+    const nextAssignee =
+      data.assignedAgentId !== undefined
+        ? data.assignedAgentId
+        : lead.assignedAgentId;
+    const organizationId =
+      data.organizationId ?? lead.organizationId ?? ctx.organizationId;
+
+    if (
+      nextAssignee &&
+      (parsed.data.claim || parsed.data.assignedAgentId !== undefined) &&
+      nextAssignee !== lead.assignedAgentId
+    ) {
+      await createCallNewLeadTaskHttpSafe({
         leadId: lead.id,
-        assigneeId: reminderAssignee,
+        assigneeId: nextAssignee,
         organizationId,
         createdById: ctx.user.id,
       });
-      // Keep ownership on the agent who attempted contact.
-      if (!lead.assignedAgentId && !data.assignedAgentId) {
-        await prisma.lead.update({
-          where: { id: lead.id },
-          data: { assignedAgentId: reminderAssignee },
+      if (nextAssignee !== ctx.user.id) {
+        notifyLeadAssignedToAgent(nextAssignee, {
+          leadId: lead.id,
+          label: lead.listingMls
+            ? `MLS® ${lead.listingMls}`
+            : "A lead was assigned to you",
         });
       }
     }
-  } else if (
-    parsed.data.status &&
-    parsed.data.status !== "NEW_LEAD" &&
-    lead.status === "NEW_LEAD"
-  ) {
-    // Any other exit from New Lead cancels the call-new task.
-    await prisma.agentTask.updateMany({
-      where: {
-        leadId: lead.id,
-        status: "OPEN",
-        title: CALL_NEW_LEAD_TASK_TITLE,
-      },
-      data: { status: "CANCELLED" },
-    });
-  }
 
-  return NextResponse.json({ ok: true, lead: updated });
+    // Attempted Contact → leave Call New Leads, create 24h follow-up reminder.
+    if (
+      parsed.data.status === "ATTEMPTED_CONTACT" &&
+      lead.status !== "ATTEMPTED_CONTACT"
+    ) {
+      const reminderAssignee = nextAssignee ?? ctx.user.id;
+      if (reminderAssignee && organizationId) {
+        await onLeadAttemptedContactHttpSafe({
+          leadId: lead.id,
+          assigneeId: reminderAssignee,
+          organizationId,
+          createdById: ctx.user.id,
+        });
+        // Keep ownership on the agent who attempted contact.
+        if (!lead.assignedAgentId && !data.assignedAgentId) {
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { assignedAgentId: reminderAssignee },
+          });
+        }
+      }
+    } else if (
+      parsed.data.status &&
+      parsed.data.status !== "NEW_LEAD" &&
+      lead.status === "NEW_LEAD"
+    ) {
+      await cancelOpenAgentTasksByTitleHttpSafe(
+        lead.id,
+        CALL_NEW_LEAD_TASK_TITLE,
+      );
+    }
+
+    return NextResponse.json({ ok: true, lead: updated });
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Could not update lead";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

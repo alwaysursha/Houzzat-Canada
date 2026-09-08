@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
+import { resolveLeadIntent } from "@/lib/agent/lead-intake";
 import { PURCHASE_TIMEFRAMES } from "@/lib/agent/timeframe";
 import { prisma } from "@/lib/prisma";
 
@@ -78,6 +79,16 @@ export async function POST(request: Request) {
       isBuyer: nextBuyer,
       isSeller: nextSeller,
       purchaseTimeframe: nextTimeframe,
+    },
+  });
+
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: {
+      intent: resolveLeadIntent({
+        isBuyer: nextBuyer,
+        isSeller: nextSeller,
+      }),
     },
   });
 

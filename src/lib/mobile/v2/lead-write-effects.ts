@@ -1,18 +1,18 @@
 /**
- * Stage 4.5.1 — HTTP-safe Mobile v2 lead write helpers.
+ * Stage 4.5.1 — HTTP-safe lead write helpers.
  *
  * PrismaNeonHttp (Workers) rejects internal transactions used by:
  * - nested relation writes (e.g. lead.update({ activities: { create } }))
  * - some batch shapes (updateMany / createMany) on older compiler paths
  *
  * These helpers preserve Stage 4.5 / web CRM semantics using flat sequential
- * Prisma calls only. Do not use for web /agent routes unless intentionally
- * migrated — web behavior stays on the existing helpers.
+ * Prisma calls only. Shared by Mobile v2 and PATCH /api/agent/leads.
  */
 
 import {
   ATTEMPTED_CONTACT_REMINDER_MS,
   ATTEMPTED_CONTACT_REMINDER_TITLE,
+  CALL_NEW_LEAD_DUE_MS,
   CALL_NEW_LEAD_TASK_TITLE,
 } from "@/lib/agent/lead-intake";
 import { resolveChildCrmOwnership } from "@/lib/crm-ownership";
@@ -96,6 +96,39 @@ export async function onLeadAttemptedContactHttpSafe(input: {
       title: ATTEMPTED_CONTACT_REMINDER_TITLE,
       body: "Lead marked Attempted Contact. Follow up within 24 hours.",
       dueAt: new Date(Date.now() + ATTEMPTED_CONTACT_REMINDER_MS),
+    },
+  });
+}
+
+/** Same as createCallNewLeadTask — flat sequential writes only. */
+export async function createCallNewLeadTaskHttpSafe(input: {
+  leadId: string;
+  assigneeId: string;
+  organizationId: string;
+  createdById?: string | null;
+}) {
+  await cancelOpenAgentTasksByTitleHttpSafe(
+    input.leadId,
+    CALL_NEW_LEAD_TASK_TITLE,
+  );
+
+  const ownership = await resolveChildCrmOwnership({
+    organizationId: input.organizationId,
+    leadId: input.leadId,
+  });
+
+  return prisma.agentTask.create({
+    data: {
+      organizationId: ownership.organizationId,
+      workspaceId: ownership.workspaceId,
+      leadId: input.leadId,
+      assigneeId: input.assigneeId,
+      createdById: input.createdById ?? null,
+      type: "CALL",
+      status: "OPEN",
+      title: CALL_NEW_LEAD_TASK_TITLE,
+      body: "Auto-created when lead was assigned. Follow up within 12 hours.",
+      dueAt: new Date(Date.now() + CALL_NEW_LEAD_DUE_MS),
     },
   });
 }

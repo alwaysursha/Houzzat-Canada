@@ -4,7 +4,7 @@
  * POST /api/mobile/v2/auth/login -> GET /api/mobile/v2/workspaces
  */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -28,9 +28,6 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const scrollRef = useRef<{
-    scrollTo: (opts: { y: number; animated?: boolean }) => void;
-  } | null>(null);
 
   useEffect(() => {
     const showEvent =
@@ -65,13 +62,6 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
     });
   };
 
-  /** Bounded scroll — keep card top visible; never scrollToEnd (clips email). */
-  const ensureCardVisible = () => {
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    });
-  };
-
   const activeError = localError || error;
 
   return (
@@ -84,7 +74,6 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
     >
       <StatusBar barStyle="dark-content" backgroundColor="#63D9BD" />
       <ScrollView
-        ref={scrollRef}
         contentContainerStyle={[
           styles.scrollContent,
           keyboardOpen ? styles.scrollContentKeyboardOpen : null,
@@ -105,15 +94,16 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
           <View
             style={[styles.header, keyboardOpen && styles.headerCompact]}
           >
-            <HouzzatProMark size={keyboardOpen ? 44 : 84} />
-            {!keyboardOpen ? (
-              <View style={styles.wordmarkWrapper}>
-                <HouzzatProWordmark size="xl" dark={true} />
-              </View>
-            ) : null}
+            <HouzzatProMark size={keyboardOpen ? 52 : 84} />
+            <View style={styles.wordmarkWrapper}>
+              <HouzzatProWordmark
+                size={keyboardOpen ? "lg" : "xl"}
+                dark={true}
+              />
+            </View>
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, keyboardOpen && styles.cardCompact]}>
             <Text style={styles.cardTitle}>Sign in to your account</Text>
             {!keyboardOpen ? (
               <Text style={styles.cardSubtitle}>
@@ -129,16 +119,17 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
               </View>
             ) : null}
 
-            <View style={styles.formGroup}>
+            <View
+              style={[styles.formGroup, keyboardOpen && styles.formGroupCompact]}
+            >
               <Text style={styles.label}>Email Address</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, keyboardOpen && styles.inputCompact]}
                 value={email}
                 onChangeText={(t) => {
                   setEmail(t);
                   if (localError) setLocalError(null);
                 }}
-                onFocus={ensureCardVisible}
                 placeholder="Enter your email address"
                 placeholderTextColor="#94A3B8"
                 autoCapitalize="none"
@@ -152,17 +143,21 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
               />
             </View>
 
-            <View style={styles.formGroup}>
+            <View
+              style={[styles.formGroup, keyboardOpen && styles.formGroupCompact]}
+            >
               <Text style={styles.label}>Password</Text>
               <View style={styles.passwordWrapper}>
                 <TextInput
-                  style={styles.passwordInput}
+                  style={[
+                    styles.passwordInput,
+                    keyboardOpen && styles.inputCompact,
+                  ]}
                   value={password}
                   onChangeText={(t) => {
                     setPassword(t);
                     if (localError) setLocalError(null);
                   }}
-                  onFocus={ensureCardVisible}
                   placeholder="Enter your password"
                   placeholderTextColor="#94A3B8"
                   secureTextEntry={!showPassword}
@@ -204,7 +199,10 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
             ) : (
               <View style={styles.buttonStack}>
                 <TouchableOpacity
-                  style={styles.signInButton}
+                  style={[
+                    styles.signInButton,
+                    keyboardOpen && styles.signInButtonCompact,
+                  ]}
                   activeOpacity={0.85}
                   onPress={handleSubmit}
                 >
@@ -243,10 +241,12 @@ const styles = StyleSheet.create({
     paddingBottom: bottomPadding + 40,
     paddingHorizontal: 20,
   },
+  // Android adjustResize shrinks the window — keep centering in the remaining
+  // space so the form sits in the gap above the keyboard (not pinned to top).
   scrollContentKeyboardOpen: {
-    justifyContent: "flex-start",
-    paddingTop: Math.max(8, topPadding - 16),
-    paddingBottom: bottomPadding + 24,
+    justifyContent: "center",
+    paddingTop: Math.max(4, topPadding - 24),
+    paddingBottom: 12,
   },
   topBar: {
     position: "absolute",
@@ -274,10 +274,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   headerCompact: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   wordmarkWrapper: {
-    marginTop: 8,
+    marginTop: 6,
   },
   card: {
     width: "100%",
@@ -289,6 +289,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 6,
+  },
+  cardCompact: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 14,
+    borderRadius: 16,
   },
   cardTitle: {
     fontSize: 20,
@@ -304,7 +310,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   subtitleSpacer: {
-    height: 12,
+    height: 8,
   },
   errorBox: {
     backgroundColor: "#FEE2E2",
@@ -320,6 +326,15 @@ const styles = StyleSheet.create({
   },
   formGroup: {
     marginBottom: 16,
+  },
+  formGroupCompact: {
+    marginBottom: 10,
+  },
+  inputCompact: {
+    paddingVertical: 10,
+  },
+  signInButtonCompact: {
+    paddingVertical: 12,
   },
   label: {
     fontSize: 12,

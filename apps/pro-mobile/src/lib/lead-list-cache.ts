@@ -60,3 +60,29 @@ export function updateLeadStatusInListCache(
     timestamp: Date.now(),
   };
 }
+
+/** Patch buyer/seller badges for every list row sharing this customer. */
+export function updateCustomerFlagsInListCache(
+  workspaceId: string | undefined,
+  customerId: string,
+  flags: { isBuyer?: boolean; isSeller?: boolean },
+) {
+  if (!workspaceId || !leadCacheStore || leadCacheStore.workspaceId !== workspaceId) {
+    return;
+  }
+  leadCacheStore = {
+    ...leadCacheStore,
+    leads: leadCacheStore.leads.map((l) => {
+      if (!l.customer || l.customer.id !== customerId) return l;
+      return {
+        ...l,
+        customer: {
+          ...l.customer,
+          ...(flags.isBuyer !== undefined ? { isBuyer: flags.isBuyer } : {}),
+          ...(flags.isSeller !== undefined ? { isSeller: flags.isSeller } : {}),
+        },
+      };
+    }),
+    timestamp: Date.now(),
+  };
+}

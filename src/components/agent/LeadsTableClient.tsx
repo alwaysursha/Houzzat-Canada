@@ -232,6 +232,7 @@ export function LeadsTableClient({
   const [addEmail, setAddEmail] = useState("");
   const [addPhone, setAddPhone] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
+  const [patchError, setPatchError] = useState<string | null>(null);
 
   useStaffOverlay({
     open: addOpen,
@@ -360,13 +361,23 @@ export function LeadsTableClient({
 
   async function patchLead(leadId: string, body: Record<string, unknown>) {
     setPending(true);
+    setPatchError(null);
     try {
       const res = await fetch("/api/agent/leads", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ leadId, ...body }),
       });
-      if (res.ok) router.refresh();
+      if (res.ok) {
+        router.refresh();
+        return;
+      }
+      const payload = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setPatchError(payload?.error || "Could not update lead");
+    } catch {
+      setPatchError("Could not update lead");
     } finally {
       setPending(false);
     }
@@ -533,6 +544,11 @@ export function LeadsTableClient({
 
   return (
     <div className="space-y-3">
+      {patchError ? (
+        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-700">
+          {patchError}
+        </p>
+      ) : null}
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] bg-white px-3 py-3">
         <div className="flex flex-wrap items-center gap-2">

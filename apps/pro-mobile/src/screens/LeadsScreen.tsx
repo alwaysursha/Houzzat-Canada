@@ -34,6 +34,7 @@ import {
   View,
 } from "react-native";
 import { mobileApiClient } from "../api/client";
+import { ContactMailIcon, ContactPhoneIcon } from "../components/ContactActionIcons";
 import { leadCacheStore, setLeadCacheStore } from "../lib/lead-list-cache";
 import { useAuth } from "../state/AuthContext";
 import type { BackendEnvelope, LeadsResponseData, MobileLeadSummary, LeadStatus } from "../types/api";
@@ -348,7 +349,10 @@ export function LeadsScreen({
     const customerName = item.customer?.name?.trim() || "Inquiry (No Name)";
     const contactEmail = item.customer?.email;
     const contactPhone = item.customer?.phone;
-    const isBuyer = item.intent === "BUYER";
+    const showBuyer =
+      item.customer?.isBuyer ?? item.intent === "BUYER";
+    const showSeller =
+      item.customer?.isSeller ?? item.intent === "SELLER";
     const lastLoginText = item.isOnline
       ? "Online"
       : formatDate(item.lastSeenAt);
@@ -380,21 +384,20 @@ export function LeadsScreen({
                 </Text>
               </View>
 
-              <View
-                style={[
-                  styles.intentBadge,
-                  { backgroundColor: isBuyer ? "#EFF6FF" : "#FAF5FF" },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.intentBadgeText,
-                    { color: isBuyer ? "#2563EB" : "#9333EA" },
-                  ]}
-                >
-                  {item.intent}
-                </Text>
-              </View>
+              {showBuyer ? (
+                <View style={[styles.intentBadge, styles.buyerBadge]}>
+                  <Text style={[styles.intentBadgeText, styles.buyerBadgeText]}>
+                    BUYER
+                  </Text>
+                </View>
+              ) : null}
+              {showSeller ? (
+                <View style={[styles.intentBadge, styles.sellerBadge]}>
+                  <Text style={[styles.intentBadgeText, styles.sellerBadgeText]}>
+                    SELLER
+                  </Text>
+                </View>
+              ) : null}
 
               {item.source ? (
                 <Text style={styles.sourceText} numberOfLines={1}>
@@ -417,14 +420,20 @@ export function LeadsScreen({
         {/* Contact info row */}
         <View style={styles.contactRow}>
           {contactEmail ? (
-            <Text style={styles.contactText} numberOfLines={1}>
-              ✉ {contactEmail}
-            </Text>
+            <View style={styles.contactItem}>
+              <ContactMailIcon color="#475569" size={12} />
+              <Text style={styles.contactText} numberOfLines={1}>
+                {contactEmail}
+              </Text>
+            </View>
           ) : null}
           {contactPhone ? (
-            <Text style={styles.contactText} numberOfLines={1}>
-              📞 {contactPhone}
-            </Text>
+            <View style={styles.contactItem}>
+              <ContactPhoneIcon color="#475569" size={12} />
+              <Text style={styles.contactText} numberOfLines={1}>
+                {contactPhone}
+              </Text>
+            </View>
           ) : null}
         </View>
 
@@ -992,6 +1001,18 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "800",
   },
+  buyerBadge: {
+    backgroundColor: "#64748B",
+  },
+  buyerBadgeText: {
+    color: "#FFFFFF",
+  },
+  sellerBadge: {
+    backgroundColor: "#5A9A6E",
+  },
+  sellerBadgeText: {
+    color: "#FFFFFF",
+  },
   sourceText: {
     fontSize: 11,
     color: "#64748B",
@@ -1007,11 +1028,20 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 12,
     paddingVertical: 4,
+    alignItems: "center",
+  },
+  contactItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    maxWidth: "100%",
+    flexShrink: 1,
   },
   contactText: {
     fontSize: 12,
     color: "#334155",
     fontWeight: "500",
+    flexShrink: 1,
   },
   cardFooterRow: {
     flexDirection: "row",

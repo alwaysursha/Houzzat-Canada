@@ -18,6 +18,7 @@
 import { NextResponse } from "next/server";
 import { LeadStatus } from "@prisma/client";
 import { computeHotnessMap } from "@/lib/agent/hotness";
+import { selectPrimaryLeadsByCustomer } from "@/lib/agent/select-primary-leads-by-customer";
 import { prisma } from "@/lib/prisma";
 import { authenticateMobileRequest } from "@/lib/mobile/v2/auth-guard";
 
@@ -194,12 +195,9 @@ export async function GET(request: Request) {
       }
     }
 
-    // lastLogin / name / status need post-fetch sort → load a capped cohort first.
+    // Collapse + memory sort share a capped cohort so pagination stays stable.
     const needsMemorySort =
       sortKey === "lastLogin" || sortKey === "name" || sortKey === "status";
-    const cohortTake = needsMemorySort ? 500 : limit;
-    const cohortSkip = needsMemorySort ? 0 : skip;
-
     const dbOrderBy =
       sortKey === "created"
         ? [{ createdAt: sortDir as "asc" | "desc" }]
@@ -217,13 +215,11 @@ export async function GET(request: Request) {
                 { updatedAt: "desc" as const },
                 { createdAt: "desc" as const },
               ];
-
-    const [leads, totalCount] = await Promise.all([
+    const [fetchedLeads] = await Promise.all([
       prisma.lead.findMany({
         where: whereConditions,
         orderBy: dbOrderBy,
-        skip: cohortSkip,
-        take: cohortTake,
+        take: 500,
         select: {
           id: true,
           status: true,
@@ -241,6 +237,8 @@ export async function GET(request: Request) {
               name: true,
               email: true,
               phone: true,
+              isBuyer: true,
+              isSeller: true,
             },
           },
           assignedAgent: {
@@ -252,8 +250,10 @@ export async function GET(request: Request) {
           },
         },
       }),
-      prisma.lead.count({ where: whereConditions }),
     ]);
+
+    const leads = selectPrimaryLeadsByCustomer(fetchedLeads);
+    const totalCount = leads.length;
 
     const hotMap = await computeHotnessMap(
       leads.map((l) => ({
@@ -282,6 +282,8 @@ export async function GET(request: Request) {
         name: string | null;
         email: string | null;
         phone: string | null;
+        isBuyer: boolean;
+        isSeller: boolean;
       } | null;
       assignedAgent: {
         id: string;
@@ -310,6 +312,8 @@ export async function GET(request: Request) {
               name: lead.customer.name,
               email: lead.customer.email,
               phone: lead.customer.phone,
+              isBuyer: lead.customer.isBuyer,
+              isSeller: lead.customer.isSeller,
             }
           : null,
         assignedAgent: lead.assignedAgent
@@ -346,8 +350,9 @@ export async function GET(request: Request) {
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         );
       });
-      rows = rows.slice(skip, skip + limit);
     }
+
+    rows = rows.slice(skip, skip + limit);
 
     const formattedLeads = rows.map(({ _sortName: _omit, ...lead }) => lead);
 

@@ -34,6 +34,10 @@ const WRITE_EFFECTS = join(
   REPO_ROOT,
   "src/lib/mobile/v2/lead-write-effects.ts",
 );
+const AGENT_LEADS_ROUTE = join(
+  REPO_ROOT,
+  "src/app/api/agent/leads/route.ts",
+);
 
 const CANONICAL_STATUSES: LeadStatus[] = [
   "NEW_LEAD",
@@ -304,15 +308,27 @@ async function runStage451Tests() {
   }
 
   // 3. Source: write-effects helper is HTTP-safe
-  console.log("[3/10] lead-write-effects helper is HTTP-safe...");
+  console.log("[3/11] lead-write-effects helper is HTTP-safe...");
   {
     const src = readFileSync(WRITE_EFFECTS, "utf8");
     assertHttpSafeSource("lead-write-effects", src);
+    assert.ok(src.includes("createCallNewLeadTaskHttpSafe"));
+    console.log("  -> PASS");
+  }
+
+  // 3b. Web agent leads PATCH is also HTTP-safe (same Neon HTTP runtime)
+  console.log("[4/11] Agent leads PATCH route is HTTP-safe...");
+  {
+    const src = readFileSync(AGENT_LEADS_ROUTE, "utf8");
+    assertHttpSafeSource("agent leads route", src);
+    assert.ok(src.includes("createCallNewLeadTaskHttpSafe"));
+    assert.ok(src.includes("onLeadAttemptedContactHttpSafe"));
+    assert.ok(src.includes("leadActivity.create"));
     console.log("  -> PASS");
   }
 
   // 4. Note write succeeds with sequential flat ops
-  console.log("[4/10] Note write plan succeeds without transaction...");
+  console.log("[5/11] Note write plan succeeds without transaction...");
   {
     const token = createWorkspaceAccessToken({
       userId: "usr_canary_agent_01",

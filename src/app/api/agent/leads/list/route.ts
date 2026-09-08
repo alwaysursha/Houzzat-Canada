@@ -4,6 +4,7 @@ import { leadScopeWhere, requireAgentContextFromRequest } from "@/lib/agent";
 import { resolveDeskView } from "@/lib/agent/brokerage";
 import { computeHotnessMap, findOnlineUserIds } from "@/lib/agent/hotness";
 import { PIPELINE_STATUSES } from "@/lib/agent/pipeline";
+import { selectPrimaryLeadsByCustomer } from "@/lib/agent/select-primary-leads-by-customer";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -66,7 +67,7 @@ export async function GET(request: Request) {
     ...(onlineOnly ? { customerId: { in: onlineUserIds } } : {}),
   };
 
-  const rawLeads = await prisma.lead.findMany({
+  const fetchedLeads = await prisma.lead.findMany({
     where:
       onlineOnly && onlineUserIds.length === 0
         ? { id: "__no_online_leads__" }
@@ -97,6 +98,8 @@ export async function GET(request: Request) {
       },
     },
   });
+
+  const rawLeads = selectPrimaryLeadsByCustomer(fetchedLeads);
 
   const hotMap = await computeHotnessMap(
     rawLeads.map((l) => ({

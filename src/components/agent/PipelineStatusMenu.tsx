@@ -36,6 +36,7 @@ export function PipelineStatusMenu({
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const dateLabel = pipelineStatusDate(statusChangedAt, createdAt);
   const StatusIcon = pipelineIcon(status);
@@ -62,6 +63,7 @@ export function PipelineStatusMenu({
       return;
     }
     setPending(true);
+    setError(null);
     try {
       const res = await fetch("/api/agent/leads", {
         method: "PATCH",
@@ -72,7 +74,14 @@ export function PipelineStatusMenu({
         setOpen(false);
         router.refresh();
         onUpdated?.();
+      } else {
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setError(body?.error || "Could not update pipeline status");
       }
+    } catch {
+      setError("Could not update pipeline status");
     } finally {
       setPending(false);
     }
@@ -113,6 +122,11 @@ export function PipelineStatusMenu({
           )}
         />
       </button>
+      {error ? (
+        <p className="mt-1 text-center text-[11px] font-semibold text-red-600">
+          {error}
+        </p>
+      ) : null}
 
       {open ? (
         <ul

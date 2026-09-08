@@ -32,12 +32,19 @@ import {
 } from "../components/EngagementTab";
 import {
   ContactBellIcon,
+  ContactChatIcon,
+  ContactMailIcon,
   ContactPencilIcon,
+  ContactPhoneIcon,
+  ContactPinIcon,
 } from "../components/ContactActionIcons";
 import { AppointmentsTab } from "../components/AppointmentsTab";
 import { ConversationsTab } from "../components/ConversationsTab";
 import { TasksRemindersTab } from "../components/TasksRemindersTab";
-import { updateLeadStatusInListCache } from "../lib/lead-list-cache";
+import {
+  updateCustomerFlagsInListCache,
+  updateLeadStatusInListCache,
+} from "../lib/lead-list-cache";
 import { unwrapEngagement } from "../lib/engagement-response";
 import { useAuth } from "../state/AuthContext";
 import type {
@@ -580,7 +587,7 @@ function ContactActionRow({
   onEdit,
   onRequestUpdate,
 }: {
-  icon: string;
+  icon: React.ReactNode;
   value: string | null;
   muted?: boolean;
   multiline?: boolean;
@@ -592,7 +599,7 @@ function ContactActionRow({
 }) {
   return (
     <View style={styles.contactRow}>
-      <Text style={styles.contactIcon}>{icon}</Text>
+      <View style={styles.contactIconSlot}>{icon}</View>
       <View style={styles.contactValueCol}>
         <Text
           style={[
@@ -617,7 +624,7 @@ function ContactActionRow({
               style={styles.contactActionBtn}
               onPress={onEdit}
               activeOpacity={0.7}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
               accessibilityLabel="Edit"
             >
               <ContactPencilIcon />
@@ -632,7 +639,7 @@ function ContactActionRow({
               onPress={updateRequested ? undefined : onRequestUpdate}
               disabled={updateRequested}
               activeOpacity={0.7}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
               accessibilityLabel={
                 updateRequested ? "Update already requested" : "Request update"
               }
@@ -642,6 +649,77 @@ function ContactActionRow({
           ) : null}
         </View>
       ) : null}
+    </View>
+  );
+}
+
+function ContactEditRow({
+  field,
+  value,
+  pending,
+  onChange,
+  onSave,
+  onCancel,
+}: {
+  field: "phone" | "email" | "address";
+  value: string;
+  pending: boolean;
+  onChange: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const placeholder =
+    field === "phone"
+      ? "Phone number"
+      : field === "email"
+        ? "Email address"
+        : "Home address";
+  return (
+    <View style={styles.contactEditRow}>
+      <TextInput
+        style={[
+          styles.contactEditInput,
+          field === "address" && styles.contactEditInputTall,
+        ]}
+        value={value}
+        onChangeText={onChange}
+        autoFocus
+        editable={!pending}
+        autoCapitalize={field === "email" ? "none" : "sentences"}
+        autoCorrect={field !== "email"}
+        keyboardType={
+          field === "email"
+            ? "email-address"
+            : field === "phone"
+              ? "phone-pad"
+              : "default"
+        }
+        placeholder={placeholder}
+        placeholderTextColor="#94A3B8"
+        multiline={field === "address"}
+        returnKeyType={field === "address" ? "default" : "done"}
+        onSubmitEditing={field === "address" ? undefined : onSave}
+      />
+      <TouchableOpacity
+        style={[
+          styles.contactEditSave,
+          (pending || (field === "email" && !value.trim())) &&
+            styles.contactEditDisabled,
+        ]}
+        disabled={pending || (field === "email" && !value.trim())}
+        onPress={onSave}
+        accessibilityLabel="Save"
+      >
+        <Text style={styles.contactEditSaveText}>✓</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.contactEditCancel}
+        disabled={pending}
+        onPress={onCancel}
+        accessibilityLabel="Cancel"
+      >
+        <Text style={styles.contactEditCancelText}>✕</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -934,6 +1012,12 @@ export function LeadDetailScreen({
         };
         if (cacheKey) {
           patchLeadDetailCache(cacheKey, { customer: nextCustomer });
+        }
+        if (prev.customer.id) {
+          updateCustomerFlagsInListCache(workspaceId, prev.customer.id, {
+            isBuyer: nextCustomer.isBuyer,
+            isSeller: nextCustomer.isSeller,
+          });
         }
         return { ...prev, customer: nextCustomer };
       });
@@ -1548,79 +1632,104 @@ export function LeadDetailScreen({
 
             <Text style={styles.name}>{name}</Text>
 
-            {/* Contact rows — web ContactDisplayRow parity (value + pen + bell) */}
+            {/* Contact rows — web ContactDisplayRow / ContactEditRow parity */}
             <View style={styles.contactStack}>
-              <ContactActionRow
-                icon="📞"
-                value={phone}
-                muted={!phone}
-                showEdit={Boolean(lead.customer)}
-                showBell={Boolean(lead.customer)}
-                updateRequested={Boolean(lead.customer?.phoneUpdateRequestedAt)}
-                onEdit={() => openContactEditor("phone")}
-                onRequestUpdate={() => {
-                  void requestContactUpdate("phone");
-                }}
-              />
-              <ContactActionRow
-                icon="✉"
-                value={email}
-                muted={!email}
-                showEdit={Boolean(lead.customer)}
-                showBell={Boolean(lead.customer)}
-                updateRequested={Boolean(lead.customer?.emailUpdateRequestedAt)}
-                onEdit={() => openContactEditor("email")}
-                onRequestUpdate={() => {
-                  void requestContactUpdate("email");
-                }}
-              />
-              <ContactActionRow
-                icon="📍"
-                value={address}
-                muted={!address}
-                multiline
-                showEdit={Boolean(lead.customer)}
-                onEdit={() => openContactEditor("address")}
-              />
+              {contactEditField === "phone" ? (
+                <ContactEditRow
+                  field="phone"
+                  value={contactEditValue}
+                  pending={contactPending}
+                  onChange={setContactEditValue}
+                  onSave={() => {
+                    void saveContactEdit();
+                  }}
+                  onCancel={() => setContactEditField(null)}
+                />
+              ) : (
+                <ContactActionRow
+                  icon={<ContactPhoneIcon color="#2B6CB0" />}
+                  value={phone}
+                  muted={!phone}
+                  showEdit={Boolean(lead.customer)}
+                  showBell={Boolean(lead.customer)}
+                  updateRequested={Boolean(lead.customer?.phoneUpdateRequestedAt)}
+                  onEdit={() => openContactEditor("phone")}
+                  onRequestUpdate={() => {
+                    void requestContactUpdate("phone");
+                  }}
+                />
+              )}
+              {contactEditField === "email" ? (
+                <ContactEditRow
+                  field="email"
+                  value={contactEditValue}
+                  pending={contactPending}
+                  onChange={setContactEditValue}
+                  onSave={() => {
+                    void saveContactEdit();
+                  }}
+                  onCancel={() => setContactEditField(null)}
+                />
+              ) : (
+                <ContactActionRow
+                  icon={<ContactMailIcon color="#2B6CB0" />}
+                  value={email}
+                  muted={!email}
+                  showEdit={Boolean(lead.customer)}
+                  showBell={Boolean(lead.customer)}
+                  updateRequested={Boolean(lead.customer?.emailUpdateRequestedAt)}
+                  onEdit={() => openContactEditor("email")}
+                  onRequestUpdate={() => {
+                    void requestContactUpdate("email");
+                  }}
+                />
+              )}
+              {contactEditField === "address" ? (
+                <ContactEditRow
+                  field="address"
+                  value={contactEditValue}
+                  pending={contactPending}
+                  onChange={setContactEditValue}
+                  onSave={() => {
+                    void saveContactEdit();
+                  }}
+                  onCancel={() => setContactEditField(null)}
+                />
+              ) : (
+                <ContactActionRow
+                  icon={<ContactPinIcon />}
+                  value={address}
+                  muted={!address}
+                  multiline
+                  showEdit={Boolean(lead.customer)}
+                  onEdit={() => openContactEditor("address")}
+                />
+              )}
             </View>
 
-            {/* Quick actions — Call / Dial / Text / Email via native OS composers */}
+            {/* Quick actions — Call / Text / Email (web rail without Dial / More) */}
             <View style={styles.actionRow}>
               {[
                 {
                   label: "Call",
                   bg: "#0D9488",
-                  icon: "📞",
-                  enabled: Boolean(phone),
-                  onPress: handleCall,
-                },
-                {
-                  label: "Dial",
-                  bg: "#14B8A6",
-                  icon: "📱",
+                  icon: <ContactPhoneIcon color="#FFFFFF" size={16} />,
                   enabled: Boolean(phone),
                   onPress: handleCall,
                 },
                 {
                   label: "Text",
                   bg: "#0EA5E9",
-                  icon: "💬",
+                  icon: <ContactChatIcon color="#FFFFFF" size={16} />,
                   enabled: Boolean(phone),
                   onPress: handleSms,
                 },
                 {
                   label: "Email",
                   bg: "#38BDF8",
-                  icon: "✉",
+                  icon: <ContactMailIcon color="#FFFFFF" size={16} />,
                   enabled: Boolean(email),
                   onPress: handleEmail,
-                },
-                {
-                  label: "More",
-                  bg: "#64748B",
-                  icon: "⋯",
-                  enabled: true,
-                  onPress: () => setTab("conversations"),
                 },
               ].map((action) => (
                 <TouchableOpacity
@@ -1635,7 +1744,7 @@ export function LeadDetailScreen({
                   onPress={action.onPress}
                   accessibilityLabel={action.label}
                 >
-                  <Text style={styles.actionIcon}>{action.icon}</Text>
+                  {action.icon}
                 </TouchableOpacity>
               ))}
             </View>
@@ -2360,97 +2469,6 @@ export function LeadDetailScreen({
       </Modal>
 
       <Modal
-        visible={contactEditField != null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setContactEditField(null)}
-      >
-        <TouchableWithoutFeedback onPress={() => setContactEditField(null)}>
-          <View style={styles.premiumOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.premiumCard}>
-                <View style={styles.premiumAccent} />
-                <Text style={styles.premiumEyebrow}>CONTACT</Text>
-                <Text style={styles.premiumTitle}>
-                  {contactEditField === "phone"
-                    ? "Edit phone"
-                    : contactEditField === "email"
-                      ? "Edit email"
-                      : "Edit address"}
-                </Text>
-                <Text style={styles.premiumSubtitle}>
-                  {contactEditField === "phone"
-                    ? "Update the cell number on this lead profile."
-                    : contactEditField === "email"
-                      ? "Update the email address on this lead profile."
-                      : "Update the home address on this lead profile."}
-                </Text>
-                <Text style={styles.premiumFieldLabel}>
-                  {contactEditField === "phone"
-                    ? "PHONE NUMBER"
-                    : contactEditField === "email"
-                      ? "EMAIL ADDRESS"
-                      : "HOME ADDRESS"}
-                </Text>
-                <TextInput
-                  style={[
-                    styles.premiumInput,
-                    contactEditField === "address" && styles.premiumInputTall,
-                  ]}
-                  value={contactEditValue}
-                  onChangeText={setContactEditValue}
-                  autoCapitalize={
-                    contactEditField === "email" ? "none" : "sentences"
-                  }
-                  autoCorrect={contactEditField !== "email"}
-                  keyboardType={
-                    contactEditField === "email"
-                      ? "email-address"
-                      : contactEditField === "phone"
-                        ? "phone-pad"
-                        : "default"
-                  }
-                  placeholder={
-                    contactEditField === "phone"
-                      ? "Phone number"
-                      : contactEditField === "email"
-                        ? "Email address"
-                        : "Home address"
-                  }
-                  placeholderTextColor="#94A3B8"
-                  editable={!contactPending}
-                  multiline={contactEditField === "address"}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.premiumPrimaryBtn,
-                    contactPending && styles.premiumBtnDisabled,
-                  ]}
-                  disabled={contactPending}
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    void saveContactEdit();
-                  }}
-                >
-                  <Text style={styles.premiumPrimaryBtnText}>
-                    {contactPending ? "Saving…" : "Save changes"}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.premiumSecondaryBtn}
-                  disabled={contactPending}
-                  activeOpacity={0.7}
-                  onPress={() => setContactEditField(null)}
-                >
-                  <Text style={styles.premiumSecondaryBtnText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-
-      <Modal
         visible={reminderNotice != null}
         transparent
         animationType="fade"
@@ -2674,10 +2692,61 @@ const styles = StyleSheet.create({
     width: "100%",
     paddingRight: 2,
   },
-  contactIcon: {
-    fontSize: 14,
+  contactIconSlot: {
     width: 20,
-    textAlign: "center",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  contactEditRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    width: "100%",
+  },
+  contactEditInput: {
+    flex: 1,
+    minWidth: 0,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: "#1E2A38",
+    backgroundColor: "#FFFFFF",
+  },
+  contactEditInputTall: {
+    minHeight: 64,
+    textAlignVertical: "top",
+  },
+  contactEditSave: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#0D9488",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  contactEditSaveText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  contactEditCancel: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+  contactEditCancelText: {
+    color: "#64748B",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  contactEditDisabled: {
+    opacity: 0.45,
   },
   contactValue: {
     fontSize: 13,
@@ -2742,10 +2811,6 @@ const styles = StyleSheet.create({
   },
   actionDisabled: {
     opacity: 0.45,
-  },
-  actionIcon: {
-    fontSize: 14,
-    color: "#FFFFFF",
   },
   actionHint: {
     marginTop: 6,

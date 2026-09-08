@@ -15,6 +15,7 @@ import { listAssignableCrmAgents } from "@/lib/agent/assignable-agents";
 import { resolveDeskView } from "@/lib/agent/brokerage";
 import { computeHotnessMap, findOnlineUserIds } from "@/lib/agent/hotness";
 import { loadLeadsDashboardEngagement } from "@/lib/agent/leads-dashboard";
+import { selectPrimaryLeadsByCustomer } from "@/lib/agent/select-primary-leads-by-customer";
 import { prisma } from "@/lib/prisma";
 import { PIPELINE_STATUSES, pipelineLabel } from "@/lib/agent/pipeline";
 import { cn } from "@/lib/utils";
@@ -88,7 +89,7 @@ export default async function AgentLeadsPage({
     ...(onlineOnly ? { customerId: { in: onlineUserIds } } : {}),
   };
 
-  const leads = await prisma.lead.findMany({
+  const fetchedLeads = await prisma.lead.findMany({
     where:
       onlineOnly && onlineUserIds.length === 0
         ? { id: "__no_online_leads__" }
@@ -119,6 +120,9 @@ export default async function AgentLeadsPage({
       },
     },
   });
+
+  // Same person can have multiple Lead rows; desk shows one card per customer.
+  const leads = selectPrimaryLeadsByCustomer(fetchedLeads);
 
   const [hotMap, engagement] = await Promise.all([
     computeHotnessMap(
