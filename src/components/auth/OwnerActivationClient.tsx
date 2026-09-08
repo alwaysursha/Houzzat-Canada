@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { HOUZZATPRO_APP_BOOTSTRAP_ORIGIN } from "@/lib/mobile/platform-bootstrap";
 
 type Props = { token: string };
 
@@ -12,6 +12,9 @@ type View = {
   expiresAt: string;
 };
 
+/** Fallback if API omits signInPath — never consumer /auth/sign-in. */
+const OWNER_ACTIVATION_PRO_SIGN_IN_FALLBACK = `${HOUZZATPRO_APP_BOOTSTRAP_ORIGIN}/pro/sign-in`;
+
 export function OwnerActivationClient({ token }: Props) {
   const router = useRouter();
   const [view, setView] = useState<View | null>(null);
@@ -20,6 +23,9 @@ export function OwnerActivationClient({ token }: Props) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [signInHref, setSignInHref] = useState(
+    OWNER_ACTIVATION_PRO_SIGN_IN_FALLBACK,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +80,12 @@ export function OwnerActivationClient({ token }: Props) {
         setError(body.message ?? "Unable to activate account.");
         return;
       }
+      const nextSignIn =
+        typeof body.data?.signInPath === "string" &&
+        body.data.signInPath.includes("/pro/sign-in")
+          ? body.data.signInPath
+          : OWNER_ACTIVATION_PRO_SIGN_IN_FALLBACK;
+      setSignInHref(nextSignIn);
       setDone(true);
       router.refresh();
     } catch {
@@ -90,12 +102,12 @@ export function OwnerActivationClient({ token }: Props) {
         <p className="mt-3 text-sm text-slate-600">
           Your password is set. Sign in to continue workspace setup.
         </p>
-        <Link
-          href="/auth/sign-in"
+        <a
+          href={signInHref}
           className="mt-6 inline-flex rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
         >
           Sign in
-        </Link>
+        </a>
       </div>
     );
   }

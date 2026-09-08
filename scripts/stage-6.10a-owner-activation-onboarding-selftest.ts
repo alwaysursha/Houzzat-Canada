@@ -956,6 +956,31 @@ async function main() {
     );
     assert.notEqual(hashOwnerActivationToken(raw), raw);
 
+    // V1: post-activation Sign in must be HouzzatPRO Pro login, not consumer auth.
+    const activationRoute = read(
+      "src/app/api/public/activate/[token]/route.ts",
+    );
+    const activationClient = read(
+      "src/components/auth/OwnerActivationClient.tsx",
+    );
+    assert.ok(
+      activationRoute.includes("buildOwnerOnboardingProSignInUrl"),
+      "activation API must return Pro sign-in URL",
+    );
+    assert.ok(
+      !activationRoute.includes('signInPath: "/auth/sign-in"'),
+      "activation API must not return consumer /auth/sign-in",
+    );
+    assert.ok(
+      activationClient.includes("/pro/sign-in"),
+      "activation success CTA must target /pro/sign-in",
+    );
+    assert.ok(
+      !activationClient.includes('href="/auth/sign-in"') &&
+        !activationClient.includes("href='/auth/sign-in'"),
+      "activation success CTA must not point to consumer /auth/sign-in",
+    );
+
     console.log("[0] Source guards (activation + migration)... PASS");
   }
 

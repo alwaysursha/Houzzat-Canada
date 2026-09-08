@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import {
   OwnerActivationError,
+  buildOwnerOnboardingProSignInUrl,
   completeOwnerActivation,
   resolvePublicOwnerActivation,
 } from "@/lib/platform/activation";
@@ -41,7 +41,10 @@ export async function POST(request: Request, context: RouteContext) {
     return platformOk({
       activated: true,
       workspaceId: result.workspaceId,
-      signInPath: "/auth/sign-in",
+      // HouzzatPRO OWNER → platform Pro sign-in (never consumer /auth/sign-in).
+      signInPath: buildOwnerOnboardingProSignInUrl({
+        workspaceId: result.workspaceId,
+      }),
     });
   } catch (error) {
     if (error instanceof OwnerActivationError) {
