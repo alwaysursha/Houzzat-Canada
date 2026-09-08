@@ -43,7 +43,11 @@ import {
 } from "@/lib/platform/status";
 import {
   BOOK_DEMO_DOCUMENT_TITLE,
+  PLATFORM_HOME_DOCUMENT_DESCRIPTION,
+  PLATFORM_HOME_DOCUMENT_TITLE,
   isHouzzatProPlatformBookDemoRequest,
+  isHouzzatProPlatformHomeRequest,
+  isHouzzatProPlatformMarketingShellRequest,
 } from "@/lib/platform/public";
 import { isHouzzatProPlatformPrivateOfferRequest } from "@/lib/platform/offers/private-offer-request";
 import { PRIVATE_OFFER_DOCUMENT_TITLE } from "@/lib/platform/offers/private-offer-copy";
@@ -51,6 +55,8 @@ import { resolvePlatformSuspendedHost } from "@/lib/platform/status/resolve-susp
 import {
   PlatformSuspendedPage,
 } from "@/components/platform/status/PlatformSuspendedPage";
+import { PlatformMarketingFooter } from "@/components/platform/public/PlatformMarketingFooter";
+import { PlatformMarketingHeader } from "@/components/platform/public/PlatformMarketingHeader";
 
 /** Hostname-aware tenancy — must not be statically generated (see tenancy-cache-policy). */
 export const dynamic = "force-dynamic";
@@ -80,6 +86,19 @@ export async function generateMetadata(): Promise<Metadata> {
         nocache: true,
         googleBot: { index: false, follow: false, noimageindex: true },
       },
+    };
+  }
+  if (await isHouzzatProPlatformHomeRequest()) {
+    return {
+      title: PLATFORM_HOME_DOCUMENT_TITLE,
+      description: PLATFORM_HOME_DOCUMENT_DESCRIPTION,
+      robots: { index: true, follow: true },
+    };
+  }
+  if (await isHouzzatProPlatformMarketingShellRequest()) {
+    // /terms and /privacy supply their own page metadata; keep indexable shell.
+    return {
+      robots: { index: true, follow: true },
     };
   }
   if (await resolvePlatformSuspendedHost()) {
@@ -119,6 +138,18 @@ export default async function MarketingLayout({
 
   if (await isHouzzatProPlatformPrivateOfferRequest()) {
     return <>{children}</>;
+  }
+
+  // V1 SaaS sales shell: / , /terms, /privacy on houzzatpro.com / www only.
+  // Does not resolve tenancy and does not grant tenant authority.
+  if (await isHouzzatProPlatformMarketingShellRequest()) {
+    return (
+      <div className="flex min-h-dvh flex-col bg-[#f7f8f7] text-slate-900">
+        <PlatformMarketingHeader />
+        <main className="flex-1">{children}</main>
+        <PlatformMarketingFooter />
+      </div>
+    );
   }
 
   if (await resolvePlatformSuspendedHost()) {

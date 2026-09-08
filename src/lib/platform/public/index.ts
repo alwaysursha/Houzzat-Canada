@@ -26,6 +26,29 @@ export {
 export { isHouzzatProPlatformBookDemoRequest } from "./book-demo-request";
 
 export {
+  PLATFORM_MARKETING_HOME_PATH,
+  PLATFORM_MARKETING_TERMS_PATH,
+  PLATFORM_MARKETING_PRIVACY_PATH,
+  PLATFORM_MARKETING_SHELL_PATHS,
+  isPlatformMarketingShellPath,
+  isPlatformMarketingHomePath,
+  matchesHouzzatProPlatformMarketingShell,
+  matchesHouzzatProPlatformHome,
+  isHouzzatProPlatformMarketingShellRequest,
+  isHouzzatProPlatformHomeRequest,
+} from "./platform-marketing-shell";
+
+export {
+  PLATFORM_HOME_DOCUMENT_TITLE,
+  PLATFORM_HOME_DOCUMENT_DESCRIPTION,
+  PLATFORM_HOME_PRIMARY_CTA_HREF,
+  PLATFORM_HOME_PRIMARY_CTA_LABEL,
+  PLATFORM_HOME_SECONDARY_CTA_HREF,
+  PLATFORM_HOME_SECONDARY_CTA_LABEL,
+  PLATFORM_HOME_NAV,
+} from "./platform-home-copy";
+
+export {
   allowBookDemoRequest,
   clearBookDemoRateLimitsForTests,
   clientIpFromPublicRequest,

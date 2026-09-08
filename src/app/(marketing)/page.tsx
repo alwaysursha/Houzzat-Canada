@@ -4,9 +4,11 @@ import { HomeAreaRailLive } from "@/components/home/HomeAreaRailLive";
 import { HomeBrowseChips } from "@/components/home/HomeBrowseChips";
 import { HomeDeferredBody } from "@/components/home/HomeDeferredBody";
 import { HomeHeroSearch } from "@/components/home/HomeHeroSearch";
+import { HouzzatProPlatformHome } from "@/components/platform/public/HouzzatProPlatformHome";
 import { AgentSignatureHome } from "@/components/templates/agent-signature/AgentSignatureHome";
 import { TeamSignatureHome } from "@/components/templates/team-signature/TeamSignatureHome";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
+import { isHouzzatProPlatformHomeRequest } from "@/lib/platform/public";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 import {
@@ -23,6 +25,11 @@ const HERO_MOBILE_GRADIENT =
   "linear-gradient(180deg, rgb(var(--tenant-primary-rgb) / 0.2) 0%, rgb(var(--tenant-primary-rgb) / 0.08) 45%, rgb(var(--tenant-primary-rgb) / 0) 100%)";
 
 export default async function HomePage() {
+  // Platform sales apex (houzzatpro.com / www) — never tenant homepage.
+  if (await isHouzzatProPlatformHomeRequest()) {
+    return <HouzzatProPlatformHome />;
+  }
+
   const chromeBrand = await resolveMarketingPresentationBrand();
   if (chromeBrand && isAgentSignatureTemplateId(chromeBrand.templateId)) {
     return <AgentSignatureHome brand={chromeBrand} />;
