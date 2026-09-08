@@ -57,24 +57,13 @@ export function HouzzatProPlatformTemplates() {
                 <h2 className="text-base font-semibold text-slate-900">
                   {template.name}
                 </h2>
-                {template.status === "coming_soon" ? (
-                  <span className="rounded-md bg-slate-200/80 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-slate-600 uppercase">
-                    Coming soon
-                  </span>
-                ) : (
-                  <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-emerald-800 uppercase">
-                    Available
-                  </span>
-                )}
+                <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-emerald-800 uppercase">
+                  Available
+                </span>
               </div>
               <p className="mt-3 text-sm leading-relaxed text-slate-600">
                 {template.blurb}
               </p>
-              {template.status === "coming_soon" ? (
-                <p className="mt-4 text-xs font-medium text-slate-500">
-                  Not available for purchase or selection at launch.
-                </p>
-              ) : null}
             </li>
           ))}
         </ul>

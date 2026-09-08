@@ -69,8 +69,7 @@ const AGENT_SIGNATURE_TEMPLATE: TemplateDefinition = {
 };
 
 /**
- * Stage 6.11E.2 — presentation ready for design review.
- * OWNER selectable remains false until physical review + roster model.
+ * Stage 6.11E.2 / V1 launch — Team Signature is commercially selectable.
  */
 const TEAM_SIGNATURE_TEMPLATE: TemplateDefinition = {
   id: TEAM_SIGNATURE_TEMPLATE_ID,
@@ -79,7 +78,7 @@ const TEAM_SIGNATURE_TEMPLATE: TemplateDefinition = {
   label: "Team Signature",
   description:
     "Premium team-brand-first website — collective brand, local market presence, and team services.",
-  selectable: false,
+  selectable: true,
   presentationReady: true,
   themes: TEAM_SIGNATURE_THEMES,
 };
@@ -197,23 +196,10 @@ export function listOnboardingTemplateOptions(): OnboardingTemplateOption[] {
 }
 
 /**
- * OWNER Website Design options for configuration/QA.
- * Includes selectable catalog plus presentation-ready Team Signature while it
- * remains commercially non-selectable. Does not expose other non-selectable
- * templates (e.g. future Brokerage).
+ * OWNER Website Design options — selectable catalog only (Default, Agent, Team).
  */
 export function listOwnerWebsiteDesignTemplateOptions(): OnboardingTemplateOption[] {
-  const byId = new Map<ImplementedTemplateId, OnboardingTemplateOption>();
-  for (const template of listSelectableTemplates()) {
-    byId.set(template.id, toOnboardingTemplateOption(template));
-  }
-  const team = getTemplate(TEAM_SIGNATURE_TEMPLATE_ID);
-  if (team?.presentationReady) {
-    byId.set(team.id, toOnboardingTemplateOption(team));
-  }
-  return IMPLEMENTED_TEMPLATE_IDS.map((id) => byId.get(id)).filter(
-    (option): option is OnboardingTemplateOption => option != null,
-  );
+  return listOnboardingTemplateOptions();
 }
 
 function toOnboardingTemplateOption(
@@ -246,7 +232,7 @@ export function listDefaultThemeOptionsForOnboarding(): OnboardingThemeOption[] 
 
 /**
  * True when themeId is a valid, presentation-ready Team Signature theme
- * usable by the public resolver. Does NOT require selectable === true.
+ * usable by the public resolver.
  */
 export function isValidConfiguredTeamSignatureTheme(
   themeId: string | null | undefined,
@@ -266,7 +252,6 @@ export function isValidConfiguredTeamSignatureTheme(
 
 /**
  * Category from persisted theme for Website Setup evaluation.
- * Uses presentationReady resolution (Team included while selectable=false).
  * Invalid / null theme → DEFAULT.
  */
 export function resolveOnboardingCategoryFromThemeId(
@@ -279,7 +264,7 @@ export function resolveOnboardingCategoryFromThemeId(
 }
 
 /**
- * Preview-only themes: presentationReady templates (incl. non-selectable Team).
+ * Preview-only themes: presentationReady templates.
  * Must NOT be used for persistence / apply.
  */
 export function requireValidPreviewableThemeId(raw: unknown): string {
@@ -322,39 +307,11 @@ export function requireValidSelectableThemeId(raw: unknown): string {
 }
 
 /**
- * OWNER Website Design persistence gate (6.11E.8B).
- * - Selectable templates: unchanged (commercial catalog).
- * - Team Signature only: presentationReady Team themes allowed while
- *   selectable=false (pre-launch QA). No generic non-selectable bypass.
+ * OWNER Website Design persistence gate — selectable catalog themes only.
+ * (V1: Team Signature is selectable; no QA-only non-selectable bypass.)
  */
 export function requireValidOwnerPersistableThemeId(raw: unknown): string {
-  if (typeof raw !== "string") {
-    throw new Error("INVALID_THEME_ID");
-  }
-  const theme = getThemeById(raw);
-  if (!theme) {
-    throw new Error("INVALID_THEME_ID");
-  }
-  const parsed = parseThemeId(theme.id);
-  if (!parsed) {
-    throw new Error("INVALID_THEME_ID");
-  }
-  const template = getTemplate(parsed.templateId);
-  if (!template) {
-    throw new Error("INVALID_THEME_ID");
-  }
-  if (template.selectable) {
-    return theme.id;
-  }
-  if (
-    template.id === TEAM_SIGNATURE_TEMPLATE_ID &&
-    template.presentationReady &&
-    template.category === "TEAM" &&
-    template.themes.some((t) => t.id === theme.id)
-  ) {
-    return theme.id;
-  }
-  throw new Error("INVALID_THEME_ID");
+  return requireValidSelectableThemeId(raw);
 }
 
 /** True when OWNER Apply may persist this themeId (UI hint). */

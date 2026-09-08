@@ -432,15 +432,16 @@ async function main() {
         "BROKERAGE",
       ]);
       const selectable = listSelectableTemplates();
-      assert.equal(selectable.length, 2);
+      assert.equal(selectable.length, 3);
       assert.equal(selectable[0]!.id, DEFAULT_TEMPLATE_ID);
       assert.equal(selectable[0]!.category, "DEFAULT");
       assert.equal(selectable[0]!.themes.length, 6);
       assert.equal(selectable[1]!.id, "agent-signature");
       assert.equal(selectable[1]!.category, "AGENT");
+      assert.equal(selectable[2]!.id, "team-signature");
+      assert.equal(selectable[2]!.category, "TEAM");
       assert.deepEqual([...RESERVED_TEMPLATE_IDS], ["brokerage-signature"]);
-      // Team Signature is catalog-implemented but not OWNER-selectable yet (6.11E.1).
-      assert.ok(!selectable.some((t) => t.id === "team-signature"));
+      assert.ok(selectable.some((t) => t.id === "team-signature"));
       assert.ok(!read("src/lib/tenancy/templates/index.ts").includes("agent-signature-02"));
       console.log("[0] CATEGORY → TEMPLATE → THEME catalog... PASS");
     }
@@ -687,13 +688,12 @@ async function main() {
       assert.ok(client.includes("Live preview"));
       assert.ok(client.includes('action: "template_theme"'));
       assert.ok(client.includes("theme.label"));
-      assert.ok(!client.includes("Team Signature"));
       assert.ok(!client.includes("Brokerage Signature"));
       assert.equal(DEFAULT_SIGNATURE_THEMES.length, 6);
       assert.ok(
         DEFAULT_SIGNATURE_THEMES.some((t) => t.label === "Mint / Green"),
       );
-      console.log("[6] No DB catalog tables; Team/Brokerage not exposed... PASS");
+      console.log("[6] No DB catalog tables; Brokerage not exposed... PASS");
     }
 
     console.log("\nSTAGE 6.11A SELFTEST PASSED\n");

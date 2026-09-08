@@ -7,6 +7,8 @@
 const EMAIL_KEY = "houzzat.rememberedEmail";
 const PASSWORD_KEY = "houzzat.rememberedSecret";
 const HAD_SESSION_KEY = "houzzat.hadClientSession";
+/** After explicit logout — require a manual Sign in click (no silent continue). */
+const MANUAL_SIGN_IN_KEY = "houzzat.manualSignInRequired";
 
 function canUseDom() {
   return typeof window !== "undefined" && typeof localStorage !== "undefined";
@@ -30,6 +32,26 @@ export function markClientSession(email: string) {
   localStorage.setItem(HAD_SESSION_KEY, "1");
 }
 
+/**
+ * Call on explicit logout so Pro sign-in does not silently restore a session
+ * or auto-fill a password for Credential Manager / local remember.
+ */
+export function markManualSignInRequired() {
+  if (!canUseDom()) return;
+  clearRememberedPassword();
+  localStorage.setItem(MANUAL_SIGN_IN_KEY, "1");
+}
+
+export function isManualSignInRequired(): boolean {
+  if (!canUseDom()) return false;
+  return localStorage.getItem(MANUAL_SIGN_IN_KEY) === "1";
+}
+
+export function clearManualSignInRequired() {
+  if (!canUseDom()) return;
+  localStorage.removeItem(MANUAL_SIGN_IN_KEY);
+}
+
 /** Store credentials on this device after a successful sign-in / sign-up. */
 export async function rememberLoginCredentials(input: {
   email: string;
@@ -41,6 +63,7 @@ export async function rememberLoginCredentials(input: {
   if (!email || !password) return;
 
   markClientSession(email);
+  clearManualSignInRequired();
 
   try {
     const PasswordCredentialCtor = (
@@ -77,9 +100,30 @@ export type RememberedLogin = {
   password: string;
 };
 
+/**
+ * Prefill for Pro sign-in after logout: email only.
+ * Never silently pulls password via Credential Manager (that can feel like auto-login).
+ */
+export function loadProSignInEmailPrefill(): {
+  email: string;
+  loginAgain: boolean;
+} {
+  if (!canUseDom()) return { email: "", loginAgain: false };
+  const email = getRememberedEmail();
+  const loginAgain =
+    hadClientSession() || isManualSignInRequired() || Boolean(email);
+  return { email, loginAgain };
+}
+
 /** Load remembered credentials for the sign-in form (password stays masked in UI). */
 export async function loadRememberedLogin(): Promise<RememberedLogin | null> {
   if (!canUseDom()) return null;
+
+  // After explicit logout, never silently restore a password.
+  if (isManualSignInRequired()) {
+    const email = getRememberedEmail();
+    return email ? { email, password: "" } : null;
+  }
 
   const storedEmail = getRememberedEmail();
 

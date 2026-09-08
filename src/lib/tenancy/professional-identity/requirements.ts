@@ -117,9 +117,8 @@ export function listMissingProfessionalIdentityFields(input: {
 
 /**
  * Overall Website Setup COMPLETE using existing onboarding step statuses.
- * TEAM requires a valid presentation-ready Team Signature theme (not
- * selectable) plus Team roster/leader data readiness.
- * Does not suspend workspace / block public site / CRM.
+ * TEAM requires a valid Team Signature theme plus Team roster/leader data
+ * readiness. Does not suspend workspace / block public site / CRM.
  */
 export function evaluateWebsiteSetupComplete(input: {
   businessProfileStatus: string;

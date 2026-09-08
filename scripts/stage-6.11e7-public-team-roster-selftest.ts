@@ -134,9 +134,9 @@ async function main() {
 
   {
     const team = getTemplate(TEAM_SIGNATURE_TEMPLATE_ID);
-    assert.equal(team?.selectable, false);
-    assert.equal(listSelectableTemplates().length, 2);
-    console.log("[0] selectable remains false... PASS");
+    assert.equal(team?.selectable, true);
+    assert.equal(listSelectableTemplates().length, 3);
+    console.log("[0] selectable=true... PASS");
   }
 
   {

@@ -14,6 +14,7 @@ import {
   PLATFORM_HOME_SECONDARY_CTA_HREF,
   PLATFORM_MARKETING_SHELL_PATHS,
 } from "@/lib/platform/public";
+import { PLATFORM_HOME_TEMPLATES } from "@/lib/platform/public/platform-home-copy";
 import { isHouzzatProPlatformRoot } from "@/lib/tenancy/platform-hostname";
 import { blocksTenantHostnameResolution } from "@/lib/tenancy/reserved-domains";
 
@@ -153,9 +154,12 @@ async function main() {
       assert.ok(!src.includes("'/auth/sign-in'"));
     }
     assert.ok(home.includes("PLATFORM_HOME_PRIMARY_CTA_HREF"));
-    assert.ok(home.includes("Coming soon"));
+    assert.ok(home.includes("Available"));
     assert.ok(copy.includes("Team Signature"));
-    assert.ok(copy.includes("coming_soon"));
+    assert.ok(copy.includes('status: "available"'));
+    assert.ok(
+      !PLATFORM_HOME_TEMPLATES.some((t) => t.status === "coming_soon"),
+    );
     assert.ok(!copy.includes("$399"));
     assert.ok(!copy.includes("Start free trial"));
     console.log("[E] CTA destinations + no consumer auth... PASS");

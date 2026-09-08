@@ -78,17 +78,17 @@ async function main() {
   {
     const team = getTemplate(TEAM_SIGNATURE_TEMPLATE_ID);
     assert.ok(team);
-    assert.equal(team.selectable, false);
+    assert.equal(team.selectable, true);
     assert.equal(team.presentationReady, true);
-    assert.equal(listSelectableTemplates().length, 2);
+    assert.equal(listSelectableTemplates().length, 3);
     assert.ok(
-      !listOnboardingTemplateOptions().some(
+      listOnboardingTemplateOptions().some(
         (o) => o.id === TEAM_SIGNATURE_TEMPLATE_ID,
       ),
     );
-    assert.throws(
-      () => requireValidSelectableThemeId("team-signature:mint"),
-      /INVALID_THEME_ID/,
+    assert.equal(
+      requireValidSelectableThemeId("team-signature:mint"),
+      "team-signature:mint",
     );
     assert.equal(
       requireValidPreviewableThemeId("team-signature:mint"),
@@ -98,7 +98,7 @@ async function main() {
       resolveTemplateIdFromThemeId("team-signature:dark-blue"),
       TEAM_SIGNATURE_TEMPLATE_ID,
     );
-    console.log("[0] selectable=false; presentationReady=true... PASS");
+    console.log("[0] selectable=true; presentationReady=true... PASS");
   }
 
   // 1. Component family + homepage order markers

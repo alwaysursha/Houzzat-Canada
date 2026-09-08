@@ -203,8 +203,14 @@ function testTransitionUiWiring() {
   assert.ok(exchange.includes("ProWorkspaceTransition"));
   assert.ok(!exchange.includes("Connecting to your workspace"));
   assert.ok(signIn.includes('get("signedOut") === "1"'));
-  assert.ok(signIn.includes("if (signedOut) return"));
+  assert.ok(signIn.includes("isManualSignInRequired"));
+  assert.ok(signIn.includes("markManualSignInRequired"));
+  assert.ok(signIn.includes("if (signedOut || isManualSignInRequired()) return"));
   assert.ok(form.includes("setNativeNavStage(\"BOOTSTRAPPING\")"));
+  assert.ok(form.includes("Pro Member Login"));
+  assert.ok(form.includes("Book a demo"));
+  assert.ok(!form.includes("NativeAuthDiagnosticOverlay"));
+  assert.ok(!form.includes("Registered Email"));
 }
 
 function testChromeFreeHandoffWiring() {

@@ -18,6 +18,7 @@ import {
   WEB_SIGNED_OUT_HOME_PATH,
 } from "@/lib/auth/complete-pro-logout";
 import { authSessionLooksAuthenticated } from "@/lib/auth/logout-cookies";
+import { markManualSignInRequired } from "@/lib/auth/remembered-login";
 import { resolveAppShell } from "@/lib/mobile/app-shell";
 
 export type HardSignOutResult = {
@@ -98,6 +99,13 @@ export async function performHardSignOut(options?: {
   isStaff?: boolean;
 }): Promise<HardSignOutResult> {
   const destination = await resolveDestination(options);
+
+  // Require an explicit Sign in click on the next visit (no silent auto-login).
+  try {
+    markManualSignInRequired();
+  } catch {
+    // ignore
+  }
 
   // Clear cookies on the *current* host (tenant or platform).
   await postLogoutClear();

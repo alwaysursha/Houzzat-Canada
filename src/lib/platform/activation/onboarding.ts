@@ -321,8 +321,8 @@ async function loadOwnerOnboardingWorkspace(
       : null) ??
     templateOptions.find((t) => t.id === parsed?.templateId) ??
     templateOptions[0]!;
-  // Category from persisted presentation-ready theme (Team included while
-  // selectable=false). Null/invalid theme → DEFAULT for evaluation.
+  // Category from persisted presentation-ready theme.
+  // Null/invalid theme → DEFAULT for evaluation.
   const evaluationCategory: TemplateCategory =
     resolveOnboardingCategoryFromThemeId(persistedThemeId);
   const onboarding = workspace.onboardingState;
@@ -401,7 +401,7 @@ async function loadOwnerOnboardingWorkspace(
     onboarding?.templateThemeStatus ?? "NOT_STARTED";
 
   // Keep templateThemeStatus coherent with Team presentation-ready theme
-  // configuration (selectable may remain false).
+  // configuration.
   if (evaluationCategory === "TEAM") {
     const teamThemeConfigured =
       isValidConfiguredTeamSignatureTheme(persistedThemeId);

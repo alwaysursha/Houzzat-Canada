@@ -374,7 +374,7 @@ async function main() {
     // 0. Catalog
     {
       const selectable = listSelectableTemplates();
-      assert.equal(selectable.length, 2);
+      assert.equal(selectable.length, 3);
       const agent = selectable.find((t) => t.id === AGENT_SIGNATURE_TEMPLATE_ID);
       assert.ok(agent);
       assert.equal(agent.category, "AGENT");
@@ -390,7 +390,7 @@ async function main() {
       const options = listOnboardingTemplateOptions();
       assert.ok(options.some((o) => o.categoryLabel === "Default"));
       assert.ok(options.some((o) => o.categoryLabel === "Agent Branded"));
-      assert.ok(!options.some((o) => o.category === "TEAM"));
+      assert.ok(options.some((o) => o.category === "TEAM"));
       assert.ok(!options.some((o) => o.category === "BROKERAGE"));
       console.log("[0] Agent Signature catalog... PASS");
     }
@@ -577,9 +577,8 @@ async function main() {
       assert.ok(!read("prisma/schema.prisma").includes("WorkspaceTemplate"));
       const client = read("src/components/onboarding/OwnerOnboardingClient.tsx");
       assert.ok(client.includes("Agent Branded") || client.includes("Agent Signature"));
-      assert.ok(!client.includes("Team Signature"));
       assert.ok(!client.includes("Brokerage Signature"));
-      console.log("[6] Persistence via themeId; no Team/Brokerage yet... PASS");
+      console.log("[6] Persistence via themeId; Brokerage not hardcoded... PASS");
     }
 
     console.log("\nSTAGE 6.11B SELFTEST PASSED\n");

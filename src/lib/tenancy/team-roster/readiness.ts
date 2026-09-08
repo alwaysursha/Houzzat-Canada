@@ -1,7 +1,7 @@
 /**
  * Stage 6.11E.8 — Team Signature workspace data readiness (roster + leader).
  * Presentation roster only — no listing-feed / SaaS-member / domain coupling.
- * Catalog `selectable` is intentionally out of scope.
+ * Catalog `selectable` is independent of data readiness evaluation.
  */
 
 import type { PrismaClient } from "@prisma/client";

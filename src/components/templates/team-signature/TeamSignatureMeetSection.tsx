@@ -4,8 +4,6 @@ import type {
 } from "@/lib/tenancy/templates/resolve-team-signature-view";
 import { cn } from "@/lib/utils";
 
-const INITIAL_VISIBLE = 8;
-
 function MemberPhoto({
   member,
   className,
@@ -135,8 +133,6 @@ export function TeamSignatureMeetSection({
     members && leader
       ? members.filter((m) => m.id !== leader.id)
       : [];
-  const visibleSupporting = supporting.slice(0, INITIAL_VISIBLE - 1);
-  const remaining = Math.max(0, supporting.length - visibleSupporting.length);
 
   return (
     <section
@@ -167,26 +163,19 @@ export function TeamSignatureMeetSection({
         {members && members.length > 0 && leader ? (
           <div className="mt-10 space-y-8">
             <LeaderFeature member={leader} />
-            {visibleSupporting.length > 0 ? (
+            {supporting.length > 0 ? (
               <div>
                 <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-surface/70">
                   Team members
                 </p>
                 <div
-                  className={supportingGridClass(visibleSupporting.length)}
-                  data-ts-roster-count={String(visibleSupporting.length)}
+                  className={supportingGridClass(supporting.length)}
+                  data-ts-roster-count={String(supporting.length)}
                 >
-                  {visibleSupporting.map((member) => (
+                  {supporting.map((member) => (
                     <SupportingCard key={member.id} member={member} />
                   ))}
                 </div>
-                {remaining > 0 ? (
-                  <p className="mt-6 text-sm text-surface/80">
-                    +{remaining} more team{" "}
-                    {remaining === 1 ? "member" : "members"} — full roster
-                    publishing coming soon.
-                  </p>
-                ) : null}
               </div>
             ) : null}
           </div>

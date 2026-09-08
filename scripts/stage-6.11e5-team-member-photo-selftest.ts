@@ -211,10 +211,10 @@ async function main() {
 
   {
     const team = getTemplate(TEAM_SIGNATURE_TEMPLATE_ID);
-    assert.equal(team?.selectable, false);
-    assert.equal(listSelectableTemplates().length, 2);
+    assert.equal(team?.selectable, true);
+    assert.equal(listSelectableTemplates().length, 3);
     assert.ok(resolveSrc.includes("brand.teamRoster") || resolveSrc.includes("teamRoster"));
-    console.log("[0] selectable=false + public roster resolve uses teamRoster... PASS");
+    console.log("[0] selectable=true + public roster resolve uses teamRoster... PASS");
   }
 
   {

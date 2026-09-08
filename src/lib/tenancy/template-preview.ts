@@ -33,7 +33,7 @@ function normalizeCatalogThemeId(raw: string): string | null {
     const parsed = parseThemeId(direct.id);
     if (!parsed) return null;
     const template = getTemplate(parsed.templateId);
-    // Previewable when presentation is ready (Team may be non-selectable).
+    // Previewable when presentation is ready.
     if (!template?.presentationReady) return null;
     return direct.id;
   }

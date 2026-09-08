@@ -1,7 +1,7 @@
 /**
  * Stage 6.11E.8 / 6.11E.8B — Team Signature data + template/theme readiness.
  * Run: pnpm stage-6.11e8-team-signature-readiness:selftest
- * No production mutation / deploy / selectable flip / MLS / migration.
+ * No production mutation / deploy / MLS / migration.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -206,9 +206,9 @@ async function main() {
     assert.equal(teamWebsiteSetupBase({ themeId: DEFAULT_THEME }), false);
     assert.equal(isValidConfiguredTeamSignatureTheme(AGENT_THEME), false);
 
-    // D. Valid Team theme while selectable=false → COMPLETE
+    // D. Valid Team theme while selectable=true → COMPLETE
     const team = getTemplate(TEAM_SIGNATURE_TEMPLATE_ID);
-    assert.equal(team?.selectable, false);
+    assert.equal(team?.selectable, true);
     assert.equal(team?.presentationReady, true);
     assert.equal(isValidConfiguredTeamSignatureTheme(TEAM_THEME), true);
     assert.equal(
@@ -310,7 +310,7 @@ async function main() {
 
   // --- I/J/K persist gates ---
   {
-    assert.throws(() => requireValidSelectableThemeId(TEAM_THEME));
+    assert.equal(requireValidSelectableThemeId(TEAM_THEME), TEAM_THEME);
     assert.equal(
       requireValidOwnerPersistableThemeId(TEAM_THEME),
       TEAM_THEME,
@@ -324,8 +324,7 @@ async function main() {
       requireValidOwnerPersistableThemeId(DEFAULT_THEME),
       DEFAULT_THEME,
     );
-    // I. Unrelated non-selectable presentationReady templates are not a
-    // generic bypass — only Team Signature gets the QA exception.
+    // Reserved / unimplemented themes remain rejected
     assert.throws(() =>
       requireValidOwnerPersistableThemeId("brokerage-signature:mint"),
     );
@@ -334,18 +333,17 @@ async function main() {
       false,
     );
 
-    // Commercial catalog unchanged
+    // Commercial + onboarding catalogs include Team
     assert.ok(
-      !listSelectableTemplates().some(
+      listSelectableTemplates().some(
         (t) => t.id === TEAM_SIGNATURE_TEMPLATE_ID,
       ),
     );
     assert.ok(
-      !listOnboardingTemplateOptions().some(
+      listOnboardingTemplateOptions().some(
         (t) => t.id === TEAM_SIGNATURE_TEMPLATE_ID,
       ),
     );
-    // OWNER Website Design includes Team for QA configuration
     assert.ok(
       listOwnerWebsiteDesignTemplateOptions().some(
         (t) => t.id === TEAM_SIGNATURE_TEMPLATE_ID,
@@ -356,7 +354,6 @@ async function main() {
       "src/components/templates/OwnerTemplatePreviewBar.tsx",
     );
     assert.ok(previewBar.includes("isOwnerPersistableThemeId"));
-    assert.ok(!previewBar.includes("selectable === true"));
 
     console.log("[5] Persist gates I/J/K + Website Design options... PASS");
   }
@@ -377,7 +374,7 @@ async function main() {
     assert.ok(onboarding.includes("listOwnerWebsiteDesignTemplateOptions"));
     assert.ok(onboarding.includes("isValidConfiguredTeamSignatureTheme"));
     assert.ok(
-      getTemplate(TEAM_SIGNATURE_TEMPLATE_ID)?.selectable === false,
+      getTemplate(TEAM_SIGNATURE_TEMPLATE_ID)?.selectable === true,
     );
     const e8 = read("src/lib/tenancy/team-roster/readiness.ts");
     assert.ok(!e8.includes("$transaction"));
@@ -386,7 +383,7 @@ async function main() {
       WEBSITE_SETUP_FIELD_LABELS.teamLogoUrl ===
         TEAM_SIGNATURE_READINESS_FIELD_LABELS.teamLogoUrl,
     );
-    console.log("[6] Isolation + wiring + selectable false... PASS");
+    console.log("[6] Isolation + wiring + selectable true... PASS");
   }
 
   console.log("\n=== Stage 6.11E.8/E.8B COMPLETE — all assertions passed ===");

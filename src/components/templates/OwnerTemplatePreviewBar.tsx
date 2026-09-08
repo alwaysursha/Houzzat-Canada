@@ -5,10 +5,9 @@ import { useState } from "react";
 import { isOwnerPersistableThemeId } from "@/lib/tenancy/templates";
 
 /**
- * Stage 6.11B.1 / 6.11E.2 / 6.11E.8B — unmistakable OWNER preview chrome.
+ * Stage 6.11B.1 / 6.11E.2 / V1 — OWNER preview chrome.
  * Exit clears cookie only. Use This Design saves via authorized persistence.
- * Team Signature may Apply while presentationReady and selectable=false (QA).
- * Other non-selectable templates remain non-applyable.
+ * Apply only for selectable catalog themes.
  */
 export function OwnerTemplatePreviewBar({
   displayLabel,

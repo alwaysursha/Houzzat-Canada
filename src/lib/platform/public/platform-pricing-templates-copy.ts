@@ -32,14 +32,14 @@ export const PLATFORM_PRICING_POINTS = [
 
 export const PLATFORM_TEMPLATES_DOCUMENT_TITLE = "Website Templates | HouzzatPRO";
 export const PLATFORM_TEMPLATES_DOCUMENT_DESCRIPTION =
-  "HouzzatPRO website presentations available at launch: Default and Agent Signature. Team Signature is coming soon.";
+  "HouzzatPRO website presentations available at launch: Default, Agent Signature, and Team Signature.";
 
 export const PLATFORM_TEMPLATES_EYEBROW = "PRESENTATION";
 export const PLATFORM_TEMPLATES_TITLE = "Website templates for your brand";
 export const PLATFORM_TEMPLATES_LEAD =
-  "Choose a professional presentation for your brokerage or personal brand. Only commercially ready options are offered at launch.";
+  "Choose a professional presentation for your brokerage, personal brand, or team.";
 
-/** Reuse homepage template inventory — keep Team Signature coming soon. */
+/** Reuse homepage template inventory (Default, Agent, Team — all available). */
 export const PLATFORM_TEMPLATES_CATALOG = PLATFORM_HOME_TEMPLATES;
 
 export const PLATFORM_PAGE_PRIMARY_CTA_HREF = PLATFORM_HOME_PRIMARY_CTA_HREF;

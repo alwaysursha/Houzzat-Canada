@@ -14,6 +14,7 @@ import {
   PLATFORM_PAGE_SECONDARY_CTA_HREF,
   PLATFORM_PRICING_DOCUMENT_TITLE,
   PLATFORM_TEMPLATES_CATALOG,
+  PLATFORM_TEMPLATES_DOCUMENT_DESCRIPTION,
   PLATFORM_TEMPLATES_DOCUMENT_TITLE,
 } from "@/lib/platform/public";
 import { blocksTenantHostnameResolution } from "@/lib/tenancy/reserved-domains";
@@ -119,24 +120,35 @@ async function main() {
     );    console.log("[D] CTA destinations + no public dollar pricing... PASS");
   }
 
-  // E. Team Signature coming soon
+  // E. Team Signature available at launch
   {
     const team = PLATFORM_TEMPLATES_CATALOG.find(
       (t) => t.name === "Team Signature",
     );
     assert.ok(team);
-    assert.equal(team!.status, "coming_soon");
+    assert.equal(team!.status, "available");
     const available = PLATFORM_TEMPLATES_CATALOG.filter(
       (t) => t.status === "available",
     ).map((t) => t.name);
     assert.ok(available.includes("Default"));
     assert.ok(available.includes("Agent Signature"));
+    assert.ok(available.includes("Team Signature"));
+    assert.ok(
+      !PLATFORM_TEMPLATES_CATALOG.some((t) => t.status === "coming_soon"),
+    );
     const templates = read(
       "src/components/platform/public/HouzzatProPlatformTemplates.tsx",
     );
-    assert.ok(templates.includes("Coming soon"));
-    assert.ok(templates.includes("Not available for purchase or selection"));
-    console.log("[E] Team Signature coming-soon wording... PASS");
+    assert.ok(templates.includes("Available"));
+    assert.ok(
+      PLATFORM_TEMPLATES_DOCUMENT_DESCRIPTION.includes("Team Signature"),
+    );
+    assert.ok(
+      !PLATFORM_TEMPLATES_DOCUMENT_DESCRIPTION.toLowerCase().includes(
+        "coming soon",
+      ),
+    );
+    console.log("[E] Team Signature available wording... PASS");
   }
 
   // F. nav routes + metadata + wiring

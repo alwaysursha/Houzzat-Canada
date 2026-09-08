@@ -225,14 +225,14 @@ async function main() {
 
   {
     const team = getTemplate(TEAM_SIGNATURE_TEMPLATE_ID);
-    assert.equal(team?.selectable, false);
-    assert.equal(listSelectableTemplates().length, 2);
+    assert.equal(team?.selectable, true);
+    assert.equal(listSelectableTemplates().length, 3);
     assert.ok(
       !read(
         "src/components/templates/team-signature/TeamSignatureHome.tsx",
       ).includes("WorkspaceRealEstateOrganizationMembership"),
     );
-    console.log("[13] Team Signature untouched / selectable=false... PASS");
+    console.log("[13] Team Signature presentationReady + selectable=true... PASS");
   }
 
   {

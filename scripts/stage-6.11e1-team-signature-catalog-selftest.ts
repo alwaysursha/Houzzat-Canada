@@ -71,7 +71,7 @@ async function main() {
     assert.equal(team.label, "Team Signature");
     assert.equal(team.category, "TEAM");
     assert.equal(team.categoryLabel, "Team Branded");
-    assert.equal(team.selectable, false);
+    assert.equal(team.selectable, true);
     assert.equal(team.presentationReady, true);
     assert.equal(categoryForTemplateId(TEAM_SIGNATURE_TEMPLATE_ID), "TEAM");
     assert.ok(isTeamSignatureTemplateId(TEAM_SIGNATURE_TEMPLATE_ID));
@@ -106,17 +106,17 @@ async function main() {
     console.log("[1] Six Team themes + parse/serialize... PASS");
   }
 
-  // 2. Selection + public activation safety
+  // 2. Selection + public activation
   {
     const selectable = listSelectableTemplates();
-    assert.equal(selectable.length, 2);
-    assert.ok(!selectable.some((t) => t.id === TEAM_SIGNATURE_TEMPLATE_ID));
+    assert.equal(selectable.length, 3);
+    assert.ok(selectable.some((t) => t.id === TEAM_SIGNATURE_TEMPLATE_ID));
     const options = listOnboardingTemplateOptions();
-    assert.ok(!options.some((o) => o.id === TEAM_SIGNATURE_TEMPLATE_ID));
-    assert.ok(!options.some((o) => o.category === "TEAM"));
-    assert.throws(
-      () => requireValidSelectableThemeId("team-signature:mint"),
-      /INVALID_THEME_ID/,
+    assert.ok(options.some((o) => o.id === TEAM_SIGNATURE_TEMPLATE_ID));
+    assert.ok(options.some((o) => o.category === "TEAM"));
+    assert.equal(
+      requireValidSelectableThemeId("team-signature:mint"),
+      "team-signature:mint",
     );
     assert.equal(
       resolveTemplateIdFromThemeId("team-signature:mint"),
@@ -147,7 +147,7 @@ async function main() {
     assert.ok(home.includes("TeamSignatureHome"));
     assert.ok(layout.includes("isTeamSignatureTemplateId"));
     assert.ok(layout.includes("TeamSignatureHeader"));
-    console.log("[2] Non-selectable + previewable presentation... PASS");
+    console.log("[2] Selectable + previewable presentation... PASS");
   }
 
   // 3. Default themes unchanged

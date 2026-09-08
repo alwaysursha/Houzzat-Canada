@@ -103,7 +103,7 @@ export function verifyOwnerTemplatePreviewCookie(
   const parsed = parseThemeId(theme.id);
   if (!parsed) return null;
   const template = getTemplate(parsed.templateId);
-  // Preview may include presentation-ready non-selectable templates (Team design review).
+  // Preview may include any presentation-ready template theme.
   if (!template?.presentationReady) return null;
 
   const expected = signPayload(workspaceId, theme.id, exp);

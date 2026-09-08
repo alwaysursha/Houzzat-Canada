@@ -102,8 +102,8 @@ export function HouzzatProPlatformHome() {
             Website templates
           </h2>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
-            Choose a professional presentation for your brokerage or personal
-            brand. Only commercially ready options are offered at launch.
+            Choose a professional presentation for your brokerage, personal
+            brand, or team.
           </p>
           <ul className="mt-10 grid gap-4 md:grid-cols-3">
             {PLATFORM_HOME_TEMPLATES.map((template) => (
@@ -115,15 +115,9 @@ export function HouzzatProPlatformHome() {
                   <h3 className="text-base font-semibold text-slate-900">
                     {template.name}
                   </h3>
-                  {template.status === "coming_soon" ? (
-                    <span className="rounded-md bg-slate-200/80 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-slate-600 uppercase">
-                      Coming soon
-                    </span>
-                  ) : (
-                    <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-emerald-800 uppercase">
-                      Available
-                    </span>
-                  )}
+                  <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-emerald-800 uppercase">
+                    Available
+                  </span>
                 </div>
                 <p className="mt-3 text-sm leading-relaxed text-slate-600">
                   {template.blurb}

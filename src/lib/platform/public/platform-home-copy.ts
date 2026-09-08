@@ -55,8 +55,8 @@ export const PLATFORM_HOME_TEMPLATES = [
   },
   {
     name: "Team Signature",
-    blurb: "Team-focused presentation.",
-    status: "coming_soon" as const,
+    blurb: "Team-focused presentation for collective brand and roster.",
+    status: "available" as const,
   },
 ] as const;
 

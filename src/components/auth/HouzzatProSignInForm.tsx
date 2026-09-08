@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { getSession, signIn } from "next-auth/react";
+import { useRef, useState } from "react";
+import { getSession } from "next-auth/react";
 import { Eye, EyeOff } from "lucide-react";
-import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  hadClientSession,
-  loadRememberedLogin,
+  clearManualSignInRequired,
+  loadProSignInEmailPrefill,
   rememberLoginCredentials,
 } from "@/lib/auth/remembered-login";
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
 import { setNativeNavStage } from "@/lib/mobile/native-route-latch";
 import { proNativeAuthController } from "@/lib/mobile/pro-native-auth-controller";
-import { NativeAuthDiagnosticOverlay } from "@/components/mobile/NativeAuthDiagnosticOverlay";
+import { BOOK_DEMO_PATH } from "@/lib/platform/public/book-demo-copy";
+import { HOUZZATPRO_PLATFORM_URL } from "@/lib/tenancy/platform-footer";
+
+const PRO_BOOK_DEMO_HREF = `${HOUZZATPRO_PLATFORM_URL}${BOOK_DEMO_PATH}`;
 
 export function HouzzatProSignInForm({
   callbackUrl = null,
@@ -25,43 +27,19 @@ export function HouzzatProSignInForm({
   returnPath?: string | null;
   workspaceHint?: string | null;
 }) {
-  const { confirm } = useSiteAlert();
   const submitRef = useRef<HTMLButtonElement>(null);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => loadProSignInEmailPrefill().email);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [loginAgain, setLoginAgain] = useState(false);
-  const [submitCount, setSubmitCount] = useState(0);
-  const [lastSignInResult, setLastSignInResult] = useState<{
-    ok?: boolean;
-    error?: string | null;
-  } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const remembered = await loadRememberedLogin();
-      if (cancelled || !remembered) {
-        if (!cancelled) setLoginAgain(hadClientSession());
-        return;
-      }
-      setEmail(remembered.email);
-      if (remembered.password) setPassword(remembered.password);
-      setLoginAgain(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [loginAgain] = useState(() => loadProSignInEmailPrefill().loginAgain);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (pending) return;
     setPending(true);
     setError(null);
-    setSubmitCount((prev) => prev + 1);
 
     const normalizedEmail = email.trim().toLowerCase();
     setNativeNavStage("BOOTSTRAPPING");
@@ -74,14 +52,13 @@ export function HouzzatProSignInForm({
       workspaceHint,
     });
 
-    setLastSignInResult(result);
-
     if (!result.ok) {
       setPending(false);
       setError(result.error ?? "Invalid email or password.");
       return;
     }
 
+    clearManualSignInRequired();
     void rememberLoginCredentials({ email: normalizedEmail, password });
     void getSession().then((session) => {
       if (session?.user?.id) {
@@ -102,7 +79,7 @@ export function HouzzatProSignInForm({
           className="text-sm font-medium text-[#0B5C49]/90"
           htmlFor="pro-signin-email"
         >
-          Registered Email
+          Pro Member Login
         </label>
         <Input
           id="pro-signin-email"
@@ -114,9 +91,10 @@ export function HouzzatProSignInForm({
           autoCorrect="off"
           spellCheck={false}
           required
+          placeholder="Enter Email Address"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="h-12 border-white/70 bg-white/95 text-ink shadow-sm backdrop-blur-sm focus-visible:border-[#0B5C49]/35 focus-visible:ring-[#0B5C49]/25"
+          className="h-12 border-white/70 bg-white/95 text-ink shadow-sm backdrop-blur-sm placeholder:text-ink/40 focus-visible:border-[#0B5C49]/35 focus-visible:ring-[#0B5C49]/25"
         />
       </div>
       <div className="space-y-2">
@@ -133,9 +111,10 @@ export function HouzzatProSignInForm({
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
             required
+            placeholder="Enter Password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="h-12 border-white/70 bg-white/95 pr-11 text-ink shadow-sm backdrop-blur-sm focus-visible:border-[#0B5C49]/35 focus-visible:ring-[#0B5C49]/25"
+            className="h-12 border-white/70 bg-white/95 pr-11 text-ink shadow-sm backdrop-blur-sm placeholder:text-ink/40 focus-visible:border-[#0B5C49]/35 focus-visible:ring-[#0B5C49]/25"
           />
           <button
             type="button"
@@ -160,14 +139,26 @@ export function HouzzatProSignInForm({
       >
         {pending ? "Signing in…" : loginAgain ? "Sign in again" : "Sign in"}
       </Button>
+
+      <div className="space-y-2 border-t border-[#0B5C49]/15 pt-4 text-center">
+        <p className="text-sm text-[#0B5C49]/75">
+          Not a HouzzatPRO member yet?
+        </p>
+        <a
+          href={PRO_BOOK_DEMO_HREF}
+          className="inline-flex text-sm font-semibold text-[#0B5C49] underline-offset-2 hover:underline"
+        >
+          Book a demo
+        </a>
+        <p className="text-xs leading-relaxed text-[#0B5C49]/55">
+          Access is by invitation after a private proposal — there is no public
+          sign-up.
+        </p>
+      </div>
+
       <p className="text-center text-xs leading-relaxed text-[#0B5C49]/65">
         Contact Houzzatpro support for assistance
       </p>
-
-      <NativeAuthDiagnosticOverlay
-        submitCount={submitCount}
-        lastSignInResult={lastSignInResult}
-      />
     </form>
   );
 }

@@ -6,6 +6,10 @@ import { useSearchParams } from "next/navigation";
 import { HouzzatProSignInForm } from "@/components/auth/HouzzatProSignInForm";
 import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransition";
+import {
+  isManualSignInRequired,
+  markManualSignInRequired,
+} from "@/lib/auth/remembered-login";
 import { hardGo } from "@/lib/mobile/nav-back";
 import { clearNativeNavStage } from "@/lib/mobile/native-route-latch";
 import { proNativeAuthController } from "@/lib/mobile/pro-native-auth-controller";
@@ -27,14 +31,15 @@ function HouzzatProSignInInner() {
     if (checked.current) return;
     checked.current = true;
     if (signedOut) {
+      markManualSignInRequired();
       clearNativeNavStage();
     }
     proNativeAuthController.setOnboardingAuthMeta({
       returnPath,
       workspaceHint,
     });
-    // After complete logout, stay on sign-in even if a stale client cache flickers.
-    if (signedOut) return;
+    // After explicit logout, stay on sign-in — user must click Sign in.
+    if (signedOut || isManualSignInRequired()) return;
     void (async () => {
       const session = await getSession();
       if (!session?.user) return;
