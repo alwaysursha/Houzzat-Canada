@@ -287,15 +287,13 @@ async function main() {
     console.log("[6] fallback paths retain force-enable... PASS");
   }
 
-  // --- Detail/related remain outside ---
+  // --- Related/by-mls remain outside G.10B3B; detail is G.10C1 ---
   {
     const related = read("src/app/api/listings/related/route.ts");
     const byMls = read("src/app/api/listings/by-mls/route.ts");
-    const detail = read("src/lib/listings/load-listing-for-detail.ts");
     assert.ok(!related.includes("entitlementFilteringEnabled"));
     assert.ok(!byMls.includes("entitlementFilteringEnabled"));
-    assert.ok(!detail.includes("entitlementFilteringEnabled"));
-    console.log("[7] detail/related remain outside G.10B3B... PASS");
+    console.log("[7] related/by-mls remain outside G.10B3B... PASS");
   }
 
   // --- Flag-OFF without force still passthrough (mobile path semantics) ---

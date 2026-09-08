@@ -63,3 +63,16 @@ export {
   resolveListingEntitlementContextForServerPage,
   type RequestListingEntitlementContext,
 } from "./resolve-for-request";
+
+export {
+  G10C0_DETAIL_ENTITLEMENT_FOUNDATION,
+  G10C_PROPTX_ON_DEMAND_REQUIRES_PRIOR_ENTITLEMENT_ALLOW,
+  classifyListingInventoryChannel,
+  decideMlsListingDetailEntitlement,
+  isWebListingDetailEntitlementEnforcementEnabled,
+  listingDetailCapabilityForStatus,
+  type DecideMlsListingDetailEntitlementInput,
+  type MlsListingDetailEntitlementDecision,
+  type MlsListingDetailEntitlementDenialReason,
+  type MlsListingDetailInventoryChannel,
+} from "./detail-entitlement";

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { buildListingPanelPayload } from "@/lib/listings/build-listing-panel";
 import { loadListingForDetailPage } from "@/lib/listings/load-listing-for-detail";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
+import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
@@ -10,8 +11,11 @@ type Params = { params: Promise<{ mlsNumber: string }> };
  * Lean authorized listing bootstrap for the in-app ListingDetailPanel.
  * Same inventory + access rules as /listing/... RSC; response is redacted JSON
  * (not a raw Prisma row). Production clicks still use the iframe sheet.
+ *
+ * G.10C1: Host → G.7C/G.10A once; web-only force-enable (G5 OFF).
+ * Board entitlement before VOW redaction in buildListingPanelPayload.
  */
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   try {
     const { mlsNumber: raw } = await params;
     const mlsNumber = decodeURIComponent(raw).trim().toUpperCase();
@@ -19,7 +23,14 @@ export async function GET(_request: Request, { params }: Params) {
       return NextResponse.json({ error: "Missing MLS number" }, { status: 400 });
     }
 
-    const listing = await loadListingForDetailPage(mlsNumber);
+    // Never trust client workspaceId / org / provider / SAK.
+    const { entitlement } =
+      await resolveListingEntitlementContextForRequest(request);
+
+    const listing = await loadListingForDetailPage(mlsNumber, {
+      entitlement,
+      entitlementFilteringEnabled: true,
+    });
     if (!listing) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }

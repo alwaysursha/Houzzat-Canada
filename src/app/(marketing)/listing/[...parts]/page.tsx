@@ -14,6 +14,9 @@ import { auth } from "@/lib/auth";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { needsEmailVerification } from "@/lib/account-access";
 import {
+  resolveListingEntitlementContextForServerPage,
+} from "@/lib/tenancy/listing-entitlement";
+import {
   resolveMarketingTenancy,
 } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
@@ -55,12 +58,27 @@ function parseListingParts(parts: string[] | undefined): {
 }
 
 /**
+ * Hostname → G.7C/G.10A once per request (shared by metadata + page).
+ * Never reads client workspaceId / org / provider.
+ */
+const resolveListingDetailEntitlementCached = cache(async () => {
+  const { entitlement } =
+    await resolveListingEntitlementContextForServerPage();
+  return entitlement;
+});
+
+/**
  * Request-scoped listing load shared by generateMetadata + page.
  * Normalize MLS before cache() so case/whitespace variants hit one entry.
+ * G.10C1: web force-enable + same entitlement snapshot for both callers.
  */
-const loadListingByMlsCached = cache((mlsNumber: string) =>
-  loadListingForDetailPage(mlsNumber),
-);
+const loadListingByMlsCached = cache(async (mlsNumber: string) => {
+  const entitlement = await resolveListingDetailEntitlementCached();
+  return loadListingForDetailPage(mlsNumber, {
+    entitlement,
+    entitlementFilteringEnabled: true,
+  });
+});
 
 function loadListingByMls(mlsNumber: string) {
   return loadListingByMlsCached(mlsNumber.trim().toUpperCase());
@@ -70,6 +88,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { parts } = await params;
   const { mlsNumber, slug } = parseListingParts(parts);
   const listing = await loadListingByMls(mlsNumber);
+  // Denied / missing → generic metadata only (no address/price/MLS/OG leak).
   if (!listing) return { title: "Listing" };
 
   // Legacy MLS-only URL — metadata still points at the canonical SEO URL.
@@ -181,8 +200,8 @@ export default async function ListingDetailPage({
       }
     : undefined;
 
-  // Same access resolver as GET /api/listings/[mls]/panel (flags cannot drift).
-  // RSC still redirects on VOW-only; the panel API returns 401/403 JSON instead.
+  // Board entitlement already applied in loadListingByMls (G.10C1).
+  // VOW/session access is a second layer — never substitutes for board rights.
   const panelAccess = resolveListingDetailAccess(user, listing);
   if (panelAccess.vowBlocked) {
     if (needsEmailVerification(user)) {
