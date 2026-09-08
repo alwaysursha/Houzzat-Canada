@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { getSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { HouzzatProSignInForm } from "@/components/auth/HouzzatProSignInForm";
+import { HouzzatProMark } from "@/components/auth/HouzzatProMark";
 import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { ProWorkspaceTransition } from "@/components/mobile/ProWorkspaceTransition";
 import {
@@ -70,7 +71,10 @@ function HouzzatProSignInInner() {
     <div className="relative flex min-h-dvh flex-col bg-[linear-gradient(165deg,#96F0D8_0%,#63D9BD_42%,#2FC3A2_100%)] px-5 pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-[max(2.5rem,env(safe-area-inset-top))]">
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
         <div className="text-center">
-          <HouzzatProWordmark size="xl" className="text-ink" />
+          <div className="flex flex-col items-center gap-2">
+            <HouzzatProMark size={84} className="drop-shadow-md" />
+            <HouzzatProWordmark size="xl" tone="dark" className="text-[#14201C]" />
+          </div>
           <p className="mt-3 text-base font-semibold tracking-tight text-[#0B5C49]">
             Agent or Broker Login
           </p>

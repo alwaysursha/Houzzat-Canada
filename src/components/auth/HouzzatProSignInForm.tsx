@@ -140,20 +140,16 @@ export function HouzzatProSignInForm({
         {pending ? "Signing in…" : loginAgain ? "Sign in again" : "Sign in"}
       </Button>
 
-      <div className="space-y-2 border-t border-[#0B5C49]/15 pt-4 text-center">
+      <div className="space-y-3 border-t border-[#0B5C49]/15 pt-4 text-center">
         <p className="text-sm text-[#0B5C49]/75">
           Not a HouzzatPRO member yet?
         </p>
         <a
           href={PRO_BOOK_DEMO_HREF}
-          className="inline-flex text-sm font-semibold text-[#0B5C49] underline-offset-2 hover:underline"
+          className="inline-flex h-12 w-full items-center justify-center rounded-xl border-2 border-[#0B5C49]/25 bg-white text-base font-semibold text-[#0B5C49] shadow-[0_8px_24px_rgba(11,92,73,0.12)] transition hover:border-[#0B5C49]/45 hover:bg-[#F4FBF8] hover:shadow-[0_10px_28px_rgba(11,92,73,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B5C49]/35"
         >
-          Book a demo
+          Book a Demo
         </a>
-        <p className="text-xs leading-relaxed text-[#0B5C49]/55">
-          Access is by invitation after a private proposal — there is no public
-          sign-up.
-        </p>
       </div>
 
       <p className="text-center text-xs leading-relaxed text-[#0B5C49]/65">

@@ -208,9 +208,11 @@ function testTransitionUiWiring() {
   assert.ok(signIn.includes("if (signedOut || isManualSignInRequired()) return"));
   assert.ok(form.includes("setNativeNavStage(\"BOOTSTRAPPING\")"));
   assert.ok(form.includes("Pro Member Login"));
-  assert.ok(form.includes("Book a demo"));
+  assert.ok(form.includes("Book a Demo"));
   assert.ok(!form.includes("NativeAuthDiagnosticOverlay"));
   assert.ok(!form.includes("Registered Email"));
+  assert.ok(!form.includes("Access is by invitation"));
+  assert.ok(signIn.includes("HouzzatProMark"));
 }
 
 function testChromeFreeHandoffWiring() {
