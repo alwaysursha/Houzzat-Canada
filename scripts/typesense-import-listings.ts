@@ -103,7 +103,7 @@ async function main() {
     const results = await client
       .collections(collection)
       .documents()
-      .import(documents, { action: "upsert" });
+      .import(documents, { action: "emplace" });
 
     for (const result of results) {
       if (result.success) imported += 1;

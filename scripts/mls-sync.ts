@@ -58,6 +58,28 @@ async function main() {
   });
   console.log(JSON.stringify(result, null, 2));
   if (!result.ok) process.exitCode = 1;
+
+  // Heal Typesense provenance for recent listings so entitlement filters
+  // never lag behind Neon (idempotent upsert with sourceAuthorityKey).
+  const healDays = Math.max(
+    1,
+    Number(process.env.TYPESENSE_PROVENANCE_HEAL_DAYS ?? 3),
+  );
+  const syncFlag = process.env.TYPESENSE_SYNC;
+  if (syncFlag !== "0" && syncFlag !== "false") {
+    console.log(
+      `Healing Typesense provenance for listings listed in the last ${healDays} day(s)…`,
+    );
+    const { backfillTypesenseListingProvenance } = await import(
+      "../src/lib/typesense/backfill-provenance"
+    );
+    const heal = await backfillTypesenseListingProvenance({
+      batchSize: 250,
+      sinceDays: healDays,
+    });
+    console.log(JSON.stringify({ provenanceHeal: heal }, null, 2));
+    if (!heal.ok) process.exitCode = 1;
+  }
 }
 
 main().catch((err) => {

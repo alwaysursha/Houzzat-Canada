@@ -4,10 +4,15 @@ import {
   getTypesenseCollectionName,
 } from "@/lib/typesense/client";
 import { typesenseEnv, typesenseFlagEnabled } from "@/lib/typesense/env";
-import { listingToTypesenseDocument } from "@/lib/typesense/listing-document";
+import {
+  buildListingSourceAuthorityKey,
+  listingToTypesenseDocument,
+} from "@/lib/typesense/listing-document";
+import { ensureTypesenseListingProvenanceFields } from "@/lib/typesense/listing-provenance-fields";
 
 let bedsLabelFieldEnsured = false;
 let livingAreaRangeFieldEnsured = false;
+let provenanceFieldsEnsured = false;
 
 async function ensureBedsLabelField(): Promise<void> {
   if (bedsLabelFieldEnsured) return;
@@ -38,6 +43,21 @@ async function ensureLivingAreaRangeField(): Promise<void> {
   livingAreaRangeFieldEnsured = true;
 }
 
+async function ensureProvenanceFields(): Promise<void> {
+  if (provenanceFieldsEnsured) return;
+  try {
+    const client = getTypesenseAdminClient();
+    const collection = getTypesenseCollectionName();
+    await ensureTypesenseListingProvenanceFields({
+      client,
+      collectionName: collection,
+    });
+  } catch (error) {
+    console.warn("[typesense/sync] provenance field ensure:", error);
+  }
+  provenanceFieldsEnsured = true;
+}
+
 function isTypesenseSyncEnabled(): boolean {
   const flag = typesenseEnv("TYPESENSE_SYNC");
   if (flag === "0" || flag === "false") return false;
@@ -54,6 +74,8 @@ function isTypesenseSyncEnabled(): boolean {
 
 /**
  * Upsert one Neon listing into Typesense. Best-effort — never throws to callers.
+ * Always writes organizationId/providerKey/sourceAuthorityKey when Neon has them
+ * so G.10 entitlement filters stay accurate.
  */
 export async function syncListingToTypesense(
   listingId: string,
@@ -90,6 +112,7 @@ export async function syncListingToTypesense(
         lng: true,
         facts: true,
         isMock: true,
+        dataSource: true,
         organizationId: true,
         providerKey: true,
         media: {
@@ -108,10 +131,40 @@ export async function syncListingToTypesense(
     if (!listing || listing.isMock) return false;
 
     await ensureBedsLabelField();
+    await ensureLivingAreaRangeField();
+    await ensureProvenanceFields();
+
+    const expectedSak = buildListingSourceAuthorityKey(
+      listing.organizationId,
+      listing.providerKey,
+    );
+    if (!expectedSak && listing.dataSource === "mls") {
+      console.warn(
+        "[typesense/sync] MLS listing missing Neon provenance; Typesense doc will lack sourceAuthorityKey",
+        listing.mlsNumber,
+        listingId,
+      );
+    }
+
     const client = getTypesenseAdminClient();
     const collection = getTypesenseCollectionName();
     const document = listingToTypesenseDocument(listing);
-    await client.collections(collection).documents().upsert(document);
+
+    if (expectedSak && document.sourceAuthorityKey !== expectedSak) {
+      console.error(
+        "[typesense/sync] refusing upsert without sourceAuthorityKey",
+        listing.mlsNumber,
+        listingId,
+      );
+      return false;
+    }
+
+    // emplace: create or merge fields — never wipe sourceAuthorityKey when an
+    // older sync host upserts a partial doc without provenance.
+    await client
+      .collections(collection)
+      .documents()
+      .create(document, { action: "emplace" });
     return true;
   } catch (error) {
     console.error("[typesense/sync]", listingId, error);

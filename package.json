@@ -193,6 +193,7 @@
     "typesense:oh-fields": "node --import tsx scripts/typesense-ensure-open-house-fields.ts",
     "typesense:oh-backfill": "node --import tsx scripts/typesense-backfill-open-houses.ts",
     "typesense:provenance-fields": "node --import tsx scripts/typesense-ensure-provenance-fields.ts",
+    "typesense:provenance-backfill": "node --import tsx scripts/typesense-backfill-provenance.ts",
     "stage-6.11g9b-typesense-provenance:selftest": "node --import tsx scripts/stage-6.11g9b-typesense-provenance-selftest.ts",
     "stage-6.11g10a-listing-entitlement:selftest": "node --import tsx scripts/stage-6.11g10a-listing-entitlement-selftest.ts",
     "stage-6.11g10b1-search-entitlement:selftest": "node --import tsx scripts/stage-6.11g10b1-search-entitlement-selftest.ts",
