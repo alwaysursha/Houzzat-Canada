@@ -475,18 +475,18 @@ async function main() {
     console.log("[15] VOW after board entitlement... PASS");
   }
 
-  // --- related / by-mls still outside (G.10C3); mobile unchanged ---
+  // --- related / by-mls owned by G.10C3; mobile unchanged ---
   {
     const related = read("src/app/api/listings/related/route.ts");
     const byMls = read("src/app/api/listings/by-mls/route.ts");
     const mobile = read(
       "src/app/api/mobile/v2/properties/[mlsNumber]/route.ts",
     );
-    assert.ok(!related.includes("evaluateWebListingDetailInventoryAccess"));
-    assert.ok(!byMls.includes("entitlementFilteringEnabled"));
+    assert.ok(related.includes("buildPrismaEntitledInventoryWhere"));
+    assert.ok(byMls.includes("buildPrismaEntitledInventoryWhere"));
     assert.ok(mobile.includes("loadListingForDetailPage"));
     assert.ok(!mobile.includes("entitlementFilteringEnabled"));
-    console.log("[16] related/by-mls + mobile outside C2... PASS");
+    console.log("[16] related/by-mls C3 + mobile outside C2... PASS");
   }
 
   // --- Status mapping still aligned ---

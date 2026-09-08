@@ -287,13 +287,15 @@ async function main() {
     console.log("[6] fallback paths retain force-enable... PASS");
   }
 
-  // --- Related/by-mls remain outside G.10B3B; detail is G.10C1 ---
+  // --- Related/by-mls owned by G.10C3 (outside G.10B3B search surfaces) ---
   {
     const related = read("src/app/api/listings/related/route.ts");
     const byMls = read("src/app/api/listings/by-mls/route.ts");
-    assert.ok(!related.includes("entitlementFilteringEnabled"));
-    assert.ok(!byMls.includes("entitlementFilteringEnabled"));
-    console.log("[7] related/by-mls remain outside G.10B3B... PASS");
+    assert.ok(related.includes("resolveListingEntitlementContextForRequest"));
+    assert.ok(byMls.includes("buildPrismaEntitledInventoryWhere"));
+    assert.ok(!related.includes("getListingProvider"));
+    assert.ok(!byMls.includes("getListingProvider"));
+    console.log("[7] related/by-mls owned by G.10C3... PASS");
   }
 
   // --- Flag-OFF without force still passthrough (mobile path semantics) ---

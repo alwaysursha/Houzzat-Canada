@@ -1,11 +1,24 @@
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
+import type { ListingStatus, Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { toCard } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
+import {
+  buildPrismaEntitledInventoryWhere,
+  evaluateWebListingDetailInventoryAccess,
+  resolveListingEntitlementContextForRequest,
+} from "@/lib/tenancy/listing-entitlement";
 import { hasClientAccess } from "@/lib/vow";
 
+/**
+ * Related listing cards for a subject MLS.
+ *
+ * G.10C3: Host → G.7C/G.10A once → subject board entitlement →
+ * capability-scoped Prisma filter on every related row.
+ * Unauthorized subject → 404. Unauthorized related rows never serialized.
+ * Neon-only (no PropTx). VOW gate remains after board entitlement.
+ */
 export async function GET(request: Request) {
   const gated = await mlsClientGate();
   if (gated) return gated;
@@ -30,6 +43,10 @@ export async function GET(request: Request) {
     );
   }
 
+  // Never trust client workspaceId / org / provider / SAK.
+  const { entitlement } =
+    await resolveListingEntitlementContextForRequest(request);
+
   const subject = await prisma.listing.findUnique({
     where: { mlsNumber },
     select: {
@@ -41,12 +58,75 @@ export async function GET(request: Request) {
       baths: true,
       segment: true,
       transactionType: true,
+      status: true,
+      dataSource: true,
+      organizationId: true,
+      providerKey: true,
     },
   });
 
   if (!subject) {
     return NextResponse.json({ error: "Listing not found." }, { status: 404 });
   }
+
+  const subjectGate = evaluateWebListingDetailInventoryAccess({
+    entitlement,
+    entitlementFilteringEnabled: true,
+    organizationId: subject.organizationId,
+    providerKey: subject.providerKey,
+    dataSource: subject.dataSource,
+    status: subject.status,
+  });
+  if (!subjectGate.allowed) {
+    return NextResponse.json({ error: "Listing not found." }, { status: 404 });
+  }
+
+  const relatedStatuses: ListingStatus[] =
+    tab === "sold" ? ["SOLD"] : ["ACTIVE"];
+
+  const inventory = buildPrismaEntitledInventoryWhere({
+    entitlement,
+    statuses: relatedStatuses,
+  });
+  if (inventory.kind === "empty") {
+    return NextResponse.json({
+      mode,
+      tab,
+      subject: {
+        mlsNumber: subject.mlsNumber,
+        city: subject.city,
+        community: subject.community,
+        propertyType: subject.propertyType,
+        beds: subject.beds,
+      },
+      items: [],
+      total: 0,
+    });
+  }
+
+  const geo: Prisma.ListingWhereInput = {
+    mlsNumber: { not: mlsNumber },
+    segment: subject.segment,
+    city: { equals: subject.city, mode: "insensitive" },
+    transactionType: subject.transactionType,
+  };
+
+  if (subject.community) {
+    geo.community = { equals: subject.community, mode: "insensitive" };
+  }
+
+  if (mode === "same-features") {
+    geo.propertyType = subject.propertyType;
+    // Match whole beds (3.0 and 3 stay together).
+    geo.beds = {
+      gte: Math.floor(subject.beds),
+      lt: Math.floor(subject.beds) + 1,
+    };
+  }
+
+  const where: Prisma.ListingWhereInput = {
+    AND: [inventory.where, geo],
+  };
 
   const session = await auth();
   const user = session?.user?.email
@@ -56,25 +136,6 @@ export async function GET(request: Request) {
       })
     : null;
   const isClient = hasClientAccess(user);
-
-  const where: Prisma.ListingWhereInput = {
-    mlsNumber: { not: mlsNumber },
-    status: tab === "sold" ? "SOLD" : "ACTIVE",
-    segment: subject.segment,
-    city: { equals: subject.city, mode: "insensitive" },
-  };
-
-  where.transactionType = subject.transactionType;
-
-  if (subject.community) {
-    where.community = { equals: subject.community, mode: "insensitive" };
-  }
-
-  if (mode === "same-features") {
-    where.propertyType = subject.propertyType;
-    // Match whole beds (3.0 and 3 stay together).
-    where.beds = { gte: Math.floor(subject.beds), lt: Math.floor(subject.beds) + 1 };
-  }
 
   const rows = await prisma.listing.findMany({
     where,

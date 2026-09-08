@@ -621,13 +621,15 @@ async function main() {
     console.log("[12] mobile loader call unchanged... PASS");
   }
 
-  // --- related / by-mls still outside C1 (G.10C3); C2 owns deferred APIs ---
+  // --- related / by-mls owned by G.10C3 (outside G.10C1 detail loader) ---
   {
     const related = read("src/app/api/listings/related/route.ts");
     const byMls = read("src/app/api/listings/by-mls/route.ts");
-    assert.ok(!related.includes("decideMlsListingDetailEntitlement"));
-    assert.ok(!byMls.includes("entitlementFilteringEnabled"));
-    console.log("[13] related/by-mls remain outside G.10C1... PASS");
+    assert.ok(related.includes("resolveListingEntitlementContextForRequest"));
+    assert.ok(byMls.includes("buildPrismaEntitledInventoryWhere"));
+    assert.ok(!related.includes("loadListingForDetailPage"));
+    assert.ok(!byMls.includes("loadListingForDetailPage"));
+    console.log("[13] related/by-mls owned by G.10C3 (not C1 loader)... PASS");
   }
 
   // --- SOLD_CONDITIONAL maps to ACTIVE_LISTINGS ---
