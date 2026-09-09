@@ -25,8 +25,10 @@ export function resolveMlsSyncMode(input: {
   env?: NodeJS.ProcessEnv;
 }): MlsSyncMode {
   const argv = input.argv ?? [];
-  const env = input.env ?? {};
-  if (argv.includes("--fast") || env.MLS_SYNC_MODE === MLS_FAST_SYNC_MODE) {
+  if (
+    argv.includes("--fast") ||
+    input.env?.["MLS_SYNC_MODE"] === MLS_FAST_SYNC_MODE
+  ) {
     return MLS_FAST_SYNC_MODE;
   }
   return MLS_FULL_SYNC_MODE;
