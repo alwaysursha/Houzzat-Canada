@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { scheduleCustomerContactRequestNotice } from "@/lib/account/contact-update-notify";
 import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
 
@@ -61,6 +62,13 @@ export async function POST(request: Request) {
         requestedAt: stamp.toISOString(),
       },
     },
+  });
+
+  scheduleCustomerContactRequestNotice({
+    customerId: lead.customerId,
+    leadId: lead.id,
+    channel: parsed.data.channel,
+    actorUserId: ctx.user.id,
   });
 
   return NextResponse.json({

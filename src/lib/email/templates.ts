@@ -78,6 +78,81 @@ export function renderWelcomeEmail(input: {
   return { subject, text, html, kind: "welcome" };
 }
 
+export function renderContactUpdateRequestEmail(input: {
+  name?: string | null;
+  channel: "email" | "phone";
+  accountUrl: string;
+}): RenderedEmail {
+  const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
+  const field = input.channel === "phone" ? "phone number" : "email address";
+  const subject = `Please confirm your ${field}`;
+  const text = [
+    greet,
+    "",
+    `Your agent asked you to confirm the ${field} on your ${SITE_NAME} account so they can reach you about showings and updates.`,
+    "",
+    `Update your details: ${input.accountUrl}`,
+  ].join("\n");
+  const html = emailLayout({
+    title: "Please confirm your contact details",
+    subtitle: `Your agent needs the right ${field} to reach you.`,
+    preheader: `Confirm your ${field} on ${SITE_NAME}`,
+    bodyHtml: `
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      <p style="margin:0 0 12px;color:#115e59">Your agent asked you to confirm the ${escapeHtml(field)} on your ${escapeHtml(SITE_NAME)} account. This helps them contact you about showings, offers, and listing updates.</p>
+      ${ctaButton(input.accountUrl, "Update contact details")}
+      <p style="margin:16px 0 0;font-size:13px;color:#047857">It only takes a moment. You can also update this the next time you visit ${escapeHtml(SITE_NAME)}.</p>
+    `,
+  });
+  return { subject, text, html, kind: "contact_update_request" };
+}
+
+export function renderStaffContactUpdatedEmail(input: {
+  clientLabel: string;
+  fields: Array<"email" | "phone">;
+  email?: string | null;
+  phone?: string | null;
+  leadUrl: string;
+}): RenderedEmail {
+  const fieldLabel =
+    input.fields.length === 2
+      ? "email and phone number"
+      : input.fields[0] === "phone"
+        ? "phone number"
+        : "email address";
+  const subject = `${input.clientLabel} updated their ${fieldLabel}`;
+  const detailLines = [
+    input.fields.includes("email") && input.email
+      ? `Email: ${input.email}`
+      : null,
+    input.fields.includes("phone") && input.phone
+      ? `Phone: ${input.phone}`
+      : null,
+  ].filter((line): line is string => Boolean(line));
+  const text = [
+    subject,
+    "",
+    ...detailLines,
+    "",
+    `Open in HouzzatPRO: ${input.leadUrl}`,
+  ].join("\n");
+  const html = emailLayout({
+    title: "Contact details updated",
+    subtitle: `${input.clientLabel} confirmed their ${fieldLabel}.`,
+    preheader: subject,
+    bodyHtml: `
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(input.clientLabel)} updated the ${escapeHtml(fieldLabel)} on their ${escapeHtml(SITE_NAME)} account.</p>
+      ${
+        detailLines.length
+          ? infoCard(detailLines.map((line) => escapeHtml(line)).join("<br/>"))
+          : ""
+      }
+      ${ctaButton(input.leadUrl, "Open lead in HouzzatPRO")}
+    `,
+  });
+  return { subject, text, html, kind: "staff_contact_updated" };
+}
+
 export function renderPasswordResetEmail(input: {
   name?: string | null;
   resetUrl: string;

@@ -9,6 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { scheduleCustomerContactRequestNotice } from "@/lib/account/contact-update-notify";
 import { authorizeMobileLeadAccess } from "@/lib/mobile/v2/lead-access";
 import { prisma } from "@/lib/prisma";
 
@@ -94,6 +95,13 @@ export async function POST(
           requestedAt: stamp.toISOString(),
         },
       },
+    });
+
+    scheduleCustomerContactRequestNotice({
+      customerId: lead.customerId,
+      leadId: lead.id,
+      channel: parsed.data.channel,
+      actorUserId: access.userId,
     });
 
     return NextResponse.json({

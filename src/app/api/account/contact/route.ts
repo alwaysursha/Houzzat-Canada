@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
+import { scheduleStaffContactUpdatedNotice } from "@/lib/account/contact-update-notify";
 import { logContactActivityForCustomer } from "@/lib/agent/log-contact-activity";
 import { isDatabaseUnavailableError } from "@/lib/errors";
 import {
@@ -160,6 +161,12 @@ export async function PATCH(request: Request) {
         }
       }
     }
+
+    scheduleStaffContactUpdatedNotice({
+      customerId: user.id,
+      emailChanged: changes.some((c) => c.startsWith("email")),
+      phoneChanged: changes.some((c) => c.startsWith("phone")),
+    });
 
     return reply(200, {
       ok: true,

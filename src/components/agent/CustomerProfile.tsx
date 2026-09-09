@@ -179,8 +179,8 @@ function ContactDisplayRow({
           </span>
         )}
         {updateRequested ? (
-          <span className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-wide text-amber-800">
-            Update requested
+          <span className="inline-flex min-w-0 flex-1 items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-900">
+            Requested
           </span>
         ) : null}
         {canEdit ? (
@@ -198,11 +198,11 @@ function ContactDisplayRow({
             type="button"
             onClick={onRequestUpdate}
             disabled={requestPending}
-            aria-label={requestLabel ?? "Request update"}
+            aria-label={requestLabel ?? "Email and notify client to update"}
             title={
               updateRequested
-                ? "Update already requested"
-                : (requestLabel ?? "Request update")
+                ? "Client has already been asked — email and push were sent"
+                : (requestLabel ?? "Email and notify the client")
             }
             className={cn(
               "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition disabled:opacity-50",
@@ -963,7 +963,7 @@ export function CustomerProfile({
                       onRequestUpdate={() =>
                         void requestContactUpdate("phone")
                       }
-                      requestLabel="Request phone update on next visit"
+                      requestLabel="Email and notify the client to confirm phone"
                       requestPending={reminderPending === "phone"}
                     />
                   )}
@@ -991,7 +991,7 @@ export function CustomerProfile({
                       onRequestUpdate={() =>
                         void requestContactUpdate("email")
                       }
-                      requestLabel="Request email update on next visit"
+                      requestLabel="Email and notify the client to confirm email"
                       requestPending={reminderPending === "email"}
                     />
                   )}
