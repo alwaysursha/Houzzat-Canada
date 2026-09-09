@@ -543,22 +543,22 @@ export function ContactUpdateReminder() {
             <p className="mt-4 text-sm text-danger">{error}</p>
           ) : null}
 
-          <div className="mt-7 flex flex-col-reverse gap-2.5 sm:flex-row sm:items-center">
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-stretch">
+            <Button
+              type="submit"
+              disabled={pending}
+              className="h-14 min-h-14 w-full shrink-0 rounded-xl px-6 text-[15px] leading-none shadow-[0_10px_24px_rgba(15,107,76,0.22)] sm:flex-1"
+            >
+              {pending ? "Saving…" : "Save details"}
+            </Button>
             <Button
               type="button"
               variant="ghost"
               disabled={pending}
               onClick={chooseLater}
-              className="h-12 flex-1 text-ink/60 hover:bg-mist hover:text-ink"
+              className="h-12 min-h-12 w-full shrink-0 text-ink/60 hover:bg-mist hover:text-ink sm:flex-1"
             >
               I’ll do this later
-            </Button>
-            <Button
-              type="submit"
-              disabled={pending}
-              className="h-12 flex-1 rounded-xl text-[15px] shadow-[0_10px_24px_rgba(15,107,76,0.22)]"
-            >
-              {pending ? "Saving…" : "Save details"}
             </Button>
           </div>
           <p className="mt-4 text-center text-[11px] leading-relaxed text-ink/40">
