@@ -1,25 +1,33 @@
 /**
  * Local / CI PropTx MLS sync:
  *   pnpm mls:sync [maxPages] [fullBackfillDays] [resources]
+ *   pnpm mls:sync --fast
+ *   pnpm mls:sync:fast
  *
  * resources (optional, comma-separated):
  *   property,media,rooms,openHouse,syntheticHistory,history
  * Default resources: property,openHouse
  *
- * Property pass order (every run):
+ * Property pass order (full/slow run):
  *   1) just-listed (ListingContractDate / entry time, newest first)
  *   2) recent ModificationTimestamp (newest first)
  *   3) ascending cursor backlog (history / sold catch-up)
  *   4) small sold-date + photo gap-fill
  *
- * Mac 15m ticks set MLS_SYNC_*_PAGES / MEDIA_CAP / SOLD_CAP for a lean split.
+ * Fast mode (`--fast` / MLS_SYNC_MODE=fast): just-listed + recent only.
+ * Does not advance MlsSyncCursor. Skips the 7-day Typesense provenance heal.
  *
  * Examples:
  *   pnpm mls:sync 40 14
  *   pnpm mls:sync 80 30 property,openHouse
  *   pnpm mls:sync 50 30 property,media,rooms,openHouse
+ *   pnpm mls:sync --fast
  */
 import { config } from "dotenv";
+import {
+  isMlsFastSyncMode,
+  resolveMlsSyncMode,
+} from "../src/lib/proptx/mls-fast-sync";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
@@ -28,13 +36,20 @@ async function main() {
   const { runPropTxMlsSync } = await import("../src/lib/proptx/sync");
   const { getMlsSyncCities } = await import("../src/lib/proptx/sync-cities");
 
-  const maxPages = Number(process.argv[2] ?? 15);
-  const fullBackfillDays = Number(process.argv[3] ?? 7);
-  const resourcesArg = process.argv[4]?.trim();
+  const argv = process.argv.slice(2);
+  const mode = resolveMlsSyncMode({ argv, env: process.env });
+  const isFast = isMlsFastSyncMode(mode);
+  const positional = argv.filter((arg) => arg !== "--fast");
+
+  const maxPages = Number(positional[0] ?? 15);
+  const fullBackfillDays = Number(positional[1] ?? 7);
+  const resourcesArg = positional[2]?.trim();
   const resources = (
-    resourcesArg
-      ? resourcesArg.split(",").map((s) => s.trim()).filter(Boolean)
-      : ["property", "openHouse"]
+    isFast
+      ? ["property"]
+      : resourcesArg
+        ? resourcesArg.split(",").map((s) => s.trim()).filter(Boolean)
+        : ["property", "openHouse"]
   ) as Array<
     | "property"
     | "media"
@@ -47,7 +62,7 @@ async function main() {
   const cities = getMlsSyncCities();
 
   console.log(
-    `Starting PropTx MLS sync (maxPages=${maxPages}, fullBackfillDays=${fullBackfillDays}, resources=${resources.join(",")})…`,
+    `Starting PropTx MLS sync (mode=${mode}, maxPages=${maxPages}, fullBackfillDays=${fullBackfillDays}, resources=${resources.join(",")})…`,
   );
   console.log(`City allowlist (${cities.length}): ${cities.join(", ")}`);
 
@@ -55,9 +70,15 @@ async function main() {
     maxPages,
     fullBackfillDays,
     resources,
+    mode,
   });
   console.log(JSON.stringify(result, null, 2));
   if (!result.ok) process.exitCode = 1;
+
+  if (isFast) {
+    console.log("[mls] mode=fast skip Typesense provenance heal");
+    return;
+  }
 
   // Heal Typesense provenance for recent listings so entitlement filters
   // never lag behind Neon (idempotent upsert with sourceAuthorityKey).

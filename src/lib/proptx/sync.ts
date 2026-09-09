@@ -39,6 +39,16 @@ import {
   type PropTxListingProvenance,
 } from "@/lib/proptx/listing-provenance";
 import {
+  assertMlsSyncCursorAccess,
+  isMlsFastSyncMode,
+  MLS_FAST_JUST_LISTED_DAYS,
+  MLS_FAST_JUST_LISTED_PAGES,
+  MLS_FAST_RECENT_DAYS,
+  MLS_FAST_RECENT_PAGES,
+  MLS_FULL_SYNC_MODE,
+  type MlsSyncMode,
+} from "@/lib/proptx/mls-fast-sync";
+import {
   syncListingToTypesense,
   typesenseSyncDisabledReason,
 } from "@/lib/typesense/sync-listing";
@@ -67,6 +77,8 @@ export type MlsSyncStats = {
   typesenseMissingProvenance: number;
   /** Listings skipped because Typesense writes are disabled/misconfigured. */
   typesenseDisabled: number;
+  /** Distinguishes fast freshness ticks from full/slow maintenance runs. */
+  mode: MlsSyncMode;
 };
 
 /** Cap inline geocode so property sync stays within the 5-minute cron window. */
@@ -77,6 +89,7 @@ export type MlsSyncResult = {
   message: string;
   stats: MlsSyncStats;
   runId: string;
+  mode: MlsSyncMode;
 };
 
 const RESOURCE_PROPERTY = "Property";
@@ -84,12 +97,17 @@ const RESOURCE_MEDIA = "Media";
 const RESOURCE_OPEN_HOUSE = "OpenHouse";
 const RESOURCE_HISTORY = "HistoryTransactional";
 
+/** Slow sync only. Fast mode throws if these are reached. */
+let activeMlsSyncMode: MlsSyncMode = MLS_FULL_SYNC_MODE;
+
 async function getCursor(resource: string): Promise<string | null> {
+  assertMlsSyncCursorAccess(activeMlsSyncMode, resource, "get");
   const row = await prisma.mlsSyncCursor.findUnique({ where: { resource } });
   return row?.cursor ?? null;
 }
 
 async function setCursor(resource: string, cursor: string) {
+  assertMlsSyncCursorAccess(activeMlsSyncMode, resource, "set");
   await prisma.mlsSyncCursor.upsert({
     where: { resource },
     create: { resource, cursor },
@@ -657,6 +675,8 @@ async function upsertPropertyRow(
     skipCityAllowlist?: boolean;
     /** Bulk backfill: upsert listing row + Typesense without PropTx media pulls. */
     skipMedia?: boolean;
+    /** Fast sync: skip inline street-geocode drain (slow job / mls:geocode). */
+    skipGeocode?: boolean;
     /** Feed-bound TRREB/PropTx provenance (resolved once per invocation). */
     provenance: PropTxListingProvenance;
   },
@@ -740,6 +760,7 @@ async function upsertPropertyRow(
       approximateCoords = false;
     } else {
       const underBudget =
+        options.skipGeocode !== true &&
         options.stats.geocodeAttempted < SYNC_GEOCODE_BUDGET;
       if (underBudget) {
         options.stats.geocodeAttempted += 1;
@@ -1114,6 +1135,7 @@ async function syncJustListedProperties(options: {
   maxPages: number;
   stats: MlsSyncStats;
   config?: PropTxConfig | null;
+  skipGeocode?: boolean;
 }): Promise<void> {
   const provenance = await createPropTxProvenanceSession(
     createPrismaPropTxProvenanceStore(prisma),
@@ -1166,6 +1188,7 @@ async function syncJustListedProperties(options: {
             stats: options.stats,
             skipReasons,
             fetchNested: false,
+            skipGeocode: options.skipGeocode,
             provenance,
           });
         }
@@ -1202,6 +1225,7 @@ async function syncRecentProperties(options: {
   maxPages: number;
   stats: MlsSyncStats;
   config?: PropTxConfig | null;
+  skipGeocode?: boolean;
 }): Promise<void> {
   const provenance = await createPropTxProvenanceSession(
     createPrismaPropTxProvenanceStore(prisma),
@@ -1231,6 +1255,7 @@ async function syncRecentProperties(options: {
         stats: options.stats,
         skipReasons,
         fetchNested: false,
+        skipGeocode: options.skipGeocode,
         provenance,
       });
     }
@@ -1827,6 +1852,32 @@ async function syncHistory(options: {
 }
 
 /**
+ * Fast freshness only: just-listed + recent mods. Never touches MlsSyncCursor.
+ */
+async function runMlsFastPropertyPasses(options: {
+  stats: MlsSyncStats;
+  config: PropTxConfig;
+}): Promise<void> {
+  console.log(
+    `[mls] mode=fast justListed=${MLS_FAST_JUST_LISTED_PAGES}p/${MLS_FAST_JUST_LISTED_DAYS}d recent=${MLS_FAST_RECENT_PAGES}p/${MLS_FAST_RECENT_DAYS}d cursor=locked`,
+  );
+  await syncJustListedProperties({
+    days: MLS_FAST_JUST_LISTED_DAYS,
+    maxPages: MLS_FAST_JUST_LISTED_PAGES,
+    stats: options.stats,
+    config: options.config,
+    skipGeocode: true,
+  });
+  await syncRecentProperties({
+    days: MLS_FAST_RECENT_DAYS,
+    maxPages: MLS_FAST_RECENT_PAGES,
+    stats: options.stats,
+    config: options.config,
+    skipGeocode: true,
+  });
+}
+
+/**
  * Pull PropTx MLS feed into Postgres. Safe to re-run (idempotent upserts).
  */
 export async function runPropTxMlsSync(options?: {
@@ -1845,15 +1896,22 @@ export async function runPropTxMlsSync(options?: {
   mediaBackfillOnly?: boolean;
   /** Run city-by-city Active inventory (heavy — off by default on cron). */
   activeInventory?: boolean;
+  /** Fast: just-listed + recent mods only. Never advances Property/Media cursors. */
+  mode?: MlsSyncMode;
 }): Promise<MlsSyncResult> {
+  const mode: MlsSyncMode =
+    options?.mode === "fast" ? "fast" : MLS_FULL_SYNC_MODE;
+  const isFast = isMlsFastSyncMode(mode);
+
   const config = getPropTxSyncConfig();
   if (!config) {
     return {
       ok: false,
       message:
         "PropTx credentials missing. Set PROPTX_ENDPOINT_URL plus IDX Token ID (PROPTX_TOKEN_ID / PROPTX_BEARER_TOKEN or PROPTX_IDX_*), and optionally PROPTX_VOW_* for sold.",
-      stats: emptyStats(),
+      stats: emptyStats(mode),
       runId: "",
+      mode,
     };
   }
 
@@ -1867,28 +1925,35 @@ export async function runPropTxMlsSync(options?: {
     // Property-derived synthetic history is written during property upserts.
   ];
 
+  const previousMode = activeMlsSyncMode;
+  activeMlsSyncMode = mode;
+
   const run = await prisma.mlsSyncRun.create({
     data: {
-      resource: "all",
+      resource: isFast ? "fast" : "all",
       status: "running",
-      message: `MLS sync starting (${config.feed})`,
+      message: `MLS sync starting (${config.feed}, mode=${mode})`,
     },
   });
 
-  const stats = emptyStats();
+  const stats = emptyStats(mode);
 
   try {
     // CloseDate was stored as soldAt; clear future closings so "Recently sold"
     // sorts by real firm dates after the next property upsert remaps them.
-    await prisma.listing.updateMany({
-      where: {
-        status: { in: ["SOLD", "LEASED"] },
-        soldAt: { gt: new Date() },
-      },
-      data: { soldAt: null },
-    });
+    if (!isFast) {
+      await prisma.listing.updateMany({
+        where: {
+          status: { in: ["SOLD", "LEASED"] },
+          soldAt: { gt: new Date() },
+        },
+        data: { soldAt: null },
+      });
+    }
 
-    if (resources.includes("property")) {
+    if (isFast) {
+      await runMlsFastPropertyPasses({ stats, config });
+    } else if (resources.includes("property")) {
       // Page budget: always pull fresh inventory first, then advance history/cursor.
       // maxPages≤40 stays lean (short CI ticks); Mac launchd uses higher defaults.
       const lean = maxPages <= 40;
@@ -2008,9 +2073,10 @@ export async function runPropTxMlsSync(options?: {
 
     // Optional heavy Active book fill (manual / nightly — not every cron tick).
     const runActiveInventory =
-      options?.activeInventory === true ||
-      resources.includes("activeInventory") ||
-      process.env.MLS_SYNC_ACTIVE_INVENTORY === "1";
+      !isFast &&
+      (options?.activeInventory === true ||
+        resources.includes("activeInventory") ||
+        process.env.MLS_SYNC_ACTIVE_INVENTORY === "1");
     if (runActiveInventory) {
       const activePages = Math.max(maxPages * 2, 60);
       // Active book for visitors must use IDX Token when available.
@@ -2022,7 +2088,7 @@ export async function runPropTxMlsSync(options?: {
       });
     }
 
-    if (resources.includes("media")) {
+    if (!isFast && resources.includes("media")) {
       try {
         await syncMedia({
           maxPages,
@@ -2037,7 +2103,7 @@ export async function runPropTxMlsSync(options?: {
         );
       }
     }
-    if (resources.includes("rooms")) {
+    if (!isFast && resources.includes("rooms")) {
       try {
         await syncRoomsBackfill({
           maxListings: Math.max(maxPages * 50, 200),
@@ -2050,7 +2116,7 @@ export async function runPropTxMlsSync(options?: {
         );
       }
     }
-    if (resources.includes("openHouse")) {
+    if (!isFast && resources.includes("openHouse")) {
       try {
         await syncOpenHouses({ maxPages, stats });
       } catch (err) {
@@ -2059,7 +2125,7 @@ export async function runPropTxMlsSync(options?: {
         );
       }
     }
-    if (resources.includes("syntheticHistory")) {
+    if (!isFast && resources.includes("syntheticHistory")) {
       try {
         await syncSyntheticHistoryBackfill({
           maxListings: Math.max(maxPages * 50, 200),
@@ -2072,7 +2138,7 @@ export async function runPropTxMlsSync(options?: {
         );
       }
     }
-    if (resources.includes("history")) {
+    if (!isFast && resources.includes("history")) {
       try {
         // Prefer per-ListingKey backfill — broad HistoryTransactional filters often 400.
         await syncHistoryBackfill({
@@ -2101,7 +2167,7 @@ export async function runPropTxMlsSync(options?: {
     const staleWarning = typesenseDegraded
       ? " TYPESENSE INDEX NOT HEALTHY — houzzat.com listings may go stale or unauthorized."
       : "";
-    const message = `Synced properties=${stats.propertyUpserted} media=${stats.mediaUpserted} rooms=${stats.roomsUpserted} openHouses=${stats.openHousesUpserted} history=${stats.historyUpserted} geocode=${stats.geocodeFixed}/${stats.geocodeAttempted} skipped=${stats.propertySkipped}${typesensePart}${staleWarning}`;
+    const message = `mode=${mode} Synced properties=${stats.propertyUpserted} media=${stats.mediaUpserted} rooms=${stats.roomsUpserted} openHouses=${stats.openHousesUpserted} history=${stats.historyUpserted} geocode=${stats.geocodeFixed}/${stats.geocodeAttempted} skipped=${stats.propertySkipped}${typesensePart}${staleWarning}`;
     if (typesenseDegraded) {
       console.error(`[mls] ${message}`);
     }
@@ -2130,14 +2196,16 @@ export async function runPropTxMlsSync(options?: {
       message,
       stats,
       runId: run.id,
+      mode,
     };
   } catch (err) {
     const message =
-      err instanceof PropTxError
+      `mode=${mode} ` +
+      (err instanceof PropTxError
         ? err.message
         : err instanceof Error
           ? err.message
-          : "MLS sync failed";
+          : "MLS sync failed");
     pushSyncError(stats, message);
     try {
       await prisma.mlsSyncRun.update({
@@ -2159,11 +2227,13 @@ export async function runPropTxMlsSync(options?: {
       );
     }
 
-    return { ok: false, message, stats, runId: run.id };
+    return { ok: false, message, stats, runId: run.id, mode };
+  } finally {
+    activeMlsSyncMode = previousMode;
   }
 }
 
-function emptyStats(): MlsSyncStats {
+function emptyStats(mode: MlsSyncMode = MLS_FULL_SYNC_MODE): MlsSyncStats {
   return {
     propertyUpserted: 0,
     propertySkipped: 0,
@@ -2181,6 +2251,7 @@ function emptyStats(): MlsSyncStats {
     typesenseFailed: 0,
     typesenseMissingProvenance: 0,
     typesenseDisabled: 0,
+    mode,
   };
 }
 

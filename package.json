@@ -14,6 +14,8 @@
     "db:seed": "node --import tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "mls:sync": "node --import tsx scripts/mls-sync.ts",
+    "mls:sync:fast": "node --import tsx scripts/mls-sync.ts --fast",
+    "mls:fast-sync:selftest": "node --import tsx scripts/mls-fast-sync-selftest.ts",
     "mls:media": "node --import tsx scripts/mls-media-backfill.ts",
     "mls:geocode": "node --import tsx scripts/mls-geocode.ts",
     "mls:geocode:loop": "node --import tsx scripts/mls-geocode-loop.ts",
