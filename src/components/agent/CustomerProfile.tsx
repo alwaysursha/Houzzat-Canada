@@ -53,6 +53,7 @@ import {
   INQUIRY_TAG_STYLE,
 } from "@/lib/agent/inquiry-tag";
 import type { LeadSummary } from "@/lib/agent/lead-summary";
+import { readJsonResponse } from "@/lib/http/fetch-json";
 import {
   PURCHASE_TIMEFRAMES,
   purchaseTimeframeLabel,
@@ -336,6 +337,28 @@ function Panel({
   );
 }
 
+async function fetchLeadSummary(leadId: string): Promise<LeadSummary> {
+  const startedAt = performance.now();
+  let res: Response;
+  try {
+    res = await fetch(`/api/agent/leads/${leadId}/summary`);
+  } catch {
+    throw new Error("Failed to load");
+  }
+  const read = await readJsonResponse<LeadSummary & { error?: string }>(res, {
+    route: "/api/agent/leads/[id]/summary",
+    method: "GET",
+    startedAt,
+  });
+  if (!read.ok) {
+    throw new Error("Failed to load");
+  }
+  if (!res.ok) {
+    throw new Error(read.data.error || "Failed to load");
+  }
+  return read.data;
+}
+
 export function CustomerProfile({
   leadId,
   variant = "page",
@@ -383,9 +406,7 @@ export function CustomerProfile({
   const [previewEmailId, setPreviewEmailId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    const res = await fetch(`/api/agent/leads/${leadId}/summary`);
-    const json = (await res.json()) as LeadSummary & { error?: string };
-    if (!res.ok) throw new Error(json.error || "Failed to load");
+    const json = await fetchLeadSummary(leadId);
     setData(json);
     return json;
   }, [leadId]);
@@ -394,18 +415,16 @@ export function CustomerProfile({
     let cancelled = false;
     setError(null);
     if (!initialData) setLoading(true);
-    fetch(`/api/agent/leads/${leadId}/summary`)
-      .then(async (res) => {
-        const json = (await res.json()) as LeadSummary & { error?: string };
-        if (!res.ok) throw new Error(json.error || "Failed to load");
+    fetchLeadSummary(leadId)
+      .then((json) => {
         if (!cancelled) {
           setData(json);
           setLoading(false);
         }
       })
-      .catch((e: Error) => {
+      .catch((e: unknown) => {
         if (!cancelled) {
-          setError(e.message);
+          setError(e instanceof Error ? e.message : "Failed to load");
           setLoading(false);
         }
       });

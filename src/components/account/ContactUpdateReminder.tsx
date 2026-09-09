@@ -8,6 +8,7 @@ import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EMAIL_VERIFIED_EVENT } from "@/lib/auth/verification-success-signal";
+import { readJsonResponse } from "@/lib/http/fetch-json";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 import { cn } from "@/lib/utils";
 
@@ -146,17 +147,30 @@ export function ContactUpdateReminder() {
       setPending(true);
       setError(null);
       try {
+        const startedAt = performance.now();
         const res = await fetch("/api/account/contact", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        const json = (await res.json()) as {
+        const read = await readJsonResponse<{
           error?: string;
           needPhone?: boolean;
           needEmail?: boolean;
-        };
-        if (!res.ok) throw new Error(json.error || "Could not save contact info");
+        }>(res, {
+          route: "/api/account/contact",
+          method: "PATCH",
+          startedAt,
+        });
+        if (!read.ok) {
+          setError("Could not save");
+          return false;
+        }
+        if (!res.ok) {
+          setError(read.data.error || "Could not save contact info");
+          return false;
+        }
+        const json = read.data;
 
         clearSnooze();
         if (!options?.silent) {
@@ -177,8 +191,8 @@ export function ContactUpdateReminder() {
           await load();
         }
         return true;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not save");
+      } catch {
+        setError("Could not save");
         return false;
       } finally {
         saveInFlight.current = false;

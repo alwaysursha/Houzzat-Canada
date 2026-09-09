@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Lock, Mail } from "lucide-react";
+import { readJsonResponse } from "@/lib/http/fetch-json";
 import { cn } from "@/lib/utils";
 
 export function EmailVerificationRequired({
@@ -65,16 +66,27 @@ export function EmailVerificationRequired({
     }
     // Compare against loaded email — always PATCH so profile stays in sync
     // when the user edits before sending.
+    const startedAt = performance.now();
     const res = await fetch("/api/account/contact", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: next }),
     });
-    const data = (await res.json()) as { error?: string; email?: string };
-    if (!res.ok) {
-      throw new Error(data.error ?? "Could not update email.");
+    const read = await readJsonResponse<{ error?: string; email?: string }>(
+      res,
+      {
+        route: "/api/account/contact",
+        method: "PATCH",
+        startedAt,
+      },
+    );
+    if (!read.ok) {
+      throw new Error("Could not update email.");
     }
-    return data.email ?? next;
+    if (!res.ok) {
+      throw new Error(read.data.error ?? "Could not update email.");
+    }
+    return read.data.email ?? next;
   }
 
   async function requestEmail() {
