@@ -19,7 +19,6 @@ import {
 import { isAdminRole, isAgentRole } from "@/lib/constants";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
-import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 import {
   shouldUseHostnameBoundStaffContext,
   tryTenantStaffContext,
@@ -221,14 +220,23 @@ async function resolveLegacyOrgMembership(
   return { role: membership?.role ?? membershipRole };
 }
 
+export type AgentContextFromRequestOptions = {
+  /**
+   * When false, skip brokerage seat sync and healAgentSeatFlags.
+   * Auth, role, hostname/workspace membership, and lead access are unchanged.
+   */
+  sideEffects?: boolean;
+};
+
 async function buildHostnameBoundAgentContext(
   user: AgentUser,
   request: Request,
+  allowSideEffects: boolean,
 ): Promise<AgentOrgContext | null> {
   const tenant = await tryTenantStaffContext(request, user);
   if (!tenant) return null;
 
-  const brokerage = await ensureBrokerageOrganization();
+  const brokerage = await ensureBrokerageOrganization(allowSideEffects);
   const orgMembership = await resolveLegacyOrgMembership(user, brokerage.id);
 
   const workspaceRow = await prisma.workspace.findUnique({
@@ -239,11 +247,13 @@ async function buildHostnameBoundAgentContext(
     return null;
   }
 
-  scheduleWorkerSideEffect(
-    healAgentSeatFlags(user.id).catch((error) => {
-      console.error("[agent] seat heal failed", error);
-    }),
-  );
+  if (allowSideEffects) {
+    scheduleWorkerSideEffect(
+      healAgentSeatFlags(user.id).catch((error) => {
+        console.error("[agent] seat heal failed", error);
+      }),
+    );
+  }
 
   await executeTenantAuthorityShadow({
     location: "buildHostnameBoundAgentContext",
@@ -285,15 +295,92 @@ async function buildHostnameBoundAgentContext(
  */
 export async function requireAgentContextForRequest(
   request: Request,
+  options?: AgentContextFromRequestOptions,
 ): Promise<AgentOrgContext | null> {
+  const allowSideEffects = options?.sideEffects !== false;
   const user = await requireAgentUser();
   if (!user) return null;
 
   if (shouldUseHostnameBoundStaffContext()) {
-    return buildHostnameBoundAgentContext(user, request);
+    return buildHostnameBoundAgentContext(user, request, allowSideEffects);
+  }
+
+  if (!allowSideEffects) {
+    return buildLegacyAgentContext(user, allowSideEffects);
   }
 
   return requireAgentContext();
+}
+
+async function buildLegacyAgentContext(
+  user: AgentUser,
+  allowSideEffects: boolean,
+): Promise<AgentOrgContext | null> {
+  const readScope = parseCrmReadScope();
+  const request = await buildSyntheticRequestFromHeaders();
+
+  if (shouldUseHostnameBoundStaffContext()) {
+    if (!request) return null;
+    return buildHostnameBoundAgentContext(user, request, allowSideEffects);
+  }
+
+  const isPlatformAdmin = isAdminRole(user.role);
+  const brokerage = await ensureBrokerageOrganization(allowSideEffects);
+  const orgMembership = await resolveLegacyOrgMembership(user, brokerage.id);
+
+  const canSeeTeamLeads =
+    isPlatformAdmin ||
+    orgMembership.role === "OWNER" ||
+    orgMembership.role === "ADMIN";
+
+  const activeWorkspaceId = await readActiveWorkspaceIdFromCookies();
+  const workspace = await resolveWorkspaceStaffContext(
+    user.id,
+    activeWorkspaceId,
+  );
+
+  if (allowSideEffects && !isPlatformAdmin) {
+    scheduleWorkerSideEffect(
+      healAgentSeatFlags(user.id).catch((error) => {
+        console.error("[agent] seat heal failed", error);
+      }),
+    );
+  }
+
+  if (request) {
+    await executeTenantAuthorityShadow({
+      location: "requireAgentContext_legacy",
+      request,
+      user,
+      currentDecision: {
+        allowed: true,
+        workspaceId: workspace.workspaceId,
+        workspaceRole: workspace.workspaceRole,
+      },
+    });
+  }
+
+  return {
+    user,
+    organizationId: brokerage.id,
+    organizationName: brokerage.name,
+    organizationIds: [brokerage.id],
+    membershipRole: orgMembership.role,
+    canSeeTeamLeads,
+    isPlatformAdmin,
+    workspaceId: workspace.workspaceId,
+    workspaceRole: workspace.workspaceRole,
+    workspaceMemberStatus: workspace.workspaceMemberStatus,
+    workspaceStatus: workspace.workspaceStatus,
+    workspaceName: workspace.workspaceName,
+    isWorkspaceMember: workspace.isWorkspaceMember,
+    isWorkspaceCrmAllowed: workspace.isWorkspaceCrmAllowed,
+    hasAmbiguousWorkspaceMembership: workspace.hasAmbiguousWorkspaceMembership,
+    hasMultipleWorkspaces: workspace.hasMultipleWorkspaces,
+    requiresWorkspaceSelection: workspace.requiresWorkspaceSelection,
+    canManageWorkspace: workspace.canManageWorkspace,
+    readScope,
+  };
 }
 
 /** Alias for API route handlers. */
@@ -308,76 +395,7 @@ export const requireAgentContext = cache(
   async (): Promise<AgentOrgContext | null> => {
     const user = await requireAgentUser();
     if (!user) return null;
-
-    const readScope = parseCrmReadScope();
-
-    const request = await buildSyntheticRequestFromHeaders();
-
-    if (shouldUseHostnameBoundStaffContext()) {
-      if (!request) return null;
-      return buildHostnameBoundAgentContext(user, request);
-    }
-
-    const isPlatformAdmin = isAdminRole(user.role);
-    const brokerage = await ensureBrokerageOrganization();
-    const orgMembership = await resolveLegacyOrgMembership(
-      user,
-      brokerage.id,
-    );
-
-    const canSeeTeamLeads =
-      isPlatformAdmin ||
-      orgMembership.role === "OWNER" ||
-      orgMembership.role === "ADMIN";
-
-    const activeWorkspaceId = await readActiveWorkspaceIdFromCookies();
-    const workspace = await resolveWorkspaceStaffContext(
-      user.id,
-      activeWorkspaceId,
-    );
-
-    if (!isPlatformAdmin) {
-      scheduleWorkerSideEffect(
-        healAgentSeatFlags(user.id).catch((error) => {
-          console.error("[agent] seat heal failed", error);
-        }),
-      );
-    }
-
-    if (request) {
-      await executeTenantAuthorityShadow({
-        location: "requireAgentContext_legacy",
-        request,
-        user,
-        currentDecision: {
-          allowed: true,
-          workspaceId: workspace.workspaceId,
-          workspaceRole: workspace.workspaceRole,
-        },
-      });
-    }
-
-    return {
-      user,
-      organizationId: brokerage.id,
-      organizationName: brokerage.name,
-      organizationIds: [brokerage.id],
-      membershipRole: orgMembership.role,
-      canSeeTeamLeads,
-      isPlatformAdmin,
-      workspaceId: workspace.workspaceId,
-      workspaceRole: workspace.workspaceRole,
-      workspaceMemberStatus: workspace.workspaceMemberStatus,
-      workspaceStatus: workspace.workspaceStatus,
-      workspaceName: workspace.workspaceName,
-      isWorkspaceMember: workspace.isWorkspaceMember,
-      isWorkspaceCrmAllowed: workspace.isWorkspaceCrmAllowed,
-      hasAmbiguousWorkspaceMembership: workspace.hasAmbiguousWorkspaceMembership,
-      hasMultipleWorkspaces: workspace.hasMultipleWorkspaces,
-      requiresWorkspaceSelection: workspace.requiresWorkspaceSelection,
-      canManageWorkspace: workspace.canManageWorkspace,
-      readScope,
-    };
+    return buildLegacyAgentContext(user, true);
   },
 );
 

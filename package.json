@@ -70,6 +70,7 @@
     "workspace:prepare-canary-activation": "node --import tsx scripts/workspace-prepare-canary-activation.ts",
     "workspace:cleanup-canary-org-artifact": "node --import tsx scripts/workspace-cleanup-canary-org-artifact.ts",
     "workspace-brokerage-sync-isolation:selftest": "node --import tsx scripts/workspace-brokerage-sync-isolation-selftest.ts",
+    "lead-profile-summary-memory:selftest": "node --import tsx scripts/lead-profile-summary-memory-selftest.ts",
     "workspace-canary-activation:selftest": "node --import tsx scripts/workspace-canary-activation-selftest.ts",
     "workspace2-lead-canary:selftest": "node --import tsx scripts/workspace2-lead-canary-selftest.ts",
     "workspace2-task-canary:selftest": "node --import tsx scripts/workspace2-task-canary-selftest.ts",

@@ -98,11 +98,11 @@ function testContactPatchHardening() {
 
 function testSummaryHardening() {
   const route = read("src/app/api/agent/leads/[id]/summary/route.ts");
-  const ctxCall = "const ctx = await requireAgentContextFromRequest(request);";
-  const ctxIdx = route.indexOf(ctxCall);
+  const ctxIdx = route.indexOf("requireAgentContextFromRequest(request");
   const tryIdx = route.lastIndexOf("try {", ctxIdx);
   assert.ok(ctxIdx >= 0, "summary must call requireAgentContextFromRequest");
   assert.ok(tryIdx >= 0 && ctxIdx > tryIdx, "auth must run inside try");
+  assert.ok(route.includes("sideEffects: false"));
   assert.ok(route.includes("jsonBytes"));
   assert.ok(route.includes("jsonApiResponse"));
 }

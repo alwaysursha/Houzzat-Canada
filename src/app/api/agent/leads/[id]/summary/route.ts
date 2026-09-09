@@ -19,10 +19,12 @@ export async function GET(request: Request, { params }: Params) {
 
   const reply = (status: number, body: unknown, error?: unknown) => {
     let jsonBytes: number | undefined;
-    try {
-      jsonBytes = jsonByteLength(body);
-    } catch {
-      jsonBytes = undefined;
+    if (status !== 200) {
+      try {
+        jsonBytes = jsonByteLength(body);
+      } catch {
+        jsonBytes = undefined;
+      }
     }
     try {
       logJsonApi({
@@ -41,7 +43,9 @@ export async function GET(request: Request, { params }: Params) {
   };
 
   try {
-    const ctx = await requireAgentContextFromRequest(request);
+    const ctx = await requireAgentContextFromRequest(request, {
+      sideEffects: false,
+    });
     if (!ctx) {
       return reply(401, { error: "Unauthorized" });
     }

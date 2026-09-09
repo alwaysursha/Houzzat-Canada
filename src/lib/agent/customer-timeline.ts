@@ -8,6 +8,76 @@ import { mlsNumberFromListingPath } from "@/lib/listings/listing-path";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { prisma } from "@/lib/prisma";
 
+/** Narrow CRM list columns — never htmlBody (preview uses GET /api/agent/emails/[id]). */
+export const LEAD_PROFILE_EMAIL_LOG_SELECT = {
+  id: true,
+  subject: true,
+  body: true,
+  toEmail: true,
+  kind: true,
+  mlsNumber: true,
+  openedAt: true,
+  clickedAt: true,
+  openCount: true,
+  clickCount: true,
+  lastClickedUrl: true,
+  createdAt: true,
+} as const;
+
+export type LeadProfileEmailLog = {
+  id: string;
+  subject: string;
+  body: string;
+  toEmail: string;
+  kind: string;
+  mlsNumber: string | null;
+  openedAt: Date | null;
+  clickedAt: Date | null;
+  openCount: number;
+  clickCount: number;
+  lastClickedUrl: string | null;
+  createdAt: Date;
+};
+
+export type LeadProfileNote = {
+  id: string;
+  body: string;
+  category: "GENERAL" | "CALL";
+  pinned: boolean;
+  pinnedAt: Date | null;
+  createdAt: Date;
+  author: { name: string | null; email: string };
+};
+
+export type LeadProfileTask = {
+  id: string;
+  type: string;
+  status: string;
+  title: string;
+  body: string | null;
+  dueAt: Date;
+  completedAt: Date | null;
+  createdAt: Date;
+};
+
+export type LeadProfileAppointment = {
+  id: string;
+  type: string;
+  status: string;
+  startsAt: Date | null;
+  listingMls: string | null;
+  videoJoinUrl: string | null;
+  notes: string | null;
+  createdAt: Date;
+};
+
+export type LeadProfileCollections = {
+  emails: LeadProfileEmailLog[] | Promise<LeadProfileEmailLog[]>;
+  notes: LeadProfileNote[] | Promise<LeadProfileNote[]>;
+  tasks: LeadProfileTask[] | Promise<LeadProfileTask[]>;
+  appointments: LeadProfileAppointment[] | Promise<LeadProfileAppointment[]>;
+};
+
 export type TimelineItem = {
   id: string;
   source: "activity" | "lead" | "domain" | "email" | "note" | "task";
@@ -137,6 +207,8 @@ export async function loadCustomerTimeline(input: {
   leadId: string;
   customerId: string | null;
   take?: number;
+  /** When set, emails/notes/tasks/appointments are not queried again. */
+  collections: LeadProfileCollections;
 }): Promise<TimelineItem[]> {
   const take = input.take ?? 120;
   const items: TimelineItem[] = [];
@@ -146,28 +218,18 @@ export async function loadCustomerTimeline(input: {
       where: { leadId: input.leadId },
       orderBy: { createdAt: "desc" },
       take,
+      select: {
+        id: true,
+        type: true,
+        body: true,
+        meta: true,
+        createdAt: true,
+      },
     }),
-    prisma.leadNote.findMany({
-      where: { leadId: input.leadId },
-      orderBy: { createdAt: "desc" },
-      take: 40,
-      include: { author: { select: { name: true, email: true } } },
-    }),
-    prisma.leadEmailLog.findMany({
-      where: { leadId: input.leadId },
-      orderBy: { createdAt: "desc" },
-      take: 40,
-    }),
-    prisma.agentTask.findMany({
-      where: { leadId: input.leadId },
-      orderBy: { createdAt: "desc" },
-      take: 40,
-    }),
-    prisma.appointment.findMany({
-      where: { leadId: input.leadId },
-      orderBy: { createdAt: "desc" },
-      take: 40,
-    }),
+    input.collections.notes,
+    input.collections.emails,
+    input.collections.tasks,
+    input.collections.appointments,
   ]);
 
   for (const a of leadActs) {

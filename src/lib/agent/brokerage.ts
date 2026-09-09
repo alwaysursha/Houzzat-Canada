@@ -154,7 +154,10 @@ async function syncBrokerageSeats(brokerageId: string): Promise<void> {
 }
 
 export const ensureBrokerageOrganization = cache(
-  async function ensureBrokerageOrganization(): Promise<{
+  async function ensureBrokerageOrganization(
+    /** When false, resolve org only — no seat upserts or bulk lead/task rewrite. */
+    syncSeats: boolean = true,
+  ): Promise<{
     id: string;
     name: string;
   }> {
@@ -167,6 +170,9 @@ export const ensureBrokerageOrganization = cache(
 
     const org = await resolveBrokerageOrg();
     brokerageCache = { org, at: Date.now() };
+    if (syncSeats === false) {
+      return org;
+    }
     // Seat/lead migration must not 500 Admin HQ if a Worker query fails.
     scheduleWorkerSideEffect(
       syncBrokerageSeats(org.id).catch((error) => {

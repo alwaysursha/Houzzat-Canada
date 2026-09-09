@@ -3,7 +3,10 @@ import type { AgentOrgContext } from "@/lib/agent";
 import { canAccessLead } from "@/lib/agent";
 import { listAssignableCrmAgents } from "@/lib/agent/assignable-agents";
 import { loadBuyerIntent } from "@/lib/agent/buyer-intent";
-import { loadCustomerTimeline } from "@/lib/agent/customer-timeline";
+import {
+  LEAD_PROFILE_EMAIL_LOG_SELECT,
+  loadCustomerTimeline,
+} from "@/lib/agent/customer-timeline";
 import { computeHotness } from "@/lib/agent/hotness";
 import type { InquiryTagValue } from "@/lib/agent/inquiry-tag";
 import { prisma } from "@/lib/prisma";
@@ -218,84 +221,96 @@ export async function loadLeadSummary(
       assignedAgent: {
         select: { id: true, name: true, email: true },
       },
-      emailLogs: {
-        orderBy: { createdAt: "desc" },
-        take: 40,
-        select: {
-          id: true,
-          subject: true,
-          body: true,
-          toEmail: true,
-          kind: true,
-          openedAt: true,
-          clickedAt: true,
-          openCount: true,
-          clickCount: true,
-          lastClickedUrl: true,
-          createdAt: true,
-        },
-      },
-      leadNotes: {
-        orderBy: [
-          { pinned: "desc" },
-          { pinnedAt: "desc" },
-          { createdAt: "desc" },
-        ],
-        take: 30,
-        include: {
-          author: { select: { name: true, email: true } },
-        },
-      },
-      tasks: {
-        orderBy: [{ status: "asc" }, { dueAt: "asc" }],
-        take: 40,
-        select: {
-          id: true,
-          type: true,
-          status: true,
-          title: true,
-          body: true,
-          dueAt: true,
-          completedAt: true,
-        },
-      },
-      appointments: {
-        orderBy: { createdAt: "desc" },
-        take: 30,
-        select: {
-          id: true,
-          type: true,
-          status: true,
-          startsAt: true,
-          listingMls: true,
-          videoJoinUrl: true,
-          notes: true,
-        },
-      },
       adCampaign: { select: { id: true, name: true } },
     },
   });
 
   if (!lead || !canAccessLead(ctx, lead)) return null;
 
-  const [hot, timeline, teamMembers] = await Promise.all([
-    computeHotness({
-      leadId: lead.id,
-      customerId: lead.customerId,
-      status: lead.status,
-      score: lead.score,
-      createdAt: lead.createdAt,
-      firstRespondedAt: lead.firstRespondedAt,
-    }),
-    loadCustomerTimeline({
-      leadId: lead.id,
-      customerId: lead.customerId,
-      take: 100,
-    }),
-    ctx.canSeeTeamLeads
-      ? listAssignableCrmAgents(ctx)
-      : Promise.resolve([]),
-  ]);
+  const emailsQuery = prisma.leadEmailLog.findMany({
+    where: { leadId: lead.id },
+    orderBy: { createdAt: "desc" },
+    take: 40,
+    select: LEAD_PROFILE_EMAIL_LOG_SELECT,
+  });
+  const notesQuery = prisma.leadNote.findMany({
+    where: { leadId: lead.id },
+    orderBy: [
+      { pinned: "desc" },
+      { pinnedAt: "desc" },
+      { createdAt: "desc" },
+    ],
+    take: 40,
+    select: {
+      id: true,
+      body: true,
+      category: true,
+      pinned: true,
+      pinnedAt: true,
+      createdAt: true,
+      author: { select: { name: true, email: true } },
+    },
+  });
+  const tasksQuery = prisma.agentTask.findMany({
+    where: { leadId: lead.id },
+    orderBy: [{ status: "asc" }, { dueAt: "asc" }],
+    take: 40,
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      title: true,
+      body: true,
+      dueAt: true,
+      completedAt: true,
+      createdAt: true,
+    },
+  });
+  const appointmentsQuery = prisma.appointment.findMany({
+    where: { leadId: lead.id },
+    orderBy: { createdAt: "desc" },
+    take: 40,
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      startsAt: true,
+      listingMls: true,
+      videoJoinUrl: true,
+      notes: true,
+      createdAt: true,
+    },
+  });
+
+  const [hot, timeline, teamMembers, emails, notes, tasks, appointments] =
+    await Promise.all([
+      computeHotness({
+        leadId: lead.id,
+        customerId: lead.customerId,
+        status: lead.status,
+        score: lead.score,
+        createdAt: lead.createdAt,
+        firstRespondedAt: lead.firstRespondedAt,
+      }),
+      loadCustomerTimeline({
+        leadId: lead.id,
+        customerId: lead.customerId,
+        take: 100,
+        collections: {
+          emails: emailsQuery,
+          notes: notesQuery,
+          tasks: tasksQuery,
+          appointments: appointmentsQuery,
+        },
+      }),
+      ctx.canSeeTeamLeads
+        ? listAssignableCrmAgents(ctx)
+        : Promise.resolve([]),
+      emailsQuery,
+      notesQuery,
+      tasksQuery,
+      appointmentsQuery,
+    ]);
 
   let savedSearchLabel: string | null = null;
   let savedListings: LeadSummary["savedListings"] = [];
@@ -403,7 +418,9 @@ export async function loadLeadSummary(
     savedSearches,
   });
 
-  const openTasks = lead.tasks.filter((t) => t.status === "OPEN");
+  const profileNotes = notes.slice(0, 30);
+  const profileAppointments = appointments.slice(0, 30);
+  const openTasks = tasks.filter((t) => t.status === "OPEN");
   const lastTouch = lead.firstRespondedAt || lead.updatedAt;
   const consented = Boolean(
     lead.contactConsentAt || lead.customer?.caslConsentAt,
@@ -458,10 +475,10 @@ export async function loadLeadSummary(
       slaHoursOpen: hot.slaHoursOpen,
     },
     stats: {
-      emails: lead.emailLogs.length,
+      emails: emails.length,
       alerts: alerts.length,
       saves: savedListings.length,
-      notes: lead.leadNotes.length,
+      notes: profileNotes.length,
       openTasks: openTasks.length,
     },
     permissions: {
@@ -487,22 +504,38 @@ export async function loadLeadSummary(
       emailOpenedAt: item.emailOpenedAt?.toISOString() ?? null,
       emailClickedAt: item.emailClickedAt?.toISOString() ?? null,
     })),
-    tasks: lead.tasks.map((t) => ({
-      ...t,
+    tasks: tasks.map((t) => ({
+      id: t.id,
+      type: t.type,
+      status: t.status,
+      title: t.title,
+      body: t.body,
       dueAt: t.dueAt.toISOString(),
       completedAt: t.completedAt?.toISOString() ?? null,
     })),
-    appointments: lead.appointments.map((a) => ({
-      ...a,
+    appointments: profileAppointments.map((a) => ({
+      id: a.id,
+      type: a.type,
+      status: a.status,
       startsAt: a.startsAt?.toISOString() ?? null,
+      listingMls: a.listingMls,
+      videoJoinUrl: a.videoJoinUrl,
+      notes: a.notes,
     })),
-    emails: lead.emailLogs.map((e) => ({
-      ...e,
+    emails: emails.map((e) => ({
+      id: e.id,
+      subject: e.subject,
+      body: e.body,
+      toEmail: e.toEmail,
+      kind: e.kind,
       openedAt: e.openedAt?.toISOString() ?? null,
       clickedAt: e.clickedAt?.toISOString() ?? null,
+      openCount: e.openCount,
+      clickCount: e.clickCount,
+      lastClickedUrl: e.lastClickedUrl,
       createdAt: e.createdAt.toISOString(),
     })),
-    notes: lead.leadNotes.map((n) => ({
+    notes: profileNotes.map((n) => ({
       id: n.id,
       body: n.body,
       category: n.category,
