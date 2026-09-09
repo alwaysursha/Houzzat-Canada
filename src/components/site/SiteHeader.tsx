@@ -22,7 +22,7 @@ export function SiteHeader({
             : "Your account"
       }
       brandMark={
-        brand ? (
+        brand && !brand.isHouzzatWorkspace ? (
           <BrandLogoMark
             displayName={brand.displayName}
             logoUrl={brand.logoUrl}

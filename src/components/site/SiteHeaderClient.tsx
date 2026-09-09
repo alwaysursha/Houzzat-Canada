@@ -338,7 +338,10 @@ export function SiteHeaderClient({
         <div className="flex h-16 w-full items-center gap-2 px-4 sm:px-6 lg:px-10">
           <Link
             href="/"
-            className="flex shrink-0 items-center gap-2 font-display text-2xl tracking-tight text-ink"
+            className={cn(
+              "flex shrink-0 items-center font-display text-2xl tracking-tight text-ink",
+              brandMark ? "gap-2" : null,
+            )}
           >
             {brandMark}
             <span>{siteName}</span>

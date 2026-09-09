@@ -64,22 +64,29 @@ export function SiteFooter({
       >
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between lg:gap-12">
           <div className="max-w-md space-y-3">
-            <div className="flex items-center gap-2">
-              {chromeBrand ? (
-                <BrandLogoMark
-                  displayName={chromeBrand.displayName}
-                  logoUrl={chromeBrand.logoUrl}
-                  primaryColor={chromeBrand.colors.primary}
-                  size="sm"
-                />
-              ) : (
-                <span
-                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-canopy/15 font-display text-sm font-bold text-canopy"
-                  aria-hidden
-                >
-                  {siteName.charAt(0).toUpperCase()}
-                </span>
+            <div
+              className={cn(
+                "flex items-center",
+                isHouzzatTenant ? null : "gap-2",
               )}
+            >
+              {!isHouzzatTenant ? (
+                chromeBrand ? (
+                  <BrandLogoMark
+                    displayName={chromeBrand.displayName}
+                    logoUrl={chromeBrand.logoUrl}
+                    primaryColor={chromeBrand.colors.primary}
+                    size="sm"
+                  />
+                ) : (
+                  <span
+                    className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-canopy/15 font-display text-sm font-bold text-canopy"
+                    aria-hidden
+                  >
+                    {siteName.charAt(0).toUpperCase()}
+                  </span>
+                )
+              ) : null}
               <p className="font-display text-2xl font-semibold leading-none tracking-tight text-ink">
                 {siteName}
               </p>
