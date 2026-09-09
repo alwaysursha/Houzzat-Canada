@@ -97,14 +97,18 @@ function testContactPatchHardening() {
 }
 
 function testSummaryHardening() {
-  const route = read("src/app/api/agent/leads/[id]/summary/route.ts");
-  const ctxIdx = route.indexOf("requireAgentContextFromRequest(request");
-  const tryIdx = route.lastIndexOf("try {", ctxIdx);
-  assert.ok(ctxIdx >= 0, "summary must call requireAgentContextFromRequest");
+  const helper = read("src/lib/http/agent-lead-get.ts");
+  const ctxIdx = helper.indexOf("requireAgentContextFromRequest(request");
+  const tryIdx = helper.lastIndexOf("try {", ctxIdx);
+  assert.ok(ctxIdx >= 0, "lead GET helper must call requireAgentContextFromRequest");
   assert.ok(tryIdx >= 0 && ctxIdx > tryIdx, "auth must run inside try");
-  assert.ok(route.includes("sideEffects: false"));
-  assert.ok(route.includes("jsonBytes"));
-  assert.ok(route.includes("jsonApiResponse"));
+  assert.ok(helper.includes("sideEffects: false"));
+  assert.ok(helper.includes("jsonBytes"));
+  assert.ok(helper.includes("jsonApiResponse"));
+
+  const route = read("src/app/api/agent/leads/[id]/summary/route.ts");
+  assert.ok(route.includes("handleAgentLeadGet"));
+  assert.ok(route.includes("loadLeadProfileSnapshot"));
 }
 
 function testClientsNoResJsonOnContactPatch() {
@@ -128,13 +132,13 @@ function testClientsNoResJsonOnContactPatch() {
 function testClientsNoResJsonOnSummary() {
   const profile = read("src/components/agent/CustomerProfile.tsx");
   const helper = profile.slice(
-    profile.indexOf("async function fetchLeadSummary"),
+    profile.indexOf("async function fetchLeadJson"),
     profile.indexOf("export function CustomerProfile"),
   );
   assert.ok(helper.includes("readJsonResponse"));
   assert.ok(!helper.includes("res.json()"));
-  assert.ok(helper.includes("fetchLeadActivity"));
-  assert.ok(helper.includes("/api/agent/leads/${leadId}/activity"));
+  assert.ok(profile.includes("/api/agent/leads/${targetLeadId}/summary"));
+  assert.ok(!profile.includes("/api/agent/leads/${leadId}/activity"));
   assert.ok(!profile.includes("fetchJson("));
   assert.ok(!helper.includes("retries"));
 }

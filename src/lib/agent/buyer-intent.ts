@@ -314,16 +314,8 @@ function buildSummary(input: {
   return `${leadIn}, ${focusBits.join(", ")}.${evidence}`;
 }
 
-/**
- * Infer what a customer is looking for from saved searches + browsing
- * (SEARCH beacons + listing views), even when they never clicked Save Search.
- */
-export async function loadBuyerIntent(input: {
-  customerId: string | null;
-  customerName?: string | null;
-  savedSearches?: Array<{ name: string; query: unknown }>;
-}): Promise<BuyerIntentSnapshot> {
-  const emptyCriteria: BuyerIntentCriteria = {
+function emptyBuyerIntentCriteria(): BuyerIntentCriteria {
+  return {
     cities: [],
     communities: [],
     propertyTypes: [],
@@ -336,6 +328,101 @@ export async function loadBuyerIntent(input: {
     listingViewCount: 0,
     sampleMls: [],
   };
+}
+
+/**
+ * First-paint Looking for: saved search only. No 45-day browse scan.
+ */
+export function buyerIntentFromSavedSearches(input: {
+  customerName: string | null;
+  savedSearches: Array<{ name: string; query: unknown }>;
+}): BuyerIntentSnapshot {
+  const savedCities: string[] = [];
+  const savedCommunities: string[] = [];
+  const savedPropertyTypes: string[] = [];
+  const savedBeds: number[] = [];
+  const savedFilterMins: number[] = [];
+  const savedFilterMaxes: number[] = [];
+  let savedTxn: "SALE" | "LEASE" | null = null;
+  let fromSaved = false;
+
+  for (const s of input.savedSearches) {
+    const parsed = queryFromSaved(s.query);
+    const usable =
+      parsed.cities.length > 0 ||
+      parsed.communities.length > 0 ||
+      parsed.minPrice != null ||
+      parsed.maxPrice != null ||
+      parsed.minBeds != null ||
+      parsed.propertyTypes.length > 0;
+    if (!usable) continue;
+    fromSaved = true;
+    savedCities.push(...parsed.cities);
+    savedCommunities.push(...parsed.communities);
+    savedPropertyTypes.push(...parsed.propertyTypes);
+    if (parsed.minBeds != null) savedBeds.push(parsed.minBeds);
+    if (parsed.minPrice != null) savedFilterMins.push(parsed.minPrice);
+    if (parsed.maxPrice != null) savedFilterMaxes.push(parsed.maxPrice);
+    if (parsed.transactionType) savedTxn = parsed.transactionType;
+    break;
+  }
+
+  if (!fromSaved) {
+    const criteria = emptyBuyerIntentCriteria();
+    return {
+      summary: buildSummary({
+        name: input.customerName,
+        criteria,
+        source: "thin",
+        hasSaved: false,
+      }),
+      chips: [],
+      source: "thin",
+      sourceLabel: "No clear criteria yet",
+      criteria,
+      headline: null,
+    };
+  }
+
+  const criteria: BuyerIntentCriteria = {
+    cities: modeStrings(savedCities, 3),
+    communities: modeStrings(savedCommunities, 3),
+    propertyTypes: modeStrings(savedPropertyTypes, 3),
+    minBeds: savedBeds.length ? Math.min(...savedBeds) : null,
+    maxBeds: null,
+    minPrice: savedFilterMins.length ? Math.min(...savedFilterMins) : null,
+    maxPrice: savedFilterMaxes.length ? Math.max(...savedFilterMaxes) : null,
+    transactionType: savedTxn,
+    searchCount: 0,
+    listingViewCount: 0,
+    sampleMls: [],
+  };
+
+  return {
+    summary: buildSummary({
+      name: input.customerName,
+      criteria,
+      source: "saved",
+      hasSaved: true,
+    }),
+    chips: buildChips(criteria),
+    source: "saved",
+    sourceLabel: "Saved search",
+    criteria,
+    headline: buildHeadline(criteria),
+  };
+}
+
+/**
+ * Infer what a customer is looking for from saved searches + browsing
+ * (SEARCH beacons + listing views), even when they never clicked Save Search.
+ */
+export async function loadBuyerIntent(input: {
+  customerId: string | null;
+  customerName?: string | null;
+  savedSearches?: Array<{ name: string; query: unknown }>;
+}): Promise<BuyerIntentSnapshot> {
+  const emptyCriteria = emptyBuyerIntentCriteria();
 
   if (!input.customerId) {
     return {

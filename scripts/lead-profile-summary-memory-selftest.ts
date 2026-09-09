@@ -125,24 +125,22 @@ function testNoDuplicateCollectionHydration() {
 }
 
 function testSummaryAndActivitySkipSeatSync() {
-  const summaryRoute = read("src/app/api/agent/leads/[id]/summary/route.ts");
+  const helper = read("src/lib/http/agent-lead-get.ts");
   const activityRoute = read("src/app/api/agent/leads/[id]/activity/route.ts");
   const agent = read("src/lib/agent.ts");
   const brokerage = read("src/lib/agent/brokerage.ts");
 
-  for (const [name, route] of [
-    ["summary", summaryRoute],
-    ["activity", activityRoute],
-  ] as const) {
-    assert.ok(route.includes("sideEffects: false"), `${name} sideEffects false`);
-    assert.ok(route.includes("requireAgentContextFromRequest(request"));
-    assert.equal(route.includes("healAgentSeatFlags"), false);
-    assert.equal(route.includes("syncBrokerageSeats"), false);
-    assert.ok(route.includes("if (status !== 200)"));
-    assert.ok(
-      route.indexOf("if (status !== 200)") < route.indexOf("jsonByteLength(body)"),
-    );
-  }
+  assert.ok(helper.includes("sideEffects: false"));
+  assert.ok(helper.includes("requireAgentContextFromRequest(request"));
+  assert.equal(helper.includes("healAgentSeatFlags"), false);
+  assert.ok(helper.includes("if (status !== 200)"));
+  assert.ok(
+    helper.indexOf("if (status !== 200)") < helper.indexOf("jsonByteLength(body)"),
+  );
+
+  assert.ok(activityRoute.includes("sideEffects: false"));
+  assert.ok(activityRoute.includes("requireAgentContextFromRequest(request"));
+  assert.equal(activityRoute.includes("healAgentSeatFlags"), false);
 
   const ensureFn = brokerage.slice(
     brokerage.indexOf("export const ensureBrokerageOrganization"),
@@ -160,14 +158,16 @@ function testSummaryAndActivitySkipSeatSync() {
 function testNoHttpTransactionOnReads() {
   const summary = read("src/lib/agent/lead-summary.ts");
   const timeline = read("src/lib/agent/customer-timeline.ts");
-  const summaryRoute = read("src/app/api/agent/leads/[id]/summary/route.ts");
-  const activityRoute = read("src/app/api/agent/leads/[id]/activity/route.ts");
+  const snapshot = read("src/lib/agent/lead-profile-snapshot.ts");
+  const paged = read("src/lib/agent/lead-profile-timeline.ts");
+  const helper = read("src/lib/http/agent-lead-get.ts");
 
   for (const [name, src] of [
     ["lead-summary", summary],
     ["customer-timeline", timeline],
-    ["summary-route", summaryRoute],
-    ["activity-route", activityRoute],
+    ["snapshot", snapshot],
+    ["paged-timeline", paged],
+    ["lead-get-helper", helper],
   ] as const) {
     assert.equal(src.includes("$transaction"), false, `${name} must not $transaction`);
     assert.equal(src.includes(".upsert("), false, `${name} must not upsert`);
@@ -177,17 +177,17 @@ function testNoHttpTransactionOnReads() {
 function testAuthorizationIntact() {
   const summary = read("src/lib/agent/lead-summary.ts");
   const agent = read("src/lib/agent.ts");
-  const summaryRoute = read("src/app/api/agent/leads/[id]/summary/route.ts");
+  const helper = read("src/lib/http/agent-lead-get.ts");
   const activityRoute = read("src/app/api/agent/leads/[id]/activity/route.ts");
 
-  assert.equal(countOccurrences(summary, "canAccessLead(ctx, lead)"), 2);
+  assert.equal(countOccurrences(summary, "canAccessLead(ctx, lead)"), 3);
   assert.ok(agent.includes("requireAgentUser()"));
   assert.ok(agent.includes("tryTenantStaffContext(request, user)"));
   assert.ok(agent.includes("isAgentRole"));
-  for (const route of [summaryRoute, activityRoute]) {
-    assert.ok(route.includes('return reply(401, { error: "Unauthorized" })'));
-    assert.ok(route.includes('return reply(404, { error: "Not found" })'));
-  }
+  assert.ok(helper.includes('return reply(401, { error: "Unauthorized" })'));
+  assert.ok(helper.includes('return reply(404, { error: "Not found" })'));
+  assert.ok(activityRoute.includes('return reply(401, { error: "Unauthorized" })'));
+  assert.ok(activityRoute.includes('return reply(404, { error: "Not found" })'));
 }
 
 function testResponseContractKeys() {
@@ -223,32 +223,34 @@ function testResponseContractKeys() {
 
 function testClientSplitAndNoRetry() {
   const profile = read("src/components/agent/CustomerProfile.tsx");
+  const snapshot = read("src/lib/agent/lead-profile-snapshot.ts");
+  const paged = read("src/lib/agent/lead-profile-timeline.ts");
   const helpers = profile.slice(
-    profile.indexOf("async function fetchLeadSummary"),
+    profile.indexOf("async function fetchLeadJson"),
     profile.indexOf("export function CustomerProfile"),
   );
-  assert.ok(helpers.includes("fetchLeadSummary"));
-  assert.ok(helpers.includes("fetchLeadActivity"));
-  assert.ok(helpers.includes("/api/agent/leads/${leadId}/activity"));
+  assert.ok(helpers.includes("fetchLeadJson"));
   assert.ok(helpers.includes("readJsonResponse"));
   assert.equal(helpers.includes("res.json()"), false);
   assert.equal(helpers.includes("retries"), false);
   assert.equal(helpers.includes("for (let attempt"), false);
-  assert.ok(profile.includes("setData(json)"));
-  const reloadFn = profile.slice(
-    profile.indexOf("const reload = useCallback"),
-    profile.indexOf("useEffect(() => {"),
-  );
-  assert.ok(
-    reloadFn.indexOf("fetchLeadSummary") < reloadFn.indexOf("setData(json)"),
-  );
-  assert.ok(
-    reloadFn.indexOf("setData(json)") < reloadFn.indexOf("requestActivity(leadId)"),
-    "activity fetch must start after first-paint data",
-  );
-  assert.ok(profile.includes("activityLoading"));
-  assert.ok(profile.includes("deferredLabel"));
-  assert.ok(profile.includes("Loading…"));
+  assert.ok(profile.includes("/api/agent/leads/${targetLeadId}/summary"));
+  assert.equal(profile.includes("/api/agent/leads/${leadId}/activity"), false);
+  assert.ok(profile.includes("/api/agent/leads/${leadId}/timeline"));
+  assert.ok(profile.includes("/api/agent/leads/${leadId}/tasks"));
+  assert.ok(profile.includes("/api/agent/leads/${leadId}/appointments"));
+  assert.ok(profile.includes("/api/agent/leads/${leadId}/emails"));
+  assert.ok(profile.includes("/api/agent/leads/${leadId}/engagement"));
+  assert.ok(profile.includes('useState<TabId>("activity")'));
+  assert.ok(profile.includes("Load more"));
+  assert.ok(profile.includes("View all"));
+  assert.ok(snapshot.includes("buyerIntentFromSavedSearches"));
+  assert.equal(snapshot.includes("loadBuyerIntent("), false);
+  assert.equal(snapshot.includes("loadLeadProfileActivity"), false);
+  assert.ok(paged.includes("LEAD_PROFILE_EMAIL_LIST_SELECT"));
+  assert.equal(paged.includes("htmlBody"), false);
+  assert.ok(paged.includes("FIRST_PAINT_TIMELINE_DAYS = 4"));
+  assert.ok(paged.includes("TIMELINE_PAGE_SIZE = 40"));
 }
 
 function wait(ms: number) {
@@ -272,13 +274,13 @@ function abortError() {
 function testAbortIsNotFailedToLoadSource() {
   const profile = read("src/components/agent/CustomerProfile.tsx");
   const gate = read("src/lib/agent/lead-profile-activity-gate.ts");
-  const activityFetch = profile.slice(
-    profile.indexOf("async function fetchLeadActivity"),
-    profile.indexOf("function isMergedLeadSummary"),
+  const helper = profile.slice(
+    profile.indexOf("async function fetchLeadJson"),
+    profile.indexOf("export function CustomerProfile"),
   );
   const apply = profile.slice(
-    profile.indexOf("const applyActivity = useCallback"),
-    profile.indexOf("const requestActivity = useCallback"),
+    profile.indexOf("const applySnapshot = useCallback"),
+    profile.indexOf("const reload = useCallback"),
   );
   const effect = profile.slice(
     profile.indexOf("useEffect(() => {"),
@@ -286,32 +288,24 @@ function testAbortIsNotFailedToLoadSource() {
   );
 
   assert.ok(profile.includes("createLeadProfileActivityGate()"));
-  assert.ok(profile.includes("activityGate.request(targetLeadId, applyActivity)"));
-  assert.ok(effect.includes("activityGate.abortActive()"));
+  assert.ok(effect.includes("snapshotGate.abortActive()"));
   assert.ok(gate.includes("if (inFlight)"));
   assert.ok(gate.includes("trailing = true"));
-  assert.ok(gate.includes("void run(nextLeadId, nextFetch)"));
   assert.equal(gate.includes("setTimeout"), false);
   assert.equal(gate.includes("retries"), false);
   assert.equal(profile.includes("for (let attempt"), false);
   assert.equal(profile.includes("retries"), false);
 
-  assert.ok(activityFetch.includes("if (isAbortError(error) || signal.aborted)"));
-  assert.ok(activityFetch.includes("throw error"));
-  const abortCatch = activityFetch.slice(
-    activityFetch.indexOf("catch (error)"),
-    activityFetch.indexOf("throw new Error(\"Failed to load\")"),
+  assert.ok(helper.includes("if (isAbortError(error) || signal?.aborted)"));
+  assert.ok(helper.includes("throw error"));
+  const abortCatch = helper.slice(
+    helper.indexOf("catch (error)"),
+    helper.indexOf("throw new Error(\"Failed to load\")"),
   );
   assert.ok(abortCatch.includes("throw error"));
   assert.equal(abortCatch.includes("Failed to load"), false);
 
-  assert.ok(apply.includes("if (isAbortError(error) || signal.aborted) return;"));
-  const applyError = apply.slice(apply.indexOf("catch (error)"));
-  const abortReturn = applyError.indexOf(
-    "if (isAbortError(error) || signal.aborted) return;",
-  );
-  const failedFlag = applyError.indexOf("setActivityError(true)");
-  assert.ok(abortReturn >= 0 && failedFlag > abortReturn);
+  assert.ok(apply.includes("if (signal.aborted || targetLeadId !== leadIdRef.current) return;"));
 }
 
 async function testActivityGateMaxOneInFlightAndCoalesce() {

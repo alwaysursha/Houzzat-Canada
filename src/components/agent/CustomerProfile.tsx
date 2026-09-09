@@ -49,16 +49,25 @@ import {
   timelineItemMatchesFilters,
 } from "@/lib/agent/activity-filters";
 import { ReassignSelect } from "@/components/agent/TeamAdminClient";
-import type { TimelineItem } from "@/lib/agent/customer-timeline";
+import type {
+  TimelineItem,
+  TimelineItemDto,
+} from "@/lib/agent/customer-timeline";
 import {
   INQUIRY_TAG_LABEL,
   INQUIRY_TAG_STYLE,
 } from "@/lib/agent/inquiry-tag";
+import type { LeadProfileSnapshot } from "@/lib/agent/lead-profile-snapshot";
+import {
+  isDefaultActivityFilters,
+  type TimelineScope,
+} from "@/lib/agent/lead-profile-timeline";
 import type {
-  LeadProfileActivity,
-  LeadProfileShell,
-  LeadSummary,
-} from "@/lib/agent/lead-summary";
+  LeadProfileAppointmentsPanel,
+  LeadProfileEmailsPanel,
+  LeadProfileEngagementPanel,
+  LeadProfileTasksPanel,
+} from "@/lib/agent/lead-profile-panels";
 import {
   createLeadProfileActivityGate,
   isAbortError,
@@ -347,57 +356,30 @@ function Panel({
   );
 }
 
-async function fetchLeadSummary(leadId: string): Promise<LeadProfileShell> {
+async function fetchLeadJson<T>(
+  url: string,
+  route: string,
+  signal?: AbortSignal,
+): Promise<T> {
   const startedAt = performance.now();
   let res: Response;
   try {
-    res = await fetch(`/api/agent/leads/${leadId}/summary`);
-  } catch {
-    throw new Error("Failed to load");
-  }
-  const read = await readJsonResponse<LeadProfileShell & { error?: string }>(
-    res,
-    {
-      route: "/api/agent/leads/[id]/summary",
-      method: "GET",
-      startedAt,
-    },
-  );
-  if (!read.ok) {
-    throw new Error("Failed to load");
-  }
-  if (!res.ok) {
-    throw new Error(read.data.error || "Failed to load");
-  }
-  return read.data;
-}
-
-async function fetchLeadActivity(
-  leadId: string,
-  signal: AbortSignal,
-): Promise<LeadProfileActivity> {
-  const startedAt = performance.now();
-  let res: Response;
-  try {
-    res = await fetch(`/api/agent/leads/${leadId}/activity`, { signal });
+    res = await fetch(url, signal ? { signal } : undefined);
   } catch (error) {
-    if (isAbortError(error) || signal.aborted) {
+    if (isAbortError(error) || signal?.aborted) {
       throw error;
     }
     throw new Error("Failed to load");
   }
-  if (signal.aborted) {
+  if (signal?.aborted) {
     throw new DOMException("Aborted", "AbortError");
   }
-  const read = await readJsonResponse<LeadProfileActivity & { error?: string }>(
-    res,
-    {
-      route: "/api/agent/leads/[id]/activity",
-      method: "GET",
-      startedAt,
-    },
-  );
-  if (signal.aborted) {
+  const read = await readJsonResponse<T & { error?: string }>(res, {
+    route,
+    method: "GET",
+    startedAt,
+  });
+  if (signal?.aborted) {
     throw new DOMException("Aborted", "AbortError");
   }
   if (!read.ok) {
@@ -407,43 +389,6 @@ async function fetchLeadActivity(
     throw new Error(read.data.error || "Failed to load");
   }
   return read.data;
-}
-
-function isMergedLeadSummary(
-  value: LeadProfileShell | LeadSummary,
-): value is LeadSummary {
-  return "timeline" in value && Array.isArray(value.timeline);
-}
-
-function shellFromInitial(value: LeadSummary): LeadProfileShell {
-  return {
-    lead: value.lead,
-    permissions: value.permissions,
-    teamMembers: value.teamMembers,
-    savedSearchLabel: value.savedSearchLabel,
-    lastTouchAt: value.lastTouchAt,
-  };
-}
-
-function activityFromInitial(value: LeadSummary): LeadProfileActivity {
-  return {
-    hot: value.hot,
-    stats: value.stats,
-    buyerIntent: value.buyerIntent,
-    savedListings: value.savedListings,
-    savedSearches: value.savedSearches,
-    propertyMonitors: value.propertyMonitors,
-    areaMonitors: value.areaMonitors,
-    listingNotes: value.listingNotes,
-    tours: value.tours,
-    alerts: value.alerts,
-    timeline: value.timeline,
-    tasks: value.tasks,
-    appointments: value.appointments,
-    emails: value.emails,
-    notes: value.notes,
-    nextReminder: value.nextReminder,
-  };
 }
 
 export function CustomerProfile({
@@ -460,22 +405,13 @@ export function CustomerProfile({
   /** Jump to another lead in the current list (popup). */
   onNavigateLead?: (leadId: string) => void;
   leadIds?: string[];
-  initialData?: LeadSummary | null;
+  initialData?: LeadProfileSnapshot | null;
 }) {
-  const [data, setData] = useState<LeadProfileShell | null>(() => {
-    if (!initialData) return null;
-    return isMergedLeadSummary(initialData)
-      ? shellFromInitial(initialData)
-      : initialData;
-  });
-  const [activity, setActivity] = useState<LeadProfileActivity | null>(() =>
-    initialData && isMergedLeadSummary(initialData)
-      ? activityFromInitial(initialData)
-      : null,
+  const [data, setData] = useState<LeadProfileSnapshot | null>(
+    initialData ?? null,
   );
-  const [activityError, setActivityError] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabId>("info");
+  const [tab, setTab] = useState<TabId>("activity");
   const [noteBody, setNoteBody] = useState("");
   const [noteCategory, setNoteCategory] = useState<"GENERAL" | "CALL">(
     "GENERAL",
@@ -501,69 +437,110 @@ export function CustomerProfile({
     () => new Set(DEFAULT_ACTIVITY_FILTER_IDS),
   );
   const [previewEmailId, setPreviewEmailId] = useState<string | null>(null);
-  const [activityGate] = useState(() => createLeadProfileActivityGate());
+  const [timelineRows, setTimelineRows] = useState<TimelineItemDto[]>(
+    () => initialData?.timeline.items ?? [],
+  );
+  const [timelineHasMore, setTimelineHasMore] = useState(
+    () => initialData?.timeline.hasMore ?? false,
+  );
+  const [timelineScope, setTimelineScope] = useState<TimelineScope>("recent");
+  const [timelineBusy, setTimelineBusy] = useState(false);
+  const [timelineError, setTimelineError] = useState(false);
+  const [tasksPanel, setTasksPanel] = useState<LeadProfileTasksPanel | null>(
+    null,
+  );
+  const [appointmentsPanel, setAppointmentsPanel] =
+    useState<LeadProfileAppointmentsPanel | null>(null);
+  const [emailsPanel, setEmailsPanel] =
+    useState<LeadProfileEmailsPanel | null>(null);
+  const [engagementPanel, setEngagementPanel] =
+    useState<LeadProfileEngagementPanel | null>(null);
+  const [panelLoading, setPanelLoading] = useState<TabId | null>(null);
+  const [panelError, setPanelError] = useState<TabId | null>(null);
+  const [snapshotGate] = useState(() => createLeadProfileActivityGate());
   const leadIdRef = useRef(leadId);
 
   useLayoutEffect(() => {
     leadIdRef.current = leadId;
     return () => {
-      activityGate.abortActive();
+      snapshotGate.abortActive();
     };
-  }, [leadId, activityGate]);
+  }, [leadId, snapshotGate]);
 
-  const applyActivity = useCallback(
+  const applySnapshot = useCallback(
     async (targetLeadId: string, signal: AbortSignal) => {
       try {
-        const json = await fetchLeadActivity(targetLeadId, signal);
+        const json = await fetchLeadJson<LeadProfileSnapshot>(
+          `/api/agent/leads/${targetLeadId}/summary`,
+          "/api/agent/leads/[id]/summary",
+          signal,
+        );
         if (signal.aborted || targetLeadId !== leadIdRef.current) return;
-        setActivity(json);
-        setActivityError(false);
+        setData(json);
+        setError(null);
+        setTimelineRows(json.timeline.items);
+        setTimelineHasMore(json.timeline.hasMore);
+        setTimelineScope("recent");
+        setTimelineError(false);
+        setTasksPanel(null);
+        setAppointmentsPanel(null);
+        setEmailsPanel(null);
+        setEngagementPanel(null);
+        setPanelError(null);
       } catch (error) {
         if (isAbortError(error) || signal.aborted) return;
         if (targetLeadId !== leadIdRef.current) return;
-        setActivity(null);
-        setActivityError(true);
+        setError("Failed to load");
       }
     },
     [],
   );
 
-  const requestActivity = useCallback(
-    (targetLeadId: string) => {
-      activityGate.request(targetLeadId, applyActivity);
-    },
-    [activityGate, applyActivity],
-  );
-
   const reload = useCallback(async () => {
-    const json = await fetchLeadSummary(leadId);
-    setData(json);
-    requestActivity(leadId);
-    return json;
-  }, [leadId, requestActivity]);
+    const ac = new AbortController();
+    snapshotGate.abortActive();
+    try {
+      await applySnapshot(leadId, ac.signal);
+    } catch (error) {
+      if (isAbortError(error) || ac.signal.aborted) return;
+      throw error;
+    }
+  }, [leadId, snapshotGate, applySnapshot]);
 
   useEffect(() => {
     let cancelled = false;
-    void fetchLeadSummary(leadId)
+    const ac = new AbortController();
+    void fetchLeadJson<LeadProfileSnapshot>(
+      `/api/agent/leads/${leadId}/summary`,
+      "/api/agent/leads/[id]/summary",
+      ac.signal,
+    )
       .then((json) => {
-        if (cancelled) return;
-        setError(null);
+        if (cancelled || ac.signal.aborted || json.lead.id !== leadIdRef.current) {
+          return;
+        }
         setData(json);
-        setActivity(null);
-        setActivityError(false);
-        if (json.lead.id !== leadId) return;
-        requestActivity(leadId);
+        setError(null);
+        setTimelineRows(json.timeline.items);
+        setTimelineHasMore(json.timeline.hasMore);
+        setTimelineScope("recent");
+        setTimelineError(false);
+        setTasksPanel(null);
+        setAppointmentsPanel(null);
+        setEmailsPanel(null);
+        setEngagementPanel(null);
+        setPanelError(null);
       })
       .catch((e: unknown) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Failed to load");
-        }
+        if (cancelled || isAbortError(e) || ac.signal.aborted) return;
+        setError(e instanceof Error ? e.message : "Failed to load");
       });
     return () => {
       cancelled = true;
-      activityGate.abortActive();
+      ac.abort();
+      snapshotGate.abortActive();
     };
-  }, [leadId, initialData, activityGate, requestActivity]);
+  }, [leadId, initialData, snapshotGate]);
 
   const onUpdated = useCallback(() => {
     void reload().catch(() => undefined);
@@ -581,6 +558,145 @@ export function CustomerProfile({
       setRefreshing(false);
     }
   }, [reload, refreshing]);
+
+  const fetchTimelinePage = useCallback(
+    async (input: {
+      scope: TimelineScope;
+      before?: string | null;
+      append: boolean;
+      filters: Set<string>;
+    }) => {
+      setTimelineBusy(true);
+      setTimelineError(false);
+      try {
+        const params = new URLSearchParams({ scope: input.scope });
+        if (input.before) params.set("before", input.before);
+        if (!isDefaultActivityFilters(input.filters)) {
+          params.set("filters", [...input.filters].join(","));
+        }
+        const page = await fetchLeadJson<{
+          items: TimelineItemDto[];
+          hasMore: boolean;
+          scope: TimelineScope;
+        }>(
+          `/api/agent/leads/${leadId}/timeline?${params.toString()}`,
+          "/api/agent/leads/[id]/timeline",
+        );
+        if (leadId !== leadIdRef.current) return;
+        setTimelineScope(page.scope);
+        setTimelineHasMore(page.hasMore);
+        setTimelineRows((prev) => {
+          if (!input.append) return page.items;
+          const seen = new Set(prev.map((row) => row.id));
+          return [...prev, ...page.items.filter((row) => !seen.has(row.id))];
+        });
+      } catch {
+        if (leadId !== leadIdRef.current) return;
+        setTimelineError(true);
+      } finally {
+        if (leadId === leadIdRef.current) setTimelineBusy(false);
+      }
+    },
+    [leadId],
+  );
+
+  const onActivityFiltersChange = useCallback(
+    (next: Set<string>) => {
+      setActivityFilters(next);
+      if (isDefaultActivityFilters(next) && data) {
+        setTimelineRows(data.timeline.items);
+        setTimelineHasMore(data.timeline.hasMore);
+        setTimelineScope("recent");
+        setTimelineError(false);
+        return;
+      }
+      if (!isDefaultActivityFilters(next)) {
+        void fetchTimelinePage({
+          scope: "history",
+          append: false,
+          filters: next,
+        });
+      }
+    },
+    [data, fetchTimelinePage],
+  );
+
+  useEffect(() => {
+    if (!data || data.lead.id !== leadId) return;
+    if (tab === "activity" || tab === "info") return;
+    if (tab === "reminders" && tasksPanel) return;
+    if (tab === "appointments" && appointmentsPanel) return;
+    if (tab === "conversations" && emailsPanel) return;
+    if (tab === "engagement" && engagementPanel) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setPanelLoading(tab);
+        setPanelError(null);
+        switch (tab) {
+          case "reminders": {
+            const json = await fetchLeadJson<LeadProfileTasksPanel>(
+              `/api/agent/leads/${leadId}/tasks`,
+              "/api/agent/leads/[id]/tasks",
+            );
+            if (!cancelled && leadId === leadIdRef.current) setTasksPanel(json);
+            break;
+          }
+          case "appointments": {
+            const json = await fetchLeadJson<LeadProfileAppointmentsPanel>(
+              `/api/agent/leads/${leadId}/appointments`,
+              "/api/agent/leads/[id]/appointments",
+            );
+            if (!cancelled && leadId === leadIdRef.current) {
+              setAppointmentsPanel(json);
+            }
+            break;
+          }
+          case "conversations": {
+            const json = await fetchLeadJson<LeadProfileEmailsPanel>(
+              `/api/agent/leads/${leadId}/emails`,
+              "/api/agent/leads/[id]/emails",
+            );
+            if (!cancelled && leadId === leadIdRef.current) setEmailsPanel(json);
+            break;
+          }
+          case "engagement": {
+            const json = await fetchLeadJson<LeadProfileEngagementPanel>(
+              `/api/agent/leads/${leadId}/engagement`,
+              "/api/agent/leads/[id]/engagement",
+            );
+            if (!cancelled && leadId === leadIdRef.current) {
+              setEngagementPanel(json);
+            }
+            break;
+          }
+          case "activity":
+          case "info":
+            break;
+          default: {
+            const _exhaustive: never = tab;
+            void _exhaustive;
+          }
+        }
+      } catch {
+        if (!cancelled && leadId === leadIdRef.current) setPanelError(tab);
+      } finally {
+        if (!cancelled && leadId === leadIdRef.current) setPanelLoading(null);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    tab,
+    data,
+    leadId,
+    tasksPanel,
+    appointmentsPanel,
+    emailsPanel,
+    engagementPanel,
+  ]);
 
   async function toggleProfileFlag(flag: "buyer" | "seller") {
     if (!data?.lead.customer || profileFlagPending) return;
@@ -665,7 +781,7 @@ export function CustomerProfile({
 
   const timelineItems = useMemo(
     () =>
-      (activity?.timeline ?? []).map(
+      timelineRows.map(
         (item): TimelineItem => ({
           ...item,
           source: item.source as TimelineItem["source"],
@@ -679,7 +795,7 @@ export function CustomerProfile({
             : null,
         }),
       ),
-    [activity?.timeline],
+    [timelineRows],
   );
 
   const activityFilterCounts = useMemo(() => {
@@ -838,27 +954,19 @@ export function CustomerProfile({
   const email = data?.lead.customer?.email;
   const address = data?.lead.customer?.homeAddress;
   const loading = Boolean(error) ? false : !data || data.lead.id !== leadId;
-  const activityLoading = Boolean(
-    data && data.lead.id === leadId && !activity && !activityError,
-  );
-  const activityReady = activity !== null;
-  const deferredLabel = activityLoading
-    ? "Loading…"
-    : activityError
-      ? "Failed to load"
-      : null;
-
-  const openRate = activity
-    ? Math.min(100, activity.stats.emails > 0 ? activity.hot.hotness : 0)
+  const lookingFor =
+    engagementPanel?.buyerIntent ?? data?.lookingFor ?? null;
+  const openRate = data
+    ? Math.min(100, data.stats.emails > 0 ? data.hot.hotness : 0)
     : 0;
-  const clickRate = activity
+  const clickRate = data
     ? Math.min(
         100,
-        Math.round(activity.hot.views24h * 6 + activity.stats.saves * 10),
+        Math.round(data.hot.views24h * 6 + data.stats.saves * 10),
       )
     : 0;
-  const alertRate = activity
-    ? Math.min(100, activity.stats.alerts > 0 ? 40 + activity.stats.alerts * 8 : 0)
+  const alertRate = data
+    ? Math.min(100, data.stats.alerts > 0 ? 40 + data.stats.alerts * 8 : 0)
     : 0;
 
   type ActionItem = {
@@ -1073,14 +1181,14 @@ export function CustomerProfile({
                   ) : null}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5">
-                  {activityReady && activity.hot.isOnline ? (
+                  {data.hot.isOnline ? (
                     <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
                       ONLINE
                     </span>
                   ) : null}
-                  {activityReady && activity.hot.binge ? (
+                  {data.hot.binge ? (
                     <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
-                      BINGE · {activity.hot.distinctListings24h} homes
+                      BINGE · {data.hot.distinctListings24h} homes
                     </span>
                   ) : null}
                 </div>
@@ -1260,17 +1368,15 @@ export function CustomerProfile({
               <div className="mt-4 flex items-center justify-center gap-5 text-[#64748b]">
                 <span className="inline-flex items-center gap-1 text-[12px] font-semibold">
                   <Heart className="size-4 text-[#e11d48]" />
-                  {activityReady ? activity.stats.saves : (deferredLabel ?? "…")}
+                  {data.stats.saves}
                 </span>
                 <span className="inline-flex items-center gap-1 text-[12px] font-semibold">
                   <Eye className="size-4" />
-                  {activityReady ? activity.hot.views24h : (deferredLabel ?? "…")}
+                  {data.hot.views24h}
                 </span>
                 <span className="inline-flex items-center gap-1 text-[12px] font-semibold">
                   <Search className="size-4" />
-                  {activityReady
-                    ? activity.savedSearches.length
-                    : (deferredLabel ?? "…")}
+                  {data.stats.savedSearches}
                 </span>
               </div>
 
@@ -1315,43 +1421,39 @@ export function CustomerProfile({
                 </p>
               )}
 
-              {activityLoading ? (
-                <div className="mt-3 rounded-xl border border-[#c7e0d4] bg-white px-3.5 py-3 text-[12px] text-[#64748b]">
-                  Loading…
-                </div>
-              ) : activityReady && activity.buyerIntent ? (
+              {lookingFor ? (
                 <div className="mt-3 overflow-hidden rounded-xl border border-[#c7e0d4] bg-[linear-gradient(165deg,#f3faf6_0%,#ffffff_55%)] text-left shadow-[0_1px_0_rgb(15_118_90/0.06)]">
                   <div className="flex items-start justify-between gap-2 border-b border-[#d8ebe2] px-3.5 py-2.5">
                     <div className="min-w-0">
                       <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#0f766e]">
                         Looking for
                       </p>
-                      {activity.buyerIntent.headline ? (
+                      {lookingFor.headline ? (
                         <p className="mt-0.5 truncate text-[13px] font-semibold text-[#134e4a]">
-                          {activity.buyerIntent.headline}
+                          {lookingFor.headline}
                         </p>
                       ) : null}
                     </div>
                     <span
                       className={cn(
                         "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-                        activity.buyerIntent.source === "saved"
+                        lookingFor.source === "saved"
                           ? "bg-[#0f766e]/12 text-[#0f766e]"
-                          : activity.buyerIntent.source === "thin"
+                          : lookingFor.source === "thin"
                             ? "bg-[#f1f5f9] text-[#64748b]"
                             : "bg-[#ecfdf5] text-[#047857]",
                       )}
                     >
-                      {activity.buyerIntent.sourceLabel}
+                      {lookingFor.sourceLabel}
                     </span>
                   </div>
                   <div className="px-3.5 py-3">
                     <p className="text-[12.5px] leading-relaxed text-[#334155]">
-                      {activity.buyerIntent.summary}
+                      {lookingFor.summary}
                     </p>
-                    {activity.buyerIntent.chips.length > 0 ? (
+                    {lookingFor.chips.length > 0 ? (
                       <div className="mt-2.5 flex flex-wrap gap-1.5">
-                        {activity.buyerIntent.chips.map((chip) => (
+                        {lookingFor.chips.map((chip) => (
                           <span
                             key={chip}
                             className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#0f766e] ring-1 ring-[#c7e0d4]"
@@ -1366,10 +1468,10 @@ export function CustomerProfile({
                         Inquiry listing · MLS {data.lead.listingMls}
                       </p>
                     ) : null}
-                    {hasUsableSearchCriteria(activity.buyerIntent.criteria) ? (
+                    {hasUsableSearchCriteria(lookingFor.criteria) ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Link
-                          href={buyerIntentToSearchHref(activity.buyerIntent.criteria)}
+                          href={buyerIntentToSearchHref(lookingFor.criteria)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#0d9488]"
@@ -1389,12 +1491,12 @@ export function CustomerProfile({
                 </div>
               ) : null}
 
-              {activityReady && activity.nextReminder ? (
+              {data.nextReminder ? (
                 <div className="mt-3 rounded-md border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-left text-[12px]">
                   <p className="font-semibold text-[#92400e]">Next reminder</p>
-                  <p className="text-[#78350f]">{activity.nextReminder.title}</p>
+                  <p className="text-[#78350f]">{data.nextReminder.title}</p>
                   <p className="text-[#a16207]">
-                    {new Date(activity.nextReminder.dueAt).toLocaleString("en-CA", {
+                    {new Date(data.nextReminder.dueAt).toLocaleString("en-CA", {
                       month: "short",
                       day: "numeric",
                       hour: "numeric",
@@ -1408,18 +1510,16 @@ export function CustomerProfile({
                 <div className="mb-3 flex flex-wrap justify-between gap-2 text-[11px] font-semibold text-[#0369a1]">
                   <span>{relativeAgo(data.lastTouchAt)} (Last Touch)</span>
                   <span>
-                    {activityReady
-                      ? `${relativeAgo(activity.hot.lastSeenAt)} (Last Visit)${activity.hot.isOnline ? " · Online" : ""}`
-                      : `${deferredLabel ?? "…"} (Last Visit)`}
+                    {`${relativeAgo(data.hot.lastSeenAt)} (Last Visit)${data.hot.isOnline ? " · Online" : ""}`}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
                   {(
                     [
-                      ["Views", activityReady ? activity.hot.views24h : (deferredLabel ?? "…")],
-                      ["Saves", activityReady ? activity.stats.saves : (deferredLabel ?? "…")],
-                      ["Alerts", activityReady ? activity.stats.alerts : (deferredLabel ?? "…")],
-                      ["Emails", activityReady ? activity.stats.emails : (deferredLabel ?? "…")],
+                      ["Views", data.hot.views24h],
+                      ["Saves", data.stats.saves],
+                      ["Alerts", data.stats.alerts],
+                      ["Emails", data.stats.emails],
                     ] as const
                   ).map(([label, value]) => (
                     <div key={String(label)}>
@@ -1436,17 +1536,11 @@ export function CustomerProfile({
                 <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-[#0369a1]">
                   Email information
                 </p>
-                {activityReady ? (
-                  <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start justify-between gap-2">
                     <RingStat label="Email Clicks" value={clickRate} tone="#0ea5e9" />
                     <RingStat label="Email Opens" value={openRate} tone="#0284c7" />
                     <RingStat label="Alert Opens" value={alertRate} tone="#0369a1" />
                   </div>
-                ) : (
-                  <p className="text-center text-[12px] text-[#0369a1]">
-                    {deferredLabel ?? "Loading…"}
-                  </p>
-                )}
               </div>
             </aside>
 
@@ -1562,20 +1656,62 @@ export function CustomerProfile({
                       </p>
                       <ActivityFilters
                         selected={activityFilters}
-                        onChange={setActivityFilters}
+                        onChange={onActivityFiltersChange}
                         counts={activityFilterCounts}
                       />
                     </div>
                     <CrmTimeline
                       items={filteredTimelineItems}
                       empty={
-                        activityLoading || activityError
-                          ? (deferredLabel ?? "Loading…")
-                          : timelineItems.length === 0
+                        timelineBusy && timelineItems.length === 0
+                          ? "Loading…"
+                          : timelineError && timelineItems.length === 0
+                            ? "Failed to load"
+                            : timelineItems.length === 0
                           ? "No activity yet."
                           : "No activity matches these filters. Adjust Filters to see more."
                       }
                     />
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {timelineHasMore ? (
+                        <button
+                          type="button"
+                          disabled={timelineBusy}
+                          onClick={() =>
+                            void fetchTimelinePage({
+                              scope: timelineScope,
+                              before:
+                                timelineRows[timelineRows.length - 1]?.createdAt ??
+                                null,
+                              append: true,
+                              filters: activityFilters,
+                            })
+                          }
+                          className="rounded-lg border border-[#d8dee6] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#1e2a38] hover:bg-[#f8fafc] disabled:opacity-50"
+                        >
+                          {timelineBusy ? "Loading…" : "Load more"}
+                        </button>
+                      ) : null}
+                      {timelineScope === "recent" ? (
+                        <button
+                          type="button"
+                          disabled={timelineBusy}
+                          onClick={() =>
+                            void fetchTimelinePage({
+                              scope: "history",
+                              before:
+                                timelineRows[timelineRows.length - 1]?.createdAt ??
+                                null,
+                              append: true,
+                              filters: activityFilters,
+                            })
+                          }
+                          className="rounded-lg bg-[#1e2a38] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#334155] disabled:opacity-50"
+                        >
+                          View all
+                        </button>
+                      ) : null}
+                    </div>
                   </Panel>
                 ) : null}
 
@@ -1677,11 +1813,7 @@ export function CustomerProfile({
                           />
                           <InfoRow
                             label="Hotness"
-                            value={
-                              activityReady
-                                ? String(activity.hot.hotness)
-                                : (deferredLabel ?? "…")
-                            }
+                            value={String(data.hot.hotness)}
                           />
                           <InfoRow
                             label="Search"
@@ -1703,13 +1835,11 @@ export function CustomerProfile({
                           <InfoRow
                             label="Last visit"
                             value={
-                              activityReady
-                                ? activity.hot.lastSeenAt
-                                  ? new Date(
-                                      activity.hot.lastSeenAt,
-                                    ).toLocaleString("en-CA")
-                                  : null
-                                : (deferredLabel ?? "…")
+                              data.hot.lastSeenAt
+                                ? new Date(
+                                    data.hot.lastSeenAt,
+                                  ).toLocaleString("en-CA")
+                                : null
                             }
                           />
                           <InfoRow
@@ -1719,11 +1849,9 @@ export function CustomerProfile({
                           <InfoRow
                             label="SLA open"
                             value={
-                              activityReady
-                                ? activity.hot.slaHoursOpen != null
-                                  ? `${activity.hot.slaHoursOpen.toFixed(1)}h`
-                                  : null
-                                : (deferredLabel ?? "…")
+                              data.hot.slaHoursOpen != null
+                                ? `${data.hot.slaHoursOpen.toFixed(1)}h`
+                                : null
                             }
                           />
                           <InfoRow
@@ -1825,16 +1953,20 @@ export function CustomerProfile({
                         onUpdated={onUpdated}
                       />
                     </Panel>
-                    {activityLoading || activityError ? (
+                    {panelLoading === "reminders" ? (
                       <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
-                        {deferredLabel ?? "Loading…"}
+                        Loading…
                       </p>
-                    ) : (activity?.tasks.length ?? 0) === 0 ? (
+                    ) : panelError === "reminders" ? (
+                      <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
+                        Failed to load
+                      </p>
+                    ) : (tasksPanel?.tasks.length ?? 0) === 0 ? (
                       <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
                         No reminders yet.
                       </p>
                     ) : (
-                      (activity?.tasks ?? []).map((task) => (
+                      (tasksPanel?.tasks ?? []).map((task) => (
                         <div
                           key={task.id}
                           className="rounded-lg border border-[#e2e8f0] bg-white px-4 py-3"
@@ -1861,10 +1993,10 @@ export function CustomerProfile({
                         </div>
                       ))
                     )}
-                    {activityReady && activity.notes.length > 0 ? (
+                    {tasksPanel && tasksPanel.notes.length > 0 ? (
                       <Panel title="Follow-up notes">
                         <ul className="space-y-2">
-                          {activity.notes.map((n) => (
+                          {tasksPanel.notes.map((n) => (
                             <li
                               key={n.id}
                               className={cn(
@@ -1928,16 +2060,20 @@ export function CustomerProfile({
 
                 {tab === "appointments" ? (
                   <div className="space-y-3">
-                    {activityLoading || activityError ? (
+                    {panelLoading === "appointments" ? (
                       <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
-                        {deferredLabel ?? "Loading…"}
+                        Loading…
                       </p>
-                    ) : (activity?.appointments.length ?? 0) === 0 ? (
+                    ) : panelError === "appointments" ? (
+                      <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
+                        Failed to load
+                      </p>
+                    ) : (appointmentsPanel?.appointments.length ?? 0) === 0 ? (
                       <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
                         No appointments.
                       </p>
                     ) : (
-                      (activity?.appointments ?? []).map((a) => (
+                      (appointmentsPanel?.appointments ?? []).map((a) => (
                         <div
                           key={a.id}
                           className="rounded-lg border border-[#e2e8f0] bg-white px-4 py-3"
@@ -1980,16 +2116,20 @@ export function CustomerProfile({
                         onUpdated={onUpdated}
                       />
                     </Panel>
-                    {activityLoading || activityError ? (
+                    {panelLoading === "conversations" ? (
                       <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
-                        {deferredLabel ?? "Loading…"}
+                        Loading…
                       </p>
-                    ) : (activity?.emails.length ?? 0) === 0 ? (
+                    ) : panelError === "conversations" ? (
+                      <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
+                        Failed to load
+                      </p>
+                    ) : (emailsPanel?.emails.length ?? 0) === 0 ? (
                       <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
                         No emails logged yet.
                       </p>
                     ) : (
-                      (activity?.emails ?? []).map((e) => (
+                      (emailsPanel?.emails ?? []).map((e) => (
                         <div
                           key={e.id}
                           className="rounded-lg border border-[#e2e8f0] bg-white px-4 py-3"
@@ -2028,9 +2168,6 @@ export function CustomerProfile({
                               </span>
                             ) : null}
                           </div>
-                          <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[13px] text-[#475569]">
-                            {e.body}
-                          </p>
                           <div className="mt-3">
                             <button
                               type="button"
@@ -2044,23 +2181,57 @@ export function CustomerProfile({
                         </div>
                       ))
                     )}
+                    {emailsPanel?.hasMore ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const last =
+                            emailsPanel.emails[emailsPanel.emails.length - 1];
+                          if (!last) return;
+                          void fetchLeadJson<LeadProfileEmailsPanel>(
+                            `/api/agent/leads/${leadId}/emails?before=${encodeURIComponent(last.createdAt)}`,
+                            "/api/agent/leads/[id]/emails",
+                          ).then((page) => {
+                            setEmailsPanel((prev) =>
+                              prev
+                                ? {
+                                    emails: [...prev.emails, ...page.emails],
+                                    hasMore: page.hasMore,
+                                  }
+                                : page,
+                            );
+                          });
+                        }}
+                        className="rounded-lg border border-[#d8dee6] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#1e2a38] hover:bg-[#f8fafc]"
+                      >
+                        Load more
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
 
                 {tab === "engagement" ? (
                   <div className="space-y-4">
-                    {!activity ? (
+                    {panelLoading === "engagement" ? (
                       <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
-                        {deferredLabel ?? "Loading…"}
+                        Loading…
+                      </p>
+                    ) : panelError === "engagement" ? (
+                      <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
+                        Failed to load
+                      </p>
+                    ) : !engagementPanel ? (
+                      <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
+                        Loading…
                       </p>
                     ) : (
                       <>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       {[
-                        ["Views (24h)", activity.hot.views24h],
-                        ["Saved homes", activity.stats.saves],
-                        ["Alerts", activity.stats.alerts],
-                        ["Emails sent", activity.stats.emails],
+                        ["Views (24h)", data.hot.views24h],
+                        ["Saved homes", data.stats.saves],
+                        ["Alerts", data.stats.alerts],
+                        ["Emails sent", data.stats.emails],
                       ].map(([label, value]) => (
                         <div
                           key={String(label)}
@@ -2076,12 +2247,12 @@ export function CustomerProfile({
                       ))}
                     </div>
 
-                    {activity.buyerIntent ? (
+                    {engagementPanel.buyerIntent ? (
                       <Panel title="Criteria · matches · shortlist">
                         <EngagementMatchboard
                           leadId={leadId}
-                          buyerIntent={activity.buyerIntent}
-                          savedSearches={activity.savedSearches}
+                          buyerIntent={engagementPanel.buyerIntent}
+                          savedSearches={engagementPanel.savedSearches}
                           consented={data.permissions.consented}
                           customerEmail={data.lead.customer?.email}
                           onUpdated={onUpdated}
@@ -2090,7 +2261,7 @@ export function CustomerProfile({
                     ) : null}
 
                     <Panel title="Saved searches / homepage">
-                      {activity.savedSearches.length === 0 ? (
+                      {engagementPanel.savedSearches.length === 0 ? (
                         <p className="text-[13px] text-[#94a3b8]">
                           No saved searches yet — use “Save as search” above to
                           create one from Looking for, or the customer can
@@ -2098,7 +2269,7 @@ export function CustomerProfile({
                         </p>
                       ) : (
                         <div className="space-y-3">
-                          {activity.savedSearches.map((s) => (
+                          {engagementPanel.savedSearches.map((s) => (
                             <div key={s.id} className="space-y-1.5">
                               {s.isHomepageActive ? (
                                 <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#047857]">
@@ -2118,10 +2289,10 @@ export function CustomerProfile({
 
                     <Panel title="Saved homes">
                       <div className="flex flex-wrap gap-1.5">
-                        {activity.savedListings.length === 0 ? (
+                        {engagementPanel.savedListings.length === 0 ? (
                           <span className="text-[13px] text-[#94a3b8]">None</span>
                         ) : (
-                          activity.savedListings.map((s) => (
+                          engagementPanel.savedListings.map((s) => (
                             <Link
                               key={s.id}
                               href={`/listing/${s.mlsNumber}`}
@@ -2136,10 +2307,10 @@ export function CustomerProfile({
 
                     <Panel title="Property watches">
                       <div className="flex flex-wrap gap-1.5">
-                        {activity.propertyMonitors.length === 0 ? (
+                        {engagementPanel.propertyMonitors.length === 0 ? (
                           <span className="text-[13px] text-[#94a3b8]">None</span>
                         ) : (
-                          activity.propertyMonitors.map((m) => (
+                          engagementPanel.propertyMonitors.map((m) => (
                             <Link
                               key={m.id}
                               href={`/listing/${m.mlsNumber}`}
@@ -2154,20 +2325,20 @@ export function CustomerProfile({
 
                     <Panel title="Area monitors">
                       <p className="text-[13px] text-[#475569]">
-                        {activity.areaMonitors.length === 0
+                        {engagementPanel.areaMonitors.length === 0
                           ? "None"
-                          : activity.areaMonitors
+                          : engagementPanel.areaMonitors
                               .map((a) => a.name || a.city || a.id.slice(0, 8))
                               .join(" · ")}
                       </p>
                     </Panel>
 
                     <Panel title="Route planner">
-                      {activity.tours.length === 0 ? (
+                      {engagementPanel.tours.length === 0 ? (
                         <p className="text-[13px] text-[#94a3b8]">No tours</p>
                       ) : (
                         <div className="space-y-1">
-                          {activity.tours.map((t) => (
+                          {engagementPanel.tours.map((t) => (
                             <p
                               key={t.id}
                               className="text-[12px] text-[#475569]"
@@ -2183,11 +2354,11 @@ export function CustomerProfile({
                     </Panel>
 
                     <Panel title="Customer listing notes">
-                      {activity.listingNotes.length === 0 ? (
+                      {engagementPanel.listingNotes.length === 0 ? (
                         <p className="text-[13px] text-[#94a3b8]">None</p>
                       ) : (
                         <div className="space-y-1">
-                          {activity.listingNotes.map((n) => (
+                          {engagementPanel.listingNotes.map((n) => (
                             <p
                               key={n.id}
                               className="text-[12px] text-[#475569]"
@@ -2207,9 +2378,9 @@ export function CustomerProfile({
 
                     <Panel title="Alerts inbox">
                       <p className="text-[13px] text-[#475569]">
-                        {activity.alerts.length === 0
+                        {engagementPanel.alerts.length === 0
                           ? "None"
-                          : `${activity.alerts.length} recent · latest: ${activity.alerts[0]?.title || activity.alerts[0]?.kind}`}
+                          : `${engagementPanel.alerts.length} recent · latest: ${engagementPanel.alerts[0]?.title || engagementPanel.alerts[0]?.kind}`}
                       </p>
                     </Panel>
                       </>

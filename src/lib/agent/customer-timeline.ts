@@ -8,6 +8,20 @@ import { mlsNumberFromListingPath } from "@/lib/listings/listing-path";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { prisma } from "@/lib/prisma";
 
+export const LEAD_PROFILE_EMAIL_LIST_SELECT = {
+  id: true,
+  subject: true,
+  toEmail: true,
+  kind: true,
+  mlsNumber: true,
+  openedAt: true,
+  clickedAt: true,
+  openCount: true,
+  clickCount: true,
+  lastClickedUrl: true,
+  createdAt: true,
+} as const;
+
 /** Narrow CRM list columns — never htmlBody (preview uses GET /api/agent/emails/[id]). */
 export const LEAD_PROFILE_EMAIL_LOG_SELECT = {
   id: true,
@@ -157,6 +171,54 @@ export type TimelineItem = {
   lastClickedUrl?: string | null;
 };
 
+export type TimelineItemDto = {
+  id: string;
+  source: string;
+  type: string;
+  title: string;
+  body: string | null;
+  mlsNumber: string | null;
+  path: string | null;
+  imageUrl: string | null;
+  createdAt: string;
+  noteId?: string | null;
+  noteCategory?: "GENERAL" | "CALL" | null;
+  pinned?: boolean;
+  pinnedAt?: string | null;
+  emailPreviewPath?: string | null;
+  emailKind?: string | null;
+  emailOpenedAt?: string | null;
+  emailClickedAt?: string | null;
+  emailOpenCount?: number;
+  emailClickCount?: number;
+  lastClickedUrl?: string | null;
+};
+
+export function serializeTimelineItem(item: TimelineItem): TimelineItemDto {
+  return {
+    id: item.id,
+    source: item.source,
+    type: item.type,
+    title: item.title,
+    body: item.body,
+    mlsNumber: item.mlsNumber,
+    path: item.path,
+    imageUrl: item.imageUrl,
+    createdAt: item.createdAt.toISOString(),
+    noteId: item.noteId,
+    noteCategory: item.noteCategory,
+    pinned: item.pinned,
+    pinnedAt: item.pinnedAt?.toISOString() ?? null,
+    emailPreviewPath: item.emailPreviewPath,
+    emailKind: item.emailKind,
+    emailOpenedAt: item.emailOpenedAt?.toISOString() ?? null,
+    emailClickedAt: item.emailClickedAt?.toISOString() ?? null,
+    emailOpenCount: item.emailOpenCount,
+    emailClickCount: item.emailClickCount,
+    lastClickedUrl: item.lastClickedUrl,
+  };
+}
+
 function formatListingAddress(listing: {
   addressLine: string;
   unitNumber: string | null;
@@ -188,7 +250,7 @@ const GENERIC_LISTING_TITLES = new Set([
   "page view",
 ]);
 
-async function enrichWithListingCovers(
+export async function enrichWithListingCovers(
   items: TimelineItem[],
 ): Promise<TimelineItem[]> {
   const mlsNumbers = [
@@ -242,7 +304,7 @@ async function enrichWithListingCovers(
   });
 }
 
-function labelActivity(type: ActivityEventType | string) {
+export function labelActivity(type: ActivityEventType | string) {
   switch (type) {
     case "contact_update_request":
       return "Contact update requested";
@@ -680,7 +742,7 @@ export async function loadCustomerTimeline(input: {
  * Collapse same-MLS LISTING_VIEW rows within a short window into one,
  * preferring the richer activity-event title when present.
  */
-function dedupeNearDuplicateListingViews(items: TimelineItem[]): TimelineItem[] {
+export function dedupeNearDuplicateListingViews(items: TimelineItem[]): TimelineItem[] {
   const WINDOW_MS = 60_000;
   const kept: TimelineItem[] = [];
 

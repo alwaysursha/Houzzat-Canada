@@ -65,6 +65,7 @@ export type LeadProfileShell = {
     user: { id: string; name: string | null; email: string };
   }>;
   savedSearchLabel: string | null;
+  savedSearchQuery: unknown | null;
   lastTouchAt: string;
 };
 
@@ -196,7 +197,7 @@ const EMPTY_DOMAIN: LeadProfileDomainCollections = {
   alerts: [],
 };
 
-const LEAD_PROFILE_ACCESS_SELECT = {
+export const LEAD_PROFILE_ACCESS_SELECT = {
   id: true,
   customerId: true,
   organizationId: true,
@@ -253,6 +254,18 @@ function mapLeadCustomer(customer: {
     phoneUpdateRequestedAt:
       customer.phoneUpdateRequestedAt?.toISOString() ?? null,
   };
+}
+
+export async function findAccessibleLead(
+  ctx: AgentOrgContext,
+  leadId: string,
+) {
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: LEAD_PROFILE_ACCESS_SELECT,
+  });
+  if (!lead || !canAccessLead(ctx, lead)) return null;
+  return lead;
 }
 
 export function mergeLeadProfile(
@@ -370,6 +383,7 @@ export async function loadLeadSummary(
     },
     teamMembers: teamMembers.map((m) => ({ user: m.user })),
     savedSearchLabel: primarySearch ? searchLabel(primarySearch) : null,
+    savedSearchQuery: primarySearch?.query ?? null,
     lastTouchAt: lastTouch.toISOString(),
   };
 }

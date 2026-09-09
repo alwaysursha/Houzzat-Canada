@@ -49,7 +49,7 @@ export type HotnessSnapshot = {
   slaHoursOpen: number | null;
 };
 
-type HotLeadInput = {
+export type HotLeadInput = {
   leadId: string;
   customerId: string | null;
   status: string;
@@ -118,6 +118,17 @@ export function accumulateViewGroups(
     viewsByUser.set(row.userId, bucket);
   }
   return viewsByUser;
+}
+
+export function hotnessFromSignals(
+  input: HotLeadInput,
+  signals: {
+    views24h: number;
+    distinctListings24h: number;
+    lastSeenAt: Date | null;
+  },
+): HotnessSnapshot {
+  return scoreHotness(input, signals);
 }
 
 /** Lead quality / urgency signals for a single lead (profile popup). */
