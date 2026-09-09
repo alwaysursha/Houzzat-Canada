@@ -246,9 +246,13 @@ async function main() {
       ),
     );
     assert.ok(ensureScript.includes("ensureTypesenseListingProvenanceFields"));
-    // Must not auto-invoke ensure from sync in G.9B (no prod schema mutation).
-    assert.ok(!syncSrc.includes("ensureTypesenseListingProvenanceFields"));
-    console.log("[6] Prisma select / write-path contract... PASS");
+    assert.ok(syncSrc.includes("gateMlsTypesenseDocument"));
+    assert.ok(syncSrc.includes("missing_provenance"));
+    assert.ok(syncSrc.includes("listingToTypesenseDocument"));
+    assert.ok(
+      !syncSrc.includes("Typesense doc will lack sourceAuthorityKey"),
+    );
+    console.log("[6] Prisma select / fail-closed MLS write-path... PASS");
   }
 
   {

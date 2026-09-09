@@ -199,6 +199,7 @@
     "typesense:provenance-fields": "node --import tsx scripts/typesense-ensure-provenance-fields.ts",
     "typesense:provenance-backfill": "node --import tsx scripts/typesense-backfill-provenance.ts",
     "stage-6.11g9b-typesense-provenance:selftest": "node --import tsx scripts/stage-6.11g9b-typesense-provenance-selftest.ts",
+    "stage-6.11g9b2-typesense-mls-write-gate:selftest": "node --import tsx scripts/stage-6.11g9b2-typesense-mls-write-gate-selftest.ts",
     "stage-6.11g10a-listing-entitlement:selftest": "node --import tsx scripts/stage-6.11g10a-listing-entitlement-selftest.ts",
     "stage-6.11g10b1-search-entitlement:selftest": "node --import tsx scripts/stage-6.11g10b1-search-entitlement-selftest.ts",
     "stage-6.11g10b2-request-entitlement:selftest": "node --import tsx scripts/stage-6.11g10b2-request-entitlement-selftest.ts",

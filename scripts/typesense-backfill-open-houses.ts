@@ -26,7 +26,7 @@ async function main() {
   let fail = 0;
   for (const row of listingIds) {
     const synced = await syncListingToTypesense(row.listingId);
-    if (synced) ok += 1;
+    if (synced.ok) ok += 1;
     else fail += 1;
     if ((ok + fail) % 50 === 0) {
       console.log(`… progress ok=${ok} fail=${fail}`);

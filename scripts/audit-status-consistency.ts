@@ -239,8 +239,8 @@ async function main() {
         },
       });
       updated += 1;
-      const ok = await syncListingToTypesense(m.id);
-      if (ok) healed += 1;
+      const synced = await syncListingToTypesense(m.id);
+      if (synced.ok) healed += 1;
     }
     console.log({ updated, healed });
 

@@ -86,7 +86,7 @@ async function main() {
       data: { status: "SOLD_CONDITIONAL", transactionType: f.txn },
     });
     updated += 1;
-    if (await syncListingToTypesense(f.id)) healed += 1;
+    if ((await syncListingToTypesense(f.id)).ok) healed += 1;
   }
 
   // Always heal known Rivertrail drift

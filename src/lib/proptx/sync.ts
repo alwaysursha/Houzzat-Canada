@@ -39,7 +39,6 @@ import {
   type PropTxListingProvenance,
 } from "@/lib/proptx/listing-provenance";
 import {
-  isTypesenseSyncEnabled,
   syncListingToTypesense,
   typesenseSyncDisabledReason,
 } from "@/lib/typesense/sync-listing";
@@ -58,10 +57,14 @@ export type MlsSyncStats = {
   pages: number;
   errors: string[];
   skipReasons?: Record<string, number>;
+  /** Typesense write attempts (excludes disabled / mock / missing row). */
+  typesenseAttempted: number;
   /** Listings successfully upserted into Typesense this run. */
   typesenseUpserted: number;
-  /** Listings that failed Typesense upsert (index enabled). */
+  /** Listings that failed Typesense upsert (index enabled, network/API). */
   typesenseFailed: number;
+  /** MLS docs refused because canonical org/provider/SAK was missing. */
+  typesenseMissingProvenance: number;
   /** Listings skipped because Typesense writes are disabled/misconfigured. */
   typesenseDisabled: number;
 };
@@ -597,13 +600,35 @@ async function pushListingToTypesense(
   listingId: string,
   stats: MlsSyncStats,
 ): Promise<void> {
-  if (!isTypesenseSyncEnabled()) {
-    stats.typesenseDisabled += 1;
+  const result = await syncListingToTypesense(listingId);
+  if (result.ok) {
+    stats.typesenseAttempted += 1;
+    stats.typesenseUpserted += 1;
     return;
   }
-  const ok = await syncListingToTypesense(listingId);
-  if (ok) stats.typesenseUpserted += 1;
-  else stats.typesenseFailed += 1;
+  switch (result.reason) {
+    case "disabled":
+      stats.typesenseDisabled += 1;
+      return;
+    case "missing_provenance":
+    case "sak_mismatch":
+      stats.typesenseAttempted += 1;
+      stats.typesenseMissingProvenance += 1;
+      return;
+    case "error":
+      stats.typesenseAttempted += 1;
+      stats.typesenseFailed += 1;
+      return;
+    case "not_found":
+    case "mock":
+      return;
+    default: {
+      const _never: never = result.reason;
+      void _never;
+      stats.typesenseAttempted += 1;
+      stats.typesenseFailed += 1;
+    }
+  }
 }
 
 function recordProvenanceSkip(
@@ -2064,22 +2089,27 @@ export async function runPropTxMlsSync(options?: {
 
     const typesenseOff = typesenseSyncDisabledReason();
     const typesenseIndexMissed =
-      stats.propertyUpserted > 0 && stats.typesenseUpserted === 0;
+      (stats.propertyUpserted > 0 || stats.openHousesUpserted > 0) &&
+      stats.typesenseUpserted === 0;
+    const typesenseDegraded =
+      typesenseIndexMissed ||
+      stats.typesenseMissingProvenance > 0 ||
+      stats.typesenseFailed > 0;
     const typesensePart = typesenseOff
-      ? ` typesense=OFF (${typesenseOff})`
-      : ` typesense=${stats.typesenseUpserted} fail=${stats.typesenseFailed}`;
-    const staleWarning = typesenseIndexMissed
-      ? " TYPESENSE INDEX NOT UPDATED — houzzat.com listings will go stale."
+      ? ` typesense=OFF (${typesenseOff}) attempted=${stats.typesenseAttempted} ok=${stats.typesenseUpserted} fail=${stats.typesenseFailed} missingProvenance=${stats.typesenseMissingProvenance}`
+      : ` typesense attempted=${stats.typesenseAttempted} ok=${stats.typesenseUpserted} fail=${stats.typesenseFailed} missingProvenance=${stats.typesenseMissingProvenance}`;
+    const staleWarning = typesenseDegraded
+      ? " TYPESENSE INDEX NOT HEALTHY — houzzat.com listings may go stale or unauthorized."
       : "";
     const message = `Synced properties=${stats.propertyUpserted} media=${stats.mediaUpserted} rooms=${stats.roomsUpserted} openHouses=${stats.openHousesUpserted} history=${stats.historyUpserted} geocode=${stats.geocodeFixed}/${stats.geocodeAttempted} skipped=${stats.propertySkipped}${typesensePart}${staleWarning}`;
-    if (typesenseIndexMissed) {
+    if (typesenseDegraded) {
       console.error(`[mls] ${message}`);
     }
     try {
       await prisma.mlsSyncRun.update({
         where: { id: run.id },
         data: {
-          status: typesenseIndexMissed ? "degraded" : "ok",
+          status: typesenseDegraded ? "degraded" : "ok",
           finishedAt: new Date(),
           message,
           stats: {
@@ -2096,7 +2126,7 @@ export async function runPropTxMlsSync(options?: {
     }
 
     return {
-      ok: !typesenseIndexMissed,
+      ok: !typesenseDegraded,
       message,
       stats,
       runId: run.id,
@@ -2146,8 +2176,10 @@ function emptyStats(): MlsSyncStats {
     pages: 0,
     errors: [],
     skipReasons: {},
+    typesenseAttempted: 0,
     typesenseUpserted: 0,
     typesenseFailed: 0,
+    typesenseMissingProvenance: 0,
     typesenseDisabled: 0,
   };
 }

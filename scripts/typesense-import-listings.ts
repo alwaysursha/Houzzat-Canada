@@ -20,6 +20,9 @@ async function main() {
   const { listingToTypesenseDocument } = await import(
     "../src/lib/typesense/listing-document"
   );
+  const { gateMlsTypesenseDocument } = await import(
+    "../src/lib/typesense/mls-write-gate"
+  );
 
   const batchSize = Math.max(1, Number(process.argv[2] ?? 250));
   const maxListings = process.argv[3]
@@ -80,6 +83,7 @@ async function main() {
         lat: true,
         lng: true,
         facts: true,
+        dataSource: true,
         organizationId: true,
         providerKey: true,
         media: {
@@ -99,7 +103,29 @@ async function main() {
     if (rows.length === 0) break;
     cursor = rows[rows.length - 1]!.id;
 
-    const documents = rows.map(listingToTypesenseDocument);
+    const documents = [];
+    for (const row of rows) {
+      const document = listingToTypesenseDocument(row);
+      const gate = gateMlsTypesenseDocument({
+        dataSource: row.dataSource,
+        organizationId: row.organizationId,
+        providerKey: row.providerKey,
+        document,
+      });
+      if (!gate.allow) {
+        failed += 1;
+        console.error(
+          "import skip MLS without provenance:",
+          row.mlsNumber,
+          gate.reason,
+        );
+        continue;
+      }
+      documents.push(document);
+    }
+
+    if (documents.length === 0) continue;
+
     const results = await client
       .collections(collection)
       .documents()

@@ -4,11 +4,9 @@ import {
   getTypesenseCollectionName,
 } from "@/lib/typesense/client";
 import { typesenseEnv, typesenseFlagEnabled } from "@/lib/typesense/env";
-import {
-  buildListingSourceAuthorityKey,
-  listingToTypesenseDocument,
-} from "@/lib/typesense/listing-document";
+import { listingToTypesenseDocument } from "@/lib/typesense/listing-document";
 import { ensureTypesenseListingProvenanceFields } from "@/lib/typesense/listing-provenance-fields";
+import { gateMlsTypesenseDocument } from "@/lib/typesense/mls-write-gate";
 
 let bedsLabelFieldEnsured = false;
 let livingAreaRangeFieldEnsured = false;
@@ -82,15 +80,29 @@ export function isTypesenseSyncEnabled(): boolean {
   return typesenseSyncDisabledReason() === null;
 }
 
+export type TypesenseListingSyncFailureReason =
+  | "disabled"
+  | "not_found"
+  | "mock"
+  | "missing_provenance"
+  | "sak_mismatch"
+  | "error";
+
+export type TypesenseListingSyncResult =
+  | { ok: true }
+  | { ok: false; reason: TypesenseListingSyncFailureReason };
+
 /**
- * Upsert one Neon listing into Typesense. Best-effort — never throws to callers.
- * Always writes organizationId/providerKey/sourceAuthorityKey when Neon has them
- * so G.10 entitlement filters stay accurate.
+ * Upsert one Neon listing into Typesense via the canonical mapper.
+ * MLS docs without canonical org/provider/SAK are refused (no partial emplace).
+ * FSBO/manual without MLS provenance still write (no invented board identity).
  */
 export async function syncListingToTypesense(
   listingId: string,
-): Promise<boolean> {
-  if (!isTypesenseSyncEnabled()) return false;
+): Promise<TypesenseListingSyncResult> {
+  if (!isTypesenseSyncEnabled()) {
+    return { ok: false, reason: "disabled" };
+  }
 
   try {
     const now = new Date();
@@ -138,47 +150,43 @@ export async function syncListingToTypesense(
         },
       },
     });
-    if (!listing || listing.isMock) return false;
+    if (!listing) return { ok: false, reason: "not_found" };
+    if (listing.isMock) return { ok: false, reason: "mock" };
+
+    const document = listingToTypesenseDocument(listing);
+    const gate = gateMlsTypesenseDocument({
+      dataSource: listing.dataSource,
+      organizationId: listing.organizationId,
+      providerKey: listing.providerKey,
+      document,
+    });
+    if (!gate.allow) {
+      console.error(
+        "[typesense/sync] refusing MLS upsert:",
+        gate.reason,
+        listing.mlsNumber,
+        listingId,
+      );
+      return { ok: false, reason: gate.reason };
+    }
 
     await ensureBedsLabelField();
     await ensureLivingAreaRangeField();
     await ensureProvenanceFields();
 
-    const expectedSak = buildListingSourceAuthorityKey(
-      listing.organizationId,
-      listing.providerKey,
-    );
-    if (!expectedSak && listing.dataSource === "mls") {
-      console.warn(
-        "[typesense/sync] MLS listing missing Neon provenance; Typesense doc will lack sourceAuthorityKey",
-        listing.mlsNumber,
-        listingId,
-      );
-    }
-
     const client = getTypesenseAdminClient();
     const collection = getTypesenseCollectionName();
-    const document = listingToTypesenseDocument(listing);
 
-    if (expectedSak && document.sourceAuthorityKey !== expectedSak) {
-      console.error(
-        "[typesense/sync] refusing upsert without sourceAuthorityKey",
-        listing.mlsNumber,
-        listingId,
-      );
-      return false;
-    }
-
-    // emplace: create or merge fields — never wipe sourceAuthorityKey when an
-    // older sync host upserts a partial doc without provenance.
+    // Full canonical document (mapper includes OH fields + provenance).
+    // Never send a provenance-less MLS body — that would strip SAK on emplace.
     await client
       .collections(collection)
       .documents()
       .create(document, { action: "emplace" });
-    return true;
+    return { ok: true };
   } catch (error) {
     console.error("[typesense/sync]", listingId, error);
-    return false;
+    return { ok: false, reason: "error" };
   }
 }
 

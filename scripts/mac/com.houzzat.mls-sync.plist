@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  STALE clone path. Do not copy these ProgramArguments onto a live Mac
+  without substituting the current repo root. StartInterval is 3600s;
+  a typical run lasts ~35–45m so effective cadence is ~90m.
+  Recommended V1 cadence (do not apply in this change): StartInterval 600.
+-->
 <plist version="1.0">
   <dict>
     <key>Label</key>

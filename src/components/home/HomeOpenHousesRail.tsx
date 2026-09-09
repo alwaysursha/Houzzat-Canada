@@ -5,36 +5,16 @@ import Link from "next/link";
 import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
 import { HomeRailCardsSkeleton } from "@/components/home/HomeRailCardsSkeleton";
 import { ListingCard } from "@/components/listings/ListingCard";
+import {
+  defaultOpenHouseDayTab,
+  listingHasOpenHouseOnDay,
+  soonestOpenHouseOnDay,
+  type OpenHouseDayTab,
+} from "@/lib/listings/home-open-house-day";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import { cn } from "@/lib/utils";
 
-type DayTab = "sat" | "sun";
-
-function listingHasOpenHouseOnDay(
-  listing: ListingCardData,
-  day: DayTab,
-): boolean {
-  const want = day === "sat" ? 6 : 0;
-  return listing.openHouses.some((oh) => {
-    const d = new Date(oh.startsAt).getDay();
-    return d === want;
-  });
-}
-
-function soonestOpenHouseOnDay(
-  listing: ListingCardData,
-  day: DayTab,
-): number {
-  const want = day === "sat" ? 6 : 0;
-  let min = Number.POSITIVE_INFINITY;
-  for (const oh of listing.openHouses) {
-    const at = new Date(oh.startsAt);
-    if (at.getDay() !== want) continue;
-    const t = at.getTime();
-    if (t < min) min = t;
-  }
-  return min;
-}
+type DayTab = OpenHouseDayTab;
 
 export function HomeOpenHousesRail({
   items,
@@ -49,8 +29,6 @@ export function HomeOpenHousesRail({
   emptyLabel?: string;
   loading?: boolean;
 }) {
-  const [tab, setTab] = useState<DayTab>("sat");
-
   const satItems = useMemo(
     () =>
       items
@@ -72,6 +50,12 @@ export function HomeOpenHousesRail({
     [items],
   );
 
+  const preferredTab = defaultOpenHouseDayTab(
+    satItems.length,
+    sunItems.length,
+  );
+  const [userTab, setUserTab] = useState<DayTab | null>(null);
+  const tab = userTab ?? preferredTab;
   const active = tab === "sat" ? satItems : sunItems;
 
   return (
@@ -107,7 +91,7 @@ export function HomeOpenHousesRail({
             type="button"
             role="tab"
             aria-selected={tab === option.id}
-            onClick={() => setTab(option.id)}
+            onClick={() => setUserTab(option.id)}
             className={cn(
               "rounded-full px-4 py-1.5 text-sm font-semibold transition",
               tab === option.id

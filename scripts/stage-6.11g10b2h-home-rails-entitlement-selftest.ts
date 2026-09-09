@@ -316,6 +316,7 @@ async function main() {
   {
     const searchTs = read("src/lib/typesense/search.ts");
     assert.ok(searchTs.includes("planTypesenseHomeRailsSearches"));
+    assert.ok(searchTs.includes('"listedAt:desc,updatedAtMls:desc"'));
     assert.ok(searchTs.includes("queryPlans.length === 0"));
     assert.ok(searchTs.includes("emptyHomeRailsPayload"));
     assert.ok(searchTs.includes('plan.kind === "empty"'));
