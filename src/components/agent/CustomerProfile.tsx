@@ -46,7 +46,9 @@ import {
   ALL_ACTIVITY_FILTER_IDS,
   DEFAULT_ACTIVITY_FILTER_IDS,
   filterIdsForTimelineType,
+  isDefaultActivityFilters,
   timelineItemMatchesFilters,
+  type TimelineScope,
 } from "@/lib/agent/activity-filters";
 import { ReassignSelect } from "@/components/agent/TeamAdminClient";
 import type {
@@ -58,10 +60,6 @@ import {
   INQUIRY_TAG_STYLE,
 } from "@/lib/agent/inquiry-tag";
 import type { LeadProfileSnapshot } from "@/lib/agent/lead-profile-snapshot";
-import {
-  isDefaultActivityFilters,
-  type TimelineScope,
-} from "@/lib/agent/lead-profile-timeline";
 import type {
   LeadProfileAppointmentsPanel,
   LeadProfileEmailsPanel,
@@ -670,9 +668,6 @@ export function CustomerProfile({
             }
             break;
           }
-          case "activity":
-          case "info":
-            break;
           default: {
             const _exhaustive: never = tab;
             void _exhaustive;

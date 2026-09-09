@@ -1,9 +1,9 @@
 import { findAccessibleLead } from "@/lib/agent/lead-summary";
+import { loadPagedLeadTimeline } from "@/lib/agent/lead-profile-timeline";
 import {
   isDefaultActivityFilters,
-  loadPagedLeadTimeline,
   type TimelineScope,
-} from "@/lib/agent/lead-profile-timeline";
+} from "@/lib/agent/activity-filters";
 import { handleAgentLeadGet } from "@/lib/http/agent-lead-get";
 
 type Params = { params: Promise<{ id: string }> };
@@ -11,7 +11,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(request: Request, { params }: Params) {
   return handleAgentLeadGet(
     request,
-    params.params,
+    params,
     "/api/agent/leads/[id]/timeline",
     async ({ ctx, id, request: req }) => {
       const lead = await findAccessibleLead(ctx, id);

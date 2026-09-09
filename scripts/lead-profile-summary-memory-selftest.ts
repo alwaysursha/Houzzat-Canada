@@ -8,6 +8,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LEAD_PROFILE_EMAIL_LOG_SELECT } from "../src/lib/agent/customer-timeline";
 import {
+  DEFAULT_ACTIVITY_FILTER_IDS,
+  isDefaultActivityFilters,
+} from "../src/lib/agent/activity-filters";
+import {
   createLeadProfileActivityGate,
   isAbortError,
 } from "../src/lib/agent/lead-profile-activity-gate";
@@ -188,6 +192,22 @@ function testAuthorizationIntact() {
   assert.ok(helper.includes('return reply(404, { error: "Not found" })'));
   assert.ok(activityRoute.includes('return reply(401, { error: "Unauthorized" })'));
   assert.ok(activityRoute.includes('return reply(404, { error: "Not found" })'));
+
+  for (const rel of [
+    "src/app/api/agent/leads/[id]/summary/route.ts",
+    "src/app/api/agent/leads/[id]/timeline/route.ts",
+    "src/app/api/agent/leads/[id]/tasks/route.ts",
+    "src/app/api/agent/leads/[id]/appointments/route.ts",
+    "src/app/api/agent/leads/[id]/emails/route.ts",
+    "src/app/api/agent/leads/[id]/engagement/route.ts",
+  ]) {
+    const src = read(rel);
+    assert.equal(
+      src.includes("params.params"),
+      false,
+      `${rel} must pass Next params Promise, not params.params`,
+    );
+  }
 }
 
 function testResponseContractKeys() {
@@ -251,6 +271,35 @@ function testClientSplitAndNoRetry() {
   assert.equal(paged.includes("htmlBody"), false);
   assert.ok(paged.includes("FIRST_PAINT_TIMELINE_DAYS = 4"));
   assert.ok(paged.includes("TIMELINE_PAGE_SIZE = 40"));
+
+  // Webpack client bundles cannot import prisma / pg. Filter helpers stay in
+  // activity-filters.ts. Type-only imports from server modules are OK.
+  assert.equal(profile.includes('from "@/lib/agent/lead-profile-timeline"'), false);
+  assert.equal(profile.includes('from "@/lib/prisma"'), false);
+  assert.equal(profile.includes('from "@/lib/agent/lead-summary"'), false);
+  for (const specifier of [
+    "@/lib/agent/lead-profile-snapshot",
+    "@/lib/agent/lead-profile-panels",
+    "@/lib/agent/customer-timeline",
+  ]) {
+    const from = `from "${specifier}"`;
+    let fromIdx = profile.indexOf(from);
+    while (fromIdx >= 0) {
+      const importIdx = profile.lastIndexOf("import", fromIdx);
+      assert.ok(importIdx >= 0, `missing import for ${specifier}`);
+      const statement = profile.slice(importIdx, fromIdx);
+      assert.ok(
+        /^\s*import type\b/.test(statement),
+        `CustomerProfile must type-only import ${specifier}`,
+      );
+      fromIdx = profile.indexOf(from, fromIdx + from.length);
+    }
+  }
+  assert.ok(profile.includes('from "@/lib/agent/activity-filters"'));
+  assert.ok(profile.includes("isDefaultActivityFilters"));
+  assert.equal(isDefaultActivityFilters(DEFAULT_ACTIVITY_FILTER_IDS), true);
+  assert.equal(isDefaultActivityFilters(new Set(DEFAULT_ACTIVITY_FILTER_IDS)), true);
+  assert.equal(isDefaultActivityFilters(["calls"]), false);
 }
 
 function wait(ms: number) {

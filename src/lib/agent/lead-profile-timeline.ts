@@ -1,7 +1,8 @@
 import {
   ALL_ACTIVITY_FILTER_IDS,
-  DEFAULT_ACTIVITY_FILTER_IDS,
+  isDefaultActivityFilters,
   timelineItemMatchesFilters,
+  type TimelineScope,
 } from "@/lib/agent/activity-filters";
 import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
 import {
@@ -80,8 +81,6 @@ const ALL_SOURCES: TimelineSource[] = [
   "alerts",
 ];
 
-export type TimelineScope = "recent" | "history";
-
 export type LeadTimelinePage = {
   items: TimelineItemDto[];
   hasMore: boolean;
@@ -111,14 +110,6 @@ function sourcesForFilters(filterIds: Set<string> | null): Set<TimelineSource> {
 
 function want(sources: Set<TimelineSource>, source: TimelineSource) {
   return sources.has(source);
-}
-
-export function isDefaultActivityFilters(selected: Iterable<string>) {
-  const selectedSet = selected instanceof Set ? selected : new Set(selected);
-  return (
-    selectedSet.size === DEFAULT_ACTIVITY_FILTER_IDS.length &&
-    DEFAULT_ACTIVITY_FILTER_IDS.every((id) => selectedSet.has(id))
-  );
 }
 
 export async function loadPagedLeadTimeline(input: {

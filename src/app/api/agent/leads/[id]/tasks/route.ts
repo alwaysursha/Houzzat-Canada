@@ -6,7 +6,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(request: Request, { params }: Params) {
   return handleAgentLeadGet(
     request,
-    params.params,
+    params,
     "/api/agent/leads/[id]/tasks",
     ({ ctx, id }) => loadLeadProfileTasksPanel(ctx, id),
   );

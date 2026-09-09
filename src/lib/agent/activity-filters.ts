@@ -225,6 +225,16 @@ export const DEFAULT_ACTIVITY_FILTER_IDS: string[] = [
   "unsubscribes",
 ];
 
+export type TimelineScope = "recent" | "history";
+
+export function isDefaultActivityFilters(selected: Iterable<string>) {
+  const selectedSet = selected instanceof Set ? selected : new Set(selected);
+  return (
+    selectedSet.size === DEFAULT_ACTIVITY_FILTER_IDS.length &&
+    DEFAULT_ACTIVITY_FILTER_IDS.every((id) => selectedSet.has(id))
+  );
+}
+
 const TYPE_TO_FILTER_IDS = new Map<string, string[]>();
 
 for (const group of ACTIVITY_FILTER_GROUPS) {
