@@ -2,17 +2,20 @@ import type { LeadStatus } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
 import { canAccessLead } from "@/lib/agent";
 import { listAssignableCrmAgents } from "@/lib/agent/assignable-agents";
-import { loadBuyerIntent } from "@/lib/agent/buyer-intent";
+import {
+  loadBuyerIntent,
+  type BuyerIntentSnapshot,
+} from "@/lib/agent/buyer-intent";
 import {
   LEAD_PROFILE_EMAIL_LOG_SELECT,
   loadCustomerTimeline,
+  type LeadProfileDomainCollections,
 } from "@/lib/agent/customer-timeline";
 import { computeHotness } from "@/lib/agent/hotness";
 import type { InquiryTagValue } from "@/lib/agent/inquiry-tag";
 import { prisma } from "@/lib/prisma";
-import type { BuyerIntentSnapshot } from "@/lib/agent/buyer-intent";
 
-export type LeadSummary = {
+export type LeadProfileShell = {
   lead: {
     id: string;
     status: LeadStatus;
@@ -51,6 +54,21 @@ export type LeadSummary = {
     assignedAgent: { id: string; name: string | null; email: string } | null;
     adCampaign: { id: string; name: string } | null;
   };
+  permissions: {
+    canSeeTeamLeads: boolean;
+    /** Platform Admin only — assign / unassign / pond. */
+    canAssignLeads: boolean;
+    canClaim: boolean;
+    consented: boolean;
+  };
+  teamMembers: Array<{
+    user: { id: string; name: string | null; email: string };
+  }>;
+  savedSearchLabel: string | null;
+  lastTouchAt: string;
+};
+
+export type LeadProfileActivity = {
   hot: {
     hotness: number;
     views24h: number;
@@ -67,17 +85,6 @@ export type LeadSummary = {
     notes: number;
     openTasks: number;
   };
-  permissions: {
-    canSeeTeamLeads: boolean;
-    /** Platform Admin only — assign / unassign / pond. */
-    canAssignLeads: boolean;
-    canClaim: boolean;
-    consented: boolean;
-  };
-  teamMembers: Array<{
-    user: { id: string; name: string | null; email: string };
-  }>;
-  savedSearchLabel: string | null;
   /** Inferred or saved “what they’re looking for” for agents. */
   buyerIntent: BuyerIntentSnapshot;
   savedListings: Array<{ id: string; mlsNumber: string }>;
@@ -174,8 +181,33 @@ export type LeadSummary = {
     author: { name: string | null; email: string };
   }>;
   nextReminder: { title: string; dueAt: string } | null;
-  lastTouchAt: string;
 };
+
+/** Merged client contract after first-paint + secondary activity. */
+export type LeadSummary = LeadProfileShell & LeadProfileActivity;
+
+const EMPTY_DOMAIN: LeadProfileDomainCollections = {
+  savedListings: [],
+  savedSearches: [],
+  propertyMonitors: [],
+  areaMonitors: [],
+  listingNotes: [],
+  tours: [],
+  alerts: [],
+};
+
+const LEAD_PROFILE_ACCESS_SELECT = {
+  id: true,
+  customerId: true,
+  organizationId: true,
+  workspaceId: true,
+  assignedAgentId: true,
+  status: true,
+  score: true,
+  createdAt: true,
+  firstRespondedAt: true,
+  updatedAt: true,
+} as const;
 
 function searchLabel(search: {
   name: string;
@@ -192,13 +224,76 @@ function searchLabel(search: {
   return bits.length > 0 ? bits.join(", ") : search.name || "Saved search";
 }
 
+function mapLeadCustomer(customer: {
+  id: string;
+  name: string | null;
+  email: string;
+  phone: string | null;
+  isBuyer: boolean;
+  isSeller: boolean;
+  purchaseTimeframe: string | null;
+  emailVerified: Date | null;
+  createdAt: Date;
+  caslConsentAt: Date | null;
+  termsAcceptedAt: Date | null;
+  vowAcceptedAt: Date | null;
+  homeAddress: string | null;
+  emailUpdateRequestedAt: Date | null;
+  phoneUpdateRequestedAt: Date | null;
+}): LeadProfileShell["lead"]["customer"] {
+  return {
+    ...customer,
+    emailVerified: customer.emailVerified?.toISOString() ?? null,
+    createdAt: customer.createdAt.toISOString(),
+    caslConsentAt: customer.caslConsentAt?.toISOString() ?? null,
+    termsAcceptedAt: customer.termsAcceptedAt?.toISOString() ?? null,
+    vowAcceptedAt: customer.vowAcceptedAt?.toISOString() ?? null,
+    emailUpdateRequestedAt:
+      customer.emailUpdateRequestedAt?.toISOString() ?? null,
+    phoneUpdateRequestedAt:
+      customer.phoneUpdateRequestedAt?.toISOString() ?? null,
+  };
+}
+
+export function mergeLeadProfile(
+  shell: LeadProfileShell,
+  activity: LeadProfileActivity,
+): LeadSummary {
+  return { ...shell, ...activity };
+}
+
+/**
+ * First-paint Lead Profile. Identity/contact/assignment only.
+ * Does not load timeline, email history, hotness, or buyer-intent.
+ */
 export async function loadLeadSummary(
   ctx: AgentOrgContext,
   leadId: string,
-): Promise<LeadSummary | null> {
+): Promise<LeadProfileShell | null> {
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    include: {
+    select: {
+      id: true,
+      status: true,
+      source: true,
+      score: true,
+      notes: true,
+      listingMls: true,
+      inquiryTag: true,
+      assignedAgentId: true,
+      organizationId: true,
+      workspaceId: true,
+      createdAt: true,
+      updatedAt: true,
+      statusChangedAt: true,
+      firstRespondedAt: true,
+      contactConsentAt: true,
+      lostReason: true,
+      winReason: true,
+      utmSource: true,
+      utmCampaign: true,
+      utmContent: true,
+      customerId: true,
       customer: {
         select: {
           id: true,
@@ -227,200 +322,18 @@ export async function loadLeadSummary(
 
   if (!lead || !canAccessLead(ctx, lead)) return null;
 
-  const emailsQuery = prisma.leadEmailLog.findMany({
-    where: { leadId: lead.id },
-    orderBy: { createdAt: "desc" },
-    take: 40,
-    select: LEAD_PROFILE_EMAIL_LOG_SELECT,
-  });
-  const notesQuery = prisma.leadNote.findMany({
-    where: { leadId: lead.id },
-    orderBy: [
-      { pinned: "desc" },
-      { pinnedAt: "desc" },
-      { createdAt: "desc" },
-    ],
-    take: 40,
-    select: {
-      id: true,
-      body: true,
-      category: true,
-      pinned: true,
-      pinnedAt: true,
-      createdAt: true,
-      author: { select: { name: true, email: true } },
-    },
-  });
-  const tasksQuery = prisma.agentTask.findMany({
-    where: { leadId: lead.id },
-    orderBy: [{ status: "asc" }, { dueAt: "asc" }],
-    take: 40,
-    select: {
-      id: true,
-      type: true,
-      status: true,
-      title: true,
-      body: true,
-      dueAt: true,
-      completedAt: true,
-      createdAt: true,
-    },
-  });
-  const appointmentsQuery = prisma.appointment.findMany({
-    where: { leadId: lead.id },
-    orderBy: { createdAt: "desc" },
-    take: 40,
-    select: {
-      id: true,
-      type: true,
-      status: true,
-      startsAt: true,
-      listingMls: true,
-      videoJoinUrl: true,
-      notes: true,
-      createdAt: true,
-    },
-  });
+  const canAssignLeads = ctx.isPlatformAdmin;
+  const [primarySearch, teamMembers] = await Promise.all([
+    lead.customerId
+      ? prisma.savedSearch.findFirst({
+          where: { userId: lead.customerId },
+          orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
+          select: { name: true, query: true },
+        })
+      : Promise.resolve(null),
+    canAssignLeads ? listAssignableCrmAgents(ctx) : Promise.resolve([]),
+  ]);
 
-  const [hot, timeline, teamMembers, emails, notes, tasks, appointments] =
-    await Promise.all([
-      computeHotness({
-        leadId: lead.id,
-        customerId: lead.customerId,
-        status: lead.status,
-        score: lead.score,
-        createdAt: lead.createdAt,
-        firstRespondedAt: lead.firstRespondedAt,
-      }),
-      loadCustomerTimeline({
-        leadId: lead.id,
-        customerId: lead.customerId,
-        take: 100,
-        collections: {
-          emails: emailsQuery,
-          notes: notesQuery,
-          tasks: tasksQuery,
-          appointments: appointmentsQuery,
-        },
-      }),
-      ctx.canSeeTeamLeads
-        ? listAssignableCrmAgents(ctx)
-        : Promise.resolve([]),
-      emailsQuery,
-      notesQuery,
-      tasksQuery,
-      appointmentsQuery,
-    ]);
-
-  let savedSearchLabel: string | null = null;
-  let savedListings: LeadSummary["savedListings"] = [];
-  let savedSearches: LeadSummary["savedSearches"] = [];
-  let propertyMonitors: LeadSummary["propertyMonitors"] = [];
-  let areaMonitors: LeadSummary["areaMonitors"] = [];
-  let listingNotes: LeadSummary["listingNotes"] = [];
-  let tours: LeadSummary["tours"] = [];
-  let alerts: LeadSummary["alerts"] = [];
-
-  if (lead.customerId) {
-    const [
-      primarySearch,
-      saves,
-      searches,
-      props,
-      areas,
-      notes,
-      viewingTours,
-      customerAlerts,
-    ] = await Promise.all([
-      prisma.savedSearch.findFirst({
-        where: { userId: lead.customerId },
-        orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
-        select: { name: true, query: true },
-      }),
-      prisma.savedListing.findMany({
-        where: { userId: lead.customerId },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        select: { id: true, mlsNumber: true },
-      }),
-      prisma.savedSearch.findMany({
-        where: { userId: lead.customerId },
-        orderBy: [
-          { isHomepageActive: "desc" },
-          { isPrimary: "desc" },
-          { updatedAt: "desc" },
-        ],
-        take: 10,
-        select: {
-          id: true,
-          name: true,
-          emailAlerts: true,
-          smsAlerts: true,
-          isHomepageActive: true,
-          query: true,
-        },
-      }),
-      prisma.propertyMonitor.findMany({
-        where: { userId: lead.customerId },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        select: { id: true, mlsNumber: true },
-      }),
-      prisma.areaMonitor.findMany({
-        where: { userId: lead.customerId },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-        select: { id: true, name: true, city: true },
-      }),
-      prisma.listingNote.findMany({
-        where: { userId: lead.customerId },
-        orderBy: { updatedAt: "desc" },
-        take: 15,
-        select: { id: true, mlsNumber: true, body: true },
-      }),
-      prisma.viewingTour.findMany({
-        where: { userId: lead.customerId },
-        orderBy: { updatedAt: "desc" },
-        take: 8,
-        include: {
-          stops: {
-            orderBy: { sortOrder: "asc" },
-            select: { mlsNumber: true },
-          },
-        },
-      }),
-      prisma.customerAlert.findMany({
-        where: { userId: lead.customerId },
-        orderBy: { createdAt: "desc" },
-        take: 15,
-        select: { id: true, title: true, kind: true },
-      }),
-    ]);
-
-    savedListings = saves;
-    savedSearches = searches;
-    propertyMonitors = props;
-    areaMonitors = areas;
-    listingNotes = notes;
-    tours = viewingTours.map((t) => ({
-      id: t.id,
-      name: t.name,
-      status: t.status,
-      stops: t.stops,
-    }));
-    alerts = customerAlerts;
-    if (primarySearch) savedSearchLabel = searchLabel(primarySearch);
-  }
-
-  const buyerIntent = await loadBuyerIntent({
-    customerId: lead.customerId,
-    customerName: lead.customer?.name ?? null,
-    savedSearches,
-  });
-
-  const profileNotes = notes.slice(0, 30);
-  const profileAppointments = appointments.slice(0, 30);
-  const openTasks = tasks.filter((t) => t.status === "OPEN");
   const lastTouch = lead.firstRespondedAt || lead.updatedAt;
   const consented = Boolean(
     lead.contactConsentAt || lead.customer?.caslConsentAt,
@@ -437,9 +350,7 @@ export async function loadLeadSummary(
       inquiryTag: lead.inquiryTag,
       assignedAgentId: lead.assignedAgentId,
       createdAt: lead.createdAt.toISOString(),
-      statusChangedAt: (
-        lead.statusChangedAt ?? lead.createdAt
-      ).toISOString(),
+      statusChangedAt: (lead.statusChangedAt ?? lead.createdAt).toISOString(),
       firstRespondedAt: lead.firstRespondedAt?.toISOString() ?? null,
       contactConsentAt: lead.contactConsentAt?.toISOString() ?? null,
       lostReason: lead.lostReason,
@@ -447,24 +358,265 @@ export async function loadLeadSummary(
       utmSource: lead.utmSource,
       utmCampaign: lead.utmCampaign,
       utmContent: lead.utmContent,
-      customer: lead.customer
-        ? {
-            ...lead.customer,
-            emailVerified: lead.customer.emailVerified?.toISOString() ?? null,
-            createdAt: lead.customer.createdAt.toISOString(),
-            caslConsentAt: lead.customer.caslConsentAt?.toISOString() ?? null,
-            termsAcceptedAt:
-              lead.customer.termsAcceptedAt?.toISOString() ?? null,
-            vowAcceptedAt: lead.customer.vowAcceptedAt?.toISOString() ?? null,
-            emailUpdateRequestedAt:
-              lead.customer.emailUpdateRequestedAt?.toISOString() ?? null,
-            phoneUpdateRequestedAt:
-              lead.customer.phoneUpdateRequestedAt?.toISOString() ?? null,
-          }
-        : null,
+      customer: lead.customer ? mapLeadCustomer(lead.customer) : null,
       assignedAgent: lead.assignedAgent,
       adCampaign: lead.adCampaign,
     },
+    permissions: {
+      canSeeTeamLeads: ctx.canSeeTeamLeads,
+      canAssignLeads,
+      canClaim: !lead.assignedAgentId,
+      consented,
+    },
+    teamMembers: teamMembers.map((m) => ({ user: m.user })),
+    savedSearchLabel: primarySearch ? searchLabel(primarySearch) : null,
+    lastTouchAt: lastTouch.toISOString(),
+  };
+}
+
+async function loadDomainCollections(
+  customerId: string,
+): Promise<LeadProfileDomainCollections> {
+  const [saves, searches, props, areas, notes, viewingTours, customerAlerts] =
+    await Promise.all([
+      prisma.savedListing.findMany({
+        where: { userId: customerId },
+        orderBy: { createdAt: "desc" },
+        take: 40,
+        select: { id: true, mlsNumber: true, createdAt: true },
+      }),
+      prisma.savedSearch.findMany({
+        where: { userId: customerId },
+        orderBy: [
+          { isHomepageActive: "desc" },
+          { isPrimary: "desc" },
+          { updatedAt: "desc" },
+        ],
+        take: 20,
+        select: {
+          id: true,
+          name: true,
+          emailAlerts: true,
+          smsAlerts: true,
+          isHomepageActive: true,
+          query: true,
+          createdAt: true,
+        },
+      }),
+      prisma.propertyMonitor.findMany({
+        where: { userId: customerId },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+        select: { id: true, mlsNumber: true, createdAt: true },
+      }),
+      prisma.areaMonitor.findMany({
+        where: { userId: customerId },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          name: true,
+          city: true,
+          community: true,
+          createdAt: true,
+        },
+      }),
+      prisma.listingNote.findMany({
+        where: { userId: customerId },
+        orderBy: { updatedAt: "desc" },
+        take: 30,
+        select: { id: true, mlsNumber: true, body: true, updatedAt: true },
+      }),
+      prisma.viewingTour.findMany({
+        where: { userId: customerId },
+        orderBy: { updatedAt: "desc" },
+        take: 15,
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          updatedAt: true,
+          stops: {
+            orderBy: { sortOrder: "asc" },
+            select: { mlsNumber: true },
+          },
+        },
+      }),
+      prisma.customerAlert.findMany({
+        where: { userId: customerId },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          title: true,
+          kind: true,
+          body: true,
+          mlsNumber: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+  return {
+    savedListings: saves,
+    savedSearches: searches,
+    propertyMonitors: props,
+    areaMonitors: areas,
+    listingNotes: notes,
+    tours: viewingTours,
+    alerts: customerAlerts,
+  };
+}
+
+/**
+ * Secondary Lead Profile CRM/engagement payload.
+ * Independently authorizes via canAccessLead. Sequences large graphs
+ * instead of hydrating timeline + hotness + buyer-intent together.
+ */
+export async function loadLeadProfileActivity(
+  ctx: AgentOrgContext,
+  leadId: string,
+): Promise<LeadProfileActivity | null> {
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: {
+      ...LEAD_PROFILE_ACCESS_SELECT,
+      customer: { select: { name: true } },
+    },
+  });
+
+  if (!lead || !canAccessLead(ctx, lead)) return null;
+
+  const [emails, notes, tasks, appointments, domain] = await Promise.all([
+    prisma.leadEmailLog.findMany({
+      where: { leadId: lead.id },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+      select: LEAD_PROFILE_EMAIL_LOG_SELECT,
+    }),
+    prisma.leadNote.findMany({
+      where: { leadId: lead.id },
+      orderBy: [
+        { pinned: "desc" },
+        { pinnedAt: "desc" },
+        { createdAt: "desc" },
+      ],
+      take: 40,
+      select: {
+        id: true,
+        body: true,
+        category: true,
+        pinned: true,
+        pinnedAt: true,
+        createdAt: true,
+        author: { select: { name: true, email: true } },
+      },
+    }),
+    prisma.agentTask.findMany({
+      where: { leadId: lead.id },
+      orderBy: [{ status: "asc" }, { dueAt: "asc" }],
+      take: 40,
+      select: {
+        id: true,
+        type: true,
+        status: true,
+        title: true,
+        body: true,
+        dueAt: true,
+        completedAt: true,
+        createdAt: true,
+      },
+    }),
+    prisma.appointment.findMany({
+      where: { leadId: lead.id },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+      select: {
+        id: true,
+        type: true,
+        status: true,
+        startsAt: true,
+        listingMls: true,
+        videoJoinUrl: true,
+        notes: true,
+        createdAt: true,
+      },
+    }),
+    lead.customerId
+      ? loadDomainCollections(lead.customerId)
+      : Promise.resolve(EMPTY_DOMAIN),
+  ]);
+
+  const timeline = await loadCustomerTimeline({
+    leadId: lead.id,
+    customerId: lead.customerId,
+    take: 100,
+    collections: {
+      emails,
+      notes,
+      tasks,
+      appointments,
+    },
+    domainCollections: domain,
+  });
+
+  const hot = await computeHotness({
+    leadId: lead.id,
+    customerId: lead.customerId,
+    status: lead.status,
+    score: lead.score,
+    createdAt: lead.createdAt,
+    firstRespondedAt: lead.firstRespondedAt,
+  });
+
+  const buyerIntent = await loadBuyerIntent({
+    customerId: lead.customerId,
+    customerName: lead.customer?.name ?? null,
+    savedSearches: domain.savedSearches,
+  });
+
+  const profileNotes = notes.slice(0, 30);
+  const profileAppointments = appointments.slice(0, 30);
+  const openTasks = tasks.filter((t) => t.status === "OPEN");
+  const savedListings = domain.savedListings.slice(0, 20).map((row) => ({
+    id: row.id,
+    mlsNumber: row.mlsNumber,
+  }));
+  const savedSearches = domain.savedSearches.slice(0, 10).map((row) => ({
+    id: row.id,
+    name: row.name,
+    emailAlerts: row.emailAlerts,
+    smsAlerts: row.smsAlerts,
+    isHomepageActive: row.isHomepageActive,
+    query: row.query,
+  }));
+  const propertyMonitors = domain.propertyMonitors.slice(0, 20).map((row) => ({
+    id: row.id,
+    mlsNumber: row.mlsNumber,
+  }));
+  const areaMonitors = domain.areaMonitors.slice(0, 10).map((row) => ({
+    id: row.id,
+    name: row.name,
+    city: row.city,
+  }));
+  const listingNotes = domain.listingNotes.slice(0, 15).map((row) => ({
+    id: row.id,
+    mlsNumber: row.mlsNumber,
+    body: row.body,
+  }));
+  const tours = domain.tours.slice(0, 8).map((row) => ({
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    stops: row.stops,
+  }));
+  const alerts = domain.alerts.slice(0, 15).map((row) => ({
+    id: row.id,
+    title: row.title,
+    kind: row.kind,
+  }));
+
+  return {
     hot: {
       hotness: hot.hotness,
       views24h: hot.views24h,
@@ -481,14 +633,6 @@ export async function loadLeadSummary(
       notes: profileNotes.length,
       openTasks: openTasks.length,
     },
-    permissions: {
-      canSeeTeamLeads: ctx.canSeeTeamLeads,
-      canAssignLeads: ctx.isPlatformAdmin,
-      canClaim: !lead.assignedAgentId,
-      consented,
-    },
-    teamMembers: teamMembers.map((m) => ({ user: m.user })),
-    savedSearchLabel,
     buyerIntent,
     savedListings,
     savedSearches,
@@ -550,6 +694,5 @@ export async function loadLeadSummary(
           dueAt: openTasks[0].dueAt.toISOString(),
         }
       : null,
-    lastTouchAt: lastTouch.toISOString(),
   };
 }

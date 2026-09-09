@@ -78,6 +78,59 @@ export type LeadProfileCollections = {
   appointments: LeadProfileAppointment[] | Promise<LeadProfileAppointment[]>;
 };
 
+/** Narrow customer-domain rows shared with the profile activity payload. */
+export type LeadProfileDomainCollections = {
+  savedListings: Array<{ id: string; mlsNumber: string; createdAt: Date }>;
+  savedSearches: Array<{
+    id: string;
+    name: string;
+    emailAlerts: boolean;
+    smsAlerts: boolean;
+    isHomepageActive: boolean;
+    query: unknown;
+    createdAt: Date;
+  }>;
+  propertyMonitors: Array<{ id: string; mlsNumber: string; createdAt: Date }>;
+  areaMonitors: Array<{
+    id: string;
+    name: string;
+    city: string;
+    community: string | null;
+    createdAt: Date;
+  }>;
+  listingNotes: Array<{
+    id: string;
+    mlsNumber: string;
+    body: string;
+    updatedAt: Date;
+  }>;
+  tours: Array<{
+    id: string;
+    name: string;
+    status: string;
+    updatedAt: Date;
+    stops: Array<{ mlsNumber: string }>;
+  }>;
+  alerts: Array<{
+    id: string;
+    title: string;
+    kind: string;
+    body: string;
+    mlsNumber: string | null;
+    createdAt: Date;
+  }>;
+};
+
+export const TIMELINE_ACTIVITY_EVENT_SELECT = {
+  id: true,
+  type: true,
+  path: true,
+  title: true,
+  mlsNumber: true,
+  utmCampaign: true,
+  createdAt: true,
+} as const;
+
 export type TimelineItem = {
   id: string;
   source: "activity" | "lead" | "domain" | "email" | "note" | "task";
@@ -209,6 +262,8 @@ export async function loadCustomerTimeline(input: {
   take?: number;
   /** When set, emails/notes/tasks/appointments are not queried again. */
   collections: LeadProfileCollections;
+  /** When set, customer saves/searches/monitors/alerts/tours are not queried again. */
+  domainCollections?: LeadProfileDomainCollections;
 }): Promise<TimelineItem[]> {
   const take = input.take ?? 120;
   const items: TimelineItem[] = [];
@@ -363,17 +418,9 @@ export async function loadCustomerTimeline(input: {
   }
 
   if (input.customerId) {
-    const [
-      events,
-      views,
-      saves,
-      searches,
-      monitors,
-      areaMonitors,
-      listingNotes,
-      tours,
-      alerts,
-    ] = await Promise.all([
+    const domain = input.domainCollections;
+    const [events, views, saves, searches, monitors, areaMonitors, listingNotes, tours, alerts] =
+      await Promise.all([
       prisma.activityEvent.findMany({
         where: {
           userId: input.customerId,
@@ -381,48 +428,105 @@ export async function loadCustomerTimeline(input: {
         },
         orderBy: { createdAt: "desc" },
         take,
+        select: TIMELINE_ACTIVITY_EVENT_SELECT,
       }),
       prisma.listingView.findMany({
         where: { userId: input.customerId },
         orderBy: { createdAt: "desc" },
         take: 40,
+        select: { id: true, mlsNumber: true, createdAt: true },
       }),
-      prisma.savedListing.findMany({
-        where: { userId: input.customerId },
-        orderBy: { createdAt: "desc" },
-        take: 40,
-      }),
-      prisma.savedSearch.findMany({
-        where: { userId: input.customerId },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-      }),
-      prisma.propertyMonitor.findMany({
-        where: { userId: input.customerId },
-        orderBy: { createdAt: "desc" },
-        take: 30,
-      }),
-      prisma.areaMonitor.findMany({
-        where: { userId: input.customerId },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-      }),
-      prisma.listingNote.findMany({
-        where: { userId: input.customerId },
-        orderBy: { updatedAt: "desc" },
-        take: 30,
-      }),
-      prisma.viewingTour.findMany({
-        where: { userId: input.customerId },
-        orderBy: { updatedAt: "desc" },
-        take: 15,
-        include: { stops: { select: { mlsNumber: true } } },
-      }),
-      prisma.customerAlert.findMany({
-        where: { userId: input.customerId },
-        orderBy: { createdAt: "desc" },
-        take: 40,
-      }),
+      domain
+        ? Promise.resolve(domain.savedListings)
+        : prisma.savedListing.findMany({
+            where: { userId: input.customerId },
+            orderBy: { createdAt: "desc" },
+            take: 40,
+            select: { id: true, mlsNumber: true, createdAt: true },
+          }),
+      domain
+        ? Promise.resolve(domain.savedSearches)
+        : prisma.savedSearch.findMany({
+            where: { userId: input.customerId },
+            orderBy: { createdAt: "desc" },
+            take: 20,
+            select: {
+              id: true,
+              name: true,
+              emailAlerts: true,
+              smsAlerts: true,
+              isHomepageActive: true,
+              query: true,
+              createdAt: true,
+            },
+          }),
+      domain
+        ? Promise.resolve(domain.propertyMonitors)
+        : prisma.propertyMonitor.findMany({
+            where: { userId: input.customerId },
+            orderBy: { createdAt: "desc" },
+            take: 30,
+            select: { id: true, mlsNumber: true, createdAt: true },
+          }),
+      domain
+        ? Promise.resolve(domain.areaMonitors)
+        : prisma.areaMonitor.findMany({
+            where: { userId: input.customerId },
+            orderBy: { createdAt: "desc" },
+            take: 20,
+            select: {
+              id: true,
+              name: true,
+              city: true,
+              community: true,
+              createdAt: true,
+            },
+          }),
+      domain
+        ? Promise.resolve(domain.listingNotes)
+        : prisma.listingNote.findMany({
+            where: { userId: input.customerId },
+            orderBy: { updatedAt: "desc" },
+            take: 30,
+            select: {
+              id: true,
+              mlsNumber: true,
+              body: true,
+              updatedAt: true,
+            },
+          }),
+      domain
+        ? Promise.resolve(domain.tours)
+        : prisma.viewingTour.findMany({
+            where: { userId: input.customerId },
+            orderBy: { updatedAt: "desc" },
+            take: 15,
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              updatedAt: true,
+              stops: {
+                orderBy: { sortOrder: "asc" },
+                select: { mlsNumber: true },
+              },
+            },
+          }),
+      domain
+        ? Promise.resolve(domain.alerts)
+        : prisma.customerAlert.findMany({
+            where: { userId: input.customerId },
+            orderBy: { createdAt: "desc" },
+            take: 40,
+            select: {
+              id: true,
+              title: true,
+              kind: true,
+              body: true,
+              mlsNumber: true,
+              createdAt: true,
+            },
+          }),
     ]);
 
     for (const e of events) {

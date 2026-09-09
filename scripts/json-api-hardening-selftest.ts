@@ -133,7 +133,21 @@ function testClientsNoResJsonOnSummary() {
   );
   assert.ok(helper.includes("readJsonResponse"));
   assert.ok(!helper.includes("res.json()"));
+  assert.ok(helper.includes("fetchLeadActivity"));
+  assert.ok(helper.includes("/api/agent/leads/${leadId}/activity"));
   assert.ok(!profile.includes("fetchJson("));
+  assert.ok(!helper.includes("retries"));
+}
+
+function testActivityRouteHardening() {
+  const route = read("src/app/api/agent/leads/[id]/activity/route.ts");
+  const ctxIdx = route.indexOf("requireAgentContextFromRequest(request");
+  const tryIdx = route.lastIndexOf("try {", ctxIdx);
+  assert.ok(ctxIdx >= 0, "activity must call requireAgentContextFromRequest");
+  assert.ok(tryIdx >= 0 && ctxIdx > tryIdx, "auth must run inside try");
+  assert.ok(route.includes("sideEffects: false"));
+  assert.ok(route.includes("loadLeadProfileActivity"));
+  assert.ok(route.includes("if (status !== 200)"));
 }
 
 testParseJsonText();
@@ -144,4 +158,5 @@ testContactPatchHardening();
 testSummaryHardening();
 testClientsNoResJsonOnContactPatch();
 testClientsNoResJsonOnSummary();
+testActivityRouteHardening();
 console.log("json-api-hardening-selftest: ok");
