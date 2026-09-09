@@ -58,18 +58,28 @@ async function ensureProvenanceFields(): Promise<void> {
   provenanceFieldsEnsured = true;
 }
 
-function isTypesenseSyncEnabled(): boolean {
+/** Why Typesense writes are off, or null when they can run. */
+export function typesenseSyncDisabledReason(): string | null {
   const flag = typesenseEnv("TYPESENSE_SYNC");
-  if (flag === "0" || flag === "false") return false;
-  const hasCreds = Boolean(
-    typesenseEnv("TYPESENSE_HOST") && typesenseEnv("TYPESENSE_ADMIN_API_KEY"),
-  );
-  if (flag === "1" || flag === "true") return hasCreds;
-  return (
-    hasCreds &&
-    (typesenseFlagEnabled("TYPESENSE_SEARCH") ||
-      typesenseFlagEnabled("TYPESENSE_AUTOCOMPLETE"))
-  );
+  if (flag === "0" || flag === "false") {
+    return "TYPESENSE_SYNC is 0";
+  }
+  const hasHost = Boolean(typesenseEnv("TYPESENSE_HOST"));
+  const hasAdmin = Boolean(typesenseEnv("TYPESENSE_ADMIN_API_KEY"));
+  if (!hasHost) return "TYPESENSE_HOST missing";
+  if (!hasAdmin) return "TYPESENSE_ADMIN_API_KEY missing";
+  if (flag === "1" || flag === "true") return null;
+  if (
+    typesenseFlagEnabled("TYPESENSE_SEARCH") ||
+    typesenseFlagEnabled("TYPESENSE_AUTOCOMPLETE")
+  ) {
+    return null;
+  }
+  return "TYPESENSE_SYNC is not 1 (and TYPESENSE_SEARCH is off)";
+}
+
+export function isTypesenseSyncEnabled(): boolean {
+  return typesenseSyncDisabledReason() === null;
 }
 
 /**

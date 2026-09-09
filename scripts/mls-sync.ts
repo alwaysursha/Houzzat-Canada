@@ -63,10 +63,19 @@ async function main() {
   // never lag behind Neon (idempotent upsert with sourceAuthorityKey).
   const healDays = Math.max(
     1,
-    Number(process.env.TYPESENSE_PROVENANCE_HEAL_DAYS ?? 3),
+    Number(process.env.TYPESENSE_PROVENANCE_HEAL_DAYS ?? 7),
   );
+  const { isTypesenseSyncEnabled, typesenseSyncDisabledReason } = await import(
+    "../src/lib/typesense/sync-listing"
+  );
+  const typesenseOff = typesenseSyncDisabledReason();
+  if (typesenseOff) {
+    console.error(
+      `ERROR: Typesense writes are off (${typesenseOff}). Neon can be current while houzzat.com stays stale.`,
+    );
+  }
   const syncFlag = process.env.TYPESENSE_SYNC;
-  if (syncFlag !== "0" && syncFlag !== "false") {
+  if (syncFlag !== "0" && syncFlag !== "false" && isTypesenseSyncEnabled()) {
     console.log(
       `Healing Typesense provenance for listings listed in the last ${healDays} day(s)…`,
     );

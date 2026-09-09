@@ -357,6 +357,13 @@ export async function typesenseSearch(
         .slice(0, limit);
     }
 
+    if (rankByAddedAt && isTypesenseNewestStale(items)) {
+      console.warn(
+        "[typesense/search] newest listedAt is stale; falling back to Neon",
+      );
+      return null;
+    }
+
     const neonByMls = await loadNeonListingStatusesByMls(
       items.map((item) => item.mlsNumber),
     );
@@ -386,6 +393,24 @@ function rankCardsByAddedAt(items: ListingCard[], limit: number): ListingCard[] 
       return b.mlsNumber.localeCompare(a.mlsNumber);
     })
     .slice(0, limit);
+}
+
+/** If Typesense "newest" is older than this, the index is behind Neon. */
+export const TYPESENSE_NEWEST_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+
+/** True when the newest returned card's listedAt is older than the stale window. */
+export function isTypesenseNewestStale(
+  items: ReadonlyArray<Pick<ListingCard, "listedAt">>,
+  nowMs = Date.now(),
+): boolean {
+  if (items.length === 0) return false;
+  let newest = 0;
+  for (const item of items) {
+    const t = Date.parse(item.listedAt);
+    if (Number.isFinite(t) && t > newest) newest = t;
+  }
+  if (newest <= 0) return false;
+  return nowMs - newest > TYPESENSE_NEWEST_STALE_AFTER_MS;
 }
 
 export type HomeRailsPayload = {
@@ -726,6 +751,13 @@ export async function typesenseHomeRails(
       payload[plan.rail] = plan.rankNewest
         ? rankCardsByAddedAt(cards, plan.take)
         : cards.slice(0, plan.take);
+    }
+
+    if (isTypesenseNewestStale(payload.newListings)) {
+      console.warn(
+        "[typesense/home-rails] newest listedAt is stale; falling back to Neon",
+      );
+      return null;
     }
 
     const neonByMls = await loadNeonListingStatusesByMls(

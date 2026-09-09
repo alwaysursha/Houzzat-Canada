@@ -23,6 +23,7 @@ export async function getPropTxSyncHealth() {
         { message: { contains: "MLS sync" } },
         { message: { contains: "VOW sync" } },
         { message: { startsWith: "Synced properties=" } },
+        { message: { contains: "TYPESENSE INDEX NOT UPDATED" } },
         { message: { contains: "PropTx" } },
       ],
     },

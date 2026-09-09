@@ -38,7 +38,11 @@ import {
   PropTxProvenanceError,
   type PropTxListingProvenance,
 } from "@/lib/proptx/listing-provenance";
-import { syncListingToTypesense } from "@/lib/typesense/sync-listing";
+import {
+  isTypesenseSyncEnabled,
+  syncListingToTypesense,
+  typesenseSyncDisabledReason,
+} from "@/lib/typesense/sync-listing";
 
 export type MlsSyncStats = {
   propertyUpserted: number;
@@ -54,6 +58,12 @@ export type MlsSyncStats = {
   pages: number;
   errors: string[];
   skipReasons?: Record<string, number>;
+  /** Listings successfully upserted into Typesense this run. */
+  typesenseUpserted: number;
+  /** Listings that failed Typesense upsert (index enabled). */
+  typesenseFailed: number;
+  /** Listings skipped because Typesense writes are disabled/misconfigured. */
+  typesenseDisabled: number;
 };
 
 /** Cap inline geocode so property sync stays within the 5-minute cron window. */
@@ -583,6 +593,19 @@ function pushSyncError(stats: MlsSyncStats, message: string) {
   stats.errors.push(message);
 }
 
+async function pushListingToTypesense(
+  listingId: string,
+  stats: MlsSyncStats,
+): Promise<void> {
+  if (!isTypesenseSyncEnabled()) {
+    stats.typesenseDisabled += 1;
+    return;
+  }
+  const ok = await syncListingToTypesense(listingId);
+  if (ok) stats.typesenseUpserted += 1;
+  else stats.typesenseFailed += 1;
+}
+
 function recordProvenanceSkip(
   options: {
     stats: MlsSyncStats;
@@ -944,8 +967,8 @@ async function upsertPropertyRow(
       }
     }
 
-    // Keep search index fresh (best-effort; never fails MLS upsert).
-    await syncListingToTypesense(listing.id);
+    // Keep search index fresh (tracked; a zero-write run is marked degraded).
+    await pushListingToTypesense(listing.id, options.stats);
 
     const updatedAtMls =
       data.updatedAtMls instanceof Date
@@ -1039,7 +1062,7 @@ export async function upsertPropTxPropertiesOnDemand(
       }
 
       // Re-sync after possible media attach on the request path.
-      await syncListingToTypesense(listing.id);
+      await pushListingToTypesense(listing.id, stats);
 
       try {
         await upsertSyntheticHistoryFromProperty(listing.id, row, stats);
@@ -1469,7 +1492,7 @@ async function syncMediaBackfill(options: {
             { maxPhotos: NEON_LISTING_MEDIA_CAP },
           );
         }
-        await syncListingToTypesense(current.id);
+        await pushListingToTypesense(current.id, options.stats);
       } catch (err) {
         pushSyncError(
           options.stats,
@@ -1565,7 +1588,7 @@ async function syncSoldAtBackfill(options: {
             ...(soldPrice != null ? { soldPrice } : {}),
           },
         });
-        await syncListingToTypesense(current.id);
+        await pushListingToTypesense(current.id, options.stats);
         filled += 1;
         options.stats.propertyUpserted += 1;
       } catch (err) {
@@ -1692,7 +1715,7 @@ async function syncOpenHouses(options: {
           });
         }
         options.stats.openHousesUpserted += 1;
-        await syncListingToTypesense(listingId);
+        await pushListingToTypesense(listingId, options.stats);
       } catch (err) {
         options.stats.errors.push(
           `openHouse: ${err instanceof Error ? err.message : "failed"}`,
@@ -2039,12 +2062,24 @@ export async function runPropTxMlsSync(options?: {
       }
     }
 
-    const message = `Synced properties=${stats.propertyUpserted} media=${stats.mediaUpserted} rooms=${stats.roomsUpserted} openHouses=${stats.openHousesUpserted} history=${stats.historyUpserted} geocode=${stats.geocodeFixed}/${stats.geocodeAttempted} skipped=${stats.propertySkipped}`;
+    const typesenseOff = typesenseSyncDisabledReason();
+    const typesenseIndexMissed =
+      stats.propertyUpserted > 0 && stats.typesenseUpserted === 0;
+    const typesensePart = typesenseOff
+      ? ` typesense=OFF (${typesenseOff})`
+      : ` typesense=${stats.typesenseUpserted} fail=${stats.typesenseFailed}`;
+    const staleWarning = typesenseIndexMissed
+      ? " TYPESENSE INDEX NOT UPDATED — houzzat.com listings will go stale."
+      : "";
+    const message = `Synced properties=${stats.propertyUpserted} media=${stats.mediaUpserted} rooms=${stats.roomsUpserted} openHouses=${stats.openHousesUpserted} history=${stats.historyUpserted} geocode=${stats.geocodeFixed}/${stats.geocodeAttempted} skipped=${stats.propertySkipped}${typesensePart}${staleWarning}`;
+    if (typesenseIndexMissed) {
+      console.error(`[mls] ${message}`);
+    }
     try {
       await prisma.mlsSyncRun.update({
         where: { id: run.id },
         data: {
-          status: "ok",
+          status: typesenseIndexMissed ? "degraded" : "ok",
           finishedAt: new Date(),
           message,
           stats: {
@@ -2060,7 +2095,12 @@ export async function runPropTxMlsSync(options?: {
       );
     }
 
-    return { ok: true, message, stats, runId: run.id };
+    return {
+      ok: !typesenseIndexMissed,
+      message,
+      stats,
+      runId: run.id,
+    };
   } catch (err) {
     const message =
       err instanceof PropTxError
@@ -2106,6 +2146,9 @@ function emptyStats(): MlsSyncStats {
     pages: 0,
     errors: [],
     skipReasons: {},
+    typesenseUpserted: 0,
+    typesenseFailed: 0,
+    typesenseDisabled: 0,
   };
 }
 
