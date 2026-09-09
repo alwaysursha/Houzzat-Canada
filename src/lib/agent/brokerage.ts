@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
+import type { OrgMembershipRole } from "@prisma/client";
 import {
   DESK_AGENT_ALL,
   DESK_AGENT_COOKIE,
@@ -28,8 +29,7 @@ const BROKERAGE_CACHE_MS = 5 * 60 * 1000;
 
 /**
  * One brokerage org for the install: Team Leader (Admin) + Agents.
- * Migrates stray personal-org memberships/leads/tasks into this desk.
- * Result is cached briefly — seat/migration sync does not need to run every request.
+ * Seat/lead migration is opt-in (syncSeats=true) — never on CRM GET/RSC.
  */
 async function resolveBrokerageOrg(): Promise<{ id: string; name: string }> {
   const fromEnv = process.env.DEFAULT_ORGANIZATION_ID?.trim();
@@ -81,23 +81,54 @@ async function resolveBrokerageOrg(): Promise<{ id: string; name: string }> {
   return org;
 }
 
+/**
+ * Neon HTTP cannot Prisma.upsert (it starts an interactive transaction).
+ * Sequential find + create/update is one statement each.
+ */
+async function ensureOrganizationMembership(input: {
+  organizationId: string;
+  userId: string;
+  role: OrgMembershipRole;
+}) {
+  const existing = await prisma.organizationMembership.findUnique({
+    where: {
+      organizationId_userId: {
+        organizationId: input.organizationId,
+        userId: input.userId,
+      },
+    },
+    select: { role: true },
+  });
+  if (!existing) {
+    await prisma.organizationMembership.create({
+      data: {
+        organizationId: input.organizationId,
+        userId: input.userId,
+        role: input.role,
+      },
+    });
+    return;
+  }
+  if (input.role === "OWNER" && existing.role !== "OWNER") {
+    await prisma.organizationMembership.update({
+      where: {
+        organizationId_userId: {
+          organizationId: input.organizationId,
+          userId: input.userId,
+        },
+      },
+      data: { role: "OWNER" },
+    });
+  }
+}
+
 async function syncBrokerageSeats(brokerageId: string): Promise<void> {
   const seatTargets = await resolveLegacyBrokerageSeatTargets();
   for (const target of seatTargets) {
-    await prisma.organizationMembership.upsert({
-      where: {
-        organizationId_userId: {
-          organizationId: brokerageId,
-          userId: target.userId,
-        },
-      },
-      create: {
-        organizationId: brokerageId,
-        userId: target.userId,
-        role: target.orgRole,
-      },
-      update:
-        target.orgRole === "OWNER" ? { role: "OWNER" } : {},
+    await ensureOrganizationMembership({
+      organizationId: brokerageId,
+      userId: target.userId,
+      role: target.orgRole,
     });
   }
 
@@ -155,25 +186,27 @@ async function syncBrokerageSeats(brokerageId: string): Promise<void> {
 
 export const ensureBrokerageOrganization = cache(
   async function ensureBrokerageOrganization(
-    /** When false, resolve org only — no seat upserts or bulk lead/task rewrite. */
-    syncSeats: boolean = true,
+    /**
+     * Opt-in only. CRM GET/RSC must leave this false: Neon HTTP cannot run
+     * Prisma upsert/transactions, and bulk lead rewrite races Lead Profile.
+     */
+    syncSeats: boolean = false,
   ): Promise<{
     id: string;
     name: string;
   }> {
-    if (
-      brokerageCache &&
-      Date.now() - brokerageCache.at < BROKERAGE_CACHE_MS
-    ) {
-      return brokerageCache.org;
+    const cached =
+      brokerageCache && Date.now() - brokerageCache.at < BROKERAGE_CACHE_MS
+        ? brokerageCache.org
+        : null;
+    const org = cached ?? (await resolveBrokerageOrg());
+    if (!cached) {
+      brokerageCache = { org, at: Date.now() };
     }
-
-    const org = await resolveBrokerageOrg();
-    brokerageCache = { org, at: Date.now() };
-    if (syncSeats === false) {
+    if (!syncSeats) {
       return org;
     }
-    // Seat/lead migration must not 500 Admin HQ if a Worker query fails.
+    // Seat/lead migration must not 500 the page if a Worker query fails.
     scheduleWorkerSideEffect(
       syncBrokerageSeats(org.id).catch((error) => {
         console.error("[brokerage] seat sync failed", error);

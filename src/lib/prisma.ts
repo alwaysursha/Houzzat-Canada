@@ -97,8 +97,10 @@ function createPrismaClient(
 }
 
 /**
- * PrismaNeonHttp cannot BEGIN/COMMIT. Run $transaction on a one-shot
- * WebSocket pool that lives only for this call, then disconnect.
+ * PrismaNeonHttp cannot BEGIN/COMMIT. Interactive transactions and
+ * Prisma.upsert (which calls adapter.startTransaction) fail on Workers.
+ * Run $transaction on a one-shot WebSocket pool that lives only for this
+ * call, then disconnect. Prefer find+create/update on the request path.
  */
 function runWorkerdNeonTransaction(
   connectionString: string,

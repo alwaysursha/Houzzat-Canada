@@ -65,6 +65,7 @@ function testNoAutoCleanup() {
   );
   assert.ok(!syncFn.includes("organizationMembership.delete"));
   assert.ok(!syncFn.includes("deleteMany"));
+  assert.ok(!syncFn.includes(".upsert("));
 }
 
 function testCleanupToolExists() {

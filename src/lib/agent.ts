@@ -160,11 +160,15 @@ function healAgentSeatFlags(userId: string): Promise<unknown> {
         data: { isBuyer: false, isSeller: false },
       });
     }
-    await prisma.agentProfile.upsert({
+    const profile = await prisma.agentProfile.findUnique({
       where: { userId },
-      create: { userId, active: true },
-      update: {},
+      select: { userId: true },
     });
+    if (!profile) {
+      await prisma.agentProfile.create({
+        data: { userId, active: true },
+      });
+    }
   })();
 }
 
@@ -222,7 +226,8 @@ async function resolveLegacyOrgMembership(
 
 export type AgentContextFromRequestOptions = {
   /**
-   * When false, skip brokerage seat sync and healAgentSeatFlags.
+   * Opt-in DB writes (seat sync / agentProfile heal). Defaults to false.
+   * Neon HTTP cannot Prisma.upsert; CRM GET/RSC must never set this true.
    * Auth, role, hostname/workspace membership, and lead access are unchanged.
    */
   sideEffects?: boolean;
@@ -297,7 +302,7 @@ export async function requireAgentContextForRequest(
   request: Request,
   options?: AgentContextFromRequestOptions,
 ): Promise<AgentOrgContext | null> {
-  const allowSideEffects = options?.sideEffects !== false;
+  const allowSideEffects = options?.sideEffects === true;
   const user = await requireAgentUser();
   if (!user) return null;
 
@@ -305,11 +310,7 @@ export async function requireAgentContextForRequest(
     return buildHostnameBoundAgentContext(user, request, allowSideEffects);
   }
 
-  if (!allowSideEffects) {
-    return buildLegacyAgentContext(user, allowSideEffects);
-  }
-
-  return requireAgentContext();
+  return buildLegacyAgentContext(user, allowSideEffects);
 }
 
 async function buildLegacyAgentContext(
@@ -395,7 +396,7 @@ export const requireAgentContext = cache(
   async (): Promise<AgentOrgContext | null> => {
     const user = await requireAgentUser();
     if (!user) return null;
-    return buildLegacyAgentContext(user, true);
+    return buildLegacyAgentContext(user, false);
   },
 );
 

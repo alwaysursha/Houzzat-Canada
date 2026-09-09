@@ -150,7 +150,21 @@ function testSummaryAndActivitySkipSeatSync() {
     brokerage.indexOf("export const ensureBrokerageOrganization"),
     brokerage.indexOf("export const listTeamAgents"),
   );
-  assert.ok(ensureFn.includes("if (syncSeats === false)"));
+  assert.ok(ensureFn.includes("syncSeats: boolean = false"));
+  assert.ok(ensureFn.includes("if (!syncSeats)"));
+
+  assert.ok(agent.includes("buildLegacyAgentContext(user, false)"));
+  assert.ok(agent.includes("options?.sideEffects === true"));
+  assert.equal(agent.includes("options?.sideEffects !== false"), false);
+  assert.equal(agent.includes("buildLegacyAgentContext(user, true)"), false);
+  assert.equal(agent.includes("prisma.agentProfile.upsert"), false);
+
+  const syncFn = brokerage.slice(
+    brokerage.indexOf("async function syncBrokerageSeats"),
+    brokerage.indexOf("export const ensureBrokerageOrganization"),
+  );
+  assert.equal(syncFn.includes(".upsert("), false);
+  assert.ok(syncFn.includes("ensureOrganizationMembership"));
 
   const hostnameFn = agent.slice(
     agent.indexOf("async function buildHostnameBoundAgentContext"),
