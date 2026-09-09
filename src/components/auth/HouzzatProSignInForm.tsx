@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import { getSession } from "next-auth/react";
-import { Eye, EyeOff } from "lucide-react";
+import { ForgotPasswordRequest } from "@/components/auth/ForgotPasswordRequest";
+import { PasswordField } from "@/components/auth/PasswordField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,6 +19,9 @@ import { HOUZZATPRO_PLATFORM_URL } from "@/lib/tenancy/platform-footer";
 
 const PRO_BOOK_DEMO_HREF = `${HOUZZATPRO_PLATFORM_URL}${BOOK_DEMO_PATH}`;
 
+const PRO_INPUT_CLASS =
+  "h-12 border-white/70 bg-white/95 text-ink shadow-sm backdrop-blur-sm placeholder:text-ink/40 focus-visible:border-[#0B5C49]/35 focus-visible:ring-[#0B5C49]/25";
+
 export function HouzzatProSignInForm({
   callbackUrl = null,
   returnPath = null,
@@ -32,7 +36,7 @@ export function HouzzatProSignInForm({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [forgotPassword, setForgotPassword] = useState(false);
   const [loginAgain] = useState(() => loadProSignInEmailPrefill().loginAgain);
 
   async function onSubmit(event: React.FormEvent) {
@@ -67,6 +71,15 @@ export function HouzzatProSignInForm({
     });
   }
 
+  if (forgotPassword) {
+    return (
+      <ForgotPasswordRequest
+        initialEmail={email}
+        onBack={() => setForgotPassword(false)}
+      />
+    );
+  }
+
   return (
     <form
       onSubmit={onSubmit}
@@ -94,42 +107,30 @@ export function HouzzatProSignInForm({
           placeholder="Enter Email Address"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="h-12 border-white/70 bg-white/95 text-ink shadow-sm backdrop-blur-sm placeholder:text-ink/40 focus-visible:border-[#0B5C49]/35 focus-visible:ring-[#0B5C49]/25"
+          className={PRO_INPUT_CLASS}
         />
       </div>
-      <div className="space-y-2">
-        <label
-          className="text-sm font-medium text-[#0B5C49]/90"
-          htmlFor="pro-signin-password"
-        >
-          Password
-        </label>
-        <div className="relative">
-          <Input
-            id="pro-signin-password"
-            name="password"
-            type={showPassword ? "text" : "password"}
-            autoComplete="current-password"
-            required
-            placeholder="Enter Password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="h-12 border-white/70 bg-white/95 pr-11 text-ink shadow-sm backdrop-blur-sm placeholder:text-ink/40 focus-visible:border-[#0B5C49]/35 focus-visible:ring-[#0B5C49]/25"
-          />
+      <PasswordField
+        id="pro-signin-password"
+        name="password"
+        label="Password"
+        autoComplete="current-password"
+        required
+        placeholder="Enter Password"
+        value={password}
+        onChange={setPassword}
+        labelClassName="text-[#0B5C49]/90"
+        inputClassName={PRO_INPUT_CLASS}
+        accessory={
           <button
             type="button"
-            onClick={() => setShowPassword((prev) => !prev)}
-            className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-[#0B5C49]/60 transition-colors hover:text-[#0B5C49] focus:outline-none"
-            aria-label={showPassword ? "Hide password" : "Show password"}
+            onClick={() => setForgotPassword(true)}
+            className="text-sm font-semibold text-[#0B5C49] hover:underline"
           >
-            {showPassword ? (
-              <EyeOff className="size-5 stroke-[1.8]" />
-            ) : (
-              <Eye className="size-5 stroke-[1.8]" />
-            )}
+            Forgot your password?
           </button>
-        </div>
-      </div>
+        }
+      />
       {error ? <p className="text-sm font-medium text-danger">{error}</p> : null}
       <Button
         type="submit"

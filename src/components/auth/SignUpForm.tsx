@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
+import { PasswordField } from "@/components/auth/PasswordField";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -187,21 +188,16 @@ export function SignUpForm({
           onChange={(event) => setEmail(event.target.value)}
         />
       </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor="auth-signup-password">
-          Password
-        </label>
-        <Input
-          id="auth-signup-password"
-          name="new-password"
-          type="password"
-          autoComplete="new-password"
-          minLength={8}
-          required
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-      </div>
+      <PasswordField
+        id="auth-signup-password"
+        name="new-password"
+        label="Password"
+        autoComplete="new-password"
+        minLength={8}
+        required
+        value={password}
+        onChange={setPassword}
+      />
       {error ? <p className="text-sm text-danger">{error}</p> : null}
       <Button type="submit" className="w-full" disabled={pending} ref={submitRef}>
         {pending ? "Creating…" : "Create Houzzat client account"}

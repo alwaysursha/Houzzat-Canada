@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
+import { ForgotPasswordRequest } from "@/components/auth/ForgotPasswordRequest";
+import { PasswordField } from "@/components/auth/PasswordField";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +35,7 @@ export function SignInForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [loginAgain, setLoginAgain] = useState(false);
+  const [forgotPassword, setForgotPassword] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +92,15 @@ export function SignInForm({
     window.setTimeout(() => flyToAccountPortal(fromRect), 40);
   }
 
+  if (forgotPassword) {
+    return (
+      <ForgotPasswordRequest
+        initialEmail={email}
+        onBack={() => setForgotPassword(false)}
+      />
+    );
+  }
+
   return (
     <form
       onSubmit={onSubmit}
@@ -111,20 +123,24 @@ export function SignInForm({
           onChange={(event) => setEmail(event.target.value)}
         />
       </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor="auth-signin-password">
-          Password
-        </label>
-        <Input
-          id="auth-signin-password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-      </div>
+      <PasswordField
+        id="auth-signin-password"
+        name="password"
+        label="Password"
+        autoComplete="current-password"
+        required
+        value={password}
+        onChange={setPassword}
+        accessory={
+          <button
+            type="button"
+            onClick={() => setForgotPassword(true)}
+            className="text-sm font-semibold text-canopy hover:underline"
+          >
+            Forgot your password?
+          </button>
+        }
+      />
       {error ? <p className="text-sm text-danger">{error}</p> : null}
       <Button type="submit" className="w-full" disabled={pending} ref={submitRef}>
         {pending ? "Signing in…" : loginAgain ? "Login again" : "Sign in"}

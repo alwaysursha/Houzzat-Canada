@@ -81,9 +81,11 @@ export function renderWelcomeEmail(input: {
 export function renderPasswordResetEmail(input: {
   name?: string | null;
   resetUrl: string;
+  siteName?: string | null;
 }): RenderedEmail {
+  const brand = input.siteName?.trim() || SITE_NAME;
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
-  const subject = `Reset your ${SITE_NAME} password`;
+  const subject = `Reset your ${brand} password`;
   const text = [
     greet,
     "",
@@ -98,7 +100,7 @@ export function renderPasswordResetEmail(input: {
     preheader: "Password reset link inside",
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px;color:#115e59">We received a request to reset your ${escapeHtml(SITE_NAME)} password.</p>
+      <p style="margin:0 0 12px;color:#115e59">We received a request to reset your ${escapeHtml(brand)} password.</p>
       ${ctaButton(input.resetUrl, "Reset password")}
       <p style="margin:16px 0 0;font-size:13px;color:#047857">If you didn’t ask for this, you can safely ignore this email.</p>
     `,

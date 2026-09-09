@@ -26,6 +26,7 @@ cloudflare-env.d.ts
 
 # misc
 .DS_Store
+._*
 *.pem
 
 # debug
