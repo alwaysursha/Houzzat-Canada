@@ -779,7 +779,7 @@ export function LeadProfileV2Host({
 }
 
 function customerPhone(
-  customer: LeadProfileV2Shell["lead"]["customer"],
+  customer: LeadProfileV2Shell["lead"]["customer"] | undefined,
 ): string | null {
   return customer?.phone ?? null;
 }
