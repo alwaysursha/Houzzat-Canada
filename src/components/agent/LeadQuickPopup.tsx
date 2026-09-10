@@ -2,10 +2,14 @@
 
 import { useEffect } from "react";
 import { CustomerProfile } from "@/components/agent/CustomerProfile";
+import { LeadProfileV2Host } from "@/components/agent/lead-profile-v2/LeadProfileV2Host";
 import {
   STAFF_OVERLAY_PRIORITY,
   useStaffOverlay,
 } from "@/lib/mobile/use-staff-overlay";
+
+/** Flip to false to restore Legacy CustomerProfile. */
+const USE_LEAD_PROFILE_V2 = true;
 
 export function LeadQuickPopup({
   leadId,
@@ -59,14 +63,25 @@ export function LeadQuickPopup({
         data-lead-profile-popup=""
         className="relative z-10 flex h-full w-full max-w-[1280px] items-stretch pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] sm:pb-0 sm:pt-0"
       >
-        <CustomerProfile
-          key={leadId}
-          leadId={leadId}
-          variant="modal"
-          leadIds={leadIds}
-          onClose={onClose}
-          onNavigateLead={onNavigate}
-        />
+        {USE_LEAD_PROFILE_V2 ? (
+          <LeadProfileV2Host
+            key={leadId}
+            leadId={leadId}
+            variant="modal"
+            leadIds={leadIds}
+            onClose={onClose}
+            onNavigateLead={onNavigate}
+          />
+        ) : (
+          <CustomerProfile
+            key={leadId}
+            leadId={leadId}
+            variant="modal"
+            leadIds={leadIds}
+            onClose={onClose}
+            onNavigateLead={onNavigate}
+          />
+        )}
       </div>
     </div>
   );

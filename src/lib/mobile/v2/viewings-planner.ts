@@ -31,6 +31,31 @@ export type ProViewingsTour = Awaited<
   ReturnType<typeof loadProViewingsTourById>
 >;
 
+/** Decide which requested MLS numbers may be appended without exceeding maxStops. */
+export function planProStopMerge(input: {
+  existingMls: string[];
+  requestedMls: string[];
+  maxStops: number;
+}): { toAdd: string[]; nextOrder: number } {
+  const remaining = Math.max(0, input.maxStops - input.existingMls.length);
+  const have = new Set(input.existingMls);
+  const toAdd: string[] = [];
+  if (remaining === 0) {
+    return { toAdd, nextOrder: input.existingMls.length };
+  }
+
+  const uniqueRequested = [
+    ...new Set(input.requestedMls.map((m) => m.trim()).filter(Boolean)),
+  ];
+  for (const mls of uniqueRequested) {
+    if (have.has(mls)) continue;
+    if (toAdd.length >= remaining) break;
+    toAdd.push(mls);
+    have.add(mls);
+  }
+  return { toAdd, nextOrder: input.existingMls.length };
+}
+
 export async function getOrCreateProDraftTour(input: {
   leadId: string;
   workspaceId: string;
@@ -90,24 +115,29 @@ export async function getOrCreateProDraftTour(input: {
 }
 
 async function mergeStopsOntoTour(tourId: string, mlsNumbers: string[]) {
-  const unique = [...new Set(mlsNumbers.map((m) => m.trim()).filter(Boolean))].slice(
-    0,
-    ROUTE_PLANNER_MAX_STOPS,
-  );
-  if (unique.length === 0) return;
-
   const existing = await prisma.viewingTourStop.findMany({
     where: { tourId },
     orderBy: { sortOrder: "asc" },
   });
-  const have = new Set(existing.map((s) => s.mlsNumber));
-  let nextOrder = existing.length;
+  const planned = planProStopMerge({
+    existingMls: existing.map((s) => s.mlsNumber),
+    requestedMls: mlsNumbers,
+    maxStops: ROUTE_PLANNER_MAX_STOPS,
+  });
+  if (planned.toAdd.length === 0) return;
 
-  for (const mls of unique) {
+  const have = new Set(existing.map((s) => s.mlsNumber));
+  let nextOrder = planned.nextOrder;
+  for (const mls of planned.toAdd) {
+    const currentCount = await prisma.viewingTourStop.count({
+      where: { tourId },
+    });
+    if (currentCount >= ROUTE_PLANNER_MAX_STOPS) break;
     if (have.has(mls)) continue;
     await prisma.viewingTourStop.create({
       data: { tourId, mlsNumber: mls, sortOrder: nextOrder },
     });
+    have.add(mls);
     nextOrder += 1;
   }
 }
