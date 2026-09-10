@@ -399,6 +399,7 @@ export function ActivityFeedDrawer({
             </div>
             <Link
               href="/agent/leads?view=mine&pipeline=NEW_LEAD"
+              prefetch={false}
               onClick={onClose}
               className="rounded-lg bg-[#e11d48] px-3 py-2 text-[12px] font-bold uppercase tracking-wide text-white"
             >

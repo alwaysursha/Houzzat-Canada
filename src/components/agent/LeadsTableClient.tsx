@@ -1313,6 +1313,7 @@ export function LeadsTableClient({
                     <td className="px-2 py-3 text-[12px]">
                       <Link
                         href={openLeadProfileHref(lead.id, { view })}
+                        prefetch={false}
                         onClick={(event) => {
                           if (!isLeadsDeskPath(pathname)) return;
                           event.preventDefault();

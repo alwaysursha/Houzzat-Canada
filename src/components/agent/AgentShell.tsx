@@ -121,6 +121,7 @@ function NavLinks({
             title={label}
             onClick={onNavigate}
             className={className}
+            prefetch={item.href === "/agent/leads" ? false : undefined}
           >
             {body}
           </Link>
@@ -413,6 +414,7 @@ export function AgentShell({
           />
           <Link
             href="/agent/leads?view=mine&pipeline=NEW_LEAD"
+            prefetch={false}
             className="inline-flex min-h-10 items-center rounded-lg bg-rose-600 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm active:scale-[0.98]"
           >
             Call new
@@ -448,7 +450,7 @@ export function AgentShell({
                 <Link
                   key={item.href}
                   href={item.href}
-                  prefetch={true}
+                  prefetch={item.href === "/agent/leads" ? false : true}
                   className={cn(
                     "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition active:opacity-70",
                     active ? "text-canopy" : "text-ink/45",

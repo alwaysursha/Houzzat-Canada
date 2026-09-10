@@ -24,6 +24,7 @@ export function KanbanLeadLink({
   return (
     <Link
       href={href}
+      prefetch={false}
       className={className}
       onClick={(event) => {
         if (!isLeadsDeskPath(pathname)) return;
