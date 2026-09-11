@@ -18,6 +18,8 @@ import { signIn } from "next-auth/react";
 import { hardGo } from "@/lib/mobile/nav-back";
 import {
   isPlatformOperatorCallbackPath,
+  isHouzzatVercelTestHost,
+  resolveVercelTestPostCredentialsHref,
   sanitizeStaffCallbackPath,
   shouldStayOnVercelTestOnboarding,
 } from "@/lib/auth/pro-sign-in-routing";
@@ -339,8 +341,19 @@ class ProNativeAuthController {
           return { ok: true };
         }
 
+        const vercelHref = resolveVercelTestPostCredentialsHref({
+          hostname: currentHost(),
+          callbackUrl: input.callbackUrl,
+          returnPath: input.returnPath ?? this.pendingReturnPath,
+        });
+        if (vercelHref) {
+          this.transitionTo("FINAL_NAVIGATION", { destination: vercelHref });
+          hardGo(vercelHref);
+          return { ok: true };
+        }
+
         // Master Admin /platform login is not native workspace bootstrap.
-        // On tenant/Vercel hosts, bootstrap would attempt a handoff that can
+        // On tenant hosts, bootstrap would attempt a handoff that can
         // only be minted from app.houzzatpro.com, then never navigate — the
         // form stays on “Signing in…”. requirePlatformOperator still gates /platform.
         if (isPlatformOperatorCallbackPath(input.callbackUrl)) {
@@ -663,7 +676,8 @@ class ProNativeAuthController {
    * from platform bootstrap, obtaining a fresh code.
    */
   public retry(): void {
-    const isPlatform = isPlatformMobileBootstrapHost(currentHost());
+    const host = currentHost();
+    const isPlatform = isPlatformMobileBootstrapHost(host);
     const opId = generateOperationId();
 
     this.activeSubmitPromise = null;
@@ -684,6 +698,10 @@ class ProNativeAuthController {
     };
     this.notify();
 
+    if (isHouzzatVercelTestHost(host)) {
+      hardGo("/pro/sign-in");
+      return;
+    }
     if (isPlatform) {
       hardGo(HOUZZATPRO_START_PATH);
     } else {

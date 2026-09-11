@@ -11,6 +11,11 @@ import {
   isManualSignInRequired,
   markManualSignInRequired,
 } from "@/lib/auth/remembered-login";
+import {
+  isPlatformOperatorCallbackPath,
+  resolveVercelTestPostCredentialsHref,
+  sanitizeStaffCallbackPath,
+} from "@/lib/auth/pro-sign-in-routing";
 import { hardGo } from "@/lib/mobile/nav-back";
 import { clearNativeNavStage } from "@/lib/mobile/native-route-latch";
 import { proNativeAuthController } from "@/lib/mobile/pro-native-auth-controller";
@@ -44,6 +49,20 @@ function HouzzatProSignInInner() {
     void (async () => {
       const session = await getSession();
       if (!session?.user) return;
+      const vercelHref = resolveVercelTestPostCredentialsHref({
+        hostname:
+          typeof window !== "undefined" ? window.location.hostname : null,
+        callbackUrl,
+        returnPath,
+      });
+      if (vercelHref) {
+        hardGo(vercelHref);
+        return;
+      }
+      if (isPlatformOperatorCallbackPath(callbackUrl)) {
+        hardGo(sanitizeStaffCallbackPath(callbackUrl, "/platform"));
+        return;
+      }
       const me = await fetch("/api/me", { cache: "no-store" }).catch(() => null);
       if (!me?.ok) return;
       setBootstrapping(true);

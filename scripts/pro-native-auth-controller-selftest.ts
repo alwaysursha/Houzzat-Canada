@@ -70,9 +70,13 @@ function testSourceStructure() {
   );
   const discoverIdx = controllerSrc.indexOf("const disc = await this.discoverWorkspace()");
   assert.ok(platformCallbackIdx > 0 && discoverIdx > platformCallbackIdx);
+  assert.ok(controllerSrc.includes("resolveVercelTestPostCredentialsHref"));
+  const vercelHrefIdx = controllerSrc.indexOf("resolveVercelTestPostCredentialsHref({");
+  assert.ok(vercelHrefIdx > 0 && vercelHrefIdx < discoverIdx);
   assert.ok(vercelOnboardingIdx > platformCallbackIdx);
   assert.ok(discoverIdx > vercelOnboardingIdx);
   assert.ok(controllerSrc.includes("hardGo(OWNER_ONBOARDING_RETURN_PATH)"));
+  assert.ok(controllerSrc.includes("isHouzzatVercelTestHost(host)"));
   assert.ok(!controllerSrc.includes("*.vercel.app"));
   assert.ok(!controllerSrc.includes('endsWith(".vercel.app")'));
   assert.ok(formSrc.includes("callbackUrl"));

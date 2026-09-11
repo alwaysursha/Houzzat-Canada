@@ -7,6 +7,7 @@ import {
   nativeAppIdFromUserAgent,
   type AppShell,
 } from "@/lib/mobile/app-shell";
+import { isHouzzatVercelTestHost } from "@/lib/auth/pro-sign-in-routing";
 import {
   HOUZZATPRO_APP_BOOTSTRAP_ORIGIN,
   isPlatformMobileBootstrapHost,
@@ -106,6 +107,12 @@ export function resolveCompleteSignOutDestination(input: {
   userAgent?: string | null;
   isStaff?: boolean | null;
 }): string {
+  // Exact Vercel test host: stay on this origin. Do not send the browser to
+  // app.houzzatpro.com (Cloudflare) — cookies are host-only.
+  if (isHouzzatVercelTestHost(input.hostname)) {
+    return PRO_SIGNED_OUT_SIGN_IN_PATH;
+  }
+
   const isNativePro = isHouzzatProShellIdentity(input);
   const onPlatformHost = isPlatformMobileBootstrapHost(input.hostname);
 

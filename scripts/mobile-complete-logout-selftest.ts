@@ -114,6 +114,34 @@ function testCompleteLogoutDestinations() {
     }),
     WEB_SIGNED_OUT_HOME_PATH,
   );
+
+  // 5. Exact Vercel test host — same-origin Pro sign-in, never app.houzzatpro.com.
+  assert.equal(
+    resolveCompleteSignOutDestination({
+      hostname: "houzzat-vercel-test.vercel.app",
+      pathname: "/platform",
+      shell: "web",
+      userAgent: "Mozilla/5.0",
+    }),
+    PRO_SIGNED_OUT_SIGN_IN_PATH,
+  );
+  assert.equal(
+    resolveCompleteSignOutDestination({
+      hostname: "houzzat-vercel-test.vercel.app",
+      pathname: "/pro/sign-in",
+      isStaff: true,
+      shell: "web",
+      userAgent: "Mozilla/5.0",
+    }),
+    PRO_SIGNED_OUT_SIGN_IN_PATH,
+  );
+  assert.equal(
+    resolveCompleteSignOutDestination({
+      hostname: "houzzat-vercel-test.vercel.app",
+      shell: "houzzatpro",
+    }),
+    PRO_SIGNED_OUT_SIGN_IN_PATH,
+  );
 }
 
 function testOpenRedirectProtectionAndCustomDomains() {
@@ -206,6 +234,8 @@ function testTransitionUiWiring() {
   assert.ok(signIn.includes("isManualSignInRequired"));
   assert.ok(signIn.includes("markManualSignInRequired"));
   assert.ok(signIn.includes("if (signedOut || isManualSignInRequired()) return"));
+  assert.ok(signIn.includes("resolveVercelTestPostCredentialsHref"));
+  assert.ok(signIn.includes("isPlatformOperatorCallbackPath"));
   assert.ok(form.includes("setNativeNavStage(\"BOOTSTRAPPING\")"));
   assert.ok(form.includes("Pro Member Login"));
   assert.ok(form.includes("Book a Demo"));

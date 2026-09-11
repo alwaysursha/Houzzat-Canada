@@ -43,16 +43,54 @@ export function sanitizeStaffCallbackPath(
 export function isPlatformOperatorCallbackPath(
   callbackUrl: string | null | undefined,
 ): boolean {
-  if (
-    !callbackUrl ||
-    !callbackUrl.startsWith("/") ||
-    callbackUrl.startsWith("//") ||
-    callbackUrl.includes("://")
-  ) {
-    return false;
-  }
-  const pathname = callbackUrl.split("?")[0] ?? "";
+  const relative = relativeCallbackPathForVercelTestOrApp(callbackUrl);
+  if (!relative) return false;
+  const pathname = relative.split("?")[0] ?? "";
   return pathname === "/platform" || pathname.startsWith("/platform/");
+}
+
+/**
+ * Relative callback path. Absolute URLs are accepted only for the exact
+ * houzzat-vercel-test.vercel.app origin (never *.vercel.app).
+ */
+export function relativeCallbackPathForVercelTestOrApp(
+  callbackUrl: string | null | undefined,
+): string | null {
+  if (!callbackUrl) return null;
+  const trimmed = callbackUrl.trim();
+  if (isSafeRelativeAppPath(trimmed)) return trimmed;
+  try {
+    const url = new URL(trimmed);
+    if (url.username || url.password) return null;
+    if (!isHouzzatVercelTestHost(url.hostname)) return null;
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * After credentials on houzzat-vercel-test.vercel.app: stay on this origin.
+ * Never mint tenant handoff to Cloudflare / app.houzzatpro.com.
+ */
+export function resolveVercelTestPostCredentialsHref(input: {
+  hostname: string | null | undefined;
+  callbackUrl?: string | null;
+  returnPath?: string | null;
+}): string | null {
+  if (!isHouzzatVercelTestHost(input.hostname)) return null;
+  if (isPlatformOperatorCallbackPath(input.callbackUrl)) {
+    return sanitizeStaffCallbackPath(
+      relativeCallbackPathForVercelTestOrApp(input.callbackUrl),
+      "/platform",
+    );
+  }
+  if (shouldStayOnVercelTestOnboarding(input)) {
+    return "/onboarding";
+  }
+  const relative = relativeCallbackPathForVercelTestOrApp(input.callbackUrl);
+  if (relative) return sanitizeStaffCallbackPath(relative);
+  return "/pro";
 }
 
 /** Physical Vercel R2 upload test host. Exact hostname only — never `*.vercel.app`. */

@@ -9,7 +9,9 @@ import {
   isOwnerOnboardingCallbackPath,
   isPlatformOperatorCallbackPath,
   isVercelTestMasterAdminCredentialsException,
+  relativeCallbackPathForVercelTestOrApp,
   resolveProPostSignInHref,
+  resolveVercelTestPostCredentialsHref,
   sanitizeStaffCallbackPath,
   shouldStayOnVercelTestOnboarding,
   shouldDeferStaffWebRoleToHostnameMembership,
@@ -39,6 +41,68 @@ function testSanitize() {
   assert.equal(isPlatformOperatorCallbackPath("//evil.com/platform"), false);
   assert.equal(isPlatformOperatorCallbackPath("https://evil.com/platform"), false);
   assert.equal(isPlatformOperatorCallbackPath("/platforming"), false);
+  assert.equal(
+    isPlatformOperatorCallbackPath(
+      "https://houzzat-vercel-test.vercel.app/platform",
+    ),
+    true,
+  );
+  assert.equal(
+    isPlatformOperatorCallbackPath("https://preview.vercel.app/platform"),
+    false,
+  );
+  assert.equal(
+    relativeCallbackPathForVercelTestOrApp(
+      "https://houzzat-vercel-test.vercel.app/platform",
+    ),
+    "/platform",
+  );
+  assert.equal(
+    relativeCallbackPathForVercelTestOrApp("https://preview.vercel.app/platform"),
+    null,
+  );
+  assert.equal(
+    resolveVercelTestPostCredentialsHref({
+      hostname: "houzzat-vercel-test.vercel.app",
+      callbackUrl: "/platform",
+    }),
+    "/platform",
+  );
+  assert.equal(
+    resolveVercelTestPostCredentialsHref({
+      hostname: "houzzat-vercel-test.vercel.app",
+      callbackUrl: "https://houzzat-vercel-test.vercel.app/platform",
+    }),
+    "/platform",
+  );
+  assert.equal(
+    resolveVercelTestPostCredentialsHref({
+      hostname: "houzzat-vercel-test.vercel.app",
+      callbackUrl: "/onboarding",
+      returnPath: "/onboarding",
+    }),
+    "/onboarding",
+  );
+  assert.equal(
+    resolveVercelTestPostCredentialsHref({
+      hostname: "houzzat-vercel-test.vercel.app",
+    }),
+    "/pro",
+  );
+  assert.equal(
+    resolveVercelTestPostCredentialsHref({
+      hostname: "app.houzzatpro.com",
+      callbackUrl: "/platform",
+    }),
+    null,
+  );
+  assert.equal(
+    resolveVercelTestPostCredentialsHref({
+      hostname: "re-max-realty.houzzatpro.com",
+      callbackUrl: "/platform",
+    }),
+    null,
+  );
 }
 
 function testHouzzatVercelTestOnboardingStay() {
