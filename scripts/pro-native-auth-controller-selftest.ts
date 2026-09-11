@@ -60,8 +60,14 @@ function testSourceStructure() {
   assert.ok(controllerSrc.includes("signOut"));
   assert.ok(controllerSrc.includes("reset"));
 
-  // Form delegates submit to proNativeAuthController
-  assert.ok(formSrc.includes("proNativeAuthController.submitCredentials"));
+  // Master Admin /platform callback skips native workspace bootstrap/handoff.
+  assert.ok(controllerSrc.includes("isPlatformOperatorCallbackPath"));
+  const platformCallbackIdx = controllerSrc.indexOf(
+    "isPlatformOperatorCallbackPath(input.callbackUrl)",
+  );
+  const discoverIdx = controllerSrc.indexOf("const disc = await this.discoverWorkspace()");
+  assert.ok(platformCallbackIdx > 0 && discoverIdx > platformCallbackIdx);
+  assert.ok(formSrc.includes("callbackUrl"));
 
   // Exchange delegates exchange to proNativeAuthController
   assert.ok(exchangeSrc.includes("proNativeAuthController.exchangeHandoff"));

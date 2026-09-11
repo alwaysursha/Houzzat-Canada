@@ -4,6 +4,7 @@
  */
 import assert from "node:assert/strict";
 import {
+  isPlatformOperatorCallbackPath,
   resolveProPostSignInHref,
   sanitizeStaffCallbackPath,
   staffSignInHref,
@@ -24,6 +25,14 @@ function testSanitize() {
     sanitizeStaffCallbackPath("/agent/leads?x=1"),
     "/agent/leads?x=1",
   );
+  assert.equal(isPlatformOperatorCallbackPath("/platform"), true);
+  assert.equal(isPlatformOperatorCallbackPath("/platform/workspaces"), true);
+  assert.equal(isPlatformOperatorCallbackPath("/platform?x=1"), true);
+  assert.equal(isPlatformOperatorCallbackPath("/pro"), false);
+  assert.equal(isPlatformOperatorCallbackPath("/admin"), false);
+  assert.equal(isPlatformOperatorCallbackPath("//evil.com/platform"), false);
+  assert.equal(isPlatformOperatorCallbackPath("https://evil.com/platform"), false);
+  assert.equal(isPlatformOperatorCallbackPath("/platforming"), false);
 }
 
 function testPostSignInDeepLinks() {

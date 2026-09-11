@@ -32,6 +32,26 @@ export function sanitizeStaffCallbackPath(
 }
 
 /**
+ * Master Admin Command Centre callback. Same-origin /platform only.
+ * Page still requires an ACTIVE MASTER_ADMIN PlatformOperator — this is
+ * routing, not authorization.
+ */
+export function isPlatformOperatorCallbackPath(
+  callbackUrl: string | null | undefined,
+): boolean {
+  if (
+    !callbackUrl ||
+    !callbackUrl.startsWith("/") ||
+    callbackUrl.startsWith("//") ||
+    callbackUrl.includes("://")
+  ) {
+    return false;
+  }
+  const pathname = callbackUrl.split("?")[0] ?? "";
+  return pathname === "/platform" || pathname.startsWith("/platform/");
+}
+
+/**
  * After Pro credentials sign-in: honor deep staff callbacks when the role
  * permits; never send AGENT into Admin; BUYER → staff-only screen.
  */

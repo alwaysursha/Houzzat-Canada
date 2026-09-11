@@ -14,9 +14,12 @@
  * 7. Privacy-safe diagnostic logging (no passwords, tokens, cookies, or raw PII).
  */
 
-import { signIn, getSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { hardGo } from "@/lib/mobile/nav-back";
-import { sanitizeStaffCallbackPath } from "@/lib/auth/pro-sign-in-routing";
+import {
+  isPlatformOperatorCallbackPath,
+  sanitizeStaffCallbackPath,
+} from "@/lib/auth/pro-sign-in-routing";
 import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
 import { HOUZZATPRO_START_PATH } from "@/lib/mobile/app-shell";
 import { performHardSignOut } from "@/lib/auth/hard-sign-out";
@@ -332,6 +335,20 @@ class ProNativeAuthController {
 
         if (input.callbackUrl && input.callbackUrl.includes("diag=1")) {
           hardGo("/pro?diag=1");
+          return { ok: true };
+        }
+
+        // Master Admin /platform login is not native workspace bootstrap.
+        // On tenant/Vercel hosts, bootstrap would attempt a handoff that can
+        // only be minted from app.houzzatpro.com, then never navigate — the
+        // form stays on “Signing in…”. requirePlatformOperator still gates /platform.
+        if (isPlatformOperatorCallbackPath(input.callbackUrl)) {
+          const destination = sanitizeStaffCallbackPath(
+            input.callbackUrl,
+            "/platform",
+          );
+          this.transitionTo("FINAL_NAVIGATION", { destination });
+          hardGo(destination);
           return { ok: true };
         }
 
