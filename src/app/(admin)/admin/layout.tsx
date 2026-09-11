@@ -12,6 +12,7 @@ import {
   redirectNonAdminFromAdminShell,
   staffSignInRedirectUrl,
 } from "@/lib/auth/staff-sign-in-redirect";
+import { isHouzzatVercelTestHost } from "@/lib/auth/pro-sign-in-routing";
 import { isAgentRole } from "@/lib/roles";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import {
@@ -50,14 +51,17 @@ export default async function AdminLayout({
     redirect(await staffSignInRedirectUrl("/admin"));
   }
   const user = session!.user;
-  if (!isAgentRole(user.role)) {
-    await redirectNonAdminFromAdminShell(user.role);
-  }
-
   const request = await buildSyntheticRequestFromHeaders();
   const hostname = request
     ? extractTrustedRequestHostname(request)
     : null;
+  if (
+    !isAgentRole(user.role) &&
+    !isHouzzatVercelTestHost(hostname)
+  ) {
+    await redirectNonAdminFromAdminShell(user.role);
+  }
+
   const surface = resolveAdminSurfaceMode(hostname);
 
   if (surface === "deny") {

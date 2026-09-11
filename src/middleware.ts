@@ -15,6 +15,7 @@ import {
   shouldRedirectUnauthenticatedProToSignIn,
 } from "@/lib/mobile/platform-bootstrap";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
+import { shouldDeferStaffWebRoleToHostnameMembership } from "@/lib/auth/pro-sign-in-routing";
 import {
   canAccessSellerTools,
   isAdminRole,
@@ -165,7 +166,14 @@ export default auth((request) => {
     }
     // Staff only at middleware. Platform vs tenant Command Centre auth is
     // enforced in admin layout (hostname + WorkspaceMember OWNER/ADMIN).
-    if (!isAgentRole(session.user.role)) {
+    // houzzat-vercel-test.vercel.app: defer User.role — layout still
+    // authorizes ACTIVE WorkspaceMember on the hostname workspace.
+    const host =
+      request.headers.get("host")?.split(":")[0]?.trim().toLowerCase() ?? "";
+    if (
+      !shouldDeferStaffWebRoleToHostnameMembership(host) &&
+      !isAgentRole(session.user.role)
+    ) {
       if (shellHint === "houzzatpro") {
         return redirectToPath(request, HOUZZATPRO_STAFF_ONLY_PATH);
       }
@@ -173,8 +181,6 @@ export default auth((request) => {
     }
 
     // Non-platform hosts: only tenant-safe /admin modules (layout enforces membership).
-    const host =
-      request.headers.get("host")?.split(":")[0]?.trim().toLowerCase() ?? "";
     const isPlatformRoot =
       host === "houzzatpro.com" || host === "www.houzzatpro.com";
     if (host && !isPlatformRoot) {
@@ -200,7 +206,12 @@ export default auth((request) => {
         pro: shellHint === "houzzatpro",
       });
     }
-    if (!isAgentRole(session.user.role)) {
+    const agentHost =
+      request.headers.get("host")?.split(":")[0]?.trim().toLowerCase() ?? "";
+    if (
+      !shouldDeferStaffWebRoleToHostnameMembership(agentHost) &&
+      !isAgentRole(session.user.role)
+    ) {
       if (shellHint === "houzzatpro") {
         if (isAdminRole(session.user.role)) {
           return redirectToPath(request, "/admin");

@@ -17,7 +17,10 @@ import {
   type CrmReadScopeMode,
 } from "@/lib/crm-read-scope";
 import { isAdminRole, isAgentRole } from "@/lib/constants";
+import { isHouzzatVercelTestHost } from "@/lib/auth/pro-sign-in-routing";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
+import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
+import { isStaffWorkspaceMemberRole } from "@/lib/mobile/workspace-destination";
 import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
 import {
   shouldUseHostnameBoundStaffContext,
@@ -87,7 +90,6 @@ export type AgentGate = {
 export const requireAgentGate = cache(async (): Promise<AgentGate | null> => {
   const session = await auth();
   if (!session?.user?.id && !session?.user?.email) return null;
-  if (!isAgentRole(session.user.role)) return null;
 
   const isPlatformAdmin = isAdminRole(session.user.role);
 
@@ -107,10 +109,8 @@ export const requireAgentGate = cache(async (): Promise<AgentGate | null> => {
     };
   }
 
-  // Field agents: confirm seat is still active (security).
-  return requireAgentUser().then((user) =>
-    user ? { user, isPlatformAdmin: false } : null,
-  );
+  const user = await requireAgentUser();
+  return user ? { user, isPlatformAdmin: false } : null;
 });
 
 export const requireAgentUser = cache(async (): Promise<AgentUser | null> => {
@@ -134,7 +134,14 @@ export const requireAgentUser = cache(async (): Promise<AgentUser | null> => {
     });
   }
 
-  if (!user || !isAgentRole(user.role)) return null;
+  if (!user) return null;
+
+  if (!isAgentRole(user.role)) {
+    // houzzat-vercel-test.vercel.app only — User.role stays BUYER/SELLER.
+    // ACTIVE WorkspaceMember OWNER/ADMIN/AGENT on the hostname workspace.
+    if (await isVercelTestHostnameStaffMember(user.id)) return user;
+    return null;
+  }
 
   // Soft-disabled agent seats cannot use CRM (platform admins still can).
   if (!isAdminRole(user.role)) {
@@ -147,6 +154,19 @@ export const requireAgentUser = cache(async (): Promise<AgentUser | null> => {
 
   return user;
 });
+
+async function isVercelTestHostnameStaffMember(userId: string): Promise<boolean> {
+  const request = await buildSyntheticRequestFromHeaders();
+  if (!request) return false;
+  const hostname = extractTrustedRequestHostname(request);
+  if (!isHouzzatVercelTestHost(hostname)) return false;
+  const tenant = await tryTenantStaffContext(request, {
+    id: userId,
+    role: "",
+  });
+  if (!tenant) return false;
+  return isStaffWorkspaceMemberRole(tenant.workspaceRole);
+}
 
 function healAgentSeatFlags(userId: string): Promise<unknown> {
   return (async () => {
@@ -306,7 +326,10 @@ export async function requireAgentContextForRequest(
   const user = await requireAgentUser();
   if (!user) return null;
 
-  if (shouldUseHostnameBoundStaffContext()) {
+  if (
+    isHouzzatVercelTestHost(extractTrustedRequestHostname(request)) ||
+    shouldUseHostnameBoundStaffContext()
+  ) {
     return buildHostnameBoundAgentContext(user, request, allowSideEffects);
   }
 
@@ -396,6 +419,13 @@ export const requireAgentContext = cache(
   async (): Promise<AgentOrgContext | null> => {
     const user = await requireAgentUser();
     if (!user) return null;
+    const request = await buildSyntheticRequestFromHeaders();
+    if (
+      request &&
+      isHouzzatVercelTestHost(extractTrustedRequestHostname(request))
+    ) {
+      return buildHostnameBoundAgentContext(user, request, false);
+    }
     return buildLegacyAgentContext(user, false);
   },
 );

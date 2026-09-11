@@ -11,6 +11,7 @@ import {
   resolveProPostSignInHref,
   sanitizeStaffCallbackPath,
   shouldStayOnVercelTestOnboarding,
+  shouldDeferStaffWebRoleToHostnameMembership,
   staffSignInHref,
 } from "../src/lib/auth/pro-sign-in-routing";
 import {
@@ -116,6 +117,31 @@ function testHouzzatVercelTestOnboardingStay() {
       hostname: "preview.vercel.app",
       callbackUrl: "/onboarding",
     }),
+    false,
+  );
+
+  assert.equal(
+    shouldDeferStaffWebRoleToHostnameMembership(
+      "houzzat-vercel-test.vercel.app",
+    ),
+    true,
+  );
+  assert.equal(
+    shouldDeferStaffWebRoleToHostnameMembership("app.houzzatpro.com"),
+    false,
+  );
+  assert.equal(
+    shouldDeferStaffWebRoleToHostnameMembership(
+      "re-max-realty.houzzatpro.com",
+    ),
+    false,
+  );
+  assert.equal(
+    shouldDeferStaffWebRoleToHostnameMembership("houzzat.com"),
+    false,
+  );
+  assert.equal(
+    shouldDeferStaffWebRoleToHostnameMembership("preview.vercel.app"),
     false,
   );
 }

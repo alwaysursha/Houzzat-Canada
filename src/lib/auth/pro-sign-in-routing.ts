@@ -98,6 +98,17 @@ export function shouldStayOnVercelTestOnboarding(input: {
 }
 
 /**
+ * Edge-safe: on houzzat-vercel-test.vercel.app, do not bounce /admin|/agent
+ * using User.role. Layouts still require ACTIVE WorkspaceMember on the
+ * hostname workspace (OWNER / ADMIN / AGENT). Production hosts unchanged.
+ */
+export function shouldDeferStaffWebRoleToHostnameMembership(
+  hostname: string | null | undefined,
+): boolean {
+  return isHouzzatVercelTestHost(hostname);
+}
+
+/**
  * After Pro credentials sign-in: honor deep staff callbacks when the role
  * permits; never send AGENT into Admin; BUYER → staff-only screen.
  */

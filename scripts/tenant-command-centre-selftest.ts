@@ -70,6 +70,7 @@ function testAuthMatrix() {
   assert.ok(layout.includes("TenantThemeStyle"));
   // User.role ADMIN alone must not authorize tenant HQ
   assert.ok(layout.includes("authorizeTenantCommandCentre(request"));
+  assert.ok(layout.includes("isHouzzatVercelTestHost(hostname)"));
 }
 
 function testWorkspacePredicates() {
@@ -119,6 +120,9 @@ function testPathAllowlistAndMiddleware() {
   const mw = read("src/middleware.ts");
   assert.ok(mw.includes("tenantAdminAllowed"));
   assert.ok(mw.includes("isAgentRole(session.user.role)"));
+  assert.ok(mw.includes("shouldDeferStaffWebRoleToHostnameMembership"));
+  assert.ok(!mw.includes("*.vercel.app"));
+  assert.ok(!mw.includes('endsWith(".vercel.app")'));
   assert.ok(!mw.includes("if (!isAdminRole(session.user.role))"));
 
   const adminLayout = read("src/app/(admin)/admin/layout.tsx");
