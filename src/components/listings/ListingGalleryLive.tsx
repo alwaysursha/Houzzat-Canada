@@ -10,7 +10,10 @@ import {
   readListingGallerySession,
   writeListingGallerySession,
 } from "@/lib/listings/gallery-client";
-import { mergeListingGalleryPhotos } from "@/lib/listings/merge-gallery-photos";
+import {
+  galleryIsRicherThanNeon,
+  mergeListingGalleryPhotos,
+} from "@/lib/listings/merge-gallery-photos";
 
 type ListingGalleryProps = ComponentProps<typeof ListingGallery>;
 
@@ -19,9 +22,38 @@ type LivePhoto = {
   url: string;
 };
 
+/** Match server PropTx timeout so Cloudflare's in-flight RSC gallery can still win. */
+const LIVE_PHOTOS_CLIENT_FALLBACK_MS = 10_000;
+
+function awaitLivePhotos(
+  promise: Promise<LivePhoto[]>,
+  timeoutMs: number,
+): Promise<LivePhoto[]> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value: LivePhoto[]) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish([]), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        finish(Array.isArray(value) ? value : []);
+      },
+      () => {
+        clearTimeout(timer);
+        finish([]);
+      },
+    );
+  });
+}
+
 /**
  * Renders Neon gallery immediately, then appends PropTx photos after paint.
- * Prefers a server-started promise (no extra API hop); falls back to client fetch.
+ * Prefers a server-started promise (no extra API hop) when it is richer than
+ * Neon. Otherwise uses the existing client `/gallery` fetch.
  * Does not reset the active slide or replace the first Neon photos.
  *
  * First client render must match SSR (Neon only) — never read sessionStorage
@@ -40,10 +72,15 @@ export function ListingGalleryLive({
 }) {
   const [photos, setPhotos] = useState(neonPhotos);
   const neonRef = useRef(neonPhotos);
-  neonRef.current = neonPhotos;
+  const [prevNeonPhotos, setPrevNeonPhotos] = useState(neonPhotos);
+
+  if (neonPhotos !== prevNeonPhotos) {
+    setPrevNeonPhotos(neonPhotos);
+    setPhotos((current) => mergeListingGalleryPhotos(neonPhotos, current));
+  }
 
   useEffect(() => {
-    setPhotos((current) => mergeListingGalleryPhotos(neonPhotos, current));
+    neonRef.current = neonPhotos;
   }, [neonPhotos]);
 
   useEffect(() => {
@@ -55,7 +92,9 @@ export function ListingGalleryLive({
 
     function applyLive(live: LivePhoto[]) {
       if (cancelled || live.length === 0) return;
-      writeListingGallerySession(mls, live);
+      if (galleryIsRicherThanNeon(live)) {
+        writeListingGallerySession(mls, live);
+      }
       setPhotos((current) => {
         const head = neonRef.current.length > 0 ? neonRef.current : current;
         const next = mergeListingGalleryPhotos(head, live);
@@ -72,21 +111,23 @@ export function ListingGalleryLive({
     async function enrich() {
       // Session cache only after mount — keeps hydration HTML identical to SSR.
       const cached = readListingGallerySession(mls);
-      if (cached && cached.length > 0) {
+      if (galleryIsRicherThanNeon(cached)) {
         applyLive(cached);
+        return;
       }
 
       if (livePhotosPromise) {
-        try {
-          const live = await livePhotosPromise;
-          applyLive(live);
-          return;
-        } catch {
-          // Fall through to client fetch
-        }
+        const live = await awaitLivePhotos(
+          livePhotosPromise,
+          LIVE_PHOTOS_CLIENT_FALLBACK_MS,
+        );
+        if (cancelled) return;
+        applyLive(live);
+        if (galleryIsRicherThanNeon(live)) return;
       }
-      const live = await fetchListingGalleryClient(mls, controller.signal);
-      applyLive(live);
+
+      const fetched = await fetchListingGalleryClient(mls, controller.signal);
+      applyLive(fetched);
     }
 
     void enrich();

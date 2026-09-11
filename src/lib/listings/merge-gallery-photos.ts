@@ -6,6 +6,13 @@ export type MergeableGalleryPhoto = {
   alt?: string | null;
 };
 
+/** True when live/session photos include extras beyond the Neon SSR cap. */
+export function galleryIsRicherThanNeon<T extends { length: number }>(
+  photos: T | null | undefined,
+): photos is T {
+  return Boolean(photos && photos.length > NEON_LISTING_MEDIA_CAP);
+}
+
 /**
  * Keep Neon head photos stable; append PropTx extras by URL.
  * Never reorders or replaces the first {@link NEON_LISTING_MEDIA_CAP} slots.

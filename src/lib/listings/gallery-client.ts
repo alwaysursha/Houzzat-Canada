@@ -2,6 +2,7 @@ import {
   GALLERY_SESSION_KEY_PREFIX,
   NEON_LISTING_MEDIA_CAP,
 } from "@/lib/listings/gallery-constants";
+import { galleryIsRicherThanNeon } from "@/lib/listings/merge-gallery-photos";
 
 export type ClientGalleryPhoto = {
   id: string;
@@ -68,7 +69,8 @@ export async function fetchListingGalleryClient(
   if (signal?.aborted) return [];
 
   const cached = readListingGallerySession(key);
-  if (cached) return cached;
+  // Neon-cap (≤5) is the SSR set — do not treat it as a completed full gallery.
+  if (galleryIsRicherThanNeon(cached)) return cached;
 
   const existing = inflightGallery.get(key);
   if (existing) {
@@ -105,7 +107,7 @@ export async function fetchListingGalleryClient(
               photo.url.length > 0,
           )
         : [];
-      if (photos.length > 0) writeListingGallerySession(key, photos);
+      if (galleryIsRicherThanNeon(photos)) writeListingGallerySession(key, photos);
       return photos;
     } catch {
       return [];
@@ -132,7 +134,8 @@ export function abortListingGalleryFetches(exceptMls?: string | null): void {
 export function prefetchListingGallery(mlsNumber: string): void {
   const key = mlsNumber.trim().toUpperCase();
   if (!key) return;
-  if (readListingGallerySession(key)) return;
+  const cached = readListingGallerySession(key);
+  if (galleryIsRicherThanNeon(cached)) return;
   void fetchListingGalleryClient(key);
 }
 

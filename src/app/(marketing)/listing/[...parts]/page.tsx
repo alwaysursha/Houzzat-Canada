@@ -222,6 +222,8 @@ export default async function ListingDetailPage({
 
   // Neon-only SSR gallery (≤5). Never await PropTx here — start it in parallel
   // and pass the promise to the client so enrich skips an extra API hop.
+  // Vercel client useEffect cannot reliably consume this RSC thenable, so the
+  // client uses /api/listings/:mls/gallery instead. Cloudflare keeps the promise.
   const galleryPhotos = resolveListingGalleryPhotos(listing);
   const livePhotosPromise =
     listing.dataSource === "mls" && listing.listingKey
@@ -246,6 +248,9 @@ export default async function ListingDetailPage({
           }));
         })
       : null;
+  const clientLivePhotosPromise = process.env.VERCEL
+    ? null
+    : livePhotosPromise;
 
   scheduleWorkerSideEffect(
     prisma.listingView.create({
@@ -379,7 +384,7 @@ export default async function ListingDetailPage({
       <ListingDetailView
         listing={listing}
         galleryPhotos={galleryPhotos}
-        livePhotosPromise={livePhotosPromise}
+        livePhotosPromise={clientLivePhotosPromise}
         listingHistoryRows={listingHistoryRows}
         isListingSheet={isListingSheet}
         signedIn={Boolean(user)}
