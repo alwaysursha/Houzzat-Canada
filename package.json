@@ -148,6 +148,7 @@
     "platform-bootstrap:selftest": "node --import tsx scripts/platform-bootstrap-regression-selftest.ts",
     "tenant-command-centre:selftest": "node --import tsx scripts/tenant-command-centre-selftest.ts",
     "vercel-test-crm-access:selftest": "node --import tsx scripts/vercel-test-crm-access-selftest.ts",
+    "vercel-test-platform-login:selftest": "node --import tsx scripts/vercel-test-platform-login-selftest.ts",
     "cap-pro-android-config:selftest": "node --import tsx scripts/cap-pro-android-config-selftest.ts",
     "mobile-workspace-bootstrap:selftest": "node --import tsx scripts/mobile-workspace-bootstrap-selftest.ts",
     "mobile-workspace-handoff:selftest": "node --import tsx scripts/mobile-workspace-handoff-selftest.ts",

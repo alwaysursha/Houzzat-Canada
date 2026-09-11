@@ -72,6 +72,17 @@ function testSourceGuards() {
   assert.ok(agent.includes("isAgentRole(user.role)"));
   assert.ok(!agent.includes("*.vercel.app"));
   assert.ok(!agent.includes("user.role = "));
+  assert.equal(agent.includes("allowVercelTestMasterAdminCredentialsLogin"), false);
+
+  const tenantAccess = read("src/lib/tenancy/tenant-auth-boundary.ts");
+  const requireFn = tenantAccess.slice(
+    tenantAccess.indexOf("export async function requireTenantWorkspaceAccess"),
+  );
+  assert.equal(requireFn.includes("platformOperator"), false);
+  assert.equal(
+    requireFn.includes("allowVercelTestMasterAdminCredentialsLogin"),
+    false,
+  );
 }
 
 testExactHostDeferral();

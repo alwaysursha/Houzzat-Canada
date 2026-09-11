@@ -8,6 +8,7 @@ import {
   isHouzzatVercelTestHost,
   isOwnerOnboardingCallbackPath,
   isPlatformOperatorCallbackPath,
+  isVercelTestMasterAdminCredentialsException,
   resolveProPostSignInHref,
   sanitizeStaffCallbackPath,
   shouldStayOnVercelTestOnboarding,
@@ -142,6 +143,21 @@ function testHouzzatVercelTestOnboardingStay() {
   );
   assert.equal(
     shouldDeferStaffWebRoleToHostnameMembership("preview.vercel.app"),
+    false,
+  );
+
+  assert.equal(
+    isVercelTestMasterAdminCredentialsException({
+      hostname: "houzzat-vercel-test.vercel.app",
+      operator: { role: "MASTER_ADMIN", status: "ACTIVE" },
+    }),
+    true,
+  );
+  assert.equal(
+    isVercelTestMasterAdminCredentialsException({
+      hostname: "re-max-realty.houzzatpro.com",
+      operator: { role: "MASTER_ADMIN", status: "ACTIVE" },
+    }),
     false,
   );
 }

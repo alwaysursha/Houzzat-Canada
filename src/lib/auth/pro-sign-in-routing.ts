@@ -3,6 +3,10 @@
  * Server role remains authoritative — shell is UX only.
  */
 
+import type {
+  PlatformOperatorRole,
+  PlatformOperatorStatus,
+} from "@prisma/client";
 import {
   HOUZZATPRO_STAFF_ONLY_PATH,
   HOUZZATPRO_START_PATH,
@@ -59,6 +63,50 @@ export function isHouzzatVercelTestHost(
 ): boolean {
   if (!hostname) return false;
   return hostname.trim().toLowerCase() === HOUZZAT_VERCEL_TEST_HOSTNAME;
+}
+
+/**
+ * Vercel-test credentials only: ACTIVE MASTER_ADMIN may create a session
+ * on houzzat-vercel-test.vercel.app without hostname WorkspaceMember.
+ * Does not grant /admin, /agent, or CRM. /platform still uses
+ * requirePlatformOperator. Production hosts unchanged.
+ */
+export function isVercelTestMasterAdminCredentialsException(input: {
+  hostname: string | null | undefined;
+  operator:
+    | {
+        role: PlatformOperatorRole;
+        status: PlatformOperatorStatus;
+      }
+    | null
+    | undefined;
+}): boolean {
+  if (!isHouzzatVercelTestHost(input.hostname)) return false;
+  const operator = input.operator;
+  if (!operator) return false;
+
+  switch (operator.status) {
+    case "DISABLED":
+      return false;
+    case "ACTIVE":
+      break;
+    default: {
+      const _exhaustive: never = operator.status;
+      return _exhaustive;
+    }
+  }
+
+  switch (operator.role) {
+    case "MASTER_ADMIN":
+      return true;
+    case "SALES":
+    case "BILLING":
+      return false;
+    default: {
+      const _exhaustive: never = operator.role;
+      return _exhaustive;
+    }
+  }
 }
 
 function isSafeRelativeAppPath(

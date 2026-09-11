@@ -11,10 +11,23 @@
  *
  * Platform Host (app.houzzatpro.com):
  * Authenticates platform identity globally for workspace discovery and handoff.
+ *
+ * houzzat-vercel-test.vercel.app (exact host only):
+ * ACTIVE MASTER_ADMIN PlatformOperator may create a session without
+ * hostname WorkspaceMember. Tenant /admin /agent / CRM still require
+ * WorkspaceMember. Production hosts unchanged.
  */
-import type { WorkspaceMemberRole } from "@prisma/client";
+import type {
+  PlatformOperatorRole,
+  PlatformOperatorStatus,
+  WorkspaceMemberRole,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
+import {
+  isHouzzatVercelTestHost,
+  isVercelTestMasterAdminCredentialsException,
+} from "@/lib/auth/pro-sign-in-routing";
 import { isHouzzatProPlatformRoot } from "@/lib/tenancy/reserved-domains";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 import { isConsumerRole } from "@/lib/roles";
@@ -23,6 +36,15 @@ import {
   type RequestTenancyDeps,
 } from "@/lib/tenancy/resolve-request-tenancy";
 import { resolveWorkspaceFromHostname } from "@/lib/tenancy/resolve-workspace-host";
+
+export type PlatformOperatorCredentialRow = {
+  role: PlatformOperatorRole;
+  status: PlatformOperatorStatus;
+};
+
+export type PlatformOperatorCredentialLookup = (
+  userId: string,
+) => Promise<PlatformOperatorCredentialRow | null>;
 
 export type TenantAuthValidationResult =
   | {
@@ -40,16 +62,22 @@ export type TenantAuthValidationResult =
         | "unauthenticated";
     };
 
-/**
- * Validates whether an authenticated User is allowed to establish an Auth.js session
- * on the current request hostname.
- */
+async function defaultLookupPlatformOperatorForCredentials(
+  userId: string,
+): Promise<PlatformOperatorCredentialRow | null> {
+  return prisma.platformOperator.findUnique({
+    where: { userId },
+    select: { role: true, status: true },
+  });
+}
+
 export async function validateTenantCredentialsAuth(input: {
   userId: string;
   userRole?: string | null;
   request?: Request | null;
   requestHostname?: string | null;
   deps?: RequestTenancyDeps;
+  lookupPlatformOperator?: PlatformOperatorCredentialLookup;
 }): Promise<TenantAuthValidationResult> {
   if (!input.userId) {
     return { ok: false, reason: "unauthenticated" };
@@ -138,13 +166,43 @@ export async function validateTenantCredentialsAuth(input: {
     };
   }
 
+  if (
+    await allowVercelTestMasterAdminCredentialsLogin({
+      hostname,
+      userId: input.userId,
+      lookupPlatformOperator: input.lookupPlatformOperator,
+    })
+  ) {
+    return { ok: true, isPlatform: true };
+  }
+
   return { ok: false, reason: "no_active_membership" };
+}
+
+/**
+ * Exact-host credentials bypass for /platform testing on
+ * houzzat-vercel-test.vercel.app. Never used by tenant /admin or /agent.
+ */
+export async function allowVercelTestMasterAdminCredentialsLogin(input: {
+  hostname: string | null | undefined;
+  userId: string;
+  lookupPlatformOperator?: PlatformOperatorCredentialLookup;
+}): Promise<boolean> {
+  if (!isHouzzatVercelTestHost(input.hostname)) return false;
+  const lookup =
+    input.lookupPlatformOperator ??
+    defaultLookupPlatformOperatorForCredentials;
+  const operator = await lookup(input.userId);
+  return isVercelTestMasterAdminCredentialsException({
+    hostname: input.hostname,
+    operator,
+  });
 }
 
 /**
  * Authoritative workspace access check for protected routes / tenant APIs.
  * Requires request hostname -> active Workspace -> ACTIVE WorkspaceMember.
- * Does NOT rely on User.role or cookie workspace alone.
+ * Does NOT rely on User.role, cookie workspace, or PlatformOperator.
  */
 export async function requireTenantWorkspaceAccess(input: {
   userId: string;
