@@ -182,6 +182,8 @@ async function main() {
   {
     const envExample = read(".env.example");
     assert.ok(envExample.includes("BRANDING_ASSETS_PUBLIC_BASE_URL"));
+    assert.ok(envExample.includes("R2_ACCESS_KEY_ID"));
+    assert.ok(envExample.includes("R2_S3_ENDPOINT"));
     assert.ok(!envExample.includes("https://branding-assets.houzzatpro.com\""));
     console.log("[6] Public base documented, not hardcoded... PASS");
   }

@@ -14,6 +14,8 @@ import {
 import { generateCmaPdfForReport } from "@/lib/cma/pdf";
 
 export const runtime = "nodejs";
+/** Browser Rendering REST can take ~45s; Vercel default is too short. */
+export const maxDuration = 60;
 
 type Ctx = { params: Promise<{ id: string }> };
 

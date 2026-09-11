@@ -4,8 +4,12 @@
 
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { tryGetCloudflareEnvAsync } from "@/lib/runtime/cloudflare-context";
 import { extractBrandingObjectKeyFromUrl } from "@/lib/tenancy/branding-assets/keys";
+import {
+  createR2S3Bucket,
+  readVercelR2S3Config,
+} from "@/lib/tenancy/branding-assets/r2-s3";
 
 export type BrandingAssetPutResult = {
   objectKey: string;
@@ -62,21 +66,25 @@ function isProductionRuntime(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
+function isR2Like(value: unknown): value is R2Like {
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    typeof (value as R2Like).put === "function" &&
+    typeof (value as R2Like).delete === "function"
+  );
+}
+
 async function getBrandingR2Bucket(): Promise<R2Like | null> {
   if (testDeps?.getBucket) return testDeps.getBucket();
-  try {
-    const { env } = await getCloudflareContext({ async: true });
-    const bucket = (env as unknown as Record<string, unknown>).BRANDING_ASSETS;
-    if (
-      bucket &&
-      typeof bucket === "object" &&
-      typeof (bucket as R2Like).put === "function" &&
-      typeof (bucket as R2Like).delete === "function"
-    ) {
-      return bucket as R2Like;
-    }
-  } catch {
-    // Local Node / selftests — no Cloudflare context.
+  const env = await tryGetCloudflareEnvAsync();
+  const binding = env?.BRANDING_ASSETS;
+  if (isR2Like(binding)) {
+    return binding;
+  }
+  const s3 = readVercelR2S3Config();
+  if (s3) {
+    return createR2S3Bucket(s3);
   }
   return null;
 }
@@ -87,8 +95,9 @@ function localPublicUrl(objectKey: string): string {
 
 /**
  * Persist bytes under tenant-isolated object key.
- * Production: requires BRANDING_ASSETS R2 binding + BRANDING_ASSETS_PUBLIC_BASE_URL.
- * Development/test without binding: public/uploads/branding (never on Workers prod).
+ * Production Cloudflare: BRANDING_ASSETS R2 binding + BRANDING_ASSETS_PUBLIC_BASE_URL.
+ * Production Vercel: S3-compatible R2 env + BRANDING_ASSETS_PUBLIC_BASE_URL.
+ * Development/test without either: public/uploads/branding (never on Workers/Vercel prod).
  */
 export async function putBrandingAssetObject(input: {
   objectKey: string;

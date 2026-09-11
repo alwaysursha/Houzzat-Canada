@@ -88,7 +88,7 @@ export async function generateCmaPdfForReport(input: {
       status: 503,
       code: "PDF_UNAVAILABLE",
       message:
-        "PDF generation is not configured on this Worker yet. Browser Rendering credentials or binding required.",
+        "PDF generation is not configured. Browser Rendering credentials or binding required.",
     };
   }
 

@@ -1,4 +1,4 @@
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { tryGetCloudflareEnvSync } from "@/lib/runtime/cloudflare-context";
 
 type TypesenseBindings = {
   TYPESENSE_HOST?: string;
@@ -13,12 +13,7 @@ type TypesenseBindings = {
 };
 
 function readBindings(): TypesenseBindings {
-  try {
-    const { env } = getCloudflareContext();
-    return env as typeof env & TypesenseBindings;
-  } catch {
-    return {};
-  }
+  return (tryGetCloudflareEnvSync() as TypesenseBindings | null) ?? {};
 }
 
 /** Prefer Worker bindings, then process.env (local / scripts). */

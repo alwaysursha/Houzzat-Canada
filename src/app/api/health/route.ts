@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { tryGetCloudflareEnvAsync } from "@/lib/runtime/cloudflare-context";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +11,16 @@ export async function GET() {
   let contextError: string | null = null;
 
   try {
-    const { env } = await getCloudflareContext({ async: true });
-    const bindings = env as unknown as Record<string, unknown>;
-    bindingKeys = Object.keys(bindings).sort();
-    const databaseUrl = bindings.DATABASE_URL;
-    databaseUrlType = typeof databaseUrl;
-    databaseUrlLength =
-      typeof databaseUrl === "string" ? databaseUrl.length : null;
-    hasBindingDatabaseUrl =
-      typeof databaseUrl === "string" && databaseUrl.trim().length > 0;
+    const bindings = await tryGetCloudflareEnvAsync();
+    if (bindings) {
+      bindingKeys = Object.keys(bindings).sort();
+      const databaseUrl = bindings.DATABASE_URL;
+      databaseUrlType = typeof databaseUrl;
+      databaseUrlLength =
+        typeof databaseUrl === "string" ? databaseUrl.length : null;
+      hasBindingDatabaseUrl =
+        typeof databaseUrl === "string" && databaseUrl.trim().length > 0;
+    }
   } catch (error) {
     contextError =
       error instanceof Error ? error.message : "Failed to read Cloudflare context";

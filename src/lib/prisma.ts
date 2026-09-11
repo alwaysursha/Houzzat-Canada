@@ -1,8 +1,12 @@
 import { cache } from "react";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { after } from "next/server";
 import { PrismaNeon, PrismaNeonHttp } from "@prisma/adapter-neon";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import {
+  tryGetCloudflareEnvSync,
+  tryGetCloudflareWaitUntil,
+} from "@/lib/runtime/cloudflare-context";
 
 type HyperdriveBinding = {
   connectionString: string;
@@ -49,16 +53,14 @@ function readDatabaseUrlFromEnv(env: CloudflareBindings | NodeJS.ProcessEnv) {
 function readDatabaseUrl(): string | undefined {
   // Prefer live Worker bindings — OpenNext only copies env into process.env
   // once on the first request, which can miss secrets.
-  try {
-    const { env } = getCloudflareContext();
-    const bindings = env as typeof env & CloudflareBindings;
+  // Vercel: never call OpenNext context (async mode boots wrangler).
+  const bindings = tryGetCloudflareEnvSync() as CloudflareBindings | null;
+  if (bindings) {
     const fromBinding = readDatabaseUrlFromEnv(bindings);
     if (fromBinding) return fromBinding;
     if (bindings.HYPERDRIVE?.connectionString) {
       return bindings.HYPERDRIVE.connectionString;
     }
-  } catch {
-    // Outside Cloudflare request context (local build, tests, etc.)
   }
 
   return readDatabaseUrlFromEnv(process.env);
@@ -153,19 +155,24 @@ function getPrismaCompat() {
 }
 
 /**
- * Keep non-critical DB I/O inside this Worker request (ctx.waitUntil).
- * Local Node: fire-and-forget. Never leave Prisma running after the isolate
- * drops the request context.
+ * Keep non-critical I/O alive after the HTTP response is sent.
+ * Cloudflare Workers: ctx.waitUntil.
+ * Vercel / Next.js 16: after().
+ * Scripts / no request scope: fire-and-forget.
  */
 export function scheduleWorkerSideEffect(work: Promise<unknown>): void {
   const tracked = work.catch(() => undefined);
-  if (!isWorkerdRuntime()) {
+  if (isWorkerdRuntime()) {
+    const waitUntil = tryGetCloudflareWaitUntil();
+    if (waitUntil) {
+      waitUntil(tracked);
+      return;
+    }
     void tracked;
     return;
   }
   try {
-    const { ctx } = getCloudflareContext();
-    ctx.waitUntil(tracked);
+    after(tracked);
   } catch {
     void tracked;
   }

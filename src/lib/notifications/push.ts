@@ -1,5 +1,5 @@
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
+import { tryGetCloudflareEnvSync } from "@/lib/runtime/cloudflare-context";
 import {
   audienceForPushType,
   isPushTypeEnabled,
@@ -83,15 +83,10 @@ type CachedAccessToken = {
 let cachedAccessToken: CachedAccessToken | null = null;
 
 function readServiceAccountJson(): string {
-  try {
-    const { env } = getCloudflareContext();
-    const fromBinding = (env as typeof env & FirebaseBindings)
-      .FIREBASE_SERVICE_ACCOUNT;
-    if (typeof fromBinding === "string" && fromBinding.trim()) {
-      return fromBinding.trim();
-    }
-  } catch {
-    // Local scripts / Node — fall through to process.env.
+  const env = tryGetCloudflareEnvSync() as FirebaseBindings | null;
+  const fromBinding = env?.FIREBASE_SERVICE_ACCOUNT;
+  if (typeof fromBinding === "string" && fromBinding.trim()) {
+    return fromBinding.trim();
   }
   return process.env.FIREBASE_SERVICE_ACCOUNT?.trim() || "";
 }

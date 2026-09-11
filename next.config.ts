@@ -1,6 +1,18 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
+/**
+ * OpenNext Cloudflare wrangler/miniflare wiring for `next dev` only.
+ * Skip Vercel and any production `next build` (including the inner Next
+ * compile used by `opennextjs-cloudflare build` / `pnpm deploy:cf`).
+ * Vercel sets VERCEL=1; `next build` sets NODE_ENV=production.
+ */
+function shouldInitOpenNextCloudflareForDev() {
+  if (process.env.VERCEL) return false;
+  if (process.env.NODE_ENV === "production") return false;
+  return true;
+}
+
 function resolveHouzzatBuildId(): string {
   const fromEnv = process.env.NEXT_PUBLIC_HOUZZAT_BUILD?.trim();
   if (fromEnv) return fromEnv;
@@ -82,4 +94,6 @@ const nextConfig: NextConfig = {
 
 export default nextConfig;
 
-initOpenNextCloudflareForDev({ remoteBindings: true });
+if (shouldInitOpenNextCloudflareForDev()) {
+  initOpenNextCloudflareForDev({ remoteBindings: true });
+}

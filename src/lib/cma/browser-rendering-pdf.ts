@@ -2,7 +2,7 @@
  * Stage 5.12B — Cloudflare Browser Rendering PDF client.
  *
  * Preferred when available: Worker `BROWSER` binding (no API token).
- * Production fallback (OpenNext-compatible): REST
+ * Vercel / no binding: REST
  *   POST /accounts/{account_id}/browser-rendering/pdf
  *
  * Secrets (REST): CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_BROWSER_RENDERING_API_TOKEN
@@ -11,11 +11,16 @@
  * Never expose tokens to native/client.
  */
 
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { tryGetCloudflareEnvSync } from "@/lib/runtime/cloudflare-context";
 
 export type BrowserRenderingPdfResult =
   | { ok: true; bytes: Uint8Array; via: "binding" | "rest" | "mock" }
   | { ok: false; code: string; message: string };
+
+export type BrowserRenderingRestCredentials = {
+  accountId: string;
+  token: string;
+};
 
 type BrowserBinding = {
   /** Workers Bindings quickAction PDF (compat date ≥ 2026-03-24). */
@@ -39,19 +44,13 @@ type CfEnv = {
 
 declare global {
   // Test hook — inject mock renderer without live Cloudflare.
-  // eslint-disable-next-line no-var
   var __cmaBrowserRenderingPdfMock:
     | ((html: string) => Promise<Uint8Array> | Uint8Array)
     | undefined;
 }
 
 function readEnv(): CfEnv {
-  try {
-    const { env } = getCloudflareContext();
-    return env as typeof env & CfEnv;
-  } catch {
-    return {};
-  }
+  return (tryGetCloudflareEnvSync() as CfEnv | null) ?? {};
 }
 
 function envString(name: keyof CfEnv): string | undefined {
@@ -67,17 +66,28 @@ function envString(name: keyof CfEnv): string | undefined {
   return undefined;
 }
 
-export function isBrowserRenderingConfigured(): boolean {
-  if (typeof globalThis.__cmaBrowserRenderingPdfMock === "function") {
-    return true;
-  }
-  const env = readEnv();
-  if (env.BROWSER) return true;
+/** Worker BROWSER binding only. Vercel has no binding — never probe OpenNext. */
+function getBrowserBinding(): BrowserBinding | undefined {
+  if (process.env.VERCEL) return undefined;
+  return readEnv().BROWSER;
+}
+
+/** REST credentials from Worker secrets or process.env (Vercel). */
+export function readBrowserRenderingRestCredentials(): BrowserRenderingRestCredentials | null {
   const accountId = envString("CLOUDFLARE_ACCOUNT_ID");
   const token =
     envString("CLOUDFLARE_BROWSER_RENDERING_API_TOKEN") ||
     envString("CLOUDFLARE_API_TOKEN");
-  return Boolean(accountId && token);
+  if (!accountId || !token) return null;
+  return { accountId, token };
+}
+
+export function isBrowserRenderingConfigured(): boolean {
+  if (typeof globalThis.__cmaBrowserRenderingPdfMock === "function") {
+    return true;
+  }
+  if (getBrowserBinding()) return true;
+  return Boolean(readBrowserRenderingRestCredentials());
 }
 
 export function browserRenderingConfigStatus(): {
@@ -92,19 +102,14 @@ export function browserRenderingConfigStatus(): {
       reason: "Test mock renderer installed",
     };
   }
-  const env = readEnv();
-  if (env.BROWSER) {
+  if (getBrowserBinding()) {
     return {
       available: true,
       mode: "binding",
       reason: "Worker BROWSER binding present",
     };
   }
-  const accountId = envString("CLOUDFLARE_ACCOUNT_ID");
-  const token =
-    envString("CLOUDFLARE_BROWSER_RENDERING_API_TOKEN") ||
-    envString("CLOUDFLARE_API_TOKEN");
-  if (accountId && token) {
+  if (readBrowserRenderingRestCredentials()) {
     return {
       available: true,
       mode: "rest",
@@ -114,8 +119,9 @@ export function browserRenderingConfigStatus(): {
   return {
     available: false,
     mode: "unconfigured",
-    reason:
-      "Configure Worker browser binding OR secrets CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_BROWSER_RENDERING_API_TOKEN",
+    reason: process.env.VERCEL
+      ? "Vercel requires CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_BROWSER_RENDERING_API_TOKEN"
+      : "Configure Worker browser binding OR secrets CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_BROWSER_RENDERING_API_TOKEN",
   };
 }
 
@@ -182,11 +188,8 @@ async function renderViaBinding(
 }
 
 async function renderViaRest(html: string): Promise<BrowserRenderingPdfResult> {
-  const accountId = envString("CLOUDFLARE_ACCOUNT_ID");
-  const token =
-    envString("CLOUDFLARE_BROWSER_RENDERING_API_TOKEN") ||
-    envString("CLOUDFLARE_API_TOKEN");
-  if (!accountId || !token) {
+  const creds = readBrowserRenderingRestCredentials();
+  if (!creds) {
     return {
       ok: false,
       code: "NOT_CONFIGURED",
@@ -194,12 +197,12 @@ async function renderViaRest(html: string): Promise<BrowserRenderingPdfResult> {
     };
   }
 
-  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/pdf`;
+  const url = `https://api.cloudflare.com/client/v4/accounts/${creds.accountId}/browser-rendering/pdf`;
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${creds.token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -261,17 +264,12 @@ export async function renderHtmlToPdf(
     }
   }
 
-  const env = readEnv();
-  if (env.BROWSER) {
-    const viaBinding = await renderViaBinding(env.BROWSER, html);
+  const browser = getBrowserBinding();
+  if (browser) {
+    const viaBinding = await renderViaBinding(browser, html);
     if (viaBinding.ok) return viaBinding;
     // Fall through to REST if credentials exist.
-    const restReady = Boolean(
-      envString("CLOUDFLARE_ACCOUNT_ID") &&
-        (envString("CLOUDFLARE_BROWSER_RENDERING_API_TOKEN") ||
-          envString("CLOUDFLARE_API_TOKEN")),
-    );
-    if (!restReady) return viaBinding;
+    if (!readBrowserRenderingRestCredentials()) return viaBinding;
   }
 
   return renderViaRest(html);

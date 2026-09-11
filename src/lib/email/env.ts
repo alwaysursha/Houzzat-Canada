@@ -1,4 +1,4 @@
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { tryGetCloudflareEnvSync } from "@/lib/runtime/cloudflare-context";
 
 type EmailBindings = {
   RESEND_API_KEY?: string;
@@ -14,12 +14,7 @@ type EmailBindings = {
 };
 
 function readBindings(): EmailBindings {
-  try {
-    const { env } = getCloudflareContext();
-    return env as typeof env & EmailBindings;
-  } catch {
-    return {};
-  }
+  return (tryGetCloudflareEnvSync() as EmailBindings | null) ?? {};
 }
 
 /** Prefer Worker bindings, then process.env (local / scripts). */
