@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { isHouzzatVercelTestHost } from "@/lib/auth/pro-sign-in-routing";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
+import { lookupActiveWorkspaceDomainRow } from "@/lib/tenancy/workspace-domain-probe";
 import { loadMobileBootstrapMemberships } from "@/lib/mobile/load-bootstrap-memberships";
 import {
   findMembershipForHostname,
   resolveMobileWorkspaceBootstrapState,
+  resolveVercelTestAliasCurrentHostMembership,
 } from "@/lib/mobile/workspace-bootstrap";
 import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
 import {
@@ -32,9 +36,26 @@ export async function GET(request: Request) {
   }
 
   const memberships = await loadMobileBootstrapMemberships(session.user.id);
-  const currentHostMembership = hostname
+  const canonicalMatch = hostname
     ? findMembershipForHostname(memberships, hostname)
     : null;
+  let aliasWorkspaceId: string | null = null;
+  if (!canonicalMatch && isHouzzatVercelTestHost(hostname)) {
+    const aliasRow = await lookupActiveWorkspaceDomainRow(prisma, hostname);
+    if (
+      aliasRow &&
+      aliasRow.status === "ACTIVE" &&
+      aliasRow.workspaceStatus === "ACTIVE"
+    ) {
+      aliasWorkspaceId = aliasRow.workspaceId;
+    }
+  }
+  const currentHostMembership = resolveVercelTestAliasCurrentHostMembership({
+    hostname,
+    memberships,
+    canonicalMatch,
+    aliasWorkspaceId,
+  });
   const bootstrap = resolveMobileWorkspaceBootstrapState({
     authenticated: true,
     requestHostname: hostname,

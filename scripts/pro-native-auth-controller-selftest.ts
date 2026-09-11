@@ -77,6 +77,21 @@ function testSourceStructure() {
   assert.ok(discoverIdx > vercelOnboardingIdx);
   assert.ok(controllerSrc.includes("hardGo(OWNER_ONBOARDING_RETURN_PATH)"));
   assert.ok(controllerSrc.includes("isHouzzatVercelTestHost(host)"));
+  assert.ok(controllerSrc.includes("finishVercelTestPlainLogin"));
+  assert.ok(controllerSrc.includes("resolveVercelTestPlainLoginHref"));
+  const plainLoginIdx = controllerSrc.indexOf("finishVercelTestPlainLogin");
+  assert.ok(plainLoginIdx > vercelHrefIdx && plainLoginIdx < discoverIdx);
+  const plainFnStart = controllerSrc.indexOf(
+    "public async finishVercelTestPlainLogin",
+  );
+  const discoverFnStart = controllerSrc.indexOf(
+    "public async discoverWorkspace",
+  );
+  assert.ok(plainFnStart > 0 && discoverFnStart > plainFnStart);
+  const plainFn = controllerSrc.slice(plainFnStart, discoverFnStart);
+  assert.ok(plainFn.includes('href = "/platform"'));
+  assert.ok(!plainFn.includes("createHandoff"));
+  assert.ok(!plainFn.includes('hardGo("/pro")'));
   assert.ok(!controllerSrc.includes("*.vercel.app"));
   assert.ok(!controllerSrc.includes('endsWith(".vercel.app")'));
   assert.ok(formSrc.includes("callbackUrl"));

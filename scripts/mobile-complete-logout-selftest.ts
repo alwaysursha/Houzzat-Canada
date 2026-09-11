@@ -236,6 +236,8 @@ function testTransitionUiWiring() {
   assert.ok(signIn.includes("if (signedOut || isManualSignInRequired()) return"));
   assert.ok(signIn.includes("resolveVercelTestPostCredentialsHref"));
   assert.ok(signIn.includes("isPlatformOperatorCallbackPath"));
+  assert.ok(signIn.includes("finishVercelTestPlainLogin"));
+  assert.ok(signIn.includes("isHouzzatVercelTestHost"));
   assert.ok(form.includes("setNativeNavStage(\"BOOTSTRAPPING\")"));
   assert.ok(form.includes("Pro Member Login"));
   assert.ok(form.includes("Book a Demo"));
@@ -271,17 +273,33 @@ function testLogoutWiring() {
   const hard = read("src/lib/auth/hard-sign-out.ts");
   const route = read("src/app/api/auth/logout/route.ts");
   const button = read("src/components/auth/SignOutButton.tsx");
+  const middleware = read("src/middleware.ts");
 
   assert.ok(hard.includes("resolveCompleteSignOutDestination"));
   assert.ok(hard.includes("resolveDestination"));
+  assert.ok(hard.includes('from "next-auth/react"'));
+  assert.ok(hard.includes("signOut({ redirect: false })"));
+  assert.ok(hard.includes("isHouzzatVercelTestHost(window.location.hostname)"));
+  const vercelTestIdx = hard.indexOf("isHouzzatVercelTestHost(window.location.hostname)");
+  const authJsSignOutIdx = hard.indexOf("await authJsSignOutClear()");
+  assert.ok(vercelTestIdx > 0 && authJsSignOutIdx > vercelTestIdx);
+  assert.ok(hard.includes("/api/auth/signout?callbackUrl="));
   assert.ok(route.includes("resolveCompleteSignOutDestination"));
   assert.ok(route.includes("isSafeSignOutReturnUrl"));
   assert.ok(route.includes("PRO_SIGNED_OUT_SIGN_IN_URL") || route.includes("PRO_SIGNED_OUT_SIGN_IN_PATH"));
+  assert.ok(route.includes("isHouzzatVercelTestHost"));
+  assert.ok(route.includes("response.cookies.delete"));
+  assert.ok(route.includes("if (alsoDelete)"));
   assert.ok(button.includes("unregisterCurrentPushDevice"));
   assert.ok(button.includes("performHardSignOut"));
+  assert.ok(middleware.includes("api/auth/logout"));
+  assert.ok(middleware.includes("api/auth/signout"));
   // Must not widen cookie Domain.
   assert.ok(!route.includes("domain:"));
   assert.ok(!route.includes('Domain='));
+  assert.ok(!hard.includes("AUTH_URL"));
+  assert.ok(!hard.includes("NEXTAUTH_URL"));
+  assert.ok(!route.includes("AUTH_URL"));
 }
 
 function testAabParityGateStillPresent() {

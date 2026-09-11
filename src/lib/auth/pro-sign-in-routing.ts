@@ -89,8 +89,41 @@ export function resolveVercelTestPostCredentialsHref(input: {
     return "/onboarding";
   }
   const relative = relativeCallbackPathForVercelTestOrApp(input.callbackUrl);
-  if (relative) return sanitizeStaffCallbackPath(relative);
-  return "/pro";
+  if (relative) {
+    const pathname = (relative.split("?")[0] ?? "").replace(/\/+$/, "") || "/";
+    // /pro is a Capacitor bootstrap surface — blank on this host.
+    if (pathname !== "/pro") {
+      return sanitizeStaffCallbackPath(relative);
+    }
+  }
+  return null;
+}
+
+/**
+ * Plain /pro/sign-in on the Vercel test host (no staff callback).
+ * This-host staff (tenant_destination) → /admin or /agent.
+ * ACTIVE MASTER_ADMIN without this-host membership → /platform.
+ * Never /pro, never Cloudflare handoff.
+ */
+export function resolveVercelTestPlainLoginHref(input: {
+  kind?: string | null;
+  destination?: string | null;
+  membership?: { role?: string | null } | null;
+  memberships?: Array<{ role?: string | null }> | null;
+} | null): string {
+  const kind = input?.kind ?? "";
+  const dest = input?.destination ?? null;
+  if (
+    kind === "tenant_destination" &&
+    (dest === "/admin" ||
+      dest === "/agent" ||
+      dest === "/onboarding" ||
+      dest === "/pro/for-staff")
+  ) {
+    return dest;
+  }
+
+  return "/platform";
 }
 
 /** Physical Vercel R2 upload test host. Exact hostname only — never `*.vercel.app`. */

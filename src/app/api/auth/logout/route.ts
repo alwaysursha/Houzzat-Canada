@@ -7,6 +7,7 @@ import {
   WEB_SIGNED_OUT_HOME_PATH,
 } from "@/lib/auth/complete-pro-logout";
 import { collectAuthCookieNamesToClear } from "@/lib/auth/logout-cookies";
+import { isHouzzatVercelTestHost } from "@/lib/auth/pro-sign-in-routing";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 
 /**
@@ -29,7 +30,11 @@ import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hos
  * with optional safe returnTo redirect).
  */
 
-function expireCookie(response: NextResponse, name: string) {
+function expireCookie(
+  response: NextResponse,
+  name: string,
+  alsoDelete: boolean,
+) {
   const isHost = name.startsWith("__Host-");
   const secure =
     isHost ||
@@ -46,12 +51,23 @@ function expireCookie(response: NextResponse, name: string) {
     sameSite: "lax",
     secure: isHost || secure,
   });
+  // Extra delete only on the Vercel test host. Cloudflare logout stays
+  // expire-Set-Cookie only (header-budget / Workers cookie behavior).
+  if (alsoDelete) {
+    response.cookies.delete({
+      name,
+      path: "/",
+    });
+  }
 }
 
 function applyClears(response: NextResponse, request: Request) {
+  const alsoDelete = isHouzzatVercelTestHost(
+    extractTrustedRequestHostname(request),
+  );
   const header = request.headers.get("cookie") ?? "";
   for (const name of collectAuthCookieNamesToClear(header)) {
-    expireCookie(response, name);
+    expireCookie(response, name, alsoDelete);
   }
   response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
   response.headers.set("Pragma", "no-cache");

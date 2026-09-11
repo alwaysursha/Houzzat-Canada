@@ -12,6 +12,7 @@ import {
   markManualSignInRequired,
 } from "@/lib/auth/remembered-login";
 import {
+  isHouzzatVercelTestHost,
   isPlatformOperatorCallbackPath,
   resolveVercelTestPostCredentialsHref,
   sanitizeStaffCallbackPath,
@@ -57,6 +58,14 @@ function HouzzatProSignInInner() {
       });
       if (vercelHref) {
         hardGo(vercelHref);
+        return;
+      }
+      if (
+        isHouzzatVercelTestHost(
+          typeof window !== "undefined" ? window.location.hostname : null,
+        )
+      ) {
+        await proNativeAuthController.finishVercelTestPlainLogin();
         return;
       }
       if (isPlatformOperatorCallbackPath(callbackUrl)) {

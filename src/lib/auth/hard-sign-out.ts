@@ -12,11 +12,13 @@
  * session is cleared too — without widening cookie Domain.
  */
 
+import { signOut } from "next-auth/react";
 import {
   isSafeSignOutDestination,
   resolveCompleteSignOutDestination,
   WEB_SIGNED_OUT_HOME_PATH,
 } from "@/lib/auth/complete-pro-logout";
+import { isHouzzatVercelTestHost } from "@/lib/auth/pro-sign-in-routing";
 import { authSessionLooksAuthenticated } from "@/lib/auth/logout-cookies";
 import { markManualSignInRequired } from "@/lib/auth/remembered-login";
 import { resolveAppShell } from "@/lib/mobile/app-shell";
@@ -77,6 +79,15 @@ async function postLogoutClear(): Promise<void> {
   }
 }
 
+/** Auth.js official sign-out (POST /api/auth/signout). Vercel test host only. */
+async function authJsSignOutClear(): Promise<void> {
+  try {
+    await signOut({ redirect: false });
+  } catch {
+    // ignore — custom /api/auth/logout remains the Workers path
+  }
+}
+
 /** GET clear via fetch so Set-Cookie applies without loading the API URL as a page. */
 async function getLogoutClearFetch(): Promise<void> {
   try {
@@ -107,13 +118,34 @@ export async function performHardSignOut(options?: {
     // ignore
   }
 
-  // Clear cookies on the *current* host (tenant or platform).
+  const vercelTest =
+    typeof window !== "undefined" &&
+    isHouzzatVercelTestHost(window.location.hostname);
+
+  if (vercelTest) {
+    // Auth.js POST /api/auth/signout while CSRF cookie still exists.
+    // Custom expire-only Set-Cookie does not drop the Vercel JWT session.
+    // Cloudflare Workers must not call this (re-issues the session cookie).
+    await authJsSignOutClear();
+  }
+
+  // Clear leftover cookies on the *current* host (tenant or platform).
   await postLogoutClear();
 
   let stillAuthed = await fetchAuthSessionUser();
   if (stillAuthed) {
+    if (vercelTest) {
+      await authJsSignOutClear();
+    }
     await getLogoutClearFetch();
     stillAuthed = await fetchAuthSessionUser();
+  }
+
+  if (vercelTest && stillAuthed) {
+    window.location.assign(
+      "/api/auth/signout?callbackUrl=%2Fpro%2Fsign-in%3FsignedOut%3D1",
+    );
+    return { sessionCleared: false, destination };
   }
 
   // Pro on tenant → absolute platform /api/auth/logout (GET clears platform + lands on sign-in).

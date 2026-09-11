@@ -19,6 +19,7 @@ import { hardGo } from "@/lib/mobile/nav-back";
 import {
   isPlatformOperatorCallbackPath,
   isHouzzatVercelTestHost,
+  resolveVercelTestPlainLoginHref,
   resolveVercelTestPostCredentialsHref,
   sanitizeStaffCallbackPath,
   shouldStayOnVercelTestOnboarding,
@@ -351,6 +352,10 @@ class ProNativeAuthController {
           hardGo(vercelHref);
           return { ok: true };
         }
+        if (isHouzzatVercelTestHost(currentHost())) {
+          await this.finishVercelTestPlainLogin();
+          return { ok: true };
+        }
 
         // Master Admin /platform login is not native workspace bootstrap.
         // On tenant hosts, bootstrap would attempt a handoff that can
@@ -422,6 +427,42 @@ class ProNativeAuthController {
     })();
 
     return this.activeSubmitPromise;
+  }
+
+  /**
+   * Exact-host plain login (no /platform callback). Never lands on blank /pro.
+   * This-host tenant staff → /admin or /agent. Else MASTER_ADMIN → /platform.
+   */
+  public async finishVercelTestPlainLogin(): Promise<void> {
+    let href = "/platform";
+    try {
+      const res = await fetch("/api/mobile/workspace-bootstrap", {
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          bootstrap?: {
+            kind?: string | null;
+            destination?: string | null;
+            membership?: { role?: string | null } | null;
+            memberships?: Array<{ role?: string | null }> | null;
+          };
+          memberships?: Array<{ role?: string | null }> | null;
+        };
+        href = resolveVercelTestPlainLoginHref({
+          kind: data.bootstrap?.kind,
+          destination: data.bootstrap?.destination,
+          membership: data.bootstrap?.membership,
+          memberships:
+            data.bootstrap?.memberships ?? data.memberships ?? null,
+        });
+      }
+    } catch {
+      href = "/platform";
+    }
+    this.transitionTo("FINAL_NAVIGATION", { destination: href });
+    hardGo(href);
   }
 
   /**

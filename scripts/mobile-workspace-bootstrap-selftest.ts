@@ -17,6 +17,7 @@ import {
 import {
   findMembershipForHostname,
   resolveMobileWorkspaceBootstrapState,
+  resolveVercelTestAliasCurrentHostMembership,
   type MobileBootstrapMembership,
 } from "../src/lib/mobile/workspace-bootstrap";
 import { resolveWorkspaceMemberMobileDestination } from "../src/lib/mobile/workspace-destination";
@@ -354,6 +355,87 @@ function testHostnameMembershipLookup() {
   assert.equal(findMembershipForHostname([canary], "houzzat.com"), null);
 }
 
+function testVercelTestAliasCurrentHostMembership() {
+  const remax = membership({
+    workspaceId: "ws_remax_alias_test",
+    role: "OWNER",
+    slug: "re-max-realty",
+    canonicalHostname: "re-max-realty.houzzatpro.com",
+  });
+  const houzzatAgent = membership({
+    workspaceId: HOUZZAT_FIXTURE_WORKSPACE_ID,
+    role: "AGENT",
+    slug: "houzzat",
+    canonicalHostname: "houzzat.com",
+  });
+
+  assert.equal(
+    resolveVercelTestAliasCurrentHostMembership({
+      hostname: "houzzat-vercel-test.vercel.app",
+      memberships: [houzzatAgent, remax],
+      canonicalMatch: null,
+      aliasWorkspaceId: remax.workspaceId,
+    })?.workspaceId,
+    remax.workspaceId,
+  );
+  assert.equal(
+    resolveVercelTestAliasCurrentHostMembership({
+      hostname: "houzzat-vercel-test.vercel.app",
+      memberships: [houzzatAgent],
+      canonicalMatch: null,
+      aliasWorkspaceId: remax.workspaceId,
+    }),
+    null,
+  );
+  assert.equal(
+    resolveVercelTestAliasCurrentHostMembership({
+      hostname: "app.houzzatpro.com",
+      memberships: [remax],
+      canonicalMatch: null,
+      aliasWorkspaceId: remax.workspaceId,
+    }),
+    null,
+  );
+  assert.equal(
+    resolveVercelTestAliasCurrentHostMembership({
+      hostname: "re-max-realty.houzzatpro.com",
+      memberships: [remax],
+      canonicalMatch: remax,
+      aliasWorkspaceId: remax.workspaceId,
+    })?.workspaceId,
+    remax.workspaceId,
+  );
+
+  assert.equal(
+    resolveMobileWorkspaceBootstrapState({
+      authenticated: true,
+      requestHostname: "houzzat-vercel-test.vercel.app",
+      memberships: [remax],
+      currentHostMembership: remax,
+    }).kind,
+    "tenant_destination",
+  );
+  assert.equal(
+    resolveMobileWorkspaceBootstrapState({
+      authenticated: true,
+      requestHostname: "houzzat-vercel-test.vercel.app",
+      memberships: [houzzatAgent],
+      currentHostMembership: null,
+    }).kind,
+    "handoff",
+  );
+
+  const route = readFileSync(
+    join(root, "src/app/api/mobile/workspace-bootstrap/route.ts"),
+    "utf8",
+  );
+  assert.ok(route.includes("isHouzzatVercelTestHost(hostname)"));
+  assert.ok(route.includes("lookupActiveWorkspaceDomainRow"));
+  assert.ok(route.includes("resolveVercelTestAliasCurrentHostMembership"));
+  assert.ok(!route.includes("*.vercel.app"));
+  assert.ok(!route.includes('endsWith(".vercel.app")'));
+}
+
 function testAbaNoWorkspaceBleed() {
   const canary = membership({
     workspaceId: TENANT_B_TEST_WORKSPACE_ID,
@@ -498,6 +580,7 @@ function main() {
   testRoutingWiring();
   testFixtureDomains();
   testHostnameMembershipLookup();
+  testVercelTestAliasCurrentHostMembership();
   testNativeAppShellCrossHostResolution();
   console.log("mobile-workspace-bootstrap:selftest OK");
 }

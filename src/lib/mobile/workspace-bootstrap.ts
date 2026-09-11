@@ -2,6 +2,7 @@
  * Stage 3K.5.10 — mobile workspace bootstrap state (pure + server helpers).
  */
 import type { WorkspaceMemberRole } from "@prisma/client";
+import { isHouzzatVercelTestHost } from "@/lib/auth/pro-sign-in-routing";
 import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
 import {
   isStaffWorkspaceMemberRole,
@@ -109,4 +110,28 @@ export function findMembershipForHostname(
   hostname: string,
 ): MobileBootstrapMembership | null {
   return memberships.find((m) => m.canonicalHostname === hostname) ?? null;
+}
+
+export function findMembershipForWorkspaceId(
+  memberships: MobileBootstrapMembership[],
+  workspaceId: string | null | undefined,
+): MobileBootstrapMembership | null {
+  if (!workspaceId) return null;
+  return memberships.find((m) => m.workspaceId === workspaceId) ?? null;
+}
+
+/**
+ * Exact-host only: houzzat-vercel-test.vercel.app is a WorkspaceDomain alias
+ * (canonical remains re-max-realty.houzzatpro.com). Canonical hostname match
+ * misses this-host staff. Production hosts unchanged.
+ */
+export function resolveVercelTestAliasCurrentHostMembership(input: {
+  hostname: string | null | undefined;
+  memberships: MobileBootstrapMembership[];
+  canonicalMatch: MobileBootstrapMembership | null;
+  aliasWorkspaceId: string | null | undefined;
+}): MobileBootstrapMembership | null {
+  if (input.canonicalMatch) return input.canonicalMatch;
+  if (!isHouzzatVercelTestHost(input.hostname)) return null;
+  return findMembershipForWorkspaceId(input.memberships, input.aliasWorkspaceId);
 }

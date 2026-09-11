@@ -11,6 +11,7 @@ import {
   isVercelTestMasterAdminCredentialsException,
   relativeCallbackPathForVercelTestOrApp,
   resolveProPostSignInHref,
+  resolveVercelTestPlainLoginHref,
   resolveVercelTestPostCredentialsHref,
   sanitizeStaffCallbackPath,
   shouldStayOnVercelTestOnboarding,
@@ -87,7 +88,79 @@ function testSanitize() {
     resolveVercelTestPostCredentialsHref({
       hostname: "houzzat-vercel-test.vercel.app",
     }),
-    "/pro",
+    null,
+  );
+  assert.equal(
+    resolveVercelTestPostCredentialsHref({
+      hostname: "houzzat-vercel-test.vercel.app",
+      callbackUrl: "/pro",
+    }),
+    null,
+  );
+  assert.equal(
+    resolveVercelTestPostCredentialsHref({
+      hostname: "houzzat-vercel-test.vercel.app",
+      callbackUrl: "/pro/",
+    }),
+    null,
+  );
+  assert.equal(
+    resolveVercelTestPostCredentialsHref({
+      hostname: "houzzat-vercel-test.vercel.app",
+      callbackUrl: "/admin",
+    }),
+    "/admin",
+  );
+  assert.equal(
+    resolveVercelTestPlainLoginHref({ kind: "no_workspace" }),
+    "/platform",
+  );
+  assert.equal(
+    resolveVercelTestPlainLoginHref({ kind: "platform_sign_in" }),
+    "/platform",
+  );
+  assert.equal(resolveVercelTestPlainLoginHref(null), "/platform");
+  assert.equal(
+    resolveVercelTestPlainLoginHref({
+      kind: "tenant_destination",
+      destination: "/admin",
+    }),
+    "/admin",
+  );
+  assert.equal(
+    resolveVercelTestPlainLoginHref({
+      kind: "tenant_destination",
+      destination: "/agent",
+    }),
+    "/agent",
+  );
+  assert.equal(
+    resolveVercelTestPlainLoginHref({
+      kind: "handoff",
+      membership: { role: "OWNER" },
+    }),
+    "/platform",
+  );
+  assert.equal(
+    resolveVercelTestPlainLoginHref({
+      kind: "handoff",
+      membership: { role: "AGENT" },
+    }),
+    "/platform",
+  );
+  assert.equal(
+    resolveVercelTestPlainLoginHref({
+      kind: "select_workspace",
+      memberships: [{ role: "ADMIN" }],
+    }),
+    "/platform",
+  );
+  assert.equal(
+    resolveVercelTestPlainLoginHref({
+      kind: "tenant_destination",
+      destination: "/pro",
+    }),
+    "/platform",
   );
   assert.equal(
     resolveVercelTestPostCredentialsHref({
@@ -304,6 +377,14 @@ function testPlatformUnauthenticatedProRedirect() {
       isNative: false,
     }),
     true,
+  );
+  assert.equal(
+    shouldRunProWorkspaceBootstrap({
+      pathname: "/pro",
+      hostname: "houzzat-vercel-test.vercel.app",
+      isNative: false,
+    }),
+    false,
   );
 }
 
