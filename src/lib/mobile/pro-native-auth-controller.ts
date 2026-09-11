@@ -19,6 +19,7 @@ import { hardGo } from "@/lib/mobile/nav-back";
 import {
   isPlatformOperatorCallbackPath,
   sanitizeStaffCallbackPath,
+  shouldStayOnVercelTestOnboarding,
 } from "@/lib/auth/pro-sign-in-routing";
 import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
 import { HOUZZATPRO_START_PATH } from "@/lib/mobile/app-shell";
@@ -349,6 +350,23 @@ class ProNativeAuthController {
           );
           this.transitionTo("FINAL_NAVIGATION", { destination });
           hardGo(destination);
+          return { ok: true };
+        }
+
+        // Physical Vercel R2 test host only. Keep /onboarding on this origin
+        // instead of minting a handoff to the workspace canonical HouzzatPRO
+        // domain (Cloudflare). Handoff allowlists and canonical origin are unchanged.
+        if (
+          shouldStayOnVercelTestOnboarding({
+            hostname: currentHost(),
+            callbackUrl: input.callbackUrl,
+            returnPath: input.returnPath ?? this.pendingReturnPath,
+          })
+        ) {
+          this.transitionTo("FINAL_NAVIGATION", {
+            destination: OWNER_ONBOARDING_RETURN_PATH,
+          });
+          hardGo(OWNER_ONBOARDING_RETURN_PATH);
           return { ok: true };
         }
 

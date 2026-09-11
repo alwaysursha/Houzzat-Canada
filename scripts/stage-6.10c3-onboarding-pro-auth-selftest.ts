@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   appendOwnerOnboardingAuthQuery,
+  buildHouzzatVercelTestOnboardingSignInUrl,
   buildOwnerOnboardingProSignInUrl,
   OWNER_ONBOARDING_RETURN_PATH,
   parseOwnerOnboardingAuthSearchParams,
@@ -49,9 +50,13 @@ function membership(workspaceId: string, slug: string, host: string) {
 function testSourceGuards() {
   const page = read("src/app/(app)/onboarding/page.tsx");
   assert.ok(page.includes("buildOwnerOnboardingProSignInUrl"));
+  assert.ok(page.includes("buildHouzzatVercelTestOnboardingSignInUrl"));
+  assert.ok(page.includes("isHouzzatVercelTestHost"));
   assert.ok(page.includes("resolveRequestTenancy"));
   assert.ok(!page.includes("/auth/sign-in?callbackUrl=/onboarding"));
   assert.ok(!page.includes("/auth/signin"));
+  assert.ok(!page.includes("*.vercel.app"));
+  assert.ok(!page.includes('endsWith(".vercel.app")'));
 
   const bridge = read("src/components/auth/AuthRouteBridge.tsx");
   // Must not "fix" onboarding by mapping to / in the consumer bridge.
@@ -98,6 +103,17 @@ function testProSignInUrl() {
   assert.equal(parsed.searchParams.get("returnPath"), "/onboarding");
   assert.equal(parsed.searchParams.get("workspaceHint"), WS_REMAX);
   assert.equal(parsed.searchParams.get("callbackUrl"), null);
+
+  const vercelUrl = buildHouzzatVercelTestOnboardingSignInUrl({
+    workspaceId: WS_REMAX,
+    returnPath: "/onboarding",
+  });
+  assert.equal(vercelUrl.startsWith("/pro/sign-in?"), true);
+  assert.equal(vercelUrl.includes("app.houzzatpro.com"), false);
+  const vercelParsed = new URL(vercelUrl, "https://houzzat-vercel-test.vercel.app");
+  assert.equal(vercelParsed.searchParams.get("callbackUrl"), "/onboarding");
+  assert.equal(vercelParsed.searchParams.get("returnPath"), "/onboarding");
+  assert.equal(vercelParsed.searchParams.get("workspaceHint"), WS_REMAX);
 
   // Malicious returnPath collapses to allowlisted /onboarding when building onboarding URL
   // (builder always forces onboarding allowlist default).
@@ -220,6 +236,8 @@ function testNoAuthSignInLoopWiring() {
   const page = read("src/app/(app)/onboarding/page.tsx");
   assert.ok(page.includes("HOUZZATPRO_APP_BOOTSTRAP_ORIGIN") === false);
   assert.ok(page.includes("buildOwnerOnboardingProSignInUrl"));
+  assert.ok(page.includes("isHouzzatVercelTestHost(tenancy.hostname)"));
+  assert.ok(page.includes("buildHouzzatVercelTestOnboardingSignInUrl"));
   assert.ok(page.includes('returnPath: "/onboarding"'));
 
   const parsed = parseOwnerOnboardingAuthSearchParams(

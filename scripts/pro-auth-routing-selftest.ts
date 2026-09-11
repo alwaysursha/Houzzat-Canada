@@ -4,9 +4,13 @@
  */
 import assert from "node:assert/strict";
 import {
+  HOUZZAT_VERCEL_TEST_HOSTNAME,
+  isHouzzatVercelTestHost,
+  isOwnerOnboardingCallbackPath,
   isPlatformOperatorCallbackPath,
   resolveProPostSignInHref,
   sanitizeStaffCallbackPath,
+  shouldStayOnVercelTestOnboarding,
   staffSignInHref,
 } from "../src/lib/auth/pro-sign-in-routing";
 import {
@@ -33,6 +37,87 @@ function testSanitize() {
   assert.equal(isPlatformOperatorCallbackPath("//evil.com/platform"), false);
   assert.equal(isPlatformOperatorCallbackPath("https://evil.com/platform"), false);
   assert.equal(isPlatformOperatorCallbackPath("/platforming"), false);
+}
+
+function testHouzzatVercelTestOnboardingStay() {
+  assert.equal(HOUZZAT_VERCEL_TEST_HOSTNAME, "houzzat-vercel-test.vercel.app");
+  assert.equal(isHouzzatVercelTestHost("houzzat-vercel-test.vercel.app"), true);
+  assert.equal(
+    isHouzzatVercelTestHost("HOUZZAT-VERCEL-TEST.VERCEL.APP"),
+    true,
+  );
+  assert.equal(isHouzzatVercelTestHost("houzzat-vercel-test.vercel.app "), true);
+  assert.equal(isHouzzatVercelTestHost("preview.vercel.app"), false);
+  assert.equal(isHouzzatVercelTestHost("something.vercel.app"), false);
+  assert.equal(
+    isHouzzatVercelTestHost("houzzat-vercel-test.vercel.app.evil.com"),
+    false,
+  );
+  assert.equal(
+    isHouzzatVercelTestHost("not-houzzat-vercel-test.vercel.app"),
+    false,
+  );
+  assert.equal(isHouzzatVercelTestHost("app.houzzatpro.com"), false);
+  assert.equal(isHouzzatVercelTestHost("re-max-realty.houzzatpro.com"), false);
+  assert.equal(isHouzzatVercelTestHost("houzzat.com"), false);
+  assert.equal(isHouzzatVercelTestHost(null), false);
+  assert.equal(isHouzzatVercelTestHost(""), false);
+
+  assert.equal(isOwnerOnboardingCallbackPath("/onboarding"), true);
+  assert.equal(isOwnerOnboardingCallbackPath("/onboarding/"), true);
+  assert.equal(isOwnerOnboardingCallbackPath("/onboarding?x=1"), true);
+  assert.equal(isOwnerOnboardingCallbackPath("/onboarding/extra"), false);
+  assert.equal(isOwnerOnboardingCallbackPath("/platform"), false);
+  assert.equal(isOwnerOnboardingCallbackPath("//evil.com/onboarding"), false);
+  assert.equal(
+    isOwnerOnboardingCallbackPath("https://evil.com/onboarding"),
+    false,
+  );
+
+  assert.equal(
+    shouldStayOnVercelTestOnboarding({
+      hostname: "houzzat-vercel-test.vercel.app",
+      callbackUrl: "/onboarding",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldStayOnVercelTestOnboarding({
+      hostname: "houzzat-vercel-test.vercel.app",
+      returnPath: "/onboarding",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldStayOnVercelTestOnboarding({
+      hostname: "houzzat-vercel-test.vercel.app",
+      callbackUrl: "/platform",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldStayOnVercelTestOnboarding({
+      hostname: "app.houzzatpro.com",
+      callbackUrl: "/onboarding",
+      returnPath: "/onboarding",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldStayOnVercelTestOnboarding({
+      hostname: "re-max-realty.houzzatpro.com",
+      callbackUrl: "/onboarding",
+      returnPath: "/onboarding",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldStayOnVercelTestOnboarding({
+      hostname: "preview.vercel.app",
+      callbackUrl: "/onboarding",
+    }),
+    false,
+  );
 }
 
 function testPostSignInDeepLinks() {
@@ -117,6 +202,7 @@ function testPlatformUnauthenticatedProRedirect() {
 }
 
 testSanitize();
+testHouzzatVercelTestOnboardingStay();
 testPostSignInDeepLinks();
 testStaffSignInHref();
 testPlatformUnauthenticatedProRedirect();

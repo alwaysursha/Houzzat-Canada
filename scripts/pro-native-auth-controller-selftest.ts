@@ -65,8 +65,16 @@ function testSourceStructure() {
   const platformCallbackIdx = controllerSrc.indexOf(
     "isPlatformOperatorCallbackPath(input.callbackUrl)",
   );
+  const vercelOnboardingIdx = controllerSrc.indexOf(
+    "shouldStayOnVercelTestOnboarding({",
+  );
   const discoverIdx = controllerSrc.indexOf("const disc = await this.discoverWorkspace()");
   assert.ok(platformCallbackIdx > 0 && discoverIdx > platformCallbackIdx);
+  assert.ok(vercelOnboardingIdx > platformCallbackIdx);
+  assert.ok(discoverIdx > vercelOnboardingIdx);
+  assert.ok(controllerSrc.includes("hardGo(OWNER_ONBOARDING_RETURN_PATH)"));
+  assert.ok(!controllerSrc.includes("*.vercel.app"));
+  assert.ok(!controllerSrc.includes('endsWith(".vercel.app")'));
   assert.ok(formSrc.includes("callbackUrl"));
 
   // Exchange delegates exchange to proNativeAuthController

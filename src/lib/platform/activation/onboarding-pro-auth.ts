@@ -90,6 +90,27 @@ export function buildOwnerOnboardingProSignInUrl(input: {
   return url.toString();
 }
 
+/**
+ * Same-origin Pro sign-in for houzzat-vercel-test.vercel.app only.
+ * Production continues to use buildOwnerOnboardingProSignInUrl (app.houzzatpro.com).
+ */
+export function buildHouzzatVercelTestOnboardingSignInUrl(input: {
+  workspaceId: string;
+  returnPath?: string | null;
+}): string {
+  const returnPath =
+    sanitizeOwnerOnboardingReturnPath(input.returnPath) ??
+    OWNER_ONBOARDING_RETURN_PATH;
+  const hint = sanitizeWorkspaceHintId(input.workspaceId);
+  const url = new URL("/pro/sign-in", "https://houzzat.invalid");
+  url.searchParams.set("callbackUrl", OWNER_ONBOARDING_RETURN_PATH);
+  url.searchParams.set(OWNER_ONBOARDING_AUTH_QUERY.returnPath, returnPath);
+  if (hint) {
+    url.searchParams.set(OWNER_ONBOARDING_AUTH_QUERY.workspaceHint, hint);
+  }
+  return `${url.pathname}${url.search}`;
+}
+
 export function parseOwnerOnboardingAuthSearchParams(
   params: URLSearchParams | { get(name: string): string | null },
 ): {

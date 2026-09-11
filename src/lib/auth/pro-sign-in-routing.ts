@@ -51,6 +51,52 @@ export function isPlatformOperatorCallbackPath(
   return pathname === "/platform" || pathname.startsWith("/platform/");
 }
 
+/** Physical Vercel R2 upload test host. Exact hostname only — never `*.vercel.app`. */
+export const HOUZZAT_VERCEL_TEST_HOSTNAME = "houzzat-vercel-test.vercel.app";
+
+export function isHouzzatVercelTestHost(
+  hostname: string | null | undefined,
+): boolean {
+  if (!hostname) return false;
+  return hostname.trim().toLowerCase() === HOUZZAT_VERCEL_TEST_HOSTNAME;
+}
+
+function isSafeRelativeAppPath(
+  raw: string | null | undefined,
+): raw is string {
+  return (
+    !!raw &&
+    raw.startsWith("/") &&
+    !raw.startsWith("//") &&
+    !raw.includes("://")
+  );
+}
+
+/** Same-origin OWNER onboarding callback. `/onboarding` only — not nested paths. */
+export function isOwnerOnboardingCallbackPath(
+  callbackUrl: string | null | undefined,
+): boolean {
+  if (!isSafeRelativeAppPath(callbackUrl)) return false;
+  const pathname = (callbackUrl.split("?")[0] ?? "").replace(/\/+$/, "");
+  return pathname === "/onboarding";
+}
+
+/**
+ * Vercel-test-only: stay on houzzat-vercel-test.vercel.app/onboarding.
+ * Production HouzzatPRO hosts still bootstrap/handoff to canonical tenant.
+ */
+export function shouldStayOnVercelTestOnboarding(input: {
+  hostname: string | null | undefined;
+  callbackUrl?: string | null;
+  returnPath?: string | null;
+}): boolean {
+  if (!isHouzzatVercelTestHost(input.hostname)) return false;
+  return (
+    isOwnerOnboardingCallbackPath(input.callbackUrl) ||
+    isOwnerOnboardingCallbackPath(input.returnPath)
+  );
+}
+
 /**
  * After Pro credentials sign-in: honor deep staff callbacks when the role
  * permits; never send AGENT into Admin; BUYER → staff-only screen.

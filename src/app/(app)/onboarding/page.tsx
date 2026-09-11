@@ -1,7 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { isHouzzatVercelTestHost } from "@/lib/auth/pro-sign-in-routing";
 import { OwnerOnboardingClient } from "@/components/onboarding/OwnerOnboardingClient";
-import { buildOwnerOnboardingProSignInUrl } from "@/lib/platform/activation/onboarding-pro-auth";
+import {
+  buildHouzzatVercelTestOnboardingSignInUrl,
+  buildOwnerOnboardingProSignInUrl,
+} from "@/lib/platform/activation/onboarding-pro-auth";
 import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
 import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
 
@@ -20,6 +24,14 @@ export default async function OwnerOnboardingPage() {
 
   const session = await auth();
   if (!session?.user?.id) {
+    if (isHouzzatVercelTestHost(tenancy.hostname)) {
+      redirect(
+        buildHouzzatVercelTestOnboardingSignInUrl({
+          workspaceId: tenancy.workspaceId,
+          returnPath: "/onboarding",
+        }),
+      );
+    }
     redirect(
       buildOwnerOnboardingProSignInUrl({
         workspaceId: tenancy.workspaceId,
