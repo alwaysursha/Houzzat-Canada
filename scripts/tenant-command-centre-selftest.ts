@@ -70,7 +70,7 @@ function testAuthMatrix() {
   assert.ok(layout.includes("TenantThemeStyle"));
   // User.role ADMIN alone must not authorize tenant HQ
   assert.ok(layout.includes("authorizeTenantCommandCentre(request"));
-  assert.ok(layout.includes("isHouzzatVercelTestHost(hostname)"));
+  assert.ok(layout.includes("shouldDeferStaffWebRoleToHostnameMembership"));
 }
 
 function testWorkspacePredicates() {

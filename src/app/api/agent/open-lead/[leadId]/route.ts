@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAgentUser } from "@/lib/agent";
 import { openLeadProfileHref } from "@/lib/agent/lead-profile-query";
 import {
   ACTIVE_WORKSPACE_COOKIE,
@@ -11,8 +11,6 @@ import {
 import { SITE_URL } from "@/lib/constants";
 import { isActiveHostnameBoundReadMode } from "@/lib/crm-read-scope";
 import { resolveOpenLeadHandoff } from "@/lib/open-lead-handoff";
-import { prisma } from "@/lib/prisma";
-import { isAgentRole } from "@/lib/roles";
 import { tryTenantStaffContext } from "@/lib/tenancy/tenant-staff-context";
 
 function deskRedirect(leadId: string) {
@@ -31,20 +29,6 @@ function withWorkspaceCookie(response: NextResponse, workspaceId: string) {
   return response;
 }
 
-async function requireAgentUserId(): Promise<{
-  id: string;
-  role: string;
-} | null> {
-  const session = await auth();
-  if (!session?.user?.id) return null;
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { id: true, role: true, disabledAt: true },
-  });
-  if (!user || user.disabledAt || !isAgentRole(user.role)) return null;
-  return user;
-}
-
 /**
  * Same-workspace / implied-context handoff (cookie write + desk redirect).
  * Rejects true cross-workspace switches — those require POST after confirm UI.
@@ -53,7 +37,7 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ leadId: string }> },
 ) {
-  const user = await requireAgentUserId();
+  const user = await requireAgentUser();
   if (!user) {
     const { leadId } = await context.params;
     const signIn = new URL("/pro/sign-in", SITE_URL);
@@ -109,7 +93,7 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   }
 
-  const user = await requireAgentUserId();
+  const user = await requireAgentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -6,13 +6,16 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { StaffRouteConsumerGate } from "@/components/mobile/StaffRouteConsumerGate";
 import { TenantBrandProvider } from "@/components/tenancy/TenantBrandProvider";
 import { TenantThemeStyle } from "@/components/tenancy/TenantThemeStyle";
-import { shouldUseHostnameBoundStaffContext } from "@/lib/tenancy/tenant-staff-context";
+import {
+  shouldUseHostnameBoundStaffContext,
+  tryTenantStaffContext,
+} from "@/lib/tenancy/tenant-staff-context";
 import { auth } from "@/lib/auth";
 import {
   redirectNonAdminFromAdminShell,
   staffSignInRedirectUrl,
 } from "@/lib/auth/staff-sign-in-redirect";
-import { isHouzzatVercelTestHost } from "@/lib/auth/pro-sign-in-routing";
+import { shouldDeferStaffWebRoleToHostnameMembership } from "@/lib/auth/pro-sign-in-routing";
 import { isAgentRole } from "@/lib/roles";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import {
@@ -57,7 +60,7 @@ export default async function AdminLayout({
     : null;
   if (
     !isAgentRole(user.role) &&
-    !isHouzzatVercelTestHost(hostname)
+    !shouldDeferStaffWebRoleToHostnameMembership(hostname)
   ) {
     await redirectNonAdminFromAdminShell(user.role);
   }
@@ -77,8 +80,14 @@ export default async function AdminLayout({
       role: user.role ?? "",
     });
     if (!tenantAuth) {
-      // AGENT members and platform ADMIN without membership → CRM, not HQ.
-      redirect("/agent");
+      const tenantStaff = await tryTenantStaffContext(request, {
+        id: user.id,
+        role: user.role ?? "",
+      });
+      if (tenantStaff) {
+        redirect("/agent");
+      }
+      await redirectNonAdminFromAdminShell(user.role);
     }
 
     const tenancy = await resolveRequestTenancy(request);

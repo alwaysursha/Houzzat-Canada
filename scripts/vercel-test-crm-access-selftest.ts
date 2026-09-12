@@ -20,6 +20,17 @@ function read(rel: string) {
   return readFileSync(join(root, rel), "utf8");
 }
 
+function withTenantDomainScope(mode: "workspace" | "legacy", fn: () => void) {
+  const prev = process.env.TENANT_DOMAIN_SCOPE;
+  process.env.TENANT_DOMAIN_SCOPE = mode;
+  try {
+    fn();
+  } finally {
+    if (prev === undefined) delete process.env.TENANT_DOMAIN_SCOPE;
+    else process.env.TENANT_DOMAIN_SCOPE = prev;
+  }
+}
+
 function testExactHostDeferral() {
   assert.equal(HOUZZAT_VERCEL_TEST_HOSTNAME, "houzzat-vercel-test.vercel.app");
   assert.equal(
@@ -29,18 +40,30 @@ function testExactHostDeferral() {
     true,
   );
   assert.equal(isHouzzatVercelTestHost("preview.vercel.app"), false);
-  assert.equal(
-    shouldDeferStaffWebRoleToHostnameMembership("app.houzzatpro.com"),
-    false,
-  );
-  assert.equal(
-    shouldDeferStaffWebRoleToHostnameMembership("re-max-realty.houzzatpro.com"),
-    false,
-  );
-  assert.equal(
-    shouldDeferStaffWebRoleToHostnameMembership("houzzat.com"),
-    false,
-  );
+  withTenantDomainScope("workspace", () => {
+    assert.equal(
+      shouldDeferStaffWebRoleToHostnameMembership("app.houzzatpro.com"),
+      false,
+    );
+    assert.equal(
+      shouldDeferStaffWebRoleToHostnameMembership("re-max-realty.houzzatpro.com"),
+      true,
+    );
+    assert.equal(
+      shouldDeferStaffWebRoleToHostnameMembership("houzzat.com"),
+      true,
+    );
+  });
+  withTenantDomainScope("legacy", () => {
+    assert.equal(
+      shouldDeferStaffWebRoleToHostnameMembership("re-max-realty.houzzatpro.com"),
+      false,
+    );
+    assert.equal(
+      shouldDeferStaffWebRoleToHostnameMembership("houzzat.com"),
+      false,
+    );
+  });
 }
 
 function testMembershipRoles() {
@@ -60,12 +83,12 @@ function testSourceGuards() {
   assert.ok(!mw.includes('endsWith(".vercel.app")'));
 
   const adminLayout = read("src/app/(admin)/admin/layout.tsx");
-  assert.ok(adminLayout.includes("isHouzzatVercelTestHost(hostname)"));
+  assert.ok(adminLayout.includes("shouldDeferStaffWebRoleToHostnameMembership"));
   assert.ok(adminLayout.includes("authorizeTenantCommandCentre(request"));
   assert.ok(adminLayout.includes("isAgentRole(user.role)"));
 
   const agent = read("src/lib/agent.ts");
-  assert.ok(agent.includes("isVercelTestHostnameStaffMember"));
+  assert.ok(agent.includes("isHostnameBoundStaffMember"));
   assert.ok(agent.includes("tryTenantStaffContext"));
   assert.ok(agent.includes("isStaffWorkspaceMemberRole"));
   assert.ok(agent.includes("isHouzzatVercelTestHost"));

@@ -23,6 +23,7 @@ import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hos
 import { isStaffWorkspaceMemberRole } from "@/lib/mobile/workspace-destination";
 import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
 import {
+  isTenantHostnameBoundCrmHost,
   shouldUseHostnameBoundStaffContext,
   tryTenantStaffContext,
 } from "@/lib/tenancy/tenant-staff-context";
@@ -93,8 +94,9 @@ export const requireAgentGate = cache(async (): Promise<AgentGate | null> => {
 
   const isPlatformAdmin = isAdminRole(session.user.role);
 
-  // Platform admins: session role is enough (JWT rechecked periodically).
-  if (isPlatformAdmin) {
+  // Platform User.role ADMIN is not tenant CRM authority. On tenant hosts,
+  // hostname-bound WorkspaceMember is required (requireAgentUser).
+  if (isPlatformAdmin && !(await isHostnameBoundStaffAuthorityHost())) {
     if (!session.user.id || !session.user.email) return null;
     return {
       user: {
@@ -136,10 +138,15 @@ export const requireAgentUser = cache(async (): Promise<AgentUser | null> => {
 
   if (!user) return null;
 
+  // Hostname → WorkspaceDomain → ACTIVE Workspace → ACTIVE WorkspaceMember.
+  // User.role=BUYER with OWNER/ADMIN/AGENT membership is tenant staff.
+  if (await isHostnameBoundStaffMember(user.id)) return user;
+
+  if (await isHostnameBoundStaffAuthorityHost()) {
+    return null;
+  }
+
   if (!isAgentRole(user.role)) {
-    // houzzat-vercel-test.vercel.app only — User.role stays BUYER/SELLER.
-    // ACTIVE WorkspaceMember OWNER/ADMIN/AGENT on the hostname workspace.
-    if (await isVercelTestHostnameStaffMember(user.id)) return user;
     return null;
   }
 
@@ -155,11 +162,22 @@ export const requireAgentUser = cache(async (): Promise<AgentUser | null> => {
   return user;
 });
 
-async function isVercelTestHostnameStaffMember(userId: string): Promise<boolean> {
+async function isHostnameBoundStaffAuthorityHost(): Promise<boolean> {
   const request = await buildSyntheticRequestFromHeaders();
   if (!request) return false;
   const hostname = extractTrustedRequestHostname(request);
-  if (!isHouzzatVercelTestHost(hostname)) return false;
+  if (isHouzzatVercelTestHost(hostname)) return true;
+  if (!hostname) return false;
+  return (
+    shouldUseHostnameBoundStaffContext() &&
+    isTenantHostnameBoundCrmHost(hostname)
+  );
+}
+
+async function isHostnameBoundStaffMember(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  const request = await buildSyntheticRequestFromHeaders();
+  if (!request) return false;
   const tenant = await tryTenantStaffContext(request, {
     id: userId,
     role: "",
@@ -422,7 +440,8 @@ export const requireAgentContext = cache(
     const request = await buildSyntheticRequestFromHeaders();
     if (
       request &&
-      isHouzzatVercelTestHost(extractTrustedRequestHostname(request))
+      (isHouzzatVercelTestHost(extractTrustedRequestHostname(request)) ||
+        shouldUseHostnameBoundStaffContext())
     ) {
       return buildHostnameBoundAgentContext(user, request, false);
     }

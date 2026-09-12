@@ -8,8 +8,10 @@ import { StaffRouteConsumerGate } from "@/components/mobile/StaffRouteConsumerGa
 import { TenantBrandProvider } from "@/components/tenancy/TenantBrandProvider";
 import { TenantThemeStyle } from "@/components/tenancy/TenantThemeStyle";
 import { requireAgentContext, requireAgentGate } from "@/lib/agent";
+import { auth } from "@/lib/auth";
 import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
+import { isAgentRole } from "@/lib/roles";
 import { buildSyntheticRequestFromHeaders } from "@/lib/tenancy/auth-origin";
 import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import { toMarketingPresentationBrand } from "@/lib/tenancy/marketing-presentation-brand";
@@ -41,11 +43,18 @@ export default async function AgentLayout({
 
   const gate = await requireAgentGate();
   if (!gate) {
+    const session = await auth();
+    if (session?.user && !isAgentRole(session.user.role)) {
+      redirect("/account");
+    }
     redirect(await staffSignInRedirectUrl("/agent"));
   }
 
   const ctx = await requireAgentContext();
   if (!ctx) {
+    if (!isAgentRole(gate.user.role)) {
+      redirect("/account");
+    }
     redirect(await staffSignInRedirectUrl("/agent"));
   }
 

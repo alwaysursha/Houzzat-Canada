@@ -147,6 +147,7 @@
     "tenant-authority-shadow:selftest": "node --import tsx scripts/tenant-authority-shadow-selftest.ts",
     "platform-bootstrap:selftest": "node --import tsx scripts/platform-bootstrap-regression-selftest.ts",
     "tenant-command-centre:selftest": "node --import tsx scripts/tenant-command-centre-selftest.ts",
+    "tenant-hostname-staff-web-access:selftest": "node --import tsx scripts/tenant-hostname-staff-web-access-selftest.ts",
     "vercel-test-crm-access:selftest": "node --import tsx scripts/vercel-test-crm-access-selftest.ts",
     "vercel-test-platform-login:selftest": "node --import tsx scripts/vercel-test-platform-login-selftest.ts",
     "cap-pro-android-config:selftest": "node --import tsx scripts/cap-pro-android-config-selftest.ts",

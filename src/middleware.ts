@@ -166,8 +166,8 @@ export default auth((request) => {
     }
     // Staff only at middleware. Platform vs tenant Command Centre auth is
     // enforced in admin layout (hostname + WorkspaceMember OWNER/ADMIN).
-    // houzzat-vercel-test.vercel.app: defer User.role — layout still
-    // authorizes ACTIVE WorkspaceMember on the hostname workspace.
+    // Tenant CRM hosts (and the exact Vercel test host): defer User.role —
+    // layout still authorizes ACTIVE WorkspaceMember on the hostname workspace.
     const host =
       request.headers.get("host")?.split(":")[0]?.trim().toLowerCase() ?? "";
     if (

@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { requireAgentUser } from "@/lib/agent";
 import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { openLeadProfileHref } from "@/lib/agent/lead-profile-query";
 import { readActiveWorkspaceIdFromCookies } from "@/lib/active-workspace";
 import { resolveOpenLeadHandoff } from "@/lib/open-lead-handoff";
-import { prisma } from "@/lib/prisma";
-import { isAgentRole } from "@/lib/roles";
 
 /**
  * Stage 3I.1 — server-validated lead deep-link handoff (read-only page).
@@ -24,17 +22,9 @@ export default async function OpenLeadHandoffPage({
   params: Promise<{ leadId: string }>;
 }) {
   const { leadId } = await params;
-  const session = await auth();
-  if (!session?.user?.id) {
+  const user = await requireAgentUser();
+  if (!user) {
     redirect(await staffSignInRedirectUrl(`/agent/open-lead/${leadId}`));
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { id: true, role: true, disabledAt: true },
-  });
-  if (!user || user.disabledAt || !isAgentRole(user.role)) {
-    notFound();
   }
 
   const cookieWorkspaceId = await readActiveWorkspaceIdFromCookies();

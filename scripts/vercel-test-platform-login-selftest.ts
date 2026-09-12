@@ -184,7 +184,7 @@ function testSourceGuards() {
   assert.ok(platformUi.includes("/platform/access-denied"));
 
   const agent = read("src/lib/agent.ts");
-  assert.ok(agent.includes("isVercelTestHostnameStaffMember"));
+  assert.ok(agent.includes("isHostnameBoundStaffMember"));
   assert.ok(agent.includes("isStaffWorkspaceMemberRole"));
   assert.equal(agent.includes("allowVercelTestMasterAdminCredentialsLogin"), false);
   assert.equal(agent.includes("isVercelTestMasterAdminCredentialsException"), false);

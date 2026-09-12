@@ -6,12 +6,16 @@
 import type {
   PlatformOperatorRole,
   PlatformOperatorStatus,
+  WorkspaceMemberRole,
 } from "@prisma/client";
 import {
   HOUZZATPRO_STAFF_ONLY_PATH,
   HOUZZATPRO_START_PATH,
 } from "@/lib/mobile/app-shell";
+import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
+import { isStaffWorkspaceMemberRole } from "@/lib/mobile/workspace-destination";
 import { isAdminRole, isAgentRole, isStaffRole } from "@/lib/roles";
+import { isTenantDomainScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
 
 /** Reject open redirects; keep internal app paths only. */
 export function sanitizeStaffCallbackPath(
@@ -217,48 +221,86 @@ export function shouldStayOnVercelTestOnboarding(input: {
 }
 
 /**
- * Edge-safe: on houzzat-vercel-test.vercel.app, do not bounce /admin|/agent
- * using User.role. Layouts still require ACTIVE WorkspaceMember on the
- * hostname workspace (OWNER / ADMIN / AGENT). Production hosts unchanged.
+ * Edge-safe: do not bounce /admin|/agent using User.role when the host is a
+ * tenant CRM hostname (TENANT_DOMAIN_SCOPE=workspace, not platform root /
+ * app bootstrap) or the exact Vercel test host. Layouts still require
+ * ACTIVE hostname-bound WorkspaceMember (OWNER / ADMIN / AGENT).
+ * User.role is not tenant authority.
  */
 export function shouldDeferStaffWebRoleToHostnameMembership(
   hostname: string | null | undefined,
 ): boolean {
-  return isHouzzatVercelTestHost(hostname);
+  if (isHouzzatVercelTestHost(hostname)) return true;
+  if (!hostname) return false;
+  const host = hostname.trim().toLowerCase().split(":")[0] ?? "";
+  if (!host) return false;
+  if (host === "houzzatpro.com" || host === "www.houzzatpro.com") return false;
+  if (isPlatformMobileBootstrapHost(host)) return false;
+  return isTenantDomainScopeWorkspace();
+}
+
+function workspaceRoleGrantsTenantStaffWeb(
+  workspaceRole: WorkspaceMemberRole | null | undefined,
+): boolean {
+  if (!workspaceRole) return false;
+  return isStaffWorkspaceMemberRole(workspaceRole);
+}
+
+function workspaceRoleGrantsTenantCommandCentre(
+  workspaceRole: WorkspaceMemberRole | null | undefined,
+): boolean {
+  if (!workspaceRole) return false;
+  switch (workspaceRole) {
+    case "OWNER":
+    case "ADMIN":
+      return true;
+    case "AGENT":
+      return false;
+    default: {
+      const _exhaustive: never = workspaceRole;
+      return _exhaustive;
+    }
+  }
 }
 
 /**
- * After Pro credentials sign-in: honor deep staff callbacks when the role
- * permits; never send AGENT into Admin; BUYER → staff-only screen.
+ * After Pro credentials sign-in: honor deep staff callbacks when User.role
+ * or hostname-bound WorkspaceMember role permits; never send AGENT into
+ * Admin; consumer without tenant staff membership → staff-only screen.
  */
 export function resolveProPostSignInHref(
   callbackUrl: string | null | undefined,
   role?: string | null,
+  workspaceRole?: WorkspaceMemberRole | null,
 ): string {
   const target = sanitizeStaffCallbackPath(callbackUrl);
+  const staffByMembership = workspaceRoleGrantsTenantStaffWeb(workspaceRole);
+  const canCommandCentre =
+    isAdminRole(role) || workspaceRoleGrantsTenantCommandCentre(workspaceRole);
+  const canAgentDesk = isAgentRole(role) || staffByMembership;
 
-  if (!isStaffRole(role)) {
+  if (!isStaffRole(role) && !staffByMembership) {
     return HOUZZATPRO_STAFF_ONLY_PATH;
   }
 
   if (target.startsWith("/admin")) {
-    if (isAdminRole(role)) return target;
+    if (canCommandCentre) return target;
     return "/agent";
   }
 
   if (target.startsWith("/agent")) {
-    if (isAgentRole(role)) return target;
+    if (canAgentDesk) return target;
     return HOUZZATPRO_STAFF_ONLY_PATH;
   }
 
   if (target === HOUZZATPRO_START_PATH || target.startsWith("/pro")) {
-    if (isAdminRole(role)) return "/admin";
-    if (role === "AGENT") return "/agent";
+    if (canCommandCentre) return "/admin";
+    if (role === "AGENT" || workspaceRole === "AGENT") return "/agent";
     return HOUZZATPRO_STAFF_ONLY_PATH;
   }
 
-  if (isAdminRole(role)) return "/admin";
-  if (role === "AGENT") return "/agent";
+  if (canCommandCentre) return "/admin";
+  if (role === "AGENT" || workspaceRole === "AGENT") return "/agent";
   return HOUZZATPRO_STAFF_ONLY_PATH;
 }
 

@@ -264,24 +264,38 @@ function testHouzzatVercelTestOnboardingStay() {
     ),
     true,
   );
-  assert.equal(
-    shouldDeferStaffWebRoleToHostnameMembership("app.houzzatpro.com"),
-    false,
-  );
-  assert.equal(
-    shouldDeferStaffWebRoleToHostnameMembership(
-      "re-max-realty.houzzatpro.com",
-    ),
-    false,
-  );
-  assert.equal(
-    shouldDeferStaffWebRoleToHostnameMembership("houzzat.com"),
-    false,
-  );
-  assert.equal(
-    shouldDeferStaffWebRoleToHostnameMembership("preview.vercel.app"),
-    false,
-  );
+  const prevDomain = process.env.TENANT_DOMAIN_SCOPE;
+  process.env.TENANT_DOMAIN_SCOPE = "workspace";
+  try {
+    assert.equal(
+      shouldDeferStaffWebRoleToHostnameMembership("app.houzzatpro.com"),
+      false,
+    );
+    assert.equal(
+      shouldDeferStaffWebRoleToHostnameMembership(
+        "re-max-realty.houzzatpro.com",
+      ),
+      true,
+    );
+    assert.equal(
+      shouldDeferStaffWebRoleToHostnameMembership("houzzat.com"),
+      true,
+    );
+  } finally {
+    process.env.TENANT_DOMAIN_SCOPE = "legacy";
+    assert.equal(
+      shouldDeferStaffWebRoleToHostnameMembership(
+        "re-max-realty.houzzatpro.com",
+      ),
+      false,
+    );
+    assert.equal(
+      shouldDeferStaffWebRoleToHostnameMembership("preview.vercel.app"),
+      false,
+    );
+    if (prevDomain === undefined) delete process.env.TENANT_DOMAIN_SCOPE;
+    else process.env.TENANT_DOMAIN_SCOPE = prevDomain;
+  }
 
   assert.equal(
     isVercelTestMasterAdminCredentialsException({
@@ -319,6 +333,14 @@ function testPostSignInDeepLinks() {
   assert.equal(resolveProPostSignInHref("/pro", "ADMIN"), "/admin");
   assert.equal(resolveProPostSignInHref("/pro", "AGENT"), "/agent");
   assert.equal(resolveProPostSignInHref("/agent", "BUYER"), "/pro/for-staff");
+  assert.equal(
+    resolveProPostSignInHref("/admin", "BUYER", "OWNER"),
+    "/admin",
+  );
+  assert.equal(
+    resolveProPostSignInHref("/agent", "BUYER", "OWNER"),
+    "/agent",
+  );
   // Unsafe callbacks sanitize to /pro, then role home for staff.
   assert.equal(resolveProPostSignInHref("https://evil.com", "AGENT"), "/agent");
   assert.equal(
