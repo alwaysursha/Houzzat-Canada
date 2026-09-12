@@ -303,6 +303,15 @@ class ProNativeAuthController {
       return { ok: false, error: "Authentication in progress" };
     }
 
+    // A new credential submit is a new operation. sessionStorage keeps
+    // HANDOFF_NAVIGATING/COMPLETE after the first tenant handoff in this tab;
+    // without a reset, AUTHENTICATING is rejected as non-monotonic and
+    // discoverWorkspace returns ok without navigating — the form stays on
+    // “Signing in…”. Closing the tab clears sessionStorage and “fixes” it.
+    if (this.snapshot.state !== "SIGNED_OUT") {
+      this.reset("SIGNED_OUT");
+    }
+
     this.setOnboardingAuthMeta({
       returnPath: input.returnPath,
       workspaceHint: input.workspaceHint,
@@ -542,7 +551,15 @@ class ProNativeAuthController {
         }
 
         if (bootstrap.kind === "handoff") {
-          await this.createHandoff(bootstrap.membership.workspaceId);
+          const handoffUrl = await this.createHandoff(
+            bootstrap.membership.workspaceId,
+          );
+          if (!handoffUrl) {
+            return {
+              ok: false,
+              error: this.snapshot.error ?? "Handoff mint failed",
+            };
+          }
           return { ok: true, state: bootstrap };
         }
 
@@ -767,6 +784,8 @@ class ProNativeAuthController {
     this.activeHandoffPromise = null;
     this.activeExchangePromise = null;
     this.exchangedCodes.clear();
+    this.pendingReturnPath = null;
+    this.pendingWorkspaceHint = null;
 
     this.snapshot = {
       state,

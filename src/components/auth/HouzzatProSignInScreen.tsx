@@ -37,9 +37,11 @@ function HouzzatProSignInInner() {
   useEffect(() => {
     if (checked.current) return;
     checked.current = true;
+    // Drop persisted HANDOFF_NAVIGATING/COMPLETE from a prior tenant in this tab
+    // even when signedOut=1 is missing (logout ran on the tenant origin).
+    clearNativeNavStage();
     if (signedOut) {
       markManualSignInRequired();
-      clearNativeNavStage();
     }
     proNativeAuthController.setOnboardingAuthMeta({
       returnPath,

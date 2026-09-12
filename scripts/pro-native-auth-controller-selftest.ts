@@ -34,6 +34,7 @@ function testSourceStructure() {
   const controllerSrc = read("src/lib/mobile/pro-native-auth-controller.ts");
   const latchSrc = read("src/lib/mobile/native-route-latch.ts");
   const formSrc = read("src/components/auth/HouzzatProSignInForm.tsx");
+  const signInScreenSrc = read("src/components/auth/HouzzatProSignInScreen.tsx");
   const exchangeSrc = read("src/components/mobile/ProMobileHandoffExchange.tsx");
   const bootstrapSrc = read("src/components/mobile/ProWorkspaceBootstrap.tsx");
 
@@ -59,6 +60,30 @@ function testSourceStructure() {
   assert.ok(controllerSrc.includes("retry"));
   assert.ok(controllerSrc.includes("signOut"));
   assert.ok(controllerSrc.includes("reset"));
+
+  // Same-tab tenant switch: a new credential submit must reset persisted
+  // HANDOFF_NAVIGATING/COMPLETE so discovery/handoff can run again.
+  const submitFnStart = controllerSrc.indexOf(
+    "public async submitCredentials(input: {",
+  );
+  const discoverFnStartForSubmit = controllerSrc.indexOf(
+    "public async finishVercelTestPlainLogin",
+  );
+  assert.ok(submitFnStart > 0 && discoverFnStartForSubmit > submitFnStart);
+  const submitFn = controllerSrc.slice(submitFnStart, discoverFnStartForSubmit);
+  const resetBeforeAuth = submitFn.includes('this.reset("SIGNED_OUT")');
+  const authenticatingIdx = submitFn.indexOf(
+    'this.transitionTo("AUTHENTICATING"',
+  );
+  const resetIdx = submitFn.indexOf("this.reset(");
+  assert.ok(resetBeforeAuth, "submitCredentials must reset stale controller state");
+  assert.ok(resetIdx >= 0 && authenticatingIdx > resetIdx);
+  assert.ok(controllerSrc.includes("this.pendingReturnPath = null"));
+  assert.ok(controllerSrc.includes("this.pendingWorkspaceHint = null"));
+
+  const handoffKindIdx = controllerSrc.indexOf('bootstrap.kind === "handoff"');
+  const handoffFailIdx = controllerSrc.indexOf("Handoff mint failed");
+  assert.ok(handoffKindIdx > 0 && handoffFailIdx > handoffKindIdx);
 
   // Master Admin /platform callback skips native workspace bootstrap/handoff.
   assert.ok(controllerSrc.includes("isPlatformOperatorCallbackPath"));
@@ -95,6 +120,15 @@ function testSourceStructure() {
   assert.ok(!controllerSrc.includes("*.vercel.app"));
   assert.ok(!controllerSrc.includes('endsWith(".vercel.app")'));
   assert.ok(formSrc.includes("callbackUrl"));
+
+  // Sign-in screen must reset the controller on every mount, not only signedOut=1.
+  const screenClearIdx = signInScreenSrc.indexOf("clearNativeNavStage()");
+  const screenSignedOutIdx = signInScreenSrc.indexOf("if (signedOut)");
+  assert.ok(screenClearIdx > 0);
+  assert.ok(
+    screenClearIdx < screenSignedOutIdx,
+    "sign-in mount must reset controller before the signedOut early-return",
+  );
 
   // Exchange delegates exchange to proNativeAuthController
   assert.ok(exchangeSrc.includes("proNativeAuthController.exchangeHandoff"));
