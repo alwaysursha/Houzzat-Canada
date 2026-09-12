@@ -5,6 +5,7 @@ import { staffSignInRedirectUrl } from "@/lib/auth/staff-sign-in-redirect";
 import { openLeadProfileHref } from "@/lib/agent/lead-profile-query";
 import { readActiveWorkspaceIdFromCookies } from "@/lib/active-workspace";
 import { resolveOpenLeadHandoff } from "@/lib/open-lead-handoff";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Stage 3I.1 — server-validated lead deep-link handoff (read-only page).
