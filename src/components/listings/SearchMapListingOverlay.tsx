@@ -16,7 +16,7 @@ import { useClientAccess } from "@/hooks/use-client-access";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { ListingCardActions } from "@/components/listings/ListingCardActions";
 import { ListingFactsPanel } from "@/components/listings/ListingFactsPanel";
-import { ListingGallery } from "@/components/listings/ListingGallery";
+import { ListingGalleryLive } from "@/components/listings/ListingGalleryLive";
 import { ListingHistoryPanel } from "@/components/listings/ListingHistoryPanel";
 import { ListingNarrative } from "@/components/listings/ListingNarrative";
 import { ListingQaPanel } from "@/components/listings/ListingQaPanel";
@@ -323,7 +323,7 @@ export function SearchMapListingOverlay({
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-4 sm:px-6 sm:py-6 lg:max-w-7xl">
-            <ListingGallery
+            <ListingGalleryLive
               addressLabel={addressLabel}
               mlsNumber={card.mlsNumber}
               callbackPath={listingPath(card)}

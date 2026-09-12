@@ -64,6 +64,19 @@ async function main() {
   console.log("[0] ListingGalleryLive falls through unless richer than Neon... PASS");
   console.log("[0b] Vercel does not pass the RSC gallery thenable to the client... PASS");
 
+  const overlay = read("src/components/listings/SearchMapListingOverlay.tsx");
+  const searchExperience = read("src/components/listings/SearchExperience.tsx");
+  assert.ok(overlay.includes('from "@/components/listings/ListingGalleryLive"'));
+  assert.ok(overlay.includes("<ListingGalleryLive"));
+  assert.ok(overlay.includes("photos={photos}"));
+  assert.ok(!overlay.includes('from "@/components/listings/ListingGallery"'));
+  assert.ok(!/\bListingGallery\b/.test(overlay.replaceAll("ListingGalleryLive", "")));
+  assert.ok(!overlay.includes("livePhotosPromise"));
+  assert.ok(searchExperience.includes("onOpenListing={!isNarrow ? openListingDetail : undefined}"));
+  assert.ok(searchExperience.includes("<SearchMapListingOverlay"));
+  console.log("[0c] Search overlay uses ListingGalleryLive with Neon photos... PASS");
+  console.log("[0d] Desktop Search overlay navigation is unchanged... PASS");
+
   assert.equal(galleryIsRicherThanNeon([]), false);
   assert.equal(galleryIsRicherThanNeon(Array.from({ length: 5 })), false);
   assert.equal(galleryIsRicherThanNeon(Array.from({ length: 6 })), true);
