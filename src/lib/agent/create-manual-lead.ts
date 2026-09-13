@@ -1,4 +1,5 @@
-import { createCallNewLeadTask } from "@/lib/agent/lead-intake";
+import type { LeadIntent, PurchaseTimeframe } from "@prisma/client";
+import { createCallNewLeadTask, resolveLeadIntent } from "@/lib/agent/lead-intake";
 import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { prisma } from "@/lib/prisma";
 
@@ -17,6 +18,17 @@ export type ManualLeadInput = {
   workspaceId?: string | null;
   /** Activity body on the lead timeline. */
   activityBody?: string;
+  isBuyer?: boolean;
+  isSeller?: boolean;
+  homeAddress?: string | null;
+  purchaseTimeframe?: PurchaseTimeframe | null;
+  utmSource?: string | null;
+  /**
+   * Import-only. When set, CASL/contact consent is applied only if true
+   * and the row is not opted out. Omit for manual Add Lead.
+   */
+  assertCommunicationConsent?: boolean;
+  optedOut?: boolean;
 };
 
 /**
@@ -28,6 +40,19 @@ export async function createManualLead(input: ManualLeadInput) {
   const name = input.name.trim();
   const phone = input.phone?.trim() || null;
   const notes = input.notes?.trim() || null;
+  const homeAddress = input.homeAddress?.trim() || null;
+  const utmSource = input.utmSource?.trim() || null;
+  const isImport = input.assertCommunicationConsent !== undefined;
+  const isBuyer = input.isBuyer ?? true;
+  const isSeller = input.isSeller ?? false;
+  const intent: LeadIntent = resolveLeadIntent({ isBuyer, isSeller });
+  const optedOut = input.optedOut === true;
+  const grantConsent = isImport
+    ? Boolean(input.assertCommunicationConsent) && !optedOut
+    : true;
+  const consentAt = grantConsent ? new Date() : null;
+  const stampClassification =
+    input.isBuyer !== undefined || input.isSeller !== undefined;
 
   let customer = await prisma.user.findUnique({ where: { email } });
   if (!customer) {
@@ -36,9 +61,13 @@ export async function createManualLead(input: ManualLeadInput) {
         email,
         name,
         phone,
+        homeAddress,
+        purchaseTimeframe: input.purchaseTimeframe ?? null,
         role: "BUYER",
-        isBuyer: true,
-        caslConsentAt: new Date(),
+        isBuyer,
+        isSeller,
+        emailAlertsEnabled: optedOut ? false : true,
+        caslConsentAt: consentAt,
       },
     });
   } else {
@@ -47,6 +76,14 @@ export async function createManualLead(input: ManualLeadInput) {
       data: {
         name: customer.name || name,
         phone: customer.phone || phone,
+        homeAddress: customer.homeAddress || homeAddress,
+        purchaseTimeframe:
+          customer.purchaseTimeframe || input.purchaseTimeframe || undefined,
+        ...(stampClassification ? { isBuyer, isSeller } : {}),
+        ...(optedOut ? { emailAlertsEnabled: false } : {}),
+        ...(grantConsent && !customer.caslConsentAt
+          ? { caslConsentAt: consentAt }
+          : {}),
       },
     });
   }
@@ -63,14 +100,15 @@ export async function createManualLead(input: ManualLeadInput) {
     data: {
       status: "NEW_LEAD",
       source: "OTHER",
-      intent: "BUYER",
+      intent,
       score: 10,
       notes,
+      utmSource,
       customerId: customer.id,
       assignedAgentId: input.agentId,
       organizationId: ownership.organizationId ?? input.organizationId,
       workspaceId: ownership.workspaceId,
-      contactConsentAt: new Date(),
+      contactConsentAt: consentAt,
       statusChangedAt: new Date(),
       activities: {
         create: {
@@ -89,21 +127,5 @@ export async function createManualLead(input: ManualLeadInput) {
     createdById: input.agentId,
   });
 
-  return { leadId: lead.id, customerId: customer.id, email };
-}
-
-/** Open (non-closed) lead already on this desk for the email. */
-export async function findOpenOrgLeadForEmail(
-  organizationId: string,
-  email: string,
-) {
-  const normalized = email.trim().toLowerCase();
-  return prisma.lead.findFirst({
-    where: {
-      organizationId,
-      status: { not: "PAST_CLIENT" },
-      customer: { email: normalized },
-    },
-    select: { id: true },
-  });
+  return { leadId: lead.id, customerId: customer.id, email, intent };
 }

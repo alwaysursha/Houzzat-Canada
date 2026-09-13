@@ -3,11 +3,16 @@
 import { useMemo, useState } from "react";
 import { Download, Trash2, Upload } from "lucide-react";
 import {
+  classifyImportedLead,
+  LEAD_IMPORT_DEFAULT_TYPES,
+  type LeadImportDefaultType,
+} from "@/lib/agent/lead-import-classify";
+import {
   draftsFromMappedRows,
   LEAD_IMPORT_FIELD_OPTIONS,
   parseLeadsCsvTable,
   suggestLeadImportMapping,
-  validateImportDraft,
+  validateImportDraftForType,
   type LeadImportColumnMapping,
   type LeadImportDraft,
   type LeadImportField,
@@ -25,12 +30,27 @@ type ImportResult = {
   skippedCount: number;
   failedCount: number;
   parseErrorCount: number;
+  deferredCount?: number;
   skipped: Array<{ row: number; email: string; reason: string }>;
   failed: Array<{ row: number; email: string; error: string }>;
   parseErrors: Array<{ row: number; error: string }>;
+  deferred?: Array<{
+    row: number;
+    email: string;
+    field: string;
+    value: string;
+    reason: string;
+  }>;
 };
 
 const MAX_ROWS = 500;
+
+const DEFAULT_TYPE_LABEL: Record<LeadImportDefaultType, string> = {
+  buyer: "Buyer",
+  seller: "Seller",
+  both: "Buyer + Seller",
+  detect: "Detect from CSV",
+};
 
 export function LeadImportModal({
   open,
@@ -46,6 +66,9 @@ export function LeadImportModal({
   const [rawRows, setRawRows] = useState<Record<string, string>[]>([]);
   const [mapping, setMapping] = useState<LeadImportColumnMapping[]>([]);
   const [drafts, setDrafts] = useState<LeadImportDraft[]>([]);
+  const [defaultLeadType, setDefaultLeadType] =
+    useState<LeadImportDefaultType>("detect");
+  const [assertConsent, setAssertConsent] = useState(false);
   const [allowDupes, setAllowDupes] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -55,13 +78,15 @@ export function LeadImportModal({
     let ready = 0;
     let issues = 0;
     let skipped = 0;
+    let deferred = 0;
     const emails = new Map<string, number>();
     for (const draft of drafts) {
       if (!draft.included) {
         skipped += 1;
         continue;
       }
-      const problems = validateImportDraft(draft);
+      if (draft.deferred.length) deferred += 1;
+      const problems = validateImportDraftForType(draft, defaultLeadType);
       const email = draft.email.trim().toLowerCase();
       if (email) {
         emails.set(email, (emails.get(email) ?? 0) + 1);
@@ -75,8 +100,8 @@ export function LeadImportModal({
       const email = draft.email.trim().toLowerCase();
       if (email && (emails.get(email) ?? 0) > 1) dupeIssues += 1;
     }
-    return { ready, issues, skipped, dupeIssues };
-  }, [drafts]);
+    return { ready, issues, skipped, dupeIssues, deferred };
+  }, [drafts, defaultLeadType]);
 
   function reset() {
     setStep("upload");
@@ -84,6 +109,8 @@ export function LeadImportModal({
     setRawRows([]);
     setMapping([]);
     setDrafts([]);
+    setDefaultLeadType("detect");
+    setAssertConsent(false);
     setAllowDupes(false);
     setError(null);
     setPending(false);
@@ -121,7 +148,12 @@ export function LeadImportModal({
       return;
     }
     const nextMapping = suggestLeadImportMapping(headers);
-    const hasName = nextMapping.some((m) => m.field === "name");
+    const hasName = nextMapping.some(
+      (m) =>
+        m.field === "name" ||
+        m.field === "first_name" ||
+        m.field === "last_name",
+    );
     const hasEmail = nextMapping.some((m) => m.field === "email");
     setFileName(file.name);
     setRawRows(rows);
@@ -139,7 +171,6 @@ export function LeadImportModal({
     setMapping((prev) => {
       const next = prev.map((col) => {
         if (col.header !== header) {
-          // Only one column per field
           if (field !== "skip" && col.field === field) {
             return { ...col, field: "skip" as const };
           }
@@ -177,13 +208,20 @@ export function LeadImportModal({
 
     const leads = drafts
       .filter((d) => d.included)
-      .filter((d) => validateImportDraft(d).length === 0)
+      .filter((d) => validateImportDraftForType(d, defaultLeadType).length === 0)
       .filter((d) => (emailCounts.get(d.email.trim().toLowerCase()) ?? 0) === 1)
       .map((d) => ({
         name: d.name.trim(),
         email: d.email.trim().toLowerCase(),
         phone: d.phone.trim() || undefined,
         notes: d.notes.trim() || undefined,
+        homeAddress: d.homeAddress.trim() || undefined,
+        timeframeRaw: undefined as string | undefined,
+        purchaseTimeframe: d.purchaseTimeframe ?? undefined,
+        utmSource: d.utmSource.trim() || undefined,
+        leadTypeRaw: d.leadTypeRaw.trim() || undefined,
+        optedOut: d.optedOut,
+        deferred: d.deferred,
         row: d.row,
       }));
 
@@ -200,6 +238,8 @@ export function LeadImportModal({
         body: JSON.stringify({
           leads,
           allowDuplicates: allowDupes,
+          defaultLeadType,
+          assertCommunicationConsent: assertConsent,
         }),
       });
       const json = (await res.json()) as ImportResult & { error?: string };
@@ -214,6 +254,8 @@ export function LeadImportModal({
             skipped: [],
             failed: [],
             parseErrors: json.parseErrors,
+            deferred: json.deferred,
+            deferredCount: json.deferredCount,
           });
         }
         return;
@@ -223,9 +265,11 @@ export function LeadImportModal({
         skippedCount: json.skippedCount ?? 0,
         failedCount: json.failedCount ?? 0,
         parseErrorCount: json.parseErrorCount ?? 0,
+        deferredCount: json.deferredCount ?? 0,
         skipped: json.skipped ?? [],
         failed: json.failed ?? [],
         parseErrors: json.parseErrors ?? [],
+        deferred: json.deferred ?? [],
       });
       setStep("done");
       if ((json.createdCount ?? 0) > 0) onImported();
@@ -254,7 +298,7 @@ export function LeadImportModal({
               {step === "upload"
                 ? "Upload a CSV — we’ll map columns automatically."
                 : step === "review"
-                  ? "Review and fix anything before importing."
+                  ? "Review mappings, lead type, and consent before importing."
                   : "Import finished."}
             </p>
           </div>
@@ -271,11 +315,13 @@ export function LeadImportModal({
           {step === "upload" ? (
             <div className="space-y-4">
               <p className="text-[13px] leading-relaxed text-[#475569]">
-                Required fields after mapping:{" "}
-                <span className="font-semibold text-[#334155]">name</span> and{" "}
+                Required after mapping:{" "}
+                <span className="font-semibold text-[#334155]">name</span>{" "}
+                (or first + last) and{" "}
                 <span className="font-semibold text-[#334155]">email</span>.
-                Phone and notes are optional. Max {MAX_ROWS} rows. Imported leads
-                are assigned to you as New Lead.
+                Max {MAX_ROWS} rows. Choose a Default Lead Type on the next step.
+                Tags and some CRM dates are recognized but stored in a later
+                phase — they are not written into Notes.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <a
@@ -349,6 +395,15 @@ export function LeadImportModal({
                       </span>
                     </>
                   ) : null}
+                  {stats.deferred ? (
+                    <>
+                      {" "}
+                      ·{" "}
+                      <span className="text-[#64748b]">
+                        {stats.deferred} with fields for the next phase
+                      </span>
+                    </>
+                  ) : null}
                 </p>
                 <button
                   type="button"
@@ -359,6 +414,50 @@ export function LeadImportModal({
                 >
                   Choose another file
                 </button>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-[12px]">
+                  <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-[#64748b]">
+                    Default Lead Type
+                  </span>
+                  <select
+                    value={defaultLeadType}
+                    onChange={(e) =>
+                      setDefaultLeadType(
+                        e.target.value as LeadImportDefaultType,
+                      )
+                    }
+                    className="w-full rounded border border-[#d8dee6] bg-white px-2 py-1.5 text-[12px] font-semibold text-[#0f172a]"
+                  >
+                    {LEAD_IMPORT_DEFAULT_TYPES.map((value) => (
+                      <option key={value} value={value}>
+                        {DEFAULT_TYPE_LABEL[value]}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-1.5 block text-[11px] text-[#64748b]">
+                    Seller files with no type column: choose Seller. Detect uses
+                    a mapped Lead Type column per row.
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-[12px] text-[#475569]">
+                  <input
+                    type="checkbox"
+                    checked={assertConsent}
+                    onChange={(e) => setAssertConsent(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    I confirm these contacts are being transferred from my
+                    existing CRM and I have the appropriate permission/basis to
+                    continue communicating with them.
+                    <span className="mt-1 block text-[11px] text-[#64748b]">
+                      Unchecked by default. Unsubscribe / opt-out in the file
+                      always wins.
+                    </span>
+                  </span>
+                </label>
               </div>
 
               <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3">
@@ -412,7 +511,7 @@ export function LeadImportModal({
                   <tbody>
                     {drafts.map((draft) => {
                       const issues = draft.included
-                        ? validateImportDraft(draft)
+                        ? validateImportDraftForType(draft, defaultLeadType)
                         : [];
                       const email = draft.email.trim().toLowerCase();
                       const dupe =
@@ -425,6 +524,10 @@ export function LeadImportModal({
                         ).length > 1;
                       if (dupe) issues.push("Duplicate email in file");
                       const hasIssue = issues.length > 0;
+                      const classification = classifyImportedLead(
+                        defaultLeadType,
+                        draft.leadTypeRaw,
+                      );
 
                       return (
                         <tr
@@ -483,9 +586,37 @@ export function LeadImportModal({
                                 {issues[0]}
                               </span>
                             ) : (
-                              <span className="font-medium text-[#059669]">
-                                Ready
-                              </span>
+                              <div className="space-y-0.5">
+                                <span className="font-medium text-[#059669]">
+                                  Ready
+                                  {classification.ok
+                                    ? classification.isBuyer &&
+                                      classification.isSeller
+                                      ? " · Buyer + Seller"
+                                      : classification.isSeller
+                                        ? " · Seller"
+                                        : " · Buyer"
+                                    : null}
+                                </span>
+                                {draft.homeAddress ? (
+                                  <p className="text-[10px] text-[#64748b]">
+                                    {draft.homeAddress}
+                                  </p>
+                                ) : null}
+                                {draft.utmSource ? (
+                                  <p className="text-[10px] text-[#64748b]">
+                                    Source: {draft.utmSource}
+                                  </p>
+                                ) : null}
+                                {draft.deferred.length ? (
+                                  <p className="text-[10px] text-[#b45309]">
+                                    Next phase:{" "}
+                                    {draft.deferred
+                                      .map((d) => d.field)
+                                      .join(", ")}
+                                  </p>
+                                ) : null}
+                              </div>
                             )}
                           </td>
                           <td className="px-2 py-1.5 align-top">
@@ -534,7 +665,16 @@ export function LeadImportModal({
                   ? ` · Skipped ${result.skippedCount}`
                   : ""}
                 {result.failedCount ? ` · Failed ${result.failedCount}` : ""}
+                {result.deferredCount
+                  ? ` · ${result.deferredCount} values held for the next phase`
+                  : ""}
               </div>
+              {result.deferredCount ? (
+                <p className="text-[12px] text-[#64748b]">
+                  Tags, original created dates, and deal-completed dates were
+                  recognized and were not written into Notes.
+                </p>
+              ) : null}
               <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-[11px] text-[#334155]">
                 {[
                   ...result.parseErrors.map(
@@ -546,8 +686,12 @@ export function LeadImportModal({
                   ...result.failed.map(
                     (r) => `Row ${r.row} (${r.email}): ${r.error}`,
                   ),
+                  ...(result.deferred ?? []).map(
+                    (r) =>
+                      `Row ${r.row} (${r.email}): ${r.field} held for next phase`,
+                  ),
                 ]
-                  .slice(0, 60)
+                  .slice(0, 80)
                   .map((line) => (
                     <p key={line} className="text-[#64748b]">
                       {line}
@@ -555,7 +699,8 @@ export function LeadImportModal({
                   ))}
                 {!result.skipped.length &&
                 !result.failed.length &&
-                !result.parseErrors.length ? (
+                !result.parseErrors.length &&
+                !result.deferred?.length ? (
                   <p className="text-[#64748b]">All selected rows imported.</p>
                 ) : null}
               </div>

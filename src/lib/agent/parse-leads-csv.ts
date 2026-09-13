@@ -1,14 +1,37 @@
 import { parseCsv } from "@/lib/poi/sync/http";
+import {
+  buildImportHomeAddress,
+  classifyImportedLead,
+  DEFERRED_IMPORT_REASON,
+  guessLeadImportField,
+  combineImportDisplayName,
+  parseImportLeadType,
+  parseImportOptOut,
+  parseImportPurchaseTimeframe,
+  type ImportDeferredValue,
+  type LeadImportDefaultType,
+  type LeadImportField,
+} from "@/lib/agent/lead-import-classify";
+import type { PurchaseTimeframeValue } from "@/lib/agent/timeframe";
+
+export type {
+  LeadImportDefaultType,
+  LeadImportField,
+} from "@/lib/agent/lead-import-classify";
 
 export type ParsedImportLead = {
   name: string;
   email: string;
   phone?: string;
   notes?: string;
+  homeAddress?: string;
+  purchaseTimeframe?: PurchaseTimeframeValue;
+  utmSource?: string;
+  leadTypeRaw?: string;
+  optedOut: boolean;
+  deferred: ImportDeferredValue[];
   row: number;
 };
-
-export type LeadImportField = "name" | "email" | "phone" | "notes" | "skip";
 
 export type LeadImportColumnMapping = {
   header: string;
@@ -16,68 +39,22 @@ export type LeadImportColumnMapping = {
 };
 
 export type LeadImportDraft = {
-  /** Stable client key */
   key: string;
   row: number;
   name: string;
   email: string;
   phone: string;
   notes: string;
+  homeAddress: string;
+  purchaseTimeframe: PurchaseTimeframeValue | null;
+  utmSource: string;
+  leadTypeRaw: string;
+  optedOut: boolean;
+  deferred: ImportDeferredValue[];
   included: boolean;
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const FIELD_ALIASES: Record<Exclude<LeadImportField, "skip">, string[]> = {
-  name: ["name", "full_name", "fullname_name", "client_name", "contact", "contact_name"],
-  email: ["email", "e_mail", "email_address", "mail", "emailaddress"],
-  phone: [
-    "phone",
-    "mobile",
-    "cell",
-    "telephone",
-    "phone_number",
-    "mobile_phone",
-    "cell_phone",
-  ],
-  notes: ["notes", "note", "comments", "comment", "memo", "description"],
-};
-
-function normalizeHeader(raw: string) {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_|_$/g, "");
-}
-
-function guessField(
-  header: string,
-  taken: Set<LeadImportField>,
-): LeadImportField {
-  const normalized = normalizeHeader(header);
-  for (const field of ["email", "name", "phone", "notes"] as const) {
-    if (taken.has(field)) continue;
-    if (FIELD_ALIASES[field].includes(normalized)) return field;
-  }
-  // Soft contains match when exact alias missed
-  for (const field of ["email", "name", "phone", "notes"] as const) {
-    if (taken.has(field)) continue;
-    if (
-      (field === "email" && normalized.includes("mail")) ||
-      (field === "phone" &&
-        (normalized.includes("phone") ||
-          normalized.includes("mobile") ||
-          normalized.includes("cell"))) ||
-      (field === "name" && normalized.includes("name")) ||
-      (field === "notes" &&
-        (normalized.includes("note") || normalized.includes("comment")))
-    ) {
-      return field;
-    }
-  }
-  return "skip";
-}
 
 /** Split CSV into headers + row objects (header keys preserved as in file). */
 export function parseLeadsCsvTable(text: string): {
@@ -88,7 +65,7 @@ export function parseLeadsCsvTable(text: string): {
   if (!cleaned) return { headers: [], rows: [] };
   const rows = parseCsv(cleaned);
   if (rows.length === 0) {
-    const firstLine = cleaned.split(/\r?\n/).find(Boolean) ?? "";
+    const firstLine = cleaned.split(/\r?\n/).find((line) => line.trim()) ?? "";
     const headers = firstLine
       ? firstLine.split(",").map((h) => h.trim().replace(/^"|"$/g, ""))
       : [];
@@ -103,7 +80,7 @@ export function suggestLeadImportMapping(
 ): LeadImportColumnMapping[] {
   const taken = new Set<LeadImportField>();
   return headers.map((header) => {
-    const field = guessField(header, taken);
+    const field = guessLeadImportField(header, taken);
     if (field !== "skip") taken.add(field);
     return { header, field };
   });
@@ -125,11 +102,84 @@ export function draftsFromMappedRows(
       if (!header) return "";
       return (row[header] ?? "").trim();
     };
-    const name = get("name");
+
+    const firstName = get("first_name");
+    const lastName = get("last_name");
+    const fullName = get("name");
+    const name = combineImportDisplayName({
+      firstName,
+      lastName,
+      fullName,
+    });
     const email = get("email");
     const phone = get("phone");
     const notes = get("notes");
-    const empty = !name && !email && !phone && !notes;
+    const homeAddress =
+      buildImportHomeAddress({
+        address: get("address"),
+        city: get("city"),
+        province: get("province"),
+        postal: get("postal"),
+        country: get("country"),
+      }) ?? "";
+    const timeframeRaw = get("timeframe");
+    const purchaseTimeframe = parseImportPurchaseTimeframe(timeframeRaw);
+    const utmSource = get("source");
+    const leadTypeRaw = get("lead_type");
+    const optedOut = parseImportOptOut(get("opt_out"));
+    const deferred: ImportDeferredValue[] = [];
+
+    const tags = get("tags");
+    if (tags) {
+      deferred.push({
+        field: "tags",
+        value: tags,
+        reason: DEFERRED_IMPORT_REASON,
+      });
+    }
+    const dateCreated = get("date_created");
+    if (dateCreated) {
+      deferred.push({
+        field: "date_created",
+        value: dateCreated,
+        reason: DEFERRED_IMPORT_REASON,
+      });
+    }
+    const dealCompleted = get("deal_completed");
+    if (dealCompleted) {
+      deferred.push({
+        field: "deal_completed",
+        value: dealCompleted,
+        reason: DEFERRED_IMPORT_REASON,
+      });
+    }
+    if (timeframeRaw && !purchaseTimeframe) {
+      deferred.push({
+        field: "timeframe",
+        value: timeframeRaw,
+        reason:
+          "Timeframe not recognized — not stored on the lead or in Notes.",
+      });
+    }
+    const parsedType = parseImportLeadType(leadTypeRaw);
+    if (parsedType.kind === "unrecognized") {
+      deferred.push({
+        field: "lead_type",
+        value: parsedType.raw,
+        reason: DEFERRED_IMPORT_REASON,
+      });
+    }
+
+    const empty =
+      !name &&
+      !email &&
+      !phone &&
+      !notes &&
+      !homeAddress &&
+      !utmSource &&
+      !leadTypeRaw &&
+      deferred.length === 0;
+
     return {
       key: `row-${index + 2}`,
       row: index + 2,
@@ -137,6 +187,12 @@ export function draftsFromMappedRows(
       email,
       phone,
       notes,
+      homeAddress,
+      purchaseTimeframe,
+      utmSource,
+      leadTypeRaw,
+      optedOut,
+      deferred,
       included: !empty,
     };
   });
@@ -153,12 +209,23 @@ export function validateImportDraft(lead: {
   return issues;
 }
 
+export function validateImportDraftForType(
+  lead: { name: string; email: string; leadTypeRaw?: string },
+  defaultType: LeadImportDefaultType,
+): string[] {
+  const issues = validateImportDraft(lead);
+  const classification = classifyImportedLead(defaultType, lead.leadTypeRaw);
+  if (!classification.ok) issues.push(classification.reason);
+  return issues;
+}
+
 /**
- * Parse leads CSV. Required columns: name, email.
- * Optional: phone, notes.
- * Accepts common header aliases (full_name, e_mail, mobile, etc.).
+ * Parse leads CSV. Required after mapping: name (or first+last) and email.
  */
-export function parseLeadsCsv(text: string): {
+export function parseLeadsCsv(
+  text: string,
+  defaultType: LeadImportDefaultType = "detect",
+): {
   leads: ParsedImportLead[];
   errors: Array<{ row: number; error: string }>;
 } {
@@ -170,8 +237,8 @@ export function parseLeadsCsv(text: string): {
   const seen = new Set<string>();
 
   for (const draft of drafts) {
-    if (!draft.name && !draft.email && !draft.phone && !draft.notes) continue;
-    const issues = validateImportDraft(draft);
+    if (!draft.included) continue;
+    const issues = validateImportDraftForType(draft, defaultType);
     if (issues.length) {
       for (const error of issues) {
         errors.push({ row: draft.row, error });
@@ -184,21 +251,31 @@ export function parseLeadsCsv(text: string): {
       continue;
     }
     seen.add(normalizedEmail);
-    leads.push({
-      name: draft.name.trim(),
-      email: normalizedEmail,
-      phone: draft.phone.trim() || undefined,
-      notes: draft.notes.trim() || undefined,
-      row: draft.row,
-    });
+    leads.push(parsedLeadFromDraft(draft));
   }
 
   return { leads, errors };
 }
 
-export const LEADS_CSV_TEMPLATE = `name,email,phone,notes
-Jane Doe,jane@example.com,416-555-0100,Open house Sunday
-John Smith,john@example.com,,Referral from partner
+export function parsedLeadFromDraft(draft: LeadImportDraft): ParsedImportLead {
+  return {
+    name: draft.name.trim(),
+    email: draft.email.trim().toLowerCase(),
+    phone: draft.phone.trim() || undefined,
+    notes: draft.notes.trim() || undefined,
+    homeAddress: draft.homeAddress.trim() || undefined,
+    purchaseTimeframe: draft.purchaseTimeframe ?? undefined,
+    utmSource: draft.utmSource.trim() || undefined,
+    leadTypeRaw: draft.leadTypeRaw.trim() || undefined,
+    optedOut: draft.optedOut,
+    deferred: draft.deferred,
+    row: draft.row,
+  };
+}
+
+export const LEADS_CSV_TEMPLATE = `name_first,name_last,email,phone,address,city,notes
+Jane,Doe,jane@example.com,416-555-0100,123 King St,Kitchener,Open house Sunday
+John,Smith,john@example.com,,,Toronto,Referral from partner
 `;
 
 export const LEAD_IMPORT_FIELD_OPTIONS: Array<{
@@ -206,8 +283,40 @@ export const LEAD_IMPORT_FIELD_OPTIONS: Array<{
   label: string;
 }> = [
   { value: "skip", label: "Ignore" },
-  { value: "name", label: "Name" },
+  { value: "name", label: "Full name" },
+  { value: "first_name", label: "First name" },
+  { value: "last_name", label: "Last name" },
   { value: "email", label: "Email" },
   { value: "phone", label: "Phone" },
+  { value: "address", label: "Address" },
+  { value: "city", label: "City" },
+  { value: "province", label: "State / province" },
+  { value: "country", label: "Country" },
+  { value: "postal", label: "Zip / postal code" },
   { value: "notes", label: "Notes" },
+  { value: "timeframe", label: "Timeframe" },
+  { value: "source", label: "Source" },
+  { value: "lead_type", label: "Lead type" },
+  { value: "opt_out", label: "Opt-out / unsubscribe" },
+  { value: "tags", label: "Tags (next phase)" },
+  { value: "date_created", label: "Created date (next phase)" },
+  { value: "deal_completed", label: "Deal completed (next phase)" },
 ];
+
+export const SELLER_CRM_CSV_HEADERS = [
+  "name_first",
+  "name_last",
+  "email",
+  "phone",
+  "date_created",
+  "address",
+  "city",
+  "state/province",
+  "country",
+  "zip/postal code",
+  "notes",
+  "tags",
+  "estimated_time_frame",
+  "source_ad",
+  "deal_completed_date",
+] as const;
