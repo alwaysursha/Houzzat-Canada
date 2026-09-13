@@ -200,13 +200,30 @@ function testCopyAndSharedVerifyUx() {
   assert.ok(gallery.includes("galleryShowAllPhotosLabel"));
   assert.ok(!gallery.includes("EmailVerificationRequired"));
   assert.ok(!gallery.includes("verifyGateIndex"));
+  assert.ok(
+    !gallery.includes("mt-2 overflow-hidden rounded-2xl"),
+    "must not render a full-width lock section under the photo grid",
+  );
+  const desktop = gallery.slice(
+    gallery.indexOf("Desktop cover grid"),
+    gallery.indexOf("Step 1 — mobile stacked gallery"),
+  );
+  assert.ok(desktop.includes("md:grid-cols-3 md:grid-rows-2"));
+  assert.ok(desktop.includes("<GalleryVerifyLockCard"));
+  assert.ok(desktop.includes("openClientToolsVerification"));
+  const viewAllClick = desktop.slice(
+    desktop.indexOf("if (showVerifyLock)"),
+    desktop.indexOf("openViewerAt(0)"),
+  );
+  assert.ok(viewAllClick.includes("openClientToolsVerification"));
+  assert.ok(desktop.includes("openViewerAt(0)"));
 
   const dialog = read(
     "src/components/auth/ClientToolsVerificationProvider.tsx",
   );
   assert.ok(dialog.includes('purpose="client-tools"'));
   assert.ok(dialog.includes("openClientToolsVerification"));
-  console.log("[2] lock card copy + shared verify dialog... PASS");
+  console.log("[2] lock card is 6th grid tile; View All opens verify dialog... PASS");
 }
 
 function testGalleryRouteDoesNotLeakUrls() {

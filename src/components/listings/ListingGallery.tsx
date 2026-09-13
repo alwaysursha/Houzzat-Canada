@@ -17,10 +17,12 @@ import {
   type ListingMapSubject,
 } from "@/components/listings/ListingMapView";
 import { ListingGalleryMapSlide } from "@/components/listings/ListingGalleryMapSlide";
+import { useClientToolsVerification } from "@/components/auth/ClientToolsVerificationProvider";
 import { useListingContactDefaults } from "@/components/listings/ListingAccountChromeProvider";
 import { GalleryVerifyLockCard } from "@/components/listings/GalleryVerifyLockCard";
 import { ListingLockedGateOverlay } from "@/components/listings/ListingLockedGateOverlay";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
+import { GALLERY_VERIFY_COPY } from "@/lib/account-access";
 import {
   galleryShowAllPhotosLabel,
   shouldShowGalleryVerifyLock,
@@ -152,6 +154,7 @@ export function ListingGallery({
   totalPhotoCount?: number | null;
 }) {
   const resolvedContact = useListingContactDefaults(contact);
+  const { openClientToolsVerification } = useClientToolsVerification();
   const tourUrl = virtualTourUrl?.trim() || null;
   const lockCallback = callbackPath ?? `/listing/${mlsNumber}`;
   const labelId = useId();
@@ -586,11 +589,13 @@ export function ListingGallery({
           className={cn(
             "grid gap-2 overflow-hidden rounded-2xl md:gap-2.5",
             detailsLocked && "blur-[6px] saturate-75",
-            side.length >= 4
-              ? "md:grid-cols-4 md:grid-rows-2"
-              : side.length > 0
-                ? "md:grid-cols-[1.6fr_1fr] md:grid-rows-2"
-                : "",
+            showVerifyLock && side.length >= 4
+              ? "md:grid-cols-3 md:grid-rows-2"
+              : side.length >= 4
+                ? "md:grid-cols-4 md:grid-rows-2"
+                : side.length > 0
+                  ? "md:grid-cols-[1.6fr_1fr] md:grid-rows-2"
+                  : "",
           )}
         >
           <button
@@ -600,12 +605,14 @@ export function ListingGallery({
               openFromCover(0);
             }}
             className={cn(
-              "group relative min-h-[52vh] overflow-hidden bg-mist text-left md:min-h-[560px]",
-              side.length >= 4
-                ? "md:col-span-2 md:row-span-2"
-                : side.length > 0
-                  ? "md:row-span-2"
-                  : "",
+              "group relative min-h-[52vh] overflow-hidden bg-mist text-left",
+              showVerifyLock && side.length >= 4
+                ? "md:min-h-[274px]"
+                : side.length >= 4
+                  ? "md:col-span-2 md:row-span-2 md:min-h-[560px]"
+                  : side.length > 0
+                    ? "md:row-span-2 md:min-h-[560px]"
+                    : "md:min-h-[560px]",
             )}
             aria-label={`View photo 1 of ${count}`}
           >
@@ -633,7 +640,7 @@ export function ListingGallery({
                 }}
                 className={cn(
                   "group relative hidden min-h-[274px] overflow-hidden bg-mist text-left md:block",
-                  side.length === 1 ? "md:row-span-2" : "",
+                  !showVerifyLock && side.length === 1 ? "md:row-span-2" : "",
                 )}
                 aria-label={
                   isLastTile
@@ -660,6 +667,19 @@ export function ListingGallery({
               </button>
             );
           })}
+
+          {showVerifyLock ? (
+            <div
+              className="relative hidden min-h-[274px] overflow-hidden bg-mist md:block"
+              aria-label={GALLERY_VERIFY_COPY.title}
+            >
+              <GalleryVerifyLockCard
+                callbackUrl={lockCallback}
+                compact
+                className="absolute inset-0"
+              />
+            </div>
+          ) : null}
         </div>
 
         {mapSubject && !detailsLocked ? (
@@ -671,7 +691,13 @@ export function ListingGallery({
         {!detailsLocked ? (
           <button
             type="button"
-            onClick={() => openViewerAt(0)}
+            onClick={() => {
+              if (showVerifyLock) {
+                openClientToolsVerification({ callbackUrl: lockCallback });
+                return;
+              }
+              openViewerAt(0);
+            }}
             className="absolute bottom-4 right-4 z-10 inline-flex items-center gap-1.5 rounded-lg bg-white/95 px-4 py-2.5 text-sm font-semibold text-ink shadow-md backdrop-blur-sm transition hover:bg-white"
           >
             {showVerifyLock ? (
@@ -709,12 +735,6 @@ export function ListingGallery({
             {tourUrl && !detailsLocked ? (
               <VirtualTourCoverButton href={tourUrl} />
             ) : null}
-          </div>
-        ) : null}
-
-        {showVerifyLock ? (
-          <div className="mt-2 overflow-hidden rounded-2xl border border-line">
-            <GalleryVerifyLockCard callbackUrl={lockCallback} />
           </div>
         ) : null}
       </div>
