@@ -2,9 +2,11 @@
 
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useRef } from "react";
+import { useClientToolsVerification } from "@/components/auth/ClientToolsVerificationProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
+import { useClientAccess } from "@/hooks/use-client-access";
 import { flyRouteToPlanner } from "@/lib/fly-to-route-planner";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
@@ -23,6 +25,8 @@ export function RoutePlannerToggleButton({
 }) {
   const routePlanner = useRoutePlanner();
   const { toast } = useSiteAlert();
+  const access = useClientAccess();
+  const { openClientToolsVerification } = useClientToolsVerification();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const onTour = routePlanner?.isOnTour(mlsNumber) ?? false;
   const inactive = listingStatus != null && listingStatus !== "ACTIVE";
@@ -37,9 +41,21 @@ export function RoutePlannerToggleButton({
       });
       return;
     }
+    if (access.needsEmailVerification) {
+      openClientToolsVerification({
+        callbackUrl: `/listing/${mlsNumber}`,
+      });
+      return;
+    }
     if (!routePlanner) return;
     const result = await routePlanner.toggleStop(mlsNumber);
     if (!result.ok) {
+      if (result.requiresEmailVerification) {
+        openClientToolsVerification({
+          callbackUrl: `/listing/${mlsNumber}`,
+        });
+        return;
+      }
       toast({
         message: result.error ?? SITE_MESSAGES.genericErrorToast,
         tone: "error",

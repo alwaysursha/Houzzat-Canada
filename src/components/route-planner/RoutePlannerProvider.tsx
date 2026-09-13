@@ -16,6 +16,7 @@ import {
   toggleLocalStop,
 } from "@/lib/route-planner/local";
 import { ROUTE_PLANNER_MAX_STOPS } from "@/lib/route-planner/optimize";
+import { customerAccessDenialFromBody } from "@/lib/account/customer-access-error";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 
 export type RoutePlannerStopSummary = {
@@ -28,7 +29,12 @@ type RoutePlannerContextValue = {
   isOnTour: (mlsNumber: string) => boolean;
   toggleStop: (
     mlsNumber: string,
-  ) => Promise<{ ok: boolean; added?: boolean; error?: string }>;
+  ) => Promise<{
+    ok: boolean;
+    added?: boolean;
+    error?: string;
+    requiresEmailVerification?: boolean;
+  }>;
   refresh: () => Promise<void>;
   mergeLocalAfterSignIn: () => Promise<void>;
 };
@@ -152,6 +158,7 @@ export function RoutePlannerProvider({
         error?: string;
         tour?: { stops?: { mlsNumber: string }[] };
         added?: boolean;
+        requiresEmailVerification?: boolean;
       } = {};
       try {
         data = (await res.json()) as typeof data;
@@ -162,9 +169,12 @@ export function RoutePlannerProvider({
         };
       }
       if (!res.ok) {
+        const denial = customerAccessDenialFromBody(res.status, data);
         return {
           ok: false,
           error: data.error ?? "Could not update Route Planner.",
+          requiresEmailVerification:
+            denial.requiresEmailVerification || res.status === 403,
         };
       }
       setMlsSet(new Set((data.tour?.stops ?? []).map((s) => s.mlsNumber)));

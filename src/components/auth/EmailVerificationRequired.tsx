@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Lock, Mail } from "lucide-react";
+import { CLIENT_TOOLS_VERIFY_COPY } from "@/lib/account-access";
 import { readJsonResponse } from "@/lib/http/fetch-json";
 import { cn } from "@/lib/utils";
 
 export function EmailVerificationRequired({
-  title = "Email verification required",
-  body = "Verify your email to keep full access to sold prices, saved searches, photos, and other client tools.",
+  title,
+  body,
   callbackUrl,
   className,
   compact = false,
@@ -16,6 +18,8 @@ export function EmailVerificationRequired({
   eyebrow = "Account access",
   /** Prefill when parent already knows the email. */
   initialEmail,
+  /** Expired-grace client tools (Save / Notes / Route Planner). */
+  purpose = "default",
 }: {
   title?: string;
   body?: string;
@@ -29,9 +33,37 @@ export function EmailVerificationRequired({
   /** Featured eyebrow label. Pass null to hide. */
   eyebrow?: string | null;
   initialEmail?: string | null;
+  purpose?: "default" | "client-tools";
 }) {
+  const clientTools = (() => {
+    switch (purpose) {
+      case "client-tools":
+        return true;
+      case "default":
+        return false;
+      default: {
+        const _exhaustive: never = purpose;
+        return _exhaustive;
+      }
+    }
+  })();
+  const resolvedTitle =
+    title ??
+    (clientTools
+      ? CLIENT_TOOLS_VERIFY_COPY.title
+      : "Email verification required");
+  const resolvedBody =
+    body ??
+    (clientTools
+      ? CLIENT_TOOLS_VERIFY_COPY.body
+      : "Verify your email to keep full access to sold prices, saved searches, photos, and other client tools.");
+  const sendLabel = clientTools
+    ? CLIENT_TOOLS_VERIFY_COPY.sendLabel
+    : "Send verification link";
+  const { update } = useSession();
   const [pending, setPending] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [email, setEmail] = useState(initialEmail?.trim() ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +87,26 @@ export function EmailVerificationRequired({
       cancelled = true;
     };
   }, [initialEmail]);
+
+  async function refreshIfVerified(): Promise<boolean> {
+    const startedAt = performance.now();
+    const res = await fetch("/api/account/access", { cache: "no-store" });
+    const read = await readJsonResponse<{
+      kind?: string;
+      needsEmailVerification?: boolean;
+      hasClientAccess?: boolean;
+    }>(res, {
+      route: "/api/account/access",
+      method: "GET",
+      startedAt,
+    });
+    if (!read.ok || !res.ok) return false;
+    const verified = read.data.kind === "verified_unlocked";
+    if (!verified) return false;
+    await update();
+    window.location.reload();
+    return true;
+  }
 
   async function saveEmailIfChanged(current: string) {
     const next = current.trim().toLowerCase();
@@ -116,16 +168,43 @@ export function EmailVerificationRequired({
         return;
       }
       if (data.alreadyVerified) {
-        setMessage("Your email is already verified. Refresh the page.");
+        const refreshed = await refreshIfVerified();
+        setMessage(
+          refreshed
+            ? "Your email is already verified. Reloading…"
+            : "Your email is already verified. Refresh the page.",
+        );
         return;
       }
-      setMessage(`Verification email sent to ${finalEmail}. Check your inbox.`);
+      setMessage(
+        clientTools
+          ? `${CLIENT_TOOLS_VERIFY_COPY.sentConfirm} (${finalEmail})`
+          : `Verification email sent to ${finalEmail}. Check your inbox.`,
+      );
     } catch (err) {
       setSavingEmail(false);
       setError(err instanceof Error ? err.message : "Could not send verification email.");
     } finally {
       setPending(false);
       setSavingEmail(false);
+    }
+  }
+
+  async function checkAgain() {
+    setChecking(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const refreshed = await refreshIfVerified();
+      if (refreshed) {
+        setMessage("Your email is already verified. Reloading…");
+        return;
+      }
+      setMessage(CLIENT_TOOLS_VERIFY_COPY.stillUnverified);
+    } catch {
+      setError("Could not check verification status. Refresh the page.");
+    } finally {
+      setChecking(false);
     }
   }
 
@@ -202,7 +281,7 @@ export function EmailVerificationRequired({
                 : "text-sm",
           )}
         >
-          {title}
+          {resolvedTitle}
         </p>
         <p
           className={cn(
@@ -216,7 +295,7 @@ export function EmailVerificationRequired({
                 : "text-xs",
           )}
         >
-          {body}
+          {resolvedBody}
         </p>
       </div>
 
@@ -268,7 +347,26 @@ export function EmailVerificationRequired({
                 ),
           )}
         >
-          {pending || savingEmail ? "Sending…" : "Send verification link"}
+          {pending || savingEmail ? "Sending…" : sendLabel}
+        </button>
+        <button
+          type="button"
+          disabled={pending || savingEmail || checking}
+          onClick={() => void checkAgain()}
+          className={cn(
+            "inline-flex w-full items-center justify-center font-semibold text-canopy-deep underline-offset-2 transition hover:underline disabled:opacity-60",
+            featured
+              ? featuredCompact
+                ? "min-h-9 text-xs"
+                : "min-h-10 text-sm"
+              : compact
+                ? "min-h-8 text-[11px]"
+                : "min-h-9 text-xs",
+          )}
+        >
+          {checking
+            ? "Checking…"
+            : CLIENT_TOOLS_VERIFY_COPY.checkAgainLabel}
         </button>
         {message ? (
           <p

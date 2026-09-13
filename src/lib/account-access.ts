@@ -1,6 +1,17 @@
 /** Full product access for 7 days after signup without email verification. */
 export const EMAIL_VERIFY_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** Expired-grace copy for Saved Listings, Notes, and Route Planner. */
+export const CLIENT_TOOLS_VERIFY_COPY = {
+  title: "Please verify your email to continue",
+  body: "Your 7-day verification grace period has ended. Houzzat is still free to use — you just need to verify your email to continue using features like Saved Listings, Notes and Route Planner.",
+  sendLabel: "Send Verification Email",
+  checkAgainLabel: "Already verified? Check again",
+  sentConfirm: "Verification email sent. Check your inbox.",
+  stillUnverified:
+    "Your email is still unverified. Check your inbox or send a new link.",
+} as const;
+
 export type AccessUser = {
   id: string;
   emailVerified?: Date | string | null;

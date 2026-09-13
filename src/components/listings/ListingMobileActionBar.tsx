@@ -6,6 +6,7 @@ import { Bell, CalendarDays, Search } from "lucide-react";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { useWatchListingToggle } from "@/components/account/useWatchListingToggle";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { useClientToolsVerification } from "@/components/auth/ClientToolsVerificationProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { useListingContactDefaults } from "@/components/listings/ListingAccountChromeProvider";
@@ -14,6 +15,7 @@ import {
   type ViewingContactDefaults,
 } from "@/components/listings/ViewingBookingModal";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
+import { useClientAccess } from "@/hooks/use-client-access";
 import { Button } from "@/components/ui/button";
 import { flyRouteToPlanner } from "@/lib/fly-to-route-planner";
 import { SITE_MESSAGES } from "@/lib/site-messages";
@@ -52,6 +54,8 @@ export function ListingMobileActionBar({
 }) {
   const { openAuth } = useAuthModal();
   const { toast } = useSiteAlert();
+  const access = useClientAccess();
+  const { openClientToolsVerification } = useClientToolsVerification();
   const resolvedContact = useListingContactDefaults(contact);
   const routePlanner = useRoutePlanner();
   const onTour = routePlanner?.isOnTour(mlsNumber) ?? false;
@@ -167,9 +171,21 @@ export function ListingMobileActionBar({
                 )}
                 onClick={() => {
                   void (async () => {
+                    if (access.needsEmailVerification) {
+                      openClientToolsVerification({
+                        callbackUrl: authCallbackUrl,
+                      });
+                      return;
+                    }
                     if (!routePlanner) return;
                     const result = await routePlanner.toggleStop(mlsNumber);
                     if (!result.ok) {
+                      if (result.requiresEmailVerification) {
+                        openClientToolsVerification({
+                          callbackUrl: authCallbackUrl,
+                        });
+                        return;
+                      }
                       toast({
                         message:
                           result.error ?? SITE_MESSAGES.genericErrorToast,

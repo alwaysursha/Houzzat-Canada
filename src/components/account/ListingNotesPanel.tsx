@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { useListingAccountChrome } from "@/components/listings/ListingAccountChromeProvider";
 import { ListingSection } from "@/components/listings/ListingSection";
+import { useClientAccess } from "@/hooks/use-client-access";
+import { customerAccessDenialFromBody } from "@/lib/account/customer-access-error";
 import { cn } from "@/lib/utils";
 
 export function ListingNotesPanel({
@@ -24,18 +27,23 @@ export function ListingNotesPanel({
   authCallbackUrl?: string;
 }) {
   const { openAuth } = useAuthModal();
+  const access = useClientAccess();
   const chrome = useListingAccountChrome();
   const [body, setBody] = useState(initialBody);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
+  const [verifyLocked, setVerifyLocked] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydrated = useRef(false);
   const userEdited = useRef(false);
   const callbackUrl = authCallbackUrl ?? `/listing/${mlsNumber}`;
+  const needsEmailVerification =
+    verifyLocked || access.needsEmailVerification;
 
   useEffect(() => {
     if (!signedIn) return;
+    if (access.loading || access.needsEmailVerification) return;
 
     // Listing detail: note body arrives via account-chrome (one request).
     if (chrome.active) {
@@ -51,7 +59,20 @@ export function ListingNotesPanel({
       const res = await fetch(
         `/api/account/notes/${encodeURIComponent(mlsNumber)}`,
       );
-      if (!res.ok || cancelled) return;
+      if (cancelled) return;
+      if (!res.ok) {
+        let data: unknown = null;
+        try {
+          data = await res.json();
+        } catch {
+          data = null;
+        }
+        const denial = customerAccessDenialFromBody(res.status, data);
+        if (denial.requiresEmailVerification) {
+          setVerifyLocked(true);
+        }
+        return;
+      }
       const data = (await res.json()) as { body?: string };
       if (userEdited.current) return;
       setBody(data.body ?? "");
@@ -60,10 +81,10 @@ export function ListingNotesPanel({
     return () => {
       cancelled = true;
     };
-  }, [mlsNumber, signedIn, chrome.active, chrome.loaded, chrome.noteBody]);
+  }, [mlsNumber, signedIn, chrome.active, chrome.loaded, chrome.noteBody, access.loading, access.needsEmailVerification]);
 
   function scheduleSave(next: string) {
-    if (!signedIn) return;
+    if (!signedIn || needsEmailVerification) return;
     setStatus("saving");
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
@@ -76,7 +97,23 @@ export function ListingNotesPanel({
             body: JSON.stringify({ body: next }),
           },
         );
-        setStatus(res.ok ? "saved" : "error");
+        if (res.ok) {
+          setStatus("saved");
+          return;
+        }
+        let data: unknown = null;
+        try {
+          data = await res.json();
+        } catch {
+          data = null;
+        }
+        const denial = customerAccessDenialFromBody(res.status, data);
+        if (denial.requiresEmailVerification) {
+          setVerifyLocked(true);
+          setStatus("idle");
+          return;
+        }
+        setStatus("error");
       })();
     }, 600);
   }
@@ -125,6 +162,48 @@ export function ListingNotesPanel({
         className={className}
       >
         {signIn}
+      </ListingSection>
+    );
+  }
+
+  if (signedIn && access.loading) {
+    const loading = (
+      <p className="text-sm text-ink/50">Loading notes…</p>
+    );
+    if (embedded) {
+      return <div className={cn("space-y-3", className)}>{loading}</div>;
+    }
+    return (
+      <ListingSection
+        eyebrow="Private"
+        title="Your notes"
+        className={className}
+      >
+        {loading}
+      </ListingSection>
+    );
+  }
+
+  if (needsEmailVerification) {
+    const verify = (
+      <EmailVerificationRequired
+        purpose="client-tools"
+        compact={embedded}
+        callbackUrl={callbackUrl}
+        initialEmail={access.email}
+      />
+    );
+    if (embedded) {
+      return <div className={cn("space-y-3", className)}>{verify}</div>;
+    }
+    return (
+      <ListingSection
+        eyebrow="Private"
+        title="Your notes"
+        hint="Verify your email to keep private notes on this home."
+        className={className}
+      >
+        {verify}
       </ListingSection>
     );
   }

@@ -9,6 +9,7 @@ import { PropertyWatchesProvider } from "@/components/account/PropertyWatchesPro
 import { ActivityBeacon } from "@/components/analytics/ActivityBeacon";
 import { isActivityBeaconEnabled } from "@/lib/analytics/activity-beacon-enabled";
 import { AuthModalProvider } from "@/components/auth/AuthModalProvider";
+import { ClientToolsVerificationProvider } from "@/components/auth/ClientToolsVerificationProvider";
 import { RememberClientSession } from "@/components/auth/RememberClientSession";
 import { NavigationRecovery } from "@/components/feedback/NavigationRecovery";
 import { SoftNavShield } from "@/components/feedback/SoftNavShield";
@@ -38,19 +39,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <RoutePlannerProvider>
           <SiteAlertProvider>
             <AuthModalProvider>
-              <CapacitorBootstrap />
-              <HouzzatAndroidBootCover />
-              <PushNotificationsBootstrap />
-              <BiometricLockGate />
-              <RememberClientSession />
-              <SoftNavShield />
-              <NavigationRecovery />
-              <RecentViewsSync />
-              <Suspense fallback={null}>
-                {isActivityBeaconEnabled() ? <ActivityBeacon /> : null}
-              </Suspense>
-              <ContactUpdateReminder />
-              <HouzzatPullToRefresh>{children}</HouzzatPullToRefresh>
+              <ClientToolsVerificationProvider>
+                <CapacitorBootstrap />
+                <HouzzatAndroidBootCover />
+                <PushNotificationsBootstrap />
+                <BiometricLockGate />
+                <RememberClientSession />
+                <SoftNavShield />
+                <NavigationRecovery />
+                <RecentViewsSync />
+                <Suspense fallback={null}>
+                  {isActivityBeaconEnabled() ? <ActivityBeacon /> : null}
+                </Suspense>
+                <ContactUpdateReminder />
+                <HouzzatPullToRefresh>{children}</HouzzatPullToRefresh>
+              </ClientToolsVerificationProvider>
             </AuthModalProvider>
           </SiteAlertProvider>
         </RoutePlannerProvider>

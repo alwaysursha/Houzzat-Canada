@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
@@ -24,6 +25,8 @@ import {
   useRoutePlanner,
 } from "@/components/route-planner/RoutePlannerProvider";
 import { useExpertWhatsAppNumber } from "@/components/whatsapp/useExpertWhatsAppNumber";
+import { useClientAccess } from "@/hooks/use-client-access";
+import { customerAccessDenialFromBody } from "@/lib/account/customer-access-error";
 import {
   formatListPrice,
   formatListingBedsLabel,
@@ -128,6 +131,7 @@ export function RoutePlannerClient({
   expertWhatsApp?: string | null;
 }) {
   const { status } = useSession();
+  const access = useClientAccess();
   const { openAuth } = useAuthModal();
   const { toast } = useSiteAlert();
   const routePlanner = useRoutePlanner();
@@ -155,6 +159,11 @@ export function RoutePlannerClient({
     }
 
     if (status === "loading") return;
+    if (status === "authenticated" && access.loading) return;
+    if (access.needsEmailVerification) {
+      setLoading(false);
+      return;
+    }
 
     if (status !== "authenticated") {
       const local = loadLocalRoutePlanner();
@@ -237,8 +246,17 @@ export function RoutePlannerClient({
 
     try {
       const res = await fetch("/api/route-planner");
-      const data = (await res.json()) as { tour?: TourPayload; error?: string };
+      const data = (await res.json()) as {
+        tour?: TourPayload;
+        error?: string;
+        requiresEmailVerification?: boolean;
+      };
       if (!res.ok || !data.tour) {
+        const denial = customerAccessDenialFromBody(res.status, data);
+        if (denial.requiresEmailVerification || res.status === 403) {
+          setLoading(false);
+          return;
+        }
         toast({ message: data.error ?? "Could not load Route Planner.", tone: "error" });
         return;
       }
@@ -254,7 +272,7 @@ export function RoutePlannerClient({
     } finally {
       setLoading(false);
     }
-  }, [status, shareMode, initialTour, toast]);
+  }, [status, shareMode, initialTour, toast, access.loading, access.needsEmailVerification]);
 
   useEffect(() => {
     void loadTour();
@@ -547,6 +565,22 @@ export function RoutePlannerClient({
       <div className="flex min-h-[40vh] items-center justify-center gap-2 text-sm text-ink/55">
         <Loader2 className="size-4 animate-spin" />
         Loading Route Planner…
+      </div>
+    );
+  }
+
+  const verifyLocked =
+    !readOnly && !shareMode && access.needsEmailVerification;
+  if (verifyLocked) {
+    return (
+      <div className="mx-auto w-full max-w-md rounded-2xl border border-line bg-surface p-5 sm:p-6">
+        <EmailVerificationRequired
+          purpose="client-tools"
+          variant="featured"
+          compact
+          callbackUrl="/route-planner"
+          initialEmail={access.email}
+        />
       </div>
     );
   }

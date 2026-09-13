@@ -3,9 +3,12 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { useClientToolsVerification } from "@/components/auth/ClientToolsVerificationProvider";
 import { useSavedListingsStatus } from "@/components/account/SavedListingsProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { useListingAccountChrome } from "@/components/listings/ListingAccountChromeProvider";
+import { useClientAccess } from "@/hooks/use-client-access";
+import { customerAccessDenialFromBody } from "@/lib/account/customer-access-error";
 import { notifySavedListingsChanged } from "@/lib/account/saved-listings-sync";
 import { flyHeartToSaved } from "@/lib/fly-to-saved";
 import { SITE_MESSAGES } from "@/lib/site-messages";
@@ -34,6 +37,8 @@ export function useSavedListingToggle({
   const savedStatus = useSavedListingsStatus();
   const chrome = useListingAccountChrome();
   const { openAuth } = useAuthModal();
+  const { openClientToolsVerification } = useClientToolsVerification();
+  const access = useClientAccess();
   const { toast } = useSiteAlert();
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
@@ -81,6 +86,11 @@ export function useSavedListingToggle({
         return;
       }
 
+      if (access.needsEmailVerification) {
+        openClientToolsVerification({ callbackUrl });
+        return;
+      }
+
       if (!providerReady && !chromeReady) return;
 
       const next = !saved;
@@ -98,28 +108,20 @@ export function useSavedListingToggle({
 
         if (!res.ok) {
           savedStatus?.setSavedState(mlsNumber, !next);
-          let requiresAuth = res.status === 401;
-          let requiresEmailVerification = res.status === 403;
+          let data: unknown = null;
           try {
-            const data = (await res.json()) as {
-              requiresAuth?: boolean;
-              requiresEmailVerification?: boolean;
-            };
-            if (data.requiresAuth) requiresAuth = true;
-            if (data.requiresEmailVerification) requiresEmailVerification = true;
+            data = await res.json();
           } catch {
-            // non-JSON error body
+            data = null;
           }
+          const denial = customerAccessDenialFromBody(res.status, data);
 
-          if (requiresAuth) {
+          if (denial.requiresAuth) {
             openAuth({ mode: "sign-in", callbackUrl });
             return;
           }
-          if (requiresEmailVerification) {
-            toast({
-              message: SITE_MESSAGES.saveRequiresEmailVerificationToast,
-              tone: "error",
-            });
+          if (denial.requiresEmailVerification || res.status === 403) {
+            openClientToolsVerification({ callbackUrl });
             return;
           }
           toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
@@ -157,6 +159,8 @@ export function useSavedListingToggle({
       saved,
       savedStatus,
       openAuth,
+      openClientToolsVerification,
+      access.needsEmailVerification,
       callbackUrl,
       toast,
     ],
