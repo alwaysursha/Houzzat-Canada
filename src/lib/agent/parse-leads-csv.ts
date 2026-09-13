@@ -6,7 +6,6 @@ import {
   guessLeadImportField,
   combineImportDisplayName,
   LEAD_IMPORT_FIELD_LABELS,
-  LEAD_IMPORT_MAPPING_NEXT_PHASE_FIELDS,
   LEAD_IMPORT_MAPPING_THIS_IMPORT_FIELDS,
   parseImportLeadType,
   parseImportOptOut,
@@ -292,13 +291,6 @@ export const LEAD_IMPORT_FIELD_OPTION_GROUPS: Array<{
   {
     label: "This import",
     options: LEAD_IMPORT_MAPPING_THIS_IMPORT_FIELDS.map((value) => ({
-      value,
-      label: LEAD_IMPORT_FIELD_LABELS[value],
-    })),
-  },
-  {
-    label: "Next phase (not stored yet)",
-    options: LEAD_IMPORT_MAPPING_NEXT_PHASE_FIELDS.map((value) => ({
       value,
       label: LEAD_IMPORT_FIELD_LABELS[value],
     })),

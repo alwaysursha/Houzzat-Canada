@@ -8,13 +8,26 @@ import {
   parseImportOptOut,
   parseImportPurchaseTimeframe,
 } from "@/lib/agent/lead-import-classify";
+import { deferredValue } from "@/lib/agent/lead-import-metadata";
 import {
   findOpenImportLeadForEmail,
   resolveLeadImportOwnership,
 } from "@/lib/agent/lead-import-ownership";
 import {
+  attachImportedLeadTags,
+  createLeadImportJob,
+  createLeadImportRow,
+  extraUnmappedFromDeferred,
+  finishLeadImportJob,
+  persistImportedLeadOrigin,
+  tagsRawFromDeferred,
+  updateLeadImportRow,
+} from "@/lib/agent/lead-import-persist";
+import {
   LEADS_CSV_TEMPLATE,
   parseLeadsCsv,
+  parseLeadsCsvTable,
+  suggestLeadImportMapping,
   validateImportDraft,
 } from "@/lib/agent/parse-leads-csv";
 import { PURCHASE_TIMEFRAMES } from "@/lib/agent/timeframe";
@@ -44,6 +57,7 @@ const leadRowSchema = z.object({
   optedOut: z.boolean().optional(),
   deferred: z.array(deferredSchema).max(20).optional(),
   row: z.number().int().positive().optional(),
+  original: z.record(z.string().max(120), z.string().max(5000)).optional(),
 });
 
 const bodySchema = z
@@ -55,6 +69,16 @@ const bodySchema = z
     allowDuplicates: z.boolean().optional(),
     defaultLeadType: z.enum(LEAD_IMPORT_DEFAULT_TYPES),
     assertCommunicationConsent: z.boolean().optional(),
+    filename: z.string().trim().max(260).optional(),
+    mapping: z
+      .array(
+        z.object({
+          header: z.string().max(120),
+          field: z.string().max(40),
+        }),
+      )
+      .max(80)
+      .optional(),
   })
   .refine((v) => Boolean(v.leads?.length || v.csv?.trim()), {
     message: "Provide leads[] or csv",
@@ -124,10 +148,13 @@ export async function POST(request: Request) {
     optedOut: boolean;
     deferred: Array<{ field: string; value: string; reason: string }>;
     row: number;
+    original: Record<string, string>;
   };
 
   let leads: ImportRow[] = [];
   let parseErrors: Array<{ row: number; error: string }> = [];
+  let mappingJson: Array<{ header: string; field: string }> =
+    parsed.data.mapping ?? [];
 
   if (parsed.data.leads?.length) {
     const seen = new Set<string>();
@@ -168,12 +195,20 @@ export async function POST(request: Request) {
         optedOut,
         deferred,
         row,
+        original: lead.original ?? {},
       });
     });
   } else if (parsed.data.csv) {
+    const table = parseLeadsCsvTable(parsed.data.csv);
+    if (mappingJson.length === 0) {
+      mappingJson = suggestLeadImportMapping(table.headers);
+    }
     const result = parseLeadsCsv(parsed.data.csv, defaultLeadType);
-    leads = result.leads;
     parseErrors = result.errors;
+    leads = result.leads.map((lead) => ({
+      ...lead,
+      original: table.rows[lead.row - 2] ?? {},
+    }));
   }
 
   if (leads.length === 0) {
@@ -209,7 +244,79 @@ export async function POST(request: Request) {
     reason: string;
   }> = [];
 
+  const workspaceId = ownership.workspaceId;
+  const job = workspaceId
+    ? await createLeadImportJob({
+        workspaceId,
+        importedByUserId: ctx.user.id,
+        filename: parsed.data.filename,
+        mapping: mappingJson,
+        defaultLeadType,
+        consentAsserted: assertCommunicationConsent,
+        allowDuplicates: parsed.data.allowDuplicates === true,
+      })
+    : null;
+
+  const parseErrorsByRow = new Map<number, string[]>();
+  for (const item of parseErrors) {
+    const list = parseErrorsByRow.get(item.row) ?? [];
+    list.push(item.error);
+    parseErrorsByRow.set(item.row, list);
+  }
+  if (job && workspaceId) {
+    for (const [rowNumber, errors] of parseErrorsByRow) {
+      try {
+        const importRow = await createLeadImportRow({
+          workspaceId,
+          jobId: job.id,
+          rowNumber,
+          payloadOriginal: {},
+          payloadCanonical: { parseErrors: errors },
+        });
+        await updateLeadImportRow({
+          id: importRow.id,
+          status: "FAILED",
+          error: errors.join("; "),
+        });
+      } catch {
+        /* keep importing valid rows even if a parse-error row fails to persist */
+      }
+    }
+  }
+
+  let deferredFieldCount = 0;
+
   for (const row of leads) {
+    const tagsRaw = tagsRawFromDeferred(row.deferred);
+    const dateCreatedRaw = deferredValue(row.deferred, "date_created");
+    const dealCompletedRaw = deferredValue(row.deferred, "deal_completed");
+    const extraUnmapped = extraUnmappedFromDeferred(row.deferred);
+    const importRow =
+      job && workspaceId
+        ? await createLeadImportRow({
+            workspaceId,
+            jobId: job.id,
+            rowNumber: row.row,
+            payloadOriginal: row.original,
+            payloadCanonical: {
+              name: row.name,
+              email: row.email,
+              phone: row.phone ?? null,
+              notes: row.notes ?? null,
+              homeAddress: row.homeAddress ?? null,
+              purchaseTimeframe: row.purchaseTimeframe ?? null,
+              utmSource: row.utmSource ?? null,
+              leadTypeRaw: row.leadTypeRaw ?? null,
+              optedOut: row.optedOut,
+              consentAsserted: assertCommunicationConsent,
+              tags: tagsRaw ?? null,
+              dateCreated: dateCreatedRaw ?? null,
+              dealCompleted: dealCompletedRaw ?? null,
+            },
+            email: row.email,
+          })
+        : null;
+
     try {
       const classification = classifyImportedLead(
         defaultLeadType,
@@ -221,6 +328,13 @@ export async function POST(request: Request) {
           email: row.email,
           reason: classification.reason,
         });
+        if (importRow) {
+          await updateLeadImportRow({
+            id: importRow.id,
+            status: "SKIPPED",
+            error: classification.reason,
+          });
+        }
         continue;
       }
 
@@ -236,6 +350,24 @@ export async function POST(request: Request) {
             email: row.email,
             reason: "Open lead already exists",
           });
+          if (importRow) {
+            await updateLeadImportRow({
+              id: importRow.id,
+              status: "SKIPPED",
+              leadId: existing.id,
+              error: "Open lead already exists",
+            });
+          }
+          if (
+            workspaceId &&
+            existing.workspaceId === workspaceId
+          ) {
+            await attachImportedLeadTags({
+              workspaceId,
+              leadId: existing.id,
+              tagsRaw,
+            });
+          }
           continue;
         }
       }
@@ -262,14 +394,62 @@ export async function POST(request: Request) {
         email: result.email,
         intent: result.intent,
       });
-      for (const item of row.deferred) {
-        deferredReports.push({
-          row: row.row,
-          email: row.email,
-          field: item.field,
-          value: item.value,
-          reason: item.reason,
-        });
+      if (importRow && workspaceId) {
+        try {
+          await updateLeadImportRow({
+            id: importRow.id,
+            status: "CREATED",
+            leadId: result.leadId,
+          });
+          const origin = await persistImportedLeadOrigin({
+            workspaceId,
+            leadId: result.leadId,
+            importRowId: importRow.id,
+            defaultLeadType,
+            leadTypeRaw: row.leadTypeRaw,
+            dateCreatedRaw,
+            dealCompletedRaw,
+            extraUnmapped,
+          });
+          deferredFieldCount += origin.unmappedCount;
+          if (origin.unmappedFields) {
+            for (const [field, value] of Object.entries(origin.unmappedFields)) {
+              deferredReports.push({
+                row: row.row,
+                email: row.email,
+                field,
+                value,
+                reason:
+                  "Recognized — stored on LeadOrigin.unmappedFields, not Notes.",
+              });
+            }
+          }
+          await attachImportedLeadTags({
+            workspaceId,
+            leadId: result.leadId,
+            tagsRaw,
+          });
+        } catch (persistErr) {
+          await updateLeadImportRow({
+            id: importRow.id,
+            status: "CREATED",
+            leadId: result.leadId,
+            error:
+              persistErr instanceof Error
+                ? persistErr.message
+                : "Provenance persist failed",
+          });
+        }
+      } else {
+        for (const item of row.deferred) {
+          deferredReports.push({
+            row: row.row,
+            email: row.email,
+            field: item.field,
+            value: item.value,
+            reason: item.reason,
+          });
+        }
       }
     } catch (err) {
       failed.push({
@@ -277,6 +457,27 @@ export async function POST(request: Request) {
         email: row.email,
         error: err instanceof Error ? err.message : "Create failed",
       });
+      if (importRow) {
+        await updateLeadImportRow({
+          id: importRow.id,
+          status: "FAILED",
+          error: err instanceof Error ? err.message : "Create failed",
+        });
+      }
+    }
+  }
+
+  if (job) {
+    try {
+      await finishLeadImportJob({
+        jobId: job.id,
+        createdCount: created.length,
+        skippedCount: skipped.length,
+        failedCount: failed.length + parseErrorsByRow.size,
+        deferredFieldCount,
+      });
+    } catch {
+      /* leads were already created; job totals can be repaired later */
     }
   }
 

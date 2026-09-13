@@ -282,6 +282,12 @@ function testStructuralWiring() {
   assert.ok(create.includes("finalizeWritableLeadClassification"));
   assert.ok(!create.includes("stampClassification"));
 
+  const persist = read("src/lib/agent/lead-import-persist.ts");
+  assert.ok(!persist.includes("$transaction"));
+  assert.ok(!persist.includes("updateMany"));
+  assert.ok(!persist.includes(".upsert("));
+  assert.ok(persist.includes("workspaceId: input.workspaceId"));
+
   assert.ok(!modal.includes("workspaceId"));
   console.log("[6] import route wiring (no client workspaceId)... PASS");
 }

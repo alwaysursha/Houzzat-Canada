@@ -89,16 +89,15 @@ export const LEAD_IMPORT_MAPPING_THIS_IMPORT_FIELDS = [
   "postal",
   "notes",
   "lead_type",
+  "tags",
   "timeframe",
   "source",
-  "opt_out",
-] as const satisfies readonly LeadImportPersistedField[];
-
-export const LEAD_IMPORT_MAPPING_NEXT_PHASE_FIELDS = [
-  "tags",
   "date_created",
   "deal_completed",
-] as const satisfies readonly LeadImportDeferredField[];
+  "opt_out",
+] as const satisfies readonly Exclude<LeadImportField, "skip">[];
+
+export const LEAD_IMPORT_MAPPING_NEXT_PHASE_FIELDS = [] as const;
 
 export const DETECT_WITHOUT_MAPPED_COLUMN_MESSAGE =
   "Detect from CSV needs a Lead Type column. Map a CSV column to Lead Type below, or choose Buyer, Seller, or Buyer + Seller.";
@@ -583,4 +582,4 @@ export function isLeadImportDeferredField(
 }
 
 export const DEFERRED_IMPORT_REASON =
-  "Recognized — stored in the next persistence phase, not Notes.";
+  "Recognized — stored as import provenance, not Notes.";

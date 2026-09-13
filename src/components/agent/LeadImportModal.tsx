@@ -263,6 +263,7 @@ export function LeadImportModal({
         optedOut: d.optedOut,
         deferred: d.deferred,
         row: d.row,
+        original: rawRows[d.row - 2] ?? {},
       }));
 
     if (leads.length === 0) {
@@ -280,6 +281,8 @@ export function LeadImportModal({
           allowDuplicates: allowDupes,
           defaultLeadType,
           assertCommunicationConsent: assertConsent,
+          filename: fileName,
+          mapping,
         }),
       });
       const json = (await res.json()) as ImportResult & { error?: string };
@@ -360,8 +363,8 @@ export function LeadImportModal({
                 (or first + last) and{" "}
                 <span className="font-semibold text-[#334155]">email</span>.
                 Max {MAX_ROWS} rows. Choose a Default Lead Type on the next step.
-                Tags and some CRM dates are recognized but stored in a later
-                phase — they are not written into Notes.
+                Tags and CRM dates are stored as import provenance — they are
+                not written into Notes.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <a
@@ -440,7 +443,7 @@ export function LeadImportModal({
                       {" "}
                       ·{" "}
                       <span className="text-[#64748b]">
-                        {stats.deferred} with fields for the next phase
+                        {stats.deferred} with extra CRM fields
                       </span>
                     </>
                   ) : null}
@@ -522,7 +525,7 @@ export function LeadImportModal({
                 <p className="mb-2 text-[11px] leading-relaxed text-[#64748b]">
                   Map each CSV column to a destination. Destinations include{" "}
                   {MAPPING_DESTINATION_LIST}. Tags, Date Created, and Deal
-                  Completed Date are recognized for the next phase and are not
+                  Completed Date are stored as import provenance and are not
                   written into Notes.
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -693,7 +696,7 @@ export function LeadImportModal({
                                 ) : null}
                                 {draft.deferred.length ? (
                                   <p className="text-[10px] text-[#b45309]">
-                                    Next phase:{" "}
+                                    Also storing:{" "}
                                     {draft.deferred
                                       .map((d) => d.field)
                                       .join(", ")}
@@ -749,13 +752,13 @@ export function LeadImportModal({
                   : ""}
                 {result.failedCount ? ` · Failed ${result.failedCount}` : ""}
                 {result.deferredCount
-                  ? ` · ${result.deferredCount} values held for the next phase`
+                  ? ` · ${result.deferredCount} values stored as unmapped origin fields`
                   : ""}
               </div>
               {result.deferredCount ? (
                 <p className="text-[12px] text-[#64748b]">
-                  Tags, original created dates, and deal-completed dates were
-                  recognized and were not written into Notes.
+                  Tags and CRM dates were stored as provenance. Unmapped values
+                  were not written into Notes.
                 </p>
               ) : null}
               <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-[11px] text-[#334155]">
@@ -771,7 +774,7 @@ export function LeadImportModal({
                   ),
                   ...(result.deferred ?? []).map(
                     (r) =>
-                      `Row ${r.row} (${r.email}): ${r.field} held for next phase`,
+                      `Row ${r.row} (${r.email}): ${r.field} stored as unmapped origin field`,
                   ),
                 ]
                   .slice(0, 80)
