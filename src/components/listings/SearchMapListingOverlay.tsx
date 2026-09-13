@@ -311,6 +311,7 @@ export function SearchMapListingOverlay({
             title={shareTitle}
             listingStatus={card.status}
             path={listingPath(card)}
+            shareMenuPlacement="down"
           />
           <button
             type="button"

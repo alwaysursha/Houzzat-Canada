@@ -16,12 +16,26 @@ function listingUrl(mlsNumber: string, path?: string) {
   return relative;
 }
 
+function shareMenuPositionClass(placement: "up" | "down"): string {
+  switch (placement) {
+    case "up":
+      return "bottom-full mb-2";
+    case "down":
+      return "top-full mt-2";
+    default: {
+      const _exhaustive: never = placement;
+      return _exhaustive;
+    }
+  }
+}
+
 export function ListingCardActions({
   mlsNumber,
   title,
   listingStatus,
   path,
   className,
+  shareMenuPlacement = "up",
 }: {
   mlsNumber: string;
   title: string;
@@ -29,6 +43,8 @@ export function ListingCardActions({
   /** Canonical SEO path when known (`/listing/slug/MLS`). */
   path?: string;
   className?: string;
+  /** Overlay header sits at the top — open the menu below the button. */
+  shareMenuPlacement?: "up" | "down";
 }) {
   const siteName = useTenantDisplayName("Houzzat");
   const { saved, pending, ready, toggle } = useSavedListingToggle({
@@ -129,7 +145,12 @@ export function ListingCardActions({
         </button>
 
         {shareOpen ? (
-          <div className="absolute left-0 bottom-full z-20 mb-2 w-48 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg">
+          <div
+            className={cn(
+              "absolute left-0 z-20 w-48 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg",
+              shareMenuPositionClass(shareMenuPlacement),
+            )}
+          >
             <button
               type="button"
               onClick={copyLink}
