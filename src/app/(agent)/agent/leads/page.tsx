@@ -14,6 +14,7 @@ import { leadScopeWhere, requireAgentContext } from "@/lib/agent";
 import { listAssignableCrmAgents } from "@/lib/agent/assignable-agents";
 import { resolveDeskView } from "@/lib/agent/brokerage";
 import { computeHotnessMap, findOnlineUserIds } from "@/lib/agent/hotness";
+import { displayedCrmClassification } from "@/lib/agent/lead-classification";
 import { loadLeadsDashboardEngagement } from "@/lib/agent/leads-dashboard";
 import { selectPrimaryLeadsByCustomer } from "@/lib/agent/select-primary-leads-by-customer";
 import { prisma } from "@/lib/prisma";
@@ -103,8 +104,6 @@ export default async function AgentLeadsPage({
           name: true,
           email: true,
           phone: true,
-          isBuyer: true,
-          isSeller: true,
           purchaseTimeframe: true,
           emailVerified: true,
           phoneVerifiedAt: true,
@@ -163,8 +162,7 @@ export default async function AgentLeadsPage({
               name: l.customer.name,
               email: l.customer.email,
               phone: eng?.phone ?? l.customer.phone,
-              isBuyer: l.customer.isBuyer,
-              isSeller: l.customer.isSeller,
+              ...displayedCrmClassification(l),
               purchaseTimeframe: l.customer.purchaseTimeframe,
               emailVerified: Boolean(l.customer.emailVerified),
               phoneVerified: Boolean(l.customer.phoneVerifiedAt),

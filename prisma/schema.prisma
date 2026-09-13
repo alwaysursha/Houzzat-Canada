@@ -64,6 +64,40 @@ enum LeadIntent {
 }
 
 /**
+ * Workspace tag catalog origin. Buyer/Seller/Both are NOT catalog rows.
+ */
+enum WorkspaceTagOrigin {
+  MANUAL
+  IMPORTED
+}
+
+enum LeadImportJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+  CANCELLED
+}
+
+enum LeadImportRowStatus {
+  PENDING
+  CREATED
+  SKIPPED
+  FAILED
+}
+
+/**
+ * Import-level default classification. BOTH = Lead.isBuyer+isSeller; intent stays SELLER.
+ */
+enum LeadImportDefaultType {
+  BUYER
+  SELLER
+  BOTH
+  DETECT
+}
+
+/**
  * How seller leads are auto-assigned.
  */
 enum SellerLeadAssignMode {
@@ -570,6 +604,11 @@ model Workspace {
    * Only ACTIVE + capabilities eventually feed entitlement (resolver not built).
    */
   dataConnections                   WorkspaceDataConnection[]
+  workspaceTags                     WorkspaceTag[]
+  leadTags                          LeadTag[]
+  leadOrigins                       LeadOrigin[]
+  leadImportJobs                    LeadImportJob[]
+  leadImportRows                    LeadImportRow[]
 
   @@index([status])
 }
@@ -891,6 +930,7 @@ model User {
    */
   platformOperator          PlatformOperator?
   ownerActivations          WorkspaceOwnerActivation[]
+  leadImportJobs            LeadImportJob[]            @relation("LeadImportImportedBy")
 }
 
 /**
@@ -1003,15 +1043,23 @@ model Lead {
   inquiryTag       InquiryTag?
   lostReason       String?
   winReason        String?
+  /**
+   * Workspace-scoped CRM classification (HouzzatPRO).
+   * NULL = not backfilled yet — do not treat NULL as Buyer/Seller.
+   * User.isBuyer / User.isSeller remain Houzzat consumer/account flags.
+   * Buyer+Seller = both true; Lead.intent stays SELLER. No LeadIntent.BOTH.
+   */
+  isBuyer          Boolean?
+  isSeller         Boolean?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
-  customer      User?          @relation("CustomerLeads", fields: [customerId], references: [id], onDelete: SetNull)
-  assignedAgent User?          @relation("AssignedLeads", fields: [assignedAgentId], references: [id], onDelete: SetNull)
-  organization  Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  workspace     Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  landingPage   LandingPage?   @relation(fields: [landingPageId], references: [id], onDelete: SetNull)
-  adCampaign    AdCampaign?    @relation(fields: [adCampaignId], references: [id], onDelete: SetNull)
+  customer      User?           @relation("CustomerLeads", fields: [customerId], references: [id], onDelete: SetNull)
+  assignedAgent User?           @relation("AssignedLeads", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  organization  Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  workspace     Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  landingPage   LandingPage?    @relation(fields: [landingPageId], references: [id], onDelete: SetNull)
+  adCampaign    AdCampaign?     @relation(fields: [adCampaignId], references: [id], onDelete: SetNull)
   activities    LeadActivity[]
   appointments  Appointment[]
   viewingTours  ViewingTour[]
@@ -1019,7 +1067,11 @@ model Lead {
   leadNotes     LeadNote[]
   emailLogs     LeadEmailLog[]
   cmaReports    CmaReport[]
+  tags          LeadTag[]
+  origin        LeadOrigin?
+  importRows    LeadImportRow[]
 
+  @@unique([workspaceId, id])
   @@index([status, assignedAgentId])
   @@index([organizationId, status])
   @@index([organizationId, assignedAgentId])
@@ -1029,6 +1081,133 @@ model Lead {
   @@index([intent, status])
   @@index([utmCampaign])
   @@index([adCampaignId])
+}
+
+/**
+ * Workspace-scoped tag catalog. Buyer/Seller/Both are generated from Lead flags,
+ * not catalog rows. Imported CRM text such as "Seller" may still be an IMPORTED tag.
+ */
+model WorkspaceTag {
+  id             String             @id @default(cuid())
+  workspaceId    String
+  name           String
+  nameNormalized String
+  origin         WorkspaceTagOrigin @default(MANUAL)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leadTags  LeadTag[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, nameNormalized])
+  @@index([workspaceId])
+}
+
+model LeadTag {
+  id          String   @id @default(cuid())
+  workspaceId String
+  leadId      String
+  tagId       String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead         @relation(fields: [workspaceId, leadId], references: [workspaceId, id], onDelete: Cascade)
+  tag       WorkspaceTag @relation(fields: [workspaceId, tagId], references: [workspaceId, id], onDelete: Cascade)
+
+  @@unique([workspaceId, leadId, tagId])
+  @@index([workspaceId, tagId])
+  @@index([leadId])
+}
+
+/**
+ * Durable original-CRM archaeology. Does not overload Lead.createdAt, Lead.source, or notes.
+ */
+model LeadOrigin {
+  id                     String    @id @default(cuid())
+  workspaceId            String
+  leadId                 String    @unique
+  sourceCrm              String?
+  externalContactId      String?
+  originalClassification String?
+  sourceCreatedAt        DateTime?
+  sourceClosedAt         DateTime?
+  unmappedFields         Json?
+  importRowId            String?   @unique
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead           @relation(fields: [workspaceId, leadId], references: [workspaceId, id], onDelete: Cascade)
+  importRow LeadImportRow? @relation(fields: [importRowId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, leadId])
+  @@index([workspaceId, sourceCrm])
+  @@index([workspaceId, sourceCrm, externalContactId])
+}
+
+model LeadImportJob {
+  id                 String                @id @default(cuid())
+  workspaceId        String
+  importedByUserId   String
+  filename           String?
+  sourceCrm          String?
+  mapping            Json
+  defaultLeadType    LeadImportDefaultType
+  consentAsserted    Boolean               @default(false)
+  checksum           String?
+  allowDuplicates    Boolean               @default(false)
+  policies           Json?
+  status             LeadImportJobStatus   @default(PENDING)
+  createdCount       Int                   @default(0)
+  skippedCount       Int                   @default(0)
+  failedCount        Int                   @default(0)
+  deferredFieldCount Int                   @default(0)
+  error              String?
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  workspace  Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  importedBy User            @relation("LeadImportImportedBy", fields: [importedByUserId], references: [id], onDelete: Restrict)
+  rows       LeadImportRow[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, status])
+  @@index([workspaceId, checksum])
+}
+
+model LeadImportRow {
+  id               String              @id @default(cuid())
+  workspaceId      String
+  jobId            String
+  rowNumber        Int
+  payloadOriginal  Json
+  payloadCanonical Json
+  status           LeadImportRowStatus @default(PENDING)
+  leadId           String?
+  error            String?
+  idempotencyKey   String?
+  attemptCount     Int                 @default(0)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  job       LeadImportJob @relation(fields: [workspaceId, jobId], references: [workspaceId, id], onDelete: Cascade)
+  /**
+   * Simple FK for Prisma (leadId optional). Tenant-safe composite FK is in migration SQL
+   * (MATCH SIMPLE: NULL leadId skips the check).
+   */
+  lead      Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  origin    LeadOrigin?
+
+  @@unique([workspaceId, id])
+  @@unique([jobId, rowNumber])
+  @@unique([jobId, idempotencyKey])
+  @@index([workspaceId, status])
+  @@index([leadId])
 }
 
 /**

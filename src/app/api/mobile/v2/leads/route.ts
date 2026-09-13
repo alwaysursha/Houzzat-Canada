@@ -18,6 +18,7 @@
 import { NextResponse } from "next/server";
 import { LeadStatus } from "@prisma/client";
 import { computeHotnessMap } from "@/lib/agent/hotness";
+import { displayedCrmClassification } from "@/lib/agent/lead-classification";
 import { selectPrimaryLeadsByCustomer } from "@/lib/agent/select-primary-leads-by-customer";
 import { prisma } from "@/lib/prisma";
 import { authenticateMobileRequest } from "@/lib/mobile/v2/auth-guard";
@@ -225,6 +226,8 @@ export async function GET(request: Request) {
           status: true,
           source: true,
           intent: true,
+          isBuyer: true,
+          isSeller: true,
           score: true,
           customerId: true,
           createdAt: true,
@@ -237,8 +240,6 @@ export async function GET(request: Request) {
               name: true,
               email: true,
               phone: true,
-              isBuyer: true,
-              isSeller: true,
               createdAt: true,
               emailVerified: true,
             },
@@ -316,8 +317,7 @@ export async function GET(request: Request) {
               name: lead.customer.name,
               email: lead.customer.email,
               phone: lead.customer.phone,
-              isBuyer: lead.customer.isBuyer,
-              isSeller: lead.customer.isSeller,
+              ...displayedCrmClassification(lead),
               createdAt: lead.customer.createdAt.toISOString(),
               emailVerified: Boolean(lead.customer.emailVerified),
             }

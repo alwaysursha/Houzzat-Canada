@@ -280,6 +280,8 @@ function testWiringNoConsentDefaultAndNoBothIntent() {
   assert.ok(create.includes("isSeller"));
   assert.ok(create.includes("utmSource"));
   assert.ok(create.includes("homeAddress"));
+  assert.ok(create.includes("finalizeWritableLeadClassification"));
+  assert.ok(!create.includes("stampClassification"));
 
   assert.ok(route.includes("defaultLeadType"));
   assert.ok(route.includes("assertCommunicationConsent"));

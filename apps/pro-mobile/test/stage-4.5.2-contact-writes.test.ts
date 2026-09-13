@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { nextWritableLeadClassification } from "../../../src/lib/agent/lead-classification";
 import {
   createWorkspaceAccessToken,
   verifyMobileToken,
@@ -18,6 +19,9 @@ type MockLead = {
   workspaceId: string;
   assignedAgentId: string | null;
   customerId: string | null;
+  isBuyer: boolean | null;
+  isSeller: boolean | null;
+  intent: "BUYER" | "SELLER";
 };
 
 type MockCustomer = {
@@ -37,24 +41,36 @@ const MOCK_LEADS: Record<string, MockLead> = {
     workspaceId: "ws_tenant_canary",
     assignedAgentId: "usr_canary_agent_01",
     customerId: "cust_canary_01",
+    isBuyer: true,
+    isSeller: false,
+    intent: "BUYER",
   },
   lead_canary_pond: {
     id: "lead_canary_pond",
     workspaceId: "ws_tenant_canary",
     assignedAgentId: null,
     customerId: "cust_canary_pond",
+    isBuyer: null,
+    isSeller: null,
+    intent: "BUYER",
   },
   lead_canary_other_agent: {
     id: "lead_canary_other_agent",
     workspaceId: "ws_tenant_canary",
     assignedAgentId: "usr_canary_agent_02",
     customerId: "cust_canary_other",
+    isBuyer: true,
+    isSeller: false,
+    intent: "BUYER",
   },
   lead_houzzat_01: {
     id: "lead_houzzat_01",
     workspaceId: "ws_houzzat_prod",
     assignedAgentId: "usr_houzzat_agent_01",
     customerId: "cust_houzzat_01",
+    isBuyer: true,
+    isSeller: false,
+    intent: "BUYER",
   },
 };
 
@@ -436,21 +452,35 @@ function executeProfileFlags(
     };
   }
 
-  const customer = customers[lead.customerId];
-  if (typeof raw.isBuyer === "boolean") customer.isBuyer = raw.isBuyer;
-  if (typeof raw.isSeller === "boolean") customer.isSeller = raw.isSeller;
+  const customerSnapshot = {
+    isBuyer: customers[lead.customerId]!.isBuyer,
+    isSeller: customers[lead.customerId]!.isSeller,
+  };
+  const next = nextWritableLeadClassification({
+    current: lead,
+    patch: {
+      isBuyer: typeof raw.isBuyer === "boolean" ? raw.isBuyer : undefined,
+      isSeller: typeof raw.isSeller === "boolean" ? raw.isSeller : undefined,
+    },
+  });
+  lead.isBuyer = next.isBuyer;
+  lead.isSeller = next.isSeller;
+  lead.intent = next.intent;
 
   activities.push({
     leadId: lead.id,
     type: "profile_flags",
-    body: `buyer=${customer.isBuyer};seller=${customer.isSeller}`,
+    body: `buyer=${lead.isBuyer};seller=${lead.isSeller}`,
   });
+
+  assert.equal(customers[lead.customerId]!.isBuyer, customerSnapshot.isBuyer);
+  assert.equal(customers[lead.customerId]!.isSeller, customerSnapshot.isSeller);
 
   return {
     ok: true as const,
     status: 200,
-    isBuyer: customer.isBuyer,
-    isSeller: customer.isSeller,
+    isBuyer: next.isBuyer,
+    isSeller: next.isSeller,
   };
 }
 
@@ -677,6 +707,11 @@ async function run() {
       assert.equal(seller.isBuyer, true);
       assert.equal(seller.isSeller, true);
     }
+    assert.equal(customers.cust_canary_01.isBuyer, true);
+    assert.equal(customers.cust_canary_01.isSeller, false);
+    assert.equal(MOCK_LEADS.lead_canary_01.isBuyer, true);
+    assert.equal(MOCK_LEADS.lead_canary_01.isSeller, true);
+    assert.equal(MOCK_LEADS.lead_canary_01.intent, "SELLER");
 
     assert.equal(
       executeProfileFlags(payload, "lead_canary_01", {}).status,

@@ -13,6 +13,7 @@ import {
 } from "@/lib/agent/customer-timeline";
 import { computeHotness } from "@/lib/agent/hotness";
 import type { InquiryTagValue } from "@/lib/agent/inquiry-tag";
+import { displayedCrmClassification } from "@/lib/agent/lead-classification";
 import { prisma } from "@/lib/prisma";
 
 export type LeadProfileShell = {
@@ -225,25 +226,31 @@ function searchLabel(search: {
   return bits.length > 0 ? bits.join(", ") : search.name || "Saved search";
 }
 
-function mapLeadCustomer(customer: {
-  id: string;
-  name: string | null;
-  email: string;
-  phone: string | null;
-  isBuyer: boolean;
-  isSeller: boolean;
-  purchaseTimeframe: string | null;
-  emailVerified: Date | null;
-  createdAt: Date;
-  caslConsentAt: Date | null;
-  termsAcceptedAt: Date | null;
-  vowAcceptedAt: Date | null;
-  homeAddress: string | null;
-  emailUpdateRequestedAt: Date | null;
-  phoneUpdateRequestedAt: Date | null;
-}): LeadProfileShell["lead"]["customer"] {
+function mapLeadCustomer(
+  customer: {
+    id: string;
+    name: string | null;
+    email: string;
+    phone: string | null;
+    purchaseTimeframe: string | null;
+    emailVerified: Date | null;
+    createdAt: Date;
+    caslConsentAt: Date | null;
+    termsAcceptedAt: Date | null;
+    vowAcceptedAt: Date | null;
+    homeAddress: string | null;
+    emailUpdateRequestedAt: Date | null;
+    phoneUpdateRequestedAt: Date | null;
+  },
+  lead: {
+    isBuyer?: boolean | null;
+    isSeller?: boolean | null;
+    intent?: string | null;
+  },
+): LeadProfileShell["lead"]["customer"] {
   return {
     ...customer,
+    ...displayedCrmClassification(lead),
     emailVerified: customer.emailVerified?.toISOString() ?? null,
     createdAt: customer.createdAt.toISOString(),
     caslConsentAt: customer.caslConsentAt?.toISOString() ?? null,
@@ -307,14 +314,15 @@ export async function loadLeadSummary(
       utmCampaign: true,
       utmContent: true,
       customerId: true,
+      isBuyer: true,
+      isSeller: true,
+      intent: true,
       customer: {
         select: {
           id: true,
           name: true,
           email: true,
           phone: true,
-          isBuyer: true,
-          isSeller: true,
           purchaseTimeframe: true,
           emailVerified: true,
           createdAt: true,
@@ -371,7 +379,7 @@ export async function loadLeadSummary(
       utmSource: lead.utmSource,
       utmCampaign: lead.utmCampaign,
       utmContent: lead.utmContent,
-      customer: lead.customer ? mapLeadCustomer(lead.customer) : null,
+      customer: lead.customer ? mapLeadCustomer(lead.customer, lead) : null,
       assignedAgent: lead.assignedAgent,
       adCampaign: lead.adCampaign,
     },

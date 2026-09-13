@@ -4,6 +4,7 @@
  */
 import type { AgentOrgContext } from "@/lib/agent";
 import { listAssignableCrmAgents } from "@/lib/agent/assignable-agents";
+import { displayedCrmClassification } from "@/lib/agent/lead-classification";
 import { v2CanAccessLead } from "@/lib/agent/lead-profile-v2/access";
 import type { LeadProfileV2Shell } from "@/lib/agent/lead-profile-v2/types";
 import { prisma } from "@/lib/prisma";
@@ -29,14 +30,15 @@ export const LEAD_PROFILE_V2_SHELL_SELECT = {
   utmSource: true,
   utmCampaign: true,
   utmContent: true,
+  isBuyer: true,
+  isSeller: true,
+  intent: true,
   customer: {
     select: {
       id: true,
       name: true,
       email: true,
       phone: true,
-      isBuyer: true,
-      isSeller: true,
       purchaseTimeframe: true,
       emailVerified: true,
       createdAt: true,
@@ -103,8 +105,7 @@ export async function loadLeadProfileV2Shell(
             name: lead.customer.name,
             email: lead.customer.email,
             phone: lead.customer.phone,
-            isBuyer: lead.customer.isBuyer,
-            isSeller: lead.customer.isSeller,
+            ...displayedCrmClassification(lead),
             purchaseTimeframe: lead.customer.purchaseTimeframe,
             emailVerified: iso(lead.customer.emailVerified),
             createdAt: lead.customer.createdAt.toISOString(),

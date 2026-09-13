@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
-import { resolveLeadIntent } from "@/lib/agent/lead-intake";
+import {
+  nextWritableLeadClassification,
+  resolveDisplayedLeadClassification,
+} from "@/lib/agent/lead-classification";
 import { PURCHASE_TIMEFRAMES } from "@/lib/agent/timeframe";
 import { prisma } from "@/lib/prisma";
 
@@ -45,11 +48,12 @@ export async function POST(request: Request) {
       workspaceId: true,
       assignedAgentId: true,
       customerId: true,
+      isBuyer: true,
+      isSeller: true,
+      intent: true,
       customer: {
         select: {
           id: true,
-          isBuyer: true,
-          isSeller: true,
           purchaseTimeframe: true,
         },
       },
@@ -60,37 +64,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const nextBuyer =
-    parsed.data.isBuyer !== undefined
-      ? parsed.data.isBuyer
-      : lead.customer.isBuyer;
-  const nextSeller =
-    parsed.data.isSeller !== undefined
-      ? parsed.data.isSeller
-      : lead.customer.isSeller;
+  const classificationTouched =
+    parsed.data.isBuyer !== undefined || parsed.data.isSeller !== undefined;
+  const next = classificationTouched
+    ? nextWritableLeadClassification({
+        current: lead,
+        patch: parsed.data,
+      })
+    : resolveDisplayedLeadClassification(lead);
   const nextTimeframe =
     parsed.data.purchaseTimeframe !== undefined
       ? parsed.data.purchaseTimeframe
       : lead.customer.purchaseTimeframe;
 
-  await prisma.user.update({
-    where: { id: lead.customer.id },
-    data: {
-      isBuyer: nextBuyer,
-      isSeller: nextSeller,
-      purchaseTimeframe: nextTimeframe,
-    },
-  });
+  if (classificationTouched) {
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: {
+        isBuyer: next.isBuyer,
+        isSeller: next.isSeller,
+        intent: next.intent,
+      },
+    });
+  }
 
-  await prisma.lead.update({
-    where: { id: lead.id },
-    data: {
-      intent: resolveLeadIntent({
-        isBuyer: nextBuyer,
-        isSeller: nextSeller,
-      }),
-    },
-  });
+  if (parsed.data.purchaseTimeframe !== undefined) {
+    await prisma.user.update({
+      where: { id: lead.customer.id },
+      data: { purchaseTimeframe: nextTimeframe },
+    });
+  }
 
   const parts: string[] = [];
   if (parsed.data.isBuyer !== undefined) {
@@ -118,8 +121,8 @@ export async function POST(request: Request) {
       type: "profile_flags",
       body: `${parts.join("; ")} by agent`,
       meta: {
-        isBuyer: nextBuyer,
-        isSeller: nextSeller,
+        isBuyer: next.isBuyer,
+        isSeller: next.isSeller,
         purchaseTimeframe: nextTimeframe,
       },
     },
@@ -127,8 +130,8 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    isBuyer: nextBuyer,
-    isSeller: nextSeller,
+    isBuyer: next.isBuyer,
+    isSeller: next.isSeller,
     purchaseTimeframe: nextTimeframe,
   });
 }

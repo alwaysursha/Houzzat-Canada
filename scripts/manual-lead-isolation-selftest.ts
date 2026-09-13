@@ -238,6 +238,8 @@ function testAddLeadRouteWiring() {
 
   assert.ok(create.includes("trustedWorkspaceId"));
   assert.ok(create.includes("input.workspaceId"));
+  assert.ok(create.includes("finalizeWritableLeadClassification"));
+  assert.ok(!create.includes("stampClassification"));
 
   assert.ok(ui.includes('fetch("/api/agent/leads"'));
   assert.ok(ui.includes("name: addName.trim()"));

@@ -279,6 +279,8 @@ function testStructuralWiring() {
   assert.ok(create.includes("trustedWorkspaceId"));
   assert.ok(create.includes("input.workspaceId"));
   assert.ok(create.includes("resolveLeadCrmOwnership"));
+  assert.ok(create.includes("finalizeWritableLeadClassification"));
+  assert.ok(!create.includes("stampClassification"));
 
   assert.ok(!modal.includes("workspaceId"));
   console.log("[6] import route wiring (no client workspaceId)... PASS");

@@ -4,6 +4,7 @@ import type { AgentOrgContext } from "@/lib/agent";
 import { leadScopeWhere } from "@/lib/agent";
 import { leadWhereForDesk } from "@/lib/crm-read-scope";
 import { computeHotnessMap, ONLINE_MS } from "@/lib/agent/hotness";
+import { displayedCrmClassification } from "@/lib/agent/lead-classification";
 import { prisma } from "@/lib/prisma";
 
 /** Recent responses only — enough for a Launchpad avg, not a full history scan. */
@@ -183,8 +184,6 @@ export async function loadLaunchpadContactRequested(input: {
         select: {
           name: true,
           email: true,
-          isBuyer: true,
-          isSeller: true,
           emailVerified: true,
           createdAt: true,
         },
@@ -217,8 +216,7 @@ export async function loadLaunchpadContactRequested(input: {
         ? {
             name: lead.customer.name,
             email: lead.customer.email,
-            isBuyer: lead.customer.isBuyer,
-            isSeller: lead.customer.isSeller,
+            ...displayedCrmClassification(lead),
             emailVerified: Boolean(lead.customer.emailVerified),
             createdAt: lead.customer.createdAt.toISOString(),
           }

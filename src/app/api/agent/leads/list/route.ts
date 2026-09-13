@@ -3,6 +3,7 @@ import type { LeadStatus } from "@prisma/client";
 import { leadScopeWhere, requireAgentContextFromRequest } from "@/lib/agent";
 import { resolveDeskView } from "@/lib/agent/brokerage";
 import { computeHotnessMap, findOnlineUserIds } from "@/lib/agent/hotness";
+import { displayedCrmClassification } from "@/lib/agent/lead-classification";
 import { PIPELINE_STATUSES } from "@/lib/agent/pipeline";
 import { selectPrimaryLeadsByCustomer } from "@/lib/agent/select-primary-leads-by-customer";
 import { prisma } from "@/lib/prisma";
@@ -81,8 +82,6 @@ export async function GET(request: Request) {
           name: true,
           email: true,
           phone: true,
-          isBuyer: true,
-          isSeller: true,
           purchaseTimeframe: true,
           emailVerified: true,
           phoneVerifiedAt: true,
@@ -125,7 +124,12 @@ export async function GET(request: Request) {
       inquiryTag: lead.inquiryTag,
       createdAt: lead.createdAt.toISOString(),
       updatedAt: lead.updatedAt.toISOString(),
-      customer: lead.customer,
+      customer: lead.customer
+        ? {
+            ...lead.customer,
+            ...displayedCrmClassification(lead),
+          }
+        : null,
       assignedAgent: lead.assignedAgent,
       nextTaskDueAt: lead.tasks[0]?.dueAt.toISOString() ?? null,
       hotness: hot?.hotness ?? lead.score,

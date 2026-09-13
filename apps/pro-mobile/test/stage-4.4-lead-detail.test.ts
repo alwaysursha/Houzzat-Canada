@@ -20,6 +20,7 @@ import {
   verifyMobileToken,
 } from "../src/types/token-helpers";
 import type { LeadStatus } from "../src/types/lead";
+import { displayedCrmClassification } from "../../../src/lib/agent/lead-classification";
 
 // Mock Database Records
 const MOCK_LEADS_DB: Record<string, any> = {
@@ -282,10 +283,9 @@ function executeLeadDetailQuery(tokenPayload: any, leadId: string) {
               id: lead.customer.id,
               name: lead.customer.name,
               email: lead.customer.email,
-              phone: lead.customer.phone,
-              isBuyer: lead.customer.isBuyer,
-              isSeller: lead.customer.isSeller,
-              purchaseTimeframe: lead.customer.purchaseTimeframe,
+            phone: lead.customer.phone,
+            ...displayedCrmClassification(lead),
+            purchaseTimeframe: lead.customer.purchaseTimeframe,
               homeAddress: lead.customer.homeAddress,
               createdAt: lead.customer.createdAt.toISOString(),
             }

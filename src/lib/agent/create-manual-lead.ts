@@ -1,5 +1,6 @@
 import type { LeadIntent, PurchaseTimeframe } from "@prisma/client";
-import { createCallNewLeadTask, resolveLeadIntent } from "@/lib/agent/lead-intake";
+import { finalizeWritableLeadClassification } from "@/lib/agent/lead-classification";
+import { createCallNewLeadTask } from "@/lib/agent/lead-intake";
 import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { prisma } from "@/lib/prisma";
 
@@ -34,6 +35,9 @@ export type ManualLeadInput = {
 /**
  * Upsert customer by email and create a NEW_LEAD assigned to the agent.
  * Same path as POST /api/agent/leads (single + bulk import).
+ *
+ * CRM classification is written to the Lead only. User.isBuyer / User.isSeller
+ * stay Houzzat consumer/account flags and are never mutated here.
  */
 export async function createManualLead(input: ManualLeadInput) {
   const email = input.email.trim().toLowerCase();
@@ -43,16 +47,16 @@ export async function createManualLead(input: ManualLeadInput) {
   const homeAddress = input.homeAddress?.trim() || null;
   const utmSource = input.utmSource?.trim() || null;
   const isImport = input.assertCommunicationConsent !== undefined;
-  const isBuyer = input.isBuyer ?? true;
-  const isSeller = input.isSeller ?? false;
-  const intent: LeadIntent = resolveLeadIntent({ isBuyer, isSeller });
+  const classification = finalizeWritableLeadClassification({
+    isBuyer: input.isBuyer ?? true,
+    isSeller: input.isSeller ?? false,
+  });
+  const intent: LeadIntent = classification.intent;
   const optedOut = input.optedOut === true;
   const grantConsent = isImport
     ? Boolean(input.assertCommunicationConsent) && !optedOut
     : true;
   const consentAt = grantConsent ? new Date() : null;
-  const stampClassification =
-    input.isBuyer !== undefined || input.isSeller !== undefined;
 
   let customer = await prisma.user.findUnique({ where: { email } });
   if (!customer) {
@@ -64,8 +68,6 @@ export async function createManualLead(input: ManualLeadInput) {
         homeAddress,
         purchaseTimeframe: input.purchaseTimeframe ?? null,
         role: "BUYER",
-        isBuyer,
-        isSeller,
         emailAlertsEnabled: optedOut ? false : true,
         caslConsentAt: consentAt,
       },
@@ -79,7 +81,6 @@ export async function createManualLead(input: ManualLeadInput) {
         homeAddress: customer.homeAddress || homeAddress,
         purchaseTimeframe:
           customer.purchaseTimeframe || input.purchaseTimeframe || undefined,
-        ...(stampClassification ? { isBuyer, isSeller } : {}),
         ...(optedOut ? { emailAlertsEnabled: false } : {}),
         ...(grantConsent && !customer.caslConsentAt
           ? { caslConsentAt: consentAt }
@@ -101,6 +102,8 @@ export async function createManualLead(input: ManualLeadInput) {
       status: "NEW_LEAD",
       source: "OTHER",
       intent,
+      isBuyer: classification.isBuyer,
+      isSeller: classification.isSeller,
       score: 10,
       notes,
       utmSource,

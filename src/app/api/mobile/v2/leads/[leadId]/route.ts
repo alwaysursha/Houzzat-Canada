@@ -17,6 +17,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { displayedCrmClassification } from "@/lib/agent/lead-classification";
 import { prisma } from "@/lib/prisma";
 import { authenticateMobileRequest } from "@/lib/mobile/v2/auth-guard";
 
@@ -103,6 +104,8 @@ export async function GET(
         status: true,
         source: true,
         intent: true,
+        isBuyer: true,
+        isSeller: true,
         score: true,
         notes: true,
         listingMls: true,
@@ -123,8 +126,6 @@ export async function GET(
             name: true,
             email: true,
             phone: true,
-            isBuyer: true,
-            isSeller: true,
             purchaseTimeframe: true,
             homeAddress: true,
             createdAt: true,
@@ -221,8 +222,7 @@ export async function GET(
             name: lead.customer.name,
             email: lead.customer.email,
             phone: lead.customer.phone,
-            isBuyer: lead.customer.isBuyer,
-            isSeller: lead.customer.isSeller,
+            ...displayedCrmClassification(lead),
             purchaseTimeframe: lead.customer.purchaseTimeframe,
             homeAddress: lead.customer.homeAddress,
             createdAt: lead.customer.createdAt.toISOString(),
