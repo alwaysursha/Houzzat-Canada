@@ -1,4 +1,5 @@
 import type { LeadIntent, LeadSource } from "@prisma/client";
+import { resolveLeadIntent } from "@/lib/agent/lead-intent";
 import {
   resolveDefaultOrganizationId,
   resolveOrganizationIdForAssignee,
@@ -58,16 +59,7 @@ export const ATTEMPTED_CONTACT_REMINDER_TITLE =
   "Follow up — attempted contact";
 export const ATTEMPTED_CONTACT_REMINDER_MS = 24 * 60 * 60 * 1000;
 
-/**
- * Buyer+seller → seller desk. Seller-only → seller. Otherwise buyer.
- */
-export function resolveLeadIntent(flags: {
-  isBuyer?: boolean | null;
-  isSeller?: boolean | null;
-}): LeadIntent {
-  if (flags.isSeller) return "SELLER";
-  return "BUYER";
-}
+export { resolveLeadIntent };
 
 /**
  * Pick assignee from routing rules.

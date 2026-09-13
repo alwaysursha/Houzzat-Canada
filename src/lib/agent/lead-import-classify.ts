@@ -2,7 +2,7 @@
  * Phase 1 Advanced Import — classification, aliases, and safe field mapping.
  * No Prisma. No Area Watch / Saved Search / tags persistence.
  */
-import { resolveLeadIntent } from "@/lib/agent/lead-intake";
+import { resolveLeadIntent } from "@/lib/agent/lead-intent";
 import {
   isPurchaseTimeframe,
   type PurchaseTimeframeValue,

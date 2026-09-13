@@ -262,6 +262,8 @@ function testWiringNoConsentDefaultAndNoBothIntent() {
   const modal = read("src/components/agent/LeadImportModal.tsx");
 
   assert.ok(classify.includes("resolveLeadIntent"));
+  assert.ok(classify.includes("@/lib/agent/lead-intent"));
+  assert.ok(!classify.includes("@/lib/agent/lead-intake"));
   assert.ok(!classify.includes("LeadIntent.BOTH"));
   assert.ok(!classify.includes('"BOTH"'));
 
