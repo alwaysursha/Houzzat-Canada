@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAgentContextFromRequest } from "@/lib/agent";
+import { createManualLead } from "@/lib/agent/create-manual-lead";
 import {
-  createManualLead,
-  findOpenOrgLeadForEmail,
-} from "@/lib/agent/create-manual-lead";
+  findOpenImportLeadForEmail,
+  resolveLeadImportOwnership,
+} from "@/lib/agent/lead-import-ownership";
 import {
   LEADS_CSV_TEMPLATE,
   parseLeadsCsv,
   validateImportDraft,
 } from "@/lib/agent/parse-leads-csv";
+import { detectClientWorkspaceOverride } from "@/lib/tenancy/public-lead-workspace";
 
 export const runtime = "nodejs";
 
@@ -55,6 +57,26 @@ export async function POST(request: Request) {
   }
 
   const json = await request.json().catch(() => null);
+  if (json && typeof json === "object" && !Array.isArray(json)) {
+    const spoof = detectClientWorkspaceOverride(
+      json as Record<string, unknown>,
+    );
+    if (spoof) {
+      return NextResponse.json(
+        { error: "Do not send workspace or tenant fields." },
+        { status: 400 },
+      );
+    }
+  }
+
+  const ownership = resolveLeadImportOwnership(ctx);
+  if (!ownership.ok) {
+    return NextResponse.json(
+      { error: ownership.error },
+      { status: ownership.status },
+    );
+  }
+
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json(
@@ -125,10 +147,11 @@ export async function POST(request: Request) {
   for (const row of leads) {
     try {
       if (!parsed.data.allowDuplicates) {
-        const existing = await findOpenOrgLeadForEmail(
-          ctx.organizationId,
-          row.email,
-        );
+        const existing = await findOpenImportLeadForEmail({
+          email: row.email,
+          workspaceId: ownership.workspaceId,
+          organizationId: ownership.organizationId,
+        });
         if (existing) {
           skipped.push({
             row: row.row,
@@ -144,7 +167,8 @@ export async function POST(request: Request) {
         email: row.email,
         phone: row.phone,
         notes: row.notes,
-        organizationId: ctx.organizationId,
+        organizationId: ownership.organizationId,
+        workspaceId: ownership.workspaceId,
         agentId: ctx.user.id,
         activityBody: "Lead imported from CSV",
       });

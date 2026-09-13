@@ -142,6 +142,8 @@
     "tenant-canary-runtime-isolation:selftest": "node --import tsx scripts/tenant-canary-runtime-isolation-selftest.ts",
     "houzzatpro-worker-foundation:selftest": "node --import tsx scripts/houzzatpro-worker-foundation-selftest.ts",
     "tenant-crm-host-isolation:selftest": "node --import tsx scripts/tenant-crm-host-isolation-selftest.ts",
+    "lead-import-isolation:selftest": "node --import tsx scripts/lead-import-isolation-selftest.ts",
+    "manual-lead-isolation:selftest": "node --import tsx scripts/manual-lead-isolation-selftest.ts",
     "tenant-auth-isolation:selftest": "node --import tsx scripts/tenant-auth-isolation-selftest.ts",
     "tenant-authority:selftest": "node --import tsx scripts/tenant-authority-selftest.ts",
     "tenant-authority-shadow:selftest": "node --import tsx scripts/tenant-authority-shadow-selftest.ts",

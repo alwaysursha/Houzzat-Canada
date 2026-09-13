@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { LeadStatus } from "@prisma/client";
 import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { createManualLead } from "@/lib/agent/create-manual-lead";
+import { resolveLeadImportOwnership } from "@/lib/agent/lead-import-ownership";
 import { CALL_NEW_LEAD_TASK_TITLE } from "@/lib/agent/lead-intake";
 import { LEAD_STATUS_ZOD } from "@/lib/agent/pipeline";
 import {
@@ -12,6 +13,7 @@ import {
 } from "@/lib/mobile/v2/lead-write-effects";
 import { notifyLeadAssignedToAgent } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
+import { detectClientWorkspaceOverride } from "@/lib/tenancy/public-lead-workspace";
 
 const patchSchema = z.object({
   leadId: z.string().min(1),
@@ -35,8 +37,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
-  const parsed = createSchema.safeParse(body);
+  const json = await request.json().catch(() => null);
+  if (json && typeof json === "object" && !Array.isArray(json)) {
+    const spoof = detectClientWorkspaceOverride(
+      json as Record<string, unknown>,
+    );
+    if (spoof) {
+      return NextResponse.json(
+        { error: "Do not send workspace or tenant fields." },
+        { status: 400 },
+      );
+    }
+  }
+
+  const ownership = resolveLeadImportOwnership(ctx);
+  if (!ownership.ok) {
+    return NextResponse.json(
+      { error: ownership.error },
+      { status: ownership.status },
+    );
+  }
+
+  const parsed = createSchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
@@ -45,7 +67,8 @@ export async function POST(request: Request) {
     name: parsed.data.name,
     email: parsed.data.email,
     phone: parsed.data.phone,
-    organizationId: ctx.organizationId,
+    organizationId: ownership.organizationId,
+    workspaceId: ownership.workspaceId,
     agentId: ctx.user.id,
   });
 

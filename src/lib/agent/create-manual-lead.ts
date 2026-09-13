@@ -9,6 +9,12 @@ export type ManualLeadInput = {
   notes?: string | null;
   organizationId: string;
   agentId: string;
+  /**
+   * Trusted hostname-resolved workspace (manual Add Lead / import).
+   * Never taken from the client. When set, stamps Lead.workspaceId and
+   * skips legacy org→Houzzat ownership mapping.
+   */
+  workspaceId?: string | null;
   /** Activity body on the lead timeline. */
   activityBody?: string;
 };
@@ -45,7 +51,13 @@ export async function createManualLead(input: ManualLeadInput) {
     });
   }
 
-  const ownership = await resolveLeadCrmOwnership(input.organizationId);
+  const trustedWorkspaceId = input.workspaceId?.trim() || null;
+  const ownership = trustedWorkspaceId
+    ? {
+        organizationId: input.organizationId,
+        workspaceId: trustedWorkspaceId,
+      }
+    : await resolveLeadCrmOwnership(input.organizationId);
 
   const lead = await prisma.lead.create({
     data: {
