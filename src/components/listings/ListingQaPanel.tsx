@@ -5,7 +5,7 @@ import { ListingSection } from "@/components/listings/ListingSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useExpertWhatsAppNumber } from "@/components/whatsapp/useExpertWhatsAppNumber";
-import { buildListingExpertWhatsAppUrl } from "@/lib/whatsapp";
+import { buildListingExpertWhatsAppUrl, WHATSAPP_UNAVAILABLE_COPY } from "@/lib/whatsapp";
 
 export function ListingQaPanel({
   mlsNumber,
@@ -48,12 +48,8 @@ export function ListingQaPanel({
       {!ready ? (
         <p className="text-sm text-ink/50">Loading WhatsApp…</p>
       ) : !phoneDigits ? (
-        <p className="rounded-xl border border-amber/30 bg-amber/5 px-4 py-3 text-sm text-ink/75">
-          WhatsApp expert number is not configured yet. Set{" "}
-          <code className="text-xs">NEXT_PUBLIC_WHATSAPP_EXPERT</code> in{" "}
-          <code className="text-xs">.env.local</code> (e.g.{" "}
-          <code className="text-xs">14165550100</code>), then restart the
-          server.
+        <p className="rounded-xl border border-line bg-mist/60 px-4 py-3 text-sm text-ink/75">
+          {WHATSAPP_UNAVAILABLE_COPY}
         </p>
       ) : (
         <form onSubmit={onSubmit} className="flex flex-col gap-2 sm:flex-row">

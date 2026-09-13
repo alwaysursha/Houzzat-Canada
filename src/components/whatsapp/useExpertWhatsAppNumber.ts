@@ -1,33 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  getExpertWhatsAppNumber,
-  normalizeWhatsAppNumber,
-} from "@/lib/whatsapp";
+import { normalizeWhatsAppNumber } from "@/lib/whatsapp";
 
 /**
- * Resolves the expert WhatsApp number from (1) SSR/prop, (2) build-time
- * NEXT_PUBLIC_*, or (3) Worker runtime via /api/public-config.
+ * Resolves the expert WhatsApp number from (1) SSR/prop or (2) hostname-bound
+ * /api/public-config. Never uses a global NEXT_PUBLIC_ WhatsApp env number.
  */
 export function useExpertWhatsAppNumber(initial?: string | null) {
-  const [digits, setDigits] = useState<string | null>(
-    () =>
-      normalizeWhatsAppNumber(initial) ?? getExpertWhatsAppNumber(),
+  const [digits, setDigits] = useState<string | null>(() =>
+    normalizeWhatsAppNumber(initial),
   );
-  const [ready, setReady] = useState(
-    () =>
-      Boolean(normalizeWhatsAppNumber(initial) ?? getExpertWhatsAppNumber()),
+  const [ready, setReady] = useState(() =>
+    Boolean(normalizeWhatsAppNumber(initial)),
   );
 
   useEffect(() => {
     const fromInitial = normalizeWhatsAppNumber(initial);
     if (fromInitial) {
       setDigits(fromInitial);
-      setReady(true);
-      return;
-    }
-    if (digits) {
       setReady(true);
       return;
     }
@@ -46,7 +37,7 @@ export function useExpertWhatsAppNumber(initial?: string | null) {
             ? (data as { whatsappExpert: string }).whatsappExpert
             : null;
         const next = normalizeWhatsAppNumber(expert);
-        if (next) setDigits(next);
+        setDigits(next);
       })
       .catch(() => undefined)
       .finally(() => {
@@ -56,7 +47,7 @@ export function useExpertWhatsAppNumber(initial?: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [initial, digits]);
+  }, [initial]);
 
   return { digits, ready };
 }

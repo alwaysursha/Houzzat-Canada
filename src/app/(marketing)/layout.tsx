@@ -33,7 +33,7 @@ import {
   buildMarketingRootMetadata,
   organizationJsonLdForTenancy,
 } from "@/lib/tenancy/tenant-seo";
-import { getExpertWhatsAppNumber } from "@/lib/whatsapp";
+import { whatsappNumberFromPresentationBrand } from "@/lib/tenancy/resolve-tenant-whatsapp";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import { isHouzzatProPlatformBootstrapRequest } from "@/lib/mobile/platform-bootstrap-request";
 import {
@@ -167,7 +167,7 @@ export default async function MarketingLayout({
 
   const cities = suggestedCitiesForLocation({ limit: 12 });
   const phone =
-    chromeBrand.contact.phone ?? getExpertWhatsAppNumber() ?? undefined;
+    whatsappNumberFromPresentationBrand(chromeBrand) ?? undefined;
 
   const agentSignature = isAgentSignatureTemplateId(chromeBrand.templateId);
   const agentSignatureView = agentSignature

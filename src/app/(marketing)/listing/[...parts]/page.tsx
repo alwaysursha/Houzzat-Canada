@@ -16,9 +16,8 @@ import { needsEmailVerification } from "@/lib/account-access";
 import {
   resolveListingEntitlementContextForServerPage,
 } from "@/lib/tenancy/listing-entitlement";
-import {
-  resolveMarketingTenancy,
-} from "@/lib/tenancy/resolve-marketing-tenancy";
+import { resolveMarketingTenancy } from "@/lib/tenancy/resolve-marketing-tenancy";
+import { resolveMarketingWhatsAppNumber } from "@/lib/tenancy/resolve-tenant-whatsapp";
 import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 import { buildTenantPublicPageMetadata } from "@/lib/tenancy/tenant-seo";
@@ -397,6 +396,7 @@ export default async function ListingDetailPage({
         gateDetails={gateDetails}
         gateSold={gateSold}
         canonicalPath={canonicalPath}
+        expertWhatsApp={await resolveMarketingWhatsAppNumber()}
       />
     </>
   );

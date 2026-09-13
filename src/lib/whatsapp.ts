@@ -5,11 +5,39 @@ export function normalizeWhatsAppNumber(raw: string | undefined | null) {
   return digits.length >= 10 ? digits : null;
 }
 
-export function getExpertWhatsAppNumber() {
-  return normalizeWhatsAppNumber(
-    process.env.NEXT_PUBLIC_WHATSAPP_EXPERT ??
-      process.env.NEXT_PUBLIC_WHATSAPP_NUMBER,
-  );
+export const WHATSAPP_UNAVAILABLE_COPY =
+  "WhatsApp isn’t available for this professional yet. Please use another contact option on this site.";
+
+export type WhatsAppTemplateKind = "AGENT" | "OTHER";
+
+/**
+ * Tenant-safe WhatsApp destination. Never applies a global/env number unless
+ * the workspace is Houzzat and an explicit Houzzat-only fallback is passed in.
+ */
+export function resolveTenantWhatsAppNumber(input: {
+  templateKind: WhatsAppTemplateKind;
+  agentCellPhone?: string | null;
+  contactPhone?: string | null;
+  isHouzzatWorkspace: boolean;
+  /** Applied only when isHouzzatWorkspace is true. */
+  houzzatEnvFallback?: string | null;
+}): string | null {
+  const cell = normalizeWhatsAppNumber(input.agentCellPhone);
+  const contact = normalizeWhatsAppNumber(input.contactPhone);
+  const houzzatFallback = input.isHouzzatWorkspace
+    ? normalizeWhatsAppNumber(input.houzzatEnvFallback)
+    : null;
+
+  switch (input.templateKind) {
+    case "AGENT":
+      return cell ?? contact ?? houzzatFallback;
+    case "OTHER":
+      return contact ?? houzzatFallback;
+    default: {
+      const _exhaustive: never = input.templateKind;
+      return _exhaustive;
+    }
+  }
 }
 
 export function buildListingExpertWhatsAppUrl(input: {

@@ -57,7 +57,7 @@ jobs:
           # Canonical production domain
           NEXTAUTH_URL: https://houzzat.com
           NEXT_PUBLIC_SITE_URL: https://houzzat.com
-          # Public wa.me number (safe to bake into the client bundle at build).
+          # Houzzat-only WhatsApp fallback (server). Not used for other tenants.
           NEXT_PUBLIC_WHATSAPP_EXPERT: "16472214949"
           # Stripe — publishable key must be present at build for Embedded Checkout.
           # Secret + webhook signing secret are also needed for Worker runtime checkout/webhook.

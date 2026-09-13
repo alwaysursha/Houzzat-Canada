@@ -38,7 +38,7 @@ import {
 } from "@/lib/route-planner/local";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { cn } from "@/lib/utils";
-import { buildRoutePlannerExpertWhatsAppUrl } from "@/lib/whatsapp";
+import { buildRoutePlannerExpertWhatsAppUrl, WHATSAPP_UNAVAILABLE_COPY } from "@/lib/whatsapp";
 
 type TourStop = {
   id: string;
@@ -1056,11 +1056,8 @@ export function RoutePlannerClient({
               {!expertWhatsAppReady ? (
                 <p className="text-sm text-ink/50">Loading WhatsApp…</p>
               ) : !expertWhatsApp ? (
-                <p className="rounded-xl border border-amber/30 bg-amber/5 px-4 py-3 text-sm text-ink/75">
-                  WhatsApp expert number is not configured yet. Set{" "}
-                  <code className="text-xs">NEXT_PUBLIC_WHATSAPP_EXPERT</code>{" "}
-                  in <code className="text-xs">.env.local</code>, then restart
-                  the server.
+                <p className="rounded-xl border border-line bg-mist/60 px-4 py-3 text-sm text-ink/75">
+                  {WHATSAPP_UNAVAILABLE_COPY}
                 </p>
               ) : (
                 <form

@@ -140,6 +140,8 @@ function testWranglerIsolation() {
   assert.equal(parseJsoncVar(canary, "TENANT_BRANDING_SCOPE"), "workspace");
   assertCanaryLeadCutoverBundle(canary);
   assert.equal(parseJsoncVar(canary, "TENANT_ADMIN_HOST_LOCK"), "off");
+  assert.equal(configHasKey(canary, "NEXT_PUBLIC_WHATSAPP_EXPERT"), false);
+  assert.ok(!canary.includes("16472214949"));
 
   assertProductionIsolatedFromCanaryLeadCutover(production);
 }

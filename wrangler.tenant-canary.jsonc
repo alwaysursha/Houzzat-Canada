@@ -50,7 +50,6 @@
     "WORKSPACE_TEAM_SCOPE": "workspace",
     "TENANT_ADMIN_HOST_LOCK": "off",
     "ACTIVITY_BEACON_DISABLED": "1",
-    "NEXT_PUBLIC_WHATSAPP_EXPERT": "16472214949",
     "COMING_SOON": "0",
     "LISTING_PROVIDER": "proptx",
     "PROPTX_FEED": "idx",

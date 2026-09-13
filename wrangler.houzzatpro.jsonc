@@ -60,6 +60,7 @@
     "WORKSPACE_READ_SCOPE": "workspace",
     "WORKSPACE_TEAM_SCOPE": "workspace",
     "TENANT_ADMIN_HOST_LOCK": "off",
+    // Houzzat-only WhatsApp fallback (server). Tenant hosts must not consume this.
     "NEXT_PUBLIC_WHATSAPP_EXPERT": "16472214949",
     "COMING_SOON": "0",
     "LISTING_PROVIDER": "proptx",

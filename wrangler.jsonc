@@ -59,8 +59,8 @@
   "vars": {
     "NEXTAUTH_URL": "https://houzzat.com",
     "NEXT_PUBLIC_SITE_URL": "https://houzzat.com",
-    // Public wa.me destination — also set NEXT_PUBLIC_WHATSAPP_EXPERT at build
-    // time (GitHub Actions) so client bundles can inline it.
+    // Houzzat-only WhatsApp fallback (server). Other tenants must not use this.
+    // Public routing resolves by hostname workspace — never bake this into tenant CTAs.
     "NEXT_PUBLIC_WHATSAPP_EXPERT": "16472214949",
     // Temporary public gate — set to "1" to show Coming Soon to visitors
     "COMING_SOON": "0",

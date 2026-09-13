@@ -63,7 +63,6 @@ import {
   homesForSaleCommunityPath,
 } from "@/lib/geo/area-paths";
 import { interceptListingSheetExitClick } from "@/lib/listings/navigate-listing";
-import { getExpertWhatsAppNumber } from "@/lib/whatsapp";
 
 export type ListingDetailViewProps = {
   listing: ListingDetail;
@@ -85,6 +84,8 @@ export type ListingDetailViewProps = {
    * under the overlay is not rewritten.
    */
   applyDocumentSheetFlags?: boolean;
+  /** Hostname-resolved WhatsApp digits — never a global env number. */
+  expertWhatsApp?: string | null;
 };
 
 /**
@@ -106,6 +107,7 @@ export function ListingDetailView({
   gateSold,
   canonicalPath,
   applyDocumentSheetFlags = true,
+  expertWhatsApp = null,
 }: ListingDetailViewProps) {
   const personalizationCities: string[] = [];
   const showClosedPrice =
@@ -493,7 +495,7 @@ export function ListingDetailView({
             city={listing.city}
             title="Quick question?"
             hint="Message the agent directly on WhatsApp — MLS® and address is already included."
-            expertWhatsApp={getExpertWhatsAppNumber()}
+            expertWhatsApp={expertWhatsApp}
           />
 
           <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
