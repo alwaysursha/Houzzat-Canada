@@ -6,7 +6,7 @@ import {
 } from "@/components/listings/ListingGallery";
 import { NEON_LISTING_MEDIA_CAP } from "@/lib/listings/gallery-constants";
 import {
-  fetchListingGalleryClient,
+  fetchListingGalleryPayload,
   readListingGallerySession,
   writeListingGallerySession,
 } from "@/lib/listings/gallery-client";
@@ -58,6 +58,10 @@ function awaitLivePhotos(
  *
  * First client render must match SSR (Neon only) — never read sessionStorage
  * during useState init or hydration will mismatch.
+ *
+ * Expired-grace (`needsEmailVerification`) never applies richer-than-Neon
+ * URLs from session, RSC, or `/gallery` — only the Neon cap plus an optional
+ * integer `totalPhotoCount`.
  */
 export function ListingGalleryLive({
   photos: neonPhotos,
@@ -71,12 +75,17 @@ export function ListingGalleryLive({
   livePhotosPromise?: Promise<LivePhoto[]> | null;
 }) {
   const [photos, setPhotos] = useState(neonPhotos);
+  const [totalPhotoCount, setTotalPhotoCount] = useState<number | null>(null);
   const neonRef = useRef(neonPhotos);
   const [prevNeonPhotos, setPrevNeonPhotos] = useState(neonPhotos);
 
   if (neonPhotos !== prevNeonPhotos) {
     setPrevNeonPhotos(neonPhotos);
-    setPhotos((current) => mergeListingGalleryPhotos(neonPhotos, current));
+    setPhotos((current) =>
+      needsEmailVerification
+        ? neonPhotos.slice(0, NEON_LISTING_MEDIA_CAP)
+        : mergeListingGalleryPhotos(neonPhotos, current),
+    );
   }
 
   useEffect(() => {
@@ -109,6 +118,17 @@ export function ListingGalleryLive({
     }
 
     async function enrich() {
+      if (needsEmailVerification) {
+        const result = await fetchListingGalleryPayload(mls, controller.signal, {
+          ignoreSessionCache: true,
+        });
+        if (cancelled) return;
+        setTotalPhotoCount(result.totalPhotoCount);
+        const head = neonRef.current;
+        setPhotos(head.slice(0, NEON_LISTING_MEDIA_CAP));
+        return;
+      }
+
       // Session cache only after mount — keeps hydration HTML identical to SSR.
       const cached = readListingGallerySession(mls);
       if (galleryIsRicherThanNeon(cached)) {
@@ -126,8 +146,8 @@ export function ListingGalleryLive({
         if (galleryIsRicherThanNeon(live)) return;
       }
 
-      const fetched = await fetchListingGalleryClient(mls, controller.signal);
-      applyLive(fetched);
+      const fetched = await fetchListingGalleryPayload(mls, controller.signal);
+      applyLive(fetched.photos);
     }
 
     void enrich();
@@ -135,14 +155,14 @@ export function ListingGalleryLive({
       cancelled = true;
       controller.abort();
     };
-  }, [mlsNumber, livePhotosPromise]);
+  }, [mlsNumber, livePhotosPromise, needsEmailVerification]);
 
   const verifyLocked = needsEmailVerification;
   const displayPhotos = verifyLocked
-    ? photos.slice(0, NEON_LISTING_MEDIA_CAP + 1)
+    ? photos.slice(0, NEON_LISTING_MEDIA_CAP)
     : photos;
   const hiddenPhotoCount = verifyLocked
-    ? Math.max(0, photos.length - NEON_LISTING_MEDIA_CAP)
+    ? Math.max(0, (totalPhotoCount ?? 0) - displayPhotos.length)
     : hiddenPhotoCountProp;
 
   return (
@@ -152,6 +172,7 @@ export function ListingGalleryLive({
       photos={displayPhotos}
       needsEmailVerification={needsEmailVerification}
       hiddenPhotoCount={hiddenPhotoCount}
+      totalPhotoCount={totalPhotoCount}
     />
   );
 }

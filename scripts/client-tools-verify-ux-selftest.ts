@@ -159,7 +159,12 @@ function testNotesUx() {
     "verify 403 must not fall through to Couldn’t save",
   );
   assert.ok(notes.includes("Couldn’t save"));
+  const overlay = read("src/components/listings/SearchMapListingOverlay.tsx");
+  assert.ok(overlay.includes("<ListingNotesPanel"));
+  assert.ok(overlay.includes("authCallbackUrl={listingPath(listing)}"));
+  assert.ok(!overlay.includes("ListingMobileNotes"));
   console.log("[4] notes skip Couldn’t save for verify lock... PASS");
+  console.log("[4b] Search overlay mounts ListingNotesPanel... PASS");
 }
 
 function testSaveUx() {

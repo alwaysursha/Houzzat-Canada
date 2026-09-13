@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useClientAccess } from "@/hooks/use-client-access";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
+import { ListingNotesPanel } from "@/components/account/ListingNotesPanel";
 import { ListingCardActions } from "@/components/listings/ListingCardActions";
 import { ListingFactsPanel } from "@/components/listings/ListingFactsPanel";
 import { ListingGalleryLive } from "@/components/listings/ListingGalleryLive";
@@ -334,6 +335,7 @@ export function SearchMapListingOverlay({
               segmentTag={segmentTagMeta}
               allowBooking={!isInactive}
               detailsLocked={detailsLocked}
+              needsEmailVerification={access.needsEmailVerification}
               mapSubject={
                 Number.isFinite(card.lat) && Number.isFinite(card.lng)
                   ? {
@@ -604,6 +606,12 @@ export function SearchMapListingOverlay({
                 </div>
 
                 <aside className="min-w-0 space-y-6 lg:sticky lg:top-0 lg:self-start">
+                  <ListingNotesPanel
+                    mlsNumber={listing.mlsNumber}
+                    signedIn={signedIn}
+                    initialBody=""
+                    authCallbackUrl={listingPath(listing)}
+                  />
                   <ViewingRequestPanel
                     mlsNumber={listing.mlsNumber}
                     callbackPath={listingPath(listing)}

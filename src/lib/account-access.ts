@@ -12,6 +12,13 @@ export const CLIENT_TOOLS_VERIFY_COPY = {
     "Your email is still unverified. Check your inbox or send a new link.",
 } as const;
 
+/** Expired-grace copy for the locked remainder of a listing gallery. */
+export const GALLERY_VERIFY_COPY = {
+  title: "View the Full Photo Gallery",
+  body: "Verify your email to unlock all photos for this property. Houzzat is free to use — verification simply helps us keep accounts secure.",
+  ctaLabel: "Verify Email",
+} as const;
+
 export type AccessUser = {
   id: string;
   emailVerified?: Date | string | null;

@@ -51,16 +51,16 @@ async function main() {
 
   const live = read("src/components/listings/ListingGalleryLive.tsx");
   assert.ok(live.includes("galleryIsRicherThanNeon"));
-  assert.ok(live.includes("fetchListingGalleryClient"));
+  assert.ok(live.includes("fetchListingGalleryPayload"));
   assert.ok(live.includes("LIVE_PHOTOS_CLIENT_FALLBACK_MS"));
   const applyIdx = live.indexOf("applyLive(live)");
   const returnIfRicher = live.indexOf("if (galleryIsRicherThanNeon(live)) return");
-  const fetchIdx = live.indexOf("fetchListingGalleryClient(mls");
+  const fetchIdx = live.indexOf("applyLive(fetched.photos)");
   assert.ok(applyIdx > 0 && returnIfRicher > applyIdx && fetchIdx > returnIfRicher);
   assert.ok(!live.includes("applyLive(live);\n          return;"));
   const page = read("src/app/(marketing)/listing/[...parts]/page.tsx");
   assert.ok(page.includes("const clientLivePhotosPromise = process.env.VERCEL"));
-  assert.ok(page.includes("livePhotosPromise={clientLivePhotosPromise}"));
+  assert.ok(page.includes("verifyLocked ? null : clientLivePhotosPromise"));
   console.log("[0] ListingGalleryLive falls through unless richer than Neon... PASS");
   console.log("[0b] Vercel does not pass the RSC gallery thenable to the client... PASS");
 
@@ -69,13 +69,19 @@ async function main() {
   assert.ok(overlay.includes('from "@/components/listings/ListingGalleryLive"'));
   assert.ok(overlay.includes("<ListingGalleryLive"));
   assert.ok(overlay.includes("photos={photos}"));
+  assert.ok(overlay.includes("needsEmailVerification={access.needsEmailVerification}"));
   assert.ok(!overlay.includes('from "@/components/listings/ListingGallery"'));
   assert.ok(!/\bListingGallery\b/.test(overlay.replaceAll("ListingGalleryLive", "")));
   assert.ok(!overlay.includes("livePhotosPromise"));
   assert.ok(searchExperience.includes("onOpenListing={!isNarrow ? openListingDetail : undefined}"));
   assert.ok(searchExperience.includes("<SearchMapListingOverlay"));
+  assert.ok(overlay.includes("<ListingNotesPanel"));
+  assert.ok(overlay.includes("authCallbackUrl={listingPath(listing)}"));
+  assert.ok(overlay.includes("signedIn={signedIn}"));
+  assert.ok(!overlay.includes("ListingMobileNotes"));
   console.log("[0c] Search overlay uses ListingGalleryLive with Neon photos... PASS");
   console.log("[0d] Desktop Search overlay navigation is unchanged... PASS");
+  console.log("[0e] Search overlay includes ListingNotesPanel (no mobile FAB)... PASS");
 
   assert.equal(galleryIsRicherThanNeon([]), false);
   assert.equal(galleryIsRicherThanNeon(Array.from({ length: 5 })), false);

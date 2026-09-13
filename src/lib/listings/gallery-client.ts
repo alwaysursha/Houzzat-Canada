@@ -10,10 +10,49 @@ export type ClientGalleryPhoto = {
   alt?: string | null;
 };
 
+export type ClientGalleryFetchResult = {
+  photos: ClientGalleryPhoto[];
+  totalPhotoCount: number | null;
+  galleryCapped: boolean;
+};
+
 type InflightGallery = {
-  promise: Promise<ClientGalleryPhoto[]>;
+  promise: Promise<ClientGalleryFetchResult>;
   controller: AbortController;
 };
+
+function parseGalleryPhotos(data: unknown): ClientGalleryPhoto[] {
+  if (!data || typeof data !== "object" || !("photos" in data)) return [];
+  const photos = (data as { photos?: unknown }).photos;
+  if (!Array.isArray(photos)) return [];
+  return photos.filter(
+    (photo): photo is ClientGalleryPhoto =>
+      Boolean(
+        photo &&
+          typeof photo === "object" &&
+          typeof (photo as ClientGalleryPhoto).id === "string" &&
+          typeof (photo as ClientGalleryPhoto).url === "string" &&
+          (photo as ClientGalleryPhoto).url.length > 0,
+      ),
+  );
+}
+
+export function parseGalleryTotalPhotoCount(data: unknown): number | null {
+  if (!data || typeof data !== "object") return null;
+  const raw = (data as { totalPhotoCount?: unknown }).totalPhotoCount;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  const n = Math.floor(raw);
+  if (n < 0 || n > 500) return null;
+  return n;
+}
+
+export function parseGalleryCapped(data: unknown): boolean {
+  return Boolean(
+    data &&
+      typeof data === "object" &&
+      (data as { galleryCapped?: unknown }).galleryCapped === true,
+  );
+}
 
 /** In-flight dedupe for full-gallery fetches (same tab / same-origin iframe). */
 const inflightGallery = new Map<string, InflightGallery>();
@@ -60,25 +99,41 @@ export function writeListingGallerySession(
   }
 }
 
-export async function fetchListingGalleryClient(
+export async function fetchListingGalleryPayload(
   mlsNumber: string,
   signal?: AbortSignal,
-): Promise<ClientGalleryPhoto[]> {
+  options?: { ignoreSessionCache?: boolean },
+): Promise<ClientGalleryFetchResult> {
+  const empty: ClientGalleryFetchResult = {
+    photos: [],
+    totalPhotoCount: null,
+    galleryCapped: false,
+  };
   const key = mlsNumber.trim().toUpperCase();
-  if (!key) return [];
-  if (signal?.aborted) return [];
+  if (!key) return empty;
+  if (signal?.aborted) return empty;
 
-  const cached = readListingGallerySession(key);
-  // Neon-cap (≤5) is the SSR set — do not treat it as a completed full gallery.
-  if (galleryIsRicherThanNeon(cached)) return cached;
-
-  const existing = inflightGallery.get(key);
-  if (existing) {
-    if (signal) {
-      const onAbort = () => existing.controller.abort();
-      signal.addEventListener("abort", onAbort, { once: true });
+  if (!options?.ignoreSessionCache) {
+    const cached = readListingGallerySession(key);
+    // Neon-cap (≤5) is the SSR set — do not treat it as a completed full gallery.
+    if (galleryIsRicherThanNeon(cached)) {
+      return {
+        photos: cached,
+        totalPhotoCount: cached.length,
+        galleryCapped: false,
+      };
     }
-    return existing.promise;
+  }
+
+  if (!options?.ignoreSessionCache) {
+    const existing = inflightGallery.get(key);
+    if (existing) {
+      if (signal) {
+        const onAbort = () => existing.controller.abort();
+        signal.addEventListener("abort", onAbort, { once: true });
+      }
+      return existing.promise;
+    }
   }
 
   const controller = new AbortController();
@@ -86,7 +141,7 @@ export async function fetchListingGalleryClient(
     signal.addEventListener("abort", () => controller.abort(), { once: true });
   }
 
-  const request = (async () => {
+  const request = (async (): Promise<ClientGalleryFetchResult> => {
     try {
       const res = await fetch(
         `/api/listings/${encodeURIComponent(key)}/gallery`,
@@ -96,28 +151,43 @@ export async function fetchListingGalleryClient(
           signal: controller.signal,
         },
       );
-      if (!res.ok) return [];
-      const data = (await res.json()) as { photos?: ClientGalleryPhoto[] };
-      const photos = Array.isArray(data.photos)
-        ? data.photos.filter(
-            (photo) =>
-              photo &&
-              typeof photo.id === "string" &&
-              typeof photo.url === "string" &&
-              photo.url.length > 0,
-          )
-        : [];
-      if (galleryIsRicherThanNeon(photos)) writeListingGallerySession(key, photos);
-      return photos;
+      if (!res.ok) return empty;
+      const data: unknown = await res.json();
+      const galleryCapped = parseGalleryCapped(data);
+      let photos = parseGalleryPhotos(data);
+      if (galleryCapped) {
+        photos = photos.slice(0, NEON_LISTING_MEDIA_CAP);
+      }
+      const totalPhotoCount = parseGalleryTotalPhotoCount(data);
+      if (
+        !options?.ignoreSessionCache &&
+        !galleryCapped &&
+        galleryIsRicherThanNeon(photos)
+      ) {
+        writeListingGallerySession(key, photos);
+      }
+      return { photos, totalPhotoCount, galleryCapped };
     } catch {
-      return [];
+      return empty;
     } finally {
-      inflightGallery.delete(key);
+      if (!options?.ignoreSessionCache) {
+        inflightGallery.delete(key);
+      }
     }
   })();
 
-  inflightGallery.set(key, { promise: request, controller });
+  if (!options?.ignoreSessionCache) {
+    inflightGallery.set(key, { promise: request, controller });
+  }
   return request;
+}
+
+export async function fetchListingGalleryClient(
+  mlsNumber: string,
+  signal?: AbortSignal,
+): Promise<ClientGalleryPhoto[]> {
+  const result = await fetchListingGalleryPayload(mlsNumber, signal);
+  return result.photos;
 }
 
 /** Drop in-flight gallery fetches except the active listing (sheet switch/close). */

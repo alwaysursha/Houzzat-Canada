@@ -384,7 +384,9 @@ export default async function ListingDetailPage({
       <ListingDetailView
         listing={listing}
         galleryPhotos={galleryPhotos}
-        livePhotosPromise={clientLivePhotosPromise}
+        livePhotosPromise={
+          verifyLocked ? null : clientLivePhotosPromise
+        }
         listingHistoryRows={listingHistoryRows}
         isListingSheet={isListingSheet}
         signedIn={Boolean(user)}

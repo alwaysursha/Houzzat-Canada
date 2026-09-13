@@ -27,24 +27,64 @@ export async function GET(request: Request, { params }: Params) {
 
   const { listing, access, entitlement } = gated;
 
-  // Locked / verify-gated callers get Neon cap only — no PropTx full gallery.
-  if (access.detailsLocked || access.needsEmailVerification) {
-    const neon = await prisma.listingMedia.findMany({
-      where: { listingId: listing.id },
-      orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
-      take: NEON_LISTING_MEDIA_CAP,
-      select: { id: true, url: true, sortOrder: true, isPrimary: true },
-    });
+  const neonRows = await prisma.listingMedia.findMany({
+    where: { listingId: listing.id },
+    orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
+    take: NEON_LISTING_MEDIA_CAP,
+    select: { id: true, url: true, sortOrder: true, isPrimary: true },
+  });
+  const neonPhotos = neonRows.map((photo, index) => ({
+    id: photo.id,
+    url: listingPhotoSrc(photo.url) ?? photo.url,
+    sortOrder: photo.sortOrder ?? index,
+    isPrimary: photo.isPrimary ?? index === 0,
+  }));
+
+  const channel = classifyListingInventoryChannel(listing.dataSource);
+  const orgId = listing.organizationId?.trim() ?? "";
+  const mayPropTx =
+    Boolean(listing.listingKey) &&
+    (channel !== "mls" ||
+      (Boolean(orgId) &&
+        mayInvokePropTxOnDemandForDetail({
+          entitlementFilteringEnabled: true,
+          entitlement,
+          requiredCapability: "MEDIA",
+          propTxOrganizationId: orgId,
+        })));
+
+  // Locked / verify-gated callers never receive extra photo URLs.
+  if (access.detailsLocked) {
     return NextResponse.json(
       {
-        photos: neon.map((photo, index) => ({
-          id: photo.id,
-          url: listingPhotoSrc(photo.url) ?? photo.url,
-          sortOrder: photo.sortOrder ?? index,
-          isPrimary: photo.isPrimary ?? index === 0,
-        })),
-        neonMediaCount: neon.length,
+        photos: neonPhotos,
+        neonMediaCount: neonPhotos.length,
         galleryCapped: true,
+      },
+      {
+        headers: {
+          "Cache-Control": "private, no-store",
+        },
+      },
+    );
+  }
+
+  if (access.needsEmailVerification) {
+    let totalPhotoCount: number | undefined;
+    if (mayPropTx && listing.listingKey) {
+      const live = await fetchListingPhotosFromPropTx(listing.listingKey, {
+        timeoutMs: 10_000,
+      });
+      if (live.length > 0) {
+        totalPhotoCount = live.length;
+      }
+    }
+    return NextResponse.json(
+      {
+        photos: neonPhotos,
+        neonMediaCount: neonPhotos.length,
+        galleryCapped: true,
+        ...(totalPhotoCount != null ? { totalPhotoCount } : {}),
       },
       {
         headers: {
@@ -58,34 +98,11 @@ export async function GET(request: Request, { params }: Params) {
     return NextResponse.json({ photos: [] as const });
   }
 
-  const channel = classifyListingInventoryChannel(listing.dataSource);
-  const orgId = listing.organizationId?.trim() ?? "";
-  const mayPropTx =
-    channel !== "mls" ||
-    (Boolean(orgId) &&
-      mayInvokePropTxOnDemandForDetail({
-        entitlementFilteringEnabled: true,
-        entitlement,
-        requiredCapability: "MEDIA",
-        propTxOrganizationId: orgId,
-      }));
-
   if (!mayPropTx) {
-    const neon = await prisma.listingMedia.findMany({
-      where: { listingId: listing.id },
-      orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
-      take: NEON_LISTING_MEDIA_CAP,
-      select: { id: true, url: true, sortOrder: true, isPrimary: true },
-    });
     return NextResponse.json(
       {
-        photos: neon.map((photo, index) => ({
-          id: photo.id,
-          url: listingPhotoSrc(photo.url) ?? photo.url,
-          sortOrder: photo.sortOrder ?? index,
-          isPrimary: photo.isPrimary ?? index === 0,
-        })),
-        neonMediaCount: neon.length,
+        photos: neonPhotos,
+        neonMediaCount: neonPhotos.length,
         galleryCapped: true,
       },
       {
