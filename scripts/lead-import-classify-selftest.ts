@@ -10,7 +10,12 @@ import {
   buildImportHomeAddress,
   classifyImportedLead,
   combineImportDisplayName,
+  DETECT_EMPTY_LEAD_TYPE_REASON,
+  DETECT_WITHOUT_MAPPED_COLUMN_MESSAGE,
   guessLeadImportField,
+  initialImportDefaultLeadType,
+  LEAD_IMPORT_FIELD_LABELS,
+  mappingIncludesLeadType,
   parseImportLeadType,
   parseImportOptOut,
   parseImportPurchaseTimeframe,
@@ -19,8 +24,11 @@ import {
 } from "../src/lib/agent/lead-import-classify";
 import {
   draftsFromMappedRows,
+  LEAD_IMPORT_FIELD_OPTIONS,
+  parseLeadsCsv,
   SELLER_CRM_CSV_HEADERS,
   suggestLeadImportMapping,
+  validateImportDraftForType,
 } from "../src/lib/agent/parse-leads-csv";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -279,12 +287,125 @@ function testWiringNoConsentDefaultAndNoBothIntent() {
   assert.ok(!route.includes("resolveLeadCrmOwnership"));
 
   assert.ok(modal.includes("Default Lead Type"));
+  assert.ok(modal.includes('useState<LeadImportDefaultType>("buyer")'));
+  assert.ok(modal.includes("initialImportDefaultLeadType"));
+  assert.ok(modal.includes("DETECT_WITHOUT_MAPPED_COLUMN_MESSAGE"));
+  assert.ok(modal.includes("LEAD_IMPORT_FIELD_OPTION_GROUPS"));
   assert.ok(modal.includes("transferred from my"));
   assert.ok(modal.includes("existing CRM"));
   assert.ok(modal.includes("assertConsent"));
   assert.ok(modal.includes("useState(false)"));
   assert.ok(!modal.includes("workspaceId"));
   console.log("[8] wiring: no BOTH intent, consent default off, isolation... PASS");
+}
+
+const PHASE1_MAPPING_DESTINATION_LABELS = [
+  "First Name",
+  "Last Name",
+  "Full Name",
+  "Email",
+  "Phone",
+  "Address",
+  "City",
+  "Province/State",
+  "Country",
+  "Postal/ZIP",
+  "Notes",
+  "Lead Type",
+  "Tags",
+  "Estimated Time Frame",
+  "Source/Ad",
+  "Date Created",
+  "Deal Completed Date",
+  "Unsubscribe/Opt-Out",
+] as const;
+
+function testMappingDestinationsVisible() {
+  const labels = LEAD_IMPORT_FIELD_OPTIONS.map((opt) => opt.label);
+  for (const label of PHASE1_MAPPING_DESTINATION_LABELS) {
+    assert.ok(labels.includes(label), `missing mapping destination: ${label}`);
+  }
+  const values = new Set(LEAD_IMPORT_FIELD_OPTIONS.map((opt) => opt.value));
+  for (const field of Object.keys(LEAD_IMPORT_FIELD_LABELS) as LeadImportField[]) {
+    assert.ok(values.has(field), `dropdown missing field ${field}`);
+  }
+  assert.equal(LEAD_IMPORT_FIELD_LABELS.lead_type, "Lead Type");
+
+  const modal = read("src/components/agent/LeadImportModal.tsx");
+  assert.ok(modal.includes("LEAD_IMPORT_FIELD_OPTION_GROUPS"));
+  assert.ok(modal.includes("LEAD_IMPORT_FIELD_LABELS"));
+  assert.ok(modal.includes("MAPPING_DESTINATION_LIST"));
+  console.log("[9] all Phase-1 mapping destinations available... PASS");
+}
+
+function testPhysicalQaNoLeadTypeColumn() {
+  const headers = ["name", "email", "phone", "notes"];
+  const mapping = mappingFor(headers);
+  assert.equal(mappingIncludesLeadType(mapping), false);
+  assert.equal(initialImportDefaultLeadType(mapping), "buyer");
+
+  const [draft] = draftsFromMappedRows(
+    [
+      {
+        name: "Jane Doe",
+        email: "jane@example.com",
+        phone: "416-555-0100",
+        notes: "Open house",
+      },
+    ],
+    mapping,
+  );
+  assert.ok(draft);
+  assert.equal(draft.leadTypeRaw, "");
+  assert.deepEqual(validateImportDraftForType(draft, "buyer"), []);
+  assert.deepEqual(validateImportDraftForType(draft, "seller"), []);
+  assert.deepEqual(validateImportDraftForType(draft, "both"), []);
+
+  const asSeller = classifyImportedLead("seller", draft.leadTypeRaw);
+  assert.equal(asSeller.ok, true);
+  if (asSeller.ok) {
+    assert.equal(asSeller.isBuyer, false);
+    assert.equal(asSeller.isSeller, true);
+  }
+  const asBoth = classifyImportedLead("both", draft.leadTypeRaw);
+  assert.equal(asBoth.ok, true);
+  if (asBoth.ok) {
+    assert.equal(asBoth.isBuyer, true);
+    assert.equal(asBoth.isSeller, true);
+  }
+
+  const detectIssues = validateImportDraftForType(draft, "detect");
+  assert.ok(detectIssues.includes(DETECT_EMPTY_LEAD_TYPE_REASON));
+  assert.ok(
+    DETECT_WITHOUT_MAPPED_COLUMN_MESSAGE.includes("Map a CSV column to Lead Type"),
+  );
+
+  const parsed = parseLeadsCsv(
+    "name,email,phone,notes\nJane Doe,jane@example.com,416-555-0100,Open house\n",
+  );
+  assert.equal(parsed.leads.length, 1);
+  assert.equal(parsed.errors.length, 0);
+
+  const mixedMapping = [
+    { header: "name", field: "name" as const },
+    { header: "email", field: "email" as const },
+    { header: "type", field: "lead_type" as const },
+  ];
+  assert.equal(initialImportDefaultLeadType(mixedMapping), "detect");
+  const mixedDrafts = draftsFromMappedRows(
+    [
+      { name: "Ada Lovelace", email: "ada@example.com", type: "Seller" },
+      { name: "Alan Turing", email: "alan@example.com", type: "Buyer" },
+    ],
+    mixedMapping,
+  );
+  assert.deepEqual(validateImportDraftForType(mixedDrafts[0]!, "detect"), []);
+  assert.deepEqual(validateImportDraftForType(mixedDrafts[1]!, "detect"), []);
+  const mixedSeller = classifyImportedLead("detect", mixedDrafts[0]!.leadTypeRaw);
+  const mixedBuyer = classifyImportedLead("detect", mixedDrafts[1]!.leadTypeRaw);
+  assert.equal(mixedSeller.ok && mixedSeller.isSeller && !mixedSeller.isBuyer, true);
+  assert.equal(mixedBuyer.ok && mixedBuyer.isBuyer && !mixedBuyer.isSeller, true);
+  console.log("[10] physical QA: no Lead Type column defaults to Buyer... PASS");
 }
 
 function main() {
@@ -298,6 +419,8 @@ function main() {
   testConsentAndOptOut();
   testAliasesAndTimeframe();
   testWiringNoConsentDefaultAndNoBothIntent();
+  testMappingDestinationsVisible();
+  testPhysicalQaNoLeadTypeColumn();
   console.log("\nLEAD IMPORT CLASSIFY + MAPPING SELFTEST PASSED\n");
 }
 

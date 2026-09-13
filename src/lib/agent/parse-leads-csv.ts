@@ -5,6 +5,9 @@ import {
   DEFERRED_IMPORT_REASON,
   guessLeadImportField,
   combineImportDisplayName,
+  LEAD_IMPORT_FIELD_LABELS,
+  LEAD_IMPORT_MAPPING_NEXT_PHASE_FIELDS,
+  LEAD_IMPORT_MAPPING_THIS_IMPORT_FIELDS,
   parseImportLeadType,
   parseImportOptOut,
   parseImportPurchaseTimeframe,
@@ -224,7 +227,7 @@ export function validateImportDraftForType(
  */
 export function parseLeadsCsv(
   text: string,
-  defaultType: LeadImportDefaultType = "detect",
+  defaultType: LeadImportDefaultType = "buyer",
 ): {
   leads: ParsedImportLead[];
   errors: Array<{ row: number; error: string }>;
@@ -278,30 +281,34 @@ Jane,Doe,jane@example.com,416-555-0100,123 King St,Kitchener,Open house Sunday
 John,Smith,john@example.com,,,Toronto,Referral from partner
 `;
 
+export const LEAD_IMPORT_FIELD_OPTION_GROUPS: Array<{
+  label: string | null;
+  options: Array<{ value: LeadImportField; label: string }>;
+}> = [
+  {
+    label: null,
+    options: [{ value: "skip", label: LEAD_IMPORT_FIELD_LABELS.skip }],
+  },
+  {
+    label: "This import",
+    options: LEAD_IMPORT_MAPPING_THIS_IMPORT_FIELDS.map((value) => ({
+      value,
+      label: LEAD_IMPORT_FIELD_LABELS[value],
+    })),
+  },
+  {
+    label: "Next phase (not stored yet)",
+    options: LEAD_IMPORT_MAPPING_NEXT_PHASE_FIELDS.map((value) => ({
+      value,
+      label: LEAD_IMPORT_FIELD_LABELS[value],
+    })),
+  },
+];
+
 export const LEAD_IMPORT_FIELD_OPTIONS: Array<{
   value: LeadImportField;
   label: string;
-}> = [
-  { value: "skip", label: "Ignore" },
-  { value: "name", label: "Full name" },
-  { value: "first_name", label: "First name" },
-  { value: "last_name", label: "Last name" },
-  { value: "email", label: "Email" },
-  { value: "phone", label: "Phone" },
-  { value: "address", label: "Address" },
-  { value: "city", label: "City" },
-  { value: "province", label: "State / province" },
-  { value: "country", label: "Country" },
-  { value: "postal", label: "Zip / postal code" },
-  { value: "notes", label: "Notes" },
-  { value: "timeframe", label: "Timeframe" },
-  { value: "source", label: "Source" },
-  { value: "lead_type", label: "Lead type" },
-  { value: "opt_out", label: "Opt-out / unsubscribe" },
-  { value: "tags", label: "Tags (next phase)" },
-  { value: "date_created", label: "Created date (next phase)" },
-  { value: "deal_completed", label: "Deal completed (next phase)" },
-];
+}> = LEAD_IMPORT_FIELD_OPTION_GROUPS.flatMap((group) => group.options);
 
 export const SELLER_CRM_CSV_HEADERS = [
   "name_first",

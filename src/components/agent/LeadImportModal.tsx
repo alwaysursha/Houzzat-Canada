@@ -4,12 +4,18 @@ import { useMemo, useState } from "react";
 import { Download, Trash2, Upload } from "lucide-react";
 import {
   classifyImportedLead,
+  DETECT_WITHOUT_MAPPED_COLUMN_MESSAGE,
+  initialImportDefaultLeadType,
   LEAD_IMPORT_DEFAULT_TYPES,
+  LEAD_IMPORT_FIELD_LABELS,
+  LEAD_IMPORT_MAPPING_NEXT_PHASE_FIELDS,
+  LEAD_IMPORT_MAPPING_THIS_IMPORT_FIELDS,
+  mappingIncludesLeadType,
   type LeadImportDefaultType,
 } from "@/lib/agent/lead-import-classify";
 import {
   draftsFromMappedRows,
-  LEAD_IMPORT_FIELD_OPTIONS,
+  LEAD_IMPORT_FIELD_OPTION_GROUPS,
   parseLeadsCsvTable,
   suggestLeadImportMapping,
   validateImportDraftForType,
@@ -52,6 +58,35 @@ const DEFAULT_TYPE_LABEL: Record<LeadImportDefaultType, string> = {
   detect: "Detect from CSV",
 };
 
+function defaultLeadTypeHelp(
+  defaultLeadType: LeadImportDefaultType,
+  hasLeadTypeColumn: boolean,
+): string {
+  switch (defaultLeadType) {
+    case "buyer":
+      return "All ready rows will import as Buyer. Switch to Seller or Buyer + Seller to apply that type to every row.";
+    case "seller":
+      return "All ready rows will import as Seller. No per-row Lead Type selection is required.";
+    case "both":
+      return "All ready rows will import as Buyer + Seller. No per-row Lead Type selection is required.";
+    case "detect":
+      return hasLeadTypeColumn
+        ? "Each row uses its mapped Lead Type column."
+        : DETECT_WITHOUT_MAPPED_COLUMN_MESSAGE;
+    default: {
+      const _never: never = defaultLeadType;
+      return _never;
+    }
+  }
+}
+
+const MAPPING_DESTINATION_LIST = [
+  ...LEAD_IMPORT_MAPPING_THIS_IMPORT_FIELDS,
+  ...LEAD_IMPORT_MAPPING_NEXT_PHASE_FIELDS,
+]
+  .map((field) => LEAD_IMPORT_FIELD_LABELS[field])
+  .join(", ");
+
 export function LeadImportModal({
   open,
   onClose,
@@ -67,12 +102,16 @@ export function LeadImportModal({
   const [mapping, setMapping] = useState<LeadImportColumnMapping[]>([]);
   const [drafts, setDrafts] = useState<LeadImportDraft[]>([]);
   const [defaultLeadType, setDefaultLeadType] =
-    useState<LeadImportDefaultType>("detect");
+    useState<LeadImportDefaultType>("buyer");
   const [assertConsent, setAssertConsent] = useState(false);
   const [allowDupes, setAllowDupes] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
+
+  const hasLeadTypeColumn = mappingIncludesLeadType(mapping);
+  const detectNeedsLeadTypeColumn =
+    defaultLeadType === "detect" && !hasLeadTypeColumn;
 
   const stats = useMemo(() => {
     let ready = 0;
@@ -109,7 +148,7 @@ export function LeadImportModal({
     setRawRows([]);
     setMapping([]);
     setDrafts([]);
-    setDefaultLeadType("detect");
+    setDefaultLeadType("buyer");
     setAssertConsent(false);
     setAllowDupes(false);
     setError(null);
@@ -159,6 +198,7 @@ export function LeadImportModal({
     setRawRows(rows);
     setMapping(nextMapping);
     setDrafts(draftsFromMappedRows(rows, nextMapping));
+    setDefaultLeadType(initialImportDefaultLeadType(nextMapping));
     setStep("review");
     if (!hasName || !hasEmail) {
       setError(
@@ -429,6 +469,7 @@ export function LeadImportModal({
                       )
                     }
                     className="w-full rounded border border-[#d8dee6] bg-white px-2 py-1.5 text-[12px] font-semibold text-[#0f172a]"
+                    aria-describedby="import-lead-type-help"
                   >
                     {LEAD_IMPORT_DEFAULT_TYPES.map((value) => (
                       <option key={value} value={value}>
@@ -436,9 +477,14 @@ export function LeadImportModal({
                       </option>
                     ))}
                   </select>
-                  <span className="mt-1.5 block text-[11px] text-[#64748b]">
-                    Seller files with no type column: choose Seller. Detect uses
-                    a mapped Lead Type column per row.
+                  <span
+                    id="import-lead-type-help"
+                    className="mt-1.5 block text-[11px] text-[#64748b]"
+                  >
+                    {defaultLeadTypeHelp(defaultLeadType, hasLeadTypeColumn)}
+                    {hasLeadTypeColumn && defaultLeadType !== "detect"
+                      ? " A Lead Type column is mapped — choose Detect from CSV to use it per row."
+                      : null}
                   </span>
                 </label>
                 <label className="flex items-start gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-[12px] text-[#475569]">
@@ -460,37 +506,74 @@ export function LeadImportModal({
                 </label>
               </div>
 
+              {detectNeedsLeadTypeColumn ? (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-[#fdba74] bg-[#fff7ed] px-3 py-2.5 text-[12px] text-[#9a3412]"
+                >
+                  {DETECT_WITHOUT_MAPPED_COLUMN_MESSAGE}
+                </div>
+              ) : null}
+
               <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3">
-                <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">
+                <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">
                   Column mapping
                 </p>
+                <p className="mb-2 text-[11px] leading-relaxed text-[#64748b]">
+                  Map each CSV column to a destination. Destinations include{" "}
+                  {MAPPING_DESTINATION_LIST}. Tags, Date Created, and Deal
+                  Completed Date are recognized for the next phase and are not
+                  written into Notes.
+                </p>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {mapping.map((col) => (
-                    <label
-                      key={col.header}
-                      className="flex items-center gap-2 rounded-md bg-white px-2.5 py-2 text-[12px] ring-1 ring-[#e2e8f0]"
-                    >
-                      <span className="min-w-0 flex-1 truncate font-medium text-[#334155]">
-                        {col.header}
-                      </span>
-                      <select
-                        value={col.field}
-                        onChange={(e) =>
-                          updateMapping(
-                            col.header,
-                            e.target.value as LeadImportField,
-                          )
-                        }
-                        className="rounded border border-[#d8dee6] bg-white px-2 py-1 text-[12px] font-semibold text-[#0f172a]"
+                  {mapping.map((col) => {
+                    const sample = (rawRows[0]?.[col.header] ?? "").trim();
+                    return (
+                      <label
+                        key={col.header}
+                        className="flex min-w-0 flex-col gap-1 rounded-md bg-white px-2.5 py-2 text-[12px] ring-1 ring-[#e2e8f0]"
                       >
-                        {LEAD_IMPORT_FIELD_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
+                        <span className="flex min-w-0 items-baseline justify-between gap-2">
+                          <span className="min-w-0 truncate font-medium text-[#334155]">
+                            {col.header}
+                          </span>
+                          {sample ? (
+                            <span className="max-w-[50%] truncate text-[10px] text-[#94a3b8]">
+                              e.g. {sample}
+                            </span>
+                          ) : null}
+                        </span>
+                        <select
+                          value={col.field}
+                          onChange={(e) =>
+                            updateMapping(
+                              col.header,
+                              e.target.value as LeadImportField,
+                            )
+                          }
+                          className="w-full min-w-0 rounded border border-[#d8dee6] bg-white px-2 py-1.5 text-[12px] font-semibold text-[#0f172a]"
+                        >
+                          {LEAD_IMPORT_FIELD_OPTION_GROUPS.map((group) =>
+                            group.label ? (
+                              <optgroup key={group.label} label={group.label}>
+                                {group.options.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ) : (
+                              group.options.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))
+                            ),
+                          )}
+                        </select>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 

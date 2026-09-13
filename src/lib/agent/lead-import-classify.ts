@@ -53,6 +53,71 @@ export type LeadImportField =
   | LeadImportDeferredField
   | "skip";
 
+/** Visible mapping destinations. Next-phase fields are labeled, not persisted. */
+export const LEAD_IMPORT_FIELD_LABELS: Record<LeadImportField, string> = {
+  skip: "Ignore",
+  first_name: "First Name",
+  last_name: "Last Name",
+  name: "Full Name",
+  email: "Email",
+  phone: "Phone",
+  address: "Address",
+  city: "City",
+  province: "Province/State",
+  country: "Country",
+  postal: "Postal/ZIP",
+  notes: "Notes",
+  lead_type: "Lead Type",
+  tags: "Tags",
+  timeframe: "Estimated Time Frame",
+  source: "Source/Ad",
+  date_created: "Date Created",
+  deal_completed: "Deal Completed Date",
+  opt_out: "Unsubscribe/Opt-Out",
+};
+
+export const LEAD_IMPORT_MAPPING_THIS_IMPORT_FIELDS = [
+  "first_name",
+  "last_name",
+  "name",
+  "email",
+  "phone",
+  "address",
+  "city",
+  "province",
+  "country",
+  "postal",
+  "notes",
+  "lead_type",
+  "timeframe",
+  "source",
+  "opt_out",
+] as const satisfies readonly LeadImportPersistedField[];
+
+export const LEAD_IMPORT_MAPPING_NEXT_PHASE_FIELDS = [
+  "tags",
+  "date_created",
+  "deal_completed",
+] as const satisfies readonly LeadImportDeferredField[];
+
+export const DETECT_WITHOUT_MAPPED_COLUMN_MESSAGE =
+  "Detect from CSV needs a Lead Type column. Map a CSV column to Lead Type below, or choose Buyer, Seller, or Buyer + Seller.";
+
+export const DETECT_EMPTY_LEAD_TYPE_REASON =
+  "Map a Lead Type column, or choose Buyer, Seller, or Buyer + Seller.";
+
+export function mappingIncludesLeadType(
+  mapping: ReadonlyArray<{ field: LeadImportField }>,
+): boolean {
+  return mapping.some((col) => col.field === "lead_type");
+}
+
+export function initialImportDefaultLeadType(
+  mapping: ReadonlyArray<{ field: LeadImportField }>,
+): LeadImportDefaultType {
+  return mappingIncludesLeadType(mapping) ? "detect" : "buyer";
+}
+
 export type ImportLeadTypeKind = "buyer" | "seller" | "both";
 
 export type ParsedImportLeadType =
@@ -410,8 +475,7 @@ export function classifyImportedLead(
       if (parsed.kind === "empty") {
         return {
           ok: false,
-          reason:
-            "Lead type not detected. Map a Lead Type column or choose a Default Lead Type.",
+          reason: DETECT_EMPTY_LEAD_TYPE_REASON,
           raw: null,
         };
       }
