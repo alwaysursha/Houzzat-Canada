@@ -130,4 +130,8 @@ export interface MobilePropertyDetail {
   openHouses: { startsAt: string; endsAt: string }[];
   featureSections: MobilePropertyFactSection[];
   mlsDisclaimer: string;
+  /** Absolute consumer listing URL for sharing. */
+  shareUrl?: string | null;
+  /** Workspace consumer origin, e.g. https://houzzat.com */
+  publicOrigin?: string | null;
 }

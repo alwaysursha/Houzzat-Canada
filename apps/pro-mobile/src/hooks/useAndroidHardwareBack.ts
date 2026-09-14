@@ -1,9 +1,10 @@
 /**
- * Android hardware back: pop overlays → home tab → double-press exit with alert.
+ * Android hardware back: overlay stack → shell pops → double-press exit.
  */
 
-import { useCallback, useEffect, useRef } from "react";
-import { Alert, BackHandler, Platform, ToastAndroid } from "react-native";
+import { useEffect, useRef } from "react";
+import { BackHandler, Platform, ToastAndroid } from "react-native";
+import { runAndroidBackStack } from "../lib/android-back-stack";
 
 export type AndroidBackHandlers = {
   /** Highest priority first. Return true if the back press was handled. */
@@ -19,23 +20,15 @@ export function useAndroidHardwareBack(handlers: AndroidBackHandlers) {
   handlersRef.current = handlers;
   const lastRootBackAt = useRef(0);
 
-  const requestExit = useCallback(() => {
-    Alert.alert("Exit HouzzatPRO?", "Close the app and return to your home screen.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Exit",
-        style: "destructive",
-        onPress: () => {
-          BackHandler.exitApp();
-        },
-      },
-    ]);
-  }, []);
-
   useEffect(() => {
     if (Platform.OS !== "android") return;
 
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (runAndroidBackStack()) {
+        lastRootBackAt.current = 0;
+        return true;
+      }
+
       const { onBack, isAtRoot } = handlersRef.current;
       if (onBack()) {
         lastRootBackAt.current = 0;
@@ -50,7 +43,7 @@ export function useAndroidHardwareBack(handlers: AndroidBackHandlers) {
       const now = Date.now();
       if (now - lastRootBackAt.current < EXIT_WINDOW_MS) {
         lastRootBackAt.current = 0;
-        requestExit();
+        BackHandler.exitApp();
         return true;
       }
 
@@ -60,5 +53,5 @@ export function useAndroidHardwareBack(handlers: AndroidBackHandlers) {
     });
 
     return () => sub.remove();
-  }, [requestExit]);
+  }, []);
 }

@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticateMobileRequest } from "@/lib/mobile/v2/auth-guard";
 import { createWorkspaceAccessToken } from "@/lib/mobile/v2/tokens";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 
 export const runtime = "nodejs";
 
@@ -78,6 +79,11 @@ export async function POST(
       role: membership.role,
     });
 
+    const publicOrigin = await resolveCanonicalPublicOrigin(
+      membership.workspaceId,
+      "houzzat.com",
+    );
+
     return NextResponse.json({
       ok: true,
       data: {
@@ -85,6 +91,7 @@ export async function POST(
           id: membership.workspace.id,
           slug: membership.workspace.slug,
           displayName: membership.workspace.branding?.displayName || membership.workspace.name,
+          publicOrigin: publicOrigin.replace(/\/$/, ""),
           brand: {
             primaryColor: membership.workspace.branding?.primaryColor || null,
             logoUrl: membership.workspace.branding?.logoUrl || null,

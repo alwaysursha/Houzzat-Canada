@@ -6,9 +6,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  BackHandler,
   Image,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -18,6 +16,7 @@ import {
 } from "react-native";
 import { mobileApiClient } from "../api/client";
 import { propertyDetailCache } from "../lib/lead-tab-cache";
+import { pushAndroidBackHandler } from "../lib/android-back-stack";
 import {
   formatListingAddress,
   formatListingBeds,
@@ -31,6 +30,7 @@ import {
 import type { MobileListingCard, MobilePropertyDetail } from "../types/property";
 import { ListingActionsSheet } from "./ListingActionsSheet";
 import { ShortlistButton } from "./ShortlistButton";
+import { useAuth } from "../state/AuthContext";
 
 type PropertyDetailModalProps = {
   visible: boolean;
@@ -83,13 +83,13 @@ export function PropertyDetailModal({
   onSavedChange,
   onAddToViewing,
 }: PropertyDetailModalProps) {
+  const { activeWorkspace } = useAuth();
+  const workspacePublicOrigin = activeWorkspace?.publicOrigin ?? null;
+
   /**
-   * Keep last card while Modal dismisses. Never unmount <Modal> when parent
-   * clears preview in the same update as visible=false — that leaves a ghost
-   * native dialog host that eats taps while scroll still works.
-   *
-   * Android hardware back: use animationType="none" + local BackHandler so
-   * dismiss matches the X button path (no slide race / shell back steal).
+   * Keep last card while parent clears preview after close.
+   * Uses a View portal (not RN Modal). Android Modal + hardware back leaves a
+   * ghost Dialog that eats taps until the screen remounts.
    */
   const heldPreviewRef = useRef<MobileListingCard | null>(preview);
   if (preview) heldPreviewRef.current = preview;
@@ -212,10 +212,18 @@ export function PropertyDetailModal({
         : [];
 
   const shareInput = useMemo(() => {
-    if (detail) return listingShareInputFromDetail(detail);
-    if (card) return listingShareInputFromCard(card);
+    if (detail) {
+      return listingShareInputFromDetail(detail, {
+        publicOrigin: workspacePublicOrigin,
+      });
+    }
+    if (card) {
+      return listingShareInputFromCard(card, {
+        publicOrigin: workspacePublicOrigin,
+      });
+    }
     return null;
-  }, [detail, card]);
+  }, [detail, card, workspacePublicOrigin]);
 
   const handleAddToViewing = useCallback(() => {
     if (!mlsNumber || !onAddToViewing) return;
@@ -233,20 +241,18 @@ export function PropertyDetailModal({
 
   useEffect(() => {
     if (!visible || Platform.OS !== "android") return;
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+    return pushAndroidBackHandler(() => {
       handleRequestClose();
       return true;
     });
-    return () => sub.remove();
   }, [visible, handleRequestClose]);
 
+  if (!visible) {
+    return null;
+  }
+
   return (
-    <Modal
-      visible={visible}
-      animationType="none"
-      presentationStyle="fullScreen"
-      onRequestClose={handleRequestClose}
-    >
+    <View style={styles.portal} collapsable={false} pointerEvents="auto">
       {!card ? (
         <View style={styles.root} />
       ) : (
@@ -551,7 +557,7 @@ export function PropertyDetailModal({
         />
       </View>
       )}
-    </Modal>
+    </View>
   );
 }
 
@@ -565,6 +571,12 @@ function FactRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  portal: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 400,
+    elevation: 400,
+    backgroundColor: "#F4F7F5",
+  },
   root: {
     flex: 1,
     backgroundColor: "#F4F7F5",

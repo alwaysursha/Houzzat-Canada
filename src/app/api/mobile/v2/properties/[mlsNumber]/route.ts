@@ -12,6 +12,8 @@ import {
 import { authorizeMobileWorkspaceAccess } from "@/lib/mobile/v2/workspace-access";
 import { isListingSavedByUser } from "@/lib/mobile/v2/saved-listings";
 import { loadListingForDetailPage } from "@/lib/listings/load-listing-for-detail";
+import { listingPath } from "@/lib/listings/listing-path";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 
 export const runtime = "nodejs";
 
@@ -46,12 +48,21 @@ export async function GET(
     }
 
     const detail = buildMobilePropertyDetailDto(listing);
+    const publicOrigin = await resolveCanonicalPublicOrigin(
+      access.workspaceId,
+      "houzzat.com",
+    );
+    const shareUrl = `${publicOrigin.replace(/\/$/, "")}${listingPath(listing)}`;
     const saved = await isListingSavedByUser(access.userId, mlsNumber);
 
     return NextResponse.json({
       ok: true,
       data: {
-        detail,
+        detail: {
+          ...detail,
+          shareUrl,
+          publicOrigin: publicOrigin.replace(/\/$/, ""),
+        },
         saved,
       },
     });

@@ -21,6 +21,8 @@ export interface MobileWorkspace {
   id: string; // The immutable tenant workspace identifier (e.g., "ws_houzzat_prod")
   slug: string;
   displayName: string;
+  /** Consumer website origin for public listing links (e.g. https://houzzat.com). */
+  publicOrigin?: string;
   brand?: MobileWorkspaceBrand;
 }
 

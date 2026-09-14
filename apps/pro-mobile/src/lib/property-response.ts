@@ -152,6 +152,8 @@ function normalizePropertyDetail(
     featureSections: Array.isArray(detail.featureSections)
       ? detail.featureSections
       : [],
+    shareUrl: detail.shareUrl ?? null,
+    publicOrigin: detail.publicOrigin ?? null,
   };
 }
 

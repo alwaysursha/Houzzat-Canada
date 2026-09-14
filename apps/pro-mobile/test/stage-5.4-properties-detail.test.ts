@@ -163,8 +163,14 @@ async function runStage54Tests() {
     assert.ok(modal.includes("onAddToViewing"));
     assert.ok(modal.includes("styles.fab"));
     assert.ok(modal.includes("handleRequestClose"));
-    assert.ok(modal.includes("BackHandler"));
-    assert.ok(modal.includes('animationType="none"'));
+    assert.ok(modal.includes("BackHandler") || modal.includes("pushAndroidBackHandler"));
+    assert.ok(modal.includes("styles.portal"));
+    assert.ok(modal.includes("pushAndroidBackHandler"));
+    assert.equal(
+      modal.includes("Modal,"),
+      false,
+      "PropertyDetailModal must not use RN Modal (Android ghost touch)",
+    );
     assert.equal(drawer.includes("if (!visible) return null"), false);
     assert.ok(build.includes("buildMobilePropertyFeatureSections"));
     assert.ok(build.includes("brokeragePhone"));
@@ -224,6 +230,9 @@ async function runStage54Tests() {
     assert.ok(actions.includes("Add to viewing"));
     assert.ok(share.includes("/listing/"));
     assert.ok(share.includes("buildListingShareMessage"));
+    assert.ok(share.includes("buildListingSharePath"));
+    assert.ok(share.includes("publicOrigin"));
+    assert.equal(share.includes('LISTING_PUBLIC_ORIGIN = "https://app.houzzatpro.com"'), false);
     console.log("  -> PASS");
   }
 

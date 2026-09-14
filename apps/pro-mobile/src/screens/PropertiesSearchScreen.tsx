@@ -590,6 +590,8 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: "#F4F7F5",
+    position: "relative",
+    overflow: "hidden",
   },
   topBar: {
     flexDirection: "row",

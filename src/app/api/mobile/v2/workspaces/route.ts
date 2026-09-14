@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticateMobileRequest } from "@/lib/mobile/v2/auth-guard";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 
 export const runtime = "nodejs";
 
@@ -55,22 +56,31 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "asc" },
     });
 
-    const safeMemberships = memberships.map((m) => ({
-      id: m.id,
-      workspaceId: m.workspaceId,
-      userId: m.userId,
-      role: m.role,
-      status: m.status,
-      workspace: {
-        id: m.workspace.id,
-        slug: m.workspace.slug,
-        displayName: m.workspace.branding?.displayName || m.workspace.name,
-        brand: {
-          primaryColor: m.workspace.branding?.primaryColor || null,
-          logoUrl: m.workspace.branding?.logoUrl || null,
-        },
-      },
-    }));
+    const safeMemberships = await Promise.all(
+      memberships.map(async (m) => {
+        const publicOrigin = await resolveCanonicalPublicOrigin(
+          m.workspaceId,
+          "houzzat.com",
+        );
+        return {
+          id: m.id,
+          workspaceId: m.workspaceId,
+          userId: m.userId,
+          role: m.role,
+          status: m.status,
+          workspace: {
+            id: m.workspace.id,
+            slug: m.workspace.slug,
+            displayName: m.workspace.branding?.displayName || m.workspace.name,
+            publicOrigin: publicOrigin.replace(/\/$/, ""),
+            brand: {
+              primaryColor: m.workspace.branding?.primaryColor || null,
+              logoUrl: m.workspace.branding?.logoUrl || null,
+            },
+          },
+        };
+      }),
+    );
 
     return NextResponse.json({
       ok: true,
