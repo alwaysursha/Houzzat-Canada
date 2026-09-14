@@ -151,6 +151,18 @@ async function runStage54Tests() {
     assert.ok(modal.includes("Agent cell number"));
     assert.ok(modal.includes("heldPreviewRef"));
     assert.equal(modal.includes("if (!preview) return null"), false);
+    assert.ok(modal.includes("onSavedChangeRef"));
+    assert.equal(
+      /loadDetail = useCallback\([\s\S]*?\[workspaceId, mlsNumber, onSavedChange\]/.test(
+        modal,
+      ),
+      false,
+      "loadDetail must not depend on onSavedChange (fetch storm)",
+    );
+    assert.ok(modal.includes("ListingActionsSheet"));
+    assert.ok(modal.includes("onAddToViewing"));
+    assert.ok(modal.includes("styles.fab"));
+    assert.ok(modal.includes("handleRequestClose"));
     assert.equal(drawer.includes("if (!visible) return null"), false);
     assert.ok(build.includes("buildMobilePropertyFeatureSections"));
     assert.ok(build.includes("brokeragePhone"));
@@ -185,12 +197,31 @@ async function runStage54Tests() {
   {
     const screen = readFileSync(PROPERTIES_SCREEN, "utf8");
     const modal = readFileSync(DETAIL_MODAL, "utf8");
+    const actions = readFileSync(
+      join(REPO_ROOT, "apps/pro-mobile/src/components/ListingActionsSheet.tsx"),
+      "utf8",
+    );
+    const share = readFileSync(
+      join(REPO_ROOT, "apps/pro-mobile/src/lib/listing-share.ts"),
+      "utf8",
+    );
     for (const src of [screen, modal]) {
       assert.equal(src.includes("WebView"), false);
-      assert.equal(src.includes("Linking.openURL"), false);
-      assert.equal(src.includes("/listing/"), false);
       assert.equal(src.includes("houzzat.com/property"), false);
     }
+    // Detail stays native; share opens mailto/sms/WhatsApp + public /listing/ URL.
+    // Actions sheet must NOT nest a second RN Modal (Android ghost-touch after back).
+    assert.equal(modal.includes("Linking.openURL"), false);
+    assert.equal(modal.includes("WebView"), false);
+    assert.equal(actions.includes("Modal,"), false);
+    assert.ok(actions.includes("absoluteFillObject"));
+    assert.ok(actions.includes("Linking.openURL"));
+    assert.ok(actions.includes("mailto:"));
+    assert.ok(actions.includes("sms:"));
+    assert.ok(actions.includes("wa.me"));
+    assert.ok(actions.includes("Add to viewing"));
+    assert.ok(share.includes("/listing/"));
+    assert.ok(share.includes("buildListingShareMessage"));
     console.log("  -> PASS");
   }
 

@@ -64,6 +64,7 @@ export function ShortlistScreen({
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detailListing, setDetailListing] = useState<MobileListingCard | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   const fetchGenRef = useRef(0);
@@ -144,6 +145,7 @@ export function ShortlistScreen({
   useEffect(() => {
     setSelected(new Set());
     setStatusMsg(null);
+    setDetailOpen(false);
     setDetailListing(null);
     if (cached) {
       setListings(cached.listings);
@@ -202,7 +204,18 @@ export function ShortlistScreen({
 
   const openDetail = useCallback((listing: MobileListingCard) => {
     setDetailListing(listing);
+    setDetailOpen(true);
   }, []);
+
+  const closeDetail = useCallback(() => {
+    setDetailOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (detailOpen) return;
+    const timer = setTimeout(() => setDetailListing(null), 450);
+    return () => clearTimeout(timer);
+  }, [detailOpen]);
 
   const selectAll = useCallback(() => {
     setSelected(new Set(listings.map((l) => l.mlsNumber)));
@@ -367,14 +380,14 @@ export function ShortlistScreen({
       ) : null}
 
       <PropertyDetailModal
-        visible={detailListing != null}
+        visible={detailOpen}
         preview={detailListing}
         workspaceId={workspaceId}
         saved={detailListing ? isSaved(detailListing.mlsNumber) : false}
         savedPending={
           detailListing != null && pendingMls === detailListing.mlsNumber
         }
-        onClose={() => setDetailListing(null)}
+        onClose={closeDetail}
         onToggleShortlist={(mls) => void handleToggleShortlist(mls)}
         onSavedChange={(mls, saved) => {
           setSavedLocal(mls, saved);
@@ -387,6 +400,14 @@ export function ShortlistScreen({
             });
           }
         }}
+        onAddToViewing={
+          onPlanViewings
+            ? (mls) => {
+                closeDetail();
+                onPlanViewings([mls]);
+              }
+            : undefined
+        }
       />
     </View>
   );

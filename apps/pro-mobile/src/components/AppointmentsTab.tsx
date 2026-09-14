@@ -110,7 +110,7 @@ type AppointmentsTabProps = {
   leadId: string;
   workspaceId: string | undefined;
   leadName?: string;
-  onPlanViewings?: (leadId: string, leadName?: string) => void;
+  onPlanViewings?: (leadId: string, leadName?: string, mlsNumbers?: string[]) => void;
   onAppointmentCountChange?: (totalCount: number) => void;
 };
 

@@ -65,6 +65,8 @@ export function usePropertySavedListings(workspaceId: string | undefined) {
     (mlsNumber: string, saved: boolean) => {
       const normalized = mlsNumber.trim().toUpperCase();
       setSavedSet((prev) => {
+        const already = prev.has(normalized);
+        if (saved === already) return prev;
         const next = new Set(prev);
         if (saved) next.add(normalized);
         else next.delete(normalized);

@@ -666,7 +666,7 @@ export function LeadDetailScreen({
   leadIds?: string[];
   onNavigateLead?: (leadId: string) => void;
   onBack: () => void;
-  onPlanViewings?: (leadId: string, leadName?: string) => void;
+  onPlanViewings?: (leadId: string, leadName?: string, mlsNumbers?: string[]) => void;
 }) {
   const { activeWorkspace } = useAuth();
   const workspaceId = activeWorkspace?.id;
@@ -2358,7 +2358,9 @@ export function LeadDetailScreen({
                   contactConsentAt={lead.contactConsentAt}
                   customerCaslConsentAt={lead.customer?.caslConsentAt}
                   emailAlertsEnabled={lead.customer?.emailAlertsEnabled}
+                  leadName={lead.customer?.name?.trim() || undefined}
                   onEngagementLoaded={handleEngagementLoaded}
+                  onPlanViewings={onPlanViewings}
                 />
               ) : null}
             </View>

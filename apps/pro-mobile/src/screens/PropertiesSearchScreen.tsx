@@ -42,6 +42,7 @@ import {
 
 type PropertiesSearchScreenProps = {
   onBack: () => void;
+  onPlanViewings?: (mlsNumbers: string[]) => void;
 };
 
 const SORT_OPTIONS = [
@@ -56,7 +57,10 @@ function filtersQueryKey(q: string, filters: PropertySearchFilters): string {
   return JSON.stringify({ q: q.trim(), ...filters });
 }
 
-export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) {
+export function PropertiesSearchScreen({
+  onBack,
+  onPlanViewings,
+}: PropertiesSearchScreenProps) {
   const { activeWorkspace } = useAuth();
   const workspaceId = activeWorkspace?.id;
   const cacheKey = workspaceId ? `${workspaceId}:properties` : "";
@@ -200,6 +204,13 @@ export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) 
       void toggleSaved(mls);
     },
     [toggleSaved],
+  );
+
+  const handleSavedChange = useCallback(
+    (mls: string, saved: boolean) => {
+      setSavedLocal(mls, saved);
+    },
+    [setSavedLocal],
   );
 
   const renderListing = useCallback(
@@ -561,7 +572,15 @@ export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) 
         }
         onClose={closeDetail}
         onToggleShortlist={handleToggleShortlist}
-        onSavedChange={(mls, saved) => setSavedLocal(mls, saved)}
+        onSavedChange={handleSavedChange}
+        onAddToViewing={
+          onPlanViewings
+            ? (mls) => {
+                closeDetail();
+                onPlanViewings([mls]);
+              }
+            : undefined
+        }
       />
     </View>
   );

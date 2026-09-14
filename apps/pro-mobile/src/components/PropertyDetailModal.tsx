@@ -22,7 +22,12 @@ import {
   formatListingPrice,
   unwrapPropertyDetail,
 } from "../lib/property-response";
+import {
+  listingShareInputFromCard,
+  listingShareInputFromDetail,
+} from "../lib/listing-share";
 import type { MobileListingCard, MobilePropertyDetail } from "../types/property";
+import { ListingActionsSheet } from "./ListingActionsSheet";
 import { ShortlistButton } from "./ShortlistButton";
 
 type PropertyDetailModalProps = {
@@ -34,6 +39,8 @@ type PropertyDetailModalProps = {
   onClose: () => void;
   onToggleShortlist: (mlsNumber: string) => void;
   onSavedChange?: (mlsNumber: string, saved: boolean) => void;
+  /** Opens lead picker / viewings planner with this MLS. */
+  onAddToViewing?: (mlsNumber: string) => void;
 };
 
 const DEFAULT_GALLERY_WIDTH = 360;
@@ -72,6 +79,7 @@ export function PropertyDetailModal({
   onClose,
   onToggleShortlist,
   onSavedChange,
+  onAddToViewing,
 }: PropertyDetailModalProps) {
   /**
    * Keep last card while Modal animates closed. Never unmount <Modal> when
@@ -93,6 +101,7 @@ export function PropertyDetailModal({
   const [loading, setLoading] = useState(!cached?.detail);
   const [error, setError] = useState<string | null>(null);
   const [galleryWidth, setGalleryWidth] = useState(DEFAULT_GALLERY_WIDTH);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const fetchGen = useRef(0);
 
   const onGalleryLayout = useCallback(
@@ -110,10 +119,17 @@ export function PropertyDetailModal({
 
   const display = detail ?? (previewDetail as MobilePropertyDetail | null);
 
+  // Keep latest callback without re-creating loadDetail (avoids fetch storms).
+  const onSavedChangeRef = useRef(onSavedChange);
+  onSavedChangeRef.current = onSavedChange;
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
+
   const loadDetail = useCallback(async () => {
     if (!workspaceId || !mlsNumber) return;
     const gen = ++fetchGen.current;
     const key = detailCacheKey(workspaceId, mlsNumber);
+    const hadDetail = Boolean(propertyDetailCache.get(key)?.detail);
 
     const hit = propertyDetailCache.get(key);
     if (hit?.detail) {
@@ -122,7 +138,8 @@ export function PropertyDetailModal({
     } else {
       setLoading(true);
     }
-    setError(null);
+    // Don't clear an existing soft error until a successful refresh.
+    if (!hadDetail) setError(null);
 
     try {
       const res = await mobileApiClient.get<unknown>(
@@ -130,30 +147,41 @@ export function PropertyDetailModal({
       );
       if (gen !== fetchGen.current) return;
       if (!res.ok) {
-        setError(res.message || "Could not load property");
+        // Keep cached/preview content; only surface hard errors when nothing loaded.
+        if (!hadDetail && !propertyDetailCache.get(key)?.detail) {
+          setError(res.message || "Could not load property");
+        } else {
+          setError(res.message || "Could not refresh property");
+        }
         setLoading(false);
         return;
       }
       const parsed = unwrapPropertyDetail(res.data);
       if (!parsed) {
-        setError("Could not load property");
+        if (!hadDetail) setError("Could not load property");
         setLoading(false);
         return;
       }
       setDetail(parsed.detail);
+      setError(null);
       propertyDetailCache.set(key, {
         detail: parsed.detail,
         saved: parsed.saved,
         timestamp: Date.now(),
       });
-      onSavedChange?.(mlsNumber, parsed.saved);
+      // Only notify parent when shortlist state actually changed.
+      if (parsed.saved !== savedRef.current) {
+        onSavedChangeRef.current?.(mlsNumber, parsed.saved);
+      }
     } catch (err: unknown) {
       if (gen !== fetchGen.current) return;
-      setError(err instanceof Error ? err.message : "Could not load property");
+      const msg =
+        err instanceof Error ? err.message : "Could not load property";
+      setError(msg);
     } finally {
       if (gen === fetchGen.current) setLoading(false);
     }
-  }, [workspaceId, mlsNumber, onSavedChange]);
+  }, [workspaceId, mlsNumber]);
 
   useEffect(() => {
     if (!visible || !mlsNumber) return;
@@ -162,6 +190,7 @@ export function PropertyDetailModal({
 
   useEffect(() => {
     if (visible) return;
+    setActionsOpen(false);
     const timer = setTimeout(() => {
       heldPreviewRef.current = null;
       setDetail(null);
@@ -177,19 +206,39 @@ export function PropertyDetailModal({
         ? [card.primaryImageUrl]
         : [];
 
+  const shareInput = useMemo(() => {
+    if (detail) return listingShareInputFromDetail(detail);
+    if (card) return listingShareInputFromCard(card);
+    return null;
+  }, [detail, card]);
+
+  const handleAddToViewing = useCallback(() => {
+    if (!mlsNumber || !onAddToViewing) return;
+    setActionsOpen(false);
+    onAddToViewing(mlsNumber);
+  }, [mlsNumber, onAddToViewing]);
+
+  const handleRequestClose = useCallback(() => {
+    if (actionsOpen) {
+      setActionsOpen(false);
+      return;
+    }
+    onClose();
+  }, [actionsOpen, onClose]);
+
   return (
     <Modal
       visible={visible}
       animationType="slide"
       presentationStyle="fullScreen"
-      onRequestClose={onClose}
+      onRequestClose={handleRequestClose}
     >
       {!card ? (
         <View style={styles.root} />
       ) : (
       <View style={styles.root}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.75}>
+          <TouchableOpacity onPress={handleRequestClose} style={styles.closeBtn} activeOpacity={0.75}>
             <Text style={styles.closeText}>✕</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle} numberOfLines={1}>
@@ -468,6 +517,24 @@ export function PropertyDetailModal({
             </View>
           ) : null}
         </ScrollView>
+
+        <TouchableOpacity
+          style={styles.fab}
+          activeOpacity={0.85}
+          onPress={() => setActionsOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Listing actions"
+        >
+          <Text style={styles.fabText}>+</Text>
+        </TouchableOpacity>
+
+        <ListingActionsSheet
+          visible={actionsOpen}
+          listing={shareInput}
+          showAddToViewing={Boolean(onAddToViewing)}
+          onClose={() => setActionsOpen(false)}
+          onAddToViewing={onAddToViewing ? handleAddToViewing : undefined}
+        />
       </View>
       )}
     </Modal>
@@ -528,7 +595,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 32,
+    paddingBottom: 96,
   },
   gallery: {
     height: 260,
@@ -740,5 +807,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     color: "#64748B",
+  },
+  fab: {
+    position: "absolute",
+    right: 18,
+    bottom: 28,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#0F766E",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  fabText: {
+    fontSize: 32,
+    fontWeight: "400",
+    color: "#FFFFFF",
+    marginTop: -2,
+    lineHeight: 36,
   },
 });

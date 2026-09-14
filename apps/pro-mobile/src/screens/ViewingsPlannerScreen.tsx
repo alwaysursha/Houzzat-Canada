@@ -220,6 +220,7 @@ export function ViewingsPlannerScreen({
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [stopTimes, setStopTimes] = useState<Record<string, StopTimeDraft>>({});
   const [detailListing, setDetailListing] = useState<MobileListingCard | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [shortlistPickerOpen, setShortlistPickerOpen] = useState(false);
@@ -297,15 +298,21 @@ export function ViewingsPlannerScreen({
         setShareMenuOpen(false);
         return true;
       }
-      if (detailListing) {
-        setDetailListing(null);
+      if (detailOpen) {
+        setDetailOpen(false);
         return true;
       }
       onBack();
       return true;
     });
     return () => sub.remove();
-  }, [shortlistPickerOpen, shareMenuOpen, detailListing, onBack]);
+  }, [shortlistPickerOpen, shareMenuOpen, detailOpen, onBack]);
+
+  useEffect(() => {
+    if (detailOpen) return;
+    const timer = setTimeout(() => setDetailListing(null), 450);
+    return () => clearTimeout(timer);
+  }, [detailOpen]);
 
   const patchTour = useCallback(
     async (body: Record<string, unknown>) => {
@@ -737,6 +744,7 @@ export function ViewingsPlannerScreen({
                           onPress={() => {
                             if (stop.listing) {
                               setDetailListing(stopListingToCard(stop.listing));
+                              setDetailOpen(true);
                             }
                           }}
                           activeOpacity={stop.listing ? 0.8 : 1}
@@ -1013,12 +1021,12 @@ export function ViewingsPlannerScreen({
       </Modal>
 
       <PropertyDetailModal
-        visible={detailListing != null}
+        visible={detailOpen}
         preview={detailListing}
         workspaceId={workspaceId}
         saved={false}
         savedPending={false}
-        onClose={() => setDetailListing(null)}
+        onClose={() => setDetailOpen(false)}
         onToggleShortlist={() => {
           Alert.alert("Shortlist", "Open property search to manage shortlist.");
         }}

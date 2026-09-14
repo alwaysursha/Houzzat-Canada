@@ -294,8 +294,12 @@ export function AgentShell({
               setLeadNavIds(leadIds);
               setSelectedLeadId(leadId);
             }}
-            onPlanViewings={(id, name) => {
-              setViewingsPlanner({ leadId: id, mlsNumbers: [], leadName: name });
+            onPlanViewings={(id, name, mlsNumbers) => {
+              setViewingsPlanner({
+                leadId: id,
+                mlsNumbers: mlsNumbers ?? [],
+                leadName: name,
+              });
             }}
           />
         )}
@@ -325,6 +329,9 @@ export function AgentShell({
                 onBack={() => {
                   setActiveUtility(null);
                   setActiveDrawerId("account");
+                }}
+                onPlanViewings={(mlsNumbers) => {
+                  setViewingsLeadPicker({ mlsNumbers });
                 }}
               />
             ) : activeUtility === "shortlist" ? (
@@ -550,8 +557,12 @@ export function AgentShell({
               setSelectedLeadId(null);
               setLeadNavIds([]);
             }}
-            onPlanViewings={(id, name) => {
-              setViewingsPlanner({ leadId: id, mlsNumbers: [], leadName: name });
+            onPlanViewings={(id, name, mlsNumbers) => {
+              setViewingsPlanner({
+                leadId: id,
+                mlsNumbers: mlsNumbers ?? [],
+                leadName: name,
+              });
             }}
           />
         </View>

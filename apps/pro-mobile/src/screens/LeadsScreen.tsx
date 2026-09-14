@@ -166,7 +166,7 @@ interface LeadsScreenProps {
   /** Called with lead id + ordered list ids for prev/next navigation (web modal parity). */
   onSelectLead?: (leadId: string, leadIds: string[]) => void;
   onBackFromDetail?: () => void;
-  onPlanViewings?: (leadId: string, leadName?: string) => void;
+  onPlanViewings?: (leadId: string, leadName?: string, mlsNumbers?: string[]) => void;
 }
 
 export function LeadsScreen({

@@ -296,8 +296,12 @@ export function CommandCentreShell() {
               setLeadNavIds(leadIds);
               setSelectedLeadId(leadId);
             }}
-            onPlanViewings={(id, name) => {
-              setViewingsPlanner({ leadId: id, mlsNumbers: [], leadName: name });
+            onPlanViewings={(id, name, mlsNumbers) => {
+              setViewingsPlanner({
+                leadId: id,
+                mlsNumbers: mlsNumbers ?? [],
+                leadName: name,
+              });
             }}
           />
         )}
@@ -321,6 +325,9 @@ export function CommandCentreShell() {
                 onBack={() => {
                   setActiveUtility(null);
                   setActiveDrawerId("account");
+                }}
+                onPlanViewings={(mlsNumbers) => {
+                  setViewingsLeadPicker({ mlsNumbers });
                 }}
               />
             ) : activeUtility === "shortlist" ? (
@@ -534,8 +541,12 @@ export function CommandCentreShell() {
               setSelectedLeadId(null);
               setLeadNavIds([]);
             }}
-            onPlanViewings={(id, name) => {
-              setViewingsPlanner({ leadId: id, mlsNumbers: [], leadName: name });
+            onPlanViewings={(id, name, mlsNumbers) => {
+              setViewingsPlanner({
+                leadId: id,
+                mlsNumbers: mlsNumbers ?? [],
+                leadName: name,
+              });
             }}
           />
         </View>

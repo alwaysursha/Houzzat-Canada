@@ -97,7 +97,13 @@ type EngagementTabProps = {
   contactConsentAt?: string | null;
   customerCaslConsentAt?: string | null;
   emailAlertsEnabled?: boolean | null;
+  leadName?: string;
   onEngagementLoaded?: (summary: EngagementProfileSummary) => void;
+  onPlanViewings?: (
+    leadId: string,
+    leadName?: string,
+    mlsNumbers?: string[],
+  ) => void;
 };
 
 function Panel({
@@ -244,7 +250,9 @@ function EngagementTabInner({
   contactConsentAt,
   customerCaslConsentAt,
   emailAlertsEnabled,
+  leadName,
   onEngagementLoaded,
+  onPlanViewings,
 }: EngagementTabProps) {
   const cacheKey = workspaceId ? `${workspaceId}:${leadId}:engagement` : "";
   const cached = cacheKey ? engagementCache.get(cacheKey) : undefined;
@@ -262,6 +270,7 @@ function EngagementTabInner({
   const [detailMatch, setDetailMatch] = useState<MobileLeadEngagementMatch | null>(
     null,
   );
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const {
     isSaved,
@@ -334,6 +343,7 @@ function EngagementTabInner({
     setSelected(new Set());
     setSendMsg(null);
     setNote("");
+    setDetailOpen(false);
     setDetailMatch(null);
     const entry = cacheKey ? engagementCache.get(cacheKey) : undefined;
     if (entry?.engagement) {
@@ -371,7 +381,18 @@ function EngagementTabInner({
 
   const openDetail = useCallback((match: MobileLeadEngagementMatch) => {
     setDetailMatch(match);
+    setDetailOpen(true);
   }, []);
+
+  const closeDetail = useCallback(() => {
+    setDetailOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (detailOpen) return;
+    const timer = setTimeout(() => setDetailMatch(null), 450);
+    return () => clearTimeout(timer);
+  }, [detailOpen]);
 
   const handleToggleShortlist = useCallback(
     (mls: string) => {
@@ -720,16 +741,24 @@ function EngagementTabInner({
       </TouchableOpacity>
 
       <PropertyDetailModal
-        visible={detailMatch != null}
+        visible={detailOpen}
         preview={detailPreview}
         workspaceId={workspaceId}
         saved={detailMatch ? isSaved(detailMatch.mlsNumber) : false}
         savedPending={
           detailMatch != null && pendingMls === detailMatch.mlsNumber
         }
-        onClose={() => setDetailMatch(null)}
+        onClose={closeDetail}
         onToggleShortlist={handleToggleShortlist}
         onSavedChange={(mls, saved) => setSavedLocal(mls, saved)}
+        onAddToViewing={
+          onPlanViewings
+            ? (mls) => {
+                closeDetail();
+                onPlanViewings(leadId, leadName, [mls]);
+              }
+            : undefined
+        }
       />
     </View>
   );
