@@ -163,6 +163,8 @@ async function runStage54Tests() {
     assert.ok(modal.includes("onAddToViewing"));
     assert.ok(modal.includes("styles.fab"));
     assert.ok(modal.includes("handleRequestClose"));
+    assert.ok(modal.includes("BackHandler"));
+    assert.ok(modal.includes('animationType="none"'));
     assert.equal(drawer.includes("if (!visible) return null"), false);
     assert.ok(build.includes("buildMobilePropertyFeatureSections"));
     assert.ok(build.includes("brokeragePhone"));

@@ -18,6 +18,10 @@ import {
 } from "react-native";
 import { mobileApiClient } from "../api/client";
 import {
+  LaunchpadStatsIcon,
+  LaunchpadTaskIcon,
+} from "../components/ContactActionIcons";
+import {
   clearLaunchpadCache,
   launchpadCache,
   launchpadCacheKey,
@@ -255,7 +259,7 @@ export function LaunchpadScreen({
     title: string;
     subtitle: string;
     accentColor: string;
-    icon: string;
+    icon: React.ReactNode;
     linkLabel: string;
     onLink: () => void;
     body: React.ReactNode;
@@ -265,7 +269,7 @@ export function LaunchpadScreen({
       title: "Call New Leads",
       subtitle: `${data.newLeadCount} new leads to call`,
       accentColor: "#E11D48",
-      icon: "📞",
+      icon: <Text style={styles.moduleIconText}>📞</Text>,
       linkLabel: "Open in leads dashboard",
       onLink: () => onNavigateToLeads("NEW_LEAD"),
       body: (
@@ -286,7 +290,7 @@ export function LaunchpadScreen({
       title: "Contacted Leads",
       subtitle: `${data.contactedCount} clients to follow up with`,
       accentColor: "#D97706",
-      icon: "👤",
+      icon: <Text style={styles.moduleIconText}>👤</Text>,
       linkLabel: "Open in leads dashboard",
       onLink: () => onNavigateToLeads("CONTACTED"),
       body: (
@@ -307,7 +311,7 @@ export function LaunchpadScreen({
       title: "Due Tasks",
       subtitle: `${data.overdueTaskCount} Overdue · ${data.dueTodayCount} Due Today`,
       accentColor: "#F59E0B",
-      icon: "✓",
+      icon: <LaunchpadTaskIcon color="#F59E0B" size={16} />,
       linkLabel: "Open tasks",
       onLink: onNavigateToTasks,
       body: (
@@ -326,7 +330,7 @@ export function LaunchpadScreen({
           ? `Response Time · ${data.avgResponseMins} mins`
           : "Response Time · —",
       accentColor: "#2B6CB0",
-      icon: "⏱",
+      icon: <LaunchpadStatsIcon color="#2B6CB0" size={16} />,
       linkLabel: "Open statistics",
       onLink: onNavigateToStatistics,
       body: (
@@ -348,7 +352,7 @@ export function LaunchpadScreen({
           ? "No leads active on the site right now"
           : `${data.onlineLeads.length} lead${data.onlineLeads.length === 1 ? "" : "s"} active on the site`,
       accentColor: "#059669",
-      icon: "⚡",
+      icon: <Text style={styles.moduleIconText}>⚡</Text>,
       linkLabel: "Open in leads dashboard",
       onLink: () => onNavigateToLeads("ALL"),
       body: (
@@ -370,7 +374,7 @@ export function LaunchpadScreen({
       title: "Hot Pipeline",
       subtitle: `${data.hotCount} leads scoring hot right now`,
       accentColor: "#0F6B4C",
-      icon: "🔥",
+      icon: <Text style={styles.moduleIconText}>🔥</Text>,
       linkLabel: "Open hot leads",
       onLink: () => onNavigateToLeads("ALL"),
       body: (
@@ -459,9 +463,7 @@ export function LaunchpadScreen({
                 activeOpacity={0.8}
                 onPress={() => toggleModule(mod.id)}
               >
-                <View style={styles.moduleIconBox}>
-                  <Text style={styles.moduleIconText}>{mod.icon}</Text>
-                </View>
+                <View style={styles.moduleIconBox}>{mod.icon}</View>
                 <View style={styles.moduleInfo}>
                   <Text style={styles.moduleTitle}>{mod.title}</Text>
                   <Text style={styles.moduleSubtitle}>{mod.subtitle}</Text>

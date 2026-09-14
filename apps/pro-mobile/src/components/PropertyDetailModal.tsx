@@ -6,8 +6,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   Image,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -82,9 +84,12 @@ export function PropertyDetailModal({
   onAddToViewing,
 }: PropertyDetailModalProps) {
   /**
-   * Keep last card while Modal animates closed. Never unmount <Modal> when
-   * parent clears preview in the same update as visible=false — that leaves a
-   * ghost native modal host that eats taps while scroll still works.
+   * Keep last card while Modal dismisses. Never unmount <Modal> when parent
+   * clears preview in the same update as visible=false — that leaves a ghost
+   * native dialog host that eats taps while scroll still works.
+   *
+   * Android hardware back: use animationType="none" + local BackHandler so
+   * dismiss matches the X button path (no slide race / shell back steal).
    */
   const heldPreviewRef = useRef<MobileListingCard | null>(preview);
   if (preview) heldPreviewRef.current = preview;
@@ -226,10 +231,19 @@ export function PropertyDetailModal({
     onClose();
   }, [actionsOpen, onClose]);
 
+  useEffect(() => {
+    if (!visible || Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleRequestClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, handleRequestClose]);
+
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="none"
       presentationStyle="fullScreen"
       onRequestClose={handleRequestClose}
     >

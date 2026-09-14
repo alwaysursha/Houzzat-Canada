@@ -365,3 +365,95 @@ const styles = StyleSheet.create({
     borderRightColor: "transparent",
   },
 });
+
+/** Checkbox / due-tasks mark — Android often lacks ✓ glyph. */
+export function LaunchpadTaskIcon({
+  color = "#F59E0B",
+  size = 16,
+}: {
+  color?: string;
+  size?: number;
+}) {
+  const stroke = Math.max(1.5, size * 0.12);
+  return (
+    <View
+      style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}
+      accessibilityElementsHidden
+    >
+      <View
+        style={{
+          width: size * 0.9,
+          height: size * 0.9,
+          borderWidth: stroke,
+          borderColor: color,
+          borderRadius: Math.max(2, size * 0.15),
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <View
+          style={{
+            width: size * 0.42,
+            height: size * 0.22,
+            borderLeftWidth: stroke,
+            borderBottomWidth: stroke,
+            borderColor: color,
+            transform: [{ rotate: "-45deg" }, { translateY: -size * 0.04 }],
+            marginTop: -size * 0.06,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Simple bar-chart mark — Android often lacks ⏱ glyph. */
+export function LaunchpadStatsIcon({
+  color = "#2B6CB0",
+  size = 16,
+}: {
+  color?: string;
+  size?: number;
+}) {
+  const barW = Math.max(2, size * 0.18);
+  const gap = Math.max(1.5, size * 0.08);
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        flexDirection: "row",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        gap,
+        paddingBottom: size * 0.05,
+      }}
+      accessibilityElementsHidden
+    >
+      <View
+        style={{
+          width: barW,
+          height: size * 0.45,
+          borderRadius: 1,
+          backgroundColor: color,
+        }}
+      />
+      <View
+        style={{
+          width: barW,
+          height: size * 0.72,
+          borderRadius: 1,
+          backgroundColor: color,
+        }}
+      />
+      <View
+        style={{
+          width: barW,
+          height: size * 0.55,
+          borderRadius: 1,
+          backgroundColor: color,
+        }}
+      />
+    </View>
+  );
+}
