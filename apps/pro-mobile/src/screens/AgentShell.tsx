@@ -2,7 +2,8 @@
  * Stage 4.3B — Native Agent Shell with Visual Restoration.
  *
  * Faithfully matches the original HouzzatPRO Agent experience:
- * - Top Navigation Bar in Dark Slate (#1E2A38) with Hamburger Menu, Brand Title, Workspace Subtitle, and Call New Action
+ * - Top Navigation Bar in Dark Slate (#1E2A38) with Hamburger Menu, Brand Title,
+ *   Activity globe (feed + dialer), and Call New Action
  * - Native Slide-in Drawer with complete previous navigation list
  * - Bottom Navigation Tabs matching original mobile layout (Launchpad, Leads, Tasks, Calendar, More)
  * - 0ms instant tab switching and drawer opening (pure React state, no network, no self-closing bug)
@@ -20,8 +21,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ActivityFeedSheet } from "../components/ActivityFeedSheet";
 import { HouzzatProWordmark } from "../components/BrandMark";
 import { NativeDrawer, type DrawerItem } from "../components/NativeDrawer";
+import { ViewingsLeadPickerSheet } from "../components/ViewingsLeadPickerSheet";
 import { useAndroidHardwareBack } from "../hooks/useAndroidHardwareBack";
 import { subscribePushNavigation } from "../lib/push-navigation";
 import { useAuth } from "../state/AuthContext";
@@ -43,7 +46,6 @@ import { NotificationPreferencesScreen } from "./NotificationPreferencesScreen";
 import { CmaScreen } from "./CmaScreen";
 import { TeamScreen } from "./TeamScreen";
 import { ViewingsPlannerScreen } from "./ViewingsPlannerScreen";
-import { ViewingsLeadPickerSheet } from "../components/ViewingsLeadPickerSheet";
 
 type AgentTab = "launchpad" | "leads" | "tasks" | "calendar" | "more";
 type ActiveUtility = Exclude<MoreUtilityId, "account"> | null;
@@ -79,6 +81,7 @@ export function AgentShell({
   const [viewingsLeadPicker, setViewingsLeadPicker] = useState<{ mlsNumbers: string[] } | null>(
     null,
   );
+  const [activityFeedOpen, setActivityFeedOpen] = useState(false);
 
   const hasMultipleWorkspaces = memberships.length > 1;
   const brandDisplayName = activeWorkspace?.displayName || "HouzzatPRO";
@@ -161,6 +164,10 @@ export function AgentShell({
         setViewingsLeadPicker(null);
         return true;
       }
+      if (activityFeedOpen) {
+        setActivityFeedOpen(false);
+        return true;
+      }
       if (selectedLeadId) {
         setSelectedLeadId(null);
         setLeadNavIds([]);
@@ -191,6 +198,7 @@ export function AgentShell({
     isAtRoot: () =>
       !viewingsPlanner &&
       !viewingsLeadPicker &&
+      !activityFeedOpen &&
       !selectedLeadId &&
       !drawerOpen &&
       !activeUtility &&
@@ -225,6 +233,28 @@ export function AgentShell({
         </View>
 
         <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={[
+              styles.globeBtn,
+              activityFeedOpen && styles.globeBtnActive,
+            ]}
+            onPress={() => setActivityFeedOpen((open) => !open)}
+            activeOpacity={0.75}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel={
+              activityFeedOpen ? "Close activity feed" : "Open activity feed"
+            }
+            accessibilityRole="button"
+          >
+            <Text
+              style={[
+                styles.globeIcon,
+                activityFeedOpen && styles.globeIconActive,
+              ]}
+            >
+              🌐
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.callNewBtn}
             onPress={handleCallNewAction}
@@ -417,7 +447,13 @@ export function AgentShell({
           }}
         >
           <View style={[styles.navIconBox, activeTab === "leads" && styles.navIconBoxActive]}>
-            <Text style={[styles.navIcon, activeTab === "leads" && styles.navIconActive]}>
+            <Text
+              style={[
+                styles.navIcon,
+                styles.navIconEmoji,
+                activeTab === "leads" && styles.navIconActive,
+              ]}
+            >
               👥
             </Text>
           </View>
@@ -455,7 +491,13 @@ export function AgentShell({
           }}
         >
           <View style={[styles.navIconBox, activeTab === "calendar" && styles.navIconBoxActive]}>
-            <Text style={[styles.navIcon, activeTab === "calendar" && styles.navIconActive]}>
+            <Text
+              style={[
+                styles.navIcon,
+                styles.navIconEmoji,
+                activeTab === "calendar" && styles.navIconActive,
+              ]}
+            >
               📅
             </Text>
           </View>
@@ -514,6 +556,19 @@ export function AgentShell({
           />
         </View>
       ) : null}
+
+      <ActivityFeedSheet
+        visible={activityFeedOpen}
+        onClose={() => setActivityFeedOpen(false)}
+        onCallNew={handleCallNewAction}
+        onOpenLead={(leadId) => {
+          setLeadNavIds([leadId]);
+          setSelectedLeadId(leadId);
+          setActiveTab("leads");
+          setActiveDrawerId("leads");
+          setActiveUtility(null);
+        }}
+      />
 
       {viewingsLeadPicker ? (
         <ViewingsLeadPickerSheet
@@ -612,6 +667,26 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     marginLeft: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  globeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  globeBtnActive: {
+    backgroundColor: "rgba(13, 148, 136, 0.18)",
+  },
+  globeIcon: {
+    fontSize: 18,
+    opacity: 0.85,
+  },
+  globeIconActive: {
+    opacity: 1,
   },
   callNewBtn: {
     backgroundColor: "#E11D48", // Rose / red from original app
@@ -780,7 +855,8 @@ const styles = StyleSheet.create({
   navIconBox: {
     width: 32,
     height: 32,
-    borderRadius: 10,
+    borderRadius: 12,
+    overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -790,6 +866,13 @@ const styles = StyleSheet.create({
   navIcon: {
     fontSize: 16,
     color: "#5B6775",
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  /** Full-color emoji sit larger than text glyphs — keep them inside the rounded box. */
+  navIconEmoji: {
+    fontSize: 14,
+    lineHeight: 16,
   },
   navIconActive: {
     color: "#0F6B4C", // Canopy green

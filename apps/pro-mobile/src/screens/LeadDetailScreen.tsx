@@ -627,7 +627,7 @@ function ContactActionRow({
               onPress={onEdit}
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-              accessibilityLabel="Edit"
+              accessibilityLabel="Edit info"
             >
               <ContactPencilIcon />
             </TouchableOpacity>

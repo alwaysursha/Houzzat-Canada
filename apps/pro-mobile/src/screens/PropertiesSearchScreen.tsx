@@ -84,6 +84,7 @@ export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) 
   const [emailOpen, setEmailOpen] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [detailListing, setDetailListing] = useState<MobileListingCard | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const {
     isSaved,
@@ -181,7 +182,18 @@ export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) 
 
   const openDetail = useCallback((listing: MobileListingCard) => {
     setDetailListing(listing);
+    setDetailOpen(true);
   }, []);
+
+  const closeDetail = useCallback(() => {
+    setDetailOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (detailOpen) return;
+    const timer = setTimeout(() => setDetailListing(null), 450);
+    return () => clearTimeout(timer);
+  }, [detailOpen]);
 
   const handleToggleShortlist = useCallback(
     (mls: string) => {
@@ -540,14 +552,14 @@ export function PropertiesSearchScreen({ onBack }: PropertiesSearchScreenProps) 
       />
 
       <PropertyDetailModal
-        visible={detailListing != null}
+        visible={detailOpen}
         preview={detailListing}
         workspaceId={workspaceId}
         saved={detailListing ? isSaved(detailListing.mlsNumber) : false}
         savedPending={
           detailListing != null && pendingMls === detailListing.mlsNumber
         }
-        onClose={() => setDetailListing(null)}
+        onClose={closeDetail}
         onToggleShortlist={handleToggleShortlist}
         onSavedChange={(mls, saved) => setSavedLocal(mls, saved)}
       />

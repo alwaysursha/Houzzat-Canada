@@ -23,12 +23,35 @@ import {
   View,
 } from "react-native";
 import { HouzzatProWordmark } from "../components/BrandMark";
+import { ContactMailIcon } from "../components/ContactActionIcons";
 import {
   DRAWER_NAV_ITEMS,
   type DrawerItem,
 } from "../lib/drawer-nav-items";
 
 export { DRAWER_NAV_ITEMS, type DrawerItem };
+
+function DrawerNavIcon({
+  item,
+  active,
+}: {
+  item: DrawerItem;
+  active: boolean;
+}) {
+  const tone = active ? "#FFFFFF" : "rgba(255, 255, 255, 0.65)";
+  if (item.id === "inbox") {
+    return (
+      <View style={styles.navItemIconSlot}>
+        <ContactMailIcon color={tone} size={16} />
+      </View>
+    );
+  }
+  return (
+    <Text style={[styles.navItemIcon, active && styles.navItemIconActive]}>
+      {item.icon}
+    </Text>
+  );
+}
 
 interface NativeDrawerProps {
   visible: boolean;
@@ -59,8 +82,6 @@ export function NativeDrawer({
   onSignOut,
   onSwitchToAgentMode,
 }: NativeDrawerProps) {
-  if (!visible) return null;
-
   const handleSignOutPress = () => {
     Alert.alert(
       "Sign Out",
@@ -79,6 +100,8 @@ export function NativeDrawer({
     );
   };
 
+  // Always keep <Modal> mounted. Returning null while visible flips false
+  // unmounts mid-dismiss and can leave a ghost touch interceptor.
   return (
     <Modal
       transparent
@@ -135,9 +158,7 @@ export function NativeDrawer({
                   }}
                 >
                   {isActive && <View style={styles.activeBar} />}
-                  <Text style={[styles.navItemIcon, isActive && styles.navItemIconActive]}>
-                    {item.icon}
-                  </Text>
+                  <DrawerNavIcon item={item} active={isActive} />
                   <Text style={[styles.navItemLabel, isActive && styles.navItemLabelActive]}>
                     {item.label}
                   </Text>
@@ -296,6 +317,12 @@ const styles = StyleSheet.create({
     color: "rgba(255, 255, 255, 0.65)",
     width: 26,
     marginRight: 6,
+  },
+  navItemIconSlot: {
+    width: 26,
+    marginRight: 6,
+    alignItems: "flex-start",
+    justifyContent: "center",
   },
   navItemIconActive: {
     color: "#FFFFFF",

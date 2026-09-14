@@ -77,6 +77,17 @@ export const PROPERTY_TYPE_OPTIONS = [
 
 export const MAX_SHORTLIST_SIZE = 24;
 
+export interface MobilePropertyFactRow {
+  label: string;
+  value: string;
+}
+
+export interface MobilePropertyFactSection {
+  id: string;
+  title: string;
+  rows: MobilePropertyFactRow[];
+}
+
 export interface MobilePropertyDetail {
   mlsNumber: string;
   listingId: string;
@@ -106,6 +117,9 @@ export interface MobilePropertyDetail {
   soldAt: string | null;
   description: string;
   brokerageName: string | null;
+  brokeragePhone: string | null;
+  agentName: string | null;
+  agentCellPhone: string | null;
   taxes: number | null;
   maintenanceFee: number | null;
   yearBuilt: number | null;
@@ -114,5 +128,6 @@ export interface MobilePropertyDetail {
   imageUrls: string[];
   primaryImageUrl: string | null;
   openHouses: { startsAt: string; endsAt: string }[];
+  featureSections: MobilePropertyFactSection[];
   mlsDisclaimer: string;
 }

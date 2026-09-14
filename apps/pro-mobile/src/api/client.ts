@@ -118,6 +118,37 @@ export class MobileApiClient {
         return mapped;
       }
 
+      // Some routes return HTTP 200 with { ok:false, message } — treat as error.
+      if (
+        payload &&
+        typeof payload === "object" &&
+        "ok" in payload &&
+        (payload as { ok: unknown }).ok === false
+      ) {
+        const body = payload as { code?: unknown; message?: unknown };
+        const codeRaw = typeof body.code === "string" ? body.code : "SERVER_ERROR";
+        const code: ApiErrorCode =
+          codeRaw === "AUTH_REQUIRED" ||
+          codeRaw === "INVALID_CREDENTIALS" ||
+          codeRaw === "WORKSPACE_FORBIDDEN" ||
+          codeRaw === "NOT_FOUND" ||
+          codeRaw === "VALIDATION_ERROR" ||
+          codeRaw === "TIMEOUT" ||
+          codeRaw === "NETWORK_ERROR" ||
+          codeRaw === "SERVER_ERROR"
+            ? codeRaw
+            : "SERVER_ERROR";
+        return {
+          ok: false,
+          code,
+          message:
+            typeof body.message === "string" && body.message.trim()
+              ? body.message.trim()
+              : "Request failed",
+          details: payload,
+        };
+      }
+
       return {
         ok: true,
         data: payload as T,

@@ -123,16 +123,36 @@ export function unwrapPropertyDetail(
     saved: boolean;
   }>;
   if (env.ok && env.data?.detail) {
-    return { detail: env.data.detail, saved: Boolean(env.data.saved) };
+    return {
+      detail: normalizePropertyDetail(env.data.detail),
+      saved: Boolean(env.data.saved),
+    };
   }
   const direct = data as {
     detail?: MobilePropertyDetail;
     saved?: boolean;
   };
   if (direct.detail) {
-    return { detail: direct.detail, saved: Boolean(direct.saved) };
+    return {
+      detail: normalizePropertyDetail(direct.detail),
+      saved: Boolean(direct.saved),
+    };
   }
   return null;
+}
+
+function normalizePropertyDetail(
+  detail: MobilePropertyDetail,
+): MobilePropertyDetail {
+  return {
+    ...detail,
+    brokeragePhone: detail.brokeragePhone ?? null,
+    agentName: detail.agentName ?? null,
+    agentCellPhone: detail.agentCellPhone ?? null,
+    featureSections: Array.isArray(detail.featureSections)
+      ? detail.featureSections
+      : [],
+  };
 }
 
 export function unwrapSavedListingsBulk(data: unknown): string[] {

@@ -11,10 +11,26 @@ import {
   listingStatusLabel,
   propertyTypeLabel,
 } from "@/lib/listings/constants";
-import { formatListingSqftLabel, formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
+import {
+  buildMobilePropertyFeatureSections,
+  formatListingSqftLabel,
+  formatBedsPlusLabel,
+  parseListingFacts,
+} from "@/lib/listings/facts";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
 import type { ListingDetail } from "@/lib/listings/types";
 import type { ListingStatus } from "@prisma/client";
+
+export type MobilePropertyFactRow = {
+  label: string;
+  value: string;
+};
+
+export type MobilePropertyFactSection = {
+  id: string;
+  title: string;
+  rows: MobilePropertyFactRow[];
+};
 
 export type MobilePropertyDetailDto = {
   mlsNumber: string;
@@ -45,6 +61,9 @@ export type MobilePropertyDetailDto = {
   soldAt: string | null;
   description: string;
   brokerageName: string | null;
+  brokeragePhone: string | null;
+  agentName: string | null;
+  agentCellPhone: string | null;
   taxes: number | null;
   maintenanceFee: number | null;
   yearBuilt: number | null;
@@ -53,6 +72,7 @@ export type MobilePropertyDetailDto = {
   imageUrls: string[];
   primaryImageUrl: string | null;
   openHouses: { startsAt: string; endsAt: string }[];
+  featureSections: MobilePropertyFactSection[];
   mlsDisclaimer: string;
 };
 
@@ -118,6 +138,9 @@ export function buildMobilePropertyDetailDto(
       : null,
     description: listing.description?.trim() ?? "",
     brokerageName: listing.brokerageName,
+    brokeragePhone: facts?.listOfficePhone?.trim() || null,
+    agentName: facts?.listAgentFullName?.trim() || null,
+    agentCellPhone: facts?.listAgentDirectPhone?.trim() || null,
     taxes: listing.taxes,
     maintenanceFee: listing.maintenanceFee,
     yearBuilt: listing.yearBuilt,
@@ -129,6 +152,16 @@ export function buildMobilePropertyDetailDto(
       startsAt: oh.startsAt.toISOString(),
       endsAt: oh.endsAt.toISOString(),
     })),
+    featureSections: buildMobilePropertyFeatureSections({
+      facts,
+      propertyTypeLabel: propertyTypeLabel(listing.propertyType),
+      city: listing.city,
+      parkingSpaces: listing.parkingSpaces,
+      beds: listing.beds,
+      baths: listing.baths,
+      taxes: listing.taxes,
+      statusLabel: listingStatusLabel(listing.status, listing.transactionType),
+    }),
     mlsDisclaimer: MLS_DISCLAIMER,
   };
 }

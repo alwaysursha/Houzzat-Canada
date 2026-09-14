@@ -73,7 +73,16 @@ export function PropertyDetailModal({
   onToggleShortlist,
   onSavedChange,
 }: PropertyDetailModalProps) {
-  const mlsNumber = preview?.mlsNumber ?? "";
+  /**
+   * Keep last card while Modal animates closed. Never unmount <Modal> when
+   * parent clears preview in the same update as visible=false — that leaves a
+   * ghost native modal host that eats taps while scroll still works.
+   */
+  const heldPreviewRef = useRef<MobileListingCard | null>(preview);
+  if (preview) heldPreviewRef.current = preview;
+  const card = preview ?? heldPreviewRef.current;
+
+  const mlsNumber = card?.mlsNumber ?? "";
   const cacheKey =
     workspaceId && mlsNumber ? detailCacheKey(workspaceId, mlsNumber) : null;
   const cached = cacheKey ? propertyDetailCache.get(cacheKey) : undefined;
@@ -95,8 +104,8 @@ export function PropertyDetailModal({
   );
 
   const previewDetail = useMemo(
-    () => (preview ? cardToPreviewDetail(preview) : null),
-    [preview],
+    () => (card ? cardToPreviewDetail(card) : null),
+    [card],
   );
 
   const display = detail ?? (previewDetail as MobilePropertyDetail | null);
@@ -151,13 +160,21 @@ export function PropertyDetailModal({
     void loadDetail();
   }, [visible, mlsNumber, loadDetail]);
 
-  if (!preview) return null;
+  useEffect(() => {
+    if (visible) return;
+    const timer = setTimeout(() => {
+      heldPreviewRef.current = null;
+      setDetail(null);
+      setError(null);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [visible]);
 
   const images =
     display?.imageUrls && display.imageUrls.length > 0
       ? display.imageUrls
-      : preview.primaryImageUrl
-        ? [preview.primaryImageUrl]
+      : card?.primaryImageUrl
+        ? [card.primaryImageUrl]
         : [];
 
   return (
@@ -167,6 +184,9 @@ export function PropertyDetailModal({
       presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
+      {!card ? (
+        <View style={styles.root} />
+      ) : (
       <View style={styles.root}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.75}>
@@ -218,13 +238,13 @@ export function PropertyDetailModal({
             <View style={styles.priceRow}>
               <Text style={styles.price}>
                 {formatListingPrice(
-                  display?.listPrice ?? preview.listPrice,
-                  display?.transactionType ?? preview.transactionType,
+                  display?.listPrice ?? card.listPrice,
+                  display?.transactionType ?? card.transactionType,
                 )}
               </Text>
-              {(display?.timingLabel || preview.timingLabel) ? (
+              {(display?.timingLabel || card.timingLabel) ? (
                 <Text style={styles.timing}>
-                  {display?.timingLabel || preview.timingLabel}
+                  {display?.timingLabel || card.timingLabel}
                 </Text>
               ) : null}
             </View>
@@ -250,7 +270,7 @@ export function PropertyDetailModal({
                     listedAt: display.listedAt,
                     soldAt: display.soldAt,
                   })
-                : formatListingAddress(preview)}
+                : formatListingAddress(card)}
             </Text>
 
             {display?.statusLabel ? (
@@ -287,11 +307,11 @@ export function PropertyDetailModal({
                       listedAt: display.listedAt,
                       soldAt: display.soldAt,
                     })
-                  : formatListingBeds(preview)}{" "}
+                  : formatListingBeds(card)}{" "}
                 bed
               </Text>
               <Text style={styles.factSep}>·</Text>
-              <Text style={styles.fact}>{display?.baths ?? preview.baths} bath</Text>
+              <Text style={styles.fact}>{display?.baths ?? card.baths} bath</Text>
               {display?.parkingSpaces != null && display.parkingSpaces > 0 ? (
                 <>
                   <Text style={styles.factSep}>·</Text>
@@ -306,7 +326,7 @@ export function PropertyDetailModal({
               ) : null}
             </View>
 
-            <Text style={styles.mlsLine}>MLS® #{display?.mlsNumber ?? preview.mlsNumber}</Text>
+            <Text style={styles.mlsLine}>MLS® #{display?.mlsNumber ?? card.mlsNumber}</Text>
 
             <ShortlistButton
               saved={saved}
@@ -370,10 +390,60 @@ export function PropertyDetailModal({
             </View>
           ) : null}
 
-          {detail?.brokerageName ? (
+          {detail?.featureSections?.map((section) =>
+            section.rows.length > 0 ? (
+              <View key={section.id} style={styles.section}>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <View style={styles.featureGrid}>
+                  {section.rows.map((row) => (
+                    <View
+                      key={`${section.id}-${row.label}`}
+                      style={styles.featureCell}
+                    >
+                      <Text style={styles.featureLabel}>{row.label}</Text>
+                      <Text
+                        style={[
+                          styles.featureValue,
+                          row.label === "Virtual Tour" && styles.featureLink,
+                        ]}
+                        numberOfLines={row.label === "Legal Description" ? 6 : 3}
+                      >
+                        {row.value}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null,
+          )}
+
+          {detail &&
+          (detail.brokerageName ||
+            detail.brokeragePhone ||
+            detail.agentName ||
+            detail.agentCellPhone) ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Listing brokerage</Text>
-              <Text style={styles.bodyText}>{detail.brokerageName}</Text>
+              <View style={styles.brokerageBlock}>
+                {detail.brokerageName ? (
+                  <Text style={styles.brokerageName}>{detail.brokerageName}</Text>
+                ) : null}
+                {detail.brokeragePhone ? (
+                  <FactRow
+                    label="Brokerage number"
+                    value={detail.brokeragePhone}
+                  />
+                ) : null}
+                {detail.agentName ? (
+                  <FactRow label="Agent name" value={detail.agentName} />
+                ) : null}
+                {detail.agentCellPhone ? (
+                  <FactRow
+                    label="Agent cell number"
+                    value={detail.agentCellPhone}
+                  />
+                ) : null}
+              </View>
             </View>
           ) : null}
 
@@ -399,6 +469,7 @@ export function PropertyDetailModal({
           ) : null}
         </ScrollView>
       </View>
+      )}
     </Modal>
   );
 }
@@ -606,6 +677,39 @@ const styles = StyleSheet.create({
   factsGrid: {
     gap: 8,
   },
+  featureGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    columnGap: 16,
+    rowGap: 12,
+  },
+  featureCell: {
+    width: "47%",
+    gap: 2,
+  },
+  featureLabel: {
+    fontSize: 11,
+    color: "#94A3B8",
+    fontWeight: "600",
+  },
+  featureValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1E2A38",
+    lineHeight: 18,
+  },
+  featureLink: {
+    color: "#0F766E",
+  },
+  brokerageBlock: {
+    gap: 8,
+  },
+  brokerageName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1E2A38",
+    marginBottom: 2,
+  },
   factRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -619,6 +723,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#1E2A38",
+    flexShrink: 1,
+    textAlign: "right",
   },
   coordsText: {
     fontSize: 12,

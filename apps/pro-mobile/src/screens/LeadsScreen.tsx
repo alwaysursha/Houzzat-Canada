@@ -20,11 +20,13 @@
  * - Real V2 backend data, server-side pagination, search, caching, pull-to-refresh
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -210,6 +212,8 @@ export function LeadsScreen({
   const [viewFilter, setViewFilter] = useState<LeadViewFilter>("all");
   const [sortKey, setSortKey] = useState<LeadSortKey>("lastLogin");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersBackdropOpacity = useRef(new Animated.Value(0)).current;
+  const filtersSheetTranslateY = useRef(new Animated.Value(56)).current;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -348,6 +352,45 @@ export function LeadsScreen({
     SORT_OPTIONS.find((o) => o.id === sortKey)?.label ?? "Last Login";
   const viewLabel =
     VIEW_FILTERS.find((o) => o.id === viewFilter)?.label ?? "All leads";
+
+  const openFilters = useCallback(() => {
+    filtersBackdropOpacity.setValue(0);
+    filtersSheetTranslateY.setValue(56);
+    setFiltersOpen(true);
+  }, [filtersBackdropOpacity, filtersSheetTranslateY]);
+
+  const closeFilters = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(filtersBackdropOpacity, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(filtersSheetTranslateY, {
+        toValue: 56,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) setFiltersOpen(false);
+    });
+  }, [filtersBackdropOpacity, filtersSheetTranslateY]);
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+    Animated.parallel([
+      Animated.timing(filtersBackdropOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(filtersSheetTranslateY, {
+        toValue: 0,
+        duration: 280,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [filtersOpen, filtersBackdropOpacity, filtersSheetTranslateY]);
 
   const renderLeadCard = ({ item }: { item: MobileLeadSummary }) => {
     const statusStyle = getStatusStyle(item.status);
@@ -578,7 +621,7 @@ export function LeadsScreen({
               styles.filtersBtn,
               activeFilterCount > 0 && styles.filtersBtnActive,
             ]}
-            onPress={() => setFiltersOpen(true)}
+            onPress={openFilters}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
           >
@@ -596,17 +639,27 @@ export function LeadsScreen({
 
       <Modal
         visible={filtersOpen}
-        animationType="slide"
+        animationType="none"
         transparent
-        onRequestClose={() => setFiltersOpen(false)}
+        onRequestClose={closeFilters}
       >
         <View style={styles.modalRoot}>
-          <TouchableOpacity
-            style={styles.modalBackdrop}
-            activeOpacity={1}
-            onPress={() => setFiltersOpen(false)}
-          />
-          <View style={styles.modalSheet}>
+          <Animated.View
+            style={[styles.modalBackdrop, { opacity: filtersBackdropOpacity }]}
+          >
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={closeFilters}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss filters"
+            />
+          </Animated.View>
+          <Animated.View
+            style={[
+              styles.modalSheet,
+              { transform: [{ translateY: filtersSheetTranslateY }] },
+            ]}
+          >
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Filters</Text>
 
@@ -660,12 +713,12 @@ export function LeadsScreen({
 
             <TouchableOpacity
               style={styles.modalDone}
-              onPress={() => setFiltersOpen(false)}
+              onPress={closeFilters}
               activeOpacity={0.8}
             >
               <Text style={styles.modalDoneText}>Done</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 

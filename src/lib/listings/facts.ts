@@ -43,6 +43,33 @@ export type ListingFacts = {
   inclusions?: string | null;
   exclusions?: string | null;
   virtualTourUrl?: string | null;
+  /** PropTx / RESO listing contacts (IDX-permitted when present). */
+  listAgentFullName?: string | null;
+  listOfficePhone?: string | null;
+  listAgentDirectPhone?: string | null;
+  /** Amenity flags commonly shown on MLS detail sheets. */
+  fireplacesTotal?: number | null;
+  furnished?: boolean | null;
+  fixerUpper?: boolean | null;
+  golf?: boolean | null;
+  horses?: boolean | null;
+  greenFeature?: boolean | null;
+  garageYn?: boolean | null;
+  airConditioningYn?: boolean | null;
+  heatingYn?: boolean | null;
+  elevator?: boolean | null;
+  spa?: boolean | null;
+  propertyAttachedYn?: boolean | null;
+  newConstructionYn?: boolean | null;
+  seniorCommunityYn?: boolean | null;
+  facingDirection?: string | null;
+  foundationDetails?: string[] | null;
+  propertySubType?: string | null;
+  roomsTotal?: number | null;
+  bathsTotal?: number | null;
+  occupancyType?: string | null;
+  standardStatus?: string | null;
+  legalDescription?: string | null;
 };
 
 export type ListingFactRow = {
@@ -276,6 +303,172 @@ export function buildListingFactSections(input: {
   pushRow(extras, "Virtual tour", f.virtualTourUrl);
   if (extras.length) {
     sections.push({ id: "extras", title: "Inclusions & extras", rows: extras });
+  }
+
+  return sections;
+}
+
+/**
+ * Mobile / agent detail sheet sections matching common MLS layout:
+ * Amenities → General Features → Interior Features → Exterior Features.
+ * Empty rows are omitted; empty sections are dropped.
+ */
+export function buildMobilePropertyFeatureSections(input: {
+  facts?: ListingFacts | null;
+  propertyTypeLabel?: string | null;
+  city?: string | null;
+  parkingSpaces?: number | null;
+  beds?: number | null;
+  baths?: number | null;
+  taxes?: number | null;
+  statusLabel?: string | null;
+}): ListingFactSection[] {
+  const f = input.facts ?? {};
+  const sections: ListingFactSection[] = [];
+
+  const amenities: ListingFactRow[] = [];
+  pushRow(
+    amenities,
+    "Fire Places",
+    f.fireplacesTotal != null
+      ? String(f.fireplacesTotal)
+      : yn(f.fireplace),
+  );
+  pushRow(amenities, "Fixer Upper", yn(f.fixerUpper));
+  pushRow(amenities, "Furnished", yn(f.furnished));
+  pushRow(
+    amenities,
+    "Garage",
+    yn(f.garageYn) ?? (f.garageType?.trim() ? "Yes" : null),
+  );
+  pushRow(amenities, "Golf", yn(f.golf));
+  pushRow(amenities, "Green", yn(f.greenFeature));
+  pushRow(amenities, "Horses", yn(f.horses));
+  pushRow(amenities, "Allow Pets", joinList(f.petsAllowed));
+  pushRow(amenities, "Building amenities", joinList(f.associationAmenities));
+  if (amenities.length) {
+    sections.push({ id: "amenities", title: "Amenities", rows: amenities });
+  }
+
+  const general: ListingFactRow[] = [];
+  pushRow(general, "Sewer", joinList(f.sewer));
+  pushRow(general, "Cooling", joinList(f.cooling));
+  pushRow(general, "Roof", joinList(f.roof));
+  pushRow(general, "Architectural Style", joinList(f.architecturalStyle));
+  pushRow(general, "Pool Features", joinList(f.poolFeatures));
+  pushRow(general, "Construction Materials", joinList(f.constructionMaterials));
+  pushRow(general, "Heater Type", f.heatType);
+  pushRow(
+    general,
+    "Parking Spaces",
+    input.parkingSpaces != null ? String(input.parkingSpaces) : null,
+  );
+  pushRow(general, "Property Subtype", f.propertySubType);
+  pushRow(
+    general,
+    "Tax Year",
+    f.taxYear != null ? String(f.taxYear) : null,
+  );
+  pushRow(general, "Lot Depth", numLabel(f.lotDepth));
+  pushRow(general, "New Construction", yn(f.newConstructionYn));
+  pushRow(general, "Property Type", input.propertyTypeLabel);
+  pushRow(general, "Attached Garage", yn(f.garageYn));
+  pushRow(general, "Facing Direction", f.facingDirection);
+  pushRow(general, "Garage Y/N", yn(f.garageYn));
+  pushRow(general, "Total Rooms", numLabel(f.roomsTotal));
+  pushRow(general, "Status", input.statusLabel);
+  pushRow(general, "City", input.city);
+  pushRow(general, "Senior Community Y/N", yn(f.seniorCommunityYn));
+  pushRow(general, "Lot Size Units", f.lotSizeUnits);
+  pushRow(general, "Property Attached Y/N", yn(f.propertyAttachedYn));
+  pushRow(
+    general,
+    "Tax Annual Amount",
+    input.taxes != null
+      ? input.taxes.toLocaleString("en-CA", {
+          maximumFractionDigits: 2,
+        })
+      : null,
+  );
+  pushRow(general, "Virtual Tour", f.virtualTourUrl);
+  pushRow(general, "Standard Status", f.standardStatus);
+  pushRow(general, "Occupancy Type", f.occupancyType);
+  pushRow(general, "Legal Description", f.legalDescription);
+  if (general.length) {
+    sections.push({
+      id: "general",
+      title: "General Features",
+      rows: general,
+    });
+  }
+
+  const interior: ListingFactRow[] = [];
+  pushRow(interior, "Interior Amenities", joinList(f.interiorFeatures));
+  pushRow(interior, "Basement", joinList(f.basement));
+  pushRow(interior, "Heat Source", f.heatSource);
+  pushRow(
+    interior,
+    "Basement (Y/N)",
+    f.basement?.length ? "Yes" : null,
+  );
+  pushRow(interior, "Air Conditioning Y/N", yn(f.airConditioningYn));
+  pushRow(interior, "Heating Y/N", yn(f.heatingYn) ?? (f.heatType ? "Yes" : null));
+  pushRow(interior, "Fireplace Y/N", yn(f.fireplace));
+  pushRow(
+    interior,
+    "Total Bedrooms",
+    formatBedsPlusLabel(input.beds, f) ??
+      (input.beds != null ? String(input.beds) : null),
+  );
+  pushRow(interior, "Elevator?", yn(f.elevator));
+  pushRow(
+    interior,
+    "Total Baths",
+    f.bathsTotal != null
+      ? String(f.bathsTotal)
+      : input.baths != null
+        ? String(input.baths)
+        : null,
+  );
+  pushRow(
+    interior,
+    "Bedrooms",
+    formatBedsPlusLabel(input.beds, f) ??
+      (input.beds != null ? String(input.beds) : null),
+  );
+  pushRow(
+    interior,
+    "Living Area Range",
+    formatLivingAreaRangeLabel(f.livingAreaRange),
+  );
+  if (interior.length) {
+    sections.push({
+      id: "interior",
+      title: "Interior Features",
+      rows: interior,
+    });
+  }
+
+  const exterior: ListingFactRow[] = [];
+  pushRow(exterior, "Parking Features", joinList(f.parkingFeatures));
+  pushRow(
+    exterior,
+    "Total Parking",
+    input.parkingSpaces != null ? String(input.parkingSpaces) : null,
+  );
+  pushRow(exterior, "Garage Type", f.garageType);
+  pushRow(exterior, "Foundation Details", joinList(f.foundationDetails));
+  pushRow(exterior, "Spa", yn(f.spa));
+  pushRow(exterior, "Waterfront Y/N", yn(f.waterfront));
+  pushRow(exterior, "Covered Spaces", numLabel(f.coveredSpaces));
+  pushRow(exterior, "LotDimensionsSource", f.lotSizeSource);
+  pushRow(exterior, "Exterior Features", joinList(f.exteriorFeatures));
+  if (exterior.length) {
+    sections.push({
+      id: "exterior",
+      title: "Exterior Features",
+      rows: exterior,
+    });
   }
 
   return sections;

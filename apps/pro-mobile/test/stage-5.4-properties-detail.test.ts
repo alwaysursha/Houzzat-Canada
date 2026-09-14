@@ -136,9 +136,25 @@ async function runStage54Tests() {
   {
     const modal = readFileSync(DETAIL_MODAL, "utf8");
     const cache = readFileSync(CACHE, "utf8");
+    const build = readFileSync(BUILD_DETAIL, "utf8");
+    const drawer = readFileSync(
+      join(REPO_ROOT, "apps/pro-mobile/src/components/NativeDrawer.tsx"),
+      "utf8",
+    );
     assert.ok(modal.includes("PropertyDetailModal"));
     assert.ok(modal.includes("preview"));
     assert.ok(modal.includes("propertyDetailCache"));
+    assert.ok(modal.includes("featureSections"));
+    assert.ok(modal.includes("Listing brokerage"));
+    assert.ok(modal.includes("Brokerage number"));
+    assert.ok(modal.includes("Agent name"));
+    assert.ok(modal.includes("Agent cell number"));
+    assert.ok(modal.includes("heldPreviewRef"));
+    assert.equal(modal.includes("if (!preview) return null"), false);
+    assert.equal(drawer.includes("if (!visible) return null"), false);
+    assert.ok(build.includes("buildMobilePropertyFeatureSections"));
+    assert.ok(build.includes("brokeragePhone"));
+    assert.ok(build.includes("agentCellPhone"));
     assert.ok(cache.includes("propertyDetailCache"));
     assert.ok(cache.includes("savedListingsCache"));
     console.log("  -> PASS");

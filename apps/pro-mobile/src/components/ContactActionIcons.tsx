@@ -15,8 +15,12 @@ export function ContactPencilIcon({
   color?: string;
   size?: number;
 }) {
-  // Lucide Pencil: thin outline body + tip (not a filled mechanical stylus).
-  const stroke = Math.max(1.4, size * 0.1);
+  // SF Symbol–style "square and pencil" — clear “edit info” affordance.
+  const stroke = Math.max(1.5, size * 0.1);
+  const pad = size * 0.58;
+  const pencilW = Math.max(2.75, size * 0.18);
+  const pencilH = size * 0.72;
+
   return (
     <View
       style={[styles.box, { width: size, height: size }]}
@@ -24,42 +28,58 @@ export function ContactPencilIcon({
     >
       <View
         style={{
-          width: size * 0.28,
-          height: size * 0.62,
+          position: "absolute",
+          width: pad,
+          height: pad,
+          top: size * 0.04,
+          left: size * 0.04,
           borderWidth: stroke,
           borderColor: color,
-          borderRadius: 1.5,
+          borderRadius: Math.max(2, size * 0.12),
           backgroundColor: "transparent",
-          transform: [{ rotate: "-45deg" }],
         }}
       />
       <View
         style={{
           position: "absolute",
-          width: 0,
-          height: 0,
-          borderLeftWidth: size * 0.14,
-          borderRightWidth: size * 0.14,
-          borderTopWidth: size * 0.2,
-          borderLeftColor: "transparent",
-          borderRightColor: "transparent",
-          borderTopColor: color,
-          bottom: size * 0.06,
-          left: size * 0.1,
+          right: size * 0.02,
+          bottom: size * 0.02,
+          width: pencilW,
+          height: pencilH,
+          alignItems: "center",
           transform: [{ rotate: "-45deg" }],
         }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          width: size * 0.22,
-          height: stroke,
-          backgroundColor: color,
-          top: size * 0.16,
-          right: size * 0.14,
-          transform: [{ rotate: "-45deg" }],
-        }}
-      />
+      >
+        <View
+          style={{
+            width: pencilW,
+            height: size * 0.12,
+            backgroundColor: color,
+            borderTopLeftRadius: 1,
+            borderTopRightRadius: 1,
+          }}
+        />
+        <View
+          style={{
+            width: pencilW,
+            height: size * 0.42,
+            backgroundColor: color,
+            marginTop: 1,
+          }}
+        />
+        <View
+          style={{
+            width: 0,
+            height: 0,
+            borderLeftWidth: pencilW / 2,
+            borderRightWidth: pencilW / 2,
+            borderTopWidth: size * 0.16,
+            borderLeftColor: "transparent",
+            borderRightColor: "transparent",
+            borderTopColor: color,
+          }}
+        />
+      </View>
     </View>
   );
 }
@@ -278,23 +298,6 @@ const styles = StyleSheet.create({
   },
   muted: {
     opacity: 0.55,
-  },
-  pencilShaft: {
-    transform: [{ rotate: "-45deg" }],
-  },
-  pencilEraser: {
-    position: "absolute",
-    borderRadius: 1,
-    backgroundColor: "transparent",
-    transform: [{ rotate: "-45deg" }],
-  },
-  pencilTip: {
-    position: "absolute",
-    width: 0,
-    height: 0,
-    borderLeftColor: "transparent",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "-45deg" }],
   },
   bellDome: {
     width: 10,
