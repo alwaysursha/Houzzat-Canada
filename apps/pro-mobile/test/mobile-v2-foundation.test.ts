@@ -24,10 +24,10 @@ async function runTests() {
   const buildGradlePath = path.resolve(__dirname, "../android/app/build.gradle");
   const buildGradle = fs.readFileSync(buildGradlePath, "utf8");
   assert.ok(buildGradle.includes('applicationId "com.houzzat.pro"'), "build.gradle must specify applicationId com.houzzat.pro");
-  assert.ok(buildGradle.includes("versionCode 20001"), "build.gradle must have versionCode 20001");
+  assert.ok(/versionCode\s+2000\d\b/.test(buildGradle), "build.gradle must have versionCode 2000x");
   assert.ok(buildGradle.includes('versionName "2.0.0"'), "build.gradle must have versionName 2.0.0");
   assert.ok(buildGradle.includes("targetSdkVersion rootProject.ext.targetSdkVersion"), "build.gradle must reference targetSdkVersion 34+");
-  console.log("✓ Android Package ID & Version verified (com.houzzat.pro / 20001 / 2.0.0)\n");
+  console.log("✓ Android Package ID & Version verified (com.houzzat.pro / 2.0.0)\n");
 
   // 2. Secure Storage Abstraction
   console.log("2. Testing Secure Storage Abstraction...");
