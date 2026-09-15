@@ -26,24 +26,7 @@ class FcmModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun ensureProAlertsChannel(promise: Promise) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val mgr =
-                    reactContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                val existing = mgr.getNotificationChannel(CHANNEL_ID)
-                if (existing == null) {
-                    val channel = NotificationChannel(
-                        CHANNEL_ID,
-                        CHANNEL_NAME,
-                        NotificationManager.IMPORTANCE_HIGH,
-                    ).apply {
-                        description = CHANNEL_DESCRIPTION
-                        setShowBadge(true)
-                        lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
-                        enableVibration(true)
-                    }
-                    mgr.createNotificationChannel(channel)
-                }
-            }
+            ensureChannel(reactContext)
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("CHANNEL_FAILED", e.message, e)
@@ -132,6 +115,24 @@ class FcmModule(private val reactContext: ReactApplicationContext) :
             ctx
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                 .emit("houzzatpro_fcm_opened", map)
+        }
+
+        fun ensureChannel(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+            val mgr =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (mgr.getNotificationChannel(CHANNEL_ID) != null) return
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = CHANNEL_DESCRIPTION
+                setShowBadge(true)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
+                enableVibration(true)
+            }
+            mgr.createNotificationChannel(channel)
         }
 
         fun extrasToMap(extras: Bundle?): WritableMap? {

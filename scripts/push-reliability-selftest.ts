@@ -21,7 +21,7 @@ const pushHrefFile = readFileSync(
   "utf8",
 );
 const proStartup = readFileSync(
-  join(root, "src/components/mobile/HouzzatProStartup.tsx"),
+  join(root, "src/components/mobile/ProWorkspaceBootstrap.tsx"),
   "utf8",
 );
 
@@ -165,6 +165,19 @@ async function main() {
     body: "b",
   });
   assert.equal(ret, undefined);
+
+  const pushSrc = readFileSync(
+    join(root, "src/lib/notifications/push.ts"),
+    "utf8",
+  );
+  assert.ok(
+    pushSrc.includes("logPushDeliveryEnqueue"),
+    "sendPushToUser must emit [push:delivery] enqueue",
+  );
+  assert.ok(
+    pushSrc.includes("logPushDeliveryResult"),
+    "deliverPushToUser must emit [push:delivery] result",
+  );
 
   console.log("push-reliability-selftest: OK");
 }

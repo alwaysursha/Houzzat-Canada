@@ -11,6 +11,7 @@ import {
   getFcmToken,
   isFcmBridgeAvailable,
 } from "./fcm-bridge";
+import { ensureAndroidPostNotificationsPermission } from "./os-notification-permission";
 
 const PUSH_TOKEN_KEY = "houzzat_pro_v2_push_token";
 const PUSH_USER_KEY = "houzzat_pro_v2_push_user";
@@ -48,6 +49,8 @@ export async function registerHouzzatProPush(userId: string): Promise<void> {
   }
 
   registerInFlight = (async () => {
+    // Prompt (API 33+) before getToken so a grant cannot land on an unregistered token.
+    await ensureAndroidPostNotificationsPermission().catch(() => undefined);
     await ensureProAlertsChannel();
     const token = await getFcmToken();
     if (!token) return;

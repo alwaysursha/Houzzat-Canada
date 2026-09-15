@@ -3,6 +3,7 @@
  */
 
 import { useEffect } from "react";
+import { AppState } from "react-native";
 import {
   getInitialPushNotification,
   subscribeFcmOpened,
@@ -23,6 +24,17 @@ export function PushRegistrationBootstrap() {
   useEffect(() => {
     if (!active || !userId) return;
     void registerHouzzatProPush(userId);
+  }, [active, userId]);
+
+  // If the user grants POST_NOTIFICATIONS in Settings, re-get token + upsert now.
+  useEffect(() => {
+    if (!active || !userId) return;
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") {
+        void registerHouzzatProPush(userId);
+      }
+    });
+    return () => sub.remove();
   }, [active, userId]);
 
   useEffect(() => {

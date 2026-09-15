@@ -9,7 +9,8 @@
     "ios": "react-native run-ios",
     "bundle:android": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx test/mobile-v2-foundation.test.ts"
+    "test": "node --import tsx test/mobile-v2-foundation.test.ts",
+    "test:push-permission": "node --import tsx test/stage-5.11-android-notification-permission.test.ts && node --import tsx test/stage-5.11-push-registration.test.ts && node --import tsx test/stage-5.11-foreground-push-display.test.ts"
   },
   "dependencies": {
     "@babel/runtime": "^8.0.0",

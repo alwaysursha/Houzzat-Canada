@@ -149,8 +149,9 @@ function runStage511Tests() {
     assert.equal(existsSync(FCM_SERVICE), true);
     const svc = readFileSync(FCM_SERVICE, "utf8");
     assert.ok(svc.includes("onNewToken"));
-    // Foreground: no local NotificationCompat post
-    assert.equal(svc.includes("NotificationCompat"), false);
+    assert.ok(svc.includes("NotificationCompat"));
+    assert.ok(svc.includes("isAppInForeground"));
+    assert.ok(svc.includes("houzzat_pro_alerts") || svc.includes("FcmModule.CHANNEL_ID"));
     console.log("  -> PASS");
   }
 
@@ -163,6 +164,12 @@ function runStage511Tests() {
     assert.ok(push.includes("/push/register"));
     assert.ok(push.includes("/push/unregister"));
     assert.ok(push.includes("unregisterHouzzatProPushForLogout"));
+    assert.ok(push.includes("ensureAndroidPostNotificationsPermission"));
+    const registerStart = push.indexOf("export async function registerHouzzatProPush");
+    const registerBody = push.slice(registerStart);
+    const permIdx = registerBody.indexOf("ensureAndroidPostNotificationsPermission");
+    const tokenIdx = registerBody.indexOf("getFcmToken");
+    assert.ok(permIdx > 0 && tokenIdx > permIdx);
     assert.ok(auth.includes("unregisterHouzzatProPushForLogout"));
     assert.ok(app.includes("PushRegistrationBootstrap"));
     console.log("  -> PASS");
