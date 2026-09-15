@@ -21,6 +21,7 @@ import {
 } from "@/lib/auth/verify-email-provider";
 import { VERIFY_EMAIL_PROVIDER_ID } from "@/lib/auth/verify-email-constants";
 import { isAdminRole, isAgentRole, resolveActiveMode } from "@/lib/roles";
+import { scheduleNotifyCustomerCameOnlineFromSignIn } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 import { validateTenantCredentialsAuth } from "@/lib/tenancy/tenant-auth-boundary";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
@@ -390,12 +391,16 @@ export const {
           });
           if (dbUser) {
             applyProfileToToken(token, dbUser, email);
-            void recordActivityEvent({
+            await recordActivityEvent({
               type: "SIGN_IN",
               userId: dbUser.id,
               path: "/auth/sign-in",
               title: "Signed in",
             });
+            scheduleNotifyCustomerCameOnlineFromSignIn(
+              dbUser.id,
+              dbUser.role,
+            );
           } else {
             token.sub = user.id;
             token.email = email;

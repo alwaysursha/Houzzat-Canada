@@ -3,12 +3,19 @@ import { openLeadHandoffHref } from "@/lib/agent/lead-profile-query";
 import { SITE_URL } from "@/lib/constants";
 import { sendNotification } from "@/lib/notifications";
 import {
+  hasRecentLeadOnlineSignIn,
+  markLeadOnlineSignIn,
+  shouldEmitLeadOnline,
+  uniqueAssignedAgentIds,
+  type LeadOnlineSource,
+} from "@/lib/notifications/lead-online-gate";
+import {
   isStaffEmailCategoryEnabled,
   type StaffNotificationCategory,
 } from "@/lib/notifications/staff-categories";
 import { sendPushToUser, sendPushToUsers } from "@/lib/notifications/push";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
-import { isAgentRole } from "@/lib/roles";
+import { isAgentRole, isConsumerRole } from "@/lib/roles";
 import {
   authorizeStaffRecipientForLead,
   authorizeStaffRecipientForTask,
@@ -308,15 +315,46 @@ export function notifyNewLeadCaptured(
   });
 }
 
-/** First beacon after the 3-minute presence window — assigned agents only. */
+/** Assigned-agent lead_online (sign-in or first beacon after the 3-minute window). */
 export async function notifyCustomerCameOnline(
   userId: string,
   previousLastSeenAt: Date | null,
+  opts?: { source?: LeadOnlineSource; role?: string | null },
 ) {
-  const wasOffline =
-    !previousLastSeenAt ||
-    Date.now() - previousLastSeenAt.getTime() >= ONLINE_MS;
-  if (!wasOffline) return;
+  const source: LeadOnlineSource = opts?.source ?? "beacon";
+
+  if (source === "sign-in") {
+    if (
+      !shouldEmitLeadOnline({
+        source: "sign-in",
+        role: opts?.role,
+        previousLastSeenAt: null,
+        recentSignInAt: null,
+      })
+    ) {
+      return;
+    }
+  } else {
+    if (hasRecentLeadOnlineSignIn(userId)) return;
+    if (
+      !shouldEmitLeadOnline({
+        source: "beacon",
+        previousLastSeenAt,
+        recentSignInAt: null,
+      })
+    ) {
+      return;
+    }
+    const recentSignIn = await prisma.activityEvent.findFirst({
+      where: {
+        userId,
+        type: "SIGN_IN",
+        createdAt: { gte: new Date(Date.now() - ONLINE_MS) },
+      },
+      select: { id: true },
+    });
+    if (recentSignIn) return;
+  }
 
   const leads = await prisma.lead.findMany({
     where: { customerId: userId, assignedAgentId: { not: null } },
@@ -336,9 +374,9 @@ export async function notifyCustomerCameOnline(
     "A client";
 
   const seen = new Set<string>();
-  for (const lead of leads) {
-    const agentId = lead.assignedAgentId;
-    if (!agentId || agentId === userId || seen.has(agentId)) continue;
+  for (const agentId of uniqueAssignedAgentIds(leads, userId)) {
+    const lead = leads.find((row) => row.assignedAgentId === agentId);
+    if (!lead) continue;
     const ok = await authorizeStaffRecipientForLead({
       userId: agentId,
       leadId: lead.id,
@@ -388,18 +426,42 @@ export async function notifyCustomerCameOnline(
   }
 }
 
+function scheduleLeadOnlineWork(
+  userId: string,
+  previousLastSeenAt: Date | null,
+  source: LeadOnlineSource,
+  role?: string | null,
+): void {
+  scheduleWorkerSideEffect(
+    notifyCustomerCameOnline(userId, previousLastSeenAt, { source, role }).catch(
+      (error) => {
+        console.error("[staff-notify] lead_online/hot failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    ),
+  );
+}
+
 /** Enqueue presence / hot-pipeline pushes without blocking the beacon response. */
 export function scheduleNotifyCustomerCameOnline(
   userId: string,
   previousLastSeenAt: Date | null,
 ): void {
-  scheduleWorkerSideEffect(
-    notifyCustomerCameOnline(userId, previousLastSeenAt).catch((error) => {
-      console.error("[staff-notify] lead_online/hot failed", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }),
-  );
+  scheduleLeadOnlineWork(userId, previousLastSeenAt, "beacon");
+}
+
+/**
+ * Consumer sign-in → lead_online. BUYER/SELLER only.
+ * Stamps the dedupe window so the immediate ActivityBeacon cannot send twice.
+ */
+export function scheduleNotifyCustomerCameOnlineFromSignIn(
+  userId: string,
+  role: string | null | undefined,
+): void {
+  if (!userId || !isConsumerRole(role)) return;
+  markLeadOnlineSignIn(userId);
+  scheduleLeadOnlineWork(userId, null, "sign-in", role);
 }
 
 /** Morning briefing of open overdue tasks (runs with the digest cron). */

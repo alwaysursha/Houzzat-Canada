@@ -34,6 +34,9 @@ function testCentralHelpersExist() {
   assert.ok(staffEvents.includes("export function scheduleStaffNotificationEmail"));
   assert.ok(staffEvents.includes("export function scheduleNewLeadStaffEmail"));
   assert.ok(staffEvents.includes("export function scheduleNotifyCustomerCameOnline"));
+  assert.ok(
+    staffEvents.includes("export function scheduleNotifyCustomerCameOnlineFromSignIn"),
+  );
   assert.ok(staffEvents.includes("scheduleWorkerSideEffect"));
   assert.ok(staffEvents.includes("openLeadHandoffHref"));
 }

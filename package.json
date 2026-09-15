@@ -29,6 +29,7 @@
     "signup:selftest": "node --import tsx scripts/signup-reliability-selftest.ts",
     "signup-lead-push:selftest": "node --import tsx scripts/signup-lead-push-selftest.ts",
     "staff-notify:selftest": "node --import tsx scripts/staff-notify-emitters-selftest.ts",
+    "lead-online-signin:selftest": "node --import tsx scripts/lead-online-signin-selftest.ts",
     "staff-prefs:selftest": "node --import tsx scripts/staff-prefs-selftest.ts",
     "new-lead-email:selftest": "node --import tsx scripts/new-lead-email-selftest.ts",
     "tenancy:baseline": "node --import tsx scripts/tenancy-baseline.ts",
