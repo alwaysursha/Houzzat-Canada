@@ -1,5 +1,12 @@
 import { getListingProvider } from "@/lib/listings/provider";
 import type { ListingDetail } from "@/lib/listings/types";
+import {
+  logSsrHang,
+  readSsrHangCorrelation,
+  SSR_HANG_EVENT,
+  ssrHangErrorFields,
+  type SsrHangNeonLookup,
+} from "@/lib/observability/ssr-hang-log";
 import { prisma } from "@/lib/prisma";
 import {
   createPrismaPropTxProvenanceStore,
@@ -139,44 +146,68 @@ export async function loadListingForDetailPage(
   mlsNumberRaw: string,
   options?: LoadListingForDetailPageOptions,
 ): Promise<ListingDetail | null> {
-  const mlsNumber = mlsNumberRaw.trim().toUpperCase();
-  if (!mlsNumber) return null;
+  const startedAt = Date.now();
+  const correlation = await readSsrHangCorrelation();
+  logSsrHang({ event: SSR_HANG_EVENT.listingStart, ...correlation });
 
-  const onDemand = options?.onDemandLookup ?? lookupAndUpsertOnDemand;
-  const getByMls =
-    options?.getByMlsForDetailPage ??
-    ((mls: string) => getListingProvider().getByMlsForDetailPage(mls));
+  const finish = (neon: SsrHangNeonLookup, listing: ListingDetail | null) => {
+    logSsrHang({
+      event: SSR_HANG_EVENT.listingSuccess,
+      ms: Date.now() - startedAt,
+      neon,
+      ...correlation,
+    });
+    return listing;
+  };
 
-  let listing = await getByMls(mlsNumber);
+  try {
+    const mlsNumber = mlsNumberRaw.trim().toUpperCase();
+    if (!mlsNumber) return finish("SKIP", null);
 
-  if (listing) {
-    return applyDetailEntitlementGate(listing, options);
-  }
+    const onDemand = options?.onDemandLookup ?? lookupAndUpsertOnDemand;
+    const getByMls =
+      options?.getByMlsForDetailPage ??
+      ((mls: string) => getListingProvider().getByMlsForDetailPage(mls));
 
-  const enforce = isWebListingDetailEntitlementEnforcementEnabled(
-    options?.entitlementFilteringEnabled,
-  );
-  if (enforce) {
-    const propTxOrganizationId =
-      await resolveCanonicalPropTxOrganizationId(options);
-    if (
-      !propTxOrganizationId ||
-      !mayInvokePropTxOnDemandForDetail({
-        entitlementFilteringEnabled: options?.entitlementFilteringEnabled,
-        entitlement: options?.entitlement,
-        requiredCapability: options?.requiredCapability,
-        propTxOrganizationId,
-      })
-    ) {
-      return null;
+    let listing = await getByMls(mlsNumber);
+
+    if (listing) {
+      return finish("HIT", applyDetailEntitlementGate(listing, options));
     }
+
+    const enforce = isWebListingDetailEntitlementEnforcementEnabled(
+      options?.entitlementFilteringEnabled,
+    );
+    if (enforce) {
+      const propTxOrganizationId =
+        await resolveCanonicalPropTxOrganizationId(options);
+      if (
+        !propTxOrganizationId ||
+        !mayInvokePropTxOnDemandForDetail({
+          entitlementFilteringEnabled: options?.entitlementFilteringEnabled,
+          entitlement: options?.entitlement,
+          requiredCapability: options?.requiredCapability,
+          propTxOrganizationId,
+        })
+      ) {
+        return finish("MISS", null);
+      }
+    }
+
+    const pulled = await onDemand(mlsNumber);
+    if (pulled.mlsNumbers.length === 0) return finish("MISS", null);
+
+    listing = await getByMls(mlsNumber);
+    if (!listing) return finish("MISS", null);
+    // POST-LOOKUP: actual listing provenance must still pass G.10C0 when enforce ON.
+    return finish("MISS", applyDetailEntitlementGate(listing, options));
+  } catch (error) {
+    logSsrHang({
+      event: SSR_HANG_EVENT.listingFailure,
+      ms: Date.now() - startedAt,
+      ...correlation,
+      ...ssrHangErrorFields(error),
+    });
+    throw error;
   }
-
-  const pulled = await onDemand(mlsNumber);
-  if (pulled.mlsNumbers.length === 0) return null;
-
-  listing = await getByMls(mlsNumber);
-  if (!listing) return null;
-  // POST-LOOKUP: actual listing provenance must still pass G.10C0 when enforce ON.
-  return applyDetailEntitlementGate(listing, options);
 }

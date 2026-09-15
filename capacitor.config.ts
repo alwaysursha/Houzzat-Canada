@@ -69,6 +69,7 @@ const houzzatConfig: CapacitorConfig = {
     backgroundColor: "#0A2F24",
     contentInset: "automatic",
     preferredContentMode: "mobile",
+    scheme: "Houzzat",
   },
 };
 

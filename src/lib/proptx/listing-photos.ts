@@ -1,5 +1,10 @@
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import {
+  logSsrHang,
+  readSsrHangCorrelation,
+  SSR_HANG_EVENT,
+} from "@/lib/observability/ssr-hang-log";
+import {
   getPropTxIdxConfig,
   getPropTxSyncConfig,
   type PropTxConfig,
@@ -143,6 +148,9 @@ export async function fetchListingPhotosFromPropTx(
   // PropTx Media can take several seconds on cold/edge; 4.5s often fell back
   // to the single cover photo stored in Neon.
   const timeoutMs = options?.timeoutMs ?? 6_000;
+  const startedAt = Date.now();
+  const correlation = await readSsrHangCorrelation();
+  logSsrHang({ event: SSR_HANG_EVENT.proptxStart, ...correlation });
 
   const work = async (): Promise<PropTxListingPhoto[]> => {
     for (const config of configs) {
@@ -172,5 +180,11 @@ export async function fetchListingPhotosFromPropTx(
     ]);
   } catch {
     return [];
+  } finally {
+    logSsrHang({
+      event: SSR_HANG_EVENT.proptxSettled,
+      ms: Date.now() - startedAt,
+      ...correlation,
+    });
   }
 }

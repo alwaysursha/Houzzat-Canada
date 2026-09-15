@@ -29,6 +29,12 @@ import {
 } from "@/lib/tenancy/templates";
 import { isTenantDomainScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
 import { prisma } from "@/lib/prisma";
+import {
+  logSsrHang,
+  SSR_HANG_EVENT,
+  ssrHangCorrelationFromRequest,
+  ssrHangErrorFields,
+} from "@/lib/observability/ssr-hang-log";
 
 export type MarketingChromeBrand = MarketingPresentationBrand;
 
@@ -100,26 +106,59 @@ export function legacyMarketingChromeBrand(
  */
 export const resolveMarketingTenancy = cache(
   async (): Promise<RequestTenancySuccess | null> => {
-    let request = await buildSyntheticRequestFromHeaders();
-    if (!request && !isTenantDomainScopeWorkspace()) {
-      const siteUrl =
-        process.env.NEXT_PUBLIC_SITE_URL?.trim() || "http://127.0.0.1:3000";
-      try {
-        request = new Request(siteUrl.endsWith("/") ? siteUrl : `${siteUrl}/`);
-      } catch {
-        request = null;
+    const startedAt = Date.now();
+    let request: Request | null = null;
+    try {
+      request = await buildSyntheticRequestFromHeaders();
+      if (!request && !isTenantDomainScopeWorkspace()) {
+        const siteUrl =
+          process.env.NEXT_PUBLIC_SITE_URL?.trim() || "http://127.0.0.1:3000";
+        try {
+          request = new Request(siteUrl.endsWith("/") ? siteUrl : `${siteUrl}/`);
+        } catch {
+          request = null;
+        }
       }
-    }
-    if (!request) {
-      return isTenantDomainScopeWorkspace() ? null : null;
-    }
+      const correlation = ssrHangCorrelationFromRequest(request);
+      logSsrHang({ event: SSR_HANG_EVENT.tenancyStart, ...correlation });
 
-    const result = await resolveRequestTenancy(request);
-    if (!result.ok) {
-      return isTenantDomainScopeWorkspace() ? null : null;
-    }
+      if (!request) {
+        logSsrHang({
+          event: SSR_HANG_EVENT.tenancySuccess,
+          ms: Date.now() - startedAt,
+          resolved: false,
+          ...correlation,
+        });
+        return isTenantDomainScopeWorkspace() ? null : null;
+      }
 
-    return result;
+      const result = await resolveRequestTenancy(request);
+      if (!result.ok) {
+        logSsrHang({
+          event: SSR_HANG_EVENT.tenancySuccess,
+          ms: Date.now() - startedAt,
+          resolved: false,
+          ...correlation,
+        });
+        return isTenantDomainScopeWorkspace() ? null : null;
+      }
+
+      logSsrHang({
+        event: SSR_HANG_EVENT.tenancySuccess,
+        ms: Date.now() - startedAt,
+        resolved: true,
+        ...correlation,
+      });
+      return result;
+    } catch (error) {
+      logSsrHang({
+        event: SSR_HANG_EVENT.tenancyFailure,
+        ms: Date.now() - startedAt,
+        ...ssrHangCorrelationFromRequest(request),
+        ...ssrHangErrorFields(error),
+      });
+      throw error;
+    }
   },
 );
 
