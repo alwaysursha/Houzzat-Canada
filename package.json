@@ -204,7 +204,6 @@
     "workspace-3h1-safety:selftest": "node --import tsx scripts/workspace-3h1-safety-selftest.ts",
     "workspace-deploy-flags:selftest": "node --import tsx scripts/workspace-deploy-flags-selftest.ts",
     "push-reliability:selftest": "node --import tsx scripts/push-reliability-selftest.ts",
-    "push-delivery-log:selftest": "node --import tsx scripts/push-delivery-log-selftest.ts",
     "verify-email:selftest": "node --import tsx scripts/verify-email-auth-selftest.ts",
     "typesense:import": "node --import tsx scripts/typesense-import-listings.ts",
     "typesense:oh-fields": "node --import tsx scripts/typesense-ensure-open-house-fields.ts",

@@ -10,11 +10,6 @@ import {
   HOUZZAT_PRO_ALERTS_CHANNEL_ID,
   HOUZZAT_UPDATES_CHANNEL_ID,
 } from "@/lib/notifications/android-channel";
-import {
-  logPushDeliveryEnqueue,
-  logPushDeliveryResult,
-  pushDeliveryUserIdPrefix,
-} from "@/lib/notifications/push-delivery-log";
 
 export type PushPayload = {
   type: PushType;
@@ -431,7 +426,7 @@ async function deliverFcm(
         providerHttpStatus: res.status,
       };
     }
-    return { status: "sent", providerHttpStatus: res.status };
+    return { status: "sent" };
   } catch (error) {
     console.error(
       "[push:fcm]",
@@ -469,67 +464,20 @@ export function isFirebaseServiceAccountReady(
   );
 }
 
-/** project_id only — never email, private_key, or raw JSON. */
-function configuredFirebaseProjectId(): string | null {
-  const raw = readServiceAccountJson();
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as { project_id?: unknown };
-    const id = parsed.project_id;
-    if (typeof id !== "string" || !/^[a-z0-9-]{4,30}$/.test(id)) return null;
-    return id;
-  } catch {
-    return null;
-  }
-}
-
 async function deliverPushToUser(
   userId: string,
   payload: PushPayload,
 ): Promise<PushDeliveryDetail> {
-  const shell = shellForAudience(audienceForPushType(payload.type));
-  const userIdPrefix = pushDeliveryUserIdPrefix(userId);
-  const firebaseProjectId = configuredFirebaseProjectId();
-
-  // TEMPORARY: [push:delivery] — remove after FCM diagnosis
-  const emitResult = (
-    detail: PushDeliveryDetail,
-    extra: { deviceCount: number; successCount: number; failureCount: number },
-  ): PushDeliveryDetail => {
-    logPushDeliveryResult({
-      type: payload.type,
-      userIdPrefix,
-      deviceCount: extra.deviceCount,
-      shell,
-      status: detail.status,
-      httpStatus: detail.providerHttpStatus ?? null,
-      errorCategory: detail.failureCategory ?? null,
-      successCount: extra.successCount,
-      failureCount: extra.failureCount,
-      firebaseProjectId,
-    });
-    return detail;
-  };
-
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, disabledAt: true, pushNotificationPrefs: true },
   });
-  if (!user || user.disabledAt) {
-    return emitResult({ status: "disabled" }, {
-      deviceCount: 0,
-      successCount: 0,
-      failureCount: 0,
-    });
-  }
+  if (!user || user.disabledAt) return { status: "disabled" };
   if (!isPushTypeEnabled(user.pushNotificationPrefs, payload.type)) {
-    return emitResult({ status: "pref_off" }, {
-      deviceCount: 0,
-      successCount: 0,
-      failureCount: 0,
-    });
+    return { status: "pref_off" };
   }
 
+  const shell = shellForAudience(audienceForPushType(payload.type));
   const devices = await prisma.pushDevice.findMany({
     where: { userId, shell },
     select: { token: true },
@@ -537,55 +485,28 @@ async function deliverPushToUser(
 
   if (devices.length === 0) {
     console.info("[push:no-device]", userId, payload.type);
-    return emitResult({ status: "no_device" }, {
-      deviceCount: 0,
-      successCount: 0,
-      failureCount: 0,
-    });
+    return { status: "no_device" };
   }
 
   const results = await Promise.all(devices.map((d) => deliverFcm(d.token, payload)));
-  const successCount = results.filter((r) => r.status === "sent").length;
-  const failureCount = results.filter(
-    (r) => r.status === "failed" || r.status === "unregistered",
-  ).length;
-  const httpStatus =
-    results.find((r) => r.status === "sent")?.providerHttpStatus ??
-    results.find((r) => r.providerHttpStatus != null)?.providerHttpStatus ??
-    undefined;
-
-  if (results.some((r) => r.status === "sent")) {
-    return emitResult(
-      { status: "sent", providerHttpStatus: httpStatus },
-      { deviceCount: devices.length, successCount, failureCount },
-    );
-  }
+  if (results.some((r) => r.status === "sent")) return { status: "sent" };
   if (results.every((r) => r.status === "skipped")) {
-    return emitResult(
-      { status: "skipped", failureCategory: "fcm_stubbed" },
-      { deviceCount: devices.length, successCount, failureCount },
-    );
+    return { status: "skipped", failureCategory: "fcm_stubbed" };
   }
   const unregistered = results.find((r) => r.status === "unregistered");
   if (unregistered) {
-    return emitResult(
-      {
-        status: "unregistered",
-        failureCategory: "fcm_unregistered",
-        providerHttpStatus: unregistered.providerHttpStatus,
-      },
-      { deviceCount: devices.length, successCount, failureCount },
-    );
+    return {
+      status: "unregistered",
+      failureCategory: "fcm_unregistered",
+      providerHttpStatus: unregistered.providerHttpStatus,
+    };
   }
   const failed = results.find((r) => r.status === "failed");
-  return emitResult(
-    {
-      status: "failed",
-      failureCategory: failed?.failureCategory ?? "fcm_unknown",
-      providerHttpStatus: failed?.providerHttpStatus,
-    },
-    { deviceCount: devices.length, successCount, failureCount },
-  );
+  return {
+    status: "failed",
+    failureCategory: failed?.failureCategory ?? "fcm_unknown",
+    providerHttpStatus: failed?.providerHttpStatus,
+  };
 }
 
 /**
@@ -598,12 +519,6 @@ export function sendPushToUser(
   payload: PushPayload,
 ): void {
   if (!userId) return;
-  // TEMPORARY: [push:delivery] — remove after FCM diagnosis
-  logPushDeliveryEnqueue({
-    type: payload.type,
-    userIdPrefix: pushDeliveryUserIdPrefix(userId),
-    shell: shellForAudience(audienceForPushType(payload.type)),
-  });
   scheduleWorkerSideEffect(deliverPushToUser(userId, payload));
 }
 
