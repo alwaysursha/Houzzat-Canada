@@ -219,13 +219,14 @@ export default async function ListingDetailPage({
   const canSeeRestricted = panelAccess.canSeeRestricted;
   const detailsLocked = panelAccess.detailsLocked;
 
-  // Neon-only SSR gallery (≤5). Never await PropTx here — start it in parallel
-  // and pass the promise to the client so enrich skips an extra API hop.
-  // Vercel client useEffect cannot reliably consume this RSC thenable, so the
-  // client uses /api/listings/:mls/gallery instead. Cloudflare keeps the promise.
+  // Neon-only SSR gallery (≤5). Never await PropTx here.
+  // Vercel: do not invoke fetchListingPhotosFromPropTx — client enriches after
+  // paint via GET /api/listings/:mls/gallery.
+  // Cloudflare: start the fetch in parallel and pass the thenable.
   const galleryPhotos = resolveListingGalleryPhotos(listing);
-  const livePhotosPromise =
-    listing.dataSource === "mls" && listing.listingKey
+  const clientLivePhotosPromise = process.env.VERCEL
+    ? null
+    : listing.dataSource === "mls" && listing.listingKey
       ? fetchListingPhotosFromPropTx(listing.listingKey, {
           timeoutMs: 10_000,
         }).then((photos) => {
@@ -247,9 +248,6 @@ export default async function ListingDetailPage({
           }));
         })
       : null;
-  const clientLivePhotosPromise = process.env.VERCEL
-    ? null
-    : livePhotosPromise;
 
   scheduleWorkerSideEffect(
     prisma.listingView.create({

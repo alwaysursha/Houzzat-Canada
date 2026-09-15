@@ -189,15 +189,15 @@ async function main() {
 
 {
   const page = read("src/app/(marketing)/listing/[...parts]/page.tsx");
-  assert.ok(page.includes("fetchListingPhotosFromPropTx"));
-  assert.ok(page.includes("clientLivePhotosPromise = process.env.VERCEL"));
-  assert.match(
-    page,
-    /const clientLivePhotosPromise = process\.env\.VERCEL\s*\n\s*\? null\s*\n\s*: livePhotosPromise;/,
-  );
+  const vercelGate = page.indexOf("const clientLivePhotosPromise = process.env.VERCEL");
+  const fetchIdx = page.indexOf("fetchListingPhotosFromPropTx(");
+  assert.ok(vercelGate >= 0, "Vercel SSR must short-circuit live photos");
+  assert.ok(fetchIdx > vercelGate, "PropTx must not be invoked before the Vercel gate");
+  assert.ok(!page.includes("const livePhotosPromise ="));
   assert.ok(!page.includes("await fetchListingPhotosFromPropTx"));
   assert.ok(!page.includes("await livePhotosPromise"));
-  console.log("[6] listing HTML still does not await PropTx... PASS");
+  assert.ok(page.includes("verifyLocked ? null : clientLivePhotosPromise"));
+  console.log("[6] Vercel listing SSR never starts PropTx gallery fetch... PASS");
 }
 
 {

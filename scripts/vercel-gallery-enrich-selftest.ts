@@ -59,10 +59,15 @@ async function main() {
   assert.ok(applyIdx > 0 && returnIfRicher > applyIdx && fetchIdx > returnIfRicher);
   assert.ok(!live.includes("applyLive(live);\n          return;"));
   const page = read("src/app/(marketing)/listing/[...parts]/page.tsx");
-  assert.ok(page.includes("const clientLivePhotosPromise = process.env.VERCEL"));
+  const vercelGate = page.indexOf("const clientLivePhotosPromise = process.env.VERCEL");
+  const propTxFetchIdx = page.indexOf("fetchListingPhotosFromPropTx(");
+  assert.ok(vercelGate >= 0);
+  assert.ok(propTxFetchIdx > vercelGate);
+  assert.ok(!page.includes("const livePhotosPromise ="));
   assert.ok(page.includes("verifyLocked ? null : clientLivePhotosPromise"));
+  assert.ok(live.includes("fetchListingGalleryPayload"));
   console.log("[0] ListingGalleryLive falls through unless richer than Neon... PASS");
-  console.log("[0b] Vercel does not pass the RSC gallery thenable to the client... PASS");
+  console.log("[0b] Vercel SSR does not start PropTx; client uses /gallery... PASS");
 
   const overlay = read("src/components/listings/SearchMapListingOverlay.tsx");
   const searchExperience = read("src/components/listings/SearchExperience.tsx");
