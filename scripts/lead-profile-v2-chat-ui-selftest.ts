@@ -40,11 +40,27 @@ function read(rel: string) {
 
 const CHAT_UI_FILES = [
   "src/lib/agent/lead-profile-v2/chat-query.ts",
+  "src/components/agent/chat/useAgentChatThread.ts",
+  "src/components/agent/chat/AgentChatTranscriptPane.tsx",
   "src/components/agent/lead-profile-v2/hooks/useLeadProfileV2Chat.ts",
   "src/components/agent/lead-profile-v2/LeadProfileV2ChatPane.tsx",
   "src/components/agent/lead-profile-v2/LeadProfileV2ConversationsPanel.tsx",
   "src/components/agent/lead-profile-v2/LeadProfileV2Host.tsx",
 ];
+
+function readChatPane() {
+  return [
+    read("src/components/agent/lead-profile-v2/LeadProfileV2ChatPane.tsx"),
+    read("src/components/agent/chat/AgentChatTranscriptPane.tsx"),
+  ].join("\n");
+}
+
+function readChatHook() {
+  return [
+    read("src/components/agent/lead-profile-v2/hooks/useLeadProfileV2Chat.ts"),
+    read("src/components/agent/chat/useAgentChatThread.ts"),
+  ].join("\n");
+}
 
 function msg(
   overrides: Partial<LeadProfileV2ChatMessage> & { id: string },
@@ -134,9 +150,7 @@ function testEmailStillExposed() {
 }
 
 function testTranscriptRendersChronologically() {
-  const pane = read(
-    "src/components/agent/lead-profile-v2/LeadProfileV2ChatPane.tsx",
-  );
+  const pane = readChatPane();
   assert.ok(pane.includes("v2ChatTranscriptItems"));
   assert.ok(pane.includes("row.message"));
   assert.ok(pane.includes("senderName"));
@@ -209,9 +223,7 @@ function testOlderPagePrependsWithoutDuplicates() {
     }),
     340,
   );
-  const hook = read(
-    "src/components/agent/lead-profile-v2/hooks/useLeadProfileV2Chat.ts",
-  );
+  const hook = readChatHook();
   assert.ok(hook.includes('"prepend"'));
   assert.ok(hook.includes("mergeV2ChatMessages"));
 }
@@ -230,9 +242,7 @@ function testDeletedTombstoneAndSystemCard() {
     "Viewing confirmed",
   );
   assert.equal(v2ChatSystemCardLabel({ raw: { twilio: true } }), "Update");
-  const pane = read(
-    "src/components/agent/lead-profile-v2/LeadProfileV2ChatPane.tsx",
-  );
+  const pane = readChatPane();
   assert.ok(pane.includes("v2ChatMessageBody"));
   assert.ok(pane.includes("v2ChatSystemCardLabel"));
   assert.equal(pane.includes("JSON.stringify"), false);
@@ -246,9 +256,7 @@ function testUnreadDividerUsesServerId() {
     items.find((row) => row.showDivider)?.message.id,
     "m2",
   );
-  const pane = read(
-    "src/components/agent/lead-profile-v2/LeadProfileV2ChatPane.tsx",
-  );
+  const pane = readChatPane();
   assert.ok(pane.includes("unread.dividerMessageId"));
   assert.equal(pane.includes("assignedAgentId ==="), false);
   assert.equal(pane.includes("agentLastReadAt"), false);
@@ -273,9 +281,7 @@ function testComposerPermissions() {
     v2ChatReadOnlyReason({ canMarkRead: false, assignedAgentId: null }),
     "Only the assigned agent can send chat messages. This lead is unassigned.",
   );
-  const pane = read(
-    "src/components/agent/lead-profile-v2/LeadProfileV2ChatPane.tsx",
-  );
+  const pane = readChatPane();
   assert.ok(pane.includes("v2ChatComposerMode"));
   assert.ok(pane.includes("viewer.canMarkRead"));
   assert.equal(pane.includes("ctx.user.role"), false);
@@ -289,12 +295,8 @@ function testSendAppendsServerMessageAndKeepsDraft() {
     appendV2ChatSentMessage(current, sent).messages.map((row) => row.id),
     ["m1", "server-99"],
   );
-  const hook = read(
-    "src/components/agent/lead-profile-v2/hooks/useLeadProfileV2Chat.ts",
-  );
-  const pane = read(
-    "src/components/agent/lead-profile-v2/LeadProfileV2ChatPane.tsx",
-  );
+  const hook = readChatHook();
+  const pane = readChatPane();
   assert.ok(hook.includes("appendV2ChatSentMessage"));
   assert.ok(hook.includes("json.message"));
   assert.equal(hook.includes("crypto.randomUUID"), false);
@@ -352,9 +354,7 @@ function testComposerKeyboardAndLimit() {
     }),
     false,
   );
-  const pane = read(
-    "src/components/agent/lead-profile-v2/LeadProfileV2ChatPane.tsx",
-  );
+  const pane = readChatPane();
   assert.ok(pane.includes("maxLength={V2_CHAT_TEXT_MAX_LENGTH}"));
   assert.ok(pane.includes("v2ChatComposerKeyAction"));
   const send = read("src/lib/conversations/agent-conversation-send.ts");
@@ -389,9 +389,7 @@ function testMarkReadUsesActualChatOpen() {
   const host = read(
     "src/components/agent/lead-profile-v2/LeadProfileV2Host.tsx",
   );
-  const hook = read(
-    "src/components/agent/lead-profile-v2/hooks/useLeadProfileV2Chat.ts",
-  );
+  const hook = readChatHook();
   assert.ok(host.includes("v2ChatIsOpen"));
   assert.ok(host.includes("useLeadProfileV2Chat"));
   assert.equal(host.includes("/conversation/read"), false);
@@ -411,12 +409,8 @@ function testEmptyAndErrorStates() {
     "No chat messages yet. Send a message to start the conversation.",
   );
   assert.equal(v2ChatEmptyCopy(false), "No chat messages yet.");
-  const pane = read(
-    "src/components/agent/lead-profile-v2/LeadProfileV2ChatPane.tsx",
-  );
-  const hook = read(
-    "src/components/agent/lead-profile-v2/hooks/useLeadProfileV2Chat.ts",
-  );
+  const pane = readChatPane();
+  const hook = readChatHook();
   const host = read(
     "src/components/agent/lead-profile-v2/LeadProfileV2Host.tsx",
   );
@@ -448,6 +442,32 @@ function testNoFakeRealtimeOrMigration() {
   assert.ok(query.includes("/api/agent/leads/${leadId}/conversation"));
 }
 
+function testLeadProfileUsesSharedChat() {
+  const pane = read(
+    "src/components/agent/lead-profile-v2/LeadProfileV2ChatPane.tsx",
+  );
+  const hook = read(
+    "src/components/agent/lead-profile-v2/hooks/useLeadProfileV2Chat.ts",
+  );
+  const host = read(
+    "src/components/agent/lead-profile-v2/LeadProfileV2Host.tsx",
+  );
+  const conversations = read(
+    "src/components/agent/lead-profile-v2/LeadProfileV2ConversationsPanel.tsx",
+  );
+  assert.ok(
+    pane.includes(
+      "export { AgentChatTranscriptPane as LeadProfileV2ChatPane }",
+    ),
+  );
+  assert.ok(
+    hook.includes("export { useAgentChatThread as useLeadProfileV2Chat }"),
+  );
+  assert.ok(host.includes("useLeadProfileV2Chat(session, leadId, chatOpen)"));
+  assert.ok(conversations.includes("<LeadProfileV2ChatPane"));
+  assert.equal(conversations.includes("useAgentChatThread"), false);
+}
+
 function testEmailFunctionalityUntouched() {
   const conversations = read(
     "src/components/agent/lead-profile-v2/LeadProfileV2ConversationsPanel.tsx",
@@ -476,6 +496,7 @@ function main() {
   testMarkReadUsesActualChatOpen();
   testEmptyAndErrorStates();
   testNoFakeRealtimeOrMigration();
+  testLeadProfileUsesSharedChat();
   testEmailFunctionalityUntouched();
   console.log("lead-profile-v2-chat-ui-selftest: ok");
 }

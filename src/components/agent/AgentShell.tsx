@@ -30,6 +30,7 @@ import {
   LayoutDashboard,
   LineChart,
   Menu,
+  MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -42,6 +43,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 const NAV = [
   { href: "/agent", label: "Launchpad", icon: LayoutDashboard, exact: true },
   { href: "/agent/leads", label: "Leads", icon: Users },
+  { href: "/agent/chats", label: "Chats", icon: MessageCircle },
   { href: "/agent/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/agent/appointments", label: "Calendar", icon: CalendarDays },
   { href: "/agent/statistics", label: "Statistics", icon: ChartColumn },
@@ -55,8 +57,8 @@ const NAV = [
 const MOBILE_TABS = [
   NAV[0],
   NAV[1],
+  NAV[2],
   NAV[4],
-  NAV[3],
 ] as const;
 
 function navActive(pathname: string, href: string, exact?: boolean) {
@@ -158,6 +160,8 @@ export function AgentShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const isProfilePage = /^\/agent\/leads\/[^/]+$/.test(pathname);
+  const isChatsPage = pathname === "/agent/chats";
+  const isImmersivePage = isProfilePage || isChatsPage;
   const mobileTabHrefs = new Set<string>(MOBILE_TABS.map((t) => t.href));
   const moreActive = NAV.some(
     (item) =>
@@ -381,7 +385,7 @@ export function AgentShell({
         </aside>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Desktop top bar */}
         <header className="sticky top-0 z-50 hidden h-12 items-center justify-end gap-1 border-b border-[#d8dee6] bg-[#1e2a38] px-4 text-white lg:flex">
           <ActivityGlobeButton
@@ -424,12 +428,12 @@ export function AgentShell({
         <main
           className={cn(
             "min-w-0 flex-1",
-            isProfilePage
-              ? "overflow-hidden p-0 pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0"
+            isImmersivePage
+              ? "flex min-h-0 flex-col overflow-hidden p-0 pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0"
               : "overflow-x-hidden px-3 py-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-5 lg:px-6 lg:pb-5",
           )}
         >
-          {isProfilePage ? (
+          {isImmersivePage ? (
             children
           ) : (
             <StaffPullToRefresh>{children}</StaffPullToRefresh>

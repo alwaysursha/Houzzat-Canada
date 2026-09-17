@@ -33,10 +33,10 @@ import {
   type LeadConversationRecord,
 } from "@/lib/conversations/lead-conversation";
 
-const ASSIGNMENT_CARD_TYPES = ["ASSIGNED", "REASSIGNED"] as const;
+export const ASSIGNMENT_CARD_TYPES = ["ASSIGNED", "REASSIGNED"] as const;
 
 /** Structured CRM assignment-class events. Assignee text in body/meta is not used. */
-const ASSIGNMENT_ACTIVITY_TYPES = [
+export const ASSIGNMENT_ACTIVITY_TYPES = [
   "assigned",
   "reassigned",
   "claimed",
@@ -120,7 +120,7 @@ function payloadCard(payload: Message["payload"]): string | null {
   return typeof card === "string" && card.trim() ? card.trim() : null;
 }
 
-function isAssignmentCard(message: ConversationReadMessage): boolean {
+export function isAssignmentCard(message: ConversationReadMessage): boolean {
   if (message.kind !== "SYSTEM_CARD") return false;
   const card = payloadCard(message.payload);
   return (
@@ -141,7 +141,7 @@ export function isAgentCursorValid(
   );
 }
 
-function isIncomingForAgent(
+export function isIncomingForAgent(
   message: ConversationReadMessage,
   assignedAgentId: string,
 ): boolean {
@@ -166,7 +166,7 @@ function isOnOrAfter(createdAt: Date, inclusiveFrom: Date): boolean {
   return createdAt.getTime() >= inclusiveFrom.getTime();
 }
 
-function resolveAgentCutoff(
+export function resolveAgentCutoff(
   conversation: LeadConversationRecord,
   assignedAgentId: string | null,
   messages: ConversationReadMessage[],
@@ -210,7 +210,7 @@ function resolveAgentCutoff(
   return { mode: "conservative_unanchored" };
 }
 
-function isInAgentUnreadWindow(
+export function isInAgentUnreadWindow(
   message: ConversationReadMessage,
   cutoff: AgentCutoff,
 ): boolean {
@@ -228,7 +228,7 @@ function isInAgentUnreadWindow(
   }
 }
 
-function summarizeUnread(
+export function summarizeUnread(
   messages: ConversationReadMessage[],
   isIncoming: (message: ConversationReadMessage) => boolean,
   inWindow: (message: ConversationReadMessage) => boolean,
@@ -241,6 +241,19 @@ function summarizeUnread(
     if (!message.deletedAt) count += 1;
   }
   return { count, dividerMessageId };
+}
+
+/** Same Agent unread count as getConversationUnreadState, for batched Inbox use. */
+export function countIncomingAgentUnread(
+  messages: ConversationReadMessage[],
+  assignedAgentId: string,
+  cutoff: AgentCutoff,
+): number {
+  return summarizeUnread(
+    messages,
+    (message) => isIncomingForAgent(message, assignedAgentId),
+    (message) => isInAgentUnreadWindow(message, cutoff),
+  ).count;
 }
 
 async function loadLeadAndConversation(
