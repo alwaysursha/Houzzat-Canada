@@ -9,8 +9,13 @@
 /* Begin PBXBuildFile section */
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
+		A22F1B041FEDC0010000AA23 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A22F1B031FEDC0010000AA22 /* FirebaseCore */; };
+		A22F1B051FEDC0010000AA24 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = A22F1B021FEDC0010000AA21 /* FirebaseMessaging */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
+		A22F1A021FEDC0010000AA11 /* HouzzatFirebaseMessaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22F1A011FEDC0010000AA10 /* HouzzatFirebaseMessaging.swift */; };
+		A22F1A041FEDC0010000AA13 /* HouzzatFcmPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22F1A031FEDC0010000AA12 /* HouzzatFcmPlugin.swift */; };
+		A22F1A061FEDC0010000AA15 /* HouzzatBridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22F1A051FEDC0010000AA14 /* HouzzatBridgeViewController.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
@@ -25,6 +30,9 @@
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A22F1A011FEDC0010000AA10 /* HouzzatFirebaseMessaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouzzatFirebaseMessaging.swift; sourceTree = "<group>"; };
+		A22F1A031FEDC0010000AA12 /* HouzzatFcmPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouzzatFcmPlugin.swift; sourceTree = "<group>"; };
+		A22F1A051FEDC0010000AA14 /* HouzzatBridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouzzatBridgeViewController.swift; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -43,6 +51,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+				A22F1B041FEDC0010000AA23 /* FirebaseCore in Frameworks */,
+				A22F1B051FEDC0010000AA24 /* FirebaseMessaging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -72,6 +82,9 @@
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				A22F1A051FEDC0010000AA14 /* HouzzatBridgeViewController.swift */,
+				A22F1A011FEDC0010000AA10 /* HouzzatFirebaseMessaging.swift */,
+				A22F1A031FEDC0010000AA12 /* HouzzatFcmPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -103,6 +116,8 @@
 			name = App;
 			packageProductDependencies = (
 				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
+				A22F1B031FEDC0010000AA22 /* FirebaseCore */,
+				A22F1B021FEDC0010000AA21 /* FirebaseMessaging */,
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
@@ -135,6 +150,7 @@
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
+				A22F1B011FEDC0010000AA20 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -169,6 +185,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				A22F1A061FEDC0010000AA15 /* HouzzatBridgeViewController.swift in Sources */,
+				A22F1A021FEDC0010000AA11 /* HouzzatFirebaseMessaging.swift in Sources */,
+				A22F1A041FEDC0010000AA13 /* HouzzatFcmPlugin.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -382,11 +401,32 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		A22F1B011FEDC0010000AA20 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = exactVersion;
+				version = 11.15.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		4D22ABE82AF431CB00220026 /* CapApp-SPM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
 			productName = "CapApp-SPM";
+		};
+		A22F1B021FEDC0010000AA21 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A22F1B011FEDC0010000AA20 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+		A22F1B031FEDC0010000AA22 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A22F1B011FEDC0010000AA20 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

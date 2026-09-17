@@ -39,9 +39,11 @@ import {
   HOUZZAT_UPDATES_CHANNEL_NAME,
   HOUZZAT_UPDATES_CHANNEL_VISIBILITY,
 } from "@/lib/notifications/android-channel";
+import { HouzzatFcm } from "@/lib/notifications/houzzat-fcm";
 
 let actionListenerAttached = false;
 let registrationListenerAttached = false;
+let iosFcmRefreshListenerAttached = false;
 let registerInFlight = false;
 let consumerChannelReady = false;
 let proChannelReady = false;
@@ -232,16 +234,59 @@ export async function ensurePushActionListener(): Promise<void> {
   }
 }
 
+function isHouzzatIos(): boolean {
+  return platform() === "ios" && registrationShell === "houzzat";
+}
+
+async function postHouzzatIosFcmToken(token: string): Promise<void> {
+  const value = token.trim();
+  if (!value || !isHouzzatIos()) return;
+  lastRegisteredToken = value;
+  await postRegister(value, "houzzat");
+}
+
+/** FCM token from native HouzzatFcm — never the Capacitor APNs token. */
+async function registerHouzzatIosFcmToken(): Promise<void> {
+  if (!isHouzzatIos()) return;
+  try {
+    const result = await HouzzatFcm.getToken();
+    const value = result?.token?.trim();
+    if (!value) return;
+    await postHouzzatIosFcmToken(value);
+  } catch {
+    // APNs may still be settling; fcmToken listener retries.
+  }
+}
+
+async function ensureHouzzatIosFcmRefreshListener(): Promise<void> {
+  if (iosFcmRefreshListenerAttached || !isHouzzatIos()) return;
+  iosFcmRefreshListenerAttached = true;
+  try {
+    await HouzzatFcm.addListener("fcmToken", (event) => {
+      const value = event?.token?.trim();
+      if (!value || !isHouzzatIos()) return;
+      void postHouzzatIosFcmToken(value);
+    });
+  } catch {
+    iosFcmRefreshListenerAttached = false;
+  }
+}
+
 async function ensureRegistrationListener(): Promise<void> {
   if (registrationListenerAttached) return;
   registrationListenerAttached = true;
   try {
     await PushNotifications.addListener("registration", (token) => {
+      if (isHouzzatIos()) {
+        void registerHouzzatIosFcmToken();
+        return;
+      }
       const value = token.value?.trim();
       if (!value) return;
       lastRegisteredToken = value;
       void postRegister(value, registrationShell);
     });
+    await ensureHouzzatIosFcmRefreshListener();
   } catch {
     registrationListenerAttached = false;
   }
@@ -299,7 +344,7 @@ export async function registerPushForSession(options?: {
     await ensureRegistrationListener();
 
     const stored = await getStoredPushToken();
-    if (stored) {
+    if (stored && !isHouzzatIos()) {
       lastRegisteredToken = stored;
       await postRegister(stored, shell);
     }
@@ -308,6 +353,9 @@ export async function registerPushForSession(options?: {
     registerInFlight = true;
     try {
       await PushNotifications.register();
+      if (isHouzzatIos()) {
+        await registerHouzzatIosFcmToken();
+      }
     } finally {
       registerInFlight = false;
     }

@@ -23,6 +23,7 @@ import {
 } from "@/components/agent/lead-profile-v2/LeadProfileV2Tabs";
 import { useLeadProfileV2Alerts } from "@/components/agent/lead-profile-v2/hooks/useLeadProfileV2Alerts";
 import { useLeadProfileV2Appointments } from "@/components/agent/lead-profile-v2/hooks/useLeadProfileV2Appointments";
+import { useLeadProfileV2Chat } from "@/components/agent/lead-profile-v2/hooks/useLeadProfileV2Chat";
 import { useLeadProfileV2Emails } from "@/components/agent/lead-profile-v2/hooks/useLeadProfileV2Emails";
 import { useLeadProfileV2EngagementOverview } from "@/components/agent/lead-profile-v2/hooks/useLeadProfileV2EngagementOverview";
 import { useLeadProfileV2AreaMonitors } from "@/components/agent/lead-profile-v2/hooks/useLeadProfileV2AreaMonitors";
@@ -36,6 +37,10 @@ import { useLeadProfileV2SavedHomes } from "@/components/agent/lead-profile-v2/h
 import { useLeadProfileV2SavedSearches } from "@/components/agent/lead-profile-v2/hooks/useLeadProfileV2SavedSearches";
 import { useLeadProfileV2Tasks } from "@/components/agent/lead-profile-v2/hooks/useLeadProfileV2Tasks";
 import { useLeadProfileV2Timeline } from "@/components/agent/lead-profile-v2/hooks/useLeadProfileV2Timeline";
+import {
+  type V2ChatSurface,
+  v2ChatIsOpen,
+} from "@/lib/agent/lead-profile-v2/chat-query";
 import { fetchV2Json } from "@/lib/agent/lead-profile-v2/fetch-json";
 import { applyV2ContactMutationRefresh } from "@/lib/agent/lead-profile-v2/contact-refresh-query";
 import { applyV2ConversationsEmailSentRefresh } from "@/lib/agent/lead-profile-v2/conversations-email-refresh-query";
@@ -75,6 +80,14 @@ export function LeadProfileV2Host({
     null,
   );
   const [tab, setTab] = useState<LeadProfileV2TabId>("activity");
+  const [conversationSurface, setConversationSurface] =
+    useState<V2ChatSurface>("chat");
+  const [conversationSurfaceLeadId, setConversationSurfaceLeadId] =
+    useState(leadId);
+  if (leadId !== conversationSurfaceLeadId) {
+    setConversationSurfaceLeadId(leadId);
+    setConversationSurface("chat");
+  }
   const [refreshing, setRefreshing] = useState(false);
   const [editingContact, setEditingContact] = useState<
     "phone" | "email" | "address" | null
@@ -126,6 +139,10 @@ export function LeadProfileV2Host({
   );
   const reloadEmails = emails.reload;
   const invalidateEmails = emails.invalidate;
+  const chatOpen = v2ChatIsOpen({ tab, conversationSurface });
+  const chat = useLeadProfileV2Chat(session, leadId, chatOpen);
+  const reloadChat = chat.reload;
+  const invalidateChat = chat.invalidate;
   const engagement = useLeadProfileV2EngagementOverview(
     session,
     leadId,
@@ -288,8 +305,14 @@ export function LeadProfileV2Host({
     else invalidateTasks();
     if (tab === "appointments") reloadAppointments();
     else invalidateAppointments();
-    if (tab === "conversations") reloadEmails();
-    else invalidateEmails();
+    if (tab === "conversations") {
+      reloadEmails();
+      if (conversationSurface === "chat") reloadChat();
+      else invalidateChat();
+    } else {
+      invalidateEmails();
+      invalidateChat();
+    }
     if (tab === "engagement") {
       reloadEngagementOverview();
       reloadSavedSearches();
@@ -311,9 +334,11 @@ export function LeadProfileV2Host({
     }
   }, [
     applyShell,
+    conversationSurface,
     invalidateAlerts,
     invalidateAppointments,
     invalidateAreaMonitors,
+    invalidateChat,
     invalidateEmails,
     invalidateEngagementOverview,
     invalidateListingNotes,
@@ -327,6 +352,7 @@ export function LeadProfileV2Host({
     reloadAppointments,
     reloadAreaMonitors,
     reloadAlerts,
+    reloadChat,
     reloadDefaultTimeline,
     reloadEmails,
     reloadEngagementOverview,
@@ -643,11 +669,24 @@ export function LeadProfileV2Host({
             leadId={leadId}
             defaultTo={data.lead.customer?.email ?? null}
             consented={data.permissions.consented}
+            surface={conversationSurface}
+            onSurfaceChange={setConversationSurface}
             panel={emails.panel}
             loading={emails.loading}
             error={emails.error}
             onEmailSent={onEmailSent}
             onLoadMore={emails.loadMore}
+            chat={{
+              panel: chat.panel,
+              loading: chat.loading,
+              error: chat.error,
+              busy: chat.busy,
+              sending: chat.sending,
+              sendError: chat.sendError,
+              onRetry: chat.reload,
+              onLoadOlder: chat.loadOlder,
+              onSend: chat.send,
+            }}
           />
         );
       case "engagement":
@@ -767,7 +806,7 @@ export function LeadProfileV2Host({
                 onCreated={onNoteCreated}
               />
               <LeadProfileV2Tabs tab={tab} onChange={setTab} />
-              <div className="min-h-0 space-y-4 px-4 py-4 sm:px-5 lg:flex-1 lg:overflow-y-auto">
+              <div className="flex min-h-0 flex-col space-y-4 px-4 py-4 sm:px-5 lg:flex-1 lg:overflow-y-auto">
                 {renderTabBody()}
               </div>
             </section>

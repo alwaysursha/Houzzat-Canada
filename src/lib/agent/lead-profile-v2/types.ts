@@ -14,6 +14,7 @@ export type LeadProfileV2ResourceKey =
   | "tasks"
   | "appointments"
   | "emails"
+  | "conversation-chat"
   | "engagement-overview"
   | "saved-searches"
   | "saved-homes"
@@ -87,6 +88,55 @@ export type LeadProfileV2Email = {
 export type LeadProfileV2EmailsPanel = {
   emails: LeadProfileV2Email[];
   hasMore: boolean;
+};
+
+export type LeadProfileV2ChatMessage = {
+  id: string;
+  channel: string;
+  kind: string;
+  senderKind: string;
+  senderUserId: string | null;
+  senderName: string;
+  body: string | null;
+  editedAt: string | null;
+  deletedAt: string | null;
+  replyToMessageId: string | null;
+  createdAt: string;
+  deliveredAt: string | null;
+  smsSource: string | null;
+  providerStatus: string | null;
+  payload: unknown;
+};
+
+export type LeadProfileV2ChatUnread = {
+  count: number;
+  dividerMessageId: string | null;
+  cutoffMode: string;
+  agentCursorValid: boolean;
+};
+
+export type LeadProfileV2ChatPanel = {
+  conversation: {
+    id: string;
+    leadId: string;
+    status: string;
+    createdAt: string;
+    lastMessageAt: string | null;
+    created: boolean;
+  };
+  assignedAgentId: string | null;
+  viewer: {
+    userId: string;
+    isAssignedAgent: boolean;
+    canMarkRead: boolean;
+  };
+  unread: LeadProfileV2ChatUnread;
+  messages: LeadProfileV2ChatMessage[];
+  page: {
+    limit: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
 };
 
 export type LeadProfileV2BuyerIntentCriteria = {

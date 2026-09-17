@@ -138,6 +138,46 @@ enum LeadNoteCategory {
   CALL
 }
 
+/**
+ * HouzzatPRO permanent Agent ↔ Lead thread. Not owned by an agent.
+ */
+enum ConversationStatus {
+  OPEN
+  BLOCKED
+}
+
+enum MessageChannel {
+  CHAT
+  SMS
+}
+
+enum MessageKind {
+  TEXT
+  SYSTEM_CARD
+}
+
+enum MessageSenderKind {
+  CUSTOMER
+  AGENT
+  ADMIN
+  SYSTEM
+}
+
+enum MessageSmsSource {
+  TWILIO
+  MANUAL
+}
+
+enum MessageRevisionAction {
+  EDIT
+  DELETE
+}
+
+enum MessageAttachmentKind {
+  IMAGE
+  VOICE_NOTE
+}
+
 enum AppointmentType {
   SHOWING
   VIRTUAL_VIEWING
@@ -609,6 +649,7 @@ model Workspace {
   leadOrigins                       LeadOrigin[]
   leadImportJobs                    LeadImportJob[]
   leadImportRows                    LeadImportRow[]
+  conversations                     Conversation[]
 
   @@index([status])
 }
@@ -931,6 +972,12 @@ model User {
   platformOperator          PlatformOperator?
   ownerActivations          WorkspaceOwnerActivation[]
   leadImportJobs            LeadImportJob[]            @relation("LeadImportImportedBy")
+  conversationAgentReads    Conversation[]             @relation("ConversationAgentLastReadBy")
+  messagesSent              Message[]                  @relation("MessageSender")
+  messagesCreated           Message[]                  @relation("MessageCreatedBy")
+  messagesDeleted           Message[]                  @relation("MessageDeletedBy")
+  messageRevisions          MessageRevision[]          @relation("MessageRevisionActor")
+  messageReactions          MessageReaction[]
 }
 
 /**
@@ -1070,6 +1117,7 @@ model Lead {
   tags          LeadTag[]
   origin        LeadOrigin?
   importRows    LeadImportRow[]
+  conversation  Conversation?
 
   @@unique([workspaceId, id])
   @@index([status, assignedAgentId])
@@ -1368,6 +1416,145 @@ model LeadActivity {
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([leadId, createdAt])
+}
+
+/**
+ * Permanent HouzzatPRO Agent ↔ Lead thread.
+ * ONE workspace + ONE lead = ONE conversation. Not owned by an agent;
+ * operational owner is always Lead.assignedAgentId.
+ */
+model Conversation {
+  id                    String             @id @default(cuid())
+  workspaceId           String
+  leadId                String
+  status                ConversationStatus @default(OPEN)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  lastMessageAt         DateTime?
+  customerLastReadAt    DateTime?
+  agentLastReadAt       DateTime?
+  /**
+   * User who last opened/read as assignee. Unread cursor is valid only when this
+   * equals Lead.assignedAgentId. Do not set on reassignment — set on agent read.
+   */
+  agentLastReadByUserId String?
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead            Lead      @relation(fields: [workspaceId, leadId], references: [workspaceId, id], onDelete: Cascade)
+  agentLastReadBy User?     @relation("ConversationAgentLastReadBy", fields: [agentLastReadByUserId], references: [id], onDelete: SetNull)
+  messages        Message[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, leadId])
+  @@index([workspaceId, lastMessageAt])
+  @@index([leadId])
+  @@index([agentLastReadByUserId])
+}
+
+/**
+ * Chat + SMS transcript. Authoritative lead path is Message → Conversation → Lead.
+ * leadId is denormalized for scoped queries / future merge; it is not a Lead FK.
+ */
+model Message {
+  id               String            @id @default(cuid())
+  workspaceId      String
+  conversationId   String
+  leadId           String
+  channel          MessageChannel
+  kind             MessageKind       @default(TEXT)
+  senderKind       MessageSenderKind
+  senderUserId     String?
+  senderName       String
+  createdByUserId  String?
+  body             String?           @db.Text
+  editedAt         DateTime?
+  deletedAt        DateTime?
+  deletedByUserId  String?
+  replyToMessageId String?
+  createdAt        DateTime          @default(now())
+  deliveredAt      DateTime?
+  smsSource        MessageSmsSource?
+  twilioMessageSid String?           @unique
+  providerStatus   String?
+  smsFrom          String?
+  smsTo            String?
+  payload          Json?
+
+  conversation Conversation        @relation(fields: [workspaceId, conversationId], references: [workspaceId, id], onDelete: Cascade)
+  senderUser   User?               @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+  createdBy    User?               @relation("MessageCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  deletedBy    User?               @relation("MessageDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
+  replyTo      Message?            @relation("MessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies      Message[]           @relation("MessageReplies")
+  revisions    MessageRevision[]
+  attachments  MessageAttachment[]
+  reactions    MessageReaction[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, conversationId, createdAt])
+  @@index([workspaceId, leadId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([senderUserId])
+  @@index([createdByUserId])
+  @@index([deletedByUserId])
+  @@index([replyToMessageId])
+}
+
+/**
+ * Hidden edit/delete audit. Do not create a row on initial send.
+ */
+model MessageRevision {
+  id          String                @id @default(cuid())
+  workspaceId String
+  messageId   String
+  action      MessageRevisionAction
+  body        String?               @db.Text
+  actorUserId String?
+  createdAt   DateTime              @default(now())
+
+  message Message @relation(fields: [workspaceId, messageId], references: [workspaceId, id], onDelete: Cascade)
+  actor   User?   @relation("MessageRevisionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, messageId, createdAt])
+  @@index([actorUserId])
+}
+
+/**
+ * Future IMAGE / VOICE_NOTE metadata. Storage is not implemented here.
+ */
+model MessageAttachment {
+  id          String                @id @default(cuid())
+  workspaceId String
+  messageId   String
+  kind        MessageAttachmentKind
+  objectKey   String
+  mimeType    String
+  byteSize    Int
+  width       Int?
+  height      Int?
+  durationMs  Int?
+  sortOrder   Int                   @default(0)
+  revokedAt   DateTime?
+  createdAt   DateTime              @default(now())
+
+  message Message @relation(fields: [workspaceId, messageId], references: [workspaceId, id], onDelete: Cascade)
+
+  @@index([workspaceId, messageId, sortOrder])
+}
+
+model MessageReaction {
+  id          String   @id @default(cuid())
+  workspaceId String
+  messageId   String
+  userId      String
+  key         String
+  createdAt   DateTime @default(now())
+
+  message Message @relation(fields: [workspaceId, messageId], references: [workspaceId, id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([workspaceId, messageId])
 }
 
 model Appointment {
