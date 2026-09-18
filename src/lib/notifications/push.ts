@@ -67,11 +67,19 @@ export type PushDeliveryStatus =
   | "pref_off"
   | "disabled";
 
+export type PushDeliveryCounts = {
+  deviceCount: number;
+  sentCount: number;
+  failedCount: number;
+  skippedCount: number;
+  unregisteredCount: number;
+};
+
 export type PushDeliveryDetail = {
   status: PushDeliveryStatus;
   failureCategory?: FcmFailureCategory;
   providerHttpStatus?: number;
-};
+} & Partial<PushDeliveryCounts>;
 
 const EXPECTED_FIREBASE_PROJECT_ID = "houzzat-aa1b0";
 
@@ -441,7 +449,33 @@ export type PushDeliveryResult = {
   status: PushDeliveryStatus;
   failureCategory?: FcmFailureCategory;
   providerHttpStatus?: number;
-};
+} & Partial<PushDeliveryCounts>;
+
+function countTokenResults(
+  results: Array<{ status: PushDeliveryStatus }>,
+): PushDeliveryCounts {
+  const counts: PushDeliveryCounts = {
+    deviceCount: results.length,
+    sentCount: 0,
+    failedCount: 0,
+    skippedCount: 0,
+    unregisteredCount: 0,
+  };
+  for (const row of results) {
+    if (row.status === "sent") counts.sentCount += 1;
+    else if (row.status === "failed") counts.failedCount += 1;
+    else if (row.status === "skipped") counts.skippedCount += 1;
+    else if (row.status === "unregistered") counts.unregisteredCount += 1;
+  }
+  return counts;
+}
+
+function withTokenCounts(
+  detail: PushDeliveryDetail,
+  results: Array<{ status: PushDeliveryStatus }>,
+): PushDeliveryDetail {
+  return { ...detail, ...countTokenResults(results) };
+}
 
 /** True when Firebase service-account JSON is available (Worker binding or env). */
 export function isFirebasePushConfigured(): boolean {
@@ -485,28 +519,39 @@ async function deliverPushToUser(
 
   if (devices.length === 0) {
     console.info("[push:no-device]", userId, payload.type);
-    return { status: "no_device" };
+    return withTokenCounts({ status: "no_device" }, []);
   }
 
   const results = await Promise.all(devices.map((d) => deliverFcm(d.token, payload)));
-  if (results.some((r) => r.status === "sent")) return { status: "sent" };
+  if (results.some((r) => r.status === "sent")) {
+    return withTokenCounts({ status: "sent" }, results);
+  }
   if (results.every((r) => r.status === "skipped")) {
-    return { status: "skipped", failureCategory: "fcm_stubbed" };
+    return withTokenCounts(
+      { status: "skipped", failureCategory: "fcm_stubbed" },
+      results,
+    );
   }
   const unregistered = results.find((r) => r.status === "unregistered");
   if (unregistered) {
-    return {
-      status: "unregistered",
-      failureCategory: "fcm_unregistered",
-      providerHttpStatus: unregistered.providerHttpStatus,
-    };
+    return withTokenCounts(
+      {
+        status: "unregistered",
+        failureCategory: "fcm_unregistered",
+        providerHttpStatus: unregistered.providerHttpStatus,
+      },
+      results,
+    );
   }
   const failed = results.find((r) => r.status === "failed");
-  return {
-    status: "failed",
-    failureCategory: failed?.failureCategory ?? "fcm_unknown",
-    providerHttpStatus: failed?.providerHttpStatus,
-  };
+  return withTokenCounts(
+    {
+      status: "failed",
+      failureCategory: failed?.failureCategory ?? "fcm_unknown",
+      providerHttpStatus: failed?.providerHttpStatus,
+    },
+    results,
+  );
 }
 
 /**
@@ -552,6 +597,11 @@ export async function deliverPushToUsersNow(
         status: detail.status,
         failureCategory: detail.failureCategory,
         providerHttpStatus: detail.providerHttpStatus,
+        deviceCount: detail.deviceCount,
+        sentCount: detail.sentCount,
+        failedCount: detail.failedCount,
+        skippedCount: detail.skippedCount,
+        unregisteredCount: detail.unregisteredCount,
       };
     }),
   );

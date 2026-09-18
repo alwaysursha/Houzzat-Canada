@@ -7,7 +7,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { PushPayload } from "../src/lib/notifications/push";
+import type {
+  PushDeliveryResult,
+  PushPayload,
+} from "../src/lib/notifications/push";
 import {
   buildCustomerChatAgentPushPayload,
   customerChatPushPreview,
@@ -15,9 +18,12 @@ import {
   CUSTOMER_CHAT_PUSH_BODY_FALLBACK,
   CUSTOMER_CHAT_PUSH_PREVIEW_MAX,
   CUSTOMER_CHAT_PUSH_TYPE,
+  formatChatMessageEnqueueLog,
+  formatChatMessageFcmResultLog,
   isCustomerChatAgentPushEligible,
   notifyAssignedAgentOfCustomerChatMessage,
   scheduleNotifyAssignedAgentOfCustomerChatMessage,
+  staffNotifyIdPrefix,
   type CustomerChatAgentPushAssignee,
   type CustomerChatAgentPushDeps,
   type CustomerChatAgentPushLead,
@@ -91,11 +97,26 @@ type Capture = {
   scheduled: number;
 };
 
+function sentResult(userId: string): PushDeliveryResult {
+  return {
+    userId,
+    status: "sent",
+    deviceCount: 1,
+    sentCount: 1,
+    failedCount: 0,
+    skippedCount: 0,
+    unregisteredCount: 0,
+  };
+}
+
 function captureHarness(options?: {
   lead?: CustomerChatAgentPushLead | null;
   assignee?: CustomerChatAgentPushAssignee | null;
   authorized?: boolean;
-  sendImpl?: (userId: string, payload: PushPayload) => void;
+  deliverImpl?: (
+    userIds: Array<string | null | undefined>,
+    payload: PushPayload,
+  ) => Promise<PushDeliveryResult[]>;
 }): Capture & CustomerChatAgentPushDeps {
   const cap: Capture = {
     pushes: [],
@@ -132,13 +153,14 @@ function captureHarness(options?: {
       cap.authorizes.push(input);
       return options?.authorized !== false;
     },
-    sendPushToUser: (userId, payload) => {
-      if (!userId) return;
-      if (options?.sendImpl) {
-        options.sendImpl(userId, payload);
-        return;
+    deliverPushToUsersNow: async (userIds, payload) => {
+      if (options?.deliverImpl) {
+        return options.deliverImpl(userIds, payload);
       }
-      cap.pushes.push({ userId, payload });
+      const id = userIds.find((value): value is string => Boolean(value));
+      if (!id) return [];
+      cap.pushes.push({ userId: id, payload });
+      return [sentResult(id)];
     },
     scheduleWorkerSideEffect: (work) => {
       cap.scheduled += 1;
@@ -146,11 +168,6 @@ function captureHarness(options?: {
     },
   });
   return deps;
-}
-
-async function flush(deps: CustomerChatAgentPushDeps) {
-  await Promise.resolve();
-  await Promise.resolve();
 }
 
 function testPreviewAndTitle() {
@@ -235,6 +252,7 @@ async function testHappyPathOnce() {
   const deps = captureHarness();
   await notifyAssignedAgentOfCustomerChatMessage(eligibleInput(), deps);
   assert.equal(deps.pushes.length, 1);
+  assert.equal(deps.scheduled, 0);
   assert.equal(deps.pushes[0]?.userId, AGENT_A);
   assert.equal(deps.pushes[0]?.payload.type, "chat_message");
   assert.equal(
@@ -353,18 +371,34 @@ async function testPreferenceOff() {
 
 async function testFcmFailureAndNoDeviceStillOk() {
   const throwing = captureHarness({
-    sendImpl: () => {
+    deliverImpl: async () => {
       throw new Error("FCM down");
     },
   });
   await notifyAssignedAgentOfCustomerChatMessage(eligibleInput(), throwing);
   assert.equal(throwing.pushes.length, 0);
+  assert.equal(throwing.scheduled, 0);
 
-  const noop = captureHarness({
-    sendImpl: () => undefined,
+  const noDevice = captureHarness({
+    deliverImpl: async (userIds) => {
+      const id = userIds.find((value): value is string => Boolean(value));
+      if (!id) return [];
+      return [
+        {
+          userId: id,
+          status: "no_device",
+          deviceCount: 0,
+          sentCount: 0,
+          failedCount: 0,
+          skippedCount: 0,
+          unregisteredCount: 0,
+        },
+      ];
+    },
   });
-  await notifyAssignedAgentOfCustomerChatMessage(eligibleInput(), noop);
-  assert.equal(noop.pushes.length, 0);
+  await notifyAssignedAgentOfCustomerChatMessage(eligibleInput(), noDevice);
+  assert.equal(noDevice.pushes.length, 0);
+  assert.equal(noDevice.scheduled, 0);
 }
 
 async function testNoDeskFanout() {
@@ -374,12 +408,126 @@ async function testNoDeskFanout() {
   assert.equal(deps.pushes[0]?.userId, AGENT_A);
 }
 
-async function testScheduleOnce() {
-  const deps = captureHarness();
+async function testScheduleOnceAndAwaitsDelivery() {
+  let deliverResolved = false;
+  let scheduledWork: Promise<unknown> | null = null;
+  const deps = captureHarness({
+    deliverImpl: async (userIds, payload) => {
+      await Promise.resolve();
+      const id = userIds.find((value): value is string => Boolean(value));
+      if (!id) return [];
+      deps.pushes.push({ userId: id, payload });
+      deliverResolved = true;
+      return [sentResult(id)];
+    },
+  });
+  deps.scheduleWorkerSideEffect = (work) => {
+    deps.scheduled += 1;
+    scheduledWork = work;
+  };
   scheduleNotifyAssignedAgentOfCustomerChatMessage(eligibleInput(), deps);
   assert.equal(deps.scheduled, 1);
-  await flush(deps);
+  assert.equal(deliverResolved, false);
+  assert.ok(scheduledWork);
+  await scheduledWork;
+  assert.equal(deliverResolved, true);
   assert.equal(deps.pushes.length, 1);
+  assert.equal(deps.scheduled, 1);
+}
+
+function assertLogSafe(line: string) {
+  assert.ok(!line.includes("Production customer chat test"));
+  assert.ok(!line.includes("Hello from customer"));
+  assert.ok(!line.includes("@"));
+  assert.ok(!line.includes("token"));
+  assert.ok(!line.includes("Bearer"));
+  assert.ok(!/1[0-9]{9,}/.test(line));
+}
+
+function testSafeObservabilityFormat() {
+  const enqueue = formatChatMessageEnqueueLog({
+    messageId: MSG_ID,
+    leadId: LEAD_ID,
+    recipientUserId: AGENT_A,
+  });
+  assert.equal(
+    enqueue,
+    `[staff-notify] chat_message enqueue messageId=${MSG_ID} leadIdPrefix=${staffNotifyIdPrefix(LEAD_ID)} recipientPrefix=${staffNotifyIdPrefix(AGENT_A)}`,
+  );
+  assertLogSafe(enqueue);
+  assert.ok(!enqueue.includes(LEAD_ID));
+  assert.ok(!enqueue.includes(AGENT_A));
+
+  const sent = formatChatMessageFcmResultLog(AGENT_A, sentResult(AGENT_A));
+  assert.equal(
+    sent,
+    `[push:fcm] result type=chat_message userPrefix=${staffNotifyIdPrefix(AGENT_A)} shell=houzzatpro devices=1 sent=1 failed=0 skipped=0 unregistered=0 status=sent`,
+  );
+  assertLogSafe(sent);
+  assert.ok(!sent.includes(AGENT_A));
+
+  const prefOff = formatChatMessageFcmResultLog(AGENT_A, { status: "pref_off" });
+  assert.equal(
+    prefOff,
+    `[push:fcm] result type=chat_message userPrefix=${staffNotifyIdPrefix(AGENT_A)} shell=houzzatpro status=pref_off`,
+  );
+  assert.ok(!prefOff.includes("devices="));
+}
+
+async function testEnqueueAndResultLogsOnSuccess() {
+  const lines: string[] = [];
+  const orig = console.info;
+  console.info = (...args: unknown[]) => {
+    lines.push(args.map((a) => String(a)).join(" "));
+  };
+  try {
+    const deps = captureHarness();
+    await notifyAssignedAgentOfCustomerChatMessage(eligibleInput(), deps);
+    const enqueue = lines.find((l) => l.includes("chat_message enqueue"));
+    const result = lines.find((l) => l.includes("[push:fcm] result"));
+    assert.ok(enqueue);
+    assert.ok(result);
+    assert.ok(enqueue?.includes(`messageId=${MSG_ID}`));
+    assert.ok(result?.includes("status=sent"));
+    assert.ok(result?.includes("devices=1"));
+    for (const line of lines) assertLogSafe(line);
+  } finally {
+    console.info = orig;
+  }
+}
+
+async function testNoDeviceLogsWithoutFailing() {
+  const lines: string[] = [];
+  const orig = console.info;
+  console.info = (...args: unknown[]) => {
+    lines.push(args.map((a) => String(a)).join(" "));
+  };
+  try {
+    const deps = captureHarness({
+      deliverImpl: async (userIds) => {
+        const id = userIds.find((value): value is string => Boolean(value));
+        if (!id) return [];
+        return [
+          {
+            userId: id,
+            status: "no_device",
+            deviceCount: 0,
+            sentCount: 0,
+            failedCount: 0,
+            skippedCount: 0,
+            unregisteredCount: 0,
+          },
+        ];
+      },
+    });
+    await notifyAssignedAgentOfCustomerChatMessage(eligibleInput(), deps);
+    const result = lines.find((l) => l.includes("[push:fcm] result"));
+    assert.ok(result?.includes("status=no_device"));
+    assert.ok(result?.includes("devices=0"));
+    for (const line of lines) assertLogSafe(line);
+  } finally {
+    console.info = orig;
+  }
 }
 
 function testPrefsDefaultOnNoUiRow() {
@@ -412,7 +560,9 @@ function testSourceContracts() {
   assert.ok(helper.includes("notifyAssignedAgentOfCustomerChatMessage"));
   assert.ok(helper.includes("authorizeStaffRecipientForLead"));
   assert.ok(helper.includes("chatsPageHref"));
-  assert.ok(helper.includes("sendPushToUser"));
+  assert.ok(helper.includes("deliverPushToUsersNow"));
+  assert.ok(helper.includes("await deliver("));
+  assert.ok(!helper.includes("sendPushToUser"));
   assert.ok(helper.includes("scheduleWorkerSideEffect"));
   assert.ok(!helper.includes("notifyNewLeadCapturedToStaff"));
   assert.ok(!helper.includes("resolveLeadDeskNotifiers"));
@@ -444,6 +594,22 @@ function testSourceContracts() {
   assert.ok(!writer.includes("sendPushToUser"));
   assert.ok(writer.includes("Do not write"));
   assert.ok(writer.includes("LeadActivity or send notifications"));
+
+  const notifyFn = helper.slice(
+    helper.indexOf("export async function notifyAssignedAgentOfCustomerChatMessage"),
+    helper.indexOf("export function scheduleNotifyAssignedAgentOfCustomerChatMessage"),
+  );
+  assert.ok(notifyFn.includes("await deliver("));
+  assert.ok(!notifyFn.includes("scheduleWorkerSideEffect"));
+  assert.ok(!notifyFn.includes("sendPushToUser"));
+  assert.ok(notifyFn.includes("formatChatMessageEnqueueLog"));
+  assert.ok(notifyFn.includes("formatChatMessageFcmResultLog"));
+
+  const scheduleFn = helper.slice(
+    helper.indexOf("export function scheduleNotifyAssignedAgentOfCustomerChatMessage"),
+  );
+  assert.ok(scheduleFn.includes("scheduleWorkerSideEffect"));
+  assert.ok(scheduleFn.includes("notifyAssignedAgentOfCustomerChatMessage"));
 
   assert.ok(!agentSend.includes("customer-chat-agent-push"));
   assert.ok(!agentSend.includes("chat_message"));
@@ -827,7 +993,10 @@ async function main() {
   await testPreferenceOff();
   await testFcmFailureAndNoDeviceStillOk();
   await testNoDeskFanout();
-  await testScheduleOnce();
+  await testScheduleOnceAndAwaitsDelivery();
+  testSafeObservabilityFormat();
+  await testEnqueueAndResultLogsOnSuccess();
+  await testNoDeviceLogsWithoutFailing();
   await testCustomerSendSchedulesOnce();
   await testUnassignedFailsBeforeMessageAndNotify();
   await testPushFailureDoesNotFailSend();

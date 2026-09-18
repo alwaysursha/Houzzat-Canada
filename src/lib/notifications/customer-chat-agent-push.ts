@@ -11,12 +11,18 @@
  * `{ chat_message: false }` is the only way to disable.
  *
  * Dedupe: `created === false` (idempotent/replayed writer result) skips.
- * One newly inserted Message.id → at most one schedule attempt.
+ * One newly inserted Message.id → at most one outer schedule.
+ * FCM is awaited inside that scheduled callback via deliverPushToUsersNow
+ * (no second nested schedule hop).
  * Message.id is logged, not added to FCM data (existing payload is type+href).
  */
 import { chatsPageHref } from "@/lib/agent/chats-inbox-query";
 import { isPushTypeEnabled } from "@/lib/notifications/catalog";
-import { sendPushToUser, type PushPayload } from "@/lib/notifications/push";
+import {
+  deliverPushToUsersNow,
+  type PushDeliveryResult,
+  type PushPayload,
+} from "@/lib/notifications/push";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { authorizeStaffRecipientForLead } from "@/lib/workspace-notification-recipients";
 import type {
@@ -65,9 +71,42 @@ export type CustomerChatAgentPushDeps = {
     userId: string,
   ) => Promise<CustomerChatAgentPushAssignee | null>;
   authorizeStaffRecipientForLead?: typeof authorizeStaffRecipientForLead;
-  sendPushToUser?: typeof sendPushToUser;
+  deliverPushToUsersNow?: typeof deliverPushToUsersNow;
   scheduleWorkerSideEffect?: typeof scheduleWorkerSideEffect;
 };
+
+const ID_PREFIX_LEN = 8;
+
+export function staffNotifyIdPrefix(id: string): string {
+  return id.slice(0, ID_PREFIX_LEN);
+}
+
+export function formatChatMessageEnqueueLog(input: {
+  messageId: string;
+  leadId: string;
+  recipientUserId: string;
+}): string {
+  return `[staff-notify] chat_message enqueue messageId=${input.messageId} leadIdPrefix=${staffNotifyIdPrefix(input.leadId)} recipientPrefix=${staffNotifyIdPrefix(input.recipientUserId)}`;
+}
+
+export function formatChatMessageFcmResultLog(
+  userId: string,
+  result: Pick<
+    PushDeliveryResult,
+    | "status"
+    | "deviceCount"
+    | "sentCount"
+    | "failedCount"
+    | "skippedCount"
+    | "unregisteredCount"
+  >,
+): string {
+  const prefix = staffNotifyIdPrefix(userId);
+  if (typeof result.deviceCount !== "number") {
+    return `[push:fcm] result type=chat_message userPrefix=${prefix} shell=houzzatpro status=${result.status}`;
+  }
+  return `[push:fcm] result type=chat_message userPrefix=${prefix} shell=houzzatpro devices=${result.deviceCount} sent=${result.sentCount ?? 0} failed=${result.failedCount ?? 0} skipped=${result.skippedCount ?? 0} unregistered=${result.unregisteredCount ?? 0} status=${result.status}`;
+}
 
 function defaultLoadLead(
   leadId: string,
@@ -222,8 +261,23 @@ export async function notifyAssignedAgentOfCustomerChatMessage(
       senderName: input.message.senderName,
       body: input.message.body,
     });
-    const send = deps.sendPushToUser ?? sendPushToUser;
-    send(agentId, payload);
+    console.info(
+      formatChatMessageEnqueueLog({
+        messageId: input.message.id,
+        leadId: lead.id,
+        recipientUserId: agentId,
+      }),
+    );
+    const deliver = deps.deliverPushToUsersNow ?? deliverPushToUsersNow;
+    const results = await deliver([agentId], payload);
+    const row = results[0];
+    if (row) {
+      console.info(formatChatMessageFcmResultLog(agentId, row));
+    } else {
+      console.info(
+        formatChatMessageFcmResultLog(agentId, { status: "no_device" }),
+      );
+    }
   } catch (error) {
     console.error("[staff-notify] chat_message failed", {
       messageId: input.message.id,

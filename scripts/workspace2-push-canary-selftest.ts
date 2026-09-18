@@ -71,7 +71,7 @@ function testAwaitablePushExport() {
   const push = read("src/lib/notifications/push.ts");
   assert.ok(push.includes("export async function deliverPushToUsersNow"));
   assert.ok(push.includes("export function isFirebasePushConfigured"));
-  assert.ok(push.includes('return "skipped"'));
+  assert.ok(push.includes('status: "skipped"'));
   assert.ok(push.includes("[push:stub]"));
 }
 

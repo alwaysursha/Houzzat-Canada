@@ -156,6 +156,8 @@ function testCustomerChatAssignedAgentPush() {
   assert.ok(helper.includes('type: CUSTOMER_CHAT_PUSH_TYPE'));
   assert.ok(helper.includes("chatsPageHref"));
   assert.ok(helper.includes("authorizeStaffRecipientForLead"));
+  assert.ok(helper.includes("deliverPushToUsersNow"));
+  assert.ok(!helper.includes("sendPushToUser"));
   assert.ok(!helper.includes("notifyNewLeadCapturedToStaff"));
   assert.ok(!helper.includes("resolveLeadDeskNotifiers"));
   assert.ok(customerSend.includes("scheduleNotifyAssignedAgentOfCustomerChatMessage"));

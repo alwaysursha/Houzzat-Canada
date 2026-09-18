@@ -163,6 +163,7 @@ async function main() {
   assert.equal(typeof pushMod.sendPushToUser, "function");
   assert.equal(typeof pushMod.sendPushToUsers, "function");
   assert.equal(typeof pushMod.sendPushToUserFirstEnabled, "function");
+  assert.equal(typeof pushMod.deliverPushToUsersNow, "function");
   const ret = pushMod.sendPushToUser(undefined, {
     type: "property_update",
     title: "t",
