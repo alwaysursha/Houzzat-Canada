@@ -1,13 +1,16 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AccountVerifiedSuccessSlot } from "@/components/account/AccountVerifiedSuccessSlot";
+import { CustomerChatFab } from "@/components/customer-chat/CustomerChatFab";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { MobileBottomNav } from "@/components/site/MobileBottomNav";
 import { ListingSheetHostLazy } from "@/components/mobile/ListingSheetHostLazy";
 import { TenantBrandProvider } from "@/components/tenancy/TenantBrandProvider";
 import { TenantThemeStyle } from "@/components/tenancy/TenantThemeStyle";
 import { requireCustomerUser } from "@/lib/account";
+import { accountSignInHref } from "@/lib/account/account-sign-in-callback";
 import { auth } from "@/lib/auth";
 import { isDatabaseUnavailableError } from "@/lib/errors";
 import { getRequestAppShell } from "@/lib/mobile/app-shell-server";
@@ -69,7 +72,12 @@ export default async function AccountLayout({
   }
 
   if (!session?.user) {
-    redirect("/auth/sign-in?callbackUrl=/account");
+    const headerStore = await headers();
+    const requestPath =
+      headerStore.get("x-houzzat-request-path") ??
+      headerStore.get("next-url") ??
+      "";
+    redirect(accountSignInHref(requestPath));
   }
 
   let customer;
@@ -101,6 +109,7 @@ export default async function AccountLayout({
       href: "/account",
       label: chromeBrand ? tenantAccountLabel(chromeBrand) : "Your account",
     },
+    { href: "/account/chat", label: "Chat" },
     { href: "/account/notifications", label: "Notifications" },
     { href: "/route-planner", label: "Route Planner" },
     { href: "/account/saved", label: "Saved" },
@@ -155,6 +164,7 @@ export default async function AccountLayout({
         {children}
       </main>
       <MobileBottomNav chromeBrand={chromeBrand ?? undefined} />
+      {chromeBrand ? <CustomerChatFab /> : null}
     </div>
   );
 

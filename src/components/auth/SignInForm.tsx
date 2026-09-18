@@ -15,11 +15,12 @@ import {
   rememberLoginCredentials,
 } from "@/lib/auth/remembered-login";
 import { flyToAccountPortal } from "@/lib/fly-to-account";
+import { authSuccessReturnPath } from "@/lib/auth/safe-callback-url";
 import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
 
 export function SignInForm({
-  callbackUrl: _callbackUrl = null,
+  callbackUrl = null,
   onSuccess,
   onSwitchMode,
 }: {
@@ -88,6 +89,12 @@ export function SignInForm({
     const fromRect = submitRef.current?.getBoundingClientRect() ?? null;
     setPending(false);
     onSuccess?.();
+    const dest = authSuccessReturnPath(callbackUrl);
+    if (dest && dest !== window.location.pathname) {
+      router.push(dest);
+      router.refresh();
+      return;
+    }
     router.refresh();
     window.setTimeout(() => flyToAccountPortal(fromRect), 40);
   }

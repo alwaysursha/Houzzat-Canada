@@ -10,3 +10,17 @@ export function safeInternalCallbackUrl(
   }
   return trimmed;
 }
+
+/**
+ * Destination after modal sign-in/sign-up.
+ * Null means stay on the current page (header Sign in, no callback).
+ * Rejects /auth/* so the user cannot bounce back into the bridge.
+ */
+export function authSuccessReturnPath(
+  callbackUrl: string | null | undefined,
+): string | null {
+  if (!callbackUrl) return null;
+  const dest = safeInternalCallbackUrl(callbackUrl, "");
+  if (!dest || dest.startsWith("/auth")) return null;
+  return dest;
+}

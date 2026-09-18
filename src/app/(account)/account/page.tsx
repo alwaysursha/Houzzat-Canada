@@ -174,6 +174,13 @@ export default async function AccountPage() {
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-3">
+        <Link
+          href="/account/chat"
+          className="rounded-2xl border border-line bg-surface p-5 transition hover:border-canopy/40"
+        >
+          <h2 className="font-semibold text-ink">Chat</h2>
+          <p className="mt-2 text-sm text-ink/55">Message your agent</p>
+        </Link>
         {[
           { label: "Saved homes", value: savedCount, href: "/account/saved" },
           { label: "Notes", value: noteCount, href: "/account/notes" },

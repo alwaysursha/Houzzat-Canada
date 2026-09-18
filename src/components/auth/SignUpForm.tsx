@@ -11,11 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
 import { flyToAccountPortal } from "@/lib/fly-to-account";
+import { authSuccessReturnPath } from "@/lib/auth/safe-callback-url";
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
 import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
 
 export function SignUpForm({
-  callbackUrl: _callbackUrl = null,
+  callbackUrl = null,
   onSuccess,
   onSwitchMode,
 }: {
@@ -149,6 +150,12 @@ export function SignUpForm({
 
     const fromRect = submitRef.current?.getBoundingClientRect() ?? null;
     onSuccess?.();
+    const dest = authSuccessReturnPath(callbackUrl);
+    if (dest && dest !== window.location.pathname) {
+      router.push(dest);
+      router.refresh();
+      return;
+    }
     router.refresh();
     window.setTimeout(() => flyToAccountPortal(fromRect), 40);
   }

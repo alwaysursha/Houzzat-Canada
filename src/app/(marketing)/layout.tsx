@@ -10,6 +10,7 @@ import { SiteHeader } from "@/components/site/SiteHeader";
 import { MobileBottomNav } from "@/components/site/MobileBottomNav";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
 import { RoutePlannerFloatingChip } from "@/components/route-planner/RoutePlannerFloatingChip";
+import { CustomerChatFab } from "@/components/customer-chat/CustomerChatFab";
 import { ListingSheetHostLazy } from "@/components/mobile/ListingSheetHostLazy";
 import { TenantBrandProvider } from "@/components/tenancy/TenantBrandProvider";
 import { TenantThemeStyle } from "@/components/tenancy/TenantThemeStyle";
@@ -228,6 +229,7 @@ export default async function MarketingLayout({
           <Suspense fallback={null}>
             <MarketingChromeGate>
               <RoutePlannerFloatingChip />
+              <CustomerChatFab />
               <ScrollToTopButton />
               <MobileBottomNav cities={cities} chromeBrand={chromeBrand} />
             </MarketingChromeGate>
