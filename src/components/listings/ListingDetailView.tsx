@@ -111,7 +111,8 @@ export function ListingDetailView({
 }: ListingDetailViewProps) {
   const personalizationCities: string[] = [];
   const showClosedPrice =
-    isClosedListingStatus(listing.status) && listing.soldPrice != null;
+    isClosedListingStatus(listing.status) &&
+    (listing.soldPrice != null || !canSeeRestricted);
   const isInactive = !isOnMarketListingStatus(listing.status);
   const similarHomesHref = (() => {
     const params = new URLSearchParams();

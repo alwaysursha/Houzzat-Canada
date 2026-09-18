@@ -587,10 +587,9 @@ async function main() {
       page.includes('if (!listing) return { title: "Listing" }'),
       "denied metadata must stay generic",
     );
-    assert.ok(
-      page.includes("Board entitlement already applied") ||
-        page.includes("never substitutes for board"),
-    );
+    assert.ok(page.includes("serializeListingDetailClientModel"));
+    assert.ok(page.includes("listing={listingForClient}"));
+    assert.ok(!page.includes("buildAddressListingHistoryRows({"));
     // No client authority trust
     assert.ok(!page.includes('searchParams.get("workspaceId")'));
     assert.ok(!page.includes('searchParams.get("organizationId")'));

@@ -395,10 +395,14 @@ async function main() {
     assert.ok(raw.includes("entitlementFilteringEnabled: true"));
     assert.ok(raw.includes('additionalCapabilities: ["MEDIA"]'));
     assert.ok(raw.includes('additionalCapabilities: ["HISTORY"]'));
+    assert.ok(raw.includes("resolveListingDetailAccess"));
+    assert.ok(raw.includes("redactListingVowRestrictedFields"));
+    assert.ok(raw.includes("buildAuthorizedAddressListingHistoryRows"));
     assert.ok(raw.includes('status: 404'));
     assert.ok(!raw.includes("lookupAndUpsertOnDemand"));
     assert.ok(!raw.includes("fetchListingPhotosFromPropTx"));
     assert.ok(!raw.includes('searchParams.get("workspaceId")'));
+    assert.ok(!raw.includes("listing: { ...listing, media }"));
     console.log("[10] raw GET entitlement + MEDIA/HISTORY strip... PASS");
   }
 
@@ -449,11 +453,21 @@ async function main() {
     assert.ok(insights.includes("evaluateWebListingDetailInventoryAccess"));
     assert.ok(insights.includes("resolveListingEntitlementContextForRequest"));
     assert.ok(insights.includes("entitlementFilteringEnabled: true"));
+    assert.ok(insights.includes("resolveListingDetailAccess"));
     const insightsGate = insights.indexOf(
       "evaluateWebListingDetailInventoryAccess({",
     );
+    const insightsVow = insights.indexOf("resolveListingDetailAccess(user, listing)");
     const insightsBuild = insights.indexOf("buildListingInsights({");
-    assert.ok(insightsGate >= 0 && insightsBuild > insightsGate);
+    assert.ok(
+      insightsGate >= 0 &&
+        insightsVow > insightsGate &&
+        insightsBuild > insightsVow,
+    );
+
+    const insightsLib = read("src/lib/market/listing-insights.ts");
+    assert.ok(insightsLib.includes("buildAuthorizedAddressListingHistoryRows"));
+    assert.ok(insightsLib.includes("buildInsightsTimeline"));
 
     assert.ok(ask.includes("evaluateWebListingDetailInventoryAccess"));
     assert.ok(ask.includes("resolveListingEntitlementContextForRequest"));

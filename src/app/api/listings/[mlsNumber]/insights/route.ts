@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { resolveClientAccess } from "@/lib/account-access";
 import { auth } from "@/lib/auth";
+import { resolveListingDetailAccess } from "@/lib/listings/build-listing-panel";
 import { getListingProvider } from "@/lib/listings/provider";
 import { buildListingInsights } from "@/lib/market/listing-insights";
 import { getMarketPulse } from "@/lib/market/pulse";
@@ -18,7 +18,9 @@ type Params = { params: Promise<{ mlsNumber: string }> };
  *
  * G.10C2: Host entitlement → base listing capability before any listing
  * context is used. Market pulse sold aggregates stay behind client/VOW
- * signed-in (not listing HISTORY). Unauthorized → 404.
+ * access (not listing HISTORY). Timeline/history uses the same
+ * resolveListingDetailAccess + authorized history helper as listing detail.
+ * Unauthorized inventory → 404.
  */
 export async function GET(request: Request, { params }: Params) {
   const { mlsNumber: raw } = await params;
@@ -63,8 +65,35 @@ export async function GET(request: Request, { params }: Params) {
         .catch(() => null)
     : null;
 
-  const access = resolveClientAccess(user);
-  const signedIn = access.hasClientAccess;
+  const panelAccess = resolveListingDetailAccess(user, listing);
+  if (panelAccess.vowBlocked) {
+    if (panelAccess.needsEmailVerification) {
+      return NextResponse.json(
+        {
+          error: "Email verification required.",
+          vowBlocked: true,
+          requiresEmailVerification: true,
+        },
+        {
+          status: 403,
+          headers: { "Cache-Control": "private, no-store" },
+        },
+      );
+    }
+    return NextResponse.json(
+      {
+        error: "VOW access requires a Houzzat account.",
+        vowBlocked: true,
+        requiresAuth: true,
+      },
+      {
+        status: 401,
+        headers: { "Cache-Control": "private, no-store" },
+      },
+    );
+  }
+
+  const signedIn = panelAccess.canSeeRestricted;
 
   try {
     const [pois, pulse] = await Promise.all([

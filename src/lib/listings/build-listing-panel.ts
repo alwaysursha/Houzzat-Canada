@@ -182,26 +182,124 @@ export function authorizeHistoryRowsForClient(
   });
 }
 
-function serializeHistoryForAccess(
-  listing: ListingDetail,
-  canSeeRestricted: boolean,
-): ListingPanelListing["history"] {
-  const rows = listing.history.filter((h) => {
+/** Same VOW history filter as the listing panel — omit synthetic + restricted rows. */
+export function listingHistoryVisibleForClient<
+  T extends {
+    note?: string | null;
+    event: string;
+    visibility?: string | null;
+  },
+>(history: T[], canSeeRestricted: boolean): T[] {
+  return history.filter((h) => {
     if (h.note === "synthetic:empty" || h.event === "Synced") return false;
     if (!canSeeRestricted && h.visibility !== "public") return false;
     return true;
   });
+}
 
-  return rows.map((h) => ({
-    id: h.id,
-    event: h.event,
-    price: h.price,
-    originalPrice: h.originalPrice ?? null,
-    contractDate: toIsoRequired(h.contractDate),
-    lastUpdatedAt: toIso(h.lastUpdatedAt ?? null),
-    externalMls: h.externalMls ?? null,
-    visibility: h.visibility ?? null,
-  }));
+/**
+ * Canonical VOW redaction for a raw listing JSON payload.
+ * Guests keep public IDX fields; soldPrice and restricted history are stripped.
+ * soldAt is left intact — same as {@link buildListingPanelPayload}.
+ */
+export function redactListingVowRestrictedFields<
+  T extends {
+    soldPrice: number | null;
+    history: Array<{
+      note?: string | null;
+      event: string;
+      visibility?: string | null;
+    }>;
+  },
+>(listing: T, canSeeRestricted: boolean): T {
+  return {
+    ...listing,
+    soldPrice: canSeeRestricted ? listing.soldPrice : null,
+    history: listingHistoryVisibleForClient(listing.history, canSeeRestricted),
+  };
+}
+
+/** History table rows with the same sold/VOW redaction as the listing panel. */
+export function buildAuthorizedAddressListingHistoryRows(input: {
+  mlsNumber: string;
+  listPrice: number;
+  listedAt: Date | string;
+  updatedAtMls?: Date | string | null;
+  soldAt?: Date | string | null;
+  soldPrice?: number | null;
+  status: string;
+  transactionType: string;
+  history: Parameters<typeof buildAddressListingHistoryRows>[0]["history"];
+  siblings: Parameters<typeof buildAddressListingHistoryRows>[0]["siblings"];
+  canSeeRestricted: boolean;
+}): HistoryRow[] {
+  const soldPrice = input.canSeeRestricted ? (input.soldPrice ?? null) : null;
+  return authorizeHistoryRowsForClient(
+    buildAddressListingHistoryRows({
+      mlsNumber: input.mlsNumber,
+      listPrice: input.listPrice,
+      listedAt: input.listedAt,
+      updatedAtMls: input.updatedAtMls,
+      soldAt: input.soldAt,
+      soldPrice,
+      status: input.status,
+      transactionType: input.transactionType,
+      history: input.history,
+      siblings: input.siblings,
+    }),
+    {
+      canSeeRestricted: input.canSeeRestricted,
+      listPrice: input.listPrice,
+      status: input.status,
+    },
+  );
+}
+
+/**
+ * Listing-page / RSC client-prop boundary.
+ * Restricted sold/close dollars must be stripped before `"use client"` props.
+ */
+export function serializeListingDetailClientModel(
+  listing: ListingDetail,
+  canSeeRestricted: boolean,
+): {
+  listing: ListingDetail;
+  listingHistoryRows: HistoryRow[];
+} {
+  return {
+    listing: redactListingVowRestrictedFields(listing, canSeeRestricted),
+    listingHistoryRows: buildAuthorizedAddressListingHistoryRows({
+      mlsNumber: listing.mlsNumber,
+      listPrice: listing.listPrice,
+      listedAt: listing.listedAt,
+      updatedAtMls: listing.updatedAtMls,
+      soldAt: listing.soldAt,
+      soldPrice: listing.soldPrice,
+      status: listing.status,
+      transactionType: listing.transactionType,
+      history: listing.history,
+      siblings: [],
+      canSeeRestricted,
+    }),
+  };
+}
+
+function serializeHistoryForAccess(
+  listing: ListingDetail,
+  canSeeRestricted: boolean,
+): ListingPanelListing["history"] {
+  return listingHistoryVisibleForClient(listing.history, canSeeRestricted).map(
+    (h) => ({
+      id: h.id,
+      event: h.event,
+      price: h.price,
+      originalPrice: h.originalPrice ?? null,
+      contractDate: toIsoRequired(h.contractDate),
+      lastUpdatedAt: toIso(h.lastUpdatedAt ?? null),
+      externalMls: h.externalMls ?? null,
+      visibility: h.visibility ?? null,
+    }),
+  );
 }
 
 /**

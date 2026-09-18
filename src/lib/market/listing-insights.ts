@@ -1,9 +1,12 @@
 import type { ListingFacts } from "@/lib/listings/facts";
 import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
 import {
-  buildListingHistoryRows,
+  buildAuthorizedAddressListingHistoryRows,
+} from "@/lib/listings/build-listing-panel";
+import {
   historyRowRecencyMs,
   isPriceChangeEvent,
+  type HistoryRow,
 } from "@/lib/listings/history-rows";
 import { daysOnMarketFromListedAt } from "@/lib/listings/constants";
 import { boundingBox, haversineKm } from "@/lib/geo/distance";
@@ -35,6 +38,68 @@ export type InsightTimelinePoint = {
   /** When false, guests see the event without the sold/leased price. */
   public: boolean;
 };
+
+type InsightsListingHistory = {
+  id: string;
+  event: string;
+  price: number | null;
+  originalPrice: number | null;
+  contractDate: Date;
+  lastUpdatedAt: Date | null;
+  externalMls: string | null;
+  visibility: string;
+  note: string | null;
+};
+
+type InsightsListingForTimeline = {
+  mlsNumber: string;
+  listPrice: number;
+  soldPrice: number | null;
+  listedAt: Date;
+  soldAt: Date | null;
+  updatedAtMls: Date | null;
+  status: string;
+  transactionType: string;
+  history: InsightsListingHistory[];
+};
+
+/**
+ * Timeline + history for Insights — same VOW sold/close redaction as
+ * listing panel / raw detail (Ask #45). Null-price rows are omitted so
+ * guest JSON cannot carry restricted dollars.
+ */
+export function buildInsightsTimeline(opts: {
+  listing: InsightsListingForTimeline;
+  canSeeRestricted: boolean;
+}): { historyRows: HistoryRow[]; timeline: InsightTimelinePoint[] } {
+  const { listing, canSeeRestricted } = opts;
+  const historyRows = buildAuthorizedAddressListingHistoryRows({
+    mlsNumber: listing.mlsNumber,
+    listPrice: listing.listPrice,
+    listedAt: listing.listedAt,
+    updatedAtMls: listing.updatedAtMls,
+    soldAt: listing.soldAt,
+    soldPrice: listing.soldPrice,
+    status: listing.status,
+    transactionType: listing.transactionType,
+    history: listing.history,
+    siblings: [],
+    canSeeRestricted,
+  });
+
+  const timeline = [...historyRows]
+    .filter((r): r is HistoryRow & { price: number } => r.price != null)
+    .sort((a, b) => historyRowRecencyMs(a) - historyRowRecencyMs(b))
+    .slice(-8)
+    .map((r) => ({
+      date: r.lastUpdate ?? r.contractDate ?? listing.listedAt.toISOString(),
+      price: r.price,
+      label: r.event,
+      public: r.public,
+    }));
+
+  return { historyRows, timeline };
+}
 
 export type InsightComp = {
   mlsNumber: string;
@@ -417,16 +482,9 @@ export async function buildListingInsights(opts: {
     ? pctDelta(listing.listPrice, pulse.medianSoldPrice)
     : null;
 
-  const historyRows = buildListingHistoryRows({
-    mlsNumber: listing.mlsNumber,
-    listPrice: listing.listPrice,
-    listedAt: listing.listedAt,
-    updatedAtMls: listing.updatedAtMls,
-    soldAt: listing.soldAt,
-    soldPrice: listing.soldPrice,
-    status: listing.status,
-    transactionType: listing.transactionType as "SALE" | "LEASE",
-    history: listing.history,
+  const { historyRows, timeline } = buildInsightsTimeline({
+    listing,
+    canSeeRestricted: signedIn,
   });
 
   const priceCuts = historyRows.filter(
@@ -436,17 +494,6 @@ export async function buildListingInsights(opts: {
       r.originalPrice != null &&
       r.price < r.originalPrice,
   ).length;
-
-  const timeline = [...historyRows]
-    .filter((r) => r.price != null)
-    .sort((a, b) => historyRowRecencyMs(a) - historyRowRecencyMs(b))
-    .slice(-8)
-    .map((r) => ({
-      date: r.lastUpdate ?? r.contractDate ?? listing.listedAt.toISOString(),
-      price: r.price!,
-      label: r.event,
-      public: r.public,
-    }));
 
   const band = 0.15;
   const priceBandLow = Math.round(listing.listPrice * (1 - band));

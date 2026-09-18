@@ -2,8 +2,10 @@ import { cache } from "react";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { ListingDetailView } from "@/components/listings/ListingDetailView";
-import { buildAddressListingHistoryRows } from "@/lib/listings/address-history";
-import { resolveListingDetailAccess } from "@/lib/listings/build-listing-panel";
+import {
+  resolveListingDetailAccess,
+  serializeListingDetailClientModel,
+} from "@/lib/listings/build-listing-panel";
 import { formatListingAddressOneLine } from "@/lib/listings/constants";
 import { NEON_LISTING_MEDIA_CAP } from "@/lib/listings/gallery-constants";
 import { loadListingForDetailPage } from "@/lib/listings/load-listing-for-detail";
@@ -218,6 +220,8 @@ export default async function ListingDetailPage({
   const gateSold = panelAccess.gateSold;
   const canSeeRestricted = panelAccess.canSeeRestricted;
   const detailsLocked = panelAccess.detailsLocked;
+  const { listing: listingForClient, listingHistoryRows } =
+    serializeListingDetailClientModel(listing, canSeeRestricted);
 
   // Neon-only SSR gallery (≤5). Never await PropTx here.
   // Vercel: do not invoke fetchListingPhotosFromPropTx — client enriches after
@@ -255,24 +259,7 @@ export default async function ListingDetailPage({
     }),
   );
 
-  // Address siblings enrich client-side (ListingHistoryPanel).
-  // RSC keeps existing HTML behavior (soldPrice still in history builder);
-  // panel API redacts soldPrice server-side for guests.
-  const listingHistoryRows = buildAddressListingHistoryRows({
-    mlsNumber: listing.mlsNumber,
-    listPrice: listing.listPrice,
-    listedAt: listing.listedAt,
-    updatedAtMls: listing.updatedAtMls,
-    soldAt: listing.soldAt,
-    soldPrice: listing.soldPrice,
-    status: listing.status,
-    transactionType: listing.transactionType,
-    history: listing.history,
-    siblings: [],
-  });
-
   const addressLabel = formatListingAddressOneLine(listing);
-
   const coverUrl =
     listing.media.find((m) => m.isPrimary)?.url ?? listing.media[0]?.url ?? null;
   const jsonLd = {
@@ -379,7 +366,7 @@ export default async function ListingDetailPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
       <ListingDetailView
-        listing={listing}
+        listing={listingForClient}
         galleryPhotos={galleryPhotos}
         livePhotosPromise={
           verifyLocked ? null : clientLivePhotosPromise
