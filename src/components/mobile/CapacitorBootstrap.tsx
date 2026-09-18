@@ -31,6 +31,7 @@ import {
   isMobileSearchSheetOpen,
   requestCloseMobileSearchSheet,
 } from "@/lib/mobile/mobile-search-sheet";
+import { resolveAgentChatsHardwareBackHref } from "@/lib/agent/chats-inbox-query";
 import { hardGo, takeNavBackHref } from "@/lib/mobile/nav-back";
 import {
   closeTopStaffOverlay,
@@ -42,7 +43,8 @@ import {
  *
  * Back priority:
  * listing chrome search → mobile AC search sheet → listing sheet →
- * staff drawers/modals → hard-nav memory → history → exit.
+ * staff drawers/modals → hard-nav memory → Chat thread→list →
+ * staff home → history → exit.
  * Closing overlays never leaves body scroll locked (acquireScrollLock).
  *
  * Also syncs the UX-only `houzzat_shell` cookie (never used for authorization).
@@ -136,6 +138,15 @@ export function CapacitorBootstrap() {
       // In staff portals (/admin/* or /agent/*), bring back to staff dashboard home
       if (currentPath.startsWith("/admin/")) {
         hardGo("/admin");
+        return;
+      }
+
+      const chatsBackHref = resolveAgentChatsHardwareBackHref(
+        currentPath,
+        window.location.search,
+      );
+      if (chatsBackHref) {
+        hardGo(chatsBackHref);
         return;
       }
 

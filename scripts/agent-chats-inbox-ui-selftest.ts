@@ -297,7 +297,7 @@ function testNoRealtime() {
   assert.ok(shell.includes("MessageCircle"));
   assert.ok(shell.includes('pathname === "/agent/chats"'));
   assert.equal(instant.includes("AgentChatsInbox"), false);
-  assert.equal(instant.includes("/agent/chats"), false);
+  assert.ok(instant.includes('href="/agent/chats"'));
   assert.equal(inbox.includes("setInterval"), false);
   assert.equal(inbox.includes("websocket"), false);
   assert.equal(inbox.includes("EventSource"), false);

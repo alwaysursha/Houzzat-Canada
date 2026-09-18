@@ -653,7 +653,8 @@ function testRouteSourceContract() {
   assert.ok(comms.includes('label: "Comms"'));
   const instant = read("src/components/agent/AgentMobileInstantShell.tsx");
   assert.ok(!instant.includes("AgentChatsInbox"));
-  assert.ok(!instant.includes("/agent/chats"));
+  assert.ok(!instant.includes("useAgentChatThread"));
+  assert.ok(instant.includes('href="/agent/chats"'));
 }
 
 async function main() {

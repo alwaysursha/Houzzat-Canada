@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LineChart,
   Menu,
+  MessageCircle,
   Phone,
   Plus,
   RefreshCw,
@@ -28,6 +29,7 @@ import { TaskForm, TaskCompleteButton } from "@/components/agent/TaskForm";
 import { LeadQuickPopup } from "@/components/agent/LeadQuickPopup";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { fetchWithMobileCache, invalidateMobileCache } from "@/lib/mobile/mobile-cache";
+import { hardGo } from "@/lib/mobile/nav-back";
 import { pipelineLabel, pipelinePillClass } from "@/lib/agent/pipeline";
 import { cn } from "@/lib/utils";
 
@@ -444,19 +446,19 @@ export function AgentMobileInstantShell({
             Leads
           </button>
 
-          <button
-            type="button"
-            onClick={() => switchTab("tasks")}
-            className={cn(
-              "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition",
-              activeTab === "tasks" ? "text-canopy" : "text-ink/45"
-            )}
+          <a
+            href="/agent/chats"
+            onClick={(event) => {
+              event.preventDefault();
+              hardGo("/agent/chats");
+            }}
+            className="flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold text-ink/45 transition"
           >
-            <span className={cn("flex size-8 items-center justify-center rounded-xl transition", activeTab === "tasks" ? "bg-canopy/12" : "bg-transparent")}>
-              <CheckSquare className="size-[18px]" strokeWidth={activeTab === "tasks" ? 2.2 : 1.85} />
+            <span className="flex size-8 items-center justify-center rounded-xl bg-transparent">
+              <MessageCircle className="size-[18px]" strokeWidth={1.85} />
             </span>
-            Tasks
-          </button>
+            Chats
+          </a>
 
           <button
             type="button"
@@ -477,11 +479,11 @@ export function AgentMobileInstantShell({
             onClick={() => setMenuOpen(true)}
             className={cn(
               "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition",
-              menuOpen ? "text-canopy" : "text-ink/45"
+              menuOpen || activeTab === "tasks" ? "text-canopy" : "text-ink/45"
             )}
           >
-            <span className={cn("flex size-8 items-center justify-center rounded-xl transition", menuOpen ? "bg-canopy/12" : "bg-transparent")}>
-              <Menu className="size-[18px]" strokeWidth={menuOpen ? 2.2 : 1.85} />
+            <span className={cn("flex size-8 items-center justify-center rounded-xl transition", menuOpen || activeTab === "tasks" ? "bg-canopy/12" : "bg-transparent")}>
+              <Menu className="size-[18px]" strokeWidth={menuOpen || activeTab === "tasks" ? 2.2 : 1.85} />
             </span>
             More
           </button>
@@ -507,6 +509,17 @@ export function AgentMobileInstantShell({
               </button>
             </div>
             <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  switchTab("tasks");
+                }}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-white/80 hover:bg-white/10"
+              >
+                <CheckSquare className="size-4" />
+                Tasks
+              </button>
               <Link
                 href="/agent/statistics"
                 onClick={() => setMenuOpen(false)}

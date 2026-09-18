@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveAgentChatsHardwareBackHref } from "../src/lib/agent/chats-inbox-query";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -127,10 +128,17 @@ function testNoUnreadBadgeOrDuplicateChat() {
   assert.equal(instant.includes("AgentChatTranscriptPane"), false);
 }
 
-function testNativeInstantShellBlocker() {
+function testNativeChatsBypassIsRouteSpecific() {
   const shell = read("src/components/agent/AgentShell.tsx");
   const instant = read("src/components/agent/AgentMobileInstantShell.tsx");
-  const nativeStart = shell.indexOf("if (isProNative)");
+  const bootstrap = read("src/components/mobile/CapacitorBootstrap.tsx");
+  const layout = read("src/app/(agent)/agent/layout.tsx");
+
+  assert.ok(shell.includes('const isChatsPage = pathname === "/agent/chats"'));
+  assert.ok(shell.includes("if (isProNative && !isChatsPage)"));
+  assert.equal(shell.includes("if (isProNative) {"), false);
+
+  const nativeStart = shell.indexOf("if (isProNative && !isChatsPage)");
   assert.ok(nativeStart >= 0);
   const webReturn = shell.indexOf(
     '<div className="flex min-h-dvh bg-mist text-ink">',
@@ -139,10 +147,96 @@ function testNativeInstantShellBlocker() {
   const nativeBlock = shell.slice(nativeStart, webReturn);
   assert.ok(nativeBlock.includes("<AgentMobileInstantShell"));
   assert.equal(nativeBlock.includes("{children}"), false);
-  assert.equal(instant.includes("/agent/chats"), false);
-  assert.equal(instant.includes('label: "Chats"'), false);
-  assert.ok(instant.includes('href="/agent/statistics"'));
-  assert.ok(instant.includes('href="/agent/inbox"'));
+
+  const webShell = shell.slice(webReturn);
+  assert.ok(webShell.includes("{children}"));
+  assert.ok(webShell.includes('href="/agent/chats"') || shell.includes('href: "/agent/chats"'));
+
+  assert.ok(layout.includes("requireAgentGate"));
+  assert.ok(layout.includes("requireAgentContext"));
+  assert.ok(layout.includes("ActiveWorkspaceGate"));
+  assert.ok(layout.includes("<AgentShell"));
+  assert.ok(layout.includes("{children}"));
+
+  assert.equal(instant.includes("AgentChatsInbox"), false);
+  assert.equal(instant.includes("useAgentChatThread"), false);
+  assert.equal(instant.includes("AgentChatTranscriptPane"), false);
+  assert.equal(instant.includes('ActiveTab = "launchpad" | "leads" | "tasks" | "calendar"'), true);
+  assert.equal(instant.includes('"chats"'), false);
+
+  assert.ok(bootstrap.includes("resolveAgentChatsHardwareBackHref"));
+  assert.ok(bootstrap.includes("hardGo(chatsBackHref)"));
+}
+
+function testNativePrimaryNavChatsAndTasksInMore() {
+  const instant = read("src/components/agent/AgentMobileInstantShell.tsx");
+  const tabsStart = instant.indexOf("grid grid-cols-5");
+  const tabsEnd = instant.indexOf("Drawer for More Navigation");
+  assert.ok(tabsStart >= 0 && tabsEnd > tabsStart);
+  const tabs = instant.slice(tabsStart, tabsEnd);
+  assert.ok(tabs.includes("Launchpad"));
+  assert.ok(tabs.includes("Leads"));
+  assert.ok(tabs.includes("Chats"));
+  assert.ok(tabs.includes("Calendar"));
+  assert.ok(tabs.includes("More"));
+  assert.ok(tabs.includes('href="/agent/chats"'));
+  assert.ok(tabs.includes('hardGo("/agent/chats")'));
+  assert.equal(tabs.includes('switchTab("tasks")'), false);
+  assert.equal(tabs.includes(">Tasks<") || tabs.includes("\n            Tasks\n"), false);
+
+  const moreStart = instant.indexOf("Drawer for More Navigation");
+  const more = instant.slice(moreStart);
+  assert.ok(more.includes('switchTab("tasks")'));
+  assert.ok(more.includes("Tasks"));
+  assert.ok(more.includes('href="/agent/statistics"'));
+  assert.ok(more.includes('href="/agent/inbox"'));
+}
+
+function testAndroidChatsHardwareBack() {
+  const bootstrap = read("src/components/mobile/CapacitorBootstrap.tsx");
+  assert.equal(
+    resolveAgentChatsHardwareBackHref("/agent/chats", "?lead=lead-9"),
+    "/agent/chats",
+  );
+  assert.equal(
+    resolveAgentChatsHardwareBackHref("/agent/chats", "lead=lead-9"),
+    "/agent/chats",
+  );
+  assert.equal(
+    resolveAgentChatsHardwareBackHref("/agent/chats", "?lead=lead-9&x=1"),
+    "/agent/chats",
+  );
+  assert.equal(resolveAgentChatsHardwareBackHref("/agent/chats", ""), "/agent");
+  assert.equal(resolveAgentChatsHardwareBackHref("/agent/chats", "?q=hi"), "/agent");
+  assert.equal(resolveAgentChatsHardwareBackHref("/agent/chats", "?lead="), "/agent");
+  assert.equal(
+    resolveAgentChatsHardwareBackHref("/agent/chats", "?lead=%20"),
+    "/agent",
+  );
+  assert.equal(
+    resolveAgentChatsHardwareBackHref("/agent/leads", "?lead=lead-9"),
+    null,
+  );
+  assert.equal(resolveAgentChatsHardwareBackHref("/agent", ""), null);
+  assert.equal(resolveAgentChatsHardwareBackHref("/agent/tasks", ""), null);
+  assert.equal(
+    resolveAgentChatsHardwareBackHref("/agent/inbox", "?lead=lead-9"),
+    null,
+  );
+
+  const listener = bootstrap.indexOf('CapApp.addListener("backButton"');
+  assert.ok(listener >= 0);
+  const overlayOrder = bootstrap.indexOf("isListingSheetSearchOpen", listener);
+  const remembered = bootstrap.indexOf("takeNavBackHref", listener);
+  const chatsBack = bootstrap.indexOf("resolveAgentChatsHardwareBackHref", listener);
+  const genericAgent = bootstrap.indexOf(
+    'currentPath.startsWith("/agent/")',
+    listener,
+  );
+  assert.ok(overlayOrder >= 0);
+  assert.ok(remembered > overlayOrder);
+  assert.ok(chatsBack > remembered);
+  assert.ok(genericAgent > chatsBack);
 }
 
 function main() {
@@ -150,7 +244,9 @@ function main() {
   testActiveState();
   testMobilePrimaryTabs();
   testNoUnreadBadgeOrDuplicateChat();
-  testNativeInstantShellBlocker();
+  testNativeChatsBypassIsRouteSpecific();
+  testNativePrimaryNavChatsAndTasksInMore();
+  testAndroidChatsHardwareBack();
   console.log("agent-chats-nav-selftest: ok");
 }
 

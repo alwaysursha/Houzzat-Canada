@@ -229,8 +229,9 @@ export function AgentShell({
     />
   );
 
-  // If running inside the HouzzatPro Native Android/iOS Shell, switch to the 0ms instant mobile client engine
-  if (isProNative) {
+  // Native InstantShell replaces Agent route children. Bypass ONLY /agent/chats
+  // (query ignored) so the existing Chat route children mount in the WebView.
+  if (isProNative && !isChatsPage) {
     return (
       <AgentMobileInstantShell
         brandDisplayName={brandDisplayName}

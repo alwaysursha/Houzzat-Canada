@@ -89,6 +89,19 @@ export function readChatsLeadParam(
   return lead || null;
 }
 
+/**
+ * Capacitor Android hardware Back on the Chat route only.
+ * Thread (`?lead=`) → Inbox list. List → InstantShell home `/agent`.
+ * Null when the path is not Chat — callers keep existing /agent/* handling.
+ */
+export function resolveAgentChatsHardwareBackHref(
+  pathname: string,
+  search: string | URLSearchParams | null,
+): typeof CHATS_INBOX_PAGE_HREF | "/agent" | null {
+  if (pathname !== CHATS_INBOX_PAGE_HREF) return null;
+  return readChatsLeadParam(search) ? CHATS_INBOX_PAGE_HREF : "/agent";
+}
+
 export function shouldAutoSelectInboxLead(): false {
   return false;
 }
