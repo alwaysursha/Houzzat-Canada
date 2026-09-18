@@ -34,6 +34,7 @@ import {
 } from "../src/lib/conversations/read-state";
 import type { LeadConversationRecord } from "../src/lib/conversations/lead-conversation";
 import type { ConversationMessageRecord } from "../src/lib/conversations/create-conversation-message";
+import type { NotifyAssignedAgentOfCustomerChatMessageInput } from "../src/lib/notifications/customer-chat-agent-push";
 import type { ResolvedWorkspaceHost } from "../src/lib/tenancy/host-resolution-types";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -420,6 +421,7 @@ class ApiWorld {
   resolveCalls = 0;
   ensureCalls = 0;
   captureCalls = 0;
+  chatPushes: NotifyAssignedAgentOfCustomerChatMessageInput[] = [];
   nextLead = 1;
 
   seedOwnLead(input: {
@@ -615,6 +617,9 @@ class ApiWorld {
           if (row) row.assignedAgentId = assignee;
         }
         return this.presentLead(identity, lead, created);
+      },
+      scheduleAssignedAgentChatPush: (input) => {
+        world.chatPushes.push(input);
       },
     };
   }
@@ -842,6 +847,7 @@ async function testNoEligibleAgentNoRows() {
   );
   assert.equal(world.db.messageCreates, 0);
   assert.equal(world.db.conversationCreates, 0);
+  assert.equal(world.chatPushes.length, 0);
 }
 
 async function testBlockedCannotSend() {
@@ -1023,6 +1029,8 @@ async function testNoSideEffectsOnSend() {
   assert.equal(world.db.emailSends, 0);
   assert.equal(world.db.smsSends, 0);
   assert.equal(world.db.consentWrites, 0);
+  assert.equal(world.chatPushes.length, 1);
+  assert.equal(world.chatPushes[0]?.created, true);
 }
 
 async function testGetQueryLeadIdIgnored() {
@@ -1075,15 +1083,27 @@ function testSourceSecurity() {
   assert.ok(api.includes("resolveCustomerChatLead"));
   assert.ok(api.includes("ensureCustomerChatLead"));
   assert.ok(api.includes("createConversationMessage"));
+  assert.ok(api.includes("scheduleNotifyAssignedAgentOfCustomerChatMessage"));
+  assert.ok(api.includes("scheduleAssignedAgentChatPush"));
   assert.ok(api.includes("markConversationReadByCustomer"));
   assert.ok(api.includes("frozenCustomerChatDisplayName"));
   assert.ok(api.includes("allowCustomerChatSend"));
   assert.ok(api.includes("requireFullCustomerUser"));
   assert.ok(!api.includes("routeExistingLead"));
   assert.ok(!api.includes("notifyNewLead"));
+  assert.ok(!api.includes("notifyNewLeadCapturedToStaff"));
+  assert.ok(!api.includes("resolveLeadDeskNotifiers"));
   assert.ok(!api.includes("getOrCreateLeadConversation") === false);
   assert.ok(sendRoute.includes("Failed to send"));
   assert.ok(!api.includes("markConversationReadByAgent"));
+
+  const sendFn = api.slice(
+    api.indexOf("export async function handleCustomerConversationSend"),
+    api.indexOf("export async function handleCustomerConversationRead"),
+  );
+  const persistIdx = sendFn.indexOf("createConversationMessage");
+  const notifyIdx = sendFn.indexOf("scheduleAssignedAgentChatPush");
+  assert.ok(persistIdx > 0 && notifyIdx > persistIdx);
 
   const getFn = api.slice(
     api.indexOf("export async function handleCustomerConversationGet"),

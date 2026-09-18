@@ -151,6 +151,7 @@
     "agent-conversation-send-api:selftest": "node --import tsx scripts/agent-conversation-send-api-selftest.ts",
     "customer-chat-lead-resolver:selftest": "node --import tsx scripts/customer-chat-lead-resolver-selftest.ts",
     "customer-conversation-api:selftest": "node --import tsx scripts/customer-conversation-api-selftest.ts",
+    "customer-chat-agent-push:selftest": "node --import tsx scripts/customer-chat-agent-push-selftest.ts",
     "customer-chat-ui:selftest": "node --import tsx scripts/customer-chat-ui-selftest.ts",
     "agent-inbox-list:selftest": "node --import tsx scripts/agent-inbox-list-selftest.ts",
     "agent-inbox-api:selftest": "node --import tsx scripts/agent-inbox-api-selftest.ts",

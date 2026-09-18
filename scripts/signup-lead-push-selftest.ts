@@ -43,7 +43,7 @@ function testCentralPushInLeadIntake() {
     leadIntake.includes("notifyNewLeadCaptured"),
     "captureWebsiteLead must call notifyNewLeadCaptured",
   );
-  const notifyIdx = leadIntake.indexOf("notifyNewLeadCaptured(");
+  const notifyIdx = leadIntake.indexOf("notifyNewLeadCapturedToStaff(");
   const returnIdx = leadIntake.indexOf(
     "return { lead, assignedAgentId: assigneeId, organizationId }",
   );
@@ -92,9 +92,12 @@ function testAdminDuplicateProtection() {
 
 function testPushPrefsAndAudience() {
   assert.equal(audienceForPushType("new_lead"), "staff");
+  assert.equal(audienceForPushType("chat_message"), "staff");
   assert.equal(shellForAudience("staff"), "houzzatpro");
   assert.equal(isPushTypeEnabled(null, "new_lead"), true);
   assert.equal(isPushTypeEnabled({ new_lead: false }, "new_lead"), false);
+  assert.equal(isPushTypeEnabled(null, "chat_message"), true);
+  assert.equal(isPushTypeEnabled({ chat_message: false }, "chat_message"), false);
   assert.ok(
     pushModule.includes("HOUZZAT_PRO_ALERTS_CHANNEL_ID"),
     "staff pushes must use houzzat_pro_alerts channel constant",
@@ -108,7 +111,7 @@ function testAssignmentBeforePush() {
   assert.ok(fnStart > 0, "captureWebsiteLead must exist");
   const body = leadIntake.slice(fnStart);
   const assignIdx = body.indexOf("assignedAgentId: assigneeId");
-  const notifyIdx = body.indexOf("notifyNewLeadCaptured(");
+  const notifyIdx = body.indexOf("notifyNewLeadCapturedToStaff(");
   assert.ok(
     assignIdx > 0 && notifyIdx > assignIdx,
     "assignment is set on create before push",
@@ -118,7 +121,7 @@ function testAssignmentBeforePush() {
 function testPushBeforeTask() {
   const fnStart = leadIntake.indexOf("export async function captureWebsiteLead");
   const body = leadIntake.slice(fnStart);
-  const notifyIdx = body.indexOf("notifyNewLeadCaptured(");
+  const notifyIdx = body.indexOf("notifyNewLeadCapturedToStaff(");
   const taskIdx = body.indexOf("createCallNewLeadTask(");
   assert.ok(
     notifyIdx > 0 && taskIdx > notifyIdx,
@@ -135,7 +138,7 @@ function testTaskFailureIsolation() {
   );
   const tryIdx = body.indexOf("try {");
   const taskIdx = body.indexOf("createCallNewLeadTask(");
-  const notifyIdx = body.indexOf("notifyNewLeadCaptured(");
+  const notifyIdx = body.indexOf("notifyNewLeadCapturedToStaff(");
   assert.ok(
     notifyIdx > 0 && notifyIdx < tryIdx && tryIdx < taskIdx,
     "task try/catch must wrap only createCallNewLeadTask after push",

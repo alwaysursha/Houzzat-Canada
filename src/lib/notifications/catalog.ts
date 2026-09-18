@@ -18,6 +18,7 @@ export const STAFF_PUSH_TYPES = [
   "alert_engagement",
   "appointment",
   "lead_reassigned",
+  "chat_message",
 ] as const;
 
 export type ConsumerPushType = (typeof CONSUMER_PUSH_TYPES)[number];
@@ -114,6 +115,11 @@ export const STAFF_PUSH_CATALOG: PushTypeItem[] = [
     id: "lead_reassigned",
     label: "Lead assigned to you",
     description: "A teammate assigned or handed you a lead",
+  },
+  {
+    id: "chat_message",
+    label: "Chat messages",
+    description: "A client sent you a new Chat message",
   },
 ];
 

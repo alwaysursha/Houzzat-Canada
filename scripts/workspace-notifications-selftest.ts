@@ -106,6 +106,13 @@ function testEmitterCoverage() {
   );
   assert.ok(events.includes("authorizeStaffRecipientForLead"));
   assert.ok(events.includes("authorizeStaffRecipientForTask"));
+  const chatPush = readFileSync(
+    join(root, "src/lib/notifications/customer-chat-agent-push.ts"),
+    "utf8",
+  );
+  assert.ok(chatPush.includes("authorizeStaffRecipientForLead"));
+  assert.ok(chatPush.includes("assignedAgentId"));
+  assert.ok(!chatPush.includes("resolveLeadDeskNotifiers"));
   const webhook = readFileSync(
     join(root, "src/lib/email/resend-webhook.ts"),
     "utf8",

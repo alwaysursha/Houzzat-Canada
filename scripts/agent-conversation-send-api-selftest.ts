@@ -691,6 +691,8 @@ function testRouteSourceContract() {
   assert.ok(!service.includes("markConversationReadByAgent("));
   assert.ok(!service.includes("prisma.leadActivity"));
   assert.ok(!service.includes("@/lib/notifications"));
+  assert.ok(!service.includes("customer-chat-agent-push"));
+  assert.ok(!service.includes("chat_message"));
   assert.ok(!service.includes("twilioMessageSid:"));
   const v2 = read("src/app/api/agent/leads-v2/[id]/emails/route.ts");
   assert.ok(!v2.includes("sendAgentLeadChatMessage"));

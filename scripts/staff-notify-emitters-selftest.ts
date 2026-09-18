@@ -42,11 +42,11 @@ function testCentralHelpersExist() {
 }
 
 function testSignupUnchangedPattern() {
-  assert.ok(leadIntake.includes("notifyNewLeadCaptured("));
+  assert.ok(leadIntake.includes("notifyNewLeadCapturedToStaff("));
   const fnStart = leadIntake.indexOf("export async function captureWebsiteLead");
   assert.ok(fnStart > 0);
   const body = leadIntake.slice(fnStart);
-  const notifyIdx = body.indexOf("notifyNewLeadCaptured(");
+  const notifyIdx = body.indexOf("notifyNewLeadCapturedToStaff(");
   const taskIdx = body.indexOf("createCallNewLeadTask(");
   assert.ok(notifyIdx > 0 && taskIdx > notifyIdx, "signup: push before task");
   assert.ok(leadIntake.includes("call-new-lead-task failed"));
@@ -147,6 +147,22 @@ function testExactHrefsInHelpers() {
   );
 }
 
+function testCustomerChatAssignedAgentPush() {
+  const helper = read("src/lib/notifications/customer-chat-agent-push.ts");
+  const customerSend = read("src/lib/conversations/customer-conversation.ts");
+  const agentSend = read("src/lib/conversations/agent-conversation-send.ts");
+  const writer = read("src/lib/conversations/create-conversation-message.ts");
+  assert.ok(helper.includes("export async function notifyAssignedAgentOfCustomerChatMessage"));
+  assert.ok(helper.includes('type: CUSTOMER_CHAT_PUSH_TYPE'));
+  assert.ok(helper.includes("chatsPageHref"));
+  assert.ok(helper.includes("authorizeStaffRecipientForLead"));
+  assert.ok(!helper.includes("notifyNewLeadCapturedToStaff"));
+  assert.ok(!helper.includes("resolveLeadDeskNotifiers"));
+  assert.ok(customerSend.includes("scheduleNotifyAssignedAgentOfCustomerChatMessage"));
+  assert.ok(!agentSend.includes("customer-chat-agent-push"));
+  assert.ok(!writer.includes("notifyAssignedAgent"));
+}
+
 testCentralHelpersExist();
 testSignupUnchangedPattern();
 testListingInquirySinglePrimaryPush();
@@ -156,5 +172,6 @@ testBeaconWorkerOwnership();
 testAlertEngagementHref();
 testMissingToolsNotWired();
 testExactHrefsInHelpers();
+testCustomerChatAssignedAgentPush();
 
 console.log("staff-notify-emitters-selftest: ok");

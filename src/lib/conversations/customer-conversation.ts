@@ -16,7 +16,10 @@
  * Messages go through createConversationMessage. Rate limit runs after
  * trusted hostname Workspace resolution and before Message creation.
  *
- * This module does not send notifications, email, SMS, or consent events.
+ * After a newly persisted CUSTOMER/CHAT/TEXT Message, this module schedules
+ * a best-effort assigned-Agent `chat_message` FCM. Message success never
+ * depends on push. Email, SMS, CustomerAlert, consent, and CRM mutations
+ * are not sent from here.
  */
 import type {
   ConversationStatus,
@@ -66,6 +69,7 @@ import {
   type ConversationReadStateDb,
 } from "@/lib/conversations/read-state";
 import { parseJsonText } from "@/lib/http/json-body";
+import { scheduleNotifyAssignedAgentOfCustomerChatMessage } from "@/lib/notifications/customer-chat-agent-push";
 import { isConsumerRole } from "@/lib/roles";
 import {
   resolveWorkspaceFromRequest,
@@ -166,6 +170,7 @@ export type CustomerConversationApiDeps = {
   resolveWorkspaceFromRequest?: typeof resolveWorkspaceFromRequest;
   allowCustomerChatSend?: typeof allowCustomerChatSend;
   requireSendAccess?: () => Promise<CustomerSendAccess>;
+  scheduleAssignedAgentChatPush?: typeof scheduleNotifyAssignedAgentOfCustomerChatMessage;
 };
 
 function encodeTranscriptCursor(createdAt: Date, id: string): string {
@@ -284,6 +289,7 @@ function mergeApiDeps(
     | "resolveWorkspaceFromRequest"
     | "allowCustomerChatSend"
     | "requireSendAccess"
+    | "scheduleAssignedAgentChatPush"
   >
 > &
   CustomerConversationApiDeps {
@@ -297,6 +303,9 @@ function mergeApiDeps(
       deps.resolveWorkspaceFromRequest ?? resolveWorkspaceFromRequest,
     allowCustomerChatSend: deps.allowCustomerChatSend ?? allowCustomerChatSend,
     requireSendAccess: deps.requireSendAccess ?? defaultRequireSendAccess,
+    scheduleAssignedAgentChatPush:
+      deps.scheduleAssignedAgentChatPush ??
+      scheduleNotifyAssignedAgentOfCustomerChatMessage,
   };
 }
 
@@ -522,6 +531,28 @@ export async function handleCustomerConversationSend(
 
   if (!created.ok) {
     return jsonResult(400, { error: "Invalid payload" });
+  }
+
+  try {
+    api.scheduleAssignedAgentChatPush({
+      leadId: ensured.leadId,
+      trustedWorkspaceId: ensured.workspaceId,
+      created: created.created,
+      message: {
+        id: created.message.id,
+        channel: created.message.channel,
+        kind: created.message.kind,
+        senderKind: created.message.senderKind,
+        senderName: created.message.senderName,
+        body: created.message.body,
+      },
+    });
+  } catch (error) {
+    console.error("[staff-notify] chat_message schedule failed", {
+      messageId: created.message.id,
+      leadId: ensured.leadId,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   const payload: CustomerConversationSendPayload = {

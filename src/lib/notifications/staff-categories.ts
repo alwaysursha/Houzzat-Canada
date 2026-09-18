@@ -36,6 +36,10 @@ export type StaffCategoryDefinition = {
   highStakes: boolean;
 };
 
+/**
+ * Preference UI rows. `chat_message` is a staff push type in catalog.ts
+ * but has no category row in V1 (missing key defaults ON).
+ */
 export const STAFF_CATEGORY_CATALOG: StaffCategoryDefinition[] = [
   {
     id: "new_leads",

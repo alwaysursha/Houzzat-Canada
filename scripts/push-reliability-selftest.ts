@@ -76,6 +76,10 @@ async function main() {
   assert.equal(sanitizePushHref("/agent/tasks"), "/agent/tasks");
   assert.equal(sanitizePushHref("/admin/people"), "/admin/people");
   assert.equal(sanitizePushHref("/agent/leads"), "/agent/leads");
+  assert.equal(
+    sanitizePushHref("/agent/chats?lead=lead_abc"),
+    "/agent/chats?lead=lead_abc",
+  );
 
   // Path traversal still rejected.
   assert.equal(sanitizePushHref("/agent/../auth/sign-in"), null);

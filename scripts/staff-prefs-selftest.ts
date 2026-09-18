@@ -112,6 +112,21 @@ function testEmailNestPreservesPushKeys() {
   );
 }
 
+function testChatMessagePrefsDefaultOnWithoutUiRow() {
+  assert.equal(isPushTypeEnabled(null, "chat_message"), true);
+  assert.equal(isPushTypeEnabled({}, "chat_message"), true);
+  assert.equal(
+    isPushTypeEnabled({ chat_message: false }, "chat_message"),
+    false,
+  );
+  assert.ok(
+    !STAFF_CATEGORY_CATALOG.some((row) =>
+      row.pushTypes.includes("chat_message"),
+    ),
+    "chat_message must not have a Messages preference UI row",
+  );
+}
+
 function testUiCatalog() {
   const rows = staffCategoriesForUi(null);
   assert.equal(rows.length, STAFF_CATEGORY_CATALOG.length);
@@ -170,6 +185,7 @@ testAllFourCombos();
 testLiveActivityMapsBothPushKeys();
 testEmailNestPreservesPushKeys();
 testUiCatalog();
+testChatMessagePrefsDefaultOnWithoutUiRow();
 testStructuralWiring();
 
 console.log("staff-prefs-selftest: ok");
