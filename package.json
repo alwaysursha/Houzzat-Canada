@@ -206,7 +206,6 @@
     "tenant-lead-cutover-preflight:selftest": "node --import tsx scripts/tenant-lead-cutover-preflight-selftest.ts",
     "tenant-canary-push-delivery:dry-run": "node --import tsx scripts/tenant-canary-push-delivery-canary.ts",
     "tenant-canary-push-delivery:selftest": "node --import tsx scripts/tenant-canary-push-delivery-canary-selftest.ts",
-    "temporary-prod-fcm-canary:selftest": "node --import tsx scripts/temporary-prod-fcm-canary-selftest.ts",
     "tenant-brand-cache-isolation:selftest": "node --import tsx scripts/tenant-brand-cache-isolation-selftest.ts",
     "tenant-host-resolution:selftest": "node --import tsx scripts/tenant-host-resolution-selftest.ts",
     "tenant-host-cache-isolation:selftest": "node --import tsx scripts/tenant-host-cache-isolation-selftest.ts",
