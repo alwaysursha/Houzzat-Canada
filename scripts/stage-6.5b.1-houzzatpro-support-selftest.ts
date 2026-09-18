@@ -45,9 +45,12 @@ async function main() {
     assert.ok(read("src/app/(marketing)/support/page.tsx").includes("HouzzatProSupportPage"));
     const supportPage = read("src/components/platform/status/HouzzatProSupportPage.tsx");
     assert.ok(supportPage.includes("HOUZZATPRO_SUPPORT_PAGE_TITLE"));
-    assert.ok(supportPage.includes("HOUZZATPRO_SUPPORT_PAGE_PENDING_CONTACT"));
+    assert.ok(supportPage.includes("HOUZZATPRO_SUPPORT_PAGE_EMAIL_LABEL"));
+    assert.ok(supportPage.includes("HOUZZATPRO_SUPPORT_PAGE_EMAIL_HREF"));
+    assert.ok(supportPage.includes("HOUZZATPRO_SUPPORT_PAGE_RESPONSE_TIME"));
+    assert.ok(!supportPage.includes("HOUZZATPRO_SUPPORT_PAGE_PENDING_CONTACT"));
+    assert.ok(!supportPage.includes("being configured"));
     assert.ok(!supportPage.includes("<form"));
-    assert.ok(!supportPage.includes("mailto:"));
     assert.ok(!supportPage.includes("tel:"));
     console.log("[3] Minimal /support landing page present... PASS");
   }
@@ -73,12 +76,17 @@ async function main() {
     console.log("[6] Middleware coming-soon bypass for /support... PASS");
   }
 
-  // 7. No invented contact channels on support page
+  // 7. Production support email is the approved mailto, no phone/form
   {
     const copy = read("src/lib/platform/status/support-copy.ts");
-    assert.ok(!/@[a-z0-9.-]+\.[a-z]{2,}/i.test(copy));
+    assert.ok(copy.includes('export const HOUZZATPRO_SUPPORT_PAGE_EMAIL = "support@houzzatpro.com"'));
+    assert.ok(copy.includes("mailto:${HOUZZATPRO_SUPPORT_PAGE_EMAIL}"));
+    assert.ok(copy.includes("We typically respond within one business day."));
+    assert.ok(!copy.includes("being configured"));
     assert.ok(!/\(\d{3}\)/.test(copy));
-    console.log("[7] Support copy avoids invented email/phone... PASS");
+    const supportPage = read("src/components/platform/status/HouzzatProSupportPage.tsx");
+    assert.ok(supportPage.includes("HOUZZATPRO_SUPPORT_PAGE_EMAIL_HREF"));
+    console.log("[7] Support page uses approved email mailto... PASS");
   }
 
   console.log("\nSTAGE 6.5B.1 — ALL TESTS PASSED\n");

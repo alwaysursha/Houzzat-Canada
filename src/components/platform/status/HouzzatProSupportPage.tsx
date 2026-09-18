@@ -3,8 +3,11 @@ import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import {
   HOUZZATPRO_SUPPORT_DOCUMENT_TITLE,
+  HOUZZATPRO_SUPPORT_PAGE_EMAIL,
+  HOUZZATPRO_SUPPORT_PAGE_EMAIL_HREF,
+  HOUZZATPRO_SUPPORT_PAGE_EMAIL_LABEL,
   HOUZZATPRO_SUPPORT_PAGE_INTRO,
-  HOUZZATPRO_SUPPORT_PAGE_PENDING_CONTACT,
+  HOUZZATPRO_SUPPORT_PAGE_RESPONSE_TIME,
   HOUZZATPRO_SUPPORT_PAGE_TITLE,
 } from "@/lib/platform/status/support-copy";
 
@@ -29,9 +32,18 @@ export function HouzzatProSupportPage() {
               {HOUZZATPRO_SUPPORT_PAGE_INTRO}
             </p>
 
-            <p className="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-600">
-              {HOUZZATPRO_SUPPORT_PAGE_PENDING_CONTACT}
-            </p>
+            <div className="mt-6 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-600">
+              <p className="font-medium text-slate-900">
+                {HOUZZATPRO_SUPPORT_PAGE_EMAIL_LABEL}
+              </p>
+              <a
+                href={HOUZZATPRO_SUPPORT_PAGE_EMAIL_HREF}
+                className="mt-1 inline-block text-slate-900 underline underline-offset-2"
+              >
+                {HOUZZATPRO_SUPPORT_PAGE_EMAIL}
+              </a>
+              <p className="mt-2">{HOUZZATPRO_SUPPORT_PAGE_RESPONSE_TIME}</p>
+            </div>
           </div>
         </div>
       </main>
