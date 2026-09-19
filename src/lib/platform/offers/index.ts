@@ -39,6 +39,19 @@ export {
 } from "./manage";
 
 export {
+  notifyOfferInvitationEmail,
+  offerInvitationSendNotice,
+  OFFER_INVITATION_EMAIL_AUDIT,
+  type OfferInvitationNotifyInput,
+  type OfferInvitationNotifyResult,
+} from "./offer-invitation-emails";
+export {
+  renderOfferInvitationEmail,
+  OFFER_INVITATION_SUBJECT,
+  OFFER_INVITATION_CTA_LABEL,
+} from "./offer-invitation-email-templates";
+
+export {
   resolvePrivateOfferByRawToken,
   type PrivateOfferPresentation,
   type PrivateOfferAcceptedPresentation,

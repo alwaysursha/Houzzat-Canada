@@ -1,7 +1,11 @@
 import {
   runPlatformRouteWithOperator,
 } from "@/lib/platform/api/route";
-import { sendCommercialOffer } from "@/lib/platform/offers";
+import {
+  notifyOfferInvitationEmail,
+  offerInvitationSendNotice,
+  sendCommercialOffer,
+} from "@/lib/platform/offers";
 import { getPlatformOfferDetail } from "@/lib/platform/read/offers";
 
 export const runtime = "nodejs";
@@ -17,14 +21,37 @@ export async function POST(_request: Request, context: RouteContext) {
       offerId,
       operatorId: operator.operatorId,
     });
+
+    let invitationEmail: {
+      status: "sent" | "skipped" | "failed";
+      reason?: string;
+    } = { status: "skipped", reason: "not_first_send" };
+
+    // Persistence is authoritative. Email failures must never fail Send Offer.
+    if (result.outcome === "sent" && result.privateUrl) {
+      try {
+        invitationEmail = await notifyOfferInvitationEmail({
+          offerId: result.offerId,
+          privateUrl: result.privateUrl,
+        });
+      } catch (error) {
+        console.error(
+          "[platform-offer-send] invitation email side-effect failed",
+          error instanceof Error ? error.message : "error",
+        );
+        invitationEmail = { status: "failed", reason: "unexpected_error" };
+      }
+    }
+
     const offer = await getPlatformOfferDetail(result.offerId);
     return {
       action: result,
       offer,
-      notice:
-        result.outcome === "sent"
-          ? "This private link is shown once. Store/share it securely."
-          : "Offer was already sent. The private link is not shown again.",
+      invitationEmail,
+      notice: offerInvitationSendNotice({
+        outcome: result.outcome,
+        emailStatus: invitationEmail.status,
+      }),
     };
   });
 }

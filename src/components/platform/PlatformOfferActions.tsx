@@ -62,6 +62,7 @@ export function PlatformOfferActions({
           alreadySent: boolean;
           outcome: string;
         };
+        invitationEmail?: { status: string };
         notice?: string;
       }>;
       if (!response.ok || !body.ok) {
@@ -73,7 +74,11 @@ export function PlatformOfferActions({
         body.data.notice ??
           (body.data.action.alreadySent
             ? "Offer was already sent. The private link is not shown again."
-            : "This private link is shown once. Store/share it securely."),
+            : body.data.invitationEmail?.status === "sent"
+              ? "Your proposal was emailed to the prospect. This private link is shown once — store it securely if you also want a copy."
+              : body.data.invitationEmail?.status === "failed"
+                ? "Offer sent. The invitation email could not be delivered. This private link is shown once — share it securely with the prospect."
+                : "Offer sent. This private link is shown once. Store/share it securely."),
       );
       setConfirmSend(false);
       router.refresh();
@@ -190,7 +195,8 @@ export function PlatformOfferActions({
             Confirm send
           </p>
           <p className="mt-1 text-xs text-slate-500">
-            No email is sent in this stage. You will receive a private link once.
+            We&apos;ll email the secure proposal to the prospect. You&apos;ll
+            also receive a private link once to copy.
           </p>
           <dl className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
             <div>
