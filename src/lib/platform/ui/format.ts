@@ -1,14 +1,20 @@
+import { formatHouzzatProZonedDateTime } from "@/lib/platform/datetime";
+
 export function formatPlatformDate(value: string | null | undefined): string {
   if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("en-CA", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const parts = formatHouzzatProZonedDateTime(value, { dateMonth: "short" });
+  if (!parts) return value;
+  return `${parts.date}, ${parts.time}`;
+}
+
+/** Scheduled appointment display — same zone as customer emails. */
+export function formatPlatformScheduledAt(
+  value: string | null | undefined,
+): string {
+  if (!value) return "—";
+  const parts = formatHouzzatProZonedDateTime(value, { dateMonth: "short" });
+  if (!parts) return value;
+  return `${parts.date}, ${parts.time} (${parts.timeZoneLabel})`;
 }
 
 export function formatCents(cents: number | null | undefined): string {

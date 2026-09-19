@@ -48,3 +48,15 @@ export {
   type CreateProspectInput,
   type UpdateProspectInput,
 } from "./manage";
+export {
+  notifyDemoScheduledEmail,
+  DEMO_SCHEDULED_EMAIL_AUDIT,
+  type DemoScheduledNotifyInput,
+  type DemoScheduledNotifyResult,
+} from "./demo-scheduled-emails";
+export {
+  renderDemoScheduledEmail,
+  renderDemoRescheduledEmail,
+  type DemoScheduledEmailFields,
+  type DemoScheduledEmailVariant,
+} from "./demo-scheduled-email-templates";

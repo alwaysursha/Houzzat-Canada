@@ -13,7 +13,11 @@ import {
   getPlatformProspect,
   PlatformApiClientError,
 } from "@/lib/platform/ui/api-client";
-import { formatPlatformDate, titleCaseStatus } from "@/lib/platform/ui/format";
+import {
+  formatPlatformDate,
+  formatPlatformScheduledAt,
+  titleCaseStatus,
+} from "@/lib/platform/ui/format";
 import { platformStatusTone } from "@/lib/platform/ui/status-tone";
 
 type PageProps = {
@@ -181,7 +185,7 @@ export default async function PlatformProspectDetailPage({ params }: PageProps) 
                   </div>
                   {activity.scheduledAt ? (
                     <p className="mt-2 text-xs text-slate-400">
-                      Scheduled: {formatPlatformDate(str(activity.scheduledAt))}
+                      Scheduled: {formatPlatformScheduledAt(str(activity.scheduledAt))}
                     </p>
                   ) : null}
                   {activity.completedAt ? (

@@ -1,6 +1,7 @@
 import { readPlatformJsonBody } from "@/lib/platform/api/body";
 import { PlatformApiError } from "@/lib/platform/api/handler";
 import { runPlatformRouteWithOperator } from "@/lib/platform/api/route";
+import { notifyDemoScheduledEmail } from "@/lib/platform/prospects/demo-scheduled-emails";
 import { applyPlatformProspectDemoAction } from "@/lib/platform/prospects/manage";
 import { getPlatformProspectDetail } from "@/lib/platform/read/prospects";
 
@@ -19,14 +20,30 @@ export async function POST(request: Request, context: RouteContext) {
       note?: unknown;
     }>(request);
 
+    const action = typeof body.action === "string" ? body.action : "";
     const result = await applyPlatformProspectDemoAction({
       prospectId,
       operatorId: operator.operatorId,
-      action: typeof body.action === "string" ? body.action : "",
+      action,
       scheduledAt:
         typeof body.scheduledAt === "string" ? body.scheduledAt : null,
       note: typeof body.note === "string" ? body.note : null,
     });
+
+    // Persistence is authoritative. Email failures must never fail scheduling.
+    if (action === "schedule" && result.activityId) {
+      try {
+        await notifyDemoScheduledEmail({
+          prospectId,
+          activityId: result.activityId,
+        });
+      } catch (error) {
+        console.error(
+          "[platform-demo-schedule] notification side-effect failed",
+          error instanceof Error ? error.message : "error",
+        );
+      }
+    }
 
     const prospect = await getPlatformProspectDetail(prospectId);
     if (!prospect) {

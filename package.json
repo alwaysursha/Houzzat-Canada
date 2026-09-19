@@ -91,6 +91,7 @@
     "stage-6.6b-public-book-demo:selftest": "node --import tsx scripts/stage-6.6b-public-book-demo-selftest.ts",
     "stage-6.6b.1-book-demo-turnstile:selftest": "node --import tsx scripts/stage-6.6b.1-book-demo-turnstile-selftest.ts",
     "stage-6.6c-demo-request-emails:selftest": "node --import tsx scripts/stage-6.6c-demo-request-emails-selftest.ts",
+    "stage-6.6d-demo-scheduled-emails:selftest": "node --import tsx scripts/stage-6.6d-demo-scheduled-emails-selftest.ts",
     "stage-6.7a-commercial-offer-management:selftest": "node --import tsx scripts/stage-6.7a-commercial-offer-management-selftest.ts",
     "stage-6.7b-private-offer-experience:selftest": "node --import tsx scripts/stage-6.7b-private-offer-experience-selftest.ts",
     "stage-6.8a-offer-acceptance-foundation:selftest": "node --import tsx scripts/stage-6.8a-offer-acceptance-foundation-selftest.ts",

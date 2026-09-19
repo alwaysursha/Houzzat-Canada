@@ -12,7 +12,7 @@ export const BOOK_DEMO_EMAIL_TAGLINE =
 
 export const HOUZZATPRO_PUBLIC_ORIGIN = "https://houzzatpro.com";
 
-function houzzatProEmailLayout(input: {
+export function houzzatProEmailLayout(input: {
   preheader: string;
   title: string;
   subtitle?: string;
@@ -69,7 +69,7 @@ function houzzatProEmailLayout(input: {
 </html>`;
 }
 
-function detailRow(label: string, value: string): string {
+export function houzzatProEmailDetailRow(label: string, value: string): string {
   return `<tr>
     <td style="padding:8px 0;border-bottom:1px solid #eef2f7;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;width:38%;vertical-align:top">${escapeHtml(label)}</td>
     <td style="padding:8px 0;border-bottom:1px solid #eef2f7;font-size:14px;color:#0f172a;vertical-align:top">${escapeHtml(value)}</td>
@@ -126,7 +126,7 @@ export function renderBookDemoInternalNotificationEmail(input: {
     bodyHtml: `
       <p style="margin:0 0 16px">A new HouzzatPRO website demo request was received.</p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse">
-        ${rows.map(([k, v]) => detailRow(k, v)).join("")}
+        ${rows.map(([k, v]) => houzzatProEmailDetailRow(k, v)).join("")}
       </table>
       <p style="margin:24px 0 0;text-align:center">
         <a href="${escapeAttr(adminUrl)}" style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 18px;border-radius:10px">View Prospect in Master Admin</a>
