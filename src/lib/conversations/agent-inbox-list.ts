@@ -756,7 +756,8 @@ export function createPrismaAgentInboxListDb(
             m.payload,
             m."providerStatus",
             m."deliveredAt",
-            m."twilioMessageSid"
+            m."twilioMessageSid",
+            m.channel
           FROM "Message" m
           WHERE m."workspaceId" = ${input.workspaceId}
             AND m."conversationId" IN (${PrismaNs.join(ids)})
@@ -777,6 +778,7 @@ export function createPrismaAgentInboxListDb(
             providerStatus: row.providerStatus,
             deliveredAt: row.deliveredAt,
             twilioMessageSid: row.twilioMessageSid,
+            channel: row.channel,
           });
         }
       }

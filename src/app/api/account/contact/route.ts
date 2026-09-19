@@ -11,6 +11,7 @@ import {
   logJsonApi,
 } from "@/lib/http/json-api-response";
 import { prisma } from "@/lib/prisma";
+import { phoneColumnsForWrite } from "@/lib/sms/e164";
 
 const ROUTE = "/api/account/contact";
 
@@ -110,7 +111,7 @@ export async function PATCH(request: Request) {
           : {}),
         ...(nextPhone !== undefined
           ? {
-              phone: nextPhone,
+              ...phoneColumnsForWrite(nextPhone),
               phoneUpdateRequestedAt: null,
               ...(nextPhone !== current.phone ? { phoneVerifiedAt: null } : {}),
             }

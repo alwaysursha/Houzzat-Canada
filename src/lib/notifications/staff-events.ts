@@ -99,17 +99,24 @@ export function scheduleNewLeadStaffEmail(input: {
         return;
       }
 
-      const users = await prisma.user.findMany({
-        where: { id: { in: authorizedIds } },
-        select: {
-          id: true,
-          email: true,
-          phone: true,
-          role: true,
-          disabledAt: true,
-          pushNotificationPrefs: true,
-        },
-      });
+      const [leadRow, users] = await Promise.all([
+        prisma.lead.findUnique({
+          where: { id: input.leadId },
+          select: { workspaceId: true },
+        }),
+        prisma.user.findMany({
+          where: { id: { in: authorizedIds } },
+          select: {
+            id: true,
+            email: true,
+            phone: true,
+            role: true,
+            disabledAt: true,
+            pushNotificationPrefs: true,
+          },
+        }),
+      ]);
+      const workspaceId = leadRow?.workspaceId ?? null;
       const byId = new Map(users.map((u) => [u.id, u]));
       const emailed = new Set<string>();
 
@@ -144,6 +151,8 @@ export function scheduleNewLeadStaffEmail(input: {
           subject: input.subject,
           text,
           smsText: input.smsText,
+          workspaceId,
+          smsClass: "staff",
           whatsappText: input.whatsappText,
           preferWhatsApp: input.preferWhatsApp,
         });
@@ -177,6 +186,7 @@ export function scheduleStaffNotificationEmail(input: {
   subject: string;
   text: string;
   smsText?: string;
+  workspaceId?: string | null;
   whatsappText?: string;
   preferWhatsApp?: boolean;
   /** Sanitized context for failure logs (no PII). */
@@ -213,6 +223,8 @@ export function scheduleStaffNotificationEmail(input: {
         subject: input.subject,
         text: input.text,
         smsText: input.smsText,
+        workspaceId: input.workspaceId,
+        smsClass: "staff",
         whatsappText: input.whatsappText,
         preferWhatsApp: input.preferWhatsApp,
       });

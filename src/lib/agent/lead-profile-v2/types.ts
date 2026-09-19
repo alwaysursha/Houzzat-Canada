@@ -132,6 +132,10 @@ export type LeadProfileV2ChatPanel = {
   };
   unread: LeadProfileV2ChatUnread;
   messages: LeadProfileV2ChatMessage[];
+  smsSend?: {
+    enabled: boolean;
+    reason: string | null;
+  };
   page: {
     limit: number;
     hasMore: boolean;

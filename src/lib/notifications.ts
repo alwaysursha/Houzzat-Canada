@@ -1,6 +1,8 @@
 import { fromForStream, type EmailStream } from "@/lib/email/config";
 import { emailEnv } from "@/lib/email/env";
 import { sendRenderedEmail } from "@/lib/email/send";
+import { sendSms as sendTwilioSms } from "@/lib/sms/transport";
+import type { SmsClass } from "@/lib/sms/types";
 
 type NotifyPayload = {
   toEmail?: string | null;
@@ -10,6 +12,10 @@ type NotifyPayload = {
   html?: string;
   stream?: EmailStream;
   smsText?: string;
+  /** Workspace that owns this SMS (required for STOP isolation). */
+  workspaceId?: string | null;
+  /** SMS consent class. Ignored when smsText is omitted. */
+  smsClass?: SmsClass;
   /** When set, also attempt WhatsApp via Twilio WhatsApp sender. */
   whatsappText?: string;
   preferWhatsApp?: boolean;
@@ -64,10 +70,13 @@ export async function sendNotification(payload: NotifyPayload) {
     payload.smsText &&
     !(payload.preferWhatsApp && results.whatsapp === "sent")
   ) {
-    results.sms = await sendSms({
+    const sent = await sendTwilioSms({
       to: phone,
       body: payload.smsText,
+      workspaceId: payload.workspaceId,
+      smsClass: payload.smsClass ?? "transactional",
     });
+    results.sms = sent.status;
   }
 
   return results;
@@ -112,48 +121,6 @@ async function sendEmail(input: {
   }
 }
 
-async function sendSms(input: {
-  to: string;
-  body: string;
-}): Promise<"sent" | "skipped" | "failed"> {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM_NUMBER;
-
-  if (!sid || !token || !from) {
-    console.info("[notify:sms:stub]", input.to, input.body);
-    return "skipped";
-  }
-
-  try {
-    const auth = Buffer.from(`${sid}:${token}`).toString("base64");
-    const body = new URLSearchParams({
-      To: input.to,
-      From: from,
-      Body: input.body,
-    });
-    const res = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${auth}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body,
-      },
-    );
-    if (!res.ok) {
-      console.error("[notify:sms]", await res.text());
-      return "failed";
-    }
-    return "sent";
-  } catch (error) {
-    console.error("[notify:sms]", error);
-    return "failed";
-  }
-}
-
 async function sendWhatsApp(input: {
   to: string;
   body: string;
@@ -163,7 +130,7 @@ async function sendWhatsApp(input: {
   const from = process.env.TWILIO_WHATSAPP_FROM;
 
   if (!sid || !token || !from) {
-    console.info("[notify:whatsapp:stub]", input.to, input.body);
+    console.info("[notify:whatsapp:stub]", { reason: "missing_credentials" });
     return "skipped";
   }
 
@@ -191,12 +158,12 @@ async function sendWhatsApp(input: {
       },
     );
     if (!res.ok) {
-      console.error("[notify:whatsapp]", await res.text());
+      console.error("[notify:whatsapp]", { httpStatus: res.status });
       return "failed";
     }
     return "sent";
-  } catch (error) {
-    console.error("[notify:whatsapp]", error);
+  } catch {
+    console.error("[notify:whatsapp]", { reason: "request_failed" });
     return "failed";
   }
 }

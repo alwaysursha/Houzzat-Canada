@@ -1,8 +1,9 @@
 import { requireAgentContextFromRequest } from "@/lib/agent";
 import {
-  agentChatSendRequestSchema,
+  agentConversationSendRequestSchema,
   sendAgentLeadChatMessage,
 } from "@/lib/conversations/agent-conversation-send";
+import { sendAgentLeadSmsMessage } from "@/lib/conversations/agent-conversation-sms";
 import { isDatabaseUnavailableError } from "@/lib/errors";
 import {
   createRequestId,
@@ -56,24 +57,62 @@ export async function POST(request: Request, { params }: Params) {
     if (parsedJson.parse !== "ok") {
       return reply(400, { error: "Invalid payload" });
     }
-    const parsed = agentChatSendRequestSchema.safeParse(parsedJson.data);
+    const parsed = agentConversationSendRequestSchema.safeParse(parsedJson.data);
     if (!parsed.success) {
       return reply(400, { error: "Invalid payload" });
     }
 
     const { id } = await params;
-    const result = await sendAgentLeadChatMessage(
-      prisma,
-      ctx,
-      id,
-      parsed.data.body,
-    );
+    const channel = parsed.data.channel ?? "CHAT";
+    const result =
+      channel === "SMS"
+        ? await sendAgentLeadSmsMessage(prisma, ctx, id, parsed.data.body)
+        : await sendAgentLeadChatMessage(prisma, ctx, id, parsed.data.body);
     if (!result.ok) {
       if (result.reason === "FORBIDDEN") {
         return reply(403, { error: "Forbidden" });
       }
       if (result.reason === "INVALID_BODY") {
         return reply(400, { error: "Invalid payload" });
+      }
+      if (result.reason === "NOT_ASSIGNED") {
+        return reply(403, {
+          error: "Only the assigned agent can send SMS.",
+          code: result.reason,
+        });
+      }
+      if (
+        result.reason === "NO_CUSTOMER_E164" ||
+        result.reason === "NO_WORKSPACE_NUMBER" ||
+        result.reason === "SUPPRESSED"
+      ) {
+        return reply(409, {
+          error:
+            result.reason === "NO_CUSTOMER_E164"
+              ? "SMS is unavailable — this lead has no valid mobile number."
+              : result.reason === "NO_WORKSPACE_NUMBER"
+                ? "SMS is unavailable — this workspace has no Twilio number."
+                : "SMS is unavailable — this number has opted out of SMS.",
+          code: result.reason,
+        });
+      }
+      if (result.reason === "SMS_TRANSPORT_UNAVAILABLE") {
+        return reply(503, {
+          error: "SMS is unavailable right now.",
+          code: result.reason,
+        });
+      }
+      if (result.reason === "SMS_SEND_FAILED") {
+        return reply(502, {
+          error: "Failed to send SMS.",
+          code: result.reason,
+        });
+      }
+      if (result.reason === "SMS_SENT_NOT_SAVED") {
+        return reply(409, {
+          error: "SMS was sent. Do not send it again.",
+          code: result.reason,
+        });
       }
       return reply(404, { error: "Not found" });
     }

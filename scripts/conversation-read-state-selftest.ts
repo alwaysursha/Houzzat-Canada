@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ConversationStatus, MessageKind, MessageSenderKind } from "@prisma/client";
+import type { ConversationStatus, MessageChannel, MessageKind, MessageSenderKind } from "@prisma/client";
 import type { LeadConversationRecord } from "../src/lib/conversations/lead-conversation";
 import {
   getConversationUnreadState,
@@ -115,6 +115,7 @@ class FakeReadDb implements ConversationReadStateDb {
     providerStatus?: string | null;
     deliveredAt?: Date | null;
     twilioMessageSid?: string | null;
+    channel?: MessageChannel;
     id?: string;
   }) {
     const row = {
@@ -131,6 +132,7 @@ class FakeReadDb implements ConversationReadStateDb {
       providerStatus: input.providerStatus ?? null,
       deliveredAt: input.deliveredAt ?? null,
       twilioMessageSid: input.twilioMessageSid ?? null,
+      channel: input.channel ?? ("CHAT" as MessageChannel),
     };
     this.messages.push(row);
     this.messageCreates += 1;
@@ -214,13 +216,18 @@ class FakeReadDb implements ConversationReadStateDb {
       where,
       orderBy,
     }: {
-      where: { workspaceId?: string; conversationId?: string };
+      where: {
+        workspaceId?: string;
+        conversationId?: string;
+        channel?: MessageChannel;
+      };
       orderBy?: { createdAt?: "asc" | "desc" };
     }) => {
       const rows = this.messages.filter(
         (row) =>
           row.workspaceId === where.workspaceId &&
-          row.conversationId === where.conversationId,
+          row.conversationId === where.conversationId &&
+          (where.channel ? row.channel === where.channel : true),
       );
       rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
       if (orderBy?.createdAt === "desc") rows.reverse();
@@ -230,7 +237,11 @@ class FakeReadDb implements ConversationReadStateDb {
       where,
       orderBy,
     }: {
-      where: { workspaceId?: string; conversationId?: string };
+      where: {
+        workspaceId?: string;
+        conversationId?: string;
+        channel?: MessageChannel;
+      };
       orderBy?: { createdAt?: "asc" | "desc" };
     }) => {
       const rows = await this.message.findMany({ where, orderBy });
@@ -730,6 +741,38 @@ async function testCustomerMarkRead() {
   assert.equal(state.customerUnreadCount, 0);
 }
 
+async function testCustomerUnreadIgnoresSms() {
+  const { db, conversation } = baseSetup(AGENT_A, T_ASSIGN);
+  conversation.customerLastReadAt = T1;
+  const chat = db.addMessage({
+    conversationId: conversation.id,
+    createdAt: T_AFTER,
+    senderKind: "AGENT",
+    senderUserId: AGENT_A,
+    channel: "CHAT",
+  });
+  db.addMessage({
+    conversationId: conversation.id,
+    createdAt: T_LATER,
+    senderKind: "AGENT",
+    senderUserId: AGENT_A,
+    channel: "SMS",
+    twilioMessageSid: "SM_IGNORE",
+  });
+  const unread = await getConversationUnreadState(db, {
+    workspaceId: WS_A,
+    leadId: LEAD_A,
+  });
+  assert.equal(unread.customerUnreadCount, 1);
+  const marked = await markConversationReadByCustomer(db, {
+    workspaceId: WS_A,
+    leadId: LEAD_A,
+  });
+  assert.equal(marked.ok, true);
+  if (!marked.ok) return;
+  assert.deepEqual(marked.conversation.customerLastReadAt, chat.createdAt);
+}
+
 async function testDeletedMessageNotInBadgeButOrdered() {
   const { db, conversation } = baseSetup(AGENT_A, T_ASSIGN);
   conversation.agentLastReadAt = T1;
@@ -850,6 +893,7 @@ async function main() {
   await testAdminCannotMutateAgentCursor();
   await testCustomerUnreadExcludesOwnSends();
   await testCustomerMarkRead();
+  await testCustomerUnreadIgnoresSms();
   await testDeletedMessageNotInBadgeButOrdered();
   await testMarkReadDoesNotTouchTwilioFields();
   await testUnreadLookupCreatesNothing();

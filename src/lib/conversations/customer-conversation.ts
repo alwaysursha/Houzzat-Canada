@@ -10,7 +10,8 @@
  *
  * GET may lazily create the permanent Conversation for an existing Lead
  * (same as Agent Chat). GET never creates a Lead, never routes, never
- * marks read.
+ * marks read. Transcript is CHAT-only — SMS lives on the Agent CRM
+ * chronology and is not exposed here.
  *
  * POST send is the only path that may create/route/assign a Lead via ensure.
  * Messages go through createConversationMessage. Rate limit runs after
@@ -51,7 +52,6 @@ import {
   resolveCustomerChatLead,
   type CustomerChatLeadFailureReason,
   type CustomerChatLeadResolverDeps,
-  type CustomerChatLeadResult,
   type CustomerChatLeadSuccess,
 } from "@/lib/conversations/customer-chat-lead";
 import {
@@ -334,6 +334,7 @@ async function loadTranscriptPage(
     where: {
       workspaceId: conversation.workspaceId,
       conversationId: conversation.id,
+      channel: "CHAT",
       ...cursorFilter,
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],

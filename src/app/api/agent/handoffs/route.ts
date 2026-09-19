@@ -65,6 +65,7 @@ export async function POST(request: Request) {
   let customerEmail = parsed.data.customerEmail;
   let listingMls = parsed.data.listingMls;
   let authorizedLeadId: string | undefined;
+  let workspaceId: string | null = ctx.workspaceId;
 
   if (parsed.data.leadId) {
     const lead = await prisma.lead.findUnique({
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     authorizedLeadId = lead.id;
+    workspaceId = lead.workspaceId;
     listingMls = listingMls ?? lead.listingMls ?? undefined;
     if (lead.notes) {
       const emailMatch = lead.notes.match(/<([^>]+@[^>]+)>/);
@@ -116,6 +118,8 @@ export async function POST(request: Request) {
       .filter(Boolean)
       .join("\n"),
     smsText: `Houzzat referral: ${customerName ?? "client"} — ${trackUrl}`,
+    workspaceId,
+    smsClass: "partner",
     whatsappText: `Houzzat referral handoff for ${customerName ?? "a client"}. Open: ${trackUrl}`,
     preferWhatsApp: true,
   });

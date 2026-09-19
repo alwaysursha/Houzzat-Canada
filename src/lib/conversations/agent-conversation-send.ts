@@ -9,7 +9,8 @@
  *
  * Sender identity is server-derived from Agent context (User.name with
  * email fallback). Client cannot supply senderKind, senderUserId, senderName,
- * channel, or Twilio fields.
+ * or Twilio fields. Optional `channel` is accepted only by the HTTP route
+ * dispatcher; this module always persists CHAT.
  *
  * Persistence goes through createConversationMessage. This module does not
  * write Message rows, CRM activity, notifications, email/SMS, or consent
@@ -39,6 +40,13 @@ export const AGENT_CHAT_TEXT_MAX_LENGTH = 4000;
 export const agentChatSendRequestSchema = z
   .object({
     body: z.string(),
+  })
+  .strict();
+
+export const agentConversationSendRequestSchema = z
+  .object({
+    body: z.string(),
+    channel: z.enum(["CHAT", "SMS"]).optional(),
   })
   .strict();
 
@@ -76,7 +84,7 @@ export function normalizeAgentChatText(raw: string): string | null {
   return normalized;
 }
 
-function presentSentMessage(
+export function presentSentMessage(
   message: ConversationMessageRecord,
 ): AgentConversationMessage {
   const row: AgentConversationMessageRow = {

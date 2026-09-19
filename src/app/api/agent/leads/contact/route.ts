@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
+import { phoneColumnsForWrite } from "@/lib/sms/e164";
 
 const nullableText = (max: number) =>
   z
@@ -91,7 +92,7 @@ export async function PATCH(request: Request) {
         : {}),
       ...(nextPhone !== undefined
         ? {
-            phone: nextPhone,
+            ...phoneColumnsForWrite(nextPhone),
             phoneUpdateRequestedAt: null,
             ...(nextPhone !== lead.customer.phone
               ? { phoneVerifiedAt: null }

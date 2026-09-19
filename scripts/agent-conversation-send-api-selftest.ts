@@ -19,6 +19,7 @@ import type { AgentOrgContext } from "../src/lib/agent";
 import {
   AGENT_CHAT_TEXT_MAX_LENGTH,
   agentChatSendRequestSchema,
+  agentConversationSendRequestSchema,
   frozenAgentSenderName,
   normalizeAgentChatText,
   sendAgentLeadChatMessage,
@@ -368,6 +369,24 @@ function testSchemaRejectsSpoofedFields() {
     }).success,
     false,
   );
+  const omitted = agentConversationSendRequestSchema.safeParse({ body: "Hello" });
+  assert.equal(omitted.success, true);
+  if (omitted.success) assert.equal(omitted.data.channel, undefined);
+  assert.equal(
+    agentConversationSendRequestSchema.safeParse({
+      body: "Hello",
+      channel: "SMS",
+    }).success,
+    true,
+  );
+  assert.equal(
+    agentConversationSendRequestSchema.safeParse({
+      body: "Hello",
+      channel: "SMS",
+      senderName: "Hacker",
+    }).success,
+    false,
+  );
 }
 
 function testNormalizeBody() {
@@ -674,7 +693,7 @@ function testRouteSourceContract() {
   const service = read("src/lib/conversations/agent-conversation-send.ts");
   assert.ok(route.includes("requireAgentContextFromRequest(request)"));
   assert.ok(route.includes("sendAgentLeadChatMessage"));
-  assert.ok(route.includes("agentChatSendRequestSchema"));
+  assert.ok(route.includes("agentConversationSendRequestSchema"));
   assert.ok(route.includes("parseJsonText"));
   assert.ok(!route.includes("prisma.message.create"));
   assert.ok(!route.includes("createConversationMessage("));

@@ -18,6 +18,8 @@ import {
   v2ChatReadOnlyReason,
   v2ChatSystemCardLabel,
   v2ChatTranscriptItems,
+  v2SmsBlockedCopy,
+  v2SmsDeliveryLabel,
 } from "@/lib/agent/lead-profile-v2/chat-query";
 import type {
   LeadProfileV2ChatMessage,
@@ -46,11 +48,15 @@ export function AgentChatTranscriptPane({
   sendError: string | null;
   onRetry: () => void;
   onLoadOlder: () => void;
-  onSend: (body: string) => Promise<boolean>;
+  onSend: (body: string, channel?: "CHAT" | "SMS") => Promise<boolean>;
   composerId?: string;
   frame?: "card" | "plain";
 }) {
   const [draft, setDraft] = useState("");
+  const [channel, setChannel] = useState<"CHAT" | "SMS">("CHAT");
+  const [composerLeadId, setComposerLeadId] = useState(
+    panel?.conversation.leadId ?? null,
+  );
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const stickToBottomRef = useRef(true);
@@ -58,12 +64,21 @@ export function AgentChatTranscriptPane({
   const pendingPrependRef = useRef(false);
   const firstMessageId = panel?.messages[0]?.id ?? null;
   const lastMessageId = panel?.messages[panel.messages.length - 1]?.id ?? null;
+  const leadId = panel?.conversation.leadId ?? null;
+  if (leadId !== composerLeadId) {
+    setComposerLeadId(leadId);
+    setDraft("");
+    setChannel("CHAT");
+  }
   const composerMode = v2ChatComposerMode({
     loading,
     error,
     canMarkRead: Boolean(panel?.viewer.canMarkRead),
   });
   const canSend = composerMode === "composer";
+  const smsEnabled = Boolean(panel?.smsSend?.enabled);
+  const smsBlockedReason = v2SmsBlockedCopy(panel?.smsSend?.reason);
+  const smsSelected = channel === "SMS";
   const readOnlyReason = panel
     ? v2ChatReadOnlyReason({
         canMarkRead: panel.viewer.canMarkRead,
@@ -98,10 +113,6 @@ export function AgentChatTranscriptPane({
     }
   }, [busy]);
 
-  useEffect(() => {
-    setDraft("");
-  }, [panel?.conversation.leadId]);
-
   function handleScroll() {
     const el = scrollerRef.current;
     if (!el) return;
@@ -123,11 +134,13 @@ export function AgentChatTranscriptPane({
         body: draft,
         pending: sending,
         canSend,
+        channel,
+        smsEnabled,
       })
     ) {
       return;
     }
-    const sent = await onSend(draft);
+    const sent = await onSend(draft, channel);
     if (sent) {
       setDraft("");
       stickToBottomRef.current = true;
@@ -228,8 +241,42 @@ export function AgentChatTranscriptPane({
         <div className="shrink-0 border-t border-[#e2e8f0] bg-[#f8fafc] px-3 py-2.5 sm:px-4">
           {canSend ? (
             <div className="space-y-1.5">
+              <div
+                role="tablist"
+                aria-label="Message channel"
+                className="inline-flex rounded-lg border border-[#d8dee6] bg-white p-0.5"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={!smsSelected}
+                  onClick={() => setChannel("CHAT")}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-[11px] font-semibold",
+                    !smsSelected
+                      ? "bg-[#2b6cb0] text-white"
+                      : "text-[#64748b] hover:text-[#1e2a38]",
+                  )}
+                >
+                  Chat
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={smsSelected}
+                  onClick={() => setChannel("SMS")}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-[11px] font-semibold",
+                    smsSelected
+                      ? "bg-[#2b6cb0] text-white"
+                      : "text-[#64748b] hover:text-[#1e2a38]",
+                  )}
+                >
+                  SMS
+                </button>
+              </div>
               <label className="sr-only" htmlFor={composerId}>
-                Chat message
+                {smsSelected ? "SMS message" : "Chat message"}
               </label>
               <textarea
                 id={composerId}
@@ -239,10 +286,17 @@ export function AgentChatTranscriptPane({
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={onComposerKeyDown}
                 rows={2}
-                disabled={sending}
-                placeholder="Write a message…"
+                disabled={sending || (smsSelected && !smsEnabled)}
+                placeholder={
+                  smsSelected ? "Write an SMS…" : "Write a message…"
+                }
                 className="w-full resize-none rounded-lg border border-[#d8dee6] bg-white px-3 py-2 text-sm text-[#1e2a38] outline-none ring-[#2b6cb0] focus:ring-2 disabled:opacity-60"
               />
+              {smsSelected && !smsEnabled ? (
+                <p className="text-[12px] text-[#64748b]" role="status">
+                  {smsBlockedReason ?? "SMS is unavailable."}
+                </p>
+              ) : null}
               <div className="flex items-center justify-between gap-2">
                 <p className="min-w-0 text-[11px] leading-4 text-[#94a3b8]">
                   <span className="hidden sm:inline">
@@ -263,12 +317,16 @@ export function AgentChatTranscriptPane({
                       body: draft,
                       pending: sending,
                       canSend,
+                      channel,
+                      smsEnabled,
                     })
                   }
-                  aria-label="Send chat message"
+                  aria-label={
+                    smsSelected ? "Send SMS message" : "Send chat message"
+                  }
                   className="shrink-0 rounded-lg bg-[#2b6cb0] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#245a94] disabled:opacity-50"
                 >
-                  {sending ? "Sending…" : "Send"}
+                  {sending ? "Sending…" : smsSelected ? "Send SMS" : "Send"}
                 </button>
               </div>
               {sendError ? (
@@ -276,7 +334,10 @@ export function AgentChatTranscriptPane({
                   className="text-[12px] font-medium text-[#b45309]"
                   role="alert"
                 >
-                  {sendError} Your message was kept.
+                  {sendError}
+                  {sendError.includes("Do not send it again")
+                    ? ""
+                    : " Your message was kept."}
                 </p>
               ) : null}
             </div>
@@ -320,6 +381,8 @@ function ChatRow({
   const body = v2ChatMessageBody(message);
   const deleted = Boolean(message.deletedAt);
   const sentAt = new Date(message.createdAt).toLocaleString("en-CA");
+  const sms = message.channel === "SMS";
+  const delivery = v2SmsDeliveryLabel(message);
 
   return (
     <div className={cn("flex", mine ? "justify-end" : "justify-start")}>
@@ -328,7 +391,9 @@ function ChatRow({
           "max-w-[85%] sm:max-w-[72%]",
           mine ? "items-end" : "items-start",
         )}
-        aria-label={`${label}, ${sentAt}${deleted ? ", deleted" : ""}`}
+        aria-label={`${label}, ${sentAt}${sms ? ", SMS" : ""}${
+          delivery ? `, ${delivery}` : ""
+        }${deleted ? ", deleted" : ""}`}
       >
         {grouped ? (
           <p
@@ -337,7 +402,9 @@ function ChatRow({
               mine ? "text-right" : "text-left",
             )}
           >
+            {sms ? <span className="mr-1 font-semibold">SMS</span> : null}
             {sentAt}
+            {delivery ? <span className="ml-1">· {delivery}</span> : null}
           </p>
         ) : (
           <p
@@ -347,7 +414,17 @@ function ChatRow({
             )}
           >
             {label}
+            {sms ? (
+              <span className="ml-1.5 rounded bg-[#e2e8f0] px-1 py-px text-[9px] font-bold uppercase tracking-wide text-[#475569]">
+                SMS
+              </span>
+            ) : null}
             <span className="ml-1.5 font-medium text-[#94a3b8]">{sentAt}</span>
+            {delivery ? (
+              <span className="ml-1 font-medium text-[#94a3b8]">
+                · {delivery}
+              </span>
+            ) : null}
           </p>
         )}
         <div

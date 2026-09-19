@@ -280,13 +280,18 @@ class FakeCustomerDb implements CustomerConversationDb {
       where,
       orderBy,
     }: {
-      where: { workspaceId?: string; conversationId?: string };
+      where: {
+        workspaceId?: string;
+        conversationId?: string;
+        channel?: string;
+      };
       orderBy?: { createdAt?: "asc" | "desc" };
     }) => {
       const rows = this.messages.filter(
         (row) =>
           row.workspaceId === where.workspaceId &&
-          row.conversationId === where.conversationId,
+          row.conversationId === where.conversationId &&
+          (where.channel ? row.channel === where.channel : true),
       );
       rows.sort((a, b) => {
         const byTime = a.createdAt.getTime() - b.createdAt.getTime();
@@ -308,6 +313,9 @@ class FakeCustomerDb implements CustomerConversationDb {
           return false;
         }
         if (where.conversationId && row.conversationId !== where.conversationId) {
+          return false;
+        }
+        if (where.channel && row.channel !== where.channel) {
           return false;
         }
         const or = where.OR as
@@ -806,6 +814,51 @@ async function testGetExistingTranscriptAndNoMarkRead() {
   assert.equal((body.conversation as { leadId?: string }).leadId, undefined);
 }
 
+async function testGetExcludesSms() {
+  const world = new ApiWorld();
+  const lead = world.seedOwnLead({ id: "lead_a" });
+  const conv = world.db.seedConversation({
+    id: "conv_a",
+    workspaceId: WS_A,
+    leadId: lead.id,
+  });
+  world.db.seedMessage({
+    id: "msg_chat",
+    workspaceId: WS_A,
+    conversationId: conv.id,
+    leadId: lead.id,
+    channel: "CHAT",
+    senderKind: "AGENT",
+    body: "Chat only",
+    createdAt: T0,
+  });
+  world.db.seedMessage({
+    id: "msg_sms",
+    workspaceId: WS_A,
+    conversationId: conv.id,
+    leadId: lead.id,
+    channel: "SMS",
+    senderKind: "AGENT",
+    body: "SMS secret",
+    createdAt: new Date(T0.getTime() + 1000),
+    smsSource: "TWILIO",
+    twilioMessageSid: "SM_HIDE",
+  });
+  const result = await getConversation(world);
+  assert.equal(result.status, 200);
+  const body = result.body as CustomerConversationGetPayload;
+  assert.equal(body.messages.length, 1);
+  assert.equal(body.messages[0]?.id, "msg_chat");
+  assert.equal(
+    body.messages.some((row) => row.channel === "SMS"),
+    false,
+  );
+  assert.equal(
+    body.messages.some((row) => row.body === "SMS secret"),
+    false,
+  );
+}
+
 async function testSendCreatesViaEnsure() {
   clearCustomerChatSendRateLimitsForTests();
   const world = new ApiWorld();
@@ -1113,6 +1166,12 @@ function testSourceSecurity() {
   assert.ok(!getFn.includes("markConversationReadByCustomer"));
   assert.ok(getFn.includes("resolveCustomerChatLead"));
 
+  const loadPage = api.slice(
+    api.indexOf("async function loadTranscriptPage"),
+    api.indexOf("export async function handleCustomerConversationGet"),
+  );
+  assert.ok(loadPage.includes('channel: "CHAT"'));
+
   const readFn = api.slice(
     api.indexOf("export async function handleCustomerConversationRead"),
   );
@@ -1131,6 +1190,7 @@ async function main() {
   await testStrictBodyRejectsIdentity();
   await testGetNoLeadDoesNotCreate();
   await testGetExistingTranscriptAndNoMarkRead();
+  await testGetExcludesSms();
   await testGetQueryLeadIdIgnored();
   await testSendCreatesViaEnsure();
   await testSendUnassignedRoutes();

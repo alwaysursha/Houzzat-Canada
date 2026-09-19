@@ -1,10 +1,10 @@
 /**
  * V1 Customer Chat → assigned Agent FCM.
  *
- * Triggered only from the Customer Conversation send flow AFTER a newly
- * persisted CUSTOMER/CHAT/TEXT Message. Best-effort: Message success never
- * depends on push. Recipient is the Lead's current assignedAgentId at
- * dispatch time (re-read), authorized for that Lead/Workspace.
+ * Triggered after a newly persisted CUSTOMER TEXT Message on CHAT or SMS.
+ * Best-effort: Message success never depends on push. Recipient is the Lead's
+ * current assignedAgentId at dispatch time (re-read), authorized for that
+ * Lead/Workspace.
  *
  * Preference: missing `chat_message` key defaults ON (isPushTypeEnabled).
  * No Messages category UI row in V1 — an explicit stored
@@ -137,9 +137,10 @@ function defaultLoadAssignee(
 export function isCustomerChatAgentPushEligible(
   input: NotifyAssignedAgentOfCustomerChatMessageInput,
 ): boolean {
+  const channel = input.message.channel;
   return (
     input.created === true &&
-    input.message.channel === "CHAT" &&
+    (channel === "CHAT" || channel === "SMS") &&
     input.message.kind === "TEXT" &&
     input.message.senderKind === "CUSTOMER"
   );

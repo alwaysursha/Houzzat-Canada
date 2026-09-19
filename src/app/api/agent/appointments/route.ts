@@ -104,6 +104,8 @@ export async function PATCH(request: Request) {
         .filter(Boolean)
         .join("\n"),
       smsText: `Houzzat: ${label} confirmed${updated.startsAt ? ` ${updated.startsAt.toLocaleString("en-CA")}` : ""}.`,
+      workspaceId: appointment.lead?.workspaceId ?? null,
+      smsClass: "transactional",
     });
     void sendPushToUser(appointment.customer.id, {
       type: "viewing_reminder",

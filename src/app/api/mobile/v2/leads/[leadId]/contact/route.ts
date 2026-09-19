@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authorizeMobileLeadAccess } from "@/lib/mobile/v2/lead-access";
 import { prisma } from "@/lib/prisma";
+import { phoneColumnsForWrite } from "@/lib/sms/e164";
 
 export const runtime = "nodejs";
 
@@ -131,7 +132,7 @@ export async function PATCH(
           : {}),
         ...(nextPhone !== undefined
           ? {
-              phone: nextPhone,
+              ...phoneColumnsForWrite(nextPhone),
               phoneUpdateRequestedAt: null,
               ...(nextPhone !== lead.customer.phone
                 ? { phoneVerifiedAt: null }

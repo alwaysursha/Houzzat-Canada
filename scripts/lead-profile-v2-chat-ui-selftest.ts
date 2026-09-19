@@ -26,6 +26,8 @@ import {
   v2ChatReadOnlyReason,
   v2ChatSystemCardLabel,
   v2ChatTranscriptItems,
+  v2SmsBlockedCopy,
+  v2SmsDeliveryLabel,
 } from "../src/lib/agent/lead-profile-v2/chat-query";
 import type {
   LeadProfileV2ChatMessage,
@@ -484,6 +486,67 @@ function testEmailFunctionalityUntouched() {
   assert.equal(conversations.includes("e.body"), false);
 }
 
+function testSmsComposerAndDelivery() {
+  const pane = readChatPane();
+  assert.ok(pane.includes('useState<"CHAT" | "SMS">("CHAT")'));
+  assert.ok(pane.includes("Chat"));
+  assert.ok(pane.includes("SMS"));
+  assert.equal(
+    v2ChatComposerCanSubmit({
+      body: "Hello",
+      pending: false,
+      canSend: true,
+    }),
+    true,
+  );
+  assert.equal(
+    v2ChatComposerCanSubmit({
+      body: "Hello",
+      pending: false,
+      canSend: true,
+      channel: "SMS",
+    }),
+    false,
+  );
+  assert.equal(
+    v2ChatComposerCanSubmit({
+      body: "Hello",
+      pending: false,
+      canSend: true,
+      channel: "SMS",
+      smsEnabled: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldGroupV2ChatMessage(
+      msg({ id: "c1", channel: "CHAT" }),
+      msg({ id: "s1", channel: "SMS" }),
+    ),
+    false,
+  );
+  assert.equal(
+    v2SmsDeliveryLabel({
+      channel: "CHAT",
+      deliveredAt: null,
+      providerStatus: "sent",
+    }),
+    null,
+  );
+  assert.equal(
+    v2SmsDeliveryLabel({
+      channel: "SMS",
+      deliveredAt: null,
+      providerStatus: "failed",
+    }),
+    "Failed",
+  );
+  assert.equal(
+    v2SmsBlockedCopy("NO_CUSTOMER_E164"),
+    "SMS is unavailable — this lead has no valid mobile number.",
+  );
+}
+
 function main() {
   testEmailStillExposed();
   testTranscriptRendersChronologically();
@@ -498,6 +561,7 @@ function main() {
   testNoFakeRealtimeOrMigration();
   testLeadProfileUsesSharedChat();
   testEmailFunctionalityUntouched();
+  testSmsComposerAndDelivery();
   console.log("lead-profile-v2-chat-ui-selftest: ok");
 }
 

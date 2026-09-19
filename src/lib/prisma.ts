@@ -20,7 +20,7 @@ type CloudflareBindings = {
 type NeonAdapterKind = "http" | "ws";
 
 /** Bump when Prisma schema fields change so local HMR drops a stale singleton. */
-const PRISMA_CLIENT_GENERATION = "email-tracking-v1-neon-http-workerd";
+const PRISMA_CLIENT_GENERATION = "sms-phase4-isv";
 
 const globalForPrisma = globalThis as typeof globalThis & {
   __houzzatPrisma?: PrismaClient;

@@ -3,6 +3,7 @@ import { finalizeWritableLeadClassification } from "@/lib/agent/lead-classificat
 import { createCallNewLeadTask } from "@/lib/agent/lead-intake";
 import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { prisma } from "@/lib/prisma";
+import { phoneColumnsForWrite } from "@/lib/sms/e164";
 
 export type ManualLeadInput = {
   name: string;
@@ -64,7 +65,7 @@ export async function createManualLead(input: ManualLeadInput) {
       data: {
         email,
         name,
-        phone,
+        ...phoneColumnsForWrite(phone),
         homeAddress,
         purchaseTimeframe: input.purchaseTimeframe ?? null,
         role: "BUYER",
@@ -77,7 +78,7 @@ export async function createManualLead(input: ManualLeadInput) {
       where: { id: customer.id },
       data: {
         name: customer.name || name,
-        phone: customer.phone || phone,
+        ...(customer.phone ? {} : phoneColumnsForWrite(phone)),
         homeAddress: customer.homeAddress || homeAddress,
         purchaseTimeframe:
           customer.purchaseTimeframe || input.purchaseTimeframe || undefined,

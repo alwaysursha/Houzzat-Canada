@@ -244,7 +244,7 @@ function testEligibility() {
     isCustomerChatAgentPushEligible(
       eligibleInput({ message: baseMessage({ channel: "SMS" }) }),
     ),
-    false,
+    true,
   );
 }
 
@@ -280,13 +280,16 @@ async function testWrongSendersNeverNotify() {
     assert.equal(deps.pushes.length, 0, senderKind);
     assert.equal(deps.loadLeadCalls, 0, senderKind);
   }
-  const sms = captureHarness();
+}
+
+async function testSmsInboundNotifiesAssignedAgent() {
+  const deps = captureHarness();
   await notifyAssignedAgentOfCustomerChatMessage(
     eligibleInput({ message: baseMessage({ channel: "SMS" }) }),
-    sms,
+    deps,
   );
-  assert.equal(sms.pushes.length, 0);
-  assert.equal(sms.loadLeadCalls, 0);
+  assert.equal(deps.pushes.length, 1);
+  assert.equal(deps.pushes[0]?.payload.type, "chat_message");
 }
 
 async function testReplaySkips() {
@@ -986,6 +989,7 @@ async function main() {
   testSourceContracts();
   await testHappyPathOnce();
   await testWrongSendersNeverNotify();
+  await testSmsInboundNotifiesAssignedAgent();
   await testReplaySkips();
   await testReassignmentRace();
   await testForeignWorkspaceNoPush();

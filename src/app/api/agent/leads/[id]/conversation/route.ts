@@ -3,6 +3,7 @@ import {
   openAgentLeadConversation,
   parseAgentConversationPageParams,
 } from "@/lib/conversations/agent-conversation-read";
+import { resolveAgentSmsSendEligibility } from "@/lib/conversations/agent-conversation-sms";
 import { isDatabaseUnavailableError } from "@/lib/errors";
 import {
   createRequestId,
@@ -64,7 +65,20 @@ export async function GET(request: Request, { params }: Params) {
     if (!data) {
       return reply(404, { error: "Not found" });
     }
-    return reply(200, data);
+    const smsEligibility = await resolveAgentSmsSendEligibility(
+      prisma,
+      ctx,
+      id,
+    );
+    return reply(200, {
+      ...data,
+      smsSend: {
+        enabled: Boolean(smsEligibility?.enabled),
+        reason: smsEligibility?.enabled
+          ? null
+          : (smsEligibility?.reason ?? "NO_CUSTOMER_E164"),
+      },
+    });
   } catch (error) {
     if (isDatabaseUnavailableError(error)) {
       return reply(503, { error: "Failed to load" }, error);

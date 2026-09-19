@@ -22,6 +22,7 @@ import {
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
+import { phoneColumnsForWrite } from "@/lib/sms/e164";
 import { VOW_VERSION } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 
@@ -135,7 +136,7 @@ async function ensureOwnerCustomer(opts: {
     await prisma.user.update({
       where: { id: existing.id },
       data: {
-        ...(opts.phone ? { phone: opts.phone } : {}),
+        ...(opts.phone ? phoneColumnsForWrite(opts.phone) : {}),
         homeAddress: opts.address,
         ...(opts.lat != null && opts.lng != null
           ? { homeLat: opts.lat, homeLng: opts.lng }
@@ -167,7 +168,7 @@ async function ensureOwnerCustomer(opts: {
       isBuyer: true,
       isSeller: true,
       activeMode: "SELLER",
-      phone: opts.phone || null,
+      ...phoneColumnsForWrite(opts.phone || null),
       homeAddress: opts.address,
       homeLat: opts.lat ?? null,
       homeLng: opts.lng ?? null,

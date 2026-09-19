@@ -21,6 +21,7 @@ import {
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
+import { phoneColumnsForWrite } from "@/lib/sms/e164";
 
 const schema = z.object({
   mlsNumber: z.string().min(3).max(32),
@@ -198,7 +199,7 @@ export async function POST(request: Request) {
           where: { id: session.user.id },
           data: {
             caslConsentAt: consentAt,
-            ...(data.phone ? { phone: data.phone } : {}),
+            ...(data.phone ? phoneColumnsForWrite(data.phone) : {}),
           },
         });
       }

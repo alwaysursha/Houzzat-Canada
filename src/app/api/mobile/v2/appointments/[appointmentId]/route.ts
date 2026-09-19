@@ -216,6 +216,8 @@ export async function PATCH(
         toEmail: existing.customer.email,
         toPhone: existing.customer.phone,
         subject: `Your ${label} is confirmed`,
+        workspaceId: existing.lead?.workspaceId ?? access.workspaceId,
+        smsClass: "transactional",
         text: [
           `Hi ${existing.customer.name ?? "there"},`,
           `Your ${label} for ${existing.listingMls ?? "a property"} is confirmed.`,

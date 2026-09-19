@@ -11,6 +11,7 @@ import {
   type OwnerAddonId,
 } from "@/lib/owner/pricing";
 import { prisma } from "@/lib/prisma";
+import { phoneColumnsForWrite } from "@/lib/sms/e164";
 
 const addonSchema = z.enum([
   "CLEANING",
@@ -126,7 +127,7 @@ export async function POST(request: Request) {
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { phone: data.phone },
+    data: phoneColumnsForWrite(data.phone),
     select: { id: true },
   });
 

@@ -200,6 +200,8 @@ export async function PATCH(
           .filter(Boolean)
           .join("\n"),
         smsText: `Houzzat: ${label} confirmed${updated.startsAt ? ` ${updated.startsAt.toLocaleString("en-CA")}` : ""}.`,
+        workspaceId: access.workspaceId,
+        smsClass: "transactional",
       });
       void sendPushToUser(existing.customer.id, {
         type: "viewing_reminder",

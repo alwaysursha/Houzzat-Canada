@@ -217,12 +217,14 @@ export function useAgentChatThread(
   }, [fetchPage, panel]);
 
   const send = useCallback(
-    async (body: string): Promise<boolean> => {
+    async (body: string, channel: "CHAT" | "SMS" = "CHAT"): Promise<boolean> => {
       if (
         shouldSkipV2ChatSubmit({
           body,
           inFlight: sendInFlightRef.current,
           canSend: Boolean(panel?.viewer.canMarkRead),
+          channel,
+          smsEnabled: Boolean(panel?.smsSend?.enabled),
         })
       ) {
         return false;
@@ -238,7 +240,9 @@ export function useAgentChatThread(
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ body }),
+            body: JSON.stringify(
+              channel === "SMS" ? { body, channel: "SMS" } : { body },
+            ),
           },
         );
         if (leadIdRef.current !== leadId) return false;
@@ -249,9 +253,12 @@ export function useAgentChatThread(
         return true;
       } catch (err) {
         if (leadIdRef.current !== leadId) return false;
-        setSendError(
-          err instanceof Error ? err.message : "Failed to send",
-        );
+        const message =
+          err instanceof Error ? err.message : "Failed to send";
+        setSendError(message);
+        if (message.includes("Do not send it again")) {
+          return true;
+        }
         return false;
       } finally {
         sendInFlightRef.current = false;

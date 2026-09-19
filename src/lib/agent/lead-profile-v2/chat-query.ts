@@ -123,10 +123,14 @@ export function v2ChatComposerCanSubmit(input: {
   body: string;
   pending: boolean;
   canSend: boolean;
+  channel?: "CHAT" | "SMS";
+  smsEnabled?: boolean;
 }): boolean {
   const trimmed = input.body.trim();
+  const smsOk = input.channel !== "SMS" || input.smsEnabled === true;
   return (
     input.canSend &&
+    smsOk &&
     !input.pending &&
     trimmed.length > 0 &&
     trimmed.length <= V2_CHAT_TEXT_MAX_LENGTH
@@ -137,11 +141,15 @@ export function shouldSkipV2ChatSubmit(input: {
   body: string;
   inFlight: boolean;
   canSend: boolean;
+  channel?: "CHAT" | "SMS";
+  smsEnabled?: boolean;
 }): boolean {
   return !v2ChatComposerCanSubmit({
     body: input.body,
     pending: input.inFlight,
     canSend: input.canSend,
+    channel: input.channel,
+    smsEnabled: input.smsEnabled,
   });
 }
 
@@ -221,10 +229,55 @@ export function shouldGroupV2ChatMessage(
   }
   if (previous.senderKind !== current.senderKind) return false;
   if (previous.senderUserId !== current.senderUserId) return false;
+  if (previous.channel !== current.channel) return false;
   return previous.senderName === current.senderName;
 }
 
 export function v2ChatMessageBody(message: LeadProfileV2ChatMessage): string {
   if (message.deletedAt) return V2_CHAT_DELETED_TOMBSTONE;
   return message.body ?? "";
+}
+
+export function v2SmsDeliveryLabel(
+  message: Pick<
+    LeadProfileV2ChatMessage,
+    "channel" | "deliveredAt" | "providerStatus"
+  >,
+): string | null {
+  if (message.channel !== "SMS") return null;
+  if (message.deliveredAt) return "Delivered";
+  const status = (message.providerStatus ?? "").trim().toLowerCase();
+  switch (status) {
+    case "queued":
+      return "Queued";
+    case "sending":
+      return "Sending";
+    case "sent":
+      return "Sent";
+    case "delivered":
+      return "Delivered";
+    case "undelivered":
+      return "Undelivered";
+    case "failed":
+      return "Failed";
+    case "":
+      return "SMS";
+    default:
+      return status.charAt(0).toUpperCase() + status.slice(1);
+  }
+}
+
+export function v2SmsBlockedCopy(reason: string | null | undefined): string | null {
+  switch (reason) {
+    case "NOT_ASSIGNED":
+      return "Only the assigned agent can send SMS.";
+    case "NO_CUSTOMER_E164":
+      return "SMS is unavailable — this lead has no valid mobile number.";
+    case "NO_WORKSPACE_NUMBER":
+      return "SMS is unavailable — this workspace has no Twilio number.";
+    case "SUPPRESSED":
+      return "SMS is unavailable — this number has opted out of SMS.";
+    default:
+      return reason ? "SMS is unavailable." : null;
+  }
 }

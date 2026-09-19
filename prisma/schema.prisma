@@ -595,6 +595,24 @@ model Workspace {
    * Historical subscriptions remain via Subscription.workspaceId (1→many).
    */
   currentSubscriptionId String?         @unique
+  /**
+   * Dedicated Twilio long code for this workspace (E.164). Unique when set.
+   * Inbound tenant routing key (To-number). Never a cross-tenant From.
+   */
+  twilioPhoneE164             String?         @unique
+  /**
+   * Twilio subaccount SID (ACxxx) that owns this workspace's Messaging
+   * Service and number. Unique when set. Auth tokens are never stored here.
+   */
+  twilioSubaccountSid         String?         @unique
+  /**
+   * Twilio Messaging Service SID (MGxxx) in that subaccount. Unique when set.
+   */
+  twilioMessagingServiceSid   String?         @unique
+  /**
+   * Twilio Incoming Phone Number SID (PNxxx). Unique when set.
+   */
+  twilioPhoneSid              String?         @unique
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
 
@@ -650,6 +668,9 @@ model Workspace {
   leadImportJobs                    LeadImportJob[]
   leadImportRows                    LeadImportRow[]
   conversations                     Conversation[]
+  smsSuppressions                   SmsSuppression[]
+  inboundSmsQuarantines             InboundSmsQuarantine[]
+  outboundSmsDeadLetters            OutboundSmsDeadLetter[]
 
   @@index([status])
 }
@@ -877,6 +898,11 @@ model User {
   activeMode             ActiveMode          @default(BUYER)
   phone                  String?
   /**
+   * Normalized E.164 from `phone` when parseable. Indexed, not unique —
+   * the same number may exist on more than one User across workspaces.
+   */
+  phoneE164              String?
+  /**
    * Agent-confirmed phone on CRM lead desk (not SMS OTP).
    */
   phoneVerifiedAt        DateTime?
@@ -978,6 +1004,8 @@ model User {
   messagesDeleted           Message[]                  @relation("MessageDeletedBy")
   messageRevisions          MessageRevision[]          @relation("MessageRevisionActor")
   messageReactions          MessageReaction[]
+
+  @@index([phoneE164])
 }
 
 /**
@@ -1498,6 +1526,68 @@ model Message {
   @@index([createdByUserId])
   @@index([deletedByUserId])
   @@index([replyToMessageId])
+}
+
+/**
+ * Per-workspace SMS STOP suppression. Same phone may be suppressed in one
+ * tenant and still reachable in another (different Twilio To-number).
+ */
+model SmsSuppression {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  phoneE164    String
+  suppressedAt DateTime @default(now())
+  keyword      String?
+  source       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, phoneE164])
+  @@index([phoneE164])
+}
+
+/**
+ * Inbound SMS that could not be attached to an existing Lead/Conversation.
+ * Never creates CRM rows. Body is not stored.
+ */
+model InboundSmsQuarantine {
+  id               String   @id @default(cuid())
+  twilioMessageSid String   @unique
+  fromE164         String
+  toE164           String
+  reason           String
+  workspaceId      String?
+  receivedAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, receivedAt])
+  @@index([fromE164])
+}
+
+/**
+ * Twilio accepted an outbound SMS but Conversation Message persist failed.
+ * Unique MessageSid lets an operator reconcile without sending twice.
+ * Body is not stored.
+ */
+model OutboundSmsDeadLetter {
+  id               String   @id @default(cuid())
+  twilioMessageSid String   @unique
+  workspaceId      String
+  leadId           String
+  conversationId   String?
+  fromE164         String
+  toE164           String
+  reason           String
+  createdAt        DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([leadId])
 }
 
 /**

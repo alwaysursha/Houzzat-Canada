@@ -6,6 +6,7 @@ import {
   logLeadActivityForCustomer,
 } from "@/lib/agent/log-contact-activity";
 import { prisma } from "@/lib/prisma";
+import { phoneColumnsForWrite } from "@/lib/sms/e164";
 
 const schema = z.object({
   emailAlertsEnabled: z.boolean().optional(),
@@ -40,7 +41,7 @@ export async function PATCH(request: Request) {
       smsAlertsEnabled: parsed.data.smsAlertsEnabled,
       ...(phoneValue !== undefined
         ? {
-            phone: phoneValue,
+            ...phoneColumnsForWrite(phoneValue),
             phoneUpdateRequestedAt: null,
             ...(phoneChanged ? { phoneVerifiedAt: null } : {}),
           }
