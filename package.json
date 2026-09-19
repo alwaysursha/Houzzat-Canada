@@ -6,7 +6,7 @@
     "dev": "bash scripts/dev.sh",
     "dev:next": "WATCHPACK_POLLING=true next dev --hostname 127.0.0.1 --webpack",
     "dev:db": "prisma dev start houzzat -d",
-    "build": "COPYFILE_DISABLE=1 bash scripts/strip-appledouble.sh && COPYFILE_DISABLE=1 next build --webpack && COPYFILE_DISABLE=1 bash scripts/strip-appledouble.sh",
+    "build": "COPYFILE_DISABLE=1 bash scripts/strip-appledouble.sh && COPYFILE_DISABLE=1 bash scripts/next-production-build.sh && COPYFILE_DISABLE=1 bash scripts/strip-appledouble.sh",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",

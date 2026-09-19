@@ -45,7 +45,9 @@ const nextConfig: NextConfig = {
     // Vercel default build machines are 8 GB. Webpack OOM shows up as
     // SIGKILL on the Next build worker, not a TypeScript/compile error.
     webpackMemoryOptimizations: true,
-    ...(process.env.VERCEL ? { cpus: 1 } : {}),
+    ...(process.env.VERCEL
+      ? { cpus: 1, webpackBuildWorker: false }
+      : {}),
   },
   images: {
     remotePatterns: [
