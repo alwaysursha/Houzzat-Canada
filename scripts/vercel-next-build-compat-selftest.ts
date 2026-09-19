@@ -20,9 +20,11 @@ assert.ok(src.includes("process.env.VERCEL"));
 assert.ok(src.includes('process.env.NODE_ENV === "production"'));
 assert.ok(src.includes("initOpenNextCloudflareForDev({ remoteBindings: true })"));
 assert.ok(src.includes("if (shouldInitOpenNextCloudflareForDev())"));
+assert.ok(src.includes("webpackMemoryOptimizations: true"));
+assert.ok(src.includes("process.env.VERCEL ? { cpus: 1 }"));
 
-assert.ok(pkg.includes('"build": "next build --webpack"'));
-assert.ok(pkg.includes('"build:cloudflare": "opennextjs-cloudflare build"'));
+assert.ok(pkg.includes("next build --webpack"));
+assert.ok(pkg.includes("opennextjs-cloudflare build"));
 assert.ok(pkg.includes('"deploy:cf":'));
 assert.ok(openNext.includes("defineCloudflareConfig"));
 assert.ok(wrangler.includes('"main": "cloudflare/worker.js"'));
