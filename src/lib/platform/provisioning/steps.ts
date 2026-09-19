@@ -275,14 +275,21 @@ async function stepCreateWorkspace(ctx: StepContext): Promise<void> {
   }
 
   const prospect = ctx.subscription.offer!.prospect;
-  const displayName = deriveWorkspaceDisplayName(prospect);
+  const displayName = deriveWorkspaceDisplayName({
+    planCode: ctx.subscription.offer!.planCode,
+    contactName: prospect.contactName,
+    businessName: prospect.businessName,
+    brokerageName: prospect.brokerageName,
+  });
   const slug = await allocateUniqueWorkspaceSlug(ctx.db, displayName);
+  const brokerageAffiliation = prospect.brokerageName?.trim() || null;
 
   const workspace = await ctx.db.workspace.create({
     data: {
       slug,
       name: displayName,
       status: "TRIAL",
+      brokerageAffiliation,
     },
     select: { id: true },
   });

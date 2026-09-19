@@ -14,7 +14,6 @@ import {
 } from "@/lib/platform/public/book-demo-copy";
 import {
   PROSPECT_BROKERAGE_NAME_MAX,
-  PROSPECT_BUSINESS_NAME_MAX,
   PROSPECT_CONTACT_NAME_MAX,
   PROSPECT_CONTACT_NAME_MIN,
   PROSPECT_PHONE_MAX,
@@ -163,7 +162,7 @@ function validatePublicBookDemoFields(input: BookDemoPublicInput) {
     );
   }
 
-  let website: string | null = optionalTrimmed(
+  const website: string | null = optionalTrimmed(
     input.website,
     PROSPECT_WEBSITE_MAX,
     "Website",
@@ -196,7 +195,6 @@ function validatePublicBookDemoFields(input: BookDemoPublicInput) {
     phone,
     brokerageName,
     estimatedTeamSize: input.teamSize,
-    businessName: brokerageName.slice(0, PROSPECT_BUSINESS_NAME_MAX),
     website,
     region,
     message,
@@ -305,7 +303,6 @@ export async function receiveWebsiteDemoRequest(
     contactName: fields.contactName,
     phone: fields.phone,
     brokerageName: fields.brokerageName,
-    businessName: fields.businessName,
     estimatedTeamSize: fields.estimatedTeamSize,
     website: fields.website,
     region: fields.region,
@@ -317,6 +314,8 @@ export async function receiveWebsiteDemoRequest(
       data: {
         ...profileData,
         email: fields.email,
+        // Public form does not collect a team/business name — do not invent one.
+        businessName: null,
         status: "NEW",
         ownerOperatorId: null,
       },

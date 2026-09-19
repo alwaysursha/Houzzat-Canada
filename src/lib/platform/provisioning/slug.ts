@@ -3,24 +3,50 @@
  * Never accepts client-supplied slug or workspaceId.
  */
 
-import type { PrismaClient } from "@prisma/client";
+import type { PlanCode, PrismaClient } from "@prisma/client";
 import { RESERVED_PLATFORM_WORKSPACE_SLUGS } from "@/lib/tenancy/platform-hostname";
 import { PROVISIONING_RESERVED_SLUGS } from "./constants";
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const DISPLAY_NAME_MAX = 120;
 
+function firstNonEmpty(
+  ...values: Array<string | null | undefined>
+): string | null {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed.slice(0, DISPLAY_NAME_MAX);
+  }
+  return null;
+}
+
+/**
+ * Tenant display name by commercial plan.
+ * brokerageName never names SOLO or TEAM workspaces.
+ */
 export function deriveWorkspaceDisplayName(input: {
+  planCode: PlanCode;
   brokerageName?: string | null;
   businessName?: string | null;
   contactName?: string | null;
 }): string {
-  const brokerage = input.brokerageName?.trim();
-  if (brokerage) return brokerage.slice(0, 120);
-  const business = input.businessName?.trim();
-  if (business) return business.slice(0, 120);
-  const contact = input.contactName?.trim();
-  if (contact) return contact.slice(0, 120);
-  return "New Workspace";
+  const contact = firstNonEmpty(input.contactName);
+  const business = firstNonEmpty(input.businessName);
+  const brokerage = firstNonEmpty(input.brokerageName);
+
+  switch (input.planCode) {
+    case "SOLO":
+      return contact ?? "New Workspace";
+    case "TEAM":
+      return business ?? contact ?? "New Workspace";
+    case "BROKERAGE":
+      return business ?? brokerage ?? contact ?? "New Workspace";
+    default: {
+      const _exhaustive: never = input.planCode;
+      void _exhaustive;
+      return "New Workspace";
+    }
+  }
 }
 
 export function slugifyWorkspaceName(raw: string): string {

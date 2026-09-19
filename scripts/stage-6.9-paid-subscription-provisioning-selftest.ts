@@ -26,6 +26,7 @@ import {
   deriveWorkspaceDisplayName,
   evaluatePaidSubscriptionProvisioningEligibility,
   provisionPaidSubscription,
+  slugifyWorkspaceName,
 } from "../src/lib/platform/provisioning";
 
 const root = process.cwd();
@@ -61,6 +62,7 @@ type FakeWorkspace = {
   status: string;
   currentSubscriptionId: string | null;
   billingOwnerUserId: string | null;
+  brokerageAffiliation: string | null;
   protected?: boolean;
   fingerprint?: string;
 };
@@ -200,6 +202,7 @@ function seedProtectedWorkspaces(state: FakeState) {
     status: "ACTIVE",
     currentSubscriptionId: "sub_houzzat_legacy_protected",
     billingOwnerUserId: "user_houzzat_owner",
+    brokerageAffiliation: null,
     protected: true,
     fingerprint: "houzzat-v1",
   };
@@ -210,6 +213,7 @@ function seedProtectedWorkspaces(state: FakeState) {
     status: "ACTIVE",
     currentSubscriptionId: "sub_canary_protected",
     billingOwnerUserId: "user_canary_owner",
+    brokerageAffiliation: null,
     protected: true,
     fingerprint: "canary-v1",
   };
@@ -665,6 +669,7 @@ function createFakePrisma(state: FakeState): PrismaClient {
           err.code = "P2002";
           throw err;
         }
+        const affiliationRaw = data.brokerageAffiliation;
         const ws: FakeWorkspace = {
           id: id("ws"),
           slug,
@@ -672,6 +677,10 @@ function createFakePrisma(state: FakeState): PrismaClient {
           status: String(data.status ?? "TRIAL"),
           currentSubscriptionId: null,
           billingOwnerUserId: null,
+          brokerageAffiliation:
+            typeof affiliationRaw === "string" && affiliationRaw.trim()
+              ? affiliationRaw.trim()
+              : null,
         };
         state.workspaces.set(ws.id, ws);
         if (!select) return { ...ws };
@@ -1123,8 +1132,45 @@ async function main() {
     );
     assert.equal(
       deriveWorkspaceDisplayName({
+        planCode: "SOLO",
         brokerageName: "Acme Brokerage",
         businessName: "Acme Biz",
+        contactName: "Pat",
+      }),
+      "Pat",
+    );
+    assert.equal(
+      deriveWorkspaceDisplayName({
+        planCode: "TEAM",
+        brokerageName: "Acme Brokerage",
+        businessName: "Acme Biz",
+        contactName: "Pat",
+      }),
+      "Acme Biz",
+    );
+    assert.equal(
+      deriveWorkspaceDisplayName({
+        planCode: "BROKERAGE",
+        brokerageName: "Acme Brokerage",
+        businessName: "Acme Biz",
+        contactName: "Pat",
+      }),
+      "Acme Biz",
+    );
+    assert.equal(
+      deriveWorkspaceDisplayName({
+        planCode: "TEAM",
+        brokerageName: "Acme Brokerage",
+        businessName: null,
+        contactName: "Pat",
+      }),
+      "Pat",
+    );
+    assert.equal(
+      deriveWorkspaceDisplayName({
+        planCode: "BROKERAGE",
+        brokerageName: "Acme Brokerage",
+        businessName: null,
         contactName: "Pat",
       }),
       "Acme Brokerage",
@@ -1202,11 +1248,14 @@ async function main() {
     assert.equal(
       ws.name,
       deriveWorkspaceDisplayName({
+        planCode: "TEAM",
         brokerageName: "Rivera Brokerage",
         businessName: "Rivera Realty",
         contactName: "Alex Rivera",
       }),
     );
+    assert.equal(ws.name, "Rivera Realty");
+    assert.equal(ws.brokerageAffiliation, "Rivera Brokerage");
 
     const sub = state.subscriptions.get(seeded.subscriptionId)!;
     assert.equal(sub.workspaceId, ws.id);
@@ -1322,6 +1371,99 @@ async function main() {
 
     assertProtectedUnchanged(state, before);
     console.log("[2] ACTIVE TEAM provisions correctly... PASS");
+  }
+
+  // 2a. Plan-based workspace identity (brokerage is affiliation, not tenant name)
+  {
+    const state = emptyState();
+    seedProtectedWorkspaces(state);
+    const before = snapshotProtected(state);
+    const prisma = createFakePrisma(state);
+
+    const solo = seedPaidSubscription(state, {
+      status: "ACTIVE",
+      planCode: "SOLO",
+      contactName: "Maria Khalid",
+      businessName: "Homelife Miracle Realty Ltd",
+      brokerageName: "HomeLife Miracle Realty Ltd",
+      acceptedEmail: "maria.khalid@identity.test",
+    });
+    const team = seedPaidSubscription(state, {
+      status: "ACTIVE",
+      planCode: "TEAM",
+      contactName: "Maria Khalid",
+      businessName: "Khalid Real Estate Group",
+      brokerageName: "HomeLife Miracle Realty Ltd",
+      acceptedEmail: "maria.team@identity.test",
+    });
+    const brokerage = seedPaidSubscription(state, {
+      status: "ACTIVE",
+      planCode: "BROKERAGE",
+      contactName: "Maria Khalid",
+      businessName: "HomeLife Miracle Realty Ltd",
+      brokerageName: "HomeLife Miracle Realty Ltd",
+      acceptedEmail: "brokerage@identity.test",
+    });
+
+    assert.equal(
+      (
+        await provisionPaidSubscription({
+          subscriptionId: solo.subscriptionId,
+          prisma,
+        })
+      ).outcome,
+      "succeeded",
+    );
+    assert.equal(
+      (
+        await provisionPaidSubscription({
+          subscriptionId: team.subscriptionId,
+          prisma,
+        })
+      ).outcome,
+      "succeeded",
+    );
+    assert.equal(
+      (
+        await provisionPaidSubscription({
+          subscriptionId: brokerage.subscriptionId,
+          prisma,
+        })
+      ).outcome,
+      "succeeded",
+    );
+
+    const soloWs = state.workspaces.get(
+      state.subscriptions.get(solo.subscriptionId)!.workspaceId!,
+    )!;
+    assert.equal(soloWs.name, "Maria Khalid");
+    assert.equal(soloWs.slug, "maria-khalid");
+    assert.equal(soloWs.slug, slugifyWorkspaceName("Maria Khalid"));
+    assert.equal(soloWs.brokerageAffiliation, "HomeLife Miracle Realty Ltd");
+    assert.equal(
+      state.domains.find((d) => d.workspaceId === soloWs.id)?.hostname,
+      "maria-khalid.houzzatpro.com",
+    );
+
+    const teamWs = state.workspaces.get(
+      state.subscriptions.get(team.subscriptionId)!.workspaceId!,
+    )!;
+    assert.equal(teamWs.name, "Khalid Real Estate Group");
+    assert.equal(teamWs.slug, "khalid-real-estate-group");
+    assert.equal(teamWs.brokerageAffiliation, "HomeLife Miracle Realty Ltd");
+
+    const brokerageWs = state.workspaces.get(
+      state.subscriptions.get(brokerage.subscriptionId)!.workspaceId!,
+    )!;
+    assert.equal(brokerageWs.name, "HomeLife Miracle Realty Ltd");
+    assert.equal(brokerageWs.slug, "homelife-miracle-realty-ltd");
+    assert.equal(
+      brokerageWs.brokerageAffiliation,
+      "HomeLife Miracle Realty Ltd",
+    );
+
+    assertProtectedUnchanged(state, before);
+    console.log("[2a] Plan-based workspace identity... PASS");
   }
 
   // 3. TRIALING → workspace TRIAL
@@ -1608,11 +1750,11 @@ async function main() {
       businessName: "Domain Fail Realty",
       brokerageName: "Domain Fail Brokerage",
     });
-    // Expected slug from brokerageName → domain-fail-brokerage
+    // TEAM slug comes from businessName → domain-fail-realty
     state.domains.push({
       id: "dom_foreign_platform",
       workspaceId: "ws_foreign_owner",
-      hostname: "domain-fail-brokerage.houzzatpro.com",
+      hostname: "domain-fail-realty.houzzatpro.com",
       kind: "PLATFORM",
       role: "PRIMARY",
       status: "ACTIVE",
@@ -1627,7 +1769,7 @@ async function main() {
     assert.equal(failed.outcome, "failed");
     assert.ok(failed.runId);
     const ws = tenantWorkspaces(state)[0]!;
-    assert.equal(ws.slug, "domain-fail-brokerage");
+    assert.equal(ws.slug, "domain-fail-realty");
     assert.notEqual(ws.status, "ACTIVE");
     assert.equal(ws.status, "TRIAL");
     assert.equal(

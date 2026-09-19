@@ -218,6 +218,8 @@ async function main() {
     assert.equal(prospect?.source, "WEBSITE_DEMO");
     assert.equal(prospect?.status, "NEW");
     assert.equal(prospect?.ownerOperatorId, null);
+    assert.equal(prospect?.brokerageName, "North Star Realty");
+    assert.equal(prospect?.businessName, null);
     assert.ok(
       state.activities.some(
         (a) =>
@@ -268,6 +270,8 @@ async function main() {
     const state = fresh();
     const db = createFakePrisma(state) as never;
     const first = await receiveWebsiteDemoRequest({ ...valid, prisma: db });
+    const afterCreate = state.prospects.get(first.prospectId)!;
+    afterCreate.businessName = "Operator Team";
     const second = await receiveWebsiteDemoRequest({
       ...valid,
       fullName: "Jamie Updated",
@@ -279,6 +283,11 @@ async function main() {
     assert.equal(second.prospectId, first.prospectId);
     assert.equal(state.prospects.size, 1);
     assert.equal(state.prospects.get(first.prospectId)?.contactName, "Jamie Updated");
+    assert.equal(
+      state.prospects.get(first.prospectId)?.businessName,
+      "Operator Team",
+      "resubmit must not clobber operator-set businessName",
+    );
     assert.equal(
       state.activities.filter((a) => a.body?.includes(BOOK_DEMO_ACTIVITY_SUMMARY))
         .length,
@@ -382,6 +391,10 @@ async function main() {
     const service = read("src/lib/platform/public/book-demo.ts");
     assert.ok(!/prisma\.\$transaction|db\.\$transaction/.test(service));
     assert.ok(!/\bstripe\.(customers|checkout|subscriptions)\b/i.test(service));
+    assert.ok(
+      !/businessName:\s*brokerageName/.test(service),
+      "book-demo must not copy brokerageName into businessName",
+    );
     console.log("[9] CRM/workspace/offer/Stripe isolation... PASS");
   }
 
