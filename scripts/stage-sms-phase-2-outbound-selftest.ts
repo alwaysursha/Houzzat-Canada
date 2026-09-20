@@ -146,6 +146,19 @@ class FakeSmsDb implements AgentSmsContextDb {
   }> = [];
   deadLetters: Array<{ twilioMessageSid: string; workspaceId: string; leadId: string }> =
     [];
+  usageEvents: Array<{
+    id: string;
+    workspaceId: string;
+    category: string;
+    recipientType: string;
+    twilioMessageSid: string | null;
+    messageId: string | null;
+    segmentCount: number;
+    segmentCountSource: string;
+    finalized: boolean;
+    periodStart: Date;
+    periodEnd: Date;
+  }> = [];
   persistFail = false;
   smsSendCalls = 0;
   nextConversationId = 1;
@@ -430,6 +443,97 @@ class FakeSmsDb implements AgentSmsContextDb {
         leadId: data.leadId,
       });
       return data;
+    },
+  };
+
+  workspace = {
+    findUnique: async ({
+      where,
+    }: {
+      where: { id: string };
+    }) =>
+      where.id
+        ? { currentSubscriptionId: "sub_legacy" }
+        : null,
+  };
+
+  subscription = {
+    findUnique: async () => ({
+      planCode: null,
+      entitlementProfileCode: "HOUZZAT_LEGACY",
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+    }),
+  };
+
+  smsUsageEvent = {
+    findUnique: async ({
+      where,
+    }: {
+      where: { twilioMessageSid: string };
+    }) =>
+      this.usageEvents.find((row) => row.twilioMessageSid === where.twilioMessageSid) ??
+      null,
+    findMany: async ({
+      where,
+    }: {
+      where: { workspaceId: string; periodStart: Date; periodEnd: Date };
+    }) =>
+      this.usageEvents.filter(
+        (row) =>
+          row.workspaceId === where.workspaceId &&
+          row.periodStart.getTime() === where.periodStart.getTime() &&
+          row.periodEnd.getTime() === where.periodEnd.getTime(),
+      ),
+    create: async ({
+      data,
+    }: {
+      data: {
+        id?: string;
+        workspaceId: string;
+        periodStart: Date;
+        periodEnd: Date;
+        category: string;
+        recipientType: string;
+        twilioMessageSid: string | null;
+        messageId: string | null;
+        segmentCount: number;
+        segmentCountSource: string;
+        finalized: boolean;
+      };
+    }) => {
+      const row = {
+        id: data.id ?? `use_${this.usageEvents.length + 1}`,
+        workspaceId: data.workspaceId,
+        periodStart: data.periodStart,
+        periodEnd: data.periodEnd,
+        category: data.category,
+        recipientType: data.recipientType,
+        twilioMessageSid: data.twilioMessageSid,
+        messageId: data.messageId,
+        segmentCount: data.segmentCount,
+        segmentCountSource: data.segmentCountSource,
+        finalized: data.finalized,
+      };
+      this.usageEvents.push(row);
+      return row;
+    },
+    update: async ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Partial<{
+        segmentCount: number;
+        segmentCountSource: string;
+        finalized: boolean;
+        messageId: string | null;
+      }>;
+    }) => {
+      const row = this.usageEvents.find((item) => item.id === where.id);
+      if (!row) throw new Error("missing usage");
+      Object.assign(row, data);
+      return row;
     },
   };
 
@@ -752,6 +856,11 @@ async function testAgentOutboundSms() {
     assert.equal(smsRows.length, 1);
     assert.equal(smsRows[0]?.twilioMessageSid, "SM_OUT");
     assert.equal(smsRows[0]?.conversationId, "conv_existing");
+    assert.equal(db.usageEvents.length, 1);
+    assert.equal(db.usageEvents[0]?.category, "AGENT_INDIVIDUAL");
+    assert.equal(db.usageEvents[0]?.twilioMessageSid, "SM_OUT");
+    assert.equal(db.usageEvents[0]?.messageId, sms.data.message.id);
+    assert.equal(db.usageEvents[0]?.segmentCount >= 1, true);
     assert.equal(
       db.activities.filter((row) => row.type === "SMS" && row.userId === AGENT_A)
         .length,
@@ -781,6 +890,7 @@ async function testAgentOutboundSms() {
       ).length,
       1,
     );
+    assert.equal(db.usageEvents.length, 1);
 
     const unauthorized = await sendAgentLeadSmsMessage(
       db,
@@ -881,6 +991,43 @@ async function testAgentOutboundSms() {
     );
     assert.equal(otherWs.ok, false);
     if (!otherWs.ok) assert.equal(otherWs.reason, "LEAD_NOT_FOUND");
+
+    const inner = new FakeSmsDb();
+    inner.seedLead({ assignedAgentId: AGENT_A });
+    inner.seedConversation({
+      id: "conv_proxy",
+      workspaceId: WS_A,
+      leadId: LEAD_A,
+    });
+    const proxy = new Proxy({} as FakeSmsDb, {
+      get(_target, prop) {
+        const value = inner[prop as keyof FakeSmsDb];
+        return typeof value === "function"
+          ? (value as (...args: unknown[]) => unknown).bind(inner)
+          : value;
+      },
+    });
+    assert.equal("smsUsageEvent" in proxy, false);
+    const proxied = await sendAgentLeadSmsMessage(
+      proxy,
+      makeCtx(),
+      LEAD_A,
+      "Proxy usage SMS",
+      {
+        sendSms: async () => ({
+          status: "sent" as const,
+          sid: "SM_PROXY",
+          providerStatus: "queued",
+          numSegments: 1,
+        }),
+      },
+    );
+    assert.equal(proxied.ok, true);
+    assert.equal(inner.usageEvents.length, 1);
+    assert.equal(inner.usageEvents[0]?.category, "AGENT_INDIVIDUAL");
+    assert.equal(inner.usageEvents[0]?.twilioMessageSid, "SM_PROXY");
+    assert.equal(inner.usageEvents[0]?.segmentCount, 1);
+    assert.equal(inner.usageEvents[0]?.segmentCountSource, "PROVIDER");
   });
 }
 

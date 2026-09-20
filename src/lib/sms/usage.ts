@@ -382,10 +382,16 @@ export function prismaSmsUsageDb(client: PrismaClient): SmsUsageDb {
 }
 
 export function hasSmsUsageDelegate(db: unknown): db is SmsUsageDb {
-  return Boolean(
-    db &&
-      typeof db === "object" &&
-      "smsUsageEvent" in db &&
-      (db as SmsUsageDb).smsUsageEvent,
-  );
+  if (!db || typeof db !== "object") return false;
+  try {
+    const events = (db as { smsUsageEvent?: unknown }).smsUsageEvent;
+    return Boolean(
+      events &&
+        typeof events === "object" &&
+        typeof (events as SmsUsageDb["smsUsageEvent"]).create === "function" &&
+        typeof (events as SmsUsageDb["smsUsageEvent"]).findUnique === "function",
+    );
+  } catch {
+    return false;
+  }
 }

@@ -29,6 +29,7 @@ import { estimateSmsSegmentCount } from "../src/lib/sms/segments";
 import {
   evaluateSmsAllowance,
   finalizeSmsUsageFromProvider,
+  hasSmsUsageDelegate,
   inspectSmsAllowance,
   recordSmsUsageEvent,
   resolveIncludedSmsSegments,
@@ -329,6 +330,20 @@ async function testUsageIdempotentAndTenantIsolation() {
   assert.equal(b.workspaceId, "ws_b");
 }
 
+function testHasSmsUsageDelegateSeesPrismaStyleProxy() {
+  const inner = new FakeUsageDb();
+  const proxy = new Proxy({} as FakeUsageDb, {
+    get(_target, prop) {
+      return inner[prop as keyof FakeUsageDb];
+    },
+  });
+  assert.equal("smsUsageEvent" in proxy, false);
+  assert.equal(hasSmsUsageDelegate(proxy), true);
+  assert.equal(hasSmsUsageDelegate(inner), true);
+  assert.equal(hasSmsUsageDelegate({}), false);
+  assert.equal(hasSmsUsageDelegate(null), false);
+}
+
 async function testNoAllowanceBlocks() {
   const db = new FakeUsageDb();
   db.currentSubscriptionId = null;
@@ -390,6 +405,8 @@ function testFilesAndNoMassOrTriggers() {
   assert.equal(usage.includes("sendSms("), false);
   assert.ok(usage.includes("AGENT_MASS"));
   assert.ok(usage.includes("ALLOWANCE_NOT_CONFIGURED"));
+  assert.equal(usage.includes('"smsUsageEvent" in db'), false);
+  assert.ok(usage.includes("smsUsageEvent"));
   const manage = read("src/lib/platform/sms-automations/manage.ts");
   assert.equal(manage.includes("sendSms("), false);
   const pane = read("src/components/agent/chat/AgentChatTranscriptPane.tsx");
@@ -406,6 +423,7 @@ async function main() {
   await testQuickTextActiveInactiveAndTenantGlobal();
   testSegmentsAndAllowanceMath();
   await testUsageIdempotentAndTenantIsolation();
+  testHasSmsUsageDelegateSeesPrismaStyleProxy();
   await testNoAllowanceBlocks();
   testEligibilityAllowsInitiate();
   testFilesAndNoMassOrTriggers();
