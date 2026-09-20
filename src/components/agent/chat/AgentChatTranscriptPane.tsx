@@ -9,6 +9,11 @@ import {
 } from "react";
 import {
   V2_CHAT_TEXT_MAX_LENGTH,
+  composerSendButtonLabel,
+  composerSendPayload,
+  latestInboundCustomerComposerChannel,
+  nextAgentComposerChannelState,
+  selectAgentComposerChannel,
   v2ChatComposerCanSubmit,
   v2ChatComposerKeyAction,
   v2ChatComposerMode,
@@ -20,6 +25,7 @@ import {
   v2ChatTranscriptItems,
   v2SmsBlockedCopy,
   v2SmsDeliveryLabel,
+  type AgentComposerChannel,
 } from "@/lib/agent/lead-profile-v2/chat-query";
 import type {
   LeadProfileV2ChatMessage,
@@ -54,6 +60,9 @@ export function AgentChatTranscriptPane({
 }) {
   const [draft, setDraft] = useState("");
   const [channel, setChannel] = useState<"CHAT" | "SMS">("CHAT");
+  const [manualChannel, setManualChannel] =
+    useState<AgentComposerChannel | null>(null);
+  const [appliedInboundId, setAppliedInboundId] = useState<string | null>(null);
   const [composerLeadId, setComposerLeadId] = useState(
     panel?.conversation.leadId ?? null,
   );
@@ -65,11 +74,29 @@ export function AgentChatTranscriptPane({
   const firstMessageId = panel?.messages[0]?.id ?? null;
   const lastMessageId = panel?.messages[panel.messages.length - 1]?.id ?? null;
   const leadId = panel?.conversation.leadId ?? null;
-  if (leadId !== composerLeadId) {
-    setComposerLeadId(leadId);
-    setDraft("");
-    setChannel("CHAT");
+  const inbound = latestInboundCustomerComposerChannel(panel?.messages ?? []);
+  const nextComposer = nextAgentComposerChannelState({
+    leadId,
+    prevLeadId: composerLeadId,
+    inboundId: inbound?.id ?? null,
+    inboundChannel: inbound?.channel ?? null,
+    appliedInboundId,
+    manualChannel,
+    channel,
+  });
+  if (
+    nextComposer.leadId !== composerLeadId ||
+    nextComposer.channel !== channel ||
+    nextComposer.manualChannel !== manualChannel ||
+    nextComposer.appliedInboundId !== appliedInboundId
+  ) {
+    setComposerLeadId(nextComposer.leadId);
+    setChannel(nextComposer.channel);
+    setManualChannel(nextComposer.manualChannel);
+    setAppliedInboundId(nextComposer.appliedInboundId);
+    if (nextComposer.resetDraft) setDraft("");
   }
+  const displayedChannel = nextComposer.channel;
   const composerMode = v2ChatComposerMode({
     loading,
     error,
@@ -78,7 +105,7 @@ export function AgentChatTranscriptPane({
   const canSend = composerMode === "composer";
   const smsEnabled = Boolean(panel?.smsSend?.enabled);
   const smsBlockedReason = v2SmsBlockedCopy(panel?.smsSend?.reason);
-  const smsSelected = channel === "SMS";
+  const smsSelected = displayedChannel === "SMS";
   const readOnlyReason = panel
     ? v2ChatReadOnlyReason({
         canMarkRead: panel.viewer.canMarkRead,
@@ -128,19 +155,26 @@ export function AgentChatTranscriptPane({
     onLoadOlder();
   }
 
+  function selectDisplayedChannel(next: AgentComposerChannel) {
+    const selected = selectAgentComposerChannel(next);
+    setChannel(selected.channel);
+    setManualChannel(selected.manualChannel);
+  }
+
   async function submit() {
     if (
       !v2ChatComposerCanSubmit({
         body: draft,
         pending: sending,
         canSend,
-        channel,
+        channel: displayedChannel,
         smsEnabled,
       })
     ) {
       return;
     }
-    const sent = await onSend(draft, channel);
+    const payload = composerSendPayload(draft, displayedChannel);
+    const sent = await onSend(payload.body, payload.channel);
     if (sent) {
       setDraft("");
       stickToBottomRef.current = true;
@@ -250,11 +284,11 @@ export function AgentChatTranscriptPane({
                   type="button"
                   role="tab"
                   aria-selected={!smsSelected}
-                  onClick={() => setChannel("CHAT")}
+                  onClick={() => selectDisplayedChannel("CHAT")}
                   className={cn(
                     "rounded-md px-2.5 py-1 text-[11px] font-semibold",
                     !smsSelected
-                      ? "bg-[#2b6cb0] text-white"
+                      ? "bg-[#2b6cb0] text-white shadow-sm ring-1 ring-[#1d4f86]"
                       : "text-[#64748b] hover:text-[#1e2a38]",
                   )}
                 >
@@ -264,11 +298,11 @@ export function AgentChatTranscriptPane({
                   type="button"
                   role="tab"
                   aria-selected={smsSelected}
-                  onClick={() => setChannel("SMS")}
+                  onClick={() => selectDisplayedChannel("SMS")}
                   className={cn(
                     "rounded-md px-2.5 py-1 text-[11px] font-semibold",
                     smsSelected
-                      ? "bg-[#2b6cb0] text-white"
+                      ? "bg-[#2b6cb0] text-white shadow-sm ring-1 ring-[#1d4f86]"
                       : "text-[#64748b] hover:text-[#1e2a38]",
                   )}
                 >
@@ -332,16 +366,19 @@ export function AgentChatTranscriptPane({
                       body: draft,
                       pending: sending,
                       canSend,
-                      channel,
+                      channel: displayedChannel,
                       smsEnabled,
                     })
                   }
                   aria-label={
-                    smsSelected ? "Send SMS message" : "Send chat message"
+                    smsSelected ? "Send SMS message" : "Send Chat message"
                   }
                   className="shrink-0 rounded-lg bg-[#2b6cb0] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#245a94] disabled:opacity-50"
                 >
-                  {sending ? "Sending…" : smsSelected ? "Send SMS" : "Send"}
+                  {composerSendButtonLabel({
+                    channel: displayedChannel,
+                    sending,
+                  })}
                 </button>
               </div>
               {sendError ? (

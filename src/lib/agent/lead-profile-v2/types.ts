@@ -318,6 +318,8 @@ export type LeadProfileV2TimelineItem = {
   emailOpenCount?: number;
   emailClickCount?: number;
   lastClickedUrl?: string | null;
+  conversationChannel?: "SMS" | "CHAT" | null;
+  conversationDirection?: "inbound" | "outbound" | null;
 };
 
 export type LeadProfileV2TimelinePage = {

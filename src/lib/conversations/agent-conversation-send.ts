@@ -12,9 +12,10 @@
  * or Twilio fields. Optional `channel` is accepted only by the HTTP route
  * dispatcher; this module always persists CHAT.
  *
- * Persistence goes through createConversationMessage. This module does not
- * write Message rows, CRM activity, notifications, email/SMS, or consent
- * events, and does not mark the Agent cursor read.
+ * Persistence goes through createConversationMessage, then one Conversation
+ * LeadActivity row (CHAT / outbound) keyed by messageId. This module does not
+ * write Message rows, notifications, email/SMS, or consent events, and does
+ * not mark the Agent cursor read.
  *
  * Chat send is not idempotent: there is no existing Agent mutation
  * idempotency-key store suitable for Chat. Double-click/retry creates two
@@ -34,6 +35,10 @@ import {
   type ConversationMessageDb,
   type ConversationMessageRecord,
 } from "@/lib/conversations/create-conversation-message";
+import {
+  recordConversationLeadActivity,
+  type ConversationLeadActivityDb,
+} from "@/lib/conversations/sms-lead-activity";
 
 export const AGENT_CHAT_TEXT_MAX_LENGTH = 4000;
 
@@ -50,7 +55,8 @@ export const agentConversationSendRequestSchema = z
   })
   .strict();
 
-export type AgentConversationSendDb = ConversationMessageDb;
+export type AgentConversationSendDb = ConversationMessageDb &
+  ConversationLeadActivityDb;
 
 export type AgentChatSendPayload = {
   conversation: {
@@ -151,6 +157,20 @@ export async function sendAgentLeadChatMessage(
       return { ok: false, reason: "LEAD_NOT_FOUND" };
     }
     return { ok: false, reason: "INVALID_BODY" };
+  }
+
+  try {
+    await recordConversationLeadActivity(db, {
+      leadId: lead.id,
+      workspaceId: lead.workspaceId,
+      messageId: created.message.id,
+      body: text,
+      channel: "CHAT",
+      direction: "outbound",
+      userId: ctx.user.id,
+    });
+  } catch {
+    // Conversation persist already succeeded.
   }
 
   return {

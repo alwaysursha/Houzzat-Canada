@@ -119,6 +119,13 @@ class FakeSendDb implements AgentConversationSendDb {
   smsSends = 0;
   nextConversationId = 1;
   nextMessageId = 1;
+  activities: Array<{
+    id: string;
+    leadId: string;
+    type: string;
+    body: string | null;
+    meta: Record<string, unknown> | null;
+  }> = [];
 
   private leadKey(workspaceId: string, leadId: string) {
     return `${workspaceId}:${leadId}`;
@@ -294,6 +301,60 @@ class FakeSendDb implements AgentConversationSendDb {
         payload: (data.payload ?? null) as ConversationMessageRecord["payload"],
       };
       this.messages.push(row);
+      return row;
+    },
+  };
+
+  leadActivity = {
+    findFirst: async ({
+      where,
+    }: {
+      where: {
+        leadId?: string;
+        type?: string;
+        meta?: { path?: string[]; equals?: unknown };
+      };
+    }) => {
+      const messageId =
+        where.meta?.path?.[0] === "messageId" &&
+        typeof where.meta.equals === "string"
+          ? where.meta.equals
+          : null;
+      if (!messageId) return null;
+      const row = this.activities.find((item) => {
+        const meta = item.meta;
+        return (
+          item.leadId === where.leadId &&
+          item.type === where.type &&
+          meta?.messageId === messageId
+        );
+      });
+      return row ? { id: row.id } : null;
+    },
+    create: async ({
+      data,
+    }: {
+      data: {
+        leadId: string;
+        type: string;
+        body?: string | null;
+        meta?: unknown;
+        userId?: string | null;
+      };
+    }) => {
+      this.leadActivityCreates += 1;
+      const meta =
+        data.meta && typeof data.meta === "object" && !Array.isArray(data.meta)
+          ? (data.meta as Record<string, unknown>)
+          : null;
+      const row = {
+        id: `act_${this.leadActivityCreates}`,
+        leadId: data.leadId,
+        type: data.type,
+        body: data.body ?? null,
+        meta,
+      };
+      this.activities.push(row);
       return row;
     },
   };
@@ -656,8 +717,12 @@ async function testSendDoesNotTouchReadCursors() {
 async function testNoCrmOrOutboundSideEffects() {
   await withWorkspaceRead(async () => {
     const db = assignedDb();
-    await sendAgentLeadChatMessage(db, makeCtx(), LEAD_A, "hello");
-    assert.equal(db.leadActivityCreates, 0);
+    const result = await sendAgentLeadChatMessage(db, makeCtx(), LEAD_A, "hello");
+    assert.equal(result.ok, true);
+    assert.equal(db.leadActivityCreates, 1);
+    assert.equal(db.activities[0]?.type, "CHAT");
+    assert.equal(db.activities[0]?.meta?.channel, "CHAT");
+    assert.equal(db.activities[0]?.meta?.direction, "outbound");
     assert.equal(db.notificationSends, 0);
     assert.equal(db.emailSends, 0);
     assert.equal(db.smsSends, 0);

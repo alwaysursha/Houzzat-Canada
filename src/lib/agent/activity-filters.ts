@@ -76,8 +76,8 @@ export const ACTIVITY_FILTER_GROUPS: ActivityFilterGroup[] = [
       },
       {
         id: "text",
-        label: "Text Conversations",
-        types: ["SMS", "sms", "text", "whatsapp", "TEXT"],
+        label: "Conversations",
+        types: ["SMS", "sms", "text", "whatsapp", "TEXT", "CHAT", "chat"],
       },
     ],
   },
@@ -326,7 +326,8 @@ export function friendlyActivityTypeLabel(type: string): string {
       return "Task";
     case "SMS":
     case "TEXT":
-      return "Text";
+    case "CHAT":
+      return "Conversation";
     default:
       return type.replaceAll("_", " ");
   }

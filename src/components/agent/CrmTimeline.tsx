@@ -15,11 +15,17 @@ import {
   MousePointerClick,
   Pin,
   Search,
+  ArrowDownLeft,
+  ArrowUpRight,
   UserRound,
   Workflow,
 } from "lucide-react";
 import type { TimelineItem } from "@/lib/agent/customer-timeline";
 import { friendlyActivityTypeLabel } from "@/lib/agent/activity-filters";
+import {
+  conversationActivityHeadline,
+  conversationActivityFromLeadActivity,
+} from "@/lib/agent/conversation-activity";
 import { propertyAlertEmailLabel } from "@/lib/agent/email-alert-kinds";
 import {
   EmailPreviewModal,
@@ -128,12 +134,40 @@ const QUICK_CATEGORIES: Array<{
   },
 ];
 
-function categoryMeta(type: string): {
+function conversationView(item: TimelineItem) {
+  if (item.conversationChannel) {
+    return {
+      isConversation: true,
+      conversationChannel: item.conversationChannel,
+      conversationDirection: item.conversationDirection ?? null,
+    };
+  }
+  return conversationActivityFromLeadActivity({ type: item.type });
+}
+
+function categoryMeta(type: string, item?: TimelineItem): {
   icon: typeof Mail;
   chip: string;
   dot: string;
   rail: string;
 } {
+  const conversation = item ? conversationView(item) : { isConversation: false, conversationChannel: null, conversationDirection: null };
+  if (conversation.isConversation) {
+    const received = conversation.conversationDirection === "inbound";
+    return received
+      ? {
+          icon: ArrowDownLeft,
+          chip: "bg-[#f1f5f9] text-[#334155] ring-[#cbd5e1]",
+          dot: "bg-[#64748b]",
+          rail: "from-[#94a3b8]/30 to-transparent",
+        }
+      : {
+          icon: ArrowUpRight,
+          chip: "bg-[#dbeafe] text-[#1e40af] ring-[#93c5fd]",
+          dot: "bg-[#2b6cb0]",
+          rail: "from-[#2b6cb0]/30 to-transparent",
+        };
+  }
   const t = type.toUpperCase();
   if (t === "DIGEST_EMAIL" || t === "PROPERTY_ALERT_EMAIL") {
     return {
@@ -232,6 +266,12 @@ function categoryMeta(type: string): {
 }
 
 function typeLabel(item: TimelineItem) {
+  const conversation = conversationActivityHeadline({
+    type: item.type,
+    conversationChannel: item.conversationChannel,
+    conversationDirection: item.conversationDirection,
+  });
+  if (conversation) return conversation;
   if (item.source === "note") {
     return item.noteCategory === "CALL" ? "Call note" : "General note";
   }
@@ -395,7 +435,8 @@ export function CrmTimeline({
 
               <ol className="relative space-y-0 border-l border-[#e2e8f0] pl-5 sm:pl-6">
                 {group.items.map((item, index) => {
-                  const meta = categoryMeta(item.type);
+                  const meta = categoryMeta(item.type, item);
+                  const conversation = conversationView(item);
                   const Icon = meta.icon;
                   const listingHref = item.mlsNumber
                     ? `/listing/${item.mlsNumber}`
@@ -518,12 +559,30 @@ export function CrmTimeline({
                           ) : null}
                         </div>
                       ) : (
-                        <div className="mt-1.5 rounded-xl border border-transparent px-2.5 py-2 transition hover:border-[#eef2f6] hover:bg-[#f8fafc]/80">
-                          <p className="text-sm font-semibold text-[#0f172a]">
-                            {item.title}
-                          </p>
+                        <div
+                          className={cn(
+                            "mt-1.5 rounded-xl border px-2.5 py-2 transition hover:border-[#eef2f6] hover:bg-[#f8fafc]/80",
+                            conversation.isConversation
+                              ? conversation.conversationDirection === "inbound"
+                                ? "border-l-[3px] border-[#cbd5e1] border-y-transparent border-r-transparent bg-[#f8fafc]"
+                                : "border-l-[3px] border-[#93c5fd] border-y-transparent border-r-transparent bg-[#f8fbff]"
+                              : "border-transparent",
+                          )}
+                        >
+                          {conversation.isConversation ? null : (
+                            <p className="text-sm font-semibold text-[#0f172a]">
+                              {item.title}
+                            </p>
+                          )}
                           {item.body ? (
-                            <p className="mt-0.5 line-clamp-3 text-[13px] leading-relaxed text-[#64748b]">
+                            <p
+                              className={cn(
+                                "line-clamp-3 text-[13px] leading-relaxed text-[#64748b]",
+                                conversation.isConversation
+                                  ? "text-sm font-medium text-[#0f172a]"
+                                  : "mt-0.5",
+                              )}
+                            >
                               {item.body}
                             </p>
                           ) : null}

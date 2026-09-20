@@ -17,9 +17,10 @@
  * Messages go through createConversationMessage. Rate limit runs after
  * trusted hostname Workspace resolution and before Message creation.
  *
- * After a newly persisted CUSTOMER/CHAT/TEXT Message, this module schedules
- * a best-effort assigned-Agent `chat_message` FCM. Message success never
- * depends on push. Email, SMS, CustomerAlert, consent, and CRM mutations
+ * After a newly persisted CUSTOMER/CHAT/TEXT Message, this module writes one
+ * Conversation LeadActivity row (CHAT / inbound) keyed by messageId, then
+ * schedules a best-effort assigned-Agent `chat_message` FCM. Message success
+ * never depends on activity or push. Email, SMS, CustomerAlert, and consent
  * are not sent from here.
  */
 import type {
@@ -68,6 +69,10 @@ import {
   markConversationReadByCustomer,
   type ConversationReadStateDb,
 } from "@/lib/conversations/read-state";
+import {
+  recordConversationLeadActivity,
+  type ConversationLeadActivityDb,
+} from "@/lib/conversations/sms-lead-activity";
 import { parseJsonText } from "@/lib/http/json-body";
 import { scheduleNotifyAssignedAgentOfCustomerChatMessage } from "@/lib/notifications/customer-chat-agent-push";
 import { isConsumerRole } from "@/lib/roles";
@@ -155,7 +160,8 @@ export type CustomerConversationHttpResult = {
 };
 
 export type CustomerConversationDb = ConversationMessageDb &
-  ConversationReadStateDb;
+  ConversationReadStateDb &
+  ConversationLeadActivityDb;
 
 export type CustomerSendAccess =
   | { ok: true; user: CustomerUser }
@@ -532,6 +538,20 @@ export async function handleCustomerConversationSend(
 
   if (!created.ok) {
     return jsonResult(400, { error: "Invalid payload" });
+  }
+
+  try {
+    await recordConversationLeadActivity(deps.db, {
+      leadId: ensured.leadId,
+      workspaceId: ensured.workspaceId,
+      messageId: created.message.id,
+      body: text,
+      channel: "CHAT",
+      direction: "inbound",
+      userId: access.user.id,
+    });
+  } catch {
+    // Conversation persist already succeeded.
   }
 
   try {

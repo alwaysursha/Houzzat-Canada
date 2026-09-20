@@ -586,9 +586,15 @@ function testSourceContracts() {
     api.indexOf("export async function handleCustomerConversationRead"),
   );
   const persistIdx = sendFn.indexOf("createConversationMessage");
+  const activityIdx = sendFn.indexOf("recordConversationLeadActivity");
   const notifyIdx = sendFn.indexOf("scheduleAssignedAgentChatPush");
   const returnIdx = sendFn.lastIndexOf("return jsonResult(200");
-  assert.ok(persistIdx > 0 && notifyIdx > persistIdx && returnIdx > notifyIdx);
+  assert.ok(
+    persistIdx > 0 &&
+      activityIdx > persistIdx &&
+      notifyIdx > activityIdx &&
+      returnIdx > notifyIdx,
+  );
   assert.ok(!sendFn.includes("notifyNewLeadCapturedToStaff"));
   assert.ok(!sendFn.includes("markConversationReadByAgent"));
   assert.ok(!sendFn.includes("markConversationReadByCustomer"));
@@ -794,6 +800,14 @@ class FakeDb implements CustomerConversationDb {
     },
   };
 
+  leadActivity = {
+    findFirst: async () => null,
+    create: async () => {
+      this.leadActivityCreates += 1;
+      return { id: "act_1" };
+    },
+  };
+
   async $transaction<T>(
     fn: (tx: {
       message: FakeDb["message"];
@@ -945,7 +959,7 @@ async function testCustomerSendSchedulesOnce() {
   assert.equal(world.chatPushes[0]?.message.body, "Hello from customer");
   assert.equal(world.chatPushes[0]?.message.senderName, "Customer A");
   assert.equal(world.chatPushes[0]?.message.id, payload.message.id);
-  assert.equal(world.db.leadActivityCreates, 0);
+  assert.equal(world.db.leadActivityCreates, 1);
 }
 
 async function testUnassignedFailsBeforeMessageAndNotify() {

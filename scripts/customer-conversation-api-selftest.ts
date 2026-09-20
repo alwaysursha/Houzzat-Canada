@@ -105,6 +105,13 @@ class FakeCustomerDb implements CustomerConversationDb {
   customerCursorWrites = 0;
   agentCursorWrites = 0;
   leadActivityCreates = 0;
+  activities: Array<{
+    id: string;
+    leadId: string;
+    type: string;
+    body: string | null;
+    meta: Record<string, unknown> | null;
+  }> = [];
   notificationSends = 0;
   emailSends = 0;
   smsSends = 0;
@@ -393,10 +400,54 @@ class FakeCustomerDb implements CustomerConversationDb {
   };
 
   leadActivity = {
-    findFirst: async () => null,
-    create: async () => {
+    findFirst: async ({
+      where,
+    }: {
+      where: {
+        leadId?: string;
+        type?: string;
+        meta?: { path?: string[]; equals?: unknown };
+      };
+    }) => {
+      const messageId =
+        where.meta?.path?.[0] === "messageId" &&
+        typeof where.meta.equals === "string"
+          ? where.meta.equals
+          : null;
+      if (!messageId) return null;
+      const row = this.activities.find(
+        (item) =>
+          item.leadId === where.leadId &&
+          item.type === where.type &&
+          item.meta?.messageId === messageId,
+      );
+      return row ? { id: row.id } : null;
+    },
+    create: async ({
+      data,
+    }: {
+      data: {
+        leadId: string;
+        type: string;
+        body?: string | null;
+        meta?: unknown;
+        userId?: string | null;
+      };
+    }) => {
       this.leadActivityCreates += 1;
-      return { id: "act_1" };
+      const meta =
+        data.meta && typeof data.meta === "object" && !Array.isArray(data.meta)
+          ? (data.meta as Record<string, unknown>)
+          : null;
+      const row = {
+        id: `act_${this.leadActivityCreates}`,
+        leadId: data.leadId,
+        type: data.type,
+        body: data.body ?? null,
+        meta,
+      };
+      this.activities.push(row);
+      return row;
     },
   };
 
@@ -1077,7 +1128,10 @@ async function testNoSideEffectsOnSend() {
   const world = new ApiWorld();
   world.seedOwnLead();
   await sendBody(world, { body: "Hi" });
-  assert.equal(world.db.leadActivityCreates, 0);
+  assert.equal(world.db.leadActivityCreates, 1);
+  assert.equal(world.db.activities[0]?.type, "CHAT");
+  assert.equal(world.db.activities[0]?.meta?.channel, "CHAT");
+  assert.equal(world.db.activities[0]?.meta?.direction, "inbound");
   assert.equal(world.db.notificationSends, 0);
   assert.equal(world.db.emailSends, 0);
   assert.equal(world.db.smsSends, 0);

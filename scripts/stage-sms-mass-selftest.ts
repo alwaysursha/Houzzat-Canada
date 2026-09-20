@@ -406,6 +406,7 @@ class FakeMassDb {
   };
 
   leadActivity = {
+    findFirst: async () => null,
     create: async ({
       data,
     }: {

@@ -4,6 +4,7 @@ import {
   timelineItemMatchesFilters,
   type TimelineScope,
 } from "@/lib/agent/activity-filters";
+import { conversationActivityFromLeadActivity } from "@/lib/agent/conversation-activity";
 import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
 import {
   LEAD_PROFILE_EMAIL_LIST_SELECT,
@@ -148,7 +149,7 @@ export async function loadPagedLeadTimeline(input: {
           where: { leadId: input.leadId, ...(createdAt ? { createdAt } : {}) },
           orderBy: { createdAt: "desc" },
           take: perSource,
-          select: { id: true, type: true, body: true, createdAt: true },
+          select: { id: true, type: true, body: true, meta: true, createdAt: true },
         })
       : Promise.resolve([]),
     want(sources, "notes")
@@ -211,6 +212,10 @@ export async function loadPagedLeadTimeline(input: {
 
   for (const a of leadActs) {
     if (a.type === "note" || a.type === "email_sent") continue;
+    const conversation = conversationActivityFromLeadActivity({
+      type: a.type,
+      meta: a.meta,
+    });
     const engagementType =
       a.type === "email_opened"
         ? "EMAIL_OPENED"
@@ -232,6 +237,8 @@ export async function loadPagedLeadTimeline(input: {
       path: null,
       imageUrl: null,
       createdAt: a.createdAt,
+      conversationChannel: conversation.conversationChannel,
+      conversationDirection: conversation.conversationDirection,
     });
   }
   for (const n of notes) {

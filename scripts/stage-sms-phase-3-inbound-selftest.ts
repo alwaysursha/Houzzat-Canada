@@ -380,6 +380,7 @@ class FakeInboundDb implements InboundSmsDb {
   };
 
   leadActivity = {
+    findFirst: async () => null,
     create: async ({
       data,
     }: {

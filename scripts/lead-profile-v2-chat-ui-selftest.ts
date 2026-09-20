@@ -542,6 +542,8 @@ function testSmsComposerAndDelivery() {
     "Failed",
   );
   assert.ok(pane.includes("smsQuickTexts"));
+  assert.ok(pane.includes("composerSendButtonLabel"));
+  assert.ok(pane.includes("Send Chat") || pane.includes('channel === "SMS" ? "Send SMS" : "Send Chat"') || pane.includes("composerSendButtonLabel"));
   assert.ok(pane.includes("setDraft(quickText.rendered)"));
   assert.equal(pane.includes("onSend(quickText"), false);
   assert.equal(pane.includes("onSend(qt"), false);

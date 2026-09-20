@@ -363,6 +363,7 @@ class FakeDb implements InboundSmsDb, AgentSmsContextDb {
   };
 
   leadActivity = {
+    findFirst: async () => null,
     create: async ({
       data,
     }: {

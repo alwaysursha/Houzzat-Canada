@@ -391,6 +391,7 @@ class FakeSmsDb implements AgentSmsContextDb {
   };
 
   leadActivity = {
+    findFirst: async () => null,
     create: async ({
       data,
     }: {

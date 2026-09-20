@@ -119,6 +119,104 @@ export function v2ChatComposerKeyAction(input: {
   return input.shiftKey ? "newline" : "send";
 }
 
+export type AgentComposerChannel = "CHAT" | "SMS";
+
+export type AgentComposerInbound = {
+  id: string;
+  channel: AgentComposerChannel;
+};
+
+export function latestInboundCustomerComposerChannel(
+  messages: Array<{
+    id: string;
+    senderKind: string;
+    channel: string;
+    kind?: string | null;
+  }>,
+): AgentComposerInbound | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const row = messages[i];
+    if (!row || row.senderKind !== "CUSTOMER") continue;
+    if (row.kind === "SYSTEM_CARD") continue;
+    if (row.channel === "SMS" || row.channel === "CHAT") {
+      return { id: row.id, channel: row.channel };
+    }
+  }
+  return null;
+}
+
+export function nextAgentComposerChannelState(input: {
+  leadId: string | null;
+  prevLeadId: string | null;
+  inboundId: string | null;
+  inboundChannel: AgentComposerChannel | null;
+  appliedInboundId: string | null;
+  manualChannel: AgentComposerChannel | null;
+  channel: AgentComposerChannel;
+}): {
+  leadId: string | null;
+  channel: AgentComposerChannel;
+  manualChannel: AgentComposerChannel | null;
+  appliedInboundId: string | null;
+  resetDraft: boolean;
+} {
+  const inboundId = input.inboundChannel ? input.inboundId : null;
+  const inboundChannel = inboundId ? input.inboundChannel : null;
+  const leadChanged = input.leadId !== input.prevLeadId;
+
+  if (leadChanged) {
+    return {
+      leadId: input.leadId,
+      channel: inboundChannel ?? "CHAT",
+      manualChannel: null,
+      appliedInboundId: inboundId,
+      resetDraft: true,
+    };
+  }
+
+  if (inboundId && inboundChannel && inboundId !== input.appliedInboundId) {
+    return {
+      leadId: input.leadId,
+      channel: inboundChannel,
+      manualChannel: null,
+      appliedInboundId: inboundId,
+      resetDraft: false,
+    };
+  }
+
+  return {
+    leadId: input.leadId,
+    channel: input.manualChannel ?? input.channel,
+    manualChannel: input.manualChannel,
+    appliedInboundId: input.appliedInboundId,
+    resetDraft: false,
+  };
+}
+
+export function selectAgentComposerChannel(
+  next: AgentComposerChannel,
+): {
+  channel: AgentComposerChannel;
+  manualChannel: AgentComposerChannel;
+} {
+  return { channel: next, manualChannel: next };
+}
+
+export function composerSendPayload(
+  body: string,
+  displayedChannel: AgentComposerChannel,
+): { body: string; channel: AgentComposerChannel } {
+  return { body, channel: displayedChannel };
+}
+
+export function composerSendButtonLabel(input: {
+  channel: AgentComposerChannel;
+  sending: boolean;
+}): string {
+  if (input.sending) return "Sending…";
+  return input.channel === "SMS" ? "Send SMS" : "Send Chat";
+}
+
 export function v2ChatComposerCanSubmit(input: {
   body: string;
   pending: boolean;

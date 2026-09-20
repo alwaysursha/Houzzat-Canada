@@ -6,6 +6,7 @@ import {
   appendV2ChatSentMessage,
   canApplyV2ChatResponse,
   clearV2ChatUnread,
+  composerSendPayload,
   mergeV2ChatMessages,
   shouldMarkV2ChatRead,
   shouldSkipDuplicateV2ChatOlder,
@@ -241,7 +242,7 @@ export function useAgentChatThread(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(
-              channel === "SMS" ? { body, channel: "SMS" } : { body },
+              composerSendPayload(body, channel),
             ),
           },
         );

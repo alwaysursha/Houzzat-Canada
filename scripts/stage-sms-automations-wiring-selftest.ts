@@ -470,6 +470,7 @@ class FakeAutomationDb {
   };
 
   leadActivity = {
+    findFirst: async () => null,
     create: async ({
       data,
     }: {

@@ -1,4 +1,5 @@
 import type { ActivityEventType } from "@prisma/client";
+import { conversationActivityFromLeadActivity } from "@/lib/agent/conversation-activity";
 import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
 import {
   isPropertyAlertUtmCampaign,
@@ -169,6 +170,8 @@ export type TimelineItem = {
   emailOpenCount?: number;
   emailClickCount?: number;
   lastClickedUrl?: string | null;
+  conversationChannel?: "SMS" | "CHAT" | null;
+  conversationDirection?: "inbound" | "outbound" | null;
 };
 
 export type TimelineItemDto = {
@@ -192,6 +195,8 @@ export type TimelineItemDto = {
   emailOpenCount?: number;
   emailClickCount?: number;
   lastClickedUrl?: string | null;
+  conversationChannel?: "SMS" | "CHAT" | null;
+  conversationDirection?: "inbound" | "outbound" | null;
 };
 
 export function serializeTimelineItem(item: TimelineItem): TimelineItemDto {
@@ -216,6 +221,8 @@ export function serializeTimelineItem(item: TimelineItem): TimelineItemDto {
     emailOpenCount: item.emailOpenCount,
     emailClickCount: item.emailClickCount,
     lastClickedUrl: item.lastClickedUrl,
+    conversationChannel: item.conversationChannel,
+    conversationDirection: item.conversationDirection,
   };
 }
 
@@ -364,6 +371,10 @@ export async function loadCustomerTimeline(input: {
     const emailLogId =
       typeof meta?.emailLogId === "string" ? meta.emailLogId : null;
     const clickUrl = typeof meta?.url === "string" ? meta.url : null;
+    const conversation = conversationActivityFromLeadActivity({
+      type: a.type,
+      meta,
+    });
 
     const engagementType =
       a.type === "email_opened"
@@ -392,6 +403,8 @@ export async function loadCustomerTimeline(input: {
         previewPath ??
         (emailLogId ? `/agent/emails/${emailLogId}` : null),
       lastClickedUrl: clickUrl,
+      conversationChannel: conversation.conversationChannel,
+      conversationDirection: conversation.conversationDirection,
     });
   }
   for (const n of notes) {
