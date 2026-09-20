@@ -12,7 +12,9 @@ import { join } from "node:path";
 import {
   hasTwilioWebhookSigningConfig,
   parseTwilioSubaccountAuthTokenMap,
+  resolveTwilioSubaccountSendCredentials,
   resolveTwilioWebhookAuthTokens,
+  twilioParentCredentials,
 } from "../src/lib/sms/credentials";
 import { handleInboundTwilioSms } from "../src/lib/sms/inbound";
 import { isTwilioSid } from "../src/lib/sms/sids";
@@ -45,10 +47,10 @@ function sign(url: string, params: Record<string, string>, token: string) {
   return createHmac("sha1", token).update(data, "utf8").digest("base64");
 }
 
-function withEnv(
+function withEnv<T>(
   values: Record<string, string | undefined>,
-  fn: () => void,
-) {
+  fn: () => T,
+): T {
   const prev: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(values)) {
     prev[key] = process.env[key];
@@ -56,7 +58,27 @@ function withEnv(
     else process.env[key] = value;
   }
   try {
-    fn();
+    return fn();
+  } finally {
+    for (const [key, value] of Object.entries(prev)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+async function withEnvAsync(
+  values: Record<string, string | undefined>,
+  fn: () => Promise<void>,
+): Promise<void> {
+  const prev: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(values)) {
+    prev[key] = process.env[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  try {
+    await fn();
   } finally {
     for (const [key, value] of Object.entries(prev)) {
       if (value === undefined) delete process.env[key];
@@ -142,6 +164,41 @@ function testSidHelpersAndWorkspaceConfig() {
     assert.equal(ready.config.messagingServiceSid, MG_A);
     assert.equal(ready.config.phoneE164, FROM);
   }
+}
+
+function testOutboundSubaccountSendCredentials() {
+  withEnv(
+    {
+      TWILIO_ACCOUNT_SID: PARENT,
+      TWILIO_AUTH_TOKEN: TOKEN_PARENT,
+      TWILIO_SUBACCOUNT_AUTH_TOKENS: JSON.stringify({ [SUB_A]: TOKEN_A }),
+    },
+    () => {
+      const parent = twilioParentCredentials();
+      assert.equal(parent?.sid, PARENT);
+      assert.equal(parent?.token, TOKEN_PARENT);
+
+      const mapped = resolveTwilioSubaccountSendCredentials(SUB_A);
+      assert.equal(mapped?.sid, SUB_A);
+      assert.equal(mapped?.token, TOKEN_A);
+
+      assert.equal(resolveTwilioSubaccountSendCredentials(SUB_B), null);
+      assert.equal(resolveTwilioSubaccountSendCredentials(PARENT), null);
+      assert.equal(resolveTwilioSubaccountSendCredentials(null), null);
+    },
+  );
+
+  withEnv(
+    {
+      TWILIO_ACCOUNT_SID: PARENT,
+      TWILIO_AUTH_TOKEN: TOKEN_PARENT,
+      TWILIO_SUBACCOUNT_AUTH_TOKENS: "",
+    },
+    () => {
+      assert.equal(twilioParentCredentials()?.sid, PARENT);
+      assert.equal(resolveTwilioSubaccountSendCredentials(SUB_A), null);
+    },
+  );
 }
 
 function testWebhookTokenResolution() {
@@ -239,7 +296,6 @@ async function testTransportIsvTargeting() {
       status: 201,
     });
   };
-  const creds = { sid: PARENT, token: TOKEN_PARENT };
   const ready = {
     ok: true as const,
     config: {
@@ -254,17 +310,17 @@ async function testTransportIsvTargeting() {
   try {
     const noWorkspace = await sendSms(
       { to: TO, body: "Hello", smsClass: "transactional" },
-      { getCredentials: () => creds, fetchImpl },
+      { fetchImpl },
     );
     assert.equal(noWorkspace.status, "skipped");
     if (noWorkspace.status === "skipped") {
       assert.equal(noWorkspace.reason, "missing_workspace");
     }
+    assert.equal(captured.length, 0);
 
     const noSub = await sendSms(
       { to: TO, body: "Hello", smsClass: "transactional", workspaceId: "ws_a" },
       {
-        getCredentials: () => creds,
         fetchImpl,
         resolveWorkspaceTwilio: async () => ({
           ok: false,
@@ -276,27 +332,75 @@ async function testTransportIsvTargeting() {
     if (noSub.status === "skipped") {
       assert.equal(noSub.reason, "missing_subaccount");
     }
+    assert.equal(captured.length, 0);
 
-    const sent = await sendSms(
-      { to: TO, body: "Hello", smsClass: "conversational", workspaceId: "ws_a" },
+    await withEnvAsync(
       {
-        getCredentials: () => creds,
-        fetchImpl,
-        resolveWorkspaceTwilio: async () => ready,
-        isSuppressed: async () => false,
+        TWILIO_ACCOUNT_SID: PARENT,
+        TWILIO_AUTH_TOKEN: TOKEN_PARENT,
+        TWILIO_SUBACCOUNT_AUTH_TOKENS: JSON.stringify({ [SUB_B]: TOKEN_A }),
+      },
+      async () => {
+        const parentOnly = await sendSms(
+          {
+            to: TO,
+            body: "Hello",
+            smsClass: "conversational",
+            workspaceId: "ws_a",
+          },
+          {
+            fetchImpl,
+            resolveWorkspaceTwilio: async () => ready,
+            isSuppressed: async () => false,
+          },
+        );
+        assert.equal(parentOnly.status, "skipped");
+        if (parentOnly.status === "skipped") {
+          assert.equal(parentOnly.reason, "missing_credentials");
+        }
+        assert.equal(captured.length, 0);
       },
     );
-    assert.equal(sent.status, "sent");
-    const last = captured.at(-1);
-    assert.ok(last);
-    assert.ok(last.url.includes(`/Accounts/${SUB_A}/Messages.json`));
-    assert.equal(last.url.includes(`/Accounts/${PARENT}/Messages.json`), false);
-    assert.equal(last.body.get("MessagingServiceSid"), MG_A);
-    assert.equal(last.body.get("From"), FROM);
-    assert.equal(last.body.get("From") === "+16045550123", false);
-    assert.equal(
-      last.auth,
-      `Basic ${Buffer.from(`${PARENT}:${TOKEN_PARENT}`).toString("base64")}`,
+
+    await withEnvAsync(
+      {
+        TWILIO_ACCOUNT_SID: PARENT,
+        TWILIO_AUTH_TOKEN: TOKEN_PARENT,
+        TWILIO_SUBACCOUNT_AUTH_TOKENS: JSON.stringify({ [SUB_A]: TOKEN_A }),
+      },
+      async () => {
+        const sent = await sendSms(
+          {
+            to: TO,
+            body: "Hello",
+            smsClass: "conversational",
+            workspaceId: "ws_a",
+          },
+          {
+            fetchImpl,
+            resolveWorkspaceTwilio: async () => ready,
+            isSuppressed: async () => false,
+          },
+        );
+        assert.equal(sent.status, "sent");
+        const last = captured.at(-1);
+        assert.ok(last);
+        assert.ok(last.url.includes(`/Accounts/${SUB_A}/Messages.json`));
+        assert.equal(last.url.includes(`/Accounts/${PARENT}/Messages.json`), false);
+        assert.equal(last.body.get("MessagingServiceSid"), MG_A);
+        assert.equal(last.body.get("From"), FROM);
+        assert.equal(last.body.get("From") === "+16045550123", false);
+        assert.equal(
+          last.auth,
+          `Basic ${Buffer.from(`${SUB_A}:${TOKEN_A}`).toString("base64")}`,
+        );
+        assert.equal(
+          last.auth.includes(
+            Buffer.from(`${PARENT}:${TOKEN_PARENT}`).toString("base64"),
+          ),
+          false,
+        );
+      },
     );
   } finally {
     if (prevFrom === undefined) delete process.env.TWILIO_FROM_NUMBER;
@@ -400,7 +504,10 @@ function testRoutesAndBoundaries() {
   assert.equal(transport.includes("TWILIO_FROM_NUMBER"), false);
   assert.ok(transport.includes("MessagingServiceSid"));
   assert.ok(creds.includes("TWILIO_SUBACCOUNT_AUTH_TOKENS"));
+  assert.ok(creds.includes("resolveTwilioSubaccountSendCredentials"));
   assert.equal(creds.includes("prisma"), false);
+  assert.ok(transport.includes("resolveTwilioSubaccountSendCredentials"));
+  assert.equal(transport.includes("twilioParentCredentials"), false);
   assert.equal(
     existsSync(join(root, "src/lib/sms/provision-twilio.ts")),
     false,
@@ -411,6 +518,7 @@ function testRoutesAndBoundaries() {
 async function main() {
   testSchemaAndMigration();
   testSidHelpersAndWorkspaceConfig();
+  testOutboundSubaccountSendCredentials();
   testWebhookTokenResolution();
   await testTransportIsvTargeting();
   await testInboundToRoutingAndAccountMismatch();

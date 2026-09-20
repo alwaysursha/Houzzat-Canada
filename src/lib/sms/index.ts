@@ -14,6 +14,7 @@ export { recordOutboundSmsDeadLetter } from "@/lib/sms/dead-letter";
 export {
   hasTwilioWebhookSigningConfig,
   parseTwilioSubaccountAuthTokenMap,
+  resolveTwilioSubaccountSendCredentials,
   resolveTwilioWebhookAuthTokens,
   twilioParentCredentials,
 } from "@/lib/sms/credentials";

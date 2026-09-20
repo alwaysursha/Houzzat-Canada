@@ -11,14 +11,28 @@ export type TwilioWebhookAuthInput = {
 };
 
 /**
- * Parent Twilio account. Authenticates v2010 sends against a workspace
- * subaccount URL. Does not send from the parent and is not used to sign
- * subaccount webhooks.
+ * Parent Twilio account. Used for parent/ISV operations and parent-account
+ * webhook signing. Not used to authenticate workspace outbound sends.
  */
 export function twilioParentCredentials(): TwilioParentCredentials | null {
   const sid = normalizeTwilioSid(process.env.TWILIO_ACCOUNT_SID, "AC");
   const token = process.env.TWILIO_AUTH_TOKEN?.trim() || "";
   if (!sid || !token) return null;
+  return { sid, token };
+}
+
+/**
+ * Outbound send credentials for one workspace subaccount.
+ * Env-only via TWILIO_SUBACCOUNT_AUTH_TOKENS. Never Prisma. Never parent fallback.
+ */
+export function resolveTwilioSubaccountSendCredentials(
+  subaccountSid: string | null | undefined,
+  map: Record<string, string> = parseTwilioSubaccountAuthTokenMap(),
+): TwilioParentCredentials | null {
+  const sid = normalizeTwilioSid(subaccountSid, "AC");
+  if (!sid) return null;
+  const token = map[sid]?.trim() || "";
+  if (!token) return null;
   return { sid, token };
 }
 

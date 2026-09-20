@@ -384,7 +384,7 @@ async function testTransport() {
     );
     assert.equal(
       last.auth,
-      `Basic ${Buffer.from(`${parentSid}:secret-token`).toString("base64")}`,
+      `Basic ${Buffer.from(`${subSid}:secret-token`).toString("base64")}`,
     );
 
     const joined = logs.join("\n");

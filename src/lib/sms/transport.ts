@@ -1,6 +1,6 @@
 import { SITE_URL } from "@/lib/constants";
 import { prisma } from "@/lib/prisma";
-import { twilioParentCredentials } from "@/lib/sms/credentials";
+import { resolveTwilioSubaccountSendCredentials } from "@/lib/sms/credentials";
 import { isE164, normalizeToE164 } from "@/lib/sms/e164";
 import { parseTwilioNumSegments } from "@/lib/sms/segments";
 import { isTwilioSid } from "@/lib/sms/sids";
@@ -24,7 +24,9 @@ export type WorkspaceTwilioResolveResult =
 
 export type SmsTransportDeps = {
   fetchImpl?: typeof fetch;
-  getCredentials?: () => { sid: string; token: string } | null;
+  getCredentials?: (
+    subaccountSid: string,
+  ) => { sid: string; token: string } | null;
   resolveWorkspaceTwilio?: (
     workspaceId: string,
   ) => Promise<WorkspaceTwilioResolveResult>;
@@ -128,9 +130,10 @@ function logSmsError(event: string, fields: Record<string, unknown>) {
 }
 
 /**
- * Shared Twilio SMS send. Parent credentials authenticate; the request
- * targets the workspace subaccount + Messaging Service. Returns MessageSid
- * on send. Does not log body, phone numbers, auth tokens, or Twilio errors.
+ * Shared Twilio SMS send. Authenticates as the workspace subaccount
+ * (SID + TWILIO_SUBACCOUNT_AUTH_TOKENS). No parent-credential fallback.
+ * Returns MessageSid on send. Does not log body, phone numbers, auth
+ * tokens, or Twilio errors.
  */
 export async function sendSms(
   input: SendSmsInput,
@@ -148,12 +151,6 @@ export async function sendSms(
     return { status: "skipped", reason: "invalid_to" };
   }
 
-  const credentials = (deps.getCredentials ?? twilioParentCredentials)();
-  if (!credentials) {
-    logSms("stub", { reason: "missing_credentials", smsClass: input.smsClass });
-    return { status: "skipped", reason: "missing_credentials" };
-  }
-
   const resolver = deps.resolveWorkspaceTwilio ?? resolveWorkspaceTwilio;
   const workspaceId = input.workspaceId?.trim() || "";
   const resolved = workspaceId
@@ -162,6 +159,14 @@ export async function sendSms(
   if (!resolved.ok) {
     logSms("skip", { reason: resolved.reason, smsClass: input.smsClass });
     return { status: "skipped", reason: resolved.reason };
+  }
+
+  const credentials = (
+    deps.getCredentials ?? resolveTwilioSubaccountSendCredentials
+  )(resolved.config.subaccountSid);
+  if (!credentials) {
+    logSms("stub", { reason: "missing_credentials", smsClass: input.smsClass });
+    return { status: "skipped", reason: "missing_credentials" };
   }
 
   const from =
@@ -200,7 +205,7 @@ export async function sendSms(
 
   try {
     const auth = Buffer.from(
-      `${credentials.sid}:${credentials.token}`,
+      `${resolved.config.subaccountSid}:${credentials.token}`,
     ).toString("base64");
     const fetchImpl = deps.fetchImpl ?? fetch;
     const res = await fetchImpl(
