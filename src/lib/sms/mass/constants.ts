@@ -1,8 +1,9 @@
 /**
  * HouzzatPRO-controlled V1 Mass SMS caps. Not tenant-editable.
- * Conservative so Cloudflare request + waitUntil ticks stay bounded.
+ * Recipients are processed in sequential ticks of SMS_MASS_TICK_SIZE —
+ * never 100 parallel Twilio requests.
  */
-export const SMS_MASS_V1_MAX_RECIPIENTS = 25;
+export const SMS_MASS_V1_MAX_RECIPIENTS = 100;
 export const SMS_MASS_TICK_SIZE = 5;
 
 export const SMS_MASS_VARIABLES = [

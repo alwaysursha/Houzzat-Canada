@@ -24,7 +24,7 @@ import type {
   ConversationMessageTx,
 } from "../src/lib/conversations/create-conversation-message";
 import { handleInboundTwilioSms } from "../src/lib/sms/inbound";
-import { SMS_MASS_V1_MAX_RECIPIENTS } from "../src/lib/sms/mass/constants";
+import { SMS_MASS_TICK_SIZE, SMS_MASS_V1_MAX_RECIPIENTS } from "../src/lib/sms/mass/constants";
 import {
   confirmMassSms,
   drainSmsMassBatch,
@@ -245,6 +245,21 @@ class FakeMassDb {
       phoneE164: TO_2,
       name: "Sam Neighbor",
     });
+  }
+
+  seedEligibleCount(count: number) {
+    const ids: string[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const id = `lead_batch_${i}`;
+      ids.push(id);
+      this.seedLead({
+        id,
+        assignedAgentId: AGENT_A,
+        phoneE164: `+1416555${String(1000 + i)}`,
+        name: `Lead ${i}`,
+      });
+    }
+    return ids;
   }
 
   lead: MassSmsDb["lead"] = {
@@ -736,7 +751,8 @@ function testFilesAndUx() {
   assert.ok(schema.includes("model SmsMassBatchRecipient"));
   assert.ok(schema.includes("AGENT_MASS"));
   assert.ok(migration.includes("NOT APPLIED"));
-  assert.equal(SMS_MASS_V1_MAX_RECIPIENTS, 25);
+  assert.equal(SMS_MASS_V1_MAX_RECIPIENTS, 100);
+  assert.equal(SMS_MASS_TICK_SIZE, 5);
 
   const table = read("src/components/agent/LeadsTableClient.tsx");
   assert.ok(table.includes("Send SMS"));
@@ -749,15 +765,23 @@ function testFilesAndUx() {
   assert.ok(form.includes("clientKey"));
   assert.ok(form.includes("confirm: true"));
   assert.ok(form.includes("setBody(quickText.body)"));
+  assert.ok(form.includes("setConfirming(false)"));
   assert.ok(form.includes("Confirm send"));
   assert.ok(form.includes("Review send"));
+  assert.ok(form.includes("leadIds.length} / {batchLimit} selected"));
+  assert.ok(form.includes("Selected {leadIds.length} / {batchLimit}"));
 
   const manage = read("src/lib/sms/mass/manage.ts");
   assert.ok(manage.includes('usageCategory: "AGENT_MASS"'));
   assert.ok(manage.includes("scheduleWorkerSideEffect") === false);
+  assert.ok(manage.includes("for (const recipient of slice)"));
+  assert.equal(manage.includes("Promise.all"), false);
   const confirmRoute = read("src/app/api/agent/leads/sms-mass/route.ts");
   assert.ok(confirmRoute.includes("scheduleWorkerSideEffect"));
   assert.ok(confirmRoute.includes("drainSmsMassBatch"));
+  assert.ok(confirmRoute.includes(".max(SMS_MASS_V1_MAX_RECIPIENTS)"));
+  const previewRoute = read("src/app/api/agent/leads/sms-mass/preview/route.ts");
+  assert.ok(previewRoute.includes(".max(SMS_MASS_V1_MAX_RECIPIENTS)"));
   assert.equal(manage.includes("redis"), false);
   assert.equal(manage.includes("kafka"), false);
   assert.equal(manage.includes("Stripe"), false);
@@ -1054,14 +1078,54 @@ async function testIdempotentRetryDoesNotDuplicate() {
   });
 }
 
-async function testBatchLimit() {
+async function testBatchLimitAccepts100() {
   const db = new FakeMassDb();
-  const ids = Array.from({ length: SMS_MASS_V1_MAX_RECIPIENTS + 1 }, (_, i) => `lead_${i}`);
+  const ids = db.seedEligibleCount(SMS_MASS_V1_MAX_RECIPIENTS);
+  await withWorkspaceRead(async () => {
+    const preview = await previewMassSms(asDb(db), makeCtx(), {
+      leadIds: ids,
+      body: "Hello everyone",
+    });
+    assert.equal(preview.overLimit, false);
+    assert.equal(preview.selectedCount, 100);
+    assert.equal(preview.eligibleCount, 100);
+    assert.equal(preview.excludedCount, 0);
+    assert.equal(preview.batchLimit, 100);
+    const result = await confirmAndDrain(db, makeCtx(), {
+      clientKey: "client-key-limit-100",
+      leadIds: ids,
+      body: "Hello everyone",
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.summary.status, "COMPLETE");
+    assert.equal(result.summary.successfulCount, 100);
+    assert.equal(result.summary.failedCount, 0);
+    assert.equal(db.smsSendCalls, 100);
+    assert.equal(
+      db.messages.filter((row) => row.channel === "SMS" && row.senderKind === "AGENT")
+        .length,
+      100,
+    );
+    assert.equal(db.activities.filter((row) => row.type === "SMS").length, 100);
+    assert.equal(db.events.length, 100);
+    assert.ok(db.events.every((row) => row.category === "AGENT_MASS"));
+  });
+}
+
+async function testBatchLimitRejects101() {
+  const db = new FakeMassDb();
+  const ids = Array.from(
+    { length: SMS_MASS_V1_MAX_RECIPIENTS + 1 },
+    (_, i) => `lead_${i}`,
+  );
   const preview = await previewMassSms(asDb(db), makeCtx(), {
     leadIds: ids,
     body: "Too many",
   });
   assert.equal(preview.overLimit, true);
+  assert.equal(preview.selectedCount, 101);
+  assert.equal(preview.batchLimit, 100);
   const result = await confirmMassSms(
     asDb(db),
     makeCtx(),
@@ -1077,6 +1141,8 @@ async function testBatchLimit() {
   assert.equal(result.error, "BATCH_LIMIT");
   assert.equal(db.smsSendCalls, 0);
   assert.equal(db.batches.length, 0);
+  assert.equal(db.messages.length, 0);
+  assert.equal(db.events.length, 0);
 }
 
 async function testInboundReplyRoutesToLeadConversation() {
@@ -1124,7 +1190,8 @@ async function main() {
   await testAllowanceBlocksBeforeSend();
   await testPartialProviderFailure();
   await testIdempotentRetryDoesNotDuplicate();
-  await testBatchLimit();
+  await testBatchLimitAccepts100();
+  await testBatchLimitRejects101();
   await testInboundReplyRoutesToLeadConversation();
   console.log("sms-mass selftest ok");
 }

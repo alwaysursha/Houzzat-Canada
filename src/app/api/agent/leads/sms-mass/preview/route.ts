@@ -9,13 +9,17 @@ import {
 } from "@/lib/http/json-api-response";
 import { jsonByteLength, parseJsonText } from "@/lib/http/json-body";
 import { prisma } from "@/lib/prisma";
-import { previewMassSms, prismaMassSmsDb } from "@/lib/sms/mass";
+import {
+  previewMassSms,
+  prismaMassSmsDb,
+  SMS_MASS_V1_MAX_RECIPIENTS,
+} from "@/lib/sms/mass";
 
 const ROUTE = "/api/agent/leads/sms-mass/preview";
 
 const schema = z
   .object({
-    leadIds: z.array(z.string().min(1)).max(200),
+    leadIds: z.array(z.string().min(1)).max(SMS_MASS_V1_MAX_RECIPIENTS),
     body: z.string(),
   })
   .strict();

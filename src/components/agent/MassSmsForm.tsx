@@ -128,6 +128,7 @@ export function MassSmsForm({ leadIds }: { leadIds: string[] }) {
 
   const eligible = preview?.eligibleCount ?? 0;
   const estimated = preview?.estimatedTotalSegments ?? 0;
+  const batchLimit = preview?.batchLimit ?? 100;
   const canReview =
     !pending &&
     Boolean(preview?.bodyValid) &&
@@ -138,11 +139,11 @@ export function MassSmsForm({ leadIds }: { leadIds: string[] }) {
   return (
     <div className="space-y-2 rounded-2xl border border-canopy/25 bg-canopy/5 p-4">
       <h3 className="text-sm font-semibold text-ink">
-        Send SMS ({leadIds.length} selected)
+        Send SMS ({leadIds.length} / {batchLimit} selected)
       </h3>
       <p className="text-xs text-ink/60">
         Eligible {preview?.eligibleCount ?? "…"} · Excluded{" "}
-        {preview?.excludedCount ?? "…"} · Selected {leadIds.length}
+        {preview?.excludedCount ?? "…"} · Selected {leadIds.length} / {batchLimit}
       </p>
       {preview?.exclusionReasons?.length ? (
         <ul className="text-xs text-ink/55">
@@ -193,7 +194,7 @@ export function MassSmsForm({ leadIds }: { leadIds: string[] }) {
       </p>
       {preview?.overLimit ? (
         <p className="text-xs font-semibold text-red-700">
-          Too many leads selected for one SMS send.
+          Too many leads selected ({leadIds.length} / {batchLimit}).
         </p>
       ) : null}
       {!preview?.bodyValid && body.trim() ? (

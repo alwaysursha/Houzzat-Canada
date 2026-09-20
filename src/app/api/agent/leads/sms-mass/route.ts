@@ -13,6 +13,7 @@ import {
   confirmMassSms,
   drainSmsMassBatch,
   prismaMassSmsDb,
+  SMS_MASS_V1_MAX_RECIPIENTS,
 } from "@/lib/sms/mass";
 
 const ROUTE = "/api/agent/leads/sms-mass";
@@ -20,7 +21,7 @@ const ROUTE = "/api/agent/leads/sms-mass";
 const schema = z
   .object({
     clientKey: z.string().min(8).max(80),
-    leadIds: z.array(z.string().min(1)).max(200),
+    leadIds: z.array(z.string().min(1)).max(SMS_MASS_V1_MAX_RECIPIENTS),
     body: z.string(),
     confirm: z.literal(true),
   })

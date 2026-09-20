@@ -867,7 +867,8 @@ export async function drainSmsMassBatch(
   batchId: string,
   deps: MassSmsSendDeps = {},
 ): Promise<MassSmsBatchSummary | null> {
-  const maxTicks = Math.ceil(SMS_MASS_V1_MAX_RECIPIENTS / SMS_MASS_TICK_SIZE) + 2;
+  const tickSize = Math.max(1, deps.tickSize ?? SMS_MASS_TICK_SIZE);
+  const maxTicks = Math.ceil(SMS_MASS_V1_MAX_RECIPIENTS / tickSize) + 2;
   for (let i = 0; i < maxTicks; i += 1) {
     const tick = await processSmsMassBatchTick(db, ctx, batchId, deps);
     if (!tick.continue) break;
