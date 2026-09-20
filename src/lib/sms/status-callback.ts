@@ -8,12 +8,31 @@ import {
 
 export const TWILIO_DELIVERED_STATUS = "delivered";
 
+/**
+ * Outbound SMS status ranks. Higher must not be overwritten by lower
+ * (Twilio callbacks are not ordered). Terminal success is `delivered`.
+ */
+const TWILIO_PROVIDER_STATUS_RANK: Record<string, number> = {
+  accepted: 10,
+  scheduled: 10,
+  queued: 20,
+  sending: 30,
+  sent: 40,
+  undelivered: 50,
+  failed: 50,
+  canceled: 50,
+  cancelled: 50,
+  partially_delivered: 55,
+  delivered: 60,
+  read: 70,
+};
+
 export type TwilioStatusCallbackFields = {
   MessageSid?: string;
   MessageStatus?: string;
   SmsSid?: string;
   SmsStatus?: string;
-  NumSegments?: string;
+  NumSegments?: string | number;
 };
 
 export type TwilioStatusCallbackDb = {
@@ -32,10 +51,15 @@ export type TwilioStatusCallbackDb = {
       deliveredAt: Date | null;
       providerStatus: string | null;
     } | null>;
-    update: (args: {
-      where: { id: string };
-      data: { providerStatus: string; deliveredAt?: Date };
-    }) => Promise<unknown>;
+    updateMany: (args: {
+      where: {
+        id: string;
+        OR?: Array<
+          { providerStatus: null } | { providerStatus: { in: string[] } }
+        >;
+      };
+      data: { providerStatus?: string; deliveredAt?: Date };
+    }) => Promise<{ count: number }>;
   };
   smsUsageEvent?: SmsUsageDb["smsUsageEvent"];
 };
@@ -51,6 +75,30 @@ export function normalizeTwilioMessageStatus(
   return status || null;
 }
 
+export function twilioProviderStatusRank(
+  status: string | null | undefined,
+): number {
+  if (!status) return 0;
+  return TWILIO_PROVIDER_STATUS_RANK[status] ?? 0;
+}
+
+export function twilioProviderStatusesAtOrBelow(rank: number): string[] {
+  return Object.entries(TWILIO_PROVIDER_STATUS_RANK)
+    .filter(([, value]) => value <= rank)
+    .map(([key]) => key);
+}
+
+export function shouldApplyTwilioProviderStatus(
+  stored: string | null | undefined,
+  incoming: string,
+): boolean {
+  const incomingRank = twilioProviderStatusRank(incoming);
+  const storedRank = twilioProviderStatusRank(stored);
+  if (incomingRank > storedRank) return true;
+  if (incomingRank < storedRank) return false;
+  return incoming !== (stored ?? "");
+}
+
 export function resolveTwilioCallbackSid(
   params: TwilioStatusCallbackFields,
 ): string | null {
@@ -61,6 +109,7 @@ export function resolveTwilioCallbackSid(
 /**
  * Apply a Twilio delivery callback to the existing Message.
  * Workspace is taken only from the stored row — never from callback From/To.
+ * Status is monotonic; NumSegments finalizes usage even when status is ignored.
  */
 export async function applyTwilioStatusCallback(
   params: TwilioStatusCallbackFields,
@@ -97,23 +146,34 @@ export async function applyTwilioStatusCallback(
     return "unknown";
   }
 
-  const delivered =
-    providerStatus === TWILIO_DELIVERED_STATUS && !existing.deliveredAt
-      ? new Date()
-      : undefined;
-  const sameStatus = existing.providerStatus === providerStatus;
-  if (sameStatus && !delivered) {
+  const applyStatus = shouldApplyTwilioProviderStatus(
+    existing.providerStatus,
+    providerStatus,
+  );
+  const setDeliveredAt =
+    providerStatus === TWILIO_DELIVERED_STATUS && !existing.deliveredAt;
+
+  if (!applyStatus && !setDeliveredAt) {
     await reconcileSegments();
     return "unchanged";
   }
 
-  await db.message.update({
-    where: { id: existing.id },
+  const allowedStatuses = twilioProviderStatusesAtOrBelow(
+    twilioProviderStatusRank(applyStatus ? providerStatus : existing.providerStatus),
+  );
+  const result = await db.message.updateMany({
+    where: {
+      id: existing.id,
+      OR: [
+        { providerStatus: null },
+        { providerStatus: { in: allowedStatuses } },
+      ],
+    },
     data: {
-      providerStatus,
-      ...(delivered ? { deliveredAt: delivered } : {}),
+      ...(applyStatus ? { providerStatus } : {}),
+      ...(setDeliveredAt ? { deliveredAt: new Date() } : {}),
     },
   });
   await reconcileSegments();
-  return "updated";
+  return result.count > 0 ? "updated" : "unchanged";
 }

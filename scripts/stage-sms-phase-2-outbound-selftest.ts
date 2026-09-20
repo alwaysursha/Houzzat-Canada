@@ -34,6 +34,7 @@ import type {
   ConversationMessageTx,
 } from "../src/lib/conversations/create-conversation-message";
 import { applyTwilioStatusCallback } from "../src/lib/sms/status-callback";
+import type { SmsUsageEventRow } from "../src/lib/sms/usage";
 import {
   parseTwilioFormBody,
   validateTwilioRequestSignature,
@@ -568,6 +569,11 @@ function testSchemaAndBoundaries() {
   assert.ok(
     existsSync(join(root, "src/app/api/webhooks/twilio/status/route.ts")),
   );
+  const statusRoute = read("src/app/api/webhooks/twilio/status/route.ts");
+  assert.ok(statusRoute.includes("NumSegments: params.NumSegments"));
+  const callback = read("src/lib/sms/status-callback.ts");
+  assert.ok(callback.includes("shouldApplyTwilioProviderStatus"));
+  assert.ok(callback.includes("updateMany"));
 
   const send = read("src/lib/conversations/agent-conversation-send.ts");
   assert.ok(send.includes('channel: "CHAT"'));
@@ -718,6 +724,7 @@ async function testStatusCallbackUpdates() {
       providerStatus: string | null;
     }
   >();
+  const usageEvents: SmsUsageEventRow[] = [];
   rows.set("SM1", {
     id: "msg_1",
     workspaceId: WS_A,
@@ -728,21 +735,69 @@ async function testStatusCallbackUpdates() {
     message: {
       findUnique: async ({ where }: { where: { twilioMessageSid: string } }) =>
         rows.get(where.twilioMessageSid) ?? null,
+      updateMany: async ({
+        where,
+        data,
+      }: {
+        where: {
+          id: string;
+          OR?: Array<
+            { providerStatus: null } | { providerStatus: { in: string[] } }
+          >;
+        };
+        data: { providerStatus?: string; deliveredAt?: Date };
+      }) => {
+        const row = [...rows.values()].find((item) => item.id === where.id);
+        if (!row) return { count: 0 };
+        const allowed = where.OR;
+        if (allowed) {
+          const ok = allowed.some((clause) => {
+            if ("providerStatus" in clause && clause.providerStatus === null) {
+              return row.providerStatus == null;
+            }
+            if (
+              "providerStatus" in clause &&
+              clause.providerStatus &&
+              typeof clause.providerStatus === "object" &&
+              "in" in clause.providerStatus
+            ) {
+              return (
+                row.providerStatus != null &&
+                clause.providerStatus.in.includes(row.providerStatus)
+              );
+            }
+            return false;
+          });
+          if (!ok) return { count: 0 };
+        }
+        if (data.providerStatus) row.providerStatus = data.providerStatus;
+        if (data.deliveredAt) row.deliveredAt = data.deliveredAt;
+        return { count: 1 };
+      },
+    },
+    smsUsageEvent: {
+      findUnique: async ({ where }: { where: { twilioMessageSid: string } }) =>
+        usageEvents.find((row) => row.twilioMessageSid === where.twilioMessageSid) ??
+        null,
+      findMany: async () => usageEvents,
+      create: async () => {
+        throw new Error("status callback must not create usage");
+      },
       update: async ({
         where,
         data,
       }: {
         where: { id: string };
-        data: { providerStatus: string; deliveredAt?: Date };
+        data: Partial<SmsUsageEventRow>;
       }) => {
-        const row = [...rows.values()].find((item) => item.id === where.id);
-        if (!row) throw new Error("missing");
-        row.providerStatus = data.providerStatus;
-        if (data.deliveredAt) row.deliveredAt = data.deliveredAt;
+        const row = usageEvents.find((item) => item.id === where.id);
+        if (!row) throw new Error("missing usage");
+        Object.assign(row, data);
         return row;
       },
     },
   };
+
   assert.equal(
     await applyTwilioStatusCallback({ MessageSid: "SM_UNKNOWN", MessageStatus: "sent" }, db),
     "unknown",
@@ -759,16 +814,29 @@ async function testStatusCallbackUpdates() {
   );
   const deliveredAt = rows.get("SM1")?.deliveredAt;
   assert.ok(deliveredAt);
+  assert.equal(rows.get("SM1")?.providerStatus, "delivered");
   assert.equal(
     await applyTwilioStatusCallback({ MessageSid: "SM1", MessageStatus: "delivered" }, db),
     "unchanged",
   );
   assert.equal(rows.get("SM1")?.deliveredAt, deliveredAt);
+
+  assert.equal(
+    await applyTwilioStatusCallback({ MessageSid: "SM1", MessageStatus: "queued" }, db),
+    "unchanged",
+  );
+  assert.equal(rows.get("SM1")?.providerStatus, "delivered");
+  assert.equal(rows.get("SM1")?.deliveredAt, deliveredAt);
+  assert.equal(
+    await applyTwilioStatusCallback({ MessageSid: "SM1", MessageStatus: "sent" }, db),
+    "unchanged",
+  );
+  assert.equal(rows.get("SM1")?.providerStatus, "delivered");
   assert.equal(
     await applyTwilioStatusCallback({ MessageSid: "SM1", MessageStatus: "failed" }, db),
-    "updated",
+    "unchanged",
   );
-  assert.equal(rows.get("SM1")?.providerStatus, "failed");
+  assert.equal(rows.get("SM1")?.providerStatus, "delivered");
   assert.equal(rows.get("SM1")?.deliveredAt, deliveredAt);
 
   rows.set("SM2", {
@@ -786,6 +854,76 @@ async function testStatusCallbackUpdates() {
   );
   assert.equal(rows.get("SM2")?.providerStatus, "undelivered");
   assert.equal(rows.get("SM2")?.deliveredAt, null);
+  assert.equal(
+    await applyTwilioStatusCallback({ MessageSid: "SM2", MessageStatus: "queued" }, db),
+    "unchanged",
+  );
+  assert.equal(rows.get("SM2")?.providerStatus, "undelivered");
+
+  rows.set("SM3", {
+    id: "msg_3",
+    workspaceId: WS_A,
+    deliveredAt: null,
+    providerStatus: "queued",
+  });
+  usageEvents.push({
+    id: "use_3",
+    workspaceId: WS_A,
+    periodStart: new Date("2026-09-01T00:00:00.000Z"),
+    periodEnd: new Date("2026-10-01T00:00:00.000Z"),
+    category: "AGENT_INDIVIDUAL",
+    recipientType: "LEAD",
+    twilioMessageSid: "SM3",
+    messageId: "msg_3",
+    segmentCount: 1,
+    segmentCountSource: "ESTIMATED",
+    finalized: false,
+    createdAt: new Date("2026-09-20T15:27:33.000Z"),
+    updatedAt: new Date("2026-09-20T15:27:33.000Z"),
+  });
+  assert.equal(
+    await applyTwilioStatusCallback(
+      {
+        MessageSid: "SM3",
+        MessageStatus: "delivered",
+        NumSegments: "2",
+      },
+      db,
+    ),
+    "updated",
+  );
+  assert.equal(rows.get("SM3")?.providerStatus, "delivered");
+  assert.equal(usageEvents[0]?.segmentCount, 2);
+  assert.equal(usageEvents[0]?.segmentCountSource, "PROVIDER");
+  assert.equal(usageEvents[0]?.finalized, true);
+  assert.equal(usageEvents.length, 1);
+  assert.equal(
+    await applyTwilioStatusCallback(
+      {
+        MessageSid: "SM3",
+        MessageStatus: "queued",
+        NumSegments: "2",
+      },
+      db,
+    ),
+    "unchanged",
+  );
+  assert.equal(rows.get("SM3")?.providerStatus, "delivered");
+  assert.equal(usageEvents.length, 1);
+  assert.equal(usageEvents[0]?.segmentCount, 2);
+
+  rows.set("SM4", {
+    id: "msg_4",
+    workspaceId: WS_A,
+    deliveredAt: new Date("2026-09-20T15:27:34.000Z"),
+    providerStatus: "delivered",
+  });
+  assert.equal(
+    await applyTwilioStatusCallback({ MessageSid: "SM4", MessageStatus: "queued" }, db),
+    "unchanged",
+  );
+  assert.equal(rows.get("SM4")?.providerStatus, "delivered");
+  assert.ok(rows.get("SM4")?.deliveredAt);
 }
 
 async function sendSmsOk() {

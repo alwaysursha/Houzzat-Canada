@@ -27,6 +27,8 @@ export {
 export {
   applyTwilioStatusCallback,
   normalizeTwilioMessageStatus,
+  shouldApplyTwilioProviderStatus,
+  twilioProviderStatusRank,
 } from "@/lib/sms/status-callback";
 export {
   resolveTwilioStatusCallbackUrl,
