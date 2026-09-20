@@ -620,9 +620,10 @@ function testSourceContracts() {
   assert.ok(scheduleFn.includes("scheduleWorkerSideEffect"));
   assert.ok(scheduleFn.includes("notifyAssignedAgentOfCustomerChatMessage"));
 
+  assert.ok(agentSend.includes("agent-chat-customer-push"));
+  assert.ok(agentSend.includes("scheduleNotifyCustomerOfAgentChatMessage"));
   assert.ok(!agentSend.includes("customer-chat-agent-push"));
   assert.ok(!agentSend.includes("chat_message"));
-  assert.ok(!agentSend.includes("@/lib/notifications"));
   assert.ok(!agentRoute.includes("customer-chat-agent-push"));
   assert.ok(customerSendRoute.includes("handleCustomerConversationSend"));
   assert.ok(!customerSendRoute.includes("sendPushToUser"));

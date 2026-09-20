@@ -19,6 +19,7 @@ export type CustomerChatMessage = {
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
+  payload: unknown;
 };
 
 export type CustomerChatConversation = {

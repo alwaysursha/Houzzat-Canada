@@ -155,8 +155,9 @@ export function isIncomingForAgent(
   return true;
 }
 
-function isIncomingForCustomer(message: ConversationReadMessage): boolean {
-  if (message.channel === "SMS") return false;
+export function isIncomingForCustomer(
+  message: ConversationReadMessage,
+): boolean {
   return message.senderKind !== "CUSTOMER";
 }
 
@@ -409,22 +410,6 @@ async function latestMessageCreatedAt(
   return latest?.createdAt ?? conversation.createdAt;
 }
 
-async function latestChatMessageCreatedAt(
-  db: ConversationReadStateDb,
-  conversation: LeadConversationRecord,
-): Promise<Date> {
-  const latest = await db.message.findFirst({
-    where: {
-      workspaceId: conversation.workspaceId,
-      conversationId: conversation.id,
-      channel: "CHAT",
-    },
-    orderBy: { createdAt: "desc" },
-    select: { createdAt: true },
-  });
-  return latest?.createdAt ?? conversation.createdAt;
-}
-
 /**
  * Current assignee only. Stores that Agent's identity on the cursor.
  * Uses latest persisted message createdAt (including tombstones).
@@ -480,7 +465,7 @@ export async function markConversationReadByCustomer(
     return { ok: false, reason: "CONVERSATION_NOT_FOUND" };
   }
 
-  const readAt = await latestChatMessageCreatedAt(db, loaded.conversation);
+  const readAt = await latestMessageCreatedAt(db, loaded.conversation);
   const conversation = await db.conversation.update({
     where: {
       workspaceId_id: {

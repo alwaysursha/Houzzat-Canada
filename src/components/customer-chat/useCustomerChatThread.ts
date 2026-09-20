@@ -18,6 +18,12 @@ import {
   shouldSkipCustomerChatSubmit,
   shouldSkipDuplicateCustomerChatOlder,
 } from "@/lib/customer-chat/query";
+import {
+  CONVERSATION_LIVE_POLL_MS,
+  conversationLivePollShouldTick,
+  conversationLiveVisible,
+  mergeLiveConversationMessages,
+} from "@/lib/conversations/conversation-live-poll";
 import type {
   CustomerChatGetPayload,
   CustomerChatLoadErrorKind,
@@ -63,12 +69,22 @@ export function useCustomerChatThread() {
 
   const sendInFlightRef = useRef(false);
   const olderInFlightRef = useRef(false);
+  const pollInFlightRef = useRef(false);
   const lastOlderCursorRef = useRef<string | null>(null);
   const markedReadIdRef = useRef<string | null>(null);
   const loadedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const fetchPage = useCallback(async (input: { cursor?: string | null; prepend: boolean }) => {
+  const fetchPage = useCallback(async (input: {
+    cursor?: string | null;
+    prepend: boolean;
+    live?: boolean;
+  }) => {
+    const live = Boolean(input.live);
+    if (live) {
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
+    }
     if (input.prepend) {
       const cursor = input.cursor ?? "";
       if (
@@ -82,15 +98,19 @@ export function useCustomerChatThread() {
       }
       olderInFlightRef.current = true;
       lastOlderCursorRef.current = cursor;
-    } else {
+    } else if (!live) {
       abortRef.current?.abort();
       abortRef.current = new AbortController();
       lastOlderCursorRef.current = null;
       setLoadError(null);
       if (!loadedRef.current) setLoading(true);
     }
-    setBusy(true);
-    const signal = input.prepend ? undefined : abortRef.current?.signal;
+    if (!live) setBusy(true);
+    const signal = live
+      ? abortRef.current?.signal
+      : input.prepend
+        ? undefined
+        : abortRef.current?.signal;
     try {
       const res = await fetch(customerChatGetUrl(input.cursor), {
         method: "GET",
@@ -100,6 +120,7 @@ export function useCustomerChatThread() {
       const body = await readJson(res);
       if (signal?.aborted) return;
       if (!res.ok) {
+        if (live) return;
         if (!input.prepend) {
           setLoadError(parseCustomerChatLoadError(res.status, body));
           setPayload(null);
@@ -113,6 +134,19 @@ export function useCustomerChatThread() {
       loadedRef.current = true;
       setLoadError(null);
       setPayload((prev) => {
+        if (live && prev) {
+          return {
+            ...prev,
+            conversation: json.conversation,
+            canSend: json.canSend,
+            blocked: json.blocked,
+            read: json.read,
+            messages: mergeLiveConversationMessages(
+              prev.messages,
+              json.messages,
+            ),
+          };
+        }
         if (!input.prepend || !prev) return json;
         return {
           ...json,
@@ -127,6 +161,7 @@ export function useCustomerChatThread() {
     } catch (error) {
       if (signal?.aborted) return;
       if (error instanceof DOMException && error.name === "AbortError") return;
+      if (live) return;
       if (!input.prepend) {
         setLoadError({
           kind: "generic",
@@ -137,9 +172,12 @@ export function useCustomerChatThread() {
         lastOlderCursorRef.current = null;
       }
     } finally {
+      if (live) pollInFlightRef.current = false;
       if (input.prepend) olderInFlightRef.current = false;
-      setBusy(false);
-      setLoading(false);
+      if (!live) {
+        setBusy(false);
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -147,6 +185,33 @@ export function useCustomerChatThread() {
     void fetchPage({ prepend: false });
     return () => {
       abortRef.current?.abort();
+    };
+  }, [fetchPage]);
+
+  useEffect(() => {
+    const tick = () => {
+      if (
+        !conversationLivePollShouldTick({
+          enabled: true,
+          visible: conversationLiveVisible(document),
+          inFlight: pollInFlightRef.current,
+          hasLoaded: loadedRef.current,
+        })
+      ) {
+        return;
+      }
+      void fetchPage({ prepend: false, live: true });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", tick);
+    const timer = window.setInterval(tick, CONVERSATION_LIVE_POLL_MS);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", tick);
     };
   }, [fetchPage]);
 

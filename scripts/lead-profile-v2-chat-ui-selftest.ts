@@ -431,18 +431,31 @@ function testEmptyAndErrorStates() {
 function testNoFakeRealtimeOrMigration() {
   for (const rel of CHAT_UI_FILES) {
     const src = read(rel);
-    assert.equal(src.includes("setInterval"), false, `${rel} must not poll`);
+    const isThreadHook = rel === "src/components/agent/chat/useAgentChatThread.ts";
+    if (!isThreadHook) {
+      assert.equal(src.includes("setInterval"), false, `${rel} must not poll`);
+      assert.equal(
+        src.includes("@/lib/conversations/"),
+        false,
+        `${rel} must stay client-safe`,
+      );
+    }
     assert.equal(src.includes("websocket"), false, `${rel} must not open sockets`);
+    assert.equal(src.includes("EventSource"), false, `${rel} must not use SSE`);
     assert.equal(src.includes("LeadEmailLog"), false, `${rel} must not merge email`);
-    assert.equal(
-      src.includes("@/lib/conversations/"),
-      false,
-      `${rel} must stay client-safe`,
-    );
   }
   const query = read("src/lib/agent/lead-profile-v2/chat-query.ts");
   assert.equal(query.includes("from \"@prisma/client\""), false);
   assert.ok(query.includes("/api/agent/leads/${leadId}/conversation"));
+  const hook = read("src/components/agent/chat/useAgentChatThread.ts");
+  assert.ok(hook.includes("conversation-live-poll"));
+  assert.ok(hook.includes("CONVERSATION_LIVE_POLL_MS"));
+  assert.ok(hook.includes("setInterval"));
+  assert.ok(hook.includes("visibilitychange"));
+  assert.ok(hook.includes("pollInFlightRef"));
+  assert.ok(hook.includes("mergeLiveConversationMessages"));
+  assert.equal(hook.includes("WebSocket"), false);
+  assert.equal(hook.includes("EventSource"), false);
 }
 
 function testLeadProfileUsesSharedChat() {

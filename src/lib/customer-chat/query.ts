@@ -17,6 +17,7 @@ import type {
   CustomerChatSendFailure,
   CustomerChatSendFailureKind,
 } from "@/lib/customer-chat/types";
+import { smsAutomationTranscriptLabel } from "@/lib/platform/sms-automations/catalog";
 
 export const CUSTOMER_CHAT_PAGE_HREF = "/account/chat";
 export const CUSTOMER_CHAT_GET_ROUTE = "/api/account/conversation";
@@ -109,6 +110,10 @@ export function shouldGroupCustomerChatMessage(
     return false;
   }
   if (previous.senderKind !== current.senderKind) return false;
+  if (previous.channel !== current.channel) return false;
+  if (customerSmsAutomationBadge(previous.payload) || customerSmsAutomationBadge(current.payload)) {
+    return false;
+  }
   return previous.senderName === current.senderName;
 }
 
@@ -121,9 +126,7 @@ export function customerUnreadDividerMessageId(
   const cutoff = Date.parse(customerLastReadAt);
   if (Number.isNaN(cutoff)) return null;
   const first = messages.find((message) => {
-    if (message.senderKind !== "AGENT" && message.senderKind !== "ADMIN") {
-      return false;
-    }
+    if (message.senderKind === "CUSTOMER") return false;
     return Date.parse(message.createdAt) > cutoff;
   });
   return first?.id ?? null;
@@ -259,6 +262,10 @@ export function parseCustomerChatLoadError(
     kind: "generic",
     message: "Couldn’t load chat. Please try again.",
   };
+}
+
+export function customerSmsAutomationBadge(payload: unknown): string | null {
+  return smsAutomationTranscriptLabel(payload);
 }
 
 export function isCustomerChatMine(senderKind: string): boolean {

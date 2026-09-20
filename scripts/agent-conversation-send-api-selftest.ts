@@ -24,7 +24,9 @@ import {
   normalizeAgentChatText,
   sendAgentLeadChatMessage,
   type AgentConversationSendDb,
+  type SendAgentLeadChatMessageDeps,
 } from "../src/lib/conversations/agent-conversation-send";
+import type { NotifyCustomerOfAgentChatMessageInput } from "../src/lib/notifications/agent-chat-customer-push";
 import type { LeadConversationRecord } from "../src/lib/conversations/lead-conversation";
 import type {
   ConversationMessageRecord,
@@ -48,6 +50,20 @@ const ADMIN_A = "user_admin_a";
 
 function uniqueError(): Error & { code: string } {
   return Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+}
+
+const NO_CUSTOMER_PUSH: SendAgentLeadChatMessageDeps = {
+  scheduleCustomerPush() {},
+};
+
+function sendChat(
+  db: AgentConversationSendDb,
+  ctx: AgentOrgContext,
+  leadId: string,
+  body: string,
+  deps: SendAgentLeadChatMessageDeps = NO_CUSTOMER_PUSH,
+) {
+  return sendAgentLeadChatMessage(db, ctx, leadId, body, deps);
 }
 
 function withWorkspaceRead<T>(fn: () => Promise<T> | T): Promise<T> {
@@ -473,7 +489,7 @@ function testNormalizeBody() {
 async function testAssignedAgentCanSend() {
   await withWorkspaceRead(async () => {
     const db = assignedDb();
-    const result = await sendAgentLeadChatMessage(
+    const result = await sendChat(
       db,
       makeCtx(),
       LEAD_A,
@@ -498,7 +514,7 @@ async function testAssignedAgentCanSend() {
 async function testFrozenNameNotAssignedAgentName() {
   await withWorkspaceRead(async () => {
     const db = assignedDb();
-    const result = await sendAgentLeadChatMessage(
+    const result = await sendChat(
       db,
       makeCtx({
         user: {
@@ -524,7 +540,7 @@ async function testFrozenNameNotAssignedAgentName() {
 async function testAdminCannotSend() {
   await withWorkspaceRead(async () => {
     const db = assignedDb();
-    const result = await sendAgentLeadChatMessage(
+    const result = await sendChat(
       db,
       makeCtx({
         userId: ADMIN_A,
@@ -551,7 +567,7 @@ async function testAdminCannotSend() {
 async function testFormerAndUnauthorizedCannotSend() {
   await withWorkspaceRead(async () => {
     const db = assignedDb();
-    const unauthorized = await sendAgentLeadChatMessage(
+    const unauthorized = await sendChat(
       db,
       makeCtx({ userId: AGENT_B }),
       LEAD_A,
@@ -560,7 +576,7 @@ async function testFormerAndUnauthorizedCannotSend() {
     assert.equal(unauthorized.ok, false);
     if (!unauthorized.ok) assert.equal(unauthorized.reason, "LEAD_NOT_FOUND");
 
-    const formerViewer = await sendAgentLeadChatMessage(
+    const formerViewer = await sendChat(
       db,
       makeCtx({
         userId: AGENT_B,
@@ -586,7 +602,7 @@ async function testFormerAndUnauthorizedCannotSend() {
 async function testForeignWorkspaceCannotSend() {
   await withWorkspaceRead(async () => {
     const db = assignedDb();
-    const result = await sendAgentLeadChatMessage(
+    const result = await sendChat(
       db,
       makeCtx({
         workspaceId: WS_B,
@@ -606,7 +622,7 @@ async function testPondCannotSend() {
   await withWorkspaceRead(async () => {
     const db = new FakeSendDb();
     db.seedLead({ assignedAgentId: null });
-    const result = await sendAgentLeadChatMessage(
+    const result = await sendChat(
       db,
       makeCtx(),
       LEAD_A,
@@ -621,7 +637,7 @@ async function testPondCannotSend() {
 async function testNonexistentLeadCannotSend() {
   await withWorkspaceRead(async () => {
     const db = assignedDb();
-    const result = await sendAgentLeadChatMessage(
+    const result = await sendChat(
       db,
       makeCtx(),
       "lead_missing",
@@ -635,12 +651,12 @@ async function testNonexistentLeadCannotSend() {
 async function testLazyCreateThenReuseConversation() {
   await withWorkspaceRead(async () => {
     const db = assignedDb();
-    const first = await sendAgentLeadChatMessage(db, makeCtx(), LEAD_A, "first");
+    const first = await sendChat(db, makeCtx(), LEAD_A, "first");
     assert.equal(first.ok, true);
     if (!first.ok) return;
     assert.equal(first.data.conversation.created, true);
     const conversationId = first.data.conversation.id;
-    const second = await sendAgentLeadChatMessage(
+    const second = await sendChat(
       db,
       makeCtx(),
       LEAD_A,
@@ -658,10 +674,10 @@ async function testLazyCreateThenReuseConversation() {
 async function testBlankAndOversizedRejected() {
   await withWorkspaceRead(async () => {
     const db = assignedDb();
-    const blank = await sendAgentLeadChatMessage(db, makeCtx(), LEAD_A, "   \n");
+    const blank = await sendChat(db, makeCtx(), LEAD_A, "   \n");
     assert.equal(blank.ok, false);
     if (!blank.ok) assert.equal(blank.reason, "INVALID_BODY");
-    const oversized = await sendAgentLeadChatMessage(
+    const oversized = await sendChat(
       db,
       makeCtx(),
       LEAD_A,
@@ -676,7 +692,7 @@ async function testBlankAndOversizedRejected() {
 async function testPlainTextLineBreaksAndHtmlLiteral() {
   await withWorkspaceRead(async () => {
     const db = assignedDb();
-    const result = await sendAgentLeadChatMessage(
+    const result = await sendChat(
       db,
       makeCtx(),
       LEAD_A,
@@ -700,7 +716,7 @@ async function testSendDoesNotTouchReadCursors() {
       agentLastReadAt: null,
       agentLastReadByUserId: null,
     });
-    const result = await sendAgentLeadChatMessage(
+    const result = await sendChat(
       db,
       makeCtx(),
       LEAD_A,
@@ -717,7 +733,12 @@ async function testSendDoesNotTouchReadCursors() {
 async function testNoCrmOrOutboundSideEffects() {
   await withWorkspaceRead(async () => {
     const db = assignedDb();
-    const result = await sendAgentLeadChatMessage(db, makeCtx(), LEAD_A, "hello");
+    const scheduled: NotifyCustomerOfAgentChatMessageInput[] = [];
+    const result = await sendChat(db, makeCtx(), LEAD_A, "hello", {
+      scheduleCustomerPush(input) {
+        scheduled.push(input);
+      },
+    });
     assert.equal(result.ok, true);
     assert.equal(db.leadActivityCreates, 1);
     assert.equal(db.activities[0]?.type, "CHAT");
@@ -726,13 +747,34 @@ async function testNoCrmOrOutboundSideEffects() {
     assert.equal(db.notificationSends, 0);
     assert.equal(db.emailSends, 0);
     assert.equal(db.smsSends, 0);
+    assert.equal(scheduled.length, 1);
+    assert.equal(scheduled[0]?.created, true);
+    assert.equal(scheduled[0]?.message.channel, "CHAT");
+    assert.equal(scheduled[0]?.message.kind, "TEXT");
+    assert.equal(scheduled[0]?.message.senderKind, "AGENT");
+    assert.equal(scheduled[0]?.leadId, LEAD_A);
+  });
+}
+
+async function testCustomerPushFailureDoesNotFailChat() {
+  await withWorkspaceRead(async () => {
+    const db = assignedDb();
+    const result = await sendChat(db, makeCtx(), LEAD_A, "hello", {
+      scheduleCustomerPush() {
+        throw new Error("push exploded");
+      },
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.data.message.body, "hello");
+    assert.equal(db.messageCreates, 1);
   });
 }
 
 async function testResponseOmitsProhibitedFields() {
   await withWorkspaceRead(async () => {
     const db = assignedDb();
-    const result = await sendAgentLeadChatMessage(
+    const result = await sendChat(
       db,
       makeCtx(),
       LEAD_A,
@@ -774,7 +816,9 @@ function testRouteSourceContract() {
   assert.ok(service.includes("assignedAgentId !== ctx.user.id"));
   assert.ok(!service.includes("markConversationReadByAgent("));
   assert.ok(!service.includes("prisma.leadActivity"));
-  assert.ok(!service.includes("@/lib/notifications"));
+  assert.ok(service.includes("@/lib/notifications/agent-chat-customer-push"));
+  assert.ok(service.includes("scheduleNotifyCustomerOfAgentChatMessage"));
+  assert.ok(service.includes("created: created.created"));
   assert.ok(!service.includes("customer-chat-agent-push"));
   assert.ok(!service.includes("chat_message"));
   assert.ok(!service.includes("twilioMessageSid:"));
@@ -797,6 +841,7 @@ async function main() {
   await testPlainTextLineBreaksAndHtmlLiteral();
   await testSendDoesNotTouchReadCursors();
   await testNoCrmOrOutboundSideEffects();
+  await testCustomerPushFailureDoesNotFailChat();
   await testResponseOmitsProhibitedFields();
   testRouteSourceContract();
   console.log("agent-conversation-send-api:selftest: ok");

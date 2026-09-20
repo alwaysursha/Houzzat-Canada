@@ -21,6 +21,12 @@ import {
   v2ChatSendUrl,
 } from "@/lib/agent/lead-profile-v2/chat-query";
 import {
+  CONVERSATION_LIVE_POLL_MS,
+  conversationLivePollShouldTick,
+  conversationLiveVisible,
+  mergeLiveConversationMessages,
+} from "@/lib/conversations/conversation-live-poll";
+import {
   isV2AbortError,
   type LeadProfileV2Session,
 } from "@/lib/agent/lead-profile-v2/request-gate";
@@ -32,6 +38,7 @@ import type {
 type ChatFetchInput = {
   cursor?: string | null;
   prepend: boolean;
+  live?: boolean;
 };
 
 export type UseAgentChatThreadListeners = {
@@ -59,6 +66,8 @@ export function useAgentChatThread(
   const lastOlderCursorKeyRef = useRef<string | null>(null);
   const markedReadForLeadRef = useRef<string | null>(null);
   const sendInFlightRef = useRef(false);
+  const pollInFlightRef = useRef(false);
+  const pollAbortRef = useRef<AbortController | null>(null);
   const listenersRef = useRef(listeners);
   listenersRef.current = listeners;
 
@@ -74,6 +83,7 @@ export function useAgentChatThread(
 
   const fetchPage = useCallback(
     (input: ChatFetchInput) => {
+      const live = Boolean(input.live);
       const run = () => {
         const stamp = { leadId, epoch: epochRef.current };
         return async (id: string, signal: AbortSignal) => {
@@ -82,8 +92,10 @@ export function useAgentChatThread(
               stamp,
               current: { leadId: leadIdRef.current, epoch: epochRef.current },
             });
-          setBusy(true);
-          if (!input.prepend) setError(false);
+          if (!live) {
+            setBusy(true);
+            if (!input.prepend) setError(false);
+          }
           try {
             const json = await fetchV2Json<LeadProfileV2ChatPanel>(
               v2ChatGetUrl(id, input.cursor),
@@ -93,6 +105,19 @@ export function useAgentChatThread(
             if (!apply() || signal.aborted) return;
             loadedForLeadRef.current = id;
             setPanel((prev) => {
+              if (live && prev) {
+                return {
+                  ...prev,
+                  conversation: json.conversation,
+                  unread: json.unread,
+                  smsSend: json.smsSend,
+                  viewer: json.viewer,
+                  messages: mergeLiveConversationMessages(
+                    prev.messages,
+                    json.messages,
+                  ),
+                };
+              }
               if (!input.prepend || !prev) return json;
               return {
                 ...json,
@@ -107,16 +132,31 @@ export function useAgentChatThread(
           } catch (err) {
             if (isV2AbortError(err) || signal.aborted) return;
             if (!apply()) return;
-            if (input.prepend) {
-              lastOlderCursorKeyRef.current = null;
+            if (live || input.prepend) {
+              lastOlderCursorKeyRef.current = input.prepend
+                ? null
+                : lastOlderCursorKeyRef.current;
               return;
             }
             setError(true);
           } finally {
-            if (apply()) setBusy(false);
+            if (!live && apply()) setBusy(false);
           }
         };
       };
+
+      if (live) {
+        if (pollInFlightRef.current) return;
+        const controller = new AbortController();
+        pollAbortRef.current = controller;
+        pollInFlightRef.current = true;
+        void run()(leadId, controller.signal).finally(() => {
+          if (pollAbortRef.current === controller) {
+            pollInFlightRef.current = false;
+          }
+        });
+        return;
+      }
 
       if (input.prepend) {
         const cursorKey = v2ChatOlderCursorKey({
@@ -156,11 +196,43 @@ export function useAgentChatThread(
     if (!enabled) {
       session.abort(V2_CHAT_RESOURCE_KEY);
       lastOlderCursorKeyRef.current = null;
+      pollAbortRef.current?.abort();
+      pollInFlightRef.current = false;
       return;
     }
     if (loadedForLeadRef.current === leadId) return;
     fetchPage({ prepend: false });
   }, [enabled, leadId, fetchPage, session]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const tick = () => {
+      if (
+        !conversationLivePollShouldTick({
+          enabled: enabledRef.current,
+          visible: conversationLiveVisible(document),
+          inFlight: pollInFlightRef.current,
+          hasLoaded: loadedForLeadRef.current === leadIdRef.current,
+        })
+      ) {
+        return;
+      }
+      fetchPage({ prepend: false, live: true });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", tick);
+    const timer = window.setInterval(tick, CONVERSATION_LIVE_POLL_MS);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", tick);
+      pollAbortRef.current?.abort();
+      pollInFlightRef.current = false;
+    };
+  }, [enabled, leadId, fetchPage]);
 
   useEffect(() => {
     if (

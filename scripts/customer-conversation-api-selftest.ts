@@ -865,7 +865,7 @@ async function testGetExistingTranscriptAndNoMarkRead() {
   assert.equal((body.conversation as { leadId?: string }).leadId, undefined);
 }
 
-async function testGetExcludesSms() {
+async function testGetIncludesSms() {
   const world = new ApiWorld();
   const lead = world.seedOwnLead({ id: "lead_a" });
   const conv = world.db.seedConversation({
@@ -880,7 +880,7 @@ async function testGetExcludesSms() {
     leadId: lead.id,
     channel: "CHAT",
     senderKind: "AGENT",
-    body: "Chat only",
+    body: "Chat hello",
     createdAt: T0,
   });
   world.db.seedMessage({
@@ -890,24 +890,45 @@ async function testGetExcludesSms() {
     leadId: lead.id,
     channel: "SMS",
     senderKind: "AGENT",
-    body: "SMS secret",
+    body: "SMS hello",
     createdAt: new Date(T0.getTime() + 1000),
     smsSource: "TWILIO",
     twilioMessageSid: "SM_HIDE",
+    payload: {
+      automationKey: "lead.inactive_14_days",
+      internal: "secret",
+    },
+  });
+  world.db.seedMessage({
+    id: "msg_inbound",
+    workspaceId: WS_A,
+    conversationId: conv.id,
+    leadId: lead.id,
+    channel: "SMS",
+    senderKind: "CUSTOMER",
+    senderName: "Customer A",
+    body: "YES",
+    createdAt: new Date(T0.getTime() + 2000),
+    smsSource: "TWILIO",
+    twilioMessageSid: "SM_IN",
   });
   const result = await getConversation(world);
   assert.equal(result.status, 200);
   const body = result.body as CustomerConversationGetPayload;
-  assert.equal(body.messages.length, 1);
+  assert.equal(body.messages.length, 3);
   assert.equal(body.messages[0]?.id, "msg_chat");
-  assert.equal(
-    body.messages.some((row) => row.channel === "SMS"),
-    false,
-  );
-  assert.equal(
-    body.messages.some((row) => row.body === "SMS secret"),
-    false,
-  );
+  assert.equal(body.messages[0]?.channel, "CHAT");
+  assert.equal(body.messages[0]?.payload, null);
+  const sms = body.messages[1];
+  assert.equal(sms?.id, "msg_sms");
+  assert.equal(sms?.channel, "SMS");
+  assert.equal(sms?.body, "SMS hello");
+  assert.deepEqual(sms?.payload, { automationKey: "lead.inactive_14_days" });
+  assert.equal("twilioMessageSid" in (sms ?? {}), false);
+  assert.equal("smsTo" in (sms ?? {}), false);
+  assert.equal(body.messages[2]?.id, "msg_inbound");
+  assert.equal(body.messages[2]?.senderKind, "CUSTOMER");
+  assert.equal(body.messages[2]?.payload, null);
 }
 
 async function testSendCreatesViaEnsure() {
@@ -1224,7 +1245,8 @@ function testSourceSecurity() {
     api.indexOf("async function loadTranscriptPage"),
     api.indexOf("export async function handleCustomerConversationGet"),
   );
-  assert.ok(loadPage.includes('channel: "CHAT"'));
+  assert.equal(loadPage.includes('channel: "CHAT"'), false);
+  assert.ok(api.includes('presentSmsAutomationMessagePayload'));
 
   const readFn = api.slice(
     api.indexOf("export async function handleCustomerConversationRead"),
@@ -1244,7 +1266,7 @@ async function main() {
   await testStrictBodyRejectsIdentity();
   await testGetNoLeadDoesNotCreate();
   await testGetExistingTranscriptAndNoMarkRead();
-  await testGetExcludesSms();
+  await testGetIncludesSms();
   await testGetQueryLeadIdIgnored();
   await testSendCreatesViaEnsure();
   await testSendUnassignedRoutes();

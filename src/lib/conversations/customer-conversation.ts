@@ -10,8 +10,8 @@
  *
  * GET may lazily create the permanent Conversation for an existing Lead
  * (same as Agent Chat). GET never creates a Lead, never routes, never
- * marks read. Transcript is CHAT-only — SMS lives on the Agent CRM
- * chronology and is not exposed here.
+ * marks read. Transcript includes CHAT and SMS on the same Conversation.
+ * Customer send remains CHAT-only.
  *
  * POST send is the only path that may create/route/assign a Lead via ensure.
  * Messages go through createConversationMessage. Rate limit runs after
@@ -29,6 +29,7 @@ import type {
   MessageChannel,
   MessageKind,
   MessageSenderKind,
+  Prisma,
 } from "@prisma/client";
 import {
   requireFullCustomerUser,
@@ -73,6 +74,7 @@ import {
   recordConversationLeadActivity,
   type ConversationLeadActivityDb,
 } from "@/lib/conversations/sms-lead-activity";
+import { presentSmsAutomationMessagePayload } from "@/lib/conversations/sms-automation-payload";
 import { parseJsonText } from "@/lib/http/json-body";
 import { scheduleNotifyAssignedAgentOfCustomerChatMessage } from "@/lib/notifications/customer-chat-agent-push";
 import { isConsumerRole } from "@/lib/roles";
@@ -96,6 +98,7 @@ export const CUSTOMER_CONVERSATION_MESSAGE_SELECT = {
   editedAt: true,
   deletedAt: true,
   createdAt: true,
+  payload: true,
 } as const;
 
 export type CustomerConversationMessageRow = Pick<
@@ -113,6 +116,7 @@ export type CustomerConversationMessage = {
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
+  payload: Prisma.JsonValue | null;
 };
 
 export type CustomerConversationSummary = {
@@ -187,6 +191,10 @@ export function presentCustomerConversationMessage(
   row: CustomerConversationMessageRow,
 ): CustomerConversationMessage {
   const deleted = Boolean(row.deletedAt);
+  const payload =
+    !deleted && row.kind === "TEXT" && row.channel === "SMS"
+      ? presentSmsAutomationMessagePayload(row.payload)
+      : null;
   return {
     id: row.id,
     channel: row.channel,
@@ -197,6 +205,7 @@ export function presentCustomerConversationMessage(
     editedAt: row.editedAt ? row.editedAt.toISOString() : null,
     deletedAt: row.deletedAt ? row.deletedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
+    payload,
   };
 }
 
@@ -340,7 +349,6 @@ async function loadTranscriptPage(
     where: {
       workspaceId: conversation.workspaceId,
       conversationId: conversation.id,
-      channel: "CHAT",
       ...cursorFilter,
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -588,6 +596,7 @@ export async function handleCustomerConversationSend(
       editedAt: null,
       deletedAt: null,
       createdAt: created.message.createdAt,
+      payload: created.message.payload,
     }),
   };
   return jsonResult(200, payload);

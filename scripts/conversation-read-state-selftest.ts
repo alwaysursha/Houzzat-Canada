@@ -741,7 +741,7 @@ async function testCustomerMarkRead() {
   assert.equal(state.customerUnreadCount, 0);
 }
 
-async function testCustomerUnreadIgnoresSms() {
+async function testCustomerUnreadIncludesAgentSmsNotOwnInbound() {
   const { db, conversation } = baseSetup(AGENT_A, T_ASSIGN);
   conversation.customerLastReadAt = T1;
   const chat = db.addMessage({
@@ -751,26 +751,36 @@ async function testCustomerUnreadIgnoresSms() {
     senderUserId: AGENT_A,
     channel: "CHAT",
   });
-  db.addMessage({
+  const agentSms = db.addMessage({
     conversationId: conversation.id,
     createdAt: T_LATER,
     senderKind: "AGENT",
     senderUserId: AGENT_A,
     channel: "SMS",
-    twilioMessageSid: "SM_IGNORE",
+    twilioMessageSid: "SM_AGENT",
+  });
+  const ownInbound = db.addMessage({
+    conversationId: conversation.id,
+    createdAt: new Date(T_LATER.getTime() + 1000),
+    senderKind: "CUSTOMER",
+    senderUserId: CUSTOMER_A,
+    channel: "SMS",
+    twilioMessageSid: "SM_OWN",
   });
   const unread = await getConversationUnreadState(db, {
     workspaceId: WS_A,
     leadId: LEAD_A,
   });
-  assert.equal(unread.customerUnreadCount, 1);
+  assert.equal(unread.customerUnreadCount, 2);
+  assert.equal(unread.customerDividerMessageId, chat.id);
   const marked = await markConversationReadByCustomer(db, {
     workspaceId: WS_A,
     leadId: LEAD_A,
   });
   assert.equal(marked.ok, true);
   if (!marked.ok) return;
-  assert.deepEqual(marked.conversation.customerLastReadAt, chat.createdAt);
+  assert.deepEqual(marked.conversation.customerLastReadAt, ownInbound.createdAt);
+  assert.notDeepEqual(marked.conversation.customerLastReadAt, agentSms.createdAt);
 }
 
 async function testDeletedMessageNotInBadgeButOrdered() {
@@ -893,7 +903,7 @@ async function main() {
   await testAdminCannotMutateAgentCursor();
   await testCustomerUnreadExcludesOwnSends();
   await testCustomerMarkRead();
-  await testCustomerUnreadIgnoresSms();
+  await testCustomerUnreadIncludesAgentSmsNotOwnInbound();
   await testDeletedMessageNotInBadgeButOrdered();
   await testMarkReadDoesNotTouchTwilioFields();
   await testUnreadLookupCreatesNothing();

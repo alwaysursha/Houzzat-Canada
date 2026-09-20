@@ -7,6 +7,7 @@ export const CONSUMER_PUSH_TYPES = [
   "shortlist",
   "morning_digest",
   "property_update",
+  "agent_chat",
 ] as const;
 
 export const STAFF_PUSH_TYPES = [
@@ -72,6 +73,11 @@ export const CONSUMER_PUSH_CATALOG: PushTypeItem[] = [
     id: "property_update",
     label: "Other listing updates",
     description: "Other changes on homes you watch",
+  },
+  {
+    id: "agent_chat",
+    label: "Chat messages",
+    description: "Your agent sent you a new Chat message",
   },
 ];
 

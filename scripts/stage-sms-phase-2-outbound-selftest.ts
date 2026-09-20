@@ -973,6 +973,7 @@ async function testAgentOutboundSms() {
       makeCtx(),
       LEAD_A,
       "Chat stays default",
+      { scheduleCustomerPush() {} },
     );
     assert.equal(chat.ok, true);
     if (chat.ok) assert.equal(chat.data.message.channel, "CHAT");

@@ -31,6 +31,7 @@ import {
   customerChatSendBody,
   customerChatTranscriptItems,
   customerChatUnavailableCopy,
+  customerSmsAutomationBadge,
   customerUnreadDividerMessageId,
   mergeCustomerChatMessages,
   parseCustomerChatSendFailure,
@@ -72,6 +73,7 @@ function msg(
     editedAt: null,
     deletedAt: null,
     createdAt: "2026-09-17T12:00:00.000Z",
+    payload: null,
     ...overrides,
   };
 }
@@ -198,6 +200,18 @@ function testTranscriptAlignmentAndTombstone() {
     ),
     false,
   );
+  assert.equal(
+    shouldGroupCustomerChatMessage(
+      msg({ id: "c", channel: "CHAT", senderKind: "AGENT", senderName: "Ali" }),
+      msg({ id: "s", channel: "SMS", senderKind: "AGENT", senderName: "Ali" }),
+    ),
+    false,
+  );
+  assert.equal(
+    customerSmsAutomationBadge({ automationKey: "lead.inactive_14_days" }),
+    "Automated · Inactive for 14 Days",
+  );
+  assert.equal(customerSmsAutomationBadge(null), null);
   const screen = read("src/components/customer-chat/CustomerChatScreen.tsx");
   assert.ok(screen.includes("whitespace-pre-wrap"));
   assert.ok(screen.includes("[overflow-wrap:anywhere]"));
@@ -205,6 +219,8 @@ function testTranscriptAlignmentAndTombstone() {
   assert.ok(screen.includes("Your Agent"));
   assert.ok(screen.includes("customerChatEmptyTitle"));
   assert.ok(screen.includes("customerChatEmptyCopy"));
+  assert.ok(screen.includes("customerSmsAutomationBadge"));
+  assert.equal(screen.includes("Send SMS"), false);
 }
 
 function testMergeAndFirstMessage() {
@@ -333,6 +349,38 @@ function testUnreadDivider() {
   );
   const rows = customerChatTranscriptItems(messages, "a1");
   assert.equal(rows[1]?.showDivider, true);
+  assert.equal(
+    customerUnreadDividerMessageId(
+      [
+        ...messages,
+        msg({
+          id: "s1",
+          channel: "SMS",
+          senderKind: "AGENT",
+          senderName: "Ali",
+          createdAt: "2026-09-17T12:06:00.000Z",
+        }),
+      ],
+      "2026-09-17T12:01:00.000Z",
+      2,
+    ),
+    "a1",
+  );
+  assert.equal(
+    customerUnreadDividerMessageId(
+      [
+        msg({
+          id: "own-sms",
+          channel: "SMS",
+          senderKind: "CUSTOMER",
+          createdAt: "2026-09-17T12:07:00.000Z",
+        }),
+      ],
+      "2026-09-17T12:01:00.000Z",
+      1,
+    ),
+    null,
+  );
 }
 
 function testOlderSkip() {
@@ -412,14 +460,23 @@ function testNoAgentCouplingOrForbiddenFeatures() {
     assert.equal(src.includes("useAgentChatThread"), false, rel);
     assert.equal(src.includes("/api/agent/"), false, rel);
     assert.equal(src.includes("EventSource"), false, rel);
-    assert.equal(src.includes("setInterval"), false, rel);
+    assert.equal(src.includes("WebSocket"), false, rel);
+    if (rel !== "src/components/customer-chat/useCustomerChatThread.ts") {
+      assert.equal(src.includes("setInterval"), false, rel);
+    }
     assert.equal(src.includes("twilio"), false, rel);
     assert.equal(src.includes("Twilio"), false, rel);
     assert.equal(src.includes("prisma."), false, rel);
-    assert.equal(src.includes("notify"), false, rel);
+    if (rel !== "src/components/customer-chat/useCustomerChatThread.ts") {
+      assert.equal(src.includes("notify"), false, rel);
+    }
   }
   const hook = read("src/components/customer-chat/useCustomerChatThread.ts");
   assert.equal(hook.includes("optimistic"), false);
+  assert.ok(hook.includes("CONVERSATION_LIVE_POLL_MS"));
+  assert.ok(hook.includes("setInterval"));
+  assert.ok(hook.includes("visibilitychange"));
+  assert.ok(hook.includes("pollInFlightRef"));
   const agentPane = read("src/components/agent/chat/AgentChatTranscriptPane.tsx");
   assert.equal(agentPane.includes("customer-chat"), false);
   const inbox = read("src/components/agent/chats/AgentChatsInbox.tsx");

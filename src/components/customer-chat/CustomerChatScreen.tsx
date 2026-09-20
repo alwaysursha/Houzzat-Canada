@@ -22,6 +22,7 @@ import {
   customerChatMessageBody,
   customerChatPrependScrollTop,
   customerChatTranscriptItems,
+  customerSmsAutomationBadge,
   customerUnreadDividerMessageId,
 } from "@/lib/customer-chat/query";
 import type { CustomerChatMessage } from "@/lib/customer-chat/types";
@@ -343,6 +344,8 @@ function CustomerChatRow({
   }
 
   const mine = align === "right";
+  const sms = message.channel === "SMS";
+  const automationBadge = customerSmsAutomationBadge(message.payload);
   const label = mine ? "You" : message.senderName || "Your Agent";
   const body = customerChatMessageBody(message);
   const deleted = Boolean(message.deletedAt);
@@ -352,7 +355,9 @@ function CustomerChatRow({
     <div className={cn("flex min-w-0", mine ? "justify-end" : "justify-start")}>
       <div
         className={cn("min-w-0 max-w-[min(85%,28rem)]", mine ? "items-end" : "items-start")}
-        aria-label={`${label}, ${sentAt}${deleted ? ", deleted" : ""}`}
+        aria-label={`${label}, ${sentAt}${sms ? ", SMS" : ""}${
+          automationBadge ? `, ${automationBadge}` : ""
+        }${deleted ? ", deleted" : ""}`}
       >
         {grouped ? (
           <p
@@ -361,6 +366,10 @@ function CustomerChatRow({
               mine ? "text-right" : "text-left",
             )}
           >
+            {sms ? <span className="mr-1 font-semibold">SMS</span> : null}
+            {automationBadge ? (
+              <span className="mr-1 font-semibold">{automationBadge}</span>
+            ) : null}
             {sentAt}
           </p>
         ) : (
@@ -371,6 +380,16 @@ function CustomerChatRow({
             )}
           >
             {label}
+            {sms ? (
+              <span className="ml-1.5 rounded bg-mist px-1 py-px text-[9px] font-bold uppercase tracking-wide text-ink/55">
+                SMS
+              </span>
+            ) : null}
+            {automationBadge ? (
+              <span className="ml-1.5 rounded bg-mist px-1 py-px text-[9px] font-semibold tracking-wide text-ink/55">
+                {automationBadge}
+              </span>
+            ) : null}
             <span className="ml-1.5 font-medium text-ink/40">{sentAt}</span>
           </p>
         )}

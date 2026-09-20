@@ -13,9 +13,11 @@
  * dispatcher; this module always persists CHAT.
  *
  * Persistence goes through createConversationMessage, then one Conversation
- * LeadActivity row (CHAT / outbound) keyed by messageId. This module does not
- * write Message rows, notifications, email/SMS, or consent events, and does
- * not mark the Agent cursor read.
+ * LeadActivity row (CHAT / outbound) keyed by messageId. After a newly
+ * created Message, this module schedules a best-effort consumer `agent_chat`
+ * FCM. Push failure does not fail Chat persist. This module does not write
+ * Message rows, email/SMS, staff Chat-to-Agent push, or consent events, and
+ * does not mark the Agent cursor read.
  *
  * Chat send is not idempotent: there is no existing Agent mutation
  * idempotency-key store suitable for Chat. Double-click/retry creates two
@@ -39,6 +41,10 @@ import {
   recordConversationLeadActivity,
   type ConversationLeadActivityDb,
 } from "@/lib/conversations/sms-lead-activity";
+import {
+  scheduleNotifyCustomerOfAgentChatMessage,
+  type AgentChatCustomerPushDeps,
+} from "@/lib/notifications/agent-chat-customer-push";
 
 export const AGENT_CHAT_TEXT_MAX_LENGTH = 4000;
 
@@ -57,6 +63,13 @@ export const agentConversationSendRequestSchema = z
 
 export type AgentConversationSendDb = ConversationMessageDb &
   ConversationLeadActivityDb;
+
+export type SendAgentLeadChatMessageDeps = {
+  scheduleCustomerPush?: (
+    input: Parameters<typeof scheduleNotifyCustomerOfAgentChatMessage>[0],
+    deps?: AgentChatCustomerPushDeps,
+  ) => void;
+};
 
 export type AgentChatSendPayload = {
   conversation: {
@@ -118,6 +131,7 @@ export async function sendAgentLeadChatMessage(
   ctx: AgentOrgContext,
   leadId: string,
   body: string,
+  deps: SendAgentLeadChatMessageDeps = {},
 ): Promise<SendAgentLeadChatMessageResult> {
   const text = normalizeAgentChatText(body);
   if (!text) {
@@ -171,6 +185,26 @@ export async function sendAgentLeadChatMessage(
     });
   } catch {
     // Conversation persist already succeeded.
+  }
+
+  try {
+    const schedule =
+      deps.scheduleCustomerPush ?? scheduleNotifyCustomerOfAgentChatMessage;
+    schedule({
+      leadId: lead.id,
+      trustedWorkspaceId: lead.workspaceId,
+      created: created.created,
+      message: {
+        id: created.message.id,
+        channel: created.message.channel,
+        kind: created.message.kind,
+        senderKind: created.message.senderKind,
+        senderName: created.message.senderName,
+        body: created.message.body,
+      },
+    });
+  } catch {
+    // Chat persist already succeeded.
   }
 
   return {
