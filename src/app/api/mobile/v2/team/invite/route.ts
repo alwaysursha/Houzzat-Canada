@@ -16,6 +16,11 @@ export const runtime = "nodejs";
 const bodySchema = z.object({
   email: z.string().trim().email().max(320),
   role: z.enum(["ADMIN", "AGENT"]),
+  firstName: z.string().trim().min(1).max(80).optional(),
+  lastName: z.string().trim().min(1).max(80).optional(),
+  phone: z.string().trim().min(1).max(40).optional(),
+  recoLicenseNumber: z.string().trim().min(1).max(40).optional(),
+  recoLicenseExpiresAt: z.string().trim().min(10).max(32).optional(),
 });
 
 export async function POST(request: Request) {
@@ -48,10 +53,24 @@ export async function POST(request: Request) {
       );
     }
 
+    const { email, role, firstName, lastName, phone, recoLicenseNumber, recoLicenseExpiresAt } =
+      parsed.data;
     const result = await createWorkspaceInvite({
       ctx,
-      email: parsed.data.email,
-      role: parsed.data.role,
+      email,
+      role,
+      ...(firstName && lastName && phone && recoLicenseNumber && recoLicenseExpiresAt
+        ? {
+            profile: {
+              firstName,
+              lastName,
+              email,
+              phone,
+              recoLicenseNumber,
+              recoLicenseExpiresAt,
+            },
+          }
+        : {}),
     });
 
     if (!result.ok) {

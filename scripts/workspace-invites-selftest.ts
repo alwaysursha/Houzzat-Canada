@@ -40,6 +40,9 @@ function testInviteModuleCoverage() {
   assert.ok(mod.includes("hashWorkspaceInviteToken"));
   assert.ok(mod.includes("createWorkspaceInviteRawToken"));
   assert.ok(mod.includes("createAgentAccountFromInvite"));
+  assert.ok(mod.includes("provisionPasswordlessAgentFromInvite"));
+  assert.ok(mod.includes("parseAdminManagedAgentProfile"));
+  assert.ok(mod.includes("existingStaffHasPassword"));
   assert.ok(!mod.includes("agentProfile: { create"));
   assert.ok(!mod.includes("consentEvents:"));
 }
@@ -55,13 +58,15 @@ function testAcceptApiBranches() {
 
 function testSchemaStatuses() {
   const schema = read("prisma/schema.prisma");
-  assert.ok(schema.includes("enum WorkspaceInviteStatus"));
-  assert.ok(schema.includes("PENDING"));
-  assert.ok(schema.includes("ACCEPTED"));
-  assert.ok(schema.includes("CANCELLED"));
-  assert.ok(schema.includes("EXPIRED"));
+  const start = schema.indexOf("enum WorkspaceInviteStatus");
+  assert.ok(start >= 0);
+  const block = schema.slice(start, schema.indexOf("}", start) + 1);
+  assert.ok(block.includes("PENDING"));
+  assert.ok(block.includes("ACCEPTED"));
+  assert.ok(block.includes("CANCELLED"));
+  assert.ok(block.includes("EXPIRED"));
   // REVOKED not used — CANCELLED is the revoke equivalent
-  assert.ok(!schema.includes("REVOKED"));
+  assert.ok(!block.includes("REVOKED"));
 }
 
 function testInvitePolicy() {

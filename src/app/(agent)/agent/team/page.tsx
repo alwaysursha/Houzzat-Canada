@@ -65,6 +65,7 @@ export default async function AgentTeamPage() {
             email: i.email,
             role: i.role,
             expiresAt: i.expiresAt.toISOString(),
+            name: [i.firstName, i.lastName].filter(Boolean).join(" ") || null,
           }))}
         />
       </div>

@@ -1,7 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import {
+  AgentProfessionalFields,
+  type AgentProfessionalFormValue,
+} from "@/components/agent/AgentProfessionalFields";
+import { Button } from "@/components/ui/button";
 import {
   STAFF_OVERLAY_PRIORITY,
   useStaffOverlay,
@@ -25,6 +31,7 @@ type Invite = {
   email: string;
   role: string;
   expiresAt: string;
+  name?: string | null;
 };
 
 export function TeamAdminClient({
@@ -55,6 +62,11 @@ export function TeamAdminClient({
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("AGENT");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [recoLicenseNumber, setRecoLicenseNumber] = useState("");
+  const [recoLicenseExpiresAt, setRecoLicenseExpiresAt] = useState("");
   const [pending, setPending] = useState(false);
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
   const [memberActionId, setMemberActionId] = useState<string | null>(null);
@@ -155,32 +167,33 @@ export function TeamAdminClient({
     }
   }
 
-  if (!canManage) {
-    return (
-      <p className="text-sm text-ink/55">
-        Only workspace owners/admins can invite seats. You are an agent on this
-        {isWorkspace ? " Workspace" : " team"}.
-      </p>
-    );
-  }
+  const inviteProfile: AgentProfessionalFormValue = {
+    firstName,
+    lastName,
+    email,
+    phone,
+    recoLicenseNumber,
+    recoLicenseExpiresAt,
+  };
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-line bg-surface p-5">
+      {canManage ? (
+      <div className="rounded-2xl border border-line bg-surface p-5 sm:p-6">
         <h2 className="font-semibold text-ink">
-          Seats{workspaceName ? ` · ${workspaceName}` : ""}
+          Invite Agent{workspaceName ? ` · ${workspaceName}` : ""}
         </h2>
         <p className="mt-1 text-sm text-ink/55">
           {seatLabel}
           {billingDeferred
             ? " (billing seat limits coming later)."
             : "."}{" "}
-          Invites email a secure link so the agent can create an account or sign
-          in and join this {isWorkspace ? "Workspace" : "team"} only. Existing
-          buyer/seller accounts are warned that those profiles will be disabled.
+          You enter professional and contact information. The Agent only sets a
+          password to activate. Invites email a secure link for this{" "}
+          {isWorkspace ? "Workspace" : "team"} only.
         </p>
         <form
-          className="mt-4 flex flex-wrap gap-2"
+          className="mt-5 space-y-5"
           onSubmit={async (e) => {
             e.preventDefault();
             setPending(true);
@@ -189,7 +202,19 @@ export function TeamAdminClient({
               const res = await fetch("/api/agent/team", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, role }),
+                body: JSON.stringify(
+                  isWorkspace
+                    ? {
+                        email,
+                        role,
+                        firstName,
+                        lastName,
+                        phone,
+                        recoLicenseNumber,
+                        recoLicenseExpiresAt,
+                      }
+                    : { email, role },
+                ),
               });
               const json = (await res.json()) as {
                 error?: string;
@@ -201,6 +226,11 @@ export function TeamAdminClient({
                 setMsg(json.error || "Invite failed");
               } else {
                 setEmail("");
+                setFirstName("");
+                setLastName("");
+                setPhone("");
+                setRecoLicenseNumber("");
+                setRecoLicenseExpiresAt("");
                 setMsg(
                   json.alreadyMember
                     ? "Added to Workspace — they were already a staff account."
@@ -217,33 +247,55 @@ export function TeamAdminClient({
             }
           }}
         >
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="agent@brokerage.com"
-            className="min-w-[220px] flex-1 rounded-lg border border-line px-3 py-2 text-sm"
-          />
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="rounded-lg border border-line px-2 py-2 text-sm"
-          >
-            <option value="AGENT">Agent</option>
-            <option value="ADMIN">Team admin</option>
-            {!isWorkspace ? <option value="OWNER">Owner</option> : null}
-          </select>
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-lg bg-canopy px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            Invite
-          </button>
+          {isWorkspace ? (
+            <AgentProfessionalFields
+              idPrefix="invite-agent"
+              value={inviteProfile}
+              onChange={(next) => {
+                setFirstName(next.firstName);
+                setLastName(next.lastName);
+                setEmail(next.email);
+                setPhone(next.phone);
+                setRecoLicenseNumber(next.recoLicenseNumber);
+                setRecoLicenseExpiresAt(next.recoLicenseExpiresAt);
+              }}
+            />
+          ) : (
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="agent@brokerage.com"
+              className="min-w-[220px] flex-1 rounded-lg border border-line px-3 py-2 text-sm"
+            />
+          )}
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="space-y-1.5 text-sm font-medium text-ink">
+              Seat role
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="block h-11 min-w-[160px] rounded-lg border border-line bg-surface px-3 text-sm"
+              >
+                <option value="AGENT">Agent</option>
+                <option value="ADMIN">Team admin</option>
+                {!isWorkspace ? <option value="OWNER">Owner</option> : null}
+              </select>
+            </label>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Sending…" : "Send invite"}
+            </Button>
+          </div>
         </form>
-        {msg ? <p className="mt-2 text-xs text-ink/55">{msg}</p> : null}
+        {msg ? <p className="mt-3 text-xs text-ink/55">{msg}</p> : null}
       </div>
+      ) : (
+        <p className="text-sm text-ink/55">
+          You can view Agent profiles. Only workspace owners/admins can invite
+          seats or edit professional and contact information.
+        </p>
+      )}
 
       <div className="rounded-2xl border border-line bg-surface p-5">
         <h2 className="font-semibold text-ink">Members</h2>
@@ -276,10 +328,18 @@ export function TeamAdminClient({
                   <p className="text-xs text-ink/45">{m.user.email}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {isWorkspace ? (
+                    <Link
+                      href={`/agent/team/${m.user.id}`}
+                      className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[12px] font-semibold text-canopy hover:bg-mist"
+                    >
+                      {canManage ? "Edit profile" : "View profile"}
+                    </Link>
+                  ) : null}
                   <span className="rounded-md bg-mist px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-ink/60">
                     {m.role}
                   </span>
-                  {!isSelf ? (
+                  {canManage && !isSelf ? (
                     <>
                       {isWorkspace &&
                       canSetPrimaryAgent &&
@@ -434,7 +494,7 @@ export function TeamAdminClient({
         </ul>
       </div>
 
-      {invites.length ? (
+      {canManage && invites.length ? (
         <div className="rounded-2xl border border-line bg-surface p-5">
           <h2 className="font-semibold text-ink">Pending invites</h2>
           <ul className="mt-3 divide-y divide-line/70">
@@ -447,6 +507,7 @@ export function TeamAdminClient({
                 >
                   <div className="min-w-0">
                     <p className="font-medium text-ink">
+                      {i.name ? `${i.name} · ` : ""}
                       {i.email}{" "}
                       <span className="font-normal text-ink/50">· {i.role}</span>
                     </p>

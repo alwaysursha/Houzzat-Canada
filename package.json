@@ -58,6 +58,7 @@
     "workspace-invites:selftest": "node --import tsx scripts/workspace-invites-selftest.ts",
     "workspace-invite-acceptance:selftest": "node --import tsx scripts/workspace-invite-acceptance-selftest.ts",
     "workspace-invite-authority:selftest": "node --import tsx scripts/workspace-invite-authority-selftest.ts",
+    "admin-agent-profile:selftest": "node --import tsx scripts/admin-agent-profile-selftest.ts",
     "workspace2-canary-plan:selftest": "node --import tsx scripts/workspace2-canary-plan-selftest.ts",
     "workspace2-provisioner:selftest": "node --import tsx scripts/workspace2-provisioner-selftest.ts",
     "workspace:provision-canary": "node --import tsx scripts/provision-tenant-canary.ts",

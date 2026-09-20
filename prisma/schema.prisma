@@ -914,6 +914,15 @@ model WorkspaceInvite {
   status      WorkspaceInviteStatus @default(PENDING)
   expiresAt   DateTime
   acceptedAt  DateTime?
+  /**
+   * Admin-managed professional snapshot captured at invite time.
+   * Applied to User + AgentProfile on provision / accept. Not a second profile.
+   */
+  firstName              String?
+  lastName               String?
+  phone                  String?
+  recoLicenseNumber      String?
+  recoLicenseExpiresAt   DateTime?
   createdAt   DateTime              @default(now())
   updatedAt   DateTime              @updatedAt
 
@@ -1118,7 +1127,15 @@ model AgentProfile {
   userId    String   @unique
   bio       String?  @db.Text
   markets   String[] @default([])
+  /**
+   * Display cellphone. Canonical SMS destination remains User.phoneE164.
+   * Kept in lockstep with User.phone by Admin-managed profile writes.
+   */
   phone     String?
+  firstName String?
+  lastName  String?
+  recoLicenseNumber    String?
+  recoLicenseExpiresAt DateTime?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

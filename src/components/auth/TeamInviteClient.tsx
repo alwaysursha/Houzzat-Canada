@@ -12,6 +12,12 @@ import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
 
 type InviteClientPreview = InvitePreview & {
   needsPasswordActivation?: boolean;
+  profilePrefilled?: boolean;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  recoLicenseNumber?: string | null;
+  recoLicenseExpiresAt?: string | null;
 };
 
 function roleLabel(role: string) {
@@ -231,8 +237,12 @@ export function TeamInviteClient({ token }: { token: string }) {
         >
           <p className="text-sm text-ink/65">
             Your workspace seat is ready. Create a password to activate HouzzatPro
-            login for {invite.email}.
+            login for {invite.email}. Professional and contact information was
+            already entered by your workspace admin.
           </p>
+          {invite.profilePrefilled ? (
+            <AdminFilledProfile invite={invite} />
+          ) : null}
           <div className="space-y-1.5">
             <label className="text-sm font-medium" htmlFor="invite-email">
               Email
@@ -294,25 +304,34 @@ export function TeamInviteClient({ token }: { token: string }) {
           className="mt-6 space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
-            void accept({ name, password });
+            void accept(
+              invite.profilePrefilled
+                ? { password }
+                : { name, password },
+            );
           }}
         >
           <p className="text-sm text-ink/65">
-            Create your agent account to join the team. Your email is fixed to
-            this invite.
+            {invite.profilePrefilled
+              ? "Your professional and contact information is already on file. Create a password to join the team."
+              : "Create your agent account to join the team. Your email is fixed to this invite."}
           </p>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="invite-name">
-              Full name
-            </label>
-            <Input
-              id="invite-name"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoComplete="name"
-            />
-          </div>
+          {invite.profilePrefilled ? (
+            <AdminFilledProfile invite={invite} />
+          ) : (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium" htmlFor="invite-name">
+                Full name
+              </label>
+              <Input
+                id="invite-name"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+              />
+            </div>
+          )}
           <div className="space-y-1.5">
             <label className="text-sm font-medium" htmlFor="invite-email">
               Email
@@ -364,6 +383,32 @@ export function TeamInviteClient({ token }: { token: string }) {
               Sign in
             </Link>
           ) : null}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function AdminFilledProfile({ invite }: { invite: InviteClientPreview }) {
+  const expiry = invite.recoLicenseExpiresAt
+    ? new Date(`${invite.recoLicenseExpiresAt}T12:00:00.000Z`).toLocaleDateString(
+        "en-CA",
+        { year: "numeric", month: "short", day: "numeric" },
+      )
+    : null;
+  return (
+    <div className="rounded-xl border border-line bg-mist/40 px-3 py-3 text-sm text-ink/70">
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-canopy">
+        Entered by your admin
+      </p>
+      <p className="mt-1 font-medium text-ink">
+        {[invite.firstName, invite.lastName].filter(Boolean).join(" ") || invite.email}
+      </p>
+      {invite.phone ? <p className="mt-0.5 text-xs">{invite.phone}</p> : null}
+      {invite.recoLicenseNumber ? (
+        <p className="mt-0.5 text-xs">
+          RECO {invite.recoLicenseNumber}
+          {expiry ? ` · expires ${expiry}` : ""}
         </p>
       ) : null}
     </div>

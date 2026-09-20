@@ -6,11 +6,77 @@
  */
 import type { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import type { ParsedAdminManagedAgentProfile } from "@/lib/agent/admin-managed-profile";
 import { TERMS_VERSION } from "@/lib/consent";
 import { persistSignupConsentEvents } from "@/lib/auth/sign-up-consent";
 import { VOW_VERSION } from "@/lib/vow";
 
 type Db = Pick<PrismaClient, "user" | "agentProfile" | "consentEvent">;
+
+function agentProfileCreateData(
+  userId: string,
+  profile?: ParsedAdminManagedAgentProfile | null,
+) {
+  return {
+    userId,
+    active: true,
+    ...(profile
+      ? {
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          phone: profile.phone,
+          recoLicenseNumber: profile.recoLicenseNumber,
+          recoLicenseExpiresAt: profile.recoLicenseExpiresAt,
+        }
+      : {}),
+  };
+}
+
+/**
+ * Admin invite: create AGENT User + AgentProfile without a password.
+ * Activation later only sets credentials. Does not create WorkspaceMember.
+ */
+export async function provisionPasswordlessAgentFromInvite(
+  db: Db,
+  input: {
+    email: string;
+    profile: ParsedAdminManagedAgentProfile;
+    ip?: string;
+    userAgent?: string;
+  },
+): Promise<{ userId: string }> {
+  const now = new Date();
+  const user = await db.user.create({
+    data: {
+      name: input.profile.displayName,
+      email: input.email,
+      password: null,
+      role: "AGENT",
+      isBuyer: false,
+      isSeller: false,
+      phone: input.profile.phone,
+      phoneE164: input.profile.phoneE164,
+      termsAcceptedAt: now,
+      termsVersion: TERMS_VERSION,
+      vowAcceptedAt: now,
+      vowVersion: VOW_VERSION,
+      caslConsentAt: now,
+    },
+  });
+
+  await db.agentProfile.create({
+    data: agentProfileCreateData(user.id, input.profile),
+  });
+
+  await persistSignupConsentEvents(db, {
+    userId: user.id,
+    email: input.email,
+    ip: input.ip,
+    userAgent: input.userAgent,
+  });
+
+  return { userId: user.id };
+}
 
 export async function createAgentAccountFromInvite(
   db: Db,
@@ -20,6 +86,7 @@ export async function createAgentAccountFromInvite(
     password: string;
     ip?: string;
     userAgent?: string;
+    profile?: ParsedAdminManagedAgentProfile | null;
   },
 ): Promise<{ userId: string }> {
   const hashed = await bcrypt.hash(input.password, 10);
@@ -27,12 +94,18 @@ export async function createAgentAccountFromInvite(
 
   const user = await db.user.create({
     data: {
-      name: input.name,
+      name: input.profile?.displayName || input.name,
       email: input.email,
       password: hashed,
       role: "AGENT",
       isBuyer: false,
       isSeller: false,
+      ...(input.profile
+        ? {
+            phone: input.profile.phone,
+            phoneE164: input.profile.phoneE164,
+          }
+        : {}),
       emailVerified: now,
       termsAcceptedAt: now,
       termsVersion: TERMS_VERSION,
@@ -43,7 +116,7 @@ export async function createAgentAccountFromInvite(
   });
 
   await db.agentProfile.create({
-    data: { userId: user.id, active: true },
+    data: agentProfileCreateData(user.id, input.profile),
   });
 
   await persistSignupConsentEvents(db, {

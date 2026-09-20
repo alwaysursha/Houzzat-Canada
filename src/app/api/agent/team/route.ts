@@ -38,6 +38,14 @@ const inviteSchema = z.object({
   role: z.enum(["OWNER", "ADMIN", "AGENT"]).default("AGENT"),
 });
 
+const workspaceAgentInviteSchema = inviteSchema.extend({
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().min(1).max(80),
+  phone: z.string().trim().min(1).max(40),
+  recoLicenseNumber: z.string().trim().min(1).max(40),
+  recoLicenseExpiresAt: z.string().trim().min(10).max(32),
+});
+
 const reassignSchema = z.object({
   leadId: z.string().min(1),
   assigneeId: z.string().min(1).nullable(),
@@ -381,15 +389,26 @@ async function handleWorkspaceTeamPost(
     return NextResponse.json({ ok: true, lead: updated });
   }
 
-  const parsed = inviteSchema.safeParse(body);
+  const parsed = workspaceAgentInviteSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid invite" }, { status: 400 });
+    return NextResponse.json(
+      { error: "First name, last name, email, cell phone, RECO license # and expiry are required." },
+      { status: 400 },
+    );
   }
 
   const result = await createWorkspaceInvite({
     ctx,
     email: parsed.data.email,
     role: parsed.data.role,
+    profile: {
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName,
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+      recoLicenseNumber: parsed.data.recoLicenseNumber,
+      recoLicenseExpiresAt: parsed.data.recoLicenseExpiresAt,
+    },
   });
   if (!result.ok) {
     return NextResponse.json(

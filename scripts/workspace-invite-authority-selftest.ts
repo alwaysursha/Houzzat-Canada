@@ -155,7 +155,10 @@ function testAcceptStillFlatAndWorkspaceFirst() {
 
 function testClientPostsNoWorkspaceAuthority() {
   const client = read("src/components/agent/TeamAdminClient.tsx");
-  assert.ok(client.includes('JSON.stringify({ email, role })'));
+  assert.ok(client.includes("JSON.stringify"));
+  assert.ok(client.includes("firstName"));
+  assert.ok(client.includes("recoLicenseNumber"));
+  assert.ok(client.includes("{ email, role }"));
   assert.ok(!client.includes("workspaceId"));
   assert.ok(!client.includes("organizationId"));
   assert.ok(client.includes('json.scope === "workspace"'));
