@@ -135,14 +135,13 @@ const QUICK_CATEGORIES: Array<{
 ];
 
 function conversationView(item: TimelineItem) {
-  if (item.conversationChannel) {
-    return {
-      isConversation: true,
-      conversationChannel: item.conversationChannel,
-      conversationDirection: item.conversationDirection ?? null,
-    };
-  }
-  return conversationActivityFromLeadActivity({ type: item.type });
+  return conversationActivityFromLeadActivity({
+    type: item.type,
+    conversationChannel: item.conversationChannel,
+    conversationDirection: item.conversationDirection,
+    automationKey: item.conversationAutomationKey,
+    recipient: item.conversationRecipient,
+  });
 }
 
 function categoryMeta(type: string, item?: TimelineItem): {
@@ -151,7 +150,25 @@ function categoryMeta(type: string, item?: TimelineItem): {
   dot: string;
   rail: string;
 } {
-  const conversation = item ? conversationView(item) : { isConversation: false, conversationChannel: null, conversationDirection: null };
+  const conversation = item
+    ? conversationView(item)
+    : conversationActivityFromLeadActivity({ type });
+  if (conversation.isAgentNotification) {
+    return {
+      icon: Workflow,
+      chip: "bg-[#f1f5f9] text-[#334155] ring-[#cbd5e1]",
+      dot: "bg-[#64748b]",
+      rail: "from-[#94a3b8]/30 to-transparent",
+    };
+  }
+  if (conversation.isAutomatedLeadSms) {
+    return {
+      icon: Workflow,
+      chip: "bg-[#ede9fe] text-[#5b21b6] ring-[#c4b5fd]",
+      dot: "bg-[#7c3aed]",
+      rail: "from-[#7c3aed]/30 to-transparent",
+    };
+  }
   if (conversation.isConversation) {
     const received = conversation.conversationDirection === "inbound";
     return received
@@ -270,6 +287,8 @@ function typeLabel(item: TimelineItem) {
     type: item.type,
     conversationChannel: item.conversationChannel,
     conversationDirection: item.conversationDirection,
+    automationKey: item.conversationAutomationKey,
+    recipient: item.conversationRecipient,
   });
   if (conversation) return conversation;
   if (item.source === "note") {
@@ -562,7 +581,11 @@ export function CrmTimeline({
                         <div
                           className={cn(
                             "mt-1.5 rounded-xl border px-2.5 py-2 transition hover:border-[#eef2f6] hover:bg-[#f8fafc]/80",
-                            conversation.isConversation
+                            conversation.isAgentNotification
+                              ? "border-l-[3px] border-[#cbd5e1] border-y-transparent border-r-transparent bg-[#f8fafc]"
+                              : conversation.isAutomatedLeadSms
+                                ? "border-l-[3px] border-[#c4b5fd] border-y-transparent border-r-transparent bg-[#faf8ff]"
+                              : conversation.isConversation
                               ? conversation.conversationDirection === "inbound"
                                 ? "border-l-[3px] border-[#cbd5e1] border-y-transparent border-r-transparent bg-[#f8fafc]"
                                 : "border-l-[3px] border-[#93c5fd] border-y-transparent border-r-transparent bg-[#f8fbff]"
@@ -584,6 +607,11 @@ export function CrmTimeline({
                               )}
                             >
                               {item.body}
+                            </p>
+                          ) : null}
+                          {conversation.automationName ? (
+                            <p className="mt-1 text-[11px] font-medium text-[#64748b]">
+                              {conversation.automationName}
                             </p>
                           ) : null}
                           {item.lastClickedUrl &&

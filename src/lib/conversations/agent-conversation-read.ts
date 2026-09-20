@@ -37,6 +37,7 @@ import {
   type AgentCutoff,
   type ConversationReadStateDb,
 } from "@/lib/conversations/read-state";
+import { presentSmsAutomationMessagePayload } from "@/lib/conversations/sms-automation-payload";
 
 export const AGENT_CONVERSATION_PAGE_SIZE = 40;
 export const AGENT_CONVERSATION_PAGE_MAX = 80;
@@ -243,12 +244,23 @@ function presentUnread(
   };
 }
 
+function presentConversationPayload(
+  row: AgentConversationMessageRow,
+  deleted: boolean,
+): Prisma.JsonValue | null {
+  if (deleted) return null;
+  if (row.kind === "SYSTEM_CARD") return row.payload ?? null;
+  if (row.kind === "TEXT" && row.channel === "SMS") {
+    return presentSmsAutomationMessagePayload(row.payload);
+  }
+  return null;
+}
+
 export function presentAgentConversationMessage(
   row: AgentConversationMessageRow,
 ): AgentConversationMessage {
   const deleted = Boolean(row.deletedAt);
-  const payload =
-    !deleted && row.kind === "SYSTEM_CARD" ? (row.payload ?? null) : null;
+  const payload = presentConversationPayload(row, deleted);
   return {
     id: row.id,
     channel: row.channel,

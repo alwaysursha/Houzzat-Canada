@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { frozenAgentSenderName } from "@/lib/conversations/agent-conversation-send";
 import { SYSTEM_SENDER_NAME } from "@/lib/conversations/create-conversation-message";
 import { createConversationMessage } from "@/lib/conversations/create-conversation-message";
+import { smsAutomationMessagePayload } from "@/lib/conversations/sms-automation-payload";
 import {
   recordSmsLeadActivity,
   type SmsLeadActivityDb,
@@ -580,6 +581,7 @@ async function sendLeadAutomation(
       createdByUserId: lead.assignedAgent?.id ?? null,
       senderName,
       body,
+      payload: smsAutomationMessagePayload(key),
       smsSource: "TWILIO",
       twilioMessageSid: sent.sid,
       smsFrom: fromE164,

@@ -1,5 +1,5 @@
 import type { ActivityEventType } from "@prisma/client";
-import { conversationActivityFromLeadActivity } from "@/lib/agent/conversation-activity";
+import { conversationActivityFromLeadActivity, conversationTimelineFields } from "@/lib/agent/conversation-activity";
 import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
 import {
   isPropertyAlertUtmCampaign,
@@ -172,6 +172,8 @@ export type TimelineItem = {
   lastClickedUrl?: string | null;
   conversationChannel?: "SMS" | "CHAT" | null;
   conversationDirection?: "inbound" | "outbound" | null;
+  conversationAutomationKey?: string | null;
+  conversationRecipient?: "LEAD" | "AGENT" | null;
 };
 
 export type TimelineItemDto = {
@@ -197,6 +199,8 @@ export type TimelineItemDto = {
   lastClickedUrl?: string | null;
   conversationChannel?: "SMS" | "CHAT" | null;
   conversationDirection?: "inbound" | "outbound" | null;
+  conversationAutomationKey?: string | null;
+  conversationRecipient?: "LEAD" | "AGENT" | null;
 };
 
 export function serializeTimelineItem(item: TimelineItem): TimelineItemDto {
@@ -223,6 +227,8 @@ export function serializeTimelineItem(item: TimelineItem): TimelineItemDto {
     lastClickedUrl: item.lastClickedUrl,
     conversationChannel: item.conversationChannel,
     conversationDirection: item.conversationDirection,
+    conversationAutomationKey: item.conversationAutomationKey,
+    conversationRecipient: item.conversationRecipient,
   };
 }
 
@@ -403,8 +409,7 @@ export async function loadCustomerTimeline(input: {
         previewPath ??
         (emailLogId ? `/agent/emails/${emailLogId}` : null),
       lastClickedUrl: clickUrl,
-      conversationChannel: conversation.conversationChannel,
-      conversationDirection: conversation.conversationDirection,
+      ...conversationTimelineFields(conversation),
     });
   }
   for (const n of notes) {

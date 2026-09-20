@@ -1,6 +1,9 @@
 export {
   SMS_AUTOMATION_CATALOG,
   smsAutomationCatalogByKey,
+  smsAutomationDisplayName,
+  smsAutomationKeyFromPayload,
+  smsAutomationTranscriptLabel,
 } from "./catalog";
 export {
   LEAD_RETURNED_INACTIVITY_BUCKETS_DAYS,

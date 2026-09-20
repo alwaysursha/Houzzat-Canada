@@ -1,16 +1,23 @@
 /**
  * Presentation for Conversation Chat/SMS LeadActivity rows.
- * Uses existing LeadActivity.type + meta.channel/meta.direction.
+ * Uses existing LeadActivity.type + meta.channel/direction/automationKey/recipient.
  * Does not create activity records.
  */
+import { smsAutomationDisplayName } from "@/lib/platform/sms-automations/catalog";
 
 export type ConversationActivityChannel = "SMS" | "CHAT";
 export type ConversationActivityDirection = "inbound" | "outbound";
+export type ConversationActivityRecipient = "LEAD" | "AGENT";
 
 export type ConversationActivityView = {
   isConversation: boolean;
   conversationChannel: ConversationActivityChannel | null;
   conversationDirection: ConversationActivityDirection | null;
+  automationKey: string | null;
+  automationName: string | null;
+  recipient: ConversationActivityRecipient | null;
+  isAgentNotification: boolean;
+  isAutomatedLeadSms: boolean;
 };
 
 function metaRecord(meta: unknown): Record<string, unknown> | null {
@@ -45,18 +52,69 @@ function directionFromValue(
   return null;
 }
 
+function recipientFromValue(
+  value: unknown,
+): ConversationActivityRecipient | null {
+  if (value === "LEAD" || value === "AGENT") return value;
+  return null;
+}
+
+function automationKeyFromValue(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const key = value.trim();
+  return key || null;
+}
+
 export function conversationActivityFromLeadActivity(input: {
   type: string;
   meta?: unknown;
+  conversationChannel?: ConversationActivityChannel | null;
+  conversationDirection?: ConversationActivityDirection | null;
+  automationKey?: string | null;
+  recipient?: ConversationActivityRecipient | null;
 }): ConversationActivityView {
   const record = metaRecord(input.meta);
   const channel =
-    channelFromValue(record?.channel) ?? channelFromType(input.type);
-  const direction = directionFromValue(record?.direction);
+    channelFromValue(record?.channel) ??
+    channelFromType(input.type) ??
+    input.conversationChannel ??
+    null;
+  const direction =
+    directionFromValue(record?.direction) ??
+    input.conversationDirection ??
+    null;
+  const automationKey =
+    automationKeyFromValue(input.automationKey) ??
+    automationKeyFromValue(record?.automationKey);
+  const recipient =
+    input.recipient ?? recipientFromValue(record?.recipient);
+  const isAgentNotification =
+    channel === "SMS" && Boolean(automationKey) && recipient === "AGENT";
+  const isAutomatedLeadSms =
+    channel === "SMS" && Boolean(automationKey) && recipient !== "AGENT";
   return {
     isConversation: channel != null,
     conversationChannel: channel,
     conversationDirection: direction,
+    automationKey,
+    automationName: smsAutomationDisplayName(automationKey),
+    recipient,
+    isAgentNotification,
+    isAutomatedLeadSms,
+  };
+}
+
+export function conversationTimelineFields(view: ConversationActivityView): {
+  conversationChannel: ConversationActivityChannel | null;
+  conversationDirection: ConversationActivityDirection | null;
+  conversationAutomationKey: string | null;
+  conversationRecipient: ConversationActivityRecipient | null;
+} {
+  return {
+    conversationChannel: view.conversationChannel,
+    conversationDirection: view.conversationDirection,
+    conversationAutomationKey: view.automationKey,
+    conversationRecipient: view.recipient,
   };
 }
 
@@ -81,20 +139,23 @@ export function conversationActivityHeadline(input: {
   meta?: unknown;
   conversationChannel?: ConversationActivityChannel | null;
   conversationDirection?: ConversationActivityDirection | null;
+  automationKey?: string | null;
+  recipient?: ConversationActivityRecipient | null;
 }): string | null {
-  const parsed =
-    input.conversationChannel || input.conversationDirection
-      ? {
-          isConversation: Boolean(input.conversationChannel),
-          conversationChannel: input.conversationChannel ?? null,
-          conversationDirection: input.conversationDirection ?? null,
-        }
-      : conversationActivityFromLeadActivity({
-          type: input.type ?? "",
-          meta: input.meta,
-        });
+  const parsed = conversationActivityFromLeadActivity({
+    type: input.type ?? "",
+    meta: input.meta,
+    conversationChannel: input.conversationChannel,
+    conversationDirection: input.conversationDirection,
+    automationKey: input.automationKey,
+    recipient: input.recipient,
+  });
+  if (parsed.isAgentNotification) return "SMS · Agent Notification";
   const channelLabel = conversationChannelLabel(parsed.conversationChannel);
   if (!parsed.isConversation || !channelLabel) return null;
+  if (parsed.isAutomatedLeadSms) {
+    return `Conversation · ${channelLabel} · Automated`;
+  }
   const directionLabel = conversationDirectionLabel(
     parsed.conversationDirection,
   );

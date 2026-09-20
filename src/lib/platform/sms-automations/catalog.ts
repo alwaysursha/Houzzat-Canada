@@ -136,3 +136,30 @@ export function smsAutomationCatalogByKey(
 ): SmsAutomationCatalogSpec | null {
   return SMS_AUTOMATION_CATALOG.find((row) => row.key === key) ?? null;
 }
+
+export function smsAutomationDisplayName(
+  automationKey: string | null | undefined,
+): string | null {
+  const key = automationKey?.trim();
+  if (!key) return null;
+  return smsAutomationCatalogByKey(key)?.name ?? null;
+}
+
+export function smsAutomationKeyFromPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+  const key = (payload as { automationKey?: unknown }).automationKey;
+  if (typeof key !== "string") return null;
+  const trimmed = key.trim();
+  return trimmed || null;
+}
+
+export function smsAutomationTranscriptLabel(
+  payload: unknown,
+): string | null {
+  const key = smsAutomationKeyFromPayload(payload);
+  if (!key) return null;
+  const name = smsAutomationDisplayName(key);
+  return name ? `Automated · ${name}` : "Automated";
+}

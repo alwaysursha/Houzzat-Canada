@@ -4,7 +4,7 @@ import {
   timelineItemMatchesFilters,
   type TimelineScope,
 } from "@/lib/agent/activity-filters";
-import { conversationActivityFromLeadActivity } from "@/lib/agent/conversation-activity";
+import { conversationActivityFromLeadActivity, conversationTimelineFields } from "@/lib/agent/conversation-activity";
 import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
 import {
   LEAD_PROFILE_EMAIL_LIST_SELECT,
@@ -237,8 +237,7 @@ export async function loadPagedLeadTimeline(input: {
       path: null,
       imageUrl: null,
       createdAt: a.createdAt,
-      conversationChannel: conversation.conversationChannel,
-      conversationDirection: conversation.conversationDirection,
+      ...conversationTimelineFields(conversation),
     });
   }
   for (const n of notes) {

@@ -30,6 +30,10 @@ import {
   type LeadConversationDb,
   type LeadConversationRecord,
 } from "@/lib/conversations/lead-conversation";
+import {
+  isSmsAutomationTextPayload,
+} from "@/lib/conversations/sms-automation-payload";
+import { smsAutomationKeyFromPayload } from "@/lib/platform/sms-automations/catalog";
 
 export const SYSTEM_SENDER_NAME = "Houzzat";
 
@@ -271,8 +275,13 @@ function normalizeContent(
 
   if (input.kind === "TEXT") {
     if (!body) return { ok: false };
-    if (payload != null) return { ok: false };
-    return { ok: true, body, payload: null };
+    if (payload == null) return { ok: true, body, payload: null };
+    if (input.channel !== "SMS" || !isSmsAutomationTextPayload(payload)) {
+      return { ok: false };
+    }
+    const automationKey = smsAutomationKeyFromPayload(payload);
+    if (!automationKey) return { ok: false };
+    return { ok: true, body, payload: { automationKey } };
   }
 
   if (input.kind === "SYSTEM_CARD") {

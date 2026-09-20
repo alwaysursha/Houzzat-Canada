@@ -170,6 +170,30 @@ function testSmsActivityRendering() {
   assert.equal(
     conversationActivityHeadline({
       type: "SMS",
+      meta: {
+        channel: "SMS",
+        direction: "outbound",
+        recipient: "LEAD",
+        automationKey: "lead.inactive_14_days",
+      },
+    }),
+    "Conversation · SMS · Automated",
+  );
+  assert.equal(
+    conversationActivityHeadline({
+      type: "SMS",
+      meta: {
+        channel: "SMS",
+        direction: "outbound",
+        recipient: "AGENT",
+        automationKey: "agent.new_lead_signup",
+      },
+    }),
+    "SMS · Agent Notification",
+  );
+  assert.equal(
+    conversationActivityHeadline({
+      type: "SMS",
       conversationChannel: "SMS",
       conversationDirection: "outbound",
     }),
@@ -214,6 +238,8 @@ function testExistingMetadataAndUiWiring() {
   assert.ok(customer.includes("conversationChannel"));
   assert.ok(customer.includes("conversationDirection"));
   assert.ok(crm.includes("conversationActivityHeadline"));
+  assert.ok(crm.includes("conversationAutomationKey") || crm.includes("automationKey"));
+  assert.ok(crm.includes("automationName"));
   assert.ok(crm.includes("ArrowDownLeft"));
   assert.ok(crm.includes("ArrowUpRight"));
   assert.ok(filters.includes('"CHAT"'));

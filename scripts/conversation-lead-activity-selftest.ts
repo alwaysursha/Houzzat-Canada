@@ -220,6 +220,34 @@ async function testDuplicateProtection() {
   );
 }
 
+function testAutomationHeadlinesDoNotNeedNewRows() {
+  assert.equal(
+    conversationActivityHeadline({
+      type: "SMS",
+      meta: {
+        channel: "SMS",
+        direction: "outbound",
+        messageId: "msg-auto",
+        automationKey: "lead.welcome_new_signup",
+        recipient: "LEAD",
+      },
+    }),
+    "Conversation · SMS · Automated",
+  );
+  assert.equal(
+    conversationActivityHeadline({
+      type: "SMS",
+      meta: {
+        channel: "SMS",
+        direction: "outbound",
+        recipient: "AGENT",
+        automationKey: "agent.viewing_requested",
+      },
+    }),
+    "SMS · Agent Notification",
+  );
+}
+
 function testWiringDoesNotDuplicatePaths() {
   const agentSend = read("src/lib/conversations/agent-conversation-send.ts");
   const customerSend = read("src/lib/conversations/customer-conversation.ts");
@@ -254,6 +282,7 @@ function testWiringDoesNotDuplicatePaths() {
 async function main() {
   await testFourCombinations();
   await testDuplicateProtection();
+  testAutomationHeadlinesDoNotNeedNewRows();
   testWiringDoesNotDuplicatePaths();
   console.log("conversation-lead-activity-selftest: ok");
 }

@@ -443,6 +443,37 @@ async function testSmsTwilioRequiresSidAndNumbers() {
   assert.equal(ok.message.smsSource, "TWILIO");
 }
 
+async function testSmsAutomationTextPayloadAllowed() {
+  const db = new FakeMessageDb();
+  db.addLead(WS_A, LEAD_A);
+  const allowed = await createConversationMessage(
+    db,
+    chatText({
+      channel: "SMS",
+      smsSource: "TWILIO",
+      twilioMessageSid: "SM_AUTO",
+      smsFrom: "+14165550100",
+      smsTo: "+14165550199",
+      body: "Automated follow-up",
+      payload: { automationKey: "lead.inactive_14_days" },
+    }),
+  );
+  assert.equal(allowed.ok, true);
+  if (!allowed.ok) return;
+  assert.deepEqual(allowed.message.payload, {
+    automationKey: "lead.inactive_14_days",
+  });
+
+  const chatRejected = await createConversationMessage(
+    db,
+    chatText({
+      payload: { automationKey: "lead.inactive_14_days" },
+    }),
+  );
+  assert.equal(chatRejected.ok, false);
+  if (!chatRejected.ok) assert.equal(chatRejected.reason, "INVALID_CONTENT");
+}
+
 async function testSmsManualRejectsTwilioSid() {
   const db = new FakeMessageDb();
   db.addLead(WS_A, LEAD_A);
@@ -619,6 +650,7 @@ async function main() {
   await testTextRequiresNonEmptyBody();
   await testChatRejectsSmsMetadata();
   await testSmsTwilioRequiresSidAndNumbers();
+  await testSmsAutomationTextPayloadAllowed();
   await testSmsManualRejectsTwilioSid();
   await testInvalidChannelSourceRejected();
   await testDuplicateTwilioSidDoesNotDuplicate();

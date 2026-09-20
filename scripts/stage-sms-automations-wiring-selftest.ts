@@ -13,6 +13,7 @@ import type {
   PlanCode,
 } from "@prisma/client";
 import type { LeadConversationRecord } from "../src/lib/conversations/lead-conversation";
+import { conversationActivityHeadline } from "../src/lib/agent/conversation-activity";
 import type {
   ConversationMessageRecord,
   ConversationMessageTx,
@@ -675,6 +676,37 @@ async function testSignupFiresOnce() {
         "recipient" in row.meta &&
         (row.meta as { recipient?: string }).recipient === "AGENT",
     ),
+  );
+  const leadMessage = db.messages.find((row) => row.channel === "SMS");
+  assert.deepEqual(leadMessage?.payload, {
+    automationKey: "lead.welcome_new_signup",
+  });
+  assert.equal(db.messages.length, 1);
+  const leadActivity = db.activities.find(
+    (row) =>
+      row.meta &&
+      typeof row.meta === "object" &&
+      (row.meta as { recipient?: string }).recipient === "LEAD",
+  );
+  const agentActivity = db.activities.find(
+    (row) =>
+      row.meta &&
+      typeof row.meta === "object" &&
+      (row.meta as { recipient?: string }).recipient === "AGENT",
+  );
+  assert.equal(
+    conversationActivityHeadline({
+      type: leadActivity?.type ?? "",
+      meta: leadActivity?.meta,
+    }),
+    "Conversation · SMS · Automated",
+  );
+  assert.equal(
+    conversationActivityHeadline({
+      type: agentActivity?.type ?? "",
+      meta: agentActivity?.meta,
+    }),
+    "SMS · Agent Notification",
   );
   await runSignupSmsAutomations(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
   assert.equal(db.smsSendCalls, 2);

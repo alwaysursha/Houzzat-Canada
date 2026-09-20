@@ -3,6 +3,7 @@ import type {
   LeadProfileV2ChatMessage,
   LeadProfileV2ChatPanel,
 } from "@/lib/agent/lead-profile-v2/types";
+import { smsAutomationTranscriptLabel } from "@/lib/platform/sms-automations/catalog";
 
 export const V2_CHAT_RESOURCE_KEY = "conversation-chat";
 export const V2_CHAT_TEXT_MAX_LENGTH = 4000;
@@ -328,12 +329,19 @@ export function shouldGroupV2ChatMessage(
   if (previous.senderKind !== current.senderKind) return false;
   if (previous.senderUserId !== current.senderUserId) return false;
   if (previous.channel !== current.channel) return false;
+  if (v2SmsAutomationBadge(previous.payload) || v2SmsAutomationBadge(current.payload)) {
+    return false;
+  }
   return previous.senderName === current.senderName;
 }
 
 export function v2ChatMessageBody(message: LeadProfileV2ChatMessage): string {
   if (message.deletedAt) return V2_CHAT_DELETED_TOMBSTONE;
   return message.body ?? "";
+}
+
+export function v2SmsAutomationBadge(payload: unknown): string | null {
+  return smsAutomationTranscriptLabel(payload);
 }
 
 export function v2SmsDeliveryLabel(

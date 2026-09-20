@@ -28,6 +28,7 @@ import {
   v2ChatTranscriptItems,
   v2SmsBlockedCopy,
   v2SmsDeliveryLabel,
+  v2SmsAutomationBadge,
 } from "../src/lib/agent/lead-profile-v2/chat-query";
 import type {
   LeadProfileV2ChatMessage,
@@ -525,6 +526,29 @@ function testSmsComposerAndDelivery() {
     ),
     false,
   );
+  assert.equal(
+    v2SmsAutomationBadge({ automationKey: "lead.inactive_14_days" }),
+    "Automated · Inactive for 14 Days",
+  );
+  assert.equal(v2SmsAutomationBadge(null), null);
+  assert.equal(
+    shouldGroupV2ChatMessage(
+      msg({
+        id: "auto-1",
+        channel: "SMS",
+        payload: { automationKey: "lead.inactive_14_days" },
+      }),
+      msg({
+        id: "auto-2",
+        channel: "SMS",
+        payload: { automationKey: "lead.inactive_14_days" },
+      }),
+    ),
+    false,
+  );
+  const paneSrc = read("src/components/agent/chat/AgentChatTranscriptPane.tsx");
+  assert.ok(paneSrc.includes("v2SmsAutomationBadge"));
+  assert.ok(paneSrc.includes("HouzzatPRO"));
   assert.equal(
     v2SmsDeliveryLabel({
       channel: "CHAT",

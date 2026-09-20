@@ -25,6 +25,7 @@ import {
   v2ChatTranscriptItems,
   v2SmsBlockedCopy,
   v2SmsDeliveryLabel,
+  v2SmsAutomationBadge,
   type AgentComposerChannel,
 } from "@/lib/agent/lead-profile-v2/chat-query";
 import type {
@@ -424,12 +425,22 @@ function ChatRow({
     );
   }
 
+  const automationBadge = v2SmsAutomationBadge(message.payload);
   const mine =
     message.senderKind === "AGENT" &&
     Boolean(viewerUserId) &&
-    message.senderUserId === viewerUserId;
+    message.senderUserId === viewerUserId &&
+    !automationBadge;
   const customer = message.senderKind === "CUSTOMER";
-  const label = mine ? "You" : message.senderName;
+  const label = automationBadge
+    ? message.senderKind === "AGENT" &&
+      message.senderName &&
+      message.senderName !== "Houzzat"
+      ? `HouzzatPRO · ${message.senderName}`
+      : "HouzzatPRO"
+    : mine
+      ? "You"
+      : message.senderName;
   const body = v2ChatMessageBody(message);
   const deleted = Boolean(message.deletedAt);
   const sentAt = new Date(message.createdAt).toLocaleString("en-CA");
@@ -444,8 +455,8 @@ function ChatRow({
           mine ? "items-end" : "items-start",
         )}
         aria-label={`${label}, ${sentAt}${sms ? ", SMS" : ""}${
-          delivery ? `, ${delivery}` : ""
-        }${deleted ? ", deleted" : ""}`}
+          automationBadge ? `, ${automationBadge}` : ""
+        }${delivery ? `, ${delivery}` : ""}${deleted ? ", deleted" : ""}`}
       >
         {grouped ? (
           <p
@@ -455,6 +466,9 @@ function ChatRow({
             )}
           >
             {sms ? <span className="mr-1 font-semibold">SMS</span> : null}
+            {automationBadge ? (
+              <span className="mr-1 font-semibold">{automationBadge}</span>
+            ) : null}
             {sentAt}
             {delivery ? <span className="ml-1">· {delivery}</span> : null}
           </p>
@@ -469,6 +483,11 @@ function ChatRow({
             {sms ? (
               <span className="ml-1.5 rounded bg-[#e2e8f0] px-1 py-px text-[9px] font-bold uppercase tracking-wide text-[#475569]">
                 SMS
+              </span>
+            ) : null}
+            {automationBadge ? (
+              <span className="ml-1.5 rounded bg-[#ede9fe] px-1 py-px text-[9px] font-semibold tracking-wide text-[#5b21b6]">
+                {automationBadge}
               </span>
             ) : null}
             <span className="ml-1.5 font-medium text-[#94a3b8]">{sentAt}</span>

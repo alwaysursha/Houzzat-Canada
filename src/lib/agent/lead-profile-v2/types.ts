@@ -320,6 +320,8 @@ export type LeadProfileV2TimelineItem = {
   lastClickedUrl?: string | null;
   conversationChannel?: "SMS" | "CHAT" | null;
   conversationDirection?: "inbound" | "outbound" | null;
+  conversationAutomationKey?: string | null;
+  conversationRecipient?: "LEAD" | "AGENT" | null;
 };
 
 export type LeadProfileV2TimelinePage = {
