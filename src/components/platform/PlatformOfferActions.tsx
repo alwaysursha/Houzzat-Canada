@@ -36,11 +36,14 @@ export function PlatformOfferActions({
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [confirmSend, setConfirmSend] = useState(false);
+  const [confirmResend, setConfirmResend] = useState(false);
   const [privateUrl, setPrivateUrl] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeTone, setNoticeTone] = useState<"ok" | "warn">("warn");
   const [error, setError] = useState<string | null>(null);
 
   const isDraft = status === "DRAFT";
+  const canResend = status === "SENT" || status === "VIEWED";
   const canCancel =
     status === "DRAFT" || status === "SENT" || status === "VIEWED";
 
@@ -48,6 +51,7 @@ export function PlatformOfferActions({
     setSubmitting(true);
     setError(null);
     setNotice(null);
+    setNoticeTone("warn");
     try {
       const response = await fetch(
         `/api/platform/v1/offers/${encodeURIComponent(offerId)}/send`,
@@ -70,13 +74,15 @@ export function PlatformOfferActions({
         return;
       }
       setPrivateUrl(body.data.action.privateUrl);
+      const emailStatus = body.data.invitationEmail?.status;
+      setNoticeTone(emailStatus === "failed" ? "warn" : "ok");
       setNotice(
         body.data.notice ??
           (body.data.action.alreadySent
             ? "Offer was already sent. The private link is not shown again."
-            : body.data.invitationEmail?.status === "sent"
+            : emailStatus === "sent"
               ? "Your proposal was emailed to the prospect. This private link is shown once — store it securely if you also want a copy."
-              : body.data.invitationEmail?.status === "failed"
+              : emailStatus === "failed"
                 ? "Offer sent. The invitation email could not be delivered. This private link is shown once — share it securely with the prospect."
                 : "Offer sent. This private link is shown once. Store/share it securely."),
       );
@@ -84,6 +90,55 @@ export function PlatformOfferActions({
       router.refresh();
     } catch {
       setError("Network error while sending offer.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function resendInvitation() {
+    setSubmitting(true);
+    setError(null);
+    setNotice(null);
+    setNoticeTone("warn");
+    try {
+      const response = await fetch(
+        `/api/platform/v1/offers/${encodeURIComponent(offerId)}/resend-invitation`,
+        {
+          method: "POST",
+          headers: { Accept: "application/json" },
+        },
+      );
+      const body = (await response.json()) as ApiEnvelope<{
+        action: {
+          privateUrl: string | null;
+          outcome: string;
+        };
+        invitationEmail?: { status: string };
+        notice?: string;
+      }>;
+      if (!response.ok || !body.ok) {
+        setError(
+          body.ok === false
+            ? body.message
+            : "Unable to resend the offer invitation.",
+        );
+        return;
+      }
+      setPrivateUrl(body.data.action.privateUrl);
+      const emailStatus = body.data.invitationEmail?.status;
+      setNoticeTone(emailStatus === "sent" ? "ok" : "warn");
+      setNotice(
+        body.data.notice ??
+          (emailStatus === "sent"
+            ? "Invitation emailed to the prospect. The previous private link is no longer valid. This new private link is shown once — store it securely if you also want a copy."
+            : emailStatus === "failed"
+              ? "The invitation email could not be delivered. The previous private link is no longer valid. Copy Secure Link below and share it with the prospect."
+              : "The previous private link is no longer valid. This new private link is shown once. Store/share it securely."),
+      );
+      setConfirmResend(false);
+      router.refresh();
+    } catch {
+      setError("Network error while resending the offer invitation.");
     } finally {
       setSubmitting(false);
     }
@@ -121,8 +176,10 @@ export function PlatformOfferActions({
     try {
       await navigator.clipboard.writeText(privateUrl);
       setNotice("Private link copied. This link is shown once — store it securely.");
+      setNoticeTone("ok");
     } catch {
       setNotice("Copy failed — select and copy the link manually.");
+      setNoticeTone("warn");
     }
   }
 
@@ -136,7 +193,13 @@ export function PlatformOfferActions({
         </p>
       ) : null}
       {notice ? (
-        <p className="rounded-lg border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+        <p
+          className={
+            noticeTone === "ok"
+              ? "rounded-lg border border-emerald-800/60 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-100"
+              : "rounded-lg border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-sm text-amber-100"
+          }
+        >
           {notice}
         </p>
       ) : null}
@@ -153,7 +216,7 @@ export function PlatformOfferActions({
             onClick={() => void copyUrl()}
             className="mt-3 rounded-md border border-emerald-700 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-900/40"
           >
-            Copy link
+            Copy Secure Link
           </button>
         </div>
       ) : null}
@@ -176,6 +239,16 @@ export function PlatformOfferActions({
               Send Offer
             </button>
           </>
+        ) : null}
+        {canResend ? (
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={() => setConfirmResend(true)}
+            className="inline-flex rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
+          >
+            Resend Offer Email
+          </button>
         ) : null}
         {canCancel ? (
           <button
@@ -241,6 +314,53 @@ export function PlatformOfferActions({
               type="button"
               disabled={submitting}
               onClick={() => setConfirmSend(false)}
+              className="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300"
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmResend ? (
+        <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+          <p className="text-sm font-semibold text-slate-100">
+            Confirm resend
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Resending will create a new secure offer link and invalidate the
+            previous link. We&apos;ll email the same proposal to the prospect.
+            You&apos;ll also receive the new private link once to copy.
+          </p>
+          <dl className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs uppercase text-slate-500">Prospect</dt>
+              <dd>{prospectLabel}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase text-slate-500">Plan</dt>
+              <dd>
+                {planCode} · {billingCadence}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase text-slate-500">Expiry</dt>
+              <dd>{expiresAt ?? "—"}</dd>
+            </div>
+          </dl>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => void resendInvitation()}
+              className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
+            >
+              {submitting ? "Resending…" : "Resend Offer Email"}
+            </button>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => setConfirmResend(false)}
               className="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300"
             >
               Back

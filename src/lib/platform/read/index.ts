@@ -20,3 +20,5 @@ export {
   getPlatformProvisioningRunDetail,
 } from "./provisioning";
 export { listPlatformAuditEvents } from "./audit";
+export { listSmsAutomations, getSmsAutomationDetail } from "../sms-automations/read";
+export { listSmsQuickTexts, getSmsQuickText } from "../sms-quick-texts";

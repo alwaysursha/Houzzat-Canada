@@ -7,7 +7,8 @@ export function platformStatusTone(status: string): BadgeTone {
     normalized === "COMPLETED" ||
     normalized === "ACCEPTED" ||
     normalized === "GRANDFATHERED" ||
-    normalized === "VERIFIED"
+    normalized === "VERIFIED" ||
+    normalized === "PUBLISHED"
   ) {
     return "success";
   }
@@ -27,7 +28,8 @@ export function platformStatusTone(status: string): BadgeTone {
     normalized === "DRAFT" ||
     normalized === "IN_PROGRESS" ||
     normalized === "PROCESSING" ||
-    normalized === "TRIALING"
+    normalized === "TRIALING" ||
+    normalized === "INACTIVE"
   ) {
     return "warning";
   }

@@ -43,6 +43,11 @@ console.log("\n=== STAGE 6.4 — PLATFORM READ-ONLY UI ===\n");
     "src/app/platform/(shell)/subscriptions/[subscriptionId]/page.tsx",
     "src/app/platform/(shell)/provisioning/page.tsx",
     "src/app/platform/(shell)/provisioning/[runId]/page.tsx",
+    "src/app/platform/(shell)/sms-automations/page.tsx",
+    "src/app/platform/(shell)/sms-automations/[key]/page.tsx",
+    "src/app/platform/(shell)/sms-quick-texts/page.tsx",
+    "src/app/platform/(shell)/sms-quick-texts/new/page.tsx",
+    "src/app/platform/(shell)/sms-quick-texts/[id]/page.tsx",
     "src/app/platform/(shell)/audit/page.tsx",
   ];
   for (const page of pages) {
@@ -131,6 +136,8 @@ console.log("\n=== STAGE 6.4 — PLATFORM READ-ONLY UI ===\n");
     "Offers",
     "Subscriptions",
     "Provisioning",
+    "SMS Automations",
+    "Quick Texts",
     "Audit",
   ];
   for (const label of navLabels) {

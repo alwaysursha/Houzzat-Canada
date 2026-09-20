@@ -4,7 +4,7 @@
  * CHAT send stays in agent-conversation-send.ts. This module is SMS-only:
  * workspace-number From, customer phoneE164 To, conversational class,
  * Phase-1 STOP suppression, no marketing-alert preference. Twilio first,
- * then persist.
+ * then persist. Assigned Agents may initiate when the Lead is SMS-eligible.
  * Persist failure after Twilio success records a dead-letter and does not
  * resend.
  */
@@ -19,6 +19,10 @@ import {
 } from "@/lib/conversations/agent-conversation-send";
 import { loadAccessibleAgentConversationLead } from "@/lib/conversations/agent-conversation-read";
 import { createConversationMessage } from "@/lib/conversations/create-conversation-message";
+import {
+  recordSmsLeadActivity,
+  type SmsLeadActivityDb,
+} from "@/lib/conversations/sms-lead-activity";
 import { isE164 } from "@/lib/sms/e164";
 import { isTwilioSid } from "@/lib/sms/sids";
 import {
@@ -28,6 +32,15 @@ import {
 import { isPhoneSuppressed, type SmsSuppressionDb } from "@/lib/sms/suppression";
 import { sendSms, type SmsTransportDeps } from "@/lib/sms/transport";
 import type { SendSmsResult } from "@/lib/sms/types";
+import { estimateSmsSegmentCount } from "@/lib/sms/segments";
+import {
+  hasSmsUsageDelegate,
+  inspectSmsAllowance,
+  recordSmsUsageEvent,
+  SMS_MANUAL_USAGE_CATEGORIES,
+  type SmsUsageCategory,
+  type SmsUsageDb,
+} from "@/lib/sms/usage";
 
 export const AGENT_SMS_TEXT_MAX_LENGTH = 1600;
 
@@ -35,7 +48,9 @@ export type AgentSmsBlockedReason =
   | "NOT_ASSIGNED"
   | "NO_CUSTOMER_E164"
   | "NO_WORKSPACE_NUMBER"
-  | "SUPPRESSED";
+  | "SUPPRESSED"
+  | "ALLOWANCE_NOT_CONFIGURED"
+  | "ALLOWANCE_EXCEEDED";
 
 export type AgentSmsSendEligibility = {
   enabled: boolean;
@@ -45,7 +60,7 @@ export type AgentSmsSendEligibility = {
 };
 
 export type SendAgentLeadSmsResult =
-  | { ok: true; data: AgentChatSendPayload }
+  | { ok: true; data: AgentChatSendPayload; twilioMessageSid: string }
   | {
       ok: false;
       reason:
@@ -60,11 +75,13 @@ export type SendAgentLeadSmsResult =
 
 export type AgentSmsEligibilityDb = SmsSuppressionDb & {
   lead: Pick<PrismaClient["lead"], "findUnique">;
+  message: Pick<PrismaClient["message"], "findFirst">;
 };
 
 export type AgentSmsContextDb = AgentConversationSendDb &
   AgentSmsEligibilityDb &
-  OutboundSmsDeadLetterDb;
+  OutboundSmsDeadLetterDb &
+  SmsLeadActivityDb;
 
 export type AgentSmsSendDeps = {
   sendSms?: (
@@ -73,6 +90,9 @@ export type AgentSmsSendDeps = {
   ) => Promise<SendSmsResult>;
   isPhoneSuppressed?: typeof isPhoneSuppressed;
   recordOutboundSmsDeadLetter?: typeof recordOutboundSmsDeadLetter;
+  usageDb?: SmsUsageDb;
+  usageCategory?: SmsUsageCategory;
+  skipAllowanceGate?: boolean;
 };
 
 type SmsLeadRow = {
@@ -115,9 +135,33 @@ export function agentSmsBlockedCopy(
       return "SMS is unavailable — this workspace has no Twilio number.";
     case "SUPPRESSED":
       return "SMS is unavailable — this number has opted out of SMS.";
+    case "ALLOWANCE_NOT_CONFIGURED":
+      return "SMS is unavailable — this workspace has no SMS allowance configured.";
+    case "ALLOWANCE_EXCEEDED":
+      return "SMS is unavailable — this workspace has used its included SMS allowance.";
     default:
       return null;
   }
+}
+
+export async function leadHasCustomerInboundSms(
+  db: Pick<AgentSmsEligibilityDb, "message">,
+  input: { workspaceId: string; leadId: string },
+): Promise<boolean> {
+  const workspaceId = input.workspaceId.trim();
+  const leadId = input.leadId.trim();
+  if (!workspaceId || !leadId) return false;
+  const row = await db.message.findFirst({
+    where: {
+      workspaceId,
+      leadId,
+      channel: "SMS",
+      senderKind: "CUSTOMER",
+      kind: "TEXT",
+    },
+    select: { id: true },
+  });
+  return Boolean(row?.id);
 }
 
 export function evaluateAgentSmsEligibility(input: {
@@ -250,6 +294,7 @@ export async function sendAgentLeadSmsMessage(
   if (!accessible?.workspaceId) {
     return { ok: false, reason: "LEAD_NOT_FOUND" };
   }
+  const workspaceId = accessible.workspaceId;
   if (!accessible.assignedAgentId || accessible.assignedAgentId !== ctx.user.id) {
     return { ok: false, reason: "FORBIDDEN" };
   }
@@ -260,12 +305,33 @@ export async function sendAgentLeadSmsMessage(
     return { ok: false, reason: eligibility.reason ?? "FORBIDDEN" };
   }
 
+  const usageDb =
+    deps.usageDb ?? (hasSmsUsageDelegate(db) ? db : null);
+  const requestedSegments = estimateSmsSegmentCount(text);
+  if (usageDb && !deps.skipAllowanceGate) {
+    try {
+      const allowance = await inspectSmsAllowance(workspaceId, {
+        db: usageDb,
+        requestedSegments: Math.max(1, requestedSegments),
+        categories: SMS_MANUAL_USAGE_CATEGORIES,
+      });
+      if (!allowance.permitted) {
+        return {
+          ok: false,
+          reason: allowance.reason ?? "ALLOWANCE_NOT_CONFIGURED",
+        };
+      }
+    } catch {
+      return { ok: false, reason: "ALLOWANCE_NOT_CONFIGURED" };
+    }
+  }
+
   const send = deps.sendSms ?? sendSms;
   const sent = await send({
     to: eligibility.toE164,
     fromE164: eligibility.fromE164,
     body: text,
-    workspaceId: accessible.workspaceId,
+    workspaceId,
     smsClass: "conversational",
   });
 
@@ -290,9 +356,30 @@ export async function sendAgentLeadSmsMessage(
     return { ok: false, reason: "SMS_SEND_FAILED" };
   }
 
+  const recordUsage = async (messageId?: string | null) => {
+    if (!usageDb) return;
+    try {
+      await recordSmsUsageEvent(
+        {
+          workspaceId,
+          category: deps.usageCategory ?? "AGENT_INDIVIDUAL",
+          recipientType: "LEAD",
+          twilioMessageSid: sent.sid,
+          messageId,
+          body: text,
+          segmentCount: sent.numSegments ?? requestedSegments,
+          segmentCountSource: sent.numSegments ? "PROVIDER" : "ESTIMATED",
+        },
+        usageDb,
+      );
+    } catch {
+      // Send already succeeded.
+    }
+  };
+
   try {
     const created = await createConversationMessage(db, {
-      workspaceId: accessible.workspaceId,
+      workspaceId,
       leadId: accessible.id,
       channel: "SMS",
       kind: "TEXT",
@@ -309,8 +396,24 @@ export async function sendAgentLeadSmsMessage(
     });
 
     if (created.ok) {
+      if (created.created) {
+        try {
+          await recordSmsLeadActivity(db, {
+            leadId: accessible.id,
+            workspaceId,
+            messageId: created.message.id,
+            body: text,
+            direction: "outbound",
+            userId: ctx.user.id,
+          });
+        } catch {
+          // Conversation persist already succeeded.
+        }
+      }
+      await recordUsage(created.message.id);
       return {
         ok: true,
+        twilioMessageSid: sent.sid,
         data: {
           conversation: {
             id: created.conversation.id,
@@ -338,7 +441,7 @@ export async function sendAgentLeadSmsMessage(
     await recordDeadLetter(
       {
         twilioMessageSid: sent.sid,
-        workspaceId: accessible.workspaceId,
+        workspaceId,
         leadId: accessible.id,
         fromE164: eligibility.fromE164,
         toE164: eligibility.toE164,
@@ -353,5 +456,6 @@ export async function sendAgentLeadSmsMessage(
     });
   }
 
+  await recordUsage(null);
   return { ok: false, reason: "SMS_SENT_NOT_SAVED" };
 }

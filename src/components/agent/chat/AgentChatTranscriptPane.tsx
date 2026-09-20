@@ -275,6 +275,21 @@ export function AgentChatTranscriptPane({
                   SMS
                 </button>
               </div>
+              {smsSelected && (panel?.smsQuickTexts?.length ?? 0) > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {panel?.smsQuickTexts?.map((quickText) => (
+                    <button
+                      type="button"
+                      key={quickText.id}
+                      onClick={() => setDraft(quickText.rendered)}
+                      disabled={sending}
+                      className="rounded-full border border-[#d8dee6] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#475569] hover:bg-[#eef6ff] hover:text-[#1e2a38] disabled:opacity-50"
+                    >
+                      {quickText.name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <label className="sr-only" htmlFor={composerId}>
                 {smsSelected ? "SMS message" : "Chat message"}
               </label>

@@ -536,6 +536,7 @@ async function main() {
       assert.ok(sendRoute.includes("notifyOfferInvitationEmail"));
       assert.ok(sendRoute.includes('result.outcome === "sent"'));
       assert.ok(sendRoute.includes("try {"));
+      assert.ok(!sendRoute.includes("resendCommercialOfferInvitation"));
       assert.ok(!manage.includes("notifyOfferInvitationEmail"));
       assert.ok(!actions.includes("No email is sent in this stage"));
       assert.ok(actions.includes("email the secure proposal"));

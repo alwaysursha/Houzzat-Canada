@@ -5,6 +5,7 @@ export { PLATFORM_OFFERS_MODULE } from "./module-flag";
 export {
   COMMERCIAL_OFFER_AUDIT,
   COMMERCIAL_OFFER_ENTITY_TYPE,
+  COMMERCIAL_OFFER_TOKEN_ENTITY_TYPE,
   PRIVATE_OFFER_PATH_PREFIX,
   PRIVATE_OFFER_PUBLIC_ORIGIN,
   ADS_MINIMUM_MONTHLY_BUDGET_CENTS,
@@ -39,8 +40,14 @@ export {
 } from "./manage";
 
 export {
+  resendCommercialOfferInvitation,
+  type ResendCommercialOfferInvitationResult,
+} from "./resend-invitation";
+
+export {
   notifyOfferInvitationEmail,
   offerInvitationSendNotice,
+  offerInvitationResendNotice,
   OFFER_INVITATION_EMAIL_AUDIT,
   type OfferInvitationNotifyInput,
   type OfferInvitationNotifyResult,

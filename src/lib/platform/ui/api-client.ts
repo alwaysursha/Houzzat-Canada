@@ -213,3 +213,29 @@ export async function listPlatformAuditEvents(query?: {
     `/api/platform/v1/audit${qs ? `?${qs}` : ""}`,
   );
 }
+
+export async function listPlatformSmsAutomations() {
+  return platformApiFetch<{
+    protectionCopy: string;
+    items: Record<string, unknown>[];
+  }>("/api/platform/v1/sms-automations");
+}
+
+export async function getPlatformSmsAutomation(key: string) {
+  return platformApiFetch<Record<string, unknown>>(
+    `/api/platform/v1/sms-automations/${encodeURIComponent(key)}`,
+  );
+}
+
+export async function listPlatformSmsQuickTexts() {
+  return platformApiFetch<{
+    protectionCopy: string;
+    items: Record<string, unknown>[];
+  }>("/api/platform/v1/sms-quick-texts");
+}
+
+export async function getPlatformSmsQuickText(id: string) {
+  return platformApiFetch<Record<string, unknown>>(
+    `/api/platform/v1/sms-quick-texts/${encodeURIComponent(id)}`,
+  );
+}

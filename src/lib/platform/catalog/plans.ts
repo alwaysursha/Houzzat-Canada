@@ -20,6 +20,11 @@ export type PlanDefinition = {
   includedSeats: number;
   /** Solo forever forbids purchasing additional seats. */
   additionalSeatsAllowed: boolean;
+  /**
+   * Included outbound SMS segments per billing month. Not Stripe credits.
+   * V1 default is 500 on every paid plan; later plans may differ.
+   */
+  includedSmsSegmentsPerMonth: number;
   monthlyPriceCents: number;
   annualPriceCents: number;
   currency: "CAD";
@@ -46,6 +51,7 @@ export const PLAN_DEFINITIONS: Record<PlanCode, PlanDefinition> = {
     planCode: "SOLO",
     includedSeats: 1,
     additionalSeatsAllowed: false,
+    includedSmsSegmentsPerMonth: 500,
     monthlyPriceCents: 39_900,
     annualPriceCents: 399_000,
     currency: "CAD",
@@ -65,6 +71,7 @@ export const PLAN_DEFINITIONS: Record<PlanCode, PlanDefinition> = {
     planCode: "TEAM",
     includedSeats: 4,
     additionalSeatsAllowed: true,
+    includedSmsSegmentsPerMonth: 500,
     monthlyPriceCents: 59_900,
     annualPriceCents: 599_000,
     currency: "CAD",
@@ -84,6 +91,7 @@ export const PLAN_DEFINITIONS: Record<PlanCode, PlanDefinition> = {
     planCode: "BROKERAGE",
     includedSeats: 20,
     additionalSeatsAllowed: true,
+    includedSmsSegmentsPerMonth: 500,
     monthlyPriceCents: 149_900,
     annualPriceCents: 1_499_000,
     currency: "CAD",

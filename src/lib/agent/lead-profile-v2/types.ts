@@ -136,6 +136,14 @@ export type LeadProfileV2ChatPanel = {
     enabled: boolean;
     reason: string | null;
   };
+  smsQuickTexts?: Array<{
+    id: string;
+    key: string;
+    name: string;
+    category: string;
+    body: string;
+    rendered: string;
+  }>;
   page: {
     limit: number;
     hasMore: boolean;

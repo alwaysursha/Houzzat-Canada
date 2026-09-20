@@ -277,6 +277,10 @@ export function v2SmsBlockedCopy(reason: string | null | undefined): string | nu
       return "SMS is unavailable — this workspace has no Twilio number.";
     case "SUPPRESSED":
       return "SMS is unavailable — this number has opted out of SMS.";
+    case "ALLOWANCE_NOT_CONFIGURED":
+      return "SMS is unavailable — this workspace has no SMS allowance configured.";
+    case "ALLOWANCE_EXCEEDED":
+      return "SMS is unavailable — this workspace has used its included SMS allowance.";
     default:
       return reason ? "SMS is unavailable." : null;
   }

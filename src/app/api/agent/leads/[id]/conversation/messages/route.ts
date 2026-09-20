@@ -84,7 +84,9 @@ export async function POST(request: Request, { params }: Params) {
       if (
         result.reason === "NO_CUSTOMER_E164" ||
         result.reason === "NO_WORKSPACE_NUMBER" ||
-        result.reason === "SUPPRESSED"
+        result.reason === "SUPPRESSED" ||
+        result.reason === "ALLOWANCE_NOT_CONFIGURED" ||
+        result.reason === "ALLOWANCE_EXCEEDED"
       ) {
         return reply(409, {
           error:
@@ -92,7 +94,11 @@ export async function POST(request: Request, { params }: Params) {
               ? "SMS is unavailable — this lead has no valid mobile number."
               : result.reason === "NO_WORKSPACE_NUMBER"
                 ? "SMS is unavailable — this workspace has no Twilio number."
-                : "SMS is unavailable — this number has opted out of SMS.",
+                : result.reason === "SUPPRESSED"
+                  ? "SMS is unavailable — this number has opted out of SMS."
+                  : result.reason === "ALLOWANCE_EXCEEDED"
+                    ? "SMS is unavailable — this workspace has used its included SMS allowance."
+                    : "SMS is unavailable — this workspace has no SMS allowance configured.",
           code: result.reason,
         });
       }

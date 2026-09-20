@@ -43,6 +43,8 @@ export const HOUZZAT_LEGACY_INCLUDED_SEATS = 10 as const;
 export const HOUZZAT_LEGACY_ADDITIONAL_SEATS = 0 as const;
 export const HOUZZAT_LEGACY_ADDITIONAL_SEATS_ALLOWED = true as const;
 export const HOUZZAT_LEGACY_SEAT_LIMIT = 10 as const;
+/** V1 included SMS segments/month for Houzzat legacy. Not unlimited. */
+export const HOUZZAT_LEGACY_INCLUDED_SMS_SEGMENTS = 500 as const;
 
 export const HOUZZAT_LEGACY_PROFILE_READY = true;
 

@@ -21,7 +21,12 @@ export type SmsSkipReason =
   | "suppressed";
 
 export type SendSmsResult =
-  | { status: "sent"; sid: string; providerStatus: string }
+  | {
+      status: "sent";
+      sid: string;
+      providerStatus: string;
+      numSegments?: number | null;
+    }
   | { status: "skipped"; reason: SmsSkipReason }
   | { status: "failed" };
 

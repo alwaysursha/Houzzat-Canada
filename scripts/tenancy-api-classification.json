@@ -15,6 +15,7 @@
     { "path": "/api/public-config", "class": "PLATFORM", "workspaceEnforcement": false },
     { "path": "/api/cron/digests", "class": "PLATFORM", "workspaceEnforcement": false },
     { "path": "/api/cron/monitors", "class": "PLATFORM", "workspaceEnforcement": false },
+    { "path": "/api/cron/sms-automations", "class": "PLATFORM", "workspaceEnforcement": false },
     { "path": "/api/webhooks/resend", "class": "PLATFORM", "workspaceEnforcement": false },
     { "path": "/api/stripe/webhook", "class": "PLATFORM", "workspaceEnforcement": false },
     { "path": "/api/admin/mls/sync", "class": "PLATFORM", "workspaceEnforcement": false },

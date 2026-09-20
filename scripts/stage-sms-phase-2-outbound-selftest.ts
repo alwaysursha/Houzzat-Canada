@@ -137,6 +137,13 @@ class FakeSmsDb implements AgentSmsContextDb {
   conversations = new Map<string, LeadConversationRecord>();
   messages: ConversationMessageRecord[] = [];
   suppressions = new Set<string>();
+  activities: Array<{
+    leadId: string;
+    userId: string | null;
+    type: string;
+    body: string | null;
+    meta: unknown;
+  }> = [];
   deadLetters: Array<{ twilioMessageSid: string; workspaceId: string; leadId: string }> =
     [];
   persistFail = false;
@@ -146,6 +153,48 @@ class FakeSmsDb implements AgentSmsContextDb {
 
   private leadKey(workspaceId: string, leadId: string) {
     return `${workspaceId}:${leadId}`;
+  }
+
+  seedInboundCustomerSms(input: {
+    leadId?: string;
+    workspaceId?: string;
+    conversationId?: string;
+    fromE164?: string;
+    toE164?: string;
+    body?: string;
+  } = {}) {
+    const workspaceId = input.workspaceId ?? WS_A;
+    const leadId = input.leadId ?? LEAD_A;
+    const conversation =
+      this.conversations.get(this.leadKey(workspaceId, leadId)) ??
+      this.seedConversation({
+        id: input.conversationId ?? "conv_existing",
+        workspaceId,
+        leadId,
+      });
+    const row: ConversationMessageRecord = {
+      id: `msg_${this.nextMessageId++}`,
+      workspaceId,
+      conversationId: conversation.id,
+      leadId,
+      channel: "SMS",
+      kind: "TEXT",
+      senderKind: "CUSTOMER",
+      senderUserId: "cust_a",
+      senderName: "Jordan Customer",
+      createdByUserId: null,
+      body: input.body ?? "Earlier inbound",
+      createdAt: new Date("2026-09-19T13:00:00.000Z"),
+      deliveredAt: null,
+      smsSource: "TWILIO",
+      twilioMessageSid: `SM_IN_${this.nextMessageId}`,
+      providerStatus: "received",
+      smsFrom: input.fromE164 ?? TO,
+      smsTo: input.toE164 ?? FROM,
+      payload: null,
+    };
+    this.messages.push(row);
+    return row;
   }
 
   seedLead(input: Partial<FakeLead> & { assignedAgentId: string | null }) {
@@ -256,6 +305,33 @@ class FakeSmsDb implements AgentSmsContextDb {
       }
       return null;
     },
+    findFirst: async ({
+      where,
+    }: {
+      where: {
+        workspaceId?: string;
+        leadId?: string;
+        channel?: string;
+        senderKind?: string;
+        kind?: string;
+        smsTo?: string;
+      };
+    }) => {
+      const rows = this.messages.filter((row) => {
+        if (where.workspaceId && row.workspaceId !== where.workspaceId) {
+          return false;
+        }
+        if (where.leadId && row.leadId !== where.leadId) return false;
+        if (where.channel && row.channel !== where.channel) return false;
+        if (where.senderKind && row.senderKind !== where.senderKind) {
+          return false;
+        }
+        if (where.kind && row.kind !== where.kind) return false;
+        if (where.smsTo && row.smsTo !== where.smsTo) return false;
+        return true;
+      });
+      return rows[0] ?? null;
+    },
     create: async ({ data }: { data: Record<string, unknown> }) => {
       if (this.persistFail) throw new Error("db down");
       if (
@@ -296,6 +372,30 @@ class FakeSmsDb implements AgentSmsContextDb {
         payload: (data.payload ?? null) as ConversationMessageRecord["payload"],
       };
       this.messages.push(row);
+      return row;
+    },
+  };
+
+  leadActivity = {
+    create: async ({
+      data,
+    }: {
+      data: {
+        leadId: string;
+        userId?: string | null;
+        type: string;
+        body?: string | null;
+        meta?: unknown;
+      };
+    }) => {
+      const row = {
+        leadId: data.leadId,
+        userId: data.userId ?? null,
+        type: data.type,
+        body: data.body ?? null,
+        meta: data.meta ?? null,
+      };
+      this.activities.push(row);
       return row;
     },
   };
@@ -412,8 +512,16 @@ function testChatSchemaDefault() {
   assert.equal(customer.success, false);
 }
 
-function testEligibility() {
-  const assigned = evaluateAgentSmsEligibility({
+function unlockedReady(overrides: {
+  viewerUserId?: string;
+  assignedAgentId?: string | null;
+  toE164?: string | null;
+  fromE164?: string | null;
+  twilioSubaccountSid?: string | null;
+  twilioMessagingServiceSid?: string | null;
+  suppressed?: boolean;
+} = {}) {
+  return {
     viewerUserId: AGENT_A,
     assignedAgentId: AGENT_A,
     toE164: TO,
@@ -421,62 +529,44 @@ function testEligibility() {
     twilioSubaccountSid: SUB_A,
     twilioMessagingServiceSid: MG_A,
     suppressed: false,
-  });
+    ...overrides,
+  };
+}
+
+function testEligibility() {
+  const assigned = evaluateAgentSmsEligibility(unlockedReady());
   assert.equal(assigned.enabled, true);
   assert.equal(
-    evaluateAgentSmsEligibility({
-      viewerUserId: AGENT_B,
-      assignedAgentId: AGENT_A,
-      toE164: TO,
-      fromE164: FROM,
-      twilioSubaccountSid: SUB_A,
-      twilioMessagingServiceSid: MG_A,
-      suppressed: false,
-    }).reason,
+    evaluateAgentSmsEligibility(
+      unlockedReady({ viewerUserId: AGENT_B }),
+    ).reason,
     "NOT_ASSIGNED",
   );
   assert.equal(
-    evaluateAgentSmsEligibility({
-      viewerUserId: AGENT_A,
-      assignedAgentId: AGENT_A,
-      toE164: null,
-      fromE164: FROM,
-      twilioSubaccountSid: SUB_A,
-      twilioMessagingServiceSid: MG_A,
-      suppressed: false,
-    }).reason,
+    evaluateAgentSmsEligibility(unlockedReady({ toE164: null })).reason,
     "NO_CUSTOMER_E164",
   );
   assert.equal(
-    evaluateAgentSmsEligibility({
-      viewerUserId: AGENT_A,
-      assignedAgentId: AGENT_A,
-      toE164: TO,
-      fromE164: null,
-      suppressed: false,
-    }).reason,
+    evaluateAgentSmsEligibility(
+      unlockedReady({
+        fromE164: null,
+        twilioSubaccountSid: undefined,
+        twilioMessagingServiceSid: undefined,
+      }),
+    ).reason,
     "NO_WORKSPACE_NUMBER",
   );
   assert.equal(
-    evaluateAgentSmsEligibility({
-      viewerUserId: AGENT_A,
-      assignedAgentId: AGENT_A,
-      toE164: TO,
-      fromE164: FROM,
-      suppressed: false,
-    }).reason,
+    evaluateAgentSmsEligibility(
+      unlockedReady({
+        twilioSubaccountSid: undefined,
+        twilioMessagingServiceSid: undefined,
+      }),
+    ).reason,
     "NO_WORKSPACE_NUMBER",
   );
   assert.equal(
-    evaluateAgentSmsEligibility({
-      viewerUserId: AGENT_A,
-      assignedAgentId: AGENT_A,
-      toE164: TO,
-      fromE164: FROM,
-      twilioSubaccountSid: SUB_A,
-      twilioMessagingServiceSid: MG_A,
-      suppressed: true,
-    }).reason,
+    evaluateAgentSmsEligibility(unlockedReady({ suppressed: true })).reason,
     "SUPPRESSED",
   );
 }
@@ -611,6 +701,29 @@ async function testAgentOutboundSms() {
       workspaceId: WS_A,
       leadId: LEAD_A,
     });
+    db.seedInboundCustomerSms();
+
+    const locked = new FakeSmsDb();
+    locked.seedLead({ assignedAgentId: AGENT_A });
+    locked.seedConversation({
+      id: "conv_existing",
+      workspaceId: WS_A,
+      leadId: LEAD_A,
+    });
+    const beforeReply = await sendAgentLeadSmsMessage(
+      locked,
+      makeCtx(),
+      LEAD_A,
+      "Hello SMS",
+      {
+        sendSms: async () => {
+          locked.smsSendCalls += 1;
+          return sendSmsOk();
+        },
+      },
+    );
+    assert.equal(beforeReply.ok, true);
+    assert.equal(locked.smsSendCalls, 1);
 
     const chat = await sendAgentLeadChatMessage(
       db,
@@ -633,10 +746,17 @@ async function testAgentOutboundSms() {
     assert.equal(sms.data.message.channel, "SMS");
     assert.equal(sms.data.message.smsSource, "TWILIO");
     assert.equal(sms.data.message.providerStatus, "queued");
-    const smsRows = db.messages.filter((row) => row.channel === "SMS");
+    const smsRows = db.messages.filter(
+      (row) => row.channel === "SMS" && row.senderKind === "AGENT",
+    );
     assert.equal(smsRows.length, 1);
     assert.equal(smsRows[0]?.twilioMessageSid, "SM_OUT");
     assert.equal(smsRows[0]?.conversationId, "conv_existing");
+    assert.equal(
+      db.activities.filter((row) => row.type === "SMS" && row.userId === AGENT_A)
+        .length,
+      1,
+    );
     assert.equal(
       db.messages.some((row) => row.channel === "CHAT"),
       true,
@@ -655,7 +775,12 @@ async function testAgentOutboundSms() {
       },
     );
     assert.equal(duplicateSid.ok, true);
-    assert.equal(db.messages.filter((row) => row.channel === "SMS").length, 1);
+    assert.equal(
+      db.messages.filter(
+        (row) => row.channel === "SMS" && row.senderKind === "AGENT",
+      ).length,
+      1,
+    );
 
     const unauthorized = await sendAgentLeadSmsMessage(
       db,
@@ -768,6 +893,7 @@ async function testDeadLetterNoResend() {
       workspaceId: WS_A,
       leadId: LEAD_A,
     });
+    db.seedInboundCustomerSms();
     db.persistFail = true;
     const result = await sendAgentLeadSmsMessage(
       db,
@@ -784,7 +910,10 @@ async function testDeadLetterNoResend() {
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.reason, "SMS_SENT_NOT_SAVED");
     assert.equal(db.smsSendCalls, 1);
-    assert.equal(db.messages.length, 0);
+    assert.equal(
+      db.messages.filter((row) => row.senderKind === "AGENT").length,
+      0,
+    );
     assert.equal(db.deadLetters.length, 1);
     assert.equal(db.deadLetters[0]?.twilioMessageSid, "SM_OUT");
 

@@ -7,6 +7,7 @@ import {
 } from "@/lib/agent/log-contact-activity";
 import { prisma } from "@/lib/prisma";
 import { phoneColumnsForWrite } from "@/lib/sms/e164";
+import { scheduleUnsubscribeSmsAutomations } from "@/lib/sms/automations";
 
 const schema = z.object({
   emailAlertsEnabled: z.boolean().optional(),
@@ -97,6 +98,7 @@ export async function PATCH(request: Request) {
       actorUserId: user.id,
       meta: { channel: "sms" },
     });
+    scheduleUnsubscribeSmsAutomations(user.id);
   }
 
   if (phoneChanged) {

@@ -2,6 +2,7 @@ import { SITE_URL } from "@/lib/constants";
 import { prisma } from "@/lib/prisma";
 import { twilioParentCredentials } from "@/lib/sms/credentials";
 import { isE164, normalizeToE164 } from "@/lib/sms/e164";
+import { parseTwilioNumSegments } from "@/lib/sms/segments";
 import { isTwilioSid } from "@/lib/sms/sids";
 import { isPhoneSuppressed } from "@/lib/sms/suppression";
 import {
@@ -222,12 +223,18 @@ export async function sendSms(
     }
     let sid = "";
     let providerStatus = "queued";
+    let numSegments: number | null = null;
     try {
-      const json = (await res.json()) as { sid?: unknown; status?: unknown };
+      const json = (await res.json()) as {
+        sid?: unknown;
+        status?: unknown;
+        num_segments?: unknown;
+      };
       sid = typeof json.sid === "string" ? json.sid : "";
       if (typeof json.status === "string" && json.status.trim()) {
         providerStatus = json.status.trim().toLowerCase();
       }
+      numSegments = parseTwilioNumSegments(json.num_segments);
     } catch {
       sid = "";
     }
@@ -240,6 +247,7 @@ export async function sendSms(
       status: "sent",
       sid,
       providerStatus,
+      numSegments,
     };
   } catch {
     logSmsError("failed", { smsClass: input.smsClass });

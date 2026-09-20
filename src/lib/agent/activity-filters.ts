@@ -324,6 +324,9 @@ export function friendlyActivityTypeLabel(type: string): string {
       return "Reminder";
     case "TODO":
       return "Task";
+    case "SMS":
+    case "TEXT":
+      return "Text";
     default:
       return type.replaceAll("_", " ");
   }

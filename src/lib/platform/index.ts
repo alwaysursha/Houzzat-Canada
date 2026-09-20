@@ -48,6 +48,7 @@ export {
   HOUZZAT_LEGACY_ADDITIONAL_SEATS,
   HOUZZAT_LEGACY_ADDITIONAL_SEATS_ALLOWED,
   HOUZZAT_LEGACY_SEAT_LIMIT,
+  HOUZZAT_LEGACY_INCLUDED_SMS_SEGMENTS,
   EntitlementProfileIncompleteError,
   getHouzzatLegacyOwnerDecisionsRequired,
   isHouzzatLegacyProfileReady,
@@ -266,7 +267,9 @@ export {
   updateDraftCommercialOffer,
   sendCommercialOffer,
   cancelCommercialOffer,
+  resendCommercialOfferInvitation,
   notifyOfferInvitationEmail,
+  offerInvitationResendNotice,
   OFFER_INVITATION_EMAIL_AUDIT,
   renderOfferInvitationEmail,
   resolveOfferCommercialTerms,
@@ -279,3 +282,19 @@ export {
   acceptPrivateOfferByRawToken,
   computeCommercialTermsHash,
 } from "./offers";
+
+export {
+  SMS_AUTOMATION_CATALOG,
+  SMS_AUTOMATION_PROTECTION_COPY,
+  LEAD_RETURNED_INACTIVITY_BUCKETS_DAYS,
+  SmsAutomationActionError,
+  ensureSmsAutomationCatalog,
+  resolvePublishedSmsAutomation,
+  selectLeadReturnedInactivityBucket,
+} from "./sms-automations";
+
+export {
+  SmsQuickTextActionError,
+  ensureSmsQuickTextCatalog,
+  listActiveSmsQuickTexts,
+} from "./sms-quick-texts";

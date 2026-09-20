@@ -541,9 +541,17 @@ function testSmsComposerAndDelivery() {
     }),
     "Failed",
   );
+  assert.ok(pane.includes("smsQuickTexts"));
+  assert.ok(pane.includes("setDraft(quickText.rendered)"));
+  assert.equal(pane.includes("onSend(quickText"), false);
+  assert.equal(pane.includes("onSend(qt"), false);
   assert.equal(
     v2SmsBlockedCopy("NO_CUSTOMER_E164"),
     "SMS is unavailable — this lead has no valid mobile number.",
+  );
+  assert.equal(
+    v2SmsBlockedCopy("ALLOWANCE_NOT_CONFIGURED"),
+    "SMS is unavailable — this workspace has no SMS allowance configured.",
   );
 }
 

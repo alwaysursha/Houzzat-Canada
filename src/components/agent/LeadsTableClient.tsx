@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import type { LeadStatus } from "@prisma/client";
 import { MassEmailForm } from "@/components/agent/LeadEmailForm";
+import { MassSmsForm } from "@/components/agent/MassSmsForm";
 import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
 import { LeadImportModal } from "@/components/agent/LeadImportModal";
 import { openLeadProfileHref, rememberLeadNavIds } from "@/components/agent/LeadQueryPopup";
@@ -220,6 +221,7 @@ export function LeadsTableClient({
   const [massOpen, setMassOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [showMassEmail, setShowMassEmail] = useState(false);
+  const [showMassSms, setShowMassSms] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pipelineOpenId, setPipelineOpenId] = useState<string | null>(null);
@@ -356,6 +358,7 @@ export function LeadsTableClient({
     setPage(0);
     setPageSize(25);
     setShowMassEmail(false);
+    setShowMassSms(false);
     setMassOpen(false);
   }
 
@@ -582,10 +585,22 @@ export function LeadsTableClient({
                   className="block w-full px-3 py-1.5 text-left text-[12px] hover:bg-[#f1f5f9]"
                   onClick={() => {
                     setShowMassEmail(true);
+                    setShowMassSms(false);
                     setMassOpen(false);
                   }}
                 >
                   Mass email
+                </button>
+                <button
+                  type="button"
+                  className="block w-full px-3 py-1.5 text-left text-[12px] hover:bg-[#f1f5f9]"
+                  onClick={() => {
+                    setShowMassSms(true);
+                    setShowMassEmail(false);
+                    setMassOpen(false);
+                  }}
+                >
+                  Send SMS
                 </button>
                 <button
                   type="button"
@@ -752,6 +767,9 @@ export function LeadsTableClient({
 
       {showMassEmail && selected.length > 0 ? (
         <MassEmailForm leadIds={selected} />
+      ) : null}
+      {showMassSms && selected.length > 0 ? (
+        <MassSmsForm leadIds={selected} />
       ) : null}
 
       {/* Mobile lead cards */}

@@ -769,6 +769,7 @@ async function main() {
       "src/app/api/platform/v1/offers/[offerId]/route.ts",
       "src/app/api/platform/v1/offers/[offerId]/send/route.ts",
       "src/app/api/platform/v1/offers/[offerId]/cancel/route.ts",
+      "src/app/api/platform/v1/offers/[offerId]/resend-invitation/route.ts",
     ])) {
       const src = read(file);
       assert.ok(!/prisma\.lead\b/.test(src), file);

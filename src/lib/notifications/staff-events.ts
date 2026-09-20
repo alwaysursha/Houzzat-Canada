@@ -16,6 +16,7 @@ import {
 import { sendPushToUser, sendPushToUsers } from "@/lib/notifications/push";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { isAgentRole, isConsumerRole } from "@/lib/roles";
+import { scheduleLeadReturnedSmsAutomations } from "@/lib/sms/automations";
 import {
   authorizeStaffRecipientForLead,
   authorizeStaffRecipientForTask,
@@ -379,6 +380,8 @@ export async function notifyCustomerCameOnline(
     take: 8,
   });
   if (leads.length === 0) return;
+
+  scheduleLeadReturnedSmsAutomations(userId, previousLastSeenAt);
 
   const name =
     leads[0]?.customer?.name?.trim() ||

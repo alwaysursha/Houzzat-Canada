@@ -1,8 +1,9 @@
 /**
- * Post-persist customer invitation after Admin first-sends a commercial offer.
- * Persistence is primary: email failures never roll back SENT.
- * Idempotency key = CommercialOffer id.
- * Never persist, audit, or log the raw token / private URL / token hash.
+ * Post-persist customer invitation after Admin sends or resends a commercial offer.
+ * Persistence is primary: email failures never roll back send/rotation.
+ * First send: idempotency key = CommercialOffer id.
+ * Resend: pass commercialOfferTokenId; idempotency key = that token row id.
+ * Never persist, audit, or log the secret, private URL, or hash.
  */
 
 import type { PrismaClient } from "@prisma/client";
@@ -13,7 +14,12 @@ import {
   sendRenderedEmail,
   type SendEmailResult,
 } from "@/lib/email/send";
-import { PRIVATE_OFFER_PUBLIC_ORIGIN, PRIVATE_OFFER_PATH_PREFIX } from "@/lib/platform/offers/constants";
+import {
+  COMMERCIAL_OFFER_ENTITY_TYPE,
+  COMMERCIAL_OFFER_TOKEN_ENTITY_TYPE,
+  PRIVATE_OFFER_PATH_PREFIX,
+  PRIVATE_OFFER_PUBLIC_ORIGIN,
+} from "@/lib/platform/offers/constants";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 import { renderOfferInvitationEmail } from "./offer-invitation-email-templates";
 
@@ -30,8 +36,13 @@ export type OfferInvitationNotifyResult = {
 
 export type OfferInvitationNotifyInput = {
   offerId: string;
-  /** In-memory first-send URL only. Never written to audit or logs. */
+  /** In-memory URL only. Never written to audit or logs. */
   privateUrl: string;
+  /**
+   * When set, this is a rotation/resend attempt keyed by the new token row
+   * (SENT or VIEWED). First send omits this and stays keyed by offer id.
+   */
+  commercialOfferTokenId?: string;
   prisma?: PrismaClient;
   send?: typeof sendRenderedEmail;
 };
@@ -55,8 +66,23 @@ async function hasAttemptForOffer(
 ): Promise<boolean> {
   const existing = await db.platformAuditEvent.findFirst({
     where: {
-      entityType: "CommercialOffer",
+      entityType: COMMERCIAL_OFFER_ENTITY_TYPE,
       entityId: offerId,
+      action: OFFER_INVITATION_EMAIL_AUDIT.ATTEMPTED,
+    },
+    select: { id: true },
+  });
+  return Boolean(existing);
+}
+
+async function hasAttemptForTokenRow(
+  db: PrismaClient,
+  commercialOfferTokenId: string,
+): Promise<boolean> {
+  const existing = await db.platformAuditEvent.findFirst({
+    where: {
+      entityType: COMMERCIAL_OFFER_TOKEN_ENTITY_TYPE,
+      entityId: commercialOfferTokenId,
       action: OFFER_INVITATION_EMAIL_AUDIT.ATTEMPTED,
     },
     select: { id: true },
@@ -71,20 +97,29 @@ async function recordAttempt(
     prospectId: string | null;
     status: OfferInvitationEmailAttemptStatus;
     reason?: string;
+    commercialOfferTokenId?: string;
   },
 ): Promise<void> {
+  const isResend = Boolean(input.commercialOfferTokenId);
   await writePlatformAuditEvent(
     {
       actorOperatorId: null,
       actorType: "SYSTEM",
       action: OFFER_INVITATION_EMAIL_AUDIT.ATTEMPTED,
-      entityType: "CommercialOffer",
-      entityId: input.offerId,
-      summary: "Commercial offer invitation email attempted",
+      entityType: isResend
+        ? COMMERCIAL_OFFER_TOKEN_ENTITY_TYPE
+        : COMMERCIAL_OFFER_ENTITY_TYPE,
+      entityId: input.commercialOfferTokenId ?? input.offerId,
+      summary: isResend
+        ? "Commercial offer invitation email attempted after resend"
+        : "Commercial offer invitation email attempted",
       metadata: {
         offerId: input.offerId,
         prospectId: input.prospectId,
         status: input.status,
+        ...(input.commercialOfferTokenId
+          ? { commercialOfferTokenId: input.commercialOfferTokenId }
+          : {}),
         ...(input.reason ? { reason: input.reason } : {}),
       },
     },
@@ -104,8 +139,18 @@ function mapSendResult(
   return { status: "failed", reason: "provider_error" };
 }
 
+function offerStatusAllowsInvitation(
+  status: string,
+  isResend: boolean,
+): boolean {
+  if (status === "SENT") return true;
+  return isResend && status === "VIEWED";
+}
+
 /**
- * Send at most one invitation email per CommercialOffer.
+ * Send an invitation email.
+ * First send: at most one attempt per CommercialOffer (SENT only).
+ * Resend: at most one attempt per token row (SENT or VIEWED).
  * Never throws — callers may ignore the result.
  */
 export async function notifyOfferInvitationEmail(
@@ -113,10 +158,16 @@ export async function notifyOfferInvitationEmail(
 ): Promise<OfferInvitationNotifyResult> {
   const db = input.prisma ?? defaultPrisma;
   const send = input.send ?? sendRenderedEmail;
+  const commercialOfferTokenId = input.commercialOfferTokenId?.trim() || undefined;
+  const isResend = Boolean(commercialOfferTokenId);
   let prospectId: string | null = null;
 
   try {
-    if (await hasAttemptForOffer(db, input.offerId)) {
+    if (isResend && commercialOfferTokenId) {
+      if (await hasAttemptForTokenRow(db, commercialOfferTokenId)) {
+        return { status: "skipped", reason: "already_attempted" };
+      }
+    } else if (await hasAttemptForOffer(db, input.offerId)) {
       return { status: "skipped", reason: "already_attempted" };
     }
 
@@ -128,6 +179,7 @@ export async function notifyOfferInvitationEmail(
       await recordAttempt(db, {
         offerId: input.offerId,
         prospectId: null,
+        commercialOfferTokenId,
         ...result,
       });
       return result;
@@ -147,16 +199,18 @@ export async function notifyOfferInvitationEmail(
       await recordAttempt(db, {
         offerId: input.offerId,
         prospectId: null,
+        commercialOfferTokenId,
         ...result,
       });
       return result;
     }
     prospectId = offer.prospectId;
-    if (offer.status !== "SENT") {
+    if (!offerStatusAllowsInvitation(offer.status, isResend)) {
       const result = { status: "skipped" as const, reason: "offer_not_sent" };
       await recordAttempt(db, {
         offerId: input.offerId,
         prospectId,
+        commercialOfferTokenId,
         ...result,
       });
       return result;
@@ -171,6 +225,7 @@ export async function notifyOfferInvitationEmail(
       await recordAttempt(db, {
         offerId: input.offerId,
         prospectId,
+        commercialOfferTokenId,
         ...result,
       });
       return result;
@@ -191,6 +246,7 @@ export async function notifyOfferInvitationEmail(
     await recordAttempt(db, {
       offerId: input.offerId,
       prospectId,
+      commercialOfferTokenId,
       status: mapped.status,
       reason: mapped.reason,
     });
@@ -208,10 +264,11 @@ export async function notifyOfferInvitationEmail(
       await recordAttempt(db, {
         offerId: input.offerId,
         prospectId,
+        commercialOfferTokenId,
         ...result,
       });
     } catch {
-      // Audit write failure must not affect offer send.
+      // Audit write failure must not affect offer send/resend.
     }
     return result;
   }
@@ -231,4 +288,16 @@ export function offerInvitationSendNotice(input: {
     return "Offer sent. The invitation email could not be delivered. This private link is shown once — share it securely with the prospect.";
   }
   return "Offer sent. This private link is shown once. Store/share it securely.";
+}
+
+export function offerInvitationResendNotice(input: {
+  emailStatus: OfferInvitationEmailAttemptStatus;
+}): string {
+  if (input.emailStatus === "sent") {
+    return "Invitation emailed to the prospect. The previous private link is no longer valid. This new private link is shown once — store it securely if you also want a copy.";
+  }
+  if (input.emailStatus === "failed") {
+    return "The invitation email could not be delivered. The previous private link is no longer valid. Copy Secure Link below and share it with the prospect.";
+  }
+  return "The previous private link is no longer valid. This new private link is shown once. Store/share it securely.";
 }

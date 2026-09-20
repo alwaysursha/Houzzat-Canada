@@ -48,6 +48,7 @@ export async function POST(request: Request) {
     MessageStatus: params.MessageStatus,
     SmsSid: params.SmsSid,
     SmsStatus: params.SmsStatus,
+    NumSegments: params.NumSegments,
   });
   if (result === "unknown") {
     logStatus("unknown_sid");

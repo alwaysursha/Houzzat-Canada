@@ -22,6 +22,7 @@ import {
 } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 import { phoneColumnsForWrite } from "@/lib/sms/e164";
+import { scheduleViewingRequestedSmsAutomation } from "@/lib/sms/automations";
 
 const schema = z.object({
   mlsNumber: z.string().min(3).max(32),
@@ -249,6 +250,13 @@ export async function POST(request: Request) {
         : undefined,
       preferWhatsApp: hotRequest,
     });
+
+    if (hotRequest) {
+      scheduleViewingRequestedSmsAutomation(
+        lead.id,
+        `${listing.addressLine}, ${listing.city}`,
+      );
+    }
 
     if (assignedAgentId && organizationId) {
       try {

@@ -10,11 +10,19 @@ import {
   createConversationMessage,
   type ConversationMessageDb,
 } from "@/lib/conversations/create-conversation-message";
+import {
+  recordSmsLeadActivity,
+  type SmsLeadActivityDb,
+} from "@/lib/conversations/sms-lead-activity";
 import { prisma } from "@/lib/prisma";
 import {
   scheduleNotifyAssignedAgentOfCustomerChatMessage,
   type NotifyAssignedAgentOfCustomerChatMessageInput,
 } from "@/lib/notifications/customer-chat-agent-push";
+import {
+  scheduleNotifyAssignedAgentOfInboundSmsByCell,
+  type AssignedAgentInboundSmsNotifyInput,
+} from "@/lib/sms/assigned-agent-inbound-notify";
 import { isE164, normalizeToE164 } from "@/lib/sms/e164";
 import { isTwilioSid } from "@/lib/sms/sids";
 import {
@@ -69,6 +77,7 @@ export type HandleInboundSmsResult = {
 type InboundLeadRow = {
   id: string;
   workspaceId: string | null;
+  assignedAgentId: string | null;
   customerId: string | null;
   customer: {
     id: string;
@@ -80,7 +89,8 @@ type InboundLeadRow = {
 
 export type InboundSmsDb = ConversationMessageDb &
   InboundSmsQuarantineDb &
-  SmsSuppressionDb & {
+  SmsSuppressionDb &
+  SmsLeadActivityDb & {
     workspace: Pick<PrismaClient["workspace"], "findUnique">;
     lead: Pick<PrismaClient["lead"], "findUnique" | "findMany">;
     message: Pick<
@@ -94,6 +104,10 @@ export type HandleInboundSmsDeps = {
   scheduleNotify?: (
     input: NotifyAssignedAgentOfCustomerChatMessageInput,
   ) => void;
+  scheduleAssignedAgentSmsNotify?: (
+    input: AssignedAgentInboundSmsNotifyInput,
+  ) => void;
+  recordLeadActivity?: typeof recordSmsLeadActivity;
   twilioManagesKeywordReplies?: boolean;
 };
 
@@ -180,6 +194,7 @@ async function findLeadsInWorkspaceByFrom(
     select: {
       id: true,
       workspaceId: true,
+      assignedAgentId: true,
       customerId: true,
       customer: {
         select: {
@@ -255,6 +270,20 @@ async function persistInboundCustomerSms(
       return "duplicate";
     }
     try {
+      const recordActivity =
+        deps.recordLeadActivity ?? recordSmsLeadActivity;
+      await recordActivity(db, {
+        leadId: input.lead.id,
+        workspaceId: input.workspaceId,
+        messageId: created.message.id,
+        body: input.body,
+        direction: "inbound",
+        userId: null,
+      });
+    } catch {
+      // Persistence already succeeded.
+    }
+    try {
       const schedule =
         deps.scheduleNotify ?? scheduleNotifyAssignedAgentOfCustomerChatMessage;
       schedule({
@@ -269,6 +298,21 @@ async function persistInboundCustomerSms(
           senderName: created.message.senderName,
           body: created.message.body,
         },
+      });
+    } catch {
+      // Persistence already succeeded.
+    }
+    try {
+      const scheduleSms =
+        deps.scheduleAssignedAgentSmsNotify ??
+        scheduleNotifyAssignedAgentOfInboundSmsByCell;
+      scheduleSms({
+        workspaceId: input.workspaceId,
+        leadId: input.lead.id,
+        leadName: senderName,
+        replyBody: input.body,
+        leadPhoneE164: input.fromE164,
+        assignedAgentId: input.lead.assignedAgentId,
       });
     } catch {
       // Persistence already succeeded.

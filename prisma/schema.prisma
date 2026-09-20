@@ -440,6 +440,56 @@ enum WorkspaceOnboardingStepStatus {
   SKIPPED
 }
 
+enum SmsAutomationRecipient {
+  LEAD
+  AGENT
+}
+
+enum SmsAutomationVersionStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum SmsUsageCategory {
+  AUTOMATION
+  AGENT_INDIVIDUAL
+  AGENT_MASS
+  AGENT_NOTIFICATION
+}
+
+enum SmsUsageRecipientType {
+  LEAD
+  AGENT
+}
+
+enum SmsSegmentCountSource {
+  ESTIMATED
+  PROVIDER
+}
+
+enum SmsMassBatchStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+  BLOCKED
+}
+
+enum SmsMassRecipientStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  EXCLUDED
+}
+
+enum SmsAutomationDispatchStatus {
+  PENDING
+  PROCESSING
+  SENT
+  SKIPPED
+  FAILED
+}
+
 /**
  * Stage 6.11G.2 — platform directory: what kind of real-estate organization / system.
  * BOARD does not imply ownership of a listing feed.
@@ -671,6 +721,9 @@ model Workspace {
   smsSuppressions                   SmsSuppression[]
   inboundSmsQuarantines             InboundSmsQuarantine[]
   outboundSmsDeadLetters            OutboundSmsDeadLetter[]
+  smsUsageEvents                    SmsUsageEvent[]
+  smsMassBatches                    SmsMassBatch[]
+  smsAutomationDispatches           SmsAutomationDispatch[]
 
   @@index([status])
 }
@@ -2851,6 +2904,10 @@ model PlatformOperator {
   statusEvents            WorkspaceStatusEvent[]
   auditEvents             PlatformAuditEvent[]
   ownerActivationsCreated WorkspaceOwnerActivation[] @relation("OwnerActivationCreator")
+  smsAutomationVersionsCreated   SmsAutomationVersion[] @relation("SmsAutomationVersionCreatedBy")
+  smsAutomationVersionsPublished SmsAutomationVersion[] @relation("SmsAutomationVersionPublishedBy")
+  smsQuickTextsCreated           SmsQuickText[]         @relation("SmsQuickTextCreatedBy")
+  smsQuickTextsUpdated           SmsQuickText[]         @relation("SmsQuickTextUpdatedBy")
 
   @@index([status, role])
 }
@@ -3247,4 +3304,178 @@ model WorkspaceOnboardingState {
   updatedAt                  DateTime                      @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+/**
+ * Platform-global SMS automation catalog. Tenants cannot override in V1.
+ * Production execution uses the latest PUBLISHED version only.
+ */
+model SmsAutomationDefinition {
+  id                    String                 @id @default(cuid())
+  key                   String                 @unique
+  name                  String
+  recipient             SmsAutomationRecipient
+  triggerKey            String
+  description           String?
+  active                Boolean                @default(true)
+  replyEnabled          Boolean                @default(false)
+  delayMinutes          Int?
+  inactivityDays        Int?
+  inactivityBucketsJson Json?
+  allowedVariables      String[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  versions SmsAutomationVersion[]
+
+  @@index([recipient, triggerKey])
+  @@index([active])
+}
+
+model SmsAutomationVersion {
+  id                    String                     @id @default(cuid())
+  definitionId          String
+  versionNumber         Int
+  status                SmsAutomationVersionStatus
+  body                  String                     @db.Text
+  delayMinutes          Int?
+  inactivityDays        Int?
+  inactivityBucketsJson Json?
+  createdAt             DateTime                   @default(now())
+  createdByOperatorId   String?
+  publishedAt           DateTime?
+  publishedByOperatorId String?
+  rollbackOfVersionId   String?
+
+  definition  SmsAutomationDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  createdBy   PlatformOperator?       @relation("SmsAutomationVersionCreatedBy", fields: [createdByOperatorId], references: [id], onDelete: SetNull)
+  publishedBy PlatformOperator?       @relation("SmsAutomationVersionPublishedBy", fields: [publishedByOperatorId], references: [id], onDelete: SetNull)
+
+  @@unique([definitionId, versionNumber])
+  @@index([definitionId, status])
+  @@index([definitionId, publishedAt])
+}
+
+/**
+ * Platform-global Quick Texts. Agents pick one to fill the composer; tenants
+ * cannot edit in V1. Separate from SmsAutomationDefinition (auto-triggered).
+ */
+model SmsQuickText {
+  id                  String   @id @default(cuid())
+  key                 String   @unique
+  name                String
+  category            String
+  body                String   @db.Text
+  sortOrder           Int      @default(0)
+  active              Boolean  @default(true)
+  allowedVariables    String[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  createdByOperatorId String?
+  updatedByOperatorId String?
+
+  createdBy PlatformOperator? @relation("SmsQuickTextCreatedBy", fields: [createdByOperatorId], references: [id], onDelete: SetNull)
+  updatedBy PlatformOperator? @relation("SmsQuickTextUpdatedBy", fields: [updatedByOperatorId], references: [id], onDelete: SetNull)
+
+  @@index([active, sortOrder])
+  @@index([category, sortOrder])
+}
+
+/**
+ * Per-workspace SMS segment usage. No message body. Idempotent on Twilio SID.
+ */
+model SmsUsageEvent {
+  id                  String                 @id @default(cuid())
+  workspaceId         String
+  periodStart         DateTime
+  periodEnd           DateTime
+  category            SmsUsageCategory
+  recipientType       SmsUsageRecipientType
+  twilioMessageSid    String?                @unique
+  messageId           String?
+  segmentCount        Int
+  segmentCountSource  SmsSegmentCountSource
+  finalized           Boolean                @default(false)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, periodStart, periodEnd])
+  @@index([workspaceId, category])
+  @@index([messageId])
+}
+
+/**
+ * Confirmed Agent Mass SMS operation. Idempotent on workspace + agent + clientKey.
+ * Recipients are processed through the existing per-Lead SMS transport.
+ */
+model SmsMassBatch {
+  id                 String             @id @default(cuid())
+  workspaceId        String
+  agentUserId        String
+  clientKey          String
+  body               String             @db.Text
+  status             SmsMassBatchStatus @default(PENDING)
+  requestedCount     Int                @default(0)
+  eligibleCount      Int                @default(0)
+  excludedCount      Int                @default(0)
+  successfulCount    Int                @default(0)
+  failedCount        Int                @default(0)
+  estimatedSegments  Int                @default(0)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  workspace  Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  recipients SmsMassBatchRecipient[]
+
+  @@unique([workspaceId, agentUserId, clientKey])
+  @@index([workspaceId, createdAt])
+  @@index([agentUserId, createdAt])
+}
+
+model SmsMassBatchRecipient {
+  id               String                 @id @default(cuid())
+  batchId          String
+  leadId           String
+  status           SmsMassRecipientStatus @default(PENDING)
+  excludeReason    String?
+  twilioMessageSid String?
+  messageId        String?
+  segmentCount     Int?
+  errorCode        String?
+  processedAt      DateTime?
+
+  batch SmsMassBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, leadId])
+  @@index([batchId, status])
+  @@index([leadId])
+}
+
+/**
+ * Idempotent SMS automation send. Unique per workspace + lead + key + cycle.
+ * A cycle is one signup, unsubscribe transition, viewing request, inactivity
+ * idle period, or return-from-inactivity event. Retries must not duplicate SENT.
+ */
+model SmsAutomationDispatch {
+  id               String                       @id @default(cuid())
+  workspaceId      String
+  leadId           String
+  automationKey    String
+  cycleKey         String
+  status           SmsAutomationDispatchStatus  @default(PENDING)
+  twilioMessageSid String?
+  messageId        String?
+  errorCode        String?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+  processedAt      DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, leadId, automationKey, cycleKey])
+  @@index([workspaceId, createdAt])
+  @@index([leadId, automationKey])
+  @@index([status, createdAt])
 }

@@ -27,6 +27,7 @@ import {
   resolveLeadCrmOwnership,
 } from "@/lib/crm-ownership";
 import { notifyNewLeadCapturedToStaff, scheduleNewLeadStaffEmail } from "@/lib/notifications/staff-events";
+import { scheduleSignupSmsAutomations } from "@/lib/sms/automations";
 import { prisma } from "@/lib/prisma";
 import {
   resolveDefaultWorkspaceIdForRouting,
@@ -451,6 +452,10 @@ export async function captureWebsiteLead(input: {
       body: `Lead captured (${intent.toLowerCase()}) via ${input.source}`,
     },
   });
+
+  if (input.source === "SIGNUP") {
+    scheduleSignupSmsAutomations(lead.id);
+  }
 
   if (assigneeId) {
     const contactLabel =

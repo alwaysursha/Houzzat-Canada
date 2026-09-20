@@ -1,4 +1,10 @@
 import { prisma } from "@/lib/prisma";
+import { parseTwilioNumSegments } from "@/lib/sms/segments";
+import {
+  finalizeSmsUsageFromProvider,
+  hasSmsUsageDelegate,
+  type SmsUsageDb,
+} from "@/lib/sms/usage";
 
 export const TWILIO_DELIVERED_STATUS = "delivered";
 
@@ -7,6 +13,7 @@ export type TwilioStatusCallbackFields = {
   MessageStatus?: string;
   SmsSid?: string;
   SmsStatus?: string;
+  NumSegments?: string;
 };
 
 export type TwilioStatusCallbackDb = {
@@ -30,6 +37,7 @@ export type TwilioStatusCallbackDb = {
       data: { providerStatus: string; deliveredAt?: Date };
     }) => Promise<unknown>;
   };
+  smsUsageEvent?: SmsUsageDb["smsUsageEvent"];
 };
 
 function defaultDb(): TwilioStatusCallbackDb {
@@ -64,6 +72,17 @@ export async function applyTwilioStatusCallback(
   );
   if (!sid || !providerStatus) return "unknown";
 
+  const numSegments = parseTwilioNumSegments(params.NumSegments);
+  const reconcileSegments = async () => {
+    if (numSegments && hasSmsUsageDelegate(db)) {
+      try {
+        await finalizeSmsUsageFromProvider(sid, numSegments, db);
+      } catch {
+        // Usage finalize must not fail the delivery callback.
+      }
+    }
+  };
+
   const existing = await db.message.findUnique({
     where: { twilioMessageSid: sid },
     select: {
@@ -73,14 +92,20 @@ export async function applyTwilioStatusCallback(
       providerStatus: true,
     },
   });
-  if (!existing) return "unknown";
+  if (!existing) {
+    await reconcileSegments();
+    return "unknown";
+  }
 
   const delivered =
     providerStatus === TWILIO_DELIVERED_STATUS && !existing.deliveredAt
       ? new Date()
       : undefined;
   const sameStatus = existing.providerStatus === providerStatus;
-  if (sameStatus && !delivered) return "unchanged";
+  if (sameStatus && !delivered) {
+    await reconcileSegments();
+    return "unchanged";
+  }
 
   await db.message.update({
     where: { id: existing.id },
@@ -89,5 +114,6 @@ export async function applyTwilioStatusCallback(
       ...(delivered ? { deliveredAt: delivered } : {}),
     },
   });
+  await reconcileSegments();
   return "updated";
 }

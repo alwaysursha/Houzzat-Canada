@@ -42,6 +42,7 @@ import {
   isCustomerChatAgentPushEligible,
   type NotifyAssignedAgentOfCustomerChatMessageInput,
 } from "../src/lib/notifications/customer-chat-agent-push";
+import type { AssignedAgentInboundSmsNotifyInput } from "../src/lib/sms/assigned-agent-inbound-notify";
 
 const root = process.cwd();
 
@@ -96,6 +97,12 @@ class FakeInboundDb implements InboundSmsDb {
   conversations = new Map<string, LeadConversationRecord>();
   messages: ConversationMessageRecord[] = [];
   suppressions = new Set<string>();
+  activities: Array<{
+    leadId: string;
+    userId: string | null;
+    type: string;
+    body: string | null;
+  }> = [];
   quarantines: Array<{
     twilioMessageSid: string;
     fromE164: string;
@@ -304,7 +311,10 @@ class FakeInboundDb implements InboundSmsDb {
     }: {
       where: {
         workspaceId?: string;
+        leadId?: string;
         channel?: string;
+        senderKind?: string;
+        kind?: string;
         smsTo?: string;
       };
     }) => {
@@ -312,7 +322,12 @@ class FakeInboundDb implements InboundSmsDb {
         if (where.workspaceId && row.workspaceId !== where.workspaceId) {
           return false;
         }
+        if (where.leadId && row.leadId !== where.leadId) return false;
         if (where.channel && row.channel !== where.channel) return false;
+        if (where.senderKind && row.senderKind !== where.senderKind) {
+          return false;
+        }
+        if (where.kind && row.kind !== where.kind) return false;
         if (where.smsTo && row.smsTo !== where.smsTo) return false;
         return true;
       });
@@ -360,6 +375,28 @@ class FakeInboundDb implements InboundSmsDb {
         payload: (data.payload ?? null) as ConversationMessageRecord["payload"],
       };
       this.messages.push(row);
+      return row;
+    },
+  };
+
+  leadActivity = {
+    create: async ({
+      data,
+    }: {
+      data: {
+        leadId: string;
+        userId?: string | null;
+        type: string;
+        body?: string | null;
+      };
+    }) => {
+      const row = {
+        leadId: data.leadId,
+        userId: data.userId ?? null,
+        type: data.type,
+        body: data.body ?? null,
+      };
+      this.activities.push(row);
       return row;
     },
   };
@@ -451,13 +488,30 @@ function inbound(overrides: Record<string, string> = {}) {
   };
 }
 
+function quietInboundDeps(): Pick<
+  HandleInboundSmsDeps,
+  "scheduleNotify" | "scheduleAssignedAgentSmsNotify"
+> {
+  return {
+    scheduleNotify: () => {},
+    scheduleAssignedAgentSmsNotify: () => {},
+  };
+}
+
 function captureNotify() {
   const pushes: NotifyAssignedAgentOfCustomerChatMessageInput[] = [];
+  const agentSms: AssignedAgentInboundSmsNotifyInput[] = [];
   return {
     pushes,
+    agentSms,
     deps: {
       scheduleNotify: (input: NotifyAssignedAgentOfCustomerChatMessageInput) => {
         pushes.push(input);
+      },
+      scheduleAssignedAgentSmsNotify: (
+        input: AssignedAgentInboundSmsNotifyInput,
+      ) => {
+        agentSms.push(input);
       },
     } satisfies HandleInboundSmsDeps,
   };
@@ -562,6 +616,14 @@ async function testPersistsOnExistingConversationAndNotifies() {
   assert.equal(notify.pushes[0]?.message.senderKind, "CUSTOMER");
   assert.equal(notify.pushes[0]?.created, true);
   assert.equal(notify.pushes[0]?.trustedWorkspaceId, WS_A);
+  assert.equal(notify.agentSms.length, 1);
+  assert.equal(notify.agentSms[0]?.leadId, LEAD_A);
+  assert.equal(notify.agentSms[0]?.leadName, "Jordan Customer");
+  assert.equal(notify.agentSms[0]?.replyBody, "On my way");
+  assert.equal(notify.agentSms[0]?.assignedAgentId, AGENT_A);
+  assert.equal(db.activities.length, 1);
+  assert.equal(db.activities[0]?.type, "SMS");
+  assert.equal(db.activities[0]?.leadId, LEAD_A);
 
   const dup = await handleInboundTwilioSms(inbound(), {
     db,
@@ -570,6 +632,8 @@ async function testPersistsOnExistingConversationAndNotifies() {
   assert.equal(dup.outcome, "duplicate");
   assert.equal(db.messages.length, 1);
   assert.equal(notify.pushes.length, 1);
+  assert.equal(notify.agentSms.length, 1);
+  assert.equal(db.activities.length, 1);
 }
 
 async function testTenantIsolationSamePhone() {
@@ -601,7 +665,7 @@ async function testTenantIsolationSamePhone() {
   });
   const result = await handleInboundTwilioSms(inbound({ To: TO_A }), {
     db,
-    scheduleNotify: () => {},
+    ...quietInboundDeps(),
   });
   assert.equal(result.outcome, "persisted");
   assert.equal(db.messages.length, 1);
@@ -666,7 +730,7 @@ async function testAmbiguousAndTieBreak() {
   });
   const routed = await handleInboundTwilioSms(inbound({ MessageSid: "SM_TIE" }), {
     db: tied,
-    scheduleNotify: () => {},
+    ...quietInboundDeps(),
   });
   assert.equal(routed.outcome, "persisted");
   assert.equal(tied.messages.filter((row) => row.senderKind === "CUSTOMER").length, 1);
@@ -725,6 +789,8 @@ async function testStopStartHelp() {
   assert.equal(start.outcome, "keyword_start");
   assert.ok(start.twiml.includes(SMS_START_ACK));
   assert.equal(await isPhoneSuppressed(WS_A, FROM, db), false);
+  assert.equal(db.messages.length, 0);
+  assert.equal(db.activities.length, 0);
 
   const managed = await handleInboundTwilioSms(
     inbound({ Body: "STOP", MessageSid: "SM_STOP2" }),
@@ -782,7 +848,7 @@ async function testYesIsNormalInboundSms() {
   const prevRead = process.env.WORKSPACE_READ_SCOPE;
   process.env.WORKSPACE_READ_SCOPE = "workspace";
   try {
-    const outbound = await sendAgentLeadSmsMessage(
+    const initiated = await sendAgentLeadSmsMessage(
       db as never,
       ctx,
       LEAD_A,
@@ -790,16 +856,15 @@ async function testYesIsNormalInboundSms() {
       {
         sendSms: async () => ({
           status: "sent",
-          sid: "SM_ASK_TIME",
+          sid: "SM_INIT",
           providerStatus: "queued",
         }),
       },
     );
-    assert.equal(outbound.ok, true);
-    if (!outbound.ok) return;
-    assert.equal(outbound.data.conversation.id, "conv_existing");
-    assert.equal(outbound.data.message.channel, "SMS");
-    assert.equal(outbound.data.message.body, "Would 3:00 PM work?");
+    assert.equal(initiated.ok, true);
+    if (initiated.ok) {
+      assert.equal(initiated.data.conversation.id, "conv_existing");
+    }
 
     const suppressedBefore = await isPhoneSuppressed(WS_A, FROM, db);
     assert.equal(suppressedBefore, false);
@@ -833,6 +898,29 @@ async function testYesIsNormalInboundSms() {
     );
     assert.equal(notify.pushes[0]?.message.body, "Yes");
     assert.equal(notify.pushes[0]?.message.channel, "SMS");
+    assert.equal(notify.agentSms.length, 1);
+    assert.equal(notify.agentSms[0]?.replyBody, "Yes");
+    assert.equal(db.activities.length, 2);
+    assert.equal(db.activities.every((row) => row.type === "SMS"), true);
+
+    const outbound = await sendAgentLeadSmsMessage(
+      db as never,
+      ctx,
+      LEAD_A,
+      "Would 3:00 PM work?",
+      {
+        sendSms: async () => ({
+          status: "sent",
+          sid: "SM_ASK_TIME",
+          providerStatus: "queued",
+        }),
+      },
+    );
+    assert.equal(outbound.ok, true);
+    if (!outbound.ok) return;
+    assert.equal(outbound.data.conversation.id, "conv_existing");
+    assert.equal(outbound.data.message.channel, "SMS");
+    assert.equal(outbound.data.message.body, "Would 3:00 PM work?");
 
     const replay = await handleInboundTwilioSms(
       inbound({ Body: "Yes", MessageSid: "SM_YES_1" }),
@@ -844,6 +932,7 @@ async function testYesIsNormalInboundSms() {
       1,
     );
     assert.equal(notify.pushes.length, 1);
+    assert.equal(notify.agentSms.length, 1);
   } finally {
     if (prevRead === undefined) delete process.env.WORKSPACE_READ_SCOPE;
     else process.env.WORKSPACE_READ_SCOPE = prevRead;
@@ -948,6 +1037,9 @@ async function testFcmFailureStillPersists() {
     db,
     scheduleNotify: () => {
       throw new Error("fcm down");
+    },
+    scheduleAssignedAgentSmsNotify: () => {
+      throw new Error("agent sms down");
     },
   });
   assert.equal(result.outcome, "persisted");

@@ -4,6 +4,7 @@ import {
   parseAgentConversationPageParams,
 } from "@/lib/conversations/agent-conversation-read";
 import { resolveAgentSmsSendEligibility } from "@/lib/conversations/agent-conversation-sms";
+import { listRenderedSmsQuickTextsForLead } from "@/lib/conversations/sms-quick-texts";
 import { isDatabaseUnavailableError } from "@/lib/errors";
 import {
   createRequestId,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/http/json-api-response";
 import { jsonByteLength } from "@/lib/http/json-body";
 import { prisma } from "@/lib/prisma";
+import { inspectSmsAllowance, SMS_MANUAL_USAGE_CATEGORIES } from "@/lib/sms/usage";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -70,14 +72,46 @@ export async function GET(request: Request, { params }: Params) {
       ctx,
       id,
     );
+    let smsSend = {
+      enabled: Boolean(smsEligibility?.enabled),
+      reason: smsEligibility?.enabled
+        ? null
+        : (smsEligibility?.reason ?? "NO_CUSTOMER_E164"),
+    };
+    if (smsSend.enabled && ctx.workspaceId) {
+      try {
+        const allowance = await inspectSmsAllowance(ctx.workspaceId, {
+          categories: SMS_MANUAL_USAGE_CATEGORIES,
+        });
+        if (!allowance.permitted) {
+          smsSend = {
+            enabled: false,
+            reason: allowance.reason ?? "ALLOWANCE_NOT_CONFIGURED",
+          };
+        }
+      } catch {
+        smsSend = {
+          enabled: false,
+          reason: "ALLOWANCE_NOT_CONFIGURED",
+        };
+      }
+    }
+    let smsQuickTexts: Awaited<
+      ReturnType<typeof listRenderedSmsQuickTextsForLead>
+    > = [];
+    try {
+      smsQuickTexts = await listRenderedSmsQuickTextsForLead(
+        prisma as never,
+        ctx,
+        id,
+      );
+    } catch {
+      smsQuickTexts = [];
+    }
     return reply(200, {
       ...data,
-      smsSend: {
-        enabled: Boolean(smsEligibility?.enabled),
-        reason: smsEligibility?.enabled
-          ? null
-          : (smsEligibility?.reason ?? "NO_CUSTOMER_E164"),
-      },
+      smsSend,
+      smsQuickTexts,
     });
   } catch (error) {
     if (isDatabaseUnavailableError(error)) {
