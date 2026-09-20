@@ -35,6 +35,7 @@ export interface MobileLeadCustomer {
   name: string | null;
   email: string | null;
   phone: string | null;
+  phoneE164?: string | null;
   isBuyer?: boolean;
   isSeller?: boolean;
   purchaseTimeframe?: string | null;

@@ -4,7 +4,7 @@ import {
   evaluateAgentSmsEligibility,
 } from "@/lib/conversations/agent-conversation-sms";
 import { frozenAgentSenderName } from "@/lib/conversations/agent-conversation-send";
-import { isE164 } from "@/lib/sms/e164";
+import { isE164, resolveCommunicationsE164 } from "@/lib/sms/e164";
 import { isPhoneSuppressed, type SmsSuppressionDb } from "@/lib/sms/suppression";
 import {
   SMS_MASS_EXCLUDE_REASONS,
@@ -20,7 +20,7 @@ export type MassSmsLeadRow = {
   id: string;
   workspaceId: string | null;
   assignedAgentId: string | null;
-  customer: { phoneE164: string | null; name: string | null } | null;
+  customer: { phoneE164: string | null; phone: string | null; name: string | null } | null;
   workspace: {
     name: string;
     twilioPhoneE164: string | null;
@@ -129,7 +129,10 @@ export async function classifyMassSmsLead(input: {
   const eligibility = evaluateAgentSmsEligibility({
     viewerUserId: input.ctx.user.id,
     assignedAgentId: input.lead.assignedAgentId,
-    toE164: input.lead.customer?.phoneE164 ?? null,
+    toE164: resolveCommunicationsE164(
+      input.lead.customer?.phone,
+      input.lead.customer?.phoneE164,
+    ),
     fromE164: input.lead.workspace?.twilioPhoneE164 ?? null,
     twilioSubaccountSid: input.lead.workspace?.twilioSubaccountSid ?? null,
     twilioMessagingServiceSid:
@@ -190,7 +193,10 @@ export async function classifyMassSmsLeads(input: {
   const decisions: MassSmsRecipientDecision[] = [];
   for (const id of input.requestedIds) {
     const lead = byId.get(id) ?? null;
-    const to = lead?.customer?.phoneE164 ?? null;
+    const to = resolveCommunicationsE164(
+      lead?.customer?.phone,
+      lead?.customer?.phoneE164,
+    );
     const suppressed =
       Boolean(input.ctx.workspaceId) && isE164(to)
         ? await check(input.ctx.workspaceId, to, input.db)

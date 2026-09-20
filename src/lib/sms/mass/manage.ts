@@ -36,7 +36,7 @@ export const MASS_SMS_LEAD_SELECT = {
   id: true,
   workspaceId: true,
   assignedAgentId: true,
-  customer: { select: { phoneE164: true, name: true } },
+  customer: { select: { phoneE164: true, phone: true, name: true } },
   workspace: {
     select: {
       name: true,

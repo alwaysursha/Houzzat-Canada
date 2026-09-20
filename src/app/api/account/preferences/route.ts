@@ -6,7 +6,7 @@ import {
   logLeadActivityForCustomer,
 } from "@/lib/agent/log-contact-activity";
 import { prisma } from "@/lib/prisma";
-import { phoneColumnsForWrite } from "@/lib/sms/e164";
+import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 import { scheduleUnsubscribeSmsAutomations } from "@/lib/sms/automations";
 
 const schema = z.object({
@@ -32,6 +32,11 @@ export async function PATCH(request: Request) {
   const phoneValue = phoneProvided
     ? parsed.data.phone?.trim() || null
     : undefined;
+  const parsedPhone =
+    phoneValue !== undefined ? parsePhoneColumnsForWrite(phoneValue) : null;
+  if (parsedPhone && !parsedPhone.ok) {
+    return NextResponse.json({ error: parsedPhone.error }, { status: 400 });
+  }
   const phoneChanged =
     phoneValue !== undefined && phoneValue !== (user.phone ?? null);
 
@@ -40,9 +45,9 @@ export async function PATCH(request: Request) {
     data: {
       emailAlertsEnabled: parsed.data.emailAlertsEnabled,
       smsAlertsEnabled: parsed.data.smsAlertsEnabled,
-      ...(phoneValue !== undefined
+      ...(parsedPhone
         ? {
-            ...phoneColumnsForWrite(phoneValue),
+            ...parsedPhone.columns,
             phoneUpdateRequestedAt: null,
             ...(phoneChanged ? { phoneVerifiedAt: null } : {}),
           }

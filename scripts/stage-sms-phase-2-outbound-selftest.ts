@@ -125,7 +125,7 @@ type FakeLead = {
   workspaceId: string;
   organizationId: string | null;
   assignedAgentId: string | null;
-  customer: { phoneE164: string | null } | null;
+  customer: { phoneE164: string | null; phone?: string | null } | null;
   workspace: {
     twilioPhoneE164: string | null;
     twilioSubaccountSid: string | null;
@@ -1004,10 +1004,44 @@ async function testAgentOutboundSms() {
         .length,
       1,
     );
-    assert.equal(
-      db.messages.some((row) => row.channel === "CHAT"),
-      true,
+    assert.equal(db.messages.some((row) => row.channel === "CHAT"), true);
+
+    const drifted = new FakeSmsDb();
+    drifted.seedLead({
+      assignedAgentId: AGENT_A,
+      customer: { phone: "416-555-0199", phoneE164: "+16473613654" },
+    });
+    let driftedTo: string | null = null;
+    const driftedSend = await sendAgentLeadSmsMessage(
+      drifted,
+      makeCtx(),
+      LEAD_A,
+      "Use the current number",
+      {
+        sendSms: async (input) => {
+          driftedTo = input.to;
+          return sendSmsOk();
+        },
+      },
     );
+    assert.equal(driftedSend.ok, true);
+    assert.equal(driftedTo, "+14165550199");
+
+    const staleUnparseable = new FakeSmsDb();
+    staleUnparseable.seedLead({
+      assignedAgentId: AGENT_A,
+      customer: { phone: "64722214949", phoneE164: "+16473613654" },
+    });
+    const blockedStale = await sendAgentLeadSmsMessage(
+      staleUnparseable,
+      makeCtx(),
+      LEAD_A,
+      "Do not use leftover E.164",
+      { sendSms: async () => sendSmsOk() },
+    );
+    assert.equal(blockedStale.ok, false);
+    if (!blockedStale.ok) assert.equal(blockedStale.reason, "NO_CUSTOMER_E164");
+
 
     const duplicateSid = await sendAgentLeadSmsMessage(
       db,

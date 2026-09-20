@@ -23,7 +23,7 @@ import {
   recordSmsLeadActivity,
   type SmsLeadActivityDb,
 } from "@/lib/conversations/sms-lead-activity";
-import { isE164 } from "@/lib/sms/e164";
+import { isE164, resolveCommunicationsE164 } from "@/lib/sms/e164";
 import { isTwilioSid } from "@/lib/sms/sids";
 import {
   recordOutboundSmsDeadLetter,
@@ -100,7 +100,7 @@ type SmsLeadRow = {
   workspaceId: string | null;
   organizationId: string | null;
   assignedAgentId: string | null;
-  customer: { phoneE164: string | null } | null;
+  customer: { phoneE164: string | null; phone: string | null } | null;
   workspace: {
     twilioPhoneE164: string | null;
     twilioSubaccountSid: string | null;
@@ -113,7 +113,7 @@ const SMS_LEAD_SELECT = {
   organizationId: true,
   workspaceId: true,
   assignedAgentId: true,
-  customer: { select: { phoneE164: true } },
+  customer: { select: { phoneE164: true, phone: true } },
   workspace: {
     select: {
       twilioPhoneE164: true,
@@ -251,7 +251,10 @@ export async function resolveAgentSmsSendEligibility(
     return null;
   }
 
-  const toE164 = lead.customer?.phoneE164 ?? null;
+  const toE164 = resolveCommunicationsE164(
+    lead.customer?.phone,
+    lead.customer?.phoneE164,
+  );
   const fromE164 = lead.workspace?.twilioPhoneE164 ?? null;
   const suppressedCheck = deps.isPhoneSuppressed ?? isPhoneSuppressed;
   const suppressed =

@@ -13,7 +13,7 @@ import {
 } from "@/lib/platform/sms-automations";
 import { renderSmsTemplate } from "@/lib/platform/sms-automations/variables";
 import { firstNameFromLeadName } from "@/lib/sms/quick-texts/render";
-import { isE164, normalizeToE164 } from "@/lib/sms/e164";
+import { isE164, resolveCommunicationsE164 } from "@/lib/sms/e164";
 import { isPhoneSuppressed, type SmsSuppressionDb } from "@/lib/sms/suppression";
 import { resolveAssignedAgentNotifyToE164 } from "@/lib/sms/assigned-agent-inbound-notify";
 import { estimateSmsSegmentCount } from "@/lib/sms/segments";
@@ -402,7 +402,10 @@ async function sendAgentNotification(
   const to = resolveAssignedAgentNotifyToE164({
     agentPhoneE164: agent.phoneE164,
     agentPhone: agent.phone,
-    leadPhoneE164: lead.customer?.phoneE164 ?? null,
+      leadPhoneE164: resolveCommunicationsE164(
+        lead.customer?.phone,
+        lead.customer?.phoneE164,
+      ),
   });
   if (!to) {
     await finish(db, row.id, {
@@ -484,9 +487,10 @@ async function sendLeadAutomation(
   deps: SmsAutomationExecuteDeps,
 ): Promise<DispatchSmsAutomationResult> {
   const workspaceId = lead.workspaceId!;
-  const toE164 =
-    (isE164(lead.customer?.phoneE164) ? lead.customer?.phoneE164 : null) ??
-    normalizeToE164(lead.customer?.phone ?? null);
+  const toE164 = resolveCommunicationsE164(
+    lead.customer?.phone,
+    lead.customer?.phoneE164,
+  );
   const fromE164 = isE164(lead.workspace?.twilioPhoneE164)
     ? lead.workspace?.twilioPhoneE164
     : null;

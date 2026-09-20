@@ -342,6 +342,7 @@ export type LeadProfileV2Customer = {
   name: string | null;
   email: string;
   phone: string | null;
+  phoneE164: string | null;
   isBuyer: boolean;
   isSeller: boolean;
   purchaseTimeframe: string | null;

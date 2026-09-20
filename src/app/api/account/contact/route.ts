@@ -11,7 +11,7 @@ import {
   logJsonApi,
 } from "@/lib/http/json-api-response";
 import { prisma } from "@/lib/prisma";
-import { phoneColumnsForWrite } from "@/lib/sms/e164";
+import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 
 const ROUTE = "/api/account/contact";
 
@@ -80,6 +80,11 @@ export async function PATCH(request: Request) {
         ? parsed.data.email.toLowerCase()
         : undefined;
     const nextPhone = parsed.data.phone;
+    const parsedPhone =
+      nextPhone !== undefined ? parsePhoneColumnsForWrite(nextPhone) : null;
+    if (parsedPhone && !parsedPhone.ok) {
+      return reply(400, { error: parsedPhone.error });
+    }
 
     if (nextEmail && nextEmail !== user.email) {
       const taken = await prisma.user.findUnique({
@@ -109,9 +114,9 @@ export async function PATCH(request: Request) {
               ...(nextEmail !== current.email ? { emailVerified: null } : {}),
             }
           : {}),
-        ...(nextPhone !== undefined
+        ...(parsedPhone
           ? {
-              ...phoneColumnsForWrite(nextPhone),
+              ...parsedPhone.columns,
               phoneUpdateRequestedAt: null,
               ...(nextPhone !== current.phone ? { phoneVerifiedAt: null } : {}),
             }

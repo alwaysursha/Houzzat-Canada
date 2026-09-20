@@ -13,6 +13,7 @@ import {
 } from "@/lib/mobile/v2/lead-write-effects";
 import { notifyLeadAssignedToAgent } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
+import { isInvalidContactPhoneError } from "@/lib/sms/e164";
 import { detectClientWorkspaceOverride } from "@/lib/tenancy/public-lead-workspace";
 
 const patchSchema = z.object({
@@ -63,16 +64,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const { leadId } = await createManualLead({
-    name: parsed.data.name,
-    email: parsed.data.email,
-    phone: parsed.data.phone,
-    organizationId: ownership.organizationId,
-    workspaceId: ownership.workspaceId,
-    agentId: ctx.user.id,
-  });
+  try {
+    const { leadId } = await createManualLead({
+      name: parsed.data.name,
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+      organizationId: ownership.organizationId,
+      workspaceId: ownership.workspaceId,
+      agentId: ctx.user.id,
+    });
 
-  return NextResponse.json({ ok: true, leadId });
+    return NextResponse.json({ ok: true, leadId });
+  } catch (error) {
+    if (isInvalidContactPhoneError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    throw error;
+  }
 }
 
 export async function PATCH(request: Request) {

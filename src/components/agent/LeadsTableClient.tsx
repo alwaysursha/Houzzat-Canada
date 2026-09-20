@@ -53,6 +53,7 @@ import {
   useStaffOverlay,
 } from "@/lib/mobile/use-staff-overlay";
 import { cn } from "@/lib/utils";
+import { contactSmsHref, contactTelHref } from "@/lib/sms/e164";
 
 export type LeadRow = {
   id: string;
@@ -69,6 +70,7 @@ export type LeadRow = {
     name: string | null;
     email: string;
     phone: string | null;
+    phoneE164: string | null;
     isBuyer: boolean;
     isSeller: boolean;
     purchaseTimeframe: string | null;
@@ -785,6 +787,8 @@ export function LeadsTableClient({
               lead.customer?.email ||
               lead.source.replaceAll("_", " ");
             const phone = lead.customer?.phone;
+            const phoneE164 = lead.customer?.phoneE164;
+            const telHref = contactTelHref(phone, phoneE164);
             const email = lead.customer?.email;
             const StatusIcon = pipelineIcon(lead.status as LeadStatus);
             return (
@@ -853,13 +857,20 @@ export function LeadsTableClient({
 
                     <div className="mt-2.5 space-y-1 text-[13px] text-[#475569]">
                       {phone ? (
+                        telHref ? (
                         <a
-                          href={`tel:${phone}`}
+                          href={telHref}
                           className="flex items-center gap-2 font-semibold text-[#2b6cb0]"
                         >
                           <Phone className="size-3.5 shrink-0" />
                           {phone}
                         </a>
+                        ) : (
+                        <span className="flex items-center gap-2 font-semibold text-[#475569]">
+                          <Phone className="size-3.5 shrink-0" />
+                          {phone}
+                        </span>
+                        )
                       ) : null}
                       {email ? (
                         <a
@@ -923,9 +934,9 @@ export function LeadsTableClient({
                       >
                         Open profile
                       </button>
-                      {phone ? (
+                      {telHref ? (
                         <a
-                          href={`tel:${phone}`}
+                          href={telHref}
                           className="inline-flex items-center justify-center rounded-lg border border-[#d8dee6] px-3 py-2.5 text-[#1e2a38] active:bg-[#f8fafc]"
                           aria-label={`Call ${name}`}
                         >
@@ -976,6 +987,9 @@ export function LeadsTableClient({
                   lead.customer?.email ||
                   lead.source.replaceAll("_", " ");
                 const phone = lead.customer?.phone;
+                const phoneE164 = lead.customer?.phoneE164;
+                const telHref = contactTelHref(phone, phoneE164);
+                const smsHref = contactSmsHref(phone, phoneE164);
                 const email = lead.customer?.email;
                 return (
                   <tr
@@ -1049,12 +1063,16 @@ export function LeadsTableClient({
                             )}
                           </button>
                           {phone ? (
+                            telHref ? (
                             <a
-                              href={`tel:${phone}`}
+                              href={telHref}
                               className="min-w-0 truncate hover:underline"
                             >
                               {phone}
                             </a>
+                            ) : (
+                            <span className="min-w-0 truncate">{phone}</span>
+                            )
                           ) : (
                             <span className="text-[#94a3b8]">N/A</span>
                           )}
@@ -1080,20 +1098,24 @@ export function LeadsTableClient({
                                 onClick={() => setPhoneMenuId(null)}
                               />
                               <div className="absolute left-5 top-full z-30 mt-1 w-28 rounded-md border border-[#e2e8f0] bg-white py-1 shadow-lg">
+                                {telHref ? (
                                 <a
-                                  href={`tel:${phone}`}
+                                  href={telHref}
                                   className="block px-3 py-1.5 text-[11px] font-semibold text-[#475569] hover:bg-[#f8fafc]"
                                   onClick={() => setPhoneMenuId(null)}
                                 >
                                   Call
                                 </a>
+                                ) : null}
+                                {smsHref ? (
                                 <a
-                                  href={`sms:${phone}`}
+                                  href={smsHref}
                                   className="block px-3 py-1.5 text-[11px] font-semibold text-[#475569] hover:bg-[#f8fafc]"
                                   onClick={() => setPhoneMenuId(null)}
                                 >
                                   Text
                                 </a>
+                                ) : null}
                                 <button
                                   type="button"
                                   className="block w-full px-3 py-1.5 text-left text-[11px] font-semibold text-[#475569] hover:bg-[#f8fafc]"
@@ -1304,8 +1326,8 @@ export function LeadsTableClient({
                         )}
                       </p>
                       <div className="mt-1 flex items-center gap-1.5 text-[#b0bac5]">
-                        {phone ? (
-                          <a href={`tel:${phone}`} title="Call">
+                        {telHref ? (
+                          <a href={telHref} title="Call">
                             <Phone className="size-3.5 hover:text-[#5b9aaa]" />
                           </a>
                         ) : (
@@ -1318,8 +1340,8 @@ export function LeadsTableClient({
                         ) : (
                           <Mail className="size-3.5 opacity-30" />
                         )}
-                        {phone ? (
-                          <a href={`sms:${phone}`} title="Text">
+                        {smsHref ? (
+                          <a href={smsHref} title="Text">
                             <MessageSquare className="size-3.5 hover:text-[#7aa8c4]" />
                           </a>
                         ) : (

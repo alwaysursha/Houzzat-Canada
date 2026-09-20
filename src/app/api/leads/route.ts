@@ -21,7 +21,7 @@ import {
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
-import { phoneColumnsForWrite } from "@/lib/sms/e164";
+import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 import { scheduleViewingRequestedSmsAutomation } from "@/lib/sms/automations";
 
 const schema = z.object({
@@ -61,6 +61,12 @@ export async function POST(request: Request) {
 
     const session = await auth();
     const data = parsed.data;
+    const parsedPhone = data.phone
+      ? parsePhoneColumnsForWrite(data.phone)
+      : null;
+    if (parsedPhone && !parsedPhone.ok) {
+      return NextResponse.json({ error: parsedPhone.error }, { status: 400 });
+    }
     const listing = await prisma.listing.findUnique({
       where: { mlsNumber: data.mlsNumber },
       select: { mlsNumber: true, addressLine: true, city: true },
@@ -200,7 +206,7 @@ export async function POST(request: Request) {
           where: { id: session.user.id },
           data: {
             caslConsentAt: consentAt,
-            ...(data.phone ? phoneColumnsForWrite(data.phone) : {}),
+            ...(parsedPhone ? parsedPhone.columns : {}),
           },
         });
       }

@@ -11,6 +11,7 @@ import { join } from "node:path";
 import {
   isE164,
   normalizeToE164,
+  parsePhoneColumnsForWrite,
   phoneColumnsForWrite,
 } from "../src/lib/sms/e164";
 import { quarantineInboundSms } from "../src/lib/sms/quarantine";
@@ -55,6 +56,21 @@ function testNormalization() {
   const cleared = phoneColumnsForWrite(null);
   assert.deepEqual(cleared, { phone: null, phoneE164: null });
   assert.deepEqual(phoneColumnsForWrite(undefined), {});
+  const nanp = parsePhoneColumnsForWrite("6472214949");
+  assert.equal(nanp.ok, true);
+  if (nanp.ok) {
+    assert.equal(nanp.columns.phone, "6472214949");
+    assert.equal(nanp.columns.phoneE164, "+16472214949");
+  }
+  const e164 = parsePhoneColumnsForWrite("+14165550199");
+  assert.equal(e164.ok, true);
+  if (e164.ok) {
+    assert.equal(e164.columns.phone, "+14165550199");
+    assert.equal(e164.columns.phoneE164, "+14165550199");
+  }
+  const invalid = parsePhoneColumnsForWrite("64722214949");
+  assert.equal(invalid.ok, false);
+  assert.throws(() => phoneColumnsForWrite("64722214949"));
 }
 
 function testSchemaAndMigration() {
@@ -463,7 +479,7 @@ function testPhoneWriteSyncAndPhaseBoundaries() {
   ];
   for (const rel of writes) {
     assert.ok(
-      read(rel).includes("phoneColumnsForWrite"),
+      read(rel).includes("parsePhoneColumnsForWrite"),
       `${rel} must sync phoneE164 on write`,
     );
   }

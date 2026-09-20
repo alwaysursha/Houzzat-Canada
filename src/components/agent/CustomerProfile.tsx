@@ -77,6 +77,7 @@ import {
   type PurchaseTimeframeValue,
 } from "@/lib/agent/timeframe";
 import { cn } from "@/lib/utils";
+import { contactSmsHref, contactTelHref } from "@/lib/sms/e164";
 
 type TabId =
   | "activity"
@@ -946,6 +947,9 @@ export function CustomerProfile({
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
   const phone = data?.lead.customer?.phone;
+  const phoneE164 = data?.lead.customer?.phoneE164;
+  const telHref = contactTelHref(phone, phoneE164);
+  const smsHref = contactSmsHref(phone, phoneE164);
   const email = data?.lead.customer?.email;
   const address = data?.lead.customer?.homeAddress;
   const loading = Boolean(error) ? false : !data || data.lead.id !== leadId;
@@ -975,13 +979,13 @@ export function CustomerProfile({
   const actions: ActionItem[] = [
     {
       icon: Phone,
-      href: phone ? `tel:${phone}` : undefined,
+      href: telHref,
       className: "bg-[#0d9488]",
       label: "Call",
     },
     {
       icon: MessageSquare,
-      href: phone ? `sms:${phone}` : undefined,
+      href: smsHref,
       className: "bg-[#0ea5e9]",
       label: "Text",
     },
@@ -1201,7 +1205,7 @@ export function CustomerProfile({
                     <ContactDisplayRow
                       icon={Phone}
                       value={phone}
-                      href={phone ? `tel:${phone}` : undefined}
+                      href={telHref}
                       canEdit={Boolean(data.lead.customer)}
                       onEdit={() => startEditContact("phone")}
                       editLabel="Edit phone"

@@ -11,7 +11,7 @@ import {
   createWorkspaceAccessToken,
   verifyMobileToken,
 } from "../src/types/token-helpers";
-import type { LeadStatus } from "../src/types/lead";
+import { contactSmsHref, contactTelHref } from "../src/lib/contact-e164";
 
 const CANONICAL_STATUSES: LeadStatus[] = [
   "NEW_LEAD",
@@ -297,16 +297,6 @@ function executePatchStatus(
 }
 
 /** Native composer URL builders used by LeadDetailScreen. */
-function buildCallUrl(phone: string | null | undefined): string | null {
-  const trimmed = phone?.trim();
-  return trimmed ? `tel:${trimmed}` : null;
-}
-
-function buildSmsUrl(phone: string | null | undefined): string | null {
-  const trimmed = phone?.trim();
-  return trimmed ? `sms:${trimmed}` : null;
-}
-
 function buildMailtoUrl(email: string | null | undefined): string | null {
   const trimmed = email?.trim();
   return trimmed ? `mailto:${encodeURIComponent(trimmed)}` : null;
@@ -627,12 +617,12 @@ async function runStage45Tests() {
   // 12. Native Call / SMS / Email URL builders (no auto-send)
   console.log("[12/12] Native composer URL builders...");
   {
-    assert.equal(buildCallUrl("416-555-0101"), "tel:416-555-0101");
-    assert.equal(buildCallUrl(null), null);
-    assert.equal(buildCallUrl("  "), null);
+    assert.equal(contactTelHref("416-555-0101", null), "tel:+14165550101");
+    assert.equal(contactTelHref(null, null), null);
+    assert.equal(contactTelHref("  ", null), null);
 
-    assert.equal(buildSmsUrl("416-555-0101"), "sms:416-555-0101");
-    assert.equal(buildSmsUrl(""), null);
+    assert.equal(contactSmsHref("416-555-0101", null), "sms:+14165550101");
+    assert.equal(contactSmsHref("", null), null);
 
     assert.equal(
       buildMailtoUrl("alice@example.com"),
@@ -641,7 +631,7 @@ async function runStage45Tests() {
     assert.equal(buildMailtoUrl(null), null);
 
     // URLs must not encode send-side payloads / auto-body.
-    assert.equal(buildSmsUrl("416-555-0101")?.includes("body="), false);
+    assert.equal(contactSmsHref("416-555-0101", null)?.includes("body="), false);
     assert.equal(buildMailtoUrl("a@b.com")?.includes("subject="), false);
     console.log("  -> PASS");
   }

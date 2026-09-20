@@ -742,6 +742,7 @@ export function LeadProfileV2Host({
       {variant === "modal" && data ? (
         <LeadProfileV2ActionRail
           phone={data.lead.customer?.phone}
+          phoneE164={data.lead.customer?.phoneE164}
           email={data.lead.customer?.email}
         />
       ) : null}

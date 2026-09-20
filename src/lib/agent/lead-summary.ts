@@ -40,6 +40,7 @@ export type LeadProfileShell = {
       name: string | null;
       email: string;
       phone: string | null;
+      phoneE164: string | null;
       isBuyer: boolean;
       isSeller: boolean;
       purchaseTimeframe: string | null;
@@ -232,6 +233,7 @@ function mapLeadCustomer(
     name: string | null;
     email: string;
     phone: string | null;
+    phoneE164: string | null;
     purchaseTimeframe: string | null;
     emailVerified: Date | null;
     createdAt: Date;
@@ -323,6 +325,7 @@ export async function loadLeadSummary(
           name: true,
           email: true,
           phone: true,
+          phoneE164: true,
           purchaseTimeframe: true,
           emailVerified: true,
           createdAt: true,

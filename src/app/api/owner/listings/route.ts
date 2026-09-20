@@ -11,7 +11,7 @@ import {
   type OwnerAddonId,
 } from "@/lib/owner/pricing";
 import { prisma } from "@/lib/prisma";
-import { phoneColumnsForWrite } from "@/lib/sms/e164";
+import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 
 const addonSchema = z.enum([
   "CLEANING",
@@ -112,6 +112,10 @@ export async function POST(request: Request) {
   }
 
   const data = parsed.data;
+  const parsedPhone = parsePhoneColumnsForWrite(data.phone);
+  if (!parsedPhone.ok) {
+    return NextResponse.json({ error: parsedPhone.error }, { status: 400 });
+  }
   const addOns = data.addOns as OwnerAddonId[];
   if (data.transactionType === "LEASE" && addOns.includes("STAGING")) {
     return NextResponse.json(
@@ -127,7 +131,7 @@ export async function POST(request: Request) {
 
   await prisma.user.update({
     where: { id: user.id },
-    data: phoneColumnsForWrite(data.phone),
+    data: parsedPhone.columns,
     select: { id: true },
   });
 

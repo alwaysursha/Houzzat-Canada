@@ -838,6 +838,30 @@ async function testEligibilityGates() {
   await runSignupSmsAutomations(LEAD_A, { db: asDb(db5), sendSms: db5.sendSms });
   assert.equal(db5.sent.filter((row) => row.smsClass === "staff").length, 0);
   assert.ok(db5.sent.some((row) => row.smsClass === "conversational"));
+
+  const dbDrift = new FakeAutomationDb();
+  dbDrift.seedLead({
+    customer: {
+      name: "Jordan Customer",
+      email: "jordan@test.local",
+      phoneE164: "+16473613654",
+      phone: "416-555-0199",
+    },
+  });
+  await seedCatalog(dbDrift);
+  await runSignupSmsAutomations(LEAD_A, {
+    db: asDb(dbDrift),
+    sendSms: dbDrift.sendSms,
+  });
+  assert.ok(
+    dbDrift.sent.some(
+      (row) => row.smsClass === "conversational" && row.to === "+14165550199",
+    ),
+  );
+  assert.equal(
+    dbDrift.sent.some((row) => row.to === "+16473613654"),
+    false,
+  );
 }
 
 async function testTenantIsolationAndFailureIsolation() {

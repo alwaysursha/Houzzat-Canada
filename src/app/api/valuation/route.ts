@@ -22,7 +22,11 @@ import {
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
-import { phoneColumnsForWrite } from "@/lib/sms/e164";
+import {
+  InvalidContactPhoneError,
+  isInvalidContactPhoneError,
+  parsePhoneColumnsForWrite,
+} from "@/lib/sms/e164";
 import { VOW_VERSION } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 
@@ -133,10 +137,14 @@ async function ensureOwnerCustomer(opts: {
     if (existing.role === "AGENT") {
       return { userId: existing.id, accountCreated: false };
     }
+    const parsedPhone = opts.phone
+      ? parsePhoneColumnsForWrite(opts.phone)
+      : { ok: true as const, columns: {} };
+    if (!parsedPhone.ok) throw new InvalidContactPhoneError(parsedPhone.error);
     await prisma.user.update({
       where: { id: existing.id },
       data: {
-        ...(opts.phone ? phoneColumnsForWrite(opts.phone) : {}),
+        ...parsedPhone.columns,
         homeAddress: opts.address,
         ...(opts.lat != null && opts.lng != null
           ? { homeLat: opts.lat, homeLng: opts.lng }
@@ -155,6 +163,8 @@ async function ensureOwnerCustomer(opts: {
   }
 
   const now = new Date();
+  const parsedPhone = parsePhoneColumnsForWrite(opts.phone || null);
+  if (!parsedPhone.ok) throw new InvalidContactPhoneError(parsedPhone.error);
   const tempPassword = randomBytes(18).toString("base64url");
   const password = await bcrypt.hash(tempPassword, 10);
   const { ip, userAgent } = requestClientMeta(opts.request);
@@ -168,7 +178,7 @@ async function ensureOwnerCustomer(opts: {
       isBuyer: true,
       isSeller: true,
       activeMode: "SELLER",
-      ...phoneColumnsForWrite(opts.phone || null),
+      ...parsedPhone.columns,
       homeAddress: opts.address,
       homeLat: opts.lat ?? null,
       homeLng: opts.lng ?? null,
@@ -250,6 +260,13 @@ export async function POST(request: Request) {
         { error: "Please provide address, name, and email." },
         { status: 400 },
       );
+    }
+
+    if (data.phone) {
+      const parsedPhone = parsePhoneColumnsForWrite(data.phone);
+      if (!parsedPhone.ok) {
+        return NextResponse.json({ error: parsedPhone.error }, { status: 400 });
+      }
     }
 
     const session = await auth();
@@ -495,6 +512,9 @@ export async function POST(request: Request) {
       estimate: estimatePayload(estimate),
     });
   } catch (error) {
+    if (isInvalidContactPhoneError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     const routingError = publicLeadRoutingErrorResponse(error);
     if (routingError) return routingError;
     console.error("[valuation]", error);

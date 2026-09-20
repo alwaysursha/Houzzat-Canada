@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
-import { phoneColumnsForWrite } from "@/lib/sms/e164";
+import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 
 const nullableText = (max: number) =>
   z
@@ -61,6 +61,11 @@ export async function PATCH(request: Request) {
       : undefined;
   const nextPhone = parsed.data.phone;
   const nextAddress = parsed.data.address;
+  const parsedPhone =
+    nextPhone !== undefined ? parsePhoneColumnsForWrite(nextPhone) : null;
+  if (parsedPhone && !parsedPhone.ok) {
+    return NextResponse.json({ error: parsedPhone.error }, { status: 400 });
+  }
 
   if (nextEmail && nextEmail !== lead.customer.email) {
     const taken = await prisma.user.findUnique({
@@ -90,9 +95,9 @@ export async function PATCH(request: Request) {
               : {}),
           }
         : {}),
-      ...(nextPhone !== undefined
+      ...(parsedPhone
         ? {
-            ...phoneColumnsForWrite(nextPhone),
+            ...parsedPhone.columns,
             phoneUpdateRequestedAt: null,
             ...(nextPhone !== lead.customer.phone
               ? { phoneVerifiedAt: null }
@@ -106,7 +111,7 @@ export async function PATCH(request: Request) {
           }
         : {}),
     },
-    select: { email: true, phone: true, homeAddress: true },
+    select: { email: true, phone: true, phoneE164: true, homeAddress: true },
   });
 
   const changes: string[] = [];
@@ -142,6 +147,7 @@ export async function PATCH(request: Request) {
     ok: true,
     email: updated.email,
     phone: updated.phone,
+    phoneE164: updated.phoneE164,
     address: updated.homeAddress,
   });
 }

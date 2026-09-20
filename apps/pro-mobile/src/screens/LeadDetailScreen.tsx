@@ -26,6 +26,7 @@ import {
   View,
 } from "react-native";
 import { mobileApiClient } from "../api/client";
+import { contactSmsHref, contactTelHref, resolveCommunicationsE164 } from "../lib/contact-e164";
 import {
   EngagementTab,
   type EngagementProfileSummary,
@@ -784,6 +785,15 @@ export function LeadDetailScreen({
         return;
       }
     }
+    if (contactEditField === "phone" && trimmed) {
+      if (!resolveCommunicationsE164(trimmed, null)) {
+        Alert.alert(
+          "Invalid phone",
+          "Enter a valid phone number using a 10-digit Canada/US number or international +E.164 format.",
+        );
+        return;
+      }
+    }
 
     setContactPending(true);
     try {
@@ -797,6 +807,7 @@ export function LeadDetailScreen({
         ok: boolean;
         email?: string | null;
         phone?: string | null;
+        phoneE164?: string | null;
         address?: string | null;
         message?: string;
       }>(`/leads/${encodeURIComponent(leadId)}/contact`, body);
@@ -812,6 +823,7 @@ export function LeadDetailScreen({
       const data = (res.data ?? {}) as {
         email?: string | null;
         phone?: string | null;
+        phoneE164?: string | null;
         address?: string | null;
       };
       setLead((prev) => {
@@ -822,6 +834,10 @@ export function LeadDetailScreen({
             data.email !== undefined ? data.email : prev.customer.email,
           phone:
             data.phone !== undefined ? data.phone : prev.customer.phone,
+          phoneE164:
+            data.phoneE164 !== undefined
+              ? data.phoneE164
+              : prev.customer.phoneE164,
           homeAddress:
             data.address !== undefined
               ? data.address
@@ -976,16 +992,22 @@ export function LeadDetailScreen({
   };
 
   const handleCall = () => {
-    const phone = lead?.customer?.phone?.trim();
-    if (!phone) return;
-    void openNativeUrl(`tel:${phone}`, "Call unavailable");
+    const href = contactTelHref(
+      lead?.customer?.phone,
+      lead?.customer?.phoneE164,
+    );
+    if (!href) return;
+    void openNativeUrl(href, "Call unavailable");
   };
 
   const handleSms = () => {
-    const phone = lead?.customer?.phone?.trim();
-    if (!phone) return;
+    const href = contactSmsHref(
+      lead?.customer?.phone,
+      lead?.customer?.phoneE164,
+    );
+    if (!href) return;
     // Native SMS composer only — no canned body invented.
-    void openNativeUrl(`sms:${phone}`, "SMS unavailable");
+    void openNativeUrl(href, "SMS unavailable");
   };
 
   const handleEmail = () => {

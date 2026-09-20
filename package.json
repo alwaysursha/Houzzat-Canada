@@ -149,6 +149,7 @@
     "lead-import-isolation:selftest": "node --import tsx scripts/lead-import-isolation-selftest.ts",
     "lead-conversation:selftest": "node --import tsx scripts/lead-conversation-selftest.ts",
     "sms-phase1-foundation:selftest": "node --import tsx scripts/stage-sms-phase-1-foundation-selftest.ts",
+    "contact-phone-e164:selftest": "node --import tsx scripts/contact-phone-e164-consistency-selftest.ts",
     "sms-phase-2-outbound:selftest": "node --import tsx scripts/stage-sms-phase-2-outbound-selftest.ts",
     "sms-phase-3-inbound:selftest": "node --import tsx scripts/stage-sms-phase-3-inbound-selftest.ts",
     "sms-phase-4-isv:selftest": "node --import tsx scripts/stage-sms-phase-4-isv-selftest.ts",

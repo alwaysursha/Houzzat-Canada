@@ -240,6 +240,7 @@ export async function GET(request: Request) {
               name: true,
               email: true,
               phone: true,
+              phoneE164: true,
               createdAt: true,
               emailVerified: true,
             },
@@ -285,6 +286,7 @@ export async function GET(request: Request) {
         name: string | null;
         email: string | null;
         phone: string | null;
+        phoneE164: string | null;
         isBuyer: boolean;
         isSeller: boolean;
         createdAt: string;
@@ -317,6 +319,7 @@ export async function GET(request: Request) {
               name: lead.customer.name,
               email: lead.customer.email,
               phone: lead.customer.phone,
+              phoneE164: lead.customer.phoneE164,
               ...displayedCrmClassification(lead),
               createdAt: lead.customer.createdAt.toISOString(),
               emailVerified: Boolean(lead.customer.emailVerified),

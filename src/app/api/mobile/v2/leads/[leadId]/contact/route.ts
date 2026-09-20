@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authorizeMobileLeadAccess } from "@/lib/mobile/v2/lead-access";
 import { prisma } from "@/lib/prisma";
-import { phoneColumnsForWrite } from "@/lib/sms/e164";
+import { isInvalidContactPhoneError, parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 
 export const runtime = "nodejs";
 
@@ -97,6 +97,18 @@ export async function PATCH(
         : undefined;
     const nextPhone = parsed.data.phone;
     const nextAddress = parsed.data.address;
+    const parsedPhone =
+      nextPhone !== undefined ? parsePhoneColumnsForWrite(nextPhone) : null;
+    if (parsedPhone && !parsedPhone.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "VALIDATION_ERROR",
+          message: parsedPhone.error,
+        },
+        { status: 400 },
+      );
+    }
 
     if (nextEmail && nextEmail !== lead.customer.email) {
       const taken = await prisma.user.findUnique({
@@ -130,9 +142,9 @@ export async function PATCH(
                 : {}),
             }
           : {}),
-        ...(nextPhone !== undefined
+        ...(parsedPhone
           ? {
-              ...phoneColumnsForWrite(nextPhone),
+              ...parsedPhone.columns,
               phoneUpdateRequestedAt: null,
               ...(nextPhone !== lead.customer.phone
                 ? { phoneVerifiedAt: null }
@@ -146,7 +158,7 @@ export async function PATCH(
             }
           : {}),
       },
-      select: { email: true, phone: true, homeAddress: true },
+      select: { email: true, phone: true, phoneE164: true, homeAddress: true },
     });
 
     const changes: string[] = [];
@@ -182,9 +194,16 @@ export async function PATCH(
       ok: true,
       email: updated.email,
       phone: updated.phone,
+      phoneE164: updated.phoneE164,
       address: updated.homeAddress,
     });
   } catch (error: unknown) {
+    if (isInvalidContactPhoneError(error)) {
+      return NextResponse.json(
+        { ok: false, code: "VALIDATION_ERROR", message: error.message },
+        { status: 400 },
+      );
+    }
     const message =
       error instanceof Error ? error.message : "Internal server error";
     return NextResponse.json(

@@ -3,7 +3,10 @@ import { finalizeWritableLeadClassification } from "@/lib/agent/lead-classificat
 import { createCallNewLeadTask } from "@/lib/agent/lead-intake";
 import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { prisma } from "@/lib/prisma";
-import { phoneColumnsForWrite } from "@/lib/sms/e164";
+import {
+  InvalidContactPhoneError,
+  parsePhoneColumnsForWrite,
+} from "@/lib/sms/e164";
 
 export type ManualLeadInput = {
   name: string;
@@ -61,11 +64,13 @@ export async function createManualLead(input: ManualLeadInput) {
 
   let customer = await prisma.user.findUnique({ where: { email } });
   if (!customer) {
+    const parsedPhone = parsePhoneColumnsForWrite(phone);
+    if (!parsedPhone.ok) throw new InvalidContactPhoneError(parsedPhone.error);
     customer = await prisma.user.create({
       data: {
         email,
         name,
-        ...phoneColumnsForWrite(phone),
+        ...parsedPhone.columns,
         homeAddress,
         purchaseTimeframe: input.purchaseTimeframe ?? null,
         role: "BUYER",
@@ -74,11 +79,18 @@ export async function createManualLead(input: ManualLeadInput) {
       },
     });
   } else {
+    const parsedPhone =
+      customer.phone || !phone
+        ? null
+        : parsePhoneColumnsForWrite(phone);
+    if (parsedPhone && !parsedPhone.ok) {
+      throw new InvalidContactPhoneError(parsedPhone.error);
+    }
     customer = await prisma.user.update({
       where: { id: customer.id },
       data: {
         name: customer.name || name,
-        ...(customer.phone ? {} : phoneColumnsForWrite(phone)),
+        ...(parsedPhone ? parsedPhone.columns : {}),
         homeAddress: customer.homeAddress || homeAddress,
         purchaseTimeframe:
           customer.purchaseTimeframe || input.purchaseTimeframe || undefined,

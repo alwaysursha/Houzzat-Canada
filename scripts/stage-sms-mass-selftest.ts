@@ -140,6 +140,7 @@ type FakeLead = {
     name: string | null;
     email: string | null;
     phoneE164: string | null;
+    phone?: string | null;
   } | null;
   workspace: {
     name: string;
@@ -199,6 +200,7 @@ class FakeMassDb {
     id: string;
     assignedAgentId: string | null;
     phoneE164: string | null;
+    phone?: string | null;
     name?: string;
     workspaceId?: string;
   }) {
@@ -214,6 +216,7 @@ class FakeMassDb {
         name: input.name ?? "Jordan Customer",
         email: `${input.id}@test.local`,
         phoneE164: input.phoneE164,
+        phone: input.phone,
       },
       workspace:
         workspaceId === WS_B
@@ -869,6 +872,31 @@ async function testExclusions() {
   });
 }
 
+async function testCurrentDisplayPhoneDestination() {
+  const db = new FakeMassDb();
+  db.seedLead({
+    id: LEAD_1,
+    assignedAgentId: AGENT_A,
+    phoneE164: "+16473613654",
+    phone: "416-555-0199",
+  });
+  const originalSend = db.sendSms;
+  let capturedTo: string | null = null;
+  db.sendSms = async (input) => {
+    capturedTo = input.to;
+    return originalSend(input);
+  };
+  await withWorkspaceRead(async () => {
+    const result = await confirmAndDrain(db, makeCtx(), {
+      clientKey: "client-key-current-phone",
+      leadIds: [LEAD_1],
+      body: "Hello from {{workspaceName}}",
+    });
+    assert.equal(result.ok, true);
+    assert.equal(capturedTo, "+14165550199");
+  });
+}
+
 async function testInactiveQuickTextUnavailable() {
   const db = new FakeMassDb();
   await ensureSmsQuickTextCatalog({ smsQuickText: db.smsQuickText });
@@ -1089,6 +1117,7 @@ async function main() {
   testFilesAndUx();
   await testSelectedEligibleSend();
   await testExclusions();
+  await testCurrentDisplayPhoneDestination();
   await testInactiveQuickTextUnavailable();
   await testVariableRendering();
   await testAllowanceBlocksBeforeSend();

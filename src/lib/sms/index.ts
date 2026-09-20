@@ -1,7 +1,14 @@
 export {
+  contactSmsHref,
+  contactTelHref,
+  INVALID_CONTACT_PHONE_MESSAGE,
+  InvalidContactPhoneError,
   isE164,
+  isInvalidContactPhoneError,
   normalizeToE164,
+  parsePhoneColumnsForWrite,
   phoneColumnsForWrite,
+  resolveCommunicationsE164,
 } from "@/lib/sms/e164";
 export {
   findInboundSmsQuarantineSid,

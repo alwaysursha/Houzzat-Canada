@@ -30,6 +30,7 @@ import {
   v2RailBlueStatTiles,
 } from "@/lib/agent/lead-profile-v2/rail-query";
 import { cn } from "@/lib/utils";
+import { contactSmsHref, contactTelHref } from "@/lib/sms/e164";
 
 function RingStat({
   label,
@@ -157,6 +158,9 @@ export function LeadProfileV2Rail({
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
   const phone = data.lead.customer?.phone;
+  const phoneE164 = data.lead.customer?.phoneE164;
+  const telHref = contactTelHref(phone, phoneE164);
+  const smsHref = contactSmsHref(phone, phoneE164);
   const email = data.lead.customer?.email;
   const address = data.lead.customer?.homeAddress;
   const rings = v2EmailRingRates(rail);
@@ -164,13 +168,13 @@ export function LeadProfileV2Rail({
   const actions: ActionItem[] = [
     {
       icon: Phone,
-      href: phone ? `tel:${phone}` : undefined,
+      href: telHref,
       className: "bg-[#0d9488]",
       label: "Call",
     },
     {
       icon: MessageSquare,
-      href: phone ? `sms:${phone}` : undefined,
+      href: smsHref,
       className: "bg-[#0ea5e9]",
       label: "Text",
     },
@@ -235,7 +239,7 @@ export function LeadProfileV2Rail({
             <ContactDisplayRow
               icon={Phone}
               value={phone}
-              href={phone ? `tel:${phone}` : undefined}
+              href={telHref}
               canEdit={Boolean(data.lead.customer)}
               onEdit={() => onEditContact("phone")}
               editLabel="Edit phone"
@@ -583,21 +587,23 @@ export function LeadProfileV2Rail({
 
 export function LeadProfileV2ActionRail({
   phone,
+  phoneE164,
   email,
 }: {
   phone: string | null | undefined;
+  phoneE164: string | null | undefined;
   email: string | null | undefined;
 }) {
   const actions: ActionItem[] = [
     {
       icon: Phone,
-      href: phone ? `tel:${phone}` : undefined,
+      href: contactTelHref(phone, phoneE164),
       className: "bg-[#0d9488]",
       label: "Call",
     },
     {
       icon: MessageSquare,
-      href: phone ? `sms:${phone}` : undefined,
+      href: contactSmsHref(phone, phoneE164),
       className: "bg-[#0ea5e9]",
       label: "Text",
     },
