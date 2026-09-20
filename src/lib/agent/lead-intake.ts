@@ -27,7 +27,10 @@ import {
   resolveLeadCrmOwnership,
 } from "@/lib/crm-ownership";
 import { notifyNewLeadCapturedToStaff, scheduleNewLeadStaffEmail } from "@/lib/notifications/staff-events";
-import { scheduleSignupSmsAutomations } from "@/lib/sms/automations";
+import {
+  scheduleCustomerIntroductionSmsAutomationsForLead,
+  scheduleSignupSmsAutomations,
+} from "@/lib/sms/automations";
 import { prisma } from "@/lib/prisma";
 import {
   resolveDefaultWorkspaceIdForRouting,
@@ -455,6 +458,8 @@ export async function captureWebsiteLead(input: {
 
   if (input.source === "SIGNUP") {
     scheduleSignupSmsAutomations(lead.id);
+  } else {
+    scheduleCustomerIntroductionSmsAutomationsForLead(lead.id);
   }
 
   if (assigneeId) {

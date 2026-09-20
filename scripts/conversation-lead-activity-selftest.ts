@@ -6,7 +6,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { conversationActivityHeadline } from "../src/lib/agent/conversation-activity";
+import {
+  conversationActivityFromLeadActivity,
+  conversationActivityHeadline,
+} from "../src/lib/agent/conversation-activity";
 import {
   recordConversationLeadActivity,
   recordSmsLeadActivity,
@@ -234,6 +237,17 @@ function testAutomationHeadlinesDoNotNeedNewRows() {
     }),
     "Conversation · SMS · Automated",
   );
+  const parsed = conversationActivityFromLeadActivity({
+    type: "SMS",
+    meta: {
+      channel: "SMS",
+      direction: "outbound",
+      messageId: "msg-auto",
+      automationKey: "lead.welcome_new_signup",
+      recipient: "LEAD",
+    },
+  });
+  assert.equal(parsed.automationName, "Customer Introduction");
   assert.equal(
     conversationActivityHeadline({
       type: "SMS",

@@ -3,6 +3,7 @@ export const SMS_AUTOMATION_KEYS = {
   agentLeadUnsubscribed: "agent.lead_unsubscribed",
   agentLeadReturned: "agent.lead_returned_after_inactivity",
   agentViewingRequested: "agent.viewing_requested",
+  /** Display name: Customer Introduction. Key kept to preserve dispatch history. */
   leadWelcome: "lead.welcome_new_signup",
   leadInactive14: "lead.inactive_14_days",
   leadReturned: "lead.returned_after_inactivity",

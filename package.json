@@ -157,6 +157,7 @@
     "sms-v1-conversation-access:selftest": "node --import tsx scripts/stage-sms-v1-conversation-access-selftest.ts",
     "sms-automations:selftest": "node --import tsx scripts/stage-sms-automations-selftest.ts",
     "sms-automations-wiring:selftest": "node --import tsx scripts/stage-sms-automations-wiring-selftest.ts",
+    "sms-customer-introduction:selftest": "node --import tsx scripts/stage-sms-customer-introduction-selftest.ts",
     "sms-automation-conversation-activity:selftest": "node --import tsx scripts/sms-automation-conversation-activity-selftest.ts",
     "sms-automations:run": "node --import tsx scripts/run-sms-automations.ts",
     "sms-agent-individual-quick-texts-usage:selftest": "node --import tsx scripts/stage-sms-agent-individual-quick-texts-usage-selftest.ts",

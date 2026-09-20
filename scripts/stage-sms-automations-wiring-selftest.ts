@@ -14,6 +14,10 @@ import type {
 } from "@prisma/client";
 import type { LeadConversationRecord } from "../src/lib/conversations/lead-conversation";
 import { conversationActivityHeadline } from "../src/lib/agent/conversation-activity";
+import {
+  smsAutomationDisplayName,
+  smsAutomationTranscriptLabel,
+} from "../src/lib/platform/sms-automations/catalog";
 import type {
   ConversationMessageRecord,
   ConversationMessageTx,
@@ -29,11 +33,12 @@ import {
   completedInactiveDays,
   SMS_AUTOMATION_KEYS,
 } from "../src/lib/sms/automations";
+import { becameFirstValidCustomerE164, isRetryableCustomerIntroductionSkip } from "../src/lib/sms/automations/customer-introduction";
 import { smsAutomationLeadProfileUrl } from "../src/lib/sms/automations/urls";
+import { resolveAssignedAgentNotifyDestination } from "../src/lib/sms/assigned-agent-inbound-notify";
+import { runInactiveLeadSmsAutomations } from "../src/lib/sms/automations/inactive";
 import {
-  runInactiveLeadSmsAutomations,
-} from "../src/lib/sms/automations/inactive";
-import {
+  runCustomerIntroductionSmsAutomation,
   runLeadReturnedSmsAutomations,
   runSignupSmsAutomations,
   runUnsubscribeSmsAutomations,
@@ -351,18 +356,24 @@ class FakeAutomationDb {
       Object.assign(row, data, { updatedAt: new Date() });
       return row;
     },
-    updateMany: async ({ where, data }) => {
-      const allowed = where.status?.in;
-      let count = 0;
-      for (const row of this.dispatches) {
-        if (row.id !== where.id) continue;
-        if (allowed && !allowed.includes(row.status)) continue;
-        Object.assign(row, data);
-        count += 1;
-      }
-      return { count };
-    },
-  };
+      updateMany: async ({ where, data }) => {
+        const allowed = where.status?.in;
+        let count = 0;
+        for (const row of this.dispatches) {
+          if (row.id !== where.id) continue;
+          if (allowed && !allowed.includes(row.status)) continue;
+          Object.assign(row, data);
+          count += 1;
+        }
+        return { count };
+      },
+      delete: async ({ where }) => {
+        const idx = this.dispatches.findIndex((row) => row.id === where.id);
+        if (idx < 0) throw new Error("missing dispatch");
+        const [row] = this.dispatches.splice(idx, 1);
+        return row;
+      },
+    };
 
   conversation = {
     findUnique: async ({ where }: { where: Record<string, unknown> }) => {
@@ -614,6 +625,7 @@ function testFilesAndWiring() {
   assert.ok(intake.includes('source === "SIGNUP"'));
   const prefs = read("src/app/api/account/preferences/route.ts");
   assert.ok(prefs.includes("scheduleUnsubscribeSmsAutomations"));
+  assert.ok(prefs.includes("scheduleCustomerIntroductionIfFirstValidE164"));
   const leads = read("src/app/api/leads/route.ts");
   assert.ok(leads.includes("scheduleViewingRequestedSmsAutomation"));
   const staff = read("src/lib/notifications/staff-events.ts");
@@ -624,6 +636,20 @@ function testFilesAndWiring() {
   assert.ok(execute.includes('category: "AUTOMATION"'));
   assert.ok(execute.includes('category: "AGENT_NOTIFICATION"'));
   assert.ok(execute.includes("smsAutomationLeadProfileUrl"));
+  assert.ok(execute.includes("DEFERRED"));
+  assert.ok(execute.includes("resolveAssignedAgentNotifyDestination"));
+  const agentNotify = read("src/lib/sms/assigned-agent-inbound-notify.ts");
+  assert.ok(agentNotify.includes("AGENT_PHONE_IS_LEAD"));
+  const contact = read("src/app/api/account/contact/route.ts");
+  assert.ok(contact.includes("scheduleCustomerIntroductionIfFirstValidE164"));
+  const agentContact = read("src/app/api/agent/leads/contact/route.ts");
+  assert.ok(agentContact.includes("scheduleCustomerIntroductionIfFirstValidE164"));
+  const mobileContact = read(
+    "src/app/api/mobile/v2/leads/[leadId]/contact/route.ts",
+  );
+  assert.ok(mobileContact.includes("scheduleCustomerIntroductionIfFirstValidE164"));
+  const manual = read("src/lib/agent/create-manual-lead.ts");
+  assert.ok(manual.includes("scheduleCustomerIntroductionSmsAutomationsForLead"));
   const cron = read("src/app/api/cron/sms-automations/route.ts");
   assert.ok(cron.includes("runInactiveLeadSmsAutomations"));
   const migration = read(
@@ -682,6 +708,14 @@ async function testSignupFiresOnce() {
     automationKey: "lead.welcome_new_signup",
   });
   assert.equal(db.messages.length, 1);
+  assert.equal(
+    smsAutomationDisplayName("lead.welcome_new_signup"),
+    "Customer Introduction",
+  );
+  assert.equal(
+    smsAutomationTranscriptLabel(leadMessage?.payload),
+    "Automated · Customer Introduction",
+  );
   const leadActivity = db.activities.find(
     (row) =>
       row.meta &&
@@ -855,6 +889,12 @@ async function testEligibilityGates() {
   await seedCatalog(db4);
   await runSignupSmsAutomations(LEAD_A, { db: asDb(db4), sendSms: db4.sendSms });
   assert.equal(db4.sent.filter((row) => row.smsClass === "conversational").length, 0);
+  assert.equal(
+    db4.dispatches.filter(
+      (row) => row.automationKey === SMS_AUTOMATION_KEYS.leadWelcome,
+    ).length,
+    0,
+  );
 
   const db5 = new FakeAutomationDb();
   db5.seedLead({
@@ -985,10 +1025,296 @@ async function testManualAllowanceSplitAndInbound() {
   assert.equal(reply?.leadId, LEAD_A);
 }
 
+function noPhoneCustomer() {
+  return {
+    name: "Hamida Hamdana",
+    email: "nophone@test.local",
+    phoneE164: null as string | null,
+    phone: null as string | null,
+  };
+}
+
+async function testCustomerIntroductionFirstPhoneOnce() {
+  const db = new FakeAutomationDb();
+  db.seedLead({
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    customer: noPhoneCustomer(),
+  });
+  await seedCatalog(db);
+  await runSignupSmsAutomations(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
+  assert.equal(db.sent.filter((row) => row.smsClass === "staff").length, 1);
+  assert.equal(db.sent.filter((row) => row.smsClass === "conversational").length, 0);
+  assert.equal(
+    db.dispatches.filter(
+      (row) => row.automationKey === SMS_AUTOMATION_KEYS.leadWelcome,
+    ).length,
+    0,
+  );
+
+  await runCustomerIntroductionSmsAutomation(LEAD_A, {
+    db: asDb(db),
+    sendSms: db.sendSms,
+  });
+  assert.equal(db.sent.filter((row) => row.smsClass === "conversational").length, 0);
+
+  const lead = db.leads.get(LEAD_A)!;
+  lead.customer = {
+    ...noPhoneCustomer(),
+    phone: TO_LEAD,
+    phoneE164: TO_LEAD,
+  };
+  assert.equal(
+    becameFirstValidCustomerE164({
+      previousPhone: null,
+      previousPhoneE164: null,
+      nextPhone: TO_LEAD,
+      nextPhoneE164: TO_LEAD,
+    }),
+    true,
+  );
+  await runCustomerIntroductionSmsAutomation(LEAD_A, {
+    db: asDb(db),
+    sendSms: db.sendSms,
+  });
+  assert.equal(db.sent.filter((row) => row.smsClass === "conversational").length, 1);
+  assert.equal(
+    db.sent.find((row) => row.smsClass === "conversational")?.to,
+    TO_LEAD,
+  );
+  assert.ok(db.events.some((row) => row.category === "AUTOMATION"));
+  assert.equal(db.messages.length, 1);
+  assert.equal(
+    smsAutomationTranscriptLabel(db.messages[0]?.payload),
+    "Automated · Customer Introduction",
+  );
+  const leadActivity = db.activities.find(
+    (row) =>
+      row.meta &&
+      typeof row.meta === "object" &&
+      (row.meta as { recipient?: string }).recipient === "LEAD",
+  );
+  assert.equal(
+    conversationActivityHeadline({
+      type: leadActivity?.type ?? "",
+      meta: leadActivity?.meta,
+    }),
+    "Conversation · SMS · Automated",
+  );
+
+  lead.customer = {
+    ...lead.customer,
+    phone: "+14165550999",
+    phoneE164: "+14165550999",
+  };
+  assert.equal(
+    becameFirstValidCustomerE164({
+      previousPhone: TO_LEAD,
+      previousPhoneE164: TO_LEAD,
+      nextPhone: "+14165550999",
+      nextPhoneE164: "+14165550999",
+    }),
+    false,
+  );
+  await runCustomerIntroductionSmsAutomation(LEAD_A, {
+    db: asDb(db),
+    sendSms: db.sendSms,
+  });
+  assert.equal(db.sent.filter((row) => row.smsClass === "conversational").length, 1);
+
+  await Promise.all([
+    runCustomerIntroductionSmsAutomation(LEAD_A, {
+      db: asDb(db),
+      sendSms: db.sendSms,
+    }),
+    runCustomerIntroductionSmsAutomation(LEAD_A, {
+      db: asDb(db),
+      sendSms: db.sendSms,
+    }),
+  ]);
+  assert.equal(db.sent.filter((row) => row.smsClass === "conversational").length, 1);
+}
+
+async function testHistoricalSkippedNoCustomerE164IsRetryableNotBackfill() {
+  assert.equal(
+    isRetryableCustomerIntroductionSkip({
+      automationKey: SMS_AUTOMATION_KEYS.leadWelcome,
+      status: "SKIPPED",
+      errorCode: "NO_CUSTOMER_E164",
+    }),
+    true,
+  );
+  assert.equal(
+    isRetryableCustomerIntroductionSkip({
+      automationKey: SMS_AUTOMATION_KEYS.leadWelcome,
+      status: "SKIPPED",
+      errorCode: "SUPPRESSED",
+    }),
+    false,
+  );
+
+  const alreadyHasPhone = new FakeAutomationDb();
+  alreadyHasPhone.seedLead();
+  await seedCatalog(alreadyHasPhone);
+  alreadyHasPhone.dispatches.push({
+    id: "hist_skip_has_phone",
+    workspaceId: WS_A,
+    leadId: LEAD_A,
+    automationKey: SMS_AUTOMATION_KEYS.leadWelcome,
+    cycleKey: "signup",
+    status: "SKIPPED",
+    twilioMessageSid: null,
+    messageId: null,
+    errorCode: "NO_CUSTOMER_E164",
+    createdAt: new Date("2026-09-20T23:26:46.000Z"),
+    updatedAt: new Date("2026-09-20T23:26:46.000Z"),
+    processedAt: new Date("2026-09-20T23:26:46.000Z"),
+  });
+  assert.equal(
+    becameFirstValidCustomerE164({
+      previousPhone: TO_LEAD,
+      previousPhoneE164: TO_LEAD,
+      nextPhone: "+14165550999",
+      nextPhoneE164: "+14165550999",
+    }),
+    false,
+  );
+  assert.equal(alreadyHasPhone.sent.length, 0);
+  assert.equal(
+    alreadyHasPhone.dispatches.find(
+      (row) => row.automationKey === SMS_AUTOMATION_KEYS.leadWelcome,
+    )?.status,
+    "SKIPPED",
+  );
+
+  const stillPhoneless = new FakeAutomationDb();
+  stillPhoneless.seedLead({ customer: noPhoneCustomer() });
+  await seedCatalog(stillPhoneless);
+  stillPhoneless.dispatches.push({
+    id: "hist_skip_no_phone",
+    workspaceId: WS_A,
+    leadId: LEAD_A,
+    automationKey: SMS_AUTOMATION_KEYS.leadWelcome,
+    cycleKey: "signup",
+    status: "SKIPPED",
+    twilioMessageSid: null,
+    messageId: null,
+    errorCode: "NO_CUSTOMER_E164",
+    createdAt: new Date("2026-09-20T23:26:46.000Z"),
+    updatedAt: new Date("2026-09-20T23:26:46.000Z"),
+    processedAt: new Date("2026-09-20T23:26:46.000Z"),
+  });
+  const lead = stillPhoneless.leads.get(LEAD_A)!;
+  lead.customer = {
+    ...noPhoneCustomer(),
+    phone: TO_LEAD,
+    phoneE164: TO_LEAD,
+  };
+  assert.equal(
+    becameFirstValidCustomerE164({
+      previousPhone: null,
+      previousPhoneE164: null,
+      nextPhone: TO_LEAD,
+      nextPhoneE164: TO_LEAD,
+    }),
+    true,
+  );
+  await runCustomerIntroductionSmsAutomation(LEAD_A, {
+    db: asDb(stillPhoneless),
+    sendSms: stillPhoneless.sendSms,
+  });
+  assert.equal(
+    stillPhoneless.sent.filter((row) => row.smsClass === "conversational").length,
+    1,
+  );
+  assert.equal(
+    stillPhoneless.dispatches.find(
+      (row) => row.automationKey === SMS_AUTOMATION_KEYS.leadWelcome,
+    )?.status,
+    "SENT",
+  );
+}
+
+async function testAgentNewLeadStaysAgentOnlyAndCollidesClosed() {
+  assert.equal(
+    resolveAssignedAgentNotifyDestination({
+      agentPhoneE164: TO_AGENT,
+      agentPhone: TO_AGENT,
+      leadPhoneE164: TO_AGENT,
+    }).reason,
+    "AGENT_PHONE_IS_LEAD",
+  );
+
+  const db = new FakeAutomationDb();
+  db.seedLead({
+    customer: {
+      name: "Hamida Hamdana",
+      email: "same@test.local",
+      phone: TO_AGENT,
+      phoneE164: TO_AGENT,
+    },
+    assignedAgent: {
+      id: AGENT_A,
+      name: "Ali Agent",
+      email: "agent@test.local",
+      phoneE164: TO_AGENT,
+      phone: TO_AGENT,
+      disabledAt: null,
+    },
+  });
+  await seedCatalog(db);
+  await runSignupSmsAutomations(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
+  assert.equal(db.sent.filter((row) => row.smsClass === "staff").length, 0);
+  assert.equal(db.sent.filter((row) => row.smsClass === "conversational").length, 1);
+  assert.equal(db.messages.length, 1);
+  const agentDispatch = db.dispatches.find(
+    (row) => row.automationKey === SMS_AUTOMATION_KEYS.agentNewLeadSignup,
+  );
+  assert.equal(agentDispatch?.status, "SKIPPED");
+  assert.equal(agentDispatch?.errorCode, "AGENT_PHONE_IS_LEAD");
+  assert.ok(db.events.every((row) => row.category !== "AGENT_NOTIFICATION"));
+  assert.ok(db.events.some((row) => row.category === "AUTOMATION"));
+}
+
+async function testCustomerIntroductionSuppressedStaysTerminal() {
+  const db = new FakeAutomationDb();
+  db.seedLead({
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    customer: noPhoneCustomer(),
+  });
+  db.suppressions.add(`${WS_A}::${TO_LEAD}`);
+  await seedCatalog(db);
+  await runSignupSmsAutomations(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
+  const lead = db.leads.get(LEAD_A)!;
+  lead.customer = {
+    ...noPhoneCustomer(),
+    phone: TO_LEAD,
+    phoneE164: TO_LEAD,
+  };
+  await runCustomerIntroductionSmsAutomation(LEAD_A, {
+    db: asDb(db),
+    sendSms: db.sendSms,
+  });
+  assert.equal(db.sent.filter((row) => row.smsClass === "conversational").length, 0);
+  const intro = db.dispatches.find(
+    (row) => row.automationKey === SMS_AUTOMATION_KEYS.leadWelcome,
+  );
+  assert.equal(intro?.status, "SKIPPED");
+  assert.equal(intro?.errorCode, "SUPPRESSED");
+  await runCustomerIntroductionSmsAutomation(LEAD_A, {
+    db: asDb(db),
+    sendSms: db.sendSms,
+  });
+  assert.equal(intro?.status, "SKIPPED");
+}
+
 async function main() {
   testFilesAndWiring();
   testBucketBoundaries();
   await testSignupFiresOnce();
+  await testCustomerIntroductionFirstPhoneOnce();
+  await testHistoricalSkippedNoCustomerE164IsRetryableNotBackfill();
+  await testAgentNewLeadStaysAgentOnlyAndCollidesClosed();
+  await testCustomerIntroductionSuppressedStaysTerminal();
   await testUnsubscribeAgentOnly();
   await testViewingPropertyOnce();
   await testInactiveOnceAndNewCycle();

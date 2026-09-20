@@ -17,12 +17,22 @@ export {
   runInactiveLeadSmsAutomations,
 } from "./inactive";
 export {
+  runCustomerIntroductionSmsAutomation,
+  runCustomerIntroductionSmsAutomationsForCustomer,
   runLeadReturnedSmsAutomations,
   runSignupSmsAutomations,
   runUnsubscribeSmsAutomations,
   runViewingRequestedSmsAutomation,
+  scheduleCustomerIntroductionIfFirstValidE164,
+  scheduleCustomerIntroductionSmsAutomationsForCustomer,
+  scheduleCustomerIntroductionSmsAutomationsForLead,
   scheduleLeadReturnedSmsAutomations,
   scheduleSignupSmsAutomations,
   scheduleUnsubscribeSmsAutomations,
   scheduleViewingRequestedSmsAutomation,
 } from "./triggers";
+export {
+  becameFirstValidCustomerE164,
+  customerIntroductionCycleKey,
+  isCustomerIntroductionAutomationKey,
+} from "./customer-introduction";

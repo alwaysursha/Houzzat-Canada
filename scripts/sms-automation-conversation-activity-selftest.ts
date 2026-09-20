@@ -384,6 +384,10 @@ function testPresenterExposesSmsAutomationPayloadSafely() {
     "Automated · Inactive for 14 Days",
   );
   assert.equal(
+    smsAutomationTranscriptLabel({ automationKey: "lead.welcome_new_signup" }),
+    "Automated · Customer Introduction",
+  );
+  assert.equal(
     v2SmsAutomationBadge(presented.payload),
     "Automated · Inactive for 14 Days",
   );

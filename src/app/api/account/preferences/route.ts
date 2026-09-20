@@ -7,7 +7,10 @@ import {
 } from "@/lib/agent/log-contact-activity";
 import { prisma } from "@/lib/prisma";
 import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
-import { scheduleUnsubscribeSmsAutomations } from "@/lib/sms/automations";
+import {
+  scheduleCustomerIntroductionIfFirstValidE164,
+  scheduleUnsubscribeSmsAutomations,
+} from "@/lib/sms/automations";
 
 const schema = z.object({
   emailAlertsEnabled: z.boolean().optional(),
@@ -62,6 +65,7 @@ export async function PATCH(request: Request) {
       emailAlertsEnabled: true,
       smsAlertsEnabled: true,
       phone: true,
+      phoneE164: true,
       relatedListingsMode: true,
       vowAcceptedAt: true,
       vowVersion: true,
@@ -116,6 +120,15 @@ export async function PATCH(request: Request) {
       actorUserId: user.id,
       meta: { phone: phoneValue, source: "preferences" },
     });
+    if (parsedPhone) {
+      scheduleCustomerIntroductionIfFirstValidE164({
+        customerId: user.id,
+        previousPhone: user.phone,
+        previousPhoneE164: null,
+        nextPhone: updated.phone,
+        nextPhoneE164: updated.phoneE164,
+      });
+    }
   }
 
   return NextResponse.json({ ok: true, preferences: updated });

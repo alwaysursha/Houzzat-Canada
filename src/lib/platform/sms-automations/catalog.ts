@@ -86,19 +86,20 @@ export const SMS_AUTOMATION_CATALOG: readonly SmsAutomationCatalogSpec[] = [
     body: "{{leadName}} requested a viewing at {{propertyAddress}}. Open: {{leadProfileUrl}}",
   },
   {
+    // Key retained: production dispatches/versions already use this key.
     key: "lead.welcome_new_signup",
-    name: "Welcome / New Lead Signup",
+    name: "Customer Introduction",
     recipient: "LEAD",
-    triggerKey: "NEW_LEAD_SIGNUP",
+    triggerKey: "CUSTOMER_FIRST_CELLPHONE",
     description:
-      "Welcome SMS to a new Lead. Reply-enabled so a Lead reply can unlock Agent SMS.",
+      "One SMS when this Lead/Customer first has a valid cellphone. Reply-enabled. Not tied to signup date; later number edits do not resend.",
     replyEnabled: true,
     delayMinutes: null,
     delayEditable: false,
     inactivityDays: null,
     inactivityBuckets: null,
     allowedVariables: ["firstName", "agentName", "workspaceName"],
-    body: "Hi {{firstName}}, it's {{agentName}} at {{workspaceName}}. Reply here anytime.",
+    body: "Hi {{firstName}}, {{agentName}} here from {{workspaceName}}. Just a quick hello! Whenever you need help with a property, viewing, or your home search, I’m only a message away.",
   },
   {
     key: "lead.inactive_14_days",

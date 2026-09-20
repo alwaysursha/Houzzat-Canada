@@ -16,7 +16,12 @@ import { renderSmsTemplate } from "@/lib/platform/sms-automations/variables";
 import { firstNameFromLeadName } from "@/lib/sms/quick-texts/render";
 import { isE164, resolveCommunicationsE164 } from "@/lib/sms/e164";
 import { isPhoneSuppressed, type SmsSuppressionDb } from "@/lib/sms/suppression";
-import { resolveAssignedAgentNotifyToE164 } from "@/lib/sms/assigned-agent-inbound-notify";
+import { resolveAssignedAgentNotifyDestination } from "@/lib/sms/assigned-agent-inbound-notify";
+import {
+  CUSTOMER_INTRODUCTION_MISSING_PHONE,
+  isCustomerIntroductionAutomationKey,
+  isRetryableCustomerIntroductionSkip,
+} from "./customer-introduction";
 import { estimateSmsSegmentCount } from "@/lib/sms/segments";
 import { sendSms, type SmsTransportDeps } from "@/lib/sms/transport";
 import type { SendSmsResult } from "@/lib/sms/types";
@@ -126,6 +131,7 @@ export type SmsAutomationExecuteDb = SmsAutomationDb &
         };
         data: Partial<SmsAutomationDispatchRow>;
       }) => Promise<{ count: number }>;
+      delete: (args: { where: { id: string } }) => Promise<unknown>;
     };
     conversation: {
       findUnique: (args: object) => Promise<unknown>;
@@ -146,7 +152,11 @@ export type SmsAutomationExecuteDb = SmsAutomationDb &
   };
 
 export type DispatchSmsAutomationResult = {
-  status: SmsAutomationDispatchStatus | "DUPLICATE" | "NO_WORKSPACE";
+  status:
+    | SmsAutomationDispatchStatus
+    | "DUPLICATE"
+    | "NO_WORKSPACE"
+    | "DEFERRED";
   reason?: string | null;
 };
 
@@ -254,6 +264,20 @@ async function finish(
   });
 }
 
+async function releaseUnsentDispatch(
+  db: SmsAutomationExecuteDb,
+  id: string,
+) {
+  try {
+    await db.smsAutomationDispatch.delete({ where: { id } });
+  } catch {
+    await finish(db, id, {
+      status: "FAILED",
+      errorCode: CUSTOMER_INTRODUCTION_MISSING_PHONE,
+    }).catch(() => undefined);
+  }
+}
+
 export async function dispatchSmsAutomation(
   db: SmsAutomationExecuteDb,
   input: DispatchSmsAutomationInput,
@@ -270,6 +294,19 @@ export async function dispatchSmsAutomation(
   const workspaceId = lead?.workspaceId?.trim() || "";
   if (!lead || !workspaceId) {
     return { status: "NO_WORKSPACE", reason: "NO_WORKSPACE" };
+  }
+
+  if (isCustomerIntroductionAutomationKey(key)) {
+    const toE164 = resolveCommunicationsE164(
+      lead.customer?.phone,
+      lead.customer?.phoneE164,
+    );
+    if (!toE164 || !isE164(toE164)) {
+      return {
+        status: "DEFERRED",
+        reason: CUSTOMER_INTRODUCTION_MISSING_PHONE,
+      };
+    }
   }
 
   let row: SmsAutomationDispatchRow;
@@ -300,14 +337,21 @@ export async function dispatchSmsAutomation(
       },
     });
     if (!existing) return { status: "DUPLICATE", reason: "P2002" };
-    if (existing.status === "SENT" || existing.status === "SKIPPED") {
+    if (existing.status === "SENT") {
+      return { status: "DUPLICATE", reason: existing.status };
+    }
+    const retryableSkip = isRetryableCustomerIntroductionSkip(existing);
+    if (existing.status === "SKIPPED" && !retryableSkip) {
       return { status: "DUPLICATE", reason: existing.status };
     }
     if (existing.status === "PENDING" || existing.status === "PROCESSING") {
       return { status: "DUPLICATE", reason: existing.status };
     }
+    const claimFrom: SmsAutomationDispatchStatus[] = retryableSkip
+      ? ["SKIPPED"]
+      : ["FAILED"];
     const claimed = await db.smsAutomationDispatch.updateMany({
-      where: { id: existing.id, status: { in: ["FAILED"] } },
+      where: { id: existing.id, status: { in: claimFrom } },
       data: { status: "PROCESSING", errorCode: null, processedAt: new Date() },
     });
     if (claimed.count !== 1) {
@@ -400,21 +444,22 @@ async function sendAgentNotification(
     });
     return { status: "SKIPPED", reason: "NO_ASSIGNEE" };
   }
-  const to = resolveAssignedAgentNotifyToE164({
+  const destination = resolveAssignedAgentNotifyDestination({
     agentPhoneE164: agent.phoneE164,
     agentPhone: agent.phone,
-      leadPhoneE164: resolveCommunicationsE164(
-        lead.customer?.phone,
-        lead.customer?.phoneE164,
-      ),
+    leadPhoneE164: resolveCommunicationsE164(
+      lead.customer?.phone,
+      lead.customer?.phoneE164,
+    ),
   });
-  if (!to) {
+  if (!destination.to) {
     await finish(db, row.id, {
       status: "SKIPPED",
-      errorCode: "NO_AGENT_PHONE",
+      errorCode: destination.reason,
     });
-    return { status: "SKIPPED", reason: "NO_AGENT_PHONE" };
+    return { status: "SKIPPED", reason: destination.reason };
   }
+  const to = destination.to;
 
   const send = deps.sendSms ?? sendSms;
   const sent = await send({
@@ -497,11 +542,18 @@ async function sendLeadAutomation(
     : null;
 
   if (!toE164 || !isE164(toE164)) {
+    if (isCustomerIntroductionAutomationKey(key)) {
+      await releaseUnsentDispatch(db, row.id);
+      return {
+        status: "DEFERRED",
+        reason: CUSTOMER_INTRODUCTION_MISSING_PHONE,
+      };
+    }
     await finish(db, row.id, {
       status: "SKIPPED",
-      errorCode: "NO_CUSTOMER_E164",
+      errorCode: CUSTOMER_INTRODUCTION_MISSING_PHONE,
     });
-    return { status: "SKIPPED", reason: "NO_CUSTOMER_E164" };
+    return { status: "SKIPPED", reason: CUSTOMER_INTRODUCTION_MISSING_PHONE };
   }
   if (
     !fromE164 ||

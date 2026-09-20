@@ -3,6 +3,7 @@ import { z } from "zod";
 import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
 import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
+import { scheduleCustomerIntroductionIfFirstValidE164 } from "@/lib/sms/automations";
 
 const nullableText = (max: number) =>
   z
@@ -46,7 +47,7 @@ export async function PATCH(request: Request) {
       assignedAgentId: true,
       customerId: true,
       customer: {
-        select: { id: true, email: true, phone: true, homeAddress: true },
+        select: { id: true, email: true, phone: true, phoneE164: true, homeAddress: true },
       },
     },
   });
@@ -140,6 +141,16 @@ export async function PATCH(request: Request) {
           homeAddress: updated.homeAddress,
         },
       },
+    });
+  }
+
+  if (parsedPhone && lead.customer) {
+    scheduleCustomerIntroductionIfFirstValidE164({
+      customerId: lead.customer.id,
+      previousPhone: lead.customer.phone,
+      previousPhoneE164: lead.customer.phoneE164,
+      nextPhone: updated.phone,
+      nextPhoneE164: updated.phoneE164,
     });
   }
 

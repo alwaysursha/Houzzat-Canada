@@ -68,6 +68,9 @@ export {
   SMS_MASS_V1_MAX_RECIPIENTS,
 } from "@/lib/sms/mass";
 export {
+  scheduleCustomerIntroductionIfFirstValidE164,
+  scheduleCustomerIntroductionSmsAutomationsForCustomer,
+  scheduleCustomerIntroductionSmsAutomationsForLead,
   scheduleSignupSmsAutomations,
   scheduleUnsubscribeSmsAutomations,
   scheduleViewingRequestedSmsAutomation,
@@ -76,6 +79,7 @@ export {
 } from "@/lib/sms/automations";
 export {
   formatAssignedAgentInboundSmsNotification,
+  resolveAssignedAgentNotifyDestination,
   resolveAssignedAgentNotifyToE164,
   scheduleNotifyAssignedAgentOfInboundSmsByCell,
 } from "@/lib/sms/assigned-agent-inbound-notify";

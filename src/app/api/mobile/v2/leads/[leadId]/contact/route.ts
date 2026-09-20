@@ -11,6 +11,7 @@ import { z } from "zod";
 import { authorizeMobileLeadAccess } from "@/lib/mobile/v2/lead-access";
 import { prisma } from "@/lib/prisma";
 import { isInvalidContactPhoneError, parsePhoneColumnsForWrite } from "@/lib/sms/e164";
+import { scheduleCustomerIntroductionIfFirstValidE164 } from "@/lib/sms/automations";
 
 export const runtime = "nodejs";
 
@@ -79,7 +80,7 @@ export async function PATCH(
         id: true,
         customerId: true,
         customer: {
-          select: { id: true, email: true, phone: true, homeAddress: true },
+          select: { id: true, email: true, phone: true, phoneE164: true, homeAddress: true },
         },
       },
     });
@@ -187,6 +188,16 @@ export async function PATCH(
             homeAddress: updated.homeAddress,
           },
         },
+      });
+    }
+
+    if (parsedPhone && lead.customer) {
+      scheduleCustomerIntroductionIfFirstValidE164({
+        customerId: lead.customer.id,
+        previousPhone: lead.customer.phone,
+        previousPhoneE164: lead.customer.phoneE164,
+        nextPhone: updated.phone,
+        nextPhoneE164: updated.phoneE164,
       });
     }
 

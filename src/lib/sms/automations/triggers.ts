@@ -7,6 +7,10 @@ import {
   type LastCustomerActivityDb,
 } from "./activity";
 import {
+  customerIntroductionCycleKey,
+  becameFirstValidCustomerE164,
+} from "./customer-introduction";
+import {
   returnedCycleKey,
   signupCycleKey,
   SMS_AUTOMATION_KEYS,
@@ -58,11 +62,40 @@ export async function runSignupSmsAutomations(
     { key: SMS_AUTOMATION_KEYS.agentNewLeadSignup, leadId, cycleKey },
     deps,
   );
+  await runCustomerIntroductionSmsAutomation(leadId, deps);
+}
+
+export async function runCustomerIntroductionSmsAutomation(
+  leadId: string,
+  deps: SmsAutomationTriggerDeps = {},
+) {
+  const db = execDb(deps);
   await safeDispatch(
     db,
-    { key: SMS_AUTOMATION_KEYS.leadWelcome, leadId, cycleKey },
+    {
+      key: SMS_AUTOMATION_KEYS.leadWelcome,
+      leadId,
+      cycleKey: customerIntroductionCycleKey(),
+    },
     deps,
   );
+}
+
+export async function runCustomerIntroductionSmsAutomationsForCustomer(
+  customerId: string,
+  deps: SmsAutomationTriggerDeps = {},
+) {
+  const id = customerId.trim();
+  if (!id) return;
+  const db = execDb(deps);
+  const leads = (await db.lead.findMany({
+    where: { customerId: id, workspaceId: { not: null } },
+    select: { id: true },
+    take: SMS_AUTOMATION_RETURN_LEAD_CAP,
+  } as never)) as Array<{ id: string }>;
+  for (const lead of leads) {
+    await runCustomerIntroductionSmsAutomation(lead.id, deps);
+  }
 }
 
 export function scheduleSignupSmsAutomations(leadId: string): void {
@@ -82,6 +115,59 @@ export function scheduleSignupSmsAutomations(leadId: string): void {
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+export function scheduleCustomerIntroductionSmsAutomationsForLead(
+  leadId: string,
+): void {
+  if (!leadId.trim()) return;
+  try {
+    scheduleWorkerSideEffect(
+      runCustomerIntroductionSmsAutomation(leadId).catch((error) => {
+        console.error("[sms:automation] customer introduction failed", {
+          leadId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }),
+    );
+  } catch (error) {
+    console.error("[sms:automation] customer introduction schedule failed", {
+      leadId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+export function scheduleCustomerIntroductionSmsAutomationsForCustomer(
+  customerId: string,
+): void {
+  if (!customerId.trim()) return;
+  try {
+    scheduleWorkerSideEffect(
+      runCustomerIntroductionSmsAutomationsForCustomer(customerId).catch(
+        (error) => {
+          console.error("[sms:automation] customer introduction failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        },
+      ),
+    );
+  } catch (error) {
+    console.error("[sms:automation] customer introduction schedule failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+export function scheduleCustomerIntroductionIfFirstValidE164(input: {
+  customerId: string;
+  previousPhone?: string | null;
+  previousPhoneE164?: string | null;
+  nextPhone?: string | null;
+  nextPhoneE164?: string | null;
+}): void {
+  if (!becameFirstValidCustomerE164(input)) return;
+  scheduleCustomerIntroductionSmsAutomationsForCustomer(input.customerId);
 }
 
 export async function runUnsubscribeSmsAutomations(

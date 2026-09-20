@@ -164,6 +164,13 @@ function testCatalogAndBuckets() {
   for (const row of returned) {
     assert.deepEqual(row.inactivityBuckets, [...LEAD_RETURNED_INACTIVITY_BUCKETS_DAYS]);
   }
+  const intro = SMS_AUTOMATION_CATALOG.find(
+    (row) => row.key === "lead.welcome_new_signup",
+  );
+  assert.equal(intro?.name, "Customer Introduction");
+  assert.equal(intro?.triggerKey, "CUSTOMER_FIRST_CELLPHONE");
+  assert.equal(intro?.recipient, "LEAD");
+  assert.ok(intro?.body.includes("{{agentName}} here from {{workspaceName}}"));
 }
 
 function testInvalidVariables() {
@@ -358,12 +365,39 @@ function testFilesAndNoTriggerWiring() {
   assert.equal(tenantCrm.includes("sms-automations"), false);
 }
 
+async function testEnsureSyncsCatalogMetadata() {
+  const db = await seeded();
+  const intro = [...db.definitions.values()].find(
+    (row) => row.key === "lead.welcome_new_signup",
+  );
+  assert.ok(intro);
+  intro!.name = "Welcome / New Lead Signup";
+  intro!.triggerKey = "NEW_LEAD_SIGNUP";
+  intro!.description = "old";
+  const publishedBody = db.versions.find(
+    (row) => row.definitionId === intro!.id && row.status === "PUBLISHED",
+  )?.body;
+  await ensureSmsAutomationCatalog(db);
+  const after = [...db.definitions.values()].find(
+    (row) => row.key === "lead.welcome_new_signup",
+  );
+  assert.equal(after?.name, "Customer Introduction");
+  assert.equal(after?.triggerKey, "CUSTOMER_FIRST_CELLPHONE");
+  assert.equal(
+    db.versions.find(
+      (row) => row.definitionId === intro!.id && row.status === "PUBLISHED",
+    )?.body,
+    publishedBody,
+  );
+}
+
 async function main() {
   testCatalogAndBuckets();
   testInvalidVariables();
   testPreviewAndProtections();
   testFilesAndNoTriggerWiring();
   await testGlobalPublishedResolutionAndEnsureIdempotent();
+  await testEnsureSyncsCatalogMetadata();
   await testDraftPublishRollback();
   await testPublishRejectsInvalidVariables();
   await testInactiveSkipsResolution();

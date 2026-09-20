@@ -66,7 +66,12 @@ export type SmsAutomationDb = {
       data: Partial<
         Pick<
           SmsAutomationDefinitionRow,
-          "name" | "active" | "delayMinutes" | "updatedAt"
+          | "name"
+          | "description"
+          | "triggerKey"
+          | "active"
+          | "delayMinutes"
+          | "updatedAt"
         >
       >;
     }) => Promise<SmsAutomationDefinitionRow>;
@@ -151,7 +156,25 @@ export async function ensureSmsAutomationCatalog(
     const existing = await db.smsAutomationDefinition.findUnique({
       where: { key: spec.key },
     });
-    if (existing) continue;
+    if (existing) {
+      const patch: Partial<
+        Pick<SmsAutomationDefinitionRow, "name" | "description" | "triggerKey">
+      > = {};
+      if (existing.name !== spec.name) patch.name = spec.name;
+      if (existing.description !== spec.description) {
+        patch.description = spec.description;
+      }
+      if (existing.triggerKey !== spec.triggerKey) {
+        patch.triggerKey = spec.triggerKey;
+      }
+      if (Object.keys(patch).length > 0) {
+        await db.smsAutomationDefinition.update({
+          where: { id: existing.id },
+          data: { ...patch, updatedAt: new Date() },
+        });
+      }
+      continue;
+    }
     const definition = await db.smsAutomationDefinition.create({
       data: {
         key: spec.key,

@@ -11,6 +11,7 @@ import {
   logJsonApi,
 } from "@/lib/http/json-api-response";
 import { prisma } from "@/lib/prisma";
+import { scheduleCustomerIntroductionIfFirstValidE164 } from "@/lib/sms/automations";
 import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 
 const ROUTE = "/api/account/contact";
@@ -98,7 +99,7 @@ export async function PATCH(request: Request) {
 
     const current = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { email: true, phone: true },
+      select: { email: true, phone: true, phoneE164: true },
     });
     if (!current) {
       return reply(404, { error: "Not found" });
@@ -125,6 +126,7 @@ export async function PATCH(request: Request) {
       select: {
         email: true,
         phone: true,
+        phoneE164: true,
         emailUpdateRequestedAt: true,
         phoneUpdateRequestedAt: true,
       },
@@ -173,6 +175,16 @@ export async function PATCH(request: Request) {
       emailChanged: changes.some((c) => c.startsWith("email")),
       phoneChanged: changes.some((c) => c.startsWith("phone")),
     });
+
+    if (parsedPhone) {
+      scheduleCustomerIntroductionIfFirstValidE164({
+        customerId: user.id,
+        previousPhone: current.phone,
+        previousPhoneE164: current.phoneE164,
+        nextPhone: updated.phone,
+        nextPhoneE164: updated.phoneE164,
+      });
+    }
 
     return reply(200, {
       ok: true,

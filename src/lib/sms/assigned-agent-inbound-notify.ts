@@ -50,18 +50,36 @@ export function formatAssignedAgentInboundSmsNotification(input: {
   return `${name}: ${preview}\n${url}`;
 }
 
+export type AssignedAgentNotifySkipReason =
+  | "NO_AGENT_PHONE"
+  | "AGENT_PHONE_IS_LEAD";
+
+export type AssignedAgentNotifyDestination =
+  | { to: string; reason: null }
+  | { to: null; reason: AssignedAgentNotifySkipReason };
+
+export function resolveAssignedAgentNotifyDestination(input: {
+  agentPhoneE164: string | null | undefined;
+  agentPhone: string | null | undefined;
+  leadPhoneE164: string | null | undefined;
+}): AssignedAgentNotifyDestination {
+  const fromE164 = isE164(input.agentPhoneE164)
+    ? input.agentPhoneE164
+    : null;
+  const to = fromE164 ?? normalizeToE164(input.agentPhone ?? null);
+  if (!to || !isE164(to)) return { to: null, reason: "NO_AGENT_PHONE" };
+  if (input.leadPhoneE164 && to === input.leadPhoneE164) {
+    return { to: null, reason: "AGENT_PHONE_IS_LEAD" };
+  }
+  return { to, reason: null };
+}
+
 export function resolveAssignedAgentNotifyToE164(input: {
   agentPhoneE164: string | null | undefined;
   agentPhone: string | null | undefined;
   leadPhoneE164: string | null | undefined;
 }): string | null {
-  const fromE164 = isE164(input.agentPhoneE164)
-    ? input.agentPhoneE164
-    : null;
-  const to = fromE164 ?? normalizeToE164(input.agentPhone ?? null);
-  if (!to || !isE164(to)) return null;
-  if (input.leadPhoneE164 && to === input.leadPhoneE164) return null;
-  return to;
+  return resolveAssignedAgentNotifyDestination(input).to;
 }
 
 async function defaultLoadAssignee(userId: string) {

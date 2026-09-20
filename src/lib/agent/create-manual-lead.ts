@@ -3,6 +3,7 @@ import { finalizeWritableLeadClassification } from "@/lib/agent/lead-classificat
 import { createCallNewLeadTask } from "@/lib/agent/lead-intake";
 import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { prisma } from "@/lib/prisma";
+import { scheduleCustomerIntroductionSmsAutomationsForLead } from "@/lib/sms/automations";
 import {
   InvalidContactPhoneError,
   parsePhoneColumnsForWrite,
@@ -142,6 +143,8 @@ export async function createManualLead(input: ManualLeadInput) {
     organizationId: input.organizationId,
     createdById: input.agentId,
   });
+
+  scheduleCustomerIntroductionSmsAutomationsForLead(lead.id);
 
   return { leadId: lead.id, customerId: customer.id, email, intent };
 }
