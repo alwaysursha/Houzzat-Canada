@@ -175,6 +175,7 @@ export const ACTIVITY_FILTER_GROUPS: ActivityFilterGroup[] = [
           "contact_update",
           "contact_update_request",
           "contact_updated_by_customer",
+          "lead_info_updated",
           "contact_verify",
           "profile_flags",
           "email_verification_requested",

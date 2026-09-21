@@ -28,7 +28,7 @@ import {
   resolveChildCrmOwnership,
   resolveLeadCrmOwnership,
 } from "@/lib/crm-ownership";
-import { notifyNewLeadCapturedToStaff, scheduleNewLeadStaffEmail } from "@/lib/notifications/staff-events";
+import { notifyNewLeadCapturedToStaff, scheduleLeadInfoUpdatedAfterIntake, scheduleNewLeadStaffEmail } from "@/lib/notifications/staff-events";
 import {
   scheduleCustomerIntroductionSmsAutomationsForLead,
   scheduleSignupSmsAutomations,
@@ -476,6 +476,14 @@ export async function captureWebsiteLead(input: {
   const lead = resolved.lead;
 
   if (!resolved.created) {
+    scheduleLeadInfoUpdatedAfterIntake({
+      created: false,
+      leadId: lead.id,
+      assignedAgentId: assigneeId,
+      clientLabel: input.name?.trim() || input.email || null,
+      changes: resolved.classificationChanges,
+      actorUserId: input.actorId ?? input.customerId,
+    });
     return {
       lead,
       assignedAgentId: assigneeId,

@@ -5,6 +5,7 @@
 export type StaffNotificationCategoryId =
   | "new_leads"
   | "lead_assignment"
+  | "lead_updates"
   | "contact_appointments"
   | "live_activity"
   | "tasks"

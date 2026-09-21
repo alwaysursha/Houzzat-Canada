@@ -1,8 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
-import { scheduleStaffContactUpdatedNotice } from "@/lib/account/contact-update-notify";
+import {
+  applyCanonicalCustomerContact,
+} from "@/lib/agent/lead-info-change";
 import { logContactActivityForCustomer } from "@/lib/agent/log-contact-activity";
+import { scheduleLeadInfoUpdatedForCustomer } from "@/lib/notifications/staff-events";
 import { isDatabaseUnavailableError } from "@/lib/errors";
 import {
   createRequestId,
@@ -105,24 +108,16 @@ export async function PATCH(request: Request) {
       return reply(404, { error: "Not found" });
     }
 
-    const updated = await prisma.user.update({
+    const applied = await applyCanonicalCustomerContact(prisma, user.id, {
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+    });
+    if (!applied.ok) {
+      return reply(applied.status, { error: applied.error });
+    }
+
+    const updated = await prisma.user.findUnique({
       where: { id: user.id },
-      data: {
-        ...(nextEmail !== undefined
-          ? {
-              email: nextEmail,
-              emailUpdateRequestedAt: null,
-              ...(nextEmail !== current.email ? { emailVerified: null } : {}),
-            }
-          : {}),
-        ...(parsedPhone
-          ? {
-              ...parsedPhone.columns,
-              phoneUpdateRequestedAt: null,
-              ...(nextPhone !== current.phone ? { phoneVerifiedAt: null } : {}),
-            }
-          : {}),
-      },
       select: {
         email: true,
         phone: true,
@@ -131,26 +126,19 @@ export async function PATCH(request: Request) {
         phoneUpdateRequestedAt: true,
       },
     });
-
-    const changes: string[] = [];
-    if (nextEmail !== undefined && nextEmail !== current.email) {
-      changes.push(`email → ${nextEmail}`);
-    }
-    if (nextPhone !== undefined && nextPhone !== current.phone) {
-      changes.push(nextPhone ? `phone → ${nextPhone}` : "phone cleared");
+    if (!updated) {
+      return reply(404, { error: "Not found" });
     }
 
-    if (changes.length) {
+    if (applied.changes.length) {
       try {
         await logContactActivityForCustomer({
           customerId: user.id,
           type: "contact_updated_by_customer",
-          body: `Customer updated contact: ${changes.join("; ")}`,
+          body: `Customer updated contact: ${applied.changes.map((c) => c.label).join("; ")}`,
           actorUserId: user.id,
           meta: {
-            email: updated.email,
-            phone: updated.phone,
-            changes,
+            changes: applied.changes.map((c) => c.label),
           },
         });
       } catch (error) {
@@ -170,13 +158,13 @@ export async function PATCH(request: Request) {
       }
     }
 
-    scheduleStaffContactUpdatedNotice({
+    scheduleLeadInfoUpdatedForCustomer({
       customerId: user.id,
-      emailChanged: changes.some((c) => c.startsWith("email")),
-      phoneChanged: changes.some((c) => c.startsWith("phone")),
+      changes: applied.changes,
+      actorUserId: user.id,
     });
 
-    if (parsedPhone) {
+    if (parsed.data.phone !== undefined) {
       scheduleCustomerIntroductionIfFirstValidE164({
         customerId: user.id,
         previousPhone: current.phone,

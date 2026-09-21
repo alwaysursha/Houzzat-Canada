@@ -20,6 +20,8 @@ import {
   type ResolveOrCreateWorkspaceLeadResult,
   type ResolveWorkspaceLeadActivity,
 } from "@/lib/agent/resolve-workspace-lead";
+import type { MaterialLeadInfoChange } from "@/lib/agent/lead-info-change";
+import { scheduleLeadInfoUpdatedAfterIntake } from "@/lib/notifications/staff-events";
 import {
   formatLeadSmsPrefix,
   formatNewLeadEmailSubject,
@@ -83,6 +85,7 @@ export async function publicResolveOrCreateLead(input: {
     adCampaignId?: string | null;
   };
   activity?: ResolveWorkspaceLeadActivity | null;
+  contactChanges?: MaterialLeadInfoChange[];
 }): Promise<
   ResolveOrCreateWorkspaceLeadResult & {
     brand: Awaited<ReturnType<typeof resolveLeadNotificationBrandFromRequest>>;
@@ -139,6 +142,18 @@ export async function publicResolveOrCreateLead(input: {
   const deskNotifiers = await resolveLeadDeskNotifiers({
     organizationId: resolved.organizationId ?? organizationId,
     workspaceId: tenancy.workspaceId,
+  });
+
+  scheduleLeadInfoUpdatedAfterIntake({
+    created: resolved.created,
+    leadId: resolved.lead.id,
+    assignedAgentId: resolved.assignedAgentId,
+    clientLabel: input.name?.trim() || input.email || null,
+    changes: [
+      ...resolved.classificationChanges,
+      ...(input.contactChanges ?? []),
+    ],
+    actorUserId: input.actorId ?? input.customerId ?? null,
   });
 
   return {

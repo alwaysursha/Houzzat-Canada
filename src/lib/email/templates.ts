@@ -107,6 +107,37 @@ export function renderContactUpdateRequestEmail(input: {
   return { subject, text, html, kind: "contact_update_request" };
 }
 
+export function renderLeadInfoUpdatedEmail(input: {
+  clientLabel: string;
+  changeLabels: string[];
+  leadUrl: string;
+}): RenderedEmail {
+  const summary = input.changeLabels.filter(Boolean).join(", ");
+  const subject = summary
+    ? `${input.clientLabel} updated their lead information: ${summary}`
+    : `${input.clientLabel} updated their lead information`;
+  const text = [
+    subject,
+    "",
+    "Open the lead in HouzzatPRO for details. This notice lists what changed, not the new values.",
+    "",
+    `Open in HouzzatPRO: ${input.leadUrl}`,
+  ].join("\n");
+  const html = emailLayout({
+    title: "Lead information updated",
+    subtitle: subject,
+    preheader: subject,
+    bodyHtml: `
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(input.clientLabel)} updated their lead information${
+        summary ? `: ${escapeHtml(summary)}` : ""
+      }.</p>
+      ${infoCard("This notice identifies what changed. Open the lead for the current details.")}
+      ${ctaButton(input.leadUrl, "Open lead in HouzzatPRO")}
+    `,
+  });
+  return { subject, text, html, kind: "lead_info_updated" };
+}
+
 export function renderStaffContactUpdatedEmail(input: {
   clientLabel: string;
   fields: Array<"email" | "phone">;

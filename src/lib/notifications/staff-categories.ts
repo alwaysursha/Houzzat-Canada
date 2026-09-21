@@ -10,6 +10,7 @@ export const STAFF_EMAIL_PREFS_KEY = "staffEmail" as const;
 export const STAFF_NOTIFICATION_CATEGORIES = [
   "new_leads",
   "lead_assignment",
+  "lead_updates",
   "contact_appointments",
   "live_activity",
   "tasks",
@@ -57,6 +58,15 @@ export const STAFF_CATEGORY_CATALOG: StaffCategoryDefinition[] = [
       "Get notified when leads are assigned or transferred to you.",
     pushTypes: ["lead_reassigned"],
     emailActive: false,
+    highStakes: true,
+  },
+  {
+    id: "lead_updates",
+    label: "Lead Info Updates",
+    description:
+      "When a client updates contact details or adds Buyer/Seller interest.",
+    pushTypes: ["lead_info_updated"],
+    emailActive: true,
     highStakes: true,
   },
   {

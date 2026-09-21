@@ -15,6 +15,10 @@ import {
   mergeIncomingLeadClassification,
 } from "@/lib/agent/lead-classification";
 import {
+  diffLeadClassificationChanges,
+  type MaterialLeadInfoChange,
+} from "@/lib/agent/lead-info-change";
+import {
   AmbiguousLeadIdentityError,
   identityLockKey,
   normalizeLeadEmail,
@@ -99,6 +103,7 @@ export type ResolveOrCreateWorkspaceLeadResult = {
   assignedAgentId: string | null;
   organizationId: string | null;
   customerId: string | null;
+  classificationChanges: MaterialLeadInfoChange[];
 };
 
 const inFlight = new Map<string, Promise<ResolveOrCreateWorkspaceLeadResult>>();
@@ -368,6 +373,7 @@ async function attachToExistingLead(
     assignedAgentId: updated.assignedAgentId,
     organizationId: input.organizationId ?? null,
     customerId: updated.customerId,
+    classificationChanges: diffLeadClassificationChanges(existing, updated),
   };
 }
 
@@ -424,6 +430,7 @@ async function insertNewLead(
     assignedAgentId: created.assignedAgentId,
     organizationId,
     customerId: created.customerId,
+    classificationChanges: [],
   };
 }
 

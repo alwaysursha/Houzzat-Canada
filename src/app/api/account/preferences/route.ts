@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
 import {
+  applyCanonicalCustomerContact,
+} from "@/lib/agent/lead-info-change";
+import {
   logContactActivityForCustomer,
   logLeadActivityForCustomer,
 } from "@/lib/agent/log-contact-activity";
 import { prisma } from "@/lib/prisma";
 import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
+import { scheduleLeadInfoUpdatedForCustomer } from "@/lib/notifications/staff-events";
 import {
   scheduleCustomerIntroductionIfFirstValidE164,
   scheduleUnsubscribeSmsAutomations,
@@ -40,21 +44,27 @@ export async function PATCH(request: Request) {
   if (parsedPhone && !parsedPhone.ok) {
     return NextResponse.json({ error: parsedPhone.error }, { status: 400 });
   }
-  const phoneChanged =
-    phoneValue !== undefined && phoneValue !== (user.phone ?? null);
+
+  let phoneChanges: Awaited<
+    ReturnType<typeof applyCanonicalCustomerContact>
+  > | null = null;
+  if (phoneValue) {
+    phoneChanges = await applyCanonicalCustomerContact(prisma, user.id, {
+      phone: phoneValue,
+    });
+    if (!phoneChanges.ok) {
+      return NextResponse.json(
+        { error: phoneChanges.error },
+        { status: phoneChanges.status },
+      );
+    }
+  }
 
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
       emailAlertsEnabled: parsed.data.emailAlertsEnabled,
       smsAlertsEnabled: parsed.data.smsAlertsEnabled,
-      ...(parsedPhone
-        ? {
-            ...parsedPhone.columns,
-            phoneUpdateRequestedAt: null,
-            ...(phoneChanged ? { phoneVerifiedAt: null } : {}),
-          }
-        : {}),
       relatedListingsMode: parsed.data.relatedListingsMode,
       caslConsentAt:
         parsed.data.emailAlertsEnabled || parsed.data.smsAlertsEnabled
@@ -110,25 +120,26 @@ export async function PATCH(request: Request) {
     scheduleUnsubscribeSmsAutomations(user.id);
   }
 
-  if (phoneChanged) {
+  if (phoneChanges?.ok && phoneChanges.changes.length) {
     await logContactActivityForCustomer({
       customerId: user.id,
       type: "contact_updated_by_customer",
-      body: phoneValue
-        ? `Customer updated contact: phone → ${phoneValue}`
-        : "Customer updated contact: phone cleared",
+      body: `Customer updated contact: ${phoneChanges.changes.map((c) => c.label).join("; ")}`,
       actorUserId: user.id,
-      meta: { phone: phoneValue, source: "preferences" },
+      meta: { source: "preferences", changes: phoneChanges.changes.map((c) => c.label) },
     });
-    if (parsedPhone) {
-      scheduleCustomerIntroductionIfFirstValidE164({
-        customerId: user.id,
-        previousPhone: user.phone,
-        previousPhoneE164: null,
-        nextPhone: updated.phone,
-        nextPhoneE164: updated.phoneE164,
-      });
-    }
+    scheduleLeadInfoUpdatedForCustomer({
+      customerId: user.id,
+      changes: phoneChanges.changes,
+      actorUserId: user.id,
+    });
+    scheduleCustomerIntroductionIfFirstValidE164({
+      customerId: user.id,
+      previousPhone: user.phone,
+      previousPhoneE164: null,
+      nextPhone: updated.phone,
+      nextPhoneE164: updated.phoneE164,
+    });
   }
 
   return NextResponse.json({ ok: true, preferences: updated });

@@ -300,6 +300,7 @@ function typeLabel(item: TimelineItem) {
   if (item.type === "contact_update_request") return "Contact update requested";
   if (item.type === "contact_updated_by_customer")
     return "Contact updated by customer";
+  if (item.type === "lead_info_updated") return "Lead info updated";
   if (item.type === "contact_update") return "Contact updated";
   if (item.type === "note_pin") return "Note pin";
   return friendlyActivityTypeLabel(item.type);

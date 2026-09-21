@@ -55,6 +55,7 @@ const SCHEMA = join(REPO_ROOT, "prisma/schema.prisma");
 const CATEGORIES = [
   "new_leads",
   "lead_assignment",
+  "lead_updates",
   "contact_appointments",
   "live_activity",
   "tasks",
@@ -73,6 +74,7 @@ function mergeStaffCategoryPrefs(
   const pushTypes: Record<string, string[]> = {
     new_leads: ["new_lead"],
     lead_assignment: ["lead_reassigned"],
+    lead_updates: ["lead_info_updated"],
     contact_appointments: ["contact_requested", "appointment"],
     live_activity: ["lead_online", "hot_pipeline"],
     tasks: ["task_due"],
@@ -102,6 +104,7 @@ function staffCategoriesForUi(prefs: Record<string, unknown>) {
   const pushMap: Record<string, string[]> = {
     new_leads: ["new_lead"],
     lead_assignment: ["lead_reassigned"],
+    lead_updates: ["lead_info_updated"],
     contact_appointments: ["contact_requested", "appointment"],
     live_activity: ["lead_online", "hot_pipeline"],
     tasks: ["task_due"],
@@ -114,9 +117,12 @@ function staffCategoriesForUi(prefs: Record<string, unknown>) {
       id,
       pushEnabled,
       emailEnabled: email[id] !== false,
-      emailActive: id === "new_leads",
+      emailActive: id === "new_leads" || id === "lead_updates",
       highStakes:
-        id === "new_leads" || id === "lead_assignment" || id === "tasks",
+        id === "new_leads" ||
+        id === "lead_assignment" ||
+        id === "lead_updates" ||
+        id === "tasks",
     };
   });
 }
@@ -187,7 +193,7 @@ async function runStage510Tests() {
       assert.ok(catSrc.includes(`"${id}"`) || catSrc.includes(`id: "${id}"`));
     }
     const categories = staffCategoriesForUi({});
-    assert.equal(categories.length, 6);
+    assert.equal(categories.length, 7);
     assert.ok(categories.every((c) => c.pushEnabled === true));
     assert.ok(categories.every((c) => c.emailEnabled === true));
     const newLeads = categories.find((c) => c.id === "new_leads");

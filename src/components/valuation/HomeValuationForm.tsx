@@ -281,7 +281,19 @@ function EstimatePreviewWindow({
   );
 }
 
-export function HomeValuationForm() {
+export type HomeValuationInitialContact = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  authenticated: boolean;
+};
+
+export function HomeValuationForm({
+  initialContact = null,
+}: {
+  initialContact?: HomeValuationInitialContact | null;
+} = {}) {
   const searchParams = useSearchParams();
   const { digits: whatsappDigits } = useExpertWhatsAppNumber();
   const initialAddress = searchParams.get("address") ?? "";
@@ -328,9 +340,10 @@ export function HomeValuationForm() {
     const n = Number(initialLng);
     return Number.isFinite(n) ? n : undefined;
   });
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [firstName, setFirstName] = useState(initialContact?.firstName ?? "");
+  const [lastName, setLastName] = useState(initialContact?.lastName ?? "");
+  const [email, setEmail] = useState(initialContact?.email ?? "");
+  const [phone, setPhone] = useState(initialContact?.phone ?? "");
   const [marketPulseOptIn, setMarketPulseOptIn] = useState(true);
   const [neighbourhoodSalesOptIn, setNeighbourhoodSalesOptIn] = useState(true);
   const [pending, setPending] = useState(false);
@@ -488,7 +501,11 @@ export function HomeValuationForm() {
   async function submitContact(event: React.FormEvent) {
     event.preventDefault();
     if (submitLockRef.current) return;
-    if (!name.trim() || !email.trim()) {
+    const composedName = `${firstName.trim()} ${lastName.trim()}`.replace(
+      /\s+/g,
+      " ",
+    ).trim();
+    if (!composedName || !email.trim()) {
       setError("Please enter your name and email.");
       return;
     }
@@ -513,7 +530,9 @@ export function HomeValuationForm() {
           community: community || undefined,
           lat,
           lng,
-          name: name.trim(),
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          name: composedName,
           email: email.trim(),
           phone: phone.trim(),
           intent: "sell",
@@ -791,6 +810,12 @@ export function HomeValuationForm() {
                 About 30 seconds. We’ll lock in your range and optional market
                 updates.
               </p>
+              {initialContact?.authenticated ? (
+                <p className="mt-2 text-xs text-ink/55">
+                  Signed in — we filled in the details Houzzat already has. You
+                  can correct anything before saving.
+                </p>
+              ) : null}
               <p className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full bg-mist px-3 py-1 text-xs font-medium text-ink/70">
                 <MapPin className="size-3.5 shrink-0 text-canopy" aria-hidden />
                 <span className="truncate">{address}</span>
@@ -814,16 +839,27 @@ export function HomeValuationForm() {
             </ul>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5 sm:col-span-2">
+              <div className="space-y-1.5">
                 <label className="text-sm font-medium text-ink/80">
-                  Full name
+                  First name
                 </label>
                 <Input
                   required
-                  autoComplete="name"
+                  autoComplete="given-name"
                   className="h-11"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-ink/80">
+                  Last name
+                </label>
+                <Input
+                  autoComplete="family-name"
+                  className="h-11"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
@@ -838,7 +874,9 @@ export function HomeValuationForm() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-ink/80">Phone</label>
+                <label className="text-sm font-medium text-ink/80">
+                  Cellphone
+                </label>
                 <Input
                   required
                   type="tel"

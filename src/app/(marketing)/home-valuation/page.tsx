@@ -7,6 +7,11 @@ import {
   ESTIMATOR_FAQS,
   SELLING_FAQS,
 } from "@/components/valuation/valuation-faqs";
+import { splitCustomerDisplayName } from "@/lib/agent/lead-info-change";
+import { LEAD_IDENTITY_SENTINEL_EMAILS } from "@/lib/agent/lead-identity";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { isConsumerRole } from "@/lib/roles";
 import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
 import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
@@ -72,6 +77,32 @@ export default async function HomeValuationPage() {
     absoluteUrlForOrigin(siteUrl, "/home-valuation") ??
     `${siteUrl.replace(/\/$/, "")}/home-valuation`;
 
+  const session = await auth();
+  let initialContact: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    authenticated: boolean;
+  } | null = null;
+  if (session?.user?.id && isConsumerRole(session.user.role)) {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { name: true, email: true, phone: true },
+    });
+    if (user) {
+      const names = splitCustomerDisplayName(user.name);
+      const email = user.email.trim().toLowerCase();
+      initialContact = {
+        firstName: names.firstName,
+        lastName: names.lastName,
+        email: LEAD_IDENTITY_SENTINEL_EMAILS.has(email) ? "" : user.email,
+        phone: user.phone?.trim() ?? "",
+        authenticated: true,
+      };
+    }
+  }
+
   return (
     <div className="pb-20">
       <script
@@ -111,7 +142,7 @@ export default async function HomeValuationPage() {
                 </div>
               }
             >
-              <HomeValuationForm />
+              <HomeValuationForm initialContact={initialContact} />
             </Suspense>
           </div>
 

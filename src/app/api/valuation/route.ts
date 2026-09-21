@@ -6,6 +6,11 @@ import { auth } from "@/lib/auth";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
 import {
+  applyCanonicalCustomerContact,
+  composeCustomerDisplayName,
+  type MaterialLeadInfoChange,
+} from "@/lib/agent/lead-info-change";
+import {
   publicLeadNotificationCopy,
   publicLeadRoutingErrorResponse,
   publicResolveOrCreateLead,
@@ -22,6 +27,7 @@ import {
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
+import { isConsumerRole } from "@/lib/roles";
 import {
   InvalidContactPhoneError,
   isInvalidContactPhoneError,
@@ -59,6 +65,8 @@ const schema = z.object({
   lat: z.number().optional(),
   lng: z.number().optional(),
   name: z.string().trim().min(1).max(120).optional(),
+  firstName: z.string().trim().max(60).optional(),
+  lastName: z.string().trim().max(60).optional(),
   email: z
     .string()
     .trim()
@@ -126,7 +134,11 @@ async function ensureOwnerCustomer(opts: {
   marketingOptIn: boolean;
   acceptTerms: boolean;
   request: Request;
-}): Promise<{ userId: string; accountCreated: boolean }> {
+}): Promise<{
+  userId: string;
+  accountCreated: boolean;
+  contactChanges: MaterialLeadInfoChange[];
+}> {
   const email = opts.email.toLowerCase();
   const existing = await prisma.user.findUnique({
     where: { email },
@@ -135,20 +147,19 @@ async function ensureOwnerCustomer(opts: {
 
   if (existing) {
     if (existing.role === "AGENT") {
-      return { userId: existing.id, accountCreated: false };
+      return { userId: existing.id, accountCreated: false, contactChanges: [] };
     }
-    const parsedPhone = opts.phone
-      ? parsePhoneColumnsForWrite(opts.phone)
-      : { ok: true as const, columns: {} };
-    if (!parsedPhone.ok) throw new InvalidContactPhoneError(parsedPhone.error);
+    const applied = await applyCanonicalCustomerContact(prisma, existing.id, {
+      name: opts.name,
+      phone: opts.phone,
+      homeAddress: opts.address,
+      homeLat: opts.lat,
+      homeLng: opts.lng,
+    });
+    if (!applied.ok) throw new InvalidContactPhoneError(applied.error);
     await prisma.user.update({
       where: { id: existing.id },
       data: {
-        ...parsedPhone.columns,
-        homeAddress: opts.address,
-        ...(opts.lat != null && opts.lng != null
-          ? { homeLat: opts.lat, homeLng: opts.lng }
-          : {}),
         ...(opts.marketingOptIn ? { emailAlertsEnabled: true } : {}),
         ...(existing.role === "ADMIN"
           ? {}
@@ -159,7 +170,11 @@ async function ensureOwnerCustomer(opts: {
             }),
       },
     });
-    return { userId: existing.id, accountCreated: false };
+    return {
+      userId: existing.id,
+      accountCreated: false,
+      contactChanges: applied.ok ? applied.changes : [],
+    };
   }
 
   const now = new Date();
@@ -236,7 +251,7 @@ async function ensureOwnerCustomer(opts: {
     }),
   );
 
-  return { userId: user.id, accountCreated: true };
+  return { userId: user.id, accountCreated: true, contactChanges: [] };
 }
 
 export async function POST(request: Request) {
@@ -253,7 +268,12 @@ export async function POST(request: Request) {
     const data = parsed.data;
     const isQuick = Boolean(data.quick);
     const estimateOnly = Boolean(data.estimateOnly);
-    const hasContact = Boolean(data.name?.trim() && data.email?.trim());
+    const contactName = composeCustomerDisplayName(
+      data.firstName,
+      data.lastName,
+      data.name,
+    );
+    const hasContact = Boolean(contactName && data.email?.trim());
 
     if (!estimateOnly && !isQuick && !hasContact) {
       return NextResponse.json(
@@ -306,8 +326,8 @@ export async function POST(request: Request) {
       });
     }
 
-    const contactName =
-      data.name?.trim() ||
+    const contactNameResolved =
+      contactName ||
       session?.user?.name ||
       (isQuick ? "Hero sell visitor" : "Valuation visitor");
     const contactEmail =
@@ -324,11 +344,55 @@ export async function POST(request: Request) {
 
     let customerId = session?.user?.id ?? undefined;
     let accountCreated = false;
+    let contactChanges: MaterialLeadInfoChange[] = [];
+    const sessionIsConsumer = isConsumerRole(session?.user?.role);
 
-    if (!isQuick && hasContact && contactEmail !== "pending@houzzat.ca") {
+    if (sessionIsConsumer && session?.user?.id && !isQuick && hasContact) {
+      const applied = await applyCanonicalCustomerContact(
+        prisma,
+        session.user.id,
+        {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          homeAddress: data.address,
+          homeLat: data.lat,
+          homeLng: data.lng,
+        },
+      );
+      if (!applied.ok) {
+        return NextResponse.json(
+          { error: applied.error },
+          { status: applied.status },
+        );
+      }
+      contactChanges = applied.changes;
+      customerId = session.user.id;
+      const consumer = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { role: true },
+      });
+      if (consumer && consumer.role !== "ADMIN") {
+        await prisma.user.update({
+          where: { id: session.user.id },
+          data: {
+            isSeller: true,
+            isBuyer: true,
+            activeMode: "SELLER",
+            ...(data.marketingOptIn ||
+            data.marketPulseOptIn ||
+            data.neighbourhoodSalesOptIn
+              ? { emailAlertsEnabled: true }
+              : {}),
+          },
+        });
+      }
+    } else if (!isQuick && hasContact && contactEmail !== "pending@houzzat.ca") {
       const ensured = await ensureOwnerCustomer({
         email: contactEmail,
-        name: contactName,
+        name: contactNameResolved,
         phone: data.phone,
         address: data.address,
         lat: data.lat,
@@ -343,6 +407,7 @@ export async function POST(request: Request) {
       });
       customerId = ensured.userId;
       accountCreated = ensured.accountCreated;
+      contactChanges = ensured.contactChanges;
     }
 
     const isSellerCapture = data.intent === "sell" || isQuick;
@@ -372,11 +437,12 @@ export async function POST(request: Request) {
       customerId,
       email: contactEmail,
       phone: data.phone,
-      name: contactName,
+      name: contactNameResolved,
       score: data.intent === "sell" ? 72 : data.intent === "buy" ? 40 : 45,
       contactConsentAt: new Date(),
       actorId: customerId ?? session?.user?.id,
       upsertCustomer: false,
+      contactChanges,
       utm: utmLeadFields(utm, adCampaignId),
       notes: [
         `Home valuation for ${data.address}`,
@@ -401,7 +467,7 @@ export async function POST(request: Request) {
         isQuick ? "Captured from homepage Sell a Home → Get Estimate" : null,
         `Indicative range: $${estimate.low.toLocaleString()} – $${estimate.high.toLocaleString()} (mid $${estimate.mid.toLocaleString()})`,
         `Method: ${methodLabel}; sample=${estimate.sampleSize}; sold=${estimate.soldCount}; active=${estimate.activeCount}`,
-        `Contact: ${contactName} <${contactEmail}>`,
+        `Contact: ${contactNameResolved} <${contactEmail}>`,
         data.phone ? `Phone: ${data.phone}` : null,
         data.marketingOptIn ||
         data.marketPulseOptIn ||
@@ -469,7 +535,7 @@ export async function POST(request: Request) {
         subject: notify.emailSubject,
         detailLines: [
           `Address: ${data.address}`,
-          `Contact: ${contactName}`,
+          `Contact: ${contactNameResolved}`,
           `Email: ${contactEmail}`,
           `Estimate range: $${estimate.low.toLocaleString()}–$${estimate.high.toLocaleString()}`,
           accountCreated ? "Owner account created" : null,

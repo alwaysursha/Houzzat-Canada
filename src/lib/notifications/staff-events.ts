@@ -1,6 +1,12 @@
 import { ONLINE_MS } from "@/lib/agent/hotness";
 import { openLeadHandoffHref } from "@/lib/agent/lead-profile-query";
 import { SITE_URL } from "@/lib/constants";
+import {
+  dedupeLeadInfoChanges,
+  formatLeadInfoUpdatedSummary,
+  leadInfoChangeLabels,
+  type MaterialLeadInfoChange,
+} from "@/lib/agent/lead-info-change";
 import { sendNotification } from "@/lib/notifications";
 import {
   hasRecentLeadOnlineSignIn,
@@ -9,6 +15,8 @@ import {
   uniqueAssignedAgentIds,
   type LeadOnlineSource,
 } from "@/lib/notifications/lead-online-gate";
+import { renderLeadInfoUpdatedEmail } from "@/lib/email/templates";
+import { resolveCommunicationsE164 } from "@/lib/sms/e164";
 import {
   isStaffEmailCategoryEnabled,
   type StaffNotificationCategory,
@@ -520,4 +528,308 @@ export async function notifyOpenTasksDue() {
       href: first.leadId ? openLeadHandoffHref(first.leadId) : "/agent/tasks",
     });
   }
+}
+
+export type LeadInfoUpdatedNotifyDeps = {
+  authorizeStaffRecipientForLead?: typeof authorizeStaffRecipientForLead;
+  sendPushToUser?: typeof sendPushToUser;
+  sendNotification?: typeof sendNotification;
+  schedule?: (work: Promise<unknown>) => void;
+  loadLead?: (leadId: string) => Promise<{
+    id: string;
+    workspaceId: string | null;
+    assignedAgentId: string | null;
+    customer: { name: string | null; email: string } | null;
+  } | null>;
+  loadAgent?: (agentId: string) => Promise<{
+    id: string;
+    email: string | null;
+    phone: string | null;
+    phoneE164: string | null;
+    disabledAt: Date | null;
+    role: string;
+    pushNotificationPrefs: unknown;
+  } | null>;
+  writeActivity?: (input: {
+    leadId: string;
+    body: string;
+    userId: string | null;
+    labels: string[];
+  }) => Promise<void>;
+};
+
+const defaultLeadInfoUpdatedDeps: LeadInfoUpdatedNotifyDeps = {};
+
+function scheduleLeadInfoWork(
+  work: Promise<unknown>,
+  deps?: LeadInfoUpdatedNotifyDeps,
+): void {
+  const schedule = deps?.schedule ?? scheduleWorkerSideEffect;
+  schedule(
+    work.catch((error) => {
+      console.error("[staff-notify] lead_info_updated failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }),
+  );
+}
+
+/**
+ * Best-effort Lead Info Updated: Push + Email + Agent SMS to assignedAgentId.
+ * Never throws to the customer request. One logical action → one event.
+ */
+export function notifyLeadInfoUpdated(
+  input: {
+    leadId: string;
+    assignedAgentId?: string | null;
+    clientLabel?: string | null;
+    changes: MaterialLeadInfoChange[];
+    actorUserId?: string | null;
+  },
+  deps: LeadInfoUpdatedNotifyDeps = defaultLeadInfoUpdatedDeps,
+): void {
+  const changes = dedupeLeadInfoChanges(input.changes);
+  const labels = leadInfoChangeLabels(changes);
+  if (labels.length === 0) return;
+
+  scheduleLeadInfoWork(
+    deliverLeadInfoUpdatedNotice(
+      {
+        leadId: input.leadId,
+        assignedAgentId: input.assignedAgentId,
+        clientLabel: input.clientLabel,
+        labels,
+        actorUserId: input.actorUserId ?? null,
+      },
+      deps,
+    ),
+    deps,
+  );
+}
+
+export async function deliverLeadInfoUpdatedNotice(
+  input: {
+    leadId: string;
+    assignedAgentId?: string | null;
+    clientLabel?: string | null;
+    labels: string[];
+    actorUserId?: string | null;
+  },
+  deps: LeadInfoUpdatedNotifyDeps = defaultLeadInfoUpdatedDeps,
+): Promise<{
+  attempted: { push: boolean; email: boolean; sms: boolean };
+  skipped?: string;
+}> {
+  const attempted = { push: false, email: false, sms: false };
+  if (input.labels.length === 0) return { attempted, skipped: "no_changes" };
+
+  const loadLead =
+    deps.loadLead ??
+    (async (leadId: string) =>
+      prisma.lead.findUnique({
+        where: { id: leadId },
+        select: {
+          id: true,
+          workspaceId: true,
+          assignedAgentId: true,
+          customer: { select: { name: true, email: true } },
+        },
+      }));
+  const lead = await loadLead(input.leadId);
+  if (!lead) return { attempted, skipped: "missing_lead" };
+
+  const agentId = input.assignedAgentId ?? lead.assignedAgentId;
+  if (!agentId) return { attempted, skipped: "unassigned" };
+
+  const authorize =
+    deps.authorizeStaffRecipientForLead ?? authorizeStaffRecipientForLead;
+  const ok = await authorize({
+    userId: agentId,
+    leadId: lead.id,
+    event: "lead_info_updated",
+  });
+  if (!ok) return { attempted, skipped: "unauthorized" };
+
+  const clientLabel =
+    input.clientLabel?.trim() ||
+    lead.customer?.name?.trim() ||
+    lead.customer?.email ||
+    "A client";
+  const summary = formatLeadInfoUpdatedSummary(clientLabel, input.labels);
+  const href = openLeadHandoffHref(lead.id);
+  const leadUrl = absoluteLeadCrmUrl(lead.id);
+
+  const writeActivity =
+    deps.writeActivity ??
+    (async (row) => {
+      await prisma.leadActivity.create({
+        data: {
+          leadId: row.leadId,
+          type: "lead_info_updated",
+          body: row.body,
+          userId: row.userId,
+          meta: { changes: row.labels },
+        },
+      });
+    });
+  try {
+    await writeActivity({
+      leadId: lead.id,
+      body: summary,
+      userId: input.actorUserId ?? null,
+      labels: input.labels,
+    });
+  } catch (error) {
+    console.error("[staff-notify] lead_info_updated activity failed", {
+      leadId: lead.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const push = deps.sendPushToUser ?? sendPushToUser;
+  try {
+    attempted.push = true;
+    push(agentId, {
+      type: "lead_info_updated",
+      title: "Lead info updated",
+      body: summary,
+      href,
+    });
+  } catch (error) {
+    console.error("[staff-notify] lead_info_updated push failed", {
+      leadId: lead.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const loadAgent =
+    deps.loadAgent ??
+    (async (id: string) =>
+      prisma.user.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          email: true,
+          phone: true,
+          phoneE164: true,
+          disabledAt: true,
+          role: true,
+          pushNotificationPrefs: true,
+        },
+      }));
+  const agent = await loadAgent(agentId);
+  if (!agent || agent.disabledAt || !isAgentRole(agent.role)) {
+    return { attempted, skipped: "agent_unavailable" };
+  }
+  if (!isStaffEmailCategoryEnabled(agent.pushNotificationPrefs, "lead_updates")) {
+    return { attempted, skipped: "preference_off" };
+  }
+
+  const toEmail = agent.email?.trim() || null;
+  const toPhone = resolveCommunicationsE164(agent.phone, agent.phoneE164);
+  const rendered = renderLeadInfoUpdatedEmail({
+    clientLabel,
+    changeLabels: input.labels,
+    leadUrl,
+  });
+  const notify = deps.sendNotification ?? sendNotification;
+  try {
+    attempted.email = Boolean(toEmail);
+    attempted.sms = Boolean(toPhone);
+    if (toEmail || toPhone) {
+      await notify({
+        toEmail,
+        toPhone,
+        subject: rendered.subject,
+        text: rendered.text,
+        html: rendered.html,
+        smsText: summary,
+        workspaceId: lead.workspaceId,
+        smsClass: "staff",
+      });
+    }
+  } catch (error) {
+    console.error("[staff-notify] lead_info_updated email/sms failed", {
+      leadId: lead.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return { attempted };
+}
+
+/**
+ * After resolve-first intake: notify only when an existing Lead materially changed.
+ * New leads keep the New Lead emitters. Never reroutes.
+ */
+export function scheduleLeadInfoUpdatedAfterIntake(input: {
+  created: boolean;
+  leadId: string;
+  assignedAgentId?: string | null;
+  clientLabel?: string | null;
+  changes: MaterialLeadInfoChange[];
+  actorUserId?: string | null;
+}): void {
+  if (input.created) return;
+  notifyLeadInfoUpdated({
+    leadId: input.leadId,
+    assignedAgentId: input.assignedAgentId,
+    clientLabel: input.clientLabel,
+    changes: input.changes,
+    actorUserId: input.actorUserId,
+  });
+}
+
+/**
+ * Account / profile paths without a specific intake Lead: notify the canonical
+ * (earliest created) assigned Lead in each workspace.
+ */
+export function scheduleLeadInfoUpdatedForCustomer(input: {
+  customerId: string;
+  changes: MaterialLeadInfoChange[];
+  actorUserId?: string | null;
+  clientLabel?: string | null;
+}): void {
+  const changes = dedupeLeadInfoChanges(input.changes);
+  if (changes.length === 0) return;
+
+  scheduleLeadInfoWork(
+    (async () => {
+      const leads = await prisma.lead.findMany({
+        where: { customerId: input.customerId },
+        select: {
+          id: true,
+          workspaceId: true,
+          assignedAgentId: true,
+          createdAt: true,
+          customer: { select: { name: true, email: true } },
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      });
+      const byWorkspace = new Map<string, (typeof leads)[number]>();
+      for (const lead of leads) {
+        const key = lead.workspaceId ?? `lead:${lead.id}`;
+        if (!byWorkspace.has(key)) byWorkspace.set(key, lead);
+      }
+      const seenAgents = new Set<string>();
+      for (const lead of byWorkspace.values()) {
+        if (!lead.assignedAgentId) continue;
+        const agentKey = `${lead.workspaceId ?? ""}:${lead.assignedAgentId}`;
+        if (seenAgents.has(agentKey)) continue;
+        seenAgents.add(agentKey);
+        const clientLabel =
+          input.clientLabel?.trim() ||
+          lead.customer?.name?.trim() ||
+          lead.customer?.email ||
+          "A client";
+        await deliverLeadInfoUpdatedNotice({
+          leadId: lead.id,
+          assignedAgentId: lead.assignedAgentId,
+          clientLabel,
+          labels: leadInfoChangeLabels(changes),
+          actorUserId: input.actorUserId ?? input.customerId,
+        });
+      }
+    })(),
+  );
 }

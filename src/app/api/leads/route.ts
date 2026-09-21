@@ -9,6 +9,11 @@ import {
   publicResolveOrCreateLead,
 } from "@/lib/agent/public-lead-api";
 import {
+  applyCanonicalCustomerContact,
+  type MaterialLeadInfoChange,
+} from "@/lib/agent/lead-info-change";
+import { isConsumerRole } from "@/lib/roles";
+import {
   createCallNewLeadTask,
   resolveLeadIntent,
 } from "@/lib/agent/lead-intake";
@@ -110,6 +115,22 @@ export async function POST(request: Request) {
     const ip = forwarded?.split(",")[0]?.trim() ?? null;
     const userAgent = request.headers.get("user-agent");
 
+    let contactChanges: MaterialLeadInfoChange[] = [];
+    if (session?.user?.id && isConsumerRole(session.user.role)) {
+      const applied = await applyCanonicalCustomerContact(prisma, session.user.id, {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+      });
+      if (!applied.ok) {
+        return NextResponse.json(
+          { error: applied.error },
+          { status: applied.status },
+        );
+      }
+      contactChanges = applied.changes;
+    }
+
     const resolved = await publicResolveOrCreateLead({
       request,
       intent,
@@ -125,6 +146,7 @@ export async function POST(request: Request) {
       contactConsentAt: consentAt,
       actorId: session?.user?.id,
       upsertCustomer: !session?.user?.id,
+      contactChanges,
       utm: utmLeadFields(utm, adCampaignId),
       notes: [
         `Contact: ${data.name} <${data.email}>`,
@@ -187,7 +209,6 @@ export async function POST(request: Request) {
         where: { id: session.user.id },
         data: {
           caslConsentAt: consentAt,
-          ...(parsedPhone ? parsedPhone.columns : {}),
         },
       });
     }

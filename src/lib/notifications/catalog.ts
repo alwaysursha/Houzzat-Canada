@@ -19,6 +19,7 @@ export const STAFF_PUSH_TYPES = [
   "alert_engagement",
   "appointment",
   "lead_reassigned",
+  "lead_info_updated",
   "chat_message",
 ] as const;
 
@@ -121,6 +122,11 @@ export const STAFF_PUSH_CATALOG: PushTypeItem[] = [
     id: "lead_reassigned",
     label: "Lead assigned to you",
     description: "A teammate assigned or handed you a lead",
+  },
+  {
+    id: "lead_info_updated",
+    label: "Lead info updated",
+    description: "A client changed contact details or Buyer/Seller interest",
   },
   {
     id: "chat_message",
