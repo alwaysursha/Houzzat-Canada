@@ -421,8 +421,7 @@ export async function dispatchSmsAutomation(
     }).catch(() => undefined);
     console.error("[sms:automation] failed", {
       key,
-      leadId,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.name : "ERROR",
     });
     return { status: "FAILED", reason: "EXCEPTION" };
   }

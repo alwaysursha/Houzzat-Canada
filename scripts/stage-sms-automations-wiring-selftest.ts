@@ -652,6 +652,13 @@ function testFilesAndWiring() {
   assert.ok(manual.includes("scheduleCustomerIntroductionSmsAutomationsForLead"));
   const cron = read("src/app/api/cron/sms-automations/route.ts");
   assert.ok(cron.includes("runInactiveLeadSmsAutomations"));
+  assert.ok(cron.includes("beginSmsAutomationCronRun"));
+  const plist = read("scripts/macos/com.houzzat.sms-automations.plist");
+  assert.ok(plist.includes("com.houzzat.sms-automations"));
+  assert.ok(plist.includes("<integer>7</integer>"));
+  const agent = read("scripts/run-sms-automations-mac.sh");
+  assert.ok(agent.includes("pnpm sms-automations:run"));
+  assert.ok(agent.includes("houzzat-sms-automations.lock"));
   const migration = read(
     "prisma/migrations/20260920030000_sms_automation_dispatches/migration.sql",
   );

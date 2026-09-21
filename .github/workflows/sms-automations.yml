@@ -1,0 +1,48 @@
+name: SMS Automations
+
+# Optional remote run of 14-day inactive Lead SMS.
+# Primary scheduler is the Sync Mac LaunchAgent (scripts/macos/).
+# Hits the deployed app cron route with the same secret family as monitors/digests.
+#
+# Required GitHub secrets (only if you use this workflow):
+#   SMS_AUTOMATION_CRON_URL — e.g. https://houzzat.com/api/cron/sms-automations
+#   SMS_AUTOMATION_CRON_SECRET (or MONITOR_CRON_SECRET / DIGEST_CRON_SECRET /
+#   CRON_SECRET / MLS_SYNC_SECRET matching the app)
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: sms-automations-schedule
+  cancel-in-progress: false
+
+jobs:
+  sms-automations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Run SMS automation cron
+        env:
+          SMS_AUTOMATION_CRON_URL: ${{ secrets.SMS_AUTOMATION_CRON_URL }}
+          SMS_AUTOMATION_CRON_SECRET: ${{ secrets.SMS_AUTOMATION_CRON_SECRET }}
+          MONITOR_CRON_SECRET: ${{ secrets.MONITOR_CRON_SECRET }}
+          DIGEST_CRON_SECRET: ${{ secrets.DIGEST_CRON_SECRET }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          MLS_SYNC_SECRET: ${{ secrets.MLS_SYNC_SECRET }}
+        run: |
+          set -euo pipefail
+          URL="${SMS_AUTOMATION_CRON_URL:-}"
+          SECRET="${SMS_AUTOMATION_CRON_SECRET:-${MONITOR_CRON_SECRET:-${DIGEST_CRON_SECRET:-${CRON_SECRET:-${MLS_SYNC_SECRET:-}}}}}"
+          if [[ -z "$URL" ]]; then
+            echo "Missing secret SMS_AUTOMATION_CRON_URL"
+            exit 1
+          fi
+          if [[ -z "$SECRET" ]]; then
+            echo "Missing SMS_AUTOMATION_CRON_SECRET (or MONITOR/DIGEST/CRON/MLS_SYNC secret)"
+            exit 1
+          fi
+          echo "POST cron job sms-automations-inactive"
+          curl -fsS -X POST "$URL" \
+            -H "Authorization: Bearer ${SECRET}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+          echo

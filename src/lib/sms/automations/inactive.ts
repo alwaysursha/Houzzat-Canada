@@ -100,8 +100,7 @@ export async function runInactiveLeadSmsAutomations(
       } catch (error) {
         skipped += 1;
         console.error("[sms:automation] inactive failed", {
-          leadId: lead.id,
-          error: error instanceof Error ? error.message : String(error),
+          error: error instanceof Error ? error.name : "ERROR",
         });
       }
     }

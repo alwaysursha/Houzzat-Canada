@@ -15,6 +15,16 @@ export const SMS_AUTOMATION_INACTIVE_SCAN = 400;
 export const SMS_AUTOMATION_RETURN_LEAD_CAP = 8;
 export const SMS_AUTOMATION_TEXT_MAX_LENGTH = 1600;
 
+/** Sync Mac LaunchAgent (same pattern as digests). Do not add Cloudflare/Vercel cron. */
+export const SMS_AUTOMATION_CRON = {
+  job: "sms-automations-inactive",
+  hourLocal: 7,
+  minuteLocal: 0,
+  timeZone: "America/Toronto",
+  schedule:
+    "daily 07:00 America/Toronto via Sync Mac LaunchAgent (pnpm sms-automations:run)",
+} as const;
+
 export function signupCycleKey() {
   return "signup";
 }

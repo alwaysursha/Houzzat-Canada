@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
-import { runInactiveLeadSmsAutomations } from "@/lib/sms/automations";
+import {
+  SMS_AUTOMATION_CRON,
+  runInactiveLeadSmsAutomations,
+} from "@/lib/sms/automations";
+import {
+  beginSmsAutomationCronRun,
+  endSmsAutomationCronRun,
+  summarizeSmsAutomationCronError,
+} from "@/lib/sms/automations/cron-lock";
 
 function authorizeSmsAutomationCron(request: Request): boolean {
   const secret =
@@ -20,13 +28,55 @@ function authorizeSmsAutomationCron(request: Request): boolean {
   return false;
 }
 
+function cronLog(event: string, fields: Record<string, string | number | boolean>) {
+  console.info(`[sms:automation:cron] ${event}`, fields);
+}
+
 export async function POST(request: Request) {
   if (!authorizeSmsAutomationCron(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await runInactiveLeadSmsAutomations();
-  return NextResponse.json({ ok: true, job: "sms-automations-inactive", ...result });
+  if (!beginSmsAutomationCronRun()) {
+    cronLog("overlap", { job: SMS_AUTOMATION_CRON.job });
+    return NextResponse.json({
+      ok: true,
+      job: SMS_AUTOMATION_CRON.job,
+      skipped: true,
+      reason: "OVERLAP",
+    });
+  }
+
+  const started = Date.now();
+  try {
+    const result = await runInactiveLeadSmsAutomations();
+    const durationMs = Date.now() - started;
+    cronLog("complete", {
+      job: SMS_AUTOMATION_CRON.job,
+      scanned: result.scanned,
+      sent: result.sent,
+      skipped: result.skipped,
+      durationMs,
+    });
+    return NextResponse.json({
+      ok: true,
+      job: SMS_AUTOMATION_CRON.job,
+      durationMs,
+      ...result,
+    });
+  } catch (error) {
+    cronLog("failed", {
+      job: SMS_AUTOMATION_CRON.job,
+      error: summarizeSmsAutomationCronError(error),
+      durationMs: Date.now() - started,
+    });
+    return NextResponse.json(
+      { ok: false, job: SMS_AUTOMATION_CRON.job, error: "EXCEPTION" },
+      { status: 500 },
+    );
+  } finally {
+    endSmsAutomationCronRun();
+  }
 }
 
 export async function GET(request: Request) {
@@ -35,7 +85,7 @@ export async function GET(request: Request) {
   }
   return NextResponse.json({
     ok: true,
-    job: "sms-automations-inactive",
-    schedule: "Hit this route like monitors/digests cron (bounded 14-day inactivity SMS)",
+    job: SMS_AUTOMATION_CRON.job,
+    schedule: SMS_AUTOMATION_CRON.schedule,
   });
 }

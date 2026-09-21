@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Paths are filled in by scripts/macos/install-sms-automations-launchagent.sh
+  Placeholders: __HOZZAT_ROOT__
+-->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.houzzat.sms-automations</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/bash</string>
+      <string>__HOZZAT_ROOT__/scripts/run-sms-automations-mac.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__HOZZAT_ROOT__</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Hour</key>
+      <integer>7</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>__HOZZAT_ROOT__/logs/sms-automations.launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOZZAT_ROOT__/logs/sms-automations.launchd.err.log</string>
+  </dict>
+</plist>
