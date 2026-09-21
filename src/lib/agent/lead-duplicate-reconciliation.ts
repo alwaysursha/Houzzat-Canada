@@ -5,8 +5,8 @@
  * never determines ownership — surviving assignedAgentId is the canonical Lead's.
  *
  * Dry-run by default. Execute requires an explicit confirm token.
- * Do not add a unique (workspaceId, customerId) index until production merge
- * has been approved and run.
+ * Production uniqueness is the partial unique index
+ * Lead_workspaceId_customerId_nonnull_key.
  */
 import type { LeadIntent, LeadSource, PrismaClient } from "@prisma/client";
 import {

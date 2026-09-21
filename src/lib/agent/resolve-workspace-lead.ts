@@ -6,8 +6,10 @@
  *
  * New Lead → caller supplies desk assignment (PERCENTAGE or LISTING_AGENT).
  *
- * No unique (workspaceId, customerId) index yet — production duplicates exist.
- * In-process lock + re-lookup is best-effort concurrent protection.
+ * Durable uniqueness: partial unique (workspaceId, customerId)
+ * WHERE customerId IS NOT NULL. Concurrent creates that lose the unique
+ * race resolve the winner — never reroute, never overwrite Agent, never 500.
+ * In-process lock remains best-effort for same-runtime overlap.
  */
 import type { LeadIntent, LeadSource, Prisma, PrismaClient } from "@prisma/client";
 import {
@@ -377,6 +379,33 @@ async function attachToExistingLead(
   };
 }
 
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "P2002"
+  );
+}
+
+async function recoverExistingAfterCreateConflict(
+  db: PrismaClient,
+  input: ResolveOrCreateWorkspaceLeadInput,
+  customerId: string | null,
+): Promise<ResolveOrCreateWorkspaceLeadResult | null> {
+  if (!customerId) return null;
+  const again = await listWorkspaceLeadsForCustomer(
+    db,
+    input.workspaceId,
+    customerId,
+  );
+  const raced = selectPrimaryLeadsByCustomer(again)[0];
+  if (raced && raced.workspaceId === input.workspaceId) {
+    return attachToExistingLead(db, input, raced, customerId);
+  }
+  return null;
+}
+
 async function insertNewLead(
   db: PrismaClient,
   input: ResolveOrCreateWorkspaceLeadInput,
@@ -386,52 +415,68 @@ async function insertNewLead(
     isBuyer: input.isBuyer === true,
     isSeller: input.isSeller === true,
   });
+
+  const existing = await recoverExistingAfterCreateConflict(db, input, customerId);
+  if (existing) return existing;
+
   const desk = await input.resolveCreateDesk();
   const organizationId = desk.organizationId ?? input.organizationId ?? null;
 
-  const created = await db.lead.create({
-    data: {
-      source: input.source,
-      status: "NEW_LEAD",
-      intent: classification.intent,
-      isBuyer: classification.isBuyer,
-      isSeller: classification.isSeller,
-      score: input.score ?? 15,
-      notes: input.notes ?? null,
-      listingMls: input.listingMls ?? null,
-      customerId,
-      assignedAgentId: desk.assigneeId,
-      organizationId: organizationId ?? undefined,
-      workspaceId: input.workspaceId,
-      contactConsentAt: input.contactConsentAt ?? undefined,
-      statusChangedAt: new Date(),
-      utmSource: input.utm?.utmSource ?? undefined,
-      utmMedium: input.utm?.utmMedium ?? undefined,
-      utmCampaign: input.utm?.utmCampaign ?? undefined,
-      utmContent: input.utm?.utmContent ?? undefined,
-      adCampaignId: input.utm?.adCampaignId ?? undefined,
-    },
-    select: leadIdentitySelect,
-  });
+  try {
+    const created = await db.lead.create({
+      data: {
+        source: input.source,
+        status: "NEW_LEAD",
+        intent: classification.intent,
+        isBuyer: classification.isBuyer,
+        isSeller: classification.isSeller,
+        score: input.score ?? 15,
+        notes: input.notes ?? null,
+        listingMls: input.listingMls ?? null,
+        customerId,
+        assignedAgentId: desk.assigneeId,
+        organizationId: organizationId ?? undefined,
+        workspaceId: input.workspaceId,
+        contactConsentAt: input.contactConsentAt ?? undefined,
+        statusChangedAt: new Date(),
+        utmSource: input.utm?.utmSource ?? undefined,
+        utmMedium: input.utm?.utmMedium ?? undefined,
+        utmCampaign: input.utm?.utmCampaign ?? undefined,
+        utmContent: input.utm?.utmContent ?? undefined,
+        adCampaignId: input.utm?.adCampaignId ?? undefined,
+      },
+      select: leadIdentitySelect,
+    });
 
-  await appendActivity(
-    db,
-    created.id,
-    input.activity,
-    input.actorId ?? customerId,
-  );
-  if (created.workspaceId) {
-    await ensureConversation(db, created.workspaceId, created.id);
+    await appendActivity(
+      db,
+      created.id,
+      input.activity,
+      input.actorId ?? customerId,
+    );
+    if (created.workspaceId) {
+      await ensureConversation(db, created.workspaceId, created.id);
+    }
+
+    return {
+      lead: created,
+      created: true,
+      assignedAgentId: created.assignedAgentId,
+      organizationId,
+      customerId: created.customerId,
+      classificationChanges: [],
+    };
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      const recovered = await recoverExistingAfterCreateConflict(
+        db,
+        input,
+        customerId,
+      );
+      if (recovered) return recovered;
+    }
+    throw error;
   }
-
-  return {
-    lead: created,
-    created: true,
-    assignedAgentId: created.assignedAgentId,
-    organizationId,
-    customerId: created.customerId,
-    classificationChanges: [],
-  };
 }
 
 async function resolveOrCreateUnlocked(
@@ -514,6 +559,13 @@ export async function resolveOrCreateWorkspaceLead(
 /** Test-only: drop in-process intake locks. */
 export function resetLeadIdentityLocksForTests(): void {
   inFlight.clear();
+}
+
+/** Test-only: simulate a separate Worker/process (no in-memory lock). */
+export async function resolveOrCreateWorkspaceLeadWithoutProcessLock(
+  input: ResolveOrCreateWorkspaceLeadInput,
+): Promise<ResolveOrCreateWorkspaceLeadResult> {
+  return resolveOrCreateUnlocked(input);
 }
 
 export { AmbiguousLeadIdentityError };

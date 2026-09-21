@@ -1218,6 +1218,10 @@ model Lead {
   conversation  Conversation?
 
   @@unique([workspaceId, id])
+  /// One non-null customer per Workspace. SQL is partial:
+  /// UNIQUE (workspaceId, customerId) WHERE customerId IS NOT NULL.
+  /// Multiple customerId = null Leads remain allowed.
+  @@unique([workspaceId, customerId], map: "Lead_workspaceId_customerId_nonnull_key")
   @@index([status, assignedAgentId])
   @@index([organizationId, status])
   @@index([organizationId, assignedAgentId])

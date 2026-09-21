@@ -1,6 +1,7 @@
 /**
  * Phase 1 Lead identity / routing — resolve-first, sticky ownership.
- * Seller PERCENTAGE is preserved. No unique index. No production cleanup.
+ * Seller PERCENTAGE is preserved. Partial unique (workspaceId, customerId)
+ * WHERE customerId IS NOT NULL. Concurrent create conflict reuses the winner.
  *
  * Run: pnpm lead-identity-routing:selftest
  */
@@ -18,6 +19,7 @@ import {
 import {
   resetLeadIdentityLocksForTests,
   resolveOrCreateWorkspaceLead,
+  resolveOrCreateWorkspaceLeadWithoutProcessLock,
 } from "../src/lib/agent/resolve-workspace-lead";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -117,7 +119,12 @@ function pickSelect<T extends Record<string, unknown>>(
   return out;
 }
 
-function createFakeDb(state: FakeState): PrismaClient {
+function createFakeDb(
+  state: FakeState,
+  opts?: { collideCreates?: boolean },
+): PrismaClient {
+  let enteredCreate = 0;
+  let releaseFirst: (() => void) | null = null;
   return {
     user: {
       async findUnique({
@@ -234,6 +241,31 @@ function createFakeDb(state: FakeState): PrismaClient {
         data: Record<string, unknown>;
         select?: Record<string, unknown>;
       }) {
+        if (opts?.collideCreates) {
+          enteredCreate += 1;
+          if (enteredCreate === 1) {
+            await new Promise<void>((resolve) => {
+              releaseFirst = resolve;
+            });
+          } else if (releaseFirst) {
+            const release = releaseFirst;
+            releaseFirst = null;
+            release();
+          }
+        }
+        const customerId = (data.customerId as string | null) ?? null;
+        if (
+          customerId &&
+          state.leads.some(
+            (row) =>
+              row.workspaceId === String(data.workspaceId) &&
+              row.customerId === customerId,
+          )
+        ) {
+          const err = new Error("Unique") as Error & { code: string };
+          err.code = "P2002";
+          throw err;
+        }
         const now = new Date();
         const lead: FakeLead = {
           id: id("lead", state),
@@ -845,13 +877,25 @@ function testSentinelEmailIsNotIdentity() {
   console.log("[11] sentinel pending@ email is not identity... PASS");
 }
 
-function testWiringAndNoUniqueIndexYet() {
+function testWiringAndPartialUniqueIndex() {
   const schema = read("prisma/schema.prisma");
   const leadStart = schema.indexOf("model Lead ");
   const leadEnd = schema.indexOf("\nmodel ", leadStart + 1);
   const leadBlock = schema.slice(leadStart, leadEnd);
-  assert.ok(!leadBlock.includes("@@unique([workspaceId, customerId])"));
-  assert.ok(!leadBlock.includes("workspaceId_customerId"));
+  assert.ok(
+    leadBlock.includes(
+      '@@unique([workspaceId, customerId], map: "Lead_workspaceId_customerId_nonnull_key")',
+    ),
+  );
+  const migration = read(
+    "prisma/migrations/20260921173000_lead_workspace_customer_unique/migration.sql",
+  );
+  assert.ok(
+    migration.includes(
+      'CREATE UNIQUE INDEX "Lead_workspaceId_customerId_nonnull_key"',
+    ),
+  );
+  assert.ok(migration.includes('WHERE "customerId" IS NOT NULL'));
 
   const routes = [
     "src/app/api/leads/route.ts",
@@ -875,6 +919,9 @@ function testWiringAndNoUniqueIndexYet() {
   const intake = read("src/lib/agent/lead-intake.ts");
   assert.ok(intake.includes("resolveOrCreateWorkspaceLead"));
   assert.ok(intake.includes("if (!resolved.created)"));
+  const resolve = read("src/lib/agent/resolve-workspace-lead.ts");
+  assert.ok(resolve.includes("isUniqueConstraintError"));
+  assert.ok(resolve.includes("recoverExistingAfterCreateConflict"));
   const manual = read("src/lib/agent/create-manual-lead.ts");
   assert.ok(manual.includes("resolveOrCreateWorkspaceLead"));
   const chat = read("src/lib/conversations/customer-chat-lead.ts");
@@ -896,7 +943,125 @@ function testWiringAndNoUniqueIndexYet() {
     { isSeller: true },
   );
   assert.equal(merge.isBuyer && merge.isSeller, true);
-  console.log("[12] wiring + no unique index yet + sticky reassignment path... PASS");
+  console.log("[12] wiring + partial unique index + sticky reassignment... PASS");
+}
+
+async function testNullCustomerIdsRemainAllowed() {
+  resetLeadIdentityLocksForTests();
+  const state = emptyState();
+  const db = createFakeDb(state);
+  const first = await resolveOrCreateWorkspaceLead({
+    workspaceId: WS_A,
+    upsertCustomer: false,
+    isBuyer: true,
+    source: "OTHER",
+    db,
+    resolveCreateDesk: async () => ({
+      assigneeId: AGENT_DEMO,
+      organizationId: "org_a",
+    }),
+  });
+  const second = await resolveOrCreateWorkspaceLead({
+    workspaceId: WS_A,
+    upsertCustomer: false,
+    isBuyer: false,
+    isSeller: true,
+    source: "HOME_VALUATION",
+    db,
+    resolveCreateDesk: async () => ({
+      assigneeId: AGENT_ALI,
+      organizationId: "org_a",
+    }),
+  });
+  assert.equal(first.created, true);
+  assert.equal(second.created, true);
+  assert.notEqual(first.lead.id, second.lead.id);
+  assert.equal(state.leads.length, 2);
+  assert.ok(state.leads.every((row) => row.customerId === null));
+  assert.equal(first.assignedAgentId, AGENT_DEMO);
+  assert.equal(second.assignedAgentId, AGENT_ALI);
+  console.log("[13] multiple null customerId Leads remain allowed... PASS");
+}
+
+async function testSameWorkspaceCustomerCannotDuplicate() {
+  resetLeadIdentityLocksForTests();
+  const state = emptyState();
+  const seeded = await seedBuyerLead(state);
+  const db = createFakeDb(state);
+  await assert.rejects(
+    () =>
+      db.lead.create({
+        data: {
+          workspaceId: WS_A,
+          customerId: seeded.user.id,
+          source: "OTHER",
+          intent: "BUYER",
+          isBuyer: true,
+          isSeller: false,
+        },
+        select: { id: true },
+      }),
+    (error: unknown) =>
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: string }).code === "P2002",
+  );
+  assert.equal(state.leads.length, 1);
+  console.log("[14] same customer + same workspace cannot insert two Leads... PASS");
+}
+
+async function testCrossProcessUniqueRaceReusesWinner() {
+  resetLeadIdentityLocksForTests();
+  const state = emptyState();
+  const db = createFakeDb(state, { collideCreates: true });
+  const [buyer, seller] = await Promise.all([
+    resolveOrCreateWorkspaceLeadWithoutProcessLock({
+      workspaceId: WS_A,
+      email: "race-unique@example.com",
+      name: "Race",
+      isBuyer: true,
+      isSeller: false,
+      source: "SIGNUP",
+      db,
+      resolveCreateDesk: async () => ({
+        assigneeId: AGENT_DEMO,
+        organizationId: "org_a",
+      }),
+      activity: { type: "created", body: "buyer intake" },
+    }),
+    resolveOrCreateWorkspaceLeadWithoutProcessLock({
+      workspaceId: WS_A,
+      email: "race-unique@example.com",
+      name: "Race",
+      isBuyer: false,
+      isSeller: true,
+      source: "HOME_VALUATION",
+      db,
+      resolveCreateDesk: async () => ({
+        assigneeId: AGENT_ALI,
+        organizationId: "org_a",
+      }),
+      activity: { type: "created", body: "seller intake" },
+    }),
+  ]);
+  assert.equal(buyer.lead.id, seller.lead.id);
+  assert.equal(state.leads.length, 1);
+  const createdCount = [buyer, seller].filter((row) => row.created).length;
+  assert.equal(createdCount, 1);
+  const winner = buyer.created ? buyer : seller;
+  const loser = buyer.created ? seller : buyer;
+  assert.equal(loser.created, false);
+  assert.equal(loser.assignedAgentId, winner.assignedAgentId);
+  assert.equal(state.leads[0]?.assignedAgentId, winner.assignedAgentId);
+  assert.equal(state.leads[0]?.isBuyer, true);
+  assert.equal(state.leads[0]?.isSeller, true);
+  assert.equal(state.conversations.length, 1);
+  assert.equal(state.conversations[0]?.leadId, winner.lead.id);
+  assert.equal(state.activities.length, 2);
+  console.log(
+    "[15] simultaneous first intake: loser resolves winner, sticky Agent, merged flags... PASS",
+  );
 }
 
 async function main() {
@@ -913,7 +1078,10 @@ async function main() {
   await testAmbiguousIdentityFailsClosed();
   await testConcurrentIntake();
   testSentinelEmailIsNotIdentity();
-  testWiringAndNoUniqueIndexYet();
+  testWiringAndPartialUniqueIndex();
+  await testNullCustomerIdsRemainAllowed();
+  await testSameWorkspaceCustomerCannotDuplicate();
+  await testCrossProcessUniqueRaceReusesWinner();
   console.log("\nLEAD IDENTITY / ROUTING PHASE 1 SELFTEST PASSED\n");
 }
 
