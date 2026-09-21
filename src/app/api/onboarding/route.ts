@@ -29,12 +29,14 @@ export async function POST(request: Request) {
       typeof body.workspaceId === "string" ? body.workspaceId : null;
     const action =
       typeof body.action === "string" ? body.action : "business_profile";
+    const persistAsDraft = body.draft === true;
 
     if (action === "template_theme") {
       const updated = await updateOwnerOnboardingTemplateTheme({
         request,
         clientWorkspaceId,
         themeId: body.themeId,
+        persistAsDraft,
       });
       return platformOk({ workspace: updated });
     }
@@ -43,6 +45,7 @@ export async function POST(request: Request) {
       const updated = await updateOwnerOnboardingProfessionalIdentity({
         request,
         clientWorkspaceId,
+        persistAsDraft,
         agentRegisteredName:
           typeof body.agentRegisteredName === "string"
             ? body.agentRegisteredName
@@ -78,6 +81,7 @@ export async function POST(request: Request) {
     const updated = await updateOwnerOnboardingBusinessProfile({
       request,
       clientWorkspaceId,
+      persistAsDraft,
       displayName:
         typeof body.displayName === "string" ? body.displayName : "",
       contactEmail:

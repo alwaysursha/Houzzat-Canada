@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrandAssetsSection } from "@/components/onboarding/BrandAssetsSection";
+import {
+  OnboardingDraftFlushProvider,
+  OnboardingDraftStatus,
+  useOnboardingDraftAutosave,
+  useOnboardingDraftFlush,
+} from "@/components/onboarding/onboarding-draft-flush";
 import {
   ProfessionalIdentitySection,
   type ProfessionalIdentityFields,
@@ -84,6 +90,14 @@ type WorkspaceRow = {
   };
 };
 
+type BusinessProfileDraft = {
+  displayName: string;
+  contactEmail: string;
+  contactPhone: string;
+  replyToEmail: string;
+  senderDisplayName: string;
+};
+
 const EMPTY_IDENTITY: ProfessionalIdentityFields = {
   agentRegisteredName: "",
   agentDesignation: "",
@@ -108,11 +122,34 @@ function identityFromRow(
   };
 }
 
+async function postOnboarding(body: Record<string, unknown>) {
+  const res = await fetch("/api/onboarding", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json()) as { ok?: boolean; message?: string };
+  if (!res.ok || !json.ok) {
+    throw new Error(json.message ?? "Unable to save.");
+  }
+}
+
 /**
  * Stage 6.10C.1 / 6.11A / 6.11B — host-bound OWNER onboarding.
  * Website Design: Default + Agent Branded (Agent Signature).
  */
 export function OwnerOnboardingClient() {
+  return (
+    <OnboardingDraftFlushProvider>
+      <OwnerOnboardingForm />
+    </OnboardingDraftFlushProvider>
+  );
+}
+
+function OwnerOnboardingForm() {
   const [item, setItem] = useState<WorkspaceRow | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
@@ -141,8 +178,66 @@ export function OwnerOnboardingClient() {
   const [savingTheme, setSavingTheme] = useState(false);
   const [startingPreview, setStartingPreview] = useState(false);
 
-  async function load() {
-    setLoading(true);
+  const workspaceIdRef = useRef<string | null>(null);
+  const businessDirtyRef = useRef(false);
+  const themeDirtyRef = useRef(false);
+  const businessFieldsRef = useRef<BusinessProfileDraft>({
+    displayName: "",
+    contactEmail: "",
+    contactPhone: "",
+    replyToEmail: "",
+    senderDisplayName: "",
+  });
+  const selectedThemeIdRef = useRef<string | null>(null);
+  const hasLoadedRef = useRef(false);
+
+  const { flushAll } = useOnboardingDraftFlush();
+
+  const persistBusinessDraft = useCallback(async (payload: BusinessProfileDraft) => {
+    const workspaceId = workspaceIdRef.current;
+    if (!workspaceId) return;
+    await postOnboarding({
+      action: "business_profile",
+      draft: true,
+      workspaceId,
+      ...payload,
+    });
+    if (
+      JSON.stringify(payload) === JSON.stringify(businessFieldsRef.current)
+    ) {
+      businessDirtyRef.current = false;
+    }
+  }, []);
+
+  const persistThemeDraft = useCallback(async (themeId: string) => {
+    const workspaceId = workspaceIdRef.current;
+    if (!workspaceId || !themeId) return;
+    await postOnboarding({
+      action: "template_theme",
+      draft: true,
+      workspaceId,
+      themeId,
+    });
+    if (selectedThemeIdRef.current === themeId) {
+      themeDirtyRef.current = false;
+    }
+  }, []);
+
+  const businessDraft = useOnboardingDraftAutosave<BusinessProfileDraft>({
+    flushId: "business-profile",
+    save: persistBusinessDraft,
+  });
+  const themeDraft = useOnboardingDraftAutosave<string>({
+    flushId: "template-theme",
+    save: persistThemeDraft,
+  });
+  const businessDraftRef = useRef(businessDraft);
+  const themeDraftRef = useRef(themeDraft);
+  businessDraftRef.current = businessDraft;
+  themeDraftRef.current = themeDraft;
+
+  const load = useCallback(async (opts?: { preserveLocalForms?: boolean }) => {
+    if (!hasLoadedRef.current) setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/onboarding", {
@@ -160,39 +255,79 @@ export function OwnerOnboardingClient() {
       }
       const first = body.data.items[0] ?? null;
       setItem(first);
-      if (first) {
-        setDisplayName(first.displayName ?? first.name);
-        setContactEmail(first.contactEmail ?? "");
-        setContactPhone(first.contactPhone ?? "");
-        setReplyToEmail(first.replyToEmail ?? first.contactEmail ?? "");
-        setSenderDisplayName(first.senderDisplayName ?? first.displayName ?? "");
+      if (!first) return;
+      workspaceIdRef.current = first.workspaceId;
+      setBrandAssets(
+        first.brandAssets ?? {
+          agentProfilePhotoUrl: null,
+          logoUrl: null,
+          brokerageLogoUrl: null,
+          faviconUrl: null,
+        },
+      );
+      setBrandingStatus(first.onboarding.brandingStatus ?? "NOT_STARTED");
+      setProfessionalIdentityStatus(
+        first.onboarding.professionalIdentityStatus ?? "NOT_STARTED",
+      );
+      setProfessionalIdentity(identityFromRow(first.professionalIdentity));
+
+      const preserveBusiness =
+        opts?.preserveLocalForms === true ||
+        businessDirtyRef.current ||
+        businessDraftRef.current.hasUnsavedWork();
+      if (!preserveBusiness) {
+        const nextBusiness: BusinessProfileDraft = {
+          displayName: first.displayName ?? first.name,
+          contactEmail: first.contactEmail ?? "",
+          contactPhone: first.contactPhone ?? "",
+          replyToEmail: first.replyToEmail ?? first.contactEmail ?? "",
+          senderDisplayName:
+            first.senderDisplayName ?? first.displayName ?? "",
+        };
+        businessFieldsRef.current = nextBusiness;
+        setDisplayName(nextBusiness.displayName);
+        setContactEmail(nextBusiness.contactEmail);
+        setContactPhone(nextBusiness.contactPhone);
+        setReplyToEmail(nextBusiness.replyToEmail);
+        setSenderDisplayName(nextBusiness.senderDisplayName);
+      }
+
+      const preserveTheme =
+        opts?.preserveLocalForms === true ||
+        themeDirtyRef.current ||
+        themeDraftRef.current.hasUnsavedWork();
+      if (!preserveTheme) {
         setSelectedTemplateId(first.templateId);
         setSelectedThemeId(first.themeId);
-        setBrandAssets(
-          first.brandAssets ?? {
-            agentProfilePhotoUrl: null,
-            logoUrl: null,
-            brokerageLogoUrl: null,
-            faviconUrl: null,
-          },
-        );
-        setBrandingStatus(first.onboarding.brandingStatus ?? "NOT_STARTED");
-        setProfessionalIdentity(identityFromRow(first.professionalIdentity));
-        setProfessionalIdentityStatus(
-          first.onboarding.professionalIdentityStatus ?? "NOT_STARTED",
-        );
+        selectedThemeIdRef.current = first.themeId;
       }
     } catch {
       setError("Network error loading onboarding.");
       setItem(null);
     } finally {
+      hasLoadedRef.current = true;
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
+
+  useEffect(() => {
+    const onHide = () => {
+      void flushAll();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") onHide();
+    };
+    window.addEventListener("pagehide", onHide);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [flushAll]);
 
   const selectedTemplate = useMemo(() => {
     if (!item || !selectedTemplateId) return null;
@@ -219,14 +354,38 @@ export function OwnerOnboardingClient() {
     });
   }, [previewTheme]);
 
-  function onSelectTemplate(template: TemplateOption) {
+  function patchBusiness<K extends keyof BusinessProfileDraft>(
+    key: K,
+    value: BusinessProfileDraft[K],
+  ) {
+    const next = { ...businessFieldsRef.current, [key]: value };
+    businessFieldsRef.current = next;
+    businessDirtyRef.current = true;
+    if (key === "displayName") setDisplayName(value);
+    if (key === "contactEmail") setContactEmail(value);
+    if (key === "contactPhone") setContactPhone(value);
+    if (key === "replyToEmail") setReplyToEmail(value);
+    if (key === "senderDisplayName") setSenderDisplayName(value);
+    businessDraft.schedule(next);
+  }
+
+  function applyThemeSelection(template: TemplateOption, themeId: string | null) {
     setSelectedTemplateId(template.id);
+    setSelectedThemeId(themeId);
+    selectedThemeIdRef.current = themeId;
+    if (!themeId) return;
+    themeDirtyRef.current = true;
+    themeDraft.schedule(themeId);
+  }
+
+  function onSelectTemplate(template: TemplateOption) {
     const keep =
       selectedThemeId &&
       template.themes.some((t) => t.id === selectedThemeId);
-    if (!keep) {
-      setSelectedThemeId(template.themes[0]?.id ?? null);
-    }
+    const nextThemeId = keep
+      ? selectedThemeId
+      : (template.themes[0]?.id ?? null);
+    applyThemeSelection(template, nextThemeId);
   }
 
   async function onSave(event: React.FormEvent) {
@@ -236,34 +395,20 @@ export function OwnerOnboardingClient() {
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch("/api/onboarding", {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          action: "business_profile",
-          workspaceId: item.workspaceId,
-          displayName,
-          contactEmail,
-          contactPhone,
-          replyToEmail,
-          senderDisplayName,
-        }),
+      await postOnboarding({
+        action: "business_profile",
+        workspaceId: item.workspaceId,
+        displayName,
+        contactEmail,
+        contactPhone,
+        replyToEmail,
+        senderDisplayName,
       });
-      const body = (await res.json()) as {
-        ok: boolean;
-        message?: string;
-      };
-      if (!res.ok || !body.ok) {
-        setError(body.message ?? "Unable to save.");
-        return;
-      }
+      businessDirtyRef.current = false;
       setMessage("Business profile saved.");
       await load();
-    } catch {
-      setError("Network error while saving.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save.");
     } finally {
       setSaving(false);
     }
@@ -275,30 +420,16 @@ export function OwnerOnboardingClient() {
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch("/api/onboarding", {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          action: "template_theme",
-          workspaceId: item.workspaceId,
-          themeId: selectedThemeId,
-        }),
+      await postOnboarding({
+        action: "template_theme",
+        workspaceId: item.workspaceId,
+        themeId: selectedThemeId,
       });
-      const body = (await res.json()) as {
-        ok: boolean;
-        message?: string;
-      };
-      if (!res.ok || !body.ok) {
-        setError(body.message ?? "Unable to save theme.");
-        return;
-      }
+      themeDirtyRef.current = false;
       setMessage("Website design saved.");
       await load();
-    } catch {
-      setError("Network error while saving theme.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save theme.");
     } finally {
       setSavingTheme(false);
     }
@@ -310,6 +441,7 @@ export function OwnerOnboardingClient() {
     setError(null);
     setMessage(null);
     try {
+      await flushAll();
       const res = await fetch("/api/onboarding/template-preview", {
         method: "POST",
         headers: {
@@ -329,6 +461,7 @@ export function OwnerOnboardingClient() {
       };
       if (!res.ok || !body.ok) {
         setError(body.message ?? "Unable to start preview.");
+        setStartingPreview(false);
         return;
       }
       window.location.assign(body.data?.redirectTo ?? "/");
@@ -411,13 +544,16 @@ export function OwnerOnboardingClient() {
         className="space-y-4 rounded-xl border border-slate-200 bg-white p-6"
         onSubmit={onSave}
       >
-        <h2 className="text-lg font-medium text-slate-900">Business profile</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-lg font-medium text-slate-900">Business profile</h2>
+          <OnboardingDraftStatus status={businessDraft.status} />
+        </div>
         <label className="block text-sm text-slate-700">
           Business display name
           <input
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
             value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
+            onChange={(e) => patchBusiness("displayName", e.target.value)}
             required
           />
         </label>
@@ -427,7 +563,7 @@ export function OwnerOnboardingClient() {
             type="email"
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
             value={contactEmail}
-            onChange={(e) => setContactEmail(e.target.value)}
+            onChange={(e) => patchBusiness("contactEmail", e.target.value)}
             required
           />
         </label>
@@ -436,7 +572,7 @@ export function OwnerOnboardingClient() {
           <input
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
             value={contactPhone}
-            onChange={(e) => setContactPhone(e.target.value)}
+            onChange={(e) => patchBusiness("contactPhone", e.target.value)}
           />
         </label>
         <label className="block text-sm text-slate-700">
@@ -445,7 +581,7 @@ export function OwnerOnboardingClient() {
             type="email"
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
             value={replyToEmail}
-            onChange={(e) => setReplyToEmail(e.target.value)}
+            onChange={(e) => patchBusiness("replyToEmail", e.target.value)}
           />
         </label>
         <label className="block text-sm text-slate-700">
@@ -453,7 +589,9 @@ export function OwnerOnboardingClient() {
           <input
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
             value={senderDisplayName}
-            onChange={(e) => setSenderDisplayName(e.target.value)}
+            onChange={(e) =>
+              patchBusiness("senderDisplayName", e.target.value)
+            }
           />
         </label>
         <button
@@ -485,7 +623,7 @@ export function OwnerOnboardingClient() {
         onAssetsChange={(next, status) => {
           setBrandAssets(next);
           setBrandingStatus(status);
-          void load();
+          void load({ preserveLocalForms: true });
         }}
       />
 
@@ -493,32 +631,35 @@ export function OwnerOnboardingClient() {
         workspaceId={item.workspaceId}
         teamSignatureDataReadiness={item.teamSignatureDataReadiness ?? null}
         onRosterChange={() => {
-          void load();
+          void load({ preserveLocalForms: true });
         }}
       />
 
       <WebsiteDomainSection workspaceId={item.workspaceId} />
 
       <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-6">
-        <div>
-          <h2 className="text-lg font-medium text-slate-900">Website design</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Choose a category, then a template. Themes control color identity.
-          </p>
-          {themeComplete ? (
-            <p className="mt-2 text-xs font-medium text-emerald-700">
-              Design selection complete
-              {item.templateLabel ? ` · ${item.templateLabel}` : ""}
-              {item.themeId
-                ? ` · ${item.themeOptions.find((t) => t.id === item.themeId)?.label ?? ""}`
-                : ""}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-medium text-slate-900">Website design</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Choose a category, then a template. Themes control color identity.
             </p>
-          ) : (
-            <p className="mt-2 text-xs text-slate-500">
-              Selecting a design finishes this step (does not complete overall
-              onboarding).
-            </p>
-          )}
+            {themeComplete ? (
+              <p className="mt-2 text-xs font-medium text-emerald-700">
+                Design selection complete
+                {item.templateLabel ? ` · ${item.templateLabel}` : ""}
+                {item.themeId
+                  ? ` · ${item.themeOptions.find((t) => t.id === item.themeId)?.label ?? ""}`
+                  : ""}
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">
+                Selecting a design finishes this step (does not complete overall
+                onboarding).
+              </p>
+            )}
+          </div>
+          <OnboardingDraftStatus status={themeDraft.status} />
         </div>
 
         <div>
@@ -621,7 +762,10 @@ export function OwnerOnboardingClient() {
                   <button
                     key={theme.id}
                     type="button"
-                    onClick={() => setSelectedThemeId(theme.id)}
+                    onClick={() => {
+                      if (!selectedTemplate) return;
+                      applyThemeSelection(selectedTemplate, theme.id);
+                    }}
                     className={[
                       "rounded-xl border p-3 text-left transition",
                       selected

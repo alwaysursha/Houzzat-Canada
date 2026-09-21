@@ -49,6 +49,8 @@ async function copyText(value: string): Promise<boolean> {
 /**
  * Stage 6.11F.1 / F.2A — Custom Website Domain claim + ownership TXT verify.
  * Ownership verification does not connect or activate the website.
+ * Hostname is claimed on submit only — not auto-saved as a draft (claiming
+ * on debounce would create pending domain rows).
  */
 export function WebsiteDomainSection({
   workspaceId,

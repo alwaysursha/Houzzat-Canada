@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  OnboardingDraftStatus,
+  useOnboardingDraftAutosave,
+  useOnboardingDraftFlush,
+} from "@/components/onboarding/onboarding-draft-flush";
+import {
   TEAM_ABOUT_TEXT_MAX,
   TEAM_MEMBER_BIO_MAX,
   TEAM_MEMBER_CELL_MAX,
@@ -70,6 +75,16 @@ type TeamRosterSectionProps = {
   onRosterChange?: () => void;
 };
 
+type TeamProfileDraft = {
+  aboutText: string;
+  serviceAreasText: string;
+};
+
+type TeamMemberDraft = {
+  memberId: string;
+  form: MemberForm;
+};
+
 function memberToForm(m: TeamMember): MemberForm {
   return {
     name: m.name ?? "",
@@ -115,6 +130,74 @@ export function TeamRosterSection({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<MemberForm>(EMPTY_FORM);
   const photoInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const profileDirtyRef = useRef(false);
+  const memberDirtyRef = useRef(false);
+  const aboutTextRef = useRef("");
+  const serviceAreasTextRef = useRef("");
+  const editFormRef = useRef<MemberForm>(EMPTY_FORM);
+  const editingIdRef = useRef<string | null>(null);
+  const workspaceIdRef = useRef(workspaceId);
+  workspaceIdRef.current = workspaceId;
+  const { flushAll } = useOnboardingDraftFlush();
+
+  const profileDraft = useOnboardingDraftAutosave<TeamProfileDraft>({
+    flushId: "team-profile",
+    save: async (payload) => {
+      const areas = textToAreas(payload.serviceAreasText);
+      if (areas.length > TEAM_SERVICE_AREA_MAX_COUNT) return;
+      if (areas.some((a) => a.length > TEAM_SERVICE_AREA_MAX_LENGTH)) return;
+      const res = await fetch("/api/onboarding/team-profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: workspaceIdRef.current,
+          aboutText: payload.aboutText.trim() || null,
+          serviceAreas: areas,
+        }),
+      });
+      const json = (await res.json()) as ApiEnvelope<{ profile: TeamProfile }>;
+      if (!res.ok || !json.ok || !json.data?.profile) {
+        throw new Error(json.message ?? "Unable to save Team profile.");
+      }
+      if (
+        payload.aboutText === aboutTextRef.current &&
+        payload.serviceAreasText === serviceAreasTextRef.current
+      ) {
+        profileDirtyRef.current = false;
+      }
+    },
+  });
+
+  const memberDraft = useOnboardingDraftAutosave<TeamMemberDraft>({
+    flushId: "team-member",
+    save: async (payload) => {
+      const res = await fetch(
+        `/api/onboarding/team-members/${payload.memberId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: workspaceIdRef.current,
+            name: payload.form.name.trim() || null,
+            designation: payload.form.designation.trim() || null,
+            cellPhone: payload.form.cellPhone.trim() || null,
+            email: payload.form.email.trim() || null,
+            bio: payload.form.bio.trim() || null,
+          }),
+        },
+      );
+      const json = (await res.json()) as ApiEnvelope<{ member: TeamMember }>;
+      if (!res.ok || !json.ok || !json.data?.member) {
+        throw new Error(json.message ?? "Unable to update Team member.");
+      }
+      if (
+        editingIdRef.current === payload.memberId &&
+        JSON.stringify(payload.form) === JSON.stringify(editFormRef.current)
+      ) {
+        memberDirtyRef.current = false;
+      }
+    },
+  });
 
   const clearFlash = () => {
     setError(null);
@@ -128,8 +211,23 @@ export function TeamRosterSection({
   const applyList = useCallback((nextProfile: TeamProfile, nextMembers: TeamMember[]) => {
     setProfile(nextProfile);
     setMembers(nextMembers);
-    setAboutText(nextProfile.aboutText ?? "");
-    setServiceAreasText(areasToText(nextProfile.serviceAreas ?? []));
+    if (!profileDirtyRef.current) {
+      setAboutText(nextProfile.aboutText ?? "");
+      setServiceAreasText(areasToText(nextProfile.serviceAreas ?? []));
+      aboutTextRef.current = nextProfile.aboutText ?? "";
+      serviceAreasTextRef.current = areasToText(nextProfile.serviceAreas ?? []);
+    }
+    if (
+      editingIdRef.current &&
+      !memberDirtyRef.current
+    ) {
+      const current = nextMembers.find((m) => m.id === editingIdRef.current);
+      if (current) {
+        const nextForm = memberToForm(current);
+        setEditForm(nextForm);
+        editFormRef.current = nextForm;
+      }
+    }
   }, []);
 
   const load = useCallback(async () => {
@@ -192,6 +290,11 @@ export function TeamRosterSection({
       setProfile(json.data.profile);
       setAboutText(json.data.profile.aboutText ?? "");
       setServiceAreasText(areasToText(json.data.profile.serviceAreas ?? []));
+      aboutTextRef.current = json.data.profile.aboutText ?? "";
+      serviceAreasTextRef.current = areasToText(
+        json.data.profile.serviceAreas ?? [],
+      );
+      profileDirtyRef.current = false;
       setMessage("Team profile saved.");
     } catch {
       setError("Network error while saving Team profile.");
@@ -227,7 +330,11 @@ export function TeamRosterSection({
       setAddForm(EMPTY_FORM);
       setShowAdd(false);
       setEditingId(json.data.member.id);
-      setEditForm(memberToForm(json.data.member));
+      editingIdRef.current = json.data.member.id;
+      const nextForm = memberToForm(json.data.member);
+      setEditForm(nextForm);
+      editFormRef.current = nextForm;
+      memberDirtyRef.current = false;
       setMessage("Team member added. Upload a photo before publishing.");
       notifyParent();
     } catch {
@@ -261,6 +368,7 @@ export function TeamRosterSection({
       setMembers((prev) =>
         prev.map((m) => (m.id === memberId ? json.data!.member : m)),
       );
+      memberDirtyRef.current = false;
       setMessage("Team member saved.");
       notifyParent();
     } catch {
@@ -274,6 +382,7 @@ export function TeamRosterSection({
     setBusyMemberId(memberId);
     clearFlash();
     try {
+      await flushAll();
       const res = await fetch(`/api/onboarding/team-members/${memberId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -307,6 +416,7 @@ export function TeamRosterSection({
     setBusyMemberId(memberId);
     clearFlash();
     try {
+      await flushAll();
       const body = new FormData();
       body.set("file", file);
       body.set("workspaceId", workspaceId);
@@ -335,6 +445,7 @@ export function TeamRosterSection({
     setBusyMemberId(memberId);
     clearFlash();
     try {
+      await flushAll();
       const res = await fetch(
         `/api/onboarding/team-members/${memberId}/photo`,
         {
@@ -381,7 +492,10 @@ export function TeamRosterSection({
         setError(json.message ?? "Unable to remove Team member.");
         return;
       }
-      if (editingId === memberId) setEditingId(null);
+      if (editingId === memberId) {
+        setEditingId(null);
+        editingIdRef.current = null;
+      }
       await load();
       setMessage("Team member removed.");
       notifyParent();
@@ -584,7 +698,10 @@ export function TeamRosterSection({
       ) : (
         <>
           <form onSubmit={saveProfile} className="space-y-3 border-t border-slate-100 pt-5">
-            <h3 className="text-sm font-medium text-slate-800">Team profile</h3>
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-sm font-medium text-slate-800">Team profile</h3>
+              <OnboardingDraftStatus status={profileDraft.status} />
+            </div>
             <label className="block text-sm text-slate-700">
               About the team
               <textarea
@@ -592,7 +709,16 @@ export function TeamRosterSection({
                 rows={4}
                 maxLength={TEAM_ABOUT_TEXT_MAX}
                 value={aboutText}
-                onChange={(e) => setAboutText(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setAboutText(next);
+                  aboutTextRef.current = next;
+                  profileDirtyRef.current = true;
+                  profileDraft.schedule({
+                    aboutText: next,
+                    serviceAreasText: serviceAreasTextRef.current,
+                  });
+                }}
               />
             </label>
             <label className="block text-sm text-slate-700">
@@ -604,7 +730,16 @@ export function TeamRosterSection({
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
                 rows={3}
                 value={serviceAreasText}
-                onChange={(e) => setServiceAreasText(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setServiceAreasText(next);
+                  serviceAreasTextRef.current = next;
+                  profileDirtyRef.current = true;
+                  profileDraft.schedule({
+                    aboutText: aboutTextRef.current,
+                    serviceAreasText: next,
+                  });
+                }}
                 placeholder={"Toronto\nMississauga"}
               />
             </label>
@@ -779,10 +914,17 @@ export function TeamRosterSection({
                             disabled={busy}
                             onClick={() => {
                               if (editing) {
+                                void memberDraft.flush();
                                 setEditingId(null);
+                                editingIdRef.current = null;
                               } else {
+                                void memberDraft.flush();
                                 setEditingId(member.id);
-                                setEditForm(memberToForm(member));
+                                editingIdRef.current = member.id;
+                                const nextForm = memberToForm(member);
+                                setEditForm(nextForm);
+                                editFormRef.current = nextForm;
+                                memberDirtyRef.current = false;
                               }
                             }}
                             className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-800 disabled:opacity-50"
@@ -840,7 +982,20 @@ export function TeamRosterSection({
 
                         {editing ? (
                           <div className="space-y-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
-                            {renderMemberFields(editForm, setEditForm, busy)}
+                            <OnboardingDraftStatus status={memberDraft.status} />
+                            {renderMemberFields(
+                              editForm,
+                              (next) => {
+                                setEditForm(next);
+                                editFormRef.current = next;
+                                memberDirtyRef.current = true;
+                                memberDraft.schedule({
+                                  memberId: member.id,
+                                  form: next,
+                                });
+                              },
+                              busy,
+                            )}
                             <button
                               type="button"
                               disabled={busy}

@@ -385,13 +385,20 @@ async function loadOwnerOnboardingWorkspace(
     assets: { brokerageLogoUrl: brandAssets.brokerageLogoUrl },
     category: evaluationCategory,
   });
+  // Never promote identity to COMPLETE on load/draft reload — only explicit
+  // professional_identity save (syncProfessionalIdentityStatus) may complete.
+  let professionalIdentityStatus =
+    onboarding?.professionalIdentityStatus ?? "NOT_STARTED";
+  if (evaluatedIdentity === "NOT_STARTED") {
+    professionalIdentityStatus = "NOT_STARTED";
+  }
   if (
     onboarding &&
-    onboarding.professionalIdentityStatus !== evaluatedIdentity
+    onboarding.professionalIdentityStatus !== professionalIdentityStatus
   ) {
     await db.workspaceOnboardingState.update({
       where: { workspaceId },
-      data: { professionalIdentityStatus: evaluatedIdentity },
+      data: { professionalIdentityStatus },
     });
   }
 
@@ -431,7 +438,7 @@ async function loadOwnerOnboardingWorkspace(
   const websiteSetupComplete = evaluateWebsiteSetupComplete({
     businessProfileStatus,
     brandingStatus: evaluatedBranding,
-    professionalIdentityStatus: evaluatedIdentity,
+    professionalIdentityStatus,
     templateThemeStatus,
     category: evaluationCategory,
     teamSignatureDataReady: teamSignatureDataReadiness.ready,
@@ -465,7 +472,7 @@ async function loadOwnerOnboardingWorkspace(
       accountActivatedAt: onboarding?.accountActivatedAt?.toISOString() ?? null,
       businessProfileStatus,
       brandingStatus: evaluatedBranding,
-      professionalIdentityStatus: evaluatedIdentity,
+      professionalIdentityStatus,
       templateThemeStatus,
       emailIdentityStatus: onboarding?.emailIdentityStatus ?? "NOT_STARTED",
       completedAt: onboarding?.completedAt?.toISOString() ?? null,
@@ -502,6 +509,11 @@ export async function updateOwnerOnboardingBusinessProfile(input: {
   contactPhone?: string | null;
   replyToEmail?: string | null;
   senderDisplayName?: string | null;
+  /**
+   * Persist entered fields without marking the section COMPLETE.
+   * Incomplete/invalid required fields must not block other valid values.
+   */
+  persistAsDraft?: boolean;
   /** Ignored as authority; mismatch fails. */
   clientWorkspaceId?: string | null;
   prisma?: PrismaClient;
@@ -517,103 +529,121 @@ export async function updateOwnerOnboardingBusinessProfile(input: {
     clientWorkspaceId: input.clientWorkspaceId,
   });
 
+  const persistAsDraft = input.persistAsDraft === true;
   const displayName = input.displayName.trim().slice(0, 120);
   const contactEmail = input.contactEmail.trim().toLowerCase();
-  if (!displayName) {
-    throw new OwnerActivationError(
-      "Display name is required",
-      "INVALID_DISPLAY_NAME",
-      400,
-    );
-  }
-  if (!contactEmail.includes("@")) {
-    throw new OwnerActivationError(
-      "Contact email is required",
-      "INVALID_EMAIL",
-      400,
-    );
+  if (!persistAsDraft) {
+    if (!displayName) {
+      throw new OwnerActivationError(
+        "Display name is required",
+        "INVALID_DISPLAY_NAME",
+        400,
+      );
+    }
+    if (!contactEmail.includes("@")) {
+      throw new OwnerActivationError(
+        "Contact email is required",
+        "INVALID_EMAIL",
+        400,
+      );
+    }
   }
 
   await ensureWorkspaceOnboardingState(db, ctx.workspaceId);
 
   const branding = await db.workspaceBranding.findUnique({
     where: { workspaceId: ctx.workspaceId },
-    select: { workspaceId: true },
+    select: { workspaceId: true, displayName: true },
   });
   if (branding) {
     await db.workspaceBranding.update({
       where: { workspaceId: ctx.workspaceId },
       data: {
-        displayName,
-        contactEmail,
+        displayName: displayName || branding.displayName,
+        contactEmail: contactEmail || null,
         contactPhone: input.contactPhone?.trim() || null,
       },
     });
   }
 
-  await db.workspace.update({
-    where: { id: ctx.workspaceId },
-    data: { name: displayName },
-  });
+  if (displayName) {
+    await db.workspace.update({
+      where: { id: ctx.workspaceId },
+      data: { name: displayName },
+    });
+  }
 
   const emailIdentity = await db.workspaceEmailIdentity.findUnique({
     where: { workspaceId: ctx.workspaceId },
     select: { workspaceId: true, domainStatus: true },
   });
   if (emailIdentity) {
+    const replyTo = input.replyToEmail?.trim().toLowerCase() || "";
+    const sender = input.senderDisplayName?.trim() || "";
     await db.workspaceEmailIdentity.update({
       where: { workspaceId: ctx.workspaceId },
-      data: {
-        contactEmail,
-        replyToEmail:
-          input.replyToEmail?.trim().toLowerCase() || contactEmail,
-        senderDisplayName: input.senderDisplayName?.trim() || displayName,
-        domainStatus:
-          emailIdentity.domainStatus === "NONE"
-            ? "NONE"
-            : emailIdentity.domainStatus,
-      },
+      data: persistAsDraft
+        ? {
+            contactEmail: contactEmail || null,
+            replyToEmail: replyTo || null,
+            senderDisplayName: sender || null,
+            domainStatus:
+              emailIdentity.domainStatus === "NONE"
+                ? "NONE"
+                : emailIdentity.domainStatus,
+          }
+        : {
+            contactEmail,
+            replyToEmail: replyTo || contactEmail,
+            senderDisplayName: sender || displayName,
+            domainStatus:
+              emailIdentity.domainStatus === "NONE"
+                ? "NONE"
+                : emailIdentity.domainStatus,
+          },
     });
   }
 
-  const onboarding = await db.workspaceOnboardingState.findUnique({
-    where: { workspaceId: ctx.workspaceId },
-  });
-  if (onboarding) {
-    const brandingRow = await db.workspaceBranding.findUnique({
+  if (!persistAsDraft) {
+    const onboarding = await db.workspaceOnboardingState.findUnique({
       where: { workspaceId: ctx.workspaceId },
-      select: {
-        agentProfilePhotoUrl: true,
-        logoUrl: true,
-        brokerageLogoUrl: true,
-        faviconUrl: true,
-        themeId: true,
-      },
     });
-    const category =
-      getTemplate(resolveTemplateIdFromThemeId(brandingRow?.themeId))
-        ?.category ?? "DEFAULT";
-    const brandingStatus = evaluateBrandingStatus({
-      category,
-      assets: {
-        agentProfilePhotoUrl: brandingRow?.agentProfilePhotoUrl ?? null,
-        logoUrl: brandingRow?.logoUrl ?? null,
-        brokerageLogoUrl: brandingRow?.brokerageLogoUrl ?? null,
-        faviconUrl: brandingRow?.faviconUrl ?? null,
-      },
-    });
-    await db.workspaceOnboardingState.update({
-      where: { workspaceId: ctx.workspaceId },
-      data: {
-        businessProfileStatus: "COMPLETE",
-        emailIdentityStatus: "COMPLETE",
-        // Preserve COMPLETE theme selection; otherwise leave NOT_STARTED.
-        ...(onboarding.templateThemeStatus === "COMPLETE"
-          ? {}
-          : { templateThemeStatus: "NOT_STARTED" }),
-        brandingStatus,
-      },
-    });
+    if (onboarding) {
+      const brandingRow = await db.workspaceBranding.findUnique({
+        where: { workspaceId: ctx.workspaceId },
+        select: {
+          agentProfilePhotoUrl: true,
+          logoUrl: true,
+          brokerageLogoUrl: true,
+          faviconUrl: true,
+          themeId: true,
+        },
+      });
+      const category =
+        getTemplate(resolveTemplateIdFromThemeId(brandingRow?.themeId))
+          ?.category ?? "DEFAULT";
+      const brandingStatus = evaluateBrandingStatus({
+        category,
+        assets: {
+          agentProfilePhotoUrl: brandingRow?.agentProfilePhotoUrl ?? null,
+          logoUrl: brandingRow?.logoUrl ?? null,
+          brokerageLogoUrl: brandingRow?.brokerageLogoUrl ?? null,
+          faviconUrl: brandingRow?.faviconUrl ?? null,
+        },
+      });
+      await db.workspaceOnboardingState.update({
+        where: { workspaceId: ctx.workspaceId },
+        data: {
+          businessProfileStatus: "COMPLETE",
+          emailIdentityStatus: "COMPLETE",
+          // Preserve COMPLETE theme selection; otherwise leave NOT_STARTED.
+          ...(onboarding.templateThemeStatus === "COMPLETE"
+            ? {}
+            : { templateThemeStatus: "NOT_STARTED" }),
+          brandingStatus,
+        },
+      });
+    }
   }
 
   return loadOwnerOnboardingWorkspace(db, ctx.workspaceId);
@@ -632,6 +662,15 @@ function requireTrimmedField(
   return trimmed.slice(0, maxLen);
 }
 
+function optionalDraftField(
+  value: string | null | undefined,
+  maxLen: number,
+): string | null {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return null;
+  return trimmed.slice(0, maxLen);
+}
+
 /**
  * Stage 6.11D — persist professional + brokerage identity (host-bound OWNER).
  * Does not lock the live website when incomplete; status tracks Website Setup only.
@@ -645,6 +684,8 @@ export async function updateOwnerOnboardingProfessionalIdentity(input: {
   brokerageFax?: string | null;
   brokeragePhone: string;
   brokerageAddress: string;
+  /** Persist partial identity without marking the section COMPLETE. */
+  persistAsDraft?: boolean;
   clientWorkspaceId?: string | null;
   prisma?: PrismaClient;
   hostDeps?: HostResolutionDeps;
@@ -659,54 +700,70 @@ export async function updateOwnerOnboardingProfessionalIdentity(input: {
     clientWorkspaceId: input.clientWorkspaceId,
   });
 
-  const data = {
-    agentRegisteredName: requireTrimmedField(
-      input.agentRegisteredName,
-      160,
-      "INVALID_AGENT_NAME",
-      "Agent name is required",
-    ),
-    agentDesignation: requireTrimmedField(
-      input.agentDesignation,
-      80,
-      "INVALID_AGENT_DESIGNATION",
-      "Agent designation is required",
-    ),
-    agentCellPhone: requireTrimmedField(
-      input.agentCellPhone,
-      40,
-      "INVALID_AGENT_CELL",
-      "Agent cell number is required",
-    ),
-    brokerageRegisteredName: requireTrimmedField(
-      input.brokerageRegisteredName,
-      200,
-      "INVALID_BROKERAGE_NAME",
-      "Brokerage name is required",
-    ),
-    brokerageFax: requireTrimmedField(
-      input.brokerageFax,
-      80,
-      "INVALID_BROKERAGE_FAX",
-      "Brokerage fax is required",
-    ),
-    brokeragePhone: requireTrimmedField(
-      input.brokeragePhone,
-      40,
-      "INVALID_BROKERAGE_PHONE",
-      "Brokerage phone is required",
-    ),
-    brokerageAddress: requireTrimmedField(
-      input.brokerageAddress,
-      400,
-      "INVALID_BROKERAGE_ADDRESS",
-      "Brokerage address is required",
-    ),
-  };
+  const persistAsDraft = input.persistAsDraft === true;
+  const data = persistAsDraft
+    ? {
+        agentRegisteredName: optionalDraftField(input.agentRegisteredName, 160),
+        agentDesignation: optionalDraftField(input.agentDesignation, 80),
+        agentCellPhone: optionalDraftField(input.agentCellPhone, 40),
+        brokerageRegisteredName: optionalDraftField(
+          input.brokerageRegisteredName,
+          200,
+        ),
+        brokerageFax: optionalDraftField(input.brokerageFax, 80),
+        brokeragePhone: optionalDraftField(input.brokeragePhone, 40),
+        brokerageAddress: optionalDraftField(input.brokerageAddress, 400),
+      }
+    : {
+        agentRegisteredName: requireTrimmedField(
+          input.agentRegisteredName,
+          160,
+          "INVALID_AGENT_NAME",
+          "Agent name is required",
+        ),
+        agentDesignation: requireTrimmedField(
+          input.agentDesignation,
+          80,
+          "INVALID_AGENT_DESIGNATION",
+          "Agent designation is required",
+        ),
+        agentCellPhone: requireTrimmedField(
+          input.agentCellPhone,
+          40,
+          "INVALID_AGENT_CELL",
+          "Agent cell number is required",
+        ),
+        brokerageRegisteredName: requireTrimmedField(
+          input.brokerageRegisteredName,
+          200,
+          "INVALID_BROKERAGE_NAME",
+          "Brokerage name is required",
+        ),
+        brokerageFax: requireTrimmedField(
+          input.brokerageFax,
+          80,
+          "INVALID_BROKERAGE_FAX",
+          "Brokerage fax is required",
+        ),
+        brokeragePhone: requireTrimmedField(
+          input.brokeragePhone,
+          40,
+          "INVALID_BROKERAGE_PHONE",
+          "Brokerage phone is required",
+        ),
+        brokerageAddress: requireTrimmedField(
+          input.brokerageAddress,
+          400,
+          "INVALID_BROKERAGE_ADDRESS",
+          "Brokerage address is required",
+        ),
+      };
 
   await ensureWorkspaceOnboardingState(db, ctx.workspaceId);
   await upsertProfessionalIdentityFields(db, ctx.workspaceId, data);
-  await syncProfessionalIdentityStatus(db, ctx.workspaceId);
+  if (!persistAsDraft) {
+    await syncProfessionalIdentityStatus(db, ctx.workspaceId);
+  }
   return loadOwnerOnboardingWorkspace(db, ctx.workspaceId);
 }
 
@@ -717,6 +774,8 @@ export async function updateOwnerOnboardingProfessionalIdentity(input: {
 export async function updateOwnerOnboardingTemplateTheme(input: {
   request: Request;
   themeId: unknown;
+  /** Persist theme without marking templateThemeStatus COMPLETE. */
+  persistAsDraft?: boolean;
   clientWorkspaceId?: string | null;
   prisma?: PrismaClient;
   hostDeps?: HostResolutionDeps;
@@ -776,13 +835,15 @@ export async function updateOwnerOnboardingTemplateTheme(input: {
     },
   });
 
-  await db.workspaceOnboardingState.update({
-    where: { workspaceId: ctx.workspaceId },
-    data: {
-      templateThemeStatus: "COMPLETE",
-      // Never mark overall onboarding complete here.
-    },
-  });
+  if (input.persistAsDraft !== true) {
+    await db.workspaceOnboardingState.update({
+      where: { workspaceId: ctx.workspaceId },
+      data: {
+        templateThemeStatus: "COMPLETE",
+        // Never mark overall onboarding complete here.
+      },
+    });
+  }
 
   return loadOwnerOnboardingWorkspace(db, ctx.workspaceId);
 }

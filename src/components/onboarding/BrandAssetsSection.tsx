@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useOnboardingDraftFlush } from "@/components/onboarding/onboarding-draft-flush";
 
 type BrandAssets = {
   agentProfilePhotoUrl: string | null;
@@ -139,12 +140,14 @@ export function BrandAssetsSection({
   const [busyKind, setBusyKind] = useState<AssetKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const { flushAll } = useOnboardingDraftFlush();
 
   async function upload(kind: AssetKind, file: File) {
     setBusyKind(kind);
     setError(null);
     setMessage(null);
     try {
+      await flushAll();
       const body = new FormData();
       body.set("kind", kind);
       body.set("file", file);
@@ -187,6 +190,7 @@ export function BrandAssetsSection({
     setError(null);
     setMessage(null);
     try {
+      await flushAll();
       const res = await fetch("/api/onboarding/branding-assets", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },

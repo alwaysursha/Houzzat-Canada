@@ -1,6 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  OnboardingDraftStatus,
+  useOnboardingDraftAutosave,
+} from "@/components/onboarding/onboarding-draft-flush";
 
 export type ProfessionalIdentityFields = {
   agentRegisteredName: string;
@@ -52,6 +56,52 @@ export function ProfessionalIdentitySection({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const agentPersonalRequired = templateCategory !== "TEAM";
+  const dirtyRef = useRef(false);
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
+  const workspaceIdRef = useRef(workspaceId);
+  workspaceIdRef.current = workspaceId;
+
+  const identityDraft = useOnboardingDraftAutosave<ProfessionalIdentityFields>({
+    flushId: "professional-identity",
+    save: async (payload) => {
+      const res = await fetch("/api/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "professional_identity",
+          draft: true,
+          workspaceId: workspaceIdRef.current,
+          ...payload,
+        }),
+      });
+      const json = (await res.json()) as { ok?: boolean; message?: string };
+      if (!res.ok || !json.ok) {
+        throw new Error(json.message || "Unable to save identity");
+      }
+      if (JSON.stringify(payload) === JSON.stringify(fieldsRef.current)) {
+        dirtyRef.current = false;
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (dirtyRef.current) return;
+    setFields(initial);
+  }, [initial]);
+
+  function patchField<K extends keyof ProfessionalIdentityFields>(
+    key: K,
+    value: ProfessionalIdentityFields[K],
+  ) {
+    setFields((current) => {
+      const next = { ...current, [key]: value };
+      fieldsRef.current = next;
+      dirtyRef.current = true;
+      identityDraft.schedule(next);
+      return next;
+    });
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,6 +143,7 @@ export function ProfessionalIdentitySection({
           brokeragePhone: ws.professionalIdentity.brokeragePhone ?? "",
           brokerageAddress: ws.professionalIdentity.brokerageAddress ?? "",
         };
+        dirtyRef.current = false;
         setFields(identity);
         onSaved();
       }
@@ -108,9 +159,12 @@ export function ProfessionalIdentitySection({
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6">
       <div>
-        <h2 className="text-lg font-medium text-slate-900">
-          Professional &amp; brokerage information
-        </h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-lg font-medium text-slate-900">
+            Professional &amp; brokerage information
+          </h2>
+          <OnboardingDraftStatus status={identityDraft.status} />
+        </div>
         <p className="mt-1 text-sm text-slate-600">
           Enter once for your workspace. Every website template uses this
           identity — it is not duplicated per theme.
@@ -148,10 +202,7 @@ export function ProfessionalIdentitySection({
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               value={fields.agentRegisteredName}
               onChange={(e) =>
-                setFields((f) => ({
-                  ...f,
-                  agentRegisteredName: e.target.value,
-                }))
+                patchField("agentRegisteredName", e.target.value)
               }
               required={agentPersonalRequired}
               autoComplete="name"
@@ -171,9 +222,7 @@ export function ProfessionalIdentitySection({
             <input
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               value={fields.agentDesignation}
-              onChange={(e) =>
-                setFields((f) => ({ ...f, agentDesignation: e.target.value }))
-              }
+              onChange={(e) => patchField("agentDesignation", e.target.value)}
               required={agentPersonalRequired}
               list="agent-designation-suggestions"
               placeholder="e.g. Salesperson"
@@ -198,9 +247,7 @@ export function ProfessionalIdentitySection({
             <input
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               value={fields.agentCellPhone}
-              onChange={(e) =>
-                setFields((f) => ({ ...f, agentCellPhone: e.target.value }))
-              }
+              onChange={(e) => patchField("agentCellPhone", e.target.value)}
               required={agentPersonalRequired}
               inputMode="tel"
               autoComplete="tel"
@@ -224,10 +271,7 @@ export function ProfessionalIdentitySection({
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               value={fields.brokerageRegisteredName}
               onChange={(e) =>
-                setFields((f) => ({
-                  ...f,
-                  brokerageRegisteredName: e.target.value,
-                }))
+                patchField("brokerageRegisteredName", e.target.value)
               }
               required
             />
@@ -244,9 +288,7 @@ export function ProfessionalIdentitySection({
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               rows={3}
               value={fields.brokerageAddress}
-              onChange={(e) =>
-                setFields((f) => ({ ...f, brokerageAddress: e.target.value }))
-              }
+              onChange={(e) => patchField("brokerageAddress", e.target.value)}
               required
             />
           </label>
@@ -258,9 +300,7 @@ export function ProfessionalIdentitySection({
             <input
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               value={fields.brokeragePhone}
-              onChange={(e) =>
-                setFields((f) => ({ ...f, brokeragePhone: e.target.value }))
-              }
+              onChange={(e) => patchField("brokeragePhone", e.target.value)}
               required
               inputMode="tel"
             />
@@ -273,12 +313,7 @@ export function ProfessionalIdentitySection({
             <input
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               value={fields.brokerageFax}
-              onChange={(e) =>
-                setFields((f) => ({
-                  ...f,
-                  brokerageFax: e.target.value,
-                }))
-              }
+              onChange={(e) => patchField("brokerageFax", e.target.value)}
               required
               inputMode="tel"
             />
