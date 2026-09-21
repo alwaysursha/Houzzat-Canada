@@ -101,6 +101,28 @@ type FakeState = {
       brokerageAddress: string | null;
     }
   >;
+  users: Map<
+    string,
+    {
+      id: string;
+      name: string | null;
+      email: string;
+      phone: string | null;
+      phoneE164: string | null;
+    }
+  >;
+  agentProfiles: Map<
+    string,
+    {
+      userId: string;
+      active: boolean;
+      firstName: string | null;
+      lastName: string | null;
+      phone: string | null;
+      recoLicenseNumber: string | null;
+      recoLicenseExpiresAt: Date | null;
+    }
+  >;
 };
 
 function emptyIdentity(workspaceId: string) {
@@ -235,6 +257,29 @@ function seedState(): FakeState {
       [WS_REMAX, emptyIdentity(WS_REMAX)],
       [WS_B, emptyIdentity(WS_B)],
     ]),
+    users: new Map([
+      [
+        USER_OWNER,
+        {
+          id: USER_OWNER,
+          name: "RE/MAX Owner",
+          email: "owner@remax.test",
+          phone: null as string | null,
+          phoneE164: null as string | null,
+        },
+      ],
+      [
+        USER_MULTI,
+        {
+          id: USER_MULTI,
+          name: "Multi Owner",
+          email: "multi@remax.test",
+          phone: null,
+          phoneE164: null,
+        },
+      ],
+    ]),
+    agentProfiles: new Map(),
   };
 }
 
@@ -297,6 +342,76 @@ function createFakePrisma(state: FakeState): PrismaClient {
             m.userId === where.workspaceId_userId.userId,
         );
         return hit ? { ...hit } : null;
+      },
+      async findFirst({
+        where,
+      }: {
+        where: { workspaceId: string; role?: string; status?: string };
+      }) {
+        const hit = state.members.find(
+          (m) =>
+            m.workspaceId === where.workspaceId &&
+            (!where.role || m.role === where.role) &&
+            (!where.status || m.status === where.status),
+        );
+        if (!hit) return null;
+        const user = state.users.get(hit.userId) ?? {
+          id: hit.userId,
+          name: null,
+          email: "",
+          phone: null,
+          phoneE164: null,
+        };
+        return {
+          ...hit,
+          user: {
+            ...user,
+            agentProfile: state.agentProfiles.get(hit.userId) ?? null,
+          },
+        };
+      },
+    },
+    user: {
+      async update({
+        where,
+        data,
+      }: {
+        where: { id: string };
+        data: Record<string, unknown>;
+      }) {
+        const row = state.users.get(where.id);
+        if (!row) throw new Error("user missing");
+        Object.assign(row, data);
+        return { ...row };
+      },
+    },
+    agentProfile: {
+      async upsert({
+        where,
+        create,
+        update,
+      }: {
+        where: { userId: string };
+        create: Record<string, unknown>;
+        update: Record<string, unknown>;
+      }) {
+        const existing = state.agentProfiles.get(where.userId);
+        if (existing) {
+          Object.assign(existing, update);
+          return { ...existing };
+        }
+        const row = {
+          userId: where.userId,
+          active: true,
+          firstName: null as string | null,
+          lastName: null as string | null,
+          phone: null as string | null,
+          recoLicenseNumber: null as string | null,
+          recoLicenseExpiresAt: null as Date | null,
+          ...create,
+        };
+        state.agentProfiles.set(where.userId, row);
+        return { ...row };
       },
     },
     workspaceBranding: {
@@ -613,6 +728,8 @@ async function main() {
         state.onboarding.get(WS_REMAX)!.professionalIdentityStatus,
         "NOT_STARTED",
       );
+      assert.equal(state.users.get(USER_OWNER)?.name, "Maria Khalid");
+      assert.equal(state.users.get(USER_OWNER)?.phone, null);
 
       await expectDenied(
         () =>
@@ -669,6 +786,10 @@ async function main() {
         state.onboarding.get(WS_REMAX)!.professionalIdentityStatus,
         "COMPLETE",
       );
+      assert.equal(state.users.get(USER_OWNER)?.phone, "416-555-0199");
+      assert.equal(state.users.get(USER_OWNER)?.phoneE164, "+14165550199");
+      assert.equal(state.agentProfiles.get(USER_OWNER)?.firstName, "Maria");
+      assert.equal(state.agentProfiles.get(USER_OWNER)?.lastName, "Khalid");
       console.log("[6] identity draft persists partial; Continue still validates... PASS");
     }
 

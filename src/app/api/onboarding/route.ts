@@ -56,6 +56,14 @@ export async function POST(request: Request) {
             : "",
         agentCellPhone:
           typeof body.agentCellPhone === "string" ? body.agentCellPhone : "",
+        recoLicenseNumber:
+          typeof body.recoLicenseNumber === "string"
+            ? body.recoLicenseNumber
+            : "",
+        recoLicenseExpiresAt:
+          typeof body.recoLicenseExpiresAt === "string"
+            ? body.recoLicenseExpiresAt
+            : "",
         brokerageRegisteredName:
           typeof body.brokerageRegisteredName === "string"
             ? body.brokerageRegisteredName

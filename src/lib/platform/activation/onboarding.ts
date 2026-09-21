@@ -45,6 +45,7 @@ import {
   evaluateTeamSignatureDataReadiness,
   type TeamSignatureDataReadiness,
 } from "@/lib/tenancy/team-roster/readiness";
+import { applyOwnerCanonicalProfileFromCurrentSave } from "./sync-owner-canonical-profile";
 
 export type OwnerOnboardingThemeOption = {
   id: string;
@@ -89,6 +90,8 @@ export type OwnerOnboardingWorkspace = {
     agentRegisteredName: string | null;
     agentDesignation: string | null;
     agentCellPhone: string | null;
+    recoLicenseNumber: string | null;
+    recoLicenseExpiresAt: string | null;
     brokerageRegisteredName: string | null;
     brokerageFax: string | null;
     brokeragePhone: string | null;
@@ -310,6 +313,23 @@ async function loadOwnerOnboardingWorkspace(
     orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
   });
 
+  const ownerMember = await db.workspaceMember.findFirst({
+    where: { workspaceId, role: "OWNER", status: "ACTIVE" },
+    select: {
+      user: {
+        select: {
+          phone: true,
+          agentProfile: {
+            select: {
+              recoLicenseNumber: true,
+              recoLicenseExpiresAt: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
   const templateOptions = listOwnerWebsiteDesignTemplateOptions();
   const persistedThemeId = workspace.branding?.themeId ?? null;
   const validTheme = getThemeById(persistedThemeId);
@@ -338,7 +358,15 @@ async function loadOwnerOnboardingWorkspace(
     agentRegisteredName:
       workspace.professionalIdentity?.agentRegisteredName ?? null,
     agentDesignation: workspace.professionalIdentity?.agentDesignation ?? null,
-    agentCellPhone: workspace.professionalIdentity?.agentCellPhone ?? null,
+    agentCellPhone:
+      ownerMember?.user.phone?.trim() ||
+      workspace.professionalIdentity?.agentCellPhone ||
+      null,
+    recoLicenseNumber:
+      ownerMember?.user.agentProfile?.recoLicenseNumber ?? null,
+    recoLicenseExpiresAt: recoExpiryInputValue(
+      ownerMember?.user.agentProfile?.recoLicenseExpiresAt ?? null,
+    ),
     brokerageRegisteredName:
       workspace.professionalIdentity?.brokerageRegisteredName ?? null,
     brokerageFax:
@@ -671,6 +699,18 @@ function optionalDraftField(
   return trimmed.slice(0, maxLen);
 }
 
+function recoExpiryInputValue(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const iso = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso.slice(0, 10);
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return recoExpiryInputValue(parsed);
+  }
+  return value.toISOString().slice(0, 10);
+}
+
 /**
  * Stage 6.11D — persist professional + brokerage identity (host-bound OWNER).
  * Does not lock the live website when incomplete; status tracks Website Setup only.
@@ -680,6 +720,8 @@ export async function updateOwnerOnboardingProfessionalIdentity(input: {
   agentRegisteredName: string;
   agentDesignation: string;
   agentCellPhone: string;
+  recoLicenseNumber?: string | null;
+  recoLicenseExpiresAt?: string | null;
   brokerageRegisteredName: string;
   brokerageFax?: string | null;
   brokeragePhone: string;
@@ -761,6 +803,17 @@ export async function updateOwnerOnboardingProfessionalIdentity(input: {
 
   await ensureWorkspaceOnboardingState(db, ctx.workspaceId);
   await upsertProfessionalIdentityFields(db, ctx.workspaceId, data);
+  await applyOwnerCanonicalProfileFromCurrentSave(
+    db,
+    ctx.userId,
+    {
+      agentRegisteredName: data.agentRegisteredName,
+      agentCellPhone: data.agentCellPhone,
+      recoLicenseNumber: optionalDraftField(input.recoLicenseNumber, 40),
+      recoLicenseExpiresAt: optionalDraftField(input.recoLicenseExpiresAt, 32),
+    },
+    { persistAsDraft },
+  );
   if (!persistAsDraft) {
     await syncProfessionalIdentityStatus(db, ctx.workspaceId);
   }

@@ -110,6 +110,7 @@
     "stage-6.10c1-host-bound-onboarding:selftest": "node --import tsx scripts/stage-6.10c1-host-bound-onboarding-selftest.ts",
     "stage-6.10c3-onboarding-pro-auth:selftest": "node --import tsx scripts/stage-6.10c3-onboarding-pro-auth-selftest.ts",
     "onboarding-draft-autosave:selftest": "node --import tsx scripts/onboarding-draft-autosave-selftest.ts",
+    "canonical-owner-agent-profile:selftest": "node --import tsx scripts/canonical-owner-agent-profile-selftest.ts",
     "stage-6.11a-default-template-themes:selftest": "node --import tsx scripts/stage-6.11a-default-template-themes-selftest.ts",
     "stage-6.11b-agent-signature:selftest": "node --import tsx scripts/stage-6.11b-agent-signature-selftest.ts",
     "stage-6.11b1-secure-owner-template-preview:selftest": "node --import tsx scripts/stage-6.11b1-secure-owner-template-preview-selftest.ts",

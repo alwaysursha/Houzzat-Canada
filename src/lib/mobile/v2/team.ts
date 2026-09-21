@@ -185,7 +185,7 @@ export async function loadMobileTeamPayload(ctx: AgentOrgContext) {
       userId: m.userId,
       name: m.user.name,
       email: m.user.email,
-      phone: m.user.agentProfile?.phone ?? m.user.phone ?? null,
+      phone: m.user.phone ?? m.user.agentProfile?.phone ?? null,
       avatarUrl: m.user.image,
       role: m.role,
       status: m.status,

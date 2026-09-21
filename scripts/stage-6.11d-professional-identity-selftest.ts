@@ -74,7 +74,44 @@ function createFakePrisma(state: {
   }>;
   workspaces: Map<string, { id: string; slug: string; status: string }>;
   onboarding: Map<string, Record<string, unknown>>;
+  users?: Map<
+    string,
+    {
+      id: string;
+      name: string | null;
+      email: string;
+      phone: string | null;
+      phoneE164: string | null;
+    }
+  >;
+  agentProfiles?: Map<
+    string,
+    {
+      userId: string;
+      active: boolean;
+      firstName: string | null;
+      lastName: string | null;
+      phone: string | null;
+      recoLicenseNumber: string | null;
+      recoLicenseExpiresAt: Date | null;
+    }
+  >;
 }): PrismaClient {
+  const users =
+    state.users ??
+    new Map([
+      [
+        USER_OWNER,
+        {
+          id: USER_OWNER,
+          name: null as string | null,
+          email: "owner@a.test",
+          phone: null as string | null,
+          phoneE164: null as string | null,
+        },
+      ],
+    ]);
+  const agentProfiles = state.agentProfiles ?? new Map();
   return {
     workspace: {
       async findUnique({
@@ -130,6 +167,88 @@ function createFakePrisma(state: {
             m.userId === where.workspaceId_userId.userId,
         );
         return hit ? { ...hit } : null;
+      },
+      async findFirst({
+        where,
+      }: {
+        where: { workspaceId: string; role?: string; status?: string };
+      }) {
+        const hit = state.members.find(
+          (m) =>
+            m.workspaceId === where.workspaceId &&
+            (!where.role || m.role === where.role) &&
+            (!where.status || m.status === where.status),
+        );
+        if (!hit) return null;
+        const user = users.get(hit.userId) ?? {
+          id: hit.userId,
+          name: null,
+          email: "",
+          phone: null,
+          phoneE164: null,
+        };
+        return {
+          ...hit,
+          user: {
+            ...user,
+            agentProfile: agentProfiles.get(hit.userId) ?? null,
+          },
+        };
+      },
+    },
+    user: {
+      async findUnique({ where }: { where: { id?: string; email?: string } }) {
+        if (where.id) return users.get(where.id) ?? null;
+        if (where.email) {
+          return (
+            [...users.values()].find((u) => u.email === where.email) ?? null
+          );
+        }
+        return null;
+      },
+      async update({
+        where,
+        data,
+      }: {
+        where: { id: string };
+        data: Record<string, unknown>;
+      }) {
+        const row = users.get(where.id);
+        if (!row) throw new Error("user missing");
+        Object.assign(row, data);
+        return { ...row };
+      },
+    },
+    agentProfile: {
+      async findUnique({ where }: { where: { userId: string } }) {
+        return agentProfiles.get(where.userId) ?? null;
+      },
+      async upsert({
+        where,
+        create,
+        update,
+      }: {
+        where: { userId: string };
+        create: Record<string, unknown>;
+        update: Record<string, unknown>;
+      }) {
+        const existing = agentProfiles.get(where.userId);
+        if (existing) {
+          Object.assign(existing, update);
+          return { ...existing };
+        }
+        const row = {
+          userId: where.userId,
+          active: true,
+          firstName: null as string | null,
+          lastName: null as string | null,
+          phone: null as string | null,
+          recoLicenseNumber: null as string | null,
+          recoLicenseExpiresAt: null as Date | null,
+          ...create,
+        };
+        agentProfiles.set(where.userId, row);
+        return { ...row };
       },
     },
     workspaceProfessionalIdentity: {
@@ -482,6 +601,19 @@ async function main() {
           [WS_B, { id: WS_B, slug: "tenant-b", status: "ACTIVE" }],
         ]),
         onboarding: new Map(),
+        users: new Map([
+          [
+            USER_OWNER,
+            {
+              id: USER_OWNER,
+              name: null as string | null,
+              email: "owner@a.test",
+              phone: null as string | null,
+              phoneE164: null as string | null,
+            },
+          ],
+        ]),
+        agentProfiles: new Map(),
       };
       const prisma = createFakePrisma(state);
       const hostDeps = createFixtureHostResolutionDeps(DOMAINS);
@@ -498,6 +630,8 @@ async function main() {
         agentRegisteredName: "Jordan Lee",
         agentDesignation: "Salesperson",
         agentCellPhone: "647-555-0101",
+        recoLicenseNumber: "12345678",
+        recoLicenseExpiresAt: "2027-06-15",
         brokerageRegisteredName: "Acme Realty Inc.",
         brokerageFax: "416-555-0299",
         brokeragePhone: "416-555-0200",
@@ -505,8 +639,19 @@ async function main() {
       });
       assert.equal(saved.workspaceId, WS_A);
       assert.equal(saved.professionalIdentity.agentRegisteredName, "Jordan Lee");
+      assert.equal(saved.professionalIdentity.recoLicenseNumber, "12345678");
       assert.equal(saved.onboarding.professionalIdentityStatus, "COMPLETE");
       assert.ok(!state.identities.has(WS_B));
+      assert.equal(state.users.get(USER_OWNER)?.name, "Jordan Lee");
+      assert.equal(state.users.get(USER_OWNER)?.phone, "647-555-0101");
+      assert.equal(state.users.get(USER_OWNER)?.phoneE164, "+16475550101");
+      assert.equal(state.agentProfiles.get(USER_OWNER)?.firstName, "Jordan");
+      assert.equal(state.agentProfiles.get(USER_OWNER)?.lastName, "Lee");
+      assert.equal(state.agentProfiles.get(USER_OWNER)?.phone, "647-555-0101");
+      assert.equal(
+        state.agentProfiles.get(USER_OWNER)?.recoLicenseNumber,
+        "12345678",
+      );
 
       await assert.rejects(
         () =>

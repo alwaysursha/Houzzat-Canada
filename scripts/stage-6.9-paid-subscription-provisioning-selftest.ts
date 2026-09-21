@@ -76,6 +76,8 @@ type FakeUser = {
   isBuyer: boolean;
   isSeller: boolean;
   platformOperatorId: string | null;
+  phone?: string | null;
+  phoneE164?: string | null;
 };
 
 type FakeMember = {
@@ -804,6 +806,8 @@ function createFakePrisma(state: FakeState): PrismaClient {
           isBuyer: Boolean(data.isBuyer ?? false),
           isSeller: Boolean(data.isSeller ?? false),
           platformOperatorId: null,
+          phone: (data.phone as string | null) ?? null,
+          phoneE164: (data.phoneE164 as string | null) ?? null,
         };
         state.users.set(user.id, user);
         if (!select) return { ...user };
@@ -1370,6 +1374,12 @@ async function main() {
     );
 
     assertProtectedUnchanged(state, before);
+    const ownerMember = state.members.find(
+      (m) => m.workspaceId === ws.id && m.role === "OWNER",
+    )!;
+    const ownerUser = state.users.get(ownerMember.userId)!;
+    assert.equal(ownerUser.phone, "+1-416-555-0100");
+    assert.equal(ownerUser.phoneE164, "+14165550100");
     console.log("[2] ACTIVE TEAM provisions correctly... PASS");
   }
 
@@ -1687,8 +1697,50 @@ async function main() {
     assert.equal(owners.length, 1);
     assert.equal(owners[0]!.role, "OWNER");
     assert.equal(ws.billingOwnerUserId, existingUserId);
+    assert.equal(user.phone, "+1-416-555-0100");
+    assert.equal(user.phoneE164, "+14165550100");
     assertProtectedUnchanged(state, before);
     console.log("[7] Existing BUYER reused; not promoted to ADMIN... PASS");
+  }
+
+  // 7b. Existing User.phone is not overwritten by prospect snapshot
+  {
+    const state = emptyState();
+    seedProtectedWorkspaces(state);
+    const before = snapshotProtected(state);
+    const email = "buyer.keptphone@example.test";
+    const existingUserId = `user_kept_${state.nextId++}`;
+    state.users.set(existingUserId, {
+      id: existingUserId,
+      email,
+      name: "Kept Phone",
+      role: "BUYER",
+      password: "hashed-not-plaintext",
+      isBuyer: true,
+      isSeller: false,
+      platformOperatorId: null,
+      phone: "416-555-9999",
+      phoneE164: "+14165559999",
+    });
+    const seeded = seedPaidSubscription(state, {
+      status: "ACTIVE",
+      planCode: "TEAM",
+      acceptedEmail: email,
+      contactName: "Prospect Name",
+      phone: "4376774949",
+    });
+    const prisma = createFakePrisma(state);
+    const result = await provisionPaidSubscription({
+      subscriptionId: seeded.subscriptionId,
+      prisma,
+    });
+    assert.equal(result.outcome, "succeeded");
+    const user = state.users.get(existingUserId)!;
+    assert.equal(user.phone, "416-555-9999");
+    assert.equal(user.phoneE164, "+14165559999");
+    assert.equal(user.name, "Kept Phone");
+    assertProtectedUnchanged(state, before);
+    console.log("[7b] Prospect snapshot does not overwrite canonical phone... PASS");
   }
 
   // 8. Houzzat + tenant-canary unchanged across multi-tenant provision

@@ -249,6 +249,23 @@ function createFakePrisma(state: FakeState): PrismaClient {
         );
         return hit ? { ...hit } : null;
       },
+      async findFirst({
+        where,
+      }: {
+        where: { workspaceId: string; role?: string; status?: string };
+      }) {
+        const hit = state.members.find(
+          (m) =>
+            m.workspaceId === where.workspaceId &&
+            (!where.role || m.role === where.role) &&
+            (!where.status || m.status === where.status),
+        );
+        if (!hit) return null;
+        return {
+          ...hit,
+          user: { phone: null, agentProfile: null },
+        };
+      },
     },
     workspaceBranding: {
       async findUnique({ where }: { where: { workspaceId: string } }) {

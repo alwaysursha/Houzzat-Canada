@@ -108,11 +108,12 @@ export async function resolvePublicAgentIdentity(
       professional?.brokerageRegisteredName,
       workspace.brokerageAffiliation,
     ),
-    // Stage 6.11D — agent cell from professional identity; never branding.contactPhone.
+    // Canonical User.phone first; professional identity is website copy/fallback.
+    // never branding.contactPhone (business phone).
     phone: firstNonEmpty(
-      professional?.agentCellPhone,
-      profile?.phone,
       agent?.phone,
+      profile?.phone,
+      professional?.agentCellPhone,
     ),
     email: firstNonEmpty(agent?.email, workspace.branding?.contactEmail),
     markets: profile?.markets ?? [],

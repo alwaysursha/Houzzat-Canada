@@ -55,7 +55,10 @@ export type AdminManagedAgentProfileView = {
   canEdit: boolean;
 };
 
-type ProfileDb = Pick<PrismaClient, "user" | "agentProfile" | "workspaceMember">;
+type ProfileDb = Pick<
+  PrismaClient,
+  "user" | "agentProfile" | "workspaceMember" | "workspaceProfessionalIdentity"
+>;
 
 export function normalizeStaffEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -63,6 +66,20 @@ export function normalizeStaffEmail(email: string): string {
 
 export function composeStaffDisplayName(firstName: string, lastName: string): string {
   return `${firstName.trim()} ${lastName.trim()}`.replace(/\s+/g, " ").trim();
+}
+
+export function splitStaffDisplayName(name: string | null | undefined): {
+  firstName: string;
+  lastName: string;
+} {
+  const trimmed = name?.trim() ?? "";
+  if (!trimmed) return { firstName: "", lastName: "" };
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0] ?? "", lastName: "" };
+  return {
+    firstName: parts[0] ?? "",
+    lastName: parts.slice(1).join(" "),
+  };
 }
 
 export function recoExpiryToInputValue(value: Date | string | null | undefined): string {
@@ -227,6 +244,7 @@ export function profileFromInviteSnapshot(invite: {
 export async function loadWorkspaceAgentProfile(
   ctx: AgentOrgContext,
   userId: string,
+  db: PrismaClient = prisma,
 ): Promise<
   | { ok: true; profile: AdminManagedAgentProfileView }
   | { ok: false; error: string; status: number }
@@ -235,7 +253,7 @@ export async function loadWorkspaceAgentProfile(
     return { ok: false, error: "Workspace required.", status: 403 };
   }
 
-  const membership = await prisma.workspaceMember.findFirst({
+  const membership = await db.workspaceMember.findFirst({
     where: { workspaceId: ctx.workspaceId, userId },
     include: {
       user: {
@@ -264,10 +282,10 @@ export async function loadWorkspaceAgentProfile(
 
   const firstName =
     membership.user.agentProfile?.firstName?.trim() ||
-    splitDisplayName(membership.user.name).firstName;
+    splitStaffDisplayName(membership.user.name).firstName;
   const lastName =
     membership.user.agentProfile?.lastName?.trim() ||
-    splitDisplayName(membership.user.name).lastName;
+    splitStaffDisplayName(membership.user.name).lastName;
 
   return {
     ok: true,
@@ -293,6 +311,7 @@ export async function updateWorkspaceAgentProfile(input: {
   ctx: AgentOrgContext;
   userId: string;
   raw: unknown;
+  prisma?: PrismaClient;
 }): Promise<
   | { ok: true; profile: AdminManagedAgentProfileView }
   | { ok: false; error: string; status: number }
@@ -304,15 +323,16 @@ export async function updateWorkspaceAgentProfile(input: {
     return { ok: false, error: "Forbidden.", status: 403 };
   }
 
+  const db = input.prisma ?? prisma;
   const parsed = parseAdminManagedAgentProfile(input.raw);
   if (!parsed.ok) return { ok: false, error: parsed.error, status: 400 };
 
-  const loaded = await loadWorkspaceAgentProfile(input.ctx, input.userId);
+  const loaded = await loadWorkspaceAgentProfile(input.ctx, input.userId, db);
   if (!loaded.ok) return loaded;
 
   const nextEmail = parsed.data.email;
   if (nextEmail !== normalizeStaffEmail(loaded.profile.email)) {
-    const conflict = await prisma.user.findUnique({
+    const conflict = await db.user.findUnique({
       where: { email: nextEmail },
       select: { id: true },
     });
@@ -325,31 +345,32 @@ export async function updateWorkspaceAgentProfile(input: {
     }
   }
 
-  await applyAdminManagedAgentProfile(prisma, input.userId, parsed.data, {
+  await applyAdminManagedAgentProfile(db, input.userId, parsed.data, {
     email: nextEmail,
   });
+  if (loaded.profile.role === "OWNER" && input.ctx.workspaceId) {
+    const websiteIdentity = await db.workspaceProfessionalIdentity.findUnique({
+      where: { workspaceId: input.ctx.workspaceId },
+      select: { workspaceId: true },
+    });
+    if (websiteIdentity) {
+      await db.workspaceProfessionalIdentity.update({
+        where: { workspaceId: input.ctx.workspaceId },
+        data: {
+          agentRegisteredName: parsed.data.displayName,
+          agentCellPhone: parsed.data.phone,
+        },
+      });
+    }
+  }
   if (nextEmail !== normalizeStaffEmail(loaded.profile.email)) {
-    await prisma.user.update({
+    await db.user.update({
       where: { id: input.userId },
       data: { emailVerified: new Date() },
     });
   }
 
-  const refreshed = await loadWorkspaceAgentProfile(input.ctx, input.userId);
+  const refreshed = await loadWorkspaceAgentProfile(input.ctx, input.userId, db);
   if (!refreshed.ok) return refreshed;
   return { ok: true, profile: refreshed.profile };
-}
-
-function splitDisplayName(name: string | null | undefined): {
-  firstName: string;
-  lastName: string;
-} {
-  const trimmed = name?.trim() ?? "";
-  if (!trimmed) return { firstName: "", lastName: "" };
-  const parts = trimmed.split(/\s+/);
-  if (parts.length === 1) return { firstName: parts[0] ?? "", lastName: "" };
-  return {
-    firstName: parts[0] ?? "",
-    lastName: parts.slice(1).join(" "),
-  };
 }

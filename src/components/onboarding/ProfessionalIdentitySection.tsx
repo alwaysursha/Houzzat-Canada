@@ -10,6 +10,8 @@ export type ProfessionalIdentityFields = {
   agentRegisteredName: string;
   agentDesignation: string;
   agentCellPhone: string;
+  recoLicenseNumber: string;
+  recoLicenseExpiresAt: string;
   brokerageRegisteredName: string;
   brokerageFax: string;
   brokeragePhone: string;
@@ -21,6 +23,8 @@ type ProfessionalIdentityApiFields = {
   agentRegisteredName?: string | null;
   agentDesignation?: string | null;
   agentCellPhone?: string | null;
+  recoLicenseNumber?: string | null;
+  recoLicenseExpiresAt?: string | null;
   brokerageRegisteredName?: string | null;
   brokerageFax?: string | null;
   brokeragePhone?: string | null;
@@ -136,6 +140,9 @@ export function ProfessionalIdentitySection({
           agentRegisteredName: ws.professionalIdentity.agentRegisteredName ?? "",
           agentDesignation: ws.professionalIdentity.agentDesignation ?? "",
           agentCellPhone: ws.professionalIdentity.agentCellPhone ?? "",
+          recoLicenseNumber: ws.professionalIdentity.recoLicenseNumber ?? "",
+          recoLicenseExpiresAt:
+            ws.professionalIdentity.recoLicenseExpiresAt ?? "",
           brokerageRegisteredName:
             ws.professionalIdentity.brokerageRegisteredName ?? "",
           brokerageFax:
@@ -254,6 +261,37 @@ export function ProfessionalIdentitySection({
             />
             <span className="mt-1 block text-xs text-slate-500">
               Agent mobile — separate from Business phone in Business profile.
+              Saved to your Team profile and used for Agent SMS notifications.
+            </span>
+          </label>
+          <label className="block text-sm text-slate-700">
+            RECO license #
+            <span className="ml-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              Optional
+            </span>
+            <input
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              value={fields.recoLicenseNumber}
+              onChange={(e) => patchField("recoLicenseNumber", e.target.value)}
+              autoComplete="off"
+            />
+          </label>
+          <label className="block text-sm text-slate-700">
+            RECO license expiry
+            <span className="ml-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              Optional
+            </span>
+            <input
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              type="date"
+              value={fields.recoLicenseExpiresAt}
+              onChange={(e) =>
+                patchField("recoLicenseExpiresAt", e.target.value)
+              }
+            />
+            <span className="mt-1 block text-xs text-slate-500">
+              Stored on your Agent professional record and shown in Team. Not
+              shown on the public website.
             </span>
           </label>
         </div>

@@ -63,6 +63,8 @@ type WorkspaceRow = {
     agentRegisteredName: string | null;
     agentDesignation: string | null;
     agentCellPhone: string | null;
+    recoLicenseNumber: string | null;
+    recoLicenseExpiresAt: string | null;
     brokerageRegisteredName: string | null;
     brokerageFax: string | null;
     brokeragePhone: string | null;
@@ -102,6 +104,8 @@ const EMPTY_IDENTITY: ProfessionalIdentityFields = {
   agentRegisteredName: "",
   agentDesignation: "",
   agentCellPhone: "",
+  recoLicenseNumber: "",
+  recoLicenseExpiresAt: "",
   brokerageRegisteredName: "",
   brokerageFax: "",
   brokeragePhone: "",
@@ -115,6 +119,8 @@ function identityFromRow(
     agentRegisteredName: row?.agentRegisteredName ?? "",
     agentDesignation: row?.agentDesignation ?? "",
     agentCellPhone: row?.agentCellPhone ?? "",
+    recoLicenseNumber: row?.recoLicenseNumber ?? "",
+    recoLicenseExpiresAt: row?.recoLicenseExpiresAt ?? "",
     brokerageRegisteredName: row?.brokerageRegisteredName ?? "",
     brokerageFax: row?.brokerageFax ?? "",
     brokeragePhone: row?.brokeragePhone ?? "",

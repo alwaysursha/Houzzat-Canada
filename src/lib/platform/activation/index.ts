@@ -57,6 +57,11 @@ export {
 } from "./onboarding";
 
 export {
+  applyOwnerCanonicalProfileFromCurrentSave,
+  provisioningPhoneSeedFromProspect,
+} from "./sync-owner-canonical-profile";
+
+export {
   OWNER_ONBOARDING_RETURN_PATH,
   OWNER_ONBOARDING_AUTH_QUERY,
   sanitizeOwnerOnboardingReturnPath,

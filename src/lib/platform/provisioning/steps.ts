@@ -16,6 +16,7 @@ import type {
   WorkspaceStatus,
 } from "@prisma/client";
 import { writePlatformAuditEvent } from "@/lib/platform/audit";
+import { provisioningPhoneSeedFromProspect } from "@/lib/platform/activation/sync-owner-canonical-profile";
 import {
   FEATURE_CUSTOM_CONSUMER_APP,
   type PlatformFeatureCode,
@@ -395,9 +396,15 @@ async function stepCreateOwnerMembership(ctx: StepContext): Promise<void> {
       id: true,
       role: true,
       password: true,
+      name: true,
+      phone: true,
       platformOperator: { select: { id: true } },
     },
   });
+
+  const prospectPhoneSeed = provisioningPhoneSeedFromProspect(
+    ctx.subscription.offer!.prospect.phone,
+  );
 
   if (!user) {
     user = await ctx.db.user.create({
@@ -408,11 +415,37 @@ async function stepCreateOwnerMembership(ctx: StepContext): Promise<void> {
         password: null,
         isBuyer: false,
         isSeller: false,
+        ...(prospectPhoneSeed
+          ? {
+              phone: prospectPhoneSeed.phone,
+              phoneE164: prospectPhoneSeed.phoneE164,
+            }
+          : {}),
       },
       select: {
         id: true,
         role: true,
         password: true,
+        name: true,
+        phone: true,
+        platformOperator: { select: { id: true } },
+      },
+    });
+  } else if (prospectPhoneSeed && !user.phone?.trim()) {
+    // Provisioning-time seed only when canonical phone is empty.
+    // Never overwrite a newer authenticated profile value.
+    user = await ctx.db.user.update({
+      where: { id: user.id },
+      data: {
+        phone: prospectPhoneSeed.phone,
+        phoneE164: prospectPhoneSeed.phoneE164,
+      },
+      select: {
+        id: true,
+        role: true,
+        password: true,
+        name: true,
+        phone: true,
         platformOperator: { select: { id: true } },
       },
     });
