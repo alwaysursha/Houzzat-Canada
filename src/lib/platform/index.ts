@@ -62,7 +62,9 @@ export {
   workspaceHasFeature,
   getWorkspaceSeatQuota,
   getCurrentWorkspaceSubscription,
+  resolveWorkspacePlanCapabilities,
   type WorkspaceSeatQuotaView,
+  type WorkspacePlanCapabilities,
 } from "./entitlements";
 
 export { materializeEntitlementProfile } from "./entitlements/materialize";

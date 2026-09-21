@@ -331,6 +331,11 @@ function createFakePrisma(state: {
         return null;
       },
     },
+    workspaceEntitlement: {
+      async findUnique() {
+        return null;
+      },
+    },
   } as unknown as PrismaClient;
 }
 

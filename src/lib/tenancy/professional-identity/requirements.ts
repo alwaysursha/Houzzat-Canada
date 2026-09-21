@@ -129,6 +129,11 @@ export function evaluateWebsiteSetupComplete(input: {
   teamSignatureDataReady?: boolean;
   /** Persisted WorkspaceBranding.themeId — required for TEAM theme gate. */
   themeId?: string | null;
+  /**
+   * Provisioned TEAM_MANAGEMENT. When false (SOLO), Team roster/leader/theme
+   * gates are skipped even if a Team Signature theme is persisted.
+   */
+  teamRosterEnabled?: boolean;
 }): boolean {
   const category = input.category ?? "DEFAULT";
   const base =
@@ -138,15 +143,20 @@ export function evaluateWebsiteSetupComplete(input: {
 
   if (!base) return false;
 
-  if (category === "TEAM") {
+  const teamRosterEnabled = input.teamRosterEnabled !== false;
+  if (category === "TEAM" && teamRosterEnabled) {
     if (!isValidConfiguredTeamSignatureTheme(input.themeId ?? null)) {
       return false;
     }
     return input.teamSignatureDataReady === true;
   }
 
-  // AGENT / DEFAULT / BROKERAGE: selectable catalog theme step unchanged.
-  return input.templateThemeStatus === "COMPLETE";
+  // AGENT / DEFAULT / BROKERAGE, and SOLO (no Team roster entitlement).
+  return (
+    input.templateThemeStatus === "COMPLETE" ||
+    (category === "TEAM" &&
+      isValidConfiguredTeamSignatureTheme(input.themeId ?? null))
+  );
 }
 
 /**
@@ -169,8 +179,10 @@ export function listMissingWebsiteSetupFields(input: {
     "missing" | "sections"
   > | null;
   themeId?: string | null;
+  teamRosterEnabled?: boolean;
 }): WebsiteSetupMissingFieldKey[] {
   const missing: WebsiteSetupMissingFieldKey[] = [];
+  const teamRosterEnabled = input.teamRosterEnabled !== false;
 
   if (input.businessProfileStatus !== "COMPLETE") {
     missing.push("businessProfile");
@@ -190,7 +202,7 @@ export function listMissingWebsiteSetupFields(input: {
     }
   }
 
-  if (input.category === "TEAM") {
+  if (input.category === "TEAM" && teamRosterEnabled) {
     if (!input.assets.logoUrl?.trim()) {
       missing.push("teamLogoUrl");
     }
@@ -208,7 +220,14 @@ export function listMissingWebsiteSetupFields(input: {
       missing.push("templateTheme");
     }
   } else if (input.templateThemeStatus !== "COMPLETE") {
-    missing.push("templateTheme");
+    if (
+      input.category === "TEAM" &&
+      isValidConfiguredTeamSignatureTheme(input.themeId ?? null)
+    ) {
+      // SOLO (or other non-roster plans) with a leftover Team theme stay complete.
+    } else {
+      missing.push("templateTheme");
+    }
   }
 
   return missing;

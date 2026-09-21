@@ -70,6 +70,8 @@ type WorkspaceRow = {
     brokeragePhone: string | null;
     brokerageAddress: string | null;
   };
+  planCode?: string | null;
+  teamRosterEnabled?: boolean;
   teamSignatureDataReadiness?: {
     ready: boolean;
     missingLabels: string[];
@@ -633,13 +635,15 @@ function OwnerOnboardingForm() {
         }}
       />
 
-      <TeamRosterSection
-        workspaceId={item.workspaceId}
-        teamSignatureDataReadiness={item.teamSignatureDataReadiness ?? null}
-        onRosterChange={() => {
-          void load({ preserveLocalForms: true });
-        }}
-      />
+      {item.teamRosterEnabled === true ? (
+        <TeamRosterSection
+          workspaceId={item.workspaceId}
+          teamSignatureDataReadiness={item.teamSignatureDataReadiness ?? null}
+          onRosterChange={() => {
+            void load({ preserveLocalForms: true });
+          }}
+        />
+      ) : null}
 
       <WebsiteDomainSection workspaceId={item.workspaceId} />
 

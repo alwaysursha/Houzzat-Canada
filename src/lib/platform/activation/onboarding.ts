@@ -23,10 +23,12 @@ import {
   resolveTemplateIdFromThemeId,
   getTemplate,
   isValidConfiguredTeamSignatureTheme,
+  TEAM_SIGNATURE_TEMPLATE_ID,
   type ImplementedTemplateId,
   type OnboardingTemplateOption,
   type TemplateCategory,
 } from "@/lib/tenancy/templates";
+import { resolveWorkspacePlanCapabilities } from "@/lib/platform/entitlements";
 import { OwnerActivationError } from "./errors";
 import { ensureWorkspaceOnboardingState } from "./onboarding-state";
 import { evaluateBrandingStatus } from "@/lib/tenancy/branding-assets/requirements";
@@ -78,6 +80,10 @@ export type OwnerOnboardingWorkspace = {
   templateOptions: OnboardingTemplateOption[];
   /** Themes for the currently selected template (compat with 6.11A clients). */
   themeOptions: OwnerOnboardingThemeOption[];
+  /** Current Subscription.planCode — not a client-supplied label. */
+  planCode: string | null;
+  /** Provisioned TEAM_MANAGEMENT. When false, Team roster UI and readiness are omitted. */
+  teamRosterEnabled: boolean;
   /** Stage 6.11C.1 — workspace brand asset URLs for Website Setup. */
   brandAssets: {
     agentProfilePhotoUrl: string | null;
@@ -99,9 +105,9 @@ export type OwnerOnboardingWorkspace = {
   };
   /**
    * Stage 6.11E.8 — server-authoritative Team Signature data readiness.
-   * Independent of catalog `selectable` (prep/QA before commercial enable).
+   * Null when the plan does not include Team roster (SOLO).
    */
-  teamSignatureDataReadiness: TeamSignatureDataReadiness;
+  teamSignatureDataReadiness: TeamSignatureDataReadiness | null;
   onboarding: {
     accountActivatedAt: string | null;
     businessProfileStatus: string;
@@ -330,8 +336,12 @@ async function loadOwnerOnboardingWorkspace(
     },
   });
 
-  const templateOptions = listOwnerWebsiteDesignTemplateOptions();
+  const plan = await resolveWorkspacePlanCapabilities(workspaceId, db);
   const persistedThemeId = workspace.branding?.themeId ?? null;
+  const templateOptions = listOwnerWebsiteDesignTemplateOptions({
+    teamRosterEnabled: plan.teamRosterEnabled,
+    includeTemplateId: resolveTemplateIdFromThemeId(persistedThemeId),
+  });
   const validTheme = getThemeById(persistedThemeId);
   const parsed = validTheme ? parseThemeId(validTheme.id) : null;
   const catalogTemplate = parsed ? getTemplate(parsed.templateId) : null;
@@ -342,9 +352,12 @@ async function loadOwnerOnboardingWorkspace(
     templateOptions.find((t) => t.id === parsed?.templateId) ??
     templateOptions[0]!;
   // Category from persisted presentation-ready theme.
-  // Null/invalid theme → DEFAULT for evaluation.
+  // Null/invalid theme → DEFAULT. SOLO never evaluates as TEAM.
   const evaluationCategory: TemplateCategory =
-    resolveOnboardingCategoryFromThemeId(persistedThemeId);
+    resolveOnboardingCategoryFromThemeId(
+      persistedThemeId,
+      plan.teamRosterEnabled,
+    );
   const onboarding = workspace.onboardingState;
 
   const brandAssets = {
@@ -382,16 +395,29 @@ async function loadOwnerOnboardingWorkspace(
     workspace.emailIdentity?.contactEmail ??
     null;
 
-  const teamSignatureDataReadiness = evaluateTeamSignatureDataReadiness({
-    workspaceId,
-    displayName,
-    contactEmail,
-    logoUrl: brandAssets.logoUrl,
-    identity: professionalIdentity,
-    brokerageLogoUrl: brandAssets.brokerageLogoUrl,
-    leaderMemberId: workspace.teamProfile?.leaderMemberId ?? null,
-    members: teamMembers,
-  });
+  const teamSignatureDataReadiness = plan.teamRosterEnabled
+    ? evaluateTeamSignatureDataReadiness({
+        workspaceId,
+        displayName,
+        contactEmail,
+        logoUrl: brandAssets.logoUrl,
+        identity: professionalIdentity,
+        brokerageLogoUrl: brandAssets.brokerageLogoUrl,
+        leaderMemberId: workspace.teamProfile?.leaderMemberId ?? null,
+        members: teamMembers,
+      })
+    : {
+        ready: true,
+        missing: [],
+        missingLabels: [],
+        sections: {
+          business: true,
+          branding: true,
+          brokerage: true,
+          roster: true,
+          leader: true,
+        },
+      };
 
   // Keep brandingStatus coherent with category requirements on every load.
   const evaluatedBranding = evaluateBrandingStatus({
@@ -400,7 +426,11 @@ async function loadOwnerOnboardingWorkspace(
   });
   if (
     onboarding &&
-    onboarding.brandingStatus !== evaluatedBranding
+    onboarding.brandingStatus !== evaluatedBranding &&
+    !(
+      !plan.teamRosterEnabled &&
+      onboarding.brandingStatus === "COMPLETE"
+    )
   ) {
     await db.workspaceOnboardingState.update({
       where: { workspaceId },
@@ -417,7 +447,13 @@ async function loadOwnerOnboardingWorkspace(
   // professional_identity save (syncProfessionalIdentityStatus) may complete.
   let professionalIdentityStatus =
     onboarding?.professionalIdentityStatus ?? "NOT_STARTED";
-  if (evaluatedIdentity === "NOT_STARTED") {
+  if (
+    evaluatedIdentity === "NOT_STARTED" &&
+    !(
+      !plan.teamRosterEnabled &&
+      professionalIdentityStatus === "COMPLETE"
+    )
+  ) {
     professionalIdentityStatus = "NOT_STARTED";
   }
   if (
@@ -437,7 +473,7 @@ async function loadOwnerOnboardingWorkspace(
 
   // Keep templateThemeStatus coherent with Team presentation-ready theme
   // configuration.
-  if (evaluationCategory === "TEAM") {
+  if (evaluationCategory === "TEAM" && plan.teamRosterEnabled) {
     const teamThemeConfigured =
       isValidConfiguredTeamSignatureTheme(persistedThemeId);
     const nextStatus = teamThemeConfigured ? "COMPLETE" : "NOT_STARTED";
@@ -460,17 +496,26 @@ async function loadOwnerOnboardingWorkspace(
       brokerageLogoUrl: brandAssets.brokerageLogoUrl,
       logoUrl: brandAssets.logoUrl,
     },
-    teamSignatureReadiness: teamSignatureDataReadiness,
+    teamSignatureReadiness: plan.teamRosterEnabled
+      ? teamSignatureDataReadiness
+      : null,
     themeId: persistedThemeId,
+    teamRosterEnabled: plan.teamRosterEnabled,
   });
   const websiteSetupComplete = evaluateWebsiteSetupComplete({
     businessProfileStatus,
-    brandingStatus: evaluatedBranding,
+    brandingStatus:
+      !plan.teamRosterEnabled && onboarding?.brandingStatus === "COMPLETE"
+        ? "COMPLETE"
+        : evaluatedBranding,
     professionalIdentityStatus,
     templateThemeStatus,
     category: evaluationCategory,
-    teamSignatureDataReady: teamSignatureDataReadiness.ready,
+    teamSignatureDataReady: plan.teamRosterEnabled
+      ? teamSignatureDataReadiness.ready
+      : true,
     themeId: persistedThemeId,
+    teamRosterEnabled: plan.teamRosterEnabled,
   });
 
   return {
@@ -493,13 +538,20 @@ async function loadOwnerOnboardingWorkspace(
       : selectedTemplate.label,
     templateOptions,
     themeOptions: selectedTemplate.themes,
+    planCode: plan.planCode,
+    teamRosterEnabled: plan.teamRosterEnabled,
     brandAssets,
     professionalIdentity,
-    teamSignatureDataReadiness,
+    teamSignatureDataReadiness: plan.teamRosterEnabled
+      ? teamSignatureDataReadiness
+      : null,
     onboarding: {
       accountActivatedAt: onboarding?.accountActivatedAt?.toISOString() ?? null,
       businessProfileStatus,
-      brandingStatus: evaluatedBranding,
+      brandingStatus:
+        !plan.teamRosterEnabled && onboarding?.brandingStatus === "COMPLETE"
+          ? "COMPLETE"
+          : evaluatedBranding,
       professionalIdentityStatus,
       templateThemeStatus,
       emailIdentityStatus: onboarding?.emailIdentityStatus ?? "NOT_STARTED",
@@ -867,13 +919,27 @@ export async function updateOwnerOnboardingTemplateTheme(input: {
 
   const branding = await db.workspaceBranding.findUnique({
     where: { workspaceId: ctx.workspaceId },
-    select: { workspaceId: true, version: true },
+    select: { workspaceId: true, version: true, themeId: true },
   });
   if (!branding) {
     throw new OwnerActivationError(
       "Workspace branding not found",
       "NOT_FOUND",
       404,
+    );
+  }
+
+  const plan = await resolveWorkspacePlanCapabilities(ctx.workspaceId, db);
+  const parsedTheme = parseThemeId(themeId);
+  if (
+    !plan.teamRosterEnabled &&
+    parsedTheme?.templateId === TEAM_SIGNATURE_TEMPLATE_ID &&
+    branding.themeId !== themeId
+  ) {
+    throw new OwnerActivationError(
+      "Team website templates are not included in your plan.",
+      "PLAN_THEME_NOT_AVAILABLE",
+      403,
     );
   }
 

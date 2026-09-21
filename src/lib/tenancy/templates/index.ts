@@ -196,10 +196,26 @@ export function listOnboardingTemplateOptions(): OnboardingTemplateOption[] {
 }
 
 /**
- * OWNER Website Design options — selectable catalog only (Default, Agent, Team).
+ * OWNER Website Design options — selectable catalog, plan-aware.
+ * SOLO (no TEAM_MANAGEMENT) does not offer Team Signature.
  */
-export function listOwnerWebsiteDesignTemplateOptions(): OnboardingTemplateOption[] {
-  return listOnboardingTemplateOptions();
+export function listOwnerWebsiteDesignTemplateOptions(input?: {
+  teamRosterEnabled?: boolean;
+  includeTemplateId?: string | null;
+}): OnboardingTemplateOption[] {
+  const teamRosterEnabled = input?.teamRosterEnabled !== false;
+  let options = listOnboardingTemplateOptions();
+  if (!teamRosterEnabled) {
+    options = options.filter((template) => template.category !== "TEAM");
+  }
+  const includeId = input?.includeTemplateId?.trim() || null;
+  if (includeId && !options.some((template) => template.id === includeId)) {
+    const extra = getTemplate(includeId);
+    if (extra?.presentationReady) {
+      options = [...options, toOnboardingTemplateOption(extra)];
+    }
+  }
+  return options;
 }
 
 function toOnboardingTemplateOption(
@@ -253,14 +269,31 @@ export function isValidConfiguredTeamSignatureTheme(
 /**
  * Category from persisted theme for Website Setup evaluation.
  * Invalid / null theme → DEFAULT.
+ * Plans without TEAM_MANAGEMENT never evaluate as TEAM (no roster/leader gates).
  */
 export function resolveOnboardingCategoryFromThemeId(
   themeId: string | null | undefined,
+  teamRosterEnabled = true,
 ): TemplateCategory {
   const templateId = resolveTemplateIdFromThemeId(themeId);
   const template = getTemplate(templateId);
   if (!template?.presentationReady) return "DEFAULT";
+  if (!teamRosterEnabled && template.category === "TEAM") return "DEFAULT";
   return template.category;
+}
+
+/**
+ * Public layout template for a provisioned plan.
+ * SOLO never renders Team Signature / roster — Owner Agent identity instead.
+ */
+export function resolvePublicTemplateIdForPlan(
+  templateId: ImplementedTemplateId,
+  teamRosterEnabled: boolean,
+): ImplementedTemplateId {
+  if (!teamRosterEnabled && isTeamSignatureTemplateId(templateId)) {
+    return AGENT_SIGNATURE_TEMPLATE_ID;
+  }
+  return templateId;
 }
 
 /**

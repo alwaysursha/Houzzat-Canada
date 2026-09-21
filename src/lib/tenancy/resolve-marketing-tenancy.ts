@@ -12,6 +12,7 @@ import {
   toMarketingPresentationBrand,
   type MarketingPresentationBrand,
 } from "@/lib/tenancy/marketing-presentation-brand";
+import { resolveWorkspacePlanCapabilities } from "@/lib/platform/entitlements";
 import { resolvePublicProfessionalIdentity } from "@/lib/tenancy/professional-identity/resolve";
 import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import {
@@ -23,6 +24,7 @@ import { resolvePublicTeamRosterForWorkspace } from "@/lib/tenancy/team-roster/p
 import {
   DEFAULT_TEMPLATE_ID,
   isTeamSignatureTemplateId,
+  resolvePublicTemplateIdForPlan,
   resolveTemplateIdFromThemeId,
   resolveThemePalette,
   type ImplementedTemplateId,
@@ -192,8 +194,13 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
   }
 
   const effectiveThemeId = previewThemeId ?? persistedThemeId;
-  const templateId: ImplementedTemplateId =
+  const persistedTemplateId: ImplementedTemplateId =
     resolveTemplateIdFromThemeId(effectiveThemeId);
+  const plan = await resolveWorkspacePlanCapabilities(tenancy.workspaceId);
+  const templateId = resolvePublicTemplateIdForPlan(
+    persistedTemplateId,
+    plan.teamRosterEnabled,
+  );
 
   // Preview may swap template colors without writing WorkspaceBranding.
   let presentationTenancy = tenancy;
@@ -227,13 +234,14 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
   }
 
   // Stage 6.11D — all templates receive canonical professional identity.
-  // Stage 6.11E.7 — Team roster only when Team Signature is active.
+  // Stage 6.11E.7 — Team roster only when Team Signature is active AND the
+  // plan includes TEAM_MANAGEMENT. SOLO uses canonical Owner/Agent identity.
   const [professionalIdentity, agent, teamRoster] = await Promise.all([
     resolvePublicProfessionalIdentity(tenancy.workspaceId),
     templateId !== DEFAULT_TEMPLATE_ID
       ? resolvePublicAgentIdentity(tenancy.workspaceId)
       : Promise.resolve(null),
-    isTeamSignatureTemplateId(templateId)
+    plan.teamRosterEnabled && isTeamSignatureTemplateId(templateId)
       ? resolvePublicTeamRosterForWorkspace(tenancy.workspaceId)
       : Promise.resolve(null),
   ]);

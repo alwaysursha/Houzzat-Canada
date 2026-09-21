@@ -4,7 +4,8 @@
  * Do NOT read Stripe as entitlement authority.
  */
 
-import type { PrismaClient, Subscription } from "@prisma/client";
+import type { PlanCode, PrismaClient, Subscription } from "@prisma/client";
+import { FEATURE_TEAM_MANAGEMENT } from "@/lib/platform/catalog/features";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 
 export type WorkspaceSeatQuotaView = {
@@ -65,4 +66,34 @@ export async function getWorkspaceSeatQuota(
     },
   });
   return row;
+}
+
+export type WorkspacePlanCapabilities = {
+  /** Subscription.planCode — null when no current subscription. */
+  planCode: PlanCode | null;
+  entitlementProfileCode: string | null;
+  /** Provisioned TEAM_MANAGEMENT entitlement (TEAM / BROKERAGE / Houzzat legacy). */
+  teamRosterEnabled: boolean;
+};
+
+/**
+ * Resolve commercial plan + Team roster capability for a workspace.
+ * Authority: current Subscription + provisioned WorkspaceEntitlement.
+ * Does not read UI labels, theme category, or client-supplied plan.
+ * Fail-closed: missing subscription or disabled TEAM_MANAGEMENT → no Team roster.
+ */
+export async function resolveWorkspacePlanCapabilities(
+  workspaceId: string,
+  db: PrismaClient = defaultPrisma,
+): Promise<WorkspacePlanCapabilities> {
+  const [subscription, teamRosterEnabled] = await Promise.all([
+    getCurrentWorkspaceSubscription(workspaceId, db),
+    workspaceHasFeature(workspaceId, FEATURE_TEAM_MANAGEMENT, db),
+  ]);
+
+  return {
+    planCode: subscription?.planCode ?? null,
+    entitlementProfileCode: subscription?.entitlementProfileCode ?? null,
+    teamRosterEnabled,
+  };
 }

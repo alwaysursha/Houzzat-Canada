@@ -15,6 +15,7 @@ import {
   requireHostBoundOwnerOnboardingContext,
   type HostBoundOwnerOnboardingContext,
 } from "@/lib/platform/activation";
+import { resolveWorkspacePlanCapabilities } from "@/lib/platform/entitlements";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 import { TEAM_MEMBER_SORT_STEP } from "@/lib/tenancy/team-roster/limits";
 import {
@@ -129,6 +130,14 @@ async function auth(input: AuthInput): Promise<{
     userId: input.userId,
     clientWorkspaceId: input.clientWorkspaceId,
   });
+  const plan = await resolveWorkspacePlanCapabilities(ctx.workspaceId, db);
+  if (!plan.teamRosterEnabled) {
+    throw new OwnerActivationError(
+      "Team roster is not included in your plan.",
+      "PLAN_TEAM_ROSTER_UNAVAILABLE",
+      403,
+    );
+  }
   return { ctx, db };
 }
 

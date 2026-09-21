@@ -218,6 +218,24 @@ function createFakePrisma(state: FakeState): PrismaClient {
         );
         return hit ? { ...hit } : null;
       },
+      async findFirst({
+        where,
+      }: {
+        where: { workspaceId: string; role?: string; status?: string };
+      }) {
+        const hit = state.members.find(
+          (m) =>
+            m.workspaceId === where.workspaceId &&
+            (where.role ? m.role === where.role : true) &&
+            (where.status ? m.status === where.status : true),
+        );
+        return hit
+          ? {
+              ...hit,
+              user: { phone: null, agentProfile: null },
+            }
+          : null;
+      },
     },
     workspaceBranding: {
       async findUnique({ where }: { where: { workspaceId: string } }) {
@@ -287,6 +305,11 @@ function createFakePrisma(state: FakeState): PrismaClient {
         if (!row) throw new Error("onboarding missing");
         Object.assign(row, data);
         return { ...row };
+      },
+    },
+    workspaceEntitlement: {
+      async findUnique() {
+        return null;
       },
     },
   } as unknown as PrismaClient;
