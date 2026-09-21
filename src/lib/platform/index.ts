@@ -69,10 +69,20 @@ export { materializeEntitlementProfile } from "./entitlements/materialize";
 
 export {
   getWorkspaceSeatConsumption,
+  getWorkspaceSeatCapacity,
+  assertWorkspaceSeatAvailableForInvite,
+  assertWorkspaceInviteAcceptanceWithinSeatLimit,
+  projectConsumedAfterInviteAcceptance,
+  memberStatusConsumesSeat,
   planAllowsSeatExpansion,
   assertAdditionalSeatAllowedForPlan,
+  WorkspaceSeatError,
+  SEAT_LIMIT_REACHED,
+  SEAT_QUOTA_MISSING,
+  SEAT_LIMIT_REACHED_MESSAGE,
   WORKSPACE_INVITE_TTL_MS,
   type SeatConsumptionBreakdown,
+  type WorkspaceSeatCapacity,
 } from "./seats";
 
 export {

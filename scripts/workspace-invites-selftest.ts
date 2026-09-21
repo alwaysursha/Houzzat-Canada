@@ -29,6 +29,8 @@ function testInviteModuleCoverage() {
   const mod = read("src/lib/workspace-invite.ts");
   assert.ok(mod.includes("createWorkspaceInvite"));
   assert.ok(mod.includes("acceptWorkspaceInvite"));
+  assert.ok(mod.includes("assertWorkspaceSeatAvailableForInvite"));
+  assert.ok(mod.includes("assertWorkspaceInviteAcceptanceWithinSeatLimit"));
   assert.ok(mod.includes("loadWorkspaceInvitePreview"));
   assert.ok(mod.includes("cancelWorkspaceInvite"));
   assert.ok(mod.includes("resendWorkspaceInvite"));

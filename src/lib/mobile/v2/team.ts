@@ -13,6 +13,7 @@ import {
   workspaceAdminCanSuspendMember,
   workspaceTeamCanManage,
 } from "@/lib/workspace-team";
+import { getWorkspaceSeatCapacity } from "@/lib/platform/seats";
 
 export async function buildMobileTeamContext(opts: {
   userId: string;
@@ -213,6 +214,9 @@ export async function loadMobileTeamPayload(ctx: AgentOrgContext) {
   }));
 
   const activeCount = memberDtos.filter((m) => m.status === "ACTIVE").length;
+  const seatCapacity = await getWorkspaceSeatCapacity(ctx.workspaceId);
+  const canInvite =
+    capabilities.canInvite && seatCapacity != null && !seatCapacity.atCapacity;
 
   return {
     workspace: {
@@ -221,7 +225,23 @@ export async function loadMobileTeamPayload(ctx: AgentOrgContext) {
       primaryAgentId: workspace?.primaryAgentId ?? null,
     },
     memberCount: activeCount,
-    capabilities,
+    seats: seatCapacity
+      ? {
+          consumed: seatCapacity.consumed,
+          seatLimit: seatCapacity.seatLimit,
+          remaining: seatCapacity.remaining,
+          atCapacity: seatCapacity.atCapacity,
+        }
+      : {
+          consumed: activeCount + inviteDtos.length,
+          seatLimit: null as number | null,
+          remaining: 0,
+          atCapacity: true,
+        },
+    capabilities: {
+      ...capabilities,
+      canInvite,
+    },
     members: memberDtos,
     pendingInvites: inviteDtos,
   };

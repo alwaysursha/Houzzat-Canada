@@ -39,7 +39,8 @@ export function TeamAdminClient({
   workspaceName,
   canManage,
   seatLimit,
-  billingDeferred,
+  consumedSeats,
+  atCapacity,
   memberCount,
   members,
   invites,
@@ -51,7 +52,8 @@ export function TeamAdminClient({
   workspaceName?: string | null;
   canManage: boolean;
   seatLimit: number | null;
-  billingDeferred?: boolean;
+  consumedSeats?: number;
+  atCapacity?: boolean;
   memberCount: number;
   members: Member[];
   invites: Invite[];
@@ -86,10 +88,14 @@ export function TeamAdminClient({
   );
 
   const isWorkspace = scope === "workspace";
+  const usedSeats = consumedSeats ?? memberCount;
+  const seatsFull =
+    atCapacity === true ||
+    (seatLimit != null && usedSeats >= seatLimit);
   const seatLabel =
     seatLimit == null
-      ? `${memberCount} active`
-      : `${memberCount} / ${seatLimit} used`;
+      ? `${usedSeats} ${usedSeats === 1 ? "seat" : "seats"} used`
+      : `${usedSeats} of ${seatLimit} seats used`;
 
   useStaffOverlay({
     open: Boolean(deleteTarget),
@@ -184,14 +190,14 @@ export function TeamAdminClient({
           Invite Agent{workspaceName ? ` · ${workspaceName}` : ""}
         </h2>
         <p className="mt-1 text-sm text-ink/55">
-          {seatLabel}
-          {billingDeferred
-            ? " (billing seat limits coming later)."
-            : "."}{" "}
-          You enter professional and contact information. The Agent only sets a
-          password to activate. Invites email a secure link for this{" "}
-          {isWorkspace ? "Workspace" : "team"} only.
+          {seatLabel}.{" "}
+          {seatsFull
+            ? "You've used all seats included in your plan."
+            : isWorkspace
+              ? "You enter professional and contact information. The Agent only sets a password to activate. Invites email a secure link for this Workspace only."
+              : "You enter professional and contact information. The Agent only sets a password to activate. Invites email a secure link for this team only."}
         </p>
+        {seatsFull ? null : (
         <form
           className="mt-5 space-y-5"
           onSubmit={async (e) => {
@@ -288,6 +294,7 @@ export function TeamAdminClient({
             </Button>
           </div>
         </form>
+        )}
         {msg ? <p className="mt-3 text-xs text-ink/55">{msg}</p> : null}
       </div>
       ) : (

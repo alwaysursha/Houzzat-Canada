@@ -2,7 +2,7 @@
  * Stage 3I — WorkspaceInvite lifecycle (create / accept / preview / cancel / resend).
  * Token is cryptographically random; authority comes from token + server lookup only.
  */
-import type { WorkspaceInviteStatus, WorkspaceMemberRole } from "@prisma/client";
+import type { WorkspaceInviteStatus, WorkspaceMemberRole, WorkspaceMemberStatus } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
 import {
   applyAdminManagedAgentProfile,
@@ -20,6 +20,12 @@ import {
 import { SITE_URL } from "@/lib/constants";
 import { sendRenderedEmail } from "@/lib/email/send";
 import { renderTeamInviteEmail } from "@/lib/email/templates";
+import {
+  assertWorkspaceInviteAcceptanceWithinSeatLimit,
+  assertWorkspaceSeatAvailableForInvite,
+  memberStatusConsumesSeat,
+  WorkspaceSeatError,
+} from "@/lib/platform/seats";
 import { prisma } from "@/lib/prisma";
 import { reconcileUserPlatformStaffState } from "@/lib/reconcile-user-platform-staff";
 import { resolveWorkspaceBrand } from "@/lib/tenancy/resolve-workspace-brand";
@@ -295,9 +301,11 @@ export async function createWorkspaceInvite(input: {
     return { ok: false, error: "That account is disabled.", status: 400 };
   }
 
+  let existingMembershipStatus: WorkspaceMemberStatus | null = null;
   if (existingUser) {
     const already = await prisma.workspaceMember.findFirst({
       where: { workspaceId: workspace.id, userId: existingUser.id },
+      select: { status: true },
     });
     if (already?.status === "ACTIVE") {
       return {
@@ -305,6 +313,18 @@ export async function createWorkspaceInvite(input: {
         error: "That user is already an ACTIVE member of this Workspace.",
         status: 400,
       };
+    }
+    existingMembershipStatus = already?.status ?? null;
+  }
+
+  if (!memberStatusConsumesSeat(existingMembershipStatus)) {
+    try {
+      await assertWorkspaceSeatAvailableForInvite(workspace.id);
+    } catch (error) {
+      if (error instanceof WorkspaceSeatError) {
+        return { ok: false, error: error.message, status: error.status };
+      }
+      throw error;
     }
   }
 
@@ -552,6 +572,31 @@ export async function acceptWorkspaceInvite(input: {
 
   if (existing?.disabledAt) {
     return { ok: false, error: "This account is disabled." };
+  }
+
+  const existingMembership = existing
+    ? await prisma.workspaceMember.findUnique({
+        where: {
+          workspaceId_userId: {
+            workspaceId: invite.workspaceId,
+            userId: existing.id,
+          },
+        },
+        select: { status: true },
+      })
+    : null;
+  try {
+    await assertWorkspaceInviteAcceptanceWithinSeatLimit({
+      workspaceId: invite.workspaceId,
+      inviteStatus: invite.status,
+      inviteExpiresAt: invite.expiresAt,
+      existingMemberStatus: existingMembership?.status ?? null,
+    });
+  } catch (error) {
+    if (error instanceof WorkspaceSeatError) {
+      return { ok: false, error: error.message };
+    }
+    throw error;
   }
 
   const password = input.password ?? "";

@@ -7,6 +7,7 @@
 import type { WorkspaceMemberRole } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
 import { isActiveHostnameBoundReadMode, isWorkspaceReadMode } from "@/lib/crm-read-scope";
+import { getWorkspaceSeatCapacity } from "@/lib/platform/seats";
 import { isWorkspaceTeamScope } from "@/lib/workspace-scope-flags";
 import { prisma } from "@/lib/prisma";
 
@@ -150,6 +151,7 @@ export async function getWorkspaceTeamPayload(ctx: AgentOrgContext) {
   ]);
 
   const activeSeatCount = members.filter((m) => m.status === "ACTIVE").length;
+  const capacity = await getWorkspaceSeatCapacity(ctx.workspaceId);
 
   return {
     workspace,
@@ -164,11 +166,15 @@ export async function getWorkspaceTeamPayload(ctx: AgentOrgContext) {
     })),
     invites,
     canManage: workspaceTeamCanManage(ctx),
-    /** Billing/seats deferred — structure only for future plans. */
     seats: {
       activeSeatCount,
-      seatLimit: null as number | null,
-      billingDeferred: true as const,
+      consumed: capacity?.consumed ?? activeSeatCount,
+      seatLimit: capacity?.seatLimit ?? null,
+      includedSeats: capacity?.includedSeats ?? null,
+      additionalSeats: capacity?.additionalSeats ?? null,
+      remaining: capacity?.remaining ?? 0,
+      atCapacity: capacity ? capacity.atCapacity : true,
+      billingDeferred: false as const,
     },
   };
 }

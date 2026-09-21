@@ -43,7 +43,8 @@ export default async function AgentTeamPage() {
           workspaceName={payload.workspace.name}
           canManage={payload.canManage}
           seatLimit={payload.seats.seatLimit}
-          billingDeferred={payload.seats.billingDeferred}
+          consumedSeats={payload.seats.consumed}
+          atCapacity={payload.seats.atCapacity}
           memberCount={payload.seats.activeSeatCount}
           currentUserId={ctx.user.id}
           primaryAgentUserId={payload.primaryAgentId}
