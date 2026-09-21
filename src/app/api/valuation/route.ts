@@ -8,7 +8,7 @@ import { pickUtm } from "@/lib/ads/utm";
 import {
   publicLeadNotificationCopy,
   publicLeadRoutingErrorResponse,
-  resolvePublicLeadRoutingContext,
+  publicResolveOrCreateLead,
 } from "@/lib/agent/public-lead-api";
 import {
   createCallNewLeadTask,
@@ -345,24 +345,11 @@ export async function POST(request: Request) {
       accountCreated = ensured.accountCreated;
     }
 
+    const isSellerCapture = data.intent === "sell" || isQuick;
     const intent = resolveLeadIntent({
-      isBuyer: data.intent !== "sell",
-      isSeller: data.intent === "sell",
+      isBuyer: !isSellerCapture,
+      isSeller: isSellerCapture,
     });
-    const routedIntent =
-      data.intent === "sell" || isQuick ? ("SELLER" as const) : intent;
-    const routing = await resolvePublicLeadRoutingContext(request, routedIntent);
-    const {
-      organizationId,
-      assignedAgentId,
-      brand,
-      deskNotifiers,
-      ownership,
-    } = routing;
-    const notify = publicLeadNotificationCopy(
-      brand,
-      isQuick ? "homepage sell estimate" : "valuation",
-    );
 
     const utm = pickUtm(data);
     const adCampaignId = await resolveAdCampaignId(utm);
@@ -376,64 +363,59 @@ export async function POST(request: Request) {
             ? "sold comps + active listings"
             : "market fallback";
 
-    // Flat Lead create — nested activities/appointments used an implicit
-    // transaction that fails on PrismaNeonHttp (Workers) after Aug 12.
-    const lead = await prisma.lead.create({
-      data: {
-        source: "HOME_VALUATION",
-        status: "NEW_LEAD",
-        intent: routedIntent,
-        score: data.intent === "sell" ? 72 : data.intent === "buy" ? 40 : 45,
-        customerId,
-        assignedAgentId,
-        organizationId: ownership.organizationId ?? organizationId ?? undefined,
-        workspaceId: ownership.workspaceId,
-        contactConsentAt: new Date(),
-        statusChangedAt: new Date(),
-        ...utmLeadFields(utm, adCampaignId),
-        notes: [
-          `Home valuation for ${data.address}`,
-          data.city ? `City: ${data.city}` : null,
-          estimate.community
-            ? `Community: ${estimate.community}`
-            : data.community
-              ? `Community: ${data.community}`
-              : null,
-          data.propertyType ? `Type: ${data.propertyType}` : null,
-          data.beds != null ? `Beds: ${data.beds}` : null,
-          data.baths != null ? `Baths: ${data.baths}` : null,
-          data.sqft != null ? `Sqft: ${data.sqft}` : null,
-          data.basement ? `Basement: ${data.basement}` : null,
-          estimate.communityAvgSold
-            ? `Community avg sold: $${estimate.communityAvgSold.toLocaleString()} (n=${estimate.communitySoldCount})`
+    const resolved = await publicResolveOrCreateLead({
+      request,
+      intent,
+      isBuyer: !isSellerCapture,
+      isSeller: isSellerCapture,
+      source: "HOME_VALUATION",
+      customerId,
+      email: contactEmail,
+      phone: data.phone,
+      name: contactName,
+      score: data.intent === "sell" ? 72 : data.intent === "buy" ? 40 : 45,
+      contactConsentAt: new Date(),
+      actorId: customerId ?? session?.user?.id,
+      upsertCustomer: false,
+      utm: utmLeadFields(utm, adCampaignId),
+      notes: [
+        `Home valuation for ${data.address}`,
+        data.city ? `City: ${data.city}` : null,
+        estimate.community
+          ? `Community: ${estimate.community}`
+          : data.community
+            ? `Community: ${data.community}`
             : null,
-          `Intent: ${data.intent}`,
-          accountCreated
-            ? "Seller profile created (buyer+seller, owner desk)"
-            : null,
-          isQuick ? "Captured from homepage Sell a Home → Get Estimate" : null,
-          `Indicative range: $${estimate.low.toLocaleString()} – $${estimate.high.toLocaleString()} (mid $${estimate.mid.toLocaleString()})`,
-          `Method: ${methodLabel}; sample=${estimate.sampleSize}; sold=${estimate.soldCount}; active=${estimate.activeCount}`,
-          `Contact: ${contactName} <${contactEmail}>`,
-          data.phone ? `Phone: ${data.phone}` : null,
-          data.marketingOptIn ||
-          data.marketPulseOptIn ||
-          data.neighbourhoodSalesOptIn
-            ? "Opted in to market updates"
-            : null,
-          data.marketPulseOptIn ? "Market Pulse: yes" : null,
-          data.neighbourhoodSalesOptIn
-            ? "Neighbourhood sales alerts: yes"
-            : null,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      },
-    });
-
-    await prisma.leadActivity.create({
-      data: {
-        leadId: lead.id,
+        data.propertyType ? `Type: ${data.propertyType}` : null,
+        data.beds != null ? `Beds: ${data.beds}` : null,
+        data.baths != null ? `Baths: ${data.baths}` : null,
+        data.sqft != null ? `Sqft: ${data.sqft}` : null,
+        data.basement ? `Basement: ${data.basement}` : null,
+        estimate.communityAvgSold
+          ? `Community avg sold: $${estimate.communityAvgSold.toLocaleString()} (n=${estimate.communitySoldCount})`
+          : null,
+        `Intent: ${data.intent}`,
+        accountCreated
+          ? "Seller profile created (buyer+seller, owner desk)"
+          : null,
+        isQuick ? "Captured from homepage Sell a Home → Get Estimate" : null,
+        `Indicative range: $${estimate.low.toLocaleString()} – $${estimate.high.toLocaleString()} (mid $${estimate.mid.toLocaleString()})`,
+        `Method: ${methodLabel}; sample=${estimate.sampleSize}; sold=${estimate.soldCount}; active=${estimate.activeCount}`,
+        `Contact: ${contactName} <${contactEmail}>`,
+        data.phone ? `Phone: ${data.phone}` : null,
+        data.marketingOptIn ||
+        data.marketPulseOptIn ||
+        data.neighbourhoodSalesOptIn
+          ? "Opted in to market updates"
+          : null,
+        data.marketPulseOptIn ? "Market Pulse: yes" : null,
+        data.neighbourhoodSalesOptIn
+          ? "Neighbourhood sales alerts: yes"
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      activity: {
         type: "home_valuation",
         userId: customerId,
         body: data.address,
@@ -448,12 +430,22 @@ export async function POST(request: Request) {
       },
     });
 
+    const lead = resolved.lead;
+    const assignedAgentId = resolved.assignedAgentId;
+    const organizationId = resolved.organizationId;
+    const brand = resolved.brand;
+    const deskNotifiers = resolved.deskNotifiers;
+    const notify = publicLeadNotificationCopy(
+      brand,
+      isQuick ? "homepage sell estimate" : "valuation",
+    );
+
     if (!isQuick) {
       await prisma.appointment.create({
         data: {
           type: "VALUATION_CALL",
           status: "REQUESTED",
-          customerId,
+          customerId: customerId ?? resolved.customerId,
           agentId: assignedAgentId,
           leadId: lead.id,
           notes: `Valuation follow-up for ${data.address}`,
@@ -461,47 +453,49 @@ export async function POST(request: Request) {
       });
     }
 
-    const deskUserIds = deskNotifiers.map((row) => row.user.id);
-    notifyNewLeadCapturedToStaff({
-      leadId: lead.id,
-      label: data.address,
-      title: notify.pushTitle,
-      assigneeId: assignedAgentId,
-      deskUserIds,
-    });
+    if (resolved.created) {
+      const deskUserIds = deskNotifiers.map((row) => row.user.id);
+      notifyNewLeadCapturedToStaff({
+        leadId: lead.id,
+        label: data.address,
+        title: notify.pushTitle,
+        assigneeId: assignedAgentId,
+        deskUserIds,
+      });
 
-    scheduleNewLeadStaffEmail({
-      leadId: lead.id,
-      source: "valuation",
-      subject: notify.emailSubject,
-      detailLines: [
-        `Address: ${data.address}`,
-        `Contact: ${contactName}`,
-        `Email: ${contactEmail}`,
-        `Estimate range: $${estimate.low.toLocaleString()}–$${estimate.high.toLocaleString()}`,
-        accountCreated ? "Owner account created" : null,
-      ].filter((line): line is string => Boolean(line)),
-      assigneeId: assignedAgentId,
-      deskRecipients: deskNotifiers.map((row) => ({
-        id: row.user.id,
-        email: row.user.email,
-        phone: row.user.phone,
-      })),
-      smsText: `${notify.smsPrefix}: ${data.address}`,
-    });
+      scheduleNewLeadStaffEmail({
+        leadId: lead.id,
+        source: "valuation",
+        subject: notify.emailSubject,
+        detailLines: [
+          `Address: ${data.address}`,
+          `Contact: ${contactName}`,
+          `Email: ${contactEmail}`,
+          `Estimate range: $${estimate.low.toLocaleString()}–$${estimate.high.toLocaleString()}`,
+          accountCreated ? "Owner account created" : null,
+        ].filter((line): line is string => Boolean(line)),
+        assigneeId: assignedAgentId,
+        deskRecipients: deskNotifiers.map((row) => ({
+          id: row.user.id,
+          email: row.user.email,
+          phone: row.user.phone,
+        })),
+        smsText: `${notify.smsPrefix}: ${data.address}`,
+      });
 
-    if (assignedAgentId && organizationId) {
-      try {
-        await createCallNewLeadTask({
-          leadId: lead.id,
-          assigneeId: assignedAgentId,
-          organizationId,
-        });
-      } catch (err) {
-        console.error("[valuation] call-new-lead-task failed", {
-          leadId: lead.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
+      if (assignedAgentId && organizationId) {
+        try {
+          await createCallNewLeadTask({
+            leadId: lead.id,
+            assigneeId: assignedAgentId,
+            organizationId,
+          });
+        } catch (err) {
+          console.error("[valuation] call-new-lead-task failed", {
+            leadId: lead.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     }
 

@@ -87,3 +87,18 @@ export function nextWritableLeadClassification(input: {
     isSeller: input.patch.isSeller ?? displayed.isSeller,
   });
 }
+
+/**
+ * Intake merge: incoming true flags OR onto the existing Lead.
+ * Never clears a flag. Buyer → Seller becomes both true (intent SELLER).
+ */
+export function mergeIncomingLeadClassification(
+  current: LeadClassificationFields,
+  incoming: { isBuyer?: boolean | null; isSeller?: boolean | null },
+): CrmLeadClassification {
+  const displayed = resolveDisplayedLeadClassification(current);
+  return finalizeWritableLeadClassification({
+    isBuyer: displayed.isBuyer || incoming.isBuyer === true,
+    isSeller: displayed.isSeller || incoming.isSeller === true,
+  });
+}

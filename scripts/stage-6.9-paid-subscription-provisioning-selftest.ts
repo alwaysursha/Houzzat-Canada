@@ -124,6 +124,22 @@ type FakeDomain = {
   protected?: boolean;
 };
 
+type FakeRoutingSettings = {
+  id: string;
+  workspaceId: string | null;
+  listingAgentId: string | null;
+  sellerAssignMode: string;
+  protected?: boolean;
+};
+
+type FakeRoutingWeight = {
+  id: string;
+  settingsId: string;
+  agentId: string;
+  lane: string;
+  percent: number;
+};
+
 type FakeState = {
   prospects: Map<string, Record<string, unknown>>;
   offers: Map<string, Record<string, unknown>>;
@@ -138,6 +154,8 @@ type FakeState = {
   members: FakeMember[];
   brandings: Map<string, Record<string, unknown>>;
   domains: FakeDomain[];
+  routingSettings: FakeRoutingSettings[];
+  routingWeights: FakeRoutingWeight[];
   emailIdentities: Map<string, Record<string, unknown>>;
   entitlements: Array<{
     id: string;
@@ -185,6 +203,8 @@ function emptyState(): FakeState {
     members: [],
     brandings: new Map(),
     domains: [],
+    routingSettings: [],
+    routingWeights: [],
     emailIdentities: new Map(),
     entitlements: [],
     seatQuotas: new Map(),
@@ -221,6 +241,13 @@ function seedProtectedWorkspaces(state: FakeState) {
   };
   state.workspaces.set(houzzat.id, houzzat);
   state.workspaces.set(canary.id, canary);
+  state.routingSettings.push({
+    id: "default",
+    workspaceId: houzzat.id,
+    listingAgentId: "user_houzzat_owner",
+    sellerAssignMode: "PERCENTAGE",
+    protected: true,
+  });
   state.domains.push(
     {
       id: "dom_houzzat_platform",
@@ -257,10 +284,14 @@ function snapshotProtected(state: FakeState) {
   const domains = state.domains
     .filter((d) => d.protected)
     .map((d) => ({ ...d, verifiedAt: d.verifiedAt?.toISOString() ?? null }));
+  const routing = state.routingSettings
+    .filter((s) => s.protected)
+    .map((s) => ({ ...s }));
   return {
     houzzat: { ...houzzat },
     canary: { ...canary },
     domains,
+    routing,
   };
 }
 
@@ -272,6 +303,7 @@ function assertProtectedUnchanged(
   assert.deepEqual(after.houzzat, before.houzzat);
   assert.deepEqual(after.canary, before.canary);
   assert.deepEqual(after.domains, before.domains);
+  assert.deepEqual(after.routing, before.routing);
 }
 
 type SeedOpts = {
@@ -753,6 +785,88 @@ function createFakePrisma(state: FakeState): PrismaClient {
         if (!member) throw new Error("member missing");
         Object.assign(member, data);
         return { ...member };
+      },
+    },
+    crmRoutingSettings: {
+      async findFirst({
+        where,
+        select,
+      }: {
+        where: { workspaceId?: string };
+        select?: Record<string, unknown>;
+      }) {
+        const hit = where.workspaceId
+          ? state.routingSettings.find(
+              (s) => s.workspaceId === where.workspaceId,
+            )
+          : state.routingSettings[0];
+        if (!hit) return null;
+        if (!select) return { ...hit };
+        const out: Record<string, unknown> = {};
+        for (const key of Object.keys(select)) {
+          if (select[key]) out[key] = (hit as Record<string, unknown>)[key];
+        }
+        return out;
+      },
+      async create({
+        data,
+        select,
+      }: {
+        data: Record<string, unknown>;
+        select?: Record<string, unknown>;
+      }) {
+        const id = String(data.id);
+        const workspaceId = (data.workspaceId as string | null) ?? null;
+        if (
+          state.routingSettings.some(
+            (s) => s.id === id || (workspaceId && s.workspaceId === workspaceId),
+          )
+        ) {
+          const err = new Error("Unique") as Error & { code: string };
+          err.code = "P2002";
+          throw err;
+        }
+        const row: FakeRoutingSettings = {
+          id,
+          workspaceId,
+          listingAgentId: (data.listingAgentId as string | null) ?? null,
+          sellerAssignMode: String(data.sellerAssignMode ?? "LISTING_AGENT"),
+        };
+        state.routingSettings.push(row);
+        if (!select) return { ...row };
+        const out: Record<string, unknown> = {};
+        for (const key of Object.keys(select)) {
+          if (select[key]) out[key] = (row as Record<string, unknown>)[key];
+        }
+        return out;
+      },
+    },
+    crmRoutingWeight: {
+      async create({ data }: { data: Record<string, unknown> }) {
+        const settingsId = String(data.settingsId);
+        const agentId = String(data.agentId);
+        const lane = String(data.lane);
+        if (
+          state.routingWeights.some(
+            (w) =>
+              w.settingsId === settingsId &&
+              w.agentId === agentId &&
+              w.lane === lane,
+          )
+        ) {
+          const err = new Error("Unique") as Error & { code: string };
+          err.code = "P2002";
+          throw err;
+        }
+        const row: FakeRoutingWeight = {
+          id: id("rw"),
+          settingsId,
+          agentId,
+          lane,
+          percent: Number(data.percent ?? 0),
+        };
+        state.routingWeights.push(row);
+        return { ...row };
       },
     },
     user: {
@@ -1333,6 +1447,23 @@ async function main() {
     assert.equal(platformDomain!.status, "ACTIVE");
     assert.ok(platformDomain!.verifiedAt instanceof Date);
     assert.equal(platformDomain!.verificationToken, null);
+
+    const routing = state.routingSettings.find((s) => s.workspaceId === ws.id);
+    assert.ok(routing);
+    assert.equal(routing!.id.startsWith("crs_"), true);
+    assert.notEqual(routing!.id, "default");
+    assert.equal(routing!.sellerAssignMode, "LISTING_AGENT");
+    assert.equal(routing!.listingAgentId, owners[0]!.userId);
+    const tenantWeights = state.routingWeights.filter(
+      (w) => w.settingsId === routing!.id,
+    );
+    assert.equal(tenantWeights.length, 2);
+    assert.ok(tenantWeights.every((w) => w.percent === 100));
+    assert.ok(tenantWeights.some((w) => w.lane === "BUYER"));
+    assert.ok(tenantWeights.some((w) => w.lane === "SELLER"));
+    const houzzatRouting = state.routingSettings.find((s) => s.id === "default");
+    assert.ok(houzzatRouting);
+    assert.equal(houzzatRouting!.sellerAssignMode, "PERCENTAGE");
 
     const email = state.emailIdentities.get(ws.id)!;
     assert.equal(email.domainStatus, "NONE");

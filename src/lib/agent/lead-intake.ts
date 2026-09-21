@@ -1,4 +1,5 @@
 import type { LeadIntent, LeadSource } from "@prisma/client";
+import { pickRoutedAssignee } from "@/lib/agent/pick-routed-assignee";
 import { resolveLeadIntent } from "@/lib/agent/lead-intent";
 import {
   resolveDefaultOrganizationId,
@@ -14,6 +15,7 @@ import {
 import {
   isWorkspacePublicLeadScope,
   PublicLeadRoutingError,
+  resolveOrganizationForWorkspaceLeadDesk,
   resolveWorkspaceModeLeadDeskAssignment,
 } from "@/lib/workspace-lead-desk";
 import {
@@ -31,6 +33,7 @@ import {
   scheduleCustomerIntroductionSmsAutomationsForLead,
   scheduleSignupSmsAutomations,
 } from "@/lib/sms/automations";
+import { resolveOrCreateWorkspaceLead } from "@/lib/agent/resolve-workspace-lead";
 import { prisma } from "@/lib/prisma";
 import {
   resolveDefaultWorkspaceIdForRouting,
@@ -67,7 +70,8 @@ export { resolveLeadIntent };
 
 /**
  * Pick assignee from routing rules.
- * 0 agents → null (pond). 1 agent → that agent. 2+ → weights / listing agent.
+ * 0 agents → null (pond). 1 agent → that agent.
+ * 2+ → LISTING_AGENT or PERCENTAGE as configured. No arbitrary agents[0].
  */
 export async function resolveRoutedAssignee(
   intent: LeadIntent,
@@ -79,52 +83,28 @@ export async function resolveRoutedAssignee(
 
   const settings = await ensureCrmRoutingSettings();
   const agents = await listRoutableAgentsForSettings(settings);
-  if (agents.length === 0) return null;
-  if (agents.length === 1) return agents[0]!.id;
-
-  if (intent === "SELLER") {
-    const mode = settings.sellerAssignMode;
-    if (mode === "LISTING_AGENT") {
-      if (
-        settings.listingAgentId &&
-        agents.some((a) => a.id === settings.listingAgentId)
-      ) {
-        return settings.listingAgentId;
-      }
-    }
-  }
-
-  const lane = intent === "SELLER" ? "SELLER" : "BUYER";
-  const agentIds = new Set(agents.map((a) => a.id));
-  const weights = settings.weights.filter(
-    (w) => w.lane === lane && w.percent > 0 && agentIds.has(w.agentId),
-  );
-  if (weights.length === 0) {
-    return agents[0]?.id ?? null;
-  }
-
-  let best = weights[0]!;
-  let bestScore =
-    best.percent > 0
-      ? best.assignedCount / best.percent
-      : Number.POSITIVE_INFINITY;
-  for (const weight of weights.slice(1)) {
-    const score =
-      weight.percent > 0
-        ? weight.assignedCount / weight.percent
-        : Number.POSITIVE_INFINITY;
-    if (score < bestScore) {
-      best = weight;
-      bestScore = score;
-    }
-  }
-
-  await prisma.crmRoutingWeight.update({
-    where: { id: best.id },
-    data: { assignedCount: { increment: 1 } },
+  const pick = pickRoutedAssignee({
+    intent,
+    agentIds: agents.map((a) => a.id),
+    sellerAssignMode: settings.sellerAssignMode,
+    listingAgentId: settings.listingAgentId,
+    weights: settings.weights.map((w) => ({
+      id: w.id,
+      agentId: w.agentId,
+      lane: w.lane,
+      percent: w.percent,
+      assignedCount: w.assignedCount,
+    })),
   });
 
-  return best.agentId;
+  if (pick.weightId) {
+    await prisma.crmRoutingWeight.update({
+      where: { id: pick.weightId },
+      data: { assignedCount: { increment: 1 } },
+    });
+  }
+
+  return pick.agentId;
 }
 
 export async function createCallNewLeadTask(input: {
@@ -340,7 +320,56 @@ export async function resolveLeadCreateOwnership(input: {
 }
 
 /**
+ * Hostname/workspace tenancy for public Lead capture WITHOUT picking an assignee.
+ * Routing (and assignedCount increment) must run only after resolve-first.
+ */
+export async function resolveLeadCaptureTenancy(
+  request?: Request | null,
+  deps?: HostResolutionDeps,
+  workspaceId?: string | null,
+) {
+  let trustedWorkspaceId: string | null;
+
+  if (request) {
+    trustedWorkspaceId = await resolvePublicLeadWorkspaceIdFromRequest(
+      request,
+      deps,
+    );
+    if (isWorkspacePublicLeadScope() && !trustedWorkspaceId) {
+      throw new PublicLeadRoutingError(
+        "workspace_not_resolved",
+        "Public lead routing requires a verified tenant hostname",
+      );
+    }
+  } else if (isWorkspacePublicLeadScope()) {
+    throw new PublicLeadRoutingError(
+      "workspace_not_resolved",
+      "Public lead routing requires a trusted request hostname",
+    );
+  } else {
+    trustedWorkspaceId =
+      workspaceId ?? (await resolveDefaultWorkspaceIdForRouting());
+  }
+
+  if (isWorkspacePublicLeadScope() && trustedWorkspaceId) {
+    const organizationId =
+      await resolveOrganizationForWorkspaceLeadDesk(trustedWorkspaceId);
+    return {
+      workspaceId: trustedWorkspaceId,
+      organizationId,
+    };
+  }
+
+  const organizationId = await resolveDefaultOrganizationId();
+  return {
+    workspaceId: trustedWorkspaceId,
+    organizationId,
+  };
+}
+
+/**
  * Create a signup / simple website lead with routing + 12h call task.
+ * Resolve-first: existing workspace Lead is reused and never rerouted.
  */
 export async function captureWebsiteLead(input: {
   source: LeadSource;
@@ -354,107 +383,106 @@ export async function captureWebsiteLead(input: {
   notes?: string | null;
   score?: number;
   actorId?: string | null;
-  /** Skip auto-routing and use this assignee (null = pond). */
+  /** Skip auto-routing and use this assignee (null = pond). Create-only. */
   forceAssigneeId?: string | null;
   request?: Request | null;
   deps?: HostResolutionDeps;
 }) {
+  const isBuyer = input.isBuyer ?? true;
+  const isSeller = input.isSeller ?? false;
   const intent =
     input.intent ??
     resolveLeadIntent({
-      isBuyer: input.isBuyer ?? true,
-      isSeller: input.isSeller ?? false,
+      isBuyer,
+      isSeller,
     });
 
-  const routed =
-    input.forceAssigneeId !== undefined
-      ? await (async () => {
-          const desk = input.request
-            ? await resolveLeadDeskAssignmentForRequest(
-                input.request,
-                intent,
-                input.deps,
-              )
-            : await resolveLeadDeskAssignment(intent);
-          if (
-            input.forceAssigneeId &&
-            desk.workspaceId &&
-            isWorkspacePublicLeadScope()
-          ) {
-            const organizationId =
-              (await resolveOrganizationIdForAssignee(
-                input.forceAssigneeId,
-                desk.workspaceId,
-              )) ?? desk.organizationId;
-            return {
-              assigneeId: input.forceAssigneeId,
-              organizationId,
-              workspaceId: desk.workspaceId,
-              workspaceSlug: desk.workspaceSlug,
-              isHouzzatWorkspace: desk.isHouzzatWorkspace,
-            };
-          }
-          return {
-            assigneeId: input.forceAssigneeId,
-            organizationId:
-              (await resolveOrganizationIdForAssignee(
-                input.forceAssigneeId,
-                desk.workspaceId,
-              )) ?? desk.organizationId,
-            workspaceId: desk.workspaceId,
-            workspaceSlug: desk.workspaceSlug,
-            isHouzzatWorkspace: desk.isHouzzatWorkspace,
-          };
-        })()
-      : input.request
+  const tenancy = await resolveLeadCaptureTenancy(
+    input.request,
+    input.deps,
+  );
+  if (!tenancy.workspaceId) {
+    throw new PublicLeadRoutingError(
+      "workspace_not_resolved",
+      "Public lead routing requires a verified tenant hostname",
+    );
+  }
+
+  const notes =
+    input.notes ??
+    [
+      input.name || input.email
+        ? `Contact: ${input.name || "Customer"}${input.email ? ` <${input.email}>` : ""}`
+        : null,
+      input.phone ? `Phone: ${input.phone}` : null,
+      `Signup lead (${intent === "SELLER" ? "seller" : "buyer"})`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+  const resolved = await resolveOrCreateWorkspaceLead({
+    workspaceId: tenancy.workspaceId,
+    organizationId: tenancy.organizationId,
+    customerId: input.customerId,
+    email: input.email,
+    phone: input.phone,
+    name: input.name,
+    isBuyer,
+    isSeller,
+    source: input.source,
+    notes,
+    score: input.score ?? 15,
+    contactConsentAt: new Date(),
+    actorId: input.actorId ?? input.customerId,
+    upsertCustomer: false,
+    activity: {
+      type: "created",
+      userId: input.actorId ?? input.customerId,
+      body: `Lead captured (${intent.toLowerCase()}) via ${input.source}`,
+    },
+    resolveCreateDesk: async () => {
+      if (input.forceAssigneeId !== undefined) {
+        const organizationId =
+          (await resolveOrganizationIdForAssignee(
+            input.forceAssigneeId,
+            tenancy.workspaceId,
+          )) ?? tenancy.organizationId;
+        return {
+          assigneeId: input.forceAssigneeId,
+          organizationId,
+        };
+      }
+      const routed = input.request
         ? await resolveLeadDeskAssignmentForRequest(
             input.request,
             intent,
             input.deps,
           )
-        : await resolveLeadDeskAssignment(intent);
-
-  const { assigneeId, organizationId } = routed;
-  const ownership = await resolveLeadCreateOwnership({
-    organizationId,
-    workspaceId: routed.workspaceId,
+        : await resolveLeadDeskAssignment(intent, tenancy.workspaceId);
+      const ownership = await resolveLeadCreateOwnership({
+        organizationId: routed.organizationId,
+        workspaceId: routed.workspaceId,
+      });
+      return {
+        assigneeId: routed.assigneeId,
+        organizationId:
+          ownership.organizationId ?? routed.organizationId ?? null,
+      };
+    },
   });
-  const brand = await resolveLeadNotificationBrandFromRequest(input.request);
 
-  const lead = await prisma.lead.create({
-    data: {
-      source: input.source,
-      status: "NEW_LEAD",
-      intent,
-      score: input.score ?? 15,
-      notes:
-        input.notes ??
-        [
-          input.name || input.email
-            ? `Contact: ${input.name || "Customer"}${input.email ? ` <${input.email}>` : ""}`
-            : null,
-          input.phone ? `Phone: ${input.phone}` : null,
-          `Signup lead (${intent === "SELLER" ? "seller" : "buyer"})`,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      customerId: input.customerId,
+  const assigneeId = resolved.assignedAgentId;
+  const organizationId = resolved.organizationId;
+  const lead = resolved.lead;
+
+  if (!resolved.created) {
+    return {
+      lead,
       assignedAgentId: assigneeId,
-      organizationId: ownership.organizationId ?? organizationId ?? undefined,
-      workspaceId: ownership.workspaceId,
-      contactConsentAt: new Date(),
-      statusChangedAt: new Date(),
-    },
-  });
-
-  await prisma.leadActivity.create({
-    data: {
-      leadId: lead.id,
-      type: "created",
-      userId: input.actorId ?? input.customerId,
-      body: `Lead captured (${intent.toLowerCase()}) via ${input.source}`,
-    },
-  });
+      organizationId,
+      created: false,
+    };
+  }
 
   if (input.source === "SIGNUP") {
     scheduleSignupSmsAutomations(lead.id);
@@ -463,6 +491,7 @@ export async function captureWebsiteLead(input: {
   }
 
   if (assigneeId) {
+    const brand = await resolveLeadNotificationBrandFromRequest(input.request);
     const contactLabel =
       input.name?.trim() ||
       input.email?.trim() ||
@@ -523,7 +552,12 @@ export async function captureWebsiteLead(input: {
     }
   }
 
-  return { lead, assignedAgentId: assigneeId, organizationId };
+  return {
+    lead,
+    assignedAgentId: assigneeId,
+    organizationId,
+    created: true,
+  };
 }
 
 /**
@@ -540,25 +574,8 @@ export async function routeExistingLead(input: {
   });
   if (!current) return null;
 
-  if (current.intent !== input.intent) {
-    await prisma.lead.update({
-      where: { id: input.leadId },
-      data: { intent: input.intent },
-    });
-  }
-
+  // Sticky ownership: never reroute or rewrite intent on an assigned Lead.
   if (current.assignedAgentId) {
-    const organizationId =
-      (await resolveOrganizationIdForAssignee(current.assignedAgentId)) ??
-      (await resolveDefaultOrganizationId());
-    if (organizationId) {
-      await createCallNewLeadTask({
-        leadId: input.leadId,
-        assigneeId: current.assignedAgentId,
-        organizationId,
-        createdById: input.actorId,
-      });
-    }
     return current.assignedAgentId;
   }
 

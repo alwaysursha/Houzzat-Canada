@@ -5,7 +5,7 @@ import { pickUtm } from "@/lib/ads/utm";
 import {
   publicLeadNotificationCopy,
   publicLeadRoutingErrorResponse,
-  resolvePublicLeadRoutingContext,
+  publicResolveOrCreateLead,
 } from "@/lib/agent/public-lead-api";
 import { createCallNewLeadTask } from "@/lib/agent/lead-intake";
 import {
@@ -44,92 +44,91 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const routing = await resolvePublicLeadRoutingContext(request, "BUYER");
-    const {
-      organizationId,
-      assignedAgentId,
-      brand,
-      deskNotifiers,
-      ownership,
-    } = routing;
-    const notify = publicLeadNotificationCopy(brand, "pre-construction");
-
     const utm = pickUtm(parsed.data);
     const adCampaignId = await resolveAdCampaignId(utm);
-
-    const lead = await prisma.lead.create({
-      data: {
-        source: "PROPERTY_INQUIRY",
-        status: "NEW_LEAD",
-        intent: "BUYER",
-        score: 45,
-        listingMls: listing.mlsNumber,
-        assignedAgentId,
-        organizationId: ownership.organizationId ?? organizationId ?? undefined,
-        workspaceId: ownership.workspaceId,
-        ...utmLeadFields(utm, adCampaignId),
-        notes: [
-          `Pre-construction inquiry: ${listing.addressLine}, ${listing.city}`,
-          `Contact: ${parsed.data.name} <${parsed.data.email}>`,
-          parsed.data.phone ? `Phone: ${parsed.data.phone}` : null,
-          parsed.data.message ? `Message: ${parsed.data.message}` : null,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        activities: {
-          create: {
-            type: "precon_inquiry",
-            body: parsed.data.message,
-            meta: {
-              email: parsed.data.email,
-              phone: parsed.data.phone,
-            },
-          },
+    const resolved = await publicResolveOrCreateLead({
+      request,
+      intent: "BUYER",
+      isBuyer: true,
+      isSeller: false,
+      source: "PROPERTY_INQUIRY",
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+      name: parsed.data.name,
+      score: 45,
+      listingMls: listing.mlsNumber,
+      utm: utmLeadFields(utm, adCampaignId),
+      notes: [
+        `Pre-construction inquiry: ${listing.addressLine}, ${listing.city}`,
+        `Contact: ${parsed.data.name} <${parsed.data.email}>`,
+        parsed.data.phone ? `Phone: ${parsed.data.phone}` : null,
+        parsed.data.message ? `Message: ${parsed.data.message}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      activity: {
+        type: "precon_inquiry",
+        body: parsed.data.message,
+        meta: {
+          email: parsed.data.email,
+          phone: parsed.data.phone,
         },
       },
     });
 
-    const deskUserIds = deskNotifiers.map((row) => row.user.id);
+    const {
+      lead,
+      assignedAgentId,
+      organizationId,
+      created,
+      brand,
+      deskNotifiers,
+    } = resolved;
+    const notify = publicLeadNotificationCopy(brand, "pre-construction");
 
-    notifyNewLeadCapturedToStaff({
-      leadId: lead.id,
-      label: `${parsed.data.name} · ${listing.addressLine}`,
-      title: notify.pushTitle,
-      assigneeId: assignedAgentId,
-      deskUserIds,
-    });
+    if (created) {
+      const deskUserIds = deskNotifiers.map((row) => row.user.id);
 
-    scheduleNewLeadStaffEmail({
-      leadId: lead.id,
-      source: "pre_construction",
-      subject: notify.emailSubject,
-      detailLines: [
-        `Listing: ${listing.addressLine}`,
-        `Contact: ${parsed.data.name}`,
-        `Email: ${parsed.data.email}`,
-        parsed.data.phone ? `Phone: ${parsed.data.phone}` : null,
-      ].filter((line): line is string => Boolean(line)),
-      assigneeId: assignedAgentId,
-      deskRecipients: deskNotifiers.map((row) => ({
-        id: row.user.id,
-        email: row.user.email,
-        phone: row.user.phone,
-      })),
-      smsText: `${notify.smsPrefix}: ${listing.addressLine}`,
-    });
+      notifyNewLeadCapturedToStaff({
+        leadId: lead.id,
+        label: `${parsed.data.name} · ${listing.addressLine}`,
+        title: notify.pushTitle,
+        assigneeId: assignedAgentId,
+        deskUserIds,
+      });
 
-    if (assignedAgentId && organizationId) {
-      try {
-        await createCallNewLeadTask({
-          leadId: lead.id,
-          assigneeId: assignedAgentId,
-          organizationId,
-        });
-      } catch (err) {
-        console.error("[pre-construction] call-new-lead-task failed", {
-          leadId: lead.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
+      scheduleNewLeadStaffEmail({
+        leadId: lead.id,
+        source: "pre_construction",
+        subject: notify.emailSubject,
+        detailLines: [
+          `Listing: ${listing.addressLine}`,
+          `Contact: ${parsed.data.name}`,
+          `Email: ${parsed.data.email}`,
+          parsed.data.phone ? `Phone: ${parsed.data.phone}` : null,
+        ].filter((line): line is string => Boolean(line)),
+        assigneeId: assignedAgentId,
+        deskRecipients: deskNotifiers.map((row) => ({
+          id: row.user.id,
+          email: row.user.email,
+          phone: row.user.phone,
+        })),
+        smsText: `${notify.smsPrefix}: ${listing.addressLine}`,
+      });
+
+      if (assignedAgentId && organizationId) {
+        try {
+          await createCallNewLeadTask({
+            leadId: lead.id,
+            assigneeId: assignedAgentId,
+            organizationId,
+          });
+        } catch (err) {
+          console.error("[pre-construction] call-new-lead-task failed", {
+            leadId: lead.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     }
 

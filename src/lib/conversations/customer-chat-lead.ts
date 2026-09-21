@@ -28,6 +28,7 @@ import {
   captureWebsiteLead,
   resolveLeadDeskAssignmentForRequest,
 } from "@/lib/agent/lead-intake";
+import { isAmbiguousLeadIdentityError } from "@/lib/agent/lead-identity";
 import { selectPrimaryLeadsByCustomer } from "@/lib/agent/select-primary-leads-by-customer";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -623,7 +624,7 @@ async function ensureLeadExists(input: {
   const source: LeadSource = "SIGNUP";
 
   try {
-    await input.deps.captureWebsiteLead({
+    const captured = await input.deps.captureWebsiteLead({
       source,
       intent,
       isBuyer: intent === "BUYER",
@@ -635,6 +636,20 @@ async function ensureLeadExists(input: {
       request: input.request,
       deps: input.hostDeps,
     });
+    const after = selectPrimaryCustomerChatLead(
+      await input.deps.listCustomerWorkspaceLeads(
+        input.host.workspaceId,
+        input.user.id,
+      ),
+    );
+    if (!after) {
+      return fail("LEAD_NOT_FOUND", {
+        workspaceId: input.host.workspaceId,
+        workspaceSlug: input.host.workspaceSlug,
+        customerUserId: input.user.id,
+      });
+    }
+    return { ok: true, lead: after, created: captured.created };
   } catch (error) {
     if (error instanceof PublicLeadRoutingError) {
       return mapPublicLeadRoutingError(error, {
@@ -643,23 +658,15 @@ async function ensureLeadExists(input: {
         customerUserId: input.user.id,
       });
     }
+    if (isAmbiguousLeadIdentityError(error)) {
+      return fail("ROUTING_UNAVAILABLE", {
+        workspaceId: input.host.workspaceId,
+        workspaceSlug: input.host.workspaceSlug,
+        customerUserId: input.user.id,
+      });
+    }
     throw error;
   }
-
-  const after = selectPrimaryCustomerChatLead(
-    await input.deps.listCustomerWorkspaceLeads(
-      input.host.workspaceId,
-      input.user.id,
-    ),
-  );
-  if (!after) {
-    return fail("LEAD_NOT_FOUND", {
-      workspaceId: input.host.workspaceId,
-      workspaceSlug: input.host.workspaceSlug,
-      customerUserId: input.user.id,
-    });
-  }
-  return { ok: true, lead: after, created: true };
 }
 
 async function runCustomerChatLeadResolver(

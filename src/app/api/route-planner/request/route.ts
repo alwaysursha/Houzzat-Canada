@@ -5,7 +5,7 @@ import { requireFullCustomerUser } from "@/lib/account";
 import {
   publicLeadNotificationCopy,
   publicLeadRoutingErrorResponse,
-  resolvePublicLeadRoutingContext,
+  publicResolveOrCreateLead,
 } from "@/lib/agent/public-lead-api";
 import {
   createCallNewLeadTask,
@@ -118,50 +118,53 @@ export async function POST(request: Request) {
     isSeller: customerFlags?.isSeller ?? false,
   });
 
-  const routing = await resolvePublicLeadRoutingContext(request, intent);
-  const {
-    organizationId,
-    assignedAgentId,
-    brand,
-    deskNotifiers,
-    ownership,
-  } = routing;
-  const notify = publicLeadNotificationCopy(brand, "route planner");
-
   const consentAt = new Date();
   const firstMls = tour.stops[0]!.mlsNumber;
+
+  const resolved = await publicResolveOrCreateLead({
+    request,
+    intent,
+    isBuyer: customerFlags?.isBuyer ?? true,
+    isSeller: customerFlags?.isSeller ?? false,
+    source: "SHOWING_REQUEST",
+    customerId: user.id,
+    email: user.email,
+    phone: user.phone,
+    name: user.name,
+    score: 60,
+    listingMls: firstMls,
+    contactConsentAt: consentAt,
+    actorId: user.id,
+    upsertCustomer: false,
+    notes: itineraryText,
+    activity: {
+      type: "route_planner_request",
+      userId: user.id,
+      body: "Customer requested a multi-stop Route Planner itinerary.",
+    },
+  });
+
+  const lead = resolved.lead;
+  const assignedAgentId = resolved.assignedAgentId;
+  const organizationId = resolved.organizationId;
+  const brand = resolved.brand;
+  const deskNotifiers = resolved.deskNotifiers;
+  const notify = publicLeadNotificationCopy(brand, "route planner");
+  const leadId = lead.id;
   const forwarded = request.headers.get("x-forwarded-for");
   const ip = forwarded?.split(",")[0]?.trim() ?? null;
   const userAgent = request.headers.get("user-agent");
 
-  const { leadId, shareToken } = await prisma.$transaction(async (tx) => {
-    const lead = await tx.lead.create({
-      data: {
-        source: "SHOWING_REQUEST",
-        status: "APPT_SET",
-        intent,
-        score: 60,
-        listingMls: firstMls,
-        customerId: user.id,
-        assignedAgentId,
-        organizationId: ownership.organizationId ?? organizationId ?? undefined,
-        workspaceId: ownership.workspaceId,
-        contactConsentAt: consentAt,
-        notes: itineraryText,
-        activities: {
-          create: {
-            type: "route_planner_request",
-            userId: user.id,
-            body: "Customer requested a multi-stop Route Planner itinerary.",
-          },
-        },
-      },
+  const { shareToken } = await prisma.$transaction(async (tx) => {
+    await tx.lead.update({
+      where: { id: leadId },
+      data: { status: "APPT_SET" },
     });
 
     await tx.consentEvent.create({
       data: {
         userId: user.id,
-        leadId: lead.id,
+        leadId,
         email: user.email.toLowerCase(),
         kind: AGENT_CONTACT_CONSENT_KIND,
         version: AGENT_CONTACT_CONSENT_VERSION,
@@ -181,7 +184,7 @@ export async function POST(request: Request) {
           notes: itineraryText,
           customerId: user.id,
           agentId: null,
-          leadId: lead.id,
+          leadId,
         },
       });
     }
@@ -201,50 +204,52 @@ export async function POST(request: Request) {
       data: { caslConsentAt: consentAt },
     });
 
-    return { leadId: lead.id, shareToken: token };
+    return { shareToken: token };
   });
 
-  const deskUserIds = deskNotifiers.map((row) => row.user.id);
+  if (resolved.created) {
+    const deskUserIds = deskNotifiers.map((row) => row.user.id);
 
-  notifyNewLeadCapturedToStaff({
-    leadId,
-    label: `${tour.stops.length} homes to tour`,
-    title: notify.pushTitle,
-    assigneeId: assignedAgentId,
-    deskUserIds,
-  });
+    notifyNewLeadCapturedToStaff({
+      leadId,
+      label: `${tour.stops.length} homes to tour`,
+      title: notify.pushTitle,
+      assigneeId: assignedAgentId,
+      deskUserIds,
+    });
 
-  scheduleNewLeadStaffEmail({
-    leadId,
-    source: "route_planner",
-    subject: notify.emailSubject,
-    detailLines: [
-      `Tour request: ${tour.stops.length} homes`,
-      itineraryText,
-    ],
-    assigneeId: assignedAgentId,
-    deskRecipients: deskNotifiers.map((row) => ({
-      id: row.user.id,
-      email: row.user.email,
-      phone: row.user.phone,
-    })),
-    smsText: `${notify.smsPrefix} Route Planner: ${tour.stops.length} homes — check agent desk.`,
-    whatsappText: `Route Planner request (${tour.stops.length} homes).`,
-    preferWhatsApp: true,
-  });
+    scheduleNewLeadStaffEmail({
+      leadId,
+      source: "route_planner",
+      subject: notify.emailSubject,
+      detailLines: [
+        `Tour request: ${tour.stops.length} homes`,
+        itineraryText,
+      ],
+      assigneeId: assignedAgentId,
+      deskRecipients: deskNotifiers.map((row) => ({
+        id: row.user.id,
+        email: row.user.email,
+        phone: row.user.phone,
+      })),
+      smsText: `${notify.smsPrefix} Route Planner: ${tour.stops.length} homes — check agent desk.`,
+      whatsappText: `Route Planner request (${tour.stops.length} homes).`,
+      preferWhatsApp: true,
+    });
 
-  if (assignedAgentId && organizationId) {
-    try {
-      await createCallNewLeadTask({
-        leadId,
-        assigneeId: assignedAgentId,
-        organizationId,
-      });
-    } catch (err) {
-      console.error("[route-planner] call-new-lead-task failed", {
-        leadId,
-        error: err instanceof Error ? err.message : String(err),
-      });
+    if (assignedAgentId && organizationId) {
+      try {
+        await createCallNewLeadTask({
+          leadId,
+          assigneeId: assignedAgentId,
+          organizationId,
+        });
+      } catch (err) {
+        console.error("[route-planner] call-new-lead-task failed", {
+          leadId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 

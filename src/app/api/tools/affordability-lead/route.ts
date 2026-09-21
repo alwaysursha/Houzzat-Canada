@@ -4,10 +4,9 @@ import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
 import {
   publicLeadRoutingErrorResponse,
-  resolvePublicLeadRoutingContext,
+  publicResolveOrCreateLead,
 } from "@/lib/agent/public-lead-api";
 import { createCallNewLeadTask } from "@/lib/agent/lead-intake";
-import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
   name: z.string().min(1),
@@ -28,39 +27,35 @@ export async function POST(request: Request) {
     }
     const utm = pickUtm(parsed.data);
     const adCampaignId = await resolveAdCampaignId(utm);
-    const routing = await resolvePublicLeadRoutingContext(request, "BUYER");
-    const { organizationId, assignedAgentId, ownership } = routing;
-
-    const lead = await prisma.lead.create({
-      data: {
-        source: "AFFORDABILITY",
-        status: "NEW_LEAD",
-        intent: "BUYER",
-        score: 30,
-        assignedAgentId,
-        organizationId: ownership.organizationId ?? organizationId ?? undefined,
-        workspaceId: ownership.workspaceId,
-        ...utmLeadFields(utm, adCampaignId),
-        notes: [
-          `Affordability lead: ${parsed.data.name} <${parsed.data.email}>`,
-          `Illustrative max purchase ~$${parsed.data.maxPurchase.toLocaleString()}`,
-          parsed.data.income
-            ? `Income stated: $${parsed.data.income.toLocaleString()}`
-            : null,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        activities: {
-          create: {
-            type: "affordability_calc",
-            body: `Max ~$${parsed.data.maxPurchase.toLocaleString()}`,
-            meta: { email: parsed.data.email },
-          },
-        },
+    const resolved = await publicResolveOrCreateLead({
+      request,
+      intent: "BUYER",
+      isBuyer: true,
+      isSeller: false,
+      source: "AFFORDABILITY",
+      email: parsed.data.email,
+      name: parsed.data.name,
+      score: 30,
+      utm: utmLeadFields(utm, adCampaignId),
+      notes: [
+        `Affordability lead: ${parsed.data.name} <${parsed.data.email}>`,
+        `Illustrative max purchase ~$${parsed.data.maxPurchase.toLocaleString()}`,
+        parsed.data.income
+          ? `Income stated: $${parsed.data.income.toLocaleString()}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      activity: {
+        type: "affordability_calc",
+        body: `Max ~$${parsed.data.maxPurchase.toLocaleString()}`,
+        meta: { email: parsed.data.email },
       },
     });
 
-    if (assignedAgentId && organizationId) {
+    const { lead, assignedAgentId, organizationId, created } = resolved;
+
+    if (created && assignedAgentId && organizationId) {
       await createCallNewLeadTask({
         leadId: lead.id,
         assigneeId: assignedAgentId,

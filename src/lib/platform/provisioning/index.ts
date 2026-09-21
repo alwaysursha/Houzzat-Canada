@@ -36,6 +36,11 @@ export {
 } from "./create-platform-domain";
 
 export {
+  provisionWorkspaceCrmRoutingSettingsIfAbsent,
+  type ProvisionedWorkspaceCrmRouting,
+} from "./crm-routing";
+
+export {
   provisionPaidSubscription,
   tryProvisionAfterBillingActivation,
   retryPaidSubscriptionProvisioning,

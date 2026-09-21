@@ -189,6 +189,7 @@
     "lead-import-classify:selftest": "node --import tsx scripts/lead-import-classify-selftest.ts",
     "lead-import-persist:selftest": "node --import tsx scripts/lead-import-persist-selftest.ts",
     "lead-classification-cutover:selftest": "node --import tsx scripts/lead-classification-cutover-selftest.ts",
+    "lead-identity-routing:selftest": "node --import tsx scripts/lead-identity-routing-selftest.ts",
     "manual-lead-isolation:selftest": "node --import tsx scripts/manual-lead-isolation-selftest.ts",
     "tenant-auth-isolation:selftest": "node --import tsx scripts/tenant-auth-isolation-selftest.ts",
     "tenant-authority:selftest": "node --import tsx scripts/tenant-authority-selftest.ts",

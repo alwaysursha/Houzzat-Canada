@@ -6,7 +6,7 @@ import { pickUtm } from "@/lib/ads/utm";
 import {
   publicLeadNotificationCopy,
   publicLeadRoutingErrorResponse,
-  resolvePublicLeadRoutingContext,
+  publicResolveOrCreateLead,
 } from "@/lib/agent/public-lead-api";
 import {
   createCallNewLeadTask,
@@ -103,16 +103,6 @@ export async function POST(request: Request) {
     }
     const intent = resolveLeadIntent(customerFlags);
 
-    const routing = await resolvePublicLeadRoutingContext(request, intent);
-    const {
-      organizationId,
-      assignedAgentId,
-      brand,
-      deskNotifiers,
-      ownership,
-    } = routing;
-    const notify = publicLeadNotificationCopy(brand, source.replaceAll("_", " "));
-
     const utm = pickUtm(data);
     const adCampaignId = await resolveAdCampaignId(utm);
     const consentAt = new Date();
@@ -120,163 +110,167 @@ export async function POST(request: Request) {
     const ip = forwarded?.split(",")[0]?.trim() ?? null;
     const userAgent = request.headers.get("user-agent");
 
-    const lead = await prisma.$transaction(async (tx) => {
-      const created = await tx.lead.create({
-        data: {
-          source,
-          status: "NEW_LEAD",
-          intent,
-          score,
-          listingMls: listing.mlsNumber,
-          customerId: session?.user?.id,
-          assignedAgentId,
-          organizationId: ownership.organizationId ?? organizationId ?? undefined,
-          workspaceId: ownership.workspaceId,
-          contactConsentAt: consentAt,
-          ...utmLeadFields(utm, adCampaignId),
-          notes: [
-            `Contact: ${data.name} <${data.email}>`,
-            data.phone ? `Phone: ${data.phone}` : null,
-            data.preferredTimes
-              ? `Preferred times: ${data.preferredTimes}`
-              : null,
-            data.focusNotes ? `Focus: ${data.focusNotes}` : null,
-            data.message ? `Message: ${data.message}` : null,
-            `Property: ${listing.addressLine}, ${listing.city}`,
-            data.kind === "virtual_viewing"
-              ? "Type: Virtual Viewing (agent on-site video walkthrough)"
-              : null,
-            `Contact consent: yes (${AGENT_CONTACT_CONSENT_VERSION})`,
-          ]
-            .filter(Boolean)
-            .join("\n"),
-          activities: {
-            create: {
-              type:
-                data.kind === "virtual_viewing"
-                  ? "virtual_viewing_request"
-                  : data.kind === "showing"
-                    ? "showing_request"
-                    : "inquiry",
-              userId: session?.user?.id,
-              body: data.message ?? null,
-              meta: {
-                email: data.email,
-                phone: data.phone,
-                preferredTimes: data.preferredTimes,
-                focusNotes: data.focusNotes,
-                contactConsent: true,
-                contactConsentAt: consentAt.toISOString(),
-                contactConsentVersion: AGENT_CONTACT_CONSENT_VERSION,
-              },
-            },
-          },
-          ...(appointmentType
-            ? {
-                appointments: {
-                  create: {
-                    type: appointmentType,
-                    status: "REQUESTED",
-                    listingMls: listing.mlsNumber,
-                    customerId: session?.user?.id,
-                    agentId: assignedAgentId,
-                    notes: data.preferredTimes ?? data.message ?? null,
-                    focusNotes: data.focusNotes,
-                  },
-                },
-              }
-            : {}),
+    const resolved = await publicResolveOrCreateLead({
+      request,
+      intent,
+      isBuyer: customerFlags.isBuyer === true,
+      isSeller: customerFlags.isSeller === true,
+      source,
+      customerId: session?.user?.id,
+      email: data.email,
+      phone: data.phone,
+      name: data.name,
+      score,
+      listingMls: listing.mlsNumber,
+      contactConsentAt: consentAt,
+      actorId: session?.user?.id,
+      upsertCustomer: !session?.user?.id,
+      utm: utmLeadFields(utm, adCampaignId),
+      notes: [
+        `Contact: ${data.name} <${data.email}>`,
+        data.phone ? `Phone: ${data.phone}` : null,
+        data.preferredTimes
+          ? `Preferred times: ${data.preferredTimes}`
+          : null,
+        data.focusNotes ? `Focus: ${data.focusNotes}` : null,
+        data.message ? `Message: ${data.message}` : null,
+        `Property: ${listing.addressLine}, ${listing.city}`,
+        data.kind === "virtual_viewing"
+          ? "Type: Virtual Viewing (agent on-site video walkthrough)"
+          : null,
+        `Contact consent: yes (${AGENT_CONTACT_CONSENT_VERSION})`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      activity: {
+        type:
+          data.kind === "virtual_viewing"
+            ? "virtual_viewing_request"
+            : data.kind === "showing"
+              ? "showing_request"
+              : "inquiry",
+        userId: session?.user?.id,
+        body: data.message ?? null,
+        meta: {
+          email: data.email,
+          phone: data.phone,
+          preferredTimes: data.preferredTimes,
+          focusNotes: data.focusNotes,
+          contactConsent: true,
+          contactConsentAt: consentAt.toISOString(),
+          contactConsentVersion: AGENT_CONTACT_CONSENT_VERSION,
         },
-      });
-
-      await tx.consentEvent.create({
-        data: {
-          userId: session?.user?.id,
-          leadId: created.id,
-          email: data.email.toLowerCase(),
-          kind: AGENT_CONTACT_CONSENT_KIND,
-          version: AGENT_CONTACT_CONSENT_VERSION,
-          ip,
-          userAgent,
-        },
-      });
-
-      if (session?.user?.id) {
-        await tx.user.update({
-          where: { id: session.user.id },
-          data: {
-            caslConsentAt: consentAt,
-            ...(parsedPhone ? parsedPhone.columns : {}),
-          },
-        });
-      }
-
-      return created;
+      },
     });
+
+    const lead = resolved.lead;
+    const assignedAgentId = resolved.assignedAgentId;
+    const organizationId = resolved.organizationId;
+    const brand = resolved.brand;
+    const deskNotifiers = resolved.deskNotifiers;
+    const notify = publicLeadNotificationCopy(brand, source.replaceAll("_", " "));
+
+    await prisma.consentEvent.create({
+      data: {
+        userId: session?.user?.id,
+        leadId: lead.id,
+        email: data.email.toLowerCase(),
+        kind: AGENT_CONTACT_CONSENT_KIND,
+        version: AGENT_CONTACT_CONSENT_VERSION,
+        ip,
+        userAgent,
+      },
+    });
+
+    if (session?.user?.id) {
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: {
+          caslConsentAt: consentAt,
+          ...(parsedPhone ? parsedPhone.columns : {}),
+        },
+      });
+    }
+
+    if (appointmentType) {
+      await prisma.appointment.create({
+        data: {
+          type: appointmentType,
+          status: "REQUESTED",
+          listingMls: listing.mlsNumber,
+          customerId: session?.user?.id ?? resolved.customerId,
+          agentId: assignedAgentId,
+          notes: data.preferredTimes ?? data.message ?? null,
+          focusNotes: data.focusNotes,
+          leadId: lead.id,
+        },
+      });
+    }
 
     const hotRequest =
       data.kind === "virtual_viewing" || data.kind === "showing";
-    const deskUserIds = deskNotifiers.map((row) => row.user.id);
-    const pushLabel = hotRequest
-      ? `${data.name} · ${data.kind.replaceAll("_", " ")} · ${listing.addressLine}`
-      : `${data.name} · ${listing.addressLine}`;
+    if (resolved.created) {
+      const deskUserIds = deskNotifiers.map((row) => row.user.id);
+      const pushLabel = hotRequest
+        ? `${data.name} · ${data.kind.replaceAll("_", " ")} · ${listing.addressLine}`
+        : `${data.name} · ${listing.addressLine}`;
 
-    // Push before task — task failure must not block new_lead delivery.
-    notifyNewLeadCapturedToStaff({
-      leadId: lead.id,
-      label: pushLabel,
-      title: notify.pushTitle,
-      assigneeId: assignedAgentId,
-      deskUserIds,
-    });
+      notifyNewLeadCapturedToStaff({
+        leadId: lead.id,
+        label: pushLabel,
+        title: notify.pushTitle,
+        assigneeId: assignedAgentId,
+        deskUserIds,
+      });
 
-    scheduleNewLeadStaffEmail({
-      leadId: lead.id,
-      source: "listing_inquiry",
-      subject: notify.emailSubject,
-      detailLines: [
-        `Listing: ${listing.addressLine}, ${listing.city} (MLS® ${listing.mlsNumber})`,
-        `Contact: ${data.name}`,
-        `Email: ${data.email}`,
-        data.phone ? `Phone: ${data.phone}` : null,
-        hotRequest
-          ? `Request: ${data.kind.replaceAll("_", " ")}`
-          : `Source: ${source.replaceAll("_", " ")}`,
-        "Consent: agent contact accepted",
-      ].filter((line): line is string => Boolean(line)),
-      assigneeId: assignedAgentId,
-      deskRecipients: deskNotifiers.map((row) => ({
-        id: row.user.id,
-        email: row.user.email,
-        phone: row.user.phone,
-      })),
-      smsText: `${notify.smsPrefix}: ${listing.addressLine} — ${data.name}. Check agent desk.`,
-      whatsappText: hotRequest
-        ? `Hot ${notify.smsPrefix} (${data.kind.replaceAll("_", " ")}): ${listing.addressLine} — ${data.name}.`
-        : undefined,
-      preferWhatsApp: hotRequest,
-    });
+      scheduleNewLeadStaffEmail({
+        leadId: lead.id,
+        source: "listing_inquiry",
+        subject: notify.emailSubject,
+        detailLines: [
+          `Listing: ${listing.addressLine}, ${listing.city} (MLS® ${listing.mlsNumber})`,
+          `Contact: ${data.name}`,
+          `Email: ${data.email}`,
+          data.phone ? `Phone: ${data.phone}` : null,
+          hotRequest
+            ? `Request: ${data.kind.replaceAll("_", " ")}`
+            : `Source: ${source.replaceAll("_", " ")}`,
+          "Consent: agent contact accepted",
+        ].filter((line): line is string => Boolean(line)),
+        assigneeId: assignedAgentId,
+        deskRecipients: deskNotifiers.map((row) => ({
+          id: row.user.id,
+          email: row.user.email,
+          phone: row.user.phone,
+        })),
+        smsText: `${notify.smsPrefix}: ${listing.addressLine} — ${data.name}. Check agent desk.`,
+        whatsappText: hotRequest
+          ? `Hot ${notify.smsPrefix} (${data.kind.replaceAll("_", " ")}): ${listing.addressLine} — ${data.name}.`
+          : undefined,
+        preferWhatsApp: hotRequest,
+      });
+
+      if (assignedAgentId && organizationId) {
+        try {
+          await createCallNewLeadTask({
+            leadId: lead.id,
+            assigneeId: assignedAgentId,
+            organizationId,
+          });
+        } catch (err) {
+          console.error("[leads] call-new-lead-task failed", {
+            leadId: lead.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
 
     if (hotRequest) {
       scheduleViewingRequestedSmsAutomation(
         lead.id,
         `${listing.addressLine}, ${listing.city}`,
       );
-    }
-
-    if (assignedAgentId && organizationId) {
-      try {
-        await createCallNewLeadTask({
-          leadId: lead.id,
-          assigneeId: assignedAgentId,
-          organizationId,
-        });
-      } catch (err) {
-        console.error("[leads] call-new-lead-task failed", {
-          leadId: lead.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
     }
 
     return NextResponse.json({ ok: true, leadId: lead.id });

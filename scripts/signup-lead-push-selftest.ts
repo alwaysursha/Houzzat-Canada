@@ -13,26 +13,16 @@ import {
 } from "../src/lib/notifications/catalog";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const leadIntake = readFileSync(
-  join(root, "src/lib/agent/lead-intake.ts"),
-  "utf8",
+function read(rel: string) {
+  return readFileSync(join(root, rel), "utf8");
+}
+const leadIntake = read("src/lib/agent/lead-intake.ts");
+const staffEvents = read("src/lib/notifications/staff-events.ts");
+const signUpRoute = read("src/app/api/auth/sign-up/route.ts");
+const assignAgentRoute = read(
+  "src/app/api/admin/people/[id]/assign-agent/route.ts",
 );
-const staffEvents = readFileSync(
-  join(root, "src/lib/notifications/staff-events.ts"),
-  "utf8",
-);
-const signUpRoute = readFileSync(
-  join(root, "src/app/api/auth/sign-up/route.ts"),
-  "utf8",
-);
-const assignAgentRoute = readFileSync(
-  join(root, "src/app/api/admin/people/[id]/assign-agent/route.ts"),
-  "utf8",
-);
-const pushModule = readFileSync(
-  join(root, "src/lib/notifications/push.ts"),
-  "utf8",
-);
+const pushModule = read("src/lib/notifications/push.ts");
 
 function testCentralPushInLeadIntake() {
   assert.ok(
@@ -44,9 +34,7 @@ function testCentralPushInLeadIntake() {
     "captureWebsiteLead must call notifyNewLeadCaptured",
   );
   const notifyIdx = leadIntake.indexOf("notifyNewLeadCapturedToStaff(");
-  const returnIdx = leadIntake.indexOf(
-    "return { lead, assignedAgentId: assigneeId, organizationId }",
-  );
+  const returnIdx = leadIntake.indexOf("created: true");
   assert.ok(notifyIdx > 0 && notifyIdx < returnIdx, "push must fire before return");
   assert.ok(
     leadIntake.includes("if (assigneeId)"),
@@ -107,14 +95,19 @@ function testPushPrefsAndAudience() {
 }
 
 function testAssignmentBeforePush() {
+  const resolve = read("src/lib/agent/resolve-workspace-lead.ts");
+  assert.ok(
+    resolve.includes("assignedAgentId: desk.assigneeId"),
+    "assignment is set on create",
+  );
   const fnStart = leadIntake.indexOf("export async function captureWebsiteLead");
   assert.ok(fnStart > 0, "captureWebsiteLead must exist");
   const body = leadIntake.slice(fnStart);
-  const assignIdx = body.indexOf("assignedAgentId: assigneeId");
+  const createdGate = body.indexOf("if (!resolved.created)");
   const notifyIdx = body.indexOf("notifyNewLeadCapturedToStaff(");
   assert.ok(
-    assignIdx > 0 && notifyIdx > assignIdx,
-    "assignment is set on create before push",
+    createdGate > 0 && notifyIdx > createdGate,
+    "reuse returns before push; assignment on create happens in resolve-first helper",
   );
 }
 

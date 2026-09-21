@@ -1,6 +1,7 @@
-import type { LeadIntent, PurchaseTimeframe } from "@prisma/client";
+import type { PurchaseTimeframe } from "@prisma/client";
 import { finalizeWritableLeadClassification } from "@/lib/agent/lead-classification";
 import { createCallNewLeadTask } from "@/lib/agent/lead-intake";
+import { resolveOrCreateWorkspaceLead } from "@/lib/agent/resolve-workspace-lead";
 import { resolveLeadCrmOwnership } from "@/lib/crm-ownership";
 import { prisma } from "@/lib/prisma";
 import { scheduleCustomerIntroductionSmsAutomationsForLead } from "@/lib/sms/automations";
@@ -38,8 +39,8 @@ export type ManualLeadInput = {
 };
 
 /**
- * Upsert customer by email and create a NEW_LEAD assigned to the agent.
- * Same path as POST /api/agent/leads (single + bulk import).
+ * Upsert customer by email and resolve-or-create a workspace Lead.
+ * Existing identity is reused (sticky assignee). Same path as POST /api/agent/leads.
  *
  * CRM classification is written to the Lead only. User.isBuyer / User.isSeller
  * stay Houzzat consumer/account flags and are never mutated here.
@@ -56,7 +57,6 @@ export async function createManualLead(input: ManualLeadInput) {
     isBuyer: input.isBuyer ?? true,
     isSeller: input.isSeller ?? false,
   });
-  const intent: LeadIntent = classification.intent;
   const optedOut = input.optedOut === true;
   const grantConsent = isImport
     ? Boolean(input.assertCommunicationConsent) && !optedOut
@@ -111,40 +111,52 @@ export async function createManualLead(input: ManualLeadInput) {
       }
     : await resolveLeadCrmOwnership(input.organizationId);
 
-  const lead = await prisma.lead.create({
-    data: {
-      status: "NEW_LEAD",
-      source: "OTHER",
-      intent,
-      isBuyer: classification.isBuyer,
-      isSeller: classification.isSeller,
-      score: 10,
-      notes,
-      utmSource,
-      customerId: customer.id,
-      assignedAgentId: input.agentId,
-      organizationId: ownership.organizationId ?? input.organizationId,
-      workspaceId: ownership.workspaceId,
-      contactConsentAt: consentAt,
-      statusChangedAt: new Date(),
-      activities: {
-        create: {
-          type: "created",
-          userId: input.agentId,
-          body: input.activityBody ?? "Manual lead created",
-        },
-      },
+  if (!ownership.workspaceId) {
+    throw new Error("Workspace required.");
+  }
+
+  const resolved = await resolveOrCreateWorkspaceLead({
+    workspaceId: ownership.workspaceId,
+    organizationId: ownership.organizationId ?? input.organizationId,
+    customerId: customer.id,
+    email,
+    phone,
+    name,
+    isBuyer: classification.isBuyer,
+    isSeller: classification.isSeller,
+    source: "OTHER",
+    notes,
+    score: 10,
+    contactConsentAt: consentAt,
+    actorId: input.agentId,
+    upsertCustomer: false,
+    utm: utmSource ? { utmSource } : undefined,
+    activity: {
+      type: "created",
+      userId: input.agentId,
+      body: input.activityBody ?? "Manual lead created",
     },
+    resolveCreateDesk: async () => ({
+      assigneeId: input.agentId,
+      organizationId: ownership.organizationId ?? input.organizationId,
+    }),
   });
 
-  await createCallNewLeadTask({
-    leadId: lead.id,
-    assigneeId: input.agentId,
-    organizationId: input.organizationId,
-    createdById: input.agentId,
-  });
+  if (resolved.created) {
+    await createCallNewLeadTask({
+      leadId: resolved.lead.id,
+      assigneeId: input.agentId,
+      organizationId: input.organizationId,
+      createdById: input.agentId,
+    });
+    scheduleCustomerIntroductionSmsAutomationsForLead(resolved.lead.id);
+  }
 
-  scheduleCustomerIntroductionSmsAutomationsForLead(lead.id);
-
-  return { leadId: lead.id, customerId: customer.id, email, intent };
+  return {
+    leadId: resolved.lead.id,
+    customerId: customer.id,
+    email,
+    intent: resolved.lead.intent,
+    created: resolved.created,
+  };
 }

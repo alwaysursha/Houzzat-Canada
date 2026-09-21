@@ -165,7 +165,8 @@ async function testLeadRoutesPassRequest() {
     const src = read(file);
     assert.ok(
       src.includes("resolvePublicLeadRoutingContext") ||
-        src.includes("resolveLeadDeskAssignmentForRequest"),
+        src.includes("resolveLeadDeskAssignmentForRequest") ||
+        src.includes("publicResolveOrCreateLead"),
       file,
     );
   }

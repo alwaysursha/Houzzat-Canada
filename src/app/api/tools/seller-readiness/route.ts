@@ -4,7 +4,7 @@ import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
 import {
   publicLeadRoutingErrorResponse,
-  resolvePublicLeadRoutingContext,
+  publicResolveOrCreateLead,
 } from "@/lib/agent/public-lead-api";
 import { createCallNewLeadTask } from "@/lib/agent/lead-intake";
 import { prisma } from "@/lib/prisma";
@@ -29,43 +29,41 @@ export async function POST(request: Request) {
     }
     const utm = pickUtm(parsed.data);
     const adCampaignId = await resolveAdCampaignId(utm);
-    const routing = await resolvePublicLeadRoutingContext(request, "SELLER");
-    const { organizationId, assignedAgentId, ownership } = routing;
-
-    const lead = await prisma.lead.create({
-      data: {
-        source: "SELLER_READINESS",
-        status: "NEW_LEAD",
-        intent: "SELLER",
-        score: Math.min(70, 20 + Math.round(parsed.data.score / 2)),
-        assignedAgentId,
-        organizationId: ownership.organizationId ?? organizationId ?? undefined,
-        workspaceId: ownership.workspaceId,
-        ...utmLeadFields(utm, adCampaignId),
-        notes: [
-          `Seller readiness: ${parsed.data.address}`,
-          `Score ${parsed.data.score}/100`,
-          `Contact: ${parsed.data.name} <${parsed.data.email}>`,
-        ].join("\n"),
-        activities: {
-          create: {
-            type: "seller_readiness",
-            body: `${parsed.data.score}/100 · ${parsed.data.address}`,
-            meta: { checks: parsed.data.checks, email: parsed.data.email },
-          },
-        },
-        appointments: {
-          create: {
-            type: "VALUATION_CALL",
-            status: "REQUESTED",
-            agentId: assignedAgentId,
-            notes: `Seller readiness follow-up (${parsed.data.score}/100)`,
-          },
-        },
+    const resolved = await publicResolveOrCreateLead({
+      request,
+      intent: "SELLER",
+      isBuyer: false,
+      isSeller: true,
+      source: "SELLER_READINESS",
+      email: parsed.data.email,
+      name: parsed.data.name,
+      score: Math.min(70, 20 + Math.round(parsed.data.score / 2)),
+      utm: utmLeadFields(utm, adCampaignId),
+      notes: [
+        `Seller readiness: ${parsed.data.address}`,
+        `Score ${parsed.data.score}/100`,
+        `Contact: ${parsed.data.name} <${parsed.data.email}>`,
+      ].join("\n"),
+      activity: {
+        type: "seller_readiness",
+        body: `${parsed.data.score}/100 · ${parsed.data.address}`,
+        meta: { checks: parsed.data.checks, email: parsed.data.email },
       },
     });
 
-    if (assignedAgentId && organizationId) {
+    const { lead, assignedAgentId, organizationId, created } = resolved;
+
+    await prisma.appointment.create({
+      data: {
+        type: "VALUATION_CALL",
+        status: "REQUESTED",
+        agentId: assignedAgentId,
+        leadId: lead.id,
+        notes: `Seller readiness follow-up (${parsed.data.score}/100)`,
+      },
+    });
+
+    if (created && assignedAgentId && organizationId) {
       await createCallNewLeadTask({
         leadId: lead.id,
         assigneeId: assignedAgentId,

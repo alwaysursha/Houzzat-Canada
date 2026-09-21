@@ -28,6 +28,7 @@ import {
 } from "@/lib/platform/catalog/plans";
 import { resolvePlanEntitlementProfile } from "@/lib/platform/entitlements/profiles";
 import { OFFER_LINE_CODES } from "@/lib/platform/offers/constants";
+import { provisionWorkspaceCrmRoutingSettingsIfAbsent } from "./crm-routing";
 import {
   PROVISIONING_AUDIT,
   PROVISIONING_ENTITY_TYPE,
@@ -497,6 +498,11 @@ async function stepCreateOwnerMembership(ctx: StepContext): Promise<void> {
   }
 
   ctx.ownerUserId = user.id;
+
+  await provisionWorkspaceCrmRoutingSettingsIfAbsent(ctx.db, {
+    workspaceId: ctx.workspaceId,
+    ownerUserId: user.id,
+  });
 
   await writeSafeAudit(
     ctx,

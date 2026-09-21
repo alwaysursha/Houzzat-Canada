@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   finalizeWritableLeadClassification,
+  mergeIncomingLeadClassification,
   nextWritableLeadClassification,
   resolveDisplayedLeadClassification,
 } from "../src/lib/agent/lead-classification";
@@ -77,6 +78,14 @@ function testBuyerPlusSellerWrites() {
   assert.equal(neither.isBuyer, true);
   assert.equal(neither.isSeller, false);
   assert.equal(neither.intent, "BUYER");
+
+  const merged = mergeIncomingLeadClassification(
+    { isBuyer: true, isSeller: false, intent: "BUYER" },
+    { isSeller: true },
+  );
+  assert.equal(merged.isBuyer, true);
+  assert.equal(merged.isSeller, true);
+  assert.equal(merged.intent, "SELLER");
   console.log("[B] buyer+seller → both Lead flags, intent SELLER... PASS");
 }
 
@@ -129,6 +138,7 @@ function testLegacyNullFallsBackToIntentNotUser() {
 
 function testImportWritesLeadOnly() {
   const create = read("src/lib/agent/create-manual-lead.ts");
+  const resolve = read("src/lib/agent/resolve-workspace-lead.ts");
   const route = read("src/app/api/agent/leads/import/route.ts");
   const classify = read("src/lib/agent/lead-import-classify.ts");
 
@@ -136,6 +146,7 @@ function testImportWritesLeadOnly() {
   assert.ok(route.includes("isSeller: classification.isSeller"));
   assert.ok(create.includes("finalizeWritableLeadClassification"));
   assert.ok(!create.includes("stampClassification"));
+  assert.ok(create.includes("resolveOrCreateWorkspaceLead"));
 
   const userCreate = sliceBetween(
     create,
@@ -145,9 +156,9 @@ function testImportWritesLeadOnly() {
   const userUpdate = sliceBetween(
     create,
     "prisma.user.update",
-    "prisma.lead.create",
+    "resolveOrCreateWorkspaceLead",
   );
-  const leadCreate = create.slice(create.indexOf("prisma.lead.create"));
+  const leadCreate = resolve.slice(resolve.indexOf("db.lead.create"));
   assert.ok(!userCreate.includes("isBuyer"));
   assert.ok(!userCreate.includes("isSeller"));
   assert.ok(!userUpdate.includes("isBuyer"));

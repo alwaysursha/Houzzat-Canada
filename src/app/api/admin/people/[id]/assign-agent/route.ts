@@ -6,6 +6,7 @@ import {
   captureWebsiteLead,
   resolveLeadIntent,
 } from "@/lib/agent/lead-intake";
+import { isAmbiguousLeadIdentityError } from "@/lib/agent/lead-identity";
 import { auth } from "@/lib/auth";
 import { notifyLeadAssignedToAgent } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
@@ -74,28 +75,46 @@ export async function POST(
 
   let createdLead = false;
   if (!leads.length) {
-    const captured = await captureWebsiteLead({
-      source: "OTHER",
-      customerId,
-      name: customer.name,
-      email: customer.email,
-      phone: customer.phone,
-      isBuyer: customer.isBuyer,
-      isSeller: customer.isSeller,
-      intent: resolveLeadIntent(customer),
-      score: 10,
-      actorId: session.user.id,
-      forceAssigneeId: parsed.data.assigneeId,
-      notes: [
-        `Contact: ${customer.name || "Customer"} <${customer.email}>`,
-        customer.phone ? `Phone: ${customer.phone}` : null,
-        "Lead created from People admin assignment",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    });
-    leads = [{ id: captured.lead.id }];
-    createdLead = true;
+    try {
+      const captured = await captureWebsiteLead({
+        source: "OTHER",
+        customerId,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        isBuyer: customer.isBuyer,
+        isSeller: customer.isSeller,
+        intent: resolveLeadIntent(customer),
+        score: 10,
+        actorId: session.user.id,
+        forceAssigneeId: parsed.data.assigneeId,
+        request,
+        notes: [
+          `Contact: ${customer.name || "Customer"} <${customer.email}>`,
+          customer.phone ? `Phone: ${customer.phone}` : null,
+          "Lead created from People admin assignment",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      });
+      leads = [{ id: captured.lead.id }];
+      createdLead = captured.created;
+      if (!captured.created) {
+        await applyLeadAssignment({
+          leadId: captured.lead.id,
+          assigneeId: parsed.data.assigneeId,
+          actorId: session.user.id,
+          activityBody: parsed.data.assigneeId
+            ? `Assigned by admin to agent ${parsed.data.assigneeId}`
+            : "Moved to pond by admin",
+        });
+      }
+    } catch (error) {
+      if (isAmbiguousLeadIdentityError(error)) {
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      }
+      throw error;
+    }
   } else {
     for (const lead of leads) {
       await applyLeadAssignment({

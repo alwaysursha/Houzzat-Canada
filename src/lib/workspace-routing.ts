@@ -8,7 +8,8 @@
  * Runtime must never link legacy `default` → workspaceId, create settings,
  * or sync weights as a side effect of lead capture / resolution.
  */
-import type { LeadIntent, SellerLeadAssignMode } from "@prisma/client";
+import type { LeadIntent } from "@prisma/client";
+import { pickRoutedAssignee } from "@/lib/agent/pick-routed-assignee";
 import type { RoutableAgent } from "@/lib/agent/routing-types";
 import { HOUZZAT_WORKSPACE_SLUG } from "@/lib/crm-ownership";
 import { prisma } from "@/lib/prisma";
@@ -67,7 +68,8 @@ export async function loadWorkspaceCrmRoutingSettings(workspaceId: string) {
 
 /**
  * Pick assignee from workspace members + existing settings only.
- * Missing settings → safe member fallback (never another workspace's config).
+ * Sole agent → that agent. LISTING_AGENT / PERCENTAGE as configured.
+ * Multi-agent missing settings or lane weights → pond (never agents[0]).
  * Fair-share assignedCount increment is operational counter, not tenancy config.
  */
 export async function resolveWorkspaceRoutedAssignee(
@@ -75,66 +77,43 @@ export async function resolveWorkspaceRoutedAssignee(
   intent: LeadIntent,
 ): Promise<string | null> {
   const agents = await listWorkspaceRoutableAgents(workspaceId);
-  if (agents.length === 0) {
+  const settings = await loadWorkspaceCrmRoutingSettings(workspaceId);
+  const pick = pickRoutedAssignee({
+    intent,
+    agentIds: agents.map((a) => a.id),
+    sellerAssignMode: settings?.sellerAssignMode ?? null,
+    listingAgentId: settings?.listingAgentId ?? null,
+    weights: (settings?.weights ?? []).map((w) => ({
+      id: w.id,
+      agentId: w.agentId,
+      lane: w.lane,
+      percent: w.percent,
+      assignedCount: w.assignedCount,
+    })),
+  });
+
+  if (pick.reason === "no_agents") {
     console.warn("[workspace-routing] no routable agents", {
       workspaceIdPrefix: workspaceId.slice(0, 8),
     });
     return null;
   }
-  if (agents.length === 1) return agents[0]!.id;
-
-  const settings = await loadWorkspaceCrmRoutingSettings(workspaceId);
-  const agentIds = new Set(agents.map((a) => a.id));
-
-  if (!settings) {
+  if (pick.reason === "unconfigured_multi_agent") {
     console.warn(
-      "[workspace-routing] missing workspace routing settings — member fallback",
-      { workspaceIdPrefix: workspaceId.slice(0, 8) },
+      "[workspace-routing] multi-agent workspace has no eligible assignment — pond",
+      { workspaceIdPrefix: workspaceId.slice(0, 8), intent },
     );
-    return agents[0]!.id;
+    return null;
   }
 
-  if (intent === "SELLER") {
-    const mode: SellerLeadAssignMode = settings.sellerAssignMode;
-    if (
-      mode === "LISTING_AGENT" &&
-      settings.listingAgentId &&
-      agentIds.has(settings.listingAgentId)
-    ) {
-      return settings.listingAgentId;
-    }
+  if (pick.weightId) {
+    await prisma.crmRoutingWeight.update({
+      where: { id: pick.weightId },
+      data: { assignedCount: { increment: 1 } },
+    });
   }
 
-  const lane = intent === "SELLER" ? "SELLER" : "BUYER";
-  const weights = settings.weights.filter(
-    (w) => w.lane === lane && w.percent > 0 && agentIds.has(w.agentId),
-  );
-  if (weights.length === 0) {
-    return agents[0]!.id;
-  }
-
-  let best = weights[0]!;
-  let bestScore =
-    best.percent > 0
-      ? best.assignedCount / best.percent
-      : Number.POSITIVE_INFINITY;
-  for (const weight of weights.slice(1)) {
-    const score =
-      weight.percent > 0
-        ? weight.assignedCount / weight.percent
-        : Number.POSITIVE_INFINITY;
-    if (score < bestScore) {
-      best = weight;
-      bestScore = score;
-    }
-  }
-
-  await prisma.crmRoutingWeight.update({
-    where: { id: best.id },
-    data: { assignedCount: { increment: 1 } },
-  });
-
-  return best.agentId;
+  return pick.agentId;
 }
 
 export function shouldUseWorkspaceRouting(

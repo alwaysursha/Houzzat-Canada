@@ -204,6 +204,7 @@ class FakeResolverWorld {
           lead: lead as never,
           assignedAgentId,
           organizationId: "org_a",
+          created: true,
         };
       },
       resolveLeadDeskAssignmentForRequest: async (request) => {

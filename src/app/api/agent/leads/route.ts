@@ -14,6 +14,7 @@ import {
 import { notifyLeadAssignedToAgent } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 import { isInvalidContactPhoneError } from "@/lib/sms/e164";
+import { isAmbiguousLeadIdentityError } from "@/lib/agent/lead-identity";
 import { detectClientWorkspaceOverride } from "@/lib/tenancy/public-lead-workspace";
 
 const patchSchema = z.object({
@@ -78,6 +79,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (isInvalidContactPhoneError(error)) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    if (isAmbiguousLeadIdentityError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
     throw error;
   }

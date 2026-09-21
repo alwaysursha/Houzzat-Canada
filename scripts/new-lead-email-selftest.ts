@@ -60,8 +60,8 @@ function testSignupAssignedAgentEmail() {
   assert.ok(fnStart > 0);
   const body = leadIntake.slice(fnStart);
   assert.ok(body.includes("scheduleNewLeadStaffEmail("));
-  assert.ok(body.includes('source: sourceKind'));
-  assert.ok(body.includes('"New signup lead"'));
+  assert.ok(body.includes("source: sourceKind"));
+  assert.ok(body.includes("formatSignupLeadEmailSubject"));
   assert.ok(body.includes("assigneeId"));
   // Unassigned: email only inside `if (assigneeId)` — no desk fan-out from intake.
   const emailIdx = body.indexOf("scheduleNewLeadStaffEmail(");
@@ -181,11 +181,11 @@ function testToolsNotActivated() {
 }
 
 function testSubjectsPresent() {
-  assert.ok(leadIntake.includes('"New signup lead"'));
-  assert.ok(leadsRoute.includes("New Houzzat lead"));
-  assert.ok(valuationRoute.includes("New valuation lead") || valuationRoute.includes("New homepage sell estimate lead"));
-  assert.ok(routePlanner.includes("New route planner lead"));
-  assert.ok(preCon.includes("New pre-construction lead"));
+  assert.ok(leadIntake.includes("formatSignupLeadEmailSubject"));
+  assert.ok(leadsRoute.includes("publicLeadNotificationCopy"));
+  assert.ok(valuationRoute.includes("publicLeadNotificationCopy"));
+  assert.ok(routePlanner.includes("publicLeadNotificationCopy"));
+  assert.ok(preCon.includes("publicLeadNotificationCopy"));
 }
 
 function testPackageScript() {
