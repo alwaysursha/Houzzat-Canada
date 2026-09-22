@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { captureWebsiteLead } from "@/lib/agent/lead-intake";
+import { EXISTING_ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/auth/existing-account-message";
 import { persistSignupConsentEvents } from "@/lib/auth/sign-up-consent";
 import {
   sendEmailVerification,
@@ -97,10 +98,7 @@ function validationErrorMessage(error: z.ZodError): string {
 
 function duplicateEmailResponse() {
   return NextResponse.json(
-    {
-      error:
-        "An account with this email already exists. Sign in instead, or use a different email.",
-    },
+    { error: EXISTING_ACCOUNT_SIGN_IN_MESSAGE },
     { status: 409 },
   );
 }

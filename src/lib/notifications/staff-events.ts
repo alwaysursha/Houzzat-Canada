@@ -336,11 +336,28 @@ export function notifyNewLeadCaptured(
   });
 }
 
+/** Leads whose assignee may receive lead_online. A workspace id limits that to one tenant. */
+export function customerOnlineLeadWhere(
+  customerId: string,
+  workspaceId?: string | null,
+) {
+  return {
+    customerId,
+    assignedAgentId: { not: null },
+    ...(workspaceId ? { workspaceId } : {}),
+  };
+}
+
 /** Assigned-agent lead_online (sign-in or first beacon after the 3-minute window). */
 export async function notifyCustomerCameOnline(
   userId: string,
   previousLastSeenAt: Date | null,
-  opts?: { source?: LeadOnlineSource; role?: string | null },
+  opts?: {
+    source?: LeadOnlineSource;
+    role?: string | null;
+    /** Null means a tenant was required and none resolved — do not notify other workspaces. */
+    workspaceId?: string | null;
+  },
 ) {
   const source: LeadOnlineSource = opts?.source ?? "beacon";
 
@@ -377,8 +394,10 @@ export async function notifyCustomerCameOnline(
     if (recentSignIn) return;
   }
 
+  if (opts?.workspaceId === null) return;
+
   const leads = await prisma.lead.findMany({
-    where: { customerId: userId, assignedAgentId: { not: null } },
+    where: customerOnlineLeadWhere(userId, opts?.workspaceId),
     select: {
       id: true,
       workspaceId: true,
@@ -454,9 +473,14 @@ function scheduleLeadOnlineWork(
   previousLastSeenAt: Date | null,
   source: LeadOnlineSource,
   role?: string | null,
+  workspaceId?: string | null,
 ): void {
   scheduleWorkerSideEffect(
-    notifyCustomerCameOnline(userId, previousLastSeenAt, { source, role }).catch(
+    notifyCustomerCameOnline(userId, previousLastSeenAt, {
+      source,
+      role,
+      workspaceId,
+    }).catch(
       (error) => {
         console.error("[staff-notify] lead_online/hot failed", {
           error: error instanceof Error ? error.message : String(error),
@@ -470,8 +494,15 @@ function scheduleLeadOnlineWork(
 export function scheduleNotifyCustomerCameOnline(
   userId: string,
   previousLastSeenAt: Date | null,
+  workspaceId?: string | null,
 ): void {
-  scheduleLeadOnlineWork(userId, previousLastSeenAt, "beacon");
+  scheduleLeadOnlineWork(
+    userId,
+    previousLastSeenAt,
+    "beacon",
+    undefined,
+    workspaceId,
+  );
 }
 
 /**
@@ -481,10 +512,11 @@ export function scheduleNotifyCustomerCameOnline(
 export function scheduleNotifyCustomerCameOnlineFromSignIn(
   userId: string,
   role: string | null | undefined,
+  workspaceId?: string | null,
 ): void {
   if (!userId || !isConsumerRole(role)) return;
   markLeadOnlineSignIn(userId);
-  scheduleLeadOnlineWork(userId, null, "sign-in", role);
+  scheduleLeadOnlineWork(userId, null, "sign-in", role, workspaceId);
 }
 
 /** Morning briefing of open overdue tasks (runs with the digest cron). */

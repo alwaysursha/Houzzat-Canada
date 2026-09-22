@@ -9,6 +9,7 @@ import { PasswordField } from "@/components/auth/PasswordField";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EXISTING_ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/auth/existing-account-message";
 import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
 import { flyToAccountPortal } from "@/lib/fly-to-account";
 import { authSuccessReturnPath } from "@/lib/auth/safe-callback-url";
@@ -19,10 +20,12 @@ export function SignUpForm({
   callbackUrl = null,
   onSuccess,
   onSwitchMode,
+  onExistingAccount,
 }: {
   callbackUrl?: string | null;
   onSuccess?: () => void;
   onSwitchMode?: () => void;
+  onExistingAccount?: (email: string) => void;
 }) {
   const router = useRouter();
   const { confirm } = useSiteAlert();
@@ -83,21 +86,26 @@ export function SignUpForm({
       data = raw ? (JSON.parse(raw) as { error?: string }) : {};
     } catch {
       setPending(false);
-      setError(
-        response.status === 409
-          ? "An account with this email already exists. Sign in instead."
-          : "Something went wrong. Please try again.",
-      );
+      if (response.status === 409) {
+        if (onExistingAccount) {
+          onExistingAccount(normalizedEmail);
+          return;
+        }
+        setError(EXISTING_ACCOUNT_SIGN_IN_MESSAGE);
+        return;
+      }
+      setError("Something went wrong. Please try again.");
       return;
     }
 
     if (!response.ok) {
       setPending(false);
       if (response.status === 409) {
-        setError(
-          data.error ??
-            "An account with this email already exists. Sign in instead.",
-        );
+        if (onExistingAccount) {
+          onExistingAccount(normalizedEmail);
+          return;
+        }
+        setError(data.error ?? EXISTING_ACCOUNT_SIGN_IN_MESSAGE);
         return;
       }
       if (response.status === 400) {

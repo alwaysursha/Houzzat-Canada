@@ -96,6 +96,11 @@ export type ResolveOrCreateWorkspaceLeadInput = {
    * Default true when email is present.
    */
   upsertCustomer?: boolean;
+  /**
+   * Existing Lead reuse still skips routing. Set false to also skip a new
+   * activity row on that reuse (repeat sign-in).
+   */
+  activityOnReuse?: boolean;
   db?: PrismaClient;
 };
 
@@ -359,12 +364,14 @@ async function attachToExistingLead(
     select: leadIdentitySelect,
   });
 
-  await appendActivity(
-    db,
-    updated.id,
-    input.activity,
-    input.actorId ?? nextCustomerId,
-  );
+  if (input.activityOnReuse !== false) {
+    await appendActivity(
+      db,
+      updated.id,
+      input.activity,
+      input.actorId ?? nextCustomerId,
+    );
+  }
   if (updated.workspaceId) {
     await ensureConversation(db, updated.workspaceId, updated.id);
   }

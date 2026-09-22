@@ -11,6 +11,7 @@ import {
 import { X } from "lucide-react";
 import { SignInForm } from "@/components/auth/SignInForm";
 import { SignUpForm } from "@/components/auth/SignUpForm";
+import { EXISTING_ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/auth/existing-account-message";
 import { hadClientSession } from "@/lib/auth/remembered-login";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { cn } from "@/lib/utils";
@@ -44,9 +45,15 @@ export function useAuthModal() {
 function AuthModalPanel() {
   const { open, mode, callbackUrl, closeAuth, setMode } = useAuthModal();
   const [loginAgain, setLoginAgain] = useState(false);
+  const [prefillEmail, setPrefillEmail] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setPrefillEmail(null);
+      setAuthNotice(null);
+      return;
+    }
     setLoginAgain(hadClientSession());
   }, [open]);
 
@@ -88,7 +95,10 @@ function AuthModalPanel() {
                 type="button"
                 role="tab"
                 aria-selected={mode === value}
-                onClick={() => setMode(value)}
+                onClick={() => {
+                  if (value === "sign-up") setAuthNotice(null);
+                  setMode(value);
+                }}
                 className={cn(
                   "rounded-lg px-3 py-2.5 text-sm transition",
                   mode === value
@@ -114,6 +124,8 @@ function AuthModalPanel() {
           {mode === "sign-in" ? (
             <SignInForm
               callbackUrl={callbackUrl}
+              initialEmail={prefillEmail}
+              notice={authNotice}
               onSuccess={closeAuth}
               onSwitchMode={() => setMode("sign-up")}
             />
@@ -122,6 +134,11 @@ function AuthModalPanel() {
               callbackUrl={callbackUrl}
               onSuccess={closeAuth}
               onSwitchMode={() => setMode("sign-in")}
+              onExistingAccount={(email) => {
+                setPrefillEmail(email);
+                setAuthNotice(EXISTING_ACCOUNT_SIGN_IN_MESSAGE);
+                setMode("sign-in");
+              }}
             />
           )}
         </div>

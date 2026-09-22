@@ -387,6 +387,8 @@ export async function captureWebsiteLead(input: {
   forceAssigneeId?: string | null;
   request?: Request | null;
   deps?: HostResolutionDeps;
+  /** Repeat capture of an existing Lead does not append another activity row. */
+  activityOnReuse?: boolean;
 }) {
   const isBuyer = input.isBuyer ?? true;
   const isSeller = input.isSeller ?? false;
@@ -435,6 +437,7 @@ export async function captureWebsiteLead(input: {
     contactConsentAt: new Date(),
     actorId: input.actorId ?? input.customerId,
     upsertCustomer: false,
+    activityOnReuse: input.activityOnReuse,
     activity: {
       type: "created",
       userId: input.actorId ?? input.customerId,

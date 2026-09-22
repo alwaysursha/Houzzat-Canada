@@ -4,6 +4,11 @@ import { AccountProfileHeader } from "@/components/account/AccountProfileHeader"
 import { AlertPreferencesForm } from "@/components/account/AlertPreferencesForm";
 import { BiometricsAccountToggle } from "@/components/account/BiometricsAccountToggle";
 import { VowAcceptCard } from "@/components/account/VowAcceptCard";
+import {
+  customerWorkspaceAppointmentWhere,
+  customerWorkspaceLeadWhere,
+  resolveAccountWorkspaceId,
+} from "@/lib/account/customer-workspace-scope";
 import { requireCustomerUser } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
 import { hasVowAccess } from "@/lib/vow";
@@ -29,7 +34,10 @@ type AccountStats = {
   loadError: boolean;
 };
 
-async function loadAccountStats(userId: string): Promise<AccountStats> {
+async function loadAccountStats(
+  userId: string,
+  workspaceId: string | null,
+): Promise<AccountStats> {
   try {
     const [
       savedCount,
@@ -49,8 +57,16 @@ async function loadAccountStats(userId: string): Promise<AccountStats> {
       prisma.propertyMonitor.count({ where: { userId } }),
       prisma.areaMonitor.count({ where: { userId } }),
       prisma.customerAlert.count({ where: { userId, readAt: null } }),
-      prisma.lead.count({ where: { customerId: userId } }),
-      prisma.appointment.count({ where: { customerId: userId } }),
+      workspaceId
+        ? prisma.lead.count({
+            where: customerWorkspaceLeadWhere(userId, workspaceId),
+          })
+        : Promise.resolve(0),
+      workspaceId
+        ? prisma.appointment.count({
+            where: customerWorkspaceAppointmentWhere(userId, workspaceId),
+          })
+        : Promise.resolve(0),
       prisma.listingView.count({ where: { userId } }),
       prisma.listingNote.findMany({
         where: { userId },
@@ -96,7 +112,8 @@ export default async function AccountPage() {
     redirect("/auth/sign-in?callbackUrl=/account");
   }
 
-  const stats = await loadAccountStats(user.id);
+  const workspaceId = await resolveAccountWorkspaceId();
+  const stats = await loadAccountStats(user.id, workspaceId);
   const {
     savedCount,
     searchCount,

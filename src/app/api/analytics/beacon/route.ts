@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ingestActivityBeacon, type BeaconPayload } from "@/lib/admin/activity";
 import { auth } from "@/lib/auth";
 import { scheduleNotifyCustomerCameOnline } from "@/lib/notifications/staff-events";
+import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
 
 export const runtime = "nodejs";
 
@@ -29,9 +30,17 @@ export async function POST(req: Request) {
       userAgent,
     });
     if (session?.user?.id) {
+      let workspaceId: string | null = null;
+      try {
+        const tenancy = await resolveRequestTenancy(req);
+        workspaceId = tenancy.ok ? tenancy.workspaceId : null;
+      } catch {
+        workspaceId = null;
+      }
       scheduleNotifyCustomerCameOnline(
         session.user.id,
         result.previousLastSeenAt,
+        workspaceId,
       );
     }
     return NextResponse.json({

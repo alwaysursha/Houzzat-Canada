@@ -199,6 +199,7 @@
     "lead-import-persist:selftest": "node --import tsx scripts/lead-import-persist-selftest.ts",
     "lead-classification-cutover:selftest": "node --import tsx scripts/lead-classification-cutover-selftest.ts",
     "lead-identity-routing:selftest": "node --import tsx scripts/lead-identity-routing-selftest.ts",
+    "customer-tenant-join:selftest": "node --import tsx scripts/customer-tenant-join-selftest.ts",
     "lead-info-updated:selftest": "node --import tsx scripts/lead-info-updated-selftest.ts",
     "lead-duplicate-reconciliation:selftest": "node --import tsx scripts/lead-duplicate-reconciliation-selftest.ts",
     "lead-duplicate-reconciliation:dryrun": "node --import tsx scripts/lead-duplicate-reconciliation-dryrun.ts",

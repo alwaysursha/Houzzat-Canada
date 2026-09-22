@@ -23,10 +23,14 @@ export function SignInForm({
   callbackUrl = null,
   onSuccess,
   onSwitchMode,
+  initialEmail = null,
+  notice = null,
 }: {
   callbackUrl?: string | null;
   onSuccess?: () => void;
   onSwitchMode?: () => void;
+  initialEmail?: string | null;
+  notice?: string | null;
 }) {
   const router = useRouter();
   const { confirm } = useSiteAlert();
@@ -41,6 +45,11 @@ export function SignInForm({
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      if (initialEmail) {
+        setEmail(initialEmail);
+        setLoginAgain(true);
+        return;
+      }
       const remembered = await loadRememberedLogin();
       if (cancelled || !remembered) {
         if (!cancelled) setLoginAgain(hadClientSession());
@@ -53,7 +62,7 @@ export function SignInForm({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialEmail]);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -148,6 +157,7 @@ export function SignInForm({
           </button>
         }
       />
+      {notice ? <p className="text-sm text-ink/70">{notice}</p> : null}
       {error ? <p className="text-sm text-danger">{error}</p> : null}
       <Button type="submit" className="w-full" disabled={pending} ref={submitRef}>
         {pending ? "Signing in…" : loginAgain ? "Login again" : "Sign in"}

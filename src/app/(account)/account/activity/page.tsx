@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { IntentTimeline } from "@/components/crm/IntentTimeline";
+import {
+  customerWorkspaceActivityWhere,
+  customerWorkspaceAppointmentWhere,
+  customerWorkspaceLeadWhere,
+  resolveAccountWorkspaceId,
+} from "@/lib/account/customer-workspace-scope";
 import { requireCustomerUser } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
 
@@ -10,23 +16,26 @@ export default async function ActivityPage() {
   const user = await requireCustomerUser();
   if (!user) redirect("/auth/sign-in?callbackUrl=/account/activity");
 
-  const [leads, appointments, activities] = await Promise.all([
-    prisma.lead.findMany({
-      where: { customerId: user.id },
-      orderBy: { createdAt: "desc" },
-      take: 30,
-    }),
-    prisma.appointment.findMany({
-      where: { customerId: user.id },
-      orderBy: { createdAt: "desc" },
-      take: 30,
-    }),
-    prisma.leadActivity.findMany({
-      where: { lead: { customerId: user.id } },
-      orderBy: { createdAt: "desc" },
-      take: 40,
-    }),
-  ]);
+  const workspaceId = await resolveAccountWorkspaceId();
+  const [leads, appointments, activities] = workspaceId
+    ? await Promise.all([
+        prisma.lead.findMany({
+          where: customerWorkspaceLeadWhere(user.id, workspaceId),
+          orderBy: { createdAt: "desc" },
+          take: 30,
+        }),
+        prisma.appointment.findMany({
+          where: customerWorkspaceAppointmentWhere(user.id, workspaceId),
+          orderBy: { createdAt: "desc" },
+          take: 30,
+        }),
+        prisma.leadActivity.findMany({
+          where: customerWorkspaceActivityWhere(user.id, workspaceId),
+          orderBy: { createdAt: "desc" },
+          take: 40,
+        }),
+      ])
+    : [[], [], []];
 
   return (
     <div className="space-y-8">

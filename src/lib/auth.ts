@@ -21,6 +21,7 @@ import {
 } from "@/lib/auth/verify-email-provider";
 import { VERIFY_EMAIL_PROVIDER_ID } from "@/lib/auth/verify-email-constants";
 import { isAdminRole, isAgentRole, resolveActiveMode } from "@/lib/roles";
+import { joinConsumerToTenantWorkspaceLead } from "@/lib/auth/join-tenant-workspace-lead";
 import { scheduleNotifyCustomerCameOnlineFromSignIn } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 import { validateTenantCredentialsAuth } from "@/lib/tenancy/tenant-auth-boundary";
@@ -397,9 +398,21 @@ export const {
               path: "/auth/sign-in",
               title: "Signed in",
             });
+            const joined = await joinConsumerToTenantWorkspaceLead({
+              user: {
+                id: dbUser.id,
+                email,
+                name: dbUser.name,
+                role: dbUser.role,
+                isBuyer: dbUser.isBuyer,
+                isSeller: dbUser.isSeller,
+              },
+              request: await buildSyntheticRequestFromHeaders(),
+            });
             scheduleNotifyCustomerCameOnlineFromSignIn(
               dbUser.id,
               dbUser.role,
+              joined.workspaceId,
             );
           } else {
             token.sub = user.id;
