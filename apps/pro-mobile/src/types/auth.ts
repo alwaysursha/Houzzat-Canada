@@ -9,6 +9,8 @@ export interface MobileUser {
   email: string;
   name?: string | null;
   avatarUrl?: string | null;
+  /** Home workspace from tenant login (null for PlatformOperator). */
+  workspaceId?: string | null;
 }
 
 export interface MobileAuthTokens {
@@ -22,10 +24,19 @@ export interface MobileAuthSession {
   tokens: MobileAuthTokens;
 }
 
+/** Pre-auth discover choice (password already verified server-side). */
+export interface MobileIdentityChoice {
+  workspaceId: string;
+  displayName: string;
+  slug: string;
+  role: string;
+}
+
 export type MobileNavigationState =
   | "BOOTING"
   | "SIGNED_OUT"
   | "PLATFORM_AUTHENTICATED"
+  | "IDENTITY_SELECTION"
   | "WORKSPACE_SELECTION"
   | "WORKSPACE_ACTIVE";
 
@@ -34,6 +45,8 @@ export interface MobileAuthState {
   user: MobileUser | null;
   tokens: MobileAuthTokens | null;
   memberships: MobileWorkspaceMembership[];
+  /** Pre-login multi-workspace choices from /auth/discover. */
+  identityChoices: MobileIdentityChoice[];
   activeMembership: MobileWorkspaceMembership | null;
   activeWorkspace: MobileWorkspace | null;
   error: string | null;

@@ -17,6 +17,7 @@ export const MOBILE_V2_API_BASE_URL = "https://app.houzzatpro.com/api/mobile/v2"
 export type ApiErrorCode =
   | "AUTH_REQUIRED"
   | "INVALID_CREDENTIALS"
+  | "RATE_LIMITED"
   | "WORKSPACE_FORBIDDEN"
   | "NOT_FOUND"
   | "VALIDATION_ERROR"
@@ -48,6 +49,15 @@ export interface BackendEnvelope<T> {
 export interface LoginResponseData {
   user: MobileUser;
   tokens: MobileAuthTokens;
+}
+
+export interface DiscoverResponseData {
+  matches: Array<{
+    workspaceId: string;
+    displayName: string;
+    slug: string;
+    role: string;
+  }>;
 }
 
 export interface WorkspacesResponseData {

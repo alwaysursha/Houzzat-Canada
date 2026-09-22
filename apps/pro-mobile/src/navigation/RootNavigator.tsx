@@ -4,7 +4,7 @@
  * Implements native state-driven & role-aware screen transitions:
  * - BOOTING -> SplashScreen
  * - SIGNED_OUT -> WelcomeScreen | SignInScreen
- * - PLATFORM_AUTHENTICATED / WORKSPACE_SELECTION -> WorkspaceSelectionScreen
+ * - PLATFORM_AUTHENTICATED / WORKSPACE_SELECTION / IDENTITY_SELECTION -> WorkspaceSelectionScreen
  * - WORKSPACE_ACTIVE:
  *     - role === "AGENT" (or "MEMBER") -> AgentShell (Home, Leads, Tasks, More)
  *     - role === "OWNER" | "ADMIN" -> CommandCentreShell (Overview, Team, Leads, More)
@@ -32,6 +32,7 @@ export function RootNavigator() {
       return <SignInScreen />;
 
     case "PLATFORM_AUTHENTICATED":
+    case "IDENTITY_SELECTION":
     case "WORKSPACE_SELECTION":
       return <WorkspaceSelectionScreen />;
 

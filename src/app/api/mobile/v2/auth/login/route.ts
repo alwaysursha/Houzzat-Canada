@@ -15,6 +15,10 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import {
+  allowMobileCredentialsAuthAttempt,
+  mobileCredentialsRateLimitedResponse,
+} from "@/lib/auth/mobile-credentials-rate-limit";
+import {
   createPlatformAccessToken,
   createMobileRefreshToken,
 } from "@/lib/mobile/v2/tokens";
@@ -66,6 +70,14 @@ export async function POST(request: Request) {
         },
         { status: 400 },
       );
+    }
+
+    const rate = allowMobileCredentialsAuthAttempt({
+      request,
+      email: parsed.data.email,
+    });
+    if (!rate.allowed) {
+      return mobileCredentialsRateLimitedResponse(rate.retryAfterSec);
     }
 
     const email = normalizeIdentityEmail(parsed.data.email);

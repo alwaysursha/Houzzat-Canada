@@ -7,6 +7,7 @@ import { StatusBar, StyleSheet, View } from "react-native";
 import { PushRegistrationBootstrap } from "./src/components/PushRegistrationBootstrap";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { AuthProvider } from "./src/state/AuthContext";
+import "./src/storage/hardware-secure-storage";
 
 export default function App() {
   return (

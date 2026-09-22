@@ -130,6 +130,7 @@ export class MobileApiClient {
         const code: ApiErrorCode =
           codeRaw === "AUTH_REQUIRED" ||
           codeRaw === "INVALID_CREDENTIALS" ||
+          codeRaw === "RATE_LIMITED" ||
           codeRaw === "WORKSPACE_FORBIDDEN" ||
           codeRaw === "NOT_FOUND" ||
           codeRaw === "VALIDATION_ERROR" ||
@@ -321,16 +322,38 @@ export class MobileApiClient {
     let code: ApiErrorCode = "SERVER_ERROR";
     let message = `Request failed with status ${status}`;
 
+    const bodyCode =
+      payload && typeof payload === "object" && "code" in payload
+        ? String((payload as { code: unknown }).code)
+        : "";
+
     if (payload && typeof payload === "object" && "message" in payload) {
       message = String((payload as { message: unknown }).message);
     }
 
-    if (status === 401) {
+    if (
+      bodyCode === "AUTH_REQUIRED" ||
+      bodyCode === "INVALID_CREDENTIALS" ||
+      bodyCode === "RATE_LIMITED" ||
+      bodyCode === "WORKSPACE_FORBIDDEN" ||
+      bodyCode === "NOT_FOUND" ||
+      bodyCode === "VALIDATION_ERROR" ||
+      bodyCode === "TIMEOUT" ||
+      bodyCode === "NETWORK_ERROR" ||
+      bodyCode === "SERVER_ERROR"
+    ) {
+      code = bodyCode;
+    } else if (status === 401) {
       code = "AUTH_REQUIRED";
     } else if (status === 403) {
       code = "WORKSPACE_FORBIDDEN";
     } else if (status === 404) {
       code = "NOT_FOUND";
+    } else if (status === 429) {
+      code = "RATE_LIMITED";
+      if (!message || message.startsWith("Request failed with status")) {
+        message = "Too many sign-in attempts. Please try again later.";
+      }
     } else if (status === 400 || status === 422) {
       code = "VALIDATION_ERROR";
     } else if (status >= 500) {

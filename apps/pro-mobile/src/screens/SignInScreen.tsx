@@ -62,6 +62,23 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
     });
   };
 
+  const handlePlatformSubmit = async () => {
+    if (!email.trim()) {
+      setLocalError("Please enter your email address");
+      return;
+    }
+    if (!password) {
+      setLocalError("Please enter your password");
+      return;
+    }
+    setLocalError(null);
+    await login({
+      email: email.trim(),
+      password,
+      mode: "platform",
+    });
+  };
+
   const activeError = localError || error;
 
   return (
@@ -207,6 +224,15 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
                   onPress={handleSubmit}
                 >
                   <Text style={styles.signInButtonText}>Sign In</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.platformLink}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    void handlePlatformSubmit();
+                  }}
+                >
+                  <Text style={styles.platformLinkText}>Platform admin sign-in</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -407,6 +433,16 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "700",
+  },
+  platformLink: {
+    marginTop: 14,
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  platformLinkText: {
+    color: "#64748B",
+    fontSize: 13,
+    fontWeight: "600",
   },
   footerNotice: {
     marginTop: 20,

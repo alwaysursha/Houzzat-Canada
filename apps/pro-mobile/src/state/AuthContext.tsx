@@ -10,9 +10,16 @@ import type { MobileWorkspace, MobileWorkspaceMembership } from "../types/worksp
 
 interface AuthContextValue extends MobileAuthState {
   controller: MobileAuthController;
-  login: (credentials: { email: string; password: string }) => Promise<{ ok: boolean; error?: string }>;
+  login: (credentials: {
+    email: string;
+    password: string;
+    mode?: "platform" | "tenant";
+    workspaceId?: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  selectIdentity: (workspaceId: string) => Promise<{ ok: boolean; error?: string }>;
   selectWorkspace: (workspaceId: string) => Promise<boolean>;
   changeWorkspace: () => Promise<void>;
+  cancelIdentitySelection: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -49,8 +56,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ...state,
     controller: mobileAuthController,
     login: (credentials) => mobileAuthController.login(credentials),
+    selectIdentity: (wsId) => mobileAuthController.selectIdentity(wsId),
     selectWorkspace: (wsId: string) => mobileAuthController.selectWorkspace(wsId),
     changeWorkspace: () => mobileAuthController.changeWorkspace(),
+    cancelIdentitySelection: () => mobileAuthController.cancelIdentitySelection(),
     signOut: () => mobileAuthController.signOut(),
   };
 

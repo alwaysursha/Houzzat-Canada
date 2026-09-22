@@ -1,8 +1,13 @@
 /**
- * Stage 4.0 — Native Workspace Selection Screen.
+ * Stage 4.0 / Phase 3 — Native Workspace / Identity Selection Screen.
  *
  * TENANCY GUARANTEE:
  * Operates purely on `workspaceId` (never hostname).
+ *
+ * Two modes:
+ * 1) IDENTITY_SELECTION — pre-auth discover matches (password already verified).
+ *    Selecting re-authenticates as that tenant User (never client-only ws switch).
+ * 2) WORKSPACE_SELECTION — post-auth memberships for the authenticated User.
  */
 
 import React from "react";
@@ -18,23 +23,41 @@ import {
 } from "react-native";
 import { HouzzatProWordmark } from "../components/BrandMark";
 import { useAuth } from "../state/AuthContext";
+import type { MobileIdentityChoice } from "../types/auth";
 import type { MobileWorkspaceMembership } from "../types/workspace";
 
 export function WorkspaceSelectionScreen() {
-  const { user, memberships, selectWorkspace, signOut } = useAuth();
+  const {
+    state,
+    user,
+    memberships,
+    identityChoices,
+    selectWorkspace,
+    selectIdentity,
+    signOut,
+    cancelIdentitySelection,
+    error,
+    isLoading,
+  } = useAuth();
 
-  const handleSignOut = () => {
+  const isIdentitySelection = state === "IDENTITY_SELECTION";
+
+  const handleCancel = () => {
+    if (isIdentitySelection) {
+      void cancelIdentitySelection();
+      return;
+    }
     Alert.alert(
       "Sign Out",
       "Are you sure you want to sign out of HouzzatPRO?",
       [
         { text: "Cancel", style: "cancel" },
         { text: "Sign Out", style: "destructive", onPress: () => signOut() },
-      ]
+      ],
     );
   };
 
-  const renderItem = ({ item }: { item: MobileWorkspaceMembership }) => {
+  const renderMembership = ({ item }: { item: MobileWorkspaceMembership }) => {
     const ws = item.workspace;
     const primaryColor = ws.brand?.primaryColor || "#0F6B4C";
 
@@ -43,6 +66,7 @@ export function WorkspaceSelectionScreen() {
         style={styles.card}
         activeOpacity={0.8}
         onPress={() => selectWorkspace(item.workspaceId)}
+        disabled={isLoading}
       >
         <View style={styles.cardHeader}>
           <View style={[styles.avatarBadge, { backgroundColor: primaryColor }]}>
@@ -67,30 +91,79 @@ export function WorkspaceSelectionScreen() {
     );
   };
 
+  const renderIdentity = ({ item }: { item: MobileIdentityChoice }) => (
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.8}
+      onPress={() => selectIdentity(item.workspaceId)}
+      disabled={isLoading}
+    >
+      <View style={styles.cardHeader}>
+        <View style={[styles.avatarBadge, { backgroundColor: "#0F6B4C" }]}>
+          <Text style={styles.avatarText}>
+            {item.displayName.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+        <View style={styles.headerText}>
+          <Text style={styles.workspaceName}>{item.displayName}</Text>
+          <Text style={styles.workspaceSlug}>{item.slug}</Text>
+        </View>
+        <View style={styles.roleBadge}>
+          <Text style={styles.roleText}>{item.role}</Text>
+        </View>
+      </View>
+      <View style={styles.cardFooter}>
+        <Text style={styles.idLabel}>ID: {item.workspaceId}</Text>
+        <Text style={styles.selectCta}>Continue →</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
       <View style={styles.topBar}>
         <HouzzatProWordmark size="sm" dark={true} />
-        <TouchableOpacity onPress={handleSignOut}>
-          <Text style={styles.signOutText}>Sign Out</Text>
+        <TouchableOpacity onPress={handleCancel}>
+          <Text style={styles.signOutText}>
+            {isIdentitySelection ? "Cancel" : "Sign Out"}
+          </Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.intro}>
-        <Text style={styles.title}>Select Workspace</Text>
-        <Text style={styles.subtitle}>
-          Signed in as <Text style={styles.userEmail}>{user?.email}</Text>
+        <Text style={styles.title}>
+          {isIdentitySelection ? "Select Workspace" : "Select Workspace"}
         </Text>
+        <Text style={styles.subtitle}>
+          {isIdentitySelection ? (
+            "Choose which brokerage identity to open"
+          ) : (
+            <>
+              Signed in as <Text style={styles.userEmail}>{user?.email}</Text>
+            </>
+          )}
+        </Text>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </View>
 
-      <FlatList
-        data={memberships}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
+      {isIdentitySelection ? (
+        <FlatList
+          data={identityChoices}
+          keyExtractor={(item) => item.workspaceId}
+          renderItem={renderIdentity}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      ) : (
+        <FlatList
+          data={memberships}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMembership}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
@@ -140,6 +213,12 @@ const styles = StyleSheet.create({
   userEmail: {
     color: "#1E2A38",
     fontWeight: "700",
+  },
+  errorText: {
+    marginTop: 8,
+    color: "#B91C1C",
+    fontSize: 13,
+    fontWeight: "600",
   },
   listContent: {
     gap: 12,

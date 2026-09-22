@@ -212,6 +212,7 @@
     "lead-duplicate-reconciliation:dryrun": "node --import tsx scripts/lead-duplicate-reconciliation-dryrun.ts",
     "manual-lead-isolation:selftest": "node --import tsx scripts/manual-lead-isolation-selftest.ts",
     "tenant-auth-isolation:selftest": "node --import tsx scripts/tenant-auth-isolation-selftest.ts",
+    "mobile-workspace-auth:selftest": "node --import tsx scripts/mobile-workspace-auth-selftest.ts",
     "tenant-authority:selftest": "node --import tsx scripts/tenant-authority-selftest.ts",
     "tenant-authority-shadow:selftest": "node --import tsx scripts/tenant-authority-shadow-selftest.ts",
     "platform-bootstrap:selftest": "node --import tsx scripts/platform-bootstrap-regression-selftest.ts",

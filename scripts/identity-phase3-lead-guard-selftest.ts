@@ -102,8 +102,11 @@ function testSourceWiring() {
   assert.ok(mobile.includes('mode: z.enum(["platform", "tenant"])'));
   assert.ok(mobile.includes("findTenantUserByEmail"));
   assert.ok(mobile.includes("platformOperator.findUnique"));
-  assert.ok(mobile.includes('mode: "platform"') || proMobile.includes('mode: "platform"'));
+  assert.ok(proMobile.includes("/auth/discover"));
+  assert.ok(proMobile.includes('mode: "tenant"'));
   assert.ok(proMobile.includes('mode: "platform"'));
+  assert.ok(proMobile.includes("IDENTITY_SELECTION"));
+  assert.ok(proMobile.includes("completeTenantLogin") || proMobile.includes('mode: "tenant"'));
 
   // No silent NULL-workspace password auth for tenants
   assert.equal(
