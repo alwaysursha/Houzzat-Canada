@@ -332,8 +332,12 @@ export async function updateWorkspaceAgentProfile(input: {
 
   const nextEmail = parsed.data.email;
   if (nextEmail !== normalizeStaffEmail(loaded.profile.email)) {
-    const conflict = await db.user.findUnique({
-      where: { email: nextEmail },
+    // Phase 3: email uniqueness is per-workspace, not global.
+    const conflict = await db.user.findFirst({
+      where: {
+        email: nextEmail,
+        workspaceId: input.ctx.workspaceId,
+      },
       select: { id: true },
     });
     if (conflict && conflict.id !== input.userId) {

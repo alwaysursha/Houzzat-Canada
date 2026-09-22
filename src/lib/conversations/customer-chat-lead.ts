@@ -658,6 +658,18 @@ async function ensureLeadExists(input: {
         customerUserId: input.user.id,
       });
     }
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code: unknown }).code === "CROSS_WORKSPACE_CUSTOMER_IDENTITY"
+    ) {
+      return fail("ROUTING_UNAVAILABLE", {
+        workspaceId: input.host.workspaceId,
+        workspaceSlug: input.host.workspaceSlug,
+        customerUserId: input.user.id,
+      });
+    }
     if (isAmbiguousLeadIdentityError(error)) {
       return fail("ROUTING_UNAVAILABLE", {
         workspaceId: input.host.workspaceId,

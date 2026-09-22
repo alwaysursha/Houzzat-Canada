@@ -35,6 +35,7 @@ import {
 } from "@/lib/sms/e164";
 import { VOW_VERSION } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import { resolveLeadCaptureTenancy } from "@/lib/agent/lead-intake";
 
 const basementSchema = z.enum(["finished", "unfinished", "none", "unknown"]);
 
@@ -134,14 +135,16 @@ async function ensureOwnerCustomer(opts: {
   marketingOptIn: boolean;
   acceptTerms: boolean;
   request: Request;
+  workspaceId: string;
 }): Promise<{
   userId: string;
   accountCreated: boolean;
   contactChanges: MaterialLeadInfoChange[];
 }> {
   const email = opts.email.toLowerCase();
-  const existing = await prisma.user.findUnique({
-    where: { email },
+  // Phase 3: never resolve User by global email — workspace-scoped only.
+  const existing = await prisma.user.findFirst({
+    where: { email, workspaceId: opts.workspaceId },
     select: { id: true, role: true, isBuyer: true, isSeller: true },
   });
 
@@ -189,6 +192,7 @@ async function ensureOwnerCustomer(opts: {
       name: opts.name,
       email,
       password,
+      workspaceId: opts.workspaceId,
       role: "SELLER",
       isBuyer: true,
       isSeller: true,
@@ -347,7 +351,30 @@ export async function POST(request: Request) {
     let contactChanges: MaterialLeadInfoChange[] = [];
     const sessionIsConsumer = isConsumerRole(session?.user?.role);
 
-    if (sessionIsConsumer && session?.user?.id && !isQuick && hasContact) {
+    const tenancy = await resolveLeadCaptureTenancy(request);
+    if (!tenancy.workspaceId) {
+      return NextResponse.json(
+        { error: "Valuation requires a verified tenant website." },
+        { status: 400 },
+      );
+    }
+
+    // Only attach the signed-in User when their home workspace matches this hostname.
+    let sessionCustomerUsable = false;
+    if (sessionIsConsumer && session?.user?.id) {
+      const sessionUser = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { workspaceId: true, role: true },
+      });
+      sessionCustomerUsable =
+        sessionUser?.workspaceId != null &&
+        sessionUser.workspaceId === tenancy.workspaceId;
+      if (!sessionCustomerUsable) {
+        customerId = undefined;
+      }
+    }
+
+    if (sessionCustomerUsable && session?.user?.id && !isQuick && hasContact) {
       const applied = await applyCanonicalCustomerContact(
         prisma,
         session.user.id,
@@ -370,7 +397,7 @@ export async function POST(request: Request) {
       }
       contactChanges = applied.changes;
       customerId = session.user.id;
-      const consumer = await prisma.user.findUnique({
+      const consumer = await prisma.user.findFirst({
         where: { id: session.user.id },
         select: { role: true },
       });
@@ -404,6 +431,7 @@ export async function POST(request: Request) {
         ),
         acceptTerms: data.acceptTerms !== false,
         request,
+        workspaceId: tenancy.workspaceId,
       });
       customerId = ensured.userId;
       accountCreated = ensured.accountCreated;

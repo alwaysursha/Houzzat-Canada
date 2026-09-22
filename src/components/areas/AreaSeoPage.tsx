@@ -59,7 +59,7 @@ export async function AreaSeoPage({ place }: Props) {
 
   const user = session?.user?.email
     ? await prisma.user.findUnique({
-        where: { email: session.user.email },
+        where: { id: session.user.id },
         select: { id: true, emailVerified: true, createdAt: true },
       })
     : null;

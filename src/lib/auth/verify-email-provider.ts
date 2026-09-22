@@ -10,6 +10,7 @@ export type VerifyEmailAuthUser = {
   isBuyer: boolean;
   isSeller: boolean;
   activeMode: ActiveMode;
+  workspaceId: string | null;
 };
 
 /** Auth.js authorize() target after a one-time verification token is consumed. */

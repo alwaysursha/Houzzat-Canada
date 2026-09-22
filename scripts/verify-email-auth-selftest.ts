@@ -41,16 +41,22 @@ function testProviderRegistered() {
 
 function testEmailLinkPointsToPage() {
   assert.ok(
-    emailVerification.includes('new URL("/auth/verify-email", SITE_URL)'),
+    emailVerification.includes('new URL("/auth/verify-email", origin)') ||
+      emailVerification.includes('new URL("/auth/verify-email", SITE_URL)'),
     "verification emails must link to inert verification page",
   );
   assert.ok(
-    !emailVerification.includes('new URL("/api/auth/verify-email", SITE_URL)'),
+    !emailVerification.includes('new URL("/api/auth/verify-email"'),
     "verification emails must not link directly to mutating API",
   );
   assert.ok(
     emailVerification.includes("safeInternalCallbackUrl"),
     "verification links must sanitize callbackUrl",
+  );
+  assert.ok(
+    emailVerification.includes("tenantBoundTokenIdentifier") ||
+      emailVerification.includes("email-verify"),
+    "Phase 3: verification tokens must be tenant-bound",
   );
 }
 

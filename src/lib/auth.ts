@@ -2,7 +2,6 @@ import NextAuth from "next-auth";
 import { cache } from "react";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import Credentials from "next-auth/providers/credentials";
-import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import type { Adapter } from "next-auth/adapters";
 import type { Provider } from "next-auth/providers";
@@ -20,13 +19,22 @@ import {
   authorizeEmailVerificationToken,
 } from "@/lib/auth/verify-email-provider";
 import { VERIFY_EMAIL_PROVIDER_ID } from "@/lib/auth/verify-email-constants";
+import {
+  findNullWorkspaceUserByEmail,
+  findTenantUserByEmail,
+  normalizeIdentityEmail,
+} from "@/lib/auth/workspace-identity";
+import {
+  assertTokenWorkspaceBinding,
+  resolveHostnameWorkspaceForAuth,
+} from "@/lib/auth/session-workspace-binding";
 import { isAdminRole, isAgentRole, resolveActiveMode } from "@/lib/roles";
-import { joinConsumerToTenantWorkspaceLead } from "@/lib/auth/join-tenant-workspace-lead";
 import { scheduleNotifyCustomerCameOnlineFromSignIn } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 import { validateTenantCredentialsAuth } from "@/lib/tenancy/tenant-auth-boundary";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
+import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
 import {
   AUTH_BUILD_MARKER,
   recordAuthServerDiagnostic,
@@ -40,7 +48,9 @@ const providers: Provider[] = [
       password: { label: "Password", type: "password" },
     },
     async authorize(credentials, request) {
-      const email = credentials?.email?.toString().trim().toLowerCase();
+      const email = normalizeIdentityEmail(
+        credentials?.email?.toString() ?? "",
+      );
       const password = credentials?.password?.toString() ?? "";
 
       if (!email || !password) {
@@ -71,21 +81,33 @@ const providers: Provider[] = [
         userAgent.includes("com.houzzat.pro");
 
       try {
-        const user = await prisma.user.findUnique({
-          where: { email },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            image: true,
-            role: true,
-            isBuyer: true,
-            isSeller: true,
-            activeMode: true,
-            password: true,
-            disabledAt: true,
-          },
-        });
+        const hostWs = await resolveHostnameWorkspaceForAuth(synthetic);
+        if (!hostWs.ok) {
+          recordAuthServerDiagnostic({
+            diagId,
+            timestamp: new Date().toISOString(),
+            buildMarker: AUTH_BUILD_MARKER,
+            incomingHost,
+            requestUrlHost,
+            resolvedAuthHostname,
+            isPlatformHost: isPlatform,
+            nativeShell: isNative,
+            userAgentSnippet: userAgent ? `${userAgent.slice(0, 40)}...` : null,
+            userFound: false,
+            passwordMatch: "SKIPPED",
+            tenantValidationInvoked: false,
+            tenantValidationReason: "unknown_tenant_workspace",
+            authorizeResult: "REJECT",
+            signInCallbackResult: "NOT_REACHED",
+            userIdMasked: null,
+          });
+          return null;
+        }
+
+        // Phase 3: tenant → (workspaceId, email); platform → NULL workspaceId only.
+        const user = hostWs.isPlatform
+          ? await findNullWorkspaceUserByEmail(email)
+          : await findTenantUserByEmail(hostWs.workspaceId, email);
 
         if (!user?.password || user.disabledAt) {
           recordAuthServerDiagnostic({
@@ -132,7 +154,6 @@ const providers: Provider[] = [
           return null;
         }
 
-        // Stage 3K.5.13 / Stage 3K.5.21: Hard Tenant Workspace Membership Boundary with Trusted Host Precedence
         const authCheck = await validateTenantCredentialsAuth({
           userId: user.id,
           userRole: user.role,
@@ -179,6 +200,9 @@ const providers: Provider[] = [
           isBuyer: user.isBuyer,
           isSeller: user.isSeller,
           activeMode: user.activeMode,
+          workspaceId: hostWs.isPlatform
+            ? null
+            : (authCheck.workspaceId ?? user.workspaceId ?? hostWs.workspaceId),
         };
       } catch (error) {
         console.error("[auth] authorize failed", error);
@@ -219,30 +243,20 @@ const providers: Provider[] = [
         isBuyer: user.isBuyer,
         isSeller: user.isSeller,
         activeMode: user.activeMode,
+        workspaceId: authCheck.workspaceId ?? user.workspaceId ?? null,
       };
     },
   }),
   mobileWorkspaceHandoffProvider,
 ];
 
-function cleanEnv(value: string | undefined): string | undefined {
-  return value?.trim().replace(/[\u200b-\u200d\ufeff]/g, "") || undefined;
-}
-
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  const googleClientId = cleanEnv(process.env.GOOGLE_CLIENT_ID);
-  const googleClientSecret = cleanEnv(process.env.GOOGLE_CLIENT_SECRET);
-
-  if (googleClientId && googleClientSecret) {
-    providers.unshift(
-      Google({
-        clientId: googleClientId,
-        clientSecret: googleClientSecret,
-        allowDangerousEmailAccountLinking: true,
-      }),
-    );
-  }
-}
+/**
+ * Phase 3 OAuth decision: DISABLE tenant Google/social OAuth for V1 launch.
+ * Do NOT enable allowDangerousEmailAccountLinking — it links by global email
+ * and would cross workspace boundaries once duplicate emails exist.
+ */
+void process.env.GOOGLE_CLIENT_ID;
+void process.env.GOOGLE_CLIENT_SECRET;
 
 const profileSelect = {
   id: true,
@@ -251,6 +265,7 @@ const profileSelect = {
   isBuyer: true,
   isSeller: true,
   activeMode: true,
+  workspaceId: true,
 } as const;
 
 function applyProfileToToken(
@@ -262,6 +277,8 @@ function applyProfileToToken(
     isBuyer?: boolean;
     isSeller?: boolean;
     activeMode?: ActiveMode;
+    workspaceId?: string | null;
+    isPlatformSession?: boolean;
     subVerifiedAt?: number;
   },
   dbUser: {
@@ -271,6 +288,7 @@ function applyProfileToToken(
     isBuyer: boolean;
     isSeller: boolean;
     activeMode: ActiveMode;
+    workspaceId: string | null;
   },
   email: string,
 ) {
@@ -281,6 +299,8 @@ function applyProfileToToken(
   token.isSeller = dbUser.isSeller;
   token.activeMode = resolveActiveMode(dbUser);
   if (dbUser.name) token.name = dbUser.name;
+  token.workspaceId = dbUser.workspaceId;
+  token.isPlatformSession = dbUser.workspaceId == null;
 }
 
 function isConsumerRoleSafe(role: Role) {
@@ -303,6 +323,13 @@ export const {
       if (account?.provider === "mobile-workspace-handoff") {
         return true;
       }
+      if (
+        account?.provider &&
+        account.provider !== "credentials" &&
+        account.provider !== VERIFY_EMAIL_PROVIDER_ID
+      ) {
+        return false;
+      }
       const synthetic = await buildSyntheticRequestFromHeaders();
       const authCheck = await validateTenantCredentialsAuth({
         userId: user.id,
@@ -323,27 +350,92 @@ export const {
     async jwt({ token, user, trigger, session }) {
       const emailFromUser =
         typeof user?.email === "string"
-          ? user.email.trim().toLowerCase()
+          ? normalizeIdentityEmail(user.email)
           : null;
       const emailFromToken =
         typeof token.email === "string"
-          ? token.email.trim().toLowerCase()
+          ? normalizeIdentityEmail(token.email)
           : null;
       const email = emailFromUser ?? emailFromToken;
 
+      if (user) {
+        const ws =
+          "workspaceId" in user
+            ? (user.workspaceId as string | null | undefined)
+            : undefined;
+        if (ws !== undefined) {
+          token.workspaceId = ws ?? null;
+          token.isPlatformSession = ws == null;
+        }
+      }
+
+      try {
+        const synthetic = await buildSyntheticRequestFromHeaders();
+        const hostWs = await resolveHostnameWorkspaceForAuth(synthetic);
+        if (hostWs.ok && token.sub) {
+          let binding = assertTokenWorkspaceBinding({
+            tokenWorkspaceId: token.workspaceId as string | null | undefined,
+            isPlatformSession: token.isPlatformSession as boolean | undefined,
+            hostnameIsPlatform: hostWs.isPlatform,
+            hostnameWorkspaceId: hostWs.workspaceId,
+          });
+
+          // Phase 3 cutover: legacy JWTs lack workspaceId. Never accept them unbound
+          // on a tenant host (cross-tenant bypass). Upgrade in-place ONLY when the
+          // DB User.workspaceId exactly matches the hostname workspace.
+          if (
+            !binding.ok &&
+            !hostWs.isPlatform &&
+            binding.reason === "missing_token_workspace"
+          ) {
+            const dbUser = await prisma.user.findUnique({
+              where: { id: token.sub as string },
+              select: profileSelect,
+            });
+            if (
+              dbUser?.workspaceId &&
+              dbUser.workspaceId === hostWs.workspaceId
+            ) {
+              applyProfileToToken(
+                token,
+                dbUser,
+                email ??
+                  (typeof token.email === "string"
+                    ? token.email
+                    : dbUser.id),
+              );
+              binding = {
+                ok: true,
+                isPlatform: false,
+                workspaceId: hostWs.workspaceId,
+              };
+            }
+          }
+
+          if (!binding.ok) {
+            console.warn(
+              "[auth] JWT workspace binding rejected",
+              binding.reason,
+            );
+            return null;
+          }
+        }
+      } catch (error) {
+        console.error("[auth] JWT workspace binding check failed", error);
+      }
+
       if (trigger === "update" && session && typeof session === "object") {
-        // Force-reload role / buyer-seller flags (e.g. after team invite accept).
         if (
           "refreshProfile" in session &&
           session.refreshProfile &&
-          email
+          token.sub
         ) {
           try {
             const dbUser = await prisma.user.findUnique({
-              where: { email },
+              where: { id: token.sub as string },
               select: profileSelect,
             });
-            if (dbUser) {
+            if (dbUser && email) {
               applyProfileToToken(token, dbUser, email);
               token.subVerifiedAt = Date.now();
             }
@@ -359,10 +451,10 @@ export const {
             : "activeMode" in session && session.activeMode === "BUYER"
               ? "BUYER"
               : null;
-        if (nextMode && email) {
+        if (nextMode && token.sub) {
           try {
             const dbUser = await prisma.user.findUnique({
-              where: { email },
+              where: { id: token.sub as string },
               select: profileSelect,
             });
             if (dbUser) {
@@ -387,7 +479,7 @@ export const {
       if (user && email) {
         try {
           const dbUser = await prisma.user.findUnique({
-            where: { email },
+            where: { id: user.id },
             select: profileSelect,
           });
           if (dbUser) {
@@ -398,21 +490,20 @@ export const {
               path: "/auth/sign-in",
               title: "Signed in",
             });
-            const joined = await joinConsumerToTenantWorkspaceLead({
-              user: {
-                id: dbUser.id,
-                email,
-                name: dbUser.name,
-                role: dbUser.role,
-                isBuyer: dbUser.isBuyer,
-                isSeller: dbUser.isSeller,
-              },
-              request: await buildSyntheticRequestFromHeaders(),
-            });
+            let onlineWorkspaceId: string | null = null;
+            const signInRequest = await buildSyntheticRequestFromHeaders();
+            if (signInRequest) {
+              try {
+                const tenancy = await resolveRequestTenancy(signInRequest);
+                onlineWorkspaceId = tenancy.ok ? tenancy.workspaceId : null;
+              } catch {
+                onlineWorkspaceId = null;
+              }
+            }
             scheduleNotifyCustomerCameOnlineFromSignIn(
               dbUser.id,
               dbUser.role,
-              joined.workspaceId,
+              onlineWorkspaceId,
             );
           } else {
             token.sub = user.id;
@@ -447,7 +538,7 @@ export const {
         return token;
       }
 
-      if (!email) {
+      if (!token.sub) {
         return token;
       }
 
@@ -455,7 +546,6 @@ export const {
         typeof token.subVerifiedAt === "number" ? token.subVerifiedAt : 0;
       const RECHECK_MS = 5 * 60 * 1000;
       const needsRecheck =
-        !token.sub ||
         token.isBuyer == null ||
         token.isSeller == null ||
         !token.activeMode ||
@@ -467,21 +557,18 @@ export const {
 
       try {
         const dbUser = await prisma.user.findUnique({
-          where: { email },
+          where: { id: token.sub as string },
           select: profileSelect,
         });
         if (!dbUser) {
-          console.warn("[auth] JWT email missing in DB; clearing session", email);
+          console.warn("[auth] JWT sub missing in DB; clearing session", token.sub);
           return null;
         }
-        if (token.sub !== dbUser.id) {
-          console.info("[auth] healed stale JWT sub", {
-            email,
-            from: token.sub,
-            to: dbUser.id,
-          });
-        }
-        applyProfileToToken(token, dbUser, email);
+        applyProfileToToken(
+          token,
+          dbUser,
+          email ?? (typeof token.email === "string" ? token.email : dbUser.id),
+        );
         token.subVerifiedAt = Date.now();
       } catch (error) {
         console.error("[auth] jwt reconcile failed", error);
@@ -497,6 +584,8 @@ export const {
         session.user.isSeller = Boolean(token.isSeller ?? false);
         session.user.activeMode =
           token.activeMode === "SELLER" ? "SELLER" : "BUYER";
+        session.user.workspaceId =
+          (token.workspaceId as string | null | undefined) ?? null;
         if (typeof token.email === "string" && token.email) {
           session.user.email = token.email;
         }

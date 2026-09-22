@@ -274,7 +274,7 @@ export async function applyCanonicalCustomerContact(
   userId: string,
   incoming: CanonicalCustomerIncoming,
 ): Promise<ApplyCanonicalCustomerContactResult> {
-  const current = await db.user.findUnique({
+  const current = await db.user.findFirst({
     where: { id: userId },
     select: {
       id: true,
@@ -285,6 +285,7 @@ export async function applyCanonicalCustomerContact(
       homeAddress: true,
       homeLat: true,
       homeLng: true,
+      workspaceId: true,
     },
   });
   if (!current) {
@@ -300,8 +301,11 @@ export async function applyCanonicalCustomerContact(
     patch.emailConflictCandidate &&
     patch.emailConflictCandidate !== current.email.trim().toLowerCase()
   ) {
-    const taken = await db.user.findUnique({
-      where: { email: patch.emailConflictCandidate },
+    const taken = await db.user.findFirst({
+      where: {
+        email: patch.emailConflictCandidate,
+        workspaceId: current.workspaceId,
+      },
       select: { id: true },
     });
     if (taken && taken.id !== userId) {

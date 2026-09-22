@@ -219,7 +219,7 @@ export function parseTenantCanaryPushDeliveryBody(
 async function resolveTenantCanaryPushDeliveryContext(
   prisma: PrismaClient,
 ): Promise<TenantCanaryPushDeliveryContext> {
-  const [workspace, houzzat, agentB] = await Promise.all([
+  const [workspace, houzzat] = await Promise.all([
     prisma.workspace.findUnique({
       where: { slug: TENANT_CANARY_WORKSPACE_SLUG },
       select: {
@@ -232,15 +232,6 @@ async function resolveTenantCanaryPushDeliveryContext(
       where: { slug: HOUZZAT_WORKSPACE_SLUG },
       select: { id: true },
     }),
-    prisma.user.findUnique({
-      where: { email: TENANT_CANARY_AGENT_B_EMAIL },
-      select: {
-        id: true,
-        email: true,
-        disabledAt: true,
-        agentProfile: { select: { active: true } },
-      },
-    }),
   ]);
 
   if (!houzzat) {
@@ -249,6 +240,20 @@ async function resolveTenantCanaryPushDeliveryContext(
   if (!workspace || workspace.status !== "ACTIVE") {
     throw new Error(`Workspace "${TENANT_CANARY_WORKSPACE_SLUG}" not ACTIVE`);
   }
+
+  const agentB = await prisma.user.findFirst({
+    where: {
+      email: TENANT_CANARY_AGENT_B_EMAIL,
+      workspaceId: workspace.id,
+    },
+    select: {
+      id: true,
+      email: true,
+      disabledAt: true,
+      agentProfile: { select: { active: true } },
+    },
+  });
+
   if (!agentB || agentB.disabledAt) {
     throw new Error(`Agent B user missing or disabled`);
   }
@@ -370,7 +375,7 @@ async function resolveAgentBOnlyPhysicalTarget(
     throw new Error(`unexpected staff push shell=${shell}`);
   }
 
-  const user = await prisma.user.findUnique({
+  const user = await prisma.user.findFirst({
     where: { id: context.agentBId },
     select: { pushNotificationPrefs: true },
   });

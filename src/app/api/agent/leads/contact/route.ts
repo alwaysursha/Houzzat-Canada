@@ -69,8 +69,8 @@ export async function PATCH(request: Request) {
   }
 
   if (nextEmail && nextEmail !== lead.customer.email) {
-    const taken = await prisma.user.findUnique({
-      where: { email: nextEmail },
+    const taken = await prisma.user.findFirst({
+      where: { email: nextEmail, workspaceId: lead.workspaceId },
       select: { id: true },
     });
     if (taken && taken.id !== lead.customer.id) {

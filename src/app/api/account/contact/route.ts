@@ -91,8 +91,11 @@ export async function PATCH(request: Request) {
     }
 
     if (nextEmail && nextEmail !== user.email) {
-      const taken = await prisma.user.findUnique({
-        where: { email: nextEmail },
+      const taken = await prisma.user.findFirst({
+        where: {
+          email: nextEmail,
+          workspaceId: user.workspaceId,
+        },
         select: { id: true },
       });
       if (taken && taken.id !== user.id) {
@@ -100,7 +103,7 @@ export async function PATCH(request: Request) {
       }
     }
 
-    const current = await prisma.user.findUnique({
+    const current = await prisma.user.findFirst({
       where: { id: user.id },
       select: { email: true, phone: true, phoneE164: true },
     });
@@ -116,7 +119,7 @@ export async function PATCH(request: Request) {
       return reply(applied.status, { error: applied.error });
     }
 
-    const updated = await prisma.user.findUnique({
+    const updated = await prisma.user.findFirst({
       where: { id: user.id },
       select: {
         email: true,

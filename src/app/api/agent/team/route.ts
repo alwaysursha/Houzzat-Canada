@@ -553,8 +553,10 @@ export async function POST(request: Request) {
       data: { expiresAt },
     });
 
-    const existing = await prisma.user.findUnique({
-      where: { email: invite.email },
+    const existing = await prisma.user.findFirst({
+      where: ctx.workspaceId
+        ? { email: invite.email, workspaceId: ctx.workspaceId }
+        : { email: invite.email, workspaceId: null },
       select: { role: true, isBuyer: true, isSeller: true },
     });
     const consumerLabels: Array<"buyer" | "seller"> = [];
@@ -690,8 +692,10 @@ export async function POST(request: Request) {
     },
   });
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
+  const existingUser = await prisma.user.findFirst({
+    where: ctx.workspaceId
+      ? { email, workspaceId: ctx.workspaceId }
+      : { email, workspaceId: null },
     select: { id: true, role: true, isBuyer: true, isSeller: true },
   });
   let alreadyMember = false;

@@ -20,10 +20,10 @@ type Params = { params: Promise<{ mlsNumber: string }> };
 
 async function canForceEnrich(): Promise<boolean> {
   const session = await auth();
-  const email = session?.user?.email;
-  if (!email) return false;
+  const userId = session?.user?.id;
+  if (!userId) return false;
   const user = await prisma.user.findUnique({
-    where: { email },
+    where: { id: userId },
     select: { id: true, emailVerified: true, createdAt: true },
   });
   return Boolean(user && hasFullClientAccess(user));

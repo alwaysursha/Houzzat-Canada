@@ -13,6 +13,7 @@ const ownerUserSelect = {
   isBuyer: true,
   isSeller: true,
   activeMode: true,
+  workspaceId: true,
 } satisfies Prisma.UserSelect;
 
 export type OwnerUser = {
@@ -25,13 +26,14 @@ export type OwnerUser = {
   isBuyer: boolean;
   isSeller: boolean;
   activeMode: ActiveMode;
+  workspaceId: string | null;
 };
 
 export async function requireOwnerUser(): Promise<OwnerUser | null> {
   const session = await auth();
   if (!session?.user?.email) return null;
   const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+    where: { id: session.user.id },
     select: ownerUserSelect,
   });
   if (!user) return null;
@@ -50,7 +52,7 @@ export async function requireAdminUser(): Promise<OwnerUser | null> {
   const session = await auth();
   if (!session?.user?.email) return null;
   const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+    where: { id: session.user.id },
     select: ownerUserSelect,
   });
   if (!user || user.role !== "ADMIN") return null;

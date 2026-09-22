@@ -294,14 +294,16 @@ function testSourceWiring() {
 
   // Auth.js credentials authorize + signIn callback wire boundary
   assert.ok(authSource.includes("validateTenantCredentialsAuth"));
-  assert.ok(authSource.includes("Stage 3K.5.13"));
+  assert.ok(authSource.includes("findTenantUserByEmail"));
   assert.ok(authSource.includes("callbacks:"));
   assert.ok(authSource.includes("async signIn({ user, account })"));
 
   // Boundary logic enforces hostname -> workspace -> active membership
+  // Phase 3: consumers require matching User.workspaceId (no global consumer exception)
   assert.ok(boundarySource.includes("isPlatformMobileBootstrapHost"));
   assert.ok(boundarySource.includes("no_active_membership"));
   assert.ok(boundarySource.includes("workspace: { status: \"ACTIVE\" }"));
+  assert.ok(boundarySource.includes("user.workspaceId === resolvedWorkspaceId"));
 
   // Admin surface modes fail closed
   assert.ok(adminPageSource.includes("resolveAdminPageSurface"));

@@ -48,12 +48,12 @@ export async function loadHomeCustomerShell(): Promise<HomeCustomerShellPayload>
   };
 
   const session = await auth();
-  const email = session?.user?.email?.trim().toLowerCase();
-  if (!email) return empty;
+  const userId = session?.user?.id;
+  if (!userId) return empty;
 
   const user = await prisma.user
     .findUnique({
-      where: { email },
+      where: { id: userId },
       select: {
         id: true,
         role: true,

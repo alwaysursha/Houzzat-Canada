@@ -56,12 +56,13 @@ export async function provisionPlatformMasterAdmin(
     throw new Error("dryRun requested — refusing writes");
   }
 
-  const user = await db.user.findUnique({
-    where: { email },
+  // Platform operators are NULL-workspace Users only — never tenant identities.
+  const user = await db.user.findFirst({
+    where: { email, workspaceId: null },
     select: { id: true, email: true, role: true },
   });
   if (!user || !user.email) {
-    throw new Error(`User not found for email=${email}`);
+    throw new Error(`NULL-workspace User not found for email=${email}`);
   }
 
   const existing = await db.platformOperator.findUnique({
@@ -131,7 +132,7 @@ export async function provisionPlatformMasterAdmin(
     );
   }
 
-  const userAfter = await db.user.findUnique({
+  const userAfter = await db.user.findFirst({
     where: { id: user.id },
     select: { role: true },
   });

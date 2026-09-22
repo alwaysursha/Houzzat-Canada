@@ -6,14 +6,19 @@ import { isResendConfigured } from "@/lib/email/config";
 import { prisma } from "@/lib/prisma";
 import { resolveTrustedRequestOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
+import {
+  findTenantUserByEmail,
+  normalizeIdentityEmail,
+  tenantBoundTokenIdentifier,
+  parseTenantBoundTokenIdentifier,
+} from "@/lib/auth/workspace-identity";
 
 export const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 export const PASSWORD_RESET_COOLDOWN_MS = 60 * 1000;
 export const PASSWORD_RESET_MIN_LENGTH = 8;
-const RESET_IDENTIFIER_PREFIX = "password-reset:";
 
-export function passwordResetIdentifier(email: string) {
-  return `${RESET_IDENTIFIER_PREFIX}${email.trim().toLowerCase()}`;
+export function passwordResetIdentifier(workspaceId: string, email: string) {
+  return tenantBoundTokenIdentifier("password-reset", workspaceId, email);
 }
 
 export function hashPasswordResetToken(token: string) {
@@ -27,21 +32,23 @@ export function isEmailSendConfigured() {
 export async function resolvePasswordResetContext(request: Request): Promise<{
   origin: string;
   siteName: string;
+  workspaceId: string | null;
 }> {
   const tenancy = await resolveRequestTenancy(request);
   if (tenancy.ok) {
     return {
       origin: tenancy.origin,
       siteName: tenancy.brand.displayName || SITE_NAME,
+      workspaceId: tenancy.workspaceId,
     };
   }
 
   const trusted = resolveTrustedRequestOrigin(request);
   if (trusted.ok) {
-    return { origin: trusted.origin, siteName: SITE_NAME };
+    return { origin: trusted.origin, siteName: SITE_NAME, workspaceId: null };
   }
 
-  return { origin: SITE_URL, siteName: SITE_NAME };
+  return { origin: SITE_URL, siteName: SITE_NAME, workspaceId: null };
 }
 
 export function passwordResetLink(token: string, origin: string) {
@@ -50,11 +57,14 @@ export function passwordResetLink(token: string, origin: string) {
   return url.toString();
 }
 
-export async function createPasswordResetToken(email: string) {
-  const normalized = email.trim().toLowerCase();
+export async function createPasswordResetToken(
+  workspaceId: string,
+  email: string,
+) {
+  const normalized = normalizeIdentityEmail(email);
   const raw = randomBytes(32).toString("hex");
   const token = hashPasswordResetToken(raw);
-  const identifier = passwordResetIdentifier(normalized);
+  const identifier = passwordResetIdentifier(workspaceId, normalized);
   const expires = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
 
   await prisma.verificationToken.deleteMany({ where: { identifier } });
@@ -62,45 +72,42 @@ export async function createPasswordResetToken(email: string) {
     data: { identifier, token, expires },
   });
 
-  return { raw, expires, email: normalized };
+  return { raw, expires, email: normalized, workspaceId };
 }
 
 /**
  * Create a reset token and email it when the account can use a password.
  * Always opaque to the caller — missing/disabled/OAuth-only accounts skip send.
+ * Tenant-scoped: only the User in THIS workspace is affected.
  */
 export async function requestPasswordReset(input: {
   email: string;
   origin: string;
   siteName?: string;
+  workspaceId: string;
 }): Promise<"sent" | "skipped" | "failed"> {
-  const normalized = input.email.trim().toLowerCase();
-  const user = await prisma.user.findUnique({
-    where: { email: normalized },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      password: true,
-      disabledAt: true,
-    },
-  });
+  const normalized = normalizeIdentityEmail(input.email);
+  const user = await findTenantUserByEmail(input.workspaceId, normalized);
 
   if (!user?.password || user.disabledAt) {
     return "skipped";
   }
 
   if (!isEmailSendConfigured()) {
-    const { raw } = await createPasswordResetToken(normalized);
+    const { raw } = await createPasswordResetToken(
+      input.workspaceId,
+      normalized,
+    );
     const link = passwordResetLink(raw, input.origin);
     console.info("[password-reset:stub] RESEND_API_KEY missing", {
       email: normalized,
+      workspaceId: input.workspaceId,
       resetUrl: link,
     });
     return "skipped";
   }
 
-  const { raw } = await createPasswordResetToken(normalized);
+  const { raw } = await createPasswordResetToken(input.workspaceId, normalized);
   const link = passwordResetLink(raw, input.origin);
   return sendPasswordResetEmail({
     email: user.email,
@@ -126,7 +133,7 @@ export async function peekPasswordResetToken(
   const row = await prisma.verificationToken.findUnique({
     where: { token: hashPasswordResetToken(trimmed) },
   });
-  if (!row || !row.identifier.startsWith(RESET_IDENTIFIER_PREFIX)) {
+  if (!row || !parseTenantBoundTokenIdentifier("password-reset", row.identifier)) {
     return { ok: false, error: "This reset link is invalid or has expired." };
   }
   if (row.expires.getTime() < Date.now()) {
@@ -157,7 +164,10 @@ export async function consumePasswordResetToken(
   const row = await prisma.verificationToken.findUnique({
     where: { token: hashedToken },
   });
-  if (!row || !row.identifier.startsWith(RESET_IDENTIFIER_PREFIX)) {
+  const parsed = row
+    ? parseTenantBoundTokenIdentifier("password-reset", row.identifier)
+    : null;
+  if (!row || !parsed) {
     return { ok: false, error: "This reset link is invalid or has expired." };
   }
   if (row.expires.getTime() < Date.now()) {
@@ -167,11 +177,7 @@ export async function consumePasswordResetToken(
     return { ok: false, error: "This reset link is invalid or has expired." };
   }
 
-  const email = row.identifier.slice(RESET_IDENTIFIER_PREFIX.length);
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, email: true, disabledAt: true },
-  });
+  const user = await findTenantUserByEmail(parsed.workspaceId, parsed.email);
   if (!user) {
     await prisma.verificationToken.delete({ where: { token: hashedToken } }).catch(
       () => undefined,
@@ -195,7 +201,9 @@ export async function consumePasswordResetToken(
       data: { password },
     }),
     prisma.verificationToken.deleteMany({
-      where: { identifier: passwordResetIdentifier(email) },
+      where: {
+        identifier: passwordResetIdentifier(parsed.workspaceId, parsed.email),
+      },
     }),
     prisma.session.deleteMany({ where: { userId: user.id } }),
   ]);

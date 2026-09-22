@@ -5,12 +5,13 @@ import {
   requestPasswordReset,
   resolvePasswordResetContext,
 } from "@/lib/auth/password-reset";
+import { normalizeIdentityEmail } from "@/lib/auth/workspace-identity";
 
 const schema = z.object({
   email: z.string().trim().email().max(254),
 });
 
-const lastSentByEmail = new Map<string, number>();
+const lastSentByKey = new Map<string, number>();
 
 function opaqueOk() {
   return NextResponse.json({ ok: true });
@@ -32,8 +33,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const email = parsed.data.email.trim().toLowerCase();
-  const last = lastSentByEmail.get(email) ?? 0;
+  const email = normalizeIdentityEmail(parsed.data.email);
+  const { origin, siteName, workspaceId } =
+    await resolvePasswordResetContext(request);
+
+  // Phase 3: reset only on tenant hosts with a resolved workspace.
+  if (!workspaceId) {
+    return opaqueOk();
+  }
+
+  const cooldownKey = `${workspaceId}:${email}`;
+  const last = lastSentByKey.get(cooldownKey) ?? 0;
   if (Date.now() - last < PASSWORD_RESET_COOLDOWN_MS) {
     return NextResponse.json(
       { error: "Please wait a minute before requesting another email." },
@@ -41,11 +51,10 @@ export async function POST(request: Request) {
     );
   }
 
-  lastSentByEmail.set(email, Date.now());
+  lastSentByKey.set(cooldownKey, Date.now());
 
-  const { origin, siteName } = await resolvePasswordResetContext(request);
   try {
-    await requestPasswordReset({ email, origin, siteName });
+    await requestPasswordReset({ email, origin, siteName, workspaceId });
   } catch (error) {
     console.error("[password-reset] request failed", error);
   }

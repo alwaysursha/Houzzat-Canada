@@ -16,6 +16,7 @@ import {
   AmbiguousLeadIdentityError,
   normalizeLeadEmail,
 } from "../src/lib/agent/lead-identity";
+import { CrossWorkspaceCustomerIdentityError } from "../src/lib/agent/lead-customer-workspace-guard";
 import {
   resetLeadIdentityLocksForTests,
   resolveOrCreateWorkspaceLead,
@@ -44,6 +45,7 @@ type FakeUser = {
   isBuyer: boolean;
   isSeller: boolean;
   activeMode: string;
+  workspaceId: string | null;
 };
 
 type FakeLead = {
@@ -140,6 +142,34 @@ function createFakeDb(
         if (!user) return null;
         return pickSelect(user as unknown as Record<string, unknown>, select);
       },
+      async findFirst({
+        where,
+        select,
+      }: {
+        where?: {
+          email?: string;
+          id?: string;
+          workspaceId?: string | null;
+          phoneE164?: string;
+        };
+        select?: Record<string, unknown>;
+      }) {
+        const user = state.users.find((u) => {
+          if (where?.id && u.id !== where.id) return false;
+          if (where?.email && u.email !== where.email) return false;
+          if (
+            where &&
+            Object.prototype.hasOwnProperty.call(where, "workspaceId") &&
+            u.workspaceId !== where.workspaceId
+          ) {
+            return false;
+          }
+          if (where?.phoneE164 && u.phoneE164 !== where.phoneE164) return false;
+          return true;
+        });
+        if (!user) return null;
+        return pickSelect(user as unknown as Record<string, unknown>, select);
+      },
       async findMany({
         where,
         select,
@@ -162,7 +192,12 @@ function createFakeDb(
         select?: Record<string, unknown>;
       }) {
         const email = String(data.email).toLowerCase();
-        if (state.users.some((u) => u.email === email)) {
+        const workspaceId = (data.workspaceId as string | null) ?? null;
+        if (
+          state.users.some(
+            (u) => u.email === email && u.workspaceId === workspaceId,
+          )
+        ) {
           const err = new Error("Unique") as Error & { code: string };
           err.code = "P2002";
           throw err;
@@ -177,6 +212,7 @@ function createFakeDb(
           isBuyer: Boolean(data.isBuyer),
           isSeller: Boolean(data.isSeller),
           activeMode: String(data.activeMode ?? "BUYER"),
+          workspaceId,
         };
         state.users.push(user);
         return pickSelect(user as unknown as Record<string, unknown>, select);
@@ -382,6 +418,7 @@ async function seedBuyerLead(state: FakeState, opts?: { workspaceId?: string }) 
     isBuyer: true,
     isSeller: false,
     activeMode: "BUYER",
+    workspaceId,
   };
   user.email = `omer.${state.next}@example.com`;
   state.users.push(user);
@@ -787,10 +824,38 @@ async function testCrossWorkspaceIsolation() {
   resetLeadIdentityLocksForTests();
   const state = emptyState();
   const seeded = await seedBuyerLead(state, { workspaceId: WS_A });
+  await assert.rejects(
+    () =>
+      capture(state, {
+        workspaceId: WS_B,
+        customerId: seeded.user.id,
+        email: seeded.user.email,
+        isBuyer: true,
+        source: "SIGNUP",
+        assigneeId: AGENT_ALI,
+      }),
+    CrossWorkspaceCustomerIdentityError,
+  );
+  assert.equal(state.leads.length, 1);
+
+  // Legitimate separate identity in WS_B (different User, same email allowed)
+  const otherUser: FakeUser = {
+    id: id("user", state),
+    email: seeded.user.email,
+    name: seeded.user.name,
+    phone: seeded.user.phone,
+    phoneE164: seeded.user.phoneE164,
+    role: "BUYER",
+    isBuyer: true,
+    isSeller: false,
+    activeMode: "BUYER",
+    workspaceId: WS_B,
+  };
+  state.users.push(otherUser);
   const other = await capture(state, {
     workspaceId: WS_B,
-    customerId: seeded.user.id,
-    email: seeded.user.email,
+    customerId: otherUser.id,
+    email: otherUser.email,
     isBuyer: true,
     source: "SIGNUP",
     assigneeId: AGENT_ALI,
@@ -816,6 +881,7 @@ async function testAmbiguousIdentityFailsClosed() {
       isBuyer: true,
       isSeller: false,
       activeMode: "BUYER",
+      workspaceId: WS_A,
     },
     {
       id: "user_phone",
@@ -827,6 +893,7 @@ async function testAmbiguousIdentityFailsClosed() {
       isBuyer: true,
       isSeller: false,
       activeMode: "BUYER",
+      workspaceId: WS_A,
     },
   );
   await assert.rejects(

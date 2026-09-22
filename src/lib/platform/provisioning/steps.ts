@@ -391,8 +391,8 @@ async function stepCreateOwnerMembership(ctx: StepContext): Promise<void> {
   const contactName =
     ctx.subscription.offer!.prospect.contactName?.trim() || null;
 
-  let user = await ctx.db.user.findUnique({
-    where: { email: acceptedEmail },
+  let user = await ctx.db.user.findFirst({
+    where: { email: acceptedEmail, workspaceId: ctx.workspaceId },
     select: {
       id: true,
       role: true,
@@ -411,6 +411,7 @@ async function stepCreateOwnerMembership(ctx: StepContext): Promise<void> {
     user = await ctx.db.user.create({
       data: {
         email: acceptedEmail,
+        workspaceId: ctx.workspaceId,
         name: contactName,
         role: "AGENT",
         password: null,

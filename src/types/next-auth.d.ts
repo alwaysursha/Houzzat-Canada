@@ -11,6 +11,8 @@ declare module "next-auth" {
       isBuyer: boolean;
       isSeller: boolean;
       activeMode: ActiveMode;
+      /** Tenant home workspace; null for platform sessions. */
+      workspaceId?: string | null;
     };
   }
 
@@ -19,6 +21,7 @@ declare module "next-auth" {
     isBuyer?: boolean;
     isSeller?: boolean;
     activeMode?: ActiveMode;
+    workspaceId?: string | null;
   }
 }
 
@@ -29,6 +32,9 @@ declare module "next-auth/jwt" {
     isSeller?: boolean;
     activeMode?: ActiveMode;
     subVerifiedAt?: number;
+    /** Bound at sign-in; must match hostname workspace on tenant hosts. */
+    workspaceId?: string | null;
+    isPlatformSession?: boolean;
   }
 }
 

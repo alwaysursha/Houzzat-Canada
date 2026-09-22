@@ -41,6 +41,8 @@ export async function provisionPasswordlessAgentFromInvite(
   input: {
     email: string;
     profile: ParsedAdminManagedAgentProfile;
+    /** Phase 3: tenant identity home workspace (required for tenant invites). */
+    workspaceId: string;
     ip?: string;
     userAgent?: string;
   },
@@ -51,6 +53,7 @@ export async function provisionPasswordlessAgentFromInvite(
       name: input.profile.displayName,
       email: input.email,
       password: null,
+      workspaceId: input.workspaceId,
       role: "AGENT",
       isBuyer: false,
       isSeller: false,
@@ -84,6 +87,8 @@ export async function createAgentAccountFromInvite(
     name: string;
     email: string;
     password: string;
+    /** Phase 3: tenant identity home workspace (required for tenant invites). */
+    workspaceId: string;
     ip?: string;
     userAgent?: string;
     profile?: ParsedAdminManagedAgentProfile | null;
@@ -97,6 +102,7 @@ export async function createAgentAccountFromInvite(
       name: input.profile?.displayName || input.name,
       email: input.email,
       password: hashed,
+      workspaceId: input.workspaceId,
       role: "AGENT",
       isBuyer: false,
       isSeller: false,

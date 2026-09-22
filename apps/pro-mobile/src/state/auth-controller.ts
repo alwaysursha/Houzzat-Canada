@@ -382,6 +382,7 @@ export class MobileAuthController {
       const loginRes = await mobileApiClient.post<BackendEnvelope<LoginResponseData>>("/auth/login", {
         email: credentials.email,
         password: credentials.password,
+        mode: "platform",
       }, { skipAuth: true });
 
       if (!loginRes.ok) {

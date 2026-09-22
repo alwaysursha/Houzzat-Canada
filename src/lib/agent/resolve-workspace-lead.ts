@@ -26,6 +26,10 @@ import {
   normalizeLeadEmail,
   normalizeLeadPhoneE164,
 } from "@/lib/agent/lead-identity";
+import {
+  assertUserMayBeLeadCustomer,
+  CrossWorkspaceCustomerIdentityError,
+} from "@/lib/agent/lead-customer-workspace-guard";
 import { selectPrimaryLeadsByCustomer } from "@/lib/agent/select-primary-leads-by-customer";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
@@ -34,6 +38,7 @@ import {
   type LeadConversationDb,
 } from "@/lib/conversations/lead-conversation";
 
+export { CrossWorkspaceCustomerIdentityError };
 const leadIdentitySelect = {
   id: true,
   workspaceId: true,
@@ -133,10 +138,11 @@ async function listWorkspaceLeadsForCustomer(
 
 async function findUserByEmail(
   db: PrismaClient,
+  workspaceId: string,
   email: string,
 ): Promise<{ id: string; phoneE164: string | null } | null> {
-  return db.user.findUnique({
-    where: { email },
+  return db.user.findFirst({
+    where: { email, workspaceId },
     select: { id: true, phoneE164: true },
   });
 }
@@ -189,7 +195,7 @@ export async function matchWorkspaceLeadIdentity(
 
   let emailUserId: string | null = null;
   if (email) {
-    const user = await findUserByEmail(db, email);
+    const user = await findUserByEmail(db, workspaceId, email);
     emailUserId = user?.id ?? null;
   }
 
@@ -244,6 +250,7 @@ export async function matchWorkspaceLeadIdentity(
 async function findOrCreateCustomerUser(
   db: PrismaClient,
   input: {
+    workspaceId: string;
     email: string;
     name?: string | null;
     phone?: string | null;
@@ -251,8 +258,8 @@ async function findOrCreateCustomerUser(
     isSeller: boolean;
   },
 ): Promise<string> {
-  const existing = await db.user.findUnique({
-    where: { email: input.email },
+  const existing = await db.user.findFirst({
+    where: { email: input.email, workspaceId: input.workspaceId },
     select: { id: true, phone: true, name: true },
   });
   if (existing) return existing.id;
@@ -266,6 +273,7 @@ async function findOrCreateCustomerUser(
       const created = await db.user.create({
         data: {
           email: input.email,
+          workspaceId: input.workspaceId,
           name: input.name?.trim() || null,
           role: "BUYER",
           isBuyer: input.isBuyer,
@@ -280,6 +288,7 @@ async function findOrCreateCustomerUser(
     const created = await db.user.create({
       data: {
         email: input.email,
+        workspaceId: input.workspaceId,
         name: input.name?.trim() || null,
         role: "BUYER",
         isBuyer: input.isBuyer,
@@ -291,8 +300,8 @@ async function findOrCreateCustomerUser(
     });
     return created.id;
   } catch (error) {
-    const raced = await db.user.findUnique({
-      where: { email: input.email },
+    const raced = await db.user.findFirst({
+      where: { email: input.email, workspaceId: input.workspaceId },
       select: { id: true },
     });
     if (raced) return raced.id;
@@ -503,8 +512,18 @@ async function resolveOrCreateUnlocked(
   const upsertCustomer = input.upsertCustomer !== false && Boolean(email);
 
   let customerId = input.customerId?.trim() || null;
+  // Fail closed: never attach a User whose home workspace ≠ this Lead workspace
+  // (blocks NULL-workspace Omer/platform/orphans and cross-tenant consumers).
+  if (customerId) {
+    await assertUserMayBeLeadCustomer({
+      userId: customerId,
+      workspaceId,
+      db,
+    });
+  }
   if (!customerId && upsertCustomer && email) {
     customerId = await findOrCreateCustomerUser(db, {
+      workspaceId,
       email,
       name: input.name,
       phone: input.phone,

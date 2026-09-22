@@ -63,13 +63,18 @@ export async function createManualLead(input: ManualLeadInput) {
     : true;
   const consentAt = grantConsent ? new Date() : null;
 
-  let customer = await prisma.user.findUnique({ where: { email } });
+  let customer = await prisma.user.findFirst({
+    where: input.workspaceId
+      ? { email, workspaceId: input.workspaceId }
+      : { email, workspaceId: null },
+  });
   if (!customer) {
     const parsedPhone = parsePhoneColumnsForWrite(phone);
     if (!parsedPhone.ok) throw new InvalidContactPhoneError(parsedPhone.error);
     customer = await prisma.user.create({
       data: {
         email,
+        workspaceId: input.workspaceId ?? undefined,
         name,
         ...parsedPhone.columns,
         homeAddress,

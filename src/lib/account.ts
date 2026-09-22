@@ -27,6 +27,7 @@ export const customerUserSelect = {
   relatedListingsMode: true,
   termsAcceptedAt: true,
   termsVersion: true,
+  workspaceId: true,
 } satisfies Prisma.UserSelect;
 
 export type CustomerUser = {
@@ -49,6 +50,7 @@ export type CustomerUser = {
   relatedListingsMode: "SAME_AREA" | "SAME_FEATURES";
   termsAcceptedAt: Date | null;
   termsVersion: string | null;
+  workspaceId: string | null;
 };
 
 /** Columns that existed on the earliest Houzzat User table. */
@@ -69,7 +71,7 @@ const customerUserSelectLegacy = {
  * Returns null only when the DB answered and no matching user exists.
  */
 async function findCustomerUser(
-  where: { id: string } | { email: string },
+  where: { id: string } | { email: string; workspaceId: string },
 ): Promise<CustomerUser | null> {
   try {
     return await prisma.user.findFirst({
@@ -103,6 +105,7 @@ async function findCustomerUser(
         relatedListingsMode: "SAME_AREA",
         termsAcceptedAt: null,
         termsVersion: null,
+        workspaceId: "workspaceId" in where ? where.workspaceId : null,
       };
     } catch (legacyError) {
       console.error("[account] legacy customer select failed", legacyError);
@@ -124,17 +127,18 @@ export async function requireCustomerUser(): Promise<CustomerUser | null> {
     return null;
   }
 
-  // Prefer id, but fall back to email. After a DB switch (e.g. local → Neon)
-  // the JWT can still carry a stale `sub` while the same email exists with a
-  // new id — homepage lookups by email succeed, id-only API/account lookups 401.
+  // Phase 3: prefer id. Email fallback MUST include session workspaceId —
+  // never resolve a User by email alone (cross-workspace leak).
   if (session.user.id) {
     const byId = await findCustomerUser({ id: session.user.id });
     if (byId) return byId;
   }
 
-  if (session.user.email) {
+  const sessionWorkspaceId = session.user.workspaceId;
+  if (session.user.email && sessionWorkspaceId) {
     return findCustomerUser({
       email: session.user.email.trim().toLowerCase(),
+      workspaceId: sessionWorkspaceId,
     });
   }
 

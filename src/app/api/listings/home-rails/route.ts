@@ -53,7 +53,7 @@ export async function GET(request: Request) {
   const sessionPromise = auth().then(async (session) => {
     if (!session?.user?.email) return null;
     return prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: session.user.id },
       select: { id: true, emailVerified: true, createdAt: true },
     });
   });

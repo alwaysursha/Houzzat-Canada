@@ -724,6 +724,15 @@ model Workspace {
   smsUsageEvents                    SmsUsageEvent[]
   smsMassBatches                    SmsMassBatch[]
   smsAutomationDispatches           SmsAutomationDispatch[]
+  /**
+   * Phase 1 identity — Users whose home tenant is this workspace.
+   * Nullable on User during migration; not yet enforced.
+   */
+  users                             User[]                                      @relation("UserHomeWorkspace")
+  /**
+   * Phase 1 identity — OAuth Account rows denormalized to a workspace (future).
+   */
+  accounts                          Account[]                                   @relation("AccountWorkspace")
 
   @@index([status])
 }
@@ -936,8 +945,16 @@ model WorkspaceInvite {
 
 model User {
   id                     String              @id @default(cuid())
+  /**
+   * Phase 3 — home Workspace for tenant-isolated identity.
+   * NULL = platform operator / orphans / pre-split only (never tenant-auth).
+   * Uniqueness enforced in SQL partial indexes (see Phase 3 migration):
+   *   UNIQUE (workspaceId, email) WHERE workspaceId IS NOT NULL
+   *   UNIQUE (email) WHERE workspaceId IS NULL
+   */
+  workspaceId            String?
   name                   String?
-  email                  String              @unique
+  email                  String
   emailVerified          DateTime?
   password               String?
   image                  String?
@@ -1014,6 +1031,10 @@ model User {
   accounts                  Account[]
   sessions                  Session[]
   agentProfile              AgentProfile?
+  /**
+   * Phase 3 — home workspace (NULL only for platform / orphans / pre-split).
+   */
+  workspace                 Workspace?                 @relation("UserHomeWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict)
   siteVisitors              SiteVisitor[]
   activityEvents            ActivityEvent[]
   auditLogs                 AuditLog[]                 @relation("AuditActor")
@@ -1068,6 +1089,9 @@ model User {
   messageReactions          MessageReaction[]
 
   @@index([phoneE164])
+  @@index([email])
+  @@index([workspaceId])
+  @@index([workspaceId, email])
 }
 
 /**
@@ -1090,6 +1114,14 @@ model PushDevice {
 model Account {
   id                String  @id @default(cuid())
   userId            String
+  /**
+   * Phase 3 — denormalized workspace for OAuth uniqueness.
+   * Partial unique indexes in SQL (Prisma cannot express WHERE clauses):
+   *   UNIQUE (workspaceId, provider, providerAccountId) WHERE workspaceId IS NOT NULL
+   *   UNIQUE (provider, providerAccountId) WHERE workspaceId IS NULL
+   * Tenant Google/social OAuth is DISABLED for V1 — do not link across workspaces.
+   */
+  workspaceId       String?
   type              String
   provider          String
   providerAccountId String
@@ -1101,9 +1133,12 @@ model Account {
   id_token          String? @db.Text
   session_state     String?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation("AccountWorkspace", fields: [workspaceId], references: [id], onDelete: SetNull)
 
-  @@unique([provider, providerAccountId])
+  @@index([workspaceId])
+  @@index([provider, providerAccountId])
+  @@index([workspaceId, provider, providerAccountId])
 }
 
 model Session {

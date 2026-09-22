@@ -28,12 +28,12 @@ export async function loadListingAccountChrome(
   if (!mlsNumber) return emptyChrome();
 
   const session = await auth();
-  const email = session?.user?.email?.trim().toLowerCase();
-  if (!email) return emptyChrome();
+  const userId = session?.user?.id;
+  if (!userId) return emptyChrome();
 
   const user = await prisma.user
     .findUnique({
-      where: { email },
+      where: { id: userId },
       select: {
         id: true,
         phone: true,
@@ -43,7 +43,7 @@ export async function loadListingAccountChrome(
     .catch(async () => {
       const base = await prisma.user
         .findUnique({
-          where: { email },
+          where: { id: userId },
           select: { id: true, phone: true },
         })
         .catch(() => null);

@@ -59,10 +59,19 @@ export async function POST(request: Request) {
     // empty body ok
   }
 
+  if (!user.workspaceId) {
+    return NextResponse.json(
+      { error: "Verification is only available for workspace accounts." },
+      { status: 400 },
+    );
+  }
+
   const result = await sendEmailVerification({
     email: user.email,
     name: user.name,
     callbackUrl,
+    customerId: user.id,
+    workspaceId: user.workspaceId,
   });
 
   if (result === "failed") {

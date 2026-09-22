@@ -117,24 +117,14 @@ export const requireAgentGate = cache(async (): Promise<AgentGate | null> => {
 
 export const requireAgentUser = cache(async (): Promise<AgentUser | null> => {
   const session = await auth();
-  if (!session?.user?.id && !session?.user?.email) return null;
+  if (!session?.user?.id) return null;
 
-  let user: AgentUser | null = null;
-  if (session.user.id) {
-    user = await prisma.user.findFirst({
-      where: { id: session.user.id, disabledAt: null },
-      select: agentUserSelect,
-    });
-  }
-  if (!user && session.user.email) {
-    user = await prisma.user.findFirst({
-      where: {
-        email: session.user.email.trim().toLowerCase(),
-        disabledAt: null,
-      },
-      select: agentUserSelect,
-    });
-  }
+  // Phase 3: resolve by session user id only. Email fallback is unsafe when
+  // the same email may exist in multiple workspaces.
+  const user = await prisma.user.findFirst({
+    where: { id: session.user.id, disabledAt: null },
+    select: agentUserSelect,
+  });
 
   if (!user) return null;
 

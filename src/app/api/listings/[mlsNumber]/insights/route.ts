@@ -51,11 +51,11 @@ export async function GET(request: Request, { params }: Params) {
   }
 
   const session = await auth();
-  const email = session?.user?.email;
-  const user = email
+  const userId = session?.user?.id;
+  const user = userId
     ? await prisma.user
         .findUnique({
-          where: { email },
+          where: { id: userId },
           select: {
             id: true,
             emailVerified: true,

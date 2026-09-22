@@ -183,7 +183,7 @@ export default async function ListingDetailPage({
   // Access fields only on SSR — save/watch/note/phone/prefs load after paint.
   const user = session?.user?.email
     ? await prisma.user.findUnique({
-        where: { email: session.user.email },
+        where: { id: session.user.id },
         select: {
           id: true,
           emailVerified: true,

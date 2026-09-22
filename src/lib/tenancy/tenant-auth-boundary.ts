@@ -147,18 +147,19 @@ export async function validateTenantCredentialsAuth(input: {
     };
   }
 
-  // If no staff WorkspaceMember exists, verify if the user is a consumer (BUYER / SELLER).
-  // Consumers are authorized to sign in on active tenant websites.
-  let role = input.userRole;
-  if (role === undefined) {
-    const user = await prisma.user.findUnique({
-      where: { id: input.userId },
-      select: { role: true },
-    });
-    role = user?.role ?? null;
-  }
+  // Phase 3: consumers may sign in ONLY when User.workspaceId matches hostname workspace.
+  // REMOVE legacy exception that allowed any BUYER/SELLER to authenticate on arbitrary tenants.
+  const user = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { role: true, workspaceId: true },
+  });
+  const role = input.userRole ?? user?.role ?? null;
 
-  if (isConsumerRole(role)) {
+  if (
+    isConsumerRole(role) &&
+    user?.workspaceId != null &&
+    user.workspaceId === resolvedWorkspaceId
+  ) {
     return {
       ok: true,
       isPlatform: false,

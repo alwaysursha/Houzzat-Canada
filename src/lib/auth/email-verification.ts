@@ -6,6 +6,12 @@ import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import { isResendConfigured } from "@/lib/email/config";
 import { renderVerifyEmail, renderWelcomeEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
+import {
+  findTenantUserByEmail,
+  normalizeIdentityEmail,
+  parseTenantBoundTokenIdentifier,
+  tenantBoundTokenIdentifier,
+} from "@/lib/auth/workspace-identity";
 
 export const VERIFY_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** Min gap between verification emails for the same address. */
@@ -15,28 +21,40 @@ export function isEmailSendConfigured() {
   return isResendConfigured();
 }
 
-export async function createEmailVerificationToken(email: string) {
-  const normalized = email.trim().toLowerCase();
+export async function createEmailVerificationToken(
+  workspaceId: string,
+  email: string,
+) {
+  const normalized = normalizeIdentityEmail(email);
   const token = randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
+  const identifier = tenantBoundTokenIdentifier(
+    "email-verify",
+    workspaceId,
+    normalized,
+  );
 
   await prisma.verificationToken.deleteMany({
-    where: { identifier: normalized },
+    where: { identifier },
   });
 
   await prisma.verificationToken.create({
     data: {
-      identifier: normalized,
+      identifier,
       token,
       expires,
     },
   });
 
-  return { token, expires, email: normalized };
+  return { token, expires, email: normalized, workspaceId };
 }
 
-export function verificationLink(token: string, callbackUrl?: string) {
-  const url = new URL("/auth/verify-email", SITE_URL);
+export function verificationLink(
+  token: string,
+  callbackUrl?: string,
+  origin: string = SITE_URL,
+) {
+  const url = new URL("/auth/verify-email", origin);
   url.searchParams.set("token", token);
   const safe = safeInternalCallbackUrl(callbackUrl, "/");
   if (safe !== "/") {
@@ -48,20 +66,26 @@ export function verificationLink(token: string, callbackUrl?: string) {
 /**
  * Create token + send verification email.
  * Returns skipped when Resend is not configured.
+ * Tenant-bound: Houzzat token cannot verify RE/MAX User.
  */
 export async function sendEmailVerification(input: {
   email: string;
   name?: string | null;
   callbackUrl?: string;
   customerId?: string | null;
+  workspaceId: string;
+  origin?: string;
 }): Promise<"sent" | "skipped" | "failed"> {
   if (!isEmailSendConfigured()) {
     console.info("[verify-email:stub] RESEND_API_KEY missing", input.email);
     return "skipped";
   }
 
-  const { token, email } = await createEmailVerificationToken(input.email);
-  const link = verificationLink(token, input.callbackUrl);
+  const { token, email } = await createEmailVerificationToken(
+    input.workspaceId,
+    input.email,
+  );
+  const link = verificationLink(token, input.callbackUrl, input.origin ?? SITE_URL);
   const rendered = renderVerifyEmail({
     name: input.name,
     verifyUrl: link,
@@ -70,10 +94,7 @@ export async function sendEmailVerification(input: {
   const user =
     input.customerId
       ? { id: input.customerId }
-      : await prisma.user.findUnique({
-          where: { email },
-          select: { id: true },
-        });
+      : await findTenantUserByEmail(input.workspaceId, email);
 
   const result = await sendAndLogClientEmail({
     to: email,
@@ -99,7 +120,7 @@ export async function sendWelcomeEmail(input: {
 
   const rendered = renderWelcomeEmail({ name: input.name });
   const result = await sendAndLogClientEmail({
-    to: input.email.trim().toLowerCase(),
+    to: normalizeIdentityEmail(input.email),
     rendered,
     stream: "notify",
     customerId: input.customerId,
@@ -155,16 +176,16 @@ export async function peekEmailVerificationToken(
     };
   }
 
-  const email = row.identifier.trim().toLowerCase();
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: {
-      id: true,
-      emailVerified: true,
-      role: true,
-      disabledAt: true,
-    },
-  });
+  const parsed = parseTenantBoundTokenIdentifier("email-verify", row.identifier);
+  if (!parsed) {
+    return {
+      ok: false,
+      error: "Verification link expired or invalid.",
+      code: "invalid",
+    };
+  }
+
+  const user = await findTenantUserByEmail(parsed.workspaceId, parsed.email);
   if (!user) {
     return {
       ok: false,
@@ -187,10 +208,15 @@ export async function peekEmailVerificationToken(
     };
   }
 
+  const verified = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { emailVerified: true },
+  });
+
   return {
     ok: true,
     userId: user.id,
-    emailVerified: Boolean(user.emailVerified),
+    emailVerified: Boolean(verified?.emailVerified),
   };
 }
 
@@ -208,6 +234,7 @@ export async function consumeEmailVerificationToken(
         isBuyer: boolean;
         isSeller: boolean;
         activeMode: ActiveMode;
+        workspaceId: string | null;
       };
     }
   | { ok: false; error: string }
@@ -231,21 +258,12 @@ export async function consumeEmailVerificationToken(
     return { ok: false, error: "Verification link expired or invalid." };
   }
 
-  const email = row.identifier.trim().toLowerCase();
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      image: true,
-      role: true,
-      isBuyer: true,
-      isSeller: true,
-      activeMode: true,
-      disabledAt: true,
-    },
-  });
+  const parsed = parseTenantBoundTokenIdentifier("email-verify", row.identifier);
+  if (!parsed) {
+    return { ok: false, error: "Verification link expired or invalid." };
+  }
+
+  const user = await findTenantUserByEmail(parsed.workspaceId, parsed.email);
   if (!user) {
     await prisma.verificationToken.delete({ where: { token: trimmed } }).catch(
       () => undefined,
@@ -278,7 +296,15 @@ export async function consumeEmailVerificationToken(
       where: { id: user.id },
       data: { emailVerified: new Date() },
     }),
-    prisma.verificationToken.deleteMany({ where: { identifier: email } }),
+    prisma.verificationToken.deleteMany({
+      where: {
+        identifier: tenantBoundTokenIdentifier(
+          "email-verify",
+          parsed.workspaceId,
+          parsed.email,
+        ),
+      },
+    }),
   ]);
 
   return {
@@ -292,6 +318,7 @@ export async function consumeEmailVerificationToken(
       isBuyer: user.isBuyer,
       isSeller: user.isSeller,
       activeMode: user.activeMode,
+      workspaceId: user.workspaceId,
     },
   };
 }

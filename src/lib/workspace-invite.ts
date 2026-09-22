@@ -163,14 +163,14 @@ export async function loadWorkspaceInvitePreview(
   }
 
   const invitedBy = invite.invitedById
-    ? await prisma.user.findUnique({
+    ? await prisma.user.findFirst({
         where: { id: invite.invitedById },
         select: { name: true, email: true },
       })
     : null;
 
-  const existing = await prisma.user.findUnique({
-    where: { email: invite.email },
+  const existing = await prisma.user.findFirst({
+    where: { email: invite.email, workspaceId: invite.workspaceId },
     select: {
       id: true,
       role: true,
@@ -286,8 +286,9 @@ export async function createWorkspaceInvite(input: {
     parsedProfile = parsed.data;
   }
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
+  // Phase 3: never resolve invitees by global email — same workspace only.
+  const existingUser = await prisma.user.findFirst({
+    where: { email, workspaceId: workspace.id },
     select: {
       id: true,
       role: true,
@@ -393,6 +394,7 @@ export async function createWorkspaceInvite(input: {
     await provisionPasswordlessAgentFromInvite(prisma, {
       email,
       profile: parsedProfile,
+      workspaceId: workspace.id,
     });
   }
 
@@ -464,8 +466,8 @@ export async function resendWorkspaceInvite(
     data: { expiresAt, token: tokenHash },
   });
 
-  const existing = await prisma.user.findUnique({
-    where: { email: invite.email },
+  const existing = await prisma.user.findFirst({
+    where: { email: invite.email, workspaceId: invite.workspaceId },
     select: { role: true, isBuyer: true, isSeller: true },
   });
   const consumerLabels: Array<"buyer" | "seller"> = [];
@@ -557,8 +559,8 @@ export async function acceptWorkspaceInvite(input: {
 
   const inviteEmail = normalizeEmail(invite.email);
 
-  const existing = await prisma.user.findUnique({
-    where: { email: inviteEmail },
+  const existing = await prisma.user.findFirst({
+    where: { email: inviteEmail, workspaceId: invite.workspaceId },
     select: {
       id: true,
       email: true,
@@ -689,7 +691,7 @@ export async function acceptWorkspaceInvite(input: {
       };
     }
 
-    const acting = await prisma.user.findUnique({
+    const acting = await prisma.user.findFirst({
       where: { id: input.actingUserId },
       select: { id: true, email: true, disabledAt: true },
     });
@@ -778,6 +780,7 @@ export async function acceptWorkspaceInvite(input: {
     email: inviteEmail,
     password: newAccountPassword,
     profile: snapshot,
+    workspaceId: invite.workspaceId,
   });
 
   const now = new Date();

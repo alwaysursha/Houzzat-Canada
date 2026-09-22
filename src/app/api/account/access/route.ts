@@ -6,8 +6,8 @@ import { prisma } from "@/lib/prisma";
 /** Public access snapshot for client gates (visitor / grace / verify-locked). */
 export async function GET() {
   const session = await auth();
-  const email = session?.user?.email?.trim().toLowerCase();
-  if (!email) {
+  const userId = session?.user?.id;
+  if (!userId) {
     return NextResponse.json({
       kind: "visitor" as const,
       isSignedIn: false,
@@ -18,7 +18,7 @@ export async function GET() {
   }
 
   const user = await prisma.user.findUnique({
-    where: { email },
+    where: { id: userId },
     select: {
       id: true,
       email: true,
@@ -30,6 +30,6 @@ export async function GET() {
   const access = resolveClientAccess(user);
   return NextResponse.json({
     ...access,
-    email: user?.email ?? email,
+    email: user?.email ?? session.user.email ?? null,
   });
 }

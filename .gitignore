@@ -62,6 +62,8 @@ next-env.d.ts
 
 # Local device QA artifacts
 .tmp-device-qa/
+tmp/identity-phase2/
+tmp/identity-phase3/
 
 # Firebase admin service-account keys (never commit)
 *-firebase-adminsdk-*.json

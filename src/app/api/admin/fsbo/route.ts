@@ -58,8 +58,14 @@ export async function POST(request: Request) {
   const data = parsed.data;
   let ownerUserId: string | null = null;
   if (data.ownerEmail) {
-    const owner = await prisma.user.findUnique({
-      where: { email: data.ownerEmail.toLowerCase() },
+    // Phase 3: resolve owner within the admin's workspace only (never global email).
+    const owner = await prisma.user.findFirst({
+      where: {
+        email: data.ownerEmail.toLowerCase(),
+        ...(admin.workspaceId
+          ? { workspaceId: admin.workspaceId }
+          : { workspaceId: null }),
+      },
       select: { id: true },
     });
     ownerUserId = owner?.id ?? null;

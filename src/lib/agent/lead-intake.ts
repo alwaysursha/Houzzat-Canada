@@ -34,6 +34,7 @@ import {
   scheduleSignupSmsAutomations,
 } from "@/lib/sms/automations";
 import { resolveOrCreateWorkspaceLead } from "@/lib/agent/resolve-workspace-lead";
+import { assertUserMayBeLeadCustomer } from "@/lib/agent/lead-customer-workspace-guard";
 import { prisma } from "@/lib/prisma";
 import {
   resolveDefaultWorkspaceIdForRouting,
@@ -409,6 +410,12 @@ export async function captureWebsiteLead(input: {
       "Public lead routing requires a verified tenant hostname",
     );
   }
+
+  // Fail closed: authenticated / provided customerId must already belong to this workspace.
+  await assertUserMayBeLeadCustomer({
+    userId: input.customerId,
+    workspaceId: tenancy.workspaceId,
+  });
 
   const notes =
     input.notes ??

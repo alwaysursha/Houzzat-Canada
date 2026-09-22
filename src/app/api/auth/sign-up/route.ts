@@ -9,9 +9,14 @@ import {
   sendEmailVerification,
   sendWelcomeEmail,
 } from "@/lib/auth/email-verification";
+import {
+  findTenantUserIdByEmail,
+  normalizeIdentityEmail,
+} from "@/lib/auth/workspace-identity";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { TERMS_VERSION } from "@/lib/consent";
 import { VOW_VERSION } from "@/lib/vow";
+import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
 
 const schema = z.object({
   name: z.string().trim().min(1, "Enter your name.").max(120),
@@ -27,6 +32,7 @@ const schema = z.object({
 });
 
 type SignUpStage =
+  | "tenancy_resolve"
   | "user_lookup"
   | "password_hash"
   | "user_create"
@@ -112,13 +118,7 @@ function mapSignUpFailure(
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === "P2002") {
-      const target = error.meta?.target;
-      if (
-        target === "User_email_key" ||
-        (Array.isArray(target) && target.includes("email"))
-      ) {
-        return duplicateEmailResponse();
-      }
+      return duplicateEmailResponse();
     }
   }
 
@@ -152,15 +152,28 @@ export async function POST(request: Request) {
     );
   }
 
-  const email = parsed.data.email.toLowerCase();
-  let stage: SignUpStage = "user_lookup";
+  const email = normalizeIdentityEmail(parsed.data.email);
+  let stage: SignUpStage = "tenancy_resolve";
 
   try {
     logSignUpStage(stage, { correlationId });
-    const existing = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true, disabledAt: true },
-    });
+    const tenancy = await resolveRequestTenancy(request);
+    if (!tenancy.ok) {
+      return NextResponse.json(
+        {
+          error:
+            "Sign-up is only available on a workspace website. Open your brokerage site and try again.",
+        },
+        { status: 400 },
+      );
+    }
+    const workspaceId = tenancy.workspaceId;
+
+    stage = "user_lookup";
+    logSignUpStage(stage, { correlationId });
+    // Phase 3: same email in another workspace MUST NOT block signup.
+    // NULL-workspace orphans / platform must NEVER resolve here.
+    const existing = await findTenantUserIdByEmail(workspaceId, email);
 
     if (existing) {
       if (existing.disabledAt) {
@@ -189,6 +202,7 @@ export async function POST(request: Request) {
         name: parsed.data.name,
         email,
         password,
+        workspaceId,
         role: "BUYER",
         isBuyer: true,
         isSeller: asSeller,
@@ -210,9 +224,6 @@ export async function POST(request: Request) {
       userAgent,
     });
 
-    // Respond before Resend / CRM side effects — awaiting them caused Worker
-    // timeouts and left users seeing "Could not create account" after a
-    // successful DB insert (duplicate email on retry).
     scheduleWorkerSideEffect(
       (async () => {
         try {
@@ -236,6 +247,7 @@ export async function POST(request: Request) {
             name: parsed.data.name,
             callbackUrl: "/",
             customerId: user.id,
+            workspaceId,
           }).catch((err) => {
             console.error("[sign-up] verification email failed", err);
             return "failed" as const;

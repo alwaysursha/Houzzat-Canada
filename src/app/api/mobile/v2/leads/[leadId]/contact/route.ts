@@ -78,6 +78,7 @@ export async function PATCH(
       where: { id: access.lead.id },
       select: {
         id: true,
+        workspaceId: true,
         customerId: true,
         customer: {
           select: { id: true, email: true, phone: true, phoneE164: true, homeAddress: true },
@@ -112,8 +113,8 @@ export async function PATCH(
     }
 
     if (nextEmail && nextEmail !== lead.customer.email) {
-      const taken = await prisma.user.findUnique({
-        where: { email: nextEmail },
+      const taken = await prisma.user.findFirst({
+        where: { email: nextEmail, workspaceId: lead.workspaceId },
         select: { id: true },
       });
       if (taken && taken.id !== lead.customer.id) {
