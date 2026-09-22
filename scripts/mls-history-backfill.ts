@@ -5,11 +5,13 @@
  * HistoryTransactional is not on this VOW feed; we synthesize from Property.
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
+  assertMlsSyncExecutionHost();
   const { runPropTxMlsSync } = await import("../src/lib/proptx/sync");
   const maxPages = Number(process.argv[2] ?? 10);
   console.log(`MLS synthetic history backfill (maxPages=${maxPages})…`);

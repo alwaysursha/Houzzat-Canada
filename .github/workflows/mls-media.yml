@@ -1,70 +1,16 @@
-name: MLS Media Backfill
+name: MLS Media (disabled)
 
-# Continuous photo gap-fill so missing images catch up without manual runs.
-# Complements mls-sync.yml (which also backfills a batch after each property pass).
+# Inert placeholder. Media synchronization runs only on the Sync Mac.
+# No schedule. No manual dispatch. This workflow cannot execute MLS scripts.
 on:
-  # PAUSED — hourly photo backfill (~10–20m each) drove Actions spend.
-  # schedule:
-  #   - cron: "22 * * * *"
-  workflow_dispatch:
-    inputs:
-      maxPages:
-        description: "Scale factor (~50 listings per page; 20 ≈ 1000 listings)"
-        required: false
-        default: "20"
-
-concurrency:
-  group: mls-media-backfill
-  # Never cancel an in-flight backfill — that left listings without photos.
-  cancel-in-progress: false
+  push:
+    branches:
+      - "__mls_execution_disabled__"
 
 jobs:
-  media:
+  disabled:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: pnpm db:generate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-
-      - name: Backfill missing MLS photos
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          PROPTX_ENDPOINT_URL: ${{ secrets.PROPTX_ENDPOINT_URL }}
-          PROPTX_BEARER_TOKEN: ${{ secrets.PROPTX_BEARER_TOKEN }}
-          PROPTX_TOKEN_ID: ${{ secrets.PROPTX_TOKEN_ID }}
-          PROPTX_VOW_BEARER_TOKEN: ${{ secrets.PROPTX_VOW_BEARER_TOKEN }}
-          PROPTX_VOW_TOKEN_ID: ${{ secrets.PROPTX_VOW_TOKEN_ID }}
-          PROPTX_FEED: idx
-          LISTING_PROVIDER: proptx
-          TYPESENSE_HOST: ${{ secrets.TYPESENSE_HOST }}
-          TYPESENSE_PORT: ${{ secrets.TYPESENSE_PORT }}
-          TYPESENSE_PROTOCOL: ${{ secrets.TYPESENSE_PROTOCOL }}
-          TYPESENSE_ADMIN_API_KEY: ${{ secrets.TYPESENSE_ADMIN_API_KEY }}
-          TYPESENSE_COLLECTION: ${{ secrets.TYPESENSE_COLLECTION }}
-          TYPESENSE_SYNC: "1"
-          MAX_PAGES: ${{ github.event.inputs.maxPages || '20' }}
-        run: |
-          set -euo pipefail
-          echo "Running pnpm mls:media ${MAX_PAGES} (~$(( MAX_PAGES * 50 )) listings)"
-          pnpm mls:media "${MAX_PAGES}"
+      - name: MLS media execution disabled
+        run: echo "MLS media sync is disabled on GitHub. The Sync Mac is the only writer."

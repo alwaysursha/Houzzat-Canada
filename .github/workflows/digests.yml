@@ -5,7 +5,7 @@ name: Digests
 #
 # Required GitHub secrets:
 #   DIGEST_CRON_URL  — e.g. https://houzzat.com/api/cron/digests
-#   DIGEST_CRON_SECRET (or CRON_SECRET / MLS_SYNC_SECRET matching the app)
+#   DIGEST_CRON_SECRET (or CRON_SECRET matching the app)
 on:
   # Local Mac LaunchAgent is the primary scheduler (scripts/macos/).
   # Keep workflow_dispatch only for optional remote runs.
@@ -38,20 +38,19 @@ jobs:
           DIGEST_CRON_URL: ${{ secrets.DIGEST_CRON_URL }}
           DIGEST_CRON_SECRET: ${{ secrets.DIGEST_CRON_SECRET }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          MLS_SYNC_SECRET: ${{ secrets.MLS_SYNC_SECRET }}
           DRY_RUN: ${{ github.event.inputs.dryRun || '0' }}
           USER_ID: ${{ github.event.inputs.userId || '' }}
           FORCE_SELLER: ${{ github.event.inputs.forceSeller || '0' }}
         run: |
           set -euo pipefail
           URL="${DIGEST_CRON_URL:-}"
-          SECRET="${DIGEST_CRON_SECRET:-${CRON_SECRET:-${MLS_SYNC_SECRET:-}}}"
+          SECRET="${DIGEST_CRON_SECRET:-${CRON_SECRET:-}}"
           if [[ -z "$URL" ]]; then
             echo "Missing secret DIGEST_CRON_URL"
             exit 1
           fi
           if [[ -z "$SECRET" ]]; then
-            echo "Missing DIGEST_CRON_SECRET (or CRON_SECRET / MLS_SYNC_SECRET)"
+            echo "Missing DIGEST_CRON_SECRET (or CRON_SECRET)"
             exit 1
           fi
           BODY='{}'

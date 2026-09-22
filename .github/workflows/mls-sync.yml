@@ -1,106 +1,16 @@
-name: MLS Sync
+name: MLS Sync (disabled)
 
-# Runs PropTx → Neon sync on GitHub runners (not via Worker HTTP).
-#
-# Required GitHub secrets:
-#   DATABASE_URL, DIRECT_URL (optional),
-#   PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID  (IDX Token — visitor listings)
-# Optional: PROPTX_VOW_BEARER_TOKEN, PROPTX_VOW_TOKEN_ID (sold enrichment for clients)
+# Inert placeholder. MLS synchronization runs only on the Sync Mac.
+# No schedule. No manual dispatch. This workflow cannot execute MLS scripts.
 on:
-  # PAUSED — every-5m sync burned ~$8–12/day in GitHub Actions minutes.
-  # Re-enable with a slower cron (e.g. hourly) when budget allows.
-  # schedule:
-  #   - cron: "*/5 * * * *"
-  workflow_dispatch:
-    inputs:
-      maxPages:
-        description: "Max Property backlog pages (~100 listings/page)"
-        required: false
-        default: "30"
-      fullBackfillDays:
-        description: "Days back when no Property cursor exists yet"
-        required: false
-        default: "7"
-      resources:
-        description: "Comma-separated: property,openHouse,media,rooms"
-        required: false
-        default: "property,openHouse"
-
-concurrency:
-  # Manual backfills must not be killed by the 15-min schedule.
-  # Scheduled runs share one group and can cancel each other.
-  group: ${{ github.event_name == 'workflow_dispatch' && format('mls-sync-manual-{0}', github.run_id) || 'mls-sync-schedule' }}
-  cancel-in-progress: ${{ github.event_name == 'schedule' }}
+  push:
+    branches:
+      - "__mls_execution_disabled__"
 
 jobs:
-  sync:
+  disabled:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    # Incremental property + small photo gap-fill. Bulk photos → mls-media.yml.
-    timeout-minutes: 90
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: pnpm db:generate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-
-      - name: Run PropTx MLS sync
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          PROPTX_ENDPOINT_URL: ${{ secrets.PROPTX_ENDPOINT_URL }}
-          PROPTX_BEARER_TOKEN: ${{ secrets.PROPTX_BEARER_TOKEN }}
-          PROPTX_TOKEN_ID: ${{ secrets.PROPTX_TOKEN_ID }}
-          PROPTX_VOW_BEARER_TOKEN: ${{ secrets.PROPTX_VOW_BEARER_TOKEN }}
-          PROPTX_VOW_TOKEN_ID: ${{ secrets.PROPTX_VOW_TOKEN_ID }}
-          PROPTX_FEED: idx
-          LISTING_PROVIDER: proptx
-          TYPESENSE_HOST: ${{ secrets.TYPESENSE_HOST }}
-          TYPESENSE_PORT: ${{ secrets.TYPESENSE_PORT }}
-          TYPESENSE_PROTOCOL: ${{ secrets.TYPESENSE_PROTOCOL }}
-          TYPESENSE_ADMIN_API_KEY: ${{ secrets.TYPESENSE_ADMIN_API_KEY }}
-          TYPESENSE_COLLECTION: ${{ secrets.TYPESENSE_COLLECTION }}
-          TYPESENSE_SYNC: "1"
-          MAX_PAGES: ${{ github.event.inputs.maxPages || '30' }}
-          BACKFILL_DAYS: ${{ github.event.inputs.fullBackfillDays || '7' }}
-          RESOURCES: ${{ github.event.inputs.resources || 'property,openHouse' }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${DATABASE_URL:-}" ]]; then
-            echo "Missing secret DATABASE_URL"
-            exit 1
-          fi
-          if [[ -z "${PROPTX_BEARER_TOKEN:-}" || -z "${PROPTX_TOKEN_ID:-}" || -z "${PROPTX_ENDPOINT_URL:-}" ]]; then
-            echo "Missing IDX secrets (PROPTX_ENDPOINT_URL, PROPTX_BEARER_TOKEN, PROPTX_TOKEN_ID)"
-            exit 1
-          fi
-          echo "Running pnpm mls:sync ${MAX_PAGES} ${BACKFILL_DAYS} ${RESOURCES} (prefer VOW Token when set; VOW=$([ -n "${PROPTX_VOW_TOKEN_ID:-}" ] && echo yes || echo no))"
-          pnpm mls:sync "${MAX_PAGES}" "${BACKFILL_DAYS}" "${RESOURCES}"
-
-      - name: Geocode new approximate pins
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-          GEOCODE_SKIP_NOMINATIM: "1"
-        run: |
-          set -euo pipefail
-          # Catch anything the inline sync geocode missed (rate limits / misses).
-          pnpm mls:geocode 1200
+      - name: MLS execution disabled
+        run: echo "MLS sync is disabled on GitHub. The Sync Mac is the only writer."

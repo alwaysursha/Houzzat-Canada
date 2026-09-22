@@ -10,8 +10,9 @@ import {
   fetchPropertiesByStreet,
   fetchPropertyByMls,
 } from "@/lib/proptx/resolve-listing";
-import { upsertPropTxPropertiesOnDemand } from "@/lib/proptx/sync";
 import type { PropTxProperty } from "@/lib/proptx/map-listing";
+import { listingCardFromPropTx } from "@/lib/proptx/read-only-listing";
+import type { ListingCard } from "@/lib/listings/types";
 
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX_PER_WINDOW = 12;
@@ -52,23 +53,28 @@ export function clientIpFromRequest(request: Request): string {
 export type OnDemandLookupResult = {
   mlsNumbers: string[];
   kind: "mls" | "address" | "street" | null;
+  /** Display cards for the current response. Not persisted. */
+  cards: ListingCard[];
+  /** Raw rows for a transient detail page. Not persisted. */
+  rows: PropTxProperty[];
 };
 
 /**
- * On Neon miss: fetch matching PropTx properties and upsert into Neon.
+ * On Neon miss: read matching PropTx properties.
+ * Does not insert Listing, history, media, or Typesense documents.
  * Only runs for MLS / exact address / street-only query shapes.
  */
-export async function lookupAndUpsertOnDemand(
+export async function lookupPropTxOnDemand(
   q: string,
   options?: { clientIp?: string | null },
 ): Promise<OnDemandLookupResult> {
   const query = q.trim();
   const knownCities = getMlsSyncCities();
   if (!isOnDemandLookupQuery(query, knownCities)) {
-    return { mlsNumbers: [], kind: null };
+    return { mlsNumbers: [], kind: null, cards: [], rows: [] };
   }
   if (!allowOnDemandLookup(options?.clientIp)) {
-    return { mlsNumbers: [], kind: null };
+    return { mlsNumbers: [], kind: null, cards: [], rows: [] };
   }
 
   let rows: PropTxProperty[] = [];
@@ -93,17 +99,25 @@ export async function lookupAndUpsertOnDemand(
       }
     }
   } catch {
-    return { mlsNumbers: [], kind };
+    return { mlsNumbers: [], kind, cards: [], rows: [] };
   }
 
-  if (rows.length === 0) return { mlsNumbers: [], kind };
+  const cards = rows.flatMap((row) => {
+    const card = listingCardFromPropTx(row);
+    return card ? [card] : [];
+  });
+  return {
+    mlsNumbers: cards.map((card) => card.mlsNumber),
+    kind,
+    cards,
+    rows,
+  };
+}
 
-  try {
-    const mlsNumbers = await upsertPropTxPropertiesOnDemand(rows, {
-      concurrency: kind === "street" ? 3 : 2,
-    });
-    return { mlsNumbers, kind };
-  } catch {
-    return { mlsNumbers: [], kind };
-  }
+/** @deprecated Read-only alias. Persistence belongs to the Sync Mac. */
+export async function lookupAndUpsertOnDemand(
+  q: string,
+  options?: { clientIp?: string | null },
+): Promise<OnDemandLookupResult> {
+  return lookupPropTxOnDemand(q, options);
 }

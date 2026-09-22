@@ -4,8 +4,7 @@ import { runDigestJobs } from "@/lib/email/digests";
 function authorizeDigestRequest(request: Request): boolean {
   const secret =
     process.env.DIGEST_CRON_SECRET?.trim() ||
-    process.env.CRON_SECRET?.trim() ||
-    process.env.MLS_SYNC_SECRET?.trim();
+    process.env.CRON_SECRET?.trim();
   if (!secret) return false;
   const header = request.headers.get("x-digest-cron-secret");
   const auth = request.headers.get("authorization");
@@ -16,7 +15,7 @@ function authorizeDigestRequest(request: Request): boolean {
 
 /**
  * Cron / manual: daily Saved Search Digests + (Monday) Neighborhood Weekly.
- * Auth: DIGEST_CRON_SECRET | CRON_SECRET | MLS_SYNC_SECRET via Bearer or x-digest-cron-secret.
+ * Auth: DIGEST_CRON_SECRET | CRON_SECRET via Bearer or x-digest-cron-secret.
  */
 export async function POST(request: Request) {
   if (!authorizeDigestRequest(request)) {

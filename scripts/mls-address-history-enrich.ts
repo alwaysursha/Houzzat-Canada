@@ -5,11 +5,13 @@
  *   pnpm mls:address-history 200
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 
 config({ path: ".env.local" });
 config();
 
 async function main() {
+  assertMlsSyncExecutionHost();
   const limitRaw = process.argv[2];
   const limit = Math.max(
     1,

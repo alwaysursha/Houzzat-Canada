@@ -5,11 +5,13 @@
  * Note: HistoryTransactional is not included on this VOW feed yet.
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
+  assertMlsSyncExecutionHost();
   const { runPropTxMlsSync } = await import("../src/lib/proptx/sync");
   const maxPages = Number(process.argv[2] ?? 8);
   console.log(`MLS rooms backfill (maxPages=${maxPages})…`);

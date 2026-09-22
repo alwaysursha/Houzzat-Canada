@@ -11,7 +11,7 @@ import type { ListingSearchResult } from "@/lib/listings/types";
 import { prisma } from "@/lib/prisma";
 import {
   clientIpFromRequest,
-  lookupAndUpsertOnDemand,
+  lookupPropTxOnDemand,
 } from "@/lib/proptx/on-demand-lookup";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
@@ -191,11 +191,16 @@ export async function GET(request: Request) {
     !searchParamsBody.cursor;
 
   if (result.items.length === 0 && q?.trim() && lightFilters) {
-    const pulled = await lookupAndUpsertOnDemand(q, {
+    const pulled = await lookupPropTxOnDemand(q, {
       clientIp: clientIpFromRequest(request),
     });
-    if (pulled.mlsNumbers.length > 0) {
-      result = await provider.search(searchParamsBody);
+    if (pulled.cards.length > 0) {
+      result = {
+        ...result,
+        items: pulled.cards,
+        total: pulled.cards.length,
+        provider: "proptx",
+      };
     }
   }
 

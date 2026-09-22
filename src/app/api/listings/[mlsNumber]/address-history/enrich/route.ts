@@ -3,8 +3,8 @@ import { auth } from "@/lib/auth";
 import { hasFullClientAccess } from "@/lib/account-access";
 import { authorizeHistoryRowsForClient } from "@/lib/listings/build-listing-panel";
 import {
-  enrichAddressListingHistory,
   loadListingForAddressHistory,
+  previewAddressListingHistory,
 } from "@/lib/proptx/address-history-enrich";
 import { prisma } from "@/lib/prisma";
 import {
@@ -86,9 +86,9 @@ export async function GET(request: Request, { params }: Params) {
 }
 
 /**
- * Pull PropTx sibling cycles at this address into Neon.
- * G.10C2: Host entitlement → base + HISTORY → VOW → exact PropTx pre-auth
- * before enrichment writes. Unauthorized → 404 (no PropTx / no warehouse write).
+ * Read PropTx sibling cycles for the customer panel.
+ * Does not upsert listings, write history, update Typesense, or stamp
+ * addressHistoryEnrichedAt. The Sync Mac nightly job persists that state.
  */
 export async function POST(request: Request, { params }: Params) {
   const { mlsNumber: raw } = await params;
@@ -151,7 +151,7 @@ export async function POST(request: Request, { params }: Params) {
     });
   }
 
-  const result = await enrichAddressListingHistory(listing, { force });
+  const result = await previewAddressListingHistory(listing, { force });
   const historyRows = authorizeRows(
     result.historyRows,
     listing,

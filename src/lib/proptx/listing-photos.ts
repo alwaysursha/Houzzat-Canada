@@ -98,6 +98,7 @@ export function preferListingPhotos(
 export async function fetchRawPropertyMedia(
   listingKey: string,
   config: PropTxConfig,
+  options?: { timeoutMs?: number; signal?: AbortSignal },
 ): Promise<PropTxProperty[]> {
   const keyLit = odataStringLiteral(listingKey);
   const attempts = [
@@ -113,6 +114,8 @@ export async function fetchRawPropertyMedia(
     for await (const page of proptxPages<PropTxProperty>(path, {
       maxPages: 2,
       config,
+      timeoutMs: options?.timeoutMs,
+      signal: options?.signal,
     })) {
       rows.push(...page);
     }
@@ -152,10 +155,16 @@ export async function fetchListingPhotosFromPropTx(
   const correlation = await readSsrHangCorrelation();
   logSsrHang({ event: SSR_HANG_EVENT.proptxStart, ...correlation });
 
-  const work = async (): Promise<PropTxListingPhoto[]> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
     for (const config of configs) {
+      if (controller.signal.aborted) return [];
       try {
-        const rows = await fetchRawPropertyMedia(key, config);
+        const rows = await fetchRawPropertyMedia(key, config, {
+          timeoutMs,
+          signal: controller.signal,
+        });
         if (rows.length === 0) continue;
         return preferListingPhotos(rows, options?.max).map((photo) => ({
           id: photo.id,
@@ -165,22 +174,14 @@ export async function fetchListingPhotosFromPropTx(
           isPrimary: photo.isPrimary,
         }));
       } catch {
-        // try next credential set
+        // try next credential set; an aborted deadline still returns []
       }
     }
     return [];
-  };
-
-  try {
-    return await Promise.race([
-      work(),
-      new Promise<PropTxListingPhoto[]>((resolve) =>
-        setTimeout(() => resolve([]), timeoutMs),
-      ),
-    ]);
   } catch {
     return [];
   } finally {
+    clearTimeout(timer);
     logSsrHang({
       event: SSR_HANG_EVENT.proptxSettled,
       ms: Date.now() - startedAt,

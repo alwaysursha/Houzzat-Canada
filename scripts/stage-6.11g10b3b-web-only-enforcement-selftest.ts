@@ -267,8 +267,10 @@ async function main() {
     );
 
     const search = read("src/app/api/listings/search/route.ts");
-    // On-demand retry reuses same body with force-enable
-    assert.ok(search.includes("result = await provider.search(searchParamsBody)"));
+    // First search still uses the entitled body. A miss returns live cards
+    // and does not re-query Typesense after a persist.
+    assert.ok(search.includes("provider.search(searchParamsBody)"));
+    assert.ok(search.includes("pulled.cards"));
 
     const autocomplete = read("src/app/api/listings/autocomplete/route.ts");
     assert.ok(autocomplete.includes("entitlementFilteringEnabled: true"));

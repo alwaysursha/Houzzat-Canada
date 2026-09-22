@@ -13,7 +13,9 @@ import {
   PROPTX_LISTING_PROVIDER_KEY,
   resolvePropTxListingProvenance,
 } from "@/lib/proptx/listing-provenance";
-import { lookupAndUpsertOnDemand } from "@/lib/proptx/on-demand-lookup";
+import { mapMlsNumber } from "@/lib/proptx/map-listing";
+import { lookupPropTxOnDemand } from "@/lib/proptx/on-demand-lookup";
+import { transientListingDetailFromPropTx } from "@/lib/proptx/read-only-listing";
 import {
   decideMlsListingDetailEntitlement,
   evaluateWebListingDetailInventoryAccess,
@@ -41,11 +43,14 @@ export type LoadListingForDetailPageOptions = {
   requiredCapability?: ListingDataCapability;
   /**
    * Test-only injection for PropTx on-demand ordering proofs.
-   * Production omits → real {@link lookupAndUpsertOnDemand}.
+   * Production omits → real read-only {@link lookupPropTxOnDemand}.
    */
   onDemandLookup?: (
     mlsNumber: string,
-  ) => Promise<{ mlsNumbers: string[] }>;
+  ) => Promise<{
+    mlsNumbers: string[];
+    rows?: Array<Record<string, unknown>>;
+  }>;
   /**
    * Test-only Neon detail lookup injection (avoids live DB in selftests).
    */
@@ -164,7 +169,7 @@ export async function loadListingForDetailPage(
     const mlsNumber = mlsNumberRaw.trim().toUpperCase();
     if (!mlsNumber) return finish("SKIP", null);
 
-    const onDemand = options?.onDemandLookup ?? lookupAndUpsertOnDemand;
+    const onDemand = options?.onDemandLookup ?? lookupPropTxOnDemand;
     const getByMls =
       options?.getByMlsForDetailPage ??
       ((mls: string) => getListingProvider().getByMlsForDetailPage(mls));
@@ -178,9 +183,9 @@ export async function loadListingForDetailPage(
     const enforce = isWebListingDetailEntitlementEnforcementEnabled(
       options?.entitlementFilteringEnabled,
     );
+    let propTxOrganizationId: string | null = null;
     if (enforce) {
-      const propTxOrganizationId =
-        await resolveCanonicalPropTxOrganizationId(options);
+      propTxOrganizationId = await resolveCanonicalPropTxOrganizationId(options);
       if (
         !propTxOrganizationId ||
         !mayInvokePropTxOnDemandForDetail({
@@ -198,9 +203,23 @@ export async function loadListingForDetailPage(
     if (pulled.mlsNumbers.length === 0) return finish("MISS", null);
 
     listing = await getByMls(mlsNumber);
-    if (!listing) return finish("MISS", null);
-    // POST-LOOKUP: actual listing provenance must still pass G.10C0 when enforce ON.
-    return finish("MISS", applyDetailEntitlementGate(listing, options));
+    if (listing) {
+      return finish("MISS", applyDetailEntitlementGate(listing, options));
+    }
+
+    const row = (pulled.rows ?? []).find(
+      (candidate) => mapMlsNumber(candidate)?.toUpperCase() === mlsNumber,
+    );
+    const live = row
+      ? transientListingDetailFromPropTx(row, {
+          organizationId: propTxOrganizationId,
+          providerKey: propTxOrganizationId
+            ? PROPTX_LISTING_PROVIDER_KEY
+            : null,
+        })
+      : null;
+    if (!live) return finish("MISS", null);
+    return finish("MISS", applyDetailEntitlementGate(live, options));
   } catch (error) {
     logSsrHang({
       event: SSR_HANG_EVENT.listingFailure,

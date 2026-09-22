@@ -5,10 +5,6 @@ import { isOnMarketListingStatus } from "@/lib/listings/constants";
 import { getListingProvider } from "@/lib/listings/provider";
 import type { AutocompleteSuggestionGroup } from "@/lib/listings/types";
 import { prisma } from "@/lib/prisma";
-import {
-  clientIpFromRequest,
-  lookupAndUpsertOnDemand,
-} from "@/lib/proptx/on-demand-lookup";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { resolveClientAccess } from "@/lib/account-access";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
@@ -55,18 +51,6 @@ export async function GET(request: Request) {
     entitlement,
     entitlementFilteringEnabled: true,
   });
-
-  // Neon miss: kick off PropTx pull in the background so typing stays snappy.
-  // Blocking on-demand lookup made the dropdown lag / never open while typing.
-  const listingHits = suggestions.filter(
-    (s) => s.type === "listing" || s.type === "mls",
-  );
-  if (!empty && q.trim() && listingHits.length === 0) {
-    const clientIp = clientIpFromRequest(request);
-    void lookupAndUpsertOnDemand(q, { clientIp }).catch(() => {
-      // Best-effort warm of Neon — autocomplete already returned.
-    });
-  }
 
   if (!isClient) {
     suggestions = suggestions.map((s) => {

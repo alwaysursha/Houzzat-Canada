@@ -24,6 +24,7 @@
  *   pnpm mls:sync --fast
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 import {
   isMlsFastSyncMode,
   resolveMlsSyncMode,
@@ -33,6 +34,7 @@ config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
+  assertMlsSyncExecutionHost();
   const { runPropTxMlsSync } = await import("../src/lib/proptx/sync");
   const { getMlsSyncCities } = await import("../src/lib/proptx/sync-cities");
 

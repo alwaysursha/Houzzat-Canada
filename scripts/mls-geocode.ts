@@ -6,11 +6,13 @@
  * Usage: pnpm mls:geocode [limit=500]
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
+  assertMlsSyncExecutionHost();
   const { prisma } = await import("../src/lib/prisma");
   const { geocodeListing } = await import("../src/lib/geo/geocode");
   const {

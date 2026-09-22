@@ -5,11 +5,13 @@
  * Prefer listings missing sqft/yearBuilt or still marked approximate.
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
+  assertMlsSyncExecutionHost();
   const { Prisma, PrismaClient } = await import("@prisma/client");
   const { PrismaPg } = await import("@prisma/adapter-pg");
   const pg = await import("pg");

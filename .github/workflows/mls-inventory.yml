@@ -1,70 +1,16 @@
-name: MLS Active Inventory
+name: MLS Inventory (disabled)
 
-# Nightly city-by-city Active book fill (heavy). Incremental status/just-listed
-# runs every 5 minutes in mls-sync.yml without this pass.
+# Inert placeholder. Inventory synchronization runs only on the Sync Mac.
+# No schedule. No manual dispatch. This workflow cannot execute MLS scripts.
 on:
-  # PAUSED — heavy nightly inventory fill. Run manually via workflow_dispatch.
-  # schedule:
-  #   - cron: "30 6 * * *"
-  workflow_dispatch:
-    inputs:
-      maxPages:
-        description: "Page budget for Active inventory (~100 listings/page)"
-        required: false
-        default: "120"
-
-concurrency:
-  group: mls-active-inventory
-  cancel-in-progress: false
+  push:
+    branches:
+      - "__mls_execution_disabled__"
 
 jobs:
-  inventory:
+  disabled:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 180
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: pnpm db:generate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-
-      - name: Run Active inventory sync
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          PROPTX_ENDPOINT_URL: ${{ secrets.PROPTX_ENDPOINT_URL }}
-          PROPTX_BEARER_TOKEN: ${{ secrets.PROPTX_BEARER_TOKEN }}
-          PROPTX_TOKEN_ID: ${{ secrets.PROPTX_TOKEN_ID }}
-          PROPTX_VOW_BEARER_TOKEN: ${{ secrets.PROPTX_VOW_BEARER_TOKEN }}
-          PROPTX_VOW_TOKEN_ID: ${{ secrets.PROPTX_VOW_TOKEN_ID }}
-          PROPTX_FEED: idx
-          LISTING_PROVIDER: proptx
-          TYPESENSE_HOST: ${{ secrets.TYPESENSE_HOST }}
-          TYPESENSE_PORT: ${{ secrets.TYPESENSE_PORT }}
-          TYPESENSE_PROTOCOL: ${{ secrets.TYPESENSE_PROTOCOL }}
-          TYPESENSE_ADMIN_API_KEY: ${{ secrets.TYPESENSE_ADMIN_API_KEY }}
-          TYPESENSE_COLLECTION: ${{ secrets.TYPESENSE_COLLECTION }}
-          TYPESENSE_SYNC: "1"
-          MLS_SYNC_ACTIVE_INVENTORY: "1"
-          MAX_PAGES: ${{ github.event.inputs.maxPages || '120' }}
-        run: |
-          set -euo pipefail
-          echo "Running pnpm mls:sync ${MAX_PAGES} 7 property,openHouse (with active inventory)"
-          pnpm mls:sync "${MAX_PAGES}" 7 property,openHouse
+      - name: MLS inventory execution disabled
+        run: echo "MLS inventory sync is disabled on GitHub. The Sync Mac is the only writer."

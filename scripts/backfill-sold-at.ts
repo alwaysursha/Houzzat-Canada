@@ -5,11 +5,13 @@
  * Usage: pnpm exec tsx scripts/backfill-sold-at.ts [limit=200]
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
+  assertMlsSyncExecutionHost();
   const { prisma } = await import("../src/lib/prisma");
   const { getPropTxVowConfig, getPropTxSyncConfig } = await import(
     "../src/lib/proptx/config"

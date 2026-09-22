@@ -224,11 +224,12 @@ async function main() {
     assert.ok(importSrc.includes("providerKey: true"));
     assert.ok(docSrc.includes("buildListingSourceAuthorityKey"));
     assert.ok(docSrc.includes("sourceAuthorityKey"));
-    // hydrate / OH / status heal all go through syncListingToTypesense
-    assert.ok(
+    // Search status overlay stays on Neon. Typesense MLS writes are Sync Mac only.
+    assert.equal(
       read("src/lib/typesense/hydrate-status.ts").includes(
         "syncListingToTypesense",
       ),
+      false,
     );
     assert.ok(
       read("scripts/typesense-backfill-open-houses.ts").includes(

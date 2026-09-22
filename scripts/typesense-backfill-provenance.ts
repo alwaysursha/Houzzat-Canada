@@ -9,11 +9,13 @@
  *   pnpm typesense:provenance-backfill 250 0 5000    # batch, all days, max rows
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 
 config({ path: ".env.local", quiet: true });
 config({ path: ".env", quiet: true });
 
 async function main() {
+  assertMlsSyncExecutionHost();
   process.env.TYPESENSE_SYNC = "1";
 
   const batchSize = Math.max(1, Number(process.argv[2] ?? 250));

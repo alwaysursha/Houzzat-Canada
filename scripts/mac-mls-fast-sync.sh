@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Houzzat MLS Fast Sync for a dedicated Mac (launchd / manual).
 # Every 5–10 minutes: just-listed + recent mods → Neon → gated Typesense.
-# Does not advance MlsSyncCursor. May overlap the slow hourly job.
+# Does not advance MlsSyncCursor. Skips entirely while Full sync holds its lock.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 LOG_DIR="${HOZZAT_SYNC_LOG_DIR:-$HOME/Library/Logs/houzzat}"
-LOCK_DIR="${TMPDIR:-/tmp}/houzzat-mls-fast-sync.lock"
+# shellcheck source=mac-mls-lock.sh
+source "$ROOT/scripts/mac-mls-lock.sh"
+FULL_LOCK="${TMPDIR:-/tmp}/houzzat-mls-sync.lock"
+FAST_LOCK="${TMPDIR:-/tmp}/houzzat-mls-fast-sync.lock"
 mkdir -p "$LOG_DIR"
 
 LOG_FILE="$LOG_DIR/mls-fast-sync-$(date +%Y%m%d).log"
@@ -22,11 +25,10 @@ if [[ ! -f "$ROOT/.env.local" ]]; then
   exit 1
 fi
 
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  echo "SKIP: another mls-fast-sync is already running"
+if ! mls_fast_prepare "$FULL_LOCK" "$FAST_LOCK"; then
   exit 0
 fi
-trap 'ec=$?; rmdir "$LOCK_DIR" 2>/dev/null || true; if [[ $ec -ne 0 ]]; then echo "======== $(date "+%Y-%m-%d %H:%M:%S %Z") mls-fast-sync FAILED exit=${ec} ========"; fi' EXIT
+trap 'ec=$?; mls_lock_release "$FAST_LOCK"; if [[ $ec -ne 0 ]]; then echo "======== $(date "+%Y-%m-%d %H:%M:%S %Z") mls-fast-sync FAILED exit=${ec} ========"; fi' EXIT
 
 export GOOGLE_MAPS_BILLING_ENABLED="${GOOGLE_MAPS_BILLING_ENABLED:-0}"
 export GEOCODE_SKIP_GOOGLE="${GEOCODE_SKIP_GOOGLE:-1}"
@@ -41,6 +43,6 @@ if ! command -v pnpm >/dev/null 2>&1; then
 fi
 
 echo "Running: pnpm mls:sync --fast"
-echo "Lock: ${LOCK_DIR} (distinct from houzzat-mls-sync.lock)"
+echo "Lock: ${FAST_LOCK} (yields to ${FULL_LOCK})"
 pnpm mls:sync --fast
 echo "======== $(date '+%Y-%m-%d %H:%M:%S %Z') mls-fast-sync done ========"

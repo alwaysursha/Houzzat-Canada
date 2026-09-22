@@ -4,11 +4,13 @@
  * Processes maxPages * 50 listings (default ~1000).
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
+  assertMlsSyncExecutionHost();
   const { runPropTxMlsSync } = await import("../src/lib/proptx/sync");
   const maxPages = Number(process.argv[2] ?? 20);
 

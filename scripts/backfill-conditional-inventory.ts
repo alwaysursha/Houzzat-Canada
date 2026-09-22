@@ -9,6 +9,7 @@
  *   pnpm exec tsx scripts/backfill-conditional-inventory.ts --dry-run
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
@@ -47,6 +48,7 @@ function isNeonSizeLimitError(err: unknown): boolean {
 }
 
 async function main() {
+  assertMlsSyncExecutionHost();
   const { prisma } = await import("../src/lib/prisma");
   const { getPropTxSyncConfig } = await import("../src/lib/proptx/config");
   const { proptxPages, proptxJson } = await import("../src/lib/proptx/client");

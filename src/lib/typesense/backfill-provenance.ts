@@ -9,6 +9,7 @@ import {
 } from "@/lib/typesense/listing-document";
 import { ensureTypesenseListingProvenanceFields } from "@/lib/typesense/listing-provenance-fields";
 import { typesenseEnv } from "@/lib/typesense/env";
+import { assertMlsSyncExecutionHost } from "@/lib/proptx/mls-sync-host";
 
 export type TypesenseProvenanceBackfillResult = {
   ok: boolean;
@@ -29,6 +30,7 @@ export async function backfillTypesenseListingProvenance(options?: {
   sinceDays?: number | null;
   maxRows?: number | null;
 }): Promise<TypesenseProvenanceBackfillResult> {
+  assertMlsSyncExecutionHost();
   const hasCreds = Boolean(
     typesenseEnv("TYPESENSE_HOST") && typesenseEnv("TYPESENSE_ADMIN_API_KEY"),
   );

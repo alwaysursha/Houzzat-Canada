@@ -5,8 +5,7 @@ function authorizeMonitorCron(request: Request): boolean {
   const secret =
     process.env.MONITOR_CRON_SECRET?.trim() ||
     process.env.DIGEST_CRON_SECRET?.trim() ||
-    process.env.CRON_SECRET?.trim() ||
-    process.env.MLS_SYNC_SECRET?.trim();
+    process.env.CRON_SECRET?.trim();
   if (!secret) return false;
   const header = request.headers.get("x-monitor-cron-secret");
   const digestHeader = request.headers.get("x-digest-cron-secret");
@@ -19,7 +18,7 @@ function authorizeMonitorCron(request: Request): boolean {
 
 /**
  * Scheduled Watch Property / Watch Area checks.
- * Auth: MONITOR_CRON_SECRET | DIGEST_CRON_SECRET | CRON_SECRET | MLS_SYNC_SECRET
+ * Auth: MONITOR_CRON_SECRET | DIGEST_CRON_SECRET | CRON_SECRET
  * via Bearer, x-monitor-cron-secret, or x-digest-cron-secret.
  *
  * Optional JSON body: { userId?: string } — scoped QA for one buyer only.

@@ -4,12 +4,14 @@
  * Optional: --backfill to remap PropTx conditionals into Neon + Typesense heal.
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 config({ path: ".env.local" });
 config({ path: ".env" });
 
 const DO_BACKFILL = process.argv.includes("--backfill");
 
 async function main() {
+  assertMlsSyncExecutionHost();
   const { prisma } = await import("../src/lib/prisma");
   const { listingStatusLabel } = await import("../src/lib/listings/constants");
   const { mapListingStatus, mapTransactionType } = await import(

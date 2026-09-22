@@ -7,6 +7,10 @@ import {
   getPropTxSyncConfig,
 } from "@/lib/proptx/config";
 import { PropTxError, proptxJson, proptxPages } from "@/lib/proptx/client";
+import {
+  readPropTxTransportStats,
+  resetPropTxTransportStats,
+} from "@/lib/proptx/transport-retry";
 import type { PropTxConfig } from "@/lib/proptx/config";
 import { geocodeListing } from "@/lib/geo/geocode";
 import { isKnownCityCentroid } from "@/lib/geo/city-centroids";
@@ -39,6 +43,21 @@ import {
   type PropTxListingProvenance,
 } from "@/lib/proptx/listing-provenance";
 import {
+  evaluateFastListingChange,
+  readMlsTimestamps,
+  type FastIncomingProperty,
+  type FastListingComparable,
+} from "@/lib/proptx/mls-fast-change";
+import {
+  completionMediaSourceStamp,
+  mediaStampAfterOutcome,
+  reconcileCappedMedia,
+  shouldFetchListingMedia,
+  MEDIA_DELAYED_COOLDOWN_MS,
+  MEDIA_DELAYED_GRACE_MS,
+  type MediaSyncOutcome,
+} from "@/lib/proptx/mls-media-sync-state";
+import {
   assertMlsSyncCursorAccess,
   isMlsFastSyncMode,
   MLS_FAST_JUST_LISTED_DAYS,
@@ -52,6 +71,12 @@ import {
   syncListingToTypesense,
   typesenseSyncDisabledReason,
 } from "@/lib/typesense/sync-listing";
+import { assertMlsSyncExecutionHost } from "@/lib/proptx/mls-sync-host";
+import {
+  executeOnMarketReconciliation,
+  formatOnMarketReconcileLog,
+  type OnMarketReconcileStats,
+} from "@/lib/proptx/mls-on-market-reconcile";
 
 export type MlsSyncStats = {
   propertyUpserted: number;
@@ -79,6 +104,30 @@ export type MlsSyncStats = {
   typesenseDisabled: number;
   /** Distinguishes fast freshness ticks from full/slow maintenance runs. */
   mode: MlsSyncMode;
+  /** Property rows that reached the fast change gate (after city + provenance). */
+  propertyInspected: number;
+  /** Fast Sync: identical Property, no Listing/Typesense/Media work. */
+  propertyUnchangedSkipped: number;
+  /** Fast Sync: no existing mlsNumber row. */
+  propertyNew: number;
+  propertyStatusChanged: number;
+  propertyPriceChanged: number;
+  propertySoldChanged: number;
+  propertyPhotoChanged: number;
+  /** PropTx Media requests issued for a listing (not rows upserted). */
+  mediaFetches: number;
+  /** Off-market reconciliation. Null when the pass did not run. */
+  onMarketReconcile: OnMarketReconcileStats | null;
+  /** Shared PropTx transport counters for this process since the run started. */
+  proptxRequests: number;
+  proptxRetries: number;
+  proptx429: number;
+  proptx5xx: number;
+  proptxTimeouts: number;
+  proptxNetworkErrors: number;
+  proptxRetryAfterWaits: number;
+  proptxRetriesExhausted: number;
+  proptxBackoffMs: number;
 };
 
 /** Cap inline geocode so property sync stays within the 5-minute cron window. */
@@ -533,47 +582,84 @@ async function syncHistoryBackfill(options: {
   );
 }
 
-/** Attach up to NEON_LISTING_MEDIA_CAP photos; full gallery loads async on detail pages. */
+/**
+ * Attach up to NEON_LISTING_MEDIA_CAP photos. Full gallery stays a live detail read.
+ * Empty and failed fetches do not write Media and do not count as complete.
+ */
 async function syncMediaForListing(
   listingKey: string,
   listingId: string,
   stats: MlsSyncStats,
   options?: { maxPhotos?: number },
-): Promise<void> {
+): Promise<MediaSyncOutcome> {
   const maxPhotos = Math.max(
     1,
     Math.min(options?.maxPhotos ?? NEON_LISTING_MEDIA_CAP, NEON_LISTING_MEDIA_CAP),
   );
-  const rows = await fetchPropertyPhotos(listingKey);
-  const selected = preferListingPhotos(rows, maxPhotos);
-  if (selected.length === 0) return;
-
-  const keepUrls = new Set(selected.map((p) => p.url));
-  for (const photo of selected) {
-    try {
-      await upsertMappedMedia(
-        listingId,
-        {
-          url: photo.url,
-          sortOrder: photo.sortOrder,
-          isPrimary: photo.isPrimary,
-        },
-        stats,
-      );
-    } catch (err) {
-      pushSyncError(
-        stats,
-        `media ${listingKey}: ${err instanceof Error ? err.message : "failed"}`,
-      );
-      if (isNeonSizeLimitError(err)) throw err;
-    }
+  stats.mediaFetches += 1;
+  let rows: Awaited<ReturnType<typeof fetchPropertyPhotos>>;
+  try {
+    rows = await fetchPropertyPhotos(listingKey);
+  } catch (err) {
+    pushSyncError(
+      stats,
+      `media ${listingKey}: ${err instanceof Error ? err.message : "failed"}`,
+    );
+    if (isNeonSizeLimitError(err)) throw err;
+    return "error";
   }
+  const selected = preferListingPhotos(rows, maxPhotos);
+  if (selected.length === 0) return "empty";
 
-  // Drop extras so Neon never keeps more than the capped set.
-  await prisma.listingMedia.deleteMany({
-    where: {
-      listingId,
-      url: { notIn: [...keepUrls] },
+  const existing = await prisma.listingMedia.findMany({
+    where: { listingId },
+    select: { url: true, sortOrder: true, isPrimary: true },
+  });
+  const plan = reconcileCappedMedia(existing, selected);
+
+  try {
+    for (const photo of plan.upserts) {
+      await upsertMappedMedia(listingId, photo, stats);
+    }
+    if (plan.deleteUrls.length > 0) {
+      await prisma.listingMedia.deleteMany({
+        where: {
+          listingId,
+          url: { in: plan.deleteUrls },
+        },
+      });
+    }
+  } catch (err) {
+    pushSyncError(
+      stats,
+      `media ${listingKey}: ${err instanceof Error ? err.message : "failed"}`,
+    );
+    if (isNeonSizeLimitError(err)) throw err;
+    return "error";
+  }
+  return "complete";
+}
+
+async function commitMediaSyncStamp(
+  listingId: string,
+  outcome: MediaSyncOutcome,
+  previous: {
+    mediaSourceTimestamp: Date | null;
+    mediaSyncedAt: Date | null;
+  },
+  sourceStamp: Date,
+): Promise<void> {
+  const completedAt = new Date();
+  const next = mediaStampAfterOutcome(outcome, previous, {
+    mediaSourceTimestamp: sourceStamp,
+    mediaSyncedAt: completedAt,
+  });
+  if (outcome !== "complete") return;
+  await prisma.listing.update({
+    where: { id: listingId },
+    data: {
+      mediaSourceTimestamp: next.mediaSourceTimestamp,
+      mediaSyncedAt: next.mediaSyncedAt,
     },
   });
 }
@@ -664,6 +750,139 @@ function recordProvenanceSkip(
   pushSyncError(options.stats, `provenance ${mlsNumber}: ${err.code}`);
 }
 
+function fastComparableFromListing(row: {
+  status: string;
+  listPrice: number;
+  soldPrice: number | null;
+  soldAt: Date | null;
+  updatedAtMls: Date | null;
+  transactionType: string;
+  segment: string;
+  propertyType: string;
+  beds: number;
+  baths: number;
+  sqft: number | null;
+  parkingSpaces: number;
+  yearBuilt: number | null;
+  taxes: number | null;
+  maintenanceFee: number | null;
+  addressLine: string;
+  unitNumber: string | null;
+  city: string;
+  community: string | null;
+  postalCode: string | null;
+  province: string;
+  description: string | null;
+  brokerageName: string | null;
+  listedAt: Date | null;
+  listingKey: string | null;
+}): FastListingComparable {
+  return {
+    status: row.status,
+    listPrice: row.listPrice,
+    soldPrice: row.soldPrice,
+    soldAt: row.soldAt,
+    updatedAtMls: row.updatedAtMls,
+    transactionType: row.transactionType,
+    segment: row.segment,
+    propertyType: row.propertyType,
+    beds: row.beds,
+    baths: row.baths,
+    sqft: row.sqft,
+    parkingSpaces: row.parkingSpaces,
+    yearBuilt: row.yearBuilt,
+    taxes: row.taxes,
+    maintenanceFee: row.maintenanceFee,
+    addressLine: row.addressLine,
+    unitNumber: row.unitNumber,
+    city: row.city,
+    community: row.community,
+    postalCode: row.postalCode,
+    province: row.province,
+    description: stripApproxPinNote(row.description ?? ""),
+    brokerageName: row.brokerageName ?? "",
+    listedAt: row.listedAt,
+    listingKey: row.listingKey,
+  };
+}
+
+function stampDate(value: unknown): Date | null {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+function stampNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function fastIncomingFromMapped(
+  data: {
+    status?: unknown;
+    listPrice?: unknown;
+    soldPrice?: unknown;
+    soldAt?: unknown;
+    updatedAtMls?: unknown;
+    transactionType?: unknown;
+    segment?: unknown;
+    propertyType?: unknown;
+    beds?: unknown;
+    baths?: unknown;
+    sqft?: unknown;
+    parkingSpaces?: unknown;
+    yearBuilt?: unknown;
+    taxes?: unknown;
+    maintenanceFee?: unknown;
+    addressLine?: unknown;
+    unitNumber?: unknown;
+    city?: unknown;
+    community?: unknown;
+    postalCode?: unknown;
+    province?: unknown;
+    description?: unknown;
+    brokerageName?: unknown;
+    listedAt?: unknown;
+  },
+  row: PropTxProperty,
+  durableListingKey: string,
+): FastIncomingProperty {
+  return {
+    status: String(data.status ?? ""),
+    listPrice: stampNumber(data.listPrice) ?? 0,
+    soldPrice: stampNumber(data.soldPrice),
+    soldAt: stampDate(data.soldAt),
+    updatedAtMls: stampDate(data.updatedAtMls),
+    transactionType: String(data.transactionType ?? ""),
+    segment: String(data.segment ?? ""),
+    propertyType: String(data.propertyType ?? ""),
+    beds: stampNumber(data.beds) ?? 0,
+    baths: stampNumber(data.baths) ?? 0,
+    sqft: stampNumber(data.sqft),
+    parkingSpaces: stampNumber(data.parkingSpaces) ?? 0,
+    yearBuilt: stampNumber(data.yearBuilt),
+    taxes: stampNumber(data.taxes),
+    maintenanceFee: stampNumber(data.maintenanceFee),
+    addressLine: String(data.addressLine ?? ""),
+    unitNumber: data.unitNumber == null ? null : String(data.unitNumber),
+    city: String(data.city ?? ""),
+    community: data.community == null ? null : String(data.community),
+    postalCode: data.postalCode == null ? null : String(data.postalCode),
+    province: String(data.province ?? ""),
+    description: stripApproxPinNote(String(data.description ?? "")),
+    brokerageName: String(data.brokerageName ?? ""),
+    listedAt: stampDate(data.listedAt),
+    listingKey: durableListingKey,
+    ...readMlsTimestamps(row),
+  };
+}
+
 async function upsertPropertyRow(
   row: PropTxProperty,
   options: {
@@ -677,6 +896,11 @@ async function upsertPropertyRow(
     skipMedia?: boolean;
     /** Fast sync: skip inline street-geocode drain (slow job / mls:geocode). */
     skipGeocode?: boolean;
+    /**
+     * Fast Sync only. Skip Listing/Typesense/Media when the Property is unchanged.
+     * Full sync and on-demand upserts leave this unset.
+     */
+    fastUnchangedSkip?: boolean;
     /** Feed-bound TRREB/PropTx provenance (resolved once per invocation). */
     provenance: PropTxListingProvenance;
   },
@@ -814,6 +1038,33 @@ async function upsertPropertyRow(
         organizationId: true,
         providerKey: true,
         mlsNumber: true,
+        status: true,
+        listPrice: true,
+        soldPrice: true,
+        soldAt: true,
+        updatedAtMls: true,
+        transactionType: true,
+        segment: true,
+        propertyType: true,
+        beds: true,
+        baths: true,
+        sqft: true,
+        parkingSpaces: true,
+        yearBuilt: true,
+        taxes: true,
+        maintenanceFee: true,
+        addressLine: true,
+        unitNumber: true,
+        city: true,
+        community: true,
+        postalCode: true,
+        province: true,
+        description: true,
+        brokerageName: true,
+        listedAt: true,
+        mediaSourceTimestamp: true,
+        mediaSyncedAt: true,
+        photosChangeTimestamp: true,
       },
     });
 
@@ -866,6 +1117,32 @@ async function upsertPropertyRow(
       }
     }
 
+    let allowMediaFetch = true;
+    if (options.fastUnchangedSkip) {
+      options.stats.propertyInspected += 1;
+      const decision = evaluateFastListingChange(
+        existingListing ? fastComparableFromListing(existingListing) : null,
+        fastIncomingFromMapped(data, row, durableListingKey),
+      );
+      if (!decision.write) {
+        // FAST_UNCHANGED_SKIP — no Listing write, synthetic history, Typesense, or Media.
+        options.stats.propertyUnchangedSkipped += 1;
+        return null;
+      }
+      if (decision.isNew) options.stats.propertyNew += 1;
+      if (decision.flags.statusChanged) options.stats.propertyStatusChanged += 1;
+      if (decision.flags.priceChanged) options.stats.propertyPriceChanged += 1;
+      if (decision.flags.soldChanged) options.stats.propertySoldChanged += 1;
+      if (decision.flags.photoChanged) options.stats.propertyPhotoChanged += 1;
+      allowMediaFetch = decision.fetchMedia;
+    }
+    // Fast fetchMedia is recorded above. The Media call itself follows
+    // shouldFetchListingMedia so a price change, a missing photo timestamp,
+    // or a count under 5 cannot refetch a completed stamp.
+    void allowMediaFetch;
+
+    const observedStamps = readMlsTimestamps(row);
+
     // Mirrors on create only — never overwrite conflicting mirrors via update.
     // Use unchecked create so organizationId/providerKey scalars are writable.
     const listing = await prisma.listing.upsert({
@@ -877,6 +1154,9 @@ async function upsertPropertyRow(
         providerKey: options.provenance.providerKey,
         dataSource: "mls",
         isMock: false,
+        ...(observedStamps.photosChangeTimestamp
+          ? { photosChangeTimestamp: observedStamps.photosChangeTimestamp }
+          : {}),
       },
       update: {
         listingKey: durableListingKey,
@@ -915,6 +1195,9 @@ async function upsertPropertyRow(
         updatedAtMls: data.updatedAtMls,
         daysOnMarket: data.daysOnMarket,
         isMock: false,
+        ...(observedStamps.photosChangeTimestamp
+          ? { photosChangeTimestamp: observedStamps.photosChangeTimestamp }
+          : {}),
       },
     });
 
@@ -963,18 +1246,49 @@ async function upsertPropertyRow(
     }
 
     // Keep up to NEON_LISTING_MEDIA_CAP photos for SSR galleries.
-    // Remaining photos load async from PropTx on the listing detail page.
+    // Remaining photos load live on the listing detail page and are not stored.
     if (!options.skipMedia && data.listingKey) {
       const mediaCount = await prisma.listingMedia.count({
         where: { listingId: listing.id },
       });
-      if (mediaCount < NEON_LISTING_MEDIA_CAP) {
+      const listedAt =
+        data.listedAt instanceof Date
+          ? data.listedAt
+          : data.listedAt
+            ? new Date(data.listedAt)
+            : listing.listedAt;
+      const mediaDecision = shouldFetchListingMedia({
+        mediaCount,
+        mediaSourceTimestamp: existingListing?.mediaSourceTimestamp ?? null,
+        mediaSyncedAt: existingListing?.mediaSyncedAt ?? null,
+        listedAt,
+        photosChangeTimestamp: observedStamps.photosChangeTimestamp,
+        now: new Date(),
+      });
+      if (mediaDecision.fetch) {
         try {
-          await syncMediaForListing(
+          const outcome = await syncMediaForListing(
             data.listingKey,
             listing.id,
             options.stats,
             { maxPhotos: NEON_LISTING_MEDIA_CAP },
+          );
+          const fallback =
+            data.updatedAtMls instanceof Date
+              ? data.updatedAtMls
+              : new Date(data.updatedAtMls);
+          await commitMediaSyncStamp(
+            listing.id,
+            outcome,
+            {
+              mediaSourceTimestamp: existingListing?.mediaSourceTimestamp ?? null,
+              mediaSyncedAt: existingListing?.mediaSyncedAt ?? null,
+            },
+            completionMediaSourceStamp({
+              photosChangeTimestamp: observedStamps.photosChangeTimestamp,
+              modificationTimestamp: observedStamps.modificationTimestamp,
+              fallback: Number.isNaN(fallback.getTime()) ? listedAt : fallback,
+            }),
           );
         } catch (err) {
           options.stats.errors.push(
@@ -1042,6 +1356,7 @@ export async function upsertPropTxPropertiesOnDemand(
   rows: PropTxProperty[],
   options?: { concurrency?: number; skipMedia?: boolean },
 ): Promise<string[]> {
+  assertMlsSyncExecutionHost();
   if (rows.length === 0) return [];
 
   const stats = emptyStats();
@@ -1086,28 +1401,8 @@ export async function upsertPropTxPropertiesOnDemand(
       if (!listing) continue;
       mlsNumbers.push(mls);
 
-      if (!skipMedia && listing.listingKey) {
-        const mediaCount = await prisma.listingMedia.count({
-          where: { listingId: listing.id },
-        });
-        if (mediaCount < NEON_LISTING_MEDIA_CAP) {
-          try {
-            await syncMediaForListing(listing.listingKey, listing.id, stats, {
-              maxPhotos: NEON_LISTING_MEDIA_CAP,
-            });
-          } catch {
-            // Gallery photos are best-effort on the request path
-          }
-        } else if (mediaCount > NEON_LISTING_MEDIA_CAP) {
-          try {
-            await pruneListingMediaToCap(listing.id);
-          } catch {
-            // Prune is best-effort on the request path
-          }
-        }
-      }
-
-      // Re-sync after possible media attach on the request path.
+      // Media is decided once inside upsertPropertyRow. A second count < 5
+      // fetch here ignored the completion stamp.
       await pushListingToTypesense(listing.id, stats);
 
       try {
@@ -1136,6 +1431,7 @@ async function syncJustListedProperties(options: {
   stats: MlsSyncStats;
   config?: PropTxConfig | null;
   skipGeocode?: boolean;
+  fastUnchangedSkip?: boolean;
 }): Promise<void> {
   const provenance = await createPropTxProvenanceSession(
     createPrismaPropTxProvenanceStore(prisma),
@@ -1189,6 +1485,7 @@ async function syncJustListedProperties(options: {
             skipReasons,
             fetchNested: false,
             skipGeocode: options.skipGeocode,
+            fastUnchangedSkip: options.fastUnchangedSkip,
             provenance,
           });
         }
@@ -1226,6 +1523,7 @@ async function syncRecentProperties(options: {
   stats: MlsSyncStats;
   config?: PropTxConfig | null;
   skipGeocode?: boolean;
+  fastUnchangedSkip?: boolean;
 }): Promise<void> {
   const provenance = await createPropTxProvenanceSession(
     createPrismaPropTxProvenanceStore(prisma),
@@ -1256,6 +1554,7 @@ async function syncRecentProperties(options: {
         skipReasons,
         fetchNested: false,
         skipGeocode: options.skipGeocode,
+        fastUnchangedSkip: options.fastUnchangedSkip,
         provenance,
       });
     }
@@ -1428,8 +1727,11 @@ async function syncProperties(options: {
 }
 
 /**
- * Backfill photos for MLS rows with fewer than NEON_LISTING_MEDIA_CAP media rows.
- * Cap via maxListings ≈ number of listings to process this run.
+ * Media gap-fill. Incomplete means zero photos, never successfully synced,
+ * a newer observed PhotosChangeTimestamp, or a delayed-upload retry whose
+ * 24-hour cooldown has elapsed inside the 48-hour grace window.
+ * A stamped 1–4 photo listing is not selected.
+ * Does not read or advance the Media cursor.
  */
 async function syncMediaBackfill(options: {
   maxListings: number;
@@ -1437,85 +1739,108 @@ async function syncMediaBackfill(options: {
   concurrency?: number;
 }): Promise<void> {
   const take = options.maxListings;
-  const cap = NEON_LISTING_MEDIA_CAP;
+  const now = new Date();
+  const graceCutoff = new Date(now.getTime() - MEDIA_DELAYED_GRACE_MS);
+  const cooldownCutoff = new Date(now.getTime() - MEDIA_DELAYED_COOLDOWN_MS);
 
   type BackfillRow = {
     id: string;
     listingKey: string;
     mlsNumber: string;
+    status: string;
+    listedAt: Date | null;
+    updatedAtMls: Date | null;
+    mediaSourceTimestamp: Date | null;
+    mediaSyncedAt: Date | null;
+    photosChangeTimestamp: Date | null;
+    mediaCount: number;
   };
 
-  async function loadUnderfilled(
-    bucket: "ACTIVE" | "CLOSED" | "INACTIVE",
-    limit: number,
-  ): Promise<BackfillRow[]> {
-    if (limit <= 0) return [];
-    if (bucket === "ACTIVE") {
-      return prisma.$queryRaw<BackfillRow[]>`
-        SELECT l.id, l."listingKey", l."mlsNumber"
-        FROM "Listing" l
-        WHERE l."dataSource" = 'mls'
-          AND l."isMock" = false
-          AND l."listingKey" IS NOT NULL
-          AND l.status = 'ACTIVE'
+  const listings = await prisma.$queryRaw<BackfillRow[]>`
+    SELECT
+      l.id,
+      l."listingKey",
+      l."mlsNumber",
+      l.status::text AS status,
+      l."listedAt",
+      l."updatedAtMls",
+      l."mediaSourceTimestamp",
+      l."mediaSyncedAt",
+      l."photosChangeTimestamp",
+      c.n AS "mediaCount"
+    FROM "Listing" l
+    JOIN LATERAL (
+      SELECT count(*)::int AS n
+      FROM "ListingMedia" m
+      WHERE m."listingId" = l.id
+    ) c ON true
+    WHERE l."dataSource" = 'mls'
+      AND l."isMock" = false
+      AND l."listingKey" IS NOT NULL
+      AND (
+        (
+          l.status IN ('ACTIVE', 'SOLD_CONDITIONAL')
           AND (
-            SELECT count(*)::int FROM "ListingMedia" m WHERE m."listingId" = l.id
-          ) <> ${cap}
-        ORDER BY l."listedAt" DESC NULLS LAST, l."updatedAt" DESC
-        LIMIT ${limit}
-      `;
-    }
-    if (bucket === "CLOSED") {
-      return prisma.$queryRaw<BackfillRow[]>`
-        SELECT l.id, l."listingKey", l."mlsNumber"
-        FROM "Listing" l
-        WHERE l."dataSource" = 'mls'
-          AND l."isMock" = false
-          AND l."listingKey" IS NOT NULL
-          AND l.status IN ('LEASED', 'SOLD')
+            c.n = 0
+            OR l."mediaSourceTimestamp" IS NULL
+            OR (
+              l."photosChangeTimestamp" IS NOT NULL
+              AND l."mediaSourceTimestamp" IS NOT NULL
+              AND l."photosChangeTimestamp" > l."mediaSourceTimestamp"
+            )
+            OR (
+              c.n BETWEEN 1 AND 4
+              AND l."mediaSourceTimestamp" IS NOT NULL
+              AND l."listedAt" >= ${graceCutoff}
+              AND (
+                l."mediaSyncedAt" IS NULL
+                OR l."mediaSyncedAt" <= ${cooldownCutoff}
+              )
+            )
+          )
+        )
+        OR (
+          l.status IN ('SOLD', 'LEASED', 'TERMINATED', 'EXPIRED', 'SUSPENDED')
           AND (
-            SELECT count(*)::int FROM "ListingMedia" m WHERE m."listingId" = l.id
-          ) <> ${cap}
-        ORDER BY l."listedAt" DESC NULLS LAST, l."updatedAt" DESC
-        LIMIT ${limit}
-      `;
-    }
-    return prisma.$queryRaw<BackfillRow[]>`
-      SELECT l.id, l."listingKey", l."mlsNumber"
-      FROM "Listing" l
-      WHERE l."dataSource" = 'mls'
-        AND l."isMock" = false
-        AND l."listingKey" IS NOT NULL
-        AND l.status IN ('TERMINATED', 'EXPIRED', 'SUSPENDED')
-        AND (
-          SELECT count(*)::int FROM "ListingMedia" m WHERE m."listingId" = l.id
-        ) <> ${cap}
-      ORDER BY l."listedAt" DESC NULLS LAST, l."updatedAt" DESC
-      LIMIT ${limit}
-    `;
-  }
-
-  // Newest ACTIVE underfilled first, then closed, then inactive.
-  let listings = await loadUnderfilled("ACTIVE", take);
-  if (listings.length < take) {
-    const closed = await loadUnderfilled("CLOSED", take - listings.length);
-    const seen = new Set(listings.map((l) => l.id));
-    for (const row of closed) {
-      if (seen.has(row.id)) continue;
-      listings.push(row);
-    }
-  }
-  if (listings.length < take) {
-    const inactive = await loadUnderfilled("INACTIVE", take - listings.length);
-    const seen = new Set(listings.map((l) => l.id));
-    for (const row of inactive) {
-      if (seen.has(row.id)) continue;
-      listings.push(row);
-    }
-  }
+            c.n = 0
+            OR l."mediaSourceTimestamp" IS NULL
+            OR (
+              l."photosChangeTimestamp" IS NOT NULL
+              AND l."mediaSourceTimestamp" IS NOT NULL
+              AND l."photosChangeTimestamp" > l."mediaSourceTimestamp"
+            )
+          )
+        )
+      )
+    ORDER BY
+      CASE
+        WHEN l.status IN ('ACTIVE', 'SOLD_CONDITIONAL') AND c.n = 0 THEN 0
+        WHEN l.status IN ('ACTIVE', 'SOLD_CONDITIONAL')
+          AND l."mediaSourceTimestamp" IS NULL
+          AND c.n BETWEEN 1 AND 4 THEN 1
+        WHEN l.status IN ('ACTIVE', 'SOLD_CONDITIONAL')
+          AND l."photosChangeTimestamp" IS NOT NULL
+          AND l."mediaSourceTimestamp" IS NOT NULL
+          AND l."photosChangeTimestamp" > l."mediaSourceTimestamp" THEN 2
+        WHEN l.status IN ('ACTIVE', 'SOLD_CONDITIONAL')
+          AND c.n BETWEEN 1 AND 4
+          AND l."mediaSourceTimestamp" IS NOT NULL
+          AND l."listedAt" >= ${graceCutoff}
+          AND (
+            l."mediaSyncedAt" IS NULL
+            OR l."mediaSyncedAt" <= ${cooldownCutoff}
+          ) THEN 3
+        WHEN l.status IN ('ACTIVE', 'SOLD_CONDITIONAL')
+          AND l."mediaSourceTimestamp" IS NULL THEN 4
+        WHEN l.status IN ('SOLD', 'LEASED') THEN 5
+        ELSE 6
+      END,
+      l."listedAt" DESC NULLS LAST
+    LIMIT ${take}
+  `;
 
   console.log(
-    `[mls] Media backfill start (${listings.length} listings needing ${cap} photos (fill or prune), concurrency=${Math.max(1, Math.min(options.concurrency ?? 6, 12))})`,
+    `[mls] Media backfill start (${listings.length} eligible listings, concurrency=${Math.max(1, Math.min(options.concurrency ?? 6, 12))})`,
   );
 
   const concurrency = Math.max(1, Math.min(options.concurrency ?? 6, 12));
@@ -1529,18 +1854,38 @@ async function syncMediaBackfill(options: {
       index += 1;
       if (!current?.listingKey) continue;
       try {
-        const mediaCount = await prisma.listingMedia.count({
-          where: { listingId: current.id },
+        const mediaCount = Number(current.mediaCount);
+        const decision = shouldFetchListingMedia({
+          mediaCount,
+          mediaSourceTimestamp: current.mediaSourceTimestamp,
+          mediaSyncedAt: current.mediaSyncedAt,
+          listedAt: current.listedAt,
+          photosChangeTimestamp: current.photosChangeTimestamp,
+          now,
         });
-        if (mediaCount > NEON_LISTING_MEDIA_CAP) {
-          await pruneListingMediaToCap(current.id);
-        } else if (mediaCount < NEON_LISTING_MEDIA_CAP) {
-          await syncMediaForListing(
+        if (decision.fetch) {
+          const outcome = await syncMediaForListing(
             current.listingKey,
             current.id,
             options.stats,
             { maxPhotos: NEON_LISTING_MEDIA_CAP },
           );
+          const fallback = current.updatedAtMls ?? current.listedAt ?? now;
+          await commitMediaSyncStamp(
+            current.id,
+            outcome,
+            {
+              mediaSourceTimestamp: current.mediaSourceTimestamp,
+              mediaSyncedAt: current.mediaSyncedAt,
+            },
+            completionMediaSourceStamp({
+              photosChangeTimestamp: current.photosChangeTimestamp,
+              modificationTimestamp: null,
+              fallback,
+            }),
+          );
+        } else if (mediaCount > NEON_LISTING_MEDIA_CAP) {
+          await pruneListingMediaToCap(current.id);
         }
         await pushListingToTypesense(current.id, options.stats);
       } catch (err) {
@@ -1867,6 +2212,7 @@ async function runMlsFastPropertyPasses(options: {
     stats: options.stats,
     config: options.config,
     skipGeocode: true,
+    fastUnchangedSkip: true,
   });
   await syncRecentProperties({
     days: MLS_FAST_RECENT_DAYS,
@@ -1874,6 +2220,7 @@ async function runMlsFastPropertyPasses(options: {
     stats: options.stats,
     config: options.config,
     skipGeocode: true,
+    fastUnchangedSkip: true,
   });
 }
 
@@ -1899,6 +2246,7 @@ export async function runPropTxMlsSync(options?: {
   /** Fast: just-listed + recent mods only. Never advances Property/Media cursors. */
   mode?: MlsSyncMode;
 }): Promise<MlsSyncResult> {
+  assertMlsSyncExecutionHost();
   const mode: MlsSyncMode =
     options?.mode === "fast" ? "fast" : MLS_FULL_SYNC_MODE;
   const isFast = isMlsFastSyncMode(mode);
@@ -1930,13 +2278,14 @@ export async function runPropTxMlsSync(options?: {
 
   const run = await prisma.mlsSyncRun.create({
     data: {
-      resource: isFast ? "fast" : "all",
+      resource: isFast ? "fast" : options?.mediaBackfillOnly ? "media" : "all",
       status: "running",
       message: `MLS sync starting (${config.feed}, mode=${mode})`,
     },
   });
 
   const stats = emptyStats(mode);
+  resetPropTxTransportStats();
 
   try {
     // CloseDate was stored as soldAt; clear future closings so "Recently sold"
@@ -2056,8 +2405,8 @@ export async function runPropTxMlsSync(options?: {
         );
       }
 
-      // 4) Photo gap-fill (ACTIVE → SOLD/LEASED → TERMINATED/EXPIRED/SUSPENDED).
-      // New/updated listings also get a cover in upsertPropertyRow when media is empty.
+      // 4) Photo gap-fill: zero photos, never synced, photo-timestamp changes,
+      // and cooldown-eligible delayed uploads. Not "count != 5".
       try {
         await syncMediaBackfill({
           maxListings: mediaCap,
@@ -2086,6 +2435,20 @@ export async function runPropTxMlsSync(options?: {
         stats,
         config: idxConfig,
       });
+    }
+
+    // Discovery + 7-day rotation. Off until MLS_ON_MARKET_RECONCILE=1.
+    // Fast sync never enters this block. Does not move the Property cursor.
+    if (!isFast && process.env.MLS_ON_MARKET_RECONCILE === "1") {
+      try {
+        stats.onMarketReconcile = await executeOnMarketReconciliation({
+          mode,
+        });
+      } catch (err) {
+        stats.errors.push(
+          `On-market reconcile: ${err instanceof Error ? err.message : "failed"}`,
+        );
+      }
     }
 
     if (!isFast && resources.includes("media")) {
@@ -2160,14 +2523,26 @@ export async function runPropTxMlsSync(options?: {
     const typesenseDegraded =
       typesenseIndexMissed ||
       stats.typesenseMissingProvenance > 0 ||
-      stats.typesenseFailed > 0;
+      stats.typesenseFailed > 0 ||
+      (stats.onMarketReconcile?.typesenseFailed ?? 0) > 0;
     const typesensePart = typesenseOff
       ? ` typesense=OFF (${typesenseOff}) attempted=${stats.typesenseAttempted} ok=${stats.typesenseUpserted} fail=${stats.typesenseFailed} missingProvenance=${stats.typesenseMissingProvenance}`
       : ` typesense attempted=${stats.typesenseAttempted} ok=${stats.typesenseUpserted} fail=${stats.typesenseFailed} missingProvenance=${stats.typesenseMissingProvenance}`;
     const staleWarning = typesenseDegraded
       ? " TYPESENSE INDEX NOT HEALTHY — houzzat.com listings may go stale or unauthorized."
       : "";
-    const message = `mode=${mode} Synced properties=${stats.propertyUpserted} media=${stats.mediaUpserted} rooms=${stats.roomsUpserted} openHouses=${stats.openHousesUpserted} history=${stats.historyUpserted} geocode=${stats.geocodeFixed}/${stats.geocodeAttempted} skipped=${stats.propertySkipped}${typesensePart}${staleWarning}`;
+    const fastPart = isFast
+      ? ` inspected=${stats.propertyInspected} unchanged=${stats.propertyUnchangedSkipped} new=${stats.propertyNew} statusChanges=${stats.propertyStatusChanged} priceChanges=${stats.propertyPriceChanged} soldChanges=${stats.propertySoldChanged} photoChanges=${stats.propertyPhotoChanged} mediaFetches=${stats.mediaFetches}`
+      : "";
+    const reconcilePart = stats.onMarketReconcile
+      ? ` ${formatOnMarketReconcileLog(stats.onMarketReconcile).replace("[mls] ", "")}`
+      : "";
+    applyPropTxTransportStats(stats);
+    const transportPart =
+      stats.proptxRequests > 0
+        ? ` proptx req=${stats.proptxRequests} retry=${stats.proptxRetries} 429=${stats.proptx429} 5xx=${stats.proptx5xx} timeout=${stats.proptxTimeouts} net=${stats.proptxNetworkErrors} exhausted=${stats.proptxRetriesExhausted} backoffMs=${stats.proptxBackoffMs}`
+        : "";
+    const message = `mode=${mode} Synced properties=${stats.propertyUpserted} media=${stats.mediaUpserted} rooms=${stats.roomsUpserted} openHouses=${stats.openHousesUpserted} history=${stats.historyUpserted} geocode=${stats.geocodeFixed}/${stats.geocodeAttempted} skipped=${stats.propertySkipped}${fastPart}${reconcilePart}${typesensePart}${transportPart}${staleWarning}`;
     if (typesenseDegraded) {
       console.error(`[mls] ${message}`);
     }
@@ -2207,6 +2582,7 @@ export async function runPropTxMlsSync(options?: {
           ? err.message
           : "MLS sync failed");
     pushSyncError(stats, message);
+    applyPropTxTransportStats(stats);
     try {
       await prisma.mlsSyncRun.update({
         where: { id: run.id },
@@ -2252,7 +2628,38 @@ function emptyStats(mode: MlsSyncMode = MLS_FULL_SYNC_MODE): MlsSyncStats {
     typesenseMissingProvenance: 0,
     typesenseDisabled: 0,
     mode,
+    propertyInspected: 0,
+    propertyUnchangedSkipped: 0,
+    propertyNew: 0,
+    propertyStatusChanged: 0,
+    propertyPriceChanged: 0,
+    propertySoldChanged: 0,
+    propertyPhotoChanged: 0,
+    mediaFetches: 0,
+    onMarketReconcile: null,
+    proptxRequests: 0,
+    proptxRetries: 0,
+    proptx429: 0,
+    proptx5xx: 0,
+    proptxTimeouts: 0,
+    proptxNetworkErrors: 0,
+    proptxRetryAfterWaits: 0,
+    proptxRetriesExhausted: 0,
+    proptxBackoffMs: 0,
   };
+}
+
+function applyPropTxTransportStats(stats: MlsSyncStats): void {
+  const transport = readPropTxTransportStats();
+  stats.proptxRequests = transport.requests;
+  stats.proptxRetries = transport.retries;
+  stats.proptx429 = transport.rateLimited;
+  stats.proptx5xx = transport.serverErrors;
+  stats.proptxTimeouts = transport.timeouts;
+  stats.proptxNetworkErrors = transport.networkErrors;
+  stats.proptxRetryAfterWaits = transport.retryAfterWaits;
+  stats.proptxRetriesExhausted = transport.exhaustedRetries;
+  stats.proptxBackoffMs = transport.backoffMs;
 }
 
 export { getPropTxSyncHealth } from "@/lib/proptx/sync-health";

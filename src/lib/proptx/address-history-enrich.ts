@@ -1,11 +1,17 @@
 import {
   buildAddressListingHistoryRows,
   findSiblingListingsAtAddress,
+  type AddressHistoryListing,
 } from "@/lib/listings/address-history";
 import type { HistoryRow } from "@/lib/listings/history-rows";
 import { parseExactAddressQuery } from "@/lib/listings/search-match";
 import { formatListingAddressOneLine } from "@/lib/listings/constants";
 import { prisma } from "@/lib/prisma";
+import {
+  mapPropertyToListingResult,
+  type PropTxProperty,
+} from "@/lib/proptx/map-listing";
+import { assertMlsSyncExecutionHost } from "@/lib/proptx/mls-sync-host";
 import { fetchAllPropertiesAtExactAddress } from "@/lib/proptx/resolve-listing";
 import { upsertPropTxPropertiesOnDemand } from "@/lib/proptx/sync";
 
@@ -139,9 +145,172 @@ export function isAddressHistoryEnrichFresh(
   return Date.now() - enrichedAt.getTime() < ttlMs;
 }
 
+function liveSiblingFromPropTx(
+  row: PropTxProperty,
+): AddressHistoryListing | null {
+  const mapped = mapPropertyToListingResult(row);
+  if (!mapped.ok) return null;
+  const data = mapped.data;
+  if (
+    !data.mlsNumber ||
+    !data.status ||
+    !data.transactionType ||
+    !data.addressLine ||
+    !data.city ||
+    data.listPrice == null ||
+    !(data.listedAt instanceof Date)
+  ) {
+    return null;
+  }
+  return {
+    mlsNumber: data.mlsNumber,
+    status: data.status,
+    transactionType: data.transactionType,
+    listPrice: data.listPrice,
+    soldPrice: data.soldPrice ?? null,
+    listedAt: data.listedAt,
+    soldAt: data.soldAt ?? null,
+    updatedAtMls: data.updatedAtMls ?? null,
+    addressLine: data.addressLine,
+    unitNumber: data.unitNumber ?? null,
+    city: data.city,
+    province: data.province,
+    postalCode: data.postalCode ?? null,
+    history: [],
+  };
+}
+
+/**
+ * Local Neon history plus live PropTx cycles. Does not write.
+ */
+export function historyRowsWithLiveAddressSiblings(
+  listing: AddressHistoryListingInput,
+  localSiblings: AddressHistoryListing[],
+  liveRows: PropTxProperty[],
+): HistoryRow[] {
+  const byMls = new Map<string, AddressHistoryListing>();
+  for (const sibling of localSiblings) {
+    if (sibling.mlsNumber === listing.mlsNumber) continue;
+    byMls.set(sibling.mlsNumber, sibling);
+  }
+  for (const row of liveRows) {
+    const live = liveSiblingFromPropTx(row);
+    if (!live || live.mlsNumber === listing.mlsNumber) continue;
+    const existing = byMls.get(live.mlsNumber);
+    byMls.set(
+      live.mlsNumber,
+      existing
+        ? {
+            ...existing,
+            status: live.status,
+            transactionType: live.transactionType,
+            listPrice: live.listPrice,
+            soldPrice: live.soldPrice,
+            listedAt: live.listedAt,
+            soldAt: live.soldAt,
+            updatedAtMls: live.updatedAtMls,
+          }
+        : live,
+    );
+  }
+  return buildAddressListingHistoryRows({
+    mlsNumber: listing.mlsNumber,
+    listPrice: listing.listPrice,
+    listedAt: listing.listedAt,
+    updatedAtMls: listing.updatedAtMls ?? null,
+    soldAt: listing.soldAt ?? null,
+    soldPrice: listing.soldPrice ?? null,
+    status: listing.status as never,
+    transactionType: listing.transactionType as never,
+    history: listing.history,
+    siblings: [...byMls.values()],
+  });
+}
+
+async function localAddressHistoryRows(listing: AddressHistoryListingInput) {
+  const siblings = await findSiblingListingsAtAddress(listing);
+  return buildAddressListingHistoryRows({
+    mlsNumber: listing.mlsNumber,
+    listPrice: listing.listPrice,
+    listedAt: listing.listedAt,
+    updatedAtMls: listing.updatedAtMls ?? null,
+    soldAt: listing.soldAt ?? null,
+    soldPrice: listing.soldPrice ?? null,
+    status: listing.status as never,
+    transactionType: listing.transactionType as never,
+    history: listing.history,
+    siblings,
+  });
+}
+
+/**
+ * Customer panel: read PropTx cycles and return history rows.
+ * Does not upsert siblings, write History, update Typesense, or stamp
+ * addressHistoryEnrichedAt. The Sync Mac nightly job persists that state.
+ */
+export async function previewAddressListingHistory(
+  listing: AddressHistoryListingInput,
+  options?: { force?: boolean },
+): Promise<{
+  ok: boolean;
+  skipped: boolean;
+  upsertedMls: string[];
+  historyRows: HistoryRow[];
+}> {
+  try {
+    if (
+      !options?.force &&
+      isAddressHistoryEnrichFresh(listing.addressHistoryEnrichedAt)
+    ) {
+      return {
+        ok: true,
+        skipped: true,
+        upsertedMls: [],
+        historyRows: await localAddressHistoryRows(listing),
+      };
+    }
+
+    const parsed = parsedAddressFromListing(listing);
+    if (!parsed) {
+      return {
+        ok: false,
+        skipped: true,
+        upsertedMls: [],
+        historyRows: await localAddressHistoryRows(listing),
+      };
+    }
+
+    const rows = await fetchAllPropertiesAtExactAddress(parsed, { max: 20 });
+    const siblings = await findSiblingListingsAtAddress(listing);
+    return {
+      ok: true,
+      skipped: false,
+      upsertedMls: [],
+      historyRows: historyRowsWithLiveAddressSiblings(listing, siblings, rows),
+    };
+  } catch (err) {
+    console.error("[address-history:preview]", listing.mlsNumber, err);
+    try {
+      return {
+        ok: false,
+        skipped: false,
+        upsertedMls: [],
+        historyRows: await localAddressHistoryRows(listing),
+      };
+    } catch {
+      return {
+        ok: false,
+        skipped: false,
+        upsertedMls: [],
+        historyRows: [],
+      };
+    }
+  }
+}
+
 /**
  * Pull all PropTx Property cycles at this civic address into Neon.
- * Safe to call from API / batch — never throws.
+ * Sync Mac only. Throws before any PropTx request when the host marker is absent.
  */
 export async function enrichAddressListingHistory(
   listing: AddressHistoryListingInput,
@@ -152,6 +321,7 @@ export async function enrichAddressListingHistory(
   upsertedMls: string[];
   historyRows: HistoryRow[];
 }> {
+  assertMlsSyncExecutionHost();
   try {
     if (
       !options?.force &&
@@ -200,6 +370,8 @@ export async function enrichAddressListingHistory(
     }
 
     const rows = await fetchAllPropertiesAtExactAddress(parsed, { max: 20 });
+    // Stamp only after that lookup returns. Timeouts, 429s, 5xx, 400, 404,
+    // and network failures throw and skip this update.
     const upsertedMls =
       rows.length > 0
         ? await upsertPropTxPropertiesOnDemand(rows, { concurrency: 3 })

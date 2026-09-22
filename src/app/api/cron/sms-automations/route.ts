@@ -14,8 +14,7 @@ function authorizeSmsAutomationCron(request: Request): boolean {
     process.env.SMS_AUTOMATION_CRON_SECRET?.trim() ||
     process.env.MONITOR_CRON_SECRET?.trim() ||
     process.env.DIGEST_CRON_SECRET?.trim() ||
-    process.env.CRON_SECRET?.trim() ||
-    process.env.MLS_SYNC_SECRET?.trim();
+    process.env.CRON_SECRET?.trim();
   if (!secret) return false;
   const header = request.headers.get("x-sms-automation-cron-secret");
   const monitorHeader = request.headers.get("x-monitor-cron-secret");

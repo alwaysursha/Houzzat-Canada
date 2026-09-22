@@ -1966,6 +1966,37 @@ model MlsSyncRun {
   stats      Json?
 }
 
+/**
+ * One open or recovered row per MLS health signal.
+ * The external checker writes this. Sync jobs do not.
+ */
+model MlsHealthIncident {
+  signal         String    @id
+  severity       String
+  state          String
+  openedAt       DateTime
+  recoveredAt    DateTime?
+  lastObservedAt DateTime
+  notifiedAt     DateTime?
+  reminded       Boolean   @default(false)
+  summary        String    @db.Text
+  detail         Json?
+}
+
+/**
+ * Single overwritten baseline for photo counts and reconciliation retry length.
+ * The first row establishes the zero-photo baseline and does not alert.
+ */
+model MlsHealthSample {
+  id                        String    @id
+  evaluatedAt               DateTime
+  activeZeroPhotos          Int
+  zeroPhotoBaseline         Int
+  zeroPhotoElevatedStreak   Int       @default(0)
+  reconcileRetryCount       Int       @default(0)
+  reconcileRetryHighSince   DateTime?
+}
+
 model SavedListing {
   id        String   @id @default(cuid())
   userId    String
@@ -2287,6 +2318,22 @@ model Listing {
    * PropTx VOW / RESO: ModificationTimestamp
    */
   updatedAtMls             DateTime
+  /**
+   * Last PhotosChangeTimestamp observed on a Property upsert.
+   * Not a media completion stamp. Null means we have not observed one.
+   */
+  photosChangeTimestamp    DateTime?
+  /**
+   * Source photo state for which Media sync last completed with at least one photo.
+   * PhotosChangeTimestamp when PropTx sent one, otherwise ModificationTimestamp.
+   * Null means Media has not successfully completed (including confirmed zero photos).
+   */
+  mediaSourceTimestamp     DateTime?
+  /**
+   * Wall clock of the last successful non-empty Media sync.
+   * Cooldown clock for the 48-hour delayed-upload retry. Not a completeness stamp.
+   */
+  mediaSyncedAt            DateTime?
   daysOnMarket             Int                    @default(0)
   /**
    * Last successful PropTx address-history enrich (sibling MLS cycles).

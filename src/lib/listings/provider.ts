@@ -938,7 +938,7 @@ export class DbListingProvider implements ListingProvider {
             ? `Serving ${health.mlsCount.toLocaleString("en-CA")} MLS listings from PropTx sync.`
             : health.lastRun?.status === "error"
               ? `PropTx sync error: ${health.lastRun.message ?? "unknown"}`
-              : "PropTx configured — run POST /api/admin/mls/sync to pull listings.",
+              : "PropTx configured. MLS sync runs on the Sync Mac.",
         listingCount: health.mlsCount,
         lastSyncedAt:
           health.lastRun?.finishedAt ?? health.lastRun?.startedAt ?? null,

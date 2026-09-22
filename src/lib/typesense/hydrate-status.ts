@@ -1,11 +1,8 @@
 import type { ListingStatus, ListingTransactionType } from "@prisma/client";
-import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
-import { syncListingToTypesense } from "@/lib/typesense/sync-listing";
+import { prisma } from "@/lib/prisma";
 
 /** Cap Neon lookups to one page of Typesense hits — never a full inventory scan. */
 const MAX_HYDRATE = 120;
-/** Bound background Typesense heal work per request. */
-const MAX_HEAL = 40;
 
 export type NeonListingStatusRow = {
   id: string;
@@ -46,8 +43,7 @@ export async function loadNeonListingStatusesByMls(
 
 /**
  * Overlay Neon status (+ transactionType) onto Typesense-shaped rows.
- * When drift is detected, schedule Typesense upserts via waitUntil
- * (does not block the response).
+ * Typesense MLS documents are updated by Sync Mac, not by this request.
  */
 export function applyNeonListingStatuses<
   T extends {
@@ -58,8 +54,7 @@ export function applyNeonListingStatuses<
 >(items: T[], neonByMls: Map<string, NeonListingStatusRow>): T[] {
   if (items.length === 0 || neonByMls.size === 0) return items;
 
-  const driftedIds: string[] = [];
-  const next = items.map((item) => {
+  return items.map((item) => {
     const row = neonByMls.get(item.mlsNumber);
     if (!row) return item;
 
@@ -67,13 +62,8 @@ export function applyNeonListingStatuses<
     const txnDrift =
       item.transactionType != null &&
       item.transactionType !== row.transactionType;
-    if (statusDrift || txnDrift) driftedIds.push(row.id);
 
-    if (
-      !statusDrift &&
-      !txnDrift &&
-      item.transactionType != null
-    ) {
+    if (!statusDrift && !txnDrift && item.transactionType != null) {
       return item;
     }
 
@@ -83,15 +73,4 @@ export function applyNeonListingStatuses<
       transactionType: row.transactionType,
     };
   });
-
-  if (driftedIds.length > 0) {
-    const uniqueIds = [...new Set(driftedIds)].slice(0, MAX_HEAL);
-    scheduleWorkerSideEffect(
-      Promise.all(uniqueIds.map((id) => syncListingToTypesense(id))).then(
-        () => undefined,
-      ),
-    );
-  }
-
-  return next;
 }

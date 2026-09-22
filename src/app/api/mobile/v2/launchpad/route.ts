@@ -5,7 +5,10 @@
 
 import { NextResponse } from "next/server";
 import { loadLaunchpadPayload } from "@/lib/agent/launchpad-payload";
-import { buildMobileStatisticsContext } from "@/lib/mobile/v2/statistics-context";
+import {
+  buildMobileStatisticsContext,
+  isLaunchpadDeskContextResolved,
+} from "@/lib/mobile/v2/statistics-context";
 import { authorizeMobileWorkspaceAccess } from "@/lib/mobile/v2/workspace-access";
 
 export const runtime = "nodejs";
@@ -26,7 +29,7 @@ export async function GET(request: Request) {
       role: access.role,
     });
 
-    if (!ctx) {
+    if (!isLaunchpadDeskContextResolved(ctx)) {
       return NextResponse.json(
         {
           ok: false,

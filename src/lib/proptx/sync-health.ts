@@ -48,7 +48,7 @@ export async function getPropTxSyncHealth() {
     mlsCount,
     hint:
       mlsCount === 0
-        ? "No MLS rows yet. Browser GET only shows status — run POST /api/admin/mls/sync (or pnpm mls:sync) to pull PropTx."
+        ? "No MLS rows yet. Browser GET only shows status. MLS sync runs on the Sync Mac."
         : undefined,
     lastRun: lastRun
       ? {
@@ -118,6 +118,6 @@ export async function getAdminMlsPulse(): Promise<{
     message:
       lastRun?.status === "error"
         ? `PropTx sync error: ${lastRun.message ?? "unknown"}`
-        : "PropTx configured — run POST /api/admin/mls/sync to pull listings.",
+        : "PropTx configured. MLS sync runs on the Sync Mac.",
   };
 }

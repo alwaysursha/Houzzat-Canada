@@ -7,9 +7,7 @@ import {
   serializeListingDetailClientModel,
 } from "@/lib/listings/build-listing-panel";
 import { formatListingAddressOneLine } from "@/lib/listings/constants";
-import { NEON_LISTING_MEDIA_CAP } from "@/lib/listings/gallery-constants";
 import { loadListingForDetailPage } from "@/lib/listings/load-listing-for-detail";
-import { persistNeonListingMediaCap } from "@/lib/listings/persist-neon-media";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
 import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
 import { auth } from "@/lib/auth";
@@ -233,24 +231,12 @@ export default async function ListingDetailPage({
     : listing.dataSource === "mls" && listing.listingKey
       ? fetchListingPhotosFromPropTx(listing.listingKey, {
           timeoutMs: 10_000,
-        }).then((photos) => {
-          if (photos.length > 0) {
-            scheduleWorkerSideEffect(
-              persistNeonListingMediaCap(
-                listing.id,
-                photos.slice(0, NEON_LISTING_MEDIA_CAP).map((photo) => ({
-                  url: photo.mediaUrl,
-                  sortOrder: photo.sortOrder,
-                  isPrimary: photo.isPrimary,
-                })),
-              ),
-            );
-          }
-          return photos.map((photo) => ({
+        }).then((photos) =>
+          photos.map((photo) => ({
             id: photo.id,
             url: photo.url,
-          }));
-        })
+          })),
+        )
       : null;
 
   scheduleWorkerSideEffect(

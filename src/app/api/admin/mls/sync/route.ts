@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/owner/auth";
-import {
-  getPropTxSyncHealth,
-  runPropTxMlsSync,
-} from "@/lib/proptx/sync";
+import { getPropTxSyncHealth } from "@/lib/proptx/sync-health";
 
 function authorizeSyncRequest(request: Request): boolean {
   const secret = process.env.MLS_SYNC_SECRET?.trim();
@@ -15,7 +12,7 @@ function authorizeSyncRequest(request: Request): boolean {
   return false;
 }
 
-/** Admin / cron: PropTx → Postgres sync status. */
+/** Admin / cron: read-only PropTx sync status. Does not start a sync. */
 export async function GET(request: Request) {
   const admin = await requireAdminUser();
   const cronOk = authorizeSyncRequest(request);
@@ -27,39 +24,13 @@ export async function GET(request: Request) {
   return NextResponse.json(health);
 }
 
-/** Admin / cron: run a small incremental PropTx sync.
- * Large backfills must use GitHub Actions (`MLS Sync` workflow) — Workers time out.
- */
-export async function POST(request: Request) {
-  const admin = await requireAdminUser();
-  const cronOk = authorizeSyncRequest(request);
-  if (!admin && !cronOk) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  let body: {
-    maxPages?: number;
-    fullBackfillDays?: number;
-    resources?: Array<"property" | "media" | "openHouse" | "history">;
-  } = {};
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    body = {};
-  }
-
-  // Hard cap — Cloudflare Workers cannot finish large PropTx pulls in one request.
-  const maxPages = Math.min(Math.max(body.maxPages ?? 5, 1), 8);
-  const fullBackfillDays = Math.min(
-    Math.max(body.fullBackfillDays ?? 3, 1),
-    14,
+/** MLS sync no longer runs on the website. The Sync Mac is the only writer. */
+export async function POST() {
+  return NextResponse.json(
+    {
+      error:
+        "MLS sync is disabled on the website. Synchronization runs only on the Sync Mac.",
+    },
+    { status: 410 },
   );
-
-  const result = await runPropTxMlsSync({
-    maxPages,
-    fullBackfillDays,
-    resources: body.resources,
-  });
-
-  return NextResponse.json(result, { status: result.ok ? 200 : 502 });
 }

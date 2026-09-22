@@ -48,49 +48,60 @@ async function tryFiltersCollect(
   if (configs.length === 0) return [];
   const timeoutMs = options?.timeoutMs ?? LOOKUP_TIMEOUT_MS;
 
-  const work = async (): Promise<PropTxProperty[]> => {
+  const rows = await runWithAbort(timeoutMs, async (signal) => {
     const collected: PropTxProperty[] = [];
     for (const config of configs) {
       for (const filter of filters) {
+        if (signal.aborted) throw signal.reason ?? new Error("aborted");
         try {
-          const rows = await queryPropertyFilter(filter, config, top);
-          if (rows.length) collected.push(...rows);
-        } catch {
-          // try next filter / credential
+          const found = await queryPropertyFilter(filter, config, top, signal);
+          if (found.length) collected.push(...found);
+        } catch (err) {
+          if (signal.aborted) throw err;
+          // Search keeps trying the next filter. Address history does not use this.
         }
       }
-      // Prefer first credential that returned rows (VOW when vowFirst).
       if (collected.length > 0) break;
     }
     return dedupeProperties(collected);
-  };
-
-  return (await withTimeout(work(), timeoutMs)) ?? [];
+  });
+  return rows ?? [];
 }
 
 
 type ODataList = { value?: PropTxProperty[] };
 
-async function withTimeout<T>(
-  work: Promise<T>,
+async function runWithAbort<T>(
   timeoutMs: number,
+  work: (signal: AbortSignal) => Promise<T>,
 ): Promise<T | null> {
-  return Promise.race([
-    work,
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
-  ]);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await work(controller.signal);
+  } catch (err) {
+    if (controller.signal.aborted) return null;
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function queryPropertyFilter(
   filter: string,
   config: PropTxConfig,
   top: number,
+  signal?: AbortSignal,
 ): Promise<PropTxProperty[]> {
   const path = `Property?$filter=${encodeURIComponent(filter)}&$top=${top}`;
   try {
-    const data = await proptxJson<ODataList>(path, config);
+    const data = await proptxJson<ODataList>(path, config, {
+      signal,
+      timeoutMs: LOOKUP_TIMEOUT_MS,
+    });
     return data.value ?? [];
   } catch (err) {
+    if (signal?.aborted) throw err;
     if (err instanceof PropTxError && (err.status === 404 || err.status === 400)) {
       return [];
     }
@@ -158,21 +169,21 @@ async function tryFilters(
   const configs = lookupConfigs();
   if (configs.length === 0) return [];
 
-  const work = async (): Promise<PropTxProperty[]> => {
+  const rows = await runWithAbort(LOOKUP_TIMEOUT_MS, async (signal) => {
     for (const config of configs) {
       for (const filter of filters) {
+        if (signal.aborted) throw signal.reason ?? new Error("aborted");
         try {
-          const rows = await queryPropertyFilter(filter, config, top);
-          if (rows.length > 0) return dedupeProperties(rows);
-        } catch {
-          // try next filter / credential
+          const found = await queryPropertyFilter(filter, config, top, signal);
+          if (found.length > 0) return dedupeProperties(found);
+        } catch (err) {
+          if (signal.aborted) throw err;
         }
       }
     }
-    return [];
-  };
-
-  return (await withTimeout(work(), LOOKUP_TIMEOUT_MS)) ?? [];
+    return [] as PropTxProperty[];
+  });
+  return rows ?? [];
 }
 
 /** Fetch one Property by MLS® ListingId / ListingKey. */
@@ -189,33 +200,34 @@ export async function fetchPropertyByMls(
   ];
 
   const configs = lookupConfigs();
-  const work = async (): Promise<PropTxProperty | null> => {
+  const row = await runWithAbort(LOOKUP_TIMEOUT_MS, async (signal) => {
     for (const config of configs) {
-      // Direct key access first when it looks like a RESO key
+      if (signal.aborted) throw signal.reason ?? new Error("aborted");
       try {
         const direct = await proptxJson<PropTxProperty>(
           `Property('${key.replace(/'/g, "''")}')`,
           config,
+          { signal, timeoutMs: LOOKUP_TIMEOUT_MS },
         );
         if (direct && (mapMlsNumber(direct) || mapListingKey(direct))) {
           return direct;
         }
-      } catch {
-        // fall through to filter
+      } catch (err) {
+        if (signal.aborted) throw err;
       }
       for (const filter of filters) {
+        if (signal.aborted) throw signal.reason ?? new Error("aborted");
         try {
-          const rows = await queryPropertyFilter(filter, config, 5);
+          const rows = await queryPropertyFilter(filter, config, 5, signal);
           if (rows[0]) return rows[0];
-        } catch {
-          // continue
+        } catch (err) {
+          if (signal.aborted) throw err;
         }
       }
     }
     return null;
-  };
-
-  return (await withTimeout(work(), LOOKUP_TIMEOUT_MS)) ?? null;
+  });
+  return row ?? null;
 }
 
 /**
@@ -288,6 +300,92 @@ export async function fetchPropertiesByExactAddress(
 const ADDRESS_HISTORY_TOP = 25;
 const ADDRESS_HISTORY_TIMEOUT_MS = 8000;
 
+export class AddressHistoryLookupError extends Error {
+  readonly reason: "timeout" | "aborted" | "http" | "network";
+  readonly status: number | null;
+
+  constructor(
+    reason: "timeout" | "aborted" | "http" | "network",
+    message: string,
+    status: number | null = null,
+  ) {
+    super(message);
+    this.name = "AddressHistoryLookupError";
+    this.reason = reason;
+    this.status = status;
+  }
+}
+
+/**
+ * Address-history lookup. Every filter must finish with HTTP 200.
+ * An empty 200 is a completed lookup. Timeout, 429, 5xx, 400, 404, and
+ * network failures throw so the caller does not stamp the listing.
+ */
+export async function collectCompletedAddressProperties(options: {
+  filters: string[];
+  configs: PropTxConfig[];
+  timeoutMs: number;
+  signal?: AbortSignal;
+  top: number;
+}): Promise<PropTxProperty[]> {
+  if (options.configs.length === 0) {
+    throw new AddressHistoryLookupError(
+      "network",
+      "PropTx credentials not configured",
+    );
+  }
+  for (const config of options.configs) {
+    const collected: PropTxProperty[] = [];
+    for (const filter of options.filters) {
+      if (options.signal?.aborted) {
+        throw new AddressHistoryLookupError(
+          "timeout",
+          "Address history lookup timed out",
+        );
+      }
+      const path = `Property?$filter=${encodeURIComponent(filter)}&$top=${options.top}`;
+      try {
+        const data = await proptxJson<ODataList>(path, config, {
+          signal: options.signal,
+          timeoutMs: options.timeoutMs,
+        });
+        const rows = data.value ?? [];
+        if (rows.length) collected.push(...rows);
+      } catch (err) {
+        if (options.signal?.aborted || (err instanceof Error && err.name === "AbortError")) {
+          throw new AddressHistoryLookupError(
+            "timeout",
+            "Address history lookup timed out",
+          );
+        }
+        if (err instanceof Error && err.name === "TimeoutError") {
+          throw new AddressHistoryLookupError(
+            "timeout",
+            "Address history lookup timed out",
+          );
+        }
+        if (err instanceof PropTxError) {
+          throw new AddressHistoryLookupError(
+            "http",
+            err.message,
+            err.status,
+          );
+        }
+        throw new AddressHistoryLookupError(
+          "network",
+          err instanceof Error ? err.message : "PropTx network error",
+        );
+      }
+    }
+    // This credential finished every filter with HTTP 200, including a real empty set.
+    return dedupeProperties(collected);
+  }
+  throw new AddressHistoryLookupError(
+    "network",
+    "PropTx credentials not configured",
+  );
+}
+
 /**
  * All Property cycles at an exact civic address (Active + off-market).
  * Unlike fetchPropertiesByExactAddress, does NOT collapse to a single row.
@@ -321,10 +419,20 @@ export async function fetchAllPropertiesAtExactAddress(
       : `contains(UnparsedAddress, ${needle})`,
   );
 
-  const rows = await tryFiltersCollect(filters, Math.max(max, 25), {
-    vowFirst: true,
-    timeoutMs: ADDRESS_HISTORY_TIMEOUT_MS,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ADDRESS_HISTORY_TIMEOUT_MS);
+  let rows: PropTxProperty[];
+  try {
+    rows = await collectCompletedAddressProperties({
+      filters,
+      configs: lookupConfigsVowFirst(),
+      timeoutMs: ADDRESS_HISTORY_TIMEOUT_MS,
+      signal: controller.signal,
+      top: Math.max(max, 25),
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (rows.length === 0) return [];
 
   const streetNum = parsed.streetNumber.toLowerCase();

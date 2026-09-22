@@ -3,11 +3,13 @@
  * Usage: pnpm exec tsx scripts/typesense-backfill-open-houses.ts
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
+  assertMlsSyncExecutionHost();
   process.env.TYPESENSE_SYNC = "1";
   const { prisma } = await import("../src/lib/prisma");
   const { syncListingToTypesense } = await import(

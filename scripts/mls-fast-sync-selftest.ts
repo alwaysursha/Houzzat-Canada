@@ -214,9 +214,13 @@ async function main() {
     assert.equal(MLS_SLOW_SYNC_LOCK_NAME, "houzzat-mls-sync.lock");
     assert.notEqual(MLS_FAST_SYNC_LOCK_NAME, MLS_SLOW_SYNC_LOCK_NAME);
     assert.ok(fastSh.includes("houzzat-mls-fast-sync.lock"));
-    assert.ok(!fastSh.includes('houzzat-mls-sync.lock"'));
+    assert.ok(fastSh.includes("mls_fast_prepare"));
+    assert.ok(fastSh.includes("houzzat-mls-sync.lock"));
+    assert.ok(fastSh.indexOf("mls_fast_prepare") < fastSh.indexOf("pnpm mls:sync"));
     assert.ok(slowSh.includes("houzzat-mls-sync.lock"));
-    assert.ok(!slowSh.includes("houzzat-mls-fast-sync.lock"));
+    assert.ok(slowSh.includes("mls_full_prepare"));
+    assert.ok(slowSh.includes("houzzat-mls-fast-sync.lock"));
+    assert.ok(slowSh.indexOf("mls_full_prepare") < slowSh.indexOf("pnpm mls:sync"));
     assert.ok(fastPlist.includes("com.houzzat.mls-fast-sync"));
     assert.ok(fastPlist.includes("<integer>600</integer>"));
     assert.ok(fastPlist.includes("/Users/Ali/Houzzat-Canada"));
@@ -229,7 +233,11 @@ async function main() {
       resolveMlsSyncMode({ env: { MLS_SYNC_MODE: "fast" } }),
       MLS_FAST_SYNC_MODE,
     );
-    assert.ok(runFn.includes('resource: isFast ? "fast" : "all"'));
+    assert.ok(
+      runFn.includes(
+        'resource: isFast ? "fast" : options?.mediaBackfillOnly ? "media" : "all"',
+      ),
+    );
     assert.ok(runFn.includes("mode=${mode}"));
     console.log("[L] Fast/slow locks are distinct... PASS");
   }

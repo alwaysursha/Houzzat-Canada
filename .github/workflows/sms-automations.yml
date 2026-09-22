@@ -7,7 +7,7 @@ name: SMS Automations
 # Required GitHub secrets (only if you use this workflow):
 #   SMS_AUTOMATION_CRON_URL — e.g. https://houzzat.com/api/cron/sms-automations
 #   SMS_AUTOMATION_CRON_SECRET (or MONITOR_CRON_SECRET / DIGEST_CRON_SECRET /
-#   CRON_SECRET / MLS_SYNC_SECRET matching the app)
+#   CRON_SECRET matching the app)
 on:
   workflow_dispatch:
 
@@ -27,17 +27,16 @@ jobs:
           MONITOR_CRON_SECRET: ${{ secrets.MONITOR_CRON_SECRET }}
           DIGEST_CRON_SECRET: ${{ secrets.DIGEST_CRON_SECRET }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          MLS_SYNC_SECRET: ${{ secrets.MLS_SYNC_SECRET }}
         run: |
           set -euo pipefail
           URL="${SMS_AUTOMATION_CRON_URL:-}"
-          SECRET="${SMS_AUTOMATION_CRON_SECRET:-${MONITOR_CRON_SECRET:-${DIGEST_CRON_SECRET:-${CRON_SECRET:-${MLS_SYNC_SECRET:-}}}}}"
+          SECRET="${SMS_AUTOMATION_CRON_SECRET:-${MONITOR_CRON_SECRET:-${DIGEST_CRON_SECRET:-${CRON_SECRET:-}}}}"
           if [[ -z "$URL" ]]; then
             echo "Missing secret SMS_AUTOMATION_CRON_URL"
             exit 1
           fi
           if [[ -z "$SECRET" ]]; then
-            echo "Missing SMS_AUTOMATION_CRON_SECRET (or MONITOR/DIGEST/CRON/MLS_SYNC secret)"
+            echo "Missing SMS_AUTOMATION_CRON_SECRET (or MONITOR/DIGEST/CRON secret)"
             exit 1
           fi
           echo "POST cron job sms-automations-inactive"

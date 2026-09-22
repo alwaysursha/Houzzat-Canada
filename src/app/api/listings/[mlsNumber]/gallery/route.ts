@@ -2,17 +2,17 @@ import { NextResponse } from "next/server";
 import { NEON_LISTING_MEDIA_CAP } from "@/lib/listings/gallery-constants";
 import { loadListingDetailApiAccess } from "@/lib/listings/listing-detail-api-access";
 import { mayInvokePropTxOnDemandForDetail } from "@/lib/listings/load-listing-for-detail";
-import { persistNeonListingMediaCap } from "@/lib/listings/persist-neon-media";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
-import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { classifyListingInventoryChannel } from "@/lib/tenancy/listing-entitlement";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
 /**
  * Full PropTx gallery for a listing (client enrich / prefetch).
- * Writes at most the first 5 photos back to Neon; never persists 6+.
+ * Live photos, including those beyond the Neon cap, are returned for display.
+ * This route does not write ListingMedia. Capped photos are Sync-Mac-owned.
  *
  * G.10C2: Host entitlement → base provenance + MEDIA → VOW → PropTx only
  * after exact-feed pre-auth. Unauthorized MEDIA → 404 (no PropTx).
@@ -116,21 +116,6 @@ export async function GET(request: Request, { params }: Params) {
   const photos = await fetchListingPhotosFromPropTx(listing.listingKey, {
     timeoutMs: 10_000,
   });
-
-  if (photos.length > 0) {
-    // Warm Neon for the next SSR paint (cap only). Do not block the response
-    // on slow DB — best-effort.
-    scheduleWorkerSideEffect(
-      persistNeonListingMediaCap(
-        listing.id,
-        photos.slice(0, NEON_LISTING_MEDIA_CAP).map((photo) => ({
-          url: photo.mediaUrl,
-          sortOrder: photo.sortOrder,
-          isPrimary: photo.isPrimary,
-        })),
-      ),
-    );
-  }
 
   const neonMediaCount = await prisma.listingMedia.count({
     where: { listingId: listing.id },

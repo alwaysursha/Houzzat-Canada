@@ -7,7 +7,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 LOG_DIR="${HOZZAT_SYNC_LOG_DIR:-$HOME/Library/Logs/houzzat}"
-LOCK_DIR="${TMPDIR:-/tmp}/houzzat-mls-sync.lock"
+# shellcheck source=mac-mls-lock.sh
+source "$ROOT/scripts/mac-mls-lock.sh"
+FULL_LOCK="${TMPDIR:-/tmp}/houzzat-mls-sync.lock"
+FAST_LOCK="${TMPDIR:-/tmp}/houzzat-mls-fast-sync.lock"
 mkdir -p "$LOG_DIR"
 
 LOG_FILE="$LOG_DIR/mls-sync-$(date +%Y%m%d).log"
@@ -21,11 +24,10 @@ if [[ ! -f "$ROOT/.env.local" ]]; then
   exit 1
 fi
 
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  echo "SKIP: another mls-sync is already running"
+if ! mls_full_prepare "$FULL_LOCK" "$FAST_LOCK"; then
   exit 0
 fi
-trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+trap 'mls_lock_release "$FULL_LOCK"' EXIT
 
 export GOOGLE_MAPS_BILLING_ENABLED="${GOOGLE_MAPS_BILLING_ENABLED:-0}"
 export GEOCODE_SKIP_GOOGLE="${GEOCODE_SKIP_GOOGLE:-1}"

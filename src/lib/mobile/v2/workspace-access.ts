@@ -59,6 +59,27 @@ export async function authorizeMobileWorkspaceAccess(
     },
   });
 
+  if (!membership) return workspaceMembershipAccessDenial(null)!;
+  const denied = workspaceMembershipAccessDenial(membership);
+  if (denied) return denied;
+
+  return {
+    ok: true,
+    userId,
+    workspaceId,
+    role: membership.role,
+  };
+}
+
+/**
+ * Membership gate used by mobile workspace auth.
+ * Missing, inactive, or non-staff memberships stay forbidden.
+ */
+export function workspaceMembershipAccessDenial(membership: {
+  role: string;
+  status: string;
+  workspace: { status: string };
+} | null): MobileWorkspaceAccessErr | null {
   if (
     !membership ||
     membership.status !== "ACTIVE" ||
@@ -85,12 +106,7 @@ export async function authorizeMobileWorkspaceAccess(
     };
   }
 
-  return {
-    ok: true,
-    userId,
-    workspaceId,
-    role: membership.role,
-  };
+  return null;
 }
 
 /** Resolve organizationId for a workspace (AgentTask requires organizationId). */

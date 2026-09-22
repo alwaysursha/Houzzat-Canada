@@ -7,6 +7,7 @@
 
 import type { Role, WorkspaceMemberRole } from "@prisma/client";
 import type { AgentOrgContext } from "@/lib/agent";
+import { ensureBrokerageOrganization } from "@/lib/agent/brokerage";
 import { prisma } from "@/lib/prisma";
 import { resolveOrganizationIdForWorkspace } from "@/lib/mobile/v2/workspace-access";
 
@@ -16,13 +17,31 @@ export {
   type MobileStatisticsRange,
 } from "@/lib/mobile/v2/statistics-range";
 
-export async function buildMobileStatisticsContext(opts: {
-  userId: string;
-  workspaceId: string;
-  role: WorkspaceMemberRole;
-}): Promise<AgentOrgContext | null> {
-  const user = await prisma.user.findFirst({
-    where: { id: opts.userId, disabledAt: null },
+type MobileContextUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+  phone: string | null;
+  role: Role;
+};
+
+export type MobileStatisticsContextDeps = {
+  findUser?: (userId: string) => Promise<MobileContextUser | null>;
+  /** Existing path: organization id stored on a lead in this workspace. */
+  resolveLeadOrganizationId?: (workspaceId: string) => Promise<string | null>;
+  /** Existing path: caller's OrganizationMembership, oldest first. */
+  resolveMembershipOrganizationId?: (userId: string) => Promise<string | null>;
+  /**
+   * Desktop hostname-bound fallback. Seat sync stays off.
+   * Tests inject this so resolution does not touch a live database.
+   */
+  resolveBrokerageOrganization?: () => Promise<{ id: string }>;
+};
+
+async function defaultFindUser(userId: string): Promise<MobileContextUser | null> {
+  return prisma.user.findFirst({
+    where: { id: userId, disabledAt: null },
     select: {
       id: true,
       email: true,
@@ -32,22 +51,59 @@ export async function buildMobileStatisticsContext(opts: {
       role: true,
     },
   });
+}
+
+async function defaultMembershipOrganizationId(
+  userId: string,
+): Promise<string | null> {
+  const membership = await prisma.organizationMembership.findFirst({
+    where: { userId },
+    select: { organizationId: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return membership?.organizationId ?? null;
+}
+
+/** Launchpad returns the desk-context 403 only when this is false. */
+export function isLaunchpadDeskContextResolved(
+  ctx: AgentOrgContext | null,
+): ctx is AgentOrgContext {
+  return ctx != null;
+}
+
+export async function buildMobileStatisticsContext(
+  opts: {
+    userId: string;
+    workspaceId: string;
+    role: WorkspaceMemberRole;
+  },
+  deps?: MobileStatisticsContextDeps,
+): Promise<AgentOrgContext | null> {
+  const findUser = deps?.findUser ?? defaultFindUser;
+  const resolveLeadOrganizationId =
+    deps?.resolveLeadOrganizationId ?? resolveOrganizationIdForWorkspace;
+  const resolveMembershipOrganizationId =
+    deps?.resolveMembershipOrganizationId ?? defaultMembershipOrganizationId;
+  const resolveBrokerageOrganization =
+    deps?.resolveBrokerageOrganization ??
+    (() => ensureBrokerageOrganization(false));
+
+  const user = await findUser(opts.userId);
   if (!user?.email) return null;
 
-  const organizationId = await resolveOrganizationIdForWorkspace(
-    opts.workspaceId,
+  const leadOrganizationId = await resolveLeadOrganizationId(opts.workspaceId);
+  if (leadOrganizationId) return buildCtx(user, leadOrganizationId, opts);
+
+  const membershipOrganizationId = await resolveMembershipOrganizationId(
+    opts.userId,
   );
-  if (!organizationId) {
-    const membership = await prisma.organizationMembership.findFirst({
-      where: { userId: opts.userId },
-      select: { organizationId: true },
-      orderBy: { createdAt: "asc" },
-    });
-    if (!membership) return null;
-    return buildCtx(user, membership.organizationId, opts);
+  if (membershipOrganizationId) {
+    return buildCtx(user, membershipOrganizationId, opts);
   }
 
-  return buildCtx(user, organizationId, opts);
+  const brokerage = await resolveBrokerageOrganization();
+  if (!brokerage.id) return null;
+  return buildCtx(user, brokerage.id, opts);
 }
 
 function buildCtx(

@@ -69,6 +69,7 @@ async function probeFeed(config: PropTxConfig) {
       "$metadata",
       { headers: { Accept: "application/xml, application/json" } },
       config,
+      { retry: false, timeoutMs: 25_000 },
     );
     const text = await res.text();
     const contentType = res.headers.get("content-type") ?? "";

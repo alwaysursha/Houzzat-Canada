@@ -4,6 +4,7 @@
  */
 import { config } from "dotenv";
 import { spawn } from "node:child_process";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
@@ -70,6 +71,7 @@ function runGeocode(limit: number): Promise<{
 }
 
 async function main() {
+  assertMlsSyncExecutionHost();
   let prevRemaining = Number.POSITIVE_INFINITY;
   let stall = 0;
 

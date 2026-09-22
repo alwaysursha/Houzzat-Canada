@@ -7,11 +7,13 @@
  *   pnpm typesense:import 500 2000     # batch size + max listings (smoke test)
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
+  assertMlsSyncExecutionHost();
   const { prisma } = await import("../src/lib/prisma");
   const {
     getTypesenseAdminClient,

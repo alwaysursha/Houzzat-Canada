@@ -3,10 +3,12 @@
  * Usage: pnpm exec tsx scripts/audit-status-sale-heal.ts
  */
 import { config } from "dotenv";
+import { assertMlsSyncExecutionHost } from "../src/lib/proptx/mls-sync-host";
 config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
+  assertMlsSyncExecutionHost();
   const { prisma } = await import("../src/lib/prisma");
   const { getPropTxSyncConfig } = await import("../src/lib/proptx/config");
   const { proptxJson } = await import("../src/lib/proptx/client");
