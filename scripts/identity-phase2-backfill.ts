@@ -7,8 +7,13 @@
  *   --apply
  *   --i-understand-production
  *
- * RE/MAX Omer User creation is PENDING_PHASE3_SPLIT (global email unique still in force).
- * Platform Houzzat staff split is PENDING_PLATFORM_STAFF_SPLIT.
+ * POST–PHASE 3: when Omer dual tenants + Platform/Houzzat staff split are already
+ * live (Users=66 topology), this tooling reports PHASE3_COMPLETE / ALREADY_SPLIT
+ * and proposes ZERO further mutations. It must never reverse Phase 3 identities.
+ *
+ * Historical (pre–Phase 3) statuses:
+ *   RE/MAX Omer User creation was PENDING_PHASE3_SPLIT
+ *   Platform Houzzat staff split was PENDING_PLATFORM_STAFF_SPLIT
  *
  * Run (dry-run only via package script):
  *   pnpm identity:phase2:dry-run
@@ -34,6 +39,10 @@ export const EXPECTED = {
   },
   omerUserId: "cmsgv80pa0004psp7xl2l2yzj",
   omerEmail: "omsyed88@gmail.com",
+  omerRemaxUserId: "cmucv4hg9y9ar0rzx2ukf47rx",
+  platformUserId: "cmt8x6eoe0003psp7bq46fkam",
+  platformEmail: "teamalisyed@gmail.com",
+  platformHouzzatStaffUserId: "cmucwfk9q7ziauq5uebbqb21y",
   alwaysurshaEmail: "alwaysursha@gmail.com",
   mariaContaminationLeads: [
     {
@@ -47,6 +56,7 @@ export const EXPECTED = {
       source: "OTHER",
     },
   ] as const,
+  /** Pre–Phase 3 audited baseline (Stage 2 era). */
   baseline: {
     users: 64,
     mariaLeads: 2,
@@ -55,6 +65,13 @@ export const EXPECTED = {
     workspaceMembers: 9,
     conversations: 7,
     leadActivities: 536,
+  },
+  /** Final Phase 3 closed topology (Stage 9/10). */
+  phase3Final: {
+    users: 66,
+    tenantUsers: 54,
+    nullUsers: 12,
+    mariaLeads: 0,
   },
 } as const;
 
@@ -180,7 +197,8 @@ export type Phase2Report = {
       | "SKIP_ORPHAN"
       | "SKIP_PLATFORM"
       | "MULTI_WORKSPACE_REQUIRES_SPLIT"
-      | "PENDING_PHASE3_SPLIT";
+      | "PENDING_PHASE3_SPLIT"
+      | "PHASE3_COMPLETE_NOOP";
     workspaceId: string | null;
     workspaceSlug: string | null;
     reasons: string[];
@@ -194,22 +212,31 @@ export type Phase2Report = {
   }>;
   skippedPlatformUsers: Array<{ userId: string; email: string }>;
   pendingOmerRemaxSplit: {
-    status: "PENDING_PHASE3_SPLIT";
+    status: "PENDING_PHASE3_SPLIT" | "ALREADY_SPLIT";
     reason: string;
     oldUserId: string;
     houzzatWorkspaceId: string;
     remaxWorkspaceId: string;
+    remaxUserId?: string;
     keepOnHouzzatUser: string[];
     moveToRemaxUserWhenAllowed: string[];
     createOnRemaxUser: string[];
     fkPreview: Record<string, unknown>;
   };
   pendingPlatformStaffSplit: {
-    status: "PENDING_PLATFORM_STAFF_SPLIT";
+    status: "PENDING_PLATFORM_STAFF_SPLIT" | "ALREADY_SPLIT";
     platformUserId: string;
     email: string;
+    houzzatStaffUserId?: string;
     note: string;
   };
+  /**
+   * When Phase 3 identity splits are live, Phase 2 apply is obsolete.
+   * Dry-run must report this and propose zero topology mutations.
+   */
+  toolingStatus:
+    | "PHASE2_ACTIVE"
+    | "PHASE3_COMPLETE_OBSOLETE_FOR_APPLY";
   expectedBeforeAfter: Record<
     string,
     { before: number; after: number; note?: string }
@@ -402,6 +429,67 @@ async function planOmerRemaxFkPreview(prisma: PrismaLike) {
   };
 }
 
+async function detectPhase3CompleteTopology(prisma: PrismaLike): Promise<{
+  complete: boolean;
+  omerHouzzatOk: boolean;
+  omerRemaxTwinId: string | null;
+  platformNullOk: boolean;
+  houzzatStaffTwinId: string | null;
+  users: number;
+  mariaLeads: number;
+}> {
+  const omer = await loadUser(prisma, EXPECTED.omerUserId);
+  const omerWs = await prisma.$queryRaw<Array<{ workspaceId: string | null }>>`
+    SELECT "workspaceId" FROM "User" WHERE id = ${EXPECTED.omerUserId} LIMIT 1
+  `;
+  const remaxTwin = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM "User"
+    WHERE lower(email) = lower(${EXPECTED.omerEmail})
+      AND "workspaceId" = ${EXPECTED.workspaces.remax}
+      AND id <> ${EXPECTED.omerUserId}
+    LIMIT 1
+  `;
+  const platform = await prisma.$queryRaw<
+    Array<{ workspaceId: string | null }>
+  >`
+    SELECT "workspaceId" FROM "User" WHERE id = ${EXPECTED.platformUserId} LIMIT 1
+  `;
+  const operator = await prisma.$queryRaw<Array<{ userId: string }>>`
+    SELECT "userId" FROM "PlatformOperator"
+    WHERE "userId" = ${EXPECTED.platformUserId} AND status = 'ACTIVE'
+    LIMIT 1
+  `;
+  const staffTwin = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM "User"
+    WHERE lower(email) = lower(${EXPECTED.platformEmail})
+      AND "workspaceId" = ${EXPECTED.workspaces.houzzat}
+      AND id <> ${EXPECTED.platformUserId}
+    LIMIT 1
+  `;
+  const counts = await topologyCountsSafe(prisma);
+  const omerHouzzatOk =
+    Boolean(omer) &&
+    omerWs[0]?.workspaceId === EXPECTED.workspaces.houzzat;
+  const platformNullOk =
+    platform[0]?.workspaceId == null && operator.length > 0;
+  const complete =
+    omerHouzzatOk &&
+    Boolean(remaxTwin[0]) &&
+    platformNullOk &&
+    Boolean(staffTwin[0]) &&
+    counts.users === EXPECTED.phase3Final.users &&
+    counts.mariaLeads === EXPECTED.phase3Final.mariaLeads;
+  return {
+    complete,
+    omerHouzzatOk,
+    omerRemaxTwinId: remaxTwin[0]?.id ?? null,
+    platformNullOk,
+    houzzatStaffTwinId: staffTwin[0]?.id ?? null,
+    users: counts.users,
+    mariaLeads: counts.mariaLeads,
+  };
+}
+
 async function buildReport(prisma: PrismaLike, mode: "DRY_RUN" | "APPLY", flags: {
   apply: boolean;
   understand: boolean;
@@ -409,6 +497,14 @@ async function buildReport(prisma: PrismaLike, mode: "DRY_RUN" | "APPLY", flags:
   const errors: string[] = [];
   const warnings: string[] = [];
   const applyBlockedReasons: string[] = [];
+
+  const phase3 = await detectPhase3CompleteTopology(prisma);
+  if (phase3.complete) {
+    warnings.push(
+      "Phase 3 strict workspace identity is COMPLETE (Users=66 dual Omer + platform/Houzzat staff). Phase 2 apply is obsolete — proposing zero topology mutations.",
+    );
+    applyBlockedReasons.push("PHASE3_COMPLETE_OBSOLETE_FOR_APPLY");
+  }
 
   const userWsCol = await columnExists(prisma, "User", "workspaceId");
   const accountWsCol = await columnExists(prisma, "Account", "workspaceId");
@@ -508,9 +604,20 @@ async function buildReport(prisma: PrismaLike, mode: "DRY_RUN" | "APPLY", flags:
 
   const counts = await topologyCountsSafe(prisma);
   // Soft drift on totals is a warning; security-relevant ID mismatches already error.
-  if (counts.users !== EXPECTED.baseline.users) {
+  if (
+    !phase3.complete &&
+    counts.users !== EXPECTED.baseline.users
+  ) {
     warnings.push(
       `User count ${counts.users} != audited baseline ${EXPECTED.baseline.users}`,
+    );
+  }
+  if (
+    phase3.complete &&
+    counts.users !== EXPECTED.phase3Final.users
+  ) {
+    errors.push(
+      `Phase 3 final User count ${counts.users} != expected ${EXPECTED.phase3Final.users}`,
     );
   }
 
@@ -579,6 +686,26 @@ async function buildReport(prisma: PrismaLike, mode: "DRY_RUN" | "APPLY", flags:
     }
 
     if (user.id === EXPECTED.omerUserId) {
+      // Post–Phase 3: Houzzat consumer identity is already assigned — never revert to NULL.
+      if (
+        phase3.omerHouzzatOk &&
+        phase3.omerRemaxTwinId &&
+        user.workspaceId === EXPECTED.workspaces.houzzat
+      ) {
+        proposedWorkspaceAssignments.push({
+          userId: user.id,
+          email: user.email,
+          action: "PHASE3_COMPLETE_NOOP",
+          workspaceId: EXPECTED.workspaces.houzzat,
+          workspaceSlug: slugById.get(EXPECTED.workspaces.houzzat) ?? "houzzat",
+          currentWorkspaceId: user.workspaceId,
+          reasons: [
+            "Phase 3 complete — Omer Houzzat consumer identity; do not move to NULL",
+            `RE/MAX twin already exists: ${phase3.omerRemaxTwinId}`,
+          ],
+        });
+        continue;
+      }
       if (user.workspaceId != null) {
         errors.push(
           `Omer ${user.email} has workspaceId=${user.workspaceId} (must remain NULL until Phase 3 split)`,
@@ -594,6 +721,46 @@ async function buildReport(prisma: PrismaLike, mode: "DRY_RUN" | "APPLY", flags:
         reasons: [
           "workspaceId stays NULL until Phase 3 — cannot assign Houzzat while RE/MAX staff FKs remain on this User",
           "RE/MAX staff clone PENDING_PHASE3_SPLIT — cannot create same-email User while global unique remains",
+        ],
+      });
+      continue;
+    }
+
+    // Post–Phase 3 RE/MAX Omer twin — never merge/delete/reassign back to Houzzat/NULL.
+    if (
+      phase3.omerRemaxTwinId &&
+      user.id === phase3.omerRemaxTwinId &&
+      user.workspaceId === EXPECTED.workspaces.remax
+    ) {
+      proposedWorkspaceAssignments.push({
+        userId: user.id,
+        email: user.email,
+        action: "PHASE3_COMPLETE_NOOP",
+        workspaceId: EXPECTED.workspaces.remax,
+        workspaceSlug: slugById.get(EXPECTED.workspaces.remax) ?? "re-max-realty",
+        currentWorkspaceId: user.workspaceId,
+        reasons: [
+          "Phase 3 complete — Omer RE/MAX staff identity; do not merge with Houzzat consumer",
+        ],
+      });
+      continue;
+    }
+
+    // Post–Phase 3 Houzzat staff twin for platform email — never move onto PlatformOperator.
+    if (
+      phase3.houzzatStaffTwinId &&
+      user.id === phase3.houzzatStaffTwinId &&
+      user.workspaceId === EXPECTED.workspaces.houzzat
+    ) {
+      proposedWorkspaceAssignments.push({
+        userId: user.id,
+        email: user.email,
+        action: "PHASE3_COMPLETE_NOOP",
+        workspaceId: EXPECTED.workspaces.houzzat,
+        workspaceSlug: slugById.get(EXPECTED.workspaces.houzzat) ?? "houzzat",
+        currentWorkspaceId: user.workspaceId,
+        reasons: [
+          "Phase 3 complete — Houzzat staff identity for platform email; do not merge onto PlatformOperator NULL User",
         ],
       });
       continue;
@@ -759,7 +926,7 @@ async function buildReport(prisma: PrismaLike, mode: "DRY_RUN" | "APPLY", flags:
     applyBlockedReasons.push("UNEXPECTED_MARIA_LEADS");
   }
 
-  const report: Phase2Report = {
+  let report: Phase2Report = {
     timestamp: new Date().toISOString(),
     mode,
     writeFlags: {
@@ -799,43 +966,77 @@ async function buildReport(prisma: PrismaLike, mode: "DRY_RUN" | "APPLY", flags:
       userId: row.userId,
       email: row.email,
     })),
-    pendingOmerRemaxSplit: {
-      status: "PENDING_PHASE3_SPLIT",
-      reason:
-        "User.email remains globally unique until Phase 3. Do not create a second omsyed88@gmail.com User and do not use a staged/fake email.",
-      oldUserId: EXPECTED.omerUserId,
-      houzzatWorkspaceId: EXPECTED.workspaces.houzzat,
-      remaxWorkspaceId: EXPECTED.workspaces.remax,
-      keepOnHouzzatUser: [
-        "Lead.customer cmsgv826x0008psp7jzcfjk3j + conversation/activity/appointments",
-        "SavedListing / SavedSearch / ListingNote / ListingView / PropertyMonitor",
-        "PushDevice / ConsentEvent / ActivityEvent / SiteVisitor",
-        "Consumer password + VOW/CASL + alert preferences",
-        "workspaceId remains NULL until Phase 3 split (then Houzzat home)",
-      ],
-      moveToRemaxUserWhenAllowed: [
-        "WorkspaceMember OWNER on RE/MAX",
-        "Workspace.billingOwnerUserId on RE/MAX",
-        "Lead.assignedAgentId on RE/MAX leads",
-        "RE/MAX-scoped AgentTask / Message.sender / Appointment.agent / LeadNote.author",
-      ],
-      createOnRemaxUser: [
-        "AgentProfile (new row; none on Omer today)",
-        "Independent staff role/preferences (no consumer history copy)",
-      ],
-      fkPreview,
-    },
-    pendingPlatformStaffSplit: {
-      status: "PENDING_PLATFORM_STAFF_SPLIT",
-      platformUserId: platformOps[0]?.userId ?? "cmt8x6eoe0003psp7bq46fkam",
-      email: platformOps[0]?.email ?? "teamalisyed@gmail.com",
-      note: "Keep PlatformOperator User workspaceId=NULL. Houzzat WorkspaceMember/primaryAgent/assigned Leads require a separate Houzzat staff User under an explicit future flag — not part of default Phase 2 apply.",
-    },
+    pendingOmerRemaxSplit: phase3.complete
+      ? {
+          status: "ALREADY_SPLIT" as const,
+          reason:
+            "Phase 3 Omer Houzzat/RE/MAX split is complete. Phase 2 must not reverse or re-plan it.",
+          oldUserId: EXPECTED.omerUserId,
+          houzzatWorkspaceId: EXPECTED.workspaces.houzzat,
+          remaxWorkspaceId: EXPECTED.workspaces.remax,
+          remaxUserId: phase3.omerRemaxTwinId ?? EXPECTED.omerRemaxUserId,
+          keepOnHouzzatUser: [
+            "Lead.customer cmsgv826x0008psp7jzcfjk3j + conversation/activity/appointments",
+            "SavedListing / SavedSearch / ListingNote / ListingView / PropertyMonitor",
+            "PushDevice / ConsentEvent / ActivityEvent / SiteVisitor",
+            "Consumer password + VOW/CASL + alert preferences",
+            "workspaceId = Houzzat (final)",
+          ],
+          moveToRemaxUserWhenAllowed: [],
+          createOnRemaxUser: [],
+          fkPreview: { alreadyMoved: true },
+        }
+      : {
+          status: "PENDING_PHASE3_SPLIT" as const,
+          reason:
+            "User.email remains globally unique until Phase 3. Do not create a second omsyed88@gmail.com User and do not use a staged/fake email.",
+          oldUserId: EXPECTED.omerUserId,
+          houzzatWorkspaceId: EXPECTED.workspaces.houzzat,
+          remaxWorkspaceId: EXPECTED.workspaces.remax,
+          keepOnHouzzatUser: [
+            "Lead.customer cmsgv826x0008psp7jzcfjk3j + conversation/activity/appointments",
+            "SavedListing / SavedSearch / ListingNote / ListingView / PropertyMonitor",
+            "PushDevice / ConsentEvent / ActivityEvent / SiteVisitor",
+            "Consumer password + VOW/CASL + alert preferences",
+            "workspaceId remains NULL until Phase 3 split (then Houzzat home)",
+          ],
+          moveToRemaxUserWhenAllowed: [
+            "WorkspaceMember OWNER on RE/MAX",
+            "Workspace.billingOwnerUserId on RE/MAX",
+            "Lead.assignedAgentId on RE/MAX leads",
+            "RE/MAX-scoped AgentTask / Message.sender / Appointment.agent / LeadNote.author",
+          ],
+          createOnRemaxUser: [
+            "AgentProfile (new row; none on Omer today)",
+            "Independent staff role/preferences (no consumer history copy)",
+          ],
+          fkPreview,
+        },
+    pendingPlatformStaffSplit: phase3.complete
+      ? {
+          status: "ALREADY_SPLIT" as const,
+          platformUserId: EXPECTED.platformUserId,
+          email: EXPECTED.platformEmail,
+          houzzatStaffUserId:
+            phase3.houzzatStaffTwinId ?? EXPECTED.platformHouzzatStaffUserId,
+          note: "Phase 3 PlatformOperator / Houzzat staff split is complete. Platform User stays NULL; Houzzat staff User is separate. Phase 2 must not reverse.",
+        }
+      : {
+          status: "PENDING_PLATFORM_STAFF_SPLIT" as const,
+          platformUserId: platformOps[0]?.userId ?? EXPECTED.platformUserId,
+          email: platformOps[0]?.email ?? EXPECTED.platformEmail,
+          note: "Keep PlatformOperator User workspaceId=NULL. Houzzat WorkspaceMember/primaryAgent/assigned Leads require a separate Houzzat staff User under an explicit future flag — not part of default Phase 2 apply.",
+        },
+    toolingStatus: phase3.complete
+      ? ("PHASE3_COMPLETE_OBSOLETE_FOR_APPLY" as const)
+      : ("PHASE2_ACTIVE" as const),
     expectedBeforeAfter: {
       users: {
         before: counts.users,
         after: counts.users,
-        note: "No User create until Phase 3 Omer split; Maria cleanup deletes Leads only",
+        note: phase3.complete
+          ? "Phase 3 closed — no further User creates/deletes from Phase 2"
+          : "No User create until Phase 3 Omer split; Maria cleanup deletes Leads only",
       },
       mariaLeads: {
         before: counts.mariaLeads,
@@ -852,7 +1053,9 @@ async function buildReport(prisma: PrismaLike, mode: "DRY_RUN" | "APPLY", flags:
       workspaceMembers: {
         before: counts.workspaceMembers,
         after: counts.workspaceMembers,
-        note: "Omer RE/MAX membership repoint deferred to Phase 3",
+        note: phase3.complete
+          ? "Phase 3 closed — membership topology frozen for Phase 2"
+          : "Omer RE/MAX membership repoint deferred to Phase 3",
       },
       conversations: {
         before: counts.conversations,
@@ -865,6 +1068,31 @@ async function buildReport(prisma: PrismaLike, mode: "DRY_RUN" | "APPLY", flags:
     },
     applyBlockedReasons: [...new Set(applyBlockedReasons)],
   };
+
+  // Safety: never propose ASSIGN/deletes that reverse Phase 3 once complete.
+  if (phase3.complete) {
+    const dangerous = report.proposedWorkspaceAssignments.filter(
+      (row) =>
+        row.action === "ASSIGN" ||
+        row.action === "PENDING_PHASE3_SPLIT" ||
+        row.action === "MULTI_WORKSPACE_REQUIRES_SPLIT",
+    );
+    if (dangerous.length > 0) {
+      report.preflight.errors.push(
+        `Phase 3 complete but Phase 2 still proposed mutating actions: ${dangerous
+          .map((d) => `${d.email}:${d.action}`)
+          .join(", ")}`,
+      );
+      report.preflight.ok = false;
+      report.applyBlockedReasons.push("PHASE3_COMPLETE_MUTATION_PROPOSED");
+    }
+    if (report.proposedDeletes.status === "PLAN") {
+      report.preflight.errors.push(
+        "Phase 3 complete but Phase 2 still proposed Maria Lead deletes",
+      );
+      report.preflight.ok = false;
+    }
+  }
 
   return report;
 }
@@ -895,6 +1123,11 @@ async function applyPhase2(
   }
   if (!report.preflight.ok) {
     fail(`Preflight failed: ${report.preflight.errors.join("; ")}`);
+  }
+  if (report.toolingStatus === "PHASE3_COMPLETE_OBSOLETE_FOR_APPLY") {
+    fail(
+      "Phase 3 identity cutover is complete. Phase 2 apply is obsolete and refuses all writes.",
+    );
   }
   if (!report.phase1ColumnsPresent.userWorkspaceId) {
     fail("Phase 1 User.workspaceId missing — refuse apply");
@@ -1008,6 +1241,7 @@ function printSummary(report: Phase2Report, artifact: { path: string; digest: st
     "pendingPlatformStaffSplit:",
     report.pendingPlatformStaffSplit.status,
   );
+  console.log("toolingStatus:", report.toolingStatus);
   console.log("expectedBeforeAfter:", report.expectedBeforeAfter);
   if (report.applyBlockedReasons.length) {
     console.log("applyBlockedReasons:", report.applyBlockedReasons);

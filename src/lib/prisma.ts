@@ -136,6 +136,10 @@ function getPrismaCompat() {
     return getPrisma();
   }
 
+  // Identity CLI dry-runs / scripts: prefer HTTP when WS is blocked (sandbox, CI).
+  const neonKind: NeonAdapterKind =
+    process.env.PRISMA_NEON_ADAPTER === "http" ? "http" : "ws";
+
   if (
     !globalForPrisma.__houzzatPrisma ||
     globalForPrisma.__houzzatPrismaGeneration !== PRISMA_CLIENT_GENERATION
@@ -147,7 +151,7 @@ function getPrismaCompat() {
     void globalForPrisma.__houzzatPrisma?.$disconnect().catch(() => undefined);
     globalForPrisma.__houzzatPrisma = createPrismaClient(
       connectionString,
-      "ws",
+      neonKind,
     );
     globalForPrisma.__houzzatPrismaGeneration = PRISMA_CLIENT_GENERATION;
   }

@@ -202,6 +202,7 @@
     "customer-tenant-join:selftest": "node --import tsx scripts/customer-tenant-join-selftest.ts",
     "identity:phase2:dry-run": "node --import tsx scripts/identity-phase2-backfill.ts",
     "identity:phase3:omer-split:dry-run": "node --import tsx scripts/identity-phase3-omer-split.ts",
+    "identity:phase3:platform-staff-split:dry-run": "node --import tsx scripts/identity-phase3-platform-staff-split.ts",
     "identity:phase3:isolation:selftest": "node --import tsx scripts/identity-phase3-isolation-selftest.ts",
     "identity:phase3:lead-guard:selftest": "node --import tsx scripts/identity-phase3-lead-guard-selftest.ts",
     "identity:phase3:org-invite:selftest": "node --import tsx scripts/identity-phase3-org-invite-selftest.ts",

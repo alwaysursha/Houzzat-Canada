@@ -328,12 +328,24 @@ function testOmerSplitToolingExists() {
   console.log("[phase3] Omer split PLAN tooling... PASS");
 }
 
+function testPlatformStaffSplitToolingExists() {
+  const split = read("scripts/identity-phase3-platform-staff-split.ts");
+  assert.ok(split.includes("applyHardBlocked"));
+  assert.ok(split.includes("HARD-BLOCKED"));
+  assert.ok(split.includes("ALREADY_SPLIT"));
+  assert.ok(split.includes("cmt8x6eoe0003psp7bq46fkam"));
+  assert.ok(split.includes("PlatformOperator"));
+  assert.ok(split.includes("Do NOT Move") || split.includes("doNotMove"));
+  console.log("[phase3] Platform staff split PLAN tooling... PASS");
+}
+
 function main() {
   testTokenIdentifiersAreTenantBound();
   testJwtWorkspaceBinding();
   testInMemoryDualWorkspaceIdentityModel();
   testSourceGuards();
   testOmerSplitToolingExists();
+  testPlatformStaffSplitToolingExists();
   console.log("\n[identity-phase3-isolation] ALL PASS\n");
 }
 

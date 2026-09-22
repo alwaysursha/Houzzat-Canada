@@ -162,11 +162,49 @@ async function main() {
         AND a."agentId" = ${OMER_SPLIT.omerUserId}
     `;
 
+    const remaxTwin = await prisma.$queryRaw<
+      Array<{ id: string; workspaceId: string | null; role: string }>
+    >`
+      SELECT id, "workspaceId", role::text AS role
+      FROM "User"
+      WHERE lower(email) = lower(${OMER_SPLIT.omerEmail})
+        AND "workspaceId" = ${OMER_SPLIT.remaxWorkspaceId}
+        AND id <> ${OMER_SPLIT.omerUserId}
+      LIMIT 1
+    `;
+
+    const membershipOnTwin = remaxTwin[0]
+      ? await prisma.$queryRaw<Array<{ id: string; userId: string }>>`
+          SELECT id, "userId" FROM "WorkspaceMember"
+          WHERE id = ${OMER_SPLIT.remaxOwnerMembershipId}
+            AND "userId" = ${remaxTwin[0].id}
+        `
+      : [];
+
+    const billingOnTwin = remaxTwin[0]
+      ? await prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM "Workspace"
+          WHERE id = ${OMER_SPLIT.remaxWorkspaceId}
+            AND "billingOwnerUserId" = ${remaxTwin[0].id}
+        `
+      : [];
+
+    const status =
+      omer[0]?.workspaceId === OMER_SPLIT.houzzatWorkspaceId &&
+      Boolean(remaxTwin[0]) &&
+      membershipOnTwin.length > 0 &&
+      billingOnTwin.length > 0
+        ? ("ALREADY_SPLIT" as const)
+        : ("PENDING_PHASE3_SPLIT_PLAN" as const);
+
     const plan = {
       timestamp: new Date().toISOString(),
       mode: "DRY_RUN",
       applyHardBlocked: true,
       currentOmer: omer[0] ?? null,
+      remaxTwin: remaxTwin[0] ?? null,
+      proposedWrites: status === "ALREADY_SPLIT" ? [] : undefined,
+      writeCount: status === "ALREADY_SPLIT" ? 0 : undefined,
       keepOnHouzzatUser: {
         userId: OMER_SPLIT.omerUserId,
         setWorkspaceId: OMER_SPLIT.houzzatWorkspaceId,
@@ -180,23 +218,43 @@ async function main() {
         ],
         houzzatLead: houzzatLead[0] ?? null,
       },
-      createRemaxUser: {
-        workspaceId: OMER_SPLIT.remaxWorkspaceId,
-        email: OMER_SPLIT.omerEmail,
-        role: "AGENT",
-        passwordStrategy:
-          "Copy current password hash once as transition only; passwords must be independently changeable after split",
-        create: ["AgentProfile (new row if missing)"],
-      },
-      moveToRemaxUser: {
-        workspaceMember: member,
-        billingOwner: billing.length > 0,
-        assignedLeads: assigned.map((r) => r.id),
-        agentTasks: Number(tasks[0]?.n ?? 0),
-        messagesSent: Number(messages[0]?.n ?? 0),
-        leadNotesAuthored: Number(notes[0]?.n ?? 0),
-        appointmentsAsAgent: Number(appts[0]?.n ?? 0),
-      },
+      createRemaxUser:
+        status === "ALREADY_SPLIT"
+          ? {
+              alreadyExistsId: remaxTwin[0]!.id,
+              workspaceId: OMER_SPLIT.remaxWorkspaceId,
+              email: OMER_SPLIT.omerEmail,
+              role: remaxTwin[0]!.role,
+              create: [],
+            }
+          : {
+              workspaceId: OMER_SPLIT.remaxWorkspaceId,
+              email: OMER_SPLIT.omerEmail,
+              role: "AGENT",
+              passwordStrategy:
+                "Copy current password hash once as transition only; passwords must be independently changeable after split",
+              create: ["AgentProfile (new row if missing)"],
+            },
+      moveToRemaxUser:
+        status === "ALREADY_SPLIT"
+          ? {
+              workspaceMember: [],
+              billingOwner: false,
+              assignedLeads: [],
+              agentTasks: 0,
+              messagesSent: 0,
+              leadNotesAuthored: 0,
+              appointmentsAsAgent: 0,
+            }
+          : {
+              workspaceMember: member,
+              billingOwner: billing.length > 0,
+              assignedLeads: assigned.map((r) => r.id),
+              agentTasks: Number(tasks[0]?.n ?? 0),
+              messagesSent: Number(messages[0]?.n ?? 0),
+              leadNotesAuthored: Number(notes[0]?.n ?? 0),
+              appointmentsAsAgent: Number(appts[0]?.n ?? 0),
+            },
       doNotCopyFromHouzzat: [
         "Leads",
         "saves/searches",
@@ -206,7 +264,7 @@ async function main() {
         "VOW/CASL history",
         "consumer ActivityEvents/SiteVisitors",
       ],
-      status: "PENDING_PHASE3_SPLIT_PLAN",
+      status,
     };
 
     mkdirSync(REPORT_DIR, { recursive: true });
@@ -218,13 +276,18 @@ async function main() {
 
     console.log("\n=== identity-phase3-omer-split ===");
     console.log("mode=DRY_RUN applyHardBlocked=true");
+    console.log("status:", plan.status);
+    console.log("writeCount:", plan.writeCount ?? "(pending plan)");
     console.log("currentOmer:", plan.currentOmer);
+    console.log("remaxTwin:", plan.remaxTwin);
     console.log("moveToRemaxUser:", plan.moveToRemaxUser);
     console.log(`report=${path}`);
     console.log(`reportSha256_16=${digest}`);
     console.log("=== end ===\n");
     console.log(
-      "[identity-phase3-omer-split] PLAN complete. Zero database writes.",
+      plan.status === "ALREADY_SPLIT"
+        ? "[identity-phase3-omer-split] ALREADY_SPLIT. Proposed writes: 0."
+        : "[identity-phase3-omer-split] PLAN complete. Zero database writes.",
     );
   } finally {
     await prisma.$disconnect().catch(() => undefined);
