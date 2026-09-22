@@ -103,6 +103,10 @@ function testSideEffectsUnchanged() {
     "signup must still send verification email in side effect",
   );
   assert.ok(
+    signUpRoute.includes("origin: tenancy.origin"),
+    "signup verification must use tenant origin (not global SITE_URL)",
+  );
+  assert.ok(
     signUpRoute.includes("sendWelcomeEmail"),
     "signup must still send welcome email in side effect",
   );

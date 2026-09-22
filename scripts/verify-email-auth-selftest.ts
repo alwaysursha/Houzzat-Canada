@@ -41,8 +41,8 @@ function testProviderRegistered() {
 
 function testEmailLinkPointsToPage() {
   assert.ok(
-    emailVerification.includes('new URL("/auth/verify-email", origin)') ||
-      emailVerification.includes('new URL("/auth/verify-email", SITE_URL)'),
+    emailVerification.includes('new URL("/auth/verify-email", base)') ||
+      emailVerification.includes('new URL("/auth/verify-email", origin)'),
     "verification emails must link to inert verification page",
   );
   assert.ok(
@@ -57,6 +57,15 @@ function testEmailLinkPointsToPage() {
     emailVerification.includes("tenantBoundTokenIdentifier") ||
       emailVerification.includes("email-verify"),
     "Phase 3: verification tokens must be tenant-bound",
+  );
+  assert.ok(
+    emailVerification.includes("resolveEmailVerificationContext") ||
+      emailVerification.includes("requires a tenant origin"),
+    "verification links must require an explicit tenant origin",
+  );
+  assert.ok(
+    !emailVerification.includes("input.origin ?? SITE_URL"),
+    "must not silently fall back to global SITE_URL for verify links",
   );
 }
 

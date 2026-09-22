@@ -4,6 +4,7 @@ import { requireCustomerUser } from "@/lib/account";
 import { isEmailVerified } from "@/lib/account-access";
 import {
   isEmailSendConfigured,
+  resolveEmailVerificationContext,
   sendEmailVerification,
   VERIFY_RESEND_COOLDOWN_MS,
 } from "@/lib/auth/email-verification";
@@ -66,12 +67,26 @@ export async function POST(request: Request) {
     );
   }
 
+  // Hostname → workspace origin (request tenancy). Never email→workspace.
+  const { origin, workspaceId: hostnameWorkspaceId } =
+    await resolveEmailVerificationContext(request);
+  if (!hostnameWorkspaceId || hostnameWorkspaceId !== user.workspaceId) {
+    return NextResponse.json(
+      {
+        error:
+          "Open your brokerage website to verify this account, then try again.",
+      },
+      { status: 400 },
+    );
+  }
+
   const result = await sendEmailVerification({
     email: user.email,
     name: user.name,
     callbackUrl,
     customerId: user.id,
     workspaceId: user.workspaceId,
+    origin,
   });
 
   if (result === "failed") {

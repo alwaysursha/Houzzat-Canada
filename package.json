@@ -206,6 +206,7 @@
     "identity:phase3:isolation:selftest": "node --import tsx scripts/identity-phase3-isolation-selftest.ts",
     "identity:phase3:lead-guard:selftest": "node --import tsx scripts/identity-phase3-lead-guard-selftest.ts",
     "identity:phase3:org-invite:selftest": "node --import tsx scripts/identity-phase3-org-invite-selftest.ts",
+    "tenant-verify-origin:selftest": "node --import tsx scripts/tenant-verify-origin-selftest.ts",
     "lead-info-updated:selftest": "node --import tsx scripts/lead-info-updated-selftest.ts",
     "lead-duplicate-reconciliation:selftest": "node --import tsx scripts/lead-duplicate-reconciliation-selftest.ts",
     "lead-duplicate-reconciliation:dryrun": "node --import tsx scripts/lead-duplicate-reconciliation-dryrun.ts",

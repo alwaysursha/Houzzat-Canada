@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 import type { ActiveMode, Role } from "@prisma/client";
-import { SITE_URL } from "@/lib/constants";
+import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import { safeInternalCallbackUrl } from "@/lib/auth/safe-callback-url";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import { isResendConfigured } from "@/lib/email/config";
@@ -12,6 +12,8 @@ import {
   parseTenantBoundTokenIdentifier,
   tenantBoundTokenIdentifier,
 } from "@/lib/auth/workspace-identity";
+import { resolveTrustedRequestOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
+import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
 
 export const VERIFY_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** Min gap between verification emails for the same address. */
@@ -49,12 +51,47 @@ export async function createEmailVerificationToken(
   return { token, expires, email: normalized, workspaceId };
 }
 
+/**
+ * Tenant-host verification context — mirrors existing request-tenancy origin resolution.
+ * Prefer request tenancy (canonical custom domain / PLATFORM primary host).
+ * Never invent workspace from email.
+ */
+export async function resolveEmailVerificationContext(request: Request): Promise<{
+  origin: string;
+  siteName: string;
+  workspaceId: string | null;
+}> {
+  const tenancy = await resolveRequestTenancy(request);
+  if (tenancy.ok) {
+    return {
+      origin: tenancy.origin,
+      siteName: tenancy.brand.displayName || SITE_NAME,
+      workspaceId: tenancy.workspaceId,
+    };
+  }
+
+  const trusted = resolveTrustedRequestOrigin(request);
+  if (trusted.ok) {
+    return { origin: trusted.origin, siteName: SITE_NAME, workspaceId: null };
+  }
+
+  return { origin: SITE_URL, siteName: SITE_NAME, workspaceId: null };
+}
+
+/**
+ * Build verification URL for a specific tenant origin.
+ * `origin` is required — do not silently fall back to global SITE_URL here.
+ */
 export function verificationLink(
   token: string,
-  callbackUrl?: string,
-  origin: string = SITE_URL,
+  callbackUrl: string | undefined,
+  origin: string,
 ) {
-  const url = new URL("/auth/verify-email", origin);
+  const base = origin.trim();
+  if (!base) {
+    throw new Error("verificationLink requires a tenant origin");
+  }
+  const url = new URL("/auth/verify-email", base);
   url.searchParams.set("token", token);
   const safe = safeInternalCallbackUrl(callbackUrl, "/");
   if (safe !== "/") {
@@ -66,7 +103,8 @@ export function verificationLink(
 /**
  * Create token + send verification email.
  * Returns skipped when Resend is not configured.
- * Tenant-bound: Houzzat token cannot verify RE/MAX User.
+ * Tenant-bound: Houzzat token cannot verify RE/MAX / Maria User.
+ * `origin` must be the tenant's canonical public origin (not global SITE_URL).
  */
 export async function sendEmailVerification(input: {
   email: string;
@@ -74,10 +112,23 @@ export async function sendEmailVerification(input: {
   callbackUrl?: string;
   customerId?: string | null;
   workspaceId: string;
-  origin?: string;
+  /** Canonical tenant website origin (custom domain or PLATFORM primary). */
+  origin: string;
 }): Promise<"sent" | "skipped" | "failed"> {
+  const origin = input.origin.trim();
+  if (!origin) {
+    console.error("[verify-email] missing tenant origin", {
+      workspaceId: input.workspaceId,
+    });
+    return "failed";
+  }
+
   if (!isEmailSendConfigured()) {
-    console.info("[verify-email:stub] RESEND_API_KEY missing", input.email);
+    console.info("[verify-email:stub] RESEND_API_KEY missing", {
+      email: input.email,
+      workspaceId: input.workspaceId,
+      origin,
+    });
     return "skipped";
   }
 
@@ -85,7 +136,7 @@ export async function sendEmailVerification(input: {
     input.workspaceId,
     input.email,
   );
-  const link = verificationLink(token, input.callbackUrl, input.origin ?? SITE_URL);
+  const link = verificationLink(token, input.callbackUrl, origin);
   const rendered = renderVerifyEmail({
     name: input.name,
     verifyUrl: link,

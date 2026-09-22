@@ -291,6 +291,25 @@ function testSourceGuards() {
   assert.ok(reset.includes("findTenantUserByEmail"));
   assert.ok(verify.includes("tenantBoundTokenIdentifier"));
   assert.ok(verify.includes("findTenantUserByEmail"));
+  assert.ok(
+    verify.includes("resolveEmailVerificationContext"),
+    "email verification must resolve tenant origin like password-reset",
+  );
+  assert.ok(
+    signup.includes("origin: tenancy.origin"),
+    "signup verification must pass tenancy.origin",
+  );
+  const requestVerification = read(
+    "src/app/api/auth/request-verification/route.ts",
+  );
+  assert.ok(
+    requestVerification.includes("resolveEmailVerificationContext"),
+    "resend verification must resolve hostname workspace/origin",
+  );
+  assert.ok(
+    requestVerification.includes("hostnameWorkspaceId !== user.workspaceId"),
+    "resend must reject cross-host workspace mismatch",
+  );
 
   assert.ok(migration.includes("User_workspaceId_email_tenant_key"));
   assert.ok(migration.includes("User_email_null_workspace_key"));

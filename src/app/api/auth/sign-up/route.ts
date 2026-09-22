@@ -248,6 +248,8 @@ export async function POST(request: Request) {
             callbackUrl: "/",
             customerId: user.id,
             workspaceId,
+            // Canonical tenant origin (PLATFORM primary or future custom domain).
+            origin: tenancy.origin,
           }).catch((err) => {
             console.error("[sign-up] verification email failed", err);
             return "failed" as const;
