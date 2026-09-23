@@ -12,6 +12,7 @@ import {
   tenantBoundTokenIdentifier,
   parseTenantBoundTokenIdentifier,
 } from "@/lib/auth/workspace-identity";
+import { sanitizeWorkspaceHintId } from "@/lib/platform/activation/onboarding-pro-auth";
 
 export const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 export const PASSWORD_RESET_COOLDOWN_MS = 60 * 1000;
@@ -118,6 +119,59 @@ export async function requestPasswordReset(input: {
   });
 }
 
+/**
+ * Platform Pro host: resolve eligible tenant Users for reset without guessing.
+ * - 0 matches → skip
+ * - 1 match → that workspace
+ * - N matches + workspaceHint matching one → that workspace
+ * - N matches without valid hint → skip (do not pick arbitrarily)
+ * Never includes NULL-workspace / PlatformOperator identities.
+ */
+export async function resolvePlatformTenantPasswordResetTargets(input: {
+  email: string;
+  workspaceHint?: string | null;
+}): Promise<Array<{ workspaceId: string; email: string }>> {
+  const normalized = normalizeIdentityEmail(input.email);
+  const hint = sanitizeWorkspaceHintId(input.workspaceHint);
+  const candidates = await prisma.user.findMany({
+    where: {
+      email: normalized,
+      workspaceId: { not: null },
+      password: { not: null },
+      disabledAt: null,
+    },
+    select: {
+      id: true,
+      email: true,
+      workspaceId: true,
+      workspaceMemberships: {
+        where: {
+          status: "ACTIVE",
+          role: { in: ["OWNER", "ADMIN", "AGENT"] },
+          workspace: { status: { in: ["ACTIVE", "TRIAL"] } },
+        },
+        select: { workspaceId: true },
+        take: 5,
+      },
+    },
+    take: 25,
+  });
+
+  const eligible: Array<{ workspaceId: string; email: string }> = [];
+  for (const row of candidates) {
+    if (!row.workspaceId) continue;
+    const home = row.workspaceMemberships.some(
+      (m) => m.workspaceId === row.workspaceId,
+    );
+    if (!home) continue;
+    eligible.push({ workspaceId: row.workspaceId, email: row.email });
+  }
+
+  if (eligible.length <= 1) return eligible;
+  if (!hint) return [];
+  return eligible.filter((row) => row.workspaceId === hint);
+}
+
 export type PasswordResetPeekResult =
   | { ok: true }
   | { ok: false; error: string };
@@ -145,7 +199,10 @@ export async function peekPasswordResetToken(
 export async function consumePasswordResetToken(
   token: string,
   newPassword: string,
-): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; email: string; workspaceId: string }
+  | { ok: false; error: string }
+> {
   const trimmed = token.trim();
   if (!trimmed) {
     return { ok: false, error: "This reset link is missing." };
@@ -208,5 +265,9 @@ export async function consumePasswordResetToken(
     prisma.session.deleteMany({ where: { userId: user.id } }),
   ]);
 
-  return { ok: true, email: user.email };
+  return {
+    ok: true,
+    email: user.email,
+    workspaceId: parsed.workspaceId,
+  };
 }

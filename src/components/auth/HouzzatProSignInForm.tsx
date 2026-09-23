@@ -22,6 +22,12 @@ const PRO_BOOK_DEMO_HREF = `${HOUZZATPRO_PLATFORM_URL}${BOOK_DEMO_PATH}`;
 const PRO_INPUT_CLASS =
   "h-12 border-white/70 bg-white/95 text-ink shadow-sm backdrop-blur-sm placeholder:text-ink/40 focus-visible:border-[#0B5C49]/35 focus-visible:ring-[#0B5C49]/25";
 
+type WorkspaceChoice = {
+  workspaceId: string;
+  displayName: string;
+  slug: string;
+};
+
 export function HouzzatProSignInForm({
   callbackUrl = null,
   returnPath = null,
@@ -37,14 +43,12 @@ export function HouzzatProSignInForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [forgotPassword, setForgotPassword] = useState(false);
+  const [workspaceChoices, setWorkspaceChoices] = useState<WorkspaceChoice[] | null>(
+    null,
+  );
   const [loginAgain] = useState(() => loadProSignInEmailPrefill().loginAgain);
 
-  async function onSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    if (pending) return;
-    setPending(true);
-    setError(null);
-
+  async function completeSignIn(selectedWorkspaceId: string | null) {
     const normalizedEmail = email.trim().toLowerCase();
     setNativeNavStage("BOOTSTRAPPING");
 
@@ -53,7 +57,7 @@ export function HouzzatProSignInForm({
       password,
       callbackUrl,
       returnPath,
-      workspaceHint,
+      workspaceHint: selectedWorkspaceId ?? workspaceHint,
     });
 
     if (!result.ok) {
@@ -71,12 +75,109 @@ export function HouzzatProSignInForm({
     });
   }
 
+  async function onSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    setError(null);
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Password-proven multi-workspace selection (same email, independent identities).
+    if (!workspaceHint) {
+      try {
+        const discoverRes = await fetch("/api/mobile/v2/auth/discover", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ email: normalizedEmail, password }),
+        });
+        const discoverBody = (await discoverRes.json().catch(() => null)) as {
+          ok?: boolean;
+          data?: { matches?: WorkspaceChoice[] };
+        } | null;
+        if (
+          discoverRes.ok &&
+          discoverBody?.ok &&
+          Array.isArray(discoverBody.data?.matches)
+        ) {
+          const matches = discoverBody.data!.matches!;
+          if (matches.length > 1) {
+            setWorkspaceChoices(matches);
+            setPending(false);
+            return;
+          }
+          if (matches.length === 1) {
+            await completeSignIn(matches[0]!.workspaceId);
+            return;
+          }
+        }
+      } catch {
+        /* fall through to credentials (PlatformOperator path) */
+      }
+    }
+
+    await completeSignIn(null);
+  }
+
+  async function onSelectWorkspace(workspaceId: string) {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    setWorkspaceChoices(null);
+    await completeSignIn(workspaceId);
+  }
+
   if (forgotPassword) {
     return (
       <ForgotPasswordRequest
         initialEmail={email}
+        workspaceHint={workspaceHint}
         onBack={() => setForgotPassword(false)}
       />
+    );
+  }
+
+  if (workspaceChoices && workspaceChoices.length > 1) {
+    return (
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <h3 className="text-lg font-semibold text-[#0B5C49]">
+            Choose a workspace
+          </h3>
+          <p className="text-sm text-[#0B5C49]/75">
+            This email belongs to more than one HouzzatPRO workspace. Select
+            where you want to sign in.
+          </p>
+        </div>
+        <ul className="space-y-2">
+          {workspaceChoices.map((choice) => (
+            <li key={choice.workspaceId}>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void onSelectWorkspace(choice.workspaceId)}
+                className="flex h-12 w-full items-center justify-between rounded-xl border border-[#0B5C49]/20 bg-white px-4 text-left text-sm font-semibold text-[#0B5C49] transition hover:border-[#0B5C49]/45 hover:bg-[#F4FBF8] disabled:opacity-60"
+              >
+                <span>{choice.displayName}</span>
+                <span className="text-xs font-medium text-[#0B5C49]/55">
+                  {choice.slug}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {error ? <p className="text-sm font-medium text-danger">{error}</p> : null}
+        <button
+          type="button"
+          onClick={() => {
+            setWorkspaceChoices(null);
+            setPending(false);
+          }}
+          className="w-full text-center text-sm font-semibold text-[#0B5C49] hover:underline"
+        >
+          Back
+        </button>
+      </div>
     );
   }
 

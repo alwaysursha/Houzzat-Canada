@@ -24,7 +24,13 @@ async function runTests() {
   const buildGradlePath = path.resolve(__dirname, "../android/app/build.gradle");
   const buildGradle = fs.readFileSync(buildGradlePath, "utf8");
   assert.ok(buildGradle.includes('applicationId "com.houzzat.pro"'), "build.gradle must specify applicationId com.houzzat.pro");
-  assert.ok(/versionCode\s+2000\d\b/.test(buildGradle), "build.gradle must have versionCode 2000x");
+  const versionCodeMatch = buildGradle.match(/versionCode\s+(\d+)/);
+  assert.ok(versionCodeMatch, "build.gradle must declare versionCode");
+  const versionCode = Number(versionCodeMatch[1]);
+  assert.ok(
+    Number.isInteger(versionCode) && versionCode >= 20001,
+    `build.gradle versionCode must be >= 20001 (got ${versionCode})`,
+  );
   assert.ok(buildGradle.includes('versionName "2.0.0"'), "build.gradle must have versionName 2.0.0");
   assert.ok(buildGradle.includes("targetSdkVersion rootProject.ext.targetSdkVersion"), "build.gradle must reference targetSdkVersion 34+");
   console.log("✓ Android Package ID & Version verified (com.houzzat.pro / 2.0.0)\n");

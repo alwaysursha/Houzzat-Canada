@@ -67,6 +67,7 @@ async function defaultFindCandidates(email: string) {
         where: {
           status: "ACTIVE",
           role: { in: [...STAFF_ROLES] },
+          workspace: { status: { in: ["ACTIVE", "TRIAL"] } },
         },
         select: {
           workspaceId: true,
@@ -123,7 +124,7 @@ export async function discoverTenantIdentitiesForCredentials(
     const homeMembership = candidate.workspaceMemberships.find(
       (m) =>
         m.workspaceId === workspaceId &&
-        m.workspace.status === "ACTIVE" &&
+        (m.workspace.status === "ACTIVE" || m.workspace.status === "TRIAL") &&
         (STAFF_ROLES as readonly string[]).includes(m.role),
     );
     if (!homeMembership) {

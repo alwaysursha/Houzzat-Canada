@@ -27,7 +27,12 @@ export async function loadMobileBootstrapMemberships(
 
   const resolved: MobileBootstrapMembership[] = [];
   for (const membership of memberships) {
-    if (membership.workspace.status !== "ACTIVE") continue;
+    if (
+      membership.workspace.status !== "ACTIVE" &&
+      membership.workspace.status !== "TRIAL"
+    ) {
+      continue;
+    }
     const hostname = await resolveMobileWorkspaceCanonicalHost(
       membership.workspaceId,
       membership.workspace.slug,

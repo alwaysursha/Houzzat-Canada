@@ -26,6 +26,7 @@ import { HouzzatProWordmark } from "../components/BrandMark";
 import { NativeDrawer, type DrawerItem } from "../components/NativeDrawer";
 import { ViewingsLeadPickerSheet } from "../components/ViewingsLeadPickerSheet";
 import { useAndroidHardwareBack } from "../hooks/useAndroidHardwareBack";
+import { triggerNavHaptic } from "../lib/nav-haptics";
 import { subscribePushNavigation } from "../lib/push-navigation";
 import { useAuth } from "../state/AuthContext";
 import { LaunchpadScreen } from "./LaunchpadScreen";
@@ -41,13 +42,20 @@ import {
 import { PropertiesSearchScreen } from "./PropertiesSearchScreen";
 import { ShortlistScreen } from "./ShortlistScreen";
 import { CommunicationsScreen } from "./CommunicationsScreen";
+import { ChatsScreen } from "./ChatsScreen";
 import { StatisticsScreen } from "./StatisticsScreen";
 import { NotificationPreferencesScreen } from "./NotificationPreferencesScreen";
 import { CmaScreen } from "./CmaScreen";
 import { TeamScreen } from "./TeamScreen";
 import { ViewingsPlannerScreen } from "./ViewingsPlannerScreen";
 
-type AgentTab = "launchpad" | "leads" | "tasks" | "calendar" | "more";
+type AgentTab =
+  | "launchpad"
+  | "leads"
+  | "chats"
+  | "tasks"
+  | "calendar"
+  | "more";
 type ActiveUtility = Exclude<MoreUtilityId, "account"> | null;
 
 type ViewingsPlannerState = {
@@ -89,6 +97,13 @@ export function AgentShell({
   const userRole = activeMembership?.role || "AGENT";
   const userEmail = user?.email || "";
   const userName = user?.name ?? null;
+
+  const selectTab = (tab: AgentTab, drawerId?: string) => {
+    triggerNavHaptic();
+    setActiveTab(tab);
+    setActiveDrawerId(drawerId ?? tab);
+    setActiveUtility(null);
+  };
 
   const handleSelectDrawerItem = (item: DrawerItem) => {
     setActiveDrawerId(item.id);
@@ -304,8 +319,20 @@ export function AgentShell({
           />
         )}
 
-        {activeTab === "tasks" && (
-          <GlobalTasksScreen
+        {activeTab === "chats" && (
+          <ChatsScreen
+            onOpenLead={(leadId) => {
+              setLeadNavIds([leadId]);
+              setSelectedLeadId(leadId);
+              setActiveTab("leads");
+              setActiveDrawerId("leads");
+              setActiveUtility(null);
+            }}
+          />
+        )}
+
+        {activeTab === "calendar" && (
+          <GlobalCalendarScreen
             onOpenLead={(leadId) => {
               setLeadNavIds([leadId]);
               setSelectedLeadId(leadId);
@@ -313,8 +340,8 @@ export function AgentShell({
           />
         )}
 
-        {activeTab === "calendar" && (
-          <GlobalCalendarScreen
+        {activeTab === "tasks" && (
+          <GlobalTasksScreen
             onOpenLead={(leadId) => {
               setLeadNavIds([leadId]);
               setSelectedLeadId(leadId);
@@ -423,23 +450,22 @@ export function AgentShell({
         )}
       </View>
 
-      {/* Bottom Navigation matching original HouzzatPRO */}
+      {/* Bottom Navigation — Launchpad | Leads | Chats | Calendar | More */}
       <View style={styles.bottomNav}>
         <TouchableOpacity
           style={styles.navItem}
           activeOpacity={0.7}
-          onPress={() => {
-            setActiveTab("launchpad");
-            setActiveDrawerId("launchpad");
-            setActiveUtility(null);
-          }}
+          onPress={() => selectTab("launchpad")}
         >
           <View style={[styles.navIconBox, activeTab === "launchpad" && styles.navIconBoxActive]}>
             <Text style={[styles.navIcon, activeTab === "launchpad" && styles.navIconActive]}>
               ⌂
             </Text>
           </View>
-          <Text style={[styles.navLabel, activeTab === "launchpad" && styles.navLabelActive]}>
+          <Text
+            style={[styles.navLabel, activeTab === "launchpad" && styles.navLabelActive]}
+            numberOfLines={1}
+          >
             Launchpad
           </Text>
         </TouchableOpacity>
@@ -447,11 +473,7 @@ export function AgentShell({
         <TouchableOpacity
           style={styles.navItem}
           activeOpacity={0.7}
-          onPress={() => {
-            setActiveTab("leads");
-            setActiveDrawerId("leads");
-            setActiveUtility(null);
-          }}
+          onPress={() => selectTab("leads")}
         >
           <View style={[styles.navIconBox, activeTab === "leads" && styles.navIconBoxActive]}>
             <Text
@@ -464,7 +486,10 @@ export function AgentShell({
               👥
             </Text>
           </View>
-          <Text style={[styles.navLabel, activeTab === "leads" && styles.navLabelActive]}>
+          <Text
+            style={[styles.navLabel, activeTab === "leads" && styles.navLabelActive]}
+            numberOfLines={1}
+          >
             Leads
           </Text>
         </TouchableOpacity>
@@ -472,30 +497,31 @@ export function AgentShell({
         <TouchableOpacity
           style={styles.navItem}
           activeOpacity={0.7}
-          onPress={() => {
-            setActiveTab("tasks");
-            setActiveDrawerId("tasks");
-            setActiveUtility(null);
-          }}
+          onPress={() => selectTab("chats", "chats")}
         >
-          <View style={[styles.navIconBox, activeTab === "tasks" && styles.navIconBoxActive]}>
-            <Text style={[styles.navIcon, activeTab === "tasks" && styles.navIconActive]}>
-              ✓
+          <View style={[styles.navIconBox, activeTab === "chats" && styles.navIconBoxActive]}>
+            <Text
+              style={[
+                styles.navIcon,
+                styles.navIconEmoji,
+                activeTab === "chats" && styles.navIconActive,
+              ]}
+            >
+              💬
             </Text>
           </View>
-          <Text style={[styles.navLabel, activeTab === "tasks" && styles.navLabelActive]}>
-            Tasks
+          <Text
+            style={[styles.navLabel, activeTab === "chats" && styles.navLabelActive]}
+            numberOfLines={1}
+          >
+            Chats
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.navItem}
           activeOpacity={0.7}
-          onPress={() => {
-            setActiveTab("calendar");
-            setActiveDrawerId("calendar");
-            setActiveUtility(null);
-          }}
+          onPress={() => selectTab("calendar")}
         >
           <View style={[styles.navIconBox, activeTab === "calendar" && styles.navIconBoxActive]}>
             <Text
@@ -508,7 +534,10 @@ export function AgentShell({
               📅
             </Text>
           </View>
-          <Text style={[styles.navLabel, activeTab === "calendar" && styles.navLabelActive]}>
+          <Text
+            style={[styles.navLabel, activeTab === "calendar" && styles.navLabelActive]}
+            numberOfLines={1}
+          >
             Calendar
           </Text>
         </TouchableOpacity>
@@ -516,14 +545,20 @@ export function AgentShell({
         <TouchableOpacity
           style={styles.navItem}
           activeOpacity={0.7}
-          onPress={() => setDrawerOpen(true)}
+          onPress={() => {
+            triggerNavHaptic();
+            setDrawerOpen(true);
+          }}
         >
           <View style={[styles.navIconBox, drawerOpen && styles.navIconBoxActive]}>
             <Text style={[styles.navIcon, drawerOpen && styles.navIconActive]}>
               ☰
             </Text>
           </View>
-          <Text style={[styles.navLabel, drawerOpen && styles.navLabelActive]}>
+          <Text
+            style={[styles.navLabel, drawerOpen && styles.navLabelActive]}
+            numberOfLines={1}
+          >
             More
           </Text>
         </TouchableOpacity>
@@ -694,10 +729,12 @@ const styles = StyleSheet.create({
   },
   globeIcon: {
     fontSize: 18,
-    opacity: 0.85,
+    color: "#FFFFFF",
+    opacity: 0.95,
   },
   globeIconActive: {
     opacity: 1,
+    color: "#FFFFFF",
   },
   callNewBtn: {
     backgroundColor: "#E11D48", // Rose / red from original app
@@ -864,9 +901,9 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   navIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 10,
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
@@ -875,15 +912,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(15, 107, 76, 0.12)",
   },
   navIcon: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#5B6775",
-    lineHeight: 18,
+    lineHeight: 16,
     textAlign: "center",
   },
   /** Full-color emoji sit larger than text glyphs — keep them inside the rounded box. */
   navIconEmoji: {
-    fontSize: 14,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 15,
   },
   navIconActive: {
     color: "#0F6B4C", // Canopy green
@@ -893,6 +930,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
     color: "#5B6775",
+    textAlign: "center",
+    paddingHorizontal: 2,
   },
   navLabelActive: {
     color: "#0F6B4C",

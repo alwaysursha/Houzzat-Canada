@@ -328,9 +328,11 @@ class ProNativeAuthController {
     this.activeSubmitPromise = (async () => {
       try {
         const normalizedEmail = input.email.trim().toLowerCase();
+        const workspaceId = sanitizeWorkspaceHintId(input.workspaceHint);
         const result = await signIn("credentials", {
           email: normalizedEmail,
           password: input.password,
+          ...(workspaceId ? { workspaceId } : {}),
           redirect: false,
         });
 

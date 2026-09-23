@@ -67,5 +67,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true, email: result.email });
+  return NextResponse.json({
+    ok: true,
+    email: result.email,
+    workspaceId: result.workspaceId,
+  });
 }

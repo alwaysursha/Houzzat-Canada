@@ -24,7 +24,8 @@ import {
 import { useAuth } from "../state/AuthContext";
 
 type Props = {
-  onBack: () => void;
+  /** When omitted (primary bottom-nav People tab), hide the back control. */
+  onBack?: () => void;
   onOpenStatistics?: () => void;
 };
 
@@ -457,10 +458,14 @@ export function TeamScreen({ onBack, onOpenStatistics }: Props) {
   return (
     <View style={styles.root}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={onBack}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.topTitle}>Team</Text>
+        {onBack ? (
+          <TouchableOpacity onPress={onBack}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.topSpacer} />
+        )}
+        <Text style={styles.topTitle}>{onBack ? "Team" : "People"}</Text>
         <View style={styles.topSpacer} />
       </View>
 

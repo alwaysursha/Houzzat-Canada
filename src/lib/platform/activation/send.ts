@@ -353,7 +353,8 @@ export async function sendOwnerActivationEmail(input: {
  * - unexpired SENT → skip
  * - expired PENDING/SENT → expire old row, allow one replacement attempt
  * - password set / USED → skip
- * - Subscription TRIALING / Workspace TRIAL → skip
+ * - Subscription ACTIVE or TRIALING (paid acceptance / trial) may auto-send
+ * - Workspace ACTIVE or TRIAL may auto-send
  * - never revoke unexpired PENDING (in-flight or failed) on auto path
  *
  * MANUAL Master Admin send rotates/resends (support recovery).
@@ -379,7 +380,10 @@ export async function tryAutoSendOwnerActivationAfterProvision(input: {
       },
     });
 
-    if (!subscription || subscription.status !== "ACTIVE") {
+    if (
+      !subscription ||
+      (subscription.status !== "ACTIVE" && subscription.status !== "TRIALING")
+    ) {
       return {
         outcome: "skipped",
         skipReason: "subscription_not_active",
@@ -415,8 +419,8 @@ export async function tryAutoSendOwnerActivationAfterProvision(input: {
       };
     }
 
-    // V1: auto-send only for ACTIVE workspaces (not TRIAL).
-    if (workspace.status !== "ACTIVE") {
+    // V1: auto-send for ACTIVE and TRIAL workspaces (TRIALING subscription).
+    if (workspace.status !== "ACTIVE" && workspace.status !== "TRIAL") {
       return {
         outcome: "skipped",
         skipReason: "workspace_not_active",

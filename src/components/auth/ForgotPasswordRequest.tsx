@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input";
 
 export function ForgotPasswordRequest({
   initialEmail,
+  workspaceHint = null,
   onBack,
 }: {
   initialEmail: string;
+  workspaceHint?: string | null;
   onBack: () => void;
 }) {
   const [email, setEmail] = useState(initialEmail);
@@ -25,7 +27,10 @@ export function ForgotPasswordRequest({
       const response = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          ...(workspaceHint ? { workspaceHint } : {}),
+        }),
       });
       const data = (await response.json().catch(() => null)) as {
         error?: string;

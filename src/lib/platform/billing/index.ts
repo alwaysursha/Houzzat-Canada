@@ -55,6 +55,23 @@ export {
 } from "./webhook";
 
 export {
+  resolveCheckoutPaymentStatus,
+  isPlausibleStripeCheckoutSessionId,
+  type CheckoutPaymentStatusView,
+  type CheckoutPaymentUiPhase,
+  type CheckoutPaymentNextAction,
+} from "./checkout-payment-status";
+
+export {
+  continueAfterCheckoutPayment,
+  type CheckoutContinueResult,
+} from "./checkout-continue";
+
+export {
+  allowCheckoutPaymentStatusRequest,
+  clearCheckoutPaymentStatusRateLimitsForTests,
+} from "./checkout-payment-status-rate-limit";
+export {
   getStripeClient,
   clearStripeClientCacheForTests,
 } from "./stripe-client";

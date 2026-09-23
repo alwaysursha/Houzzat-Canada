@@ -65,6 +65,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
       const data = (await res.json().catch(() => null)) as {
         error?: string;
         email?: string;
+        workspaceId?: string;
       } | null;
       if (!res.ok) {
         setError(data?.error ?? "This reset link is invalid or has expired.");
@@ -73,10 +74,12 @@ export function ResetPasswordForm({ token }: { token: string }) {
       }
 
       const email = data?.email;
+      const workspaceId = data?.workspaceId ?? null;
       if (email) {
         const result = await signIn("credentials", {
           email,
           password,
+          ...(workspaceId ? { workspaceId } : {}),
           redirect: false,
         });
         if (!result?.error) {
@@ -84,7 +87,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
           const session = await getSession();
           await clearIntentionalSignOut({ userId: session?.user?.id });
           setDone(true);
-          router.replace("/");
+          router.replace("/pro");
           router.refresh();
           return;
         }
@@ -127,7 +130,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
               </p>
             </div>
             <Link
-              href="/auth/sign-in"
+              href="/pro/sign-in"
               className="inline-flex h-11 items-center justify-center rounded-lg bg-canopy px-5 text-sm font-semibold text-white hover:bg-canopy-deep"
             >
               Back to sign in
@@ -147,7 +150,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
                 </h1>
               </div>
               <Link
-                href="/auth/sign-in"
+                href="/pro/sign-in"
                 className="inline-flex h-11 items-center justify-center rounded-lg bg-canopy px-5 text-sm font-semibold text-white hover:bg-canopy-deep"
               >
                 Sign in

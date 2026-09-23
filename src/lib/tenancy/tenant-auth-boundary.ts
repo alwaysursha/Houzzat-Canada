@@ -130,7 +130,7 @@ export async function validateTenantCredentialsAuth(input: {
       userId: input.userId,
       workspaceId: resolvedWorkspaceId,
       status: "ACTIVE",
-      workspace: { status: "ACTIVE" },
+      workspace: { status: { in: ["ACTIVE", "TRIAL"] } },
     },
     select: {
       id: true,

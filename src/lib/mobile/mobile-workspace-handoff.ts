@@ -143,7 +143,7 @@ export async function createMobileWorkspaceHandoff(input: {
       userId: input.userId,
       workspaceId: input.workspaceId,
       status: "ACTIVE",
-      workspace: { status: "ACTIVE" },
+      workspace: { status: { in: ["ACTIVE", "TRIAL"] } },
     },
     select: { role: true, workspace: { select: { slug: true } } },
   });

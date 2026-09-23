@@ -10,6 +10,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -59,23 +60,6 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
     await login({
       email: email.trim(),
       password,
-    });
-  };
-
-  const handlePlatformSubmit = async () => {
-    if (!email.trim()) {
-      setLocalError("Please enter your email address");
-      return;
-    }
-    if (!password) {
-      setLocalError("Please enter your password");
-      return;
-    }
-    setLocalError(null);
-    await login({
-      email: email.trim(),
-      password,
-      mode: "platform",
     });
   };
 
@@ -166,6 +150,7 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
               <Text style={styles.label}>Password</Text>
               <View style={styles.passwordWrapper}>
                 <TextInput
+                  key={showPassword ? "password-visible" : "password-hidden"}
                   style={[
                     styles.passwordInput,
                     keyboardOpen && styles.inputCompact,
@@ -184,7 +169,9 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
                   autoComplete="password"
                   textContentType="password"
                   keyboardType={
-                    Platform.OS === "android" ? "visible-password" : "default"
+                    Platform.OS === "android" && showPassword
+                      ? "visible-password"
+                      : "default"
                   }
                   importantForAutofill="yes"
                   editable={!isLoading}
@@ -193,16 +180,20 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
                     void handleSubmit();
                   }}
                 />
-                <TouchableOpacity
+                <Pressable
                   style={styles.eyeButton}
-                  activeOpacity={0.7}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   onPress={() => setShowPassword((prev) => !prev)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    showPassword ? "Hide password" : "Show password"
+                  }
+                  accessibilityState={{ checked: showPassword }}
                 >
                   <Text style={styles.eyeIcon}>
                     {showPassword ? "👁" : "👁‍🗨"}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
 
@@ -214,27 +205,16 @@ export function SignInScreen({ onBack }: { onBack?: () => void }) {
                 </Text>
               </View>
             ) : (
-              <View style={styles.buttonStack}>
-                <TouchableOpacity
-                  style={[
-                    styles.signInButton,
-                    keyboardOpen && styles.signInButtonCompact,
-                  ]}
-                  activeOpacity={0.85}
-                  onPress={handleSubmit}
-                >
-                  <Text style={styles.signInButtonText}>Sign In</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.platformLink}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    void handlePlatformSubmit();
-                  }}
-                >
-                  <Text style={styles.platformLinkText}>Platform admin sign-in</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={[
+                  styles.signInButton,
+                  keyboardOpen && styles.signInButtonCompact,
+                ]}
+                activeOpacity={0.85}
+                onPress={handleSubmit}
+              >
+                <Text style={styles.signInButtonText}>Sign In</Text>
+              </TouchableOpacity>
             )}
           </View>
 
@@ -398,6 +378,8 @@ const styles = StyleSheet.create({
   },
   eyeButton: {
     padding: 4,
+    justifyContent: "center",
+    alignItems: "center",
   },
   eyeIcon: {
     fontSize: 18,
@@ -415,10 +397,8 @@ const styles = StyleSheet.create({
     color: "#0B5C49",
     fontWeight: "600",
   },
-  buttonStack: {
-    marginTop: 8,
-  },
   signInButton: {
+    marginTop: 8,
     backgroundColor: "#0F6B4C",
     borderRadius: 12,
     paddingVertical: 14,
@@ -433,16 +413,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "700",
-  },
-  platformLink: {
-    marginTop: 14,
-    alignItems: "center",
-    paddingVertical: 6,
-  },
-  platformLinkText: {
-    color: "#64748B",
-    fontSize: 13,
-    fontWeight: "600",
   },
   footerNotice: {
     marginTop: 20,

@@ -4,7 +4,7 @@
  * Faithfully matches the original HouzzatPRO Owner/Broker experience:
  * - Top Navigation Bar in Dark Slate (#1E2A38) with Hamburger Menu & Command Centre identity
  * - Native Slide-in Drawer with navigation options & Agent Mode switch
- * - Bottom Navigation Tabs (Overview, Team, Leads, Calendar, More)
+ * - Bottom Navigation Tabs (Overview, Lead Routing, People, CRM, More)
  * - 0ms instant tab switching & drawer opening
  * - Preserves Leads screen with real Stage 4.3A workspace data
  */
@@ -22,7 +22,9 @@ import {
 } from "react-native";
 import { HouzzatProWordmark } from "../components/BrandMark";
 import { NativeDrawer, type DrawerItem } from "../components/NativeDrawer";
+import { ViewingsLeadPickerSheet } from "../components/ViewingsLeadPickerSheet";
 import { useAndroidHardwareBack } from "../hooks/useAndroidHardwareBack";
+import { triggerNavHaptic } from "../lib/nav-haptics";
 import { subscribePushNavigation } from "../lib/push-navigation";
 import { useAuth } from "../state/AuthContext";
 import { AgentShell } from "./AgentShell";
@@ -36,14 +38,19 @@ import {
 import { PropertiesSearchScreen } from "./PropertiesSearchScreen";
 import { ShortlistScreen } from "./ShortlistScreen";
 import { CommunicationsScreen } from "./CommunicationsScreen";
+import { LeadRoutingScreen } from "./LeadRoutingScreen";
 import { StatisticsScreen } from "./StatisticsScreen";
 import { NotificationPreferencesScreen } from "./NotificationPreferencesScreen";
 import { CmaScreen } from "./CmaScreen";
 import { TeamScreen } from "./TeamScreen";
 import { ViewingsPlannerScreen } from "./ViewingsPlannerScreen";
-import { ViewingsLeadPickerSheet } from "../components/ViewingsLeadPickerSheet";
 
-type CommandCentreTab = "overview" | "team" | "leads" | "calendar" | "more";
+type CommandCentreTab =
+  | "overview"
+  | "leadRouting"
+  | "people"
+  | "crm"
+  | "more";
 type ActiveUtility = Exclude<MoreUtilityId, "account"> | null;
 
 type ViewingsPlannerState = {
@@ -89,7 +96,7 @@ export function CommandCentreShell() {
       setViewingsPlanner(null);
       setViewingsLeadPicker(null);
       if (target.kind === "lead") {
-        setActiveTab("leads");
+        setActiveTab("crm");
         setActiveDrawerId("leads");
         setLeadNavIds([target.leadId]);
         setSelectedLeadId(target.leadId);
@@ -107,6 +114,13 @@ export function CommandCentreShell() {
     });
   }, [inAgentMode]);
 
+  const selectTab = (tab: CommandCentreTab, drawerId?: string) => {
+    triggerNavHaptic();
+    setActiveTab(tab);
+    if (drawerId) setActiveDrawerId(drawerId);
+    setActiveUtility(null);
+  };
+
   const handleSelectDrawerItem = (item: DrawerItem) => {
     setActiveDrawerId(item.id);
     if (item.utilityId && item.utilityId !== "account") {
@@ -116,9 +130,8 @@ export function CommandCentreShell() {
     }
     setActiveUtility(null);
     if (item.tabKey === "launchpad") setActiveTab("overview");
-    else if (item.tabKey === "leads") setActiveTab("leads");
-    else if (item.tabKey === "tasks") setActiveTab("team");
-    else if (item.tabKey === "calendar") setActiveTab("calendar");
+    else if (item.tabKey === "leads") setActiveTab("crm");
+    else if (item.id === "team") setActiveTab("people");
     else setActiveTab("more");
   };
 
@@ -275,7 +288,9 @@ export function CommandCentreShell() {
           </ScrollView>
         )}
 
-        {activeTab === "team" && (
+        {activeTab === "leadRouting" && <LeadRoutingScreen />}
+
+        {activeTab === "people" && (
           <TeamScreen
             onOpenStatistics={
               userRole === "OWNER" || userRole === "ADMIN"
@@ -289,7 +304,7 @@ export function CommandCentreShell() {
           />
         )}
 
-        {activeTab === "leads" && (
+        {activeTab === "crm" && (
           <LeadsScreen
             selectedLeadId={selectedLeadId}
             onSelectLead={(leadId, leadIds) => {
@@ -304,18 +319,6 @@ export function CommandCentreShell() {
               });
             }}
           />
-        )}
-
-        {activeTab === "calendar" && (
-          <View style={styles.placeholderContainer}>
-            <View style={styles.placeholderIconBox}>
-              <Text style={styles.placeholderIconText}>📅</Text>
-            </View>
-            <Text style={styles.placeholderTitle}>Brokerage Appointments</Text>
-            <Text style={styles.placeholderSubtitle}>
-              Team showing schedules and calendar sync.
-            </Text>
-          </View>
         )}
 
         {activeTab === "more" && (
@@ -419,23 +422,22 @@ export function CommandCentreShell() {
         )}
       </View>
 
-      {/* Bottom Navigation matching original HouzzatPRO */}
+      {/* Bottom Navigation — Overview | Lead Routing | People | CRM | More */}
       <View style={styles.bottomNav}>
         <TouchableOpacity
           style={styles.navItem}
           activeOpacity={0.7}
-          onPress={() => {
-            setActiveTab("overview");
-            setActiveDrawerId("launchpad");
-            setActiveUtility(null);
-          }}
+          onPress={() => selectTab("overview", "launchpad")}
         >
           <View style={[styles.navIconBox, activeTab === "overview" && styles.navIconBoxActive]}>
             <Text style={[styles.navIcon, activeTab === "overview" && styles.navIconActive]}>
               ⌂
             </Text>
           </View>
-          <Text style={[styles.navLabel, activeTab === "overview" && styles.navLabelActive]}>
+          <Text
+            style={[styles.navLabel, activeTab === "overview" && styles.navLabelActive]}
+            numberOfLines={1}
+          >
             Overview
           </Text>
         </TouchableOpacity>
@@ -443,19 +445,73 @@ export function CommandCentreShell() {
         <TouchableOpacity
           style={styles.navItem}
           activeOpacity={0.7}
-          onPress={() => {
-            setActiveTab("team");
-            setActiveDrawerId("tasks");
-            setActiveUtility(null);
-          }}
+          onPress={() => selectTab("leadRouting", "lead-routing")}
         >
-          <View style={[styles.navIconBox, activeTab === "team" && styles.navIconBoxActive]}>
-            <Text style={[styles.navIcon, activeTab === "team" && styles.navIconActive]}>
+          <View
+            style={[
+              styles.navIconBox,
+              activeTab === "leadRouting" && styles.navIconBoxActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.navIcon,
+                activeTab === "leadRouting" && styles.navIconActive,
+              ]}
+            >
+              %
+            </Text>
+          </View>
+          <Text
+            style={[
+              styles.navLabel,
+              activeTab === "leadRouting" && styles.navLabelActive,
+            ]}
+            numberOfLines={1}
+          >
+            Lead Routing
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navItem}
+          activeOpacity={0.7}
+          onPress={() => selectTab("people", "team")}
+        >
+          <View style={[styles.navIconBox, activeTab === "people" && styles.navIconBoxActive]}>
+            <Text
+              style={[
+                styles.navIcon,
+                styles.navIconEmoji,
+                activeTab === "people" && styles.navIconActive,
+              ]}
+            >
               👥
             </Text>
           </View>
-          <Text style={[styles.navLabel, activeTab === "team" && styles.navLabelActive]}>
-            Team
+          <Text
+            style={[styles.navLabel, activeTab === "people" && styles.navLabelActive]}
+            numberOfLines={1}
+          >
+            People
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navItem}
+          activeOpacity={0.7}
+          onPress={() => selectTab("crm", "leads")}
+        >
+          <View style={[styles.navIconBox, activeTab === "crm" && styles.navIconBoxActive]}>
+            <Text style={[styles.navIcon, activeTab === "crm" && styles.navIconActive]}>
+              ◫
+            </Text>
+          </View>
+          <Text
+            style={[styles.navLabel, activeTab === "crm" && styles.navLabelActive]}
+            numberOfLines={1}
+          >
+            CRM
           </Text>
         </TouchableOpacity>
 
@@ -463,51 +519,19 @@ export function CommandCentreShell() {
           style={styles.navItem}
           activeOpacity={0.7}
           onPress={() => {
-            setActiveTab("leads");
-            setActiveDrawerId("leads");
-            setActiveUtility(null);
+            triggerNavHaptic();
+            setDrawerOpen(true);
           }}
-        >
-          <View style={[styles.navIconBox, activeTab === "leads" && styles.navIconBoxActive]}>
-            <Text style={[styles.navIcon, activeTab === "leads" && styles.navIconActive]}>
-              📊
-            </Text>
-          </View>
-          <Text style={[styles.navLabel, activeTab === "leads" && styles.navLabelActive]}>
-            Leads
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          activeOpacity={0.7}
-          onPress={() => {
-            setActiveTab("calendar");
-            setActiveDrawerId("calendar");
-            setActiveUtility(null);
-          }}
-        >
-          <View style={[styles.navIconBox, activeTab === "calendar" && styles.navIconBoxActive]}>
-            <Text style={[styles.navIcon, activeTab === "calendar" && styles.navIconActive]}>
-              📅
-            </Text>
-          </View>
-          <Text style={[styles.navLabel, activeTab === "calendar" && styles.navLabelActive]}>
-            Calendar
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          activeOpacity={0.7}
-          onPress={() => setDrawerOpen(true)}
         >
           <View style={[styles.navIconBox, drawerOpen && styles.navIconBoxActive]}>
             <Text style={[styles.navIcon, drawerOpen && styles.navIconActive]}>
               ☰
             </Text>
           </View>
-          <Text style={[styles.navLabel, drawerOpen && styles.navLabelActive]}>
+          <Text
+            style={[styles.navLabel, drawerOpen && styles.navLabelActive]}
+            numberOfLines={1}
+          >
             More
           </Text>
         </TouchableOpacity>
@@ -894,8 +918,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   navIconBox: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
@@ -904,8 +928,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(30, 42, 56, 0.1)",
   },
   navIcon: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#5B6775",
+  },
+  navIconEmoji: {
+    fontSize: 13,
+    lineHeight: 15,
   },
   navIconActive: {
     color: "#1E2A38",
@@ -915,6 +943,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
     color: "#5B6775",
+    textAlign: "center",
+    paddingHorizontal: 1,
   },
   navLabelActive: {
     color: "#1E2A38",

@@ -28,6 +28,8 @@ import {
   assertTokenWorkspaceBinding,
   resolveHostnameWorkspaceForAuth,
 } from "@/lib/auth/session-workspace-binding";
+import { discoverTenantIdentitiesForCredentials } from "@/lib/mobile/v2/discover-tenant-identities";
+import { sanitizeWorkspaceHintId } from "@/lib/platform/activation/onboarding-pro-auth";
 import { isAdminRole, isAgentRole, resolveActiveMode } from "@/lib/roles";
 import { scheduleNotifyCustomerCameOnlineFromSignIn } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
@@ -46,12 +48,17 @@ const providers: Provider[] = [
     credentials: {
       email: { label: "Email", type: "email" },
       password: { label: "Password", type: "password" },
+      /** Optional: password-proven tenant workspace (platform Pro login). */
+      workspaceId: { label: "Workspace", type: "text" },
     },
     async authorize(credentials, request) {
       const email = normalizeIdentityEmail(
         credentials?.email?.toString() ?? "",
       );
       const password = credentials?.password?.toString() ?? "";
+      const requestedWorkspaceId = sanitizeWorkspaceHintId(
+        credentials?.workspaceId?.toString() ?? null,
+      );
 
       if (!email || !password) {
         return null;
@@ -104,10 +111,64 @@ const providers: Provider[] = [
           return null;
         }
 
-        // Phase 3: tenant → (workspaceId, email); platform → NULL workspaceId only.
-        const user = hostWs.isPlatform
-          ? await findNullWorkspaceUserByEmail(email)
-          : await findTenantUserByEmail(hostWs.workspaceId, email);
+        let user: Awaited<ReturnType<typeof findTenantUserByEmail>> = null;
+        let boundWorkspaceId: string | null = null;
+
+        if (hostWs.isPlatform) {
+          // 1) Explicit PlatformOperator (NULL workspace) when no tenant workspace requested.
+          if (!requestedWorkspaceId) {
+            const platformUser = await findNullWorkspaceUserByEmail(email);
+            if (platformUser?.password && !platformUser.disabledAt) {
+              const operator = await prisma.platformOperator.findUnique({
+                where: { userId: platformUser.id },
+                select: { status: true },
+              });
+              if (operator?.status === "ACTIVE") {
+                const validPlatform = await bcrypt.compare(
+                  password,
+                  platformUser.password,
+                );
+                if (validPlatform) {
+                  user = platformUser;
+                  boundWorkspaceId = null;
+                }
+              }
+            }
+          }
+
+          // 2) Password-proven tenant identity (never email-alone; never trust hint alone).
+          if (!user) {
+            const discovered = await discoverTenantIdentitiesForCredentials({
+              email,
+              password,
+            });
+            if (discovered.ok) {
+              let match = discovered.matches[0] ?? null;
+              if (discovered.matches.length > 1) {
+                match = requestedWorkspaceId
+                  ? (discovered.matches.find(
+                      (m) => m.workspaceId === requestedWorkspaceId,
+                    ) ?? null)
+                  : null;
+              } else if (
+                requestedWorkspaceId &&
+                match &&
+                match.workspaceId !== requestedWorkspaceId
+              ) {
+                // Hint must not override a different password-proven workspace.
+                match = null;
+              }
+              if (match) {
+                user = await findTenantUserByEmail(match.workspaceId, email);
+                boundWorkspaceId = match.workspaceId;
+              }
+            }
+          }
+        } else {
+          // Tenant hostname: only that workspace's User.
+          user = await findTenantUserByEmail(hostWs.workspaceId, email);
+          boundWorkspaceId = hostWs.workspaceId;
+        }
 
         if (!user?.password || user.disabledAt) {
           recordAuthServerDiagnostic({
@@ -131,27 +192,37 @@ const providers: Provider[] = [
           return null;
         }
 
-        const valid = await bcrypt.compare(password, user.password);
-        if (!valid) {
-          recordAuthServerDiagnostic({
-            diagId,
-            timestamp: new Date().toISOString(),
-            buildMarker: AUTH_BUILD_MARKER,
-            incomingHost,
-            requestUrlHost,
-            resolvedAuthHostname,
-            isPlatformHost: isPlatform,
-            nativeShell: isNative,
-            userAgentSnippet: userAgent ? `${userAgent.slice(0, 40)}...` : null,
-            userFound: true,
-            passwordMatch: "NO_MATCH",
-            tenantValidationInvoked: false,
-            tenantValidationReason: "password_mismatch",
-            authorizeResult: "REJECT",
-            signInCallbackResult: "NOT_REACHED",
-            userIdMasked: `***${user.id.slice(-3)}`,
-          });
-          return null;
+        // Platform path already password-proved via discover or platform compare.
+        // Tenant hostname still needs bcrypt here.
+        if (!hostWs.isPlatform) {
+          const valid = await bcrypt.compare(password, user.password);
+          if (!valid) {
+            recordAuthServerDiagnostic({
+              diagId,
+              timestamp: new Date().toISOString(),
+              buildMarker: AUTH_BUILD_MARKER,
+              incomingHost,
+              requestUrlHost,
+              resolvedAuthHostname,
+              isPlatformHost: isPlatform,
+              nativeShell: isNative,
+              userAgentSnippet: userAgent ? `${userAgent.slice(0, 40)}...` : null,
+              userFound: true,
+              passwordMatch: "NO_MATCH",
+              tenantValidationInvoked: false,
+              tenantValidationReason: "password_mismatch",
+              authorizeResult: "REJECT",
+              signInCallbackResult: "NOT_REACHED",
+              userIdMasked: `***${user.id.slice(-3)}`,
+            });
+            return null;
+          }
+        } else if (boundWorkspaceId == null) {
+          // PlatformOperator path already compared above; re-check for safety.
+          const valid = await bcrypt.compare(password, user.password);
+          if (!valid) {
+            return null;
+          }
         }
 
         const authCheck = await validateTenantCredentialsAuth({
@@ -201,7 +272,7 @@ const providers: Provider[] = [
           isSeller: user.isSeller,
           activeMode: user.activeMode,
           workspaceId: hostWs.isPlatform
-            ? null
+            ? boundWorkspaceId
             : (authCheck.workspaceId ?? user.workspaceId ?? hostWs.workspaceId),
         };
       } catch (error) {

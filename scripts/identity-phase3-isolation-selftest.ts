@@ -266,6 +266,7 @@ function testSourceGuards() {
 
   assert.ok(auth.includes("findTenantUserByEmail"));
   assert.ok(auth.includes("findNullWorkspaceUserByEmail"));
+  assert.ok(auth.includes("discoverTenantIdentitiesForCredentials"));
   assert.equal(
     /allowDangerousEmailAccountLinking:\s*true/.test(auth),
     false,
@@ -289,6 +290,7 @@ function testSourceGuards() {
 
   assert.ok(reset.includes("tenantBoundTokenIdentifier"));
   assert.ok(reset.includes("findTenantUserByEmail"));
+  assert.ok(reset.includes("resolvePlatformTenantPasswordResetTargets"));
   assert.ok(verify.includes("tenantBoundTokenIdentifier"));
   assert.ok(verify.includes("findTenantUserByEmail"));
   assert.ok(

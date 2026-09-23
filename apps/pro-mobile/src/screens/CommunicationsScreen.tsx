@@ -43,7 +43,7 @@ const DEFAULT_BODY =
   "Hi,\n\nJust checking in. Happy to set up a showing or refine your search.\n\nBest regards";
 
 type CommunicationsScreenProps = {
-  onBack: () => void;
+  onBack?: () => void;
   onOpenLead: (leadId: string) => void;
 };
 
@@ -395,13 +395,17 @@ export function CommunicationsScreen({
   return (
     <View style={styles.root}>
       <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={onBack}
-          activeOpacity={0.75}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+        {onBack ? (
+          <TouchableOpacity
+            onPress={onBack}
+            activeOpacity={0.75}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.topSpacer} />
+        )}
         <Text style={styles.topTitle} numberOfLines={1}>
           Communications
         </Text>

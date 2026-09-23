@@ -539,7 +539,7 @@ async function main() {
     console.log("[K/L] manual resend after fail rotates... PASS");
   }
 
-  // M. TRIALING excluded
+  // M. TRIALING / TRIAL is a paid acceptance path — auto-send allowed
   {
     const state = baseState();
     state.subscription.status = "TRIALING";
@@ -551,12 +551,9 @@ async function main() {
       prisma: makeDb(state),
       send,
     });
-    assert.equal(result.outcome, "skipped");
-    if (result.outcome === "skipped") {
-      assert.equal(result.skipReason, "subscription_not_active");
-    }
-    assert.equal(state.emails.length, 0);
-    console.log("[M] TRIALING excluded... PASS");
+    assert.equal(result.outcome, "sent");
+    assert.equal(state.emails.length, 1);
+    console.log("[M] TRIALING auto-send allowed... PASS");
   }
 
   // N. provisioning failure path — no auto without ACTIVE workspace/domain

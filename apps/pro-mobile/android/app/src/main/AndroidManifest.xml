@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Required for React Native Vibration (bottom-nav haptics). Without this,
+         Vibration.vibrate throws a native SecurityException and kills the release app. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Stage 5.10 — declare so OS permission status can be checked (prefs ≠ delivery). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 

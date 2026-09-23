@@ -198,6 +198,23 @@ export async function completeOwnerActivation(input: {
     },
   });
 
+  // Invalidate sibling unused activation tokens for the same owner.
+  const siblings = await db.workspaceOwnerActivation.findMany({
+    where: {
+      workspaceId: row.workspaceId,
+      userId: row.userId,
+      status: { in: ["PENDING", "SENT"] },
+      id: { not: row.id },
+    },
+    select: { id: true },
+  });
+  for (const sibling of siblings) {
+    await db.workspaceOwnerActivation.update({
+      where: { id: sibling.id },
+      data: { status: "REVOKED", revokedAt: now },
+    });
+  }
+
   await markAccountActivatedOnboarding(db, row.workspaceId);
 
   await writePlatformAuditEvent(

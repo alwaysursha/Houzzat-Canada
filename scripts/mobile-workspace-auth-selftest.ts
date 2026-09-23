@@ -297,9 +297,11 @@ function testSourceGuards() {
   assert.ok(proMobile.includes('mode: "platform"'));
   assert.ok(proMobile.includes("selectIdentity"));
   assert.ok(proMobile.includes("IDENTITY_SELECTION"));
-  // Default Sign In must NOT hardcode platform-only login as the only path
-  assert.ok(signIn.includes("Platform admin sign-in"));
-  assert.ok(signIn.includes('mode: "platform"'));
+  // HouzzatPRO mobile Sign In must NOT expose Platform/Master Admin entry
+  assert.equal(signIn.includes("Platform admin sign-in"), false);
+  assert.equal(signIn.includes('mode: "platform"'), false);
+  // Backend platform mode remains available in auth controller (not UI-exposed)
+  assert.ok(proMobile.includes('mode: "platform"'));
 
   assert.ok(session.includes("workspaceId_userId"));
   assert.ok(session.includes('status !== "ACTIVE"'));

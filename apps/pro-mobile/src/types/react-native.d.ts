@@ -216,6 +216,20 @@ declare module "react-native" {
     [key: string]: any;
   }>;
 
+  export const Pressable: React.FC<{
+    style?: any;
+    children?: React.ReactNode;
+    onPress?: () => void;
+    hitSlop?:
+      | number
+      | { top?: number; bottom?: number; left?: number; right?: number };
+    disabled?: boolean;
+    accessibilityRole?: string;
+    accessibilityLabel?: string;
+    accessibilityState?: { checked?: boolean; disabled?: boolean };
+    [key: string]: any;
+  }>;
+
   export const ActivityIndicator: React.FC<{
     size?: "small" | "large" | number;
     color?: string;
@@ -288,5 +302,10 @@ declare module "react-native" {
     SHORT: number;
     LONG: number;
     show(message: string, duration: number): void;
+  };
+
+  export const Vibration: {
+    vibrate(pattern?: number | number[], repeat?: boolean): void;
+    cancel(): void;
   };
 }

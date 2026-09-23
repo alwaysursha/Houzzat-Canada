@@ -52,7 +52,24 @@ export const PRIVATE_OFFER_PAYMENT_STATUS_TITLE = "Subscription Payment";
 export const PRIVATE_OFFER_PAYMENT_STATUS_BODY =
   "If you completed Checkout, payment confirmation is processed securely by Stripe. This page does not activate your subscription by itself.";
 export const PRIVATE_OFFER_PAYMENT_STATUS_PENDING =
-  "Payment is being confirmed. You can safely close this page.";
+  "We are confirming your payment. This usually takes just a few moments.";
+export const PRIVATE_OFFER_PAYMENT_STATUS_PROVISIONING =
+  "Payment received. We are preparing your HouzzatPRO workspace.";
+export const PRIVATE_OFFER_PAYMENT_STATUS_SUCCESS_TITLE =
+  "Thank you — your payment has been received.";
+export const PRIVATE_OFFER_PAYMENT_STATUS_SUCCESS_BODY =
+  "Your HouzzatPRO workspace is ready. Continue to activate your account and finish setup.";
+export const PRIVATE_OFFER_PAYMENT_STATUS_SUCCESS_SIGN_IN_BODY =
+  "Your HouzzatPRO workspace is ready. Sign in to continue setup.";
+export const PRIVATE_OFFER_PAYMENT_STATUS_NEXT = "Next";
+export const PRIVATE_OFFER_PAYMENT_STATUS_RECOVERABLE =
+  "Payment was received, but workspace setup is taking longer than expected. You can wait a moment and try again, or contact HouzzatPRO Support.";
+export const PRIVATE_OFFER_PAYMENT_STATUS_FAILED =
+  "We could not confirm a completed payment for this session. If you were charged, contact HouzzatPRO Support.";
+export const PRIVATE_OFFER_PAYMENT_STATUS_UNKNOWN =
+  "We could not locate this payment session. If you completed Checkout, contact HouzzatPRO Support with your receipt.";
+export const PRIVATE_OFFER_PAYMENT_STATUS_TIMEOUT =
+  "Still confirming payment. You can safely leave this page — an activation email will arrive when your workspace is ready. You may also contact support.";
 
 export const PRIVATE_OFFER_ACCEPT_EMAIL_LABEL = "Email Address";
 export const PRIVATE_OFFER_ACCEPT_EMAIL_HINT =

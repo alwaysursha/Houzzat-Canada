@@ -353,7 +353,9 @@ async function runStage58Tests() {
     const inbox = readFileSync(INBOX_PAGE, "utf8");
     assert.ok(inbox.includes("Outbound email log"));
     assert.ok(inbox.includes("inbound replies come in Phase 3.5"));
-    assert.equal(schema.includes("model Conversation "), false);
+    // Conversation/Message powers agent↔customer Chat (Chats tab), not this email log.
+    assert.ok(schema.includes("model Conversation"));
+    assert.ok(schema.includes("model Message"));
     assert.equal(schema.includes("model SmsMessage"), false);
     console.log("  -> PASS (INBOUND EMAIL NOT CURRENTLY CANONICAL)");
   }

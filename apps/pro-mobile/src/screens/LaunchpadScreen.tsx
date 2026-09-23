@@ -17,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { mobileApiClient } from "../api/client";
+import { AgentServicesComingSoonBanner } from "../components/AgentServicesComingSoonBanner";
 import {
   LaunchpadStatsIcon,
   LaunchpadTaskIcon,
@@ -396,6 +397,10 @@ export function LaunchpadScreen({
     data.dueTodayCount === 1
       ? "1 task"
       : `${data.dueTodayCount} tasks`;
+  const overdueLine =
+    data.overdueTaskCount === 1
+      ? "1 overdue"
+      : `${data.overdueTaskCount} overdue`;
 
   return (
     <ScrollView
@@ -418,9 +423,20 @@ export function LaunchpadScreen({
         <Text style={styles.dateTitle}>{dateFormatted}</Text>
         <Text style={styles.dateSubtitle}>
           Today you have <Text style={styles.highlightCount}>{tasksDueLine}</Text>{" "}
-          due.
+          due
+          {data.overdueTaskCount > 0 ? (
+            <>
+              {" · "}
+              <Text style={styles.highlightCount}>{overdueLine}</Text>
+              {"."}
+            </>
+          ) : (
+            "."
+          )}
         </Text>
       </View>
+
+      <AgentServicesComingSoonBanner />
 
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionHeading}>Quick Modules</Text>
