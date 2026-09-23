@@ -143,7 +143,10 @@ const providers: Provider[] = [
               password,
             });
             if (discovered.ok) {
-              let match = discovered.matches[0] ?? null;
+              // Explicit | null: matches[0] is typed as T (not T|undefined) without
+              // noUncheckedIndexedAccess, so `?? null` alone does not widen.
+              let match: (typeof discovered.matches)[number] | null =
+                discovered.matches[0] ?? null;
               if (discovered.matches.length > 1) {
                 match = requestedWorkspaceId
                   ? (discovered.matches.find(
