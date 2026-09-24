@@ -73,6 +73,10 @@ export function HouzzatProSignInForm({
         void clearIntentionalSignOut({ userId: session.user.id });
       }
     });
+    // Navigation should hardGo away; clear pending if we remain on this page.
+    window.setTimeout(() => {
+      setPending(false);
+    }, 4_000);
   }
 
   async function onSubmit(event: React.FormEvent) {

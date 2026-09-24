@@ -31,7 +31,8 @@ type StatusPayload = {
 };
 
 const POLL_MS = 2500;
-const MAX_POLL_MS = 3 * 60_000;
+/** Soft ceiling for awaiting unpaid/pending webhook confirmation only. */
+const PENDING_PAYMENT_MAX_POLL_MS = 3 * 60_000;
 
 type UiState =
   | { kind: "processing"; message: string }
@@ -41,6 +42,10 @@ type UiState =
   | { kind: "unknown"; message: string }
   | { kind: "timeout"; message: string };
 
+/**
+ * Map server phase → UI. READY always wins regardless of browser elapsed time.
+ * Do not treat timer alone as recoverable while provisioning is PENDING/RUNNING.
+ */
 function mapStatus(data: StatusPayload, elapsedMs: number): UiState {
   switch (data.phase) {
     case "ready":
@@ -52,7 +57,7 @@ function mapStatus(data: StatusPayload, elapsedMs: number): UiState {
         message: PRIVATE_OFFER_PAYMENT_STATUS_RECOVERABLE,
       };
     case "paid_provisioning":
-      if (data.provisioningRecoverable || elapsedMs >= MAX_POLL_MS) {
+      if (data.provisioningRecoverable) {
         return {
           kind: "recoverable",
           message: PRIVATE_OFFER_PAYMENT_STATUS_RECOVERABLE,
@@ -63,7 +68,7 @@ function mapStatus(data: StatusPayload, elapsedMs: number): UiState {
         message: PRIVATE_OFFER_PAYMENT_STATUS_PROVISIONING,
       };
     case "pending":
-      if (elapsedMs >= MAX_POLL_MS) {
+      if (elapsedMs >= PENDING_PAYMENT_MAX_POLL_MS) {
         return {
           kind: "timeout",
           message: PRIVATE_OFFER_PAYMENT_STATUS_TIMEOUT,
@@ -92,6 +97,8 @@ export function SubscribePaymentStatusClient({
 }) {
   const support = resolveHouzzatProSupportCta();
   const startedAt = useRef(Date.now());
+  const lastPhaseRef = useRef<CheckoutPaymentUiPhase | null>(null);
+  const [pollEpoch, setPollEpoch] = useState(0);
   const [ui, setUi] = useState<UiState>(() =>
     sessionId
       ? { kind: "processing", message: PRIVATE_OFFER_PAYMENT_STATUS_PENDING }
@@ -113,7 +120,10 @@ export function SubscribePaymentStatusClient({
       } | null;
       if (!res.ok || !body?.ok || !body.data) {
         const elapsed = Date.now() - startedAt.current;
-        if (elapsed >= MAX_POLL_MS) {
+        if (
+          lastPhaseRef.current !== "paid_provisioning" &&
+          elapsed >= PENDING_PAYMENT_MAX_POLL_MS
+        ) {
           setUi({
             kind: "timeout",
             message: PRIVATE_OFFER_PAYMENT_STATUS_TIMEOUT,
@@ -121,6 +131,7 @@ export function SubscribePaymentStatusClient({
         }
         return;
       }
+      lastPhaseRef.current = body.data.phase;
       setUi(mapStatus(body.data, Date.now() - startedAt.current));
     } catch {
       /* keep last UI; next poll retries */
@@ -129,28 +140,48 @@ export function SubscribePaymentStatusClient({
 
   useEffect(() => {
     if (!sessionId) return;
+    let cancelled = false;
     void poll();
     const id = window.setInterval(() => {
+      if (cancelled) return;
       const elapsed = Date.now() - startedAt.current;
-      if (elapsed >= MAX_POLL_MS) {
+      const phase = lastPhaseRef.current;
+      // Stop interval only for unpaid pending timeout — keep polling while
+      // paid provisioning is still legitimately PENDING/RUNNING.
+      if (
+        phase !== "paid_provisioning" &&
+        phase !== "ready" &&
+        elapsed >= PENDING_PAYMENT_MAX_POLL_MS
+      ) {
         window.clearInterval(id);
         setUi((prev) =>
-          prev.kind === "success"
+          prev.kind === "success" || prev.kind === "recoverable"
             ? prev
             : {
-                kind: prev.kind === "recoverable" ? "recoverable" : "timeout",
-                message:
-                  prev.kind === "recoverable"
-                    ? prev.message
-                    : PRIVATE_OFFER_PAYMENT_STATUS_TIMEOUT,
+                kind: "timeout",
+                message: PRIVATE_OFFER_PAYMENT_STATUS_TIMEOUT,
               },
         );
         return;
       }
       void poll();
     }, POLL_MS);
-    return () => window.clearInterval(id);
-  }, [sessionId, poll]);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [sessionId, poll, pollEpoch]);
+
+  function onCheckAgain() {
+    startedAt.current = Date.now();
+    lastPhaseRef.current = null;
+    setUi({
+      kind: "processing",
+      message: PRIVATE_OFFER_PAYMENT_STATUS_PROVISIONING,
+    });
+    // Remount the poll interval so Check Again actually re-enters polling.
+    setPollEpoch((n) => n + 1);
+  }
 
   async function onNext() {
     if (!sessionId || continuing) return;
@@ -236,14 +267,7 @@ export function SubscribePaymentStatusClient({
             {ui.kind === "recoverable" || ui.kind === "timeout" ? (
               <button
                 type="button"
-                onClick={() => {
-                  startedAt.current = Date.now();
-                  setUi({
-                    kind: "processing",
-                    message: PRIVATE_OFFER_PAYMENT_STATUS_PROVISIONING,
-                  });
-                  void poll();
-                }}
+                onClick={onCheckAgain}
                 className="inline-flex rounded-lg border border-white/15 px-4 py-2.5 text-sm font-semibold text-white transition hover:border-emerald-400/40 hover:bg-white/5"
               >
                 Check again

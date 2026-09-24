@@ -55,6 +55,11 @@ function testSourceGuards() {
   assert.ok(statusClient.includes("/api/platform/public/checkout/continue"));
   assert.ok(statusClient.includes("PRIVATE_OFFER_PAYMENT_STATUS_SUCCESS_TITLE"));
   assert.ok(statusClient.includes("PRIVATE_OFFER_PAYMENT_STATUS_NEXT"));
+  // Timer alone must not mark paid_provisioning recoverable; Check Again restarts poll.
+  assert.ok(statusClient.includes("provisioningRecoverable"));
+  assert.ok(statusClient.includes("setPollEpoch"));
+  assert.ok(statusClient.includes("onCheckAgain"));
+  assert.ok(!statusClient.includes("elapsedMs >= MAX_POLL_MS"));
   assert.ok(
     read("src/lib/platform/offers/private-offer-copy.ts").includes(
       "Thank you — your payment has been received.",

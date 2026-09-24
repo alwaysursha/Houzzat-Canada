@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { PlatformSignOutButton } from "@/components/platform/PlatformSignOutButton";
 
 type NavItem = {
   href: string;
@@ -43,13 +44,7 @@ export function PlatformMobileNav({ nav, email }: PlatformMobileNavProps) {
               </Link>
             ))}
           </nav>
-          <Link
-            href="/auth/sign-out"
-            className="mt-3 block px-3 py-2 text-sm text-slate-400"
-            onClick={() => setOpen(false)}
-          >
-            Sign out
-          </Link>
+          <PlatformSignOutButton className="mt-3 block px-3 py-2 text-left text-sm text-slate-400 disabled:opacity-60" />
         </div>
       ) : null}
     </div>

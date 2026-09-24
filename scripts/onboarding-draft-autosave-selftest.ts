@@ -371,6 +371,11 @@ function createFakePrisma(state: FakeState): PrismaClient {
         };
       },
     },
+    subscription: {
+      async findFirst() {
+        return null;
+      },
+    },
     user: {
       async update({
         where,

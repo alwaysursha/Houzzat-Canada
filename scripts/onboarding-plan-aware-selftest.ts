@@ -250,6 +250,9 @@ function createFakePrisma(state: State): PrismaClient {
       async findUnique({ where }: { where: { id: string } }) {
         return state.subscriptions.get(where.id) ?? null;
       },
+      async findFirst() {
+        return null;
+      },
     },
     workspaceEntitlement: {
       async findUnique({

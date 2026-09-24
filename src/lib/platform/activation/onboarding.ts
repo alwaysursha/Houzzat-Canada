@@ -48,6 +48,10 @@ import {
   type TeamSignatureDataReadiness,
 } from "@/lib/tenancy/team-roster/readiness";
 import { applyOwnerCanonicalProfileFromCurrentSave } from "./sync-owner-canonical-profile";
+import {
+  applyOnboardingContinuityPrefill,
+  type OnboardingContinuityLocks,
+} from "./onboarding-continuity";
 
 export type OwnerOnboardingThemeOption = {
   id: string;
@@ -103,6 +107,11 @@ export type OwnerOnboardingWorkspace = {
     brokeragePhone: string | null;
     brokerageAddress: string | null;
   };
+  /**
+   * Book Demo / User-confirmed identity locks for onboarding UI.
+   * True ⇒ field is prefilled from authoritative sales data and read-only.
+   */
+  identityLocks: OnboardingContinuityLocks;
   /**
    * Stage 6.11E.8 — server-authoritative Team Signature data readiness.
    * Null when the plan does not include Team roster (SOLO).
@@ -265,6 +274,7 @@ async function loadOwnerOnboardingWorkspace(
       id: true,
       name: true,
       slug: true,
+      brokerageAffiliation: true,
       branding: {
         select: {
           displayName: true,
@@ -324,6 +334,7 @@ async function loadOwnerOnboardingWorkspace(
     select: {
       user: {
         select: {
+          name: true,
           phone: true,
           agentProfile: {
             select: {
@@ -335,6 +346,32 @@ async function loadOwnerOnboardingWorkspace(
       },
     },
   });
+
+  // Linked Book Demo prospect (when this workspace came from paid offer provision).
+  const linkedOffer = await db.subscription.findFirst({
+    where: {
+      workspaceId,
+      offerId: { not: null },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      offer: {
+        select: {
+          acceptance: { select: { acceptedEmail: true } },
+          prospect: {
+            select: {
+              contactName: true,
+              phone: true,
+              brokerageName: true,
+              email: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  const prospect = linkedOffer?.offer?.prospect ?? null;
+  const acceptedEmail = linkedOffer?.offer?.acceptance?.acceptedEmail ?? null;
 
   const plan = await resolveWorkspacePlanCapabilities(workspaceId, db);
   const persistedThemeId = workspace.branding?.themeId ?? null;
@@ -367,14 +404,11 @@ async function loadOwnerOnboardingWorkspace(
     faviconUrl: workspace.branding?.faviconUrl ?? null,
   };
 
-  const professionalIdentity = {
+  const professionalIdentityBase = {
     agentRegisteredName:
       workspace.professionalIdentity?.agentRegisteredName ?? null,
     agentDesignation: workspace.professionalIdentity?.agentDesignation ?? null,
-    agentCellPhone:
-      ownerMember?.user.phone?.trim() ||
-      workspace.professionalIdentity?.agentCellPhone ||
-      null,
+    agentCellPhone: workspace.professionalIdentity?.agentCellPhone ?? null,
     recoLicenseNumber:
       ownerMember?.user.agentProfile?.recoLicenseNumber ?? null,
     recoLicenseExpiresAt: recoExpiryInputValue(
@@ -390,10 +424,28 @@ async function loadOwnerOnboardingWorkspace(
 
   const displayName =
     workspace.branding?.displayName ?? workspace.name;
-  const contactEmail =
+  const contactEmailBase =
     workspace.branding?.contactEmail ??
     workspace.emailIdentity?.contactEmail ??
     null;
+
+  const continuity = applyOnboardingContinuityPrefill({
+    professionalIdentity: professionalIdentityBase,
+    contactEmail: contactEmailBase,
+    sources: {
+      prospectContactName: prospect?.contactName ?? null,
+      prospectPhone: prospect?.phone ?? null,
+      prospectBrokerageName: prospect?.brokerageName ?? null,
+      prospectEmail: prospect?.email ?? null,
+      acceptedEmail,
+      userName: ownerMember?.user.name ?? null,
+      userPhone: ownerMember?.user.phone ?? null,
+      workspaceBrokerageAffiliation: workspace.brokerageAffiliation ?? null,
+    },
+  });
+  const professionalIdentity = continuity.professionalIdentity;
+  const contactEmail = continuity.contactEmail;
+  const identityLocks = continuity.locks;
 
   const teamSignatureDataReadiness = plan.teamRosterEnabled
     ? evaluateTeamSignatureDataReadiness({
@@ -542,6 +594,7 @@ async function loadOwnerOnboardingWorkspace(
     teamRosterEnabled: plan.teamRosterEnabled,
     brandAssets,
     professionalIdentity,
+    identityLocks,
     teamSignatureDataReadiness: plan.teamRosterEnabled
       ? teamSignatureDataReadiness
       : null,

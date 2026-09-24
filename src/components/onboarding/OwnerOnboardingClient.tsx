@@ -70,6 +70,12 @@ type WorkspaceRow = {
     brokeragePhone: string | null;
     brokerageAddress: string | null;
   };
+  identityLocks?: {
+    agentRegisteredName: boolean;
+    agentCellPhone: boolean;
+    brokerageRegisteredName: boolean;
+    contactEmail: boolean;
+  };
   planCode?: string | null;
   teamRosterEnabled?: boolean;
   teamSignatureDataReadiness?: {
@@ -181,6 +187,7 @@ function OwnerOnboardingForm() {
     useState("NOT_STARTED");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [designJustSaved, setDesignJustSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
@@ -434,7 +441,8 @@ function OwnerOnboardingForm() {
         themeId: selectedThemeId,
       });
       themeDirtyRef.current = false;
-      setMessage("Website design saved.");
+      setDesignJustSaved(true);
+      setMessage(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save theme.");
@@ -500,6 +508,12 @@ function OwnerOnboardingForm() {
   const websiteSetupComplete = item.onboarding.websiteSetupComplete === true;
   const websiteSetupMissingFields =
     item.onboarding.websiteSetupMissingFields ?? [];
+  const identityLocks = item.identityLocks ?? {
+    agentRegisteredName: false,
+    agentCellPhone: false,
+    brokerageRegisteredName: false,
+    contactEmail: false,
+  };
   const categories = Array.from(
     new Map(
       item.templateOptions.map((t) => [
@@ -508,6 +522,42 @@ function OwnerOnboardingForm() {
       ]),
     ).values(),
   );
+
+  if (designJustSaved && themeComplete) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-8">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-6 py-10 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
+            Setup saved
+          </p>
+          <h1 className="mt-3 text-2xl font-semibold text-slate-900">
+            Your website setup has been saved
+          </h1>
+          <p className="mx-auto mt-3 max-w-md text-sm text-slate-600">
+            Your design and onboarding details are stored. You can enter your
+            HouzzatPRO workspace now — CRM stays available whether or not every
+            checklist item is marked complete.
+          </p>
+          <a
+            href="/agent"
+            className="mt-8 inline-flex min-w-[12rem] items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold text-white"
+            style={{ backgroundColor: "var(--canopy, #0F6B4C)" }}
+          >
+            Enter HouzzatPRO
+          </a>
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => setDesignJustSaved(false)}
+              className="text-sm font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
+            >
+              Edit website design
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
@@ -569,11 +619,21 @@ function OwnerOnboardingForm() {
           Contact email
           <input
             type="email"
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+            className={[
+              "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2",
+              identityLocks.contactEmail ? "bg-slate-50 text-slate-700" : "",
+            ].join(" ")}
             value={contactEmail}
             onChange={(e) => patchBusiness("contactEmail", e.target.value)}
             required
+            readOnly={identityLocks.contactEmail}
+            aria-readonly={identityLocks.contactEmail || undefined}
           />
+          {identityLocks.contactEmail ? (
+            <span className="mt-1 block text-xs text-slate-500">
+              Confirmed from your Book a Demo / login email.
+            </span>
+          ) : null}
         </label>
         <label className="block text-sm text-slate-700">
           Business phone
@@ -618,6 +678,11 @@ function OwnerOnboardingForm() {
         initial={professionalIdentity}
         brokerageLogoUrl={brandAssets.brokerageLogoUrl}
         templateCategory={item.templateCategory}
+        locks={{
+          agentRegisteredName: identityLocks.agentRegisteredName,
+          agentCellPhone: identityLocks.agentCellPhone,
+          brokerageRegisteredName: identityLocks.brokerageRegisteredName,
+        }}
         onSaved={() => {
           void load();
         }}

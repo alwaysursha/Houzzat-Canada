@@ -38,6 +38,12 @@ type ProfessionalIdentitySectionProps = {
   brokerageLogoUrl: string | null;
   /** When TEAM, Agent personal fields are optional (brokerage still required). */
   templateCategory?: string;
+  /** Book Demo / User-confirmed fields — prefilled and read-only when true. */
+  locks?: {
+    agentRegisteredName?: boolean;
+    agentCellPhone?: boolean;
+    brokerageRegisteredName?: boolean;
+  };
   onSaved: () => void;
 };
 
@@ -54,12 +60,16 @@ export function ProfessionalIdentitySection({
   initial,
   brokerageLogoUrl,
   templateCategory = "DEFAULT",
+  locks,
   onSaved,
 }: ProfessionalIdentitySectionProps) {
   const [fields, setFields] = useState<ProfessionalIdentityFields>(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const agentPersonalRequired = templateCategory !== "TEAM";
+  const lockAgentName = locks?.agentRegisteredName === true;
+  const lockAgentCell = locks?.agentCellPhone === true;
+  const lockBrokerageName = locks?.brokerageRegisteredName === true;
   const dirtyRef = useRef(false);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
@@ -98,6 +108,13 @@ export function ProfessionalIdentitySection({
     key: K,
     value: ProfessionalIdentityFields[K],
   ) {
+    if (
+      (key === "agentRegisteredName" && lockAgentName) ||
+      (key === "agentCellPhone" && lockAgentCell) ||
+      (key === "brokerageRegisteredName" && lockBrokerageName)
+    ) {
+      return;
+    }
     setFields((current) => {
       const next = { ...current, [key]: value };
       fieldsRef.current = next;
@@ -206,14 +223,25 @@ export function ProfessionalIdentitySection({
               </span>
             )}
             <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              className={[
+                "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2",
+                lockAgentName ? "bg-slate-50 text-slate-700" : "",
+              ].join(" ")}
               value={fields.agentRegisteredName}
               onChange={(e) =>
                 patchField("agentRegisteredName", e.target.value)
               }
               required={agentPersonalRequired}
               autoComplete="name"
+              readOnly={lockAgentName}
+              aria-readonly={lockAgentName || undefined}
             />
+            {lockAgentName ? (
+              <span className="mt-1 block text-xs text-slate-500">
+                Confirmed from Book a Demo / account name. Business display name
+                below remains editable for branding.
+              </span>
+            ) : null}
           </label>
           <label className="block text-sm text-slate-700">
             Designation
@@ -252,16 +280,22 @@ export function ProfessionalIdentitySection({
               </span>
             )}
             <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              className={[
+                "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2",
+                lockAgentCell ? "bg-slate-50 text-slate-700" : "",
+              ].join(" ")}
               value={fields.agentCellPhone}
               onChange={(e) => patchField("agentCellPhone", e.target.value)}
-              required={agentPersonalRequired}
+              required={agentPersonalRequired && !lockAgentCell}
               inputMode="tel"
               autoComplete="tel"
+              readOnly={lockAgentCell}
+              aria-readonly={lockAgentCell || undefined}
             />
             <span className="mt-1 block text-xs text-slate-500">
-              Agent mobile — separate from Business phone in Business profile.
-              Saved to your Team profile and used for Agent SMS notifications.
+              {lockAgentCell
+                ? "Confirmed from Book a Demo / account phone."
+                : "Agent mobile — separate from Business phone in Business profile. Saved to your Team profile and used for Agent SMS notifications."}
             </span>
           </label>
           <label className="block text-sm text-slate-700">
@@ -306,15 +340,22 @@ export function ProfessionalIdentitySection({
               Required
             </span>
             <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              className={[
+                "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2",
+                lockBrokerageName ? "bg-slate-50 text-slate-700" : "",
+              ].join(" ")}
               value={fields.brokerageRegisteredName}
               onChange={(e) =>
                 patchField("brokerageRegisteredName", e.target.value)
               }
-              required
+              required={!lockBrokerageName}
+              readOnly={lockBrokerageName}
+              aria-readonly={lockBrokerageName || undefined}
             />
             <span className="mt-1 block text-xs text-slate-500">
-              Registered brokerage name — not the same as Business display name.
+              {lockBrokerageName
+                ? "Confirmed from Book a Demo brokerage."
+                : "Registered brokerage name — not the same as Business display name."}
             </span>
           </label>
           <label className="block text-sm text-slate-700">

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { PlatformMobileNav } from "@/components/platform/PlatformMobileNav";
+import { PlatformSignOutButton } from "@/components/platform/PlatformSignOutButton";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import type { PlatformMeData } from "@/lib/platform/ui/types";
 
@@ -53,12 +54,9 @@ export function PlatformShell({ me, children }: PlatformShellProps) {
             <p className="mt-1 uppercase tracking-wide text-emerald-400/90">
               {me.operator.role}
             </p>
-            <Link
-              href="/auth/sign-out"
-              className="mt-3 inline-block text-slate-400 underline-offset-2 hover:text-white hover:underline"
-            >
-              Sign out
-            </Link>
+            <PlatformSignOutButton
+              className="mt-3 inline-block text-slate-400 underline-offset-2 hover:text-white hover:underline disabled:opacity-60"
+            />
           </div>
         </aside>
 

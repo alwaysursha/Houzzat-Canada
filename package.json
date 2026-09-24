@@ -207,6 +207,7 @@
     "identity:phase3:lead-guard:selftest": "node --import tsx scripts/identity-phase3-lead-guard-selftest.ts",
     "identity:phase3:org-invite:selftest": "node --import tsx scripts/identity-phase3-org-invite-selftest.ts",
     "p0-paid-onboarding-repair:selftest": "node --import tsx scripts/p0-paid-onboarding-repair-selftest.ts",
+    "onboarding-quality-pass:selftest": "node --import tsx scripts/onboarding-quality-pass-selftest.ts",
     "tenant-verify-origin:selftest": "node --import tsx scripts/tenant-verify-origin-selftest.ts",
     "lead-info-updated:selftest": "node --import tsx scripts/lead-info-updated-selftest.ts",
     "lead-duplicate-reconciliation:selftest": "node --import tsx scripts/lead-duplicate-reconciliation-selftest.ts",

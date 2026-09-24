@@ -308,8 +308,13 @@ function createFakePrisma(state: FakeState): PrismaClient {
         if (!hit) return null;
         return {
           ...hit,
-          user: { phone: null, agentProfile: null },
+          user: { name: null, phone: null, agentProfile: null },
         };
+      },
+    },
+    subscription: {
+      async findFirst() {
+        return null;
       },
     },
     workspaceBranding: {

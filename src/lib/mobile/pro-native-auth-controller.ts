@@ -399,8 +399,8 @@ class ProNativeAuthController {
           return { ok: true };
         }
 
-        // Fast-path: immediately discover workspace and mint handoff code in the same session,
-        // avoiding an unnecessary intermediate full-page reload on /pro.
+        // Fast-path: discover workspace and navigate. Every success path must
+        // terminate with hardGo or an explicit error — never leave Sign in pending.
         try {
           const disc = await this.discoverWorkspace();
           if (disc.ok && disc.state?.kind === "select_workspace") {
@@ -410,14 +410,52 @@ class ProNativeAuthController {
                 workspaceHint: this.pendingWorkspaceHint,
               }),
             );
-          } else if (!disc.ok) {
-            hardGo(
-              appendOwnerOnboardingAuthQuery(HOUZZATPRO_START_PATH, {
-                returnPath: this.pendingReturnPath,
-                workspaceHint: this.pendingWorkspaceHint,
-              }),
-            );
+            return { ok: true };
           }
+          if (disc.ok && disc.state?.kind === "no_workspace") {
+            // PlatformOperator with no tenant memberships — only valid destination
+            // on the Pro bootstrap host is the control plane. Elsewhere: explicit error.
+            if (isPlatformMobileBootstrapHost(currentHost())) {
+              this.transitionTo("FINAL_NAVIGATION", { destination: "/platform" });
+              hardGo("/platform");
+              return { ok: true };
+            }
+            this.transitionTo("ERROR", {
+              error: "No active workspace membership found.",
+            });
+            return {
+              ok: false,
+              error: "No active workspace membership found.",
+            };
+          }
+          if (
+            disc.ok &&
+            (disc.state?.kind === "handoff" ||
+              disc.state?.kind === "tenant_destination")
+          ) {
+            // discoverWorkspace / createHandoff already called hardGo.
+            return { ok: true };
+          }
+          if (!disc.ok) {
+            const fallback = appendOwnerOnboardingAuthQuery(HOUZZATPRO_START_PATH, {
+              returnPath: this.pendingReturnPath,
+              workspaceHint: this.pendingWorkspaceHint,
+            });
+            this.transitionTo("FINAL_NAVIGATION", { destination: fallback });
+            hardGo(fallback);
+            return {
+              ok: false,
+              error: disc.error ?? "Unable to open your workspace.",
+            };
+          }
+          // Unknown ok state — still leave the sign-in button.
+          hardGo(
+            appendOwnerOnboardingAuthQuery(HOUZZATPRO_START_PATH, {
+              returnPath: this.pendingReturnPath,
+              workspaceHint: this.pendingWorkspaceHint,
+            }),
+          );
+          return { ok: true };
         } catch {
           hardGo(
             appendOwnerOnboardingAuthQuery(HOUZZATPRO_START_PATH, {
@@ -425,9 +463,8 @@ class ProNativeAuthController {
               workspaceHint: this.pendingWorkspaceHint,
             }),
           );
+          return { ok: true };
         }
-
-        return { ok: true };
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Authentication failed";
         this.transitionTo("ERROR", { error: msg });
