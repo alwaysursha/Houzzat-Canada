@@ -6,6 +6,7 @@ import type {
   ClientAccessKind,
   ResolvedClientAccess,
 } from "@/lib/account-access";
+import { EMAIL_VERIFIED_EVENT } from "@/lib/auth/verification-success-signal";
 
 export type ClientAccessState = ResolvedClientAccess & {
   email: string | null;
@@ -21,9 +22,28 @@ const VISITOR: ClientAccessState = {
   loading: true,
 };
 
+function accessFromJson(data: unknown): ClientAccessState {
+  const json = data as {
+    kind?: ClientAccessKind;
+    isSignedIn?: boolean;
+    hasClientAccess?: boolean;
+    needsEmailVerification?: boolean;
+    email?: string | null;
+  };
+  return {
+    kind: json.kind ?? "visitor",
+    isSignedIn: Boolean(json.isSignedIn),
+    hasClientAccess: Boolean(json.hasClientAccess),
+    needsEmailVerification: Boolean(json.needsEmailVerification),
+    email: json.email ?? null,
+    loading: false,
+  };
+}
+
 /**
  * Site-wide client access for gates.
  * Prefer this over `useSession() === "authenticated"` for sold/VOW locks.
+ * Authority is always live `/api/account/access` (DB), never JWT emailVerified.
  */
 export function useClientAccess(): ClientAccessState {
   const { status } = useSession();
@@ -40,41 +60,39 @@ export function useClientAccess(): ClientAccessState {
     }
 
     let cancelled = false;
-    setState((prev) => ({ ...prev, loading: true }));
-    void fetch("/api/account/access")
-      .then((res) => res.json())
-      .then((data: unknown) => {
+
+    async function loadAccess(opts?: { quiet?: boolean }) {
+      if (!opts?.quiet) {
+        setState((prev) => ({ ...prev, loading: true }));
+      }
+      try {
+        const res = await fetch("/api/account/access", { cache: "no-store" });
+        const data: unknown = await res.json();
         if (cancelled) return;
-        const json = data as {
-          kind?: ClientAccessKind;
-          isSignedIn?: boolean;
-          hasClientAccess?: boolean;
-          needsEmailVerification?: boolean;
-          email?: string | null;
-        };
-        setState({
-          kind: json.kind ?? "visitor",
-          isSignedIn: Boolean(json.isSignedIn),
-          hasClientAccess: Boolean(json.hasClientAccess),
-          needsEmailVerification: Boolean(json.needsEmailVerification),
-          email: json.email ?? null,
-          loading: false,
-        });
-      })
-      .catch(() => {
+        setState(accessFromJson(data));
+      } catch {
         if (cancelled) return;
         setState({
           kind: "visitor",
-          isSignedIn: status === "authenticated",
+          isSignedIn: true,
           hasClientAccess: false,
           needsEmailVerification: false,
           email: null,
           loading: false,
         });
-      });
+      }
+    }
+
+    void loadAccess();
+
+    const onVerified = () => {
+      void loadAccess({ quiet: true });
+    };
+    window.addEventListener(EMAIL_VERIFIED_EVENT, onVerified);
 
     return () => {
       cancelled = true;
+      window.removeEventListener(EMAIL_VERIFIED_EVENT, onVerified);
     };
   }, [status]);
 

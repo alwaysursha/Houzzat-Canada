@@ -140,9 +140,8 @@ export function CommandCentreShell() {
   };
 
   useAndroidHardwareBack({
+    enabled: !inAgentMode,
     onBack: () => {
-      // Agent Mode mounts its own shell with its own back handler.
-      if (inAgentMode) return false;
       if (viewingsPlanner) {
         setViewingsPlanner(null);
         return true;
@@ -175,7 +174,6 @@ export function CommandCentreShell() {
       return false;
     },
     isAtRoot: () =>
-      !inAgentMode &&
       !viewingsPlanner &&
       !viewingsLeadPicker &&
       !selectedLeadId &&

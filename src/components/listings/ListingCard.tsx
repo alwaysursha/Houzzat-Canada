@@ -1,3 +1,5 @@
+"use client";
+
 import { Bath, Bed, Calendar, Car, Maximize2 } from "lucide-react";
 import { ListingCardActions } from "@/components/listings/ListingCardActions";
 import { ListingLink } from "@/components/listings/ListingLink";

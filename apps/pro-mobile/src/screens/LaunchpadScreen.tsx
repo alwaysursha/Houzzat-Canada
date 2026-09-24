@@ -236,9 +236,14 @@ export function LaunchpadScreen({
   useEffect(() => {
     if (!workspaceId) return;
     const entry = launchpadCache.get(launchpadCacheKey(workspaceId));
+    const FRESH_MS = 60_000;
     if (entry) {
       setData(entry.launchpad as LaunchpadData);
       setLoading(false);
+      // Skip immediate refetch when hydrated cache is still fresh.
+      if (Date.now() - entry.timestamp < FRESH_MS) {
+        return;
+      }
     } else {
       setData(emptyLaunchpad(workspaceId));
       setLoading(true);

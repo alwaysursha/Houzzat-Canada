@@ -33,7 +33,21 @@ import {
   type MobileChatPanel,
   type MobileChatsInboxRow,
 } from "../lib/chats-response";
+import {
+  clearChatsInboxCache,
+  getChatsInboxCache,
+  setChatsInboxCache,
+} from "../lib/chats-inbox-cache";
+import {
+  chatsDiagnosticLooksSafe,
+  classifyChatsFailure,
+  formatChatsLoadError,
+  inspectAccessTokenClaims,
+  type ChatsRequestDiagnostic,
+} from "../lib/chats-diagnostics";
+import { pushAndroidBackHandler } from "../lib/android-back-stack";
 import { useAuth } from "../state/AuthContext";
+import { mobileAuthController } from "../state/auth-controller";
 
 type Filter = "all" | "unread";
 
@@ -47,6 +61,15 @@ export function ChatsScreen({ onOpenLead }: ChatsScreenProps) {
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedTitle, setSelectedTitle] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedLeadId) return;
+    return pushAndroidBackHandler(() => {
+      setSelectedLeadId(null);
+      setSelectedTitle(null);
+      return true;
+    });
+  }, [selectedLeadId]);
 
   if (selectedLeadId) {
     return (
@@ -91,6 +114,7 @@ function ChatInboxList({
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diagHint, setDiagHint] = useState<string | null>(null);
   const fetchGenRef = useRef(0);
 
   useEffect(() => {
@@ -101,14 +125,34 @@ function ChatInboxList({
   }, [queryInput]);
 
   const loadList = useCallback(
-    async (opts?: { cursor?: string | null; soft?: boolean }) => {
+    async (opts?: { cursor?: string | null; soft?: boolean; force?: boolean }) => {
+      if (!workspaceId) return;
       const cursor = opts?.cursor ?? null;
       const isMore = Boolean(cursor);
       const gen = ++fetchGenRef.current;
+
+      if (!isMore && !opts?.force && !opts?.soft) {
+        const cached = getChatsInboxCache({
+          workspaceId,
+          filter,
+          q: debouncedQ,
+        });
+        if (cached) {
+          setRows(cached.rows);
+          setHasMore(cached.hasMore);
+          setNextCursor(cached.nextCursor);
+          setError(null);
+          setDiagHint(null);
+          setLoading(false);
+          return;
+        }
+      }
+
       if (isMore) setLoadingMore(true);
       else if (!opts?.soft) {
         setLoading(true);
         setError(null);
+        setDiagHint(null);
       } else {
         setRefreshing(true);
       }
@@ -118,12 +162,71 @@ function ChatInboxList({
         filter,
         cursor,
       });
+
+      const snap = mobileAuthController.getSnapshot();
+      const tokenInspect = inspectAccessTokenClaims(snap.tokens?.accessToken);
+      const diagBase = {
+        requestAttempted: true as const,
+        accessTokenPresent: tokenInspect.present,
+        tokenType: tokenInspect.type,
+        workspaceIdPresent: tokenInspect.workspaceIdPresent,
+        role: tokenInspect.role,
+        tokenExpiryState: tokenInspect.expiryState,
+        initialHttpStatus: null as number | null,
+        refreshAttempted: false,
+        refreshSucceeded: null as boolean | null,
+        retryHttpStatus: null as number | null,
+        serverCode: null as string | null,
+        serverMessage: null as string | null,
+        unwrapSucceeded: null as boolean | null,
+        diagClass: "UNKNOWN" as const,
+      };
+
       const res = await mobileApiClient.get<unknown>(`/conversations${qs}`);
       if (gen !== fetchGenRef.current) return;
 
       if (!res.ok) {
         if (!isMore) {
-          setError(res.message || "Couldn’t load chats.");
+          const details =
+            res.details && typeof res.details === "object"
+              ? (res.details as Record<string, unknown>)
+              : null;
+          const status =
+            typeof details?.status === "number"
+              ? details.status
+              : res.code === "AUTH_REQUIRED"
+                ? 401
+                : res.code === "WORKSPACE_FORBIDDEN" || res.code === "NOT_FOUND"
+                  ? res.code === "NOT_FOUND"
+                    ? 404
+                    : 403
+                  : res.code === "SERVER_ERROR"
+                    ? 500
+                    : null;
+          const diag: ChatsRequestDiagnostic = {
+            ...diagBase,
+            initialHttpStatus: status,
+            refreshAttempted: res.code === "AUTH_REQUIRED",
+            refreshSucceeded:
+              res.code === "AUTH_REQUIRED" ? false : null,
+            serverCode: res.code,
+            serverMessage: res.message,
+            unwrapSucceeded: null,
+            diagClass: classifyChatsFailure({
+              httpStatus: status,
+              code: res.code,
+              network: res.code === "NETWORK_ERROR",
+              timeout: res.code === "TIMEOUT",
+            }),
+          };
+          void chatsDiagnosticLooksSafe(diag);
+          if (chatsDiagnosticLooksSafe(diag)) {
+            console.warn("[chats-diag]", JSON.stringify(diag));
+          }
+          setError(formatChatsLoadError(diag));
+          setDiagHint(
+            `diag ${diag.diagClass} · token=${diag.accessTokenPresent ? "yes" : "no"} · type=${diag.tokenType ?? "?"} · wsClaim=${diag.workspaceIdPresent ? "yes" : "no"} · exp=${diag.tokenExpiryState}`,
+          );
           setRows([]);
           setHasMore(false);
           setNextCursor(null);
@@ -137,7 +240,20 @@ function ChatInboxList({
       const data = unwrapChatsInboxList(res.data);
       if (!data) {
         if (!isMore) {
-          setError("Couldn’t load chats.");
+          const diag: ChatsRequestDiagnostic = {
+            ...diagBase,
+            initialHttpStatus: 200,
+            serverCode: null,
+            serverMessage: null,
+            unwrapSucceeded: false,
+            diagClass: "RESPONSE_SHAPE",
+          };
+          void chatsDiagnosticLooksSafe(diag);
+          if (chatsDiagnosticLooksSafe(diag)) {
+            console.warn("[chats-diag]", JSON.stringify(diag));
+          }
+          setError(formatChatsLoadError(diag));
+          setDiagHint(`diag RESPONSE_SHAPE · unwrap failed`);
           setRows([]);
         }
         setLoading(false);
@@ -152,11 +268,22 @@ function ChatInboxList({
       setHasMore(data.page.hasMore);
       setNextCursor(data.page.nextCursor);
       setError(null);
+      setDiagHint(null);
+      if (!isMore) {
+        setChatsInboxCache({
+          workspaceId,
+          rows: data.conversations,
+          nextCursor: data.page.nextCursor,
+          hasMore: data.page.hasMore,
+          filter,
+          q: debouncedQ,
+        });
+      }
       setLoading(false);
       setRefreshing(false);
       setLoadingMore(false);
     },
-    [debouncedQ, filter],
+    [debouncedQ, filter, workspaceId],
   );
 
   useEffect(() => {
@@ -217,9 +344,17 @@ function ChatInboxList({
       ) : error ? (
         <View style={styles.centerBox}>
           <Text style={styles.errorText}>{error}</Text>
+          {diagHint ? (
+            <Text style={styles.diagHint} selectable>
+              {diagHint}
+            </Text>
+          ) : null}
           <TouchableOpacity
             style={styles.retryBtn}
-            onPress={() => void loadList()}
+            onPress={() => {
+              if (workspaceId) clearChatsInboxCache(workspaceId);
+              void loadList({ force: true });
+            }}
           >
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
@@ -232,7 +367,10 @@ function ChatInboxList({
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => void loadList({ soft: true })}
+              onRefresh={() => {
+                if (workspaceId) clearChatsInboxCache(workspaceId);
+                void loadList({ soft: true, force: true });
+              }}
               tintColor="#0F766E"
             />
           }
@@ -814,6 +952,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#B91C1C",
     textAlign: "center",
+  },
+  diagHint: {
+    fontSize: 11,
+    color: "#64748B",
+    textAlign: "center",
+    marginTop: 4,
   },
   retryBtn: {
     marginTop: 8,

@@ -178,7 +178,18 @@ export function ListingMobileActionBar({
                       return;
                     }
                     if (!routePlanner) return;
-                    const result = await routePlanner.toggleStop(mlsNumber);
+                    let result: Awaited<
+                      ReturnType<typeof routePlanner.toggleStop>
+                    >;
+                    try {
+                      result = await routePlanner.toggleStop(mlsNumber);
+                    } catch {
+                      toast({
+                        message: SITE_MESSAGES.genericErrorToast,
+                        tone: "error",
+                      });
+                      return;
+                    }
                     if (!result.ok) {
                       if (result.requiresEmailVerification) {
                         openClientToolsVerification({
@@ -193,11 +204,17 @@ export function ListingMobileActionBar({
                       });
                       return;
                     }
-                    if (result.added && routeButtonRef.current) {
-                      const el = routeButtonRef.current;
-                      requestAnimationFrame(() => {
-                        requestAnimationFrame(() => flyRouteToPlanner(el));
+                    if (result.added) {
+                      toast({
+                        message: SITE_MESSAGES.routePlannerAddedToast,
+                        tone: "success",
                       });
+                      if (routeButtonRef.current) {
+                        const el = routeButtonRef.current;
+                        requestAnimationFrame(() => {
+                          requestAnimationFrame(() => flyRouteToPlanner(el));
+                        });
+                      }
                       return;
                     }
                     toast({

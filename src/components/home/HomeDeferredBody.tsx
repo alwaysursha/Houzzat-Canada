@@ -153,14 +153,22 @@ export function HomeDeferredBody({
       }
     }
 
-    const onVerified = () => {
+    const onReload = () => {
       void reloadShell();
     };
-    window.addEventListener(EMAIL_VERIFIED_EVENT, onVerified);
+    window.addEventListener(EMAIL_VERIFIED_EVENT, onReload);
+    window.addEventListener(
+      "houzzat:homepage-personalization-changed",
+      onReload,
+    );
     return () => {
       cancelled = true;
       controller.abort();
-      window.removeEventListener(EMAIL_VERIFIED_EVENT, onVerified);
+      window.removeEventListener(EMAIL_VERIFIED_EVENT, onReload);
+      window.removeEventListener(
+        "houzzat:homepage-personalization-changed",
+        onReload,
+      );
     };
   }, [isAuthenticated]);
 

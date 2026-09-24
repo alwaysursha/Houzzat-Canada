@@ -1,5 +1,7 @@
 /** Guest Route Planner bucket — localStorage until sign-in. */
 
+import { notifyRoutePlannerChanged } from "@/lib/route-planner/route-planner-sync";
+
 const STORAGE_KEY = "houzzat:route-planner";
 const LEGACY_STORAGE_KEY = "houzzat:viewing-day";
 
@@ -57,14 +59,14 @@ export function saveLocalRoutePlanner(day: LocalRoutePlanner) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(day));
   window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-  window.dispatchEvent(new Event("houzzat:route-planner-changed"));
+  notifyRoutePlannerChanged();
 }
 
 export function clearLocalRoutePlanner() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(STORAGE_KEY);
   window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-  window.dispatchEvent(new Event("houzzat:route-planner-changed"));
+  notifyRoutePlannerChanged();
 }
 
 export function toggleLocalStop(mlsNumber: string, maxStops: number) {

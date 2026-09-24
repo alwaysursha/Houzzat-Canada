@@ -64,6 +64,8 @@ type ViewingsPlannerState = {
   leadName?: string;
 } | null;
 
+type VisitedTabs = Partial<Record<AgentTab, boolean>>;
+
 export function AgentShell({
   onReturnToCommandCentre,
 }: {
@@ -79,6 +81,9 @@ export function AgentShell({
   } = useAuth();
 
   const [activeTab, setActiveTab] = useState<AgentTab>("launchpad");
+  const [visitedTabs, setVisitedTabs] = useState<VisitedTabs>({
+    launchpad: true,
+  });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeDrawerId, setActiveDrawerId] = useState("launchpad");
   const [activeUtility, setActiveUtility] = useState<ActiveUtility>(null);
@@ -104,6 +109,12 @@ export function AgentShell({
     setActiveDrawerId(drawerId ?? tab);
     setActiveUtility(null);
   };
+
+  useEffect(() => {
+    setVisitedTabs((prev) =>
+      prev[activeTab] ? prev : { ...prev, [activeTab]: true },
+    );
+  }, [activeTab]);
 
   const handleSelectDrawerItem = (item: DrawerItem) => {
     setActiveDrawerId(item.id);
@@ -280,74 +291,114 @@ export function AgentShell({
         </View>
       </View>
 
-      {/* Body Content Area */}
+      {/* Body Content Area — keep visited primary tabs mounted (no cold remount). */}
       <View style={styles.body}>
-        {activeTab === "launchpad" && (
-          <LaunchpadScreen
-            onNavigateToLeads={handleNavigateToLeads}
-            onNavigateToTasks={handleNavigateToTasks}
-            onNavigateToStatistics={() => {
-              setActiveTab("more");
-              setActiveUtility("statistics");
-              setActiveDrawerId("statistics");
-            }}
-            onOpenLead={(leadId, leadIds) => {
-              setLeadNavIds(leadIds?.length ? leadIds : [leadId]);
-              setSelectedLeadId(leadId);
-              setActiveTab("leads");
-              setActiveDrawerId("leads");
-              setActiveUtility(null);
-            }}
-          />
-        )}
+        {visitedTabs.launchpad ? (
+          <View
+            style={[
+              styles.tabPane,
+              activeTab !== "launchpad" ? styles.tabPaneHidden : null,
+            ]}
+            pointerEvents={activeTab === "launchpad" ? "auto" : "none"}
+          >
+            <LaunchpadScreen
+              onNavigateToLeads={handleNavigateToLeads}
+              onNavigateToTasks={handleNavigateToTasks}
+              onNavigateToStatistics={() => {
+                setActiveTab("more");
+                setActiveUtility("statistics");
+                setActiveDrawerId("statistics");
+              }}
+              onOpenLead={(leadId, leadIds) => {
+                setLeadNavIds(leadIds?.length ? leadIds : [leadId]);
+                setSelectedLeadId(leadId);
+                setActiveTab("leads");
+                setActiveDrawerId("leads");
+                setActiveUtility(null);
+              }}
+            />
+          </View>
+        ) : null}
 
-        {activeTab === "leads" && (
-          <LeadsScreen
-            initialStatusFilter={leadsInitialFilter}
-            selectedLeadId={selectedLeadId}
-            onSelectLead={(leadId, leadIds) => {
-              setLeadNavIds(leadIds);
-              setSelectedLeadId(leadId);
-            }}
-            onPlanViewings={(id, name, mlsNumbers) => {
-              setViewingsPlanner({
-                leadId: id,
-                mlsNumbers: mlsNumbers ?? [],
-                leadName: name,
-              });
-            }}
-          />
-        )}
+        {visitedTabs.leads ? (
+          <View
+            style={[
+              styles.tabPane,
+              activeTab !== "leads" ? styles.tabPaneHidden : null,
+            ]}
+            pointerEvents={activeTab === "leads" ? "auto" : "none"}
+          >
+            <LeadsScreen
+              initialStatusFilter={leadsInitialFilter}
+              selectedLeadId={selectedLeadId}
+              onSelectLead={(leadId, leadIds) => {
+                setLeadNavIds(leadIds);
+                setSelectedLeadId(leadId);
+              }}
+              onPlanViewings={(id, name, mlsNumbers) => {
+                setViewingsPlanner({
+                  leadId: id,
+                  mlsNumbers: mlsNumbers ?? [],
+                  leadName: name,
+                });
+              }}
+            />
+          </View>
+        ) : null}
 
-        {activeTab === "chats" && (
-          <ChatsScreen
-            onOpenLead={(leadId) => {
-              setLeadNavIds([leadId]);
-              setSelectedLeadId(leadId);
-              setActiveTab("leads");
-              setActiveDrawerId("leads");
-              setActiveUtility(null);
-            }}
-          />
-        )}
+        {visitedTabs.chats ? (
+          <View
+            style={[
+              styles.tabPane,
+              activeTab !== "chats" ? styles.tabPaneHidden : null,
+            ]}
+            pointerEvents={activeTab === "chats" ? "auto" : "none"}
+          >
+            <ChatsScreen
+              onOpenLead={(leadId) => {
+                setLeadNavIds([leadId]);
+                setSelectedLeadId(leadId);
+                setActiveTab("leads");
+                setActiveDrawerId("leads");
+                setActiveUtility(null);
+              }}
+            />
+          </View>
+        ) : null}
 
-        {activeTab === "calendar" && (
-          <GlobalCalendarScreen
-            onOpenLead={(leadId) => {
-              setLeadNavIds([leadId]);
-              setSelectedLeadId(leadId);
-            }}
-          />
-        )}
+        {visitedTabs.calendar ? (
+          <View
+            style={[
+              styles.tabPane,
+              activeTab !== "calendar" ? styles.tabPaneHidden : null,
+            ]}
+            pointerEvents={activeTab === "calendar" ? "auto" : "none"}
+          >
+            <GlobalCalendarScreen
+              onOpenLead={(leadId) => {
+                setLeadNavIds([leadId]);
+                setSelectedLeadId(leadId);
+              }}
+            />
+          </View>
+        ) : null}
 
-        {activeTab === "tasks" && (
-          <GlobalTasksScreen
-            onOpenLead={(leadId) => {
-              setLeadNavIds([leadId]);
-              setSelectedLeadId(leadId);
-            }}
-          />
-        )}
+        {visitedTabs.tasks ? (
+          <View
+            style={[
+              styles.tabPane,
+              activeTab !== "tasks" ? styles.tabPaneHidden : null,
+            ]}
+            pointerEvents={activeTab === "tasks" ? "auto" : "none"}
+          >
+            <GlobalTasksScreen
+              onOpenLead={(leadId) => {
+                setLeadNavIds([leadId]);
+                setSelectedLeadId(leadId);
+              }}
+            />
+          </View>
+        ) : null}
 
         {activeTab === "more" && (
           activeUtility ? (
@@ -756,6 +807,12 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     backgroundColor: "#F4F6F8",
+  },
+  tabPane: {
+    flex: 1,
+  },
+  tabPaneHidden: {
+    display: "none",
   },
   scrollContent: {
     padding: 16,

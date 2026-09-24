@@ -11,6 +11,8 @@ import { listingPath } from "@/lib/listings/listing-path";
 import { toCard } from "@/lib/listings/provider";
 import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
+import { ENV_PINNED_ORIGIN_DOC } from "@/lib/tenancy/env-pinned-origin";
 
 export type SendShortlistEmailInput = {
   leadId: string;
@@ -60,6 +62,29 @@ function encodeSharePayload(input: {
 }) {
   const json = JSON.stringify(input);
   return Buffer.from(json, "utf8").toString("base64url").replace(/=+$/, "");
+}
+
+/**
+ * Customer-facing share/listing links must use the lead workspace's canonical
+ * public consumer origin — never the HouzzatPRO CRM host (app.houzzatpro.com).
+ */
+async function resolveShortlistPublicOrigin(
+  workspaceId: string | null,
+): Promise<string> {
+  if (workspaceId) {
+    let fallbackHost = "houzzat.com";
+    try {
+      const siteHost = new URL(SITE_URL).hostname;
+      // HouzzatPRO CRM host is not a consumer marketing origin for /share/homes.
+      if (siteHost !== "app.houzzatpro.com") {
+        fallbackHost = siteHost;
+      }
+    } catch {
+      fallbackHost = "houzzat.com";
+    }
+    return resolveCanonicalPublicOrigin(workspaceId, fallbackHost);
+  }
+  return ENV_PINNED_ORIGIN_DOC.productionValueToday;
 }
 
 export async function sendShortlistEmail(
@@ -149,7 +174,10 @@ export async function sendShortlistEmail(
     .digest("hex")
     .slice(0, 10);
 
-  const shareUrl = `${SITE_URL}/share/homes/${token}`;
+  const publicOrigin = (
+    await resolveShortlistPublicOrigin(lead.workspaceId)
+  ).replace(/\/$/, "");
+  const shareUrl = `${publicOrigin}/share/homes/${token}`;
 
   const emailListings = cards.map((c) => {
     const baths = Number.isInteger(c.baths)
@@ -160,7 +188,7 @@ export async function sendShortlistEmail(
       addressLine: formatListingAddressOneLine(c),
       city: c.city,
       priceLabel: formatListPrice(c.listPrice, c.transactionType),
-      listingUrl: `${SITE_URL}${listingPath(c)}`,
+      listingUrl: `${publicOrigin}${listingPath(c)}`,
       bedsLabel: formatListingBedsLabel(c),
       bathsLabel: baths,
       sqftLabel: c.sqft ? `${c.sqft.toLocaleString("en-CA")} sqft` : null,
@@ -204,7 +232,7 @@ export async function sendShortlistEmail(
       type: "shortlist",
       title: "Homes from your agent",
       body: `${cards.length} ${cards.length === 1 ? "home" : "homes"} to review`,
-      href: shareUrl.replace(SITE_URL, "") || "/account",
+      href: shareUrl.replace(publicOrigin, "") || "/account",
     });
   }
 

@@ -21,6 +21,7 @@ interface AuthContextValue extends MobileAuthState {
   changeWorkspace: () => Promise<void>;
   cancelIdentitySelection: () => Promise<void>;
   signOut: () => Promise<void>;
+  retryBootstrap: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -61,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     changeWorkspace: () => mobileAuthController.changeWorkspace(),
     cancelIdentitySelection: () => mobileAuthController.cancelIdentitySelection(),
     signOut: () => mobileAuthController.signOut(),
+    retryBootstrap: () => mobileAuthController.retryBootstrap(),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,10 +1,8 @@
 /**
- * Stage 4.8 — Native Conversations tab (web CustomerProfile Conversations parity).
+ * Lead Profile Emails tab — LeadEmailLog send/history.
  *
- * Visual + data authority: CustomerProfile tab="conversations"
- *   = Panel "Send email" + LeadEmailForm + LeadEmailLog cards.
- *
- * Canonical records: LeadEmailLog (NOT chat/SMS/visitor messaging).
+ * Canonical chat/SMS lives in LeadConversationTab + ChatsScreen
+ * (Conversation / Message). This component is email-only.
  *
  * Data: GET/POST /api/mobile/v2/leads/[leadId]/conversations
  *        GET /api/mobile/v2/leads/[leadId]/conversations/[emailId] (preview)

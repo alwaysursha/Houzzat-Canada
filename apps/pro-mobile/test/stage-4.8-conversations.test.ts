@@ -279,17 +279,33 @@ async function runStage48Tests() {
     console.log("  -> PASS");
   }
 
-  console.log("[2/14] ConversationsTab mounted (ComingSoon gone)...");
+  console.log("[2/14] Emails tab mounts ConversationsTab (LeadEmailLog)...");
   {
     const src = readFileSync(DETAIL_SCREEN, "utf8");
     assert.ok(src.includes("import { ConversationsTab }"));
     assert.ok(src.includes("<ConversationsTab"));
-    const idx = src.indexOf('{tab === "conversations"');
-    assert.ok(idx > 0);
-    const end = src.indexOf("{tab === \"engagement\"", idx);
-    const block = src.slice(idx, end > idx ? end : idx + 250);
-    assert.equal(block.includes("ComingSoonPanel"), false);
-    assert.ok(block.includes("ConversationsTab"));
+    assert.ok(src.includes('import { LeadConversationTab }'));
+    assert.ok(src.includes("<LeadConversationTab"));
+    // Canonical chat Conversations tab
+    const chatIdx = src.indexOf('{tab === "conversations"');
+    assert.ok(chatIdx > 0);
+    const chatEnd = src.indexOf('{tab === "emails"', chatIdx);
+    const chatBlock = src.slice(
+      chatIdx,
+      chatEnd > chatIdx ? chatEnd : chatIdx + 250,
+    );
+    assert.ok(chatBlock.includes("LeadConversationTab"));
+    assert.equal(chatBlock.includes("ConversationsTab"), false);
+    // Email log stays under Emails — not masquerading as Conversations
+    const emailIdx = src.indexOf('{tab === "emails"');
+    assert.ok(emailIdx > 0);
+    const emailEnd = src.indexOf('{tab === "engagement"', emailIdx);
+    const emailBlock = src.slice(
+      emailIdx,
+      emailEnd > emailIdx ? emailEnd : emailIdx + 250,
+    );
+    assert.equal(emailBlock.includes("ComingSoonPanel"), false);
+    assert.ok(emailBlock.includes("ConversationsTab"));
     const tab = readFileSync(CONV_TAB, "utf8");
     assert.ok(tab.includes("Send email"));
     assert.ok(tab.includes("No emails logged yet."));

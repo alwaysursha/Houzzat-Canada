@@ -4,10 +4,24 @@
  */
 
 import React from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { HouzzatProMark, HouzzatProWordmark } from "../components/BrandMark";
 
-export function SplashScreen() {
+export function SplashScreen({
+  error,
+  onRetry,
+  retrying,
+}: {
+  error?: string | null;
+  onRetry?: () => void;
+  retrying?: boolean;
+} = {}) {
   return (
     <View style={styles.container}>
       <View style={styles.centerContent}>
@@ -18,8 +32,28 @@ export function SplashScreen() {
         <Text style={styles.subtitle}>Real Estate Agent Operating System</Text>
       </View>
       <View style={styles.footer}>
-        <ActivityIndicator size="small" color="#0B5C49" />
-        <Text style={styles.loadingText}>Initializing Native Engine…</Text>
+        {error ? (
+          <>
+            <Text style={styles.errorText}>{error}</Text>
+            {onRetry ? (
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={onRetry}
+                disabled={retrying}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.retryBtnText}>
+                  {retrying ? "Retrying…" : "Retry connection"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <ActivityIndicator size="small" color="#0B5C49" />
+            <Text style={styles.loadingText}>Initializing Native Engine…</Text>
+          </>
+        )}
       </View>
     </View>
   );
@@ -53,11 +87,31 @@ const styles = StyleSheet.create({
   footer: {
     alignItems: "center",
     gap: 8,
+    maxWidth: 320,
   },
   loadingText: {
     fontSize: 12,
     fontWeight: "600",
     color: "#0B5C49",
     opacity: 0.75,
+  },
+  errorText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0B5C49",
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  retryBtn: {
+    marginTop: 8,
+    backgroundColor: "#0B5C49",
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryBtnText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
 });

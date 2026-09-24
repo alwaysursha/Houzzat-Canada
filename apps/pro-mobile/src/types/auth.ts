@@ -34,6 +34,7 @@ export interface MobileIdentityChoice {
 
 export type MobileNavigationState =
   | "BOOTING"
+  | "BOOTSTRAP_RETRY"
   | "SIGNED_OUT"
   | "PLATFORM_AUTHENTICATED"
   | "IDENTITY_SELECTION"

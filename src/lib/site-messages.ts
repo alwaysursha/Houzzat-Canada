@@ -14,6 +14,7 @@ export const SITE_MESSAGES = {
     "Verify your email to watch listings and areas.",
   saveAddedToast: "Added to Saved Listings",
   saveRemovedToast: "Removed from Saved Listings",
+  routePlannerAddedToast: "Added to Route Planner",
   routePlannerRemovedToast: "Removed from Route Planner",
   areaWatchedToast: "Area added to your watchlist.",
   areaRemovedToast: "Area removed from your watchlist.",

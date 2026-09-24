@@ -48,7 +48,16 @@ export function RoutePlannerToggleButton({
       return;
     }
     if (!routePlanner) return;
-    const result = await routePlanner.toggleStop(mlsNumber);
+    let result: Awaited<ReturnType<typeof routePlanner.toggleStop>>;
+    try {
+      result = await routePlanner.toggleStop(mlsNumber);
+    } catch {
+      toast({
+        message: SITE_MESSAGES.genericErrorToast,
+        tone: "error",
+      });
+      return;
+    }
     if (!result.ok) {
       if (result.requiresEmailVerification) {
         openClientToolsVerification({
@@ -62,12 +71,18 @@ export function RoutePlannerToggleButton({
       });
       return;
     }
-    if (result.added && buttonRef.current) {
-      const el = buttonRef.current;
-      // Wait for the floating chip to paint (count 0 → 1) before measuring.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => flyRouteToPlanner(el));
+    if (result.added) {
+      toast({
+        message: SITE_MESSAGES.routePlannerAddedToast,
+        tone: "success",
       });
+      if (buttonRef.current) {
+        const el = buttonRef.current;
+        // Fly only when the floating chip exists (not inside listing sheet iframe).
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => flyRouteToPlanner(el));
+        });
+      }
       return;
     }
     toast({

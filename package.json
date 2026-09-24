@@ -273,6 +273,7 @@
     "push-reliability:selftest": "node --import tsx scripts/push-reliability-selftest.ts",
     "houzzat-ios-fcm-register:selftest": "node --import tsx scripts/houzzat-ios-fcm-register-selftest.ts",
     "verify-email:selftest": "node --import tsx scripts/verify-email-auth-selftest.ts",
+    "houzzat-consumer-stabilization:selftest": "node --import tsx scripts/houzzat-consumer-stabilization-selftest.ts",
     "typesense:import": "node --import tsx scripts/typesense-import-listings.ts",
     "typesense:oh-fields": "node --import tsx scripts/typesense-ensure-open-house-fields.ts",
     "typesense:oh-backfill": "node --import tsx scripts/typesense-backfill-open-houses.ts",

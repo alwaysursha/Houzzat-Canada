@@ -36,6 +36,7 @@ import {
   loadLocalRoutePlanner,
   saveLocalRoutePlanner,
 } from "@/lib/route-planner/local";
+import { notifyRoutePlannerChanged } from "@/lib/route-planner/route-planner-sync";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { cn } from "@/lib/utils";
 import { buildRoutePlannerExpertWhatsAppUrl, WHATSAPP_UNAVAILABLE_COPY } from "@/lib/whatsapp";
@@ -441,7 +442,7 @@ export function RoutePlannerClient({
       return;
     }
     setTour(data.tour);
-    window.dispatchEvent(new Event("houzzat:route-planner-changed"));
+    notifyRoutePlannerChanged();
   }
 
   async function onDropReorder(toIndex: number) {

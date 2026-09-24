@@ -16,6 +16,12 @@ import {
   toggleLocalStop,
 } from "@/lib/route-planner/local";
 import { ROUTE_PLANNER_MAX_STOPS } from "@/lib/route-planner/optimize";
+import {
+  isRoutePlannerChangedMessage,
+  isRoutePlannerRevStorageKey,
+  notifyRoutePlannerChanged,
+  ROUTE_PLANNER_CHANGED_EVENT,
+} from "@/lib/route-planner/route-planner-sync";
 import { customerAccessDenialFromBody } from "@/lib/account/customer-access-error";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 
@@ -129,57 +135,77 @@ export function RoutePlannerProvider({
     function onChanged() {
       void refresh();
     }
-    window.addEventListener("houzzat:route-planner-changed", onChanged);
-    return () =>
-      window.removeEventListener("houzzat:route-planner-changed", onChanged);
+    function onStorage(event: StorageEvent) {
+      if (isRoutePlannerRevStorageKey(event.key)) onChanged();
+    }
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      if (!isRoutePlannerChangedMessage(event.data)) return;
+      onChanged();
+    }
+    window.addEventListener(ROUTE_PLANNER_CHANGED_EVENT, onChanged);
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener(ROUTE_PLANNER_CHANGED_EVENT, onChanged);
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("message", onMessage);
+    };
   }, [refresh]);
 
   const toggleStop = useCallback(
     async (mlsNumber: string) => {
-      if (status !== "authenticated") {
-        const result = toggleLocalStop(mlsNumber, ROUTE_PLANNER_MAX_STOPS);
-        if (!result.ok) {
+      try {
+        if (status !== "authenticated") {
+          const result = toggleLocalStop(mlsNumber, ROUTE_PLANNER_MAX_STOPS);
+          if (!result.ok) {
+            return {
+              ok: false,
+              error: `Routes work best under ${ROUTE_PLANNER_MAX_STOPS} homes.`,
+            };
+          }
+          setMlsSet(new Set(result.day.mlsNumbers));
+          return { ok: true, added: result.added };
+        }
+
+        const onTour = mlsSet.has(mlsNumber);
+        const res = await fetch("/api/route-planner/stops", {
+          method: onTour ? "DELETE" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mlsNumber }),
+        });
+        let data: {
+          error?: string;
+          tour?: { stops?: { mlsNumber: string }[] };
+          added?: boolean;
+          requiresEmailVerification?: boolean;
+        } = {};
+        try {
+          data = (await res.json()) as typeof data;
+        } catch {
           return {
             ok: false,
-            error: `Routes work best under ${ROUTE_PLANNER_MAX_STOPS} homes.`,
+            error: "Could not update Route Planner. Please try again.",
           };
         }
-        setMlsSet(new Set(result.day.mlsNumbers));
-        return { ok: true, added: result.added };
-      }
-
-      const onTour = mlsSet.has(mlsNumber);
-      const res = await fetch("/api/route-planner/stops", {
-        method: onTour ? "DELETE" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mlsNumber }),
-      });
-      let data: {
-        error?: string;
-        tour?: { stops?: { mlsNumber: string }[] };
-        added?: boolean;
-        requiresEmailVerification?: boolean;
-      } = {};
-      try {
-        data = (await res.json()) as typeof data;
+        if (!res.ok) {
+          const denial = customerAccessDenialFromBody(res.status, data);
+          return {
+            ok: false,
+            error: data.error ?? "Could not update Route Planner.",
+            requiresEmailVerification:
+              denial.requiresEmailVerification || res.status === 403,
+          };
+        }
+        setMlsSet(new Set((data.tour?.stops ?? []).map((s) => s.mlsNumber)));
+        notifyRoutePlannerChanged();
+        return { ok: true, added: !onTour };
       } catch {
         return {
           ok: false,
           error: "Could not update Route Planner. Please try again.",
         };
       }
-      if (!res.ok) {
-        const denial = customerAccessDenialFromBody(res.status, data);
-        return {
-          ok: false,
-          error: data.error ?? "Could not update Route Planner.",
-          requiresEmailVerification:
-            denial.requiresEmailVerification || res.status === 403,
-        };
-      }
-      setMlsSet(new Set((data.tour?.stops ?? []).map((s) => s.mlsNumber)));
-      window.dispatchEvent(new Event("houzzat:route-planner-changed"));
-      return { ok: true, added: !onTour };
     },
     [status, mlsSet],
   );

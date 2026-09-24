@@ -15,6 +15,7 @@
 import { mobileApiClient } from "../api/client";
 import { clearAllWorkspaceCaches } from "../lib/lead-tab-cache";
 import { clearLeadListCache } from "../lib/lead-list-cache";
+import { clearChatsInboxCache } from "../lib/chats-inbox-cache";
 import { SecureStorage, SECURE_STORAGE_KEYS } from "../storage/secure-storage";
 // Hardware keystore engine is initialized from App entry — not here —
 // so Node selftests can load the controller without transforming react-native.
@@ -261,10 +262,21 @@ export class MobileAuthController {
       const refreshed = await this.refreshAccessToken({ force: true });
       const activeTokens = this.state.tokens;
       if (!refreshed || !activeTokens?.accessToken) {
-        // refreshAccessToken already signed out on AUTH_REQUIRED; otherwise stay signed out cleanly.
-        if (this.state.state !== "SIGNED_OUT") {
-          await this.signOut();
+        // refreshAccessToken already signed out on definitive AUTH_REQUIRED.
+        if (this.state.state === "SIGNED_OUT") return;
+        // Transient refresh failure — keep stored credentials for retry.
+        if (activeTokens?.refreshToken || tokens.refreshToken) {
+          this.updateState({
+            state: "BOOTSTRAP_RETRY",
+            user,
+            tokens: activeTokens ?? tokens,
+            isLoading: false,
+            error:
+              "Couldn't reach HouzzatPRO. Check your connection and try again.",
+          });
+          return;
         }
+        await this.signOut();
         return;
       }
 
@@ -275,7 +287,25 @@ export class MobileAuthController {
       );
 
       if (!wsRes.ok) {
-        await this.signOut();
+        if (
+          wsRes.code === "AUTH_REQUIRED" ||
+          wsRes.code === "INVALID_CREDENTIALS"
+        ) {
+          await this.signOut();
+          return;
+        }
+        // Network / timeout / 5xx / other transient — preserve session.
+        this.updateState({
+          state: "BOOTSTRAP_RETRY",
+          user,
+          tokens: activeTokens,
+          isLoading: false,
+          error:
+            wsRes.code === "TIMEOUT" || wsRes.code === "NETWORK_ERROR"
+              ? "Couldn't reach HouzzatPRO. Check your connection and try again."
+              : wsRes.message ||
+                "Couldn't restore your workspace. Tap retry to try again.",
+        });
         return;
       }
 
@@ -316,8 +346,22 @@ export class MobileAuthController {
         isLoading: false,
       });
     } catch {
+      if (this.state.tokens?.refreshToken) {
+        this.updateState({
+          state: "BOOTSTRAP_RETRY",
+          isLoading: false,
+          error:
+            "Couldn't reach HouzzatPRO. Check your connection and try again.",
+        });
+        return;
+      }
       await this.signOut();
     }
+  }
+
+  /** Retry cold-start restore after BOOTSTRAP_RETRY (keeps stored credentials). */
+  public async retryBootstrap(): Promise<void> {
+    await this.bootstrap();
   }
 
   /**
@@ -807,6 +851,7 @@ export class MobileAuthController {
     // Stage 5.2 — one central clear for all workspace-scoped native caches.
     clearAllWorkspaceCaches(priorWs);
     clearLeadListCache(priorWs);
+    clearChatsInboxCache(priorWs);
     this.updateState({
       state: "WORKSPACE_SELECTION",
       activeMembership: null,
@@ -865,6 +910,7 @@ export class MobileAuthController {
       await SecureStorage.clear();
       clearAllWorkspaceCaches();
       clearLeadListCache();
+      clearChatsInboxCache();
       this.updateState({
         state: "SIGNED_OUT",
         user: null,

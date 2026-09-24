@@ -42,6 +42,7 @@ import {
 import { LeadAccountVerifyMenu } from "../components/LeadAccountVerifyMenu";
 import { AppointmentsTab } from "../components/AppointmentsTab";
 import { ConversationsTab } from "../components/ConversationsTab";
+import { LeadConversationTab } from "../components/LeadConversationTab";
 import { TasksRemindersTab } from "../components/TasksRemindersTab";
 import {
   updateCustomerFlagsInListCache,
@@ -117,6 +118,7 @@ type TabId =
   | "reminders"
   | "appointments"
   | "conversations"
+  | "emails"
   | "engagement";
 
 const TABS: Array<{ id: TabId; label: string }> = [
@@ -125,6 +127,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: "reminders", label: "Task & Reminders" },
   { id: "appointments", label: "Appointments" },
   { id: "conversations", label: "Conversations" },
+  { id: "emails", label: "Emails" },
   { id: "engagement", label: "Engagement" },
 ];
 
@@ -742,6 +745,7 @@ export function LeadDetailScreen({
       next === "reminders" ||
       next === "appointments" ||
       next === "conversations" ||
+      next === "emails" ||
       next === "engagement"
     ) {
       requestAnimationFrame(() => {
@@ -2361,6 +2365,13 @@ export function LeadDetailScreen({
               ) : null}
 
               {tab === "conversations" ? (
+                <LeadConversationTab
+                  leadId={leadId}
+                  workspaceId={workspaceId}
+                />
+              ) : null}
+
+              {tab === "emails" ? (
                 <ConversationsTab
                   leadId={leadId}
                   workspaceId={workspaceId}

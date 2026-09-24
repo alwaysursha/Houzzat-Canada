@@ -11,6 +11,11 @@ export type AndroidBackHandlers = {
   onBack: () => boolean;
   /** True when already at the app "home" surface (exit candidate). */
   isAtRoot: () => boolean;
+  /**
+   * When false, this shell does not subscribe (e.g. CommandCentre while
+   * AgentShell is mounted in Agent Mode — avoid competing handlers).
+   */
+  enabled?: boolean;
 };
 
 const EXIT_WINDOW_MS = 2200;
@@ -19,9 +24,10 @@ export function useAndroidHardwareBack(handlers: AndroidBackHandlers) {
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
   const lastRootBackAt = useRef(0);
+  const enabled = handlers.enabled !== false;
 
   useEffect(() => {
-    if (Platform.OS !== "android") return;
+    if (Platform.OS !== "android" || !enabled) return;
 
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (runAndroidBackStack()) {
@@ -53,5 +59,5 @@ export function useAndroidHardwareBack(handlers: AndroidBackHandlers) {
     });
 
     return () => sub.remove();
-  }, []);
+  }, [enabled]);
 }

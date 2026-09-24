@@ -43,7 +43,7 @@ export function ListingNotesPanel({
 
   useEffect(() => {
     if (!signedIn) return;
-    if (access.loading || access.needsEmailVerification) return;
+    if (access.needsEmailVerification) return;
 
     // Listing detail: note body arrives via account-chrome (one request).
     if (chrome.active) {
@@ -54,6 +54,8 @@ export function ListingNotesPanel({
     }
 
     // Other surfaces without the provider still load notes directly.
+    // Wait for access only when we need the notes API (auth-gated).
+    if (access.loading) return;
     let cancelled = false;
     void (async () => {
       const res = await fetch(
@@ -166,24 +168,8 @@ export function ListingNotesPanel({
     );
   }
 
-  if (signedIn && access.loading) {
-    const loading = (
-      <p className="text-sm text-ink/50">Loading notes…</p>
-    );
-    if (embedded) {
-      return <div className={cn("space-y-3", className)}>{loading}</div>;
-    }
-    return (
-      <ListingSection
-        eyebrow="Private"
-        title="Your notes"
-        className={className}
-      >
-        {loading}
-      </ListingSection>
-    );
-  }
-
+  // Do not withhold the editor on access.loading — chrome/SSR already has the
+  // note body. Access still gates verify UI and save authorization below.
   if (needsEmailVerification) {
     const verify = (
       <EmailVerificationRequired
