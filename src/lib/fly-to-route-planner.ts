@@ -18,9 +18,16 @@ function pulseRoutePlannerTarget(target: HTMLElement) {
 export function flyRouteToPlanner(fromEl: HTMLElement) {
   if (typeof document === "undefined") return;
 
-  const target = document.querySelector(
+  // Prefer the sheet-layer chip when the listing overlay is open (same document
+  // as panel mode, or parent document after iframe sync). Page chip is under
+  // the sheet and must not win querySelector.
+  const sheetTarget = document.querySelector(
+    '[data-houzzat-route-planner-target="sheet"]',
+  ) as HTMLElement | null;
+  const pageTarget = document.querySelector(
     ROUTE_TARGET_SELECTOR,
   ) as HTMLElement | null;
+  const target = sheetTarget ?? pageTarget;
   if (!target) return;
 
   const from = fromEl.getBoundingClientRect();
@@ -47,7 +54,7 @@ export function flyRouteToPlanner(fromEl: HTMLElement) {
     top: `${startY}px`,
     width: `${size}px`,
     height: `${size}px`,
-    zIndex: "200",
+    zIndex: "220",
     pointerEvents: "none",
     color: "var(--canopy, #0f6b4c)",
     filter: "drop-shadow(0 4px 10px rgba(15, 107, 76, 0.4))",

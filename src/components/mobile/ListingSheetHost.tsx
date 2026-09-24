@@ -28,6 +28,7 @@ import {
   ListingSheetChrome,
   listingSheetChromeHeightVar,
 } from "@/components/mobile/ListingSheetChrome";
+import { RoutePlannerFloatingChip } from "@/components/route-planner/RoutePlannerFloatingChip";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 
 type PanelComponent = ComponentType<{ href: string }>;
@@ -293,6 +294,13 @@ export function ListingSheetHost() {
           className="min-h-0 w-full flex-1 border-0 bg-mist"
         />
       )}
+      {/*
+        Parent page chip is z-60 under this sheet (z-200). iframe cannot host
+        that chip (MarketingChromeGate). Mount a sheet-layer chip here so
+        postMessage/localStorage sync updates stay visible while the sheet
+        stays open — no extreme cross-document z-index hacks.
+      */}
+      <RoutePlannerFloatingChip layer="sheet" />
     </div>
   );
 }

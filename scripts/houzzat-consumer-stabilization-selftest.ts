@@ -142,6 +142,25 @@ function testAddToRouteFeedbackAndSheetSync() {
   assert.match(provider, /isRoutePlannerChangedMessage/);
   assert.match(provider, /addEventListener\(["']message["']/);
   assert.match(provider, /try \{/);
+
+  // Listing sheet (z-200) covers page chip (z-60); sheet hosts its own chip.
+  const host = read("src/components/mobile/ListingSheetHost.tsx");
+  assert.match(host, /z-\[200\]/);
+  assert.match(host, /RoutePlannerFloatingChip/);
+  assert.match(host, /layer=["']sheet["']/);
+
+  const chip = read("src/components/route-planner/RoutePlannerFloatingChip.tsx");
+  assert.match(chip, /layer\s*=\s*["']page["']/);
+  assert.match(chip, /z-\[210\]/);
+  assert.match(chip, /data-houzzat-route-planner-target/);
+
+  const fly = read("src/lib/fly-to-route-planner.ts");
+  assert.match(fly, /data-houzzat-route-planner-target=["']sheet["']/);
+  assert.match(fly, /sheetTarget/);
+
+  const toast = read("src/components/feedback/SiteAlertProvider.tsx");
+  assert.match(toast, /z-\[220\]/);
+
   console.log("[6] Add to Route toast + sheet parent sync... PASS");
 }
 

@@ -155,7 +155,7 @@ function SiteToastStack({
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 z-[115] flex flex-col items-center gap-2 px-4 pb-2 pt-2 bottom-[max(5.25rem,calc(env(safe-area-inset-bottom)+4.5rem))] md:bottom-6 md:pb-0"
+      className="pointer-events-none fixed inset-x-0 z-[220] flex flex-col items-center gap-2 px-4 pb-2 pt-2 bottom-[max(5.25rem,calc(env(safe-area-inset-bottom)+4.5rem))] md:bottom-6 md:pb-0"
       aria-live="polite"
     >
       {toasts.map((item) => (
