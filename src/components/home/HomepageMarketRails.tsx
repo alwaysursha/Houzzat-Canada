@@ -4,12 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { HomeListingRail } from "@/components/home/HomeListingRail";
 import { HomeOpenHousesRail } from "@/components/home/HomeOpenHousesRail";
 import { HomeSoldRail } from "@/components/home/HomeSoldRail";
+import { EMAIL_VERIFIED_EVENT } from "@/lib/auth/verification-success-signal";
 import {
   citiesQueryParam,
   resolveRegionFromCity,
   resolveRegionFromCoords,
   type MarketRegion,
 } from "@/lib/geo/regions";
+import { homeRailsClientFetchInit } from "@/lib/listings/home-rails-access";
 import type { HomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import {
@@ -98,14 +100,28 @@ export function HomepageMarketRails({
   const [sold, setSold] = useState<ListingCardData[]>([]);
   const [forLease, setForLease] = useState<ListingCardData[]>([]);
   const [commercial, setCommercial] = useState<ListingCardData[]>([]);
+  /** Bumps on EMAIL_VERIFIED_EVENT so rails refetch even if isClient was already true (grace). */
+  const [accessEpoch, setAccessEpoch] = useState(0);
   const regionIdRef = useRef(region.id);
   regionIdRef.current = region.id;
+  const isClientRef = useRef(isClient);
+  isClientRef.current = isClient;
 
   const personalizedCities = personalizationCities(personalization);
   const personalizationKey = JSON.stringify({
     cities: personalizedCities,
     ...personalizationQuery(personalization),
   });
+
+  useEffect(() => {
+    function onEmailVerified() {
+      setAccessEpoch((n) => n + 1);
+    }
+    window.addEventListener(EMAIL_VERIFIED_EVENT, onEmailVerified);
+    return () => {
+      window.removeEventListener(EMAIL_VERIFIED_EVENT, onEmailVerified);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,11 +157,13 @@ export function HomepageMarketRails({
         cityOverride?.length ? cityOverride : nextRegion.cities,
       );
       const extras = personalizationQuery(personalization);
+      const clientAccess = isClientRef.current;
 
       try {
-        const res = await fetch(homeRailsUrl(cities, extras), {
-          cache: "default",
-        });
+        const res = await fetch(
+          homeRailsUrl(cities, extras),
+          homeRailsClientFetchInit(clientAccess),
+        );
         if (!res.ok) throw new Error(`home-rails ${res.status}`);
         const data = (await res.json()) as HomeRailsPayload;
         if (cancelled || thisRequest !== requestId) return;
@@ -234,18 +252,21 @@ export function HomepageMarketRails({
     window.addEventListener(HOME_GEO_EVENT, onGeo);
     // Defer market fetch slightly so the hero paints first — still starts
     // quickly via idle timeout so the finished page is not slower overall.
+    // Access-change refetches (isClient / email verified) skip the first-paint
+    // delay so sold prices update promptly after login/verification.
+    const deferMs = loadedRef.current || isClient || accessEpoch > 0 ? 0 : 900;
     const cancelSchedule = scheduleAfterFirstPaint(
       () => {
         if (!cancelled) void load();
       },
-      { timeoutMs: 900 },
+      { timeoutMs: deferMs },
     );
     return () => {
       cancelled = true;
       cancelSchedule();
       window.removeEventListener(HOME_GEO_EVENT, onGeo);
     };
-  }, [personalizationKey, vowOnlyGuest]);
+  }, [personalizationKey, vowOnlyGuest, isClient, accessEpoch]);
 
   const citiesParam = citiesQueryParam(
     overrideCities?.length ? overrideCities : region.cities,

@@ -3,8 +3,12 @@
  */
 
 import { useEffect, useRef } from "react";
-import { BackHandler, Platform, ToastAndroid } from "react-native";
+import { Platform, ToastAndroid } from "react-native";
 import { runAndroidBackStack } from "../lib/android-back-stack";
+import {
+  addAndroidHardwareBackListener,
+  androidHardwareBackExitApp,
+} from "../lib/android-hardware-back";
 
 export type AndroidBackHandlers = {
   /** Highest priority first. Return true if the back press was handled. */
@@ -29,7 +33,7 @@ export function useAndroidHardwareBack(handlers: AndroidBackHandlers) {
   useEffect(() => {
     if (Platform.OS !== "android" || !enabled) return;
 
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+    const sub = addAndroidHardwareBackListener(() => {
       if (runAndroidBackStack()) {
         lastRootBackAt.current = 0;
         return true;
@@ -49,14 +53,14 @@ export function useAndroidHardwareBack(handlers: AndroidBackHandlers) {
       const now = Date.now();
       if (now - lastRootBackAt.current < EXIT_WINDOW_MS) {
         lastRootBackAt.current = 0;
-        BackHandler.exitApp();
+        androidHardwareBackExitApp();
         return true;
       }
 
       lastRootBackAt.current = now;
       ToastAndroid.show("Press back again to exit", ToastAndroid.SHORT);
       return true;
-    });
+    }, "agent-shell");
 
     return () => sub.remove();
   }, [enabled]);

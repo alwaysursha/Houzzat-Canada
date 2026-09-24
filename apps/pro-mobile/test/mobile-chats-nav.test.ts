@@ -45,12 +45,20 @@ function main() {
   const agent = readApp("src/screens/AgentShell.tsx");
   assert.ok(agent.includes("ChatsScreen"));
   assert.ok(agent.includes('selectTab("chats"'));
+  assert.ok(agent.includes("chatsThreadOpen"));
+  assert.ok(agent.includes("onThreadOpenChange={setChatsThreadOpen}"));
   const chatsTabStart = agent.indexOf('activeTab === "chats"');
   const chatsTabEnd = agent.indexOf('activeTab === "calendar"', chatsTabStart);
   assert.ok(chatsTabStart >= 0 && chatsTabEnd > chatsTabStart);
   const chatsTabBlock = agent.slice(chatsTabStart, chatsTabEnd);
   assert.ok(chatsTabBlock.includes("ChatsScreen"));
   assert.equal(chatsTabBlock.includes("CommunicationsScreen"), false);
+
+  console.log("[3b] Chats thread direct hardwareBackPress registration...");
+  const chats = readApp("src/screens/ChatsScreen.tsx");
+  assert.ok(chats.includes("addAndroidHardwareBackListener"));
+  assert.ok(chats.includes('"chats-thread"'));
+  assert.ok(chats.includes("threadCloseRef"));
 
   console.log("[4] Agent nav labels locked (no Tasks on bottom)...");
   assert.deepEqual([...AGENT_BOTTOM_NAV_LABELS], [

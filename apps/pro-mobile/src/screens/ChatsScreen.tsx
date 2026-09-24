@@ -46,6 +46,7 @@ import {
   type ChatsRequestDiagnostic,
 } from "../lib/chats-diagnostics";
 import { pushAndroidBackHandler } from "../lib/android-back-stack";
+import { addAndroidHardwareBackListener } from "../lib/android-hardware-back";
 import { useAuth } from "../state/AuthContext";
 import { mobileAuthController } from "../state/auth-controller";
 
@@ -53,23 +54,65 @@ type Filter = "all" | "unread";
 
 type ChatsScreenProps = {
   onOpenLead?: (leadId: string) => void;
+  /** Notify AgentShell when a conversation thread is open (hardware-back fallback). */
+  onThreadOpenChange?: (open: boolean) => void;
+  /** Shell can invoke the same close-thread path as green Back. */
+  threadCloseRef?: React.MutableRefObject<(() => void) | null>;
 };
 
-export function ChatsScreen({ onOpenLead }: ChatsScreenProps) {
+export function ChatsScreen({
+  onOpenLead,
+  onThreadOpenChange,
+  threadCloseRef,
+}: ChatsScreenProps) {
   const { activeWorkspace } = useAuth();
   const workspaceId = activeWorkspace?.id;
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedTitle, setSelectedTitle] = useState<string | null>(null);
 
+  const closeThread = useCallback(() => {
+    setSelectedLeadId(null);
+    setSelectedTitle(null);
+  }, []);
+
+  useEffect(() => {
+    if (!threadCloseRef) return;
+    threadCloseRef.current = closeThread;
+    return () => {
+      if (threadCloseRef.current === closeThread) {
+        threadCloseRef.current = null;
+      }
+    };
+  }, [threadCloseRef, closeThread]);
+
+  useEffect(() => {
+    onThreadOpenChange?.(Boolean(selectedLeadId));
+  }, [selectedLeadId, onThreadOpenChange]);
+
+  useEffect(() => {
+    return () => onThreadOpenChange?.(false);
+  }, [onThreadOpenChange]);
+
+  // Direct hardwareBackPress while a thread is open (ViewingsPlanner pattern).
+  // Registered after the shell listener → LIFO wins → one press closes thread only.
+  useEffect(() => {
+    if (Platform.OS !== "android" || !selectedLeadId) return;
+    const sub = addAndroidHardwareBackListener(() => {
+      closeThread();
+      return true;
+    }, "chats-thread");
+    return () => sub.remove();
+  }, [selectedLeadId, closeThread]);
+
+  // Keep overlay stack as secondary path for shell runAndroidBackStack().
   useEffect(() => {
     if (!selectedLeadId) return;
     return pushAndroidBackHandler(() => {
-      setSelectedLeadId(null);
-      setSelectedTitle(null);
+      closeThread();
       return true;
     });
-  }, [selectedLeadId]);
+  }, [selectedLeadId, closeThread]);
 
   if (selectedLeadId) {
     return (
@@ -77,10 +120,7 @@ export function ChatsScreen({ onOpenLead }: ChatsScreenProps) {
         leadId={selectedLeadId}
         title={selectedTitle ?? "Chat"}
         workspaceId={workspaceId}
-        onBack={() => {
-          setSelectedLeadId(null);
-          setSelectedTitle(null);
-        }}
+        onBack={closeThread}
         onOpenLead={onOpenLead}
       />
     );

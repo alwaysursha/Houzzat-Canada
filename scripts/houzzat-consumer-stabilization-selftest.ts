@@ -14,6 +14,11 @@ import {
   ROUTE_PLANNER_CHANGED_EVENT,
   ROUTE_PLANNER_CHANGED_MESSAGE,
 } from "../src/lib/route-planner/route-planner-sync";
+import {
+  homeRailsCacheHeaders,
+  homeRailsClientFetchInit,
+  redactHomeRailsSoldForAccess,
+} from "../src/lib/listings/home-rails-access";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -155,6 +160,78 @@ function testVowAuthorityPreserved() {
   console.log("[7] VOW/access DB authority preserved... PASS");
 }
 
+function testHomepageSoldRailsAccessRefresh() {
+  const sold = [
+    { mlsNumber: "A", soldPrice: 1_250_000 as number | null },
+    { mlsNumber: "B", soldPrice: 890_000 as number | null },
+  ];
+
+  // A — Guest homepage: soldPrice always null
+  const guestSold = redactHomeRailsSoldForAccess(sold, false);
+  assert.deepEqual(
+    guestSold.map((s) => s.soldPrice),
+    [null, null],
+  );
+  assert.equal(sold[0]?.soldPrice, 1_250_000, "redaction must not mutate input");
+
+  // B — Verified/authorized client: soldPrice preserved (server hasClientAccess path)
+  const clientSold = redactHomeRailsSoldForAccess(sold, true);
+  assert.deepEqual(
+    clientSold.map((s) => s.soldPrice),
+    [1_250_000, 890_000],
+  );
+
+  // E — Authenticated response private / non-cacheable
+  const clientHeaders = homeRailsCacheHeaders(true);
+  assert.equal(clientHeaders["Cache-Control"], "private, no-store");
+  assert.equal(clientHeaders.Vary, "Cookie");
+  assert.match(clientHeaders["Cache-Control"]!, /no-store/);
+  assert.doesNotMatch(clientHeaders["Cache-Control"]!, /public/);
+
+  // F — Guest/public cache never carries authenticated sold payload policy
+  const guestHeaders = homeRailsCacheHeaders(false);
+  assert.match(guestHeaders["Cache-Control"]!, /public/);
+  assert.equal(guestHeaders.Vary, "Cookie");
+  assert.notEqual(
+    guestHeaders["Cache-Control"],
+    clientHeaders["Cache-Control"],
+  );
+
+  const guestFetch = homeRailsClientFetchInit(false);
+  assert.equal(guestFetch.credentials, "same-origin");
+  assert.equal(guestFetch.cache, "default");
+
+  const clientFetch = homeRailsClientFetchInit(true);
+  assert.equal(clientFetch.credentials, "same-origin");
+  assert.equal(clientFetch.cache, "no-store");
+
+  // C/D — Client refresh wiring: isClient + EMAIL_VERIFIED_EVENT
+  const rails = read("src/components/home/HomepageMarketRails.tsx");
+  assert.match(rails, /homeRailsClientFetchInit/);
+  assert.match(rails, /EMAIL_VERIFIED_EVENT/);
+  assert.match(rails, /accessEpoch/);
+  assert.match(rails, /isClient/);
+  assert.match(
+    rails,
+    /\[personalizationKey,\s*vowOnlyGuest,\s*isClient,\s*accessEpoch\]/,
+  );
+  assert.match(rails, /setAccessEpoch/);
+
+  const route = read("src/app/api/listings/home-rails/route.ts");
+  assert.match(route, /redactHomeRailsSoldForAccess/);
+  assert.match(route, /homeRailsCacheHeaders/);
+  assert.match(route, /hasClientAccess/);
+  assert.doesNotMatch(
+    route,
+    /"Cache-Control":\s*isClient/,
+    "route must use homeRailsCacheHeaders helper",
+  );
+
+  console.log(
+    "[8] homepage sold rails guest redaction + client refresh/cache... PASS",
+  );
+}
+
 function main() {
   testHomepagePersonalizationReload();
   testClientAccessEmailVerified();
@@ -163,6 +240,7 @@ function main() {
   testShareTokenEncodingUnchanged();
   testAddToRouteFeedbackAndSheetSync();
   testVowAuthorityPreserved();
+  testHomepageSoldRailsAccessRefresh();
   console.log("\nhouzzat-consumer-stabilization-selftest: ALL PASS");
 }
 

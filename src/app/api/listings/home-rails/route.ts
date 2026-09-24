@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import type { PropertyType } from "@prisma/client";
 import { auth } from "@/lib/auth";
+import {
+  homeRailsCacheHeaders,
+  redactHomeRailsSoldForAccess,
+} from "@/lib/listings/home-rails-access";
 import { getListingProvider } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
@@ -157,9 +161,7 @@ export async function GET(request: Request) {
   ]);
 
   const isClient = hasClientAccess(user);
-  const sold = isClient
-    ? rails.sold
-    : rails.sold.map((item) => ({ ...item, soldPrice: null }));
+  const sold = redactHomeRailsSoldForAccess(rails.sold, isClient);
 
   return NextResponse.json(
     {
@@ -170,11 +172,7 @@ export async function GET(request: Request) {
       commercial: rails.commercial,
     },
     {
-      headers: {
-        "Cache-Control": isClient
-          ? "private, no-store"
-          : "public, s-maxage=45, stale-while-revalidate=120",
-      },
+      headers: homeRailsCacheHeaders(isClient),
     },
   );
 }

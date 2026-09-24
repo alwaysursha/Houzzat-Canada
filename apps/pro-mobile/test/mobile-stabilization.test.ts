@@ -23,6 +23,14 @@ import {
   pushAndroidBackHandler,
   runAndroidBackStack,
 } from "../src/lib/android-back-stack";
+import {
+  addAndroidHardwareBackListener,
+  getLastAndroidHardwareBackEvent,
+  __emitHardwareBackPress,
+  __getAndroidHardwareBackExitAppCount,
+  __getAndroidHardwareBackListenerCount,
+  __resetAndroidHardwareBackForTests,
+} from "../src/lib/android-hardware-back";
 import { MobileAuthController } from "../src/state/auth-controller";
 import { SecureStorage, SECURE_STORAGE_KEYS } from "../src/storage/secure-storage";
 
@@ -45,26 +53,202 @@ function makeFakeJwt(claims: Record<string, unknown>): string {
   return `${header}.${payload}.sig`;
 }
 
+/** Mirrors AgentShell + ChatsScreen registration order for hardwareBackPress. */
+function simulateChatsThreadHardwareBackHarness(opts: {
+  threadOpen: boolean;
+  activeTab: "chats" | "launchpad";
+  registerDirectThreadListener: boolean;
+  registerStackHandler: boolean;
+}) {
+  __resetAndroidHardwareBackForTests();
+
+  let selectedLeadId: string | null = opts.threadOpen ? "lead_thread" : null;
+  let selectedTitle: string | null = opts.threadOpen ? "Test Lead" : null;
+  let chatsThreadOpen = opts.threadOpen;
+  let activeTab: "chats" | "launchpad" = opts.activeTab;
+  let exitViaShellDoubleBack = 0;
+  let lastRootBackAt = 0;
+  const EXIT_WINDOW_MS = 2200;
+
+  const closeThread = () => {
+    selectedLeadId = null;
+    selectedTitle = null;
+    chatsThreadOpen = false;
+  };
+
+  // Shell mounts first (earlier in LIFO list).
+  const shellSub = addAndroidHardwareBackListener(() => {
+    if (runAndroidBackStack()) {
+      lastRootBackAt = 0;
+      return true;
+    }
+    if (chatsThreadOpen) {
+      closeThread();
+      lastRootBackAt = 0;
+      return true;
+    }
+    if (activeTab !== "launchpad") {
+      activeTab = "launchpad";
+      lastRootBackAt = 0;
+      return true;
+    }
+    const now = Date.now();
+    if (now - lastRootBackAt < EXIT_WINDOW_MS) {
+      lastRootBackAt = 0;
+      exitViaShellDoubleBack += 1;
+      return true;
+    }
+    lastRootBackAt = now;
+    return true;
+  }, "agent-shell");
+
+  let stackPop: (() => void) | null = null;
+  if (opts.registerStackHandler && selectedLeadId) {
+    stackPop = pushAndroidBackHandler(() => {
+      closeThread();
+      return true;
+    });
+  }
+
+  let threadSub: { remove: () => void } | null = null;
+  if (opts.registerDirectThreadListener && selectedLeadId) {
+    // Registered after shell → LIFO: thread wins on one press.
+    threadSub = addAndroidHardwareBackListener(() => {
+      closeThread();
+      return true;
+    }, "chats-thread");
+  }
+
+  return {
+    get state() {
+      return {
+        selectedLeadId,
+        selectedTitle,
+        chatsThreadOpen,
+        activeTab,
+        exitViaShellDoubleBack,
+        exitAppCount: __getAndroidHardwareBackExitAppCount(),
+        listenerCount: __getAndroidHardwareBackListenerCount(),
+      };
+    },
+    emit: () => __emitHardwareBackPress(),
+    closeThreadAndRemoveListeners: () => {
+      closeThread();
+      threadSub?.remove();
+      threadSub = null;
+      stackPop?.();
+      stackPop = null;
+    },
+    dispose: () => {
+      threadSub?.remove();
+      stackPop?.();
+      shellSub.remove();
+      __resetAndroidHardwareBackForTests();
+    },
+  };
+}
+
 async function main() {
   console.log("=================================================================");
   console.log("MOBILE STABILIZATION TESTS");
   console.log("=================================================================\n");
 
-  // A — Chat thread → hardware Back → Chats inbox
-  console.log("[A] Chat thread registers Android back → inbox...");
+  // A — Chat thread → emit hardwareBackPress → Chats inbox (not exit / not launchpad)
+  console.log("[A] hardwareBackPress with open chat thread closes thread only...");
   {
     const chats = readApp("src/screens/ChatsScreen.tsx");
+    assert.ok(chats.includes("addAndroidHardwareBackListener"));
+    assert.ok(chats.includes('"chats-thread"'));
     assert.ok(chats.includes("pushAndroidBackHandler"));
-    assert.ok(chats.includes("setSelectedLeadId(null)"));
-    const stackOrder: string[] = [];
-    const pop = pushAndroidBackHandler(() => {
-      stackOrder.push("thread");
-      return true;
+    assert.ok(chats.includes("onThreadOpenChange"));
+    assert.ok(chats.includes("threadCloseRef"));
+    assert.ok(chats.includes("closeThread"));
+
+    const harness = simulateChatsThreadHardwareBackHarness({
+      threadOpen: true,
+      activeTab: "chats",
+      registerDirectThreadListener: true,
+      registerStackHandler: true,
     });
-    assert.equal(runAndroidBackStack(), true);
-    assert.deepEqual(stackOrder, ["thread"]);
-    pop();
-    assert.equal(runAndroidBackStack(), false);
+    try {
+      assert.equal(harness.state.selectedLeadId, "lead_thread");
+      assert.ok(harness.state.listenerCount >= 2);
+
+      const consumed = harness.emit();
+      assert.equal(consumed, true);
+      assert.equal(harness.state.selectedLeadId, null);
+      assert.equal(harness.state.selectedTitle, null);
+      assert.equal(harness.state.chatsThreadOpen, false);
+      assert.equal(harness.state.activeTab, "chats");
+      assert.equal(harness.state.exitAppCount, 0);
+      assert.equal(harness.state.exitViaShellDoubleBack, 0);
+
+      const last = getLastAndroidHardwareBackEvent();
+      assert.ok(last);
+      assert.equal(last?.source, "chats-thread");
+      assert.equal(last?.consumed, true);
+      assert.equal(last?.trigger, "test-emit");
+
+      harness.closeThreadAndRemoveListeners();
+      assert.equal(
+        harness.state.listenerCount,
+        1,
+        "only shell listener remains after thread close",
+      );
+    } finally {
+      harness.dispose();
+    }
+    console.log("  -> PASS");
+  }
+
+  // A2 — Shell fallback: no direct listener, stack empty, chatsThreadOpen → inbox
+  console.log("[A2] Shell chatsThreadOpen fallback closes thread (no launchpad)...");
+  {
+    const agent = readApp("src/screens/AgentShell.tsx");
+    assert.ok(agent.includes("chatsThreadOpen"));
+    assert.ok(agent.includes("chatsThreadCloseRef"));
+    assert.ok(agent.includes("onThreadOpenChange={setChatsThreadOpen}"));
+
+    const harness = simulateChatsThreadHardwareBackHarness({
+      threadOpen: true,
+      activeTab: "chats",
+      registerDirectThreadListener: false,
+      registerStackHandler: false,
+    });
+    try {
+      const consumed = harness.emit();
+      assert.equal(consumed, true);
+      assert.equal(harness.state.selectedLeadId, null);
+      assert.equal(harness.state.activeTab, "chats");
+      assert.equal(harness.state.exitAppCount, 0);
+      const last = getLastAndroidHardwareBackEvent();
+      assert.equal(last?.source, "agent-shell");
+    } finally {
+      harness.dispose();
+    }
+    console.log("  -> PASS");
+  }
+
+  // A3 — One press must not also switch Launchpad when direct listener wins
+  console.log("[A3] Direct chats-thread listener prevents shell tab switch...");
+  {
+    const harness = simulateChatsThreadHardwareBackHarness({
+      threadOpen: true,
+      activeTab: "chats",
+      registerDirectThreadListener: true,
+      registerStackHandler: true,
+    });
+    try {
+      harness.emit();
+      assert.equal(harness.state.activeTab, "chats");
+      assert.equal(harness.state.selectedLeadId, null);
+      harness.closeThreadAndRemoveListeners();
+      harness.emit();
+      assert.equal(harness.state.activeTab, "launchpad");
+      assert.equal(harness.state.exitAppCount, 0);
+    } finally {
+      harness.dispose();
+    }
     console.log("  -> PASS");
   }
 
@@ -85,10 +269,48 @@ async function main() {
   {
     const hook = readApp("src/hooks/useAndroidHardwareBack.ts");
     assert.ok(hook.includes("Press back again to exit"));
-    assert.ok(hook.includes("BackHandler.exitApp"));
+    assert.ok(hook.includes("androidHardwareBackExitApp"));
+    assert.ok(hook.includes("addAndroidHardwareBackListener"));
     assert.ok(hook.includes("enabled"));
     const cc = readApp("src/screens/CommandCentreShell.tsx");
     assert.ok(cc.includes("enabled: !inAgentMode"));
+
+    const harness = simulateChatsThreadHardwareBackHarness({
+      threadOpen: false,
+      activeTab: "launchpad",
+      registerDirectThreadListener: false,
+      registerStackHandler: false,
+    });
+    try {
+      harness.emit();
+      assert.equal(harness.state.exitViaShellDoubleBack, 0);
+      harness.emit();
+      assert.equal(harness.state.exitViaShellDoubleBack, 1);
+      assert.equal(harness.state.activeTab, "launchpad");
+    } finally {
+      harness.dispose();
+    }
+    console.log("  -> PASS");
+  }
+
+  // C2 — Chats inbox (no thread) → shell navigates to launchpad, no exit
+  console.log("[C2] Chats inbox hardwareBackPress → launchpad, no exit...");
+  {
+    const harness = simulateChatsThreadHardwareBackHarness({
+      threadOpen: false,
+      activeTab: "chats",
+      registerDirectThreadListener: false,
+      registerStackHandler: false,
+    });
+    try {
+      const consumed = harness.emit();
+      assert.equal(consumed, true);
+      assert.equal(harness.state.activeTab, "launchpad");
+      assert.equal(harness.state.exitAppCount, 0);
+      assert.equal(harness.state.exitViaShellDoubleBack, 0);
+    } finally {
+      harness.dispose();
+    }
     console.log("  -> PASS");
   }
 
@@ -140,7 +362,6 @@ async function main() {
     assert.ok(leadChat.includes("`/leads/${encodeURIComponent(leadId)}/conversation"));
     assert.ok(leadChat.includes("/conversation/messages"));
     assert.ok(leadChat.includes("/conversation/read"));
-    // Must not call the plural email-log path as a literal fetch target.
     assert.equal(
       /\/leads\/\$\{[^}]+\}\/conversations/.test(leadChat) ||
         leadChat.includes('"/conversations"') ||
@@ -181,7 +402,6 @@ async function main() {
 
     const originalFetch = globalThis.fetch;
     try {
-      // G — network failure on refresh preserves credentials
       await SecureStorage.clear();
       await SecureStorage.setItem(
         SECURE_STORAGE_KEYS.AUTH_TOKENS,
@@ -208,7 +428,6 @@ async function main() {
         true,
       );
 
-      // H — timeout preserves session
       await SecureStorage.setItem(
         SECURE_STORAGE_KEYS.AUTH_TOKENS,
         JSON.stringify({
@@ -234,7 +453,6 @@ async function main() {
       assert.equal(authH.getSnapshot().state, "BOOTSTRAP_RETRY");
       assert.ok(authH.getSnapshot().tokens?.refreshToken);
 
-      // I — definitive invalid refresh signs out
       await SecureStorage.setItem(
         SECURE_STORAGE_KEYS.AUTH_TOKENS,
         JSON.stringify({
@@ -374,6 +592,12 @@ async function main() {
     const msg = formatChatsLoadError(diag);
     assert.equal(msg.includes(jwt), false);
     assert.equal(msg.includes("Bearer"), false);
+
+    const backDiag = readApp("src/lib/android-hardware-back.ts");
+    assert.ok(backDiag.includes("getLastAndroidHardwareBackEvent"));
+    assert.ok(backDiag.includes("[AndroidBack]"));
+    assert.equal(backDiag.includes("accessToken"), false);
+    assert.equal(backDiag.includes("refreshToken"), false);
     console.log("  -> PASS");
   }
 

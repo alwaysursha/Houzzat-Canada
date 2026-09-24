@@ -1,3 +1,6 @@
+/** Metro / React Native injects this global. */
+declare const __DEV__: boolean;
+
 declare module "react-native" {
   import * as React from "react";
 

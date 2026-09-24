@@ -11,7 +11,7 @@
  * - Leads screen with real Stage 4.3A workspace data, search, and status filters
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Platform,
   SafeAreaView,
@@ -95,6 +95,8 @@ export function AgentShell({
     null,
   );
   const [activityFeedOpen, setActivityFeedOpen] = useState(false);
+  const [chatsThreadOpen, setChatsThreadOpen] = useState(false);
+  const chatsThreadCloseRef = useRef<(() => void) | null>(null);
 
   const hasMultipleWorkspaces = memberships.length > 1;
   const brandDisplayName = activeWorkspace?.displayName || "HouzzatPRO";
@@ -194,6 +196,12 @@ export function AgentShell({
         setActivityFeedOpen(false);
         return true;
       }
+      // Chats conversation thread — same close as green Back (fallback if
+      // chats-thread listener / overlay stack did not run).
+      if (chatsThreadOpen) {
+        chatsThreadCloseRef.current?.();
+        return true;
+      }
       if (selectedLeadId) {
         setSelectedLeadId(null);
         setLeadNavIds([]);
@@ -225,6 +233,7 @@ export function AgentShell({
       !viewingsPlanner &&
       !viewingsLeadPicker &&
       !activityFeedOpen &&
+      !chatsThreadOpen &&
       !selectedLeadId &&
       !drawerOpen &&
       !activeUtility &&
@@ -355,6 +364,8 @@ export function AgentShell({
             pointerEvents={activeTab === "chats" ? "auto" : "none"}
           >
             <ChatsScreen
+              onThreadOpenChange={setChatsThreadOpen}
+              threadCloseRef={chatsThreadCloseRef}
               onOpenLead={(leadId) => {
                 setLeadNavIds([leadId]);
                 setSelectedLeadId(leadId);
