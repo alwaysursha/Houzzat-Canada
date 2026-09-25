@@ -11,6 +11,7 @@ import { authorizeMobileLeadAccess } from "@/lib/mobile/v2/lead-access";
 import {
   buildProTourResponse,
   getOrCreateProDraftTour,
+  removeProTourStops,
   reorderProTourStops,
   updateProStopTimes,
   updateProTourFields,
@@ -40,6 +41,7 @@ const patchSchema = z.object({
       }),
     )
     .optional(),
+  removeStopIds: z.array(z.string().min(1)).max(10).optional(),
 });
 
 async function loadLeadCustomer(leadId: string) {
@@ -195,6 +197,18 @@ export async function PATCH(
       );
     }
 
+    if (parsed.data.stopOrder?.length) {
+      await reorderProTourStops(parsed.data.tourId, parsed.data.stopOrder);
+    }
+
+    if (parsed.data.stopTimes?.length) {
+      await updateProStopTimes(parsed.data.tourId, parsed.data.stopTimes);
+    }
+
+    if (parsed.data.removeStopIds?.length) {
+      await removeProTourStops(parsed.data.tourId, parsed.data.removeStopIds);
+    }
+
     await updateProTourFields(parsed.data.tourId, {
       startAddress: parsed.data.startAddress,
       startLat: parsed.data.startLat,
@@ -206,14 +220,6 @@ export async function PATCH(
           ? null
           : undefined,
     });
-
-    if (parsed.data.stopOrder?.length) {
-      await reorderProTourStops(parsed.data.tourId, parsed.data.stopOrder);
-    }
-
-    if (parsed.data.stopTimes?.length) {
-      await updateProStopTimes(parsed.data.tourId, parsed.data.stopTimes);
-    }
 
     const payload = await buildProTourResponse(parsed.data.tourId);
     return NextResponse.json({ ok: true, tour: payload });

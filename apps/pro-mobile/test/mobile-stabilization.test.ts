@@ -207,7 +207,7 @@ async function main() {
     const agent = readApp("src/screens/AgentShell.tsx");
     assert.ok(agent.includes("chatsThreadOpen"));
     assert.ok(agent.includes("chatsThreadCloseRef"));
-    assert.ok(agent.includes("onThreadOpenChange={setChatsThreadOpen}"));
+    assert.ok(agent.includes("onThreadOpenChange={ctx.setChatsThreadOpen}"));
 
     const harness = simulateChatsThreadHardwareBackHarness({
       threadOpen: true,
@@ -256,7 +256,9 @@ async function main() {
   console.log("[B] Lead detail closed by AgentShell / CommandCentre back...");
   {
     const agent = readApp("src/screens/AgentShell.tsx");
-    assert.ok(agent.includes("if (selectedLeadId)"));
+    assert.ok(agent.includes("popLeadsStackIfPushed()"));
+    assert.ok(agent.includes("leadsStackBackAction"));
+    assert.ok(agent.includes("navigation.goBack()"));
     assert.ok(agent.includes("setSelectedLeadId(null)"));
     const cc = readApp("src/screens/CommandCentreShell.tsx");
     assert.ok(cc.includes("if (selectedLeadId)"));
@@ -318,9 +320,9 @@ async function main() {
   console.log("[D] Visited-tab mount + Launchpad/Chats cache...");
   {
     const agent = readApp("src/screens/AgentShell.tsx");
-    assert.ok(agent.includes("visitedTabs"));
-    assert.ok(agent.includes("tabPaneHidden"));
-    assert.ok(agent.includes('display: "none"'));
+    assert.ok(agent.includes("detachInactiveScreens={false}"));
+    assert.ok(agent.includes("lazy: true"));
+    assert.ok(agent.includes("freezeOnBlur: true"));
     const launch = readApp("src/screens/LaunchpadScreen.tsx");
     assert.ok(launch.includes("FRESH_MS"));
     assert.ok(launch.includes("Skip immediate refetch"));

@@ -5,13 +5,13 @@
  * - Top Navigation Bar in Dark Slate (#1E2A38) with Hamburger Menu, Brand Title,
  *   Activity globe (feed + dialer), and Call New Action
  * - Native Slide-in Drawer with complete previous navigation list
- * - Bottom Navigation Tabs matching original mobile layout (Launchpad, Leads, Tasks, Calendar, More)
+ * - Bottom Navigation Tabs matching original mobile layout (Launchpad, Leads, Chats, Calendar, More)
  * - 0ms instant tab switching and drawer opening (pure React state, no network, no self-closing bug)
  * - Launchpad screen with Quick Modules, Todo status, and Contact Requested cards
  * - Leads screen with real Stage 4.3A workspace data, search, and status filters
  */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   Platform,
   SafeAreaView,
@@ -21,6 +21,23 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  createBottomTabNavigator,
+  type BottomTabBarProps,
+} from "@react-navigation/bottom-tabs";
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import {
+  createNativeStackNavigator,
+  type NativeStackNavigationProp,
+} from "@react-navigation/native-stack";
+import { traceAndroidBack } from "../lib/android-back-trace";
+import { leadsStackBackAction } from "../navigation/leads-stack-back";
+import type {
+  AgentTabParamList,
+  AgentTabRouteName,
+  LeadsStackParamList,
+} from "../navigation/types";
+import { AGENT_BOTTOM_NAV_LABELS } from "../lib/drawer-nav-items";
 import { ActivityFeedSheet } from "../components/ActivityFeedSheet";
 import { HouzzatProWordmark } from "../components/BrandMark";
 import { NativeDrawer, type DrawerItem } from "../components/NativeDrawer";
@@ -64,7 +81,385 @@ type ViewingsPlannerState = {
   leadName?: string;
 } | null;
 
-type VisitedTabs = Partial<Record<AgentTab, boolean>>;
+const TAB_ROUTE: Record<AgentTab, AgentTabRouteName> = {
+  launchpad: "Launchpad",
+  leads: "Leads",
+  chats: "Chats",
+  tasks: "Tasks",
+  calendar: "Calendar",
+  more: "More",
+};
+
+const Tab = createBottomTabNavigator<AgentTabParamList>();
+
+const agentTabNavigationRef: {
+  current: {
+    navigate: (name: AgentTabRouteName, params?: object) => void;
+  } | null;
+} = { current: null };
+
+const leadsStackNavRef: {
+  current: NativeStackNavigationProp<LeadsStackParamList> | null;
+} = { current: null };
+
+function useBindLeadsStackNavigation(): NativeStackNavigationProp<LeadsStackParamList> {
+  const navigation = useNavigation<NativeStackNavigationProp<LeadsStackParamList>>();
+  // Keep the latest stack navigation object. Do not clear it when a screen blurs;
+  // Lead Profile must still be able to pop after the list loses focus.
+  useEffect(() => {
+    leadsStackNavRef.current = navigation;
+  }, [navigation]);
+  return navigation;
+}
+
+function leadsBackSnapshot(tab: string) {
+  const navigation = leadsStackNavRef.current;
+  if (!navigation) return { tab, leadsRef: "null" as const };
+  try {
+    const state = navigation.getState();
+    return {
+      tab,
+      leadsRef: "set" as const,
+      stackKey: state?.key ?? null,
+      stackIndex: state?.index ?? null,
+      stackRoutes: state?.routes?.map((route) => route.name) ?? null,
+    };
+  } catch (error) {
+    return { tab, leadsRef: "set" as const, getStateError: String(error) };
+  }
+}
+
+function popLeadsStackIfPushed(): boolean {
+  const navigation = leadsStackNavRef.current;
+  if (!navigation) return false;
+  const action = leadsStackBackAction(navigation.getState());
+  if (!action) return false;
+  navigation.dispatch(action);
+  return true;
+}
+
+type AgentTabContextValue = {
+  leadsInitialFilter?: string;
+  selectedLeadId: string | null;
+  activeUtility: ActiveUtility;
+  chatsThreadCloseRef: React.MutableRefObject<(() => void) | null>;
+  userEmail: string;
+  userName: string | null;
+  userRole: string;
+  brandDisplayName: string;
+  workspaceId?: string;
+  workspaceSlug?: string;
+  hasMultipleWorkspaces: boolean;
+  drawerOpen: boolean;
+  onReturnToCommandCentre?: () => void;
+  setChatsThreadOpen: (open: boolean) => void;
+  setSelectedLeadId: (leadId: string | null) => void;
+  setActiveRoute: (route: AgentTabRouteName) => void;
+  openDrawer: () => void;
+  selectPrimaryTab: (route: Exclude<AgentTabRouteName, "Tasks" | "More">) => void;
+  navigateToLeads: (statusFilter?: string) => void;
+  navigateToTasks: () => void;
+  openStatistics: () => void;
+  openLeadOnLeads: (leadId: string, leadIds?: string[]) => void;
+  selectLead: (leadId: string, leadIds: string[]) => void;
+  openLeadFromChat: (leadId: string) => void;
+  planViewings: (id: string, name: string | undefined, mlsNumbers: string[]) => void;
+  closeUtility: () => void;
+  browseProperties: () => void;
+  openUtility: (id: Exclude<MoreUtilityId, "account">) => void;
+  openLeadFromUtility: (leadId: string) => void;
+  openViewingsLeadPicker: (mlsNumbers: string[]) => void;
+  openTeamStatistics: () => void;
+  changeWorkspace: () => void;
+  signOut: () => void;
+};
+
+const AgentTabContext = createContext<AgentTabContextValue | null>(null);
+
+function useAgentTabContext(): AgentTabContextValue {
+  const ctx = useContext(AgentTabContext);
+  if (!ctx) {
+    throw new Error("Agent tab screens must render inside AgentShell");
+  }
+  return ctx;
+}
+
+function LaunchpadTab() {
+  const ctx = useAgentTabContext();
+  return (
+    <LaunchpadScreen
+      onNavigateToLeads={ctx.navigateToLeads}
+      onNavigateToTasks={ctx.navigateToTasks}
+      onNavigateToStatistics={ctx.openStatistics}
+      onOpenLead={(leadId, leadIds) => ctx.openLeadOnLeads(leadId, leadIds)}
+    />
+  );
+}
+
+function LeadsListRoute() {
+  const ctx = useAgentTabContext();
+  const navigation = useBindLeadsStackNavigation();
+  return (
+    <LeadsScreen
+      initialStatusFilter={ctx.leadsInitialFilter}
+      selectedLeadId={ctx.selectedLeadId}
+      onSelectLead={(leadId, leadIds) => {
+        navigation.navigate("LeadProfile", {
+          leadId,
+          leadIds,
+        });
+      }}
+      onPlanViewings={(id, name, mlsNumbers) =>
+        ctx.planViewings(id, name, mlsNumbers ?? [])
+      }
+    />
+  );
+}
+
+function LeadProfileRoute() {
+  const ctx = useAgentTabContext();
+  const navigation = useBindLeadsStackNavigation();
+  const route = useRoute<RouteProp<LeadsStackParamList, "LeadProfile">>();
+  const leadId = route.params.leadId;
+  const leadIds = route.params.leadIds;
+  const setSelectedLeadId = ctx.setSelectedLeadId;
+
+  useFocusEffect(
+    useCallback(() => {
+      setSelectedLeadId(leadId);
+      return () => setSelectedLeadId(null);
+    }, [leadId, setSelectedLeadId]),
+  );
+
+  return (
+    <LeadDetailScreen
+      embeddedInShell
+      leadId={leadId}
+      leadIds={leadIds}
+      onBack={() => navigation.goBack()}
+      onNavigateLead={(id) => navigation.setParams({ leadId: id })}
+      onPlanViewings={(id, name, mlsNumbers) =>
+        ctx.planViewings(id, name, mlsNumbers ?? [])
+      }
+    />
+  );
+}
+
+function LeadsTab() {
+  const Navigator = LeadsStack.Navigator as unknown as React.ComponentType<
+    Record<string, unknown>
+  >;
+  const Screen = LeadsStack.Screen as unknown as React.ComponentType<
+    Record<string, unknown>
+  >;
+  return (
+    <Navigator
+      initialRouteName="LeadsList"
+      screenOptions={{
+        headerShown: false,
+        animation: "slide_from_right",
+        gestureEnabled: true,
+      }}
+    >
+      <Screen name="LeadsList" component={LeadsListRoute} />
+      <Screen name="LeadProfile" component={LeadProfileRoute} />
+    </Navigator>
+  );
+}
+
+const LeadsStack = createNativeStackNavigator<LeadsStackParamList>();
+
+function ChatsTab() {
+  const ctx = useAgentTabContext();
+  return (
+    <ChatsScreen
+      onThreadOpenChange={ctx.setChatsThreadOpen}
+      threadCloseRef={ctx.chatsThreadCloseRef}
+      onOpenLead={ctx.openLeadFromChat}
+    />
+  );
+}
+
+function CalendarTab() {
+  const ctx = useAgentTabContext();
+  return (
+    <GlobalCalendarScreen
+      onOpenLead={(leadId) => ctx.openLeadFromUtility(leadId)}
+    />
+  );
+}
+
+function TasksTab() {
+  const ctx = useAgentTabContext();
+  return (
+    <GlobalTasksScreen
+      onOpenLead={(leadId) => ctx.openLeadFromUtility(leadId)}
+    />
+  );
+}
+
+function MoreTab() {
+  const ctx = useAgentTabContext();
+  if (ctx.activeUtility === "search") {
+    return (
+      <PropertiesSearchScreen
+        onBack={ctx.closeUtility}
+        onPlanViewings={ctx.openViewingsLeadPicker}
+      />
+    );
+  }
+  if (ctx.activeUtility === "shortlist") {
+    return (
+      <ShortlistScreen
+        onBack={ctx.closeUtility}
+        onBrowseProperties={ctx.browseProperties}
+        onPlanViewings={ctx.openViewingsLeadPicker}
+      />
+    );
+  }
+  if (ctx.activeUtility === "inbox") {
+    return (
+      <CommunicationsScreen
+        onBack={ctx.closeUtility}
+        onOpenLead={ctx.openLeadFromUtility}
+      />
+    );
+  }
+  if (ctx.activeUtility === "statistics") {
+    return <StatisticsScreen onBack={ctx.closeUtility} />;
+  }
+  if (ctx.activeUtility === "cma") {
+    return <CmaScreen onBack={ctx.closeUtility} />;
+  }
+  if (ctx.activeUtility === "team") {
+    return (
+      <TeamScreen
+        onBack={ctx.closeUtility}
+        onOpenStatistics={ctx.openTeamStatistics}
+      />
+    );
+  }
+  if (ctx.activeUtility === "notifications") {
+    return <NotificationPreferencesScreen onBack={ctx.closeUtility} />;
+  }
+  if (ctx.activeUtility) {
+    return (
+      <MoreUtilityScreen utilityId={ctx.activeUtility} onBack={ctx.closeUtility} />
+    );
+  }
+  return (
+    <MoreHubScreen
+      userEmail={ctx.userEmail}
+      userName={ctx.userName}
+      userRole={ctx.userRole}
+      brandDisplayName={ctx.brandDisplayName}
+      workspaceId={ctx.workspaceId}
+      workspaceSlug={ctx.workspaceSlug}
+      hasMultipleWorkspaces={ctx.hasMultipleWorkspaces}
+      onChangeWorkspace={ctx.changeWorkspace}
+      onSignOut={ctx.signOut}
+      onReturnToCommandCentre={ctx.onReturnToCommandCentre}
+      onOpenUtility={ctx.openUtility}
+    />
+  );
+}
+
+const TAB_ICONS: Record<(typeof AGENT_BOTTOM_NAV_LABELS)[number], string> = {
+  Launchpad: "⌂",
+  Leads: "👥",
+  Chats: "💬",
+  Calendar: "📅",
+  More: "☰",
+};
+
+function AgentBottomTabBar({ state, navigation }: BottomTabBarProps) {
+  const ctx = useAgentTabContext();
+  agentTabNavigationRef.current = navigation;
+  const focused = state.routes[state.index]?.name;
+
+  useEffect(() => {
+    if (focused === "Launchpad" || focused === "Leads" || focused === "Chats" || focused === "Calendar" || focused === "More" || focused === "Tasks") {
+      ctx.setActiveRoute(focused);
+    }
+  }, [ctx, focused]);
+
+  return (
+    <View style={styles.bottomNav}>
+      {AGENT_BOTTOM_NAV_LABELS.map((label) => {
+        const routeName = label as AgentTabRouteName;
+        const focusedTab = focused === routeName;
+        const active = label === "More" ? ctx.drawerOpen : focusedTab;
+        const emoji = label !== "Launchpad" && label !== "More";
+        return (
+          <TouchableOpacity
+            key={label}
+            style={styles.navItem}
+            activeOpacity={0.7}
+            onPress={() => {
+              triggerNavHaptic();
+              if (label === "More") {
+                ctx.openDrawer();
+                return;
+              }
+              ctx.selectPrimaryTab(routeName as Exclude<AgentTabRouteName, "Tasks" | "More">);
+            }}
+          >
+            <View style={[styles.navIconBox, active && styles.navIconBoxActive]}>
+              <Text
+                style={[
+                  styles.navIcon,
+                  emoji && styles.navIconEmoji,
+                  active && styles.navIconActive,
+                ]}
+              >
+                {TAB_ICONS[label]}
+              </Text>
+            </View>
+            <Text
+              style={[styles.navLabel, active && styles.navLabelActive]}
+              numberOfLines={1}
+            >
+              {label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function AgentPrimaryTabs() {
+  // React 18.3 Component.refs disagrees with this package's JSX type.
+  const Navigator = Tab.Navigator as unknown as React.ComponentType<Record<string, unknown>>;
+  const Screen = Tab.Screen as unknown as React.ComponentType<Record<string, unknown>>;
+  return (
+    <Navigator
+      backBehavior="none"
+      detachInactiveScreens={false}
+      screenOptions={{
+        headerShown: false,
+        lazy: true,
+        freezeOnBlur: true,
+        animation: "none",
+      }}
+      tabBar={(props: BottomTabBarProps) => <AgentBottomTabBar {...props} />}
+    >
+      <Screen name="Launchpad" component={LaunchpadTab} />
+      <Screen name="Leads" component={LeadsTab} />
+      <Screen name="Chats" component={ChatsTab} />
+      <Screen name="Calendar" component={CalendarTab} />
+      <Screen name="More" component={MoreTab} />
+      <Screen
+        name="Tasks"
+        component={TasksTab}
+        options={{
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: "none" },
+        }}
+      />
+    </Navigator>
+  );
+}
 
 export function AgentShell({
   onReturnToCommandCentre,
@@ -80,10 +475,7 @@ export function AgentShell({
     signOut,
   } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<AgentTab>("launchpad");
-  const [visitedTabs, setVisitedTabs] = useState<VisitedTabs>({
-    launchpad: true,
-  });
+  const [activeRoute, setActiveRoute] = useState<AgentTabRouteName>("Launchpad");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeDrawerId, setActiveDrawerId] = useState("launchpad");
   const [activeUtility, setActiveUtility] = useState<ActiveUtility>(null);
@@ -105,50 +497,59 @@ export function AgentShell({
   const userEmail = user?.email || "";
   const userName = user?.name ?? null;
 
-  const selectTab = (tab: AgentTab, drawerId?: string) => {
-    triggerNavHaptic();
-    setActiveTab(tab);
+  const navigateTab = (tab: AgentTab, drawerId?: string) => {
+    const route = TAB_ROUTE[tab];
+    setActiveRoute(route);
     setActiveDrawerId(drawerId ?? tab);
     setActiveUtility(null);
+    agentTabNavigationRef.current?.navigate(route);
   };
 
-  useEffect(() => {
-    setVisitedTabs((prev) =>
-      prev[activeTab] ? prev : { ...prev, [activeTab]: true },
-    );
-  }, [activeTab]);
+  const pushLeadProfile = (leadId: string, leadIds?: string[]) => {
+    const ids = leadIds && leadIds.length > 0 ? leadIds : [leadId];
+    setLeadNavIds(ids);
+    setSelectedLeadId(leadId);
+    setActiveUtility(null);
+    setActiveRoute("Leads");
+    setActiveDrawerId("leads");
+    agentTabNavigationRef.current?.navigate("Leads", {
+      screen: "LeadProfile",
+      params: { leadId, leadIds: ids },
+    });
+  };
 
   const handleSelectDrawerItem = (item: DrawerItem) => {
     setActiveDrawerId(item.id);
+    if (item.id === "viewings") {
+      setViewingsLeadPicker({ mlsNumbers: [] });
+      return;
+    }
     if (item.utilityId && item.utilityId !== "account") {
       setActiveUtility(item.utilityId);
-      setActiveTab("more");
+      setActiveRoute("More");
+      agentTabNavigationRef.current?.navigate("More");
       return;
     }
     setActiveUtility(null);
     if (item.tabKey) {
-      setActiveTab(item.tabKey);
+      const route = TAB_ROUTE[item.tabKey];
+      setActiveRoute(route);
+      agentTabNavigationRef.current?.navigate(route);
     }
   };
 
   const handleCallNewAction = () => {
     setLeadsInitialFilter("NEW_LEAD");
-    setActiveTab("leads");
-    setActiveDrawerId("leads");
-    setActiveUtility(null);
+    navigateTab("leads", "leads");
   };
 
   const handleNavigateToLeads = (statusFilter?: string) => {
     setLeadsInitialFilter(statusFilter);
-    setActiveTab("leads");
-    setActiveDrawerId("leads");
-    setActiveUtility(null);
+    navigateTab("leads", "leads");
   };
 
   const handleNavigateToTasks = () => {
-    setActiveTab("tasks");
-    setActiveDrawerId("tasks");
-    setActiveUtility(null);
+    navigateTab("tasks", "tasks");
   };
 
   const handleSignOut = () => {
@@ -162,71 +563,83 @@ export function AgentShell({
       setViewingsPlanner(null);
       setViewingsLeadPicker(null);
       if (target.kind === "lead") {
-        setActiveTab("leads");
-        setActiveDrawerId("leads");
-        setLeadNavIds([target.leadId]);
-        setSelectedLeadId(target.leadId);
+        pushLeadProfile(target.leadId);
         return;
       }
       if (target.kind === "tasks") {
+        leadsStackNavRef.current?.popToTop();
         setSelectedLeadId(null);
         setLeadNavIds([]);
-        setActiveTab("tasks");
-        setActiveDrawerId("tasks");
+        navigateTab("tasks", "tasks");
         return;
       }
+      leadsStackNavRef.current?.popToTop();
       setSelectedLeadId(null);
       setLeadNavIds([]);
-      setActiveTab("launchpad");
-      setActiveDrawerId("launchpad");
+      navigateTab("launchpad", "launchpad");
     });
   }, []);
 
   useAndroidHardwareBack({
     onBack: () => {
+      traceAndroidBack("js agent-shell onBack", leadsBackSnapshot(activeRoute));
       if (viewingsPlanner) {
         setViewingsPlanner(null);
+        traceAndroidBack("js agent-shell consumed viewings-planner");
         return true;
       }
       if (viewingsLeadPicker) {
         setViewingsLeadPicker(null);
+        traceAndroidBack("js agent-shell consumed viewings-lead-picker");
         return true;
       }
       if (activityFeedOpen) {
         setActivityFeedOpen(false);
+        traceAndroidBack("js agent-shell consumed activity-feed");
         return true;
       }
       // Chats conversation thread — same close as green Back (fallback if
       // chats-thread listener / overlay stack did not run).
       if (chatsThreadOpen) {
         chatsThreadCloseRef.current?.();
+        traceAndroidBack("js agent-shell consumed chats-thread");
         return true;
       }
-      if (selectedLeadId) {
-        setSelectedLeadId(null);
-        setLeadNavIds([]);
+      if (popLeadsStackIfPushed()) {
+        traceAndroidBack(
+          "js agent-shell consumed leads-pop",
+          leadsBackSnapshot(activeRoute),
+        );
         return true;
       }
       if (drawerOpen) {
         setDrawerOpen(false);
+        traceAndroidBack("js agent-shell consumed drawer");
         return true;
       }
       if (activeUtility) {
         setActiveUtility(null);
         setActiveDrawerId("account");
-        setActiveTab("more");
+        setActiveRoute("More");
+        agentTabNavigationRef.current?.navigate("More");
+        traceAndroidBack("js agent-shell consumed utility");
         return true;
       }
-      if (activeTab !== "launchpad") {
-        setActiveTab("launchpad");
-        setActiveDrawerId("launchpad");
-        setActiveUtility(null);
+      if (activeRoute !== "Launchpad") {
+        navigateTab("launchpad", "launchpad");
+        traceAndroidBack("js agent-shell consumed tab-to-launchpad", {
+          tab: activeRoute,
+        });
         return true;
       }
       if (onReturnToCommandCentre) {
         onReturnToCommandCentre();
+        traceAndroidBack("js agent-shell consumed return-to-command-centre");
         return true;
       }
+      traceAndroidBack("js agent-shell onBack returned false", {
+        tab: activeRoute,
+      });
       return false;
     },
     isAtRoot: () =>
@@ -237,11 +650,101 @@ export function AgentShell({
       !selectedLeadId &&
       !drawerOpen &&
       !activeUtility &&
-      activeTab === "launchpad" &&
+      activeRoute === "Launchpad" &&
       !onReturnToCommandCentre,
   });
 
+  const tabContext: AgentTabContextValue = {
+    leadsInitialFilter,
+    selectedLeadId,
+    activeUtility,
+    chatsThreadCloseRef,
+    userEmail,
+    userName,
+    userRole,
+    brandDisplayName,
+    workspaceId: activeWorkspace?.id,
+    workspaceSlug: activeWorkspace?.slug,
+    hasMultipleWorkspaces,
+    drawerOpen,
+    onReturnToCommandCentre,
+    setChatsThreadOpen,
+    setSelectedLeadId,
+    setActiveRoute: (route) => {
+      setActiveRoute((prev) => (prev === route ? prev : route));
+    },
+    openDrawer: () => setDrawerOpen(true),
+    selectPrimaryTab: (route) => {
+      const tab =
+        route === "Launchpad"
+          ? "launchpad"
+          : route === "Leads"
+            ? "leads"
+            : route === "Chats"
+              ? "chats"
+              : "calendar";
+      navigateTab(tab, tab);
+    },
+    navigateToLeads: handleNavigateToLeads,
+    navigateToTasks: handleNavigateToTasks,
+    openStatistics: () => {
+      setActiveUtility("statistics");
+      setActiveDrawerId("statistics");
+      setActiveRoute("More");
+      agentTabNavigationRef.current?.navigate("More");
+    },
+    openLeadOnLeads: (leadId, leadIds) => {
+      pushLeadProfile(leadId, leadIds);
+    },
+    selectLead: (leadId, leadIds) => {
+      pushLeadProfile(leadId, leadIds);
+    },
+    openLeadFromChat: (leadId) => {
+      pushLeadProfile(leadId);
+    },
+    planViewings: (id, name, mlsNumbers) => {
+      setViewingsPlanner({
+        leadId: id,
+        mlsNumbers,
+        leadName: name,
+      });
+    },
+    closeUtility: () => {
+      setActiveUtility(null);
+      setActiveDrawerId("account");
+    },
+    browseProperties: () => {
+      setActiveUtility("search");
+      setActiveDrawerId("search");
+    },
+    openUtility: (id) => {
+      if (id === "viewings") {
+        setViewingsLeadPicker({ mlsNumbers: [] });
+        return;
+      }
+      setActiveUtility(id);
+      setActiveDrawerId(id);
+    },
+    openLeadFromUtility: (leadId) => {
+      pushLeadProfile(leadId);
+    },
+    openViewingsLeadPicker: (mlsNumbers) => {
+      setViewingsLeadPicker({ mlsNumbers });
+    },
+    openTeamStatistics: () => {
+      setActiveUtility("statistics");
+      setActiveDrawerId("statistics");
+    },
+    changeWorkspace: () => {
+      void changeWorkspace();
+    },
+    signOut: () => {
+      void signOut();
+    },
+  };
+
   return (
+    <AgentTabContext.Provider value={tabContext}>
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#1E2A38" />
 
@@ -262,7 +765,7 @@ export function AgentShell({
               {brandDisplayName}
             </Text>
             <Text style={styles.headerSubtitle} numberOfLines={1}>
-              {activeTab.toUpperCase()} · {orgName}
+              {activeRoute.toUpperCase()} · {orgName}
             </Text>
           </View>
         </View>
@@ -300,330 +803,20 @@ export function AgentShell({
         </View>
       </View>
 
-      {/* Body Content Area — keep visited primary tabs mounted (no cold remount). */}
+      {/* Primary tabs — React Navigation bottom tabs. Visited screens stay mounted. */}
       <View style={styles.body}>
-        {visitedTabs.launchpad ? (
-          <View
-            style={[
-              styles.tabPane,
-              activeTab !== "launchpad" ? styles.tabPaneHidden : null,
-            ]}
-            pointerEvents={activeTab === "launchpad" ? "auto" : "none"}
-          >
-            <LaunchpadScreen
-              onNavigateToLeads={handleNavigateToLeads}
-              onNavigateToTasks={handleNavigateToTasks}
-              onNavigateToStatistics={() => {
-                setActiveTab("more");
-                setActiveUtility("statistics");
-                setActiveDrawerId("statistics");
-              }}
-              onOpenLead={(leadId, leadIds) => {
-                setLeadNavIds(leadIds?.length ? leadIds : [leadId]);
-                setSelectedLeadId(leadId);
-                setActiveTab("leads");
-                setActiveDrawerId("leads");
-                setActiveUtility(null);
-              }}
+        <AgentPrimaryTabs />
+        {viewingsPlanner ? (
+          <View style={styles.viewingsPlannerPane}>
+            <ViewingsPlannerScreen
+              embeddedInShell
+              leadId={viewingsPlanner.leadId}
+              leadName={viewingsPlanner.leadName}
+              initialMlsNumbers={viewingsPlanner.mlsNumbers}
+              onBack={() => setViewingsPlanner(null)}
             />
           </View>
         ) : null}
-
-        {visitedTabs.leads ? (
-          <View
-            style={[
-              styles.tabPane,
-              activeTab !== "leads" ? styles.tabPaneHidden : null,
-            ]}
-            pointerEvents={activeTab === "leads" ? "auto" : "none"}
-          >
-            <LeadsScreen
-              initialStatusFilter={leadsInitialFilter}
-              selectedLeadId={selectedLeadId}
-              onSelectLead={(leadId, leadIds) => {
-                setLeadNavIds(leadIds);
-                setSelectedLeadId(leadId);
-              }}
-              onPlanViewings={(id, name, mlsNumbers) => {
-                setViewingsPlanner({
-                  leadId: id,
-                  mlsNumbers: mlsNumbers ?? [],
-                  leadName: name,
-                });
-              }}
-            />
-          </View>
-        ) : null}
-
-        {visitedTabs.chats ? (
-          <View
-            style={[
-              styles.tabPane,
-              activeTab !== "chats" ? styles.tabPaneHidden : null,
-            ]}
-            pointerEvents={activeTab === "chats" ? "auto" : "none"}
-          >
-            <ChatsScreen
-              onThreadOpenChange={setChatsThreadOpen}
-              threadCloseRef={chatsThreadCloseRef}
-              onOpenLead={(leadId) => {
-                setLeadNavIds([leadId]);
-                setSelectedLeadId(leadId);
-                setActiveTab("leads");
-                setActiveDrawerId("leads");
-                setActiveUtility(null);
-              }}
-            />
-          </View>
-        ) : null}
-
-        {visitedTabs.calendar ? (
-          <View
-            style={[
-              styles.tabPane,
-              activeTab !== "calendar" ? styles.tabPaneHidden : null,
-            ]}
-            pointerEvents={activeTab === "calendar" ? "auto" : "none"}
-          >
-            <GlobalCalendarScreen
-              onOpenLead={(leadId) => {
-                setLeadNavIds([leadId]);
-                setSelectedLeadId(leadId);
-              }}
-            />
-          </View>
-        ) : null}
-
-        {visitedTabs.tasks ? (
-          <View
-            style={[
-              styles.tabPane,
-              activeTab !== "tasks" ? styles.tabPaneHidden : null,
-            ]}
-            pointerEvents={activeTab === "tasks" ? "auto" : "none"}
-          >
-            <GlobalTasksScreen
-              onOpenLead={(leadId) => {
-                setLeadNavIds([leadId]);
-                setSelectedLeadId(leadId);
-              }}
-            />
-          </View>
-        ) : null}
-
-        {activeTab === "more" && (
-          activeUtility ? (
-            activeUtility === "search" ? (
-              <PropertiesSearchScreen
-                onBack={() => {
-                  setActiveUtility(null);
-                  setActiveDrawerId("account");
-                }}
-                onPlanViewings={(mlsNumbers) => {
-                  setViewingsLeadPicker({ mlsNumbers });
-                }}
-              />
-            ) : activeUtility === "shortlist" ? (
-              <ShortlistScreen
-                onBack={() => {
-                  setActiveUtility(null);
-                  setActiveDrawerId("account");
-                }}
-                onBrowseProperties={() => {
-                  setActiveUtility("search");
-                  setActiveDrawerId("search");
-                }}
-                onPlanViewings={(mlsNumbers) => {
-                  setViewingsLeadPicker({ mlsNumbers });
-                }}
-              />
-            ) : activeUtility === "inbox" ? (
-              <CommunicationsScreen
-                onBack={() => {
-                  setActiveUtility(null);
-                  setActiveDrawerId("account");
-                }}
-                onOpenLead={(leadId) => {
-                  setLeadNavIds([leadId]);
-                  setSelectedLeadId(leadId);
-                }}
-              />
-            ) : activeUtility === "statistics" ? (
-              <StatisticsScreen
-                onBack={() => {
-                  setActiveUtility(null);
-                  setActiveDrawerId("account");
-                }}
-              />
-            ) : activeUtility === "cma" ? (
-              <CmaScreen
-                onBack={() => {
-                  setActiveUtility(null);
-                  setActiveDrawerId("account");
-                }}
-              />
-            ) : activeUtility === "team" ? (
-              <TeamScreen
-                onBack={() => {
-                  setActiveUtility(null);
-                  setActiveDrawerId("account");
-                }}
-                onOpenStatistics={() => {
-                  setActiveUtility("statistics");
-                  setActiveDrawerId("statistics");
-                }}
-              />
-            ) : activeUtility === "notifications" ? (
-              <NotificationPreferencesScreen
-                onBack={() => {
-                  setActiveUtility(null);
-                  setActiveDrawerId("account");
-                }}
-              />
-            ) : (
-              <MoreUtilityScreen
-                utilityId={activeUtility}
-                onBack={() => {
-                  setActiveUtility(null);
-                  setActiveDrawerId("account");
-                }}
-              />
-            )
-          ) : (
-            <MoreHubScreen
-              userEmail={userEmail}
-              userName={userName}
-              userRole={userRole}
-              brandDisplayName={brandDisplayName}
-              workspaceId={activeWorkspace?.id}
-              workspaceSlug={activeWorkspace?.slug}
-              hasMultipleWorkspaces={hasMultipleWorkspaces}
-              onChangeWorkspace={() => {
-                void changeWorkspace();
-              }}
-              onSignOut={handleSignOut}
-              onReturnToCommandCentre={onReturnToCommandCentre}
-              onOpenUtility={(id) => {
-                setActiveUtility(id);
-                setActiveDrawerId(id);
-              }}
-            />
-          )
-        )}
-      </View>
-
-      {/* Bottom Navigation — Launchpad | Leads | Chats | Calendar | More */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navItem}
-          activeOpacity={0.7}
-          onPress={() => selectTab("launchpad")}
-        >
-          <View style={[styles.navIconBox, activeTab === "launchpad" && styles.navIconBoxActive]}>
-            <Text style={[styles.navIcon, activeTab === "launchpad" && styles.navIconActive]}>
-              ⌂
-            </Text>
-          </View>
-          <Text
-            style={[styles.navLabel, activeTab === "launchpad" && styles.navLabelActive]}
-            numberOfLines={1}
-          >
-            Launchpad
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          activeOpacity={0.7}
-          onPress={() => selectTab("leads")}
-        >
-          <View style={[styles.navIconBox, activeTab === "leads" && styles.navIconBoxActive]}>
-            <Text
-              style={[
-                styles.navIcon,
-                styles.navIconEmoji,
-                activeTab === "leads" && styles.navIconActive,
-              ]}
-            >
-              👥
-            </Text>
-          </View>
-          <Text
-            style={[styles.navLabel, activeTab === "leads" && styles.navLabelActive]}
-            numberOfLines={1}
-          >
-            Leads
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          activeOpacity={0.7}
-          onPress={() => selectTab("chats", "chats")}
-        >
-          <View style={[styles.navIconBox, activeTab === "chats" && styles.navIconBoxActive]}>
-            <Text
-              style={[
-                styles.navIcon,
-                styles.navIconEmoji,
-                activeTab === "chats" && styles.navIconActive,
-              ]}
-            >
-              💬
-            </Text>
-          </View>
-          <Text
-            style={[styles.navLabel, activeTab === "chats" && styles.navLabelActive]}
-            numberOfLines={1}
-          >
-            Chats
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          activeOpacity={0.7}
-          onPress={() => selectTab("calendar")}
-        >
-          <View style={[styles.navIconBox, activeTab === "calendar" && styles.navIconBoxActive]}>
-            <Text
-              style={[
-                styles.navIcon,
-                styles.navIconEmoji,
-                activeTab === "calendar" && styles.navIconActive,
-              ]}
-            >
-              📅
-            </Text>
-          </View>
-          <Text
-            style={[styles.navLabel, activeTab === "calendar" && styles.navLabelActive]}
-            numberOfLines={1}
-          >
-            Calendar
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          activeOpacity={0.7}
-          onPress={() => {
-            triggerNavHaptic();
-            setDrawerOpen(true);
-          }}
-        >
-          <View style={[styles.navIconBox, drawerOpen && styles.navIconBoxActive]}>
-            <Text style={[styles.navIcon, drawerOpen && styles.navIconActive]}>
-              ☰
-            </Text>
-          </View>
-          <Text
-            style={[styles.navLabel, drawerOpen && styles.navLabelActive]}
-            numberOfLines={1}
-          >
-            More
-          </Text>
-        </TouchableOpacity>
       </View>
 
       {/* Native Slide-in Navigation Drawer */}
@@ -643,38 +836,12 @@ export function AgentShell({
         onSignOut={() => signOut()}
       />
 
-      {/* Lead Detail overlay — matches web LeadQuickPopup full-screen modal */}
-      {selectedLeadId ? (
-        <View style={styles.leadDetailOverlay}>
-          <LeadDetailScreen
-            leadId={selectedLeadId}
-            leadIds={leadNavIds}
-            onNavigateLead={(id) => setSelectedLeadId(id)}
-            onBack={() => {
-              setSelectedLeadId(null);
-              setLeadNavIds([]);
-            }}
-            onPlanViewings={(id, name, mlsNumbers) => {
-              setViewingsPlanner({
-                leadId: id,
-                mlsNumbers: mlsNumbers ?? [],
-                leadName: name,
-              });
-            }}
-          />
-        </View>
-      ) : null}
-
       <ActivityFeedSheet
         visible={activityFeedOpen}
         onClose={() => setActivityFeedOpen(false)}
         onCallNew={handleCallNewAction}
         onOpenLead={(leadId) => {
-          setLeadNavIds([leadId]);
-          setSelectedLeadId(leadId);
-          setActiveTab("leads");
-          setActiveDrawerId("leads");
-          setActiveUtility(null);
+          pushLeadProfile(leadId);
         }}
       />
 
@@ -693,17 +860,8 @@ export function AgentShell({
         />
       ) : null}
 
-      {viewingsPlanner ? (
-        <View style={styles.viewingsPlannerOverlay}>
-          <ViewingsPlannerScreen
-            leadId={viewingsPlanner.leadId}
-            leadName={viewingsPlanner.leadName}
-            initialMlsNumbers={viewingsPlanner.mlsNumbers}
-            onBack={() => setViewingsPlanner(null)}
-          />
-        </View>
-      ) : null}
     </SafeAreaView>
+    </AgentTabContext.Provider>
   );
 }
 
@@ -715,17 +873,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#1E2A38", // Header color
   },
-  leadDetailOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 100,
-    elevation: 100,
-    backgroundColor: "#FFFFFF",
-  },
-  viewingsPlannerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 110,
-    elevation: 110,
-    backgroundColor: "#FFFFFF",
+  viewingsPlannerPane: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: Platform.OS === "android" ? 102 : 64,
+    zIndex: 30,
+    backgroundColor: "#F4F7F5",
   },
   header: {
     backgroundColor: "#1E2A38",

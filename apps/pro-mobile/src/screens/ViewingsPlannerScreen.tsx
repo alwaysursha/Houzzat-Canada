@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   BackHandler,
-  Clipboard,
+  Image,
   Linking,
   Modal,
   Platform,
@@ -24,11 +24,26 @@ import { mobileApiClient } from "../api/client";
 import { NativeDateTimeField } from "../components/NativeDateTimeField";
 import { PropertyDetailModal } from "../components/PropertyDetailModal";
 import {
+  buildPropertiesSearchQuery,
   buildShortlistListQuery,
   formatListingPrice,
+  unwrapPropertiesSearch,
   unwrapShortlistList,
 } from "../lib/property-response";
 import { unwrapViewingsPlannerTour } from "../lib/viewings-planner-response";
+import {
+  acceptSearchResponse,
+  listingsForQuery,
+  missingMlsNumbers,
+  mlsBatchSearchPath,
+  mlsPrefixSearchPath,
+  parseViewingPropertyQuery,
+} from "../lib/viewing-search";
+import {
+  clockFromIso,
+  stopTimePayload,
+  type ViewingStopTimeDraft,
+} from "../lib/viewing-stop-times";
 import { useAuth } from "../state/AuthContext";
 import type { MobileListingCard } from "../types/property";
 import type {
@@ -45,12 +60,11 @@ type ViewingsPlannerScreenProps = {
   leadName?: string;
   initialMlsNumbers?: string[];
   onBack: () => void;
+  /** Rendered under the Agent shell header and above the bottom tabs. */
+  embeddedInShell?: boolean;
 };
 
-type StopTimeDraft = {
-  startsAt: string;
-  endsAt: string;
-};
+type StopTimeDraft = ViewingStopTimeDraft;
 
 function combineDateAndTime(date: Date | null, time: Date | null): Date | null {
   if (!date) return null;
@@ -86,47 +100,16 @@ function stopListingToCard(listing: MobileViewingsPlannerStopListing): MobileLis
   };
 }
 
-function isoToDateInput(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function dateInputToIso(dateStr: string): string | null {
-  const trimmed = dateStr.trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
-  const d = new Date(`${trimmed}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
-function isoToDatetimeLocal(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const h = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${y}-${m}-${day}T${h}:${min}`;
-}
-
-function datetimeLocalToIso(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const d = new Date(trimmed);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
 function formatKm(meters: number): string {
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function formatStopAddress(stop: MobileViewingsPlannerStop): string {
+  const listing = stop.listing;
+  if (!listing) return stop.mlsNumber;
+  const unit = listing.unitNumber ? `#${listing.unitNumber} ` : "";
+  return `${unit}${listing.addressLine}, ${listing.city}`.trim();
 }
 
 function formatDriveDuration(seconds: number): string {
@@ -187,18 +170,11 @@ function stopTimesFromTour(stops: MobileViewingsPlannerStop[]): Record<string, S
   const map: Record<string, StopTimeDraft> = {};
   for (const stop of stops) {
     map[stop.id] = {
-      startsAt: isoToDatetimeLocal(stop.suggestedArriveAt),
-      endsAt: isoToDatetimeLocal(stop.suggestedLeaveAt),
+      arrive: clockFromIso(stop.suggestedArriveAt),
+      leave: clockFromIso(stop.suggestedLeaveAt),
     };
   }
   return map;
-}
-
-function formatStopAddress(stop: MobileViewingsPlannerStop): string {
-  const listing = stop.listing;
-  if (!listing) return stop.mlsNumber;
-  const unit = listing.unitNumber ? `#${listing.unitNumber} ` : "";
-  return `${unit}${listing.addressLine}, ${listing.city}`.trim();
 }
 
 export function ViewingsPlannerScreen({
@@ -206,6 +182,7 @@ export function ViewingsPlannerScreen({
   leadName,
   initialMlsNumbers,
   onBack,
+  embeddedInShell = false,
 }: ViewingsPlannerScreenProps) {
   const { activeWorkspace } = useAuth();
   const workspaceId = activeWorkspace?.id;
@@ -230,6 +207,12 @@ export function ViewingsPlannerScreen({
     () => new Set(),
   );
   const [addingStops, setAddingStops] = useState(false);
+  const [propertyQuery, setPropertyQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<MobileListingCard[]>([]);
+  const [searchNotFound, setSearchNotFound] = useState<string[]>([]);
+  const [addingMls, setAddingMls] = useState<string | null>(null);
 
   const manualReorderRef = useRef(false);
   const hasOptimizedRef = useRef(false);
@@ -359,23 +342,32 @@ export function ViewingsPlannerScreen({
     [viewingDate, patchTour],
   );
 
-  const handleStopTimeBlur = useCallback(
-    async (stopId: string) => {
-      const draft = stopTimes[stopId];
-      if (!draft) return;
+  const handleStopClock = useCallback(
+    async (stopId: string, next: StopTimeDraft) => {
+      setStopTimes((prev) => ({ ...prev, [stopId]: next }));
       setError(null);
-      await patchTour({
-        stopTimes: [
-          {
-            stopId,
-            startsAt: datetimeLocalToIso(draft.startsAt),
-            endsAt: datetimeLocalToIso(draft.endsAt),
-          },
-        ],
-      });
+      const payload = stopTimePayload({ stopId, day: viewingDate, draft: next });
+      if (!payload) return;
+      await patchTour({ stopTimes: [payload] });
     },
-    [stopTimes, patchTour],
+    [viewingDate, patchTour],
   );
+
+  const flushStopTimes = useCallback(async () => {
+    if (!tour || !viewingDate) return true;
+    const stopTimesPayload = tour.stops
+      .map((stop) =>
+        stopTimePayload({
+          stopId: stop.id,
+          day: viewingDate,
+          draft: stopTimes[stop.id],
+        }),
+      )
+      .filter((row): row is NonNullable<typeof row> => row != null);
+    if (stopTimesPayload.length === 0) return true;
+    const parsed = await patchTour({ stopTimes: stopTimesPayload });
+    return Boolean(parsed);
+  }, [tour, viewingDate, stopTimes, patchTour]);
 
   const moveStop = useCallback(
     async (index: number, direction: -1 | 1) => {
@@ -449,6 +441,11 @@ export function ViewingsPlannerScreen({
     setSavePending(true);
     setError(null);
     try {
+      const flushed = await flushStopTimes();
+      if (!flushed) {
+        Alert.alert("Save failed", "Could not save arrive and leave times");
+        return;
+      }
       const res = await mobileApiClient.post<unknown>(
         `/leads/${encodeURIComponent(leadId)}/viewings-planner/save`,
         { tourId: tour.id },
@@ -470,7 +467,7 @@ export function ViewingsPlannerScreen({
     } finally {
       setSavePending(false);
     }
-  }, [tour, leadId, applyTour]);
+  }, [tour, leadId, applyTour, flushStopTimes]);
 
   const openShortlistPicker = useCallback(async () => {
     setShortlistPickerOpen(true);
@@ -522,6 +519,153 @@ export function ViewingsPlannerScreen({
       setAddingStops(false);
     }
   }, [shortlistSelected, leadId, applyTour]);
+
+  const existingMls = useMemo(
+    () => new Set((tour?.stops ?? []).map((stop) => stop.mlsNumber.toUpperCase())),
+    [tour],
+  );
+
+  const addMlsNumbers = useCallback(
+    async (mlsNumbers: string[]) => {
+      const fresh = mlsNumbers.filter((mls) => !existingMls.has(mls.toUpperCase()));
+      if (fresh.length === 0) {
+        setStatusMsg("Already on this viewing day");
+        return false;
+      }
+      setError(null);
+      const res = await mobileApiClient.post<unknown>(
+        `/leads/${encodeURIComponent(leadId)}/viewings-planner`,
+        { mlsNumbers: fresh },
+      );
+      if (!res.ok) {
+        setError(res.message || "Could not add properties");
+        return false;
+      }
+      const parsed = unwrapViewingsPlannerTour(res.data);
+      if (!parsed) {
+        setError("Unexpected response from server");
+        return false;
+      }
+      applyTour(parsed);
+      setStatusMsg(
+        `Added ${fresh.length} propert${fresh.length === 1 ? "y" : "ies"}`,
+      );
+      return true;
+    },
+    [existingMls, leadId, applyTour],
+  );
+
+  const searchGenRef = useRef(0);
+  const runPropertySearch = useCallback(async (raw: string) => {
+    const parsed = parseViewingPropertyQuery(raw);
+    const gen = ++searchGenRef.current;
+    if (parsed.kind === "empty" || parsed.kind === "short") {
+      setSearchResults([]);
+      setSearchNotFound([]);
+      setSearchError(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const endpoint =
+        parsed.kind === "mls"
+          ? mlsBatchSearchPath(parsed.mlsNumbers)
+          : parsed.kind === "mls-prefix"
+            ? mlsPrefixSearchPath(parsed.prefix)
+            : buildPropertiesSearchQuery({ q: parsed.q, filters: {
+              transactionType: "ALL",
+              sort: "newest",
+              minPrice: "",
+              maxPrice: "",
+              minBeds: "",
+              minBaths: "",
+              openHouseOnly: false,
+              propertyTypes: [],
+            } });
+      const res = await mobileApiClient.get<unknown>(endpoint);
+      if (!acceptSearchResponse(gen, searchGenRef.current)) return;
+      if (!res.ok) {
+        setSearchError(res.message || "Could not search properties");
+        setSearchResults([]);
+        setSearchNotFound([]);
+        return;
+      }
+      const list = unwrapPropertiesSearch(res.data);
+      const cards = listingsForQuery(parsed, list.listings);
+      setSearchResults(cards);
+      setSearchNotFound(missingMlsNumbers(parsed, cards));
+    } catch (err: unknown) {
+      if (!acceptSearchResponse(gen, searchGenRef.current)) return;
+      setSearchError(err instanceof Error ? err.message : "Could not search properties");
+    } finally {
+      if (acceptSearchResponse(gen, searchGenRef.current)) setSearching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const parsed = parseViewingPropertyQuery(propertyQuery);
+    if (parsed.kind === "empty" || parsed.kind === "short") {
+      searchGenRef.current += 1;
+      setSearching(false);
+      setSearchResults([]);
+      setSearchNotFound([]);
+      setSearchError(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      void runPropertySearch(propertyQuery.trim());
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [propertyQuery, runPropertySearch]);
+
+  const removeStop = useCallback(
+    (stop: MobileViewingsPlannerStop) => {
+      Alert.alert(
+        "Remove property",
+        `Remove ${formatStopAddress(stop)} from this viewing day?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: () => {
+              void (async () => {
+                setError(null);
+                const parsed = await patchTour({ removeStopIds: [stop.id] });
+                if (parsed) setStatusMsg("Property removed");
+              })();
+            },
+          },
+        ],
+      );
+    },
+    [patchTour],
+  );
+
+  const removeAllStops = useCallback(() => {
+    if (!tour || tour.stops.length === 0) return;
+    const stopIds = tour.stops.map((stop) => stop.id);
+    Alert.alert(
+      "Remove all properties",
+      "Remove all properties from this viewing day?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove All",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setError(null);
+              const parsed = await patchTour({ removeStopIds: stopIds });
+              if (parsed) setStatusMsg("All properties removed");
+            })();
+          },
+        },
+      ],
+    );
+  }, [tour, patchTour]);
 
   const shareUrl = useMemo(() => {
     if (!tour?.sharePath) return null;
@@ -621,7 +765,7 @@ export function ViewingsPlannerScreen({
 
   return (
     <View style={styles.root}>
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, embeddedInShell && styles.topBarEmbedded]}>
         <TouchableOpacity onPress={onBack} activeOpacity={0.75} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
@@ -663,6 +807,120 @@ export function ViewingsPlannerScreen({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            <View style={styles.addPropertyCard}>
+              <Text style={styles.addPropertyTitle}>Add Property</Text>
+              <Text style={styles.fieldHint}>
+                Type an address, or paste one or more MLS numbers.
+              </Text>
+              <View style={styles.searchBox}>
+                <TextInput
+                  value={propertyQuery}
+                  onChangeText={setPropertyQuery}
+                  placeholder="33 Ellen Street or X13815246, X13813458"
+                  placeholderTextColor="#94A3B8"
+                  style={styles.searchInput}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="search"
+                />
+                {propertyQuery ? (
+                  <TouchableOpacity
+                    onPress={() => setPropertyQuery("")}
+                    style={styles.searchClear}
+                    accessibilityLabel="Clear search"
+                  >
+                    <Text style={styles.searchClearText}>✕</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              {searching ? (
+                <View style={styles.searchStatusRow}>
+                  <ActivityIndicator color="#0F766E" size="small" />
+                  <Text style={styles.fieldHint}>Searching…</Text>
+                </View>
+              ) : null}
+              {searchError ? <Text style={styles.searchError}>{searchError}</Text> : null}
+              {!searching &&
+              parseViewingPropertyQuery(propertyQuery).kind !== "empty" &&
+              parseViewingPropertyQuery(propertyQuery).kind !== "short" &&
+              searchResults.length === 0 &&
+              !searchError ? (
+                <Text style={styles.fieldHint}>No property found</Text>
+              ) : null}
+              {searchNotFound.length > 0 ? (
+                <Text style={styles.searchMissing}>
+                  Not found: {searchNotFound.join(", ")}
+                </Text>
+              ) : null}
+              {searchResults.length > 0 ? (
+                <View style={styles.searchPanel}>
+                  {searchResults.length > 1 ? (
+                    <TouchableOpacity
+                      style={styles.addAllBtn}
+                      onPress={() =>
+                        void addMlsNumbers(searchResults.map((item) => item.mlsNumber))
+                      }
+                    >
+                      <Text style={styles.addAllText}>Add all</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {searchResults.map((item) => {
+                    const already = existingMls.has(item.mlsNumber.toUpperCase());
+                    return (
+                      <View key={item.mlsNumber} style={styles.searchResult}>
+                        {item.primaryImageUrl ? (
+                          <Image
+                            source={{ uri: item.primaryImageUrl }}
+                            style={styles.searchThumb}
+                          />
+                        ) : (
+                          <View style={styles.searchThumb} />
+                        )}
+                        <View style={styles.searchResultText}>
+                          <Text style={styles.stopAddress} numberOfLines={2}>
+                            {item.addressLine}
+                            {item.city ? `, ${item.city}` : ""}
+                          </Text>
+                          <Text style={styles.stopPrice}>
+                            {formatListingPrice(item.listPrice, item.transactionType)}
+                            {" · "}
+                            {item.mlsNumber}
+                            {item.status ? ` · ${item.status}` : ""}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.addOneBtn, already && styles.btnDisabled]}
+                          disabled={already || addingMls === item.mlsNumber}
+                          onPress={() => {
+                            setAddingMls(item.mlsNumber);
+                            void addMlsNumbers([item.mlsNumber]).finally(() =>
+                              setAddingMls(null),
+                            );
+                          }}
+                        >
+                          <Text style={styles.addOneText}>
+                            {already ? "Added" : "+ Add"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </View>
+
+            {tour && tour.stops.length > 0 ? (
+              <TouchableOpacity
+                style={styles.removeAllBtn}
+                onPress={removeAllStops}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Remove All"
+              >
+                <Text style={styles.removeAllBtnText}>Remove All</Text>
+              </TouchableOpacity>
+            ) : null}
+
             <View style={styles.section}>
               <NativeDateTimeField
                 label="Viewing date"
@@ -702,12 +960,22 @@ export function ViewingsPlannerScreen({
                 <View style={styles.section}>
                   <View style={styles.stopsHeaderRow}>
                     <Text style={styles.sectionLabel}>Stops</Text>
-                    <TouchableOpacity
-                      onPress={() => void openShortlistPicker()}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.addStopsLink}>+ Add from Shortlist</Text>
-                    </TouchableOpacity>
+                    <View style={styles.stopsHeaderActions}>
+                      {tour.stops.length > 0 ? (
+                        <TouchableOpacity
+                          onPress={removeAllStops}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.removeAllLink}>Remove All</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      <TouchableOpacity
+                        onPress={() => void openShortlistPicker()}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.addStopsLink}>+ Add from Shortlist</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 {tour.stops.length === 0 ? (
                   <View style={styles.emptyStopsBox}>
@@ -725,7 +993,7 @@ export function ViewingsPlannerScreen({
                   </View>
                 ) : (
                   tour.stops.map((stop, index) => {
-                    const times = stopTimes[stop.id] ?? { startsAt: "", endsAt: "" };
+                    const times = stopTimes[stop.id] ?? { arrive: null, leave: null };
                     const hasWarning = travelWarnings.has(stop.id);
                     return (
                       <View key={stop.id} style={styles.stopCard}>
@@ -764,43 +1032,31 @@ export function ViewingsPlannerScreen({
 
                         <View style={styles.timeRow}>
                           <View style={styles.timeField}>
-                            <Text style={styles.timeLabel}>Arrive</Text>
-                            <TextInput
-                              value={times.startsAt}
-                              onChangeText={(v) =>
-                                setStopTimes((prev) => ({
-                                  ...prev,
-                                  [stop.id]: {
-                                    startsAt: v,
-                                    endsAt: prev[stop.id]?.endsAt ?? "",
-                                  },
-                                }))
+                            <NativeDateTimeField
+                              label="Arrive"
+                              mode="time"
+                              value={times.arrive}
+                              placeholder="Set arrive"
+                              onChange={(date) =>
+                                void handleStopClock(stop.id, {
+                                  arrive: date,
+                                  leave: times.leave,
+                                })
                               }
-                              onBlur={() => void handleStopTimeBlur(stop.id)}
-                              placeholder="YYYY-MM-DDTHH:mm"
-                              placeholderTextColor="#94A3B8"
-                              style={styles.timeInput}
-                              autoCapitalize="none"
                             />
                           </View>
                           <View style={styles.timeField}>
-                            <Text style={styles.timeLabel}>Leave</Text>
-                            <TextInput
-                              value={times.endsAt}
-                              onChangeText={(v) =>
-                                setStopTimes((prev) => ({
-                                  ...prev,
-                                  [stop.id]: {
-                                    startsAt: prev[stop.id]?.startsAt ?? "",
-                                    endsAt: v,
-                                  },
-                                }))
+                            <NativeDateTimeField
+                              label="Leave"
+                              mode="time"
+                              value={times.leave}
+                              placeholder="Set leave"
+                              onChange={(date) =>
+                                void handleStopClock(stop.id, {
+                                  arrive: times.arrive,
+                                  leave: date,
+                                })
                               }
-                              onBlur={() => void handleStopTimeBlur(stop.id)}
-                              placeholder="YYYY-MM-DDTHH:mm"
-                              placeholderTextColor="#94A3B8"
-                              style={styles.timeInput}
-                              autoCapitalize="none"
                             />
                           </View>
                         </View>
@@ -812,6 +1068,12 @@ export function ViewingsPlannerScreen({
                         ) : null}
 
                         <View style={styles.reorderRow}>
+                          <TouchableOpacity
+                            style={styles.removeStopBtn}
+                            onPress={() => removeStop(stop)}
+                          >
+                            <Text style={styles.removeStopText}>Remove</Text>
+                          </TouchableOpacity>
                           <TouchableOpacity
                             style={[styles.reorderBtn, index === 0 && styles.reorderBtnDisabled]}
                             disabled={index === 0}
@@ -840,7 +1102,7 @@ export function ViewingsPlannerScreen({
           </ScrollView>
 
           {tour ? (
-            <View style={styles.footer}>
+          <View style={[styles.footer, embeddedInShell && styles.footerEmbedded]}>
               {tour.stops.length === 0 ? (
                 <Text style={styles.footerHint}>
                   Add properties from Shortlist to recalculate and save.
@@ -1061,6 +1323,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E2E8F0",
   },
+  topBarEmbedded: {
+    paddingTop: 8,
+  },
   backText: {
     fontSize: 14,
     fontWeight: "700",
@@ -1140,6 +1405,50 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 16,
     gap: 16,
+  },
+  addPropertyCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 14,
+    gap: 8,
+  },
+  addPropertyTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#1E2A38",
+  },
+  searchThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    backgroundColor: "#EEF2F6",
+  },
+  removeAllLink: {
+    color: "#B91C1C",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  removeAllBtn: {
+    minHeight: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    backgroundColor: "#FEF2F2",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  removeAllBtnText: {
+    color: "#B91C1C",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  stopsHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   section: {
     gap: 8,
@@ -1223,6 +1532,110 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
+  },
+  footerEmbedded: {
+    paddingBottom: 12,
+  },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  searchInput: {
+    flex: 1,
+    minHeight: 44,
+    fontSize: 15,
+    color: "#1E2A38",
+  },
+  searchClear: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchClearText: {
+    color: "#64748B",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  searchStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  searchError: {
+    marginTop: 8,
+    color: "#B91C1C",
+    fontSize: 13,
+  },
+  searchMissing: {
+    marginTop: 8,
+    color: "#B45309",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  searchPanel: {
+    marginTop: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
+  },
+  searchResult: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  searchResultText: {
+    flex: 1,
+  },
+  addOneBtn: {
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "#0F766E",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addOneText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  addAllBtn: {
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ECFDF5",
+  },
+  addAllText: {
+    color: "#0F766E",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  removeStopBtn: {
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  removeStopText: {
+    color: "#B91C1C",
+    fontSize: 13,
+    fontWeight: "700",
   },
   summaryCard: {
     backgroundColor: "#FFFFFF",

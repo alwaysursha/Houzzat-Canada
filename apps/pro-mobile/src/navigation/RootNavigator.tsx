@@ -1,29 +1,26 @@
 /**
- * Stage 4.2 — HouzzatPRO Mobile v2 Root Navigator.
+ * Phase 1 — React Navigation root stack foundation.
  *
- * Implements native state-driven & role-aware screen transitions:
- * - BOOTING -> SplashScreen
- * - BOOTSTRAP_RETRY -> SplashScreen with retry (credentials preserved)
- * - SIGNED_OUT -> WelcomeScreen | SignInScreen
- * - PLATFORM_AUTHENTICATED / WORKSPACE_SELECTION / IDENTITY_SELECTION -> WorkspaceSelectionScreen
- * - WORKSPACE_ACTIVE:
- *     - role === "AGENT" (or "MEMBER") -> AgentShell (Home, Leads, Tasks, More)
- *     - role === "OWNER" | "ADMIN" -> CommandCentreShell (Overview, Team, Leads, More)
- *     - otherwise -> AccessUnavailableScreen
+ * Auth-controller state remains authoritative. This navigator mirrors that state
+ * into proper routes; it does not decide workspace, role, or tenancy.
+ *
+ * WORKSPACE_ACTIVE → AppRoot (hosts existing AgentShell / CommandCentreShell
+ * unchanged). Shell-internal tabs, leads, chats, and custom Back are not migrated.
  */
 
 import React, { useState } from "react";
-import { AccessUnavailableScreen } from "../screens/AccessUnavailableScreen";
-import { AgentShell } from "../screens/AgentShell";
-import { CommandCentreShell } from "../screens/CommandCentreShell";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SignInScreen } from "../screens/SignInScreen";
 import { SplashScreen } from "../screens/SplashScreen";
 import { WorkspaceSelectionScreen } from "../screens/WorkspaceSelectionScreen";
 import { useAuth } from "../state/AuthContext";
+import { AppRoot } from "./AppRoot";
+import type { RootStackParamList } from "./types";
 
-export function RootNavigator() {
-  const { state, activeMembership, error, retryBootstrap, isLoading } =
-    useAuth();
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+function BootstrapRetryScreen() {
+  const { error, retryBootstrap, isLoading } = useAuth();
   const [retrying, setRetrying] = useState(false);
 
   async function onRetryBootstrap() {
@@ -36,42 +33,44 @@ export function RootNavigator() {
     }
   }
 
-  switch (state) {
-    case "BOOTING":
-      return <SplashScreen />;
+  return (
+    <SplashScreen
+      error={error ?? "Couldn't reach HouzzatPRO. Try again."}
+      onRetry={() => void onRetryBootstrap()}
+      retrying={retrying || isLoading}
+    />
+  );
+}
 
-    case "BOOTSTRAP_RETRY":
-      return (
-        <SplashScreen
-          error={error ?? "Couldn't reach HouzzatPRO. Try again."}
-          onRetry={() => void onRetryBootstrap()}
-          retrying={retrying || isLoading}
+export function RootNavigator() {
+  const { state } = useAuth();
+
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: "fade",
+        gestureEnabled: false,
+      }}
+    >
+      {state === "BOOTING" ? (
+        <Stack.Screen name="Splash" component={SplashScreen} />
+      ) : state === "BOOTSTRAP_RETRY" ? (
+        <Stack.Screen name="BootstrapRetry" component={BootstrapRetryScreen} />
+      ) : state === "SIGNED_OUT" ? (
+        <Stack.Screen name="SignIn" component={SignInScreen} />
+      ) : state === "PLATFORM_AUTHENTICATED" ||
+        state === "IDENTITY_SELECTION" ||
+        state === "WORKSPACE_SELECTION" ? (
+        <Stack.Screen
+          name="WorkspaceSelection"
+          component={WorkspaceSelectionScreen}
         />
-      );
-
-    case "SIGNED_OUT":
-      return <SignInScreen />;
-
-    case "PLATFORM_AUTHENTICATED":
-    case "IDENTITY_SELECTION":
-    case "WORKSPACE_SELECTION":
-      return <WorkspaceSelectionScreen />;
-
-    case "WORKSPACE_ACTIVE": {
-      const role = activeMembership?.role;
-      if (role === "AGENT" || (role as string) === "MEMBER") {
-        return <AgentShell />;
-      }
-      if (role === "OWNER" || role === "ADMIN") {
-        return <CommandCentreShell />;
-      }
-      return <AccessUnavailableScreen />;
-    }
-
-    default: {
-      const _exhaustive: never = state;
-      void _exhaustive;
-      return <SplashScreen />;
-    }
-  }
+      ) : state === "WORKSPACE_ACTIVE" ? (
+        <Stack.Screen name="AppRoot" component={AppRoot} />
+      ) : (
+        <Stack.Screen name="Splash" component={SplashScreen} />
+      )}
+    </Stack.Navigator>
+  );
 }

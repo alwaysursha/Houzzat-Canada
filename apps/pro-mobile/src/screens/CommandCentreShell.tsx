@@ -123,6 +123,10 @@ export function CommandCentreShell() {
 
   const handleSelectDrawerItem = (item: DrawerItem) => {
     setActiveDrawerId(item.id);
+    if (item.id === "viewings") {
+      setViewingsLeadPicker({ mlsNumbers: [] });
+      return;
+    }
     if (item.utilityId && item.utilityId !== "account") {
       setActiveUtility(item.utilityId);
       setActiveTab("more");
@@ -412,12 +416,27 @@ export function CommandCentreShell() {
               onSignOut={handleSignOut}
               onOpenAgentDesk={() => setInAgentMode(true)}
               onOpenUtility={(id) => {
+                if (id === "viewings") {
+                  setViewingsLeadPicker({ mlsNumbers: [] });
+                  return;
+                }
                 setActiveUtility(id);
                 setActiveDrawerId(id);
               }}
             />
           )
         )}
+        {viewingsPlanner ? (
+          <View style={styles.viewingsPlannerOverlay}>
+            <ViewingsPlannerScreen
+              embeddedInShell
+              leadId={viewingsPlanner.leadId}
+              leadName={viewingsPlanner.leadName}
+              initialMlsNumbers={viewingsPlanner.mlsNumbers}
+              onBack={() => setViewingsPlanner(null)}
+            />
+          </View>
+        ) : null}
       </View>
 
       {/* Bottom Navigation — Overview | Lead Routing | People | CRM | More */}
@@ -589,16 +608,6 @@ export function CommandCentreShell() {
         />
       ) : null}
 
-      {viewingsPlanner ? (
-        <View style={styles.viewingsPlannerOverlay}>
-          <ViewingsPlannerScreen
-            leadId={viewingsPlanner.leadId}
-            leadName={viewingsPlanner.leadName}
-            initialMlsNumbers={viewingsPlanner.mlsNumbers}
-            onBack={() => setViewingsPlanner(null)}
-          />
-        </View>
-      ) : null}
     </SafeAreaView>
   );
 }

@@ -8,6 +8,8 @@
  * Safe diagnostics only (source + consumed). No tokens or PII.
  */
 
+import { traceAndroidBack } from "./android-back-trace";
+
 export type AndroidHardwareBackHandler = () => boolean | null | undefined;
 
 type RegistryEntry = {
@@ -81,6 +83,18 @@ function ensureNativeSubscription(): void {
   );
 }
 
+/**
+ * React Navigation's useBackButton registers after child effects, so it would
+ * run first. Remove and re-add this one subscription so it is last in RN's
+ * list and therefore runs before useBackButton. Still a single listener.
+ */
+export function promoteAndroidHardwareBackSubscription(): void {
+  if (!nativeSub) return;
+  nativeSub.remove();
+  nativeSub = null;
+  ensureNativeSubscription();
+}
+
 function maybeTearDownNativeSubscription(): void {
   if (entries.length > 0 || !nativeSub) return;
   nativeSub.remove();
@@ -114,15 +128,25 @@ export function addAndroidHardwareBackListener(
 export function dispatchAndroidHardwareBackPress(
   trigger: "native" | "test-emit" = "test-emit",
 ): boolean {
+  traceAndroidBack("js app-bridge dispatch", {
+    trigger,
+    listeners: entries.length,
+    sources: entries.map((entry) => entry.source),
+  });
   recordDiag("dispatch", false, trigger);
   for (let i = entries.length - 1; i >= 0; i -= 1) {
     const entry = entries[i];
     if (!entry) continue;
     const consumed = Boolean(entry.handler());
+    traceAndroidBack("js app-bridge handler", {
+      source: entry.source,
+      consumed,
+    });
     recordDiag(entry.source, consumed, trigger);
     if (consumed) return true;
   }
   exitAppCount += 1;
+  traceAndroidBack("js app-bridge none consumed -> exitApp");
   recordDiag("exitApp", true, trigger);
   const bridge = resolveNativeBridge();
   bridge?.exitApp();
@@ -131,6 +155,7 @@ export function dispatchAndroidHardwareBackPress(
 
 export function androidHardwareBackExitApp(): void {
   exitAppCount += 1;
+  traceAndroidBack("js app-bridge androidHardwareBackExitApp");
   recordDiag("exitApp-explicit", true, "explicit");
   const bridge = resolveNativeBridge();
   if (bridge) {

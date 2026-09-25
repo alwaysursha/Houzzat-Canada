@@ -14,8 +14,15 @@
 import { NextResponse } from "next/server";
 import { getListingProvider } from "@/lib/listings/provider";
 import { parseListingSearchQueryParams } from "@/lib/listings/parse-search-query-params";
+import {
+  findListingsByMlsPrefix,
+  findListingsByPreciseAddress,
+  normalizeExactMlsTokens,
+  normalizeMlsPrefix,
+} from "@/lib/listings/precise-property-search";
 import { enrichListingCardForMobile } from "@/lib/mobile/v2/build-property-detail";
 import { authorizeMobileWorkspaceAccess } from "@/lib/mobile/v2/workspace-access";
+import { enrichTourStops } from "@/lib/route-planner/server";
 
 export const runtime = "nodejs";
 
@@ -32,6 +39,81 @@ export async function GET(request: Request) {
     }
 
     const url = new URL(request.url);
+    const mode = url.searchParams.get("mode");
+    const mlsParam = url.searchParams.get("mls");
+    const qParam = url.searchParams.get("q")?.trim() ?? "";
+
+    if (mode === "prefix") {
+      const prefix = normalizeMlsPrefix(mlsParam ?? qParam);
+      const cards = prefix ? await findListingsByMlsPrefix(prefix) : [];
+      const listings = cards.map((card) => enrichListingCardForMobile(card));
+      return NextResponse.json({
+        ok: true,
+        data: {
+          listings,
+          notFound: [],
+          total: listings.length,
+          nextCursor: null,
+          limit: listings.length,
+        },
+      });
+    }
+
+    if (mode === "exact" || (mlsParam?.trim() && mode !== "address")) {
+      const wanted = normalizeExactMlsTokens(mlsParam ?? "");
+      const cards = await enrichTourStops(wanted);
+      const byUpper = new Map(
+        [...cards.entries()].map(([mls, card]) => [mls.toUpperCase(), card]),
+      );
+      const listings = wanted.flatMap((mls) => {
+        const card = byUpper.get(mls);
+        return card ? [enrichListingCardForMobile(card)] : [];
+      });
+      const found = new Set(listings.map((item) => item.mlsNumber.toUpperCase()));
+      return NextResponse.json({
+        ok: true,
+        data: {
+          listings,
+          notFound: wanted.filter((mls) => !found.has(mls)),
+          total: listings.length,
+          nextCursor: null,
+          limit: wanted.length,
+        },
+      });
+    }
+
+    if (mode === "address" || (qParam.length >= 3 && !mode)) {
+      const transaction = url.searchParams.get("transactionType");
+      const cards = await findListingsByPreciseAddress(
+        qParam,
+        transaction === "SALE" || transaction === "LEASE" ? transaction : null,
+      );
+      const listings = cards.map((card) => enrichListingCardForMobile(card));
+      return NextResponse.json({
+        ok: true,
+        data: {
+          listings,
+          notFound: [],
+          total: listings.length,
+          nextCursor: null,
+          limit: listings.length,
+        },
+      });
+    }
+
+    if (qParam.length > 0 && qParam.length < 3) {
+      return NextResponse.json({
+        ok: true,
+        data: {
+          listings: [],
+          notFound: [],
+          total: 0,
+          nextCursor: null,
+          limit: 0,
+        },
+      });
+    }
+
     const params = parseListingSearchQueryParams(url.searchParams, {
       defaultLimit: 60,
       includeMapBounds: false,

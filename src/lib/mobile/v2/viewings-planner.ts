@@ -38,7 +38,7 @@ export function planProStopMerge(input: {
   maxStops: number;
 }): { toAdd: string[]; nextOrder: number } {
   const remaining = Math.max(0, input.maxStops - input.existingMls.length);
-  const have = new Set(input.existingMls);
+  const have = new Set(input.existingMls.map((mls) => mls.trim().toUpperCase()));
   const toAdd: string[] = [];
   if (remaining === 0) {
     return { toAdd, nextOrder: input.existingMls.length };
@@ -48,10 +48,11 @@ export function planProStopMerge(input: {
     ...new Set(input.requestedMls.map((m) => m.trim()).filter(Boolean)),
   ];
   for (const mls of uniqueRequested) {
-    if (have.has(mls)) continue;
+    const key = mls.toUpperCase();
+    if (have.has(key)) continue;
     if (toAdd.length >= remaining) break;
     toAdd.push(mls);
-    have.add(mls);
+    have.add(key);
   }
   return { toAdd, nextOrder: input.existingMls.length };
 }
@@ -168,6 +169,22 @@ export async function assertProTourAccess(input: {
   return tour;
 }
 
+export function proTourFieldPatch(data: {
+  startAddress?: string | null;
+  startLat?: number | null;
+  startLng?: number | null;
+  startAt?: Date | null;
+  viewingDate?: Date | null;
+  defaultDwellMinutes?: number;
+  bufferMinutes?: number;
+}): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) patch[key] = value;
+  }
+  return patch;
+}
+
 export async function updateProTourFields(
   tourId: string,
   data: {
@@ -180,9 +197,11 @@ export async function updateProTourFields(
     bufferMinutes?: number;
   },
 ) {
+  const patch = proTourFieldPatch(data);
+  if (Object.keys(patch).length === 0) return;
   await prisma.viewingTour.update({
     where: { id: tourId },
-    data,
+    data: patch,
   });
 }
 
@@ -204,6 +223,51 @@ export async function reorderProTourStops(
     await prisma.viewingTourStop.update({
       where: { id: stopIdsInOrder[i]! },
       data: { sortOrder: i },
+    });
+  }
+}
+
+export function planProStopRemoval(
+  stops: Array<{ id: string; sortOrder: number }>,
+  removeIds: string[],
+): Array<{ id: string; sortOrder: number }> {
+  const remove = new Set(removeIds);
+  return stops
+    .filter((stop) => !remove.has(stop.id))
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((stop, index) => ({ id: stop.id, sortOrder: index }));
+}
+
+export async function removeProTourStops(tourId: string, stopIds: string[]) {
+  if (stopIds.length === 0) return;
+  const stops = await prisma.viewingTourStop.findMany({
+    where: { tourId },
+    orderBy: { sortOrder: "asc" },
+  });
+  const remove = new Set(stopIds);
+  const doomed = stops.filter((stop) => remove.has(stop.id));
+  for (const stop of doomed) {
+    if (stop.appointmentId) {
+      try {
+        await prisma.appointment.update({
+          where: { id: stop.appointmentId },
+          data: { status: "CANCELLED" },
+        });
+      } catch (error) {
+        const code =
+          typeof error === "object" && error && "code" in error
+            ? String((error as { code?: string }).code)
+            : "";
+        if (code !== "P2025") throw error;
+      }
+    }
+    await prisma.viewingTourStop.delete({ where: { id: stop.id } });
+  }
+  const remaining = planProStopRemoval(stops, stopIds);
+  for (const row of remaining) {
+    await prisma.viewingTourStop.update({
+      where: { id: row.id },
+      data: { sortOrder: row.sortOrder },
     });
   }
 }

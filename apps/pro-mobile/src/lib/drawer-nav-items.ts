@@ -20,7 +20,8 @@ export interface DrawerItem {
     | "team"
     | "notifications"
     | "search"
-    | "shortlist";
+    | "shortlist"
+    | "viewings";
 }
 
 /**
@@ -51,6 +52,7 @@ export const DRAWER_NAV_ITEMS: DrawerItem[] = [
   },
   { id: "search", label: "Properties", icon: "🔍", utilityId: "search" },
   { id: "shortlist", label: "Shortlist", icon: "♥", utilityId: "shortlist" },
+  { id: "viewings", label: "Viewings", icon: "🗓", utilityId: "viewings" },
 ];
 
 /** Final Agent bottom-nav labels (locked). */

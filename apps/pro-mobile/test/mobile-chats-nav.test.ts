@@ -44,15 +44,12 @@ function main() {
   console.log("[3] Native ChatsScreen on Agent bottom nav...");
   const agent = readApp("src/screens/AgentShell.tsx");
   assert.ok(agent.includes("ChatsScreen"));
-  assert.ok(agent.includes('selectTab("chats"'));
+  assert.ok(agent.includes('name="Chats"'));
   assert.ok(agent.includes("chatsThreadOpen"));
-  assert.ok(agent.includes("onThreadOpenChange={setChatsThreadOpen}"));
-  const chatsTabStart = agent.indexOf('activeTab === "chats"');
-  const chatsTabEnd = agent.indexOf('activeTab === "calendar"', chatsTabStart);
-  assert.ok(chatsTabStart >= 0 && chatsTabEnd > chatsTabStart);
-  const chatsTabBlock = agent.slice(chatsTabStart, chatsTabEnd);
-  assert.ok(chatsTabBlock.includes("ChatsScreen"));
-  assert.equal(chatsTabBlock.includes("CommunicationsScreen"), false);
+  assert.ok(agent.includes("onThreadOpenChange={ctx.setChatsThreadOpen}"));
+  const chatsFn = agent.slice(agent.indexOf("function ChatsTab"), agent.indexOf("function CalendarTab"));
+  assert.ok(chatsFn.includes("ChatsScreen"));
+  assert.equal(chatsFn.includes("CommunicationsScreen"), false);
 
   console.log("[3b] Chats thread direct hardwareBackPress registration...");
   const chats = readApp("src/screens/ChatsScreen.tsx");
@@ -68,10 +65,11 @@ function main() {
     "Calendar",
     "More",
   ]);
-  const bottomStart = agent.indexOf("Bottom Navigation");
-  const bottomEnd = agent.indexOf("NativeDrawer", bottomStart);
-  const bottomBlock = agent.slice(bottomStart, bottomEnd);
-  assert.equal(bottomBlock.includes('selectTab("tasks")'), false);
+  const barStart = agent.indexOf("function AgentBottomTabBar");
+  const barEnd = agent.indexOf("function AgentPrimaryTabs", barStart);
+  const bottomBlock = agent.slice(barStart, barEnd);
+  assert.equal(bottomBlock.includes('name="Tasks"'), false);
+  assert.equal(bottomBlock.includes(">Tasks<"), false);
 
   console.log("[5] Admin nav labels locked...");
   assert.deepEqual([...ADMIN_BOTTOM_NAV_LABELS], [

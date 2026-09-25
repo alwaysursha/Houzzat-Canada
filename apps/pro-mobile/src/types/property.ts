@@ -34,6 +34,7 @@ export interface PropertiesSearchData {
   total: number;
   nextCursor: string | null;
   limit: number;
+  notFound?: string[];
 }
 
 export interface ShortlistEmailData {

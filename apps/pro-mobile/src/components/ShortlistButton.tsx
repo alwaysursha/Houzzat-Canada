@@ -61,6 +61,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     backgroundColor: "#FFFFFF",
+    alignSelf: "flex-start",
   },
   btnCompact: {
     width: 34,

@@ -586,8 +586,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 14,
-    paddingTop: 52,
-    paddingBottom: 12,
+    // Shell header already clears the status bar. 52px here was a second inset.
+    paddingTop: 10,
+    paddingBottom: 10,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#E2E8F0",

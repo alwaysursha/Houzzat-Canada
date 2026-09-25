@@ -22,6 +22,7 @@ export function unwrapPropertiesSearch(data: unknown): PropertiesSearchData {
       total: env.data.total ?? env.data.listings.length,
       nextCursor: env.data.nextCursor ?? null,
       limit: env.data.limit ?? 60,
+      notFound: env.data.notFound ?? [],
     };
   }
   if ("listings" in (data as object)) {
@@ -31,6 +32,7 @@ export function unwrapPropertiesSearch(data: unknown): PropertiesSearchData {
       total: direct.total ?? direct.listings?.length ?? 0,
       nextCursor: direct.nextCursor ?? null,
       limit: direct.limit ?? 60,
+      notFound: direct.notFound ?? [],
     };
   }
   return { listings: [], total: 0, nextCursor: null, limit: 60 };
@@ -70,6 +72,7 @@ export function buildPropertiesSearchQuery(input: {
 }): string {
   const q = input.q.trim();
   return withQuery("/properties/search", {
+    mode: q ? "address" : undefined,
     q: q || undefined,
     transactionType: input.filters.transactionType,
     sort: input.filters.sort,

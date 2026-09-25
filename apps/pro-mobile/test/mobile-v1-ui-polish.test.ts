@@ -59,16 +59,15 @@ function testAgentBottomNav() {
   for (const label of AGENT_BOTTOM_NAV_LABELS) {
     assert.ok(agent.includes(label), `Agent nav missing ${label}`);
   }
-  // Tasks not a bottom-nav destination (may remain as drawer/tab content)
-  const bottomStart = agent.indexOf("Bottom Navigation");
-  const bottomEnd = agent.indexOf("NativeDrawer", bottomStart);
-  assert.ok(bottomStart > 0 && bottomEnd > bottomStart);
-  const bottomBlock = agent.slice(bottomStart, bottomEnd);
+  const barStart = agent.indexOf("function AgentBottomTabBar");
+  const barEnd = agent.indexOf("function AgentPrimaryTabs", barStart);
+  assert.ok(barStart > 0 && barEnd > barStart);
+  const bottomBlock = agent.slice(barStart, barEnd);
   assert.equal(bottomBlock.includes(">Tasks<"), false);
-  assert.equal(bottomBlock.includes('selectTab("tasks")'), false);
-  assert.ok(bottomBlock.includes("ChatsScreen") === false); // only label in nav
+  assert.equal(bottomBlock.includes('navigate("Tasks")'), false);
+  assert.equal(bottomBlock.includes("ChatsScreen"), false);
   assert.ok(agent.includes("ChatsScreen"));
-  assert.ok(agent.includes('selectTab("chats"'));
+  assert.ok(agent.includes('name="Chats"'));
   console.log("[ui] agent bottom nav 5-tab locked... PASS");
 }
 

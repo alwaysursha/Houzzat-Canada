@@ -80,6 +80,8 @@ apps/pro-mobile/android/build/
 apps/pro-mobile/android/app/build/
 apps/pro-mobile/android/local.properties
 apps/pro-mobile/node_modules/
+apps/pro-mobile/.vendor-tgz/
+.npm-cache/
 *.apk
 *.aab
 

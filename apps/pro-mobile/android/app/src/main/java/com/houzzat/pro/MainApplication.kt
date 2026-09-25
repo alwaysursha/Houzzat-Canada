@@ -10,6 +10,8 @@ import com.facebook.soloader.SoLoader
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.reactcommunity.rndatetimepicker.RNDateTimePickerPackage
 import com.reactnativecommunity.webview.RNCWebViewPackage
+import com.swmansion.rnscreens.RNScreensPackage
+import com.th3rdwave.safeareacontext.SafeAreaContextPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -24,6 +26,8 @@ class MainApplication : Application(), ReactApplication {
                 PdfSharePackage(),
                 RNCWebViewPackage(),
                 RNDateTimePickerPackage(),
+                RNScreensPackage(),
+                SafeAreaContextPackage(),
             )
         }
 

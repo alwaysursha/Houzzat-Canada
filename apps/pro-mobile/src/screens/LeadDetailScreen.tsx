@@ -665,12 +665,15 @@ export function LeadDetailScreen({
   onNavigateLead,
   onBack,
   onPlanViewings,
+  embeddedInShell = false,
 }: {
   leadId: string;
   leadIds?: string[];
   onNavigateLead?: (leadId: string) => void;
   onBack: () => void;
   onPlanViewings?: (leadId: string, leadName?: string, mlsNumbers?: string[]) => void;
+  /** Agent Leads stack already sits under the shell header. */
+  embeddedInShell?: boolean;
 }) {
   const { activeWorkspace } = useAuth();
   const workspaceId = activeWorkspace?.id;
@@ -1500,7 +1503,7 @@ export function LeadDetailScreen({
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Modal header — matches LeadQuickPopup / CustomerProfile modal chrome */}
-      <View style={styles.modalHeader}>
+      <View style={[styles.modalHeader, embeddedInShell && styles.modalHeaderEmbedded]}>
         <TouchableOpacity
           style={styles.closeBtn}
           onPress={onBack}
@@ -2599,6 +2602,9 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     paddingHorizontal: 8,
     backgroundColor: "#FFFFFF",
+  },
+  modalHeaderEmbedded: {
+    paddingTop: 8,
   },
   closeBtn: {
     width: 36,

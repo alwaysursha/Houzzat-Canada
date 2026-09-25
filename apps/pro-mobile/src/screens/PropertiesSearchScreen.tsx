@@ -21,6 +21,14 @@ import {
 import { ShortlistEmailSheet } from "../components/ShortlistEmailSheet";
 import { PropertyDetailModal } from "../components/PropertyDetailModal";
 import {
+  acceptSearchResponse,
+  listingsForQuery,
+  missingMlsNumbers,
+  mlsBatchSearchPath,
+  mlsPrefixSearchPath,
+  parseViewingPropertyQuery,
+} from "../lib/viewing-search";
+import {
   LISTING_IMAGE_LIMIT,
   PropertyListingCard,
 } from "../components/PropertyListingCard";
@@ -78,10 +86,8 @@ export function PropertiesSearchScreen({
   const cached = cacheKey ? propertySearchCache.get(cacheKey) : undefined;
   const cacheHit = cached?.queryKey === queryKey ? cached : undefined;
 
-  const [listings, setListings] = useState<MobileListingCard[]>(
-    cacheHit?.listings ?? [],
-  );
-  const [loading, setLoading] = useState(!cacheHit);
+  const [listings, setListings] = useState<MobileListingCard[]>([]);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -89,6 +95,7 @@ export function PropertiesSearchScreen({
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [detailListing, setDetailListing] = useState<MobileListingCard | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [missingMls, setMissingMls] = useState<string[]>([]);
 
   const {
     isSaved,
@@ -123,21 +130,36 @@ export function PropertiesSearchScreen({
       setError(null);
 
       try {
-        const endpoint = buildPropertiesSearchQuery({ q, filters: f });
-        const res = await mobileApiClient.get<unknown>(endpoint);
-        if (gen !== fetchGenRef.current) return;
-        if (!res.ok) {
-          setError(res.message || "Could not search properties");
-          return;
-        }
-        const parsed = unwrapPropertiesSearch(res.data);
-        setListings(parsed.listings);
-        persistCache(parsed.listings, key);
+      const parsedQuery = parseViewingPropertyQuery(q);
+      if (parsedQuery.kind === "empty" || parsedQuery.kind === "short") {
+        setListings([]);
+        setMissingMls([]);
+        return;
+      }
+      const endpoint =
+        parsedQuery.kind === "mls"
+          ? mlsBatchSearchPath(parsedQuery.mlsNumbers)
+          : parsedQuery.kind === "mls-prefix"
+            ? mlsPrefixSearchPath(parsedQuery.prefix)
+            : buildPropertiesSearchQuery({ q, filters: f });
+      const res = await mobileApiClient.get<unknown>(endpoint);
+      if (!acceptSearchResponse(gen, fetchGenRef.current)) return;
+      if (!res.ok) {
+        setError(res.message || "Could not search properties");
+        setListings([]);
+        setMissingMls([]);
+        return;
+      }
+      const parsed = unwrapPropertiesSearch(res.data);
+      const cards = listingsForQuery(parsedQuery, parsed.listings);
+      setListings(cards);
+      setMissingMls(missingMlsNumbers(parsedQuery, cards));
+      persistCache(cards, key);
       } catch (err: unknown) {
-        if (gen !== fetchGenRef.current) return;
+        if (!acceptSearchResponse(gen, fetchGenRef.current)) return;
         setError(err instanceof Error ? err.message : "Could not search properties");
       } finally {
-        if (gen === fetchGenRef.current) {
+        if (acceptSearchResponse(gen, fetchGenRef.current)) {
           setLoading(false);
           setRefreshing(false);
         }
@@ -147,10 +169,32 @@ export function PropertiesSearchScreen({
   );
 
   useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 3) {
+      fetchGenRef.current += 1;
+      setSubmittedQuery("");
+      setListings([]);
+      setMissingMls([]);
+      setLoading(false);
+      return;
+    }
+    const timer = setTimeout(() => setSubmittedQuery(trimmed), 350);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    const parsed = parseViewingPropertyQuery(submittedQuery);
     setSelected(new Set());
     setStatusMsg(null);
+    if (parsed.kind === "empty" || parsed.kind === "short") {
+      fetchGenRef.current += 1;
+      setListings([]);
+      setMissingMls([]);
+      setLoading(false);
+      return;
+    }
     if (cacheHit) {
-      setListings(cacheHit.listings);
+      setListings(listingsForQuery(parsed, cacheHit.listings));
       setLoading(false);
       void runSearch({ background: true });
     } else {
@@ -253,12 +297,19 @@ export function PropertiesSearchScreen({
         </View>
       );
     }
+    if (query.trim().length < 3) {
+      return (
+        <View style={styles.centerBox}>
+          <Text style={styles.centerText}>Type at least 3 characters to search.</Text>
+        </View>
+      );
+    }
     return (
       <View style={styles.centerBox}>
-        <Text style={styles.centerText}>No listings match your search.</Text>
+        <Text style={styles.centerText}>No property found</Text>
       </View>
     );
-  }, [loading, error, runSearch]);
+  }, [loading, error, runSearch, query]);
 
   const handleSubmitSearch = () => {
     setSubmittedQuery(query.trim());
@@ -291,7 +342,7 @@ export function PropertiesSearchScreen({
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="City, address, MLS…"
+            placeholder="City, address, or MLS numbers"
             placeholderTextColor="#94A3B8"
             style={styles.searchInput}
             returnKeyType="search"
@@ -362,6 +413,12 @@ export function PropertiesSearchScreen({
       {statusMsg ? (
         <View style={styles.statusBanner}>
           <Text style={styles.statusText}>{statusMsg}</Text>
+        </View>
+      ) : null}
+
+      {missingMls.length > 0 ? (
+        <View style={styles.statusBanner}>
+          <Text style={styles.statusText}>Not found: {missingMls.join(", ")}</Text>
         </View>
       ) : null}
 

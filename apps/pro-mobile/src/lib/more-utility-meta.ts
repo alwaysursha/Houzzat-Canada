@@ -10,6 +10,7 @@ export type MoreUtilityId =
   | "notifications"
   | "search"
   | "shortlist"
+  | "viewings"
   | "account";
 
 export const MORE_UTILITY_META: Record<
@@ -57,6 +58,12 @@ export const MORE_UTILITY_META: Record<
     summary:
       "MLS search, multi-select shortlist, and email-to-lead from native Properties.",
     nextStage: "Stage 5.3 — Native Properties Search",
+  },
+  viewings: {
+    title: "Viewings",
+    webPath: "/agent/viewings",
+    summary: "Open the existing viewing planner for a lead.",
+    nextStage: "Uses the current Viewings Planner",
   },
   shortlist: {
     title: "Shortlist",

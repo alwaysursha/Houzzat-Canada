@@ -72,6 +72,8 @@ dependencies {
     implementation("com.google.firebase:firebase-messaging")
     implementation project(':react-native-webview')
     implementation project(':react-native-community_datetimepicker')
+    implementation project(':react-native-screens')
+    implementation project(':react-native-safe-area-context')
 }
 
 apply plugin: "com.google.gms.google-services"
