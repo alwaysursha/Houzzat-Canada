@@ -7,6 +7,19 @@
 /** Suggestions start only after this many typed characters. */
 export const MIN_PROPERTY_SEARCH_LENGTH = 3;
 
+export const SHORT_SEARCH_HINT = "Type at least 3 characters to search.";
+
+/**
+ * Empty and 1–2 typed characters are different states.
+ * Empty loads the personalized feed. A short prefix does not search.
+ */
+export function propertiesBrowsePhase(query: string): "feed" | "short" | "search" {
+  const trimmed = query.trim();
+  if (!trimmed) return "feed";
+  if (trimmed.length < MIN_PROPERTY_SEARCH_LENGTH) return "short";
+  return "search";
+}
+
 /** A finished board number, such as X13815246 or W1234567. */
 const MLS_COMPLETE = /^[A-Z]{1,3}\d{7,8}$/;
 

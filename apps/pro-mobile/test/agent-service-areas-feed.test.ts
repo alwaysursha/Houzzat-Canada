@@ -15,7 +15,12 @@ import {
   parseProspectRegionToServiceAreas,
 } from "../../../src/lib/agent/service-areas";
 import { gtaServiceCities } from "../../../src/lib/geo/regions";
-import { parseViewingPropertyQuery } from "../src/lib/viewing-search";
+import { listingCityInServiceAreas } from "../../../src/lib/listings/precise-property-search";
+import {
+  parseViewingPropertyQuery,
+  propertiesBrowsePhase,
+  SHORT_SEARCH_HINT,
+} from "../src/lib/viewing-search";
 import {
   buildPropertiesFeedQuery,
   buildPropertiesSearchQuery,
@@ -120,7 +125,48 @@ function run() {
   assert.ok(rent.includes("transactionType=LEASE"));
   console.log("  -> feed query: PASS\n");
 
-  console.log("[5] Precision search is unchanged...");
+  console.log("[5] Empty query loads the feed; 1–2 characters do not...");
+  assert.equal(propertiesBrowsePhase(""), "feed");
+  assert.equal(propertiesBrowsePhase("   "), "feed");
+  assert.equal(propertiesBrowsePhase("X"), "short");
+  assert.equal(propertiesBrowsePhase("X1"), "short");
+  assert.equal(propertiesBrowsePhase("X13"), "search");
+  const screen = readApp("src/screens/PropertiesSearchScreen.tsx");
+  assert.ok(screen.includes("propertiesBrowsePhase"));
+  assert.ok(screen.includes("buildPropertiesFeedQuery"));
+  assert.ok(screen.includes('phase === "short"'));
+  assert.ok(screen.includes('usingFeed = phase === "feed"'));
+  assert.ok(screen.includes("SHORT_SEARCH_HINT"));
+  assert.equal(SHORT_SEARCH_HINT, "Type at least 3 characters to search.");
+  const shortBranch = screen.indexOf('phase === "short"');
+  const feedCall = screen.indexOf("buildPropertiesFeedQuery");
+  assert.ok(shortBranch > 0 && feedCall > 0);
+  const emptyCards = [{ mlsNumber: "X13815246" }];
+  const mounted = propertiesBrowsePhase("");
+  assert.equal(mounted, "feed");
+  assert.equal(mounted === "short", false);
+  assert.deepEqual(
+    mounted === "feed" ? emptyCards.map((card) => card.mlsNumber) : [],
+    ["X13815246"],
+  );
+  assert.equal(propertiesBrowsePhase("X") === "short", true);
+  assert.equal(propertiesBrowsePhase("") === "feed", true);
+  assert.ok(listingCityInServiceAreas("Toronto C01", ["Toronto"]));
+  assert.ok(listingCityInServiceAreas("Mississauga", ["Mississauga"]));
+  assert.equal(listingCityInServiceAreas("Toronto C01", ["Mississauga"]), false);
+  assert.ok(listingCityInServiceAreas("Toronto C01", feedCitiesForMarkets([]).cities));
+  assert.equal(listingCityInServiceAreas("London", ["Mississauga"]), false);
+  const searchRoute = readRepo("src/app/api/mobile/v2/properties/search/route.ts");
+  const feedRoute = searchRoute.slice(
+    searchRoute.indexOf('mode === "feed"'),
+    searchRoute.indexOf('mode === "prefix"'),
+  );
+  assert.ok(feedRoute.includes("findFeedListings"));
+  assert.equal(feedRoute.includes("provider.search"), false);
+  assert.ok(feedRoute.includes('transactionType: transaction'));
+  console.log("  -> mount: PASS\n");
+
+  console.log("[6] Precision search is unchanged...");
   const exact = parseViewingPropertyQuery("X13815246");
   assert.equal(exact.kind, "mls");
   if (exact.kind === "mls") {
@@ -143,7 +189,7 @@ function run() {
   assert.ok(properties.includes('transactionType: "SALE"') || properties.includes("transactionType=SALE") || readApp("src/types/property.ts").includes('transactionType: "SALE"'));
   console.log("  -> precision: PASS\n");
 
-  console.log("[6] Profile storage is per agent and workspace-gated...");
+  console.log("[7] Profile storage is per agent and workspace-gated...");
   const route = readRepo("src/app/api/mobile/v2/profile/service-areas/route.ts");
   assert.ok(route.includes("authorizeMobileWorkspaceAccess"));
   assert.ok(route.includes("access.userId"));
@@ -152,7 +198,8 @@ function run() {
   const feedBlock = search.slice(search.indexOf('mode === "feed"'), search.indexOf('mode === "prefix"'));
   assert.ok(feedBlock.includes("access.userId"));
   assert.ok(feedBlock.includes("feedCitiesForMarkets"));
-  assert.ok(feedBlock.includes("params.q = undefined"));
+  assert.ok(feedBlock.includes("findFeedListings"));
+  assert.equal(feedBlock.includes("provider.search"), false);
   const addressBlock = search.slice(search.indexOf('mode === "address"'));
   assert.equal(addressBlock.includes("feedCitiesForMarkets"), false);
   const profile = readApp("src/components/ServiceAreasCard.tsx");

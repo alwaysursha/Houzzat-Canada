@@ -18,6 +18,7 @@ import { getListingProvider } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
 import { parseListingSearchQueryParams } from "@/lib/listings/parse-search-query-params";
 import {
+  findFeedListings,
   findListingsByMlsPrefix,
   findListingsByPreciseAddress,
   normalizeExactMlsTokens,
@@ -55,22 +56,31 @@ export async function GET(request: Request) {
         defaultLimit: 60,
         includeMapBounds: false,
       });
-      params.q = undefined;
-      params.cities = feed.cities;
-      params.city = undefined;
-      if (params.limit != null && params.limit > MAX_LIMIT) {
-        params.limit = MAX_LIMIT;
-      }
-      const provider = getListingProvider();
-      const result = await provider.search(params);
+      const explicitCities = params.cities?.filter((city) => city.trim()) ?? [];
+      const cities = explicitCities.length > 0 ? explicitCities : feed.cities;
+      const transaction =
+        params.transactionType === "SALE" || params.transactionType === "LEASE"
+          ? params.transactionType
+          : "SALE";
+      const cards = await findFeedListings({
+        cities,
+        transactionType: transaction,
+        limit: Math.min(params.limit ?? 60, MAX_LIMIT),
+        minPrice: params.minPrice,
+        maxPrice: params.maxPrice,
+        minBeds: params.minBeds,
+        minBaths: params.minBaths,
+        propertyTypes: params.propertyTypes,
+      });
+      const listings = cards.map((card) => enrichListingCardForMobile(card));
       return NextResponse.json({
         ok: true,
         data: {
-          listings: result.items.map((item) => enrichListingCardForMobile(item)),
-          total: result.total ?? result.items.length,
-          nextCursor: result.nextCursor ?? null,
-          limit: params.limit ?? 60,
-          serviceAreaSource: feed.source,
+          listings,
+          total: listings.length,
+          nextCursor: null,
+          limit: Math.min(params.limit ?? 60, MAX_LIMIT),
+          serviceAreaSource: explicitCities.length > 0 ? "filter" : feed.source,
         },
       });
     }

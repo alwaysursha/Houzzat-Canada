@@ -27,6 +27,8 @@ import {
   mlsBatchSearchPath,
   mlsPrefixSearchPath,
   parseViewingPropertyQuery,
+  propertiesBrowsePhase,
+  SHORT_SEARCH_HINT,
 } from "../lib/viewing-search";
 import {
   LISTING_IMAGE_LIMIT,
@@ -83,12 +85,8 @@ export function PropertiesSearchScreen({
     useState<PropertySearchFilters>(DEFAULT_PROPERTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const queryKey = filtersQueryKey(submittedQuery, filters);
-  const cached = cacheKey ? propertySearchCache.get(cacheKey) : undefined;
-  const cacheHit = cached?.queryKey === queryKey ? cached : undefined;
-
   const [listings, setListings] = useState<MobileListingCard[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -131,8 +129,15 @@ export function PropertiesSearchScreen({
       setError(null);
 
       try {
+      const phase = propertiesBrowsePhase(q);
+      if (phase === "short") {
+        setListings([]);
+        setMissingMls([]);
+        setLoading(false);
+        return;
+      }
       const parsedQuery = parseViewingPropertyQuery(q);
-      const usingFeed = parsedQuery.kind === "empty" || parsedQuery.kind === "short";
+      const usingFeed = phase === "feed";
       const endpoint = usingFeed
         ? buildPropertiesFeedQuery({ filters: f })
         : parsedQuery.kind === "mls"
@@ -169,34 +174,25 @@ export function PropertiesSearchScreen({
   );
 
   useEffect(() => {
-    const trimmed = query.trim();
-    if (trimmed.length < 3) {
-      setSubmittedQuery("");
-      setMissingMls([]);
-      return;
-    }
-    const timer = setTimeout(() => setSubmittedQuery(trimmed), 350);
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  useEffect(() => {
-    const parsed = parseViewingPropertyQuery(submittedQuery);
+    const phase = propertiesBrowsePhase(query);
     setSelected(new Set());
     setStatusMsg(null);
-    if (parsed.kind === "empty" || parsed.kind === "short") {
+    if (phase === "short") {
+      fetchGenRef.current += 1;
+      setSubmittedQuery("");
+      setListings([]);
       setMissingMls([]);
-      void runSearch();
+      setLoading(false);
+      setError(null);
       return;
     }
-    if (cacheHit) {
-      setListings(listingsForQuery(parsed, cacheHit.listings));
-      setLoading(false);
-      void runSearch({ background: true });
-    } else {
-      void runSearch();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- workspace / filter change
-  }, [workspaceId, submittedQuery, filters]);
+    const trimmed = query.trim();
+    const timer = setTimeout(() => {
+      setSubmittedQuery(trimmed);
+      void runSearch({ q: trimmed });
+    }, phase === "feed" ? 0 : 350);
+    return () => clearTimeout(timer);
+  }, [workspaceId, query, filters, runSearch]);
 
   const activeFilterCount = useMemo(() => {
     let n = 0;
@@ -292,7 +288,14 @@ export function PropertiesSearchScreen({
         </View>
       );
     }
-    if (query.trim().length < 3) {
+    if (propertiesBrowsePhase(query) === "short") {
+      return (
+        <View style={styles.centerBox}>
+          <Text style={styles.centerText}>{SHORT_SEARCH_HINT}</Text>
+        </View>
+      );
+    }
+    if (propertiesBrowsePhase(query) === "feed") {
       return (
         <View style={styles.centerBox}>
           <Text style={styles.centerText}>No listings in your service areas.</Text>
