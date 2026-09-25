@@ -16,6 +16,7 @@ import type {
   WorkspaceStatus,
 } from "@prisma/client";
 import { writePlatformAuditEvent } from "@/lib/platform/audit";
+import { seedOwnerServiceAreasFromProspect } from "@/lib/agent/service-areas-store";
 import { provisioningPhoneSeedFromProspect } from "@/lib/platform/activation/sync-owner-canonical-profile";
 import {
   FEATURE_CUSTOM_CONSUMER_APP,
@@ -48,6 +49,7 @@ export type ProspectIdentity = {
   businessName: string | null;
   brokerageName: string | null;
   phone: string | null;
+  region?: string | null;
 };
 
 export type LoadedSubscription = {
@@ -486,6 +488,12 @@ async function stepCreateOwnerMembership(ctx: StepContext): Promise<void> {
       },
     });
   }
+
+  await seedOwnerServiceAreasFromProspect(
+    ctx.db,
+    user.id,
+    ctx.subscription.offer?.prospect.region,
+  );
 
   const workspace = await ctx.db.workspace.findUnique({
     where: { id: ctx.workspaceId },

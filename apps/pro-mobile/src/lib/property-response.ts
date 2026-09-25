@@ -56,6 +56,36 @@ export function unwrapShortlistEmail(data: unknown): ShortlistEmailData | null {
   return null;
 }
 
+export function buildPropertiesFeedQuery(input: {
+  filters: {
+    transactionType: string;
+    sort: string;
+    minPrice: string;
+    maxPrice: string;
+    minBeds: string;
+    minBaths: string;
+    openHouseOnly: boolean;
+    propertyTypes: string[];
+  };
+}): string {
+  return withQuery("/properties/search", {
+    mode: "feed",
+    transactionType: input.filters.transactionType,
+    sort: input.filters.sort,
+    limit: "60",
+    status: "ACTIVE",
+    minPrice: input.filters.minPrice.trim() || undefined,
+    maxPrice: input.filters.maxPrice.trim() || undefined,
+    minBeds: input.filters.minBeds.trim() || undefined,
+    minBaths: input.filters.minBaths.trim() || undefined,
+    openHouseOnly: input.filters.openHouseOnly ? "1" : undefined,
+    propertyTypes:
+      input.filters.propertyTypes.length > 0
+        ? input.filters.propertyTypes.join(",")
+        : undefined,
+  });
+}
+
 export function buildPropertiesSearchQuery(input: {
   q: string;
   filters: {

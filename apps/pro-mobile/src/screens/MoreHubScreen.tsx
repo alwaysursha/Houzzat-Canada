@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ServiceAreasCard } from "../components/ServiceAreasCard";
 import {
   MORE_UTILITY_META,
   type MoreUtilityId,
@@ -83,6 +84,8 @@ export function MoreHubScreen({
           </View>
         </View>
       </View>
+
+      <ServiceAreasCard />
 
       <View style={styles.card}>
         <Text style={styles.cardSectionTitle}>Active Workspace</Text>

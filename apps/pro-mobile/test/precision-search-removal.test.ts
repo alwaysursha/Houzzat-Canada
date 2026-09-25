@@ -145,8 +145,9 @@ function run() {
   assert.ok(planner.indexOf("styles.removeAllBtn") < planner.indexOf('label="Viewing date"'));
   assert.ok(planner.includes("Remove all properties from this viewing day?"));
   const searchRoute = readRepo("src/app/api/mobile/v2/properties/search/route.ts");
-  assert.ok(searchRoute.indexOf('mode === "prefix"') < searchRoute.indexOf("provider.search"));
-  assert.ok(searchRoute.indexOf('mode === "exact"') < searchRoute.indexOf("provider.search"));
+  const fallbackSearch = searchRoute.lastIndexOf("provider.search");
+  assert.ok(searchRoute.indexOf('mode === "prefix"') < fallbackSearch);
+  assert.ok(searchRoute.indexOf('mode === "exact"') < fallbackSearch);
   assert.ok(searchRoute.includes("findListingsByPreciseAddress"));
   console.log("  -> removal: PASS\n");
 

@@ -115,6 +115,7 @@ async function loadSubscription(
               businessName: true,
               brokerageName: true,
               phone: true,
+              region: true,
             },
           },
         },

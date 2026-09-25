@@ -313,6 +313,25 @@ export function staticOntarioHubCities(): string[] {
   return dedupeCityNames(cities).sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * Greater Toronto Area for HouzzatPRO's empty-profile property feed.
+ * Toronto, Peel, York, Durham, and Halton from MARKET_REGIONS.
+ * London, Niagara, Hamilton, and Kitchener–Waterloo stay out of this fallback.
+ */
+export const GTA_MARKET_REGION_IDS = [
+  "toronto",
+  "peel",
+  "york",
+  "durham",
+  "halton",
+] as const satisfies ReadonlyArray<Exclude<MarketRegionId, "default">>;
+
+export function gtaServiceCities(): string[] {
+  return dedupeCityNames(
+    GTA_MARKET_REGION_IDS.flatMap((id) => MARKET_REGIONS[id].cities),
+  );
+}
+
 /** Map fly-to target for a city name (case-insensitive). */
 export function cityMapCenter(
   city: string | null | undefined,

@@ -35,6 +35,7 @@ import {
 import { mobileApiClient } from "../api/client";
 import { usePropertySavedListings } from "../hooks/usePropertySavedListings";
 import {
+  buildPropertiesFeedQuery,
   buildPropertiesSearchQuery,
   unwrapPropertiesSearch,
 } from "../lib/property-response";
@@ -131,13 +132,10 @@ export function PropertiesSearchScreen({
 
       try {
       const parsedQuery = parseViewingPropertyQuery(q);
-      if (parsedQuery.kind === "empty" || parsedQuery.kind === "short") {
-        setListings([]);
-        setMissingMls([]);
-        return;
-      }
-      const endpoint =
-        parsedQuery.kind === "mls"
+      const usingFeed = parsedQuery.kind === "empty" || parsedQuery.kind === "short";
+      const endpoint = usingFeed
+        ? buildPropertiesFeedQuery({ filters: f })
+        : parsedQuery.kind === "mls"
           ? mlsBatchSearchPath(parsedQuery.mlsNumbers)
           : parsedQuery.kind === "mls-prefix"
             ? mlsPrefixSearchPath(parsedQuery.prefix)
@@ -151,9 +149,11 @@ export function PropertiesSearchScreen({
         return;
       }
       const parsed = unwrapPropertiesSearch(res.data);
-      const cards = listingsForQuery(parsedQuery, parsed.listings);
+      const cards = usingFeed
+        ? parsed.listings
+        : listingsForQuery(parsedQuery, parsed.listings);
       setListings(cards);
-      setMissingMls(missingMlsNumbers(parsedQuery, cards));
+      setMissingMls(usingFeed ? [] : missingMlsNumbers(parsedQuery, cards));
       persistCache(cards, key);
       } catch (err: unknown) {
         if (!acceptSearchResponse(gen, fetchGenRef.current)) return;
@@ -171,11 +171,8 @@ export function PropertiesSearchScreen({
   useEffect(() => {
     const trimmed = query.trim();
     if (trimmed.length < 3) {
-      fetchGenRef.current += 1;
       setSubmittedQuery("");
-      setListings([]);
       setMissingMls([]);
-      setLoading(false);
       return;
     }
     const timer = setTimeout(() => setSubmittedQuery(trimmed), 350);
@@ -187,10 +184,8 @@ export function PropertiesSearchScreen({
     setSelected(new Set());
     setStatusMsg(null);
     if (parsed.kind === "empty" || parsed.kind === "short") {
-      fetchGenRef.current += 1;
-      setListings([]);
       setMissingMls([]);
-      setLoading(false);
+      void runSearch();
       return;
     }
     if (cacheHit) {
@@ -300,7 +295,7 @@ export function PropertiesSearchScreen({
     if (query.trim().length < 3) {
       return (
         <View style={styles.centerBox}>
-          <Text style={styles.centerText}>Type at least 3 characters to search.</Text>
+          <Text style={styles.centerText}>No listings in your service areas.</Text>
         </View>
       );
     }
@@ -375,7 +370,7 @@ export function PropertiesSearchScreen({
                 filters.transactionType === "SALE" && styles.chipTextActive,
               ]}
             >
-              Buy
+              For Sale
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -393,7 +388,7 @@ export function PropertiesSearchScreen({
                 filters.transactionType === "LEASE" && styles.chipTextActive,
               ]}
             >
-              Rent
+              For Rent
             </Text>
           </TouchableOpacity>
           <TouchableOpacity

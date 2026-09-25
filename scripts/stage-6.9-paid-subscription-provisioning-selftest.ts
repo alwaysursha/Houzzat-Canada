@@ -869,6 +869,22 @@ function createFakePrisma(state: FakeState): PrismaClient {
         return { ...row };
       },
     },
+    agentProfile: {
+      async findUnique() {
+        return null;
+      },
+      async upsert({
+        create,
+      }: {
+        create?: { userId?: string; markets?: string[] };
+      }) {
+        return {
+          userId: create?.userId ?? "user",
+          markets: create?.markets ?? [],
+          marketsCustomizedAt: null,
+        };
+      },
+    },
     user: {
       async findUnique({
         where,

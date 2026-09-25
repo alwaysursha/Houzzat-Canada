@@ -1161,7 +1161,16 @@ model AgentProfile {
   id        String   @id @default(cuid())
   userId    String   @unique
   bio       String?  @db.Text
+  /**
+   * Canonical areas this agent serves (cities and region labels).
+   * Per agent, not per workspace. Empty means "not chosen", not MLS denial.
+   */
   markets   String[] @default([])
+  /**
+   * Set when the agent saves service areas, including a clear.
+   * Demo/onboarding geography may seed markets only while this is null.
+   */
+  marketsCustomizedAt DateTime?
   /**
    * Display cellphone. Canonical SMS destination remains User.phoneE164.
    * Kept in lockstep with User.phone by Admin-managed profile writes.

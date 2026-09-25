@@ -12,7 +12,10 @@
  */
 
 import { NextResponse } from "next/server";
+import { feedCitiesForMarkets } from "@/lib/agent/service-areas";
+import { loadAgentServiceAreas } from "@/lib/agent/service-areas-store";
 import { getListingProvider } from "@/lib/listings/provider";
+import { prisma } from "@/lib/prisma";
 import { parseListingSearchQueryParams } from "@/lib/listings/parse-search-query-params";
 import {
   findListingsByMlsPrefix,
@@ -40,6 +43,38 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const mode = url.searchParams.get("mode");
+
+    if (mode === "feed") {
+      const markets = await loadAgentServiceAreas(
+        prisma,
+        access.userId,
+        access.workspaceId,
+      );
+      const feed = feedCitiesForMarkets(markets);
+      const params = parseListingSearchQueryParams(url.searchParams, {
+        defaultLimit: 60,
+        includeMapBounds: false,
+      });
+      params.q = undefined;
+      params.cities = feed.cities;
+      params.city = undefined;
+      if (params.limit != null && params.limit > MAX_LIMIT) {
+        params.limit = MAX_LIMIT;
+      }
+      const provider = getListingProvider();
+      const result = await provider.search(params);
+      return NextResponse.json({
+        ok: true,
+        data: {
+          listings: result.items.map((item) => enrichListingCardForMobile(item)),
+          total: result.total ?? result.items.length,
+          nextCursor: result.nextCursor ?? null,
+          limit: params.limit ?? 60,
+          serviceAreaSource: feed.source,
+        },
+      });
+    }
+
     const mlsParam = url.searchParams.get("mls");
     const qParam = url.searchParams.get("q")?.trim() ?? "";
 
