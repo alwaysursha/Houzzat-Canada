@@ -138,9 +138,7 @@ async function main() {
       PLATFORM_HOME_SECONDARY_CTA_HREF,
       "https://app.houzzatpro.com/pro/sign-in",
     );
-    const home = read(
-      "src/components/platform/public/HouzzatProPlatformHome.tsx",
-    );
+    const home = read("src/components/platform/public/HomePreviewPage.tsx");
     const header = read(
       "src/components/platform/public/PlatformMarketingHeader.tsx",
     );
@@ -154,7 +152,7 @@ async function main() {
       assert.ok(!src.includes("'/auth/sign-in'"));
     }
     assert.ok(home.includes("PLATFORM_HOME_PRIMARY_CTA_HREF"));
-    assert.ok(home.includes("Available"));
+    assert.ok(home.includes("PLATFORM_HOME_SECONDARY_CTA_HREF"));
     assert.ok(copy.includes("Team Signature"));
     assert.ok(copy.includes('status: "available"'));
     assert.ok(
@@ -180,7 +178,7 @@ async function main() {
 
     const page = read("src/app/(marketing)/page.tsx");
     assert.ok(page.includes("isHouzzatProPlatformHomeRequest"));
-    assert.ok(page.includes("HouzzatProPlatformHome"));
+    assert.ok(page.includes("HomePreviewPage"));
     assert.ok(page.includes("resolveMarketingPresentationBrand"));
 
     const terms = read("src/app/(marketing)/terms/page.tsx");

@@ -141,7 +141,13 @@ export default async function MarketingLayout({
     return <>{children}</>;
   }
 
-  // V1 SaaS sales shell: / , /terms, /privacy on houzzatpro.com / www only.
+  // Approved HouzzatPRO homepage owns its header and footer.
+  // Terms, privacy, pricing, and templates keep the shared sales shell.
+  if (await isHouzzatProPlatformHomeRequest()) {
+    return <>{children}</>;
+  }
+
+  // V1 SaaS sales shell: /terms, /privacy, /pricing, /templates on houzzatpro.com / www only.
   // Does not resolve tenancy and does not grant tenant authority.
   if (await isHouzzatProPlatformMarketingShellRequest()) {
     return (

@@ -23,6 +23,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
         "/viewings/share/",
         "/r/",
         "/coming-soon",
+        "/home-preview",
       ],
     },
     sitemap: `${siteUrl}/sitemap.xml`,

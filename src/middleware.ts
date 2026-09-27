@@ -89,6 +89,12 @@ function readShellHint(request: NextRequest) {
 
 export default auth((request) => {
   const { pathname } = request.nextUrl;
+  if (pathname === "/home-preview") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    url.search = "";
+    return NextResponse.redirect(url, 308);
+  }
   const session = request.auth;
   const shellHint = readShellHint(request);
 

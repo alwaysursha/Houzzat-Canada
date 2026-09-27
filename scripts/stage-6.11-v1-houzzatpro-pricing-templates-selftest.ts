@@ -166,11 +166,12 @@ async function main() {
     assert.ok(footer.includes('href="/pricing"'));
     assert.ok(footer.includes('href="/templates"'));
 
-    const home = read(
-      "src/components/platform/public/HouzzatProPlatformHome.tsx",
+    const home = read("src/components/platform/public/HomePreviewPage.tsx");
+    assert.ok(home.includes('"/pricing"'));
+    const header = read(
+      "src/components/platform/public/PlatformMarketingHeader.tsx",
     );
-    assert.ok(home.includes('href="/pricing"'));
-    assert.ok(home.includes('href="/templates"'));
+    assert.ok(header.includes("PLATFORM_HOME_NAV"));
 
     const shell = read("src/lib/platform/public/platform-marketing-shell.ts");
     assert.ok(shell.includes("PLATFORM_MARKETING_PRICING_PATH"));

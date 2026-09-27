@@ -4,7 +4,8 @@ import { HomeAreaRailLive } from "@/components/home/HomeAreaRailLive";
 import { HomeBrowseChips } from "@/components/home/HomeBrowseChips";
 import { HomeDeferredBody } from "@/components/home/HomeDeferredBody";
 import { HomeHeroSearch } from "@/components/home/HomeHeroSearch";
-import { HouzzatProPlatformHome } from "@/components/platform/public/HouzzatProPlatformHome";
+import { HomePreviewMotion } from "@/components/platform/public/HomePreviewMotion";
+import { HomePreviewPage } from "@/components/platform/public/HomePreviewPage";
 import { AgentSignatureHome } from "@/components/templates/agent-signature/AgentSignatureHome";
 import { TeamSignatureHome } from "@/components/templates/team-signature/TeamSignatureHome";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
@@ -27,7 +28,11 @@ const HERO_MOBILE_GRADIENT =
 export default async function HomePage() {
   // Platform sales apex (houzzatpro.com / www) — never tenant homepage.
   if (await isHouzzatProPlatformHomeRequest()) {
-    return <HouzzatProPlatformHome />;
+    return (
+      <HomePreviewMotion>
+        <HomePreviewPage />
+      </HomePreviewMotion>
+    );
   }
 
   const chromeBrand = await resolveMarketingPresentationBrand();
