@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import type { CSSProperties } from "react";
 import {
   Bell,
@@ -21,7 +20,6 @@ import { HomePreviewEverything } from "@/components/platform/public/HomePreviewE
 import { HomePreviewFinalCta } from "@/components/platform/public/HomePreviewFinalCta";
 import { HomePreviewLeadOrbit } from "@/components/platform/public/HomePreviewLeadOrbit";
 import { HomePreviewNav } from "@/components/platform/public/HomePreviewNav";
-import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import {
   PLATFORM_HOME_PRIMARY_CTA_HREF,
   PLATFORM_HOME_SECONDARY_CTA_HREF,
@@ -41,14 +39,6 @@ import {
  * Rendered as the HouzzatPRO apex homepage (/).
  * Metadata stays on the marketing layout: indexable, no preview robots.
  */
-
-const NAV = [
-  { label: "Platform", href: "#platform" },
-  { label: "Features", href: "#platform" },
-  { label: "Solutions", href: "#platform" },
-  { label: "Pricing", href: "/pricing" },
-  { label: "Resources", href: "/support" },
-] as const;
 
 const DESKTOP_SHOT =
   "/images/home-preview/houzzatpro-launchpad-desktop.png";
@@ -279,6 +269,11 @@ function LeadProfilePhone({ compact = false }: { compact?: boolean }) {
 
 export function HomePreviewPage() {
   return (
+    <>
+      <HomePreviewNav
+        loginHref={PLATFORM_HOME_SECONDARY_CTA_HREF}
+        demoHref={PLATFORM_HOME_PRIMARY_CTA_HREF}
+      />
     <main className="min-h-dvh overflow-x-hidden bg-[#fbfcf9] text-[#0d1715]">
       {/* HERO */}
       <section className="relative isolate overflow-hidden border-b border-[#dfe8e1] bg-[#f7faf6]">
@@ -289,20 +284,6 @@ export function HomePreviewPage() {
           style={{ backgroundImage: `url("${HERO_HOME}")` }}
         />
         <div className="pointer-events-none absolute inset-0 -z-10 hidden bg-[linear-gradient(90deg,#f7faf6_0%,#f7faf6_38%,rgba(247,250,246,.82)_52%,rgba(247,250,246,.14)_78%,rgba(247,250,246,.02)_100%)] lg:block" />
-
-        {/* HEADER */}
-        <header className="relative z-40">
-          <div className="relative mx-auto flex max-w-[1480px] items-center justify-between gap-2.5 px-4 py-3 sm:gap-5 sm:px-8 lg:px-10 lg:py-5 xl:px-12">
-            <Link href="/" aria-label="HouzzatPRO home" className="shrink-0" data-hp-enter="fade" style={motionDelay(40)}>
-              <HouzzatProWordmark size="md" className="text-[1.2rem] min-[380px]:text-[1.45rem] sm:text-[1.7rem]" />
-            </Link>
-            <HomePreviewNav
-              links={NAV}
-              loginHref={PLATFORM_HOME_SECONDARY_CTA_HREF}
-              demoHref={PLATFORM_HOME_PRIMARY_CTA_HREF}
-            />
-          </div>
-        </header>
 
         <div className="mx-auto grid max-w-[1480px] grid-cols-1 items-center gap-5 px-5 pb-6 pt-3 sm:px-8 lg:min-h-[560px] lg:grid-cols-[0.82fr_1.18fr] lg:gap-3 lg:px-10 lg:pb-12 lg:pt-7 xl:px-12">
           {/* COPY */}
@@ -1024,5 +1005,6 @@ export function HomePreviewPage() {
       {/* Deliberate stop point.
           Do not build later sections until this visual foundation is approved. */}
     </main>
+    </>
   );
 }
