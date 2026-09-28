@@ -87,3 +87,53 @@
     background: #c9e2d6;
   }
 }
+
+.hp-motion .hp-pub .hp-plan-card {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.hp-motion .hp-pub .hp-plan-arrow {
+  display: inline-block;
+  transition: transform 180ms ease;
+}
+
+.hp-motion .hp-pub .hp-plan-mark {
+  color: #7b9088;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.hp-motion .hp-pub .hp-plan-mark.is-yes {
+  color: #07583f;
+}
+
+.hp-motion .hp-pub .hp-plan-mark.is-yes::before {
+  content: "✓ ";
+}
+
+.hp-motion .hp-pub .hp-plan-mark.is-addon {
+  color: #0a5a42;
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .hp-motion .hp-pub .hp-plan-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 22px 50px rgba(16, 40, 32, 0.1);
+  }
+
+  .hp-motion .hp-pub .hp-plan-card-featured:hover {
+    box-shadow: 0 24px 56px rgba(7, 88, 63, 0.28);
+  }
+
+  .hp-motion .hp-pub .hp-plan-cta:hover .hp-plan-arrow {
+    transform: translateX(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hp-motion .hp-pub .hp-plan-card,
+  .hp-motion .hp-pub .hp-plan-arrow {
+    transition: none;
+  }
+}

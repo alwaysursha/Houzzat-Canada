@@ -1,12 +1,11 @@
 import { PublicSiteFrame } from "@/components/platform/public/site/PublicSiteFrame";
-import { PublicStoryView } from "@/components/platform/public/site/PublicStoryView";
-import { publicStory } from "@/components/platform/public/site/public-stories";
+import { HouzzatProPlansExperience } from "@/components/platform/public/HouzzatProPlansExperience";
 
-/** HouzzatPRO /pricing — private proposal, no public dollar amounts. */
+/** HouzzatPRO /pricing — catalog packages, no public dollar amounts. */
 export function HouzzatProPlatformPricing() {
   return (
     <PublicSiteFrame pathname="/pricing">
-      <PublicStoryView story={publicStory("/pricing")} />
+      <HouzzatProPlansExperience />
     </PublicSiteFrame>
   );
 }
