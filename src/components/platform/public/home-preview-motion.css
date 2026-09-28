@@ -665,6 +665,10 @@
     transform: rotate(180deg);
   }
 
+  .hp-motion .hp-trigger.is-current {
+    background: #eef6f1;
+  }
+
   .hp-motion .hp-mega-columns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .hp-motion .hp-mega-platform { grid-template-columns: minmax(0, 1.7fr) minmax(220px, 0.8fr); }
   .hp-motion .hp-mega-solutions { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(200px, 0.8fr); }

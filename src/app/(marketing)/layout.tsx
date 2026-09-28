@@ -58,6 +58,7 @@ import {
 } from "@/components/platform/status/PlatformSuspendedPage";
 import { PlatformMarketingFooter } from "@/components/platform/public/PlatformMarketingFooter";
 import { PlatformMarketingHeader } from "@/components/platform/public/PlatformMarketingHeader";
+import { isHouzzatProOwnedChromeRequest } from "@/lib/platform/public/public-site-paths";
 
 /** Hostname-aware tenancy — must not be statically generated (see tenancy-cache-policy). */
 export const dynamic = "force-dynamic";
@@ -144,6 +145,10 @@ export default async function MarketingLayout({
   // Approved HouzzatPRO homepage owns its header and footer.
   // Terms, privacy, pricing, and templates keep the shared sales shell.
   if (await isHouzzatProPlatformHomeRequest()) {
+    return <>{children}</>;
+  }
+
+  if (await isHouzzatProOwnedChromeRequest()) {
     return <>{children}</>;
   }
 

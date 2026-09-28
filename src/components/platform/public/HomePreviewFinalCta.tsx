@@ -30,30 +30,33 @@ const callouts: { label: string; icon: LucideIcon; place: string }[] = [
 
 const footerColumns: { title: string; links: { label: string; href?: string }[] }[] = [
   {
-    title: "Product",
+    title: "Platform",
     links: [
-      { label: "Features", href: "#platform" },
-      { label: "Mobile App", href: "#mobile-leads" },
-      { label: "Consumer Website", href: "#consumer-website" },
-      { label: "Integrations" },
+      { label: "Platform", href: "/product" },
+      { label: "CRM", href: "/product/crm" },
+      { label: "Website", href: "/product/website" },
+      { label: "Mobile", href: "/product/mobile" },
+      { label: "Pricing", href: "/pricing" },
     ],
   },
   {
-    title: "Company",
+    title: "Solutions",
     links: [
-      { label: "About Us" },
-      { label: "Careers" },
-      { label: "Contact" },
-      { label: "Blog" },
+      { label: "Agents", href: "/solutions/agents" },
+      { label: "Teams", href: "/solutions/teams" },
+      { label: "Brokerages", href: "/solutions/brokerages" },
     ],
   },
   {
-    title: "Support",
+    title: "Resources",
     links: [
+      { label: "Resources", href: "/resources" },
+      { label: "Blog", href: "/blog" },
+      { label: "FAQ", href: "/faq" },
+      { label: "Contact", href: "/contact" },
       { label: "Help Centre", href: "/support" },
-      { label: "Privacy Policy", href: "/privacy" },
-      { label: "Terms of Service", href: "/terms" },
-      { label: "Security" },
+      { label: "Privacy", href: "/privacy" },
+      { label: "Terms", href: "/terms" },
     ],
   },
 ];
@@ -144,36 +147,39 @@ export function HomePreviewFinalCta() {
         </div>
       </section>
 
-      <footer className="bg-white" data-hp-reveal="fade" style={motionDelay(40)}>
-        <div className="mx-auto max-w-[1500px] px-6 py-8 lg:px-10 lg:py-12">
-          <div className="lg:grid lg:grid-cols-[1.7fr_1fr_1fr_1fr_1fr] lg:gap-10">
-            <div>
-              <Link href="/" aria-label="HouzzatPRO home">
-                <HouzzatProWordmark size="md" className="text-[1.7rem] text-[#10201c]" />
-              </Link>
-              <p className="mt-4 max-w-[360px] text-sm leading-6 text-neutral-500">
-                The all-in-one real estate lead generation platform built for modern agents and brokerages.
-              </p>
-            </div>
-            <FooterAccordions columns={footerColumns} />
-            {footerColumns.map((column) => (
-              <div key={column.title} className="hidden lg:block">
-                <FooterCol title={column.title} links={column.links} />
-              </div>
-            ))}
-            <div className="hidden lg:block">
-              <h3 className="font-semibold text-[#10201c]">Follow Us</h3>
-            </div>
-          </div>
-          <div className="mt-8 flex flex-col gap-3 border-t border-neutral-200 pt-6 text-sm text-neutral-500 lg:mt-10 lg:flex-row lg:items-center lg:justify-between">
-            <p>© 2026 HouzzatPRO. All rights reserved.</p>
-            <p>
-              Built for Real Estate Professionals <span className="mx-2">|</span> Powered by Houzzat
+      <HomePreviewSiteFooter />
+    </>
+  );
+}
+
+export function HomePreviewSiteFooter() {
+  return (
+    <footer className="bg-white">
+      <div className="mx-auto max-w-[1500px] px-6 py-8 lg:px-10 lg:py-12">
+        <div className="lg:grid lg:grid-cols-[1.7fr_1fr_1fr_1fr] lg:gap-10">
+          <div>
+            <Link href="/" aria-label="HouzzatPRO home">
+              <HouzzatProWordmark size="md" className="text-[1.7rem] text-[#10201c]" />
+            </Link>
+            <p className="mt-4 max-w-[360px] text-sm leading-6 text-neutral-500">
+              The all-in-one real estate lead generation platform built for modern agents and brokerages.
             </p>
           </div>
+          <FooterAccordions columns={footerColumns} />
+          {footerColumns.map((column) => (
+            <div key={column.title} className="hidden lg:block">
+              <FooterCol title={column.title} links={column.links} />
+            </div>
+          ))}
         </div>
-      </footer>
-    </>
+        <div className="mt-8 flex flex-col gap-3 border-t border-neutral-200 pt-6 text-sm text-neutral-500 lg:mt-10 lg:flex-row lg:items-center lg:justify-between">
+          <p>© 2026 HouzzatPRO. All rights reserved.</p>
+          <p>
+            Built for Real Estate Professionals <span className="mx-2">|</span> Powered by Houzzat
+          </p>
+        </div>
+      </div>
+    </footer>
   );
 }
 

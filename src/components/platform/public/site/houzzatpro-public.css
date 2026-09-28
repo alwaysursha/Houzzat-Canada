@@ -1,0 +1,319 @@
+/* HouzzatPRO public pages. Every selector stays under .hp-motion .hp-pub. */
+
+.hp-motion .hp-pub {
+  min-height: 100dvh;
+  background: #fbfcf9;
+  color: #0d1715;
+  overflow-x: clip;
+}
+
+.hp-motion .hp-pub-main {
+  overflow-x: clip;
+}
+
+.hp-motion .hp-pub-hero,
+.hp-motion .hp-pub-band,
+.hp-motion .hp-pub-note,
+.hp-motion .hp-pub-card,
+.hp-motion .hp-pub-shot,
+.hp-motion .hp-pub-step,
+.hp-motion .hp-pub-empty,
+.hp-motion .hp-pub-faq-item,
+.hp-motion .hp-pub-path {
+  border: 1px solid rgba(18, 48, 38, 0.08);
+  border-radius: 24px;
+  background: #f7faf6;
+}
+
+.hp-motion .hp-pub-hero,
+.hp-motion .hp-pub-band,
+.hp-motion .hp-pub-split,
+.hp-motion .hp-pub-hub,
+.hp-motion .hp-pub-faq,
+.hp-motion .hp-pub-contact {
+  width: min(1180px, calc(100% - 32px));
+  margin: 28px auto;
+}
+
+.hp-motion .hp-pub-hero {
+  display: grid;
+  gap: 22px;
+  padding: 28px 20px 24px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(151, 221, 185, 0.35), transparent 36%),
+    #f7faf6;
+}
+
+.hp-motion .hp-pub-kicker {
+  margin: 0;
+  color: #0a5a42;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.hp-motion .hp-pub h1 {
+  margin: 10px 0 0;
+  color: #0b1417;
+  font-size: clamp(2rem, 8vw, 4.4rem);
+  font-weight: 680;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+}
+
+.hp-motion .hp-pub h2 {
+  margin: 0;
+  color: #10201c;
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.hp-motion .hp-pub-lead {
+  max-width: 640px;
+  margin: 14px 0 0;
+  color: #273d37;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.hp-motion .hp-pub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.hp-motion .hp-pub-primary,
+.hp-motion .hp-pub-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.hp-motion .hp-pub-primary {
+  background: #07583f;
+  color: #fff;
+}
+
+.hp-motion .hp-pub-secondary {
+  border: 1px solid #21483d;
+  background: rgba(255, 255, 255, 0.55);
+  color: #132b25;
+}
+
+.hp-motion .hp-pub-shot {
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 18px 40px rgba(16, 40, 32, 0.08);
+}
+
+.hp-motion .hp-pub-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.hp-motion .hp-pub-grid,
+.hp-motion .hp-pub-flow,
+.hp-motion .hp-pub-phones {
+  display: grid;
+  gap: 14px;
+}
+
+.hp-motion .hp-pub-card,
+.hp-motion .hp-pub-step,
+.hp-motion .hp-pub-path {
+  padding: 18px;
+  background: #fff;
+}
+
+.hp-motion .hp-pub-card h3,
+.hp-motion .hp-pub-step h3,
+.hp-motion .hp-pub-path h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 680;
+}
+
+.hp-motion .hp-pub-card p,
+.hp-motion .hp-pub-step p,
+.hp-motion .hp-pub-path p,
+.hp-motion .hp-pub-empty p,
+.hp-motion .hp-pub-note p {
+  margin: 8px 0 0;
+  color: #4d655c;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.hp-motion .hp-pub-note {
+  padding: 16px 18px;
+  background: #eef6f1;
+}
+
+.hp-motion .hp-pub-flow {
+  margin-top: 8px;
+}
+
+.hp-motion .hp-pub-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+}
+
+.hp-motion .hp-pub-index {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 12px;
+  background: #e7f5ee;
+  color: #07583f;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.hp-motion .hp-pub-link {
+  color: #07583f;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.hp-motion .hp-pub-phones {
+  grid-template-columns: 1fr;
+}
+
+.hp-motion .hp-pub-phone {
+  justify-self: center;
+  width: min(240px, 70%);
+  overflow: hidden;
+  border: 10px solid #121a18;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 22px 50px rgba(16, 40, 32, 0.16);
+}
+
+.hp-motion .hp-pub-phone img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.hp-motion .hp-pub-empty {
+  padding: 22px;
+  background: #fff;
+}
+
+.hp-motion .hp-pub-faq-item {
+  padding: 0;
+  background: #fff;
+}
+
+.hp-motion .hp-pub-faq-item summary {
+  min-height: 48px;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-weight: 680;
+}
+
+.hp-motion .hp-pub-faq-item p {
+  margin: 0;
+  padding: 0 16px 16px;
+  color: #4d655c;
+  line-height: 1.5;
+}
+
+.hp-motion .hp-pub-search {
+  width: 100%;
+  min-height: 48px;
+  margin: 12px 0 16px;
+  padding: 0 14px;
+  border: 1px solid rgba(18, 48, 38, 0.14);
+  border-radius: 12px;
+  background: #fff;
+  color: #143229;
+  font: inherit;
+}
+
+.hp-motion .hp-pub-search:focus-visible,
+.hp-motion .hp-pub-primary:focus-visible,
+.hp-motion .hp-pub-secondary:focus-visible,
+.hp-motion .hp-pub-link:focus-visible {
+  outline: 2px solid #07583f;
+  outline-offset: 3px;
+}
+
+@media (min-width: 768px) {
+  .hp-motion .hp-pub-hero,
+  .hp-motion .hp-pub-band,
+  .hp-motion .hp-pub-split,
+  .hp-motion .hp-pub-hub,
+  .hp-motion .hp-pub-faq,
+  .hp-motion .hp-pub-contact {
+    width: min(1180px, calc(100% - 64px));
+  }
+
+  .hp-motion .hp-pub-grid,
+  .hp-motion .hp-pub-hub {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .hp-motion .hp-pub-phones {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: end;
+  }
+}
+
+@media (min-width: 1024px) {
+  .hp-motion .hp-pub-hero.hp-pub-split,
+  .hp-motion .hp-pub-band.hp-pub-split {
+    grid-template-columns: 1.05fr 0.95fr;
+    align-items: center;
+    padding: 36px;
+  }
+
+  .hp-motion .hp-pub-flow {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .hp-motion .hp-pub-step {
+    grid-template-columns: 1fr;
+  }
+
+  .hp-motion .hp-pub-hub {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hp-motion .hp-pub-card,
+  .hp-motion .hp-pub-path,
+  .hp-motion .hp-pub-step {
+    transition: transform 180ms ease, box-shadow 180ms ease;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .hp-motion a.hp-pub-card:hover,
+  .hp-motion a.hp-pub-path:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 32px rgba(16, 40, 32, 0.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hp-motion .hp-pub-card,
+  .hp-motion .hp-pub-path,
+  .hp-motion .hp-pub-step {
+    transition: none;
+  }
+}

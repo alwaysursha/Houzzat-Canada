@@ -18,6 +18,7 @@ const liveHeader = read(
 const sitemap = read("src/app/sitemap.ts");
 const robots = read("src/app/robots.ts");
 const preview = read("src/components/platform/public/HomePreviewPage.tsx");
+const nav = read("src/components/platform/public/HomePreviewNav.tsx");
 const footer = read("src/components/platform/public/HomePreviewFinalCta.tsx");
 const middleware = read("src/middleware.ts");
 
@@ -40,9 +41,9 @@ assert.ok(
 );
 assert.ok(middleware.includes('pathname === "/home-preview"'));
 assert.ok(middleware.includes("308"));
-assert.ok(preview.includes('href="/"'));
+assert.ok(nav.includes('href="/"'));
 assert.ok(footer.includes('href="/"'));
-assert.ok(!preview.includes('href="/home-preview"'));
+assert.ok(!nav.includes('href="/home-preview"'));
 assert.ok(!footer.includes('href="/home-preview"'));
 assert.ok(preview.includes("PLATFORM_HOME_PRIMARY_CTA_HREF"));
 assert.ok(preview.includes("See How It Works"));

@@ -50,17 +50,19 @@ const PLATFORM: readonly NavGroup[] = [
       {
         title: "CRM & Lead Management",
         body: "Organize leads, activity, notes and follow-ups.",
-        href: "#crm",
+        href: "/product/crm",
         icon: "users",
       },
       {
         title: "Lead Routing",
         body: "Automatically connect new opportunities with the right agent.",
+        href: "/product/lead-routing",
         icon: "route",
       },
       {
         title: "Conversations",
         body: "Keep client communication and history together.",
+        href: "/product/conversations",
         icon: "chat",
       },
     ],
@@ -71,18 +73,19 @@ const PLATFORM: readonly NavGroup[] = [
       {
         title: "Real Estate Website",
         body: "Your branded website built to capture leads.",
-        href: "#consumer-website",
+        href: "/product/website",
         icon: "house",
       },
       {
         title: "MLS® Property Search",
         body: "Give clients a modern property-search experience.",
-        href: "#properties-viewings",
+        href: "/product/mls-search",
         icon: "search",
       },
       {
         title: "Lead Capture",
         body: "Turn website visitors and property activity into opportunities.",
+        href: "/product/lead-capture",
         icon: "capture",
       },
     ],
@@ -93,24 +96,25 @@ const PLATFORM: readonly NavGroup[] = [
       {
         title: "Alerts & Automation",
         body: "Keep clients engaged with timely follow-ups and alerts.",
+        href: "/product/alerts",
         icon: "bell",
       },
       {
         title: "Properties & Viewings",
         body: "Search properties and organize client showings.",
-        href: "#properties-viewings",
+        href: "/product/properties",
         icon: "pin",
       },
       {
         title: "Viewing Planner",
         body: "Build efficient viewing days and take them on the road.",
-        href: "#properties-viewings",
+        href: "/product/viewing-planner",
         icon: "calendar",
       },
       {
         title: "HouzzatPRO Mobile",
         body: "Manage leads, properties and activity anywhere.",
-        href: "#mobile-leads",
+        href: "/product/mobile",
         icon: "phone",
       },
     ],
@@ -121,16 +125,19 @@ const SOLUTIONS_BUSINESS: readonly NavEntry[] = [
   {
     title: "Individual Agents",
     body: "Build your brand and manage your entire business.",
+    href: "/solutions/agents",
     icon: "user",
   },
   {
     title: "Real Estate Teams",
     body: "Route opportunities and keep your team organized.",
+    href: "/solutions/teams",
     icon: "team",
   },
   {
     title: "Brokerages",
     body: "Give agents a connected lead-generation ecosystem.",
+    href: "/solutions/brokerages",
     icon: "building",
   },
 ];
@@ -139,25 +146,25 @@ const SOLUTIONS_GOALS: readonly NavEntry[] = [
   {
     title: "Generate More Leads",
     body: "Website, MLS® search and lead capture.",
-    href: "#consumer-website",
+    href: "/solutions/generate-leads",
     icon: "spark",
   },
   {
     title: "Convert More Leads",
     body: "CRM, conversations and follow-up workflows.",
-    href: "#crm",
+    href: "/solutions/convert-leads",
     icon: "users",
   },
   {
     title: "Improve Client Experience",
     body: "Property alerts, viewing planning and communication.",
-    href: "#properties-viewings",
+    href: "/solutions/client-experience",
     icon: "pin",
   },
   {
     title: "Work From Anywhere",
     body: "Run your business through HouzzatPRO Mobile.",
-    href: "#mobile-leads",
+    href: "/solutions/work-from-anywhere",
     icon: "phone",
   },
 ];
@@ -169,11 +176,13 @@ const RESOURCES: readonly NavGroup[] = [
       {
         title: "Resources",
         body: "Guides and strategies for growing your real-estate business.",
+        href: "/resources",
         icon: "book",
       },
       {
         title: "Blog",
         body: "Real-estate marketing, technology and business insights.",
+        href: "/blog",
         icon: "compass",
       },
       {
@@ -190,16 +199,19 @@ const RESOURCES: readonly NavGroup[] = [
       {
         title: "Product Updates",
         body: "See what's new in HouzzatPRO.",
+        href: "/product-updates",
         icon: "news",
       },
       {
         title: "Customer Stories",
         body: "See how professionals use the platform.",
+        href: "/customer-stories",
         icon: "story",
       },
       {
         title: "FAQ",
         body: "Common questions about HouzzatPRO.",
+        href: "/faq",
         icon: "help",
       },
     ],
@@ -216,6 +228,7 @@ const RESOURCES: readonly NavGroup[] = [
       {
         title: "Contact Us",
         body: "Talk to our team.",
+        href: "/contact",
         icon: "mail",
       },
     ],
@@ -223,6 +236,24 @@ const RESOURCES: readonly NavGroup[] = [
 ];
 
 const MENUS: readonly MenuId[] = ["platform", "solutions", "resources"];
+
+function navSection(pathname: string): MenuId | "pricing" | null {
+  if (pathname === "/pricing") return "pricing";
+  if (pathname.startsWith("/product")) return "platform";
+  if (pathname.startsWith("/solutions")) return "solutions";
+  if (
+    pathname === "/resources" ||
+    pathname === "/blog" ||
+    pathname === "/product-updates" ||
+    pathname === "/customer-stories" ||
+    pathname === "/faq" ||
+    pathname === "/support" ||
+    pathname === "/contact"
+  ) {
+    return "resources";
+  }
+  return null;
+}
 
 function NavGlyph({ name }: { name: NavIconName }) {
   const common = {
@@ -437,9 +468,11 @@ function MenuEntry({
 export function HomePreviewNav({
   loginHref,
   demoHref,
+  pathname = "/",
 }: {
   loginHref: string;
   demoHref: string;
+  pathname?: string;
 }) {
   const drawerId = useId();
   const platformId = useId();
@@ -567,6 +600,7 @@ export function HomePreviewNav({
     }
   };
 
+  const section = navSection(pathname);
   const demoArrow = (
     <svg className="hp-cta-arrow h-3.5 w-3.5 lg:h-4 lg:w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M5 12h14M14 7l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -592,9 +626,10 @@ export function HomePreviewNav({
               <button
                 key={id}
                 type="button"
-                className={`hp-trigger${menu === id ? " is-open" : ""}`}
+                className={`hp-trigger${menu === id ? " is-open" : ""}${section === id ? " is-current" : ""}`}
                 data-hp-trigger={id}
                 aria-expanded={menu === id}
+                aria-current={section === id ? "page" : undefined}
                 aria-controls={panelId(id)}
                 onMouseEnter={() => openMenu(id)}
                 onFocus={() => openMenu(id)}
@@ -607,7 +642,7 @@ export function HomePreviewNav({
               </button>
             );
           })}
-          <a href="/pricing" className="hp-trigger hp-trigger-link" onMouseEnter={() => setMenu(null)}>
+          <a href="/pricing" className={`hp-trigger hp-trigger-link${section === "pricing" ? " is-current" : ""}`} aria-current={section === "pricing" ? "page" : undefined} onMouseEnter={() => setMenu(null)}>
             Pricing
           </a>
         </nav>
@@ -660,7 +695,7 @@ export function HomePreviewNav({
                 </div>
                 <p className="hp-mega-kicker">The complete real estate platform</p>
                 <p className="hp-mega-flow">Capture → Engage → Show → Convert</p>
-                <a href="#platform" className="hp-mega-cta" onClick={closeAll}>
+                <a href="/product" className="hp-mega-cta" onClick={closeAll}>
                   Explore the Platform
                   <svg className="hp-cta-arrow h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path d="M5 12h14M14 7l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -687,7 +722,7 @@ export function HomePreviewNav({
               <aside className="hp-mega-card">
                 <p className="hp-mega-card-title">Built for modern real estate professionals</p>
                 <p className="hp-mega-flow">Website · CRM · MLS® · Mobile · Automation</p>
-                <a href="#platform" className="hp-mega-cta" onClick={closeAll}>
+                <a href="/product" className="hp-mega-cta" onClick={closeAll}>
                   Find Your Solution
                   <svg className="hp-cta-arrow h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path d="M5 12h14M14 7l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />

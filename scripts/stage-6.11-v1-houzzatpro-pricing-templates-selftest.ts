@@ -166,7 +166,7 @@ async function main() {
     assert.ok(footer.includes('href="/pricing"'));
     assert.ok(footer.includes('href="/templates"'));
 
-    const home = read("src/components/platform/public/HomePreviewPage.tsx");
+    const home = read("src/components/platform/public/HomePreviewNav.tsx");
     assert.ok(home.includes('"/pricing"'));
     const header = read(
       "src/components/platform/public/PlatformMarketingHeader.tsx",

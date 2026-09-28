@@ -26,7 +26,15 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: PLATFORM_PRICING_DOCUMENT_TITLE,
     description: PLATFORM_PRICING_DOCUMENT_DESCRIPTION,
+    alternates: { canonical: "https://houzzatpro.com/pricing" },
     robots: { index: true, follow: true },
+    openGraph: {
+      title: PLATFORM_PRICING_DOCUMENT_TITLE,
+      description: PLATFORM_PRICING_DOCUMENT_DESCRIPTION,
+      url: "https://houzzatpro.com/pricing",
+      siteName: "HouzzatPRO",
+      type: "website",
+    },
   };
 }
 
