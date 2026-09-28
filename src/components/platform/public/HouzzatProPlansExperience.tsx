@@ -7,6 +7,7 @@ import { publicPlanCards, publicPlanRows, PUBLIC_PLAN_FAQS } from "@/lib/platfor
 const SITE = "/images/home-preview/houzzatpro-consumer-desktop.png";
 const CRM = "/images/home-preview/houzzatpro-crm-leads.png";
 const PHONE = "/images/home-preview/houzzatpro-mobile-lead-profile.png?v=5";
+const AGENT_APP_COVER = "/images/home-preview/houzzatpro-agent-app-cover.png";
 const CHAT = "/images/home-preview/houzzatpro-lead-conversation.png";
 const PROPERTIES = "/images/home-preview/houzzatpro-properties-desktop.png";
 
@@ -143,11 +144,18 @@ export function HouzzatProPlansExperience() {
               ["Manage", "CRM and client activity", CRM],
               ["Engage", "Conversation on the lead record", CHAT],
               ["Show", "Property search in the workspace", PROPERTIES],
-              ["Grow", "The agent app, included on every package", PHONE],
+              ["Grow", "The agent app, included on every package", AGENT_APP_COVER],
             ].map(([title, body, src]) => (
               <div key={title}>
-                <div className="overflow-hidden rounded-2xl border border-[#e5efe9] bg-[#f7faf6] shadow-[0_16px_40px_rgba(16,40,32,0.06)]">
-                  <Image src={src} alt="" width={800} height={520} unoptimized className="h-36 w-full object-cover object-left sm:h-44" />
+                <div className={`overflow-hidden rounded-2xl border shadow-[0_16px_40px_rgba(16,40,32,0.06)] ${src === AGENT_APP_COVER ? "border-[#83d7bf] bg-[#83d7bf]" : "border-[#e5efe9] bg-[#f7faf6]"}`}>
+                  <Image
+                    src={src}
+                    alt={src === AGENT_APP_COVER ? "HouzzatPRO agent app cover" : ""}
+                    width={src === AGENT_APP_COVER ? 1200 : 800}
+                    height={src === AGENT_APP_COVER ? 1200 : 520}
+                    unoptimized
+                    className={src === AGENT_APP_COVER ? "h-36 w-full object-cover object-center sm:h-44" : "h-36 w-full object-cover object-left sm:h-44"}
+                  />
                 </div>
                 <h3 className="mt-4 text-lg font-semibold tracking-[-0.03em] text-[#101817]">{title}</h3>
                 <p className="mt-1 text-sm leading-6 text-[#5d726a]">{body}</p>
