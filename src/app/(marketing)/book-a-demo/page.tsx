@@ -54,35 +54,37 @@ export default async function BookADemoPage() {
 
   return (
     <PublicSiteFrame pathname="/book-a-demo">
-    <div className="mx-auto grid w-[min(1180px,calc(100%-32px))] gap-6 py-8 lg:grid-cols-2 lg:py-12">
-        <aside className="hp-pub-hero">
-          <HouzzatProWordmark size="md" className="text-[1.45rem]" />
-          <p className="hp-pub-kicker">{BOOK_DEMO_EYEBROW}</p>
-          <h1>
-            <span className="block">{BOOK_DEMO_HERO_TITLE_LINE_1}</span>
-            <span className="mt-1 block text-[#087052]">{BOOK_DEMO_HERO_TITLE_LINE_2}</span>
-          </h1>
-          <p className="hp-pub-lead">{BOOK_DEMO_HERO_LEAD}</p>
-          <p className="hp-pub-lead">{BOOK_DEMO_HERO_SUPPORT}</p>
-          <BookDemoProductVisual />
-          <div className="mt-6 grid gap-4">
-            {BOOK_DEMO_VALUE_GROUPS.map((group) => (
-              <div key={group.title}>
-                <p className="hp-pub-kicker">{group.title}</p>
-                <ul className="mt-2 space-y-1">
-                  {group.items.map((item) => (
-                    <li key={item} className="text-sm text-[#273d37]">{item}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+      <div className="bg-[#f3faf6]">
+        <div className="mx-auto grid w-full max-w-[1480px] items-start gap-12 px-4 py-16 sm:px-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-16 lg:px-10 lg:py-24 xl:px-12">
+          <aside className="max-w-[560px]">
+            <HouzzatProWordmark size="md" className="text-[1.45rem]" />
+            <p className="mt-8 text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#087052]">{BOOK_DEMO_EYEBROW}</p>
+            <h1 className="mt-4 text-[clamp(2.15rem,4.6vw,3.8rem)] font-semibold leading-[0.98] tracking-[-0.045em] text-[#101817]">
+              <span className="block">{BOOK_DEMO_HERO_TITLE_LINE_1}</span>
+              <span className="mt-1 block text-[#087052]">{BOOK_DEMO_HERO_TITLE_LINE_2}</span>
+            </h1>
+            <p className="mt-5 text-[17px] leading-7 text-[#53635e]">{BOOK_DEMO_HERO_LEAD}</p>
+            <p className="mt-3 text-[17px] leading-7 text-[#53635e]">{BOOK_DEMO_HERO_SUPPORT}</p>
+            <BookDemoProductVisual />
+            <div className="mt-8 grid gap-6">
+              {BOOK_DEMO_VALUE_GROUPS.map((group) => (
+                <div key={group.title}>
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#087052]">{group.title}</p>
+                  <ul className="mt-2 space-y-1">
+                    {group.items.map((item) => (
+                      <li key={item} className="text-sm leading-6 text-[#273d37]">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <p className="mt-8 text-xs text-[#4d655c]">{PLATFORM_PRODUCT_NAME} · sales-assisted onboarding</p>
+          </aside>
+          <div className="rounded-3xl border border-[#d7e4dc] bg-white p-5 shadow-[0_24px_60px_rgba(16,40,32,0.08)] sm:p-8">
+            <BookDemoForm turnstileSiteKey={turnstileSiteKey} />
           </div>
-          <p className="mt-6 text-xs text-[#4d655c]">{PLATFORM_PRODUCT_NAME} · sales-assisted onboarding</p>
-        </aside>
-        <div className="rounded-3xl border border-[#d7e4dc] bg-white p-5 shadow-[0_24px_60px_rgba(16,40,32,0.08)] sm:p-8">
-          <BookDemoForm turnstileSiteKey={turnstileSiteKey} />
         </div>
-    </div>
+      </div>
     </PublicSiteFrame>
   );
 }

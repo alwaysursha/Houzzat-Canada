@@ -1,307 +1,104 @@
-import Image from "next/image";
-import Link from "next/link";
-import { FaqExplorer } from "@/components/platform/public/site/FaqExplorer";
-import type { PublicStory, StoryKind, StoryShot } from "@/components/platform/public/site/public-stories";
-
-function Shot({ shot }: { shot: StoryShot }) {
-  return (
-    <figure className="hp-pub-shot">
-      <Image src={shot.src} alt={shot.alt} width={shot.width} height={shot.height} unoptimized />
-    </figure>
-  );
-}
-
-function Actions() {
-  return (
-    <div className="hp-pub-actions">
-      <Link href="/book-a-demo" className="hp-pub-primary">
-        Book a Demo
-      </Link>
-      <Link href="/pricing" className="hp-pub-secondary">
-        Pricing
-      </Link>
-    </div>
-  );
-}
-
-function Note({ text }: { text?: string }) {
-  if (!text) return null;
-  return (
-    <aside className="hp-pub-note">
-      <p>{text}</p>
-    </aside>
-  );
-}
-
-function Points({ story }: { story: PublicStory }) {
-  if (!story.points?.length) return null;
-  return (
-    <div className="hp-pub-grid">
-      {story.points.map((point) => (
-        <article key={point.title} className="hp-pub-card">
-          <h3>{point.title}</h3>
-          <p>{point.body}</p>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function Steps({ story }: { story: PublicStory }) {
-  if (!story.steps?.length) return null;
-  return (
-    <ol className="hp-pub-flow">
-      {story.steps.map((step, index) => (
-        <li key={step.title} className="hp-pub-step">
-          <span className="hp-pub-index">{index + 1}</span>
-          <div>
-            <h3>{step.title}</h3>
-            <p>{step.body}</p>
-          </div>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function Links({ story }: { story: PublicStory }) {
-  if (!story.links?.length) return null;
-  return (
-    <div className="hp-pub-grid">
-      {story.links.map((link) => (
-        <Link key={`${link.href}-${link.title}`} href={link.href} className="hp-pub-path">
-          <h3>{link.title}</h3>
-          <p>{link.body}</p>
-          <p className="hp-pub-link">Open</p>
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-function EmptyHub({ story }: { story: PublicStory }) {
-  return (
-    <div className="hp-pub-empty">
-      <h2>Nothing is published here yet</h2>
-      <p>
-        {story.lead} Book a demo if you want to see the product itself.
-      </p>
-      <div className="hp-pub-actions">
-        <Link href="/book-a-demo" className="hp-pub-primary">
-          Book a Demo
-        </Link>
-      </div>
-    </div>
-  );
-}
+import type { PublicStory } from "@/components/platform/public/site/public-stories";
+import { Crop, DeskFrame, DeskPair, PhoneCluster } from "@/components/platform/public/site/pub-visuals";
+import {
+  AlertsPage,
+  AudiencePage,
+  ContactPage,
+  ConversationsPage,
+  CrmPage,
+  FaqPage,
+  FlowProduct,
+  GoalPage,
+  HubPage,
+  MobilePage,
+  PlannerPage,
+  PlatformPage,
+  PricingPage,
+  PropertiesPage,
+  SearchPage,
+  WebsitePage,
+} from "@/components/platform/public/site/story-pages";
 
 export function PublicStoryView({ story }: { story: PublicStory }) {
-  const kind: StoryKind = story.kind;
-  const primary = story.shots?.[0];
+  const path = story.path;
+  const shots = story.shots ?? [];
+  const first = shots[0];
+  const second = shots[1];
 
-  switch (kind) {
-    case "overview":
+  switch (path) {
+    case "/product":
+      return <PlatformPage story={story} />;
+    case "/product/crm":
+      return <CrmPage story={story} />;
+    case "/product/website":
+      return <WebsitePage story={story} />;
+    case "/product/properties":
+      return <PropertiesPage story={story} />;
+    case "/product/viewing-planner":
+      return <PlannerPage story={story} />;
+    case "/product/mobile":
+      return <MobilePage story={story} />;
+    case "/product/mls-search":
+      return <SearchPage story={story} />;
+    case "/product/lead-routing":
+      return <FlowProduct story={story} title="See how a new lead reaches an agent." eyebrow="Lead captured to follow-up" />;
+    case "/product/lead-capture":
+      return <FlowProduct story={story} title="See a visitor become a lead someone owns." eyebrow="Visitor to a lead" visualCaption="Website visitor" />;
+    case "/product/conversations":
+      return <ConversationsPage story={story} />;
+    case "/product/alerts":
+      return <AlertsPage story={story} />;
+    case "/solutions/agents":
       return (
-        <>
-          <header className="hp-pub-hero hp-pub-split">
-            <div>
-              <p className="hp-pub-kicker">{story.kicker}</p>
-              <h1>{story.headline}</h1>
-              <p className="hp-pub-lead">{story.lead}</p>
-              <Actions />
-            </div>
-            {primary ? <Shot shot={primary} /> : null}
-          </header>
-          <section className="hp-pub-band">
-            <h2>The client journey</h2>
-            <Steps story={story} />
-          </section>
-          <section className="hp-pub-band">
-            <h2>Go further</h2>
-            <Links story={story} />
-          </section>
-        </>
+        <AudiencePage
+          story={story}
+          title="See HouzzatPRO for an individual agent."
+          journey="Brand, leads, showings, and follow-up."
+          visual={first ? <DeskFrame shot={first} /> : <div />}
+          steps={story.steps ?? []}
+        />
       );
-    case "split":
+    case "/solutions/teams":
       return (
-        <>
-          <header className="hp-pub-hero hp-pub-split">
-            <div>
-              <p className="hp-pub-kicker">{story.kicker}</p>
-              <h1>{story.headline}</h1>
-              <p className="hp-pub-lead">{story.lead}</p>
-              <Actions />
-            </div>
-            {primary ? <Shot shot={primary} /> : null}
-          </header>
-          {story.shots && story.shots.length > 1 ? (
-            <section className="hp-pub-band hp-pub-split">
-              {story.shots.slice(1).map((shot) => (
-                <Shot key={shot.src} shot={shot} />
-              ))}
-            </section>
-          ) : null}
-          <section className="hp-pub-band">
-            <Points story={story} />
-            <Steps story={story} />
-            <Note text={story.note} />
-          </section>
-        </>
+        <AudiencePage
+          story={story}
+          title="See how a team works the same client."
+          journey="One record the whole team can continue."
+          visual={first ? <Crop shot={first} focus="profile" /> : <div />}
+          steps={story.points ?? []}
+        />
       );
-    case "flow":
+    case "/solutions/brokerages":
       return (
-        <>
-          <header className="hp-pub-hero">
-            <p className="hp-pub-kicker">{story.kicker}</p>
-            <h1>{story.headline}</h1>
-            <p className="hp-pub-lead">{story.lead}</p>
-            <Actions />
-          </header>
-          <section className="hp-pub-band">
-            <Steps story={story} />
-            {primary ? <Shot shot={primary} /> : null}
-            <Note text={story.note} />
-          </section>
-        </>
+        <AudiencePage
+          story={story}
+          title="See a branded system agents can share."
+          journey="The site and the agent’s lead record."
+          visual={first && second ? <DeskPair back={first} front={second} /> : first ? <DeskFrame shot={first} /> : <div />}
+          steps={story.points ?? []}
+        />
       );
-    case "phones":
-      return (
-        <>
-          <header className="hp-pub-hero">
-            <p className="hp-pub-kicker">{story.kicker}</p>
-            <h1>{story.headline}</h1>
-            <p className="hp-pub-lead">{story.lead}</p>
-            <Actions />
-          </header>
-          <section className="hp-pub-band">
-            <div className="hp-pub-phones">
-              {story.shots?.map((shot) => (
-                <div key={shot.src} className="hp-pub-phone">
-                  <Image src={shot.src} alt={shot.alt} width={shot.width} height={shot.height} unoptimized />
-                </div>
-              ))}
-            </div>
-            <Points story={story} />
-          </section>
-        </>
-      );
-    case "audience":
-      return (
-        <>
-          <header className="hp-pub-hero hp-pub-split">
-            <div>
-              <p className="hp-pub-kicker">{story.kicker}</p>
-              <h1>{story.headline}</h1>
-              <p className="hp-pub-lead">{story.lead}</p>
-              <Actions />
-            </div>
-            {primary ? <Shot shot={primary} /> : null}
-          </header>
-          <section className="hp-pub-band">
-            <Steps story={story} />
-            <Points story={story} />
-            <Note text={story.note} />
-          </section>
-        </>
-      );
-    case "goal":
-      return (
-        <>
-          <header className="hp-pub-hero">
-            <p className="hp-pub-kicker">{story.kicker}</p>
-            <h1>{story.headline}</h1>
-            <p className="hp-pub-lead">{story.lead}</p>
-          </header>
-          <section className="hp-pub-band">
-            <Links story={story} />
-            {story.shots ? (
-              <div className="hp-pub-phones">
-                {story.shots.map((shot) => (
-                  <div key={shot.src} className="hp-pub-phone">
-                    <Image src={shot.src} alt={shot.alt} width={shot.width} height={shot.height} unoptimized />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </section>
-        </>
-      );
-    case "pricing":
-      return (
-        <>
-          <header className="hp-pub-hero">
-            <p className="hp-pub-kicker">{story.kicker}</p>
-            <h1>{story.headline}</h1>
-            <p className="hp-pub-lead">{story.lead}</p>
-            <div className="hp-pub-actions">
-              <Link href="/book-a-demo" className="hp-pub-primary">
-                Book a Demo
-              </Link>
-            </div>
-          </header>
-          <section className="hp-pub-band">
-            <h2>What the proposal reflects</h2>
-            <Points story={story} />
-            <Note text={story.note} />
-          </section>
-          <section className="hp-pub-band">
-            <h2>What happens next</h2>
-            <ol className="hp-pub-flow">
-              <li className="hp-pub-step"><span className="hp-pub-index">1</span><div><h3>Book a demo</h3><p>See the website, CRM, properties, viewings, and mobile app.</p></div></li>
-              <li className="hp-pub-step"><span className="hp-pub-index">2</span><div><h3>We learn the operation</h3><p>Setup, seats, and the capabilities you need.</p></div></li>
-              <li className="hp-pub-step"><span className="hp-pub-index">3</span><div><h3>Private proposal</h3><p>Commercial terms are delivered after the demo, not on this page.</p></div></li>
-            </ol>
-          </section>
-          {story.groups ? <FaqExplorer groups={story.groups} /> : null}
-        </>
-      );
-    case "hub":
-      return (
-        <>
-          <header className="hp-pub-hero">
-            <p className="hp-pub-kicker">{story.kicker}</p>
-            <h1>{story.headline}</h1>
-            <p className="hp-pub-lead">{story.lead}</p>
-          </header>
-          <section className="hp-pub-band">
-            <EmptyHub story={story} />
-            <div className="hp-pub-hub">
-              <Points story={story} />
-            </div>
-          </section>
-        </>
-      );
-    case "faq":
-      return (
-        <>
-          <header className="hp-pub-hero">
-            <p className="hp-pub-kicker">{story.kicker}</p>
-            <h1>{story.headline}</h1>
-            <p className="hp-pub-lead">{story.lead}</p>
-          </header>
-          {story.groups ? <FaqExplorer groups={story.groups} /> : null}
-        </>
-      );
-    case "contact":
-      return (
-        <>
-          <header className="hp-pub-hero">
-            <p className="hp-pub-kicker">{story.kicker}</p>
-            <h1>{story.headline}</h1>
-            <p className="hp-pub-lead">{story.lead}</p>
-          </header>
-          <section className="hp-pub-band">
-            <Links story={story} />
-            <aside className="hp-pub-note">
-              <p>
-                Existing customers can email <a className="hp-pub-link" href="mailto:support@houzzatpro.com">support@houzzatpro.com</a>. Replies are typically within one business day.
-              </p>
-            </aside>
-          </section>
-        </>
-      );
+    case "/solutions/generate-leads":
+      return <GoalPage story={story} title="See how the site creates a lead." />;
+    case "/solutions/convert-leads":
+      return <GoalPage story={story} title="See the record that carries a lead forward." />;
+    case "/solutions/client-experience":
+      return <GoalPage story={story} title="See search, conversation, and the viewing day." />;
+    case "/solutions/work-from-anywhere":
+      return <GoalPage story={story} title="See the lead record on the phone." visual={shots.length > 0 ? <PhoneCluster shots={shots} /> : undefined} />;
+    case "/pricing":
+      return <PricingPage story={story} />;
+    case "/resources":
+    case "/blog":
+    case "/product-updates":
+    case "/customer-stories":
+      return <HubPage story={story} />;
+    case "/faq":
+      return <FaqPage story={story} />;
+    case "/contact":
+      return <ContactPage story={story} />;
     default: {
-      const exhaustive: never = kind;
+      const exhaustive: never = path;
       return exhaustive;
     }
   }

@@ -139,11 +139,11 @@ export const PUBLIC_STORIES: readonly PublicStory[] = [
     title: "CRM & Lead Management | HouzzatPRO",
     description:
       "Organize HouzzatPRO leads, profiles, notes, status, assignment, and activity in one client record.",
-    kicker: "CRM",
+    kicker: "CRM & Lead Management",
     headline: "Every lead. Every conversation. One place.",
     lead: "The HouzzatPRO lead record keeps the person, their activity, and the next follow-up together. Marketing examples use the fictional client Emily Carter.",
     kind: "split",
-    shots: [crm, activity],
+    shots: [crm, activity, conversation],
     points: [
       { title: "Lead list", body: "See who needs attention without keeping a second spreadsheet." },
       { title: "Profile and notes", body: "The client profile holds the details and notes your team adds." },
