@@ -30,6 +30,9 @@ function resolveHouzzatBuildId(): string {
 const houzzatBuildId = resolveHouzzatBuildId();
 
 const nextConfig: NextConfig = {
+  // Local tenant browsing uses http://houzzat.com:<dev port>. Next blocks
+  // the dev HMR/debug socket unless that host is allowlisted.
+  allowedDevOrigins: ["houzzat.com"],
   generateBuildId: async () => houzzatBuildId,
   env: {
     NEXT_PUBLIC_HOUZZAT_BUILD: houzzatBuildId,

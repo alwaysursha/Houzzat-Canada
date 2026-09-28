@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { TimelineItem } from "@/lib/agent/customer-timeline";
 import { friendlyActivityTypeLabel } from "@/lib/agent/activity-filters";
+import { isCallOutcomeActivityTitle } from "@/lib/agent/call-outcome-presentation";
 import {
   conversationActivityHeadline,
   conversationActivityFromLeadActivity,
@@ -303,6 +304,7 @@ function typeLabel(item: TimelineItem) {
   if (item.type === "lead_info_updated") return "Lead info updated";
   if (item.type === "contact_update") return "Contact updated";
   if (item.type === "note_pin") return "Note pin";
+  if (item.type === "CALL" && isCallOutcomeActivityTitle(item.title)) return "Call";
   return friendlyActivityTypeLabel(item.type);
 }
 

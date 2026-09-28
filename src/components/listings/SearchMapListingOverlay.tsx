@@ -616,6 +616,7 @@ export function SearchMapListingOverlay({
                   <ViewingRequestPanel
                     mlsNumber={listing.mlsNumber}
                     callbackPath={listingPath(listing)}
+                    claimRestore="always"
                     inactive={isInactive}
                     similarHomesHref={similarHomesHref}
                     city={listing.city}

@@ -4,6 +4,7 @@ import {
   timelineItemMatchesFilters,
   type TimelineScope,
 } from "@/lib/agent/activity-filters";
+import { presentCallLeadActivity } from "@/lib/agent/call-outcome-presentation";
 import { conversationActivityFromLeadActivity, conversationTimelineFields } from "@/lib/agent/conversation-activity";
 import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
 import {
@@ -222,17 +223,23 @@ export async function loadPagedLeadTimeline(input: {
         : a.type === "email_clicked"
           ? "EMAIL_CLICKED"
           : a.type;
+    const callOutcome = presentCallLeadActivity({
+      type: a.type,
+      body: a.body,
+      meta: a.meta,
+    });
     items.push({
       id: `la-${a.id}`,
       source: "lead",
       type: engagementType,
       title:
-        a.type === "email_opened"
+        callOutcome?.title ??
+        (a.type === "email_opened"
           ? "Email opened"
           : a.type === "email_clicked"
             ? "Email link clicked"
-            : labelActivity(a.type),
-      body: a.body,
+            : labelActivity(a.type)),
+      body: callOutcome ? callOutcome.body : a.body,
       mlsNumber: null,
       path: null,
       imageUrl: null,

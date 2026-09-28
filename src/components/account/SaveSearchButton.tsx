@@ -2,9 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { useClientToolsVerification } from "@/components/auth/ClientToolsVerificationProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { UpdateSavedSearchDialog } from "@/components/listings/UpdateSavedSearchDialog";
 import { Button } from "@/components/ui/button";
+import {
+  openGuestSaveSearchIntent,
+  clearSavedSearchConfirm,
+  readSavedSearchConfirm,
+  retainSaveSearchIntentHandler,
+  SAVED_SEARCH_NEEDS_CONFIRM_EVENT,
+  stableSavedSearchQueryKey,
+} from "@/lib/auth/save-search-intent";
 import { savePrimarySearch } from "@/lib/listings/save-primary-search";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
@@ -17,13 +27,7 @@ type SavedSearchItem = {
 };
 
 function normalizeQuery(query: Record<string, unknown>): string {
-  const cleaned: Record<string, unknown> = {};
-  for (const key of Object.keys(query).sort()) {
-    const value = query[key];
-    if (value == null || value === "") continue;
-    cleaned[key] = value;
-  }
-  return JSON.stringify(cleaned);
+  return stableSavedSearchQueryKey(query);
 }
 
 function nameFromQuery(query: Record<string, unknown>): string {
@@ -38,18 +42,22 @@ function nameFromQuery(query: Record<string, unknown>): string {
 export function SaveSearchButton({
   query,
   signedIn,
+  callbackPath,
 }: {
   query: Record<string, unknown>;
   signedIn: boolean;
+  /** Full search URL, including the query string. */
+  callbackPath: string;
 }) {
   const { openAuth } = useAuthModal();
+  const { openClientToolsVerification } = useClientToolsVerification();
   const { toast } = useSiteAlert();
   const [savedBaselineKey, setSavedBaselineKey] = useState<string | null>(null);
   const [sessionBaselineKey, setSessionBaselineKey] = useState<string | null>(
     null,
   );
   const [pending, setPending] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(readSavedSearchConfirm);
 
   const currentKey = useMemo(() => normalizeQuery(query), [query]);
 
@@ -90,6 +98,42 @@ export function SaveSearchButton({
       window.removeEventListener("houzzat:saved-searches-changed", onChanged);
   }, [refreshSavedBaseline]);
 
+  useEffect(() => {
+    if (readSavedSearchConfirm()) setConfirmOpen(true);
+  }, []);
+
+  useEffect(() => {
+    function onNeedsConfirm() {
+      setConfirmOpen(true);
+    }
+    window.addEventListener(SAVED_SEARCH_NEEDS_CONFIRM_EVENT, onNeedsConfirm);
+    return () =>
+      window.removeEventListener(
+        SAVED_SEARCH_NEEDS_CONFIRM_EVENT,
+        onNeedsConfirm,
+      );
+  }, []);
+
+  useEffect(() => {
+    return retainSaveSearchIntentHandler({
+      onSaved: () => {
+        toast({
+          message: "Search saved to your buyer profile.",
+          tone: "success",
+        });
+      },
+      onFailed: () => {
+        toast({
+          message: SITE_MESSAGES.genericErrorToast,
+          tone: "error",
+        });
+      },
+      onVerification: () => {
+        openClientToolsVerification({ callbackUrl: callbackPath });
+      },
+    });
+  }, [toast, openClientToolsVerification, callbackPath]);
+
   const baselineKey = savedBaselineKey ?? sessionBaselineKey;
   const criteriaChanged =
     baselineKey != null && currentKey !== baselineKey;
@@ -97,7 +141,16 @@ export function SaveSearchButton({
 
   async function persist(confirmReplace: boolean) {
     if (!signedIn) {
-      openAuth({ mode: "sign-in", callbackUrl: "/search" });
+      const opened = openGuestSaveSearchIntent({
+        callbackPath,
+        host: window.location.hostname,
+        now: Date.now(),
+        store: browserCaptureIntentStore(),
+        openAuth,
+      });
+      if (!opened.ok) {
+        openAuth({ mode: "sign-in", callbackUrl: callbackPath });
+      }
       return;
     }
     setPending(true);
@@ -109,7 +162,7 @@ export function SaveSearchButton({
     setPending(false);
 
     if (outcome.status === "auth") {
-      openAuth({ mode: "sign-in", callbackUrl: "/search" });
+      openAuth({ mode: "sign-in", callbackUrl: callbackPath });
       return;
     }
     if (outcome.status === "needs_confirm") {
@@ -126,6 +179,7 @@ export function SaveSearchButton({
 
     setSavedBaselineKey(currentKey);
     setSessionBaselineKey(currentKey);
+    clearSavedSearchConfirm();
     setConfirmOpen(false);
     toast({
       message: confirmReplace
@@ -155,7 +209,10 @@ export function SaveSearchButton({
       <UpdateSavedSearchDialog
         open={confirmOpen}
         pending={pending}
-        onCancel={() => setConfirmOpen(false)}
+        onCancel={() => {
+          clearSavedSearchConfirm();
+          setConfirmOpen(false);
+        }}
         onConfirm={() => void persist(true)}
       />
     </>

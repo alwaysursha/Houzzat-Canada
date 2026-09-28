@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
 import { ForgotPasswordRequest } from "@/components/auth/ForgotPasswordRequest";
 import { PasswordField } from "@/components/auth/PasswordField";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
@@ -25,12 +24,14 @@ export function SignInForm({
   onSwitchMode,
   initialEmail = null,
   notice = null,
+  afterConsent = null,
 }: {
   callbackUrl?: string | null;
   onSuccess?: () => void;
   onSwitchMode?: () => void;
   initialEmail?: string | null;
   notice?: string | null;
+  afterConsent?: ReactNode;
 }) {
   const router = useRouter();
   const { confirm } = useSiteAlert();
@@ -124,7 +125,6 @@ export function SignInForm({
       autoComplete="on"
       name="houzzat-signin"
     >
-      <AuthBenefitsPanel />
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="auth-signin-email">
           Email
@@ -174,6 +174,7 @@ export function SignInForm({
           </button>
         </p>
       ) : null}
+      {afterConsent}
     </form>
   );
 }

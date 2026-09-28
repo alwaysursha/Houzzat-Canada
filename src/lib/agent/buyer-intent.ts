@@ -413,6 +413,35 @@ export function buyerIntentFromSavedSearches(input: {
   };
 }
 
+/** Same labels Looking For already shows. Not persisted onto SavedSearch. */
+export function buyerIntentDisplaySource(input: {
+  fromSaved: boolean;
+  fromBrowse: boolean;
+}): {
+  source: BuyerIntentSnapshot["source"];
+  sourceLabel: string;
+} {
+  const source: BuyerIntentSnapshot["source"] =
+    input.fromSaved && input.fromBrowse
+      ? "mixed"
+      : input.fromSaved
+        ? "saved"
+        : input.fromBrowse
+          ? "inferred"
+          : "thin";
+
+  const sourceLabel =
+    source === "saved"
+      ? "Saved search"
+      : source === "mixed"
+        ? "Saved + browsing"
+        : source === "inferred"
+          ? "From browsing"
+          : "No clear criteria yet";
+
+  return { source, sourceLabel };
+}
+
 /**
  * Infer what a customer is looking for from saved searches + browsing
  * (SEARCH beacons + listing views), even when they never clicked Save Search.
@@ -653,23 +682,10 @@ export async function loadBuyerIntent(input: {
     }
   }
 
-  const source: BuyerIntentSnapshot["source"] =
-    fromSaved && fromBrowse
-      ? "mixed"
-      : fromSaved
-        ? "saved"
-        : fromBrowse
-          ? "inferred"
-          : "thin";
-
-  const sourceLabel =
-    source === "saved"
-      ? "Saved search"
-      : source === "mixed"
-        ? "Saved + browsing"
-        : source === "inferred"
-          ? "From browsing"
-          : "No clear criteria yet";
+  const { source, sourceLabel } = buyerIntentDisplaySource({
+    fromSaved,
+    fromBrowse,
+  });
 
   return {
     summary: buildSummary({

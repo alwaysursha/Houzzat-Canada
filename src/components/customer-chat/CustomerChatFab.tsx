@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { MessageCircle } from "lucide-react";
-import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
+import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { CUSTOMER_CHAT_PAGE_HREF } from "@/lib/customer-chat/query";
+import { openGuestStartChatIntent } from "@/lib/auth/start-chat-intent";
 import { resolveAppShell } from "@/lib/mobile/app-shell";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +19,7 @@ import { cn } from "@/lib/utils";
 export function CustomerChatFab() {
   const pathname = usePathname() || "/";
   const { status, data } = useSession();
+  const { openAuth } = useAuthModal();
   const role = data?.user?.role;
   const [houzzatProShell, setHouzzatProShell] = useState(false);
 
@@ -75,14 +78,21 @@ export function CustomerChatFab() {
   }
 
   return (
-    <AuthOpenButton
-      mode="sign-in"
-      callbackUrl={CUSTOMER_CHAT_PAGE_HREF}
+    <button
+      type="button"
       aria-label="Chat with your agent"
       data-customer-chat-entry=""
       className={className}
+      onClick={() => {
+        openGuestStartChatIntent({
+          host: window.location.hostname,
+          now: Date.now(),
+          store: browserCaptureIntentStore(),
+          openAuth,
+        });
+      }}
     >
       {inner}
-    </AuthOpenButton>
+    </button>
   );
 }

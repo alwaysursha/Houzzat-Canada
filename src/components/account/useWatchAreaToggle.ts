@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import {
   invalidateAreaMonitorsCache,
   loadAreaMonitorsCache,
@@ -18,6 +19,10 @@ import {
   AREA_WATCHES_CHANGED_EVENT,
   notifyAreaWatchesChanged,
 } from "@/lib/account/watch-sync";
+import {
+  openGuestAreaWatchIntent,
+  retainAreaWatchIntentHandler,
+} from "@/lib/auth/area-watch-intent";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 
 function watchSegmentOf(
@@ -100,6 +105,23 @@ export function useWatchAreaToggle({
   }, [signedIn, userKey]);
 
   useEffect(() => {
+    return retainAreaWatchIntentHandler({
+      onWatched: () => {
+        toast({ message: SITE_MESSAGES.areaWatchedToast, tone: "success" });
+      },
+      onVerification: () => {
+        toast({
+          message: SITE_MESSAGES.watchRequiresEmailVerificationToast,
+          tone: "error",
+        });
+      },
+      onFailed: () => {
+        toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+      },
+    });
+  }, [toast]);
+
+  useEffect(() => {
     if (!signedIn || !canWatch) {
       setReady(true);
       return;
@@ -138,7 +160,17 @@ export function useWatchAreaToggle({
     if (sessionLoading) return;
 
     if (!signedIn) {
-      openAuth({ mode: "sign-in", callbackUrl: authCallbackUrl });
+      openGuestAreaWatchIntent({
+        city: city.trim(),
+        community: normalizedCommunity,
+        transactionType: normalizedTxn,
+        segment: normalizedSegment,
+        callbackPath: authCallbackUrl,
+        host: window.location.hostname,
+        now: Date.now(),
+        store: browserCaptureIntentStore(),
+        openAuth,
+      });
       return;
     }
 

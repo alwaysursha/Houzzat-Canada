@@ -66,12 +66,13 @@ type ActionItem = {
   href?: string;
   className: string;
   label: string;
+  onClick?: (event: { currentTarget: HTMLElement }) => void;
 };
 
 function renderAction(action: ActionItem, size: "rail" | "inline") {
   const Icon = action.icon;
   const className = cn(
-    "flex items-center justify-center rounded-full text-white shadow-md transition hover:scale-105",
+    "flex items-center justify-center rounded-full text-white shadow-md transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2",
     size === "rail" ? "size-11" : "size-10",
     action.className,
     !action.href && "pointer-events-none opacity-40",
@@ -84,6 +85,7 @@ function renderAction(action: ActionItem, size: "rail" | "inline") {
         className={className}
         title={action.label}
         aria-label={action.label}
+        onClick={action.onClick}
       >
         <Icon className="size-4" />
       </a>
@@ -121,6 +123,7 @@ export function LeadProfileV2Rail({
   onPipelineUpdated,
   onReassignUpdated,
   onOpenEngagement,
+  onCall,
 }: {
   leadId: string;
   data: LeadProfileV2Shell;
@@ -146,6 +149,7 @@ export function LeadProfileV2Rail({
   onPipelineUpdated: () => void;
   onReassignUpdated: () => void;
   onOpenEngagement: () => void;
+  onCall: (target: HTMLElement) => void;
 }) {
   const name =
     data.lead.customer?.name ||
@@ -171,6 +175,7 @@ export function LeadProfileV2Rail({
       href: telHref,
       className: "bg-[#0d9488]",
       label: "Call",
+      onClick: (event) => onCall(event.currentTarget),
     },
     {
       icon: MessageSquare,
@@ -310,11 +315,15 @@ export function LeadProfileV2Rail({
         </div>
       </div>
 
-      {variant === "page" ? (
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
-          {actions.map((action) => renderAction(action, "inline"))}
-        </div>
-      ) : null}
+      <div
+        className={
+          variant === "page"
+            ? "mt-4 flex flex-wrap items-center justify-center gap-2.5"
+            : "mt-4 flex flex-wrap items-center justify-center gap-2.5 sm:hidden"
+        }
+      >
+        {actions.map((action) => renderAction(action, "inline"))}
+      </div>
 
       <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[13px] font-medium text-[#1e2a38]">
         <button
@@ -589,10 +598,12 @@ export function LeadProfileV2ActionRail({
   phone,
   phoneE164,
   email,
+  onCall,
 }: {
   phone: string | null | undefined;
   phoneE164: string | null | undefined;
   email: string | null | undefined;
+  onCall: (target: HTMLElement) => void;
 }) {
   const actions: ActionItem[] = [
     {
@@ -600,6 +611,7 @@ export function LeadProfileV2ActionRail({
       href: contactTelHref(phone, phoneE164),
       className: "bg-[#0d9488]",
       label: "Call",
+      onClick: (event) => onCall(event.currentTarget),
     },
     {
       icon: MessageSquare,

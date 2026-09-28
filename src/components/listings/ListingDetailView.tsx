@@ -28,6 +28,7 @@ import { ListingSheetDocumentFlags } from "@/components/listings/ListingSheetDoc
 import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
 import { ListingMobileNotes } from "@/components/listings/ListingMobileNotes";
 import { ListingAccountChromeProvider } from "@/components/listings/ListingAccountChromeProvider";
+import { ListingAccessGate } from "@/components/listings/ListingAccessGate";
 import { RecordRecentView } from "@/components/listings/RecordRecentView";
 import { SeoLocationBridge } from "@/components/site/SeoLocationContext";
 import { ListingInsightsDeferred } from "@/components/listings/insights/ListingInsightsDeferred";
@@ -186,6 +187,11 @@ export function ListingDetailView({
   return (
     <ListingAccountChromeProvider
       mlsNumber={listing.mlsNumber}
+      signedIn={signedIn}
+    >
+    <ListingAccessGate
+      mlsNumber={listing.mlsNumber}
+      callbackPath={canonicalPath}
       signedIn={signedIn}
     >
       <SeoLocationBridge
@@ -628,6 +634,7 @@ export function ListingDetailView({
 
       <ListingDetailFooter isListingSheet={isListingSheet} />
     </div>
+    </ListingAccessGate>
     </ListingAccountChromeProvider>
   );
 }

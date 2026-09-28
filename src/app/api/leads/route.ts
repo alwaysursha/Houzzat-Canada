@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { requireCustomerUser } from "@/lib/account";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
 import {
@@ -64,7 +64,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const session = await auth();
+    const customer = await requireCustomerUser();
+    if (!customer || !isConsumerRole(customer.role)) {
+      return NextResponse.json(
+        { error: "Sign in to send this request.", requiresAuth: true },
+        { status: 401 },
+      );
+    }
     const data = parsed.data;
     const parsedPhone = data.phone
       ? parsePhoneColumnsForWrite(data.phone)
@@ -99,13 +105,11 @@ export async function POST(request: Request) {
       data.kind === "virtual_viewing" ? 55 : data.kind === "showing" ? 40 : 25;
 
     let customerFlags = { isBuyer: true, isSeller: false };
-    if (session?.user?.id) {
-      const customer = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { isBuyer: true, isSeller: true },
-      });
-      if (customer) customerFlags = customer;
-    }
+    const account = await prisma.user.findUnique({
+      where: { id: customer.id },
+      select: { isBuyer: true, isSeller: true },
+    });
+    if (account) customerFlags = account;
     const intent = resolveLeadIntent(customerFlags);
 
     const utm = pickUtm(data);
@@ -116,8 +120,8 @@ export async function POST(request: Request) {
     const userAgent = request.headers.get("user-agent");
 
     let contactChanges: MaterialLeadInfoChange[] = [];
-    if (session?.user?.id && isConsumerRole(session.user.role)) {
-      const applied = await applyCanonicalCustomerContact(prisma, session.user.id, {
+    {
+      const applied = await applyCanonicalCustomerContact(prisma, customer.id, {
         name: data.name,
         email: data.email,
         phone: data.phone,
@@ -137,15 +141,15 @@ export async function POST(request: Request) {
       isBuyer: customerFlags.isBuyer === true,
       isSeller: customerFlags.isSeller === true,
       source,
-      customerId: session?.user?.id,
+      customerId: customer.id,
       email: data.email,
       phone: data.phone,
       name: data.name,
       score,
       listingMls: listing.mlsNumber,
       contactConsentAt: consentAt,
-      actorId: session?.user?.id,
-      upsertCustomer: !session?.user?.id,
+      actorId: customer.id,
+      upsertCustomer: false,
       contactChanges,
       utm: utmLeadFields(utm, adCampaignId),
       notes: [
@@ -171,7 +175,7 @@ export async function POST(request: Request) {
             : data.kind === "showing"
               ? "showing_request"
               : "inquiry",
-        userId: session?.user?.id,
+        userId: customer.id,
         body: data.message ?? null,
         meta: {
           email: data.email,
@@ -194,7 +198,7 @@ export async function POST(request: Request) {
 
     await prisma.consentEvent.create({
       data: {
-        userId: session?.user?.id,
+        userId: customer.id,
         leadId: lead.id,
         email: data.email.toLowerCase(),
         kind: AGENT_CONTACT_CONSENT_KIND,
@@ -204,14 +208,12 @@ export async function POST(request: Request) {
       },
     });
 
-    if (session?.user?.id) {
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: {
-          caslConsentAt: consentAt,
-        },
-      });
-    }
+    await prisma.user.update({
+      where: { id: customer.id },
+      data: {
+        caslConsentAt: consentAt,
+      },
+    });
 
     if (appointmentType) {
       await prisma.appointment.create({
@@ -219,7 +221,7 @@ export async function POST(request: Request) {
           type: appointmentType,
           status: "REQUESTED",
           listingMls: listing.mlsNumber,
-          customerId: session?.user?.id ?? resolved.customerId,
+          customerId: customer.id,
           agentId: assignedAgentId,
           notes: data.preferredTimes ?? data.message ?? null,
           focusNotes: data.focusNotes,

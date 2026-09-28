@@ -5,11 +5,14 @@ import Link from "next/link";
 import { Bell, CalendarDays, Search } from "lucide-react";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { useWatchListingToggle } from "@/components/account/useWatchListingToggle";
-import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { useClientToolsVerification } from "@/components/auth/ClientToolsVerificationProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { useListingContactDefaults } from "@/components/listings/ListingAccountChromeProvider";
+import {
+  LEAD_REQUEST_RESTORE_EVENT,
+  peekLeadRequestRestore,
+} from "@/lib/auth/lead-request-intent";
 import {
   ViewingBookingModal,
   type ViewingContactDefaults,
@@ -52,7 +55,6 @@ export function ListingMobileActionBar({
   transactionType?: "SALE" | "LEASE";
   segment?: "RESIDENTIAL" | "COMMERCIAL" | "PRE_CONSTRUCTION" | string;
 }) {
-  const { openAuth } = useAuthModal();
   const { toast } = useSiteAlert();
   const access = useClientAccess();
   const { openClientToolsVerification } = useClientToolsVerification();
@@ -73,6 +75,28 @@ export function ListingMobileActionBar({
     initiallyWatching,
     authCallbackUrl,
   });
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    function openRestored() {
+      if (!media.matches || inactive) return;
+      const pending = peekLeadRequestRestore();
+      if (!pending) return;
+      if (
+        pending.mlsNumber.trim().toUpperCase() !==
+        mlsNumber.trim().toUpperCase()
+      ) {
+        return;
+      }
+      if (pending.kind === "inquiry") return;
+      setBookingOpen(true);
+    }
+    window.addEventListener(LEAD_REQUEST_RESTORE_EVENT, openRestored);
+    openRestored();
+    return () => {
+      window.removeEventListener(LEAD_REQUEST_RESTORE_EVENT, openRestored);
+    };
+  }, [inactive, mlsNumber]);
 
   useEffect(() => {
     function sync() {
@@ -234,16 +258,7 @@ export function ListingMobileActionBar({
                 type="button"
                 size="lg"
                 className="h-12 min-w-0 flex-[1.45] gap-1.5 px-3.5 text-sm"
-                onClick={() => {
-                  if (!signedIn) {
-                    openAuth({
-                      mode: "sign-in",
-                      callbackUrl: authCallbackUrl,
-                    });
-                    return;
-                  }
-                  setBookingOpen(true);
-                }}
+                onClick={() => setBookingOpen(true)}
               >
                 <CalendarDays className="size-4 shrink-0" />
                 <span className="whitespace-nowrap">Book a viewing</span>
@@ -259,6 +274,7 @@ export function ListingMobileActionBar({
           onClose={() => setBookingOpen(false)}
           mlsNumber={mlsNumber}
           contact={resolvedContact}
+          callbackPath={authCallbackUrl}
         />
       ) : null}
     </>

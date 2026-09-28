@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
+import { publishPresentedTenantBrand } from "@/components/tenancy/presented-tenant-brand";
 import type { MarketingPresentationBrand } from "@/lib/tenancy/marketing-presentation-brand";
 
 const TenantBrandContext = createContext<MarketingPresentationBrand | null>(
@@ -15,6 +16,12 @@ export function TenantBrandProvider({
   children: React.ReactNode;
 }) {
   const value = useMemo(() => brand, [brand]);
+
+  useEffect(() => {
+    publishPresentedTenantBrand(brand);
+    return () => publishPresentedTenantBrand(null);
+  }, [brand]);
+
   return (
     <TenantBrandContext.Provider value={value}>
       {children}

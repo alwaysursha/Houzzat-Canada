@@ -1,10 +1,12 @@
 "use client";
 
+import { responseRequiresEmailVerification } from "@/lib/account/customer-access-error";
+
 export type PrimarySaveOutcome =
   | { status: "saved" }
   | { status: "needs_confirm"; existingCount: number }
   | { status: "auth" }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; verification?: boolean };
 
 async function readApiError(res: Response, fallback: string): Promise<string> {
   try {
@@ -50,9 +52,13 @@ export async function createPrimarySavedSearch(input: {
   });
   if (res.status === 401) return { status: "auth" };
   if (!res.ok) {
+    const verification = await responseRequiresEmailVerification(res);
     return {
       status: "error",
-      message: await readApiError(res, "Could not save search."),
+      message: verification
+        ? "Email verification required."
+        : await readApiError(res, "Could not save search."),
+      verification,
     };
   }
   window.dispatchEvent(new Event("houzzat:saved-searches-changed"));

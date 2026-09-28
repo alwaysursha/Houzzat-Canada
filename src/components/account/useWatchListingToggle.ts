@@ -1,12 +1,17 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { usePropertyWatchesStatus } from "@/components/account/PropertyWatchesProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { useListingAccountChrome } from "@/components/listings/ListingAccountChromeProvider";
 import { notifyPropertyWatchesChanged } from "@/lib/account/watch-sync";
+import {
+  openGuestPropertyWatchIntent,
+  retainPropertyWatchIntentHandler,
+} from "@/lib/auth/property-watch-intent";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 
 export function useWatchListingToggle({
@@ -30,6 +35,23 @@ export function useWatchListingToggle({
   const { confirm, toast, alert } = useSiteAlert();
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
+
+  useEffect(() => {
+    return retainPropertyWatchIntentHandler({
+      onWatched: () => {
+        void alert({ ...SITE_MESSAGES.watchAdded });
+      },
+      onVerification: () => {
+        toast({
+          message: SITE_MESSAGES.watchRequiresEmailVerificationToast,
+          tone: "error",
+        });
+      },
+      onFailed: () => {
+        toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+      },
+    });
+  }, [alert, toast]);
 
   const callbackUrl = authCallbackUrl ?? `/listing/${mlsNumber}`;
   const providerReady = Boolean(watchStatus?.ready);
@@ -62,7 +84,14 @@ export function useWatchListingToggle({
     if (sessionLoading) return;
 
     if (!signedIn) {
-      openAuth({ mode: "sign-in", callbackUrl });
+      openGuestPropertyWatchIntent({
+        mlsNumber,
+        callbackPath: callbackUrl,
+        host: window.location.hostname,
+        now: Date.now(),
+        store: browserCaptureIntentStore(),
+        openAuth,
+      });
       return;
     }
 

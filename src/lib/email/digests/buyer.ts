@@ -13,6 +13,10 @@ import {
   findNewListingsForSavedQuery,
   type DigestListingCard,
 } from "@/lib/email/digests/search";
+import {
+  planBuyerDigest,
+  savedSearchDigestCursorUpdate,
+} from "@/lib/email/digests/buyer-digest-plan";
 import { emailPreferencesUrl } from "@/lib/email/log";
 import { renderSavedSearchDigestEmail } from "@/lib/email/templates";
 import { formatListPrice } from "@/lib/listings/constants";
@@ -63,29 +67,14 @@ function toDigestLine(listing: DigestListingCard) {
 }
 
 /**
- * Upsert primary SavedSearch from Saved + browsing intent so CRM stays aligned.
- * Returns the primary search used for cursors / emailAlerts.
+ * Materialize a browse-derived primary only when the customer has none.
+ * Never called for an existing primary.
  */
-async function syncPrimarySavedSearch(input: {
+async function createBrowsePrimarySavedSearch(input: {
   userId: string;
   query: Record<string, unknown>;
   name: string;
 }) {
-  const existing = await prisma.savedSearch.findFirst({
-    where: { userId: input.userId, isPrimary: true },
-    orderBy: { updatedAt: "desc" },
-  });
-
-  if (existing) {
-    return prisma.savedSearch.update({
-      where: { id: existing.id },
-      data: {
-        name: input.name,
-        query: input.query as Prisma.InputJsonValue,
-      },
-    });
-  }
-
   await prisma.savedSearch.updateMany({
     where: { userId: input.userId, isPrimary: true },
     data: { isPrimary: false },
@@ -136,47 +125,62 @@ export async function runBuyerSavedSearchDigests(opts?: {
   for (const user of users) {
     stats.checked += 1;
     try {
-      const savedSearches = await prisma.savedSearch.findMany({
-        where: { userId: user.id },
-        select: { name: true, query: true, emailAlerts: true, isPrimary: true },
-        take: 20,
-        orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
-      });
-
-      const intent = await loadBuyerIntent({
-        customerId: user.id,
-        customerName: user.name,
-        savedSearches,
-      });
-
-      if (
-        intent.source === "thin" ||
-        !hasUsableSearchCriteria(intent.criteria)
-      ) {
-        stats.skipped += 1;
-        continue;
-      }
-
-      const query = buyerIntentToSavedQuery(intent.criteria);
-      const searchName = buyerIntentSearchName(intent.criteria);
-
       const existingPrimary = await prisma.savedSearch.findFirst({
         where: { userId: user.id, isPrimary: true },
         orderBy: { updatedAt: "desc" },
       });
 
-      if (existingPrimary && !existingPrimary.emailAlerts) {
+      let browseQuery: Record<string, unknown> | null = null;
+      let browseName: string | null = null;
+      let browseUsable = false;
+      if (!existingPrimary) {
+        const savedSearches = await prisma.savedSearch.findMany({
+          where: { userId: user.id },
+          select: { name: true, query: true },
+          take: 20,
+          orderBy: { updatedAt: "desc" },
+        });
+        const intent = await loadBuyerIntent({
+          customerId: user.id,
+          customerName: user.name,
+          savedSearches,
+        });
+        browseUsable =
+          intent.source !== "thin" &&
+          hasUsableSearchCriteria(intent.criteria);
+        if (browseUsable) {
+          browseQuery = buyerIntentToSavedQuery(intent.criteria);
+          browseName = buyerIntentSearchName(intent.criteria);
+        }
+      }
+
+      const plan = planBuyerDigest({
+        primary: existingPrimary
+          ? {
+              id: existingPrimary.id,
+              query: existingPrimary.query,
+              emailAlerts: existingPrimary.emailAlerts,
+              lastAlertedAt: existingPrimary.lastAlertedAt,
+            }
+          : null,
+        browseQuery,
+        browseName,
+        browseUsable,
+      });
+
+      if (plan.action === "skip") {
         stats.skipped += 1;
         continue;
       }
 
-      const primary = opts?.dryRun
-        ? existingPrimary
-        : await syncPrimarySavedSearch({
-            userId: user.id,
-            query,
-            name: searchName,
-          });
+      const primary =
+        plan.action === "create_from_browse" && !opts?.dryRun
+          ? await createBrowsePrimarySavedSearch({
+              userId: user.id,
+              query: plan.query,
+              name: plan.name,
+            })
+          : existingPrimary;
 
       if (primary && !primary.emailAlerts) {
         stats.skipped += 1;
@@ -189,7 +193,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
         user.lastBuyerDigestAt ??
         new Date(Date.now() - DAY_MS);
 
-      const listings = await findNewListingsForSavedQuery(query, {
+      const listings = await findNewListingsForSavedQuery(plan.query, {
         since,
         limit: BUYER_DIGEST_LIMIT,
       });
@@ -200,7 +204,11 @@ export async function runBuyerSavedSearchDigests(opts?: {
         continue;
       }
 
-      const searchHref = savedQueryToSearchHref(query);
+      const searchHref = savedQueryToSearchHref(plan.query);
+      const searchName =
+        plan.action === "create_from_browse"
+          ? plan.name
+          : (primary?.name ?? "Saved search");
       const rendered = renderSavedSearchDigestEmail({
         name: user.name,
         searchName,
@@ -250,7 +258,6 @@ export async function runBuyerSavedSearchDigests(opts?: {
       );
 
       const now = new Date();
-      // Non-dry-run always synced a primary above.
       if (!primary) {
         stats.failed += 1;
         console.error("[digest:buyer] missing primary after send", user.email);
@@ -263,7 +270,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
         }),
         prisma.savedSearch.update({
           where: { id: primary.id },
-          data: { lastAlertedAt: now },
+          data: savedSearchDigestCursorUpdate(now),
         }),
       ]);
 

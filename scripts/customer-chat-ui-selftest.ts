@@ -416,8 +416,8 @@ function testTenantOnlyFabAndNoSixthTab() {
   assert.ok(fab.includes("ADMIN"));
   assert.ok(fab.includes("AGENT"));
   assert.ok(fab.includes('status === "loading"'));
-  assert.ok(fab.includes("openAuth") || fab.includes("AuthOpenButton"));
-  assert.ok(fab.includes('callbackUrl={CUSTOMER_CHAT_PAGE_HREF}'));
+  assert.ok(fab.includes("openGuestStartChatIntent"));
+  assert.ok(fab.includes("href={CUSTOMER_CHAT_PAGE_HREF}"));
   assert.ok(fab.includes('aria-label="Chat with your agent"'));
   const nav = read("src/components/site/MobileBottomNav.tsx");
   assert.ok(nav.includes('label="Chat"'));

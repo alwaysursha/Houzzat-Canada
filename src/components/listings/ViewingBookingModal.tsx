@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { useSession } from "next-auth/react";
 import { X } from "lucide-react";
 import { LeadRequestForm } from "@/components/listings/LeadRequestForm";
+import { useLeadRequestRestore } from "@/components/listings/useLeadRequestRestore";
 import { cn } from "@/lib/utils";
 
 export type ViewingContactDefaults = {
@@ -26,17 +28,27 @@ export function ViewingBookingModal({
   onClose,
   mlsNumber,
   contact,
+  callbackPath,
   initialKind = "showing",
 }: {
   open: boolean;
   onClose: () => void;
   mlsNumber: string;
   contact?: ViewingContactDefaults;
+  callbackPath?: string;
   initialKind?: "showing" | "virtual_viewing";
 }) {
   const titleId = useId();
+  const { status } = useSession();
+  const restore = useLeadRequestRestore(mlsNumber, open);
   const [kind, setKind] = useState<"showing" | "virtual_viewing">(initialKind);
+  const [kindChosen, setKindChosen] = useState(false);
   const [entered, setEntered] = useState(false);
+  const shownKind =
+    !kindChosen &&
+    (restore?.kind === "showing" || restore?.kind === "virtual_viewing")
+      ? restore.kind
+      : kind;
 
   useEffect(() => {
     if (open) setKind(initialKind);
@@ -139,10 +151,13 @@ export function ViewingBookingModal({
               <button
                 key={value}
                 type="button"
-                onClick={() => setKind(value)}
+                onClick={() => {
+                  setKindChosen(true);
+                  setKind(value);
+                }}
                 className={cn(
                   "rounded-lg px-3 py-1.5 text-sm font-medium transition",
-                  kind === value
+                  shownKind === value
                     ? value === "virtual_viewing"
                       ? "bg-signal text-white"
                       : "bg-canopy text-white"
@@ -156,14 +171,23 @@ export function ViewingBookingModal({
 
           <div className="mt-4">
             <LeadRequestForm
-              key={`${kind}-${mlsNumber}`}
+              key={`${status}-${shownKind}-${mlsNumber}-${restore?.restoredAt ?? "base"}`}
               mlsNumber={mlsNumber}
-              kind={kind}
+              kind={shownKind}
+              callbackPath={callbackPath}
               defaults={{
                 name: contact?.name ?? "",
                 email: contact?.email ?? "",
                 phone: contact?.phone ?? "",
-                message: defaultViewingMessage(mlsNumber, kind),
+                message:
+                  restore && restore.kind === shownKind && restore.message
+                    ? restore.message
+                    : defaultViewingMessage(mlsNumber, shownKind),
+                focusNotes:
+                  restore?.kind === "virtual_viewing" &&
+                  shownKind === "virtual_viewing"
+                    ? (restore.focusNotes ?? "")
+                    : "",
               }}
             />
           </div>

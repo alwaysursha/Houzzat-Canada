@@ -26,9 +26,12 @@ import {
 } from "lucide-react";
 import { PersonalizeHomepageModal } from "@/components/home/PersonalizeHomepageModal";
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
+import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { CUSTOMER_CHAT_PAGE_HREF } from "@/lib/customer-chat/query";
+import { openGuestStartChatIntent } from "@/lib/auth/start-chat-intent";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
 import { tenantAccountLabel } from "@/lib/tenancy/marketing-presentation-brand";
 import type { MarketingChromeBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
@@ -499,6 +502,7 @@ function MoreSheet({
 }) {
   const { status } = useSession();
   const signedIn = status === "authenticated";
+  const { openAuth } = useAuthModal();
   const routePlanner = useRoutePlanner();
   const routeCount = routePlanner?.count ?? 0;
 
@@ -538,18 +542,25 @@ function MoreSheet({
             onNavigate={onNavigateAway}
           />
         ) : (
-          <AuthOpenButton
-            mode="sign-in"
-            callbackUrl={CUSTOMER_CHAT_PAGE_HREF}
-            onClick={onNavigateAway}
+          <button
+            type="button"
             aria-label="Chat with your agent"
+            onClick={() => {
+              onNavigateAway();
+              openGuestStartChatIntent({
+                host: window.location.hostname,
+                now: Date.now(),
+                store: browserCaptureIntentStore(),
+                openAuth,
+              });
+            }}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-ink transition hover:bg-mist active:scale-[0.99]"
           >
             <span className="inline-flex size-9 items-center justify-center rounded-lg bg-canopy/10 text-canopy">
               <MessageCircle className="size-4" aria-hidden />
             </span>
             Chat
-          </AuthOpenButton>
+          </button>
         )}
         <MoreLink
           href="/account/notifications"

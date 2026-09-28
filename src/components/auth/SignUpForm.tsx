@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
+import { loadPersistedUtm } from "@/components/ads/UtmCapture";
 import { PasswordField } from "@/components/auth/PasswordField";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
@@ -18,14 +18,18 @@ import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biomet
 
 export function SignUpForm({
   callbackUrl = null,
+  displayName = "your team",
   onSuccess,
   onSwitchMode,
   onExistingAccount,
+  afterConsent = null,
 }: {
   callbackUrl?: string | null;
+  displayName?: string;
   onSuccess?: () => void;
   onSwitchMode?: () => void;
   onExistingAccount?: (email: string) => void;
+  afterConsent?: ReactNode;
 }) {
   const router = useRouter();
   const { confirm } = useSiteAlert();
@@ -65,12 +69,13 @@ export function SignUpForm({
       response = await fetch("/api/auth/sign-up", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: trimmedName,
-          email: normalizedEmail,
-          password,
-          acceptTerms: true,
-        }),
+          body: JSON.stringify({
+            name: trimmedName,
+            email: normalizedEmail,
+            password,
+            acceptTerms: true,
+            ...loadPersistedUtm(),
+          }),
       });
     } catch {
       setPending(false);
@@ -175,7 +180,6 @@ export function SignUpForm({
       autoComplete="on"
       name="houzzat-signup"
     >
-      <AuthBenefitsPanel />
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="auth-signup-name">
           Name
@@ -215,7 +219,7 @@ export function SignUpForm({
       />
       {error ? <p className="text-sm text-danger">{error}</p> : null}
       <Button type="submit" className="w-full" disabled={pending} ref={submitRef}>
-        {pending ? "Creating…" : "Create Houzzat client account"}
+        {pending ? "Creating…" : "Create Free Account"}
       </Button>
       <p className="text-center text-[11px] leading-relaxed text-ink/50">
         By creating an account you agree to our{" "}
@@ -233,8 +237,9 @@ export function SignUpForm({
           Privacy Policy
         </Link>
         , PropTx / VOW client agreement, and to receive email alerts and phone
-        contact from Houzzat about your home search.
+        contact from {displayName} about your home search.
       </p>
+      {afterConsent}
       {onSwitchMode ? (
         <p className="text-center text-sm text-ink/60">
           Already registered?{" "}

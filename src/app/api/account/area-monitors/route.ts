@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireFullCustomerUser } from "@/lib/account";
+import { createOrReuseAreaMonitor } from "@/lib/account/area-monitor-create";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { prisma } from "@/lib/prisma";
 
@@ -49,43 +50,44 @@ export async function POST(request: Request) {
   const name =
     data.name || [community, city].filter(Boolean).join(", ") || city;
 
-  const existing = await prisma.areaMonitor.findFirst({
-    where: {
-      userId: user.id,
-      city,
-      community,
-      transactionType,
-      segment,
+  const criteria = {
+    userId: user.id,
+    city,
+    community,
+    transactionType,
+    segment,
+  };
+  const { item, alreadyWatching } = await createOrReuseAreaMonitor(
+    {
+      findEquivalent: (match) =>
+        prisma.areaMonitor.findFirst({ where: match }),
+      create: (row) =>
+        prisma.areaMonitor.create({
+          data: { ...row, name },
+        }),
     },
-  });
-  if (existing) {
-    return NextResponse.json({ ok: true, item: existing, alreadyWatching: true });
-  }
-
-  const item = await prisma.areaMonitor.create({
-    data: {
-      userId: user.id,
-      name,
-      city,
-      community,
-      transactionType,
-      segment,
+    {
+      ...criteria,
       notifyNew: data.notifyNew ?? true,
       notifySold: data.notifySold ?? true,
       emailAlerts: data.emailAlerts ?? true,
       lastSeenListingAt: new Date(),
     },
-  });
+  );
 
-  void recordActivityEvent({
-    type: "WATCH_AREA",
-    userId: user.id,
-    path: "/account/watchlist",
-    title: `Area watch: ${name}`,
-    meta: { areaMonitorId: item.id, city, community },
-  });
+  if (!alreadyWatching) {
+    void recordActivityEvent({
+      type: "WATCH_AREA",
+      userId: user.id,
+      path: "/account/watchlist",
+      title: `Area watch: ${name}`,
+      meta: { areaMonitorId: item.id, city, community },
+    });
+  }
 
-  return NextResponse.json({ ok: true, item });
+  return NextResponse.json(
+    alreadyWatching ? { ok: true, item, alreadyWatching: true } : { ok: true, item },
+  );
 }
 
 const deleteSchema = z.union([

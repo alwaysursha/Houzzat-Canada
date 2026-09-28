@@ -66,13 +66,16 @@ function testServerContactEditActivity() {
 }
 
 function testServerContactRequestUpdateActivity() {
+  const helper = read("src/lib/agent/contact-update-request.ts");
   const route = read("src/app/api/agent/leads/contact-reminder/route.ts");
-  assert.ok(route.includes("prisma.leadActivity.create"));
-  assert.ok(route.includes('type: "contact_update_request"'));
-  assert.ok(route.includes("emailUpdateRequestedAt"));
-  assert.ok(route.includes("phoneUpdateRequestedAt"));
-  assert.ok(route.includes("scheduleCustomerContactRequestNotice"));
+  assert.ok(helper.includes("leadActivity.create"));
+  assert.ok(helper.includes('type: "contact_update_request"'));
+  assert.ok(helper.includes("emailUpdateRequestedAt"));
+  assert.ok(helper.includes("phoneUpdateRequestedAt"));
+  assert.ok(helper.includes("scheduleCustomerContactRequestNotice"));
+  assert.ok(route.includes("requestCustomerContactUpdate"));
   assert.equal(route.includes("agentTask"), false);
+  assert.equal(helper.includes("agentTask"), false);
   assert.equal(route.includes("savedSearch"), false);
   assert.equal(v2ContactMutationActivityType("request-update"), "contact_update_request");
   assert.equal(v2ContactRequestUpdateWritesLeadActivity(), true);

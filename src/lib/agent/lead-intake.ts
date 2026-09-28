@@ -386,6 +386,16 @@ export async function captureWebsiteLead(input: {
   actorId?: string | null;
   /** Skip auto-routing and use this assignee (null = pond). Create-only. */
   forceAssigneeId?: string | null;
+  /**
+   * Acquisition attribution. Written only when a Lead is created.
+   * Reuse leaves the existing Lead's UTM fields unchanged.
+   */
+  utm?: {
+    utmSource?: string | null;
+    utmMedium?: string | null;
+    utmCampaign?: string | null;
+    utmContent?: string | null;
+  };
   request?: Request | null;
   deps?: HostResolutionDeps;
   /** Repeat capture of an existing Lead does not append another activity row. */
@@ -443,6 +453,7 @@ export async function captureWebsiteLead(input: {
     score: input.score ?? 15,
     contactConsentAt: new Date(),
     actorId: input.actorId ?? input.customerId,
+    utm: input.utm,
     upsertCustomer: false,
     activityOnReuse: input.activityOnReuse,
     activity: {

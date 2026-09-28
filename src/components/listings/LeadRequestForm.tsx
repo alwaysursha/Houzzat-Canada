@@ -1,49 +1,71 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
+import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { openGuestLeadRequestIntent } from "@/lib/auth/lead-request-intent";
 
 type Kind = "inquiry" | "showing" | "virtual_viewing";
 
 export function LeadRequestForm({
   mlsNumber,
   kind,
+  callbackPath,
   defaults,
 }: {
   mlsNumber: string;
   kind: Kind;
+  /** Listing path the auth modal returns to. */
+  callbackPath?: string;
   defaults?: {
     name?: string;
     email?: string;
     phone?: string;
     message?: string;
+    focusNotes?: string;
   };
 }) {
   const tenantName = useTenantDisplayName("Houzzat");
-  const [name, setName] = useState(defaults?.name ?? "");
-  const [email, setEmail] = useState(defaults?.email ?? "");
-  const [phone, setPhone] = useState(defaults?.phone ?? "");
+  const { status } = useSession();
+  const { openAuth } = useAuthModal();
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState<string | null>(null);
+  const [phoneDraft, setPhoneDraft] = useState<string | null>(null);
   const [message, setMessage] = useState(defaults?.message ?? "");
-  const [focusNotes, setFocusNotes] = useState("");
+  const [focusNotes, setFocusNotes] = useState(defaults?.focusNotes ?? "");
   const [contactConsent, setContactConsent] = useState(false);
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const phoneTouched = useRef(false);
-
-  useEffect(() => {
-    if (phoneTouched.current) return;
-    const next = defaults?.phone ?? "";
-    if (next && !phone) setPhone(next);
-  }, [defaults?.phone, phone]);
+  const name = nameDraft ?? defaults?.name ?? "";
+  const email = emailDraft ?? defaults?.email ?? "";
+  const phone = phoneDraft ?? defaults?.phone ?? "";
 
   const isVirtual = kind === "virtual_viewing";
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (status !== "authenticated") {
+      if (status === "loading") return;
+      openGuestLeadRequestIntent({
+        type: kind === "inquiry" ? "CONTACT_AGENT" : "REQUEST_VIEWING",
+        kind,
+        mlsNumber,
+        callbackPath: callbackPath ?? `/listing/${mlsNumber}`,
+        message,
+        focusNotes: kind === "virtual_viewing" ? focusNotes : null,
+        host: window.location.hostname,
+        now: Date.now(),
+        store: browserCaptureIntentStore(),
+        openAuth,
+      });
+      return;
+    }
     if (!contactConsent) {
       setError(`Please confirm you agree to be contacted by a ${tenantName} agent.`);
       return;
@@ -54,6 +76,7 @@ export function LeadRequestForm({
 
     const res = await fetch("/api/leads", {
       method: "POST",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         mlsNumber,
@@ -106,7 +129,7 @@ export function LeadRequestForm({
           required
           placeholder="Full name"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => setNameDraft(e.target.value)}
           autoComplete="name"
         />
         <Input
@@ -114,17 +137,14 @@ export function LeadRequestForm({
           type="email"
           placeholder="Email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => setEmailDraft(e.target.value)}
           autoComplete="email"
         />
       </div>
       <Input
         placeholder="Phone (optional)"
         value={phone}
-        onChange={(e) => {
-          phoneTouched.current = true;
-          setPhone(e.target.value);
-        }}
+        onChange={(e) => setPhoneDraft(e.target.value)}
         autoComplete="tel"
       />
       {isVirtual ? (

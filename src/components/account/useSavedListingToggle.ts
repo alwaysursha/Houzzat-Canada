@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { useClientToolsVerification } from "@/components/auth/ClientToolsVerificationProvider";
 import { useSavedListingsStatus } from "@/components/account/SavedListingsProvider";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
@@ -10,6 +11,10 @@ import { useListingAccountChrome } from "@/components/listings/ListingAccountChr
 import { useClientAccess } from "@/hooks/use-client-access";
 import { customerAccessDenialFromBody } from "@/lib/account/customer-access-error";
 import { notifySavedListingsChanged } from "@/lib/account/saved-listings-sync";
+import {
+  openGuestSaveListingIntent,
+  retainSaveListingIntentHandler,
+} from "@/lib/auth/save-listing-intent";
 import { flyHeartToSaved } from "@/lib/fly-to-saved";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 
@@ -42,8 +47,21 @@ export function useSavedListingToggle({
   const { toast } = useSiteAlert();
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
-
   const callbackUrl = authCallbackUrl ?? `/listing/${mlsNumber}`;
+
+  useEffect(() => {
+    return retainSaveListingIntentHandler(
+      () => {
+        toast({
+          message: SITE_MESSAGES.saveAddedToast,
+          tone: "success",
+        });
+      },
+      () => {
+        openClientToolsVerification({ callbackUrl });
+      },
+    );
+  }, [toast, openClientToolsVerification, callbackUrl]);
 
   const providerReady = Boolean(savedStatus?.ready);
   const chromeReady = chrome.active && chrome.loaded;
@@ -82,7 +100,14 @@ export function useSavedListingToggle({
       if (sessionLoading) return;
 
       if (!signedIn) {
-        openAuth({ mode: "sign-in", callbackUrl });
+        openGuestSaveListingIntent({
+          mlsNumber,
+          callbackPath: callbackUrl,
+          host: window.location.hostname,
+          now: Date.now(),
+          store: browserCaptureIntentStore(),
+          openAuth,
+        });
         return;
       }
 

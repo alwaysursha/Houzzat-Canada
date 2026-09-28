@@ -11,7 +11,6 @@ import {
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { PropertyType } from "@prisma/client";
 import { useClientAccess } from "@/hooks/use-client-access";
 import {
   ArrowUpDown,
@@ -32,7 +31,6 @@ import { SearchActiveFilterStrip } from "@/components/listings/SearchActiveFilte
 import {
   countActiveSearchFilters,
   type SearchFilters,
-  type SearchStatusOption,
   type SearchViewMode,
 } from "@/components/listings/SearchFilterChips";
 import { SearchFiltersMenu } from "@/components/listings/SearchFiltersMenu";
@@ -44,6 +42,14 @@ import {
   parseSearchQuery,
   searchHrefFromParsed,
 } from "@/lib/listings/parse-search-query";
+import {
+  parseInitialStatuses,
+  parseSearchPropertyTypes,
+  parseSearchSort,
+  parseSearchView,
+  searchPageHref,
+  statusesQueryValue,
+} from "@/lib/listings/search-page-href";
 import { pointInPolygon, polygonBBox } from "@/lib/maps/geo";
 import { cityMapCenter } from "@/lib/geo/regions";
 import { cn } from "@/lib/utils";
@@ -70,72 +76,6 @@ type Bounds = {
 };
 
 type LngLat = [number, number];
-
-const PROPERTY_TYPES = new Set<string>([
-  "DETACHED",
-  "SEMI_DETACHED",
-  "TOWNHOUSE",
-  "CONDO_APT",
-  "CONDO_TOWNHOUSE",
-  "MULTIPLEX",
-  "VACANT_LAND",
-  "OFFICE",
-  "RETAIL",
-  "INDUSTRIAL",
-  "MIXED_USE",
-  "OTHER",
-]);
-
-function parseInitialStatuses(
-  statusParam: string | null,
-  isLease: boolean,
-): SearchStatusOption[] {
-  if (!statusParam || statusParam === "ACTIVE") return ["ACTIVE"];
-  if (statusParam === "ALL") {
-    return isLease
-      ? ["ACTIVE", "SOLD_CONDITIONAL", "LEASED", "UNLISTED"]
-      : ["ACTIVE", "SOLD_CONDITIONAL", "SOLD", "UNLISTED"];
-  }
-  const allowed = new Set<SearchStatusOption>(
-    isLease
-      ? ["ACTIVE", "SOLD_CONDITIONAL", "LEASED", "UNLISTED"]
-      : ["ACTIVE", "SOLD_CONDITIONAL", "SOLD", "UNLISTED"],
-  );
-  const parsed = statusParam
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s): s is SearchStatusOption =>
-      allowed.has(s as SearchStatusOption),
-    );
-  return parsed.length ? parsed : ["ACTIVE"];
-}
-
-function statusesQueryValue(statuses: SearchStatusOption[]): string | null {
-  if (statuses.length === 1 && statuses[0] === "ACTIVE") return null;
-  return statuses.join(",");
-}
-
-function parseSort(raw: string | null): SearchFilters["sort"] {
-  if (raw === "price_asc" || raw === "price") return "price_asc";
-  if (raw === "price_desc") return "price_desc";
-  return "newest";
-}
-
-function parseView(
-  raw: string | null,
-  isMobileDefault: boolean,
-): SearchViewMode {
-  if (raw === "map" || raw === "cards" || raw === "split") return raw;
-  return isMobileDefault ? "cards" : "split";
-}
-
-function parsePropertyTypes(raw: string | null): PropertyType[] {
-  if (!raw) return [];
-  return raw
-    .split(",")
-    .map((t) => t.trim())
-    .filter((t): t is PropertyType => PROPERTY_TYPES.has(t));
-}
 
 export function SearchExperience() {
   const router = useRouter();
@@ -204,17 +144,17 @@ export function SearchExperience() {
     maxPrice: searchParams.get("maxPrice") ?? "",
     minBeds: searchParams.get("minBeds") ?? "",
     minBaths: searchParams.get("minBaths") ?? "",
-    propertyTypes: parsePropertyTypes(searchParams.get("propertyTypes")),
+    propertyTypes: parseSearchPropertyTypes(searchParams.get("propertyTypes")),
     openHouseOnly: searchParams.get("openHouseOnly") === "1",
     statuses: parseInitialStatuses(
       searchParams.get("status"),
       initialTxn === "LEASE",
     ),
-    sort: parseSort(searchParams.get("sort")),
+    sort: parseSearchSort(searchParams.get("sort")),
   });
 
   const [view, setView] = useState<SearchViewMode>(() =>
-    parseView(searchParams.get("view"), false),
+    parseSearchView(searchParams.get("view"), false),
   );
 
   useEffect(() => {
@@ -249,13 +189,13 @@ export function SearchExperience() {
       maxPrice: searchParams.get("maxPrice") ?? "",
       minBeds: searchParams.get("minBeds") ?? "",
       minBaths: searchParams.get("minBaths") ?? "",
-      propertyTypes: parsePropertyTypes(searchParams.get("propertyTypes")),
+      propertyTypes: parseSearchPropertyTypes(searchParams.get("propertyTypes")),
       openHouseOnly: searchParams.get("openHouseOnly") === "1",
       statuses: parseInitialStatuses(
         searchParams.get("status"),
         nextTxn === "LEASE",
       ),
-      sort: parseSort(searchParams.get("sort")),
+      sort: parseSearchSort(searchParams.get("sort")),
     }));
   }, [searchParams]);
 
@@ -310,38 +250,34 @@ export function SearchExperience() {
       nextView: SearchViewMode = view,
       options?: { clearMultiPlace?: boolean; clearQuery?: boolean },
     ) => {
-      const params = new URLSearchParams();
-      if (next.segment && next.segment !== "RESIDENTIAL") {
-        params.set("segment", next.segment);
-      }
-      params.set("transactionType", next.transactionType);
-      if (next.dataSource) params.set("dataSource", next.dataSource);
-      if (!options?.clearMultiPlace && citiesParam) {
-        params.set("cities", citiesParam);
-      } else if (next.city) {
-        params.set("city", next.city);
-      }
-      if (!options?.clearMultiPlace && communitiesParam) {
-        params.set("communities", communitiesParam);
-      } else if (next.community) {
-        params.set("community", next.community);
-      }
-      if (next.propertyTypes.length) {
-        params.set("propertyTypes", next.propertyTypes.join(","));
-      }
-      if (next.minPrice) params.set("minPrice", next.minPrice);
-      if (next.maxPrice) params.set("maxPrice", next.maxPrice);
-      if (next.minBeds) params.set("minBeds", next.minBeds);
-      if (next.minBaths) params.set("minBaths", next.minBaths);
-      if (next.openHouseOnly) params.set("openHouseOnly", "1");
-      const statusQ = statusesQueryValue(next.statuses);
-      if (statusQ) params.set("status", statusQ);
-      if (next.sort !== "newest") params.set("sort", next.sort);
-      if (!options?.clearQuery && qParam) params.set("q", qParam);
-      if (nextView !== "split") params.set("view", nextView);
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      router.replace(
+        searchPageHref({
+          pathname,
+          filters: next,
+          view: nextView,
+          cities: citiesParam,
+          communities: communitiesParam,
+          q: qParam,
+          clearMultiPlace: options?.clearMultiPlace,
+          clearQuery: options?.clearQuery,
+        }),
+        { scroll: false },
+      );
     },
     [citiesParam, communitiesParam, pathname, qParam, router, view],
+  );
+
+  const searchCallbackPath = useCallback(
+    (next: SearchFilters) =>
+      searchPageHref({
+        pathname,
+        filters: next,
+        view,
+        cities: citiesParam,
+        communities: communitiesParam,
+        q: qParam,
+      }),
+    [citiesParam, communitiesParam, pathname, qParam, view],
   );
 
   const queryString = useMemo(() => {
@@ -774,6 +710,7 @@ export function SearchExperience() {
             <div ref={saveSearchRef} className="inline-flex shrink-0">
               <SaveSearchButton
                 signedIn={signedIn}
+                callbackPath={searchCallbackPath(filters)}
                 query={{
                   segment:
                     filters.segment !== "RESIDENTIAL"
@@ -899,6 +836,7 @@ export function SearchExperience() {
               resultNoun={noun}
               signedIn={signedIn}
               previewExtras={filterPreviewExtras}
+              searchCallbackPath={searchCallbackPath}
             />
             <div className="flex flex-wrap items-center gap-2 text-xs text-ink/50">
               <span className="inline-flex items-center gap-1.5 font-medium text-ink/65">
@@ -948,6 +886,7 @@ export function SearchExperience() {
               >
                 <SaveSearchButton
                   signedIn={signedIn}
+                  callbackPath={searchCallbackPath(filters)}
                   query={{
                     segment:
                       filters.segment !== "RESIDENTIAL"
@@ -979,6 +918,7 @@ export function SearchExperience() {
                 community={filters.community || undefined}
                 transactionType={filters.transactionType}
                 segment={filters.segment}
+                authCallbackUrl={searchCallbackPath(filters)}
               />
               {filters.dataSource === "fsbo" ? (
                 <button
@@ -1087,6 +1027,7 @@ export function SearchExperience() {
           pending={pending}
           resultNoun={noun}
           signedIn={signedIn}
+          callbackPath={searchCallbackPath(filters)}
         />
       ) : null}
 

@@ -157,11 +157,20 @@ async function main() {
       process.exit(1);
     }
 
+    const sessionCookie = process.env.CANARY_SESSION_COOKIE?.trim();
+    if (!sessionCookie) {
+      console.error(
+        "STOP: POST /api/leads requires a signed-in customer. Set CANARY_SESSION_COOKIE, or run CANARY_VIA=local. This script will not create a guest user.",
+      );
+      process.exit(1);
+    }
+
     const res = await fetch(`${SITE}/api/leads`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         origin: SITE,
+        cookie: sessionCookie,
         "user-agent": "houzzat-workspace-routing-canary/1.0",
       },
       body: JSON.stringify({

@@ -9,6 +9,7 @@ import { PropertyWatchesProvider } from "@/components/account/PropertyWatchesPro
 import { ActivityBeacon } from "@/components/analytics/ActivityBeacon";
 import { isActivityBeaconEnabled } from "@/lib/analytics/activity-beacon-enabled";
 import { AuthModalProvider } from "@/components/auth/AuthModalProvider";
+import { CaptureIntentResume } from "@/components/auth/CaptureIntentResume";
 import { ClientToolsVerificationProvider } from "@/components/auth/ClientToolsVerificationProvider";
 import { RememberClientSession } from "@/components/auth/RememberClientSession";
 import { NavigationRecovery } from "@/components/feedback/NavigationRecovery";
@@ -45,6 +46,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 <PushNotificationsBootstrap />
                 <BiometricLockGate />
                 <RememberClientSession />
+                <CaptureIntentResume />
                 <SoftNavShield />
                 <NavigationRecovery />
                 <RecentViewsSync />

@@ -9,7 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { scheduleCustomerContactRequestNotice } from "@/lib/account/contact-update-notify";
+import { requestCustomerContactUpdate } from "@/lib/agent/contact-update-request";
 import { authorizeMobileLeadAccess } from "@/lib/mobile/v2/lead-access";
 import { prisma } from "@/lib/prisma";
 
@@ -69,46 +69,14 @@ export async function POST(
       );
     }
 
-    const stamp = new Date();
-    if (parsed.data.channel === "email") {
-      await prisma.user.update({
-        where: { id: lead.customerId },
-        data: { emailUpdateRequestedAt: stamp },
-      });
-    } else {
-      await prisma.user.update({
-        where: { id: lead.customerId },
-        data: { phoneUpdateRequestedAt: stamp },
-      });
-    }
-
-    const channelLabel =
-      parsed.data.channel === "phone" ? "phone number" : "email";
-    await prisma.leadActivity.create({
-      data: {
-        leadId: lead.id,
-        userId: access.userId,
-        type: "contact_update_request",
-        body: `Agent requested customer to provide the correct ${channelLabel}`,
-        meta: {
-          channel: parsed.data.channel,
-          requestedAt: stamp.toISOString(),
-        },
-      },
-    });
-
-    scheduleCustomerContactRequestNotice({
-      customerId: lead.customerId,
+    const requested = await requestCustomerContactUpdate({
       leadId: lead.id,
-      channel: parsed.data.channel,
+      customerId: lead.customerId,
       actorUserId: access.userId,
+      channel: parsed.data.channel,
     });
 
-    return NextResponse.json({
-      ok: true,
-      channel: parsed.data.channel,
-      requestedAt: stamp.toISOString(),
-    });
+    return NextResponse.json(requested);
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Internal server error";

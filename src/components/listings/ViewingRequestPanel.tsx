@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { useListingContactDefaults } from "@/components/listings/ListingAccountChromeProvider";
 import { LeadRequestForm } from "@/components/listings/LeadRequestForm";
+import { useLeadRequestRestore } from "@/components/listings/useLeadRequestRestore";
 import {
   defaultViewingMessage,
   type ViewingContactDefaults,
@@ -15,6 +17,20 @@ import { cn } from "@/lib/utils";
 
 function defaultInquiryMessage(mlsNumber: string) {
   return `I'd like details or something similar to MLS® ${mlsNumber}. Please contact me.`;
+}
+
+function useListingViewport(): "unknown" | "narrow" | "wide" {
+  const [viewport, setViewport] = useState<"unknown" | "narrow" | "wide">(
+    "unknown",
+  );
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const sync = () => setViewport(media.matches ? "narrow" : "wide");
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+  return viewport;
 }
 
 export function ViewingRequestPanel({
@@ -29,6 +45,7 @@ export function ViewingRequestPanel({
   segment,
   signedIn = false,
   className,
+  claimRestore = "auto",
 }: {
   mlsNumber: string;
   /** Canonical SEO path for auth redirects. */
@@ -42,8 +59,20 @@ export function ViewingRequestPanel({
   segment?: "RESIDENTIAL" | "COMMERCIAL" | "PRE_CONSTRUCTION" | string;
   signedIn?: boolean;
   className?: string;
+  /**
+   * auto: the desktop panel claims the restore. The mobile booking sheet does.
+   * always: this panel is the visible form at every width (map overlay).
+   */
+  claimRestore?: "auto" | "always";
 }) {
+  const viewport = useListingViewport();
+  const { status } = useSession();
+  const narrow = viewport === "narrow";
+  const claim =
+    claimRestore === "always" || inactive || viewport === "wide";
+  const restore = useLeadRequestRestore(mlsNumber, claim);
   const [mode, setMode] = useState<"showing" | "virtual_viewing">("showing");
+  const [modeChosen, setModeChosen] = useState(false);
   const resolvedContact = useListingContactDefaults(contact);
   const watchSegment =
     segment === "COMMERCIAL" ? "COMMERCIAL" : ("RESIDENTIAL" as const);
@@ -52,6 +81,12 @@ export function ViewingRequestPanel({
     `/search?status=ACTIVE&city=${encodeURIComponent(city ?? "")}`;
   const authCallbackUrl = callbackPath ?? `/listing/${mlsNumber}`;
 
+  const restoredViewing =
+    !modeChosen &&
+    (restore?.kind === "showing" || restore?.kind === "virtual_viewing")
+      ? restore.kind
+      : mode;
+  const showInquiryOnMobile = narrow && restore?.kind === "inquiry";
   const shellClass = cn(
     // Parent column must be the tall grid aside — do not wrap this in a short
     // div, or sticky has no room to travel.
@@ -61,10 +96,11 @@ export function ViewingRequestPanel({
     "sticky top-[calc(var(--site-header-stack,4rem)+var(--listing-sticky-bar-height,5.5rem)+var(--listing-viewing-sticky-gap,0.5rem))] z-10 rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6",
     className,
   );
+  const shellStyle = showInquiryOnMobile ? { display: "block" as const } : undefined;
 
   if (inactive) {
     return (
-      <div className={shellClass}>
+      <div className={shellClass} style={shellStyle}>
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
           Next step
         </p>
@@ -77,13 +113,18 @@ export function ViewingRequestPanel({
         </p>
         <div className="mt-4">
           <LeadRequestForm
+            key={`${status}-${restore?.kind === "inquiry" ? restore.restoredAt : "inquiry"}`}
             mlsNumber={mlsNumber}
             kind="inquiry"
+            callbackPath={authCallbackUrl}
             defaults={{
               name: resolvedContact?.name ?? "",
               email: resolvedContact?.email ?? "",
               phone: resolvedContact?.phone ?? "",
-              message: defaultInquiryMessage(mlsNumber),
+              message:
+                restore?.kind === "inquiry" && restore.message
+                  ? restore.message
+                  : defaultInquiryMessage(mlsNumber),
             }}
           />
         </div>
@@ -117,7 +158,7 @@ export function ViewingRequestPanel({
   }
 
   return (
-    <div className={shellClass}>
+    <div className={shellClass} style={shellStyle}>
       <div className="mb-4">
         <RoutePlannerToggleButton
           mlsNumber={mlsNumber}
@@ -135,36 +176,53 @@ export function ViewingRequestPanel({
         <button
           type="button"
           className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
-            mode === "showing"
+            restoredViewing === "showing"
               ? "bg-canopy text-white shadow-sm"
               : "border border-line/70 bg-mist/40 text-ink/70"
           }`}
-          onClick={() => setMode("showing")}
+          onClick={() => {
+            setModeChosen(true);
+            setMode("showing");
+          }}
         >
           In-person
         </button>
         <button
           type="button"
           className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
-            mode === "virtual_viewing"
+            restoredViewing === "virtual_viewing"
               ? "bg-signal text-white shadow-sm"
               : "border border-line/70 bg-mist/40 text-ink/70"
           }`}
-          onClick={() => setMode("virtual_viewing")}
+          onClick={() => {
+            setModeChosen(true);
+            setMode("virtual_viewing");
+          }}
         >
           Virtual Viewing
         </button>
       </div>
       <div className="mt-4">
         <LeadRequestForm
-          key={mode}
+          key={`${status}-${restoredViewing}-${restore?.restoredAt ?? "base"}`}
           mlsNumber={mlsNumber}
-          kind={mode}
+          kind={restoredViewing}
+          callbackPath={authCallbackUrl}
           defaults={{
             name: resolvedContact?.name ?? "",
             email: resolvedContact?.email ?? "",
             phone: resolvedContact?.phone ?? "",
-            message: defaultViewingMessage(mlsNumber, mode),
+            message:
+              restore &&
+              restore.kind === restoredViewing &&
+              restore.message
+                ? restore.message
+                : defaultViewingMessage(mlsNumber, restoredViewing),
+            focusNotes:
+              restore?.kind === "virtual_viewing" &&
+              restoredViewing === "virtual_viewing"
+                ? (restore.focusNotes ?? "")
+                : "",
           }}
         />
       </div>

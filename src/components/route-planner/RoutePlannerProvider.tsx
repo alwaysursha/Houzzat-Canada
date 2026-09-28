@@ -15,6 +15,7 @@ import {
   saveLocalRoutePlanner,
   toggleLocalStop,
 } from "@/lib/route-planner/local";
+import { mergeGuestRoutePlanner } from "@/lib/route-planner/merge-guest";
 import { ROUTE_PLANNER_MAX_STOPS } from "@/lib/route-planner/optimize";
 import {
   isRoutePlannerChangedMessage,
@@ -85,29 +86,19 @@ export function RoutePlannerProvider({
 
   const mergeLocalAfterSignIn = useCallback(async () => {
     if (status !== "authenticated") return;
-    const local = loadLocalRoutePlanner();
-    if (local.mlsNumbers.length === 0 && !local.startAddress && !local.startAt) {
-      return;
-    }
-    try {
-      await fetch("/api/route-planner", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mergeMlsNumbers: local.mlsNumbers,
-          startAddress: local.startAddress ?? undefined,
-          startLat: local.startLat ?? undefined,
-          startLng: local.startLng ?? undefined,
-          startAt: local.startAt ?? undefined,
-          defaultDwellMinutes: local.defaultDwellMinutes,
-          bufferMinutes: local.bufferMinutes,
-        }),
-      });
-      clearLocalRoutePlanner();
-      await refresh();
-    } catch {
-      // ignore merge failure
-    }
+    await mergeGuestRoutePlanner({
+      load: loadLocalRoutePlanner,
+      patch: async (body) => {
+        const res = await fetch("/api/route-planner", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        return { ok: res.ok };
+      },
+      refresh,
+      clear: clearLocalRoutePlanner,
+    });
   }, [status, refresh]);
 
   useEffect(() => {

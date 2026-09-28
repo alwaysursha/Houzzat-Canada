@@ -8,6 +8,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { CallOutcomeDialog } from "@/components/agent/CallOutcomeDialog";
+import { newCallOutcomeRequestId } from "@/lib/agent/call-outcome-presentation";
 import { LeadProfileV2ActivityPanel } from "@/components/agent/lead-profile-v2/LeadProfileV2ActivityPanel";
 import { LeadProfileV2AppointmentsPanel } from "@/components/agent/lead-profile-v2/LeadProfileV2AppointmentsPanel";
 import { LeadProfileV2ConversationsPanel } from "@/components/agent/lead-profile-v2/LeadProfileV2ConversationsPanel";
@@ -89,6 +91,19 @@ export function LeadProfileV2Host({
     setConversationSurface("chat");
   }
   const [refreshing, setRefreshing] = useState(false);
+  const [callOutcomeLeadId, setCallOutcomeLeadId] = useState(leadId);
+  const [callOutcomeRequestId, setCallOutcomeRequestId] = useState<string | null>(
+    null,
+  );
+  const callReturnFocusRef = useRef<HTMLElement | null>(null);
+  if (leadId !== callOutcomeLeadId) {
+    setCallOutcomeLeadId(leadId);
+    setCallOutcomeRequestId(null);
+  }
+  const beginCallOutcome = useCallback((target: HTMLElement) => {
+    callReturnFocusRef.current = target;
+    setCallOutcomeRequestId((current) => current ?? newCallOutcomeRequestId());
+  }, []);
   const [editingContact, setEditingContact] = useState<
     "phone" | "email" | "address" | null
   >(null);
@@ -744,6 +759,7 @@ export function LeadProfileV2Host({
           phone={data.lead.customer?.phone}
           phoneE164={data.lead.customer?.phoneE164}
           email={data.lead.customer?.email}
+          onCall={beginCallOutcome}
         />
       ) : null}
 
@@ -800,6 +816,7 @@ export function LeadProfileV2Host({
               onPipelineUpdated={onTaskAffectingLeadWrite}
               onReassignUpdated={onUpdated}
               onOpenEngagement={() => setTab("engagement")}
+              onCall={beginCallOutcome}
             />
             <section className="flex min-w-0 flex-col bg-[#f7f9fb] lg:min-h-0 lg:overflow-hidden">
               <LeadProfileV2NoteComposer
@@ -814,6 +831,20 @@ export function LeadProfileV2Host({
           </div>
         )}
       </div>
+      {callOutcomeRequestId && data?.lead.customer?.phone ? (
+        <CallOutcomeDialog
+          leadId={leadId}
+          customerName={name}
+          phoneLabel={data.lead.customer.phone}
+          clientRequestId={callOutcomeRequestId}
+          returnFocusRef={callReturnFocusRef}
+          onClose={() => setCallOutcomeRequestId(null)}
+          onSaved={() => {
+            setCallOutcomeRequestId(null);
+            onTaskAffectingLeadWrite();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

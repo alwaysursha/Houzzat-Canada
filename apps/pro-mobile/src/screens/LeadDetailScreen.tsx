@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Linking,
   Modal,
   Platform,
@@ -40,6 +41,7 @@ import {
   ContactPinIcon,
 } from "../components/ContactActionIcons";
 import { LeadAccountVerifyMenu } from "../components/LeadAccountVerifyMenu";
+import { CallOutcomeSheet } from "../components/CallOutcomeSheet";
 import { AppointmentsTab } from "../components/AppointmentsTab";
 import { ConversationsTab } from "../components/ConversationsTab";
 import { LeadConversationTab } from "../components/LeadConversationTab";
@@ -50,6 +52,18 @@ import {
   updateCustomerEmailVerifiedInListCache,
 } from "../lib/lead-list-cache";
 import { unwrapEngagement } from "../lib/engagement-response";
+import {
+  DIALER_STAYED_FOREGROUND_MS,
+  callOutcomeRequestId,
+  cancelCallOutcomeFlow,
+  createCallOutcomeRequestId,
+  noteCallOutcomeAppState,
+  noteDialerHandedOff,
+  openCallOutcomeIfReturned,
+  settleForegroundFallback,
+  startCallOutcomeFlow,
+  type CallOutcomeFlow,
+} from "../lib/call-outcome-session";
 import { useAuth } from "../state/AuthContext";
 import type {
   BackendEnvelope,
@@ -711,6 +725,9 @@ export function LeadDetailScreen({
     });
   const [isLoading, setIsLoading] = useState(!cachedEntry);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const callFlowRef = useRef<CallOutcomeFlow>({ status: "idle" });
+  const [callFlow, setCallFlow] = useState<CallOutcomeFlow>({ status: "idle" });
+  const dialerSettleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>("activity");
@@ -985,6 +1002,31 @@ export function LeadDetailScreen({
     }
   };
 
+  const commitCallFlow = useCallback((next: CallOutcomeFlow) => {
+    callFlowRef.current = next;
+    setCallFlow(next);
+  }, []);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "background" || next === "inactive") {
+        if (dialerSettleTimer.current) {
+          clearTimeout(dialerSettleTimer.current);
+          dialerSettleTimer.current = null;
+        }
+      }
+      commitCallFlow(noteCallOutcomeAppState(callFlowRef.current, next));
+      if (callFlowRef.current.status !== "pending_return" && dialerSettleTimer.current) {
+        clearTimeout(dialerSettleTimer.current);
+        dialerSettleTimer.current = null;
+      }
+    });
+    return () => {
+      sub.remove();
+      if (dialerSettleTimer.current) clearTimeout(dialerSettleTimer.current);
+    };
+  }, [commitCallFlow]);
+
   const openNativeUrl = async (url: string, unavailableTitle: string) => {
     try {
       const supported = await Linking.canOpenURL(url);
@@ -1003,8 +1045,47 @@ export function LeadDetailScreen({
       lead?.customer?.phone,
       lead?.customer?.phoneE164,
     );
-    if (!href) return;
-    void openNativeUrl(href, "Call unavailable");
+    if (!href || callFlowRef.current.status !== "idle") return;
+    const requestId = createCallOutcomeRequestId();
+    commitCallFlow(startCallOutcomeFlow(requestId));
+    void (async () => {
+      try {
+        const supported = await Linking.canOpenURL(href);
+        if (!supported) {
+          commitCallFlow(cancelCallOutcomeFlow());
+          Alert.alert("Call unavailable", "No compatible app is available on this device.");
+          return;
+        }
+        await Linking.openURL(href);
+        const handed = openCallOutcomeIfReturned(
+          noteDialerHandedOff(callFlowRef.current),
+          AppState.currentState,
+        );
+        commitCallFlow(handed);
+        if (
+          handed.status === "pending_return" &&
+          handed.handedOff &&
+          !handed.leftApp &&
+          AppState.currentState === "active"
+        ) {
+        const armedRequestId = requestId;
+        if (dialerSettleTimer.current) clearTimeout(dialerSettleTimer.current);
+        dialerSettleTimer.current = setTimeout(() => {
+          dialerSettleTimer.current = null;
+          commitCallFlow(
+            settleForegroundFallback(
+              callFlowRef.current,
+              armedRequestId,
+              AppState.currentState,
+            ),
+          );
+        }, DIALER_STAYED_FOREGROUND_MS);
+        }
+      } catch {
+        commitCallFlow(cancelCallOutcomeFlow());
+        Alert.alert("Call unavailable", "Could not open the device app.");
+      }
+    })();
   };
 
   const handleSms = () => {
@@ -2580,6 +2661,20 @@ export function LeadDetailScreen({
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      <CallOutcomeSheet
+        key={callOutcomeRequestId(callFlow) ?? "closed"}
+        visible={callFlow.status === "open"}
+        leadId={leadId}
+        customerName={lead?.customer?.name?.trim() || "Lead"}
+        phoneLabel={lead?.customer?.phone?.trim() || ""}
+        requestId={callOutcomeRequestId(callFlow) ?? ""}
+        onDismiss={() => commitCallFlow(cancelCallOutcomeFlow())}
+        onSaved={() => {
+          commitCallFlow(cancelCallOutcomeFlow());
+          handleRefresh();
+        }}
+      />
     </View>
   );
 }

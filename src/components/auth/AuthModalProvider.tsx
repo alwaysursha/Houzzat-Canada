@@ -7,12 +7,24 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
+  type ReactNode,
 } from "react";
 import { X } from "lucide-react";
+import { authModalCopy } from "@/components/auth/auth-modal-copy";
+import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
 import { SignInForm } from "@/components/auth/SignInForm";
 import { SignUpForm } from "@/components/auth/SignUpForm";
+import { BrandLogoMark } from "@/components/tenancy/BrandLogoMark";
+import {
+  getPresentedTenantBrand,
+  getPresentedTenantBrandServerSnapshot,
+  subscribePresentedTenantBrand,
+} from "@/components/tenancy/presented-tenant-brand";
 import { EXISTING_ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/auth/existing-account-message";
+import type { CaptureIntentType } from "@/lib/auth/capture-intent";
 import { hadClientSession } from "@/lib/auth/remembered-login";
+import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { cn } from "@/lib/utils";
 
@@ -21,12 +33,15 @@ export type AuthMode = "sign-in" | "sign-up";
 type OpenAuthOptions = {
   mode?: AuthMode;
   callbackUrl?: string | null;
+  /** Presentation only. Never sent to signup or credentials APIs. */
+  intent?: CaptureIntentType | null;
 };
 
 type AuthModalContextValue = {
   open: boolean;
   mode: AuthMode;
   callbackUrl: string | null;
+  intent: CaptureIntentType | null;
   openAuth: (options?: OpenAuthOptions) => void;
   closeAuth: () => void;
   setMode: (mode: AuthMode) => void;
@@ -42,11 +57,57 @@ export function useAuthModal() {
   return ctx;
 }
 
+function AuthModalTabs({
+  mode,
+  signInLabel,
+  onMode,
+}: {
+  mode: AuthMode;
+  signInLabel: string;
+  onMode: (mode: AuthMode) => void;
+}) {
+  return (
+    <div
+      className="grid min-w-0 flex-1 grid-cols-2 rounded-xl bg-mist p-1"
+      role="tablist"
+      aria-label="Account"
+    >
+      {(
+        [
+          ["sign-in", signInLabel],
+          ["sign-up", "Sign up"],
+        ] as const
+      ).map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          role="tab"
+          aria-selected={mode === value}
+          onClick={() => onMode(value)}
+          className={cn(
+            "rounded-lg px-3 py-2.5 text-sm transition",
+            mode === value
+              ? "bg-surface font-semibold text-canopy shadow-sm ring-1 ring-canopy/20"
+              : "font-medium text-ink/50 hover:text-ink/75",
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function AuthModalPanel() {
-  const { open, mode, callbackUrl, closeAuth, setMode } = useAuthModal();
+  const { open, mode, callbackUrl, intent, closeAuth, setMode } = useAuthModal();
   const [loginAgain, setLoginAgain] = useState(false);
   const [prefillEmail, setPrefillEmail] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const brand = useSyncExternalStore(
+    subscribePresentedTenantBrand,
+    getPresentedTenantBrand,
+    getPresentedTenantBrandServerSnapshot,
+  );
 
   useEffect(() => {
     if (!open) {
@@ -60,9 +121,45 @@ function AuthModalPanel() {
   if (!open) return null;
 
   const signInLabel = loginAgain ? "Login again" : "Sign in";
+  const displayName = brand?.displayName?.trim() || "your team";
+  const copy = intent ? authModalCopy(intent, mode, displayName) : null;
+  const compactBenefits = <AuthBenefitsPanel variant="compact" />;
+
+  function selectMode(next: AuthMode) {
+    if (next === "sign-up") setAuthNotice(null);
+    setMode(next);
+  }
+
+  const forms = (
+    <>
+      {mode === "sign-in" ? (
+        <SignInForm
+          callbackUrl={callbackUrl}
+          initialEmail={prefillEmail}
+          notice={authNotice}
+          onSuccess={closeAuth}
+          onSwitchMode={() => setMode("sign-up")}
+          afterConsent={copy ? <div className="lg:hidden">{compactBenefits}</div> : compactBenefits}
+        />
+      ) : (
+        <SignUpForm
+          callbackUrl={callbackUrl}
+          displayName={displayName}
+          onSuccess={closeAuth}
+          onSwitchMode={() => setMode("sign-in")}
+          onExistingAccount={(email) => {
+            setPrefillEmail(email);
+            setAuthNotice(EXISTING_ACCOUNT_SIGN_IN_MESSAGE);
+            setMode("sign-in");
+          }}
+          afterConsent={copy ? <div className="lg:hidden">{compactBenefits}</div> : compactBenefits}
+        />
+      )}
+    </>
+  );
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-8">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-4 sm:py-8">
       <button
         type="button"
         className="absolute inset-0 bg-ink/50 backdrop-blur-[2px]"
@@ -73,88 +170,95 @@ function AuthModalPanel() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="auth-modal-title"
-        className="relative z-10 flex max-h-[min(78vh,38rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
+        className={cn(
+          "relative z-10 flex w-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl",
+          copy ? "max-w-4xl" : "max-h-[min(78vh,38rem)] max-w-md",
+        )}
+        style={
+          copy
+            ? { maxWidth: 880, maxHeight: "min(78vh, calc(100dvh - 2rem))" }
+            : undefined
+        }
       >
-        <h2 id="auth-modal-title" className="sr-only">
-          {mode === "sign-in" ? signInLabel : "Sign up"}
-        </h2>
-        <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3.5 sm:px-5">
-          <div
-            className="grid min-w-0 flex-1 grid-cols-2 rounded-xl bg-mist p-1"
-            role="tablist"
-            aria-label="Account"
-          >
-            {(
-              [
-                ["sign-in", signInLabel],
-                ["sign-up", "Sign up"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={mode === value}
-                onClick={() => {
-                  if (value === "sign-up") setAuthNotice(null);
-                  setMode(value);
-                }}
-                className={cn(
-                  "rounded-lg px-3 py-2.5 text-sm transition",
-                  mode === value
-                    ? "bg-surface font-semibold text-canopy shadow-sm ring-1 ring-canopy/20"
-                    : "font-medium text-ink/50 hover:text-ink/75",
-                )}
-              >
-                {label}
-              </button>
-            ))}
+        {copy ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="lg:grid lg:min-h-full lg:grid-cols-2">
+              <div className="border-b border-line bg-mist px-5 py-5 lg:border-b-0 lg:border-r lg:px-8 lg:py-8">
+                <div className="flex items-center gap-2.5">
+                  {brand ? (
+                    <BrandLogoMark
+                      displayName={brand.displayName}
+                      logoUrl={brand.logoUrl}
+                      primaryColor={brand.colors.primary}
+                      size="sm"
+                    />
+                  ) : null}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-ink">{displayName}</p>
+                    <p className="text-[11px] text-ink/45">Powered by {PLATFORM_PRODUCT_NAME}</p>
+                  </div>
+                </div>
+                <h2
+                  id="auth-modal-title"
+                  className="mt-4 font-display text-xl leading-tight text-ink lg:mt-6 lg:text-3xl"
+                >
+                  {copy.headline}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-ink/70">{copy.subhead}</p>
+                <div className="mt-6 hidden lg:block">
+                  <AuthBenefitsPanel />
+                </div>
+              </div>
+              <div className="flex flex-col">
+                <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-surface px-4 py-3.5 sm:px-5">
+                  <AuthModalTabs mode={mode} signInLabel={signInLabel} onMode={selectMode} />
+                  <button
+                    type="button"
+                    onClick={closeAuth}
+                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-line text-ink/70 transition hover:bg-mist"
+                    aria-label="Close"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+                <div className="px-5 py-5">{forms}</div>
+              </div>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={closeAuth}
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-line text-ink/70 transition hover:bg-mist"
-            aria-label="Close"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-          {mode === "sign-in" ? (
-            <SignInForm
-              callbackUrl={callbackUrl}
-              initialEmail={prefillEmail}
-              notice={authNotice}
-              onSuccess={closeAuth}
-              onSwitchMode={() => setMode("sign-up")}
-            />
-          ) : (
-            <SignUpForm
-              callbackUrl={callbackUrl}
-              onSuccess={closeAuth}
-              onSwitchMode={() => setMode("sign-in")}
-              onExistingAccount={(email) => {
-                setPrefillEmail(email);
-                setAuthNotice(EXISTING_ACCOUNT_SIGN_IN_MESSAGE);
-                setMode("sign-in");
-              }}
-            />
-          )}
-        </div>
+        ) : (
+          <>
+            <h2 id="auth-modal-title" className="sr-only">
+              {mode === "sign-in" ? signInLabel : "Sign up"}
+            </h2>
+            <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3.5 sm:px-5">
+              <AuthModalTabs mode={mode} signInLabel={signInLabel} onMode={selectMode} />
+              <button
+                type="button"
+                onClick={closeAuth}
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-line text-ink/70 transition hover:bg-mist"
+                aria-label="Close"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{forms}</div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-export function AuthModalProvider({ children }: { children: React.ReactNode }) {
+export function AuthModalProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [callbackUrl, setCallbackUrl] = useState<string | null>(null);
+  const [intent, setIntent] = useState<CaptureIntentType | null>(null);
 
   const openAuth = useCallback((options?: OpenAuthOptions) => {
     setMode(options?.mode ?? "sign-in");
     setCallbackUrl(options?.callbackUrl ?? null);
+    setIntent(options?.intent ?? null);
     setOpen(true);
   }, []);
 
@@ -189,11 +293,12 @@ export function AuthModalProvider({ children }: { children: React.ReactNode }) {
       open,
       mode,
       callbackUrl,
+      intent,
       openAuth,
       closeAuth,
       setMode,
     }),
-    [open, mode, callbackUrl, openAuth, closeAuth],
+    [open, mode, callbackUrl, intent, openAuth, closeAuth],
   );
 
   return (

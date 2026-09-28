@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import {
   countActiveSearchFilters,
@@ -29,6 +30,7 @@ import { UpdateSavedSearchDialog } from "@/components/listings/UpdateSavedSearch
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { propertyTypeLabel } from "@/lib/listings/constants";
+import { openGuestSaveSearchIntent } from "@/lib/auth/save-search-intent";
 import { savePrimarySearch } from "@/lib/listings/save-primary-search";
 import {
   savedSearchDisplayName,
@@ -128,12 +130,14 @@ export function SearchFiltersMenu({
   resultNoun = "homes",
   signedIn,
   previewExtras,
+  searchCallbackPath,
 }: {
   filters: SearchFilters;
   onChange: (next: SearchFilters) => void;
   resultCount: number;
   resultNoun?: string;
   signedIn: boolean;
+  searchCallbackPath: (filters: SearchFilters) => string;
   previewExtras?: {
     cities?: string;
     communities?: string;
@@ -237,7 +241,17 @@ export function SearchFiltersMenu({
 
   async function persist(confirmReplace: boolean) {
     if (!signedIn) {
-      openAuth({ mode: "sign-in", callbackUrl: "/search" });
+      const callbackPath = searchCallbackPath(draft);
+      const opened = openGuestSaveSearchIntent({
+        callbackPath,
+        host: window.location.hostname,
+        now: Date.now(),
+        store: browserCaptureIntentStore(),
+        openAuth,
+      });
+      if (!opened.ok) {
+        openAuth({ mode: "sign-in", callbackUrl: callbackPath });
+      }
       toast({
         message: "Sign in to save this search to your buyer profile.",
         tone: "info",
@@ -253,7 +267,7 @@ export function SearchFiltersMenu({
     setSaving(false);
 
     if (outcome.status === "auth") {
-      openAuth({ mode: "sign-in", callbackUrl: "/search" });
+      openAuth({ mode: "sign-in", callbackUrl: searchCallbackPath(draft) });
       return false;
     }
     if (outcome.status === "needs_confirm") {

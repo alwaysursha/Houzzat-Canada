@@ -1025,6 +1025,7 @@ export function ListingGallery({
           onClose={() => setBookingOpen(false)}
           mlsNumber={mlsNumber}
           contact={resolvedContact}
+          callbackPath={callbackPath}
         />
       ) : null}
     </>

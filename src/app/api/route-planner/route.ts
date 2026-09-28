@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireFullCustomerUser } from "@/lib/account";
+import { appendGuestStopsInOrder } from "@/lib/route-planner/merge-guest-stops";
 import { prisma } from "@/lib/prisma";
 import {
   enrichTourStops,
@@ -51,27 +52,29 @@ export async function PATCH(request: Request) {
   const data = parsed.data;
 
   if (data.mergeMlsNumbers?.length) {
-    const listings = await prisma.listing.findMany({
-      where: {
-        mlsNumber: { in: data.mergeMlsNumbers },
-        status: "ACTIVE",
-      },
-      select: { mlsNumber: true },
-    });
-    const existing = new Set(tour.stops.map((s) => s.mlsNumber));
-    let order = tour.stops.length;
-    for (const listing of listings) {
-      if (existing.has(listing.mlsNumber) || order >= 10) continue;
-      await prisma.viewingTourStop.create({
-        data: {
-          tourId: tour.id,
-          mlsNumber: listing.mlsNumber,
-          sortOrder: order,
+    await appendGuestStopsInOrder(
+      {
+        listActiveMls: async (mlsNumbers) => {
+          const listings = await prisma.listing.findMany({
+            where: {
+              mlsNumber: { in: mlsNumbers },
+              status: "ACTIVE",
+            },
+            select: { mlsNumber: true },
+          });
+          return listings.map((listing) => listing.mlsNumber);
         },
-      });
-      existing.add(listing.mlsNumber);
-      order += 1;
-    }
+        listStops: async (tourId) =>
+          prisma.viewingTourStop.findMany({
+            where: { tourId },
+            select: { mlsNumber: true, sortOrder: true },
+          }),
+        createStop: async (stop) => {
+          await prisma.viewingTourStop.create({ data: stop });
+        },
+      },
+      { tourId: tour.id, mergeMlsNumbers: data.mergeMlsNumbers },
+    );
   }
 
   await prisma.viewingTour.update({

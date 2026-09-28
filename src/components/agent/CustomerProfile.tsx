@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { CallOutcomeDialog } from "@/components/agent/CallOutcomeDialog";
+import { newCallOutcomeRequestId } from "@/lib/agent/call-outcome-presentation";
 import {
   useCallback,
   useEffect,
@@ -420,6 +422,15 @@ export function CustomerProfile({
   const [noteMessage, setNoteMessage] = useState<string | null>(null);
   const [pinPendingId, setPinPendingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [callOutcomeLeadId, setCallOutcomeLeadId] = useState(leadId);
+  const [callOutcomeRequestId, setCallOutcomeRequestId] = useState<string | null>(
+    null,
+  );
+  const callReturnFocusRef = useRef<HTMLElement | null>(null);
+  if (leadId !== callOutcomeLeadId) {
+    setCallOutcomeLeadId(leadId);
+    setCallOutcomeRequestId(null);
+  }
   const [editingContact, setEditingContact] = useState<
     "phone" | "email" | "address" | null
   >(null);
@@ -973,7 +984,7 @@ export function CustomerProfile({
     href?: string;
     className: string;
     label: string;
-    onClick?: () => void;
+    onClick?: (event: { currentTarget: HTMLElement }) => void;
   };
 
   const actions: ActionItem[] = [
@@ -982,6 +993,10 @@ export function CustomerProfile({
       href: telHref,
       className: "bg-[#0d9488]",
       label: "Call",
+      onClick: (event) => {
+        callReturnFocusRef.current = event.currentTarget;
+        setCallOutcomeRequestId((current) => current ?? newCallOutcomeRequestId());
+      },
     },
     {
       icon: MessageSquare,
@@ -1000,7 +1015,7 @@ export function CustomerProfile({
   function renderAction(action: ActionItem, size: "rail" | "inline") {
     const Icon = action.icon;
     const className = cn(
-      "flex items-center justify-center rounded-full text-white shadow-md transition hover:scale-105",
+      "flex items-center justify-center rounded-full text-white shadow-md transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2",
       size === "rail" ? "size-11" : "size-10",
       action.className,
       !action.href && !action.onClick && "pointer-events-none opacity-40",
@@ -1026,6 +1041,7 @@ export function CustomerProfile({
           className={className}
           title={action.label}
           aria-label={action.label}
+          onClick={action.onClick}
         >
           <Icon className="size-4" />
         </a>
@@ -1036,7 +1052,7 @@ export function CustomerProfile({
         <button
           key={action.label}
           type="button"
-          onClick={action.onClick}
+          onClick={(event) => action.onClick?.(event)}
           className={className}
           title={action.label}
           aria-label={action.label}
@@ -1280,11 +1296,15 @@ export function CustomerProfile({
                 </div>
               </div>
 
-              {variant === "page" ? (
-                <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
-                  {actions.map((action) => renderAction(action, "inline"))}
-                </div>
-              ) : null}
+              <div
+                className={
+                  variant === "page"
+                    ? "mt-4 flex flex-wrap items-center justify-center gap-2.5"
+                    : "mt-4 flex flex-wrap items-center justify-center gap-2.5 sm:hidden"
+                }
+              >
+                {actions.map((action) => renderAction(action, "inline"))}
+              </div>
 
               <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[13px] font-medium text-[#1e2a38]">
                 <button
@@ -2391,6 +2411,20 @@ export function CustomerProfile({
           </div>
         )}
       </div>
+      {callOutcomeRequestId && phone ? (
+        <CallOutcomeDialog
+          leadId={leadId}
+          customerName={name}
+          phoneLabel={phone}
+          clientRequestId={callOutcomeRequestId}
+          returnFocusRef={callReturnFocusRef}
+          onClose={() => setCallOutcomeRequestId(null)}
+          onSaved={() => {
+            setCallOutcomeRequestId(null);
+            onUpdated();
+          }}
+        />
+      ) : null}
       <EmailPreviewModal
         emailId={previewEmailId}
         onClose={() => setPreviewEmailId(null)}

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { pickUtm } from "@/lib/ads/utm";
 import { captureWebsiteLead } from "@/lib/agent/lead-intake";
 import { EXISTING_ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/auth/existing-account-message";
 import { persistSignupConsentEvents } from "@/lib/auth/sign-up-consent";
@@ -144,6 +145,11 @@ export async function POST(request: Request) {
     );
   }
 
+  const utm = pickUtm(
+    body && typeof body === "object" && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : null,
+  );
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -235,6 +241,7 @@ export async function POST(request: Request) {
             isBuyer: true,
             isSeller: asSeller,
             score: asSeller ? 40 : 20,
+            utm,
             request,
           });
         } catch (err) {

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { PropertyType } from "@prisma/client";
 import { ArrowLeft, Check, Loader2, RotateCcw } from "lucide-react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ import {
   type SearchStatusOption,
 } from "@/components/listings/SearchFilterChips";
 import { UpdateSavedSearchDialog } from "@/components/listings/UpdateSavedSearchDialog";
+import { openGuestSaveSearchIntent } from "@/lib/auth/save-search-intent";
 import { propertyTypeLabel } from "@/lib/listings/constants";
 import { savePrimarySearch } from "@/lib/listings/save-primary-search";
 import {
@@ -118,6 +120,7 @@ export function SearchFiltersSheet({
   pending = false,
   resultNoun = "homes",
   signedIn = false,
+  callbackPath,
 }: {
   open: boolean;
   onClose: () => void;
@@ -127,6 +130,7 @@ export function SearchFiltersSheet({
   pending?: boolean;
   resultNoun?: string;
   signedIn?: boolean;
+  callbackPath: string;
 }) {
   const { openAuth } = useAuthModal();
   const { toast } = useSiteAlert();
@@ -213,7 +217,16 @@ export function SearchFiltersSheet({
 
   async function persist(confirmReplace: boolean) {
     if (!signedIn) {
-      openAuth({ mode: "sign-in", callbackUrl: "/search" });
+      const opened = openGuestSaveSearchIntent({
+        callbackPath,
+        host: window.location.hostname,
+        now: Date.now(),
+        store: browserCaptureIntentStore(),
+        openAuth,
+      });
+      if (!opened.ok) {
+        openAuth({ mode: "sign-in", callbackUrl: callbackPath });
+      }
       toast({
         message: "Sign in to save this search to your buyer profile.",
         tone: "info",
@@ -229,7 +242,7 @@ export function SearchFiltersSheet({
     });
     setSaving(false);
     if (outcome.status === "auth") {
-      openAuth({ mode: "sign-in", callbackUrl: "/search" });
+      openAuth({ mode: "sign-in", callbackUrl: callbackPath });
       return;
     }
     if (outcome.status === "needs_confirm") {

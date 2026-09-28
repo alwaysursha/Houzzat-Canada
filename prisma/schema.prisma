@@ -2222,6 +2222,10 @@ model AreaMonitor {
   user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   alerts CustomerAlert[]
 
+  /// One watch per customer + city + community + transaction + segment.
+  /// Null community and null segment each count as one value.
+  /// The migration uses NULLS NOT DISTINCT so empty community cannot duplicate.
+  @@unique([userId, city, community, transactionType, segment], map: "AreaMonitor_user_criteria_key")
   @@index([userId, createdAt])
   @@index([city, community])
 }
