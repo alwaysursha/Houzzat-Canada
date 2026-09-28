@@ -332,7 +332,14 @@ function testApiRequiresCustomerAndKeepsDownstream() {
   assert.ok(route.includes("upsertCustomer: false"));
   assert.ok(!route.includes("upsertCustomer: !session"));
   assert.ok(!route.includes("findOrCreateCustomerUser"));
-  assert.ok(route.includes("applyCanonicalCustomerContact"));
+  assert.equal(route.includes("applyCanonicalCustomerContact"), false);
+  assert.ok(route.includes("customerId: customer.id"));
+  assert.equal(route.includes("email: data.email"), false);
+  assert.equal(route.includes("phone: data.phone"), false);
+  assert.equal(route.includes("customerId:"), true);
+  const form = read("src/components/listings/LeadRequestForm.tsx");
+  assert.ok(form.includes("Requesting as"));
+  assert.ok(form.includes('status === "authenticated"'));
   assert.ok(route.includes("publicResolveOrCreateLead"));
   assert.ok(route.includes("if (resolved.created)"));
   assert.ok(route.includes("if (appointmentType)"));

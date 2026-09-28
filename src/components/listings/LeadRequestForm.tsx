@@ -47,15 +47,29 @@ export function LeadRequestForm({
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const name = nameDraft ?? defaults?.name ?? "";
-  const email = emailDraft ?? defaults?.email ?? "";
-  const phone = phoneDraft ?? defaults?.phone ?? "";
+  const signedIn =
+    status === "authenticated" ||
+    (status === "loading" && Boolean(defaults?.email?.trim()));
+  const name = signedIn
+    ? (defaults?.name ?? "")
+    : (nameDraft ?? defaults?.name ?? "");
+  const email = signedIn
+    ? (defaults?.email ?? "")
+    : (emailDraft ?? defaults?.email ?? "");
+  const phone = signedIn
+    ? (defaults?.phone?.trim() ?? "")
+    : (phoneDraft ?? defaults?.phone ?? "");
 
   useEffect(() => {
+    if (status === "authenticated") {
+      clearLeadRequestContactPrefill();
+      return;
+    }
+    if (status !== "unauthenticated") return;
     if (phoneDraft !== null) return;
     const retained = peekLeadRequestContactPrefill(mlsNumber, kind);
     if (retained) setPhoneDraft(retained);
-  }, [kind, mlsNumber, phoneDraft]);
+  }, [kind, mlsNumber, phoneDraft, status]);
 
   const isVirtual = kind === "virtual_viewing";
 
@@ -101,9 +115,6 @@ export function LeadRequestForm({
       body: JSON.stringify({
         mlsNumber,
         kind,
-        name,
-        email,
-        phone: phone || undefined,
         message: message || undefined,
         focusNotes: focusNotes || undefined,
         contactConsent: true,
@@ -145,29 +156,44 @@ export function LeadRequestForm({
           {tenantName}&apos;s Virtual Viewing.
         </p>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Input
-          required
-          placeholder="Full name"
-          value={name}
-          onChange={(e) => setNameDraft(e.target.value)}
-          autoComplete="name"
-        />
-        <Input
-          required
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmailDraft(e.target.value)}
-          autoComplete="email"
-        />
-      </div>
-      <Input
-        placeholder="Phone (optional)"
-        value={phone}
-        onChange={(e) => setPhoneDraft(e.target.value)}
-        autoComplete="tel"
-      />
+      {signedIn ? (
+        <div className="rounded-lg border border-line bg-mist/40 px-3 py-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/45">
+            Requesting as
+          </p>
+          <div className="mt-1 space-y-0.5 text-sm text-ink">
+            {name ? <p className="font-medium">{name}</p> : null}
+            {email ? <p className="text-ink/70">{email}</p> : null}
+            {phone ? <p className="text-ink/70">{phone}</p> : null}
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              required
+              placeholder="Full name"
+              value={name}
+              onChange={(e) => setNameDraft(e.target.value)}
+              autoComplete="name"
+            />
+            <Input
+              required
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmailDraft(e.target.value)}
+              autoComplete="email"
+            />
+          </div>
+          <Input
+            placeholder="Phone (optional)"
+            value={phone}
+            onChange={(e) => setPhoneDraft(e.target.value)}
+            autoComplete="tel"
+          />
+        </>
+      )}
       {isVirtual ? (
         <Input
           placeholder="What should we focus on? (basement, light, parking…)"

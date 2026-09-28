@@ -8,10 +8,6 @@ import {
   publicLeadRoutingErrorResponse,
   publicResolveOrCreateLead,
 } from "@/lib/agent/public-lead-api";
-import {
-  applyCanonicalCustomerContact,
-  type MaterialLeadInfoChange,
-} from "@/lib/agent/lead-info-change";
 import { isConsumerRole } from "@/lib/roles";
 import {
   createCallNewLeadTask,
@@ -26,14 +22,10 @@ import {
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
-import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 import { scheduleViewingRequestedSmsAutomation } from "@/lib/sms/automations";
 
 const schema = z.object({
   mlsNumber: z.string().min(3).max(32),
-  name: z.string().trim().min(1).max(120),
-  email: z.string().trim().email().max(254),
-  phone: z.string().trim().max(40).optional(),
   message: z.string().trim().max(2000).optional(),
   kind: z.enum(["inquiry", "showing", "virtual_viewing"]),
   preferredTimes: z.string().trim().max(500).optional(),
@@ -55,11 +47,11 @@ export async function POST(request: Request) {
         (issue) => issue.path[0] === "contactConsent",
       );
       return NextResponse.json(
-        {
-          error: consentMissing
-            ? "Please agree to be contacted by a Houzzat agent."
-            : "Please fill in name, email, and a valid listing.",
-        },
+          {
+            error: consentMissing
+              ? "Please agree to be contacted by a Houzzat agent."
+              : "Please choose a valid listing.",
+          },
         { status: 400 },
       );
     }
@@ -72,12 +64,9 @@ export async function POST(request: Request) {
       );
     }
     const data = parsed.data;
-    const parsedPhone = data.phone
-      ? parsePhoneColumnsForWrite(data.phone)
-      : null;
-    if (parsedPhone && !parsedPhone.ok) {
-      return NextResponse.json({ error: parsedPhone.error }, { status: 400 });
-    }
+    const contactName = customer.name?.trim() || customer.email;
+    const contactEmail = customer.email;
+    const contactPhone = customer.phone?.trim() || null;
     const listing = await prisma.listing.findUnique({
       where: { mlsNumber: data.mlsNumber },
       select: { mlsNumber: true, addressLine: true, city: true },
@@ -119,22 +108,6 @@ export async function POST(request: Request) {
     const ip = forwarded?.split(",")[0]?.trim() ?? null;
     const userAgent = request.headers.get("user-agent");
 
-    let contactChanges: MaterialLeadInfoChange[] = [];
-    {
-      const applied = await applyCanonicalCustomerContact(prisma, customer.id, {
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-      });
-      if (!applied.ok) {
-        return NextResponse.json(
-          { error: applied.error },
-          { status: applied.status },
-        );
-      }
-      contactChanges = applied.changes;
-    }
-
     const resolved = await publicResolveOrCreateLead({
       request,
       intent,
@@ -142,19 +115,19 @@ export async function POST(request: Request) {
       isSeller: customerFlags.isSeller === true,
       source,
       customerId: customer.id,
-      email: data.email,
-      phone: data.phone,
-      name: data.name,
+      email: contactEmail,
+      phone: contactPhone,
+      name: contactName,
       score,
       listingMls: listing.mlsNumber,
       contactConsentAt: consentAt,
       actorId: customer.id,
       upsertCustomer: false,
-      contactChanges,
+      contactChanges: [],
       utm: utmLeadFields(utm, adCampaignId),
       notes: [
-        `Contact: ${data.name} <${data.email}>`,
-        data.phone ? `Phone: ${data.phone}` : null,
+        `Contact: ${contactName} <${contactEmail}>`,
+        contactPhone ? `Phone: ${contactPhone}` : null,
         data.preferredTimes
           ? `Preferred times: ${data.preferredTimes}`
           : null,
@@ -178,8 +151,8 @@ export async function POST(request: Request) {
         userId: customer.id,
         body: data.message ?? null,
         meta: {
-          email: data.email,
-          phone: data.phone,
+          email: contactEmail,
+          phone: contactPhone,
           preferredTimes: data.preferredTimes,
           focusNotes: data.focusNotes,
           contactConsent: true,
@@ -200,7 +173,7 @@ export async function POST(request: Request) {
       data: {
         userId: customer.id,
         leadId: lead.id,
-        email: data.email.toLowerCase(),
+        email: contactEmail.toLowerCase(),
         kind: AGENT_CONTACT_CONSENT_KIND,
         version: AGENT_CONTACT_CONSENT_VERSION,
         ip,
@@ -235,8 +208,8 @@ export async function POST(request: Request) {
     if (resolved.created) {
       const deskUserIds = deskNotifiers.map((row) => row.user.id);
       const pushLabel = hotRequest
-        ? `${data.name} · ${data.kind.replaceAll("_", " ")} · ${listing.addressLine}`
-        : `${data.name} · ${listing.addressLine}`;
+        ? `${contactName} · ${data.kind.replaceAll("_", " ")} · ${listing.addressLine}`
+        : `${contactName} · ${listing.addressLine}`;
 
       notifyNewLeadCapturedToStaff({
         leadId: lead.id,
@@ -252,9 +225,9 @@ export async function POST(request: Request) {
         subject: notify.emailSubject,
         detailLines: [
           `Listing: ${listing.addressLine}, ${listing.city} (MLS® ${listing.mlsNumber})`,
-          `Contact: ${data.name}`,
-          `Email: ${data.email}`,
-          data.phone ? `Phone: ${data.phone}` : null,
+          `Contact: ${contactName}`,
+          `Email: ${contactEmail}`,
+          contactPhone ? `Phone: ${contactPhone}` : null,
           hotRequest
             ? `Request: ${data.kind.replaceAll("_", " ")}`
             : `Source: ${source.replaceAll("_", " ")}`,
@@ -266,9 +239,9 @@ export async function POST(request: Request) {
           email: row.user.email,
           phone: row.user.phone,
         })),
-        smsText: `${notify.smsPrefix}: ${listing.addressLine} — ${data.name}. Check agent desk.`,
+        smsText: `${notify.smsPrefix}: ${listing.addressLine} — ${contactName}. Check agent desk.`,
         whatsappText: hotRequest
-          ? `Hot ${notify.smsPrefix} (${data.kind.replaceAll("_", " ")}): ${listing.addressLine} — ${data.name}.`
+          ? `Hot ${notify.smsPrefix} (${data.kind.replaceAll("_", " ")}): ${listing.addressLine} — ${contactName}.`
           : undefined,
         preferWhatsApp: hotRequest,
       });

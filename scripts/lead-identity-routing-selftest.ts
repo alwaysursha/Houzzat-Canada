@@ -912,6 +912,58 @@ async function testAmbiguousIdentityFailsClosed() {
   console.log("[9] ambiguous identity fails closed... PASS");
 }
 
+async function testAuthenticatedCustomerIgnoresContactFields() {
+  resetLeadIdentityLocksForTests();
+  const state = emptyState();
+  const seeded = await seedBuyerLead(state);
+  const sharedPhoneUser: FakeUser = {
+    id: id("user", state),
+    email: "other.person@example.com",
+    name: "Other Person",
+    phone: seeded.user.phone,
+    phoneE164: seeded.user.phoneE164,
+    role: "BUYER",
+    isBuyer: true,
+    isSeller: false,
+    activeMode: "BUYER",
+    workspaceId: WS_A,
+  };
+  state.users.push(sharedPhoneUser);
+  const usersBefore = state.users.length;
+
+  for (const source of [
+    "SHOWING_REQUEST",
+    "VIRTUAL_VIEWING",
+    "PROPERTY_INQUIRY",
+  ] as const) {
+    const result = await capture(state, {
+      workspaceId: WS_A,
+      customerId: seeded.user.id,
+      email: sharedPhoneUser.email,
+      phone: sharedPhoneUser.phone,
+      name: "Spoofed Name",
+      isBuyer: true,
+      source,
+      assigneeId: AGENT_ALI,
+    });
+    assert.equal(result.created, false);
+    assert.equal(result.routed, false);
+    assert.equal(result.lead.id, seeded.lead.id);
+    assert.equal(result.customerId, seeded.user.id);
+    assert.equal(result.assignedAgentId, AGENT_DEMO);
+  }
+
+  assert.equal(state.leads.length, 1);
+  assert.equal(state.leads[0]?.customerId, seeded.user.id);
+  assert.equal(state.users.length, usersBefore);
+  assert.equal(seeded.user.email.startsWith("omer."), true);
+  assert.equal(state.conversations.length, 1);
+  assert.equal(state.conversations[0]?.leadId, seeded.lead.id);
+  console.log(
+    "[9b] authenticated customer reuses Lead despite conflicting email/phone... PASS",
+  );
+}
+
 async function testConcurrentIntake() {
   resetLeadIdentityLocksForTests();
   const state = emptyState();
@@ -1143,6 +1195,7 @@ async function main() {
   await testGuestThenAuthenticated();
   await testCrossWorkspaceIsolation();
   await testAmbiguousIdentityFailsClosed();
+  await testAuthenticatedCustomerIgnoresContactFields();
   await testConcurrentIntake();
   testSentinelEmailIsNotIdentity();
   testWiringAndPartialUniqueIndex();

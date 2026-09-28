@@ -511,7 +511,8 @@ async function resolveOrCreateUnlocked(
   const email = normalizeLeadEmail(input.email);
   const upsertCustomer = input.upsertCustomer !== false && Boolean(email);
 
-  let customerId = input.customerId?.trim() || null;
+  const authoritativeCustomerId = input.customerId?.trim() || null;
+  let customerId = authoritativeCustomerId;
   // Fail closed: never attach a User whose home workspace ≠ this Lead workspace
   // (blocks NULL-workspace Omer/platform/orphans and cross-tenant consumers).
   if (customerId) {
@@ -535,8 +536,10 @@ async function resolveOrCreateUnlocked(
   const matched = await matchWorkspaceLeadIdentity(db, {
     workspaceId,
     customerId,
-    email,
-    phone: input.phone,
+    // A caller-supplied customer is the person. Do not re-select them by
+    // email or phone, including a phone shared with someone else.
+    email: authoritativeCustomerId ? null : email,
+    phone: authoritativeCustomerId ? null : input.phone,
   });
   customerId = matched.customerId ?? customerId;
 

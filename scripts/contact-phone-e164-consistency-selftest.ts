@@ -242,7 +242,6 @@ function testWritePathsRejectUnparseable() {
     "src/app/api/account/preferences/route.ts",
     "src/app/api/agent/leads/contact/route.ts",
     "src/app/api/mobile/v2/leads/[leadId]/contact/route.ts",
-    "src/app/api/leads/route.ts",
     "src/app/api/valuation/route.ts",
     "src/app/api/owner/listings/route.ts",
   ];

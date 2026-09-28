@@ -118,8 +118,11 @@ function testSummaryCopy() {
 }
 
 async function testApplySkipsEmailTakeover() {
-  const users = new Map<string, CanonicalCustomerSnapshot>([
-    ["user_omer", { ...current }],
+  const users = new Map<
+    string,
+    CanonicalCustomerSnapshot & { workspaceId: string }
+  >([
+    ["user_omer", { ...current, workspaceId: "ws_a" }],
     [
       "user_other",
       {
@@ -129,19 +132,24 @@ async function testApplySkipsEmailTakeover() {
         phone: null,
         phoneE164: null,
         homeAddress: null,
+        workspaceId: "ws_a",
       },
     ],
   ]);
   const db = {
     user: {
-      async findUnique(args: {
-        where: { id?: string; email?: string };
+      async findFirst(args: {
+        where: { id?: string; email?: string; workspaceId?: string | null };
         select?: Record<string, boolean>;
       }) {
         if (args.where.id) return users.get(args.where.id) ?? null;
         if (args.where.email) {
           return (
-            [...users.values()].find((u) => u.email === args.where.email) ?? null
+            [...users.values()].find(
+              (user) =>
+                user.email === args.where.email &&
+                user.workspaceId === args.where.workspaceId,
+            ) ?? null
           );
         }
         return null;
