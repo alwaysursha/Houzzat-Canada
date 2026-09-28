@@ -24,6 +24,9 @@ import {
   serializeListingAccess,
   type ListingAccessStore,
 } from "../src/lib/listings/anonymous-listing-access";
+import { toWorkspaceBrandPublic } from "../src/lib/tenancy/brand-dto";
+import { buildLegacyHouzzatBrand } from "../src/lib/tenancy/legacy-houzzat-brand";
+import { toMarketingPresentationBrand } from "../src/lib/tenancy/marketing-presentation-brand";
 
 const HOST = "acme.houzzatpro.com";
 const NOW = 1_700_000_000_000;
@@ -402,6 +405,51 @@ function testWiringLeavesServerListingUntouched() {
   assert.equal(signup.includes("ListingAccessGate"), false);
   assert.equal(signup.includes("VIEW_LISTING"), false);
   assert.ok(read("src/components/Providers.tsx").includes("refetchOnWindowFocus"));
+
+  const modal = read("src/components/auth/AuthModalProvider.tsx");
+  const gateBrand = modal.slice(
+    modal.indexOf("function ListingGateBrand"),
+    modal.indexOf("function AuthModalTabs"),
+  );
+  assert.ok(gateBrand.includes("<TenantTextLogo"));
+  assert.equal(gateBrand.includes("logoUrl"), false);
+  assert.equal(gateBrand.includes("naturalWidth"), false);
+  assert.equal(gateBrand.includes("Houzzat"), false);
+  assert.equal(gateBrand.includes("Powered by"), false);
+  const textLogo = read("src/components/tenancy/TenantTextLogo.tsx");
+  assert.ok(textLogo.includes("font-display"));
+  assert.ok(textLogo.includes("tracking-tight"));
+  assert.ok(textLogo.includes("text-ink"));
+  assert.equal(textLogo.includes("Houzzat"), false);
+  const header = read("src/components/site/SiteHeaderClient.tsx");
+  assert.ok(header.includes("<TenantTextLogo"));
+  assert.ok(header.includes('className="text-2xl"'));
+  assert.ok(modal.includes('className="text-4xl leading-none sm:text-5xl"'));
+}
+
+function testTenantTextLogoUsesResolvedDisplayName() {
+  const base = toWorkspaceBrandPublic(buildLegacyHouzzatBrand("ws_houzzat"));
+  function present(slug: string, displayName: string) {
+    return toMarketingPresentationBrand(
+      {
+        ok: true,
+        hostname: `${slug}.example`,
+        origin: `https://${slug}.example`,
+        workspaceId: `ws_${slug}`,
+        workspaceSlug: slug,
+        verifiedHostname: true,
+        resolutionMode: "workspace",
+        brand: { ...base, workspaceId: `ws_${slug}`, displayName },
+      },
+      "https://example",
+    );
+  }
+  const houzzat = present("houzzat", "Houzzat");
+  const other = present("remax-realty", "RE/MAX REALTY");
+  assert.equal(houzzat.displayName, "Houzzat");
+  assert.equal(houzzat.isHouzzatWorkspace, true);
+  assert.equal(other.displayName, "RE/MAX REALTY");
+  assert.equal(other.isHouzzatWorkspace, false);
 }
 
 function main() {
@@ -418,6 +466,8 @@ function main() {
   testDoesNotOverwritePendingHighIntent();
   console.log("[23-25] the gate does not act or replace a pending save on rerender");
   testWiringLeavesServerListingUntouched();
+  testTenantTextLogoUsesResolvedDisplayName();
+  console.log("[gate brand] header text logo is tenant display name");
   console.log("[17-18,26-28] listing SSR, search clicks, VOW, and route planner stay in place");
   console.log("listing access selftest: PASS");
 }

@@ -16,6 +16,7 @@ import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
 import { SignInForm } from "@/components/auth/SignInForm";
 import { SignUpForm } from "@/components/auth/SignUpForm";
 import { BrandLogoMark } from "@/components/tenancy/BrandLogoMark";
+import { TenantTextLogo } from "@/components/tenancy/TenantTextLogo";
 import {
   getPresentedTenantBrand,
   getPresentedTenantBrandServerSnapshot,
@@ -66,45 +67,16 @@ export function useAuthModal() {
 }
 
 /**
- * Gate brand only. A wide logo is treated as a wordmark that already
- * contains the tenant name. A compact mark keeps the display name.
- * No logo falls back to the resolved display name.
+ * Same text logo as the site header, one step larger for this gate.
+ * The header logo mark is not repeated here.
  */
-function ListingGateBrand({
-  displayName,
-  logoUrl,
-}: {
-  displayName: string;
-  logoUrl: string | null;
-}) {
-  const [showName, setShowName] = useState(false);
-
-  if (!logoUrl) {
-    if (!displayName) return null;
-    return (
-      <p className="font-display text-[1.75rem] leading-none tracking-tight text-ink sm:text-4xl">
-        {displayName}
-      </p>
-    );
-  }
-
+function ListingGateBrand({ displayName }: { displayName: string }) {
+  if (!displayName) return null;
   return (
-    <div className="flex flex-col items-start gap-3">
-      {/* eslint-disable-next-line @next/next/no-img-element -- tenant-provided asset URL */}
-      <img
-        src={logoUrl}
-        alt={showName ? "" : displayName}
-        className="h-16 w-auto max-w-full object-contain object-left sm:h-[4.5rem]"
-        onLoad={(event) => {
-          const image = event.currentTarget;
-          if (image.naturalHeight <= 0) return;
-          setShowName(image.naturalWidth / image.naturalHeight < 1.75);
-        }}
-      />
-      {showName && displayName ? (
-        <p className="text-xl font-semibold tracking-tight text-ink">{displayName}</p>
-      ) : null}
-    </div>
+    <TenantTextLogo
+      name={displayName}
+      className="text-4xl leading-none sm:text-5xl"
+    />
   );
 }
 
@@ -278,7 +250,6 @@ function AuthModalPanel() {
                 {listingGate ? (
                   <ListingGateBrand
                     displayName={brand?.displayName?.trim() || ""}
-                    logoUrl={brand?.logoUrl?.trim() || null}
                   />
                 ) : (
                   <div className="flex items-center gap-2.5">

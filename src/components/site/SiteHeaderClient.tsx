@@ -8,6 +8,7 @@ import { Menu, UserRound, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { LazyAddressAutocomplete } from "@/components/listings/LazyAddressAutocomplete";
 import { StaffHardLink } from "@/components/site/StaffHardLink";
+import { TenantTextLogo } from "@/components/tenancy/TenantTextLogo";
 import { Button } from "@/components/ui/button";
 import { pushHref } from "@/lib/listings/navigate-listing";
 import {
@@ -339,12 +340,12 @@ export function SiteHeaderClient({
           <Link
             href="/"
             className={cn(
-              "flex shrink-0 items-center font-display text-2xl tracking-tight text-ink",
+              "flex shrink-0 items-center",
               brandMark ? "gap-2" : null,
             )}
           >
             {brandMark}
-            <span>{siteName}</span>
+            <TenantTextLogo name={siteName} className="text-2xl" />
           </Link>
 
           {/* Desktop only — search stays inside the header row */}
