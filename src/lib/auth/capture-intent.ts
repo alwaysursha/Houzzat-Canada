@@ -567,8 +567,14 @@ export function requireAuthForIntent(input: {
     callbackUrl: string;
     /** Presentation only. Not stored and not sent to an auth API. */
     intent?: CaptureIntentType;
+    /**
+     * Signup form convenience only. Not stored and not sent to an auth API.
+     */
+    signupPrefill?: { name: string; email: string } | null;
   }) => void;
   mode?: "sign-in" | "sign-up";
+  /** Signup form convenience only. Never written into the capture intent. */
+  signupPrefill?: { name: string; email: string } | null;
 }):
   | { ok: true; intent: CaptureIntent }
   | { ok: false; reason: "invalid" } {
@@ -582,6 +588,7 @@ export function requireAuthForIntent(input: {
     mode: input.mode ?? "sign-in",
     callbackUrl: created.intent.callbackPath,
     intent: created.intent.type,
+    ...(input.signupPrefill ? { signupPrefill: input.signupPrefill } : {}),
   });
   return { ok: true, intent: created.intent };
 }

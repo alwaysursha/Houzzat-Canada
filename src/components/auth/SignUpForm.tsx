@@ -19,6 +19,10 @@ import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biomet
 export function SignUpForm({
   callbackUrl = null,
   displayName = "your team",
+  initialName = "",
+  initialEmail = "",
+  focusPassword = false,
+  onIdentityChange,
   onSuccess,
   onSwitchMode,
   onExistingAccount,
@@ -26,6 +30,10 @@ export function SignUpForm({
 }: {
   callbackUrl?: string | null;
   displayName?: string;
+  initialName?: string;
+  initialEmail?: string;
+  focusPassword?: boolean;
+  onIdentityChange?: (next: { name: string; email: string }) => void;
   onSuccess?: () => void;
   onSwitchMode?: () => void;
   onExistingAccount?: (email: string) => void;
@@ -34,8 +42,9 @@ export function SignUpForm({
   const router = useRouter();
   const { confirm } = useSiteAlert();
   const submitRef = useRef<HTMLButtonElement>(null);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [name, setName] = useState(initialName);
+  const [email, setEmail] = useState(initialEmail);
+  const continuedRequest = initialName.trim() !== "" && initialEmail.trim() !== "";
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -190,7 +199,11 @@ export function SignUpForm({
           autoComplete="name"
           required
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => {
+            const next = event.target.value;
+            setName(next);
+            onIdentityChange?.({ name: next, email });
+          }}
         />
       </div>
       <div className="space-y-2">
@@ -204,9 +217,18 @@ export function SignUpForm({
           autoComplete="email"
           required
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          onChange={(event) => {
+            const next = event.target.value;
+            setEmail(next);
+            onIdentityChange?.({ name, email: next });
+          }}
         />
       </div>
+      {continuedRequest ? (
+        <p className="text-sm text-ink/70">
+          Choose a password to finish. Your name and email are still editable.
+        </p>
+      ) : null}
       <PasswordField
         id="auth-signup-password"
         name="new-password"
@@ -214,6 +236,7 @@ export function SignUpForm({
         autoComplete="new-password"
         minLength={8}
         required
+        autoFocus={focusPassword || continuedRequest}
         value={password}
         onChange={setPassword}
       />

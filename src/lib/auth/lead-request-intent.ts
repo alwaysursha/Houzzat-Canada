@@ -8,6 +8,8 @@ import { registerCaptureIntentHandler } from "@/lib/auth/capture-intent-dispatch
 type OpenAuth = (options: {
   mode?: "sign-in" | "sign-up";
   callbackUrl: string;
+  /** Presentation only. Not stored with the lead-request draft. */
+  signupPrefill?: { name: string; email: string } | null;
 }) => void;
 
 export const LEAD_REQUEST_RESTORE_KEY = "houzzat:lead-request-restore";
@@ -47,6 +49,8 @@ export function openGuestLeadRequestIntent(input: {
   store: CaptureIntentStore;
   openAuth: OpenAuth;
   mode?: "sign-in" | "sign-up";
+  /** Name and email already typed. Passed to the signup form, not stored. */
+  signupPrefill?: { name: string; email: string } | null;
 }):
   | { ok: true; intent: CaptureIntent }
   | { ok: false; reason: "invalid" } {
@@ -64,6 +68,7 @@ export function openGuestLeadRequestIntent(input: {
       store: input.store,
       openAuth: input.openAuth,
       mode: input.mode ?? "sign-in",
+      signupPrefill: input.signupPrefill,
     });
   }
   if (input.kind !== "showing" && input.kind !== "virtual_viewing") {
@@ -83,6 +88,7 @@ export function openGuestLeadRequestIntent(input: {
     store: input.store,
     openAuth: input.openAuth,
     mode: input.mode ?? "sign-in",
+    signupPrefill: input.signupPrefill,
   });
 }
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { useLayoutEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { useSession } from "next-auth/react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { syncViewListingGate } from "@/lib/auth/view-listing-intent";
+import { acquireScrollLock } from "@/lib/scroll-lock";
 import {
   browserListingAccessStore,
   getListingAccessServerSnapshot,
@@ -34,7 +35,10 @@ export function ListingAccessGate({
   children: ReactNode;
 }) {
   const { status } = useSession();
-  const { openAuth } = useAuthModal();
+  const { openAuth, closeAuth } = useAuthModal();
+  const closeAuthRef = useRef(closeAuth);
+  const blockedRef = useRef(false);
+  closeAuthRef.current = closeAuth;
   const presentedMls = useRef<string | null>(null);
   const freeMls = useSyncExternalStore(
     subscribeListingAccess,
@@ -64,6 +68,19 @@ export function ListingAccessGate({
     setListingAccessWriteFailed(decision.access === "storage_unavailable");
     notifyListingAccess();
   }, [ready, authenticated, normalizedMls]);
+
+  blockedRef.current = blocked;
+
+  useEffect(() => {
+    if (!blocked) return;
+    return acquireScrollLock();
+  }, [blocked]);
+
+  useEffect(() => {
+    return () => {
+      if (blockedRef.current) closeAuthRef.current();
+    };
+  }, []);
 
   useLayoutEffect(() => {
     if (!blocked || !normalizedMls) return;

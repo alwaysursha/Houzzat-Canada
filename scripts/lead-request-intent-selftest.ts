@@ -18,6 +18,10 @@ import {
   registerCaptureIntentHandler,
 } from "../src/lib/auth/capture-intent-dispatch";
 import {
+  leadRequestPhonePrefillRecord,
+  phoneFromLeadRequestPrefill,
+} from "../src/lib/auth/lead-request-contact-prefill";
+import {
   leadRequestFormSeed,
   openGuestLeadRequestIntent,
   resumeLeadRequestIntent,
@@ -372,6 +376,96 @@ function testEntryPointsShareTheForm() {
   assert.ok(!mobile.includes("mode: \"sign-in\""));
 }
 
+function testSignupPrefillDoesNotEnterTheDraft() {
+  const store = memoryStore();
+  let opened: {
+    mode?: string;
+    callbackUrl?: string;
+    signupPrefill?: { name: string; email: string } | null;
+  } | null = null;
+  const saved = openGuestLeadRequestIntent({
+    type: "CONTACT_AGENT",
+    kind: "inquiry",
+    mlsNumber: "W1234567",
+    callbackPath: LISTING,
+    message: "Is parking included?",
+    host: HOST,
+    now: NOW,
+    store,
+    mode: "sign-up",
+    signupPrefill: { name: "Pat Lee", email: "pat@example.com" },
+    openAuth(options) {
+      opened = options;
+    },
+  });
+  assert.equal(saved.ok, true);
+  assert.equal(opened?.mode, "sign-up");
+  assert.equal(opened?.callbackUrl, LISTING);
+  assert.deepEqual(opened?.signupPrefill, {
+    name: "Pat Lee",
+    email: "pat@example.com",
+  });
+  const raw = store.raw ?? "";
+  assert.equal(raw.includes("Pat Lee"), false);
+  assert.equal(raw.includes("pat@example.com"), false);
+  assert.equal(raw.includes("password"), false);
+  assert.equal(raw.includes("workspaceId"), false);
+
+  const phone = leadRequestPhonePrefillRecord({
+    mlsNumber: "W1234567",
+    kind: "showing",
+    phone: " 416-555-0100 ",
+  });
+  assert.deepEqual(phone, {
+    mlsNumber: "W1234567",
+    kind: "showing",
+    phone: "416-555-0100",
+  });
+  const encoded = JSON.stringify(phone);
+  assert.equal(
+    phoneFromLeadRequestPrefill(encoded, "w1234567", "showing"),
+    "416-555-0100",
+  );
+  assert.equal(phoneFromLeadRequestPrefill(encoded, "W1234567", "inquiry"), null);
+  const polluted = JSON.stringify({
+    ...phone,
+    email: "pat@example.com",
+    password: "secret",
+    workspaceId: "ws",
+  });
+  assert.equal(phoneFromLeadRequestPrefill(polluted, "W1234567", "showing"), null);
+  assert.equal(
+    leadRequestPhonePrefillRecord({
+      mlsNumber: "W1234567",
+      kind: "showing",
+      phone: "   ",
+    }),
+    null,
+  );
+
+  const form = read("src/components/listings/LeadRequestForm.tsx");
+  assert.ok(form.includes('mode: "sign-up"'));
+  assert.ok(form.includes("signupPrefill"));
+  assert.ok(form.includes("rememberLeadRequestContactPrefill"));
+  assert.ok(form.includes("clearLeadRequestContactPrefill"));
+  assert.equal(form.includes("password"), false);
+  const signup = read("src/components/auth/SignUpForm.tsx");
+  assert.ok(signup.includes("initialName"));
+  assert.ok(signup.includes("initialEmail"));
+  assert.ok(signup.includes('fetch("/api/auth/sign-up"'));
+  assert.equal(signup.includes('fetch("/api/leads"'), false);
+  assert.equal(signup.includes("phone:"), false);
+  const contact = read("src/lib/auth/lead-request-contact-prefill.ts");
+  assert.equal(contact.includes("password"), false);
+  assert.equal(contact.includes("workspaceId"), false);
+  assert.equal(contact.includes("localStorage"), false);
+  const modal = read("src/components/auth/AuthModalProvider.tsx");
+  assert.ok(modal.includes("signupPrefill"));
+  assert.ok(modal.includes('intent === "VIEW_LISTING"'));
+  const gate = read("src/components/listings/ListingAccessGate.tsx");
+  assert.equal(gate.includes("signupPrefill"), false);
+}
+
 function testSaveFlowsStayAvailable() {
   const saveListing = read("src/lib/auth/save-listing-intent.ts");
   const saveSearch = read("src/lib/auth/save-search-intent.ts");
@@ -402,6 +496,7 @@ testSuccessDoesNotReplay();
 testWrongHostAndExpiredAndMissingListing();
 testApiRequiresCustomerAndKeepsDownstream();
 testEntryPointsShareTheForm();
+testSignupPrefillDoesNotEnterTheDraft();
 testSaveFlowsStayAvailable();
 
 void (null as CaptureIntent | null);

@@ -59,6 +59,7 @@ export function PasswordField({
   onChange,
   required,
   minLength,
+  autoFocus,
   placeholder,
   inputClassName,
   labelClassName,
@@ -72,6 +73,7 @@ export function PasswordField({
   onChange: (value: string) => void;
   required?: boolean;
   minLength?: number;
+  autoFocus?: boolean;
   placeholder?: string;
   inputClassName?: string;
   labelClassName?: string;
@@ -95,6 +97,7 @@ export function PasswordField({
           autoComplete={autoComplete}
           required={required}
           minLength={minLength}
+          autoFocus={autoFocus}
           placeholder={placeholder}
           value={value}
           onChange={(event) => onChange(event.target.value)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
@@ -8,6 +8,11 @@ import { browserCaptureIntentStore } from "@/components/auth/capture-intent-brow
 import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  clearLeadRequestContactPrefill,
+  peekLeadRequestContactPrefill,
+  rememberLeadRequestContactPrefill,
+} from "@/lib/auth/lead-request-contact-prefill";
 import { openGuestLeadRequestIntent } from "@/lib/auth/lead-request-intent";
 
 type Kind = "inquiry" | "showing" | "virtual_viewing";
@@ -46,12 +51,22 @@ export function LeadRequestForm({
   const email = emailDraft ?? defaults?.email ?? "";
   const phone = phoneDraft ?? defaults?.phone ?? "";
 
+  useEffect(() => {
+    if (phoneDraft !== null) return;
+    const retained = peekLeadRequestContactPrefill(mlsNumber, kind);
+    if (retained) setPhoneDraft(retained);
+  }, [kind, mlsNumber, phoneDraft]);
+
   const isVirtual = kind === "virtual_viewing";
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (status !== "authenticated") {
       if (status === "loading") return;
+      const trimmedPhone = phone.trim();
+      rememberLeadRequestContactPrefill(
+        trimmedPhone ? { mlsNumber, kind, phone: trimmedPhone } : null,
+      );
       openGuestLeadRequestIntent({
         type: kind === "inquiry" ? "CONTACT_AGENT" : "REQUEST_VIEWING",
         kind,
@@ -63,6 +78,11 @@ export function LeadRequestForm({
         now: Date.now(),
         store: browserCaptureIntentStore(),
         openAuth,
+        mode: "sign-up",
+        signupPrefill: {
+          name: name.trim(),
+          email: email.trim(),
+        },
       });
       return;
     }
@@ -99,6 +119,7 @@ export function LeadRequestForm({
       return;
     }
 
+    clearLeadRequestContactPrefill();
     setDone(true);
   }
 
