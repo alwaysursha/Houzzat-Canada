@@ -912,7 +912,7 @@ export function HomePreviewPage() {
               </div>
             </div>
 
-            <div className="relative mx-auto hidden max-w-[420px] lg:block min-[1400px]:hidden">
+            <div className="hp-lead-bridge relative mx-auto max-w-[420px]">
               <div className="pointer-events-none absolute left-1/2 top-16 h-72 w-72 -translate-x-1/2 rounded-full bg-emerald-50 blur-3xl" />
               <div className="relative mx-auto w-[280px]" data-hp-reveal="depth" style={motionDelay(80)}>
                 <LeadProfilePhone />

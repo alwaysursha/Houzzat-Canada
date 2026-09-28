@@ -19,3 +19,15 @@
   transform: rotate(-6deg);
   transform-origin: center center;
 }
+
+/* Visible only while the desktop orbit is hidden. Unlayered so it is not
+   overridden by the later lg:block utility group. */
+.hp-motion .hp-lead-bridge {
+  display: none;
+}
+
+@media (min-width: 1024px) and (max-width: 1399px) {
+  .hp-motion .hp-lead-bridge {
+    display: block;
+  }
+}
