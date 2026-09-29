@@ -36,6 +36,9 @@ export function ListingCardActions({
   path,
   className,
   shareMenuPlacement = "up",
+  heartClassName,
+  quiet = false,
+  omitHeart = false,
 }: {
   mlsNumber: string;
   title: string;
@@ -45,6 +48,12 @@ export function ListingCardActions({
   className?: string;
   /** Overlay header sits at the top — open the menu below the button. */
   shareMenuPlacement?: "up" | "down";
+  /** When set, the save control is positioned by the caller (photo overlay). */
+  heartClassName?: string;
+  /** Icon-only route and share, for dense result cards. */
+  quiet?: boolean;
+  /** Search cards place Save on the photograph instead. */
+  omitHeart?: boolean;
 }) {
   const siteName = useTenantDisplayName("Houzzat");
   const { saved, pending, ready, toggle } = useSavedListingToggle({
@@ -110,6 +119,7 @@ export function ListingCardActions({
       className={cn("flex items-center gap-1.5", className)}
       onClick={(event) => event.stopPropagation()}
     >
+      {omitHeart ? null : (
       <button
         ref={saveButtonRef}
         type="button"
@@ -118,8 +128,11 @@ export function ListingCardActions({
         disabled={pending || !ready}
         onClick={toggleSave}
         className={cn(
-          "inline-flex size-9 items-center justify-center rounded-lg border border-line bg-mist text-ink transition hover:border-canopy/40 hover:bg-canopy/5",
-          saved && "border-canopy/40 bg-canopy/10 text-canopy",
+          heartClassName
+            ? heartClassName
+            : "inline-flex size-9 items-center justify-center rounded-lg border border-line bg-mist text-ink transition hover:border-canopy/40 hover:bg-canopy/5",
+          !heartClassName && saved && "border-canopy/40 bg-canopy/10 text-canopy",
+          heartClassName && saved && "text-canopy",
         )}
       >
         <Heart
@@ -127,10 +140,16 @@ export function ListingCardActions({
           strokeWidth={2.25}
         />
       </button>
+      )}
 
       <RoutePlannerToggleButton
         mlsNumber={mlsNumber}
         listingStatus={listingStatus}
+        className={
+          quiet
+            ? "size-8 border-transparent bg-transparent shadow-none hover:bg-mist"
+            : undefined
+        }
       />
 
       <div className="relative">
@@ -139,7 +158,12 @@ export function ListingCardActions({
           aria-label="Share property"
           aria-expanded={shareOpen}
           onClick={toggleShareMenu}
-          className="inline-flex size-9 items-center justify-center rounded-lg border border-line bg-mist text-ink transition hover:border-canopy/40 hover:bg-canopy/5"
+          className={cn(
+            "inline-flex items-center justify-center rounded-lg text-ink transition hover:bg-canopy/5 hover:text-canopy",
+            quiet
+              ? "size-8 border-0 bg-transparent"
+              : "size-9 border border-line bg-mist hover:border-canopy/40",
+          )}
         >
           <Share2 className="size-4" strokeWidth={2.25} />
         </button>

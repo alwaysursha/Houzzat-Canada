@@ -119,8 +119,6 @@ export function SearchMap({
   status = ["ACTIVE"],
   onStatusToggle,
   isLease = false,
-  expandCardOnClick = false,
-  onOpenListing,
   onOpenFilters,
   activeFilterCount = 0,
   className,
@@ -137,9 +135,6 @@ export function SearchMap({
   status?: MapStatus[];
   onStatusToggle?: (status: MapStatus) => void;
   isLease?: boolean;
-  /** Pin card opens listing detail overlay instead of navigating away. */
-  expandCardOnClick?: boolean;
-  onOpenListing?: (mlsNumber: string) => void;
   /** Mobile: open full filter sheet from the map. */
   onOpenFilters?: () => void;
   activeFilterCount?: number;
@@ -640,11 +635,6 @@ export function SearchMap({
           <SearchMapPopupCard
             listing={popupListing}
             onClose={clearPopup}
-            onOpen={
-              expandCardOnClick && onOpenListing
-                ? () => onOpenListing(popupListing.mlsNumber)
-                : undefined
-            }
           />
         </div>
       ) : null}

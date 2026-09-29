@@ -307,13 +307,13 @@ function testBothListingSurfaces() {
   const detail = read("src/components/listings/ListingDetailView.tsx");
   assert.ok(detail.includes("<ListingGalleryLive"));
   assert.ok(detail.includes("needsEmailVerification={verifyLocked}"));
-
-  const overlay = read("src/components/listings/SearchMapListingOverlay.tsx");
-  assert.ok(overlay.includes("<ListingGalleryLive"));
-  assert.ok(
-    overlay.includes("needsEmailVerification={access.needsEmailVerification}"),
+  assert.ok(detail.includes("photos={galleryPhotos}"));
+  assert.equal(
+    read("src/components/listings/SearchExperience.tsx").includes(
+      "SearchMapListingOverlay",
+    ),
+    false,
   );
-  assert.ok(overlay.includes("photos={photos}"));
 
   const live = read("src/components/listings/ListingGalleryLive.tsx");
   const enrichStart = live.indexOf("async function enrich()");
@@ -325,7 +325,7 @@ function testBothListingSurfaces() {
   assert.ok(live.includes("totalPhotoCount={totalPhotoCount}"));
   const page = read("src/app/(marketing)/listing/[...parts]/page.tsx");
   assert.ok(page.includes("verifyLocked ? null : clientLivePhotosPromise"));
-  console.log("[6] listing detail + Search overlay lock wiring... PASS");
+  console.log("[6] listing detail lock wiring; Search has no duplicate overlay... PASS");
 }
 
 async function main() {

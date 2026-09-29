@@ -34,8 +34,11 @@ function main() {
     "listing cards must keep the default upward Share menu",
   );
 
-  const overlay = read("src/components/listings/SearchMapListingOverlay.tsx");
-  assert.ok(overlay.includes('shareMenuPlacement="down"'));
+  const search = read("src/components/listings/SearchExperience.tsx");
+  assert.equal(search.includes("SearchMapListingOverlay"), false);
+  const popup = read("src/components/listings/SearchMapPopupCard.tsx");
+  assert.ok(popup.includes("openListingPath(href)"));
+  assert.ok(popup.includes("<ListingLink"));
   console.log("listing-share-menu-placement-selftest: ok");
 }
 

@@ -222,13 +222,10 @@ function CardImageSlider({
 export function SearchMapPopupCard({
   listing,
   onClose,
-  onOpen,
   className,
 }: {
   listing: ListingCardData;
   onClose?: () => void;
-  /** When set, card opens this instead of navigating to the listing page. */
-  onOpen?: () => void;
   className?: string;
 }) {
   const [street, cityLine] = formatListingAddress(listing);
@@ -325,28 +322,14 @@ export function SearchMapPopupCard({
         urls={urls}
         alt={street}
         statusBadge={statusBadge}
-        onActivate={
-          onOpen
-            ? onOpen
-            : () => {
-                openListingPath(href);
-              }
-        }
+        onActivate={() => {
+          openListingPath(href);
+        }}
       />
 
-      {onOpen ? (
-        <button
-          type="button"
-          onClick={onOpen}
-          className="block w-full text-left transition hover:bg-mist/40"
-        >
-          {details}
-        </button>
-      ) : (
-        <ListingLink href={href} className="block transition hover:bg-mist/40">
-          {details}
-        </ListingLink>
-      )}
+      <ListingLink href={href} className="block transition hover:bg-mist/40">
+        {details}
+      </ListingLink>
     </div>
   );
 }

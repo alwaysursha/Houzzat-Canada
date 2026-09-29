@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { AdminDeferredDeskPicker } from "@/components/admin/AdminDeferredDeskPicker";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { StaffRouteConsumerGate } from "@/components/mobile/StaffRouteConsumerGate";
+import { ListingSheetHostLazy } from "@/components/mobile/ListingSheetHostLazy";
 import { TenantBrandProvider } from "@/components/tenancy/TenantBrandProvider";
 import { TenantThemeStyle } from "@/components/tenancy/TenantThemeStyle";
 import {
@@ -118,6 +119,7 @@ export default async function AdminLayout({
           <StaffRouteConsumerGate />
           <Suspense fallback={null}>{children}</Suspense>
         </AdminShell>
+        <ListingSheetHostLazy />
       </TenantBrandProvider>
     );
   }
@@ -165,6 +167,7 @@ export default async function AdminLayout({
         <StaffRouteConsumerGate />
         <Suspense fallback={null}>{children}</Suspense>
       </AdminShell>
+      <ListingSheetHostLazy />
     </TenantBrandProvider>
   );
 }

@@ -375,12 +375,15 @@ function testApiRequiresCustomerAndKeepsDownstream() {
 
 function testEntryPointsShareTheForm() {
   const gallery = read("src/components/listings/ListingGallery.tsx");
-  const overlay = read("src/components/listings/SearchMapListingOverlay.tsx");
+  const detail = read("src/components/listings/ListingDetailView.tsx");
+  const search = read("src/components/listings/SearchExperience.tsx");
   const mobile = read("src/components/listings/ListingMobileActionBar.tsx");
   const panel = read("src/components/listings/ViewingRequestPanel.tsx");
   assert.ok(gallery.includes("<ViewingBookingModal"));
   assert.ok(gallery.includes("callbackPath={callbackPath}"));
-  assert.ok(overlay.includes('claimRestore="always"'));
+  assert.ok(detail.includes("<ViewingRequestPanel"));
+  assert.ok(detail.includes("callbackPath={canonicalPath}"));
+  assert.equal(search.includes("SearchMapListingOverlay"), false);
   assert.ok(panel.includes("useLeadRequestRestore"));
   assert.ok(mobile.includes("setBookingOpen(true)"));
   assert.ok(mobile.includes("peekLeadRequestRestore"));

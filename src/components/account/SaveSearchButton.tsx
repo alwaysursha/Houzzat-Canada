@@ -43,11 +43,13 @@ export function SaveSearchButton({
   query,
   signedIn,
   callbackPath,
+  className,
 }: {
   query: Record<string, unknown>;
   signedIn: boolean;
   /** Full search URL, including the query string. */
   callbackPath: string;
+  className?: string;
 }) {
   const { openAuth } = useAuthModal();
   const { openClientToolsVerification } = useClientToolsVerification();
@@ -202,7 +204,7 @@ export function SaveSearchButton({
             : "Save this search to your buyer profile"
         }
         onClick={() => void persist(false)}
-        className={cn(disabled && "border-line/70 text-ink/35")}
+        className={cn("h-8 rounded-full px-2.5", disabled && "border-line/70 text-ink/35", className)}
       >
         {pending ? "Saving…" : "Saved Search"}
       </Button>

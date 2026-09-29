@@ -321,11 +321,6 @@ function main() {
     );
   }
 
-  const overlaySrc = read("src/components/listings/SearchMapListingOverlay.tsx");
-  assert.ok(overlaySrc.includes("`/api/listings/${card.mlsNumber}`"));
-  assert.ok(overlaySrc.includes("soldPrice={listing.soldPrice}"));
-  assert.ok(overlaySrc.includes("isClosed && listing.soldPrice != null"));
-
   const route = read("src/app/api/listings/[mlsNumber]/route.ts");
   assert.ok(route.includes("resolveListingDetailAccess"));
   assert.ok(route.includes("redactListingVowRestrictedFields"));

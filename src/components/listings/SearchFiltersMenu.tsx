@@ -131,6 +131,7 @@ export function SearchFiltersMenu({
   signedIn,
   previewExtras,
   searchCallbackPath,
+  hidePlaceChip = false,
 }: {
   filters: SearchFilters;
   onChange: (next: SearchFilters) => void;
@@ -147,6 +148,8 @@ export function SearchFiltersMenu({
     east?: number;
     north?: number;
   };
+  /** Location lives in the search field; do not repeat it as a chip. */
+  hidePlaceChip?: boolean;
 }) {
   const { openAuth } = useAuthModal();
   const { toast } = useSiteAlert();
@@ -571,7 +574,7 @@ export function SearchFiltersMenu({
   return (
     <>
       <div className="relative flex flex-wrap items-center gap-2" ref={rootRef}>
-        {(filters.city || filters.community) && (
+        {!hidePlaceChip && (filters.city || filters.community) ? (
           <button
             type="button"
             title="Clear location"
@@ -585,7 +588,7 @@ export function SearchFiltersMenu({
             </span>
             <X className="size-3.5 shrink-0 opacity-70" aria-hidden />
           </button>
-        )}
+        ) : null}
         <button
           ref={buttonRef}
           type="button"
@@ -594,7 +597,7 @@ export function SearchFiltersMenu({
           aria-haspopup="dialog"
           onClick={() => setOpen((v) => !v)}
           className={cn(
-            "inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition",
+            "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition",
             activeCount > 0 || open
               ? "border-canopy/50 bg-canopy/10 text-canopy"
               : "border-line bg-surface text-ink/75 hover:border-canopy/35",

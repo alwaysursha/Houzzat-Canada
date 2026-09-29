@@ -19,15 +19,14 @@ import {
   LayoutGrid,
   ListFilter,
   Map as MapIcon,
-  Loader2,
 } from "lucide-react";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { pushHref } from "@/lib/listings/navigate-listing";
+import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { SaveSearchButton } from "@/components/account/SaveSearchButton";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
-import { SearchActiveFilterStrip } from "@/components/listings/SearchActiveFilterStrip";
 import {
   countActiveSearchFilters,
   type SearchFilters,
@@ -36,7 +35,7 @@ import {
 import { SearchFiltersMenu } from "@/components/listings/SearchFiltersMenu";
 import { SearchFiltersSheet } from "@/components/listings/SearchFiltersSheet";
 import { MapSearchCoachMarks } from "@/components/listings/MapSearchCoachMarks";
-import { SearchMapListingOverlay } from "@/components/listings/SearchMapListingOverlay";
+import { SearchToolbarChips } from "@/components/listings/SearchResultsContext";
 import { SearchResultsPane } from "@/components/listings/SearchResultsPane";
 import {
   parseSearchQuery,
@@ -50,6 +49,10 @@ import {
   searchPageHref,
   statusesQueryValue,
 } from "@/lib/listings/search-page-href";
+import {
+  searchResultsCopy,
+  type SearchResultChipKey,
+} from "@/lib/listings/search-results-copy";
 import { pointInPolygon, polygonBBox } from "@/lib/maps/geo";
 import { cityMapCenter } from "@/lib/geo/regions";
 import { cn } from "@/lib/utils";
@@ -90,12 +93,10 @@ export function SearchExperience() {
   const signedIn = access.isSignedIn;
   /** VOW / sold unlock — never treat verify-locked as unlocked. */
   const hasClientAccess = access.hasClientAccess;
-  const needsEmailVerification = access.needsEmailVerification;
   const [pending, startTransition] = useTransition();
   const [items, setItems] = useState<ListingCardData[]>([]);
   const [total, setTotal] = useState(0);
   const [activeMls, setActiveMls] = useState<string | null>(null);
-  const [detailMls, setDetailMls] = useState<string | null>(null);
   const [provider, setProvider] = useState("mock");
   const [focus, setFocus] = useState<{
     lat: number;
@@ -156,12 +157,17 @@ export function SearchExperience() {
   const [view, setView] = useState<SearchViewMode>(() =>
     parseSearchView(searchParams.get("view"), false),
   );
+  const viewRef = useRef(view);
+  viewRef.current = view;
 
+  // Explicit ?view= stays in sync. No param means the discovery split, which
+  // is the initial state — later search updates must not reset a chosen mode.
   useEffect(() => {
-    if (!searchParams.get("view")) {
-      setView(isNarrow ? "cards" : "split");
+    const fromUrl = searchParams.get("view");
+    if (fromUrl === "map" || fromUrl === "cards" || fromUrl === "split") {
+      setView(fromUrl);
     }
-  }, [isNarrow, searchParams]);
+  }, [searchParams]);
 
   const communitiesParam = searchParams.get("communities") ?? "";
   const citiesParam = searchParams.get("cities") ?? "";
@@ -377,16 +383,10 @@ export function SearchExperience() {
   }
 
   function updateView(next: SearchViewMode) {
+    viewRef.current = next;
     setView(next);
     syncUrl(filters, next);
   }
-
-  // Hybrid/split is desktop-only.
-  useEffect(() => {
-    if (!isNarrow || view !== "split") return;
-    setView("cards");
-    syncUrl(filters, "cards");
-  }, [isNarrow, view, filters, syncUrl]);
 
   function onPlaceSelect(suggestion: AutocompleteSuggestion) {
     setPlaceQueryCleared(false);
@@ -481,7 +481,7 @@ export function SearchExperience() {
         );
         if (!hadPlace) return f;
         const cleared = { ...f, city: "", community: "" };
-        syncUrl(cleared, view, { clearMultiPlace: true });
+        syncUrl(cleared, viewRef.current, { clearMultiPlace: true });
         return cleared;
       });
     }, prev ? 400 : 0);
@@ -509,7 +509,6 @@ export function SearchExperience() {
   const showList = view === "split" || view === "cards";
   const activeFilterCount = countActiveSearchFilters(filters);
   const activeListing = items.find((i) => i.mlsNumber === activeMls) ?? null;
-  const detailListing = items.find((i) => i.mlsNumber === detailMls) ?? null;
   const coachFilterIntentKey = [
     filters.city,
     filters.community,
@@ -524,22 +523,103 @@ export function SearchExperience() {
     communitiesParam,
   ].join("|");
 
-  function openListingDetail(mlsNumber: string) {
-    setActiveMls(mlsNumber);
-    setDetailMls(mlsNumber);
-  }
-
-  // Listing detail popup is desktop-only; mobile uses the full listing page.
-  useEffect(() => {
-    if (isNarrow) setDetailMls(null);
-  }, [isNarrow]);
-
   const noun =
     filters.segment === "COMMERCIAL"
       ? "properties"
       : isLease
         ? "rentals"
         : "homes";
+
+  const resultsCopy = useMemo(
+    () =>
+      searchResultsCopy({
+        transactionType: filters.transactionType,
+        segment: filters.segment,
+        city: filters.city,
+        community: filters.community,
+        cities: citiesParam,
+        communities: communitiesParam,
+        q: qParam,
+        minPrice: filters.minPrice,
+        maxPrice: filters.maxPrice,
+        minBeds: filters.minBeds,
+        minBaths: filters.minBaths,
+        propertyTypes: filters.propertyTypes,
+        openHouseOnly: filters.openHouseOnly,
+        statuses: filters.statuses,
+        total,
+        pending,
+      }),
+    [citiesParam, communitiesParam, filters, pending, qParam, total],
+  );
+
+  const countLabel = pending
+    ? "Updating"
+    : `${Math.max(0, total).toLocaleString("en-CA")} results`;
+
+  const savedSearchQuery = useMemo(
+    () => ({
+      segment: filters.segment !== "RESIDENTIAL" ? filters.segment : undefined,
+      transactionType:
+        filters.transactionType !== "ALL" ? filters.transactionType : undefined,
+      dataSource: filters.dataSource || undefined,
+      city: filters.city || undefined,
+      community: filters.community || undefined,
+      propertyTypes: filters.propertyTypes.length
+        ? filters.propertyTypes.join(",")
+        : undefined,
+      minPrice: filters.minPrice || undefined,
+      maxPrice: filters.maxPrice || undefined,
+      minBeds: filters.minBeds || undefined,
+      minBaths: filters.minBaths || undefined,
+      openHouseOnly: filters.openHouseOnly ? "1" : undefined,
+      status: statusesQueryValue(filters.statuses) ?? undefined,
+      sort: filters.sort !== "newest" ? filters.sort : undefined,
+    }),
+    [filters],
+  );
+
+  function clearResultChip(key: SearchResultChipKey) {
+    switch (key) {
+      case "transaction":
+        return;
+      case "price":
+        updateFilters({ ...filters, minPrice: "", maxPrice: "" });
+        return;
+      case "beds":
+        updateFilters({ ...filters, minBeds: "" });
+        return;
+      case "baths":
+        updateFilters({ ...filters, minBaths: "" });
+        return;
+      case "types":
+        updateFilters({ ...filters, propertyTypes: [] });
+        return;
+      case "openHouse":
+        updateFilters({ ...filters, openHouseOnly: false });
+        return;
+      case "segment":
+        updateFilters({ ...filters, segment: "RESIDENTIAL" });
+        return;
+      case "status":
+        updateFilters({ ...filters, statuses: ["ACTIVE"] });
+        return;
+      case "place": {
+        const next = { ...filters, city: "", community: "" };
+        setFilters(next);
+        syncUrl(next, view, { clearMultiPlace: true });
+        return;
+      }
+      case "query":
+        setPlaceQueryCleared(true);
+        syncUrl(filters, view, { clearQuery: true });
+        return;
+      default: {
+        const unexpected: never = key;
+        return unexpected;
+      }
+    }
+  }
 
   const filterPreviewExtras = useMemo(
     () => ({
@@ -568,7 +648,7 @@ export function SearchExperience() {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b border-line/80 bg-surface px-3 py-2 sm:px-4 sm:py-2.5">
         {isNarrow ? (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <div className="flex items-center gap-2">
             <div className="flex shrink-0 rounded-full bg-mist p-0.5">
               {transactionButtons.map(([value, label]) => (
@@ -616,39 +696,62 @@ export function SearchExperience() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {!showMap ? (
-              <button
-                type="button"
-                onClick={() => setFiltersOpen(true)}
-                className="inline-flex h-11 min-w-11 items-center gap-1.5 rounded-full border border-line bg-mist px-3.5 text-sm font-semibold text-ink transition hover:border-canopy/40"
-              >
-                <ListFilter className="size-4" aria-hidden />
+          <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div
+              ref={viewToggleRef}
+              className="flex shrink-0 rounded-full border border-line bg-mist p-0.5"
+            >
+              {(
+                [
+                  ["map", MapIcon, "Map"],
+                  ["split", Columns2, "Split"],
+                  ["cards", LayoutGrid, "List"],
+                ] as const
+              ).map(([mode, Icon, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-label={label}
+                  title={label}
+                  onClick={() => updateView(mode)}
+                  className={cn(
+                    "inline-flex size-8 items-center justify-center rounded-full transition",
+                    view === mode
+                      ? "bg-surface text-canopy shadow-sm"
+                      : "text-ink/45 hover:text-ink",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden />
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(true)}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-xs font-semibold text-ink"
+            >
+                <ListFilter className="size-3.5" aria-hidden />
                 Filters
                 {activeFilterCount > 0 ? (
                   <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-canopy px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                     {activeFilterCount}
                   </span>
                 ) : null}
-              </button>
-            ) : null}
+            </button>
+            <SearchToolbarChips
+              chips={resultsCopy.chips}
+              onClearChip={clearResultChip}
+            />
 
-            <label className="group relative inline-flex h-11 min-w-11 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border border-line bg-mist px-3 shadow-sm transition hover:border-canopy/40">
-              <ArrowUpDown
-                className="size-3.5 shrink-0 text-canopy"
-                aria-hidden
-              />
-              <span className="truncate text-sm font-semibold text-ink">
+            <label className="group relative inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-full border border-line bg-surface px-2.5">
+              <ArrowUpDown className="size-3.5 shrink-0 text-canopy" aria-hidden />
+              <span className="text-xs font-semibold text-ink">
                 {filters.sort === "newest"
                   ? "Newest"
                   : filters.sort === "price_desc"
                     ? "Price ↓"
                     : "Price ↑"}
               </span>
-              <ChevronDown
-                className="size-3.5 shrink-0 text-ink/35"
-                aria-hidden
-              />
               <select
                 aria-label="Sort listings"
                 value={filters.sort}
@@ -665,89 +768,35 @@ export function SearchExperience() {
                 <option value="price_desc">Price: high to low</option>
               </select>
             </label>
-
-            <div
-              ref={viewToggleRef}
-              className="flex shrink-0 rounded-full border border-line bg-mist p-0.5"
-            >
-              {(
-                [
-                  ["map", MapIcon, "Map"],
-                  ["cards", LayoutGrid, "List"],
-                ] as const
-              ).map(([mode, Icon, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  aria-label={label}
-                  title={label}
-                  onClick={() => updateView(mode)}
-                  className={cn(
-                    "inline-flex size-11 items-center justify-center rounded-full transition",
-                    view === mode
-                      ? "bg-surface text-canopy shadow-sm"
-                      : "text-ink/45 hover:text-ink",
-                  )}
-                >
-                  <Icon className="size-4" aria-hidden />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <p className="inline-flex min-w-0 items-center gap-1.5 font-medium text-ink/55">
-              {pending ? (
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
-              ) : null}
-              <span className="truncate">
-                {pending
-                  ? "Updating…"
-                  : `${total.toLocaleString("en-CA")} ${noun}`}
-                {provider === "mock" ? " · demo" : ""}
-              </span>
-            </p>
             <div ref={saveSearchRef} className="inline-flex shrink-0">
               <SaveSearchButton
                 signedIn={signedIn}
                 callbackPath={searchCallbackPath(filters)}
-                query={{
-                  segment:
-                    filters.segment !== "RESIDENTIAL"
-                      ? filters.segment
-                      : undefined,
-                  transactionType:
-                    filters.transactionType !== "ALL"
-                      ? filters.transactionType
-                      : undefined,
-                  dataSource: filters.dataSource || undefined,
-                  city: filters.city || undefined,
-                  community: filters.community || undefined,
-                  propertyTypes: filters.propertyTypes.length
-                    ? filters.propertyTypes.join(",")
-                    : undefined,
-                  minPrice: filters.minPrice || undefined,
-                  maxPrice: filters.maxPrice || undefined,
-                  minBeds: filters.minBeds || undefined,
-                  minBaths: filters.minBaths || undefined,
-                  openHouseOnly: filters.openHouseOnly ? "1" : undefined,
-                  status: statusesQueryValue(filters.statuses) ?? undefined,
-                  sort: filters.sort !== "newest" ? filters.sort : undefined,
-                }}
+                query={savedSearchQuery}
               />
             </div>
-          </div>
-
-          {activeFilterCount > 0 ? (
-            <SearchActiveFilterStrip
-              filters={filters}
-              onChange={updateFilters}
+            <WatchAreaButton
+              signedIn={signedIn}
+              city={filters.city}
+              community={filters.community || undefined}
+              transactionType={filters.transactionType}
+              segment={filters.segment}
+              idleLabel="Watch"
+              authCallbackUrl={searchCallbackPath(filters)}
+              className="h-8 shrink-0 rounded-full px-2.5"
             />
-          ) : null}
+            <Link
+              href="/route-planner"
+              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-canopy/20 bg-canopy/10 px-2.5 text-xs font-semibold text-canopy"
+            >
+              <RouteStartIcon />
+              Plan
+            </Link>
+          </div>
         </div>
         ) : (
-        <div className="space-y-2.5">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
             <div className="flex rounded-full bg-mist p-0.5">
               {transactionButtons.map(([value, label]) => (
                 <button
@@ -828,31 +877,23 @@ export function SearchExperience() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <SearchFiltersMenu
-              filters={filters}
-              onChange={updateFilters}
-              resultCount={total}
-              resultNoun={noun}
-              signedIn={signedIn}
-              previewExtras={filterPreviewExtras}
-              searchCallbackPath={searchCallbackPath}
-            />
-            <div className="flex flex-wrap items-center gap-2 text-xs text-ink/50">
-              <span className="inline-flex items-center gap-1.5 font-medium text-ink/65">
-                {pending ? (
-                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                ) : null}
-                {pending
-                  ? "Updating…"
-                  : `${total.toLocaleString("en-CA")} ${noun}`}
-                {provider === "mock" ? " · demo" : ""}
-              </span>
-              <label className="group relative inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 shadow-sm transition hover:border-canopy/40">
-                <ArrowUpDown
-                  className="size-3.5 shrink-0 text-canopy"
-                  aria-hidden
-                />
+                filters={filters}
+                onChange={updateFilters}
+                resultCount={total}
+                resultNoun={noun}
+                signedIn={signedIn}
+                previewExtras={filterPreviewExtras}
+                searchCallbackPath={searchCallbackPath}
+                hidePlaceChip
+              />
+              <SearchToolbarChips
+                chips={resultsCopy.chips}
+                onClearChip={clearResultChip}
+              />
+            <label className="group relative inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-xs transition hover:border-canopy/40">
+                <ArrowUpDown className="size-3.5 shrink-0 text-canopy" aria-hidden />
                 <span className="text-xs font-semibold text-ink">
                   {filters.sort === "newest"
                     ? "Newest"
@@ -860,10 +901,7 @@ export function SearchExperience() {
                       ? "Price ↓"
                       : "Price ↑"}
                 </span>
-                <ChevronDown
-                  className="size-3.5 shrink-0 text-ink/35 group-hover:text-ink/55"
-                  aria-hidden
-                />
+                <ChevronDown className="size-3.5 shrink-0 text-ink/35" aria-hidden />
                 <select
                   aria-label="Sort listings"
                   value={filters.sort}
@@ -880,36 +918,11 @@ export function SearchExperience() {
                   <option value="price_desc">Price: high to low</option>
                 </select>
               </label>
-              <div
-                ref={isNarrow ? undefined : saveSearchRef}
-                className="inline-flex"
-              >
+              <div ref={saveSearchRef} className="inline-flex">
                 <SaveSearchButton
                   signedIn={signedIn}
                   callbackPath={searchCallbackPath(filters)}
-                  query={{
-                    segment:
-                      filters.segment !== "RESIDENTIAL"
-                        ? filters.segment
-                        : undefined,
-                    transactionType:
-                      filters.transactionType !== "ALL"
-                        ? filters.transactionType
-                        : undefined,
-                    dataSource: filters.dataSource || undefined,
-                    city: filters.city || undefined,
-                    community: filters.community || undefined,
-                    propertyTypes: filters.propertyTypes.length
-                      ? filters.propertyTypes.join(",")
-                      : undefined,
-                    minPrice: filters.minPrice || undefined,
-                    maxPrice: filters.maxPrice || undefined,
-                    minBeds: filters.minBeds || undefined,
-                    minBaths: filters.minBaths || undefined,
-                    openHouseOnly: filters.openHouseOnly ? "1" : undefined,
-                    status: statusesQueryValue(filters.statuses) ?? undefined,
-                    sort: filters.sort !== "newest" ? filters.sort : undefined,
-                  }}
+                  query={savedSearchQuery}
                 />
               </div>
               <WatchAreaButton
@@ -918,25 +931,26 @@ export function SearchExperience() {
                 community={filters.community || undefined}
                 transactionType={filters.transactionType}
                 segment={filters.segment}
+                idleLabel="Watch area"
                 authCallbackUrl={searchCallbackPath(filters)}
+                className="h-8 rounded-full px-2.5"
               />
+              <Link
+                href="/route-planner"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-canopy/20 bg-canopy/10 px-2.5 text-xs font-semibold text-canopy transition hover:bg-canopy/15"
+              >
+                <RouteStartIcon />
+                Plan viewings
+              </Link>
               {filters.dataSource === "fsbo" ? (
                 <button
                   type="button"
                   onClick={() => updateFilters({ ...filters, dataSource: "" })}
-                  className="rounded-full bg-signal/15 px-2.5 py-1 font-semibold text-signal"
+                  className="rounded-full bg-signal/15 px-2.5 py-1 text-xs font-semibold text-signal"
                 >
                   By owner · clear
                 </button>
-              ) : (
-                <Link
-                  href="/owner/new"
-                  className="hidden font-semibold text-ink/45 hover:text-canopy sm:inline"
-                >
-                  List yours
-                </Link>
-              )}
-            </div>
+              ) : null}
           </div>
         </div>
         )}
@@ -948,12 +962,33 @@ export function SearchExperience() {
           view === "split" && "flex flex-col lg:flex-row",
         )}
       >
+        {view === "split" ? (
+          <style>{`
+            @media (max-width: 1023px) {
+              .search-split-map {
+                width: 100%;
+                height: 38vh;
+                min-height: 11rem;
+                max-height: 45vh;
+                flex: none;
+              }
+            }
+            @media (min-width: 1024px) {
+              .search-split-map {
+                width: 48%;
+                max-width: 48%;
+                flex: 0 0 48%;
+                height: 100%;
+              }
+            }
+          `}</style>
+        ) : null}
         {showMap ? (
           <div
             className={cn(
               "relative min-h-0 bg-mist",
               view === "map" && "h-full w-full",
-              view === "split" && "h-[42vh] w-full lg:h-full lg:w-[55%]",
+              view === "split" && "search-split-map w-full",
             )}
           >
             <SearchMap
@@ -978,8 +1013,6 @@ export function SearchExperience() {
                 updateFilters({ ...filters, statuses: nextStatuses });
                 setActiveMls(null);
               }}
-              expandCardOnClick={!isNarrow}
-              onOpenListing={!isNarrow ? openListingDetail : undefined}
               onOpenFilters={
                 isNarrow ? () => setFiltersOpen(true) : undefined
               }
@@ -994,23 +1027,24 @@ export function SearchExperience() {
             className={cn(
               "min-h-0 bg-mist/40",
               view === "cards" && "h-full w-full",
-              view === "split" && "min-h-0 flex-1 lg:w-[45%]",
+              view === "split" && "min-w-0 flex-1 border-line/70 lg:border-l",
             )}
           >
             <SearchResultsPane
               items={items}
               activeMls={activeMls}
               onFocus={setActiveMls}
-              onOpenListing={!isNarrow ? openListingDetail : undefined}
               signedIn={signedIn}
               hasClientAccess={hasClientAccess}
-              needsEmailVerification={needsEmailVerification}
               pending={pending}
-              view={view}
+              horizontal={isNarrow}
+              wideGrid={!isNarrow && view === "cards"}
+              title={resultsCopy.title}
+              countLabel={countLabel}
               emptyHint={
                 polygon
-                  ? "No listings inside this drawn area. Clear the draw or expand it."
-                  : "No listings match. Adjust filters or search this map area."
+                  ? "Clear the draw or expand it."
+                  : "Adjust your filters or search this map area."
               }
             />
           </div>
@@ -1028,13 +1062,6 @@ export function SearchExperience() {
           resultNoun={noun}
           signedIn={signedIn}
           callbackPath={searchCallbackPath(filters)}
-        />
-      ) : null}
-
-      {detailListing ? (
-        <SearchMapListingOverlay
-          listing={detailListing}
-          onClose={() => setDetailMls(null)}
         />
       ) : null}
 

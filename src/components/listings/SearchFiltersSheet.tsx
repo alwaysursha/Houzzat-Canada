@@ -140,6 +140,12 @@ export function SearchFiltersSheet({
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const historyPushedRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  const keepHrefRef = useRef("");
+  onCloseRef.current = onClose;
+  if (open && typeof window !== "undefined") {
+    keepHrefRef.current = window.location.href;
+  }
   const isLease = filters.transactionType === "LEASE";
   const pricePresets = isLease ? LEASE_PRICE_PRESETS : SALE_PRICE_PRESETS;
   const typeOptions =
@@ -163,16 +169,12 @@ export function SearchFiltersSheet({
   }, []);
 
   const closeViaUi = useCallback(() => {
-    if (
-      historyPushedRef.current &&
-      (window.history.state as FiltersHistoryState | null)?.houzzatSearchFilters
-    ) {
-      historyPushedRef.current = false;
+    if (historyPushedRef.current) {
       window.history.back();
       return;
     }
-    onClose();
-  }, [onClose]);
+    onCloseRef.current();
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -192,28 +194,43 @@ export function SearchFiltersSheet({
     };
   }, [open, closeViaUi]);
 
-  // Hardware / browser Back closes Filters before leaving Search.
+  // Hardware / browser Back closes Filters and stays on this Search URL.
+  // Capture phase + stopImmediatePropagation so Next's popstate handler does not
+  // treat the same-URL history entry as leaving /search. The marker is not a
+  // query param. Manual close uses history.back() so the entry is consumed.
   useEffect(() => {
-    if (!open) {
-      historyPushedRef.current = false;
-      return;
+    if (!open) return;
+
+    if (!historyPushedRef.current) {
+      const prev = (window.history.state ?? {}) as FiltersHistoryState;
+      if (prev.houzzatSearchFilters) {
+        historyPushedRef.current = true;
+      } else {
+        window.history.pushState({ ...prev, houzzatSearchFilters: true }, "");
+        historyPushedRef.current = true;
+      }
     }
 
-    const prev = (window.history.state ?? {}) as FiltersHistoryState;
-    if (!prev.houzzatSearchFilters) {
-      window.history.pushState({ ...prev, houzzatSearchFilters: true }, "");
-      historyPushedRef.current = true;
-    }
-
-    const onPopState = () => {
+    const onPopState = (event: PopStateEvent) => {
+      if (!historyPushedRef.current) return;
+      event.stopImmediatePropagation();
       historyPushedRef.current = false;
-      onClose();
+      const keepHref = keepHrefRef.current;
+      if (keepHref && window.location.href !== keepHref) {
+        const state = {
+          ...((window.history.state ?? {}) as Record<string, unknown>),
+        };
+        delete state.__NA;
+        delete state.__PRIVATE_NEXTJS_INTERNALS_TREE;
+        window.history.replaceState(state, "", keepHref);
+      }
+      onCloseRef.current();
     };
-    window.addEventListener("popstate", onPopState);
+    window.addEventListener("popstate", onPopState, true);
     return () => {
-      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("popstate", onPopState, true);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   async function persist(confirmReplace: boolean) {
     if (!signedIn) {
