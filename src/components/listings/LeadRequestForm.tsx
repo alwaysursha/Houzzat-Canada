@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
+import { reportGa4LeadRequest } from "@/lib/ads/ga4-sign-up";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
@@ -130,6 +131,7 @@ export function LeadRequestForm({
       return;
     }
 
+    reportGa4LeadRequest(kind);
     clearLeadRequestContactPrefill();
     setDone(true);
   }

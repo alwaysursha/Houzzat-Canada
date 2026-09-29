@@ -4,6 +4,10 @@
  * Run: pnpm lead-request:selftest
  */
 import assert from "node:assert/strict";
+import {
+  ga4LeadRequestEvent,
+  reportGa4LeadRequest,
+} from "../src/lib/ads/ga4-sign-up";
 import { readFileSync } from "node:fs";
 import {
   CAPTURE_INTENT_TTL_MS,
@@ -473,6 +477,54 @@ function testSignupPrefillDoesNotEnterTheDraft() {
   assert.equal(gate.includes("signupPrefill"), false);
 }
 
+function testGa4LeadRequestFiresOnlyAfterSuccessfulLead() {
+  assert.equal(ga4LeadRequestEvent("showing"), "request_viewing");
+  assert.equal(ga4LeadRequestEvent("virtual_viewing"), "request_viewing");
+  assert.equal(ga4LeadRequestEvent("inquiry"), "contact_agent");
+
+  const calls: unknown[][] = [];
+  reportGa4LeadRequest("showing", (...args) => {
+    calls.push(args);
+  });
+  reportGa4LeadRequest("virtual_viewing", (...args) => {
+    calls.push(args);
+  });
+  reportGa4LeadRequest("inquiry", (...args) => {
+    calls.push(args);
+  });
+  assert.deepEqual(calls, [
+    ["event", "request_viewing"],
+    ["event", "request_viewing"],
+    ["event", "contact_agent"],
+  ]);
+  for (const call of calls) {
+    assert.equal(call.length, 2);
+  }
+  assert.doesNotThrow(() => {
+    reportGa4LeadRequest("inquiry", () => {
+      throw new Error("analytics down");
+    });
+  });
+  reportGa4LeadRequest("showing", undefined);
+
+  const form = read("src/components/listings/LeadRequestForm.tsx");
+  const authAt = form.indexOf('status !== "authenticated"');
+  const consentAt = form.indexOf("if (!contactConsent)");
+  const fetchAt = form.indexOf('fetch("/api/leads"');
+  const failedAt = form.indexOf("if (!res.ok)");
+  const eventAt = form.indexOf("reportGa4LeadRequest(kind)");
+  assert.ok(authAt !== -1 && authAt < eventAt);
+  assert.ok(consentAt !== -1 && consentAt < eventAt);
+  assert.ok(fetchAt !== -1 && fetchAt < eventAt);
+  assert.ok(failedAt !== -1 && failedAt < eventAt);
+  assert.equal(form.includes("reportGa4SignUp"), false);
+  const signup = read("src/lib/ads/ga4-sign-up.ts");
+  assert.ok(signup.includes('gtag?.("event", "sign_up", { method: "email" })'));
+  const signupForm = read("src/components/auth/SignUpForm.tsx");
+  assert.equal(signupForm.includes("request_viewing"), false);
+  assert.equal(signupForm.includes("contact_agent"), false);
+}
+
 function testSaveFlowsStayAvailable() {
   const saveListing = read("src/lib/auth/save-listing-intent.ts");
   const saveSearch = read("src/lib/auth/save-search-intent.ts");
@@ -505,6 +557,7 @@ testApiRequiresCustomerAndKeepsDownstream();
 testEntryPointsShareTheForm();
 testSignupPrefillDoesNotEnterTheDraft();
 testSaveFlowsStayAvailable();
+testGa4LeadRequestFiresOnlyAfterSuccessfulLead();
 
 void (null as CaptureIntent | null);
 

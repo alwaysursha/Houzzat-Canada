@@ -1,14 +1,19 @@
-"use client";
+import {
+  googleTagInstall,
+  workspaceTrackingIds,
+  type WorkspaceTrackingIds,
+} from "@/lib/ads/workspace-tracking";
 
 /**
- * Lightweight pixel / tag hooks. Set NEXT_PUBLIC_META_PIXEL_ID and
- * NEXT_PUBLIC_GOOGLE_ADS_ID when ready — no-ops otherwise.
+ * Public tags for the resolved workspace. No workspace ID loads nothing.
+ * Conversion events stay in the shared gtag helpers.
  */
-export function AdsTrackingPixels() {
-  const metaId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
-  const googleId = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
+export function AdsTrackingPixels(ids: Partial<WorkspaceTrackingIds>) {
+  const tracking = workspaceTrackingIds(ids);
+  const google = googleTagInstall(tracking);
+  const metaId = tracking.metaPixelId;
 
-  if (!metaId && !googleId) return null;
+  if (!google && !metaId) return null;
 
   return (
     <>
@@ -26,19 +31,16 @@ fbq('init','${metaId}');fbq('track','PageView');
           }}
         />
       ) : null}
-      {googleId ? (
-        <script
-          async
-          src={`https://www.googletagmanager.com/gtag/js?id=${googleId}`}
-        />
+      {google ? (
+        <script async src={google.src} />
       ) : null}
-      {googleId ? (
+      {google ? (
         <script
           dangerouslySetInnerHTML={{
             __html: `
 window.dataLayer=window.dataLayer||[];
 function gtag(){dataLayer.push(arguments);}
-gtag('js',new Date());gtag('config','${googleId}');
+gtag('js',new Date());${google.config}
             `,
           }}
         />

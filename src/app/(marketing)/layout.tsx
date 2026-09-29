@@ -36,6 +36,7 @@ import {
 } from "@/lib/tenancy/tenant-seo";
 import { whatsappNumberFromPresentationBrand } from "@/lib/tenancy/resolve-tenant-whatsapp";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
+import { resolveWorkspaceTracking } from "@/lib/ads/workspace-tracking";
 import { isHouzzatProPlatformBootstrapRequest } from "@/lib/mobile/platform-bootstrap-request";
 import {
   HOUZZATPRO_SUPPORT_DOCUMENT_TITLE,
@@ -189,6 +190,7 @@ export default async function MarketingLayout({
   const teamSignatureView = teamSignature
     ? resolveTeamSignatureView(chromeBrand)
     : null;
+  const tracking = await resolveWorkspaceTracking(tenancy.workspaceId);
 
   return (
     <TenantBrandProvider brand={chromeBrand}>
@@ -212,7 +214,11 @@ export default async function MarketingLayout({
               { telephone: phone },
             )}
           />
-          <AdsTrackingPixels />
+          <AdsTrackingPixels
+            ga4MeasurementId={tracking.ga4MeasurementId}
+            googleAdsId={tracking.googleAdsId}
+            metaPixelId={tracking.metaPixelId}
+          />
           <Suspense fallback={null}>
             <UtmCapture />
           </Suspense>

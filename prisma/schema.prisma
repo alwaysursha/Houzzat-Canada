@@ -679,6 +679,10 @@ model Workspace {
   crmRoutingSettings                CrmRoutingSettings?
   domains                           WorkspaceDomain[]
   branding                          WorkspaceBranding?
+  /**
+   * Public website tags (GA4, Google Ads, Meta). Not branding.
+   */
+  tracking                          WorkspaceTracking?
   viewingTours                      ViewingTour[]
   cmaReports                        CmaReport[]
   seatQuota                         WorkspaceSeatQuota?
@@ -889,6 +893,22 @@ model WorkspaceBranding {
   version              Int          @default(1)
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+/**
+ * Public tracking tags for one workspace website.
+ * One row per workspace. Absent or blank IDs load no tag.
+ * Not WorkspaceBranding — display identity stays there.
+ */
+model WorkspaceTracking {
+  workspaceId       String   @id
+  ga4MeasurementId  String?
+  googleAdsId       String?
+  metaPixelId       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }

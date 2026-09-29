@@ -634,7 +634,9 @@ function testGa4SignUpFiresOnlyAfterCreatedAccount() {
   assert.equal(signIn.includes("reportGa4SignUp"), false);
   const pixels = read("src/components/ads/AdsTrackingPixels.tsx");
   assert.equal(pixels.includes("GTM-"), false);
-  assert.equal((pixels.match(/googletagmanager.com\/gtag\/js/g) ?? []).length, 1);
+  assert.equal(pixels.includes("NEXT_PUBLIC_GOOGLE_ADS_ID"), false);
+  const tracking = read("src/lib/ads/workspace-tracking.ts");
+  assert.equal((tracking.match(/googletagmanager.com\/gtag\/js/g) ?? []).length, 1);
 }
 
 function testWatchVerificationUxUnchanged() {
