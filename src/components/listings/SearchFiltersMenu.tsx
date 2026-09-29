@@ -22,10 +22,10 @@ import { browserCaptureIntentStore } from "@/components/auth/capture-intent-brow
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import {
   countActiveSearchFilters,
-  resetSearchFilters,
   type SearchFilters,
   type SearchStatusOption,
 } from "@/components/listings/SearchFilterChips";
+import { StructuredCityField } from "@/components/listings/StructuredCityField";
 import { UpdateSavedSearchDialog } from "@/components/listings/UpdateSavedSearchDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -126,6 +126,9 @@ function Section({
 export function SearchFiltersMenu({
   filters,
   onChange,
+  cities,
+  onCitiesChange,
+  onResetFilters,
   resultCount,
   resultNoun = "homes",
   signedIn,
@@ -135,6 +138,9 @@ export function SearchFiltersMenu({
 }: {
   filters: SearchFilters;
   onChange: (next: SearchFilters) => void;
+  cities: string[];
+  onCitiesChange: (next: string[]) => void;
+  onResetFilters: () => void;
   resultCount: number;
   resultNoun?: string;
   signedIn: boolean;
@@ -165,7 +171,9 @@ export function SearchFiltersMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const id = useId();
   const flyoutStyle = useFlyoutFixedStyle(open, buttonRef, 400);
-  const activeCount = countActiveSearchFilters(filters);
+  const activeCount =
+    countActiveSearchFilters({ ...filters, city: "" }) +
+    cities.filter((city) => city.trim()).length;
   const isLease = draft.transactionType === "LEASE";
   const pricePresets = isLease ? LEASE_PRICE_PRESETS : SALE_PRICE_PRESETS;
   const typeOptions =
@@ -327,7 +335,7 @@ export function SearchFiltersMenu({
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setDraft(resetSearchFilters(draft))}
+              onClick={onResetFilters}
               className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-ink/50 transition hover:bg-mist hover:text-danger"
             >
               <RotateCcw className="size-3.5" aria-hidden />
@@ -518,16 +526,7 @@ export function SearchFiltersMenu({
 
           <Section title="Location">
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="block space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/45">
-                City
-                <Input
-                  value={draft.city}
-                  onChange={(e) =>
-                    setDraft({ ...draft, city: e.target.value })
-                  }
-                  placeholder="Toronto"
-                />
-              </label>
+              <StructuredCityField cities={cities} onCitiesChange={onCitiesChange} />
               <label className="block space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/45">
                 Community
                 <Input

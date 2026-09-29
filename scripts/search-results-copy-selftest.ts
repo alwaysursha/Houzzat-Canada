@@ -60,6 +60,15 @@ assert.equal(
 );
 assert.equal(manyCities.title.includes("Ignored"), false);
 
+assert.deepEqual(
+  manyCities.chips.filter((chip) => chip.key === "city").map((chip) => chip.label),
+  ["Kitchener", "Waterloo", "Cambridge"],
+);
+assert.equal(
+  manyCities.chips.filter((chip) => chip.key === "city").every((chip) => chip.city === chip.label),
+  true,
+);
+
 const fourCities = searchResultsCopy(
   input({ cities: "A|B|C|D", total: 4 }),
 );

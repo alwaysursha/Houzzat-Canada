@@ -407,24 +407,24 @@ function testWiringLeavesServerListingUntouched() {
   assert.ok(read("src/components/Providers.tsx").includes("refetchOnWindowFocus"));
 
   const modal = read("src/components/auth/AuthModalProvider.tsx");
-  const gateBrand = modal.slice(
-    modal.indexOf("function ListingGateBrand"),
-    modal.indexOf("function AuthModalTabs"),
-  );
-  assert.ok(gateBrand.includes("<TenantTextLogo"));
-  assert.equal(gateBrand.includes("logoUrl"), false);
-  assert.equal(gateBrand.includes("naturalWidth"), false);
-  assert.equal(gateBrand.includes("Houzzat"), false);
-  assert.equal(gateBrand.includes("Powered by"), false);
+  const headerBrand = read("src/components/tenancy/TenantHeaderBrand.tsx");
+  assert.ok(modal.includes("<TenantHeaderBrand"));
+  assert.ok(modal.includes("!brand.isHouzzatWorkspace"));
+  assert.equal(modal.includes("Powered by"), false);
+  assert.equal(modal.includes("PLATFORM_PRODUCT_NAME"), false);
+  assert.equal(modal.includes("function ListingGateBrand"), false);
+  assert.equal(headerBrand.includes("Houzzat"), false);
+  assert.ok(headerBrand.includes("<TenantTextLogo"));
+  assert.ok(headerBrand.includes('textClassName = "text-2xl"'));
+  assert.ok(headerBrand.includes("<BrandLogoMark"));
   const textLogo = read("src/components/tenancy/TenantTextLogo.tsx");
   assert.ok(textLogo.includes("font-display"));
   assert.ok(textLogo.includes("tracking-tight"));
   assert.ok(textLogo.includes("text-ink"));
   assert.equal(textLogo.includes("Houzzat"), false);
   const header = read("src/components/site/SiteHeaderClient.tsx");
-  assert.ok(header.includes("<TenantTextLogo"));
-  assert.ok(header.includes('className="text-2xl"'));
-  assert.ok(modal.includes('className="text-4xl leading-none sm:text-5xl"'));
+  assert.ok(header.includes("<TenantHeaderBrand"));
+  assert.equal(modal.includes('className="text-4xl leading-none sm:text-5xl"'), false);
 }
 
 function testTenantTextLogoUsesResolvedDisplayName() {

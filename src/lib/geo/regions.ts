@@ -332,6 +332,37 @@ export function gtaServiceCities(): string[] {
   );
 }
 
+function cityLookupKey(city: string): string {
+  return normalizeCityKey(city).replace(/-/g, " ");
+}
+
+let marketCityNames: Map<string, string> | null = null;
+
+function marketCityIndex(): Map<string, string> {
+  if (marketCityNames) return marketCityNames;
+  const index = new Map<string, string>();
+  for (const name of staticOntarioHubCities()) {
+    const key = cityLookupKey(name);
+    if (!key || index.has(key)) continue;
+    index.set(key, name);
+  }
+  marketCityNames = index;
+  return index;
+}
+
+/**
+ * Whole-string match against the Ontario market city catalog.
+ * `cambridge` and `KITCHENER` become the catalog display name.
+ * Anything else, including streets and neighbourhoods, is not a city.
+ */
+export function canonicalMarketCity(
+  raw: string | null | undefined,
+): string | null {
+  const key = cityLookupKey(raw ?? "");
+  if (!key) return null;
+  return marketCityIndex().get(key) ?? null;
+}
+
 /** Map fly-to target for a city name (case-insensitive). */
 export function cityMapCenter(
   city: string | null | undefined,

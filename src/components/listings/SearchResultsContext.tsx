@@ -34,14 +34,18 @@ export function SearchToolbarChips({
   onClearChip,
 }: {
   chips: SearchResultsCopy["chips"];
-  onClearChip: (key: SearchResultChipKey) => void;
+  onClearChip: (chip: SearchResultChip) => void;
 }) {
   const visible = chips.filter((chip) => !TOOLBAR_OMIT.has(chip.key));
   if (visible.length === 0) return null;
   return (
     <>
       {visible.map((chip) => (
-        <ToolbarChip key={chip.key} chip={chip} onClear={onClearChip} />
+        <ToolbarChip
+          key={chip.city ? `${chip.key}:${chip.city}` : chip.key}
+          chip={chip}
+          onClear={onClearChip}
+        />
       ))}
     </>
   );
@@ -52,7 +56,7 @@ function ToolbarChip({
   onClear,
 }: {
   chip: SearchResultChip;
-  onClear: (key: SearchResultChipKey) => void;
+  onClear: (chip: SearchResultChip) => void;
 }) {
   if (!chip.clearable) {
     return (
@@ -64,7 +68,7 @@ function ToolbarChip({
   return (
     <button
       type="button"
-      onClick={() => onClear(chip.key)}
+      onClick={() => onClear(chip)}
       className={cn(
         "inline-flex h-8 max-w-[14rem] shrink-0 items-center gap-1 rounded-full border border-line bg-surface px-2.5 text-xs font-medium text-ink/75 transition hover:border-ink/20 hover:text-ink",
       )}

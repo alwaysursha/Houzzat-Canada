@@ -9,8 +9,8 @@ import { browserCaptureIntentStore } from "@/components/auth/capture-intent-brow
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { StructuredCityField } from "@/components/listings/StructuredCityField";
 import {
-  resetSearchFilters,
   type SearchFilters,
   type SearchStatusOption,
 } from "@/components/listings/SearchFilterChips";
@@ -116,6 +116,9 @@ export function SearchFiltersSheet({
   onClose,
   filters,
   onChange,
+  cities,
+  onCitiesChange,
+  onResetFilters,
   resultCount,
   pending = false,
   resultNoun = "homes",
@@ -126,6 +129,9 @@ export function SearchFiltersSheet({
   onClose: () => void;
   filters: SearchFilters;
   onChange: (next: SearchFilters) => void;
+  cities: string[];
+  onCitiesChange: (next: string[]) => void;
+  onResetFilters: () => void;
   resultCount: number;
   pending?: boolean;
   resultNoun?: string;
@@ -319,7 +325,7 @@ export function SearchFiltersSheet({
           </h2>
           <button
             type="button"
-            onClick={() => onChange(resetSearchFilters(filters))}
+            onClick={onResetFilters}
             className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-ink/60 transition hover:bg-mist hover:text-danger"
           >
             <RotateCcw className="size-3.5" aria-hidden />
@@ -503,18 +509,7 @@ export function SearchFiltersSheet({
           </Section>
 
           <Section title="Location">
-            <label className="block space-y-1.5 text-sm text-ink/70">
-              <span className="text-xs font-semibold uppercase tracking-wide text-ink/45">
-                City
-              </span>
-              <Input
-                value={filters.city}
-                onChange={(e) =>
-                  onChange({ ...filters, city: e.target.value })
-                }
-                placeholder="Toronto"
-              />
-            </label>
+            <StructuredCityField cities={cities} onCitiesChange={onCitiesChange} />
             <label className="mt-3 block space-y-1.5 text-sm text-ink/70">
               <span className="text-xs font-semibold uppercase tracking-wide text-ink/45">
                 Community

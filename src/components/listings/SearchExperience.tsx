@@ -31,6 +31,7 @@ import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import {
   countActiveSearchFilters,
+  resetSearchFilters,
   type SearchFilters,
   type SearchViewMode,
 } from "@/components/listings/SearchFilterChips";
@@ -53,8 +54,12 @@ import {
 } from "@/lib/listings/search-page-href";
 import {
   searchResultsCopy,
-  type SearchResultChipKey,
+  type SearchResultChip,
 } from "@/lib/listings/search-results-copy";
+import {
+  structuredCitiesFromSearch,
+  withStructuredCity,
+} from "@/lib/listings/structured-cities";
 import { pointInPolygon, polygonBBox } from "@/lib/maps/geo";
 import {
   listingResultFrame,
@@ -120,6 +125,7 @@ export function SearchExperience() {
   const [isNarrow, setIsNarrow] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [placeQueryCleared, setPlaceQueryCleared] = useState(false);
+  const [cityEntryToken, setCityEntryToken] = useState(0);
   const [resultsSheetOpen, setResultsSheetOpen] = useState(false);
   const splitStageRef = useRef<HTMLDivElement>(null);
   const sheetPointerHandledRef = useRef(false);
@@ -306,14 +312,24 @@ export function SearchExperience() {
     (
       next: SearchFilters,
       nextView: SearchViewMode = view,
-      options?: { clearMultiPlace?: boolean; clearQuery?: boolean },
+      options?: {
+        clearMultiPlace?: boolean;
+        clearQuery?: boolean;
+        cities?: string;
+      },
     ) => {
+      const cities =
+        options?.cities !== undefined
+          ? options.cities
+          : options?.clearMultiPlace
+            ? ""
+            : citiesParam;
       router.replace(
         searchPageHref({
           pathname,
           filters: next,
           view: nextView,
-          cities: citiesParam,
+          cities,
           communities: communitiesParam,
           q: qParam,
           clearMultiPlace: options?.clearMultiPlace,
@@ -560,6 +576,21 @@ export function SearchExperience() {
   }
 
   function onBarSearchSubmit(raw: string) {
+    const recognized = withStructuredCity(
+      structuredCitiesFromSearch(citiesParam, filters.city),
+      raw,
+    );
+    if (recognized) {
+      const next = { ...filters, city: "" };
+      setFilters(next);
+      setCityEntryToken((token) => token + 1);
+      if (!filters.community.trim()) setPlaceQueryCleared(true);
+      syncUrl(next, view, {
+        cities: recognized.join("|"),
+        clearQuery: true,
+      });
+      return;
+    }
     setPlaceQueryCleared(false);
     const parsed = parseSearchQuery(raw);
     const txn =
@@ -639,7 +670,11 @@ export function SearchExperience() {
 
   const showMap = view === "split" || view === "map";
   const showList = view === "split" || view === "cards";
-  const activeFilterCount = countActiveSearchFilters(filters);
+  const activeFilterCount =
+    countActiveSearchFilters(filters) +
+    (citiesParam.trim()
+      ? structuredCitiesFromSearch(citiesParam, "").length
+      : 0);
   const activeListing = items.find((i) => i.mlsNumber === activeMls) ?? null;
   const coachFilterIntentKey = [
     filters.city,
@@ -711,8 +746,20 @@ export function SearchExperience() {
     [filters],
   );
 
-  function clearResultChip(key: SearchResultChipKey) {
-    switch (key) {
+  function replaceStructuredCities(nextCities: string[]) {
+    const next = { ...filters, city: "" };
+    setFilters(next);
+    syncUrl(next, view, { cities: nextCities.join("|") });
+  }
+
+  function resetStructuredFilters() {
+    const next = resetSearchFilters(filters);
+    setFilters(next);
+    syncUrl(next, view, { cities: "", clearMultiPlace: true });
+  }
+
+  function clearResultChip(chip: SearchResultChip) {
+    switch (chip.key) {
       case "transaction":
         return;
       case "price":
@@ -742,12 +789,20 @@ export function SearchExperience() {
         syncUrl(next, view, { clearMultiPlace: true });
         return;
       }
+      case "city": {
+        const current = structuredCitiesFromSearch(citiesParam, filters.city);
+        const nextCities = current.filter((city) => city !== chip.city);
+        const next = { ...filters, city: "" };
+        setFilters(next);
+        syncUrl(next, view, { cities: nextCities.join("|") });
+        return;
+      }
       case "query":
         setPlaceQueryCleared(true);
         syncUrl(filters, view, { clearQuery: true });
         return;
       default: {
-        const unexpected: never = key;
+        const unexpected: never = chip.key;
         return unexpected;
       }
     }
@@ -812,6 +867,7 @@ export function SearchExperience() {
               className="min-w-0 flex-1 rounded-full border border-line bg-mist/60 px-1"
             >
               <AddressAutocomplete
+                key={`${citiesParam || filters.city || "none"}:${cityEntryToken}`}
                 initialQuery={searchBarQuery}
                 transactionType={
                   filters.transactionType === "LEASE" ||
@@ -960,6 +1016,7 @@ export function SearchExperience() {
               className="min-w-0 flex-1 basis-[16rem] rounded-full border border-line bg-mist/60 px-1"
             >
               <AddressAutocomplete
+                key={`${citiesParam || filters.city || "none"}:${cityEntryToken}`}
                 initialQuery={searchBarQuery}
                 transactionType={
                   filters.transactionType === "LEASE" ||
@@ -1013,6 +1070,9 @@ export function SearchExperience() {
             <SearchFiltersMenu
                 filters={filters}
                 onChange={updateFilters}
+                cities={structuredCitiesFromSearch(citiesParam, filters.city)}
+                onCitiesChange={replaceStructuredCities}
+                onResetFilters={resetStructuredFilters}
                 resultCount={total}
                 resultNoun={noun}
                 signedIn={signedIn}
@@ -1274,6 +1334,9 @@ export function SearchExperience() {
           onClose={() => setFiltersOpen(false)}
           filters={filters}
           onChange={updateFilters}
+          cities={structuredCitiesFromSearch(citiesParam, filters.city)}
+          onCitiesChange={replaceStructuredCities}
+          onResetFilters={resetStructuredFilters}
           resultCount={total}
           pending={pending}
           resultNoun={noun}

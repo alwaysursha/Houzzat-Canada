@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -8,7 +8,7 @@ import { Menu, UserRound, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { LazyAddressAutocomplete } from "@/components/listings/LazyAddressAutocomplete";
 import { StaffHardLink } from "@/components/site/StaffHardLink";
-import { TenantTextLogo } from "@/components/tenancy/TenantTextLogo";
+import { TenantHeaderBrand } from "@/components/tenancy/TenantHeaderBrand";
 import { Button } from "@/components/ui/button";
 import { pushHref } from "@/lib/listings/navigate-listing";
 import {
@@ -265,12 +265,14 @@ export function SiteHeaderClient({
   siteName,
   primaryColor = "#1A7B59",
   accountLabel = "Your Houzzat",
-  brandMark = null,
+  logoUrl = null,
+  showLogoMark = false,
 }: {
   siteName: string;
   primaryColor?: string;
   accountLabel?: string;
-  brandMark?: ReactNode;
+  logoUrl?: string | null;
+  showLogoMark?: boolean;
 }) {
   const { status, data } = useSession();
   const pathname = usePathname();
@@ -337,15 +339,13 @@ export function SiteHeaderClient({
         />
         <div className="border-b border-line/80 bg-mist/95">
         <div className="flex h-16 w-full items-center gap-2 px-4 sm:px-6 lg:px-10">
-          <Link
-            href="/"
-            className={cn(
-              "flex shrink-0 items-center",
-              brandMark ? "gap-2" : null,
-            )}
-          >
-            {brandMark}
-            <TenantTextLogo name={siteName} className="text-2xl" />
+          <Link href="/" className="flex shrink-0 items-center">
+            <TenantHeaderBrand
+              displayName={siteName}
+              logoUrl={logoUrl}
+              primaryColor={primaryColor}
+              showLogoMark={showLogoMark}
+            />
           </Link>
 
           {/* Desktop only — search stays inside the header row */}

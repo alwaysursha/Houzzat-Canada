@@ -1,5 +1,4 @@
 import { SiteHeaderClient } from "@/components/site/SiteHeaderClient";
-import { BrandLogoMark } from "@/components/tenancy/BrandLogoMark";
 import { SITE_NAME } from "@/lib/constants";
 import type { MarketingChromeBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 
@@ -21,16 +20,8 @@ export function SiteHeader({
             ? `Your ${brand.displayName}`
             : "Your account"
       }
-      brandMark={
-        brand && !brand.isHouzzatWorkspace ? (
-          <BrandLogoMark
-            displayName={brand.displayName}
-            logoUrl={brand.logoUrl}
-            primaryColor={brand.colors.primary}
-            size="sm"
-          />
-        ) : null
-      }
+      logoUrl={brand?.logoUrl ?? null}
+      showLogoMark={Boolean(brand && !brand.isHouzzatWorkspace)}
     />
   );
 }

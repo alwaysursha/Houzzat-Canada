@@ -35,6 +35,7 @@ export type SearchResultChipKey =
   | "openHouse"
   | "segment"
   | "place"
+  | "city"
   | "query"
   | "status";
 
@@ -42,6 +43,8 @@ export type SearchResultChip = {
   key: SearchResultChipKey;
   label: string;
   clearable: boolean;
+  /** Set for one structured city so the chip can be removed on its own. */
+  city?: string;
 };
 
 export type SearchResultsCopy = {
@@ -233,7 +236,18 @@ export function searchResultsCopy(input: SearchResultsCopyInput): SearchResultsC
   }
   const status = statusLabel(input.statuses, lease);
   if (status) chips.push({ key: "status", label: status, clearable: true });
-  if (place) {
+  const listedCities = splitList(input.cities);
+  const singleCity =
+    listedCities.length === 0 &&
+    !input.community.trim() &&
+    splitList(input.communities).length === 0
+      ? input.city.trim()
+      : "";
+  const cityNames = listedCities.length > 0 ? listedCities : singleCity ? [singleCity] : [];
+  for (const name of cityNames) {
+    chips.push({ key: "city", label: name, clearable: true, city: name });
+  }
+  if (place && cityNames.length === 0) {
     chips.push({
       key: "place",
       label: place.many ? `${place.label} ${place.many}` : place.label,

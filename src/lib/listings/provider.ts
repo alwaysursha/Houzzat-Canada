@@ -10,6 +10,7 @@ import {
 import { ownerListingTag } from "@/lib/owner/pricing";
 import { prisma } from "@/lib/prisma";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
+import { serviceAreaCityWhere } from "@/lib/listings/precise-property-search";
 import {
   filterAndRankListingsByQuery,
   listingQueryCandidateWhere,
@@ -138,6 +139,29 @@ export function toCard(
   };
 }
 
+function structuredCityNames(params: Pick<ListingSearchParams, "city" | "cities">): string[] {
+  const listed = (params.cities ?? []).map((city) => city.trim()).filter(Boolean);
+  if (listed.length > 0) return listed;
+  const one = params.city?.trim();
+  return one ? [one] : [];
+}
+
+/**
+ * Typesense zero is a miss for free text, and for a first-page structured
+ * city search. Other empty results stay authoritative. A later Typesense
+ * page (`ts:`) is the end of that index, not a Neon page.
+ */
+export function typesenseResultNeedsNeonFallback(
+  params: Pick<ListingSearchParams, "q" | "city" | "cities" | "cursor">,
+  typesenseItemCount: number,
+): boolean {
+  if (typesenseItemCount !== 0) return false;
+  if (params.q?.trim()) return true;
+  if (structuredCityNames(params).length === 0) return false;
+  if (params.cursor?.startsWith("ts:")) return false;
+  return true;
+}
+
 export class DbListingProvider implements ListingProvider {
   constructor(readonly name: "mock" | "proptx") {}
 
@@ -200,10 +224,11 @@ export class DbListingProvider implements ListingProvider {
 
   async search(params: ListingSearchParams): Promise<ListingSearchResult> {
     const fromTypesense = await typesenseSearch(params, this.name);
-    // Text miss with a query → Neon (on-demand PropTx warm-up in the API route).
+    // Text miss, or a structured city miss, continues to Neon.
+    // A non-empty Typesense page stays the result.
     if (
       fromTypesense &&
-      !(fromTypesense.items.length === 0 && params.q?.trim())
+      !typesenseResultNeedsNeonFallback(params, fromTypesense.items.length)
     ) {
       if (params.sort === "newest" && params.status !== "SOLD") {
         return {
@@ -257,14 +282,11 @@ export class DbListingProvider implements ListingProvider {
       this.inventorySourceFilter(params.dataSource, params),
     );
 
-    if (params.cities?.length) {
-      (where.AND as Prisma.ListingWhereInput[]).push({
-        OR: params.cities.map((city) => ({
-          city: { equals: city, mode: "insensitive" as const },
-        })),
-      });
-    } else if (params.city) {
-      where.city = { equals: params.city, mode: "insensitive" };
+    const cityNames = structuredCityNames(params);
+    if (cityNames.length) {
+      (where.AND as Prisma.ListingWhereInput[]).push(
+        serviceAreaCityWhere(cityNames),
+      );
     }
     if (params.propertyTypes?.length) {
       where.propertyType = { in: params.propertyTypes };

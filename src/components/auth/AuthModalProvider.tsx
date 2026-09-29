@@ -15,8 +15,7 @@ import { authModalCopy } from "@/components/auth/auth-modal-copy";
 import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
 import { SignInForm } from "@/components/auth/SignInForm";
 import { SignUpForm } from "@/components/auth/SignUpForm";
-import { BrandLogoMark } from "@/components/tenancy/BrandLogoMark";
-import { TenantTextLogo } from "@/components/tenancy/TenantTextLogo";
+import { TenantHeaderBrand } from "@/components/tenancy/TenantHeaderBrand";
 import {
   getPresentedTenantBrand,
   getPresentedTenantBrandServerSnapshot,
@@ -25,7 +24,6 @@ import {
 import { EXISTING_ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/auth/existing-account-message";
 import type { CaptureIntentType } from "@/lib/auth/capture-intent";
 import { hadClientSession } from "@/lib/auth/remembered-login";
-import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { cn } from "@/lib/utils";
 
@@ -64,20 +62,6 @@ export function useAuthModal() {
     throw new Error("useAuthModal must be used within AuthModalProvider");
   }
   return ctx;
-}
-
-/**
- * Same text logo as the site header, one step larger for this gate.
- * The header logo mark is not repeated here.
- */
-function ListingGateBrand({ displayName }: { displayName: string }) {
-  if (!displayName) return null;
-  return (
-    <TenantTextLogo
-      name={displayName}
-      className="text-4xl leading-none sm:text-5xl"
-    />
-  );
 }
 
 function AuthModalTabs({
@@ -247,26 +231,12 @@ function AuthModalPanel() {
               <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="lg:grid lg:min-h-full lg:grid-cols-2">
               <div className="border-b border-line bg-mist px-5 py-5 lg:border-b-0 lg:border-r lg:px-8 lg:py-8">
-                {listingGate ? (
-                  <ListingGateBrand
-                    displayName={brand?.displayName?.trim() || ""}
-                  />
-                ) : (
-                  <div className="flex items-center gap-2.5">
-                    {brand ? (
-                      <BrandLogoMark
-                        displayName={brand.displayName}
-                        logoUrl={brand.logoUrl}
-                        primaryColor={brand.colors.primary}
-                        size="sm"
-                      />
-                    ) : null}
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink">{displayName}</p>
-                      <p className="text-[11px] text-ink/45">Powered by {PLATFORM_PRODUCT_NAME}</p>
-                    </div>
-                  </div>
-                )}
+                <TenantHeaderBrand
+                  displayName={brand?.displayName?.trim() || ""}
+                  logoUrl={brand?.logoUrl ?? null}
+                  primaryColor={brand?.colors.primary}
+                  showLogoMark={Boolean(brand && !brand.isHouzzatWorkspace)}
+                />
                 <h2
                   id="auth-modal-title"
                   className="mt-4 font-display text-xl leading-tight text-ink lg:mt-6 lg:text-3xl"
