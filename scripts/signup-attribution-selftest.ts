@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { PrismaClient } from "@prisma/client";
+import { reportGa4SignUp } from "../src/lib/ads/ga4-sign-up";
 import { pickUtm } from "../src/lib/ads/utm";
 import {
   resetLeadIdentityLocksForTests,
@@ -606,6 +607,36 @@ async function testSuccessfulSavesAndConfirmStayUnchanged() {
   assert.equal(confirms, 1);
 }
 
+function testGa4SignUpFiresOnlyAfterCreatedAccount() {
+  const calls: unknown[][] = [];
+  reportGa4SignUp((...args) => {
+    calls.push(args);
+  });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], ["event", "sign_up", { method: "email" }]);
+  assert.deepEqual(Object.keys(calls[0]?.[2] as object), ["method"]);
+
+  reportGa4SignUp(undefined);
+  assert.doesNotThrow(() => {
+    reportGa4SignUp(() => {
+      throw new Error("analytics down");
+    });
+  });
+
+  const form = read("src/components/auth/SignUpForm.tsx");
+  const createdAt = form.indexOf("reportGa4SignUp()");
+  const signInAt = form.indexOf('signIn("credentials"');
+  const existingAt = form.indexOf("status === 409");
+  assert.ok(createdAt !== -1 && signInAt !== -1 && createdAt < signInAt);
+  assert.ok(existingAt !== -1 && existingAt < createdAt);
+  const signIn = read("src/components/auth/SignInForm.tsx");
+  assert.equal(signIn.includes("sign_up"), false);
+  assert.equal(signIn.includes("reportGa4SignUp"), false);
+  const pixels = read("src/components/ads/AdsTrackingPixels.tsx");
+  assert.equal(pixels.includes("GTM-"), false);
+  assert.equal((pixels.match(/googletagmanager.com\/gtag\/js/g) ?? []).length, 1);
+}
+
 function testWatchVerificationUxUnchanged() {
   const listing = read("src/components/account/useWatchListingToggle.ts");
   const area = read("src/components/account/useWatchAreaToggle.ts");
@@ -640,6 +671,8 @@ async function main() {
   console.log("[14-16] successful save and replace confirmation stay unchanged");
   testWatchVerificationUxUnchanged();
   console.log("[17] Property and Area Watch verification UX unchanged");
+  testGa4SignUpFiresOnlyAfterCreatedAccount();
+  console.log("[18] GA4 sign_up fires only after a created account");
   console.log("signup attribution selftest: PASS");
 }
 

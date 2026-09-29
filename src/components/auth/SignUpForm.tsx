@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
+import { reportGa4SignUp } from "@/lib/ads/ga4-sign-up";
 import { PasswordField } from "@/components/auth/PasswordField";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
@@ -139,6 +140,8 @@ export function SignUpForm({
       );
       return;
     }
+
+    reportGa4SignUp();
 
     await rememberLoginCredentials({
       email: normalizedEmail,
