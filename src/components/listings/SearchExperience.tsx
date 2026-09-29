@@ -133,8 +133,6 @@ export function SearchExperience() {
   const resultFitKeyRef = useRef<string | null>(null);
   const itemsGeoKeyRef = useRef<string | null>(null);
   const geoKeyRef = useRef("");
-  const polygonRef = useRef(polygon);
-  polygonRef.current = polygon;
   const loadSeqRef = useRef(0);
 
   useEffect(() => {
@@ -283,7 +281,6 @@ export function SearchExperience() {
     mapPinnedToRef.current = null;
     resultFitKeyRef.current = null;
     itemsGeoKeyRef.current = null;
-    if (!polygonRef.current) setAppliedBounds(null);
     const frame = searchMapCentroidFrame(mapGeography);
     if (!frame) return;
     setMapFrame({ ...frame, token: `place:${mapGeographyKey}` });
@@ -584,6 +581,9 @@ export function SearchExperience() {
     if (meta?.userGesture && geoKeyRef.current) {
       mapPinnedToRef.current = geoKeyRef.current;
     }
+    // Opening the map and a programmatic fit are not a new search.
+    // A real pan or zoom still owns the viewport.
+    if (!meta?.userGesture) return;
     // Draw-polygon mode owns the search area until cleared.
     if (polygon) return;
 

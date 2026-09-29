@@ -34,9 +34,9 @@ const card = readFileSync(
   "src/components/listings/SearchResultCard.tsx",
   "utf8",
 );
-assert.match(card, /justify-self-end self-start/);
+assert.match(card, /absolute right-2 top-2 z-10/);
 assert.match(card, /isolate z-0/);
-assert.doesNotMatch(card, /absolute right-2 top-2/);
+assert.doesNotMatch(card, /justify-self-end self-start/);
 
 const heading = readFileSync(
   "src/components/listings/SearchResultsContext.tsx",

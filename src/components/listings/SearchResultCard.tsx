@@ -73,17 +73,21 @@ export function SearchResultCard({
     >
       <div
         className={cn(
-          "relative isolate grid shrink-0 grid-cols-1 grid-rows-1 overflow-hidden bg-mist",
-          horizontal ? "w-[7.25rem] self-stretch sm:w-[8.5rem]" : "w-full",
+          "search-result-photo relative isolate z-0 shrink-0 overflow-hidden bg-mist",
+          horizontal ? "search-result-photo-h self-stretch" : "w-full",
         )}
+        style={{ transform: "translateZ(0)" }}
       >
+        {horizontal ? (
+          <style>{`.search-result-photo-h{width:7.25rem}@media(min-width:640px){.search-result-photo-h{width:8.5rem}}`}</style>
+        ) : null}
         <ListingLink
           href={path}
           aria-label={`${street}, ${cityLine}`}
           onMouseEnter={onFocus}
           onFocus={onFocus}
           className={cn(
-          "relative col-start-1 row-start-1 block h-full bg-mist",
+          "relative block h-full bg-mist",
           horizontal ? "min-h-[7rem]" : "aspect-[16/10] w-full",
           lockedPreview && "blur-[3px] saturate-75",
         )}
@@ -109,7 +113,7 @@ export function SearchResultCard({
             void toggle({ flyFrom: event.currentTarget });
           }}
           className={cn(
-            "col-start-1 row-start-1 m-2 inline-flex size-8 items-center justify-center justify-self-end self-start rounded-full border border-white/80 bg-surface/95 text-ink shadow-sm transition hover:text-canopy",
+            "absolute right-2 top-2 z-10 inline-flex size-8 items-center justify-center rounded-full border border-white/80 bg-surface/95 text-ink shadow-sm transition hover:text-canopy",
             saved && "text-canopy",
           )}
         >

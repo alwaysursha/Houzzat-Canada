@@ -452,6 +452,8 @@ export function SearchMap({
     const map = mapRef.current;
     if (!mapFrame || !map) return;
     if (framedTokenRef && framedTokenRef.current === mapFrame.token) return;
+    // Camera-only. The next moveend must not run a bounds search.
+    skipBoundsNotify.current = true;
     const duration = window.matchMedia("(prefers-reduced-motion: reduce)")
       .matches
       ? 0

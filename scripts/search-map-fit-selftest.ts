@@ -3,6 +3,7 @@
  * Run: node --import tsx scripts/search-map-fit-selftest.ts
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   listingResultFrame,
   searchMapCentroidFrame,
@@ -88,5 +89,18 @@ assert.equal(listingResultFrame([{ lat: 0, lng: 0 }]), null);
 
 assert.equal(searchMapNeedsResultFit({ ...empty, q: "MLS123" }), true);
 assert.equal(searchMapCentroidFrame({ ...empty, q: "MLS123" }), null);
+
+const experience = readFileSync(
+  "src/components/listings/SearchExperience.tsx",
+  "utf8",
+);
+const map = readFileSync("src/components/listings/SearchMap.tsx", "utf8");
+assert.match(experience, /if \(!meta\?\.userGesture\) return;/);
+assert.match(experience, /loadSeqRef/);
+assert.doesNotMatch(
+  experience,
+  /if \(!polygonRef\.current\) setAppliedBounds\(null\)/,
+);
+assert.match(map, /skipBoundsNotify\.current = true/);
 
 console.log("search-map-fit-selftest: ok");
