@@ -19,7 +19,7 @@ export function SearchResultsHeading({
   countLabel: string;
 }) {
   return (
-    <div className="search-results-heading sticky top-0 z-10 flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5 bg-mist/95 px-3 py-2 backdrop-blur-sm sm:gap-x-3 sm:px-4 sm:py-2.5">
+    <div className="search-results-heading sticky top-0 z-20 flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5 bg-mist px-3 py-2 sm:gap-x-3 sm:px-4 sm:py-2.5">
       <style>{`@media (min-width: 640px) { .search-results-heading { flex-wrap: nowrap; } .search-results-heading h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }`}</style>
       <h1 className="min-w-0 text-lg font-semibold leading-snug tracking-tight text-ink sm:text-2xl sm:leading-tight">
         {title}

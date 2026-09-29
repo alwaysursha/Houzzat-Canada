@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   useTransition,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -15,6 +16,7 @@ import { useClientAccess } from "@/hooks/use-client-access";
 import {
   ArrowUpDown,
   ChevronDown,
+  ChevronUp,
   Columns2,
   LayoutGrid,
   ListFilter,
@@ -54,7 +56,13 @@ import {
   type SearchResultChipKey,
 } from "@/lib/listings/search-results-copy";
 import { pointInPolygon, polygonBBox } from "@/lib/maps/geo";
-import { cityMapCenter } from "@/lib/geo/regions";
+import {
+  listingResultFrame,
+  searchMapCentroidFrame,
+  searchMapGeographyKey,
+  searchMapNeedsResultFit,
+  type MapFrame,
+} from "@/lib/geo/search-map-fit";
 import { cn } from "@/lib/utils";
 
 /** MapLibre stays out of the List/cards bundle until Map (or Split) is shown. */
@@ -98,11 +106,9 @@ export function SearchExperience() {
   const [total, setTotal] = useState(0);
   const [activeMls, setActiveMls] = useState<string | null>(null);
   const [provider, setProvider] = useState("mock");
-  const [focus, setFocus] = useState<{
-    lat: number;
-    lng: number;
-    zoom?: number;
-  } | null>(null);
+  const [mapFrame, setMapFrame] = useState<(MapFrame & { token: string }) | null>(
+    null,
+  );
   const [appliedBounds, setAppliedBounds] = useState<Bounds | null>(null);
   const [polygon, setPolygon] = useState<LngLat[] | null>(null);
   const boundsApplyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -114,6 +120,22 @@ export function SearchExperience() {
   const [isNarrow, setIsNarrow] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [placeQueryCleared, setPlaceQueryCleared] = useState(false);
+  const [resultsSheetOpen, setResultsSheetOpen] = useState(false);
+  const splitStageRef = useRef<HTMLDivElement>(null);
+  const sheetPointerHandledRef = useRef(false);
+  const resumeCameraRef = useRef<{
+    lat: number;
+    lng: number;
+    zoom: number;
+  } | null>(null);
+  const framedTokenRef = useRef("");
+  const mapPinnedToRef = useRef<string | null>(null);
+  const resultFitKeyRef = useRef<string | null>(null);
+  const itemsGeoKeyRef = useRef<string | null>(null);
+  const geoKeyRef = useRef("");
+  const polygonRef = useRef(polygon);
+  polygonRef.current = polygon;
+  const loadSeqRef = useRef(0);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1023px)");
@@ -211,6 +233,18 @@ export function SearchExperience() {
       citiesParam.trim() ||
       communitiesParam.trim(),
   );
+  const mapGeography = useMemo(
+    () => ({
+      city: filters.city,
+      community: filters.community,
+      cities: citiesParam,
+      communities: communitiesParam,
+      q: qParam,
+    }),
+    [citiesParam, communitiesParam, filters.city, filters.community, qParam],
+  );
+  const mapGeographyKey = searchMapGeographyKey(mapGeography);
+  geoKeyRef.current = mapGeographyKey;
 
   // Place search owns the criteria — drop stale map-area bounds.
   useEffect(() => {
@@ -243,12 +277,33 @@ export function SearchExperience() {
     }
   }, [placeQueryCleared, qParam, filters.city, filters.community]);
 
-  // Fly map to the selected city (don't rely on map viewport for results).
+  // Move the map once when the place changes. Known cities use existing
+  // centroids. Neighbourhoods and other free text wait for listing coordinates.
   useEffect(() => {
-    const center = cityMapCenter(filters.city);
-    if (!center) return;
-    setFocus({ lat: center.lat, lng: center.lng, zoom: 11 });
-  }, [filters.city]);
+    mapPinnedToRef.current = null;
+    resultFitKeyRef.current = null;
+    itemsGeoKeyRef.current = null;
+    if (!polygonRef.current) setAppliedBounds(null);
+    const frame = searchMapCentroidFrame(mapGeography);
+    if (!frame) return;
+    setMapFrame({ ...frame, token: `place:${mapGeographyKey}` });
+  }, [mapGeography, mapGeographyKey]);
+
+  useEffect(() => {
+    if (!mapGeographyKey) return;
+    if (mapPinnedToRef.current === mapGeographyKey) return;
+    if (resultFitKeyRef.current === mapGeographyKey) return;
+    if (itemsGeoKeyRef.current !== mapGeographyKey) return;
+    if (!searchMapNeedsResultFit(mapGeography)) {
+      resultFitKeyRef.current = mapGeographyKey;
+      return;
+    }
+    if (polygon) return;
+    const frame = listingResultFrame(items);
+    if (!frame) return;
+    resultFitKeyRef.current = mapGeographyKey;
+    setMapFrame({ ...frame, token: `results:${mapGeographyKey}` });
+  }, [items, mapGeography, mapGeographyKey, polygon]);
 
   const syncUrl = useCallback(
     (
@@ -346,12 +401,15 @@ export function SearchExperience() {
   ]);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
+    const keyAtStart = geoKeyRef.current;
     const res = await fetch(`/api/listings/search?${queryString}`);
     const data = (await res.json()) as {
       items?: ListingCardData[];
       total?: number;
       provider?: string;
     };
+    if (seq !== loadSeqRef.current || geoKeyRef.current !== keyAtStart) return;
     let nextItems = data.items ?? [];
     if (polygon && polygon.length >= 3) {
       nextItems = nextItems.filter((item) =>
@@ -361,6 +419,7 @@ export function SearchExperience() {
     setItems(nextItems);
     setTotal(polygon ? nextItems.length : (data.total ?? nextItems.length));
     setProvider(data.provider ?? "mock");
+    itemsGeoKeyRef.current = keyAtStart;
   }, [queryString, polygon]);
 
   useEffect(() => {
@@ -373,7 +432,13 @@ export function SearchExperience() {
     const lat = searchParams.get("lat");
     const lng = searchParams.get("lng");
     if (lat && lng) {
-      setFocus({ lat: Number(lat), lng: Number(lng), zoom: 12 });
+      setMapFrame({
+        token: `latlng:${lat},${lng}`,
+        kind: "center",
+        lat: Number(lat),
+        lng: Number(lng),
+        zoom: 12,
+      });
     }
   }, [searchParams]);
 
@@ -386,6 +451,61 @@ export function SearchExperience() {
     viewRef.current = next;
     setView(next);
     syncUrl(filters, next);
+  }
+
+  /** Two-position results sheet. Drag lives on the handle only. Presentation state. */
+  function onResultsSheetPointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (view !== "split" || !isNarrow) return;
+    const stageFound = splitStageRef.current;
+    if (!stageFound) return;
+    const stageEl: HTMLDivElement = stageFound;
+    const height = stageEl.getBoundingClientRect().height;
+    if (height <= 0) return;
+    const handle = event.currentTarget;
+    try {
+      handle.setPointerCapture(event.pointerId);
+    } catch {
+      /* Capture can fail for a canceled pointer. Listeners still follow the drag. */
+    }
+    const startY = event.clientY;
+    const startPct = resultsSheetOpen ? 0.89 : 0.61;
+    let latest = startPct;
+    let moved = false;
+
+    function apply(pct: number) {
+      stageEl.style.setProperty("--search-sheet", `${(pct * 100).toFixed(2)}%`);
+    }
+
+    function onMove(ev: PointerEvent) {
+      if (Math.abs(ev.clientY - startY) > 6) moved = true;
+      const next = Math.min(0.89, Math.max(0.61, startPct + (startY - ev.clientY) / height));
+      latest = next;
+      stageEl.classList.add("is-dragging");
+      apply(next);
+    }
+
+    function finish(ev: PointerEvent) {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", finish);
+      handle.removeEventListener("pointercancel", finish);
+      if (handle.hasPointerCapture?.(ev.pointerId)) {
+        try {
+          handle.releasePointerCapture(ev.pointerId);
+        } catch {
+          /* already released */
+        }
+      }
+      const open = moved ? latest >= 0.75 : !resultsSheetOpen;
+      stageEl.classList.toggle("is-sheet-open", open);
+      stageEl.classList.remove("is-dragging");
+      stageEl.style.removeProperty("--search-sheet");
+      sheetPointerHandledRef.current = true;
+      setResultsSheetOpen(open);
+    }
+
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
   }
 
   function onPlaceSelect(suggestion: AutocompleteSuggestion) {
@@ -410,7 +530,13 @@ export function SearchExperience() {
       return;
     }
     if (suggestion.lat != null && suggestion.lng != null) {
-      setFocus({ lat: suggestion.lat, lng: suggestion.lng, zoom: 12 });
+      setMapFrame({
+        token: `suggest:${suggestion.lat},${suggestion.lng}:${suggestion.label ?? ""}`,
+        kind: "center",
+        lat: suggestion.lat,
+        lng: suggestion.lng,
+        zoom: 12,
+      });
     }
     if (
       suggestion.type === "city" ||
@@ -451,7 +577,13 @@ export function SearchExperience() {
     router.push(href);
   }
 
-  function onMapBoundsChange(next: Bounds) {
+  function onMapBoundsChange(
+    next: Bounds,
+    meta?: { userGesture: boolean },
+  ) {
+    if (meta?.userGesture && geoKeyRef.current) {
+      mapPinnedToRef.current = geoKeyRef.current;
+    }
     // Draw-polygon mode owns the search area until cleared.
     if (polygon) return;
 
@@ -957,28 +1089,81 @@ export function SearchExperience() {
       </div>
 
       <div
+        ref={splitStageRef}
         className={cn(
           "relative min-h-0 flex-1",
-          view === "split" && "flex flex-col lg:flex-row",
+          view === "split" && "search-split-stage flex flex-col lg:flex-row",
+          view === "split" && resultsSheetOpen && "is-sheet-open",
         )}
       >
         {view === "split" ? (
           <style>{`
             @media (max-width: 1023px) {
-              .search-split-map {
+              .search-split-stage { --search-sheet: 61%; }
+              .search-split-stage.is-sheet-open { --search-sheet: 89%; }
+              .search-split-stage .search-split-map {
+                position: absolute;
+                inset: 0;
+                bottom: calc(var(--search-sheet) - 8px);
                 width: 100%;
-                height: 38vh;
-                min-height: 11rem;
-                max-height: 45vh;
+                height: auto;
+                min-height: 0;
+                max-height: none;
                 flex: none;
+                overflow: hidden;
+                transition: bottom 300ms ease;
+              }
+              .search-split-stage .search-results-sheet {
+                position: absolute;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 20;
+                display: flex;
+                height: var(--search-sheet);
+                min-height: 0;
+                flex-direction: column;
+                overflow: hidden;
+                border-radius: 1rem 1rem 0 0;
+                background: var(--mist, #f4f7f5);
+                box-shadow: 0 -10px 28px rgba(20, 32, 28, 0.12);
+                transition: height 300ms ease;
+              }
+              .search-split-stage.is-dragging .search-split-map,
+              .search-split-stage.is-dragging .search-results-sheet {
+                transition: none;
               }
             }
             @media (min-width: 1024px) {
               .search-split-map {
+                position: relative;
+                inset: auto;
                 width: 48%;
                 max-width: 48%;
                 flex: 0 0 48%;
                 height: 100%;
+                overflow: visible;
+                transition: none;
+              }
+              .search-results-sheet {
+                position: relative;
+                inset: auto;
+                z-index: auto;
+                display: flex;
+                height: auto;
+                flex: 1 1 0%;
+                min-width: 0;
+                flex-direction: column;
+                border-radius: 0;
+                box-shadow: none;
+                background: transparent;
+                transition: none;
+              }
+            }
+            @media (prefers-reduced-motion: reduce) {
+              .search-split-stage .search-split-map,
+              .search-split-stage .search-results-sheet {
+                transition: none;
               }
             }
           `}</style>
@@ -995,7 +1180,12 @@ export function SearchExperience() {
               listings={items}
               activeMls={activeMls}
               activeListing={activeListing}
-              focus={focus}
+              mapFrame={mapFrame}
+              initialCameraRef={resumeCameraRef}
+              framedTokenRef={framedTokenRef}
+              onCamera={(camera) => {
+                resumeCameraRef.current = camera;
+              }}
               onSelect={setActiveMls}
               onClearSelection={() => setActiveMls(null)}
               onBoundsChange={onMapBoundsChange}
@@ -1027,9 +1217,35 @@ export function SearchExperience() {
             className={cn(
               "min-h-0 bg-mist/40",
               view === "cards" && "h-full w-full",
-              view === "split" && "min-w-0 flex-1 border-line/70 lg:border-l",
+              view === "split" && "search-results-sheet border-line/70 lg:border-l",
             )}
           >
+            {isNarrow && view === "split" ? (
+              <button
+                type="button"
+                aria-expanded={resultsSheetOpen}
+                aria-label={resultsSheetOpen ? "Show more map" : "Show more results"}
+                onPointerDown={onResultsSheetPointerDown}
+                onClick={() => {
+                  if (sheetPointerHandledRef.current) {
+                    sheetPointerHandledRef.current = false;
+                    return;
+                  }
+                  setResultsSheetOpen((open) => !open);
+                }}
+                className="flex w-full shrink-0 touch-none flex-col items-center gap-0.5 border-b border-line/50 bg-mist pt-2 pb-1"
+              >
+                <span className="h-1 w-9 rounded-full bg-ink/25" aria-hidden />
+                <ChevronUp
+                  className={cn(
+                    "size-3.5 text-ink/45 motion-safe:transition-transform motion-safe:duration-300",
+                    resultsSheetOpen && "rotate-180",
+                  )}
+                  aria-hidden
+                />
+              </button>
+            ) : null}
+            <div className={cn("min-h-0", view === "split" ? "flex-1" : "h-full")}>
             <SearchResultsPane
               items={items}
               activeMls={activeMls}
@@ -1047,6 +1263,7 @@ export function SearchExperience() {
                   : "Adjust your filters or search this map area."
               }
             />
+            </div>
           </div>
         ) : null}
       </div>

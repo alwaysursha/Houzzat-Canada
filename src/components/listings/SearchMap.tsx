@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Check, ListFilter, Pencil, Trash2, X } from "lucide-react";
@@ -113,7 +113,10 @@ export function SearchMap({
   onSelect,
   onClearSelection,
   onBoundsChange,
-  focus,
+  mapFrame,
+  initialCameraRef,
+  framedTokenRef,
+  onCamera,
   polygon,
   onPolygonChange,
   status = ["ACTIVE"],
@@ -128,8 +131,31 @@ export function SearchMap({
   activeListing?: ListingCard | null;
   onSelect?: (mlsNumber: string) => void;
   onClearSelection?: () => void;
-  onBoundsChange?: (bounds: Bounds) => void;
-  focus?: { lat: number; lng: number; zoom?: number } | null;
+  onBoundsChange?: (
+    bounds: Bounds,
+    meta?: { userGesture: boolean },
+  ) => void;
+  /** One-shot camera command. The same token is not replayed after a remount. */
+  mapFrame?: ({ token: string } & (
+    | { kind: "center"; lat: number; lng: number; zoom: number }
+    | {
+        kind: "bounds";
+        west: number;
+        south: number;
+        east: number;
+        north: number;
+        maxZoom: number;
+      }
+  )) | null;
+  /** Last camera, used when the map is created again after Cards mode. */
+  initialCameraRef?: MutableRefObject<{
+    lat: number;
+    lng: number;
+    zoom: number;
+  } | null>;
+  /** Tokens already applied, so view switches do not replay a fit. */
+  framedTokenRef?: MutableRefObject<string>;
+  onCamera?: (camera: { lat: number; lng: number; zoom: number }) => void;
   polygon: LngLat[] | null;
   onPolygonChange: (ring: LngLat[] | null) => void;
   status?: MapStatus[];
@@ -144,6 +170,8 @@ export function SearchMap({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const popupRef = useRef<HTMLDivElement>(null);
+  const onCameraRef = useRef(onCamera);
+  onCameraRef.current = onCamera;
   const onBoundsChangeRef = useRef(onBoundsChange);
   onBoundsChangeRef.current = onBoundsChange;
   const onSelectRef = useRef(onSelect);
@@ -185,11 +213,12 @@ export function SearchMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
+    const camera = initialCameraRef?.current;
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: OSM_STYLE,
-      center: [-79.4, 43.7],
-      zoom: 9.4,
+      center: camera ? [camera.lng, camera.lat] : [-79.4, 43.7],
+      zoom: camera?.zoom ?? 9.4,
       minZoom: MAP_MIN_ZOOM,
       maxZoom: MAP_MAX_ZOOM,
     });
@@ -237,18 +266,30 @@ export function SearchMap({
       });
     });
 
-    map.on("moveend", () => {
+    map.on("moveend", (event) => {
+      const center = map.getCenter();
+      onCameraRef.current?.({
+        lat: center.lat,
+        lng: center.lng,
+        zoom: map.getZoom(),
+      });
       if (skipBoundsNotify.current) {
         skipBoundsNotify.current = false;
         return;
       }
       const b = map.getBounds();
-      onBoundsChangeRef.current?.({
-        west: b.getWest(),
-        south: b.getSouth(),
-        east: b.getEast(),
-        north: b.getNorth(),
-      });
+      const userGesture = Boolean(
+        (event as { originalEvent?: Event }).originalEvent,
+      );
+      onBoundsChangeRef.current?.(
+        {
+          west: b.getWest(),
+          south: b.getSouth(),
+          east: b.getEast(),
+          north: b.getNorth(),
+        },
+        { userGesture },
+      );
     });
 
     mapRef.current = map;
@@ -408,14 +449,66 @@ export function SearchMap({
   }, [activeMls]);
 
   useEffect(() => {
-    if (!focus || !mapRef.current) return;
-    skipBoundsNotify.current = true;
-    mapRef.current.flyTo({
-      center: [focus.lng, focus.lat],
-      zoom: Math.min(focus.zoom ?? 12, MAP_MAX_ZOOM),
-      essential: true,
-    });
-  }, [focus]);
+    const map = mapRef.current;
+    if (!mapFrame || !map) return;
+    if (framedTokenRef && framedTokenRef.current === mapFrame.token) return;
+    const duration = window.matchMedia("(prefers-reduced-motion: reduce)")
+      .matches
+      ? 0
+      : 700;
+    if (mapFrame.kind === "center") {
+      const zoom = Math.min(mapFrame.zoom, MAP_MAX_ZOOM);
+      if (initialCameraRef) {
+        initialCameraRef.current = {
+          lat: mapFrame.lat,
+          lng: mapFrame.lng,
+          zoom,
+        };
+      }
+      if (framedTokenRef) framedTokenRef.current = mapFrame.token;
+      map.flyTo({
+        center: [mapFrame.lng, mapFrame.lat],
+        zoom,
+        essential: true,
+        duration,
+      });
+      return;
+    }
+    const maxZoom = Math.min(mapFrame.maxZoom, MAP_MAX_ZOOM);
+    const camera = map.cameraForBounds(
+      [
+        [mapFrame.west, mapFrame.south],
+        [mapFrame.east, mapFrame.north],
+      ],
+      { padding: 56, maxZoom },
+    );
+    const fittedCenter = camera?.center;
+    const fittedZoom = camera?.zoom;
+    if (fittedCenter && fittedZoom != null && initialCameraRef) {
+      const lng = Array.isArray(fittedCenter)
+        ? fittedCenter[0]
+        : "lng" in fittedCenter
+          ? fittedCenter.lng
+          : fittedCenter.lon;
+      const lat = Array.isArray(fittedCenter)
+        ? fittedCenter[1]
+        : fittedCenter.lat;
+      initialCameraRef.current = { lat, lng, zoom: fittedZoom };
+    }
+    if (framedTokenRef) framedTokenRef.current = mapFrame.token;
+    map.fitBounds(
+      [
+        [mapFrame.west, mapFrame.south],
+        [mapFrame.east, mapFrame.north],
+      ],
+      {
+        padding: 56,
+        maxZoom,
+        essential: true,
+        duration,
+      },
+    );
+  }, [framedTokenRef, initialCameraRef, mapFrame]);
 
   useEffect(() => {
     const map = mapRef.current;

@@ -64,7 +64,7 @@ export function SearchResultCard({
   return (
     <article
       className={cn(
-        "group relative flex min-w-0 overflow-hidden rounded-xl border bg-surface transition",
+        "group relative isolate z-0 flex min-w-0 overflow-hidden rounded-xl border bg-surface transition",
         horizontal ? "flex-row" : "flex-col",
         active
           ? "border-canopy shadow-sm ring-1 ring-canopy/25"
@@ -73,8 +73,8 @@ export function SearchResultCard({
     >
       <div
         className={cn(
-          "relative shrink-0 bg-mist",
-          horizontal ? "relative w-[7.25rem] self-stretch sm:w-[8.5rem]" : "relative w-full",
+          "relative isolate grid shrink-0 grid-cols-1 grid-rows-1 overflow-hidden bg-mist",
+          horizontal ? "w-[7.25rem] self-stretch sm:w-[8.5rem]" : "w-full",
         )}
       >
         <ListingLink
@@ -83,7 +83,7 @@ export function SearchResultCard({
           onMouseEnter={onFocus}
           onFocus={onFocus}
           className={cn(
-          "relative block h-full bg-mist",
+          "relative col-start-1 row-start-1 block h-full bg-mist",
           horizontal ? "min-h-[7rem]" : "aspect-[16/10] w-full",
           lockedPreview && "blur-[3px] saturate-75",
         )}
@@ -109,7 +109,7 @@ export function SearchResultCard({
             void toggle({ flyFrom: event.currentTarget });
           }}
           className={cn(
-            "absolute right-2 top-2 z-10 inline-flex size-8 items-center justify-center rounded-full border border-white/80 bg-surface/95 text-ink shadow-sm transition hover:text-canopy",
+            "col-start-1 row-start-1 m-2 inline-flex size-8 items-center justify-center justify-self-end self-start rounded-full border border-white/80 bg-surface/95 text-ink shadow-sm transition hover:text-canopy",
             saved && "text-canopy",
           )}
         >
