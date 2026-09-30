@@ -14,7 +14,7 @@ import type {
   ListingSearchParams,
   ListingSearchResult,
 } from "@/lib/listings/types";
-import { addressQueryKeepsAllTokens } from "@/lib/listings/search-match";
+import { typesenseTextMatchSettings } from "@/lib/listings/search-match";
 import {
   buildTypesenseCapabilityScopedStatusFilter,
   buildTypesenseListingAuthorityFilter,
@@ -341,8 +341,7 @@ export async function typesenseSearch(
         per_page: perPage,
         page,
         prefix: true,
-        num_typos: q === "*" ? 0 : 1,
-        ...(addressQueryKeepsAllTokens(q) ? { drop_tokens_threshold: 0 } : {}),
+        ...typesenseTextMatchSettings(q),
         exhaustive_search: false,
       });
 

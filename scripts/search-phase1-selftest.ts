@@ -6,7 +6,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   addressQueryKeepsAllTokens,
+  compareStreetHistory,
   listingQueryCandidateWhere,
+  typesenseTextMatchSettings,
 } from "../src/lib/listings/search-match";
 import {
   parseListingSearchQueryParams,
@@ -31,6 +33,35 @@ assert.equal(addressQueryKeepsAllTokens("eden oak trail"), true);
 assert.equal(addressQueryKeepsAllTokens("125 eden oak trail"), true);
 assert.equal(addressQueryKeepsAllTokens("eden oak"), true);
 assert.equal(addressQueryKeepsAllTokens("kitchener"), false);
+for (const q of [
+  "eden oak",
+  "eden oak tr",
+  "eden oak tra",
+  "eden oak trai",
+  "eden oak trail",
+  "eden oak court",
+  "eden oak crescent",
+]) {
+  const settings = typesenseTextMatchSettings(q);
+  assert.equal(settings.num_typos, 0, q);
+  assert.equal(settings.drop_tokens_threshold, 0, q);
+}
+assert.equal(typesenseTextMatchSettings("eden oak t").num_typos, 1);
+assert.equal(
+  typesenseTextMatchSettings("eden oak t").drop_tokens_threshold,
+  undefined,
+);
+
+const ranked = [
+  { status: "TERMINATED", listedAt: "2026-09-01T00:00:00.000Z", street: "history-new" },
+  { status: "ACTIVE", listedAt: "2024-01-01T00:00:00.000Z", street: "current-old" },
+  { status: "SOLD", listedAt: "2026-09-20T00:00:00.000Z", street: "history-newer" },
+  { status: "SOLD_CONDITIONAL", listedAt: "2025-01-01T00:00:00.000Z", street: "current-new" },
+].sort(compareStreetHistory);
+assert.deepEqual(
+  ranked.map((row) => row.street),
+  ["current-new", "current-old", "history-newer", "history-new"],
+);
 
 for (const q of ["eden oak trail", "125 eden oak trail", "eden oak"]) {
   for (const value of containsValues(listingQueryCandidateWhere(q))) {
@@ -172,13 +203,15 @@ const autocompleteTs = readFileSync(
   new URL("../src/lib/typesense/autocomplete.ts", import.meta.url),
   "utf8",
 );
+assert.match(searchTs, /typesenseTextMatchSettings\(q\)/);
+assert.match(autocompleteTs, /typesenseTextMatchSettings\(q\)/);
+assert.match(autocompleteTs, /compareStreetHistory/);
 assert.match(
-  searchTs,
-  /addressQueryKeepsAllTokens\(q\) \? \{ drop_tokens_threshold: 0 \}/,
-);
-assert.match(
-  autocompleteTs,
-  /addressQueryKeepsAllTokens\(q\) \? \{ drop_tokens_threshold: 0 \}/,
+  readFileSync(
+    new URL("../src/lib/listings/provider.ts", import.meta.url),
+    "utf8",
+  ),
+  /orderStreetHistory/,
 );
 assert.match(autocompleteTs, /ACTIVE_LISTINGS/);
 assert.match(autocompleteTs, /"SOLD"/);
@@ -259,6 +292,48 @@ async function liveInventory() {
   for (const item of leaseHits.items) {
     assert.equal(item.transactionType, "LEASE");
     assert.match(item.addressLine, /eden oak trail/i);
+  }
+
+  const trailIds = new Set<string>();
+  for (const q of [
+    "eden oak t",
+    "eden oak tr",
+    "eden oak tra",
+    "eden oak trai",
+    "eden oak trail",
+  ]) {
+    const step = await typesenseSearch({ ...sale, q }, "proptx");
+    assert.ok(step);
+    const exact = step.items.filter((item) =>
+      /\beden oak trail\b/i.test(item.addressLine),
+    );
+    assert.ok(exact.length > 0, q);
+    if (q === "eden oak trai") {
+      for (const item of exact) trailIds.add(item.mlsNumber);
+    }
+    if (q === "eden oak trail") {
+      for (const item of step.items) {
+        assert.match(item.addressLine, /\beden oak trail\b/i);
+      }
+      for (const mls of trailIds) {
+        assert.ok(step.items.some((item) => item.mlsNumber === mls), mls);
+      }
+    }
+  }
+
+  const court = await typesenseSearch({ ...sale, q: "eden oak court" }, "proptx");
+  assert.ok(court && court.total > 0);
+  for (const item of court.items) {
+    assert.match(item.addressLine, /\beden oak court\b/i);
+    assert.doesNotMatch(item.addressLine, /\beden oak (trail|crescent)\b/i);
+  }
+  const crescent = await typesenseSearch(
+    { ...sale, q: "eden oak crescent" },
+    "proptx",
+  );
+  assert.ok(crescent && crescent.total > 0);
+  for (const item of crescent.items) {
+    assert.match(item.addressLine, /\beden oak crescent\b/i);
   }
 
   const suggestions = await typesenseAutocomplete("eden oak trail", {

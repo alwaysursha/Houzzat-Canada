@@ -12,6 +12,8 @@ import { prisma } from "@/lib/prisma";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
 import { serviceAreaCityWhere } from "@/lib/listings/precise-property-search";
 import {
+  addressQueryKeepsAllTokens,
+  compareStreetHistory,
   filterAndRankListingsByQuery,
   listingQueryCandidateWhere,
 } from "@/lib/listings/search-match";
@@ -193,6 +195,17 @@ export function typesenseResultNeedsNeonFallback(
   return requestsOffMarketListings(params);
 }
 
+function orderStreetHistory(
+  params: ListingSearchParams,
+  result: ListingSearchResult,
+): ListingSearchResult {
+  if (!params.q?.trim() || !addressQueryKeepsAllTokens(params.q)) return result;
+  return {
+    ...result,
+    items: [...result.items].sort(compareStreetHistory),
+  };
+}
+
 export class DbListingProvider implements ListingProvider {
   constructor(readonly name: "mock" | "proptx") {}
 
@@ -271,7 +284,7 @@ export class DbListingProvider implements ListingProvider {
           items: sortCardsByAddedAtDesc(fromTypesense.items),
         };
       }
-      return fromTypesense;
+      return orderStreetHistory(params, fromTypesense);
     }
 
     // Map search needs a denser pin set; list pages stay lighter.
@@ -439,14 +452,14 @@ export class DbListingProvider implements ListingProvider {
       ? total > limit
       : rows.length > limit;
 
-    return {
+    return orderStreetHistory(params, {
       items,
       nextCursor: hasMore
         ? items[items.length - 1]?.mlsNumber ?? null
         : null,
       total,
       provider: this.name,
-    };
+    });
   }
 
   async getByMls(mlsNumber: string): Promise<ListingDetail | null> {

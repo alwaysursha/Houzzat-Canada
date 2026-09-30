@@ -8,7 +8,11 @@ import {
   formatListingAddressSearchLine,
   isOnMarketListingStatus,
 } from "@/lib/listings/constants";
-import { addressQueryKeepsAllTokens } from "@/lib/listings/search-match";
+import {
+  addressQueryKeepsAllTokens,
+  compareStreetHistory,
+  typesenseTextMatchSettings,
+} from "@/lib/listings/search-match";
 import type {
   AutocompleteOptions,
   AutocompleteSuggestion,
@@ -199,9 +203,9 @@ export async function typesenseAutocomplete(
         query_by_weights: "4,3,2,2,2,1",
         per_page: 28,
         prefix: true,
-        num_typos: 1,
-        typo_tokens_threshold: 3,
-        ...(addressQueryKeepsAllTokens(q) ? { drop_tokens_threshold: 0 } : {}),
+        ...(addressQueryKeepsAllTokens(q)
+          ? typesenseTextMatchSettings(q)
+          : { num_typos: 1, typo_tokens_threshold: 3 }),
         filter_by: filterBy,
         sort_by: "_text_match:desc,listedAt:desc",
         include_fields:
@@ -219,15 +223,30 @@ export async function typesenseAutocomplete(
     );
     const hydratedDocs = applyNeonListingStatuses(docs, neonByMls);
 
-    // Keep on-market (Active + Sold/Leased Conditional) ahead of off-market hits.
-    const ranked = [
-      ...hydratedDocs.filter((d) =>
-        isOnMarketListingStatus(d.status ?? "ACTIVE"),
-      ),
-      ...hydratedDocs.filter(
-        (d) => !isOnMarketListingStatus(d.status ?? "ACTIVE"),
-      ),
-    ];
+    // Current street inventory first, then newer history. A finished suffix
+    // must not push an exact match behind a typo hit or off the list.
+    const streetQuery = addressQueryKeepsAllTokens(q);
+    const byHistory = (left: TypesenseHit["document"], right: TypesenseHit["document"]) =>
+      compareStreetHistory(
+        {
+          status: left.status,
+          listedAt: left.listedAt ? new Date(left.listedAt * 1000) : null,
+        },
+        {
+          status: right.status,
+          listedAt: right.listedAt ? new Date(right.listedAt * 1000) : null,
+        },
+      );
+    const ranked = streetQuery
+      ? [...hydratedDocs].sort(byHistory)
+      : [
+          ...hydratedDocs.filter((d) =>
+            isOnMarketListingStatus(d.status ?? "ACTIVE"),
+          ),
+          ...hydratedDocs.filter(
+            (d) => !isOnMarketListingStatus(d.status ?? "ACTIVE"),
+          ),
+        ];
 
     const mlsHits: AutocompleteSuggestion[] = [];
     const listingHits: AutocompleteSuggestion[] = [];

@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { isOnMarketListingStatus } from "@/lib/listings/constants";
 
 /** Street / direction abbreviations ↔ full forms. */
 const TOKEN_ALIASES: Record<string, string[]> = {
@@ -112,6 +113,44 @@ export function addressQueryKeepsAllTokens(q: string): boolean {
   if (/^\d/.test(tokens[0] ?? "")) return true;
   if (tokens.some((token) => TOKEN_ALIASES[token])) return true;
   return tokens.every((token) => /^[a-z][a-z'-]{2,}$/i.test(token));
+}
+
+/**
+ * Street and civic queries must stay exact as the last word is completed.
+ * A common finished suffix such as "trail" is a one-typo candidate for
+ * thousands of other streets, and Typesense then drops or misses the
+ * exact match. Prefix search still completes "trai" → "trail".
+ */
+export function typesenseTextMatchSettings(q: string): {
+  num_typos: number;
+  drop_tokens_threshold?: number;
+  typo_tokens_threshold?: number;
+} {
+  if (q === "*" || !addressQueryKeepsAllTokens(q)) {
+    return { num_typos: q === "*" ? 0 : 1 };
+  }
+  return {
+    num_typos: 0,
+    drop_tokens_threshold: 0,
+    typo_tokens_threshold: 0,
+  };
+}
+
+function listedAtMillis(value: string | Date | null | undefined): number {
+  if (!value) return 0;
+  const time = value instanceof Date ? value.getTime() : Date.parse(value);
+  return Number.isFinite(time) ? time : 0;
+}
+
+/** Exact street page: current inventory, then newer history. */
+export function compareStreetHistory<
+  T extends { status?: string | null; listedAt?: string | Date | null },
+>(a: T, b: T): number {
+  const bucket = (status?: string | null) =>
+    isOnMarketListingStatus(status ?? "") ? 0 : 1;
+  const byStatus = bucket(a.status) - bucket(b.status);
+  if (byStatus !== 0) return byStatus;
+  return listedAtMillis(b.listedAt) - listedAtMillis(a.listedAt);
 }
 
 function fieldContainsAny(
