@@ -32,16 +32,34 @@ export function parseInitialStatuses(
   }
   const allowed = new Set<SearchStatusOption>(
     isLease
-      ? ["ACTIVE", "SOLD_CONDITIONAL", "LEASED", "UNLISTED"]
-      : ["ACTIVE", "SOLD_CONDITIONAL", "SOLD", "UNLISTED"],
+      ? [
+          "ACTIVE",
+          "SOLD_CONDITIONAL",
+          "LEASED",
+          "UNLISTED",
+          "TERMINATED",
+          "SUSPENDED",
+          "EXPIRED",
+        ]
+      : [
+          "ACTIVE",
+          "SOLD_CONDITIONAL",
+          "SOLD",
+          "UNLISTED",
+          "TERMINATED",
+          "SUSPENDED",
+          "EXPIRED",
+        ],
   );
   const parsed = statusParam
     .split(",")
     .map((s) => s.trim())
+    .map((s) => (s === "CANCELLED" ? "TERMINATED" : s))
     .filter((s): s is SearchStatusOption =>
       allowed.has(s as SearchStatusOption),
     );
-  return parsed.length ? parsed : ["ACTIVE"];
+  const unique = [...new Set(parsed)];
+  return unique.length ? unique : ["ACTIVE"];
 }
 
 export function statusesQueryValue(

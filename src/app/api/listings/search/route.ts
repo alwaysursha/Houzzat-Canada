@@ -74,6 +74,7 @@ export async function GET(request: Request) {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean)
+        .map((s) => (s === "CANCELLED" ? "TERMINATED" : s))
     : [];
   const validStatusToken = (
     s: string,

@@ -25,7 +25,15 @@ const DRAW_FILL = "houzzat-draw-fill";
 const DRAW_LINE = "houzzat-draw-line";
 const DRAW_POINTS = "houzzat-draw-points";
 
-type MapStatus = "ACTIVE" | "SOLD_CONDITIONAL" | "SOLD" | "LEASED" | "UNLISTED";
+type MapStatus =
+  | "ACTIVE"
+  | "SOLD_CONDITIONAL"
+  | "SOLD"
+  | "LEASED"
+  | "UNLISTED"
+  | "TERMINATED"
+  | "SUSPENDED"
+  | "EXPIRED";
 
 function pillToneFromListingStatus(
   listingStatus: string,

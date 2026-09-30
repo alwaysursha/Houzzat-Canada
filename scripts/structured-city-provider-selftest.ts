@@ -8,7 +8,13 @@ import {
   listingCityInServiceAreas,
   serviceAreaCityWhere,
 } from "../src/lib/listings/precise-property-search";
+import { parseListingSearchQueryParams } from "../src/lib/listings/parse-search-query-params";
 import { typesenseResultNeedsNeonFallback } from "../src/lib/listings/provider";
+import {
+  parseInitialStatuses,
+  statusesQueryValue,
+} from "../src/lib/listings/search-page-href";
+import { normalizeListingSearchStatuses } from "../src/lib/tenancy/listing-entitlement/search-authority-filters";
 
 assert.equal(typesenseResultNeedsNeonFallback({ q: "cambridge" }, 0), true);
 assert.equal(
@@ -34,6 +40,51 @@ assert.equal(
 assert.equal(typesenseResultNeedsNeonFallback({ city: "Cambridge" }, 8), false);
 assert.equal(typesenseResultNeedsNeonFallback({ q: "cambridge" }, 8), false);
 assert.equal(typesenseResultNeedsNeonFallback({}, 0), false);
+assert.equal(typesenseResultNeedsNeonFallback({ status: "ACTIVE" }, 0), false);
+assert.equal(typesenseResultNeedsNeonFallback({ status: "SOLD" }, 0), true);
+assert.equal(
+  typesenseResultNeedsNeonFallback({ status: "TERMINATED" }, 0),
+  true,
+);
+assert.equal(
+  typesenseResultNeedsNeonFallback({ statuses: ["CANCELLED"] }, 0),
+  true,
+);
+assert.equal(
+  typesenseResultNeedsNeonFallback({ status: "SOLD", cursor: "ts:2" }, 0),
+  false,
+);
+assert.equal(typesenseResultNeedsNeonFallback({ status: "SOLD" }, 4), false);
+assert.deepEqual(parseInitialStatuses("SOLD", false), ["SOLD"]);
+assert.deepEqual(parseInitialStatuses("ACTIVE", false), ["ACTIVE"]);
+assert.equal(statusesQueryValue(parseInitialStatuses("ACTIVE", false)), null);
+
+function searchedStatuses(status: string): string[] | null {
+  const pageStatuses = parseInitialStatuses(status, false);
+  const pageQuery = statusesQueryValue(pageStatuses);
+  const params = parseListingSearchQueryParams(
+    new URLSearchParams(pageQuery ? { status: pageQuery } : {}),
+  );
+  return normalizeListingSearchStatuses(params);
+}
+
+assert.deepEqual(searchedStatuses("TERMINATED"), ["TERMINATED"]);
+assert.deepEqual(searchedStatuses("CANCELLED"), ["TERMINATED"]);
+assert.deepEqual(searchedStatuses("SUSPENDED"), ["SUSPENDED"]);
+assert.deepEqual(searchedStatuses("EXPIRED"), ["EXPIRED"]);
+assert.deepEqual(searchedStatuses("UNLISTED"), [
+  "SUSPENDED",
+  "TERMINATED",
+  "EXPIRED",
+]);
+assert.deepEqual(searchedStatuses("SOLD"), ["SOLD"]);
+assert.deepEqual(searchedStatuses("ACTIVE"), ["ACTIVE", "SOLD_CONDITIONAL"]);
+assert.deepEqual(
+  normalizeListingSearchStatuses(
+    parseListingSearchQueryParams(new URLSearchParams({ status: "CANCELLED" })),
+  ),
+  ["TERMINATED"],
+);
 assert.equal(
   typesenseResultNeedsNeonFallback({ city: "  ", cities: ["", " "] }, 0),
   false,

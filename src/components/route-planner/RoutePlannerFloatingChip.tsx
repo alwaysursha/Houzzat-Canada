@@ -36,9 +36,9 @@ export function RoutePlannerFloatingChip({
         "fixed left-4 inline-flex items-center gap-2 rounded-md border border-canopy/30 bg-surface px-3 py-2 text-sm font-semibold text-canopy shadow-lg transition-[opacity,transform,background-color,border-color] duration-200 hover:border-canopy/55 hover:bg-mist sm:left-6",
         layer === "sheet" ? "z-[210]" : "z-[60]",
         layer === "sheet"
-          ? "bottom-[max(1.25rem,env(safe-area-inset-bottom))] sm:bottom-6"
+          ? "bottom-[calc(4.5rem+max(3rem,env(safe-area-inset-bottom,0px)))] md:bottom-6"
           : aboveListingBar
-            ? "bottom-[calc(var(--mobile-bottom-nav,0px)+4.75rem)] md:bottom-6"
+            ? "bottom-[calc(var(--mobile-bottom-nav,0px)+5.5rem)] md:bottom-6"
             : "bottom-[calc(var(--mobile-bottom-nav,0px)+1.25rem)] sm:bottom-6",
         visible
           ? "pointer-events-auto translate-y-0 opacity-100"

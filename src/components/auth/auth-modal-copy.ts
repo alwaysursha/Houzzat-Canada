@@ -23,8 +23,8 @@ export function authModalCopy(
   switch (intent) {
     case "VIEW_LISTING":
       return {
-        headline: "Continue exploring homes",
-        subhead: `${action} to keep browsing listings and unlock more tools for your home search.`,
+        headline: "Sign in to view this listing",
+        subhead: `${action} to see the restricted listing details available to registered users.`,
       };
     case "SAVE_LISTING":
       return {

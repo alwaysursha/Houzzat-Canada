@@ -26,6 +26,9 @@ function statusChipLabel(
         SOLD: "Sold",
         LEASED: "Leased",
         UNLISTED: "Unlisted",
+        TERMINATED: "Terminated",
+        SUSPENDED: "Suspended",
+        EXPIRED: "Expired",
       }
     : {
         ACTIVE: "For sale",
@@ -33,6 +36,9 @@ function statusChipLabel(
         SOLD: "Sold",
         LEASED: "Leased",
         UNLISTED: "Unlisted",
+        TERMINATED: "Terminated",
+        SUSPENDED: "Suspended",
+        EXPIRED: "Expired",
       };
   if (statuses.length === 1) {
     return options[statuses[0]!] ?? "Status";

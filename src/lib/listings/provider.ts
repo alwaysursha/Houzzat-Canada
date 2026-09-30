@@ -147,19 +147,48 @@ function structuredCityNames(params: Pick<ListingSearchParams, "city" | "cities"
 }
 
 /**
- * Typesense zero is a miss for free text, and for a first-page structured
- * city search. Other empty results stay authoritative. A later Typesense
- * page (`ts:`) is the end of that index, not a Neon page.
+ * Typesense zero is a miss for free text, a first-page structured city
+ * search, and an explicit off-market status. Other empty results stay
+ * authoritative. A later Typesense page (`ts:`) is the end of that index,
+ * except free text, which still checks Neon.
  */
+const OFF_MARKET_STATUS = new Set([
+  "SOLD",
+  "LEASED",
+  "TERMINATED",
+  "SUSPENDED",
+  "EXPIRED",
+  "UNLISTED",
+  "CANCELLED",
+]);
+
+function requestsOffMarketListings(
+  params: Pick<ListingSearchParams, "status" | "statuses">,
+): boolean {
+  const tokens =
+    params.statuses && params.statuses.length > 0
+      ? params.statuses
+      : params.status && params.status !== "ALL"
+        ? [params.status]
+        : [];
+  return tokens.some((status) => OFF_MARKET_STATUS.has(status));
+}
+
 export function typesenseResultNeedsNeonFallback(
-  params: Pick<ListingSearchParams, "q" | "city" | "cities" | "cursor">,
+  params: Pick<
+    ListingSearchParams,
+    "q" | "city" | "cities" | "cursor" | "status" | "statuses"
+  >,
   typesenseItemCount: number,
 ): boolean {
   if (typesenseItemCount !== 0) return false;
   if (params.q?.trim()) return true;
-  if (structuredCityNames(params).length === 0) return false;
+  // A later Typesense page is the end of that index, not a Neon page.
   if (params.cursor?.startsWith("ts:")) return false;
-  return true;
+  if (structuredCityNames(params).length > 0) return true;
+  // Sold, terminated, and cancelled searches are explicit. An empty
+  // Typesense page is a miss; Neon still applies entitlement and VOW rules.
+  return requestsOffMarketListings(params);
 }
 
 export class DbListingProvider implements ListingProvider {

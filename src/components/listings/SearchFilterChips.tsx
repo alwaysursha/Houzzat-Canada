@@ -17,7 +17,10 @@ export type SearchStatusOption =
   | "SOLD_CONDITIONAL"
   | "SOLD"
   | "LEASED"
-  | "UNLISTED";
+  | "UNLISTED"
+  | "TERMINATED"
+  | "SUSPENDED"
+  | "EXPIRED";
 
 export type SearchFilters = {
   segment: "RESIDENTIAL" | "COMMERCIAL" | "ALL";

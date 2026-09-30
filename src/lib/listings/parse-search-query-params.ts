@@ -51,6 +51,7 @@ export function parseListingSearchQueryParams(
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean)
+        .map((s) => (s === "CANCELLED" ? "TERMINATED" : s))
     : [];
   const tokens = statusParts.filter(validStatusToken);
   const useAll = tokens.length === 1 && tokens[0] === "ALL";

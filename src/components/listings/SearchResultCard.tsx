@@ -2,6 +2,8 @@
 
 import { Bath, Bed, Heart, Maximize2 } from "lucide-react";
 import { useSavedListingToggle } from "@/components/account/useSavedListingToggle";
+import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { ListingCardActions } from "@/components/listings/ListingCardActions";
 import { ListingLink } from "@/components/listings/ListingLink";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
@@ -18,6 +20,7 @@ import {
   propertyTypeLabel,
 } from "@/lib/listings/constants";
 import { formatListingSqftLabel } from "@/lib/listings/facts";
+import { syncViewListingGate } from "@/lib/auth/view-listing-intent";
 import { listingPath } from "@/lib/listings/listing-path";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +63,24 @@ export function SearchResultCard({
     mlsNumber: listing.mlsNumber,
     authCallbackUrl: path,
   });
+  const { openAuth } = useAuthModal();
+
+  function openListingSignIn() {
+    const callbackPath = `${window.location.pathname}${window.location.search}`;
+    syncViewListingGate({
+      blocked: true,
+      mlsNumber: listing.mlsNumber,
+      callbackPath,
+      host: window.location.hostname,
+      now: Date.now(),
+      store: browserCaptureIntentStore(),
+    });
+    openAuth({
+      mode: "sign-in",
+      intent: "VIEW_LISTING",
+      callbackUrl: callbackPath,
+    });
+  }
 
   return (
     <article
@@ -89,7 +110,6 @@ export function SearchResultCard({
           className={cn(
           "relative block h-full bg-mist",
           horizontal ? "min-h-[7rem]" : "aspect-[16/10] w-full",
-          lockedPreview && "blur-[3px] saturate-75",
         )}
         >
           {listing.primaryImageUrl ? (
@@ -132,22 +152,27 @@ export function SearchResultCard({
           className={cn(
             "block min-w-0",
             horizontal ? "px-2.5 pt-0.5" : "px-3 pt-2.5",
-            lockedPreview && "blur-[2px]",
           )}
         >
-          <p className="truncate text-lg font-semibold leading-none tracking-tight text-ink">
-            {showClosedPrice ? (
-              <SoldForPrice
-                soldPrice={listing.soldPrice}
-                listPrice={listing.listPrice}
-                status={listing.status}
-                transactionType={listing.transactionType}
-                size="sm"
-              />
-            ) : (
-              formatListPrice(listing.listPrice, listing.transactionType)
-            )}
-          </p>
+          {lockedPreview ? (
+            <p className="text-sm font-medium leading-snug text-ink/55">
+              Restricted listing
+            </p>
+          ) : (
+            <p className="truncate text-lg font-semibold leading-none tracking-tight text-ink">
+              {showClosedPrice ? (
+                <SoldForPrice
+                  soldPrice={listing.soldPrice}
+                  listPrice={listing.listPrice}
+                  status={listing.status}
+                  transactionType={listing.transactionType}
+                  size="sm"
+                />
+              ) : (
+                formatListPrice(listing.listPrice, listing.transactionType)
+              )}
+            </p>
+          )}
           <p className="mt-1.5 truncate text-sm font-medium text-ink">{street}</p>
           <p className="truncate text-xs text-ink/50">{cityLine}</p>
           <p className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-ink/70">
@@ -192,6 +217,17 @@ export function SearchResultCard({
             </p>
           ) : null}
         </ListingLink>
+        {lockedPreview ? (
+          <div className={cn(horizontal ? "px-2.5" : "px-3")}>
+            <button
+              type="button"
+              onClick={openListingSignIn}
+              className="mt-2 inline-flex h-8 items-center rounded-full bg-canopy px-3 text-xs font-semibold text-white transition hover:bg-canopy-deep"
+            >
+              Sign in required
+            </button>
+          </div>
+        ) : null}
         <div className={cn("mt-auto", horizontal ? "px-1.5 pb-1" : "px-1.5 pb-1.5")}>
           <ListingCardActions
             mlsNumber={listing.mlsNumber}
