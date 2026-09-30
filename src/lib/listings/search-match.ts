@@ -87,6 +87,33 @@ function streetNumberMatches(addressLine: string, numberToken: string): boolean 
   return includesWholeToken(addr, n);
 }
 
+/**
+ * Street-suffix aliases are whole words ("trail"), never 1–2 letter
+ * substrings ("tr") that match unrelated text such as "Centre".
+ */
+function sqlMatchVariants(token: string): string[] {
+  return [
+    ...new Set(tokenVariants(token).filter((variant) => variant.length >= 3)),
+  ];
+}
+
+/**
+ * Civic numbers and multi-word street phrases must keep every token.
+ * Typesense otherwise drops words when the strict query has few hits.
+ */
+export function addressQueryKeepsAllTokens(q: string): boolean {
+  const tokens = q
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.replace(/[.,]/g, ""))
+    .filter(Boolean);
+  if (tokens.length < 2) return false;
+  if (/^\d/.test(tokens[0] ?? "")) return true;
+  if (tokens.some((token) => TOKEN_ALIASES[token])) return true;
+  return tokens.every((token) => /^[a-z][a-z'-]{2,}$/i.test(token));
+}
+
 function fieldContainsAny(
   variants: string[],
 ): Prisma.ListingWhereInput[] {
@@ -140,7 +167,7 @@ export function listingQueryCandidateWhere(
         ],
       };
     }
-    return { OR: fieldContainsAny(tokenVariants(t)) };
+    return { OR: fieldContainsAny(sqlMatchVariants(t)) };
   }
 
   const numberToken = tokens.find((t) => /^\d+[a-z]?$/i.test(t));
@@ -169,7 +196,7 @@ export function listingQueryCandidateWhere(
     const variants =
       strong.length >= 2 && !TOKEN_ALIASES[strong]
         ? [strong, ...(strong.length >= 6 ? [strong.slice(0, -1)] : [])]
-        : tokenVariants(strong);
+        : sqlMatchVariants(strong);
     and.push({ OR: fieldContainsAny(variants) });
   }
 
@@ -178,7 +205,7 @@ export function listingQueryCandidateWhere(
     if (token === strong) continue;
     if (token.length > 2) continue;
     if (!TOKEN_ALIASES[token]) continue;
-    and.push({ OR: fieldContainsAny(tokenVariants(token)) });
+    and.push({ OR: fieldContainsAny(sqlMatchVariants(token)) });
   }
 
   return and.length > 0 ? { AND: and } : {};

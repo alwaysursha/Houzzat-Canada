@@ -16,7 +16,7 @@ import {
 } from "../src/lib/listings/search-page-href";
 import { normalizeListingSearchStatuses } from "../src/lib/tenancy/listing-entitlement/search-authority-filters";
 
-assert.equal(typesenseResultNeedsNeonFallback({ q: "cambridge" }, 0), true);
+assert.equal(typesenseResultNeedsNeonFallback({ q: "cambridge" }, 0), false);
 assert.equal(
   typesenseResultNeedsNeonFallback({ cities: ["Cambridge"] }, 0),
   true,

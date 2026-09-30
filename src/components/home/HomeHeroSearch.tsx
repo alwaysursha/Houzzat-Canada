@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   parseSearchQuery,
   searchHrefFromParsed,
+  shouldUseExplicitPlace,
 } from "@/lib/listings/parse-search-query";
 import { pushHref } from "@/lib/listings/navigate-listing";
 import { pushLocalRecentSearch } from "@/lib/listings/recent-searches-local";
@@ -33,6 +34,7 @@ export function HomeHeroSearch({
   const [mode, setMode] = useState<Mode>("buy");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AutocompleteSuggestion | null>(null);
+  const explicitPlaceRef = useRef(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const onAgent = surface === "agent";
@@ -72,10 +74,12 @@ export function HomeHeroSearch({
         ? `${suggestion.label}, ${suggestion.city}, ${suggestion.province}`
         : suggestion.label,
     );
-    // Soft-select a Google address — wait for Search or an around-option click.
+    // Customer picked a place. Search may use that place instead of raw text.
     if (suggestion.type === "place" && !suggestion.action) {
+      explicitPlaceRef.current = true;
       return;
     }
+    explicitPlaceRef.current = false;
     if (suggestion.action === "near_me" && suggestion.href) {
       goHref(suggestion.href, "Near me");
       return;
@@ -118,23 +122,28 @@ export function HomeHeroSearch({
       router.push(`/search?transactionType=${txn()}`);
       return;
     }
-    if (selected?.mlsNumber && !rawQuery) {
-      goHref(
-        selected.href ?? `/listing/${selected.mlsNumber}`,
-        selected.label,
-      );
-      return;
-    }
-    if (selected?.href && !rawQuery) {
-      goHref(selected.href, selected.label);
-      return;
-    }
-    if (selected?.lat != null && selected?.lng != null && !rawQuery) {
-      goHref(
-        `/search?${searchParamsForMode(selected).toString()}`,
-        selected.label,
-      );
-      return;
+    if (
+      selected &&
+      shouldUseExplicitPlace(explicitPlaceRef.current)
+    ) {
+      if (selected.mlsNumber) {
+        goHref(
+          selected.href ?? `/listing/${selected.mlsNumber}`,
+          selected.label,
+        );
+        return;
+      }
+      if (selected.href) {
+        goHref(selected.href, selected.label);
+        return;
+      }
+      if (selected.lat != null && selected.lng != null) {
+        goHref(
+          `/search?${searchParamsForMode(selected).toString()}`,
+          selected.label,
+        );
+        return;
+      }
     }
 
     const parsed = parseSearchQuery(q);
@@ -321,13 +330,16 @@ export function HomeHeroSearch({
               }
               inputClassName="h-9 rounded-md border-0 bg-transparent text-sm shadow-none focus-visible:ring-0 sm:h-11 sm:text-[15px]"
               onQueryChange={(value) => {
+                explicitPlaceRef.current = false;
                 setQuery(value);
                 setSelected(null);
               }}
               onPlaceSelect={isInventory ? onSearchPlace : onSellPlace}
               onPlaceResolved={
                 isInventory
-                  ? (place) => {
+                  ? (place, source) => {
+                      if (source !== "selected") return;
+                      explicitPlaceRef.current = true;
                       setSelected(place);
                     }
                   : undefined

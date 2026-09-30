@@ -22,6 +22,17 @@ function validStatusToken(
   );
 }
 
+/**
+ * No text: browse on-market inventory.
+ * Text with no explicit status: search every authorized status.
+ * Transaction type is chosen separately.
+ */
+export function unspecifiedSearchStatus(
+  q: string | null | undefined,
+): "ACTIVE" | "ALL" {
+  return q?.trim() ? "ALL" : "ACTIVE";
+}
+
 /** Parse listing search params from URL searchParams (web + mobile v2). */
 export function parseListingSearchQueryParams(
   searchParams: URLSearchParams,
@@ -64,7 +75,11 @@ export function parseListingSearchQueryParams(
 
   const body: ListingSearchParams = {
     q: searchParams.get("q") ?? undefined,
-    status: useAll ? ("ALL" as const) : statuses ? undefined : ("ACTIVE" as const),
+    status: useAll
+      ? ("ALL" as const)
+      : statuses
+        ? undefined
+        : unspecifiedSearchStatus(searchParams.get("q")),
     statuses,
     segment: (segmentParam as ListingSegment | "ALL" | null) ?? undefined,
     transactionType:

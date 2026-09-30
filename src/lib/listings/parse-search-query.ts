@@ -192,6 +192,14 @@ export function parseSearchQuery(input: string): ParsedSearchQuery {
   return result;
 }
 
+/**
+ * A Photon place replaces the typed query only after the customer picks it.
+ * An automatic address resolution does not.
+ */
+export function shouldUseExplicitPlace(explicitPlace: boolean): boolean {
+  return explicitPlace;
+}
+
 /** Build `/search?...` (or a staff base path) from a parsed phrase + defaults. */
 export function searchHrefFromParsed(
   parsed: ParsedSearchQuery,

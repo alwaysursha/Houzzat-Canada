@@ -6,6 +6,7 @@ import type {
   PropertyType,
 } from "@prisma/client";
 import { auth } from "@/lib/auth";
+import { unspecifiedSearchStatus } from "@/lib/listings/parse-search-query-params";
 import { getListingProvider } from "@/lib/listings/provider";
 import type { ListingSearchResult } from "@/lib/listings/types";
 import { prisma } from "@/lib/prisma";
@@ -98,7 +99,11 @@ export async function GET(request: Request) {
   const q = searchParams.get("q") ?? undefined;
   const searchParamsBody = {
     q,
-    status: useAll ? ("ALL" as const) : statuses ? undefined : ("ACTIVE" as const),
+    status: useAll
+      ? ("ALL" as const)
+      : statuses
+        ? undefined
+        : unspecifiedSearchStatus(q),
     statuses,
     segment: (segmentParam as ListingSegment | "ALL" | null) ?? undefined,
     transactionType:

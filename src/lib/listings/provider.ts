@@ -147,10 +147,10 @@ function structuredCityNames(params: Pick<ListingSearchParams, "city" | "cities"
 }
 
 /**
- * Typesense zero is a miss for free text, a first-page structured city
- * search, and an explicit off-market status. Other empty results stay
- * authoritative. A later Typesense page (`ts:`) is the end of that index,
- * except free text, which still checks Neon.
+ * A Typesense text result, including a deliberate zero, is the answer.
+ * Neon still covers a first-page structured city miss and an explicit
+ * off-market status miss. A later Typesense page (`ts:`) is the end of
+ * that index.
  */
 const OFF_MARKET_STATUS = new Set([
   "SOLD",
@@ -182,10 +182,12 @@ export function typesenseResultNeedsNeonFallback(
   typesenseItemCount: number,
 ): boolean {
   if (typesenseItemCount !== 0) return false;
-  if (params.q?.trim()) return true;
   // A later Typesense page is the end of that index, not a Neon page.
   if (params.cursor?.startsWith("ts:")) return false;
   if (structuredCityNames(params).length > 0) return true;
+  // Text queries stay on the Typesense result, including zero. The Neon
+  // substring matcher is not a substitute for that result.
+  if (params.q?.trim()) return false;
   // Sold, terminated, and cancelled searches are explicit. An empty
   // Typesense page is a miss; Neon still applies entitlement and VOW rules.
   return requestsOffMarketListings(params);
@@ -253,13 +255,17 @@ export class DbListingProvider implements ListingProvider {
 
   async search(params: ListingSearchParams): Promise<ListingSearchResult> {
     const fromTypesense = await typesenseSearch(params, this.name);
-    // Text miss, or a structured city miss, continues to Neon.
-    // A non-empty Typesense page stays the result.
+    // Structured city and explicit off-market misses continue to Neon.
+    // A text result, including zero, stays the result.
     if (
       fromTypesense &&
       !typesenseResultNeedsNeonFallback(params, fromTypesense.items.length)
     ) {
-      if (params.sort === "newest" && params.status !== "SOLD") {
+      if (
+        params.sort === "newest" &&
+        params.status !== "SOLD" &&
+        !params.q?.trim()
+      ) {
         return {
           ...fromTypesense,
           items: sortCardsByAddedAtDesc(fromTypesense.items),
@@ -522,15 +528,14 @@ export class DbListingProvider implements ListingProvider {
     const inventory = this.inventorySourceFilter(undefined, {
       entitlement: options?.entitlement,
       entitlementFilteringEnabled: options?.entitlementFilteringEnabled,
-      // Autocomplete listing inventory is on-market oriented.
-      status: "ACTIVE",
+      // Typed lookup may discover any authorized status. Empty browse stays
+      // on-market in emptyAutocomplete.
+      status: "ALL",
     });
     const publishedWhere: Prisma.ListingWhereInput = {
       AND: [
         inventory,
         ...(txn ? [{ transactionType: txn }] : []),
-        // When enforce ON, ACTIVE is already in inventory MLS/FSBO branches.
-        ...(enforce ? [] : [{ status: "ACTIVE" as const }]),
       ],
     };
     const publicWhere: Prisma.ListingWhereInput = enforce

@@ -178,7 +178,10 @@ export function AddressAutocomplete({
    * Soft-select when Google resolves an address (lat/lng ready) without navigating.
    * Used so the parent Search button can run a near-map search.
    */
-  onPlaceResolved?: (suggestion: AutocompleteSuggestion) => void;
+  onPlaceResolved?: (
+    suggestion: AutocompleteSuggestion,
+    source?: "auto" | "selected",
+  ) => void;
   onQueryChange?: (query: string) => void;
   /** When true, selecting a hint fills the field without navigating. */
   fillOnly?: boolean;
@@ -561,7 +564,7 @@ export function AddressAutocomplete({
                 around = suggestionsAroundPlace(resolved, transactionType);
                 nearHref = nearAddressHref(resolved, transactionType);
                 nearLabel = resolved.label || null;
-                onPlaceResolvedRef.current?.(resolved);
+                onPlaceResolvedRef.current?.(resolved, "auto");
               }
             }
           } catch {
@@ -836,7 +839,7 @@ export function AddressAutocomplete({
         lastEmittedQueryRef.current = filled;
         setQuery(filled);
         onQueryChange?.(filled);
-        onPlaceResolvedRef.current?.(addressRow);
+        onPlaceResolvedRef.current?.(addressRow, "selected");
         setResolvedNearHref(nearAddressHref(resolved, transactionType));
         setResolvedNearLabel(resolved.label || null);
         setSuggestions([addressRow, ...around]);

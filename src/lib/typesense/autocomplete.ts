@@ -8,6 +8,7 @@ import {
   formatListingAddressSearchLine,
   isOnMarketListingStatus,
 } from "@/lib/listings/constants";
+import { addressQueryKeepsAllTokens } from "@/lib/listings/search-match";
 import type {
   AutocompleteOptions,
   AutocompleteSuggestion,
@@ -17,7 +18,9 @@ import {
   buildTypesenseListingAuthorityFilter,
   composeTypesenseFilterWithAuthority,
   isListingEntitlementEnforcementEnabled,
+  type TypesenseAuthorityFilterResult,
 } from "@/lib/tenancy/listing-entitlement";
+import type { WorkspaceListingEntitlement } from "@/lib/tenancy/listing-entitlement/types";
 import {
   getTypesenseCollectionName,
   getTypesenseSearchClient,
@@ -58,6 +61,25 @@ type TypesenseFacetCount = {
   counts?: Array<{ value: string; count: number }>;
   field_name?: string;
 };
+
+/** Text discovery may show any authorized status. Transaction stays a separate filter. */
+function discoveryAuthorityFilter(
+  entitlement: WorkspaceListingEntitlement,
+): TypesenseAuthorityFilterResult {
+  const active = buildTypesenseListingAuthorityFilter(
+    entitlement,
+    "ACTIVE_LISTINGS",
+  );
+  const sold = buildTypesenseListingAuthorityFilter(entitlement, "SOLD");
+  if (active.kind === "empty" && sold.kind === "empty") return { kind: "empty" };
+  if (active.kind === "empty") return sold;
+  if (sold.kind === "empty") return active;
+  if (active.filterBy === sold.filterBy) return active;
+  return {
+    kind: "filter",
+    filterBy: `(${active.filterBy} || ${sold.filterBy})`,
+  };
+}
 
 function searchParamsBase(txn?: ListingTransactionType) {
   const params = new URLSearchParams();
@@ -154,9 +176,8 @@ export async function typesenseAutocomplete(
     );
     let filterBy = baseFilter;
     if (enforce) {
-      const authority = buildTypesenseListingAuthorityFilter(
+      const authority = discoveryAuthorityFilter(
         options?.entitlement ?? { workspaceId: "", authorities: [] },
-        "ACTIVE_LISTINGS",
       );
       const composed = composeTypesenseFilterWithAuthority(
         baseFilter,
@@ -180,6 +201,7 @@ export async function typesenseAutocomplete(
         prefix: true,
         num_typos: 1,
         typo_tokens_threshold: 3,
+        ...(addressQueryKeepsAllTokens(q) ? { drop_tokens_threshold: 0 } : {}),
         filter_by: filterBy,
         sort_by: "_text_match:desc,listedAt:desc",
         include_fields:

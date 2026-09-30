@@ -14,6 +14,7 @@ import type {
   ListingSearchParams,
   ListingSearchResult,
 } from "@/lib/listings/types";
+import { addressQueryKeepsAllTokens } from "@/lib/listings/search-match";
 import {
   buildTypesenseCapabilityScopedStatusFilter,
   buildTypesenseListingAuthorityFilter,
@@ -321,7 +322,8 @@ export async function typesenseSearch(
     const rankByAddedAt =
       params.sort === "newest" &&
       !isSoldNewestSort(params) &&
-      !params.cursor;
+      !params.cursor &&
+      !params.q?.trim();
     const perPage = rankByAddedAt
       ? Math.min(Math.max(limit * 3, 36), 120)
       : limit;
@@ -340,6 +342,7 @@ export async function typesenseSearch(
         page,
         prefix: true,
         num_typos: q === "*" ? 0 : 1,
+        ...(addressQueryKeepsAllTokens(q) ? { drop_tokens_threshold: 0 } : {}),
         exhaustive_search: false,
       });
 
@@ -357,7 +360,7 @@ export async function typesenseSearch(
         .slice(0, limit);
     }
 
-    if (rankByAddedAt && isTypesenseNewestStale(items)) {
+    if (rankByAddedAt && !params.q?.trim() && isTypesenseNewestStale(items)) {
       console.warn(
         "[typesense/search] newest listedAt is stale; falling back to Neon",
       );
