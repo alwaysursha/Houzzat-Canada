@@ -14,11 +14,17 @@ export const LEGACY_HOUZZAT_COLORS = {
   ink: "#14201C",
 } as const;
 
+/**
+ * Official Houzzat app icon. Metadata and structured data use this path.
+ * The visible site header stays a text wordmark.
+ */
+export const HOUZZAT_OFFICIAL_LOGO_PATH = "/images/houzzat-app-icon-512.png";
+
 /** Static assets used on production Houzzat site today. */
 export const LEGACY_HOUZZAT_ASSETS = {
-  logoUrl: "/images/houzzat-house-mark.png",
-  faviconUrl: "/images/houzzat-favicon.png",
-  ogImageUrl: "/icon.png",
+  logoUrl: HOUZZAT_OFFICIAL_LOGO_PATH,
+  faviconUrl: HOUZZAT_OFFICIAL_LOGO_PATH,
+  ogImageUrl: HOUZZAT_OFFICIAL_LOGO_PATH,
   brokerageLogoUrl: "/images/royal-lepage-logo.png",
 } as const;
 

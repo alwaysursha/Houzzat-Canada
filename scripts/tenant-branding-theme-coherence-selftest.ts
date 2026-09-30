@@ -135,7 +135,8 @@ function testNoHouzzatLogoFallbackOnTenant() {
   const footer = read("src/components/site/SiteFooter.tsx");
   assert.ok(!footer.includes("houzzat-house-mark"));
   const seo = read("src/lib/tenancy/tenant-seo.ts");
-  assert.ok(seo.includes("isHouzzatWorkspace ? \"/icon.png\""));
+  assert.ok(seo.includes("HOUZZAT_OFFICIAL_LOGO_PATH"));
+  assert.ok(!seo.includes("houzzat-house-mark"));
 }
 
 function testListingSheetUsesTenantName() {

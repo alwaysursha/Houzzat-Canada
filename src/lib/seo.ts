@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/constants";
+import { HOUZZAT_OFFICIAL_LOGO_PATH } from "@/lib/tenancy/legacy-houzzat-brand";
 
 /** Absolute public URL for a site path. */
 export function absoluteUrl(path = "/"): string {
@@ -10,7 +11,7 @@ export function absoluteUrl(path = "/"): string {
 }
 
 export const DEFAULT_OG_IMAGE = {
-  url: absoluteUrl("/icon.png"),
+  url: absoluteUrl(HOUZZAT_OFFICIAL_LOGO_PATH),
   width: 512,
   height: 512,
   alt: `${SITE_NAME} — GTA homes for sale`,
@@ -104,8 +105,8 @@ export function organizationJsonLd(input?: {
     "@id": `${absoluteUrl("/")}#organization`,
     name: SITE_NAME,
     url: absoluteUrl("/"),
-    logo: absoluteUrl("/icon.png"),
-    image: absoluteUrl("/icon.png"),
+    logo: absoluteUrl(HOUZZAT_OFFICIAL_LOGO_PATH),
+    image: absoluteUrl(HOUZZAT_OFFICIAL_LOGO_PATH),
     description: SITE_DESCRIPTION,
     areaServed: [
       {

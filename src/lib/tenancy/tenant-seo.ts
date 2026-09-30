@@ -6,17 +6,30 @@ import type { MarketingPresentationBrand } from "@/lib/tenancy/marketing-present
 import type { RequestTenancySuccess } from "@/lib/tenancy/resolve-request-tenancy";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 import { toMarketingPresentationBrand } from "@/lib/tenancy/marketing-presentation-brand";
+import { HOUZZAT_OFFICIAL_LOGO_PATH } from "@/lib/tenancy/legacy-houzzat-brand";
 import { resolveTenantFaviconMetadata } from "@/lib/tenancy/tenant-favicon";
 
 function metadataBase(origin: string): URL {
   return new URL(origin.endsWith("/") ? origin : `${origin}/`);
 }
 
+function marketingIcons(
+  brand: MarketingPresentationBrand,
+  canonicalOrigin: string,
+) {
+  if (brand.isHouzzatWorkspace) {
+    return resolveTenantFaviconMetadata(
+      { ...brand, faviconUrl: HOUZZAT_OFFICIAL_LOGO_PATH },
+      canonicalOrigin,
+    );
+  }
+  return resolveTenantFaviconMetadata(brand, canonicalOrigin);
+}
+
 function defaultOgImage(brand: MarketingPresentationBrand) {
-  const imagePath =
-    brand.ogImageUrl ??
-    brand.logoUrl ??
-    (brand.isHouzzatWorkspace ? "/icon.png" : null);
+  const imagePath = brand.isHouzzatWorkspace
+    ? HOUZZAT_OFFICIAL_LOGO_PATH
+    : brand.ogImageUrl ?? brand.logoUrl ?? null;
   if (!imagePath) {
     return null;
   }
@@ -53,7 +66,7 @@ export function buildMarketingRootMetadata(
     description: brand.seoDescription,
     applicationName: brand.displayName,
     alternates: { canonical: homeUrl },
-    icons: resolveTenantFaviconMetadata(brand, canonicalOrigin),
+    icons: marketingIcons(brand, canonicalOrigin),
     openGraph: {
       type: "website",
       locale: "en_CA",
@@ -103,7 +116,7 @@ export function buildTenantPublicPageMetadata(input: {
     title: input.title,
     description: input.description,
     alternates: url ? { canonical: url } : undefined,
-    icons: resolveTenantFaviconMetadata(brand, input.canonicalOrigin),
+    icons: marketingIcons(brand, input.canonicalOrigin),
     openGraph: {
       title: input.title,
       description: input.description,
@@ -131,10 +144,9 @@ export function organizationJsonLdForTenancy(
   const presentation = toMarketingPresentationBrand(tenancy, canonicalOrigin);
   const origin = canonicalOrigin;
   const home = absoluteUrlForOrigin(origin, "/") ?? origin;
-  const logoPath =
-    brand.logoUrl ??
-    brand.ogImageUrl ??
-    (presentation.isHouzzatWorkspace ? "/icon.png" : null);
+  const logoPath = presentation.isHouzzatWorkspace
+    ? HOUZZAT_OFFICIAL_LOGO_PATH
+    : brand.logoUrl ?? brand.ogImageUrl ?? null;
   const logo = logoPath
     ? logoPath.startsWith("http")
       ? logoPath

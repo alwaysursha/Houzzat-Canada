@@ -6,7 +6,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildMarketingRootMetadata } from "../src/lib/tenancy/tenant-seo";
+import {
+  buildMarketingRootMetadata,
+  organizationJsonLdForTenancy,
+} from "../src/lib/tenancy/tenant-seo";
 import { buildLegacyHouzzatBrand } from "../src/lib/tenancy/legacy-houzzat-brand";
 import { workspaceBrandingRowToBrand } from "../src/lib/tenancy/resolve-workspace-brand";
 import { toMarketingPresentationBrand } from "../src/lib/tenancy/marketing-presentation-brand";
@@ -114,13 +117,53 @@ function testTenantBMetadataUsesGeneratedApi() {
 }
 
 function testHouzzatExplicitFaviconPreserved() {
-  const meta = buildMarketingRootMetadata(
-    houzzatTenancy(),
-    "https://houzzat.com",
-  );
+  const tenancy = houzzatTenancy();
+  const meta = buildMarketingRootMetadata(tenancy, "https://houzzat.com");
   const url = iconUrl(meta);
-  assert.ok(url.includes("/images/houzzat-favicon.png"));
+  const official = "https://houzzat.com/images/houzzat-app-icon-512.png";
+  assert.equal(url, official);
+  const icons = meta.icons;
+  assert.ok(icons && !Array.isArray(icons) && typeof icons !== "string");
+  if (!icons || Array.isArray(icons) || typeof icons === "string") return;
+  assert.equal(icons.apple, official);
+  assert.equal(icons.shortcut, official);
+  const og = meta.openGraph?.images;
+  const ogUrl = Array.isArray(og) ? og[0] : og;
+  assert.equal(typeof ogUrl === "string" ? ogUrl : ogUrl?.url, official);
+  const twitter = meta.twitter?.images;
+  const twitterUrl = Array.isArray(twitter) ? twitter[0] : twitter;
+  assert.equal(
+    typeof twitterUrl === "string" ? twitterUrl : twitterUrl?.url,
+    official,
+  );
+  const jsonLd = organizationJsonLdForTenancy(tenancy, "https://houzzat.com");
+  assert.equal(jsonLd.logo, official);
+  assert.equal(jsonLd.image, official);
   assert.ok(!url.includes("/api/tenancy/favicon"));
+
+  const tenant = buildMarketingRootMetadata(
+    tenantBTenancy(),
+    "https://tenant-canary.houzzatpro.com",
+  );
+  assert.ok(!iconUrl(tenant).includes("houzzat-app-icon-512"));
+  const tenantLd = organizationJsonLdForTenancy(
+    tenantBTenancy(),
+    "https://tenant-canary.houzzatpro.com",
+  );
+  assert.equal(tenantLd.logo, undefined);
+
+  const stale = houzzatTenancy();
+  stale.brand = {
+    ...stale.brand,
+    logoUrl: "/images/houzzat-house-mark.png",
+    faviconUrl: "/images/houzzat-favicon.png",
+    ogImageUrl: "/icon.png",
+  };
+  const staleMeta = buildMarketingRootMetadata(stale, "https://houzzat.com");
+  assert.equal(iconUrl(staleMeta), official);
+  const staleLd = organizationJsonLdForTenancy(stale, "https://houzzat.com");
+  assert.equal(staleLd.logo, official);
+  assert.equal(staleLd.image, official);
 }
 
 function testCustomFaviconWinsOverGenerated() {
