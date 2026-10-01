@@ -549,8 +549,8 @@ export function ListingDetailView({
 
       <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-start lg:gap-x-10 lg:gap-y-8">
           <div className="flex flex-col gap-5 border-0 bg-transparent px-0 py-1 lg:col-span-2">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0 w-full md:flex-1">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between xl:grid xl:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="min-w-0 w-full md:flex-1 xl:col-start-1 xl:row-start-1">
               <div className="flex w-full min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-1 md:block">
                 <div className="flex shrink-0 items-baseline gap-1.5 md:gap-4">
                 <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -618,8 +618,6 @@ export function ListingDetailView({
                   {timingLabel}
                 </p>
               </div>
-              <div className="xl:flex xl:items-center xl:justify-between xl:gap-x-10">
-                <div className="min-w-0">
               <div className="mt-2 font-sans leading-snug text-ink">
                 {detailsLocked ? (
                     <h1 className="select-none text-xl font-semibold blur-[5px]">
@@ -679,25 +677,25 @@ export function ListingDetailView({
                   </span>
                 </p>
               )}
-                </div>
-                <div className="hidden shrink-0 xl:block">
-                  <SummaryPropertyFacts
-                    segment={listing.segment}
-                    bedsLabel={bedsPlusLabel}
-                    beds={listing.beds}
-                    baths={listing.baths}
-                    livingAreaRange={listingFacts?.livingAreaRange}
-                    parkingSpaces={listing.parkingSpaces}
-                    locked={detailsLocked}
-                  />
-                </div>
-              </div>
             </div>
 
-            <div className="hidden w-full min-w-0 flex-col gap-3 md:flex lg:w-auto lg:shrink-0 lg:items-end">
+            <div className="hidden w-full min-w-0 flex-col gap-3 md:flex lg:w-auto lg:shrink-0 lg:items-end xl:col-start-2 xl:row-start-1">
               <p className="hidden text-right text-base font-semibold leading-snug text-ink/75 md:block">
                 {timingLabel}
               </p>
+            </div>
+            <div className="pointer-events-none hidden xl:col-span-2 xl:row-start-1 xl:flex xl:w-full xl:items-end xl:justify-end xl:self-end">
+              <div className="pointer-events-auto">
+                <SummaryPropertyFacts
+                  segment={listing.segment}
+                  bedsLabel={bedsPlusLabel}
+                  beds={listing.beds}
+                  baths={listing.baths}
+                  livingAreaRange={listingFacts?.livingAreaRange}
+                  parkingSpaces={listing.parkingSpaces}
+                  locked={detailsLocked}
+                />
+              </div>
             </div>
             </div>
             <div className="xl:hidden md:flex md:justify-end">
