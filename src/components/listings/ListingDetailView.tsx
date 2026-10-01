@@ -207,12 +207,12 @@ function SummaryPropertyFacts({
   return (
     <div
       aria-label="Property facts"
-      className={`flex w-full items-start justify-between px-3 md:w-auto md:flex-nowrap md:items-center md:justify-end md:gap-x-6 md:px-0 ${locked ? "select-none blur-[5px]" : ""}`}
+      className={`flex w-full items-start justify-between px-3 md:w-auto md:flex-nowrap md:items-center md:justify-end md:gap-x-6 md:px-0 xl:gap-x-8 ${locked ? "select-none blur-[5px]" : ""}`}
     >
       {facts.map((fact) => (
         <div
           key={fact.key}
-          className="flex flex-col items-center gap-1.5 text-center md:w-auto md:shrink-0 md:flex-row md:flex-nowrap md:items-center md:gap-2.5 md:text-left"
+          className="flex flex-col items-center gap-1.5 text-center md:w-auto md:shrink-0 md:flex-row md:flex-nowrap md:items-center md:gap-2.5 md:text-left xl:flex-col xl:items-center xl:gap-1.5 xl:text-center"
         >
           <SummaryFactIcon kind={fact.icon} />
           <span className="whitespace-nowrap text-[15px] font-semibold leading-none tracking-tight text-ink md:hidden">
@@ -549,7 +549,7 @@ export function ListingDetailView({
 
       <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-start lg:gap-x-10 lg:gap-y-8">
           <div className="flex flex-col gap-5 border-0 bg-transparent px-0 py-1 lg:col-span-2">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between xl:grid xl:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between xl:grid xl:grid-cols-[minmax(0,1fr)_auto] xl:items-stretch">
             <div className="min-w-0 w-full md:flex-1 xl:col-start-1 xl:row-start-1">
               <div className="flex w-full min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-1 md:block">
                 <div className="flex shrink-0 items-baseline gap-1.5 md:gap-4">
@@ -669,9 +669,9 @@ export function ListingDetailView({
                   {gateDetails.title}
                 </p>
               ) : (
-                <p className="mt-1.5 text-[17px] font-semibold leading-snug text-ink md:text-sm md:font-normal md:text-ink/50">
+                <p className="mt-1.5 text-[17px] font-semibold leading-snug text-ink md:text-sm md:font-normal md:text-ink/50 xl:text-base xl:font-semibold xl:text-ink">
                   {propertyTypeLabel(listing.propertyType)}
-                  <span className="hidden md:inline">
+                  <span className="hidden md:inline xl:hidden">
                     {" · "}
                     MLS® {listing.mlsNumber}
                   </span>
@@ -679,13 +679,16 @@ export function ListingDetailView({
               )}
             </div>
 
-            <div className="hidden w-full min-w-0 flex-col gap-3 md:flex lg:w-auto lg:shrink-0 lg:items-end xl:col-start-2 xl:row-start-1">
+            <div className="hidden w-full min-w-0 flex-col gap-3 md:flex lg:w-auto lg:shrink-0 lg:items-end xl:col-start-2 xl:row-start-1 xl:h-full xl:gap-0">
               <p className="hidden text-right text-base font-semibold leading-snug text-ink/75 md:block">
                 {timingLabel}
               </p>
-            </div>
-            <div className="pointer-events-none hidden xl:col-span-2 xl:row-start-1 xl:flex xl:w-full xl:items-end xl:justify-end xl:self-end">
-              <div className="pointer-events-auto">
+              {detailsLocked ? null : (
+                <p className="mt-8 hidden text-right text-base font-medium leading-none text-ink/75 xl:block">
+                  MLS® {listing.mlsNumber}
+                </p>
+              )}
+              <div className="mb-6 mt-auto hidden xl:block">
                 <SummaryPropertyFacts
                   segment={listing.segment}
                   bedsLabel={bedsPlusLabel}
