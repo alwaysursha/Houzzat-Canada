@@ -33,15 +33,17 @@ assert.equal(chrome.includes("Search · Share · Save"), false);
 
 assert.ok(gallery.includes("hidden md:block"));
 assert.ok(gallery.includes("md:grid-cols-4 md:grid-rows-2"));
-assert.ok(gallery.includes("aspect-[4/3]"));
+assert.ok(gallery.includes("min-h-[52vh] w-full min-w-full"));
+assert.ok(gallery.includes("ListingGalleryMapSlide"));
 assert.ok(gallery.includes("object-cover"));
-assert.ok(gallery.includes("openViewerAt(0)"));
 assert.ok(gallery.includes("openStack()"));
 assert.ok(gallery.includes('restoreEntry="gallery"'));
-assert.equal(gallery.includes("min-h-[52vh] w-full min-w-full"), false);
+assert.equal(gallery.includes("aspect-[4/3]"), false);
 
-assert.ok(detail.includes("md:rounded-2xl md:border md:border-line/40 md:bg-surface"));
-assert.ok(detail.includes("hidden w-full gap-2 md:flex"));
+assert.ok(detail.includes("DesktopListingSectionNav"));
+assert.ok(detail.includes("DesktopListingActions"));
+assert.ok(detail.includes("lg:col-span-2"));
+assert.ok(detail.includes("hidden gap-2 md:flex md:items-stretch"));
 assert.ok(detail.includes("ListingMapViewButton"));
 assert.ok(detail.includes("Virtual tour"));
 assert.ok(detail.includes("<ListingAccessGate"));
@@ -65,8 +67,11 @@ assert.ok(
     detail.indexOf("<DriveTimePanel"),
 );
 assert.ok(detail.includes('{ id: "listing-insights", label: "Insights" }'));
+const mobileNav = detail.slice(
+  detail.indexOf('{ id: "listing-about", label: "About" }'),
+);
 assert.ok(
-  detail.indexOf('label: "Insights"') < detail.indexOf('label: "History"'),
+  mobileNav.indexOf('label: "Insights"') < mobileNav.indexOf('label: "History"'),
 );
 assert.ok(detail.includes('className="hidden md:block"'));
 

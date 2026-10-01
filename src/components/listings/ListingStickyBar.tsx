@@ -2,11 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { ChevronRight, Search } from "lucide-react";
-import { SaveListingButton } from "@/components/account/SaveListingButton";
-import { WatchAreaButton } from "@/components/account/WatchAreaButton";
-import { WatchListingButton } from "@/components/account/WatchListingButton";
-import { ShareListingButton } from "@/components/listings/ShareListingButton";
+import { ChevronRight } from "lucide-react";
 import { interceptListingSheetExitClick } from "@/lib/listings/navigate-listing";
 import { cn } from "@/lib/utils";
 
@@ -85,18 +81,6 @@ function readStickyTopPx(): number {
 
 export function ListingStickyBar({
   crumbs,
-  mlsNumber,
-  shareTitle,
-  callbackPath,
-  initiallySaved,
-  initiallyWatching,
-  signedIn,
-  city,
-  community,
-  transactionType,
-  segment,
-  inactive = false,
-  similarHomesHref,
   sheetMode = false,
 }: {
   crumbs: Crumb[];
@@ -117,7 +101,6 @@ export function ListingStickyBar({
   /** Listing overlay iframe (?sheet=1) — pin flush under the green Close bar. */
   sheetMode?: boolean;
 }) {
-  const authCallbackUrl = callbackPath ?? `/listing/${mlsNumber}`;
   const sentinelRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const [isSheet, setIsSheet] = useState(sheetMode);
@@ -193,8 +176,7 @@ export function ListingStickyBar({
     };
   }, [stuck, isSheet]);
 
-  const watchSegment =
-    segment === "COMMERCIAL" ? "COMMERCIAL" : ("RESIDENTIAL" as const);
+  if (isSheet) return null;
 
   return (
     <>
@@ -229,77 +211,9 @@ export function ListingStickyBar({
               stuck || isSheet ? "py-2.5" : "py-0",
             )}
           >
-            <section
-              className={cn(
-                "border px-4 py-3 transition duration-300 sm:px-5",
-                // Sheet: flush strip under Close bar (no floating card gap).
-                isSheet
-                  ? "rounded-none border-x-0 border-t-0 border-canopy/20 bg-surface/95"
-                  : stuck
-                    ? "rounded-2xl border-canopy/25 bg-surface/95"
-                    : "rounded-2xl border-canopy/15 bg-surface",
-              )}
-            >
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
-                <ListingBreadcrumbs crumbs={crumbs} className="overflow-hidden" />
-
-                <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
-                  <ShareListingButton
-                    mlsNumber={mlsNumber}
-                    title={shareTitle}
-                    path={callbackPath}
-                  />
-                  <SaveListingButton
-                    mlsNumber={mlsNumber}
-                    initiallySaved={initiallySaved}
-                    signedIn={signedIn}
-                    authCallbackUrl={authCallbackUrl}
-                  />
-                  {inactive ? (
-                    <>
-                      <WatchAreaButton
-                        city={city}
-                        community={community ?? undefined}
-                        transactionType={transactionType}
-                        segment={watchSegment}
-                        signedIn={signedIn}
-                        idleLabel="Watch this area"
-                        authCallbackUrl={authCallbackUrl}
-                      />
-                      {similarHomesHref ? (
-                        <Link
-                          href={similarHomesHref}
-                          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-canopy px-3 text-xs font-semibold text-white transition hover:bg-canopy-deep"
-                        >
-                          <Search className="size-3.5" aria-hidden />
-                          Find similar homes
-                        </Link>
-                      ) : null}
-                    </>
-                  ) : (
-                    <>
-                      <WatchListingButton
-                        mlsNumber={mlsNumber}
-                        initiallyWatching={initiallyWatching}
-                        signedIn={signedIn}
-                        idleLabel="Watch property"
-                        activeLabel="Watching"
-                        authCallbackUrl={authCallbackUrl}
-                      />
-                      <WatchAreaButton
-                        city={city}
-                        community={community ?? undefined}
-                        transactionType={transactionType}
-                        segment={watchSegment}
-                        signedIn={signedIn}
-                        idleLabel="Watch area"
-                        authCallbackUrl={authCallbackUrl}
-                      />
-                    </>
-                  )}
-                </div>
-              </div>
-            </section>
+            <div className="py-2">
+              <ListingBreadcrumbs crumbs={crumbs} className="overflow-hidden" />
+            </div>
           </div>
         </div>
         {isSheet ? (

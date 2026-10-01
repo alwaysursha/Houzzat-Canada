@@ -38,7 +38,8 @@ import { cn } from "@/lib/utils";
 
 /** Two-row sheet chrome body height (excludes safe-area; Host adds inset). */
 /** Row 1 (2.75rem) + desktop search band (~3.25rem). Mobile action row matches. */
-export const LISTING_SHEET_CHROME_BODY = "6.5rem";
+/** Desktop sheet header is one compact row. Mobile chrome height is set separately. */
+export const LISTING_SHEET_CHROME_BODY = "3.5rem";
 
 const SEARCH_PLACEHOLDER =
   "Search active or sold listings by MLS® #, address or neighbourhood";
@@ -471,7 +472,7 @@ export function ListingSheetChrome({
 
   return (
     <header
-      className="relative z-50 shrink-0 border-b border-white/15 bg-canopy text-white"
+      className="relative z-50 shrink-0 border-b border-white/15 bg-canopy text-white md:border-line/70 md:bg-white md:text-ink"
       style={{
         paddingTop: "env(safe-area-inset-top, 0px)",
       }}
@@ -482,19 +483,19 @@ export function ListingSheetChrome({
       */}
       <div
         className={cn(
-          "pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-[1] flex h-11 items-center justify-center transition-opacity duration-200 ease-out",
+          "pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-[1] flex h-11 items-center justify-center transition-opacity duration-200 ease-out md:h-14",
           mobileSearchOpen ? "opacity-0" : "opacity-100",
         )}
         aria-hidden={mobileSearchOpen}
       >
-        <span className="font-display text-[1.7rem] font-semibold leading-none tracking-tight text-white sm:text-[1.85rem]">
+        <span className="font-display text-[1.7rem] font-semibold leading-none tracking-tight text-white sm:text-[1.85rem] md:text-canopy">
           {tenantDisplayName}
         </span>
       </div>
 
       <div
         className={cn(
-          "relative z-[2] flex h-11 items-center justify-between gap-1 px-1 transition-opacity duration-200 ease-out sm:px-2",
+          "relative z-[2] flex h-11 items-center justify-between gap-1 px-1 transition-opacity duration-200 ease-out sm:px-2 md:h-14 md:px-4",
           mobileSearchOpen && "pointer-events-none opacity-0",
         )}
       >
@@ -530,15 +531,15 @@ export function ListingSheetChrome({
           <button
             type="button"
             onClick={() => closeListingSheet()}
-            className="hidden h-11 min-w-0 items-center gap-0.5 rounded-lg px-1.5 text-sm font-semibold text-white transition hover:bg-white/10 active:bg-white/15 md:inline-flex"
-            aria-label="Back to results"
+            className="hidden h-10 min-w-0 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-ink transition hover:bg-mist active:bg-line/40 md:inline-flex"
+            aria-label="Back to search results"
           >
             <ChevronLeft className="size-5 shrink-0" strokeWidth={2.2} aria-hidden />
-            <span className="truncate">Back to results</span>
+            <span className="truncate">Back to search results</span>
           </button>
         ) : null}
 
-        <div className="flex shrink-0 items-center justify-end">
+        <div className="flex shrink-0 items-center justify-end md:gap-2">
           {hasBrowse ? (
             <>
               <button
@@ -547,10 +548,10 @@ export function ListingSheetChrome({
                 onClick={() => {
                   if (previousHref) replaceListingSheet(previousHref);
                 }}
-                className="hidden h-11 items-center rounded-lg px-2 text-sm font-medium text-white/90 transition hover:bg-white/10 active:bg-white/15 disabled:pointer-events-none disabled:text-white/35 md:inline-flex"
+                className="hidden h-9 items-center rounded-lg border border-line px-3 text-sm font-medium text-ink transition hover:bg-mist active:bg-line/40 disabled:pointer-events-none disabled:text-ink/30 md:inline-flex"
                 aria-label="Previous listing"
               >
-                Previous
+                Previous listing
               </button>
               <button
                 type="button"
@@ -558,10 +559,10 @@ export function ListingSheetChrome({
                 onClick={() => {
                   if (nextHref) replaceListingSheet(nextHref);
                 }}
-                className="hidden h-11 items-center rounded-lg px-2 text-sm font-medium text-white/90 transition hover:bg-white/10 active:bg-white/15 disabled:pointer-events-none disabled:text-white/35 md:inline-flex"
+                className="hidden h-9 items-center rounded-lg border border-line px-3 text-sm font-medium text-ink transition hover:bg-mist active:bg-line/40 disabled:pointer-events-none disabled:text-ink/30 md:inline-flex"
                 aria-label="Next listing"
               >
-                Next
+                Next listing
               </button>
             </>
           ) : null}
@@ -569,7 +570,7 @@ export function ListingSheetChrome({
             <button
               type="button"
               onClick={() => backListingSheet()}
-              className="hidden h-11 items-center justify-center gap-0.5 rounded-lg px-1.5 text-sm font-semibold text-white transition hover:bg-white/10 active:bg-white/15 md:inline-flex"
+              className="hidden h-9 items-center justify-center gap-0.5 rounded-lg border border-line px-2.5 text-sm font-semibold text-ink transition hover:bg-mist active:bg-line/40 md:inline-flex"
               aria-label="Back to previous listing"
             >
               <ChevronLeft className="size-5" strokeWidth={2.2} aria-hidden />
@@ -579,11 +580,10 @@ export function ListingSheetChrome({
           <button
             type="button"
             onClick={() => closeListingSheet()}
-            className="hidden h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-sm font-semibold text-white transition hover:bg-white/10 active:bg-white/15 md:inline-flex"
+            className="hidden size-9 items-center justify-center rounded-lg text-ink transition hover:bg-mist active:bg-line/40 md:inline-flex"
             aria-label="Close listing"
           >
             <X className="size-5" strokeWidth={2.2} aria-hidden />
-            Close
           </button>
           <div className="flex items-center md:hidden">
             <button
@@ -615,7 +615,7 @@ export function ListingSheetChrome({
       </div>
 
       {/* Desktop: centered search — not edge-to-edge; breathing room in the band. */}
-      <div className="hidden border-t border-white/12 bg-canopy-deep/25 md:block">
+      <div className="hidden">
         <div className="mx-auto flex max-w-2xl items-center px-6 py-3 lg:px-8">
           {searchField(desktopNav, {
             portalDesktop: true,

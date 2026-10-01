@@ -1,8 +1,11 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { Bath, Bed, Car, Maximize2, ArrowDown, ArrowUp, Video } from "lucide-react";
+import { ArrowDown, ArrowUp, Search, Video } from "lucide-react";
+import { SaveListingButton } from "@/components/account/SaveListingButton";
+import { WatchAreaButton } from "@/components/account/WatchAreaButton";
+import { WatchListingButton } from "@/components/account/WatchListingButton";
 import { ListingNotesPanel } from "@/components/account/ListingNotesPanel";
 import { ListingDetailFooter } from "@/components/listings/ListingDetailFooter";
 import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
@@ -16,7 +19,9 @@ import {
 } from "@/components/listings/ListingRoomsOpenHousesLive";
 import { ListingHistoryPanel } from "@/components/listings/ListingHistoryPanel";
 import { ListingNarrative } from "@/components/listings/ListingNarrative";
+import { ShareListingButton } from "@/components/listings/ShareListingButton";
 import { ListingStickyBar } from "@/components/listings/ListingStickyBar";
+import { RoutePlannerToggleButton } from "@/components/route-planner/RoutePlannerToggleButton";
 import { NearbyAmenitiesDeferred } from "@/components/listings/NearbyAmenitiesDeferred";
 import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
 import { ListingRelatedSection } from "@/components/listings/ListingRelatedSection";
@@ -95,6 +100,146 @@ export type ListingDetailViewProps = {
   expertWhatsApp?: string | null;
 };
 
+const DESKTOP_SECTION_LINKS = [
+  { id: "listing-about", label: "Overview" },
+  { id: "listing-details", label: "Details" },
+  { id: "listing-history", label: "History" },
+  { id: "listing-insights", label: "Insights" },
+  { id: "listing-nearby", label: "Neighbourhood" },
+  // Both labels use the one related section. It owns Nearby/Similar and sale/sold.
+  { id: "listing-related", label: "Comparable Sold" },
+  { id: "listing-related", label: "Nearby Listings" },
+] as const;
+
+function DesktopListingSectionNav() {
+  const [activeLabel, setActiveLabel] = useState<string>(
+    DESKTOP_SECTION_LINKS[0].label,
+  );
+  return (
+    <nav
+      aria-label="Listing sections"
+      className="mt-1 hidden gap-6 border-b border-line/70 md:flex"
+    >
+      {DESKTOP_SECTION_LINKS.map((item) => {
+        const active = item.label === activeLabel;
+        return (
+          <button
+            key={item.label}
+            type="button"
+            onClick={() => {
+              setActiveLabel(item.label);
+              document.getElementById(item.id)?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            }}
+            className={
+              active
+                ? "border-b-2 border-canopy pb-3 text-sm font-semibold text-ink"
+                : "border-b-2 border-transparent pb-3 text-sm font-medium text-ink/55 hover:text-ink"
+            }
+            aria-current={active ? "true" : undefined}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function DesktopListingActions({
+  mlsNumber,
+  shareTitle,
+  callbackPath,
+  signedIn,
+  inactive,
+  city,
+  community,
+  transactionType,
+  segment,
+  similarHomesHref,
+}: {
+  mlsNumber: string;
+  shareTitle: string;
+  callbackPath: string;
+  signedIn: boolean;
+  inactive: boolean;
+  city: string;
+  community: string | null;
+  transactionType: "SALE" | "LEASE";
+  segment: string;
+  similarHomesHref: string;
+}) {
+  const watchSegment =
+    segment === "COMMERCIAL" ? "COMMERCIAL" : ("RESIDENTIAL" as const);
+  return (
+    <div className="hidden flex-wrap items-center gap-2 md:flex">
+      <SaveListingButton
+        mlsNumber={mlsNumber}
+        initiallySaved={false}
+        signedIn={signedIn}
+        authCallbackUrl={callbackPath}
+      />
+      {inactive ? (
+        <>
+          {city ? (
+            <WatchAreaButton
+              city={city}
+              community={community ?? undefined}
+              transactionType={transactionType}
+              segment={watchSegment}
+              signedIn={signedIn}
+              idleLabel="Watch this area"
+              authCallbackUrl={callbackPath}
+            />
+          ) : null}
+          <Link
+            href={similarHomesHref}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-sm font-semibold text-ink transition hover:bg-mist"
+          >
+            <Search className="size-3.5" aria-hidden />
+            Find similar homes
+          </Link>
+        </>
+      ) : (
+        <>
+          <WatchListingButton
+            mlsNumber={mlsNumber}
+            initiallyWatching={false}
+            signedIn={signedIn}
+            idleLabel="Watch property"
+            activeLabel="Watching"
+            authCallbackUrl={callbackPath}
+          />
+          {city ? (
+            <WatchAreaButton
+              city={city}
+              community={community ?? undefined}
+              transactionType={transactionType}
+              segment={watchSegment}
+              signedIn={signedIn}
+              idleLabel="Watch area"
+              authCallbackUrl={callbackPath}
+            />
+          ) : null}
+          <RoutePlannerToggleButton
+            mlsNumber={mlsNumber}
+            listingStatus="ACTIVE"
+            size="button"
+            className="h-9 w-auto px-3 text-sm"
+          />
+        </>
+      )}
+      <ShareListingButton
+        mlsNumber={mlsNumber}
+        title={shareTitle}
+        path={callbackPath}
+      />
+    </div>
+  );
+}
+
 /**
  * Listing detail presentation shared by /listing/... RSC and ListingDetailPanel.
  * Data loading stays in the page / panel API.
@@ -118,6 +263,14 @@ export function ListingDetailView({
   expertWhatsApp = null,
 }: ListingDetailViewProps) {
   const [mobileInquiryOpen, setMobileInquiryOpen] = useState(false);
+  useEffect(() => {
+    if (!isListingSheet) return;
+    const root = document.documentElement;
+    root.style.setProperty("--listing-sticky-bar-height", "0px");
+    return () => {
+      root.style.removeProperty("--listing-sticky-bar-height");
+    };
+  }, [isListingSheet]);
   const personalizationCities: string[] = [];
   const showClosedPrice =
     isClosedListingStatus(listing.status) &&
@@ -263,7 +416,7 @@ export function ListingDetailView({
           sheetMode={isListingSheet}
         />
 
-        <div className="-mt-5 space-y-3 md:mt-8 md:space-y-8">
+        <div className="space-y-3 md:space-y-4">
           {!isListingSheet ? (
             <div className="-mx-4 empty:hidden sm:-mx-6 lg:-mx-10">
               <HomepagePersonalizationBanner
@@ -315,9 +468,9 @@ export function ListingDetailView({
           />
         </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-10">
-        <div className="min-w-0 flex flex-col gap-5 sm:gap-6">
-          <div className="order-1 flex flex-col gap-4 border-0 bg-transparent px-0 py-1 md:order-none md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-x-8 md:gap-y-5 md:rounded-2xl md:border md:border-line/40 md:bg-surface md:px-5 md:py-5">
+      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-start lg:gap-x-10 lg:gap-y-8">
+          <div className="flex flex-col gap-5 border-0 bg-transparent px-0 py-1 lg:col-span-2">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0 w-full md:flex-1">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -343,7 +496,7 @@ export function ListingDetailView({
                     </p>
                   ) : (
                     <>
-                      <p className="font-sans text-3xl font-semibold tracking-tight text-canopy">
+                      <p className="font-sans text-3xl font-semibold tracking-tight text-canopy md:text-4xl md:text-ink">
                         {formatListPrice(
                           listing.listPrice,
                           listing.transactionType,
@@ -385,7 +538,7 @@ export function ListingDetailView({
                   </h1>
                 ) : (
                   <>
-                    <h1 className="text-xl font-semibold tracking-tight">
+                    <h1 className="text-xl font-semibold tracking-tight md:text-2xl">
                       {streetLine}
                     </h1>
                     <p className="mt-1 text-sm font-medium text-ink/60">
@@ -461,62 +614,46 @@ export function ListingDetailView({
                 Desktop (md+): keep the original fixed min-widths and gaps.
               */}
               <div
-                className={
-                  listing.segment !== "COMMERCIAL"
-                    ? `hidden w-full gap-2 md:flex md:w-auto md:items-start md:gap-3 ${detailsLocked ? "select-none blur-[5px]" : ""}`
-                    : `hidden w-full gap-2 md:flex md:w-auto md:items-start md:gap-3 ${detailsLocked ? "select-none blur-[5px]" : ""}`
-                }
+                className={`hidden gap-2 md:flex md:items-stretch ${detailsLocked ? "select-none blur-[5px]" : ""}`}
               >
                 {listing.segment !== "COMMERCIAL" ? (
                   <>
-                    <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/35 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
-                      <Bed
-                        className="size-5 text-canopy md:size-6"
-                        strokeWidth={1.75}
-                        aria-hidden
-                      />
-                      <span className="text-sm font-semibold leading-tight text-ink">
+                    <div className="flex min-w-[5.25rem] flex-col items-center justify-center rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
+                      <span className="font-sans text-2xl font-semibold leading-none text-ink">
                         {bedsPlusLabel
                           ? bedsPlusLabel.includes("+")
                             ? bedsPlusLabel
-                            : `${bedsPlusLabel} ${bedsPlusLabel === "1" ? "Bed" : "Beds"}`
-                          : `${listing.beds} ${listing.beds === 1 ? "Bed" : "Beds"}`}
+                            : bedsPlusLabel
+                          : String(listing.beds)}
+                      </span>
+                      <span className="mt-1 text-xs text-ink/50">
+                        {listing.beds === 1 ? "Bed" : "Beds"}
                       </span>
                     </div>
-                    <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/35 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
-                      <Bath
-                        className="size-5 text-canopy md:size-6"
-                        strokeWidth={1.75}
-                        aria-hidden
-                      />
-                      <span className="text-sm font-semibold leading-tight text-ink">
-                        {listing.baths} {listing.baths === 1 ? "Bath" : "Baths"}
+                    <div className="flex min-w-[5.25rem] flex-col items-center justify-center rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
+                      <span className="font-sans text-2xl font-semibold leading-none text-ink">
+                        {listing.baths}
+                      </span>
+                      <span className="mt-1 text-xs text-ink/50">
+                        {listing.baths === 1 ? "Bath" : "Baths"}
                       </span>
                     </div>
                   </>
                 ) : null}
-                <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/35 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
-                  <Maximize2
-                    className="size-5 text-canopy md:size-6"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  <span className="text-sm font-semibold leading-tight text-ink">
-                    {sqftLabel ?? "n/a SqFt"}
+                <div className="flex min-w-[5.25rem] flex-col items-center justify-center rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
+                  <span className="font-sans text-lg font-semibold leading-none text-ink">
+                    {sqftLabel?.replace(/\s*sqft$/i, "") ?? "—"}
                   </span>
+                  <span className="mt-1 text-xs text-ink/50">Sq Ft</span>
                 </div>
-                <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/35 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
-                  <Car
-                    className="size-5 text-canopy md:size-6"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  <span className="text-sm font-semibold leading-tight text-ink">
-                    {listing.parkingSpaces}{" "}
-                    {listing.parkingSpaces === 1 ? "Parking" : "Parkings"}
+                <div className="flex min-w-[5.25rem] flex-col items-center justify-center rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
+                  <span className="font-sans text-2xl font-semibold leading-none text-ink">
+                    {listing.parkingSpaces}
                   </span>
+                  <span className="mt-1 text-xs text-ink/50">Parking</span>
                 </div>
               </div>
+            </div>
             </div>
             {!detailsLocked &&
             (listingFacts?.virtualTourUrl?.trim() ||
@@ -560,9 +697,21 @@ export function ListingDetailView({
                 ) : null}
               </div>
             ) : null}
+            <DesktopListingActions
+              mlsNumber={listing.mlsNumber}
+              shareTitle={addressLabel}
+              callbackPath={canonicalPath}
+              signedIn={signedIn}
+              inactive={isInactive}
+              city={listing.city}
+              community={listing.community}
+              transactionType={listing.transactionType}
+              segment={listing.segment}
+              similarHomesHref={similarHomesHref}
+            />
           </div>
 
-          <div className="order-2 md:contents">
+          <div className="lg:col-span-2">
           <ListingDetailSectionNav
             layout={
               isListingSheet
@@ -584,8 +733,10 @@ export function ListingDetailView({
               { id: "listing-related", label: "Similar" },
             ]}
           />
+          <DesktopListingSectionNav />
           </div>
 
+          <div className="min-w-0 flex flex-col gap-5 sm:gap-6">
           <div className="order-3 md:contents">
           <ListingNarrative body={listing.description} />
           </div>
