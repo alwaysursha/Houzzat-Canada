@@ -35,7 +35,7 @@ assert.equal(locality.includes("md:hidden"), false);
 assert.equal(locality.includes("hidden md:"), false);
 
 const summaryFacts = detail.slice(
-  detail.indexOf("function summaryRangeSqftCaption"),
+  detail.indexOf("function summaryCompactRangeSqft"),
   detail.indexOf("function DesktopListingActions"),
 );
 assert.ok(summaryFacts.includes('case "bed"'));
@@ -47,9 +47,14 @@ assert.ok(summaryFacts.includes("formatLivingAreaRangeLabel"));
 assert.equal(summaryFacts.includes("summaryExactSqftCaption"), false);
 assert.equal(summaryFacts.includes("listing.sqft"), false);
 assert.ok(summaryFacts.includes('bedValue === "1" ? "Bed" : "Beds"'));
-assert.ok(summaryFacts.includes('bedValue === "1" ? "Bedroom" : "Bedrooms"'));
+assert.equal(summaryFacts.includes("Bedroom"), false);
 assert.ok(summaryFacts.includes('baths === 1 ? "Bath" : "Baths"'));
-assert.ok(summaryFacts.includes('baths === 1 ? "Bathroom" : "Bathrooms"'));
+assert.equal(summaryFacts.includes("Bathroom"), false);
+assert.ok(summaryFacts.includes("text-lg font-semibold"));
+assert.ok(summaryFacts.includes("md:gap-x-6"));
+assert.ok(detail.includes("xl:flex xl:items-center xl:justify-between xl:gap-x-10"));
+assert.ok(detail.includes("hidden shrink-0 xl:block"));
+assert.ok(detail.includes("xl:hidden md:flex md:justify-end"));
 assert.ok(summaryFacts.includes("summaryCompactRangeSqft"));
 assert.ok(summaryFacts.includes('parkingSpaces === 1 ? "Spot" : "Spots"'));
 assert.ok(summaryFacts.includes("justify-between"));
@@ -91,7 +96,9 @@ assert.ok(
     "flex w-full min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-1 md:block",
   ),
 );
-assert.ok(detail.includes("flex shrink-0 items-baseline gap-1.5"));
+assert.ok(detail.includes("flex shrink-0 items-baseline gap-1.5 md:gap-4"));
+assert.equal(count(detail, "<ListingEstimateLine"), 1);
+assert.ok(detail.includes('className="md:text-base md:tracking-normal"'));
 assert.ok(
   detail.includes(
     "ml-auto shrink-0 whitespace-nowrap text-right text-base font-semibold leading-none text-ink/85 md:hidden",
@@ -103,13 +110,12 @@ assert.ok(
   ),
 );
 assert.ok(insights.includes("valuation.restricted"));
-const compactEstimate = insights.slice(
-  insights.indexOf("if (compact)"),
-  insights.indexOf("Estimated value"),
-);
+const compactEstimate = insights.slice(insights.indexOf("export function ListingEstimateLine"));
+assert.ok(compactEstimate.includes("if (!compact) return null"));
 assert.ok(compactEstimate.includes("Est. Value"));
 assert.ok(compactEstimate.includes("text-ink/55"));
 assert.ok(compactEstimate.includes("text-sm font-medium"));
+assert.equal(compactEstimate.includes("Estimated value"), false);
 assert.equal(compactEstimate.includes("clamp("), false);
 assert.equal(compactEstimate.includes("text-canopy"), false);
 assert.ok(insights.includes("valuation.mid == null"));

@@ -89,7 +89,7 @@ export function ListingEstimateLine({
 }: {
   mlsNumber: string;
   eligible: boolean;
-  /** Mobile summary: one grey line beside the asking price. */
+  /** Grey “Est. Value” line beside the asking price. Desktop size is passed in className. */
   compact?: boolean;
   className?: string;
 }) {
@@ -98,22 +98,15 @@ export function ListingEstimateLine({
   const valuation = data.valuation;
   if (valuation.restricted || valuation.mid == null) return null;
   const amount = formatPrice(valuation.mid);
-  if (compact) {
-    return (
-      <p
-        className={cn(
-          "shrink-0 whitespace-nowrap text-sm font-medium leading-none tracking-tight text-ink/55",
-          className,
-        )}
-      >
-        Est. Value {amount}
-      </p>
-    );
-  }
+  if (!compact) return null;
   return (
-    <p className={cn("mt-1 text-sm text-ink/65", className)}>
-      <span className="font-medium">Estimated value</span>{" "}
-      <span className="font-semibold text-canopy">{amount}</span>
+    <p
+      className={cn(
+        "shrink-0 whitespace-nowrap text-sm font-medium leading-none tracking-tight text-ink/55",
+        className,
+      )}
+    >
+      Est. Value {amount}
     </p>
   );
 }

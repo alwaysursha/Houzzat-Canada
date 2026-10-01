@@ -108,14 +108,7 @@ function formatFactCount(value: number): string {
   return value.toLocaleString("en-CA", { maximumFractionDigits: 1 });
 }
 
-/** MLS living-area range only. Never an exact or midpoint square footage. */
-function summaryRangeSqftCaption(range: string | null | undefined): string | null {
-  const formatted = formatLivingAreaRangeLabel(range);
-  if (!formatted) return null;
-  return `${formatted} sqft`;
-}
-
-/** Mobile summary only: `1500-2000sqft`. Desktop keeps the spaced range. */
+/** MLS living-area range only, one line: `1500-2000sqft`. Never exact sqft. */
 function summaryCompactRangeSqft(range: string | null | undefined): string | null {
   const formatted = formatLivingAreaRangeLabel(range);
   if (!formatted) return null;
@@ -127,8 +120,7 @@ function summaryCompactRangeSqft(range: string | null | undefined): string | nul
 type SummaryFactIconKind = "bed" | "bath" | "sqft" | "parking";
 
 function SummaryFactIcon({ kind }: { kind: SummaryFactIconKind }) {
-  const className =
-    "size-7 shrink-0 text-canopy md:size-6 lg:size-7 xl:size-8";
+  const className = "size-7 shrink-0 text-canopy";
   switch (kind) {
     case "bed":
       return <Bed className={className} aria-hidden />;
@@ -177,7 +169,7 @@ function SummaryPropertyFacts({
         key: "beds",
         icon: "bed",
         mobile: `${bedValue} ${bedValue === "1" ? "Bed" : "Beds"}`,
-        desktop: `${bedValue} ${bedValue === "1" ? "Bedroom" : "Bedrooms"}`,
+        desktop: `${bedValue} ${bedValue === "1" ? "Bed" : "Beds"}`,
       });
     }
     if (Number.isFinite(baths)) {
@@ -186,18 +178,17 @@ function SummaryPropertyFacts({
         key: "baths",
         icon: "bath",
         mobile: `${bathCount} ${baths === 1 ? "Bath" : "Baths"}`,
-        desktop: `${bathCount} ${baths === 1 ? "Bathroom" : "Bathrooms"}`,
+        desktop: `${bathCount} ${baths === 1 ? "Bath" : "Baths"}`,
       });
     }
   }
-  const sqftMobile = summaryCompactRangeSqft(livingAreaRange);
-  const sqftDesktop = summaryRangeSqftCaption(livingAreaRange);
-  if (sqftMobile && sqftDesktop) {
+  const sqftLabel = summaryCompactRangeSqft(livingAreaRange);
+  if (sqftLabel) {
     facts.push({
       key: "sqft",
       icon: "sqft",
-      mobile: sqftMobile,
-      desktop: sqftDesktop,
+      mobile: sqftLabel,
+      desktop: sqftLabel,
     });
   }
   if (Number.isFinite(parkingSpaces)) {
@@ -216,18 +207,18 @@ function SummaryPropertyFacts({
   return (
     <div
       aria-label="Property facts"
-      className={`flex w-full items-start justify-between px-3 md:flex-nowrap md:items-center md:justify-end md:gap-x-4 md:px-0 lg:gap-x-6 xl:gap-x-8 ${locked ? "select-none blur-[5px]" : ""}`}
+      className={`flex w-full items-start justify-between px-3 md:w-auto md:flex-nowrap md:items-center md:justify-end md:gap-x-6 md:px-0 ${locked ? "select-none blur-[5px]" : ""}`}
     >
       {facts.map((fact) => (
         <div
           key={fact.key}
-          className="flex flex-col items-center gap-1.5 text-center md:w-auto md:shrink-0 md:flex-row md:flex-nowrap md:gap-2 lg:gap-2.5 md:text-left"
+          className="flex flex-col items-center gap-1.5 text-center md:w-auto md:shrink-0 md:flex-row md:flex-nowrap md:items-center md:gap-2.5 md:text-left"
         >
           <SummaryFactIcon kind={fact.icon} />
           <span className="whitespace-nowrap text-[15px] font-semibold leading-none tracking-tight text-ink md:hidden">
             {fact.mobile}
           </span>
-          <span className="hidden whitespace-nowrap font-semibold leading-none tracking-tight text-ink md:inline md:text-base lg:text-lg xl:text-xl">
+          <span className="hidden whitespace-nowrap text-lg font-semibold leading-none tracking-tight text-ink md:inline">
             {fact.desktop}
           </span>
         </div>
@@ -561,7 +552,7 @@ export function ListingDetailView({
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0 w-full md:flex-1">
               <div className="flex w-full min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-1 md:block">
-                <div className="flex shrink-0 items-baseline gap-1.5">
+                <div className="flex shrink-0 items-baseline gap-1.5 md:gap-4">
                 <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                   {showClosedPrice ? (
                     <SoldForPrice
@@ -620,18 +611,15 @@ export function ListingDetailView({
                   mlsNumber={listing.mlsNumber}
                   eligible={estimateEligible}
                   compact
-                  className="md:hidden"
+                  className="md:text-base md:tracking-normal"
                 />
                 </div>
                 <p className="ml-auto shrink-0 whitespace-nowrap text-right text-base font-semibold leading-none text-ink/85 md:hidden">
                   {timingLabel}
                 </p>
               </div>
-              <ListingEstimateLine
-                mlsNumber={listing.mlsNumber}
-                eligible={estimateEligible}
-                className="hidden md:block"
-              />
+              <div className="xl:flex xl:items-center xl:justify-between xl:gap-x-10">
+                <div className="min-w-0">
               <div className="mt-2 font-sans leading-snug text-ink">
                 {detailsLocked ? (
                     <h1 className="select-none text-xl font-semibold blur-[5px]">
@@ -691,6 +679,19 @@ export function ListingDetailView({
                   </span>
                 </p>
               )}
+                </div>
+                <div className="hidden shrink-0 xl:block">
+                  <SummaryPropertyFacts
+                    segment={listing.segment}
+                    bedsLabel={bedsPlusLabel}
+                    beds={listing.beds}
+                    baths={listing.baths}
+                    livingAreaRange={listingFacts?.livingAreaRange}
+                    parkingSpaces={listing.parkingSpaces}
+                    locked={detailsLocked}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="hidden w-full min-w-0 flex-col gap-3 md:flex lg:w-auto lg:shrink-0 lg:items-end">
@@ -699,15 +700,17 @@ export function ListingDetailView({
               </p>
             </div>
             </div>
-            <SummaryPropertyFacts
-              segment={listing.segment}
-              bedsLabel={bedsPlusLabel}
-              beds={listing.beds}
-              baths={listing.baths}
-              livingAreaRange={listingFacts?.livingAreaRange}
-              parkingSpaces={listing.parkingSpaces}
-              locked={detailsLocked}
-            />
+            <div className="xl:hidden md:flex md:justify-end">
+              <SummaryPropertyFacts
+                segment={listing.segment}
+                bedsLabel={bedsPlusLabel}
+                beds={listing.beds}
+                baths={listing.baths}
+                livingAreaRange={listingFacts?.livingAreaRange}
+                parkingSpaces={listing.parkingSpaces}
+                locked={detailsLocked}
+              />
+            </div>
             {!detailsLocked && listingFacts?.virtualTourUrl?.trim() ? (
               <a
                 href={listingFacts.virtualTourUrl.trim()}
