@@ -8,6 +8,8 @@ import {
   addressQueryKeepsAllTokens,
   compareStreetHistory,
   listingQueryCandidateWhere,
+  normalizeTypesenseStreetQuery,
+  typesenseQueryPlan,
   typesenseTextMatchSettings,
 } from "../src/lib/listings/search-match";
 import {
@@ -51,6 +53,62 @@ assert.equal(
   typesenseTextMatchSettings("eden oak t").drop_tokens_threshold,
   undefined,
 );
+
+function assertPlan(typed: string, sent: string, strict: boolean) {
+  const plan = typesenseQueryPlan(typed);
+  assert.equal(plan.q, sent, typed);
+  assert.equal(normalizeTypesenseStreetQuery(typed), sent, typed);
+  if (strict) {
+    assert.equal(plan.num_typos, 0, typed);
+    assert.equal(plan.drop_tokens_threshold, 0, typed);
+    assert.equal(plan.typo_tokens_threshold, 0, typed);
+    return;
+  }
+  assert.equal(plan.num_typos, 1, typed);
+  assert.equal(plan.drop_tokens_threshold, undefined, typed);
+}
+
+assertPlan("erin centre b", "erin centre b", false);
+assertPlan("erin centre bl", "erin centre boulevard", true);
+assertPlan("erin centre blv", "erin centre boulevard", true);
+assertPlan("Erin Centre Blvd", "erin centre boulevard", true);
+assertPlan("erin centre boulevard", "erin centre boulevard", true);
+assertPlan("main r", "main r", false);
+assertPlan("main rd", "main road", true);
+assertPlan("main road", "main road", true);
+assertPlan("king c", "king c", false);
+assertPlan("king ct", "king court", true);
+assertPlan("king crt", "king court", true);
+assertPlan("king court", "king court", true);
+assertPlan("eden oak t", "eden oak t", false);
+assertPlan("eden oak tr", "eden oak trail", true);
+assertPlan("eden oak tra", "eden oak trail", true);
+assertPlan("eden oak trai", "eden oak trail", true);
+assertPlan("eden oak trail", "eden oak trail", true);
+assertPlan("lakeshore dr", "lakeshore drive", true);
+assertPlan("burnhamthorpe av", "burnhamthorpe avenue", true);
+assertPlan("burnhamthorpe ave", "burnhamthorpe avenue", true);
+assertPlan("eden oak cres", "eden oak crescent", true);
+assertPlan("eden oak cr", "eden oak crescent", true);
+assertPlan("queen st", "queen street", true);
+assertPlan("queen str", "queen street", true);
+assertPlan("401 hwy", "401 highway", true);
+assert.equal(typesenseQueryPlan("erin centre cr").q, "erin centre crescent");
+assert.notEqual(typesenseQueryPlan("erin centre cr").q, "erin centre court");
+
+for (const unchanged of [
+  "kitchener",
+  "W13757690",
+  "L5M 2T6",
+  "mississauga",
+  "erin centre",
+  "st clair",
+  "blvd",
+]) {
+  assert.equal(normalizeTypesenseStreetQuery(unchanged), unchanged);
+}
+assert.equal(normalizeTypesenseStreetQuery("St Clair Ave"), "st clair avenue");
+assert.equal(normalizeTypesenseStreetQuery("125 Main St"), "125 main street");
 
 const ranked = [
   { status: "TERMINATED", listedAt: "2026-09-01T00:00:00.000Z", street: "history-new" },
@@ -203,8 +261,10 @@ const autocompleteTs = readFileSync(
   new URL("../src/lib/typesense/autocomplete.ts", import.meta.url),
   "utf8",
 );
-assert.match(searchTs, /typesenseTextMatchSettings\(q\)/);
-assert.match(autocompleteTs, /typesenseTextMatchSettings\(q\)/);
+assert.match(searchTs, /typesenseQueryPlan\(/);
+assert.match(autocompleteTs, /typesenseQueryPlan\(/);
+assert.match(searchTs, /buildEntitledTypesenseFilterBy/);
+assert.match(autocompleteTs, /discoveryAuthorityFilter/);
 assert.match(autocompleteTs, /compareStreetHistory/);
 assert.match(
   readFileSync(
@@ -335,6 +395,153 @@ async function liveInventory() {
   for (const item of crescent.items) {
     assert.match(item.addressLine, /\beden oak crescent\b/i);
   }
+
+  async function assertAliasAgrees(
+    typed: string,
+    canonical: string,
+    address: RegExp,
+  ) {
+    const abbreviated = await typesenseSearch(
+      { ...sale, q: typed, limit: 20 },
+      "proptx",
+    );
+    const full = await typesenseSearch(
+      { ...sale, q: canonical, limit: 20 },
+      "proptx",
+    );
+    assert.ok(abbreviated && full, typed);
+    assert.ok(full.total > 0, canonical);
+    assert.equal(abbreviated.total, full.total, `${typed} vs ${canonical}`);
+    for (const item of abbreviated.items) {
+      assert.match(item.addressLine, address, typed);
+    }
+    const typedSuggestions = await typesenseAutocomplete(typed, {
+      transactionType: "SALE",
+    });
+    const canonicalSuggestions = await typesenseAutocomplete(canonical, {
+      transactionType: "SALE",
+    });
+    assert.ok(typedSuggestions && canonicalSuggestions, typed);
+    const listingsOf = (
+      rows: NonNullable<Awaited<ReturnType<typeof typesenseAutocomplete>>>,
+    ) => rows.filter((item) => item.type === "listing" || item.type === "mls");
+    const typedListings = listingsOf(typedSuggestions);
+    const canonicalListings = listingsOf(canonicalSuggestions);
+    assert.ok(typedListings.length > 0, `${typed} autocomplete`);
+    for (const row of typedListings) {
+      assert.match(row.label, address, `${typed} label`);
+    }
+    assert.deepEqual(
+      typedListings.map((item) => item.mlsNumber),
+      canonicalListings.map((item) => item.mlsNumber),
+      `${typed} autocomplete vs ${canonical}`,
+    );
+  }
+
+  await assertAliasAgrees(
+    "erin centre blv",
+    "erin centre boulevard",
+    /erin centre (boulevard|blvd)/i,
+  );
+  await assertAliasAgrees(
+    "erin centre blvd",
+    "erin centre boulevard",
+    /erin centre (boulevard|blvd)/i,
+  );
+  await assertAliasAgrees("main rd", "main road", /\b(road|rd)\b/i);
+  await assertAliasAgrees("king ct", "king court", /\b(court|ct)\b/i);
+  await assertAliasAgrees("king crt", "king court", /\b(court|ct)\b/i);
+  await assertAliasAgrees("lakeshore dr", "lakeshore drive", /\b(drive|dr)\b/i);
+  await assertAliasAgrees("dundas ave", "dundas avenue", /\b(avenue|ave)\b/i);
+  await assertAliasAgrees(
+    "eden oak cres",
+    "eden oak crescent",
+    /\b(crescent|cres)\b/i,
+  );
+  await assertAliasAgrees("queen st", "queen street", /\b(street|st)\b/i);
+  await assertAliasAgrees("eden oak tr", "eden oak trail", /\btrail\b/i);
+
+  const sample = trail.items[0];
+  assert.ok(sample);
+  const city = await typesenseSearch({ ...sale, q: "kitchener" }, "proptx");
+  assert.ok(city && city.total > 20);
+  const mls = await typesenseSearch(
+    { ...sale, q: sample.mlsNumber },
+    "proptx",
+  );
+  assert.ok(mls?.items.some((item) => item.mlsNumber === sample.mlsNumber));
+  if (sample.postalCode) {
+    const postal = await typesenseSearch(
+      { ...sale, q: sample.postalCode },
+      "proptx",
+    );
+    assert.ok(
+      postal?.items.some((item) => item.postalCode === sample.postalCode),
+    );
+    assert.equal(
+      normalizeTypesenseStreetQuery(sample.postalCode),
+      sample.postalCode.trim(),
+    );
+  }
+  if (sample.community) {
+    const community = await typesenseSearch(
+      { ...sale, q: sample.community },
+      "proptx",
+    );
+    assert.ok(community && community.total > 0);
+    assert.equal(
+      normalizeTypesenseStreetQuery(sample.community),
+      sample.community.trim(),
+    );
+  }
+  const civicFull = await typesenseSearch(
+    { ...sale, q: "187 eden oak trail" },
+    "proptx",
+  );
+  const civicAlias = await typesenseSearch(
+    { ...sale, q: "187 eden oak tr" },
+    "proptx",
+  );
+  assert.ok(civicFull && civicFull.total > 0);
+  assert.equal(civicAlias?.total, civicFull.total);
+  for (const item of civicAlias?.items ?? []) {
+    assert.match(item.addressLine, /\b187\b/);
+    assert.match(item.addressLine, /eden oak trail/i);
+  }
+  const missingAlias = await typesenseSearch(
+    { ...sale, q: "125 eden oak tr" },
+    "proptx",
+  );
+  assert.ok(missingAlias);
+  assert.equal(missingAlias.total, missing.total);
+  const activeOnly = await typesenseSearch(
+    { ...sale, q: "erin centre boulevard", status: "ACTIVE", limit: 20 },
+    "proptx",
+  );
+  assert.ok(activeOnly && activeOnly.total > 0);
+  for (const item of activeOnly.items) {
+    assert.ok(
+      item.status === "ACTIVE" || item.status === "SOLD_CONDITIONAL",
+      item.status ?? "",
+    );
+  }
+  const closed = await typesenseSearch(
+    {
+      ...sale,
+      q: "erin centre blvd",
+      entitlementFilteringEnabled: true,
+      entitlement: { workspaceId: "", authorities: [] },
+    },
+    "proptx",
+  );
+  assert.ok(closed);
+  assert.equal(closed.total, 0);
+  const closedSuggestions = await typesenseAutocomplete("erin centre blvd", {
+    transactionType: "SALE",
+    entitlementFilteringEnabled: true,
+    entitlement: { workspaceId: "", authorities: [] },
+  });
+  assert.deepEqual(closedSuggestions, []);
 
   const suggestions = await typesenseAutocomplete("eden oak trail", {
     transactionType: "SALE",

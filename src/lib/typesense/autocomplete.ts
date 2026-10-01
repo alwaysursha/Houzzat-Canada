@@ -11,7 +11,7 @@ import {
 import {
   addressQueryKeepsAllTokens,
   compareStreetHistory,
-  typesenseTextMatchSettings,
+  typesenseQueryPlan,
 } from "@/lib/listings/search-match";
 import type {
   AutocompleteOptions,
@@ -193,18 +193,20 @@ export async function typesenseAutocomplete(
       filterBy = composed.filterBy;
     }
 
+    const { q: typesenseQ, ...textMatch } = typesenseQueryPlan(q);
+    const streetQuery = addressQueryKeepsAllTokens(typesenseQ);
     const result = await client
       .collections(collection)
       .documents()
       .search({
-        q,
+        q: typesenseQ,
         query_by:
           "mlsNumber,addressLine,unitNumber,city,community,postalCode",
         query_by_weights: "4,3,2,2,2,1",
         per_page: 28,
         prefix: true,
-        ...(addressQueryKeepsAllTokens(q)
-          ? typesenseTextMatchSettings(q)
+        ...(streetQuery
+          ? textMatch
           : { num_typos: 1, typo_tokens_threshold: 3 }),
         filter_by: filterBy,
         sort_by: "_text_match:desc,listedAt:desc",
@@ -225,7 +227,6 @@ export async function typesenseAutocomplete(
 
     // Current street inventory first, then newer history. A finished suffix
     // must not push an exact match behind a typo hit or off the list.
-    const streetQuery = addressQueryKeepsAllTokens(q);
     const byHistory = (left: TypesenseHit["document"], right: TypesenseHit["document"]) =>
       compareStreetHistory(
         {

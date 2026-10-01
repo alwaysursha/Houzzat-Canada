@@ -16,6 +16,7 @@ import {
   compareStreetHistory,
   filterAndRankListingsByQuery,
   listingQueryCandidateWhere,
+  normalizeTypesenseStreetQuery,
 } from "@/lib/listings/search-match";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { listingPath } from "@/lib/listings/listing-path";
@@ -199,7 +200,8 @@ function orderStreetHistory(
   params: ListingSearchParams,
   result: ListingSearchResult,
 ): ListingSearchResult {
-  if (!params.q?.trim() || !addressQueryKeepsAllTokens(params.q)) return result;
+  const q = normalizeTypesenseStreetQuery(params.q ?? "");
+  if (!q.trim() || !addressQueryKeepsAllTokens(q)) return result;
   return {
     ...result,
     items: [...result.items].sort(compareStreetHistory),

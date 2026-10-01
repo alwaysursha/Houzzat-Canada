@@ -14,7 +14,7 @@ import type {
   ListingSearchParams,
   ListingSearchResult,
 } from "@/lib/listings/types";
-import { typesenseTextMatchSettings } from "@/lib/listings/search-match";
+import { typesenseQueryPlan } from "@/lib/listings/search-match";
 import {
   buildTypesenseCapabilityScopedStatusFilter,
   buildTypesenseListingAuthorityFilter,
@@ -316,7 +316,7 @@ export async function typesenseSearch(
     const collection = getTypesenseCollectionName();
     const limit = Math.min(params.limit ?? 40, 500);
     const page = parsePageCursor(params.cursor);
-    const q = params.q?.trim() || "*";
+    const { q, ...textMatch } = typesenseQueryPlan(params.q?.trim() || "*");
     // Date-only listedAt ties hide same-day "Added 7h ago" behind "1 day ago"
     // unless we over-fetch and rank by resolveListingAddedAt.
     const rankByAddedAt =
@@ -341,7 +341,7 @@ export async function typesenseSearch(
         per_page: perPage,
         page,
         prefix: true,
-        ...typesenseTextMatchSettings(q),
+        ...textMatch,
         exhaustive_search: false,
       });
 

@@ -1,37 +1,38 @@
 import type { Prisma } from "@prisma/client";
 import { isOnMarketListingStatus } from "@/lib/listings/constants";
 
-/** Street / direction abbreviations ↔ full forms. */
-const TOKEN_ALIASES: Record<string, string[]> = {
-  st: ["st", "street"],
-  street: ["st", "street"],
-  ave: ["ave", "avenue"],
-  avenue: ["ave", "avenue"],
-  rd: ["rd", "road"],
-  road: ["rd", "road"],
-  dr: ["dr", "drive"],
-  drive: ["dr", "drive"],
-  blvd: ["blvd", "boulevard"],
-  boulevard: ["blvd", "boulevard"],
-  cres: ["cres", "crescent"],
-  crescent: ["cres", "crescent"],
-  crt: ["crt", "court", "ct"],
-  court: ["crt", "court", "ct"],
-  ct: ["ct", "court", "crt"],
-  ln: ["ln", "lane"],
-  lane: ["ln", "lane"],
-  pl: ["pl", "place"],
-  place: ["pl", "place"],
-  ter: ["ter", "terr", "terrace"],
-  terr: ["ter", "terr", "terrace"],
-  terrace: ["ter", "terr", "terrace"],
-  pkwy: ["pkwy", "parkway"],
-  parkway: ["pkwy", "parkway"],
-  cir: ["cir", "circle"],
-  circle: ["cir", "circle"],
-  trail: ["trail", "tr"],
-  tr: ["tr", "trail"],
-  way: ["way"],
+/**
+ * Indexed MLS addresses store the canonical spelling. Both SQL scoring and
+ * the Typesense query planner use this list. Direction words stay out of it:
+ * e/n/s/w are SQL aliases only, because a one-letter rewrite is ambiguous.
+ */
+const STREET_SUFFIX_GROUPS: ReadonlyArray<{
+  canonical: string;
+  forms: readonly string[];
+}> = [
+  { canonical: "street", forms: ["st", "str", "street"] },
+  { canonical: "road", forms: ["rd", "road"] },
+  { canonical: "drive", forms: ["dr", "drive"] },
+  { canonical: "avenue", forms: ["ave", "av", "avenue"] },
+  { canonical: "boulevard", forms: ["blvd", "blv", "boulevard"] },
+  { canonical: "court", forms: ["ct", "crt", "court"] },
+  { canonical: "crescent", forms: ["cres", "cr", "crescent"] },
+  { canonical: "trail", forms: ["tr", "trail"] },
+  { canonical: "lane", forms: ["ln", "lane"] },
+  { canonical: "place", forms: ["pl", "place"] },
+  { canonical: "circle", forms: ["cir", "circle"] },
+  { canonical: "parkway", forms: ["pkwy", "parkway"] },
+  { canonical: "terrace", forms: ["ter", "terr", "terrace"] },
+  { canonical: "highway", forms: ["hwy", "highway"] },
+  { canonical: "way", forms: ["way"] },
+];
+
+const TOKEN_ALIASES: Record<string, string[]> = {};
+for (const group of STREET_SUFFIX_GROUPS) {
+  const aliases = [...group.forms];
+  for (const form of aliases) TOKEN_ALIASES[form] = aliases;
+}
+Object.assign(TOKEN_ALIASES, {
   e: ["e", "east"],
   east: ["e", "east"],
   w: ["w", "west"],
@@ -40,7 +41,14 @@ const TOKEN_ALIASES: Record<string, string[]> = {
   north: ["n", "north"],
   s: ["s", "south"],
   south: ["s", "south"],
-};
+});
+
+const STREET_SUFFIX_CANONICAL = new Map<string, string>();
+for (const group of STREET_SUFFIX_GROUPS) {
+  for (const form of group.forms) {
+    STREET_SUFFIX_CANONICAL.set(form, group.canonical);
+  }
+}
 
 export function tokenizeSearchQuery(q: string): string[] {
   return q
@@ -119,7 +127,7 @@ export function addressQueryKeepsAllTokens(q: string): boolean {
  * Street and civic queries must stay exact as the last word is completed.
  * A common finished suffix such as "trail" is a one-typo candidate for
  * thousands of other streets, and Typesense then drops or misses the
- * exact match. Prefix search still completes "trai" → "trail".
+ * exact match. A one-character prefix still uses prefix search.
  */
 export function typesenseTextMatchSettings(q: string): {
   num_typos: number;
@@ -136,13 +144,70 @@ export function typesenseTextMatchSettings(q: string): {
   };
 }
 
+/**
+ * A finished alias, or the only suffix family it can still spell.
+ * Exact aliases win first so "cr" is crescent even though it also
+ * prefixes "crt". A one-character fragment is not a completed alias.
+ */
+function canonicalStreetSuffix(token: string): string | null {
+  const exact = STREET_SUFFIX_CANONICAL.get(token);
+  if (exact) return exact;
+  if (token.length < 2) return null;
+  let match: string | null = null;
+  for (const group of STREET_SUFFIX_GROUPS) {
+    const continues = group.forms.some(
+      (form) => form.startsWith(token) && form.length > token.length,
+    );
+    if (!continues) continue;
+    if (match && match !== group.canonical) return null;
+    match = group.canonical;
+  }
+  return match;
+}
+
+/**
+ * Rewrite only the last token of a multi-word query when it is a street
+ * suffix. Civic numbers, street names, cities, and earlier tokens stay put,
+ * so "St Clair Ave" becomes "st clair avenue" rather than "street clair avenue".
+ */
+export function normalizeTypesenseStreetQuery(q: string): string {
+  const trimmed = q.trim();
+  if (!trimmed || trimmed === "*") return trimmed;
+  const tokens = tokenizeSearchQuery(trimmed);
+  if (tokens.length < 2) return trimmed;
+  const last = tokens[tokens.length - 1] ?? "";
+  const canonical = canonicalStreetSuffix(last);
+  if (!canonical || canonical === last) return trimmed;
+  tokens[tokens.length - 1] = canonical;
+  return tokens.join(" ");
+}
+
+/** Shared Typesense text request for autocomplete and search. */
+export function typesenseQueryPlan(q: string): {
+  q: string;
+  num_typos: number;
+  drop_tokens_threshold?: number;
+  typo_tokens_threshold?: number;
+} {
+  const normalized = normalizeTypesenseStreetQuery(q);
+  return { q: normalized, ...typesenseTextMatchSettings(normalized) };
+}
+
 function listedAtMillis(value: string | Date | null | undefined): number {
   if (!value) return 0;
   const time = value instanceof Date ? value.getTime() : Date.parse(value);
   return Number.isFinite(time) ? time : 0;
 }
 
-/** Exact street page: current inventory, then newer history. */
+/**
+ * Exact street page: current inventory, then newer history.
+ * Phase 2 backlog (do not implement here): street phrase relevance must
+ * outrank unordered token coincidence before status or recency.
+ * Order: exact MLS or civic address, exact street phrase, street prefix,
+ * then general token match. Example: "main road" prefers Main Road over
+ * "Kingston Road Main"; "king court" prefers King Court over a Court
+ * address whose city or community merely contains King.
+ */
 export function compareStreetHistory<
   T extends { status?: string | null; listedAt?: string | Date | null },
 >(a: T, b: T): number {
