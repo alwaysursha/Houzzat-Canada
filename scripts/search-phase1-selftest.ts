@@ -95,6 +95,31 @@ assertPlan("queen str", "queen street", true);
 assertPlan("401 hwy", "401 highway", true);
 assert.equal(typesenseQueryPlan("erin centre cr").q, "erin centre crescent");
 assert.notEqual(typesenseQueryPlan("erin centre cr").q, "erin centre court");
+assert.equal(typesenseQueryPlan("eden oak tr").q, "eden oak trail");
+assert.notEqual(typesenseQueryPlan("eden oak tr").q, "eden oak terrace");
+assertPlan("ruscombe c", "ruscombe c", false);
+assertPlan("ruscombe cl", "ruscombe close", true);
+assertPlan("ruscombe close", "ruscombe close", true);
+assertPlan("mill run g", "mill run g", false);
+assertPlan("mill run gt", "mill run gate", true);
+assertPlan("mill run gate", "mill run gate", true);
+assertPlan("rosemar gdns", "rosemar gardens", true);
+assertPlan("rosemar gardens", "rosemar gardens", true);
+assertPlan("orchard h", "orchard h", false);
+assertPlan("orchard hts", "orchard heights", true);
+assertPlan("orchard heights", "orchard heights", true);
+assertPlan("victoria ter", "victoria terrace", true);
+assertPlan("victoria terr", "victoria terrace", true);
+assertPlan("victoria terrace", "victoria terrace", true);
+assertPlan("carding mill pl", "carding mill place", true);
+assertPlan("carding mill place", "carding mill place", true);
+assertPlan("woods bay ln", "woods bay lane", true);
+assertPlan("woods bay lane", "woods bay lane", true);
+assertPlan("theobalds cir", "theobalds circle", true);
+assertPlan("theobalds circle", "theobalds circle", true);
+assertPlan("erin mills pkwy", "erin mills parkway", true);
+assertPlan("erin mills parkway", "erin mills parkway", true);
+assertPlan("maple ga", "maple ga", false);
 
 for (const unchanged of [
   "kitchener",
@@ -460,6 +485,35 @@ async function liveInventory() {
   );
   await assertAliasAgrees("queen st", "queen street", /\b(street|st)\b/i);
   await assertAliasAgrees("eden oak tr", "eden oak trail", /\btrail\b/i);
+  await assertAliasAgrees("ruscombe cl", "ruscombe close", /\bclose\b/i);
+  await assertAliasAgrees("mill run gt", "mill run gate", /\bgate\b/i);
+  await assertAliasAgrees(
+    "rosemar gdns",
+    "rosemar gardens",
+    /\b(gardens|gdns)\b/i,
+  );
+  await assertAliasAgrees("orchard hts", "orchard heights", /\bheights\b/i);
+  await assertAliasAgrees(
+    "victoria terr",
+    "victoria terrace",
+    /\b(terrace|ter)\b/i,
+  );
+  await assertAliasAgrees(
+    "carding mill pl",
+    "carding mill place",
+    /\b(place|pl)\b/i,
+  );
+  await assertAliasAgrees("woods bay ln", "woods bay lane", /\b(lane|ln)\b/i);
+  await assertAliasAgrees(
+    "theobalds cir",
+    "theobalds circle",
+    /\b(circle|cir)\b/i,
+  );
+  await assertAliasAgrees(
+    "erin mills pkwy",
+    "erin mills parkway",
+    /\b(parkway|pkwy)\b/i,
+  );
 
   const sample = trail.items[0];
   assert.ok(sample);
