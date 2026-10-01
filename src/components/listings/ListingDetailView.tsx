@@ -115,11 +115,20 @@ function summaryRangeSqftCaption(range: string | null | undefined): string | nul
   return `${formatted} sqft`;
 }
 
+/** Mobile summary only: `1500-2000sqft`. Desktop keeps the spaced range. */
+function summaryCompactRangeSqft(range: string | null | undefined): string | null {
+  const formatted = formatLivingAreaRangeLabel(range);
+  if (!formatted) return null;
+  const match = formatted.match(/(\d[\d,]*)\s*[–—-]\s*(\d[\d,]*)/);
+  if (!match) return null;
+  return `${match[1]!.replace(/,/g, "")}-${match[2]!.replace(/,/g, "")}sqft`;
+}
+
 type SummaryFactIconKind = "bed" | "bath" | "sqft" | "parking";
 
 function SummaryFactIcon({ kind }: { kind: SummaryFactIconKind }) {
   const className =
-    "size-[clamp(1.75rem,7.5vw,2.75rem)] shrink-0 text-canopy md:size-6 lg:size-7 xl:size-8";
+    "size-7 shrink-0 text-canopy md:size-6 lg:size-7 xl:size-8";
   switch (kind) {
     case "bed":
       return <Bed className={className} aria-hidden />;
@@ -153,8 +162,12 @@ function SummaryPropertyFacts({
   parkingSpaces: number;
   locked: boolean;
 }) {
-  const facts: { key: string; icon: SummaryFactIconKind; caption: string }[] =
-    [];
+  const facts: {
+    key: string;
+    icon: SummaryFactIconKind;
+    mobile: string;
+    desktop: string;
+  }[] = [];
   if (segment !== "COMMERCIAL") {
     const bedValue =
       bedsLabel?.trim() ||
@@ -163,30 +176,39 @@ function SummaryPropertyFacts({
       facts.push({
         key: "beds",
         icon: "bed",
-        caption: `${bedValue} ${bedValue === "1" ? "Bedroom" : "Bedrooms"}`,
+        mobile: `${bedValue} ${bedValue === "1" ? "Bed" : "Beds"}`,
+        desktop: `${bedValue} ${bedValue === "1" ? "Bedroom" : "Bedrooms"}`,
       });
     }
     if (Number.isFinite(baths)) {
+      const bathCount = formatFactCount(baths);
       facts.push({
         key: "baths",
         icon: "bath",
-        caption: `${formatFactCount(baths)} ${
-          baths === 1 ? "Bathroom" : "Bathrooms"
-        }`,
+        mobile: `${bathCount} ${baths === 1 ? "Bath" : "Baths"}`,
+        desktop: `${bathCount} ${baths === 1 ? "Bathroom" : "Bathrooms"}`,
       });
     }
   }
-  const sqftCaption = summaryRangeSqftCaption(livingAreaRange);
-  if (sqftCaption) {
-    facts.push({ key: "sqft", icon: "sqft", caption: sqftCaption });
+  const sqftMobile = summaryCompactRangeSqft(livingAreaRange);
+  const sqftDesktop = summaryRangeSqftCaption(livingAreaRange);
+  if (sqftMobile && sqftDesktop) {
+    facts.push({
+      key: "sqft",
+      icon: "sqft",
+      mobile: sqftMobile,
+      desktop: sqftDesktop,
+    });
   }
   if (Number.isFinite(parkingSpaces)) {
+    const parking = `${formatFactCount(parkingSpaces)} ${
+      parkingSpaces === 1 ? "Spot" : "Spots"
+    }`;
     facts.push({
       key: "parking",
       icon: "parking",
-      caption: `${formatFactCount(parkingSpaces)} ${
-        parkingSpaces === 1 ? "Spot" : "Spots"
-      }`,
+      mobile: parking,
+      desktop: parking,
     });
   }
   if (facts.length === 0) return null;
@@ -194,16 +216,19 @@ function SummaryPropertyFacts({
   return (
     <div
       aria-label="Property facts"
-      className={`flex w-[calc(100%+2rem)] -mx-4 items-start justify-between sm:w-[calc(100%+3rem)] sm:-mx-6 md:mx-0 md:w-full md:flex-nowrap md:items-center md:justify-end md:gap-x-4 lg:gap-x-6 xl:gap-x-8 ${locked ? "select-none blur-[5px]" : ""}`}
+      className={`flex w-full items-start justify-between md:flex-nowrap md:items-center md:justify-end md:gap-x-4 lg:gap-x-6 xl:gap-x-8 ${locked ? "select-none blur-[5px]" : ""}`}
     >
       {facts.map((fact) => (
         <div
           key={fact.key}
-          className="flex flex-col items-center gap-2 text-center md:w-auto md:shrink-0 md:flex-row md:flex-nowrap md:gap-2 lg:gap-2.5 md:text-left"
+          className="flex flex-col items-center gap-1.5 text-center md:w-auto md:shrink-0 md:flex-row md:flex-nowrap md:gap-2 lg:gap-2.5 md:text-left"
         >
           <SummaryFactIcon kind={fact.icon} />
-          <span className="whitespace-nowrap font-semibold leading-none tracking-tight text-ink text-[clamp(0.8125rem,3.6vw,1.125rem)] md:text-base lg:text-lg xl:text-xl">
-            {fact.caption}
+          <span className="whitespace-nowrap text-[15px] font-semibold leading-none tracking-tight text-ink md:hidden">
+            {fact.mobile}
+          </span>
+          <span className="hidden whitespace-nowrap font-semibold leading-none tracking-tight text-ink md:inline md:text-base lg:text-lg xl:text-xl">
+            {fact.desktop}
           </span>
         </div>
       ))}
@@ -535,7 +560,7 @@ export function ListingDetailView({
           <div className="flex flex-col gap-5 border-0 bg-transparent px-0 py-1 lg:col-span-2">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0 w-full md:flex-1">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center justify-between gap-3 md:items-start">
                 <div className="flex min-w-0 flex-wrap items-center gap-3">
                   {showClosedPrice ? (
                     <SoldForPrice
@@ -590,9 +615,16 @@ export function ListingDetailView({
                     </>
                   )}
                 </div>
-                <p className="shrink-0 pt-1.5 text-right text-sm font-semibold leading-snug text-ink/75 md:hidden">
-                  {timingLabel}
-                </p>
+                <div className="flex shrink-0 flex-col items-end gap-1 text-right md:hidden">
+                  <p className="text-base font-semibold leading-none text-ink/85">
+                    {timingLabel}
+                  </p>
+                  {detailsLocked ? null : (
+                    <p className="text-[13px] font-medium leading-none text-ink/55">
+                      MLS® {listing.mlsNumber}
+                    </p>
+                  )}
+                </div>
               </div>
               <ListingEstimateLine
                 mlsNumber={listing.mlsNumber}
@@ -608,7 +640,7 @@ export function ListingDetailView({
                     <h1 className="text-xl font-semibold tracking-tight md:text-2xl">
                       {streetLine}
                     </h1>
-                    <p className="mt-1 text-sm font-medium text-ink/60">
+                    <p className="mt-1 text-[15px] font-medium leading-snug text-ink/80 md:text-sm md:text-ink/60">
                       {listing.city.trim()}
                       {communityHref && listing.community ? (
                         <>
@@ -644,10 +676,12 @@ export function ListingDetailView({
                   {gateDetails.title}
                 </p>
               ) : (
-                <p className="mt-1.5 text-sm text-ink/50">
+                <p className="mt-1.5 text-[15px] font-semibold leading-snug text-ink md:text-sm md:font-normal md:text-ink/50">
                   {propertyTypeLabel(listing.propertyType)}
-                  {" · "}
-                  MLS® {listing.mlsNumber}
+                  <span className="hidden md:inline">
+                    {" · "}
+                    MLS® {listing.mlsNumber}
+                  </span>
                 </p>
               )}
             </div>
