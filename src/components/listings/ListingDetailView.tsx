@@ -216,7 +216,7 @@ function SummaryPropertyFacts({
   return (
     <div
       aria-label="Property facts"
-      className={`flex w-full items-start justify-between md:flex-nowrap md:items-center md:justify-end md:gap-x-4 lg:gap-x-6 xl:gap-x-8 ${locked ? "select-none blur-[5px]" : ""}`}
+      className={`flex w-full items-start justify-center gap-x-3 px-2 md:flex-nowrap md:items-center md:justify-end md:gap-x-4 md:px-0 lg:gap-x-6 xl:gap-x-8 ${locked ? "select-none blur-[5px]" : ""}`}
     >
       {facts.map((fact) => (
         <div
@@ -560,7 +560,8 @@ export function ListingDetailView({
           <div className="flex flex-col gap-5 border-0 bg-transparent px-0 py-1 lg:col-span-2">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0 w-full md:flex-1">
-              <div className="flex items-center justify-between gap-3 md:items-start">
+              <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-3">
+                <div className="flex min-w-0 items-center justify-between gap-3 md:contents">
                 <div className="flex min-w-0 flex-wrap items-center gap-3">
                   {showClosedPrice ? (
                     <SoldForPrice
@@ -615,12 +616,19 @@ export function ListingDetailView({
                     </>
                   )}
                 </div>
+                <ListingEstimateLine
+                  mlsNumber={listing.mlsNumber}
+                  eligible={estimateEligible}
+                  compact
+                  className="md:hidden"
+                />
+                </div>
                 <div className="flex shrink-0 flex-col items-end gap-1 text-right md:hidden">
                   <p className="text-base font-semibold leading-none text-ink/85">
                     {timingLabel}
                   </p>
                   {detailsLocked ? null : (
-                    <p className="text-[13px] font-medium leading-none text-ink/55">
+                    <p className="text-[15px] font-medium leading-none text-ink/55">
                       MLS® {listing.mlsNumber}
                     </p>
                   )}
@@ -629,6 +637,7 @@ export function ListingDetailView({
               <ListingEstimateLine
                 mlsNumber={listing.mlsNumber}
                 eligible={estimateEligible}
+                className="hidden md:block"
               />
               <div className="mt-2 font-sans leading-snug text-ink">
                 {detailsLocked ? (
@@ -676,7 +685,7 @@ export function ListingDetailView({
                   {gateDetails.title}
                 </p>
               ) : (
-                <p className="mt-1.5 text-[15px] font-semibold leading-snug text-ink md:text-sm md:font-normal md:text-ink/50">
+                <p className="mt-1.5 text-[17px] font-semibold leading-snug text-ink md:text-sm md:font-normal md:text-ink/50">
                   {propertyTypeLabel(listing.propertyType)}
                   <span className="hidden md:inline">
                     {" · "}

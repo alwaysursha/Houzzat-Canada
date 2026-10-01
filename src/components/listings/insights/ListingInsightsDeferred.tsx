@@ -4,6 +4,7 @@ import { HouzzatInsights } from "@/components/listings/insights/HouzzatInsights"
 import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { formatPrice } from "@/lib/listings/constants";
 import { useListingInsights } from "@/lib/listings/listing-insights-client";
+import { cn } from "@/lib/utils";
 
 function InsightsSkeleton({ brandDisplayName }: { brandDisplayName: string }) {
   return (
@@ -83,18 +84,36 @@ export function ListingInsightsDeferred({
 export function ListingEstimateLine({
   mlsNumber,
   eligible,
+  compact = false,
+  className,
 }: {
   mlsNumber: string;
   eligible: boolean;
+  /** Mobile summary: one grey line beside the asking price. */
+  compact?: boolean;
+  className?: string;
 }) {
   const { data } = useListingInsights(mlsNumber, eligible);
   if (!eligible || !data) return null;
   const valuation = data.valuation;
   if (valuation.restricted || valuation.mid == null) return null;
+  const amount = formatPrice(valuation.mid);
+  if (compact) {
+    return (
+      <p
+        className={cn(
+          "shrink-0 whitespace-nowrap text-sm font-medium leading-none text-ink/55",
+          className,
+        )}
+      >
+        Est. Value {amount}
+      </p>
+    );
+  }
   return (
-    <p className="mt-1 text-sm text-ink/65">
+    <p className={cn("mt-1 text-sm text-ink/65", className)}>
       <span className="font-medium">Estimated value</span>{" "}
-      <span className="font-semibold text-canopy">{formatPrice(valuation.mid)}</span>
+      <span className="font-semibold text-canopy">{amount}</span>
     </p>
   );
 }
