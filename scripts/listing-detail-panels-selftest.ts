@@ -35,7 +35,7 @@ assert.equal(locality.includes("md:hidden"), false);
 assert.equal(locality.includes("hidden md:"), false);
 
 const summaryFacts = detail.slice(
-  detail.indexOf("function SummaryFactIcon"),
+  detail.indexOf("function summaryRangeSqftCaption"),
   detail.indexOf("function DesktopListingActions"),
 );
 assert.ok(summaryFacts.includes('case "bed"'));
@@ -43,12 +43,17 @@ assert.ok(summaryFacts.includes('case "bath"'));
 assert.ok(summaryFacts.includes('case "sqft"'));
 assert.ok(summaryFacts.includes('case "parking"'));
 assert.ok(summaryFacts.includes('segment !== "COMMERCIAL"'));
-assert.ok(summaryFacts.includes("summaryExactSqftCaption"));
-assert.ok(summaryFacts.includes('bedValue === "1" ? "Bed" : "Beds"'));
-assert.ok(summaryFacts.includes('baths === 1 ? "Bath" : "Baths"'));
+assert.ok(summaryFacts.includes("formatLivingAreaRangeLabel"));
+assert.equal(summaryFacts.includes("summaryExactSqftCaption"), false);
+assert.equal(summaryFacts.includes("listing.sqft"), false);
+assert.ok(summaryFacts.includes('bedValue === "1" ? "Bedroom" : "Bedrooms"'));
+assert.ok(summaryFacts.includes('baths === 1 ? "Bathroom" : "Bathrooms"'));
 assert.ok(summaryFacts.includes('parkingSpaces === 1 ? "Spot" : "Spots"'));
 assert.ok(summaryFacts.includes("grid w-full"));
-assert.equal(summaryFacts.includes("livingAreaRange"), false);
+assert.ok(summaryFacts.includes("whitespace-nowrap"));
+assert.ok(summaryFacts.includes("flex-col"));
+assert.ok(summaryFacts.includes("md:flex-row"));
+assert.ok(summaryFacts.includes("minmax(0, 1fr)"));
 assert.equal(summaryFacts.includes("border"), false);
 assert.equal(count(detail, "formatListingSqftLabel("), 1);
 assert.ok(

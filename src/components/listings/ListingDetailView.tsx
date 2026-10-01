@@ -59,6 +59,7 @@ import {
 } from "@/lib/listings/constants";
 import {
   formatBedsPlusLabel,
+  formatLivingAreaRangeLabel,
   parseListingFacts,
   formatListingSqftLabel,
 } from "@/lib/listings/facts";
@@ -107,16 +108,18 @@ function formatFactCount(value: number): string {
   return value.toLocaleString("en-CA", { maximumFractionDigits: 1 });
 }
 
-/** Exact MLS area only. A living-area range is never treated as a number. */
-function summaryExactSqftCaption(sqft: number | null | undefined): string | null {
-  if (sqft == null || !Number.isFinite(sqft) || sqft <= 0) return null;
-  return `${Math.round(sqft).toLocaleString("en-CA")} sqft`;
+/** MLS living-area range only. Never an exact or midpoint square footage. */
+function summaryRangeSqftCaption(range: string | null | undefined): string | null {
+  const formatted = formatLivingAreaRangeLabel(range);
+  if (!formatted) return null;
+  return `${formatted} sqft`;
 }
 
 type SummaryFactIconKind = "bed" | "bath" | "sqft" | "parking";
 
 function SummaryFactIcon({ kind }: { kind: SummaryFactIconKind }) {
-  const className = "size-8 text-canopy md:size-6";
+  const className =
+    "size-[clamp(2.25rem,10vw,3.25rem)] shrink-0 text-canopy md:size-7 lg:size-6 xl:size-7 2xl:size-8";
   switch (kind) {
     case "bed":
       return <Bed className={className} aria-hidden />;
@@ -138,7 +141,7 @@ function SummaryPropertyFacts({
   bedsLabel,
   beds,
   baths,
-  sqft,
+  livingAreaRange,
   parkingSpaces,
   locked,
 }: {
@@ -146,7 +149,7 @@ function SummaryPropertyFacts({
   bedsLabel: string | null;
   beds: number;
   baths: number;
-  sqft: number | null;
+  livingAreaRange: string | null | undefined;
   parkingSpaces: number;
   locked: boolean;
 }) {
@@ -160,18 +163,20 @@ function SummaryPropertyFacts({
       facts.push({
         key: "beds",
         icon: "bed",
-        caption: `${bedValue} ${bedValue === "1" ? "Bed" : "Beds"}`,
+        caption: `${bedValue} ${bedValue === "1" ? "Bedroom" : "Bedrooms"}`,
       });
     }
     if (Number.isFinite(baths)) {
       facts.push({
         key: "baths",
         icon: "bath",
-        caption: `${formatFactCount(baths)} ${baths === 1 ? "Bath" : "Baths"}`,
+        caption: `${formatFactCount(baths)} ${
+          baths === 1 ? "Bathroom" : "Bathrooms"
+        }`,
       });
     }
   }
-  const sqftCaption = summaryExactSqftCaption(sqft);
+  const sqftCaption = summaryRangeSqftCaption(livingAreaRange);
   if (sqftCaption) {
     facts.push({ key: "sqft", icon: "sqft", caption: sqftCaption });
   }
@@ -189,16 +194,19 @@ function SummaryPropertyFacts({
   return (
     <div
       aria-label="Property facts"
-      className={`grid w-full md:flex md:w-auto md:justify-end md:gap-7 ${locked ? "select-none blur-[5px]" : ""}`}
-      style={{ gridTemplateColumns: `repeat(${facts.length}, minmax(0, 1fr))` }}
+      className={`@container grid w-full md:flex md:w-full md:items-center md:justify-between md:gap-x-5 lg:w-auto lg:justify-end lg:gap-x-4 xl:gap-x-6 2xl:gap-x-8 ${locked ? "select-none blur-[5px]" : ""}`}
+      style={{
+        gridTemplateColumns: `repeat(${facts.length}, minmax(0, 1fr))`,
+        ["--fact-cols" as string]: facts.length,
+      }}
     >
       {facts.map((fact) => (
         <div
           key={fact.key}
-          className="flex min-w-0 flex-col items-center gap-2 text-center md:min-w-[4.75rem]"
+          className="flex min-w-0 flex-col items-center gap-2 text-center md:w-auto md:flex-row md:gap-2.5 md:text-left"
         >
           <SummaryFactIcon kind={fact.icon} />
-          <span className="text-sm font-semibold leading-tight text-ink sm:text-base md:text-sm">
+          <span className="whitespace-nowrap font-semibold leading-none tracking-tight text-ink [font-size:clamp(0.5625rem,calc(100cqi/var(--fact-cols)/9.2),1.25rem)] md:text-lg lg:text-base xl:text-lg 2xl:text-xl">
             {fact.caption}
           </span>
         </div>
@@ -529,7 +537,7 @@ export function ListingDetailView({
 
       <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-start lg:gap-x-10 lg:gap-y-8">
           <div className="flex flex-col gap-5 border-0 bg-transparent px-0 py-1 lg:col-span-2">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0 w-full md:flex-1">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -648,7 +656,7 @@ export function ListingDetailView({
               )}
             </div>
 
-            <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:shrink-0 md:items-end">
+            <div className="flex w-full min-w-0 flex-col gap-3 lg:w-auto lg:shrink-0 lg:items-end">
               <p className="hidden text-right text-base font-semibold leading-snug text-ink/75 md:block">
                 {timingLabel}
               </p>
@@ -657,7 +665,7 @@ export function ListingDetailView({
                 bedsLabel={bedsPlusLabel}
                 beds={listing.beds}
                 baths={listing.baths}
-                sqft={listing.sqft}
+                livingAreaRange={listingFacts?.livingAreaRange}
                 parkingSpaces={listing.parkingSpaces}
                 locked={detailsLocked}
               />
