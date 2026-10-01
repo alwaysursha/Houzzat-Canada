@@ -143,6 +143,22 @@ function testNoFakeContextAndGracefulMiss() {
   );
 }
 
+function testMlsSlugDriftKeepsBrowse() {
+  reset();
+  publishListingBrowseSource(RESULTS);
+  const drifted = "/listing/C";
+  const browse = browseSourceForHref(drifted);
+  assert.ok(browse);
+  openListingSheet(drifted, browse);
+  const state = getListingSheetState();
+  assert.equal(state.hasBrowse, true);
+  assert.equal(state.previousHref, B);
+  assert.equal(state.nextHref, D);
+  assert.equal(replaceListingSheet(state.nextHref!), true);
+  assert.equal(getListingSheetState().href, D);
+  assert.equal(getListingSheetState().depth, 1);
+}
+
 function testContextStoresPathsOnly() {
   reset();
   openListingSheet(C, [
@@ -198,6 +214,7 @@ testSearchContextNavigation();
 testReplaceDoesNotGrowStackOrHistoryCalls();
 testCloseAndBackLeaveSearchMounted();
 testNoFakeContextAndGracefulMiss();
+testMlsSlugDriftKeepsBrowse();
 testContextStoresPathsOnly();
 testGateIframePanelAndDesktopChrome();
 reset();

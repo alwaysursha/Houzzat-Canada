@@ -40,38 +40,26 @@ assert.ok(gallery.includes("openStack()"));
 assert.ok(gallery.includes('restoreEntry="gallery"'));
 assert.equal(gallery.includes("aspect-[4/3]"), false);
 
-assert.ok(detail.includes("DesktopListingSectionNav"));
+assert.ok(detail.includes("ListingDetailPanels"));
+assert.equal(detail.includes("DesktopListingSectionNav"), false);
+assert.equal(detail.includes("scrollIntoView"), false);
 assert.ok(detail.includes("DesktopListingActions"));
 assert.ok(detail.includes("lg:col-span-2"));
 assert.ok(detail.includes("hidden gap-2 md:flex md:items-stretch"));
-assert.ok(detail.includes("ListingMapViewButton"));
+assert.equal(detail.includes("ListingMapViewButton"), false);
+assert.ok(gallery.includes("ListingGalleryMapSlide"));
 assert.ok(detail.includes("Virtual tour"));
 assert.ok(detail.includes("<ListingAccessGate"));
 assert.ok(detail.includes("<ViewingRequestPanel"));
-assert.ok(detail.includes("order-7 md:contents"));
-assert.ok(detail.includes("order-8 md:contents"));
-assert.ok(detail.includes("order-11 md:hidden"));
-assert.ok(detail.includes("order-12 md:contents"));
 assert.ok(detail.includes("<MobilePublicAgentSection"));
 assert.equal(detail.includes("<ListingQaPanel"), false);
-assert.ok(
-  detail.indexOf("<MobilePublicAgentSection") <
-    detail.indexOf("<ListingRelatedSection"),
-);
 assert.ok(
   detail.indexOf("<ListingHistoryPanel") <
     detail.indexOf("<ListingInsightsDeferred"),
 );
 assert.ok(
-  detail.indexOf("<ListingRelatedSection") <
-    detail.indexOf("<DriveTimePanel"),
-);
-assert.ok(detail.includes('{ id: "listing-insights", label: "Insights" }'));
-const mobileNav = detail.slice(
-  detail.indexOf('{ id: "listing-about", label: "About" }'),
-);
-assert.ok(
-  mobileNav.indexOf('label: "Insights"') < mobileNav.indexOf('label: "History"'),
+  detail.indexOf("presentation=\"similar\"") <
+    detail.indexOf("<MobilePublicAgentSection"),
 );
 assert.ok(detail.includes('className="hidden md:block"'));
 

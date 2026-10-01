@@ -1,3 +1,4 @@
+import { mlsNumberFromListingPath } from "@/lib/listings/listing-path";
 import { normalizeListingSheetHref } from "@/lib/mobile/listing-sheet-store";
 
 /**
@@ -13,12 +14,20 @@ export function publishListingBrowseSource(
   hrefs = next && next.length > 0 ? next : null;
 }
 
+function sameBrowseHref(left: string, right: string) {
+  if (normalizeListingSheetHref(left) === normalizeListingSheetHref(right)) {
+    return true;
+  }
+  const a = mlsNumberFromListingPath(left);
+  const b = mlsNumberFromListingPath(right);
+  return Boolean(a && b && a.toUpperCase() === b.toUpperCase());
+}
+
 /** Ordered paths when `href` is one of the currently published results. */
 export function browseSourceForHref(href: string): readonly string[] | null {
   if (!hrefs) return null;
-  const current = normalizeListingSheetHref(href);
   for (const candidate of hrefs) {
-    if (normalizeListingSheetHref(candidate) === current) return hrefs;
+    if (sameBrowseHref(candidate, href)) return hrefs;
   }
   return null;
 }

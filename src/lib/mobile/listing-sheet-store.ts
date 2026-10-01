@@ -2,6 +2,7 @@
  * Listing detail overlay stack — browse page stays mounted underneath.
  * Back pops one listing; Close clears the whole stack.
  */
+import { mlsNumberFromListingPath } from "@/lib/listings/listing-path";
 
 type Listener = (state: ListingSheetState) => void;
 
@@ -34,6 +35,13 @@ export function normalizeListingSheetHref(href: string): string {
   }
 }
 
+function sameListingHref(left: string, right: string): boolean {
+  if (left === right) return true;
+  const a = mlsNumberFromListingPath(left);
+  const b = mlsNumberFromListingPath(right);
+  return Boolean(a && b && a.toUpperCase() === b.toUpperCase());
+}
+
 function normalizeBrowse(
   hrefs: readonly string[] | null | undefined,
   current: string,
@@ -49,7 +57,7 @@ function normalizeBrowse(
     seen.add(href);
     out.push(href);
   }
-  if (!out.includes(current)) return null;
+  if (!out.some((href) => sameListingHref(href, current))) return null;
   return out;
 }
 
@@ -61,7 +69,9 @@ function neighbors(frame: ListingSheetFrame | undefined): {
   if (!frame?.browse?.length) {
     return { hasBrowse: false, previousHref: null, nextHref: null };
   }
-  const index = frame.browse.indexOf(frame.href);
+  const index = frame.browse.findIndex((href) =>
+    sameListingHref(href, frame.href),
+  );
   if (index < 0) {
     return { hasBrowse: false, previousHref: null, nextHref: null };
   }
@@ -130,7 +140,7 @@ export function replaceListingSheet(href: string): boolean {
   const top = stack[stack.length - 1];
   if (!top?.browse) return false;
   const next = normalizeListingSheetHref(href);
-  if (!top.browse.includes(next)) return false;
+  if (!top.browse.some((href) => sameListingHref(href, next))) return false;
   if (top.href === next) return true;
   stack = [...stack.slice(0, -1), { href: next, browse: top.browse }];
   emit();

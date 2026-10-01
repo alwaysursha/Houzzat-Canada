@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, Search, Video } from "lucide-react";
+import { ArrowDown, ArrowUp, Bath, Bed, Car, Ruler, Search, Video } from "lucide-react";
 import { SaveListingButton } from "@/components/account/SaveListingButton";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
 import { WatchListingButton } from "@/components/account/WatchListingButton";
@@ -27,16 +27,18 @@ import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
 import { ListingRelatedSection } from "@/components/listings/ListingRelatedSection";
 import { ListingMobileSideMenu } from "@/components/listings/ListingMobileSideMenu";
 import { ListingDetailCoachMarks } from "@/components/listings/ListingDetailCoachMarks";
-import { ListingDetailSectionNav } from "@/components/listings/ListingDetailSectionNav";
+import { ListingDetailPanels } from "@/components/listings/ListingDetailPanels";
 import { ListingSheetDocumentFlags } from "@/components/listings/ListingSheetDocumentFlags";
-import { ListingMapViewButton } from "@/components/listings/ListingMapView";
 import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
 import { ListingMobileNotes } from "@/components/listings/ListingMobileNotes";
 import { ListingAccountChromeProvider } from "@/components/listings/ListingAccountChromeProvider";
 import { ListingAccessGate } from "@/components/listings/ListingAccessGate";
 import { RecordRecentView } from "@/components/listings/RecordRecentView";
 import { SeoLocationBridge } from "@/components/site/SeoLocationContext";
-import { ListingInsightsDeferred } from "@/components/listings/insights/ListingInsightsDeferred";
+import {
+  ListingEstimateLine,
+  ListingInsightsDeferred,
+} from "@/components/listings/insights/ListingInsightsDeferred";
 import { ViewingRequestPanel, MobilePublicAgentSection } from "@/components/listings/ViewingRequestPanel";
 import type { ViewingContactDefaults } from "@/components/listings/ViewingBookingModal";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
@@ -99,54 +101,6 @@ export type ListingDetailViewProps = {
   /** Hostname-resolved WhatsApp digits — never a global env number. */
   expertWhatsApp?: string | null;
 };
-
-const DESKTOP_SECTION_LINKS = [
-  { id: "listing-about", label: "Overview" },
-  { id: "listing-details", label: "Details" },
-  { id: "listing-history", label: "History" },
-  { id: "listing-insights", label: "Insights" },
-  { id: "listing-nearby", label: "Neighbourhood" },
-  // Both labels use the one related section. It owns Nearby/Similar and sale/sold.
-  { id: "listing-related", label: "Comparable Sold" },
-  { id: "listing-related", label: "Nearby Listings" },
-] as const;
-
-function DesktopListingSectionNav() {
-  const [activeLabel, setActiveLabel] = useState<string>(
-    DESKTOP_SECTION_LINKS[0].label,
-  );
-  return (
-    <nav
-      aria-label="Listing sections"
-      className="mt-1 hidden gap-6 border-b border-line/70 md:flex"
-    >
-      {DESKTOP_SECTION_LINKS.map((item) => {
-        const active = item.label === activeLabel;
-        return (
-          <button
-            key={item.label}
-            type="button"
-            onClick={() => {
-              setActiveLabel(item.label);
-              document.getElementById(item.id)?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              });
-            }}
-            className={
-              active
-                ? "border-b-2 border-canopy pb-3 text-sm font-semibold text-ink"
-                : "border-b-2 border-transparent pb-3 text-sm font-medium text-ink/55 hover:text-ink"
-            }
-            aria-current={active ? "true" : undefined}
-          >
-            {item.label}
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
 
 function DesktopListingActions({
   mlsNumber,
@@ -276,6 +230,11 @@ export function ListingDetailView({
     isClosedListingStatus(listing.status) &&
     (listing.soldPrice != null || !canSeeRestricted);
   const isInactive = !isOnMarketListingStatus(listing.status);
+  const estimateEligible =
+    listing.status === "ACTIVE" &&
+    listing.transactionType === "SALE" &&
+    !showClosedPrice &&
+    !detailsLocked;
   const similarHomesHref = (() => {
     const params = new URLSearchParams();
     params.set("status", "ACTIVE");
@@ -393,7 +352,7 @@ export function ListingDetailView({
         segment={listing.segment}
         contact={sessionContact}
       />
-      <div className="w-full min-w-0 space-y-8 bg-[linear-gradient(180deg,rgb(244_247_245)_0%,rgb(255_255_255)_28%,rgb(255_255_255)_100%)] px-4 pb-[calc(2rem+5.25rem+var(--mobile-bottom-nav,0px)+var(--listing-action-pad-bottom))] pt-3 sm:px-6 md:pb-8 md:pt-6 lg:px-10">
+      <div className={`w-full min-w-0 space-y-3 bg-[linear-gradient(180deg,rgb(244_247_245)_0%,rgb(255_255_255)_28%,rgb(255_255_255)_100%)] px-4 pb-[calc(2rem+5.25rem+var(--mobile-bottom-nav,0px)+var(--listing-action-pad-bottom))] sm:px-6 md:space-y-8 md:pb-8 md:pt-6 lg:px-10 ${isListingSheet ? "pt-0" : "pt-3"}`}>
         {/*
           Sticky bar must be a descendant of this tall page section (including the
           grid below), not a short breadcrumbs+gallery wrapper — otherwise sticky
@@ -496,7 +455,7 @@ export function ListingDetailView({
                     </p>
                   ) : (
                     <>
-                      <p className="font-sans text-3xl font-semibold tracking-tight text-canopy md:text-4xl md:text-ink">
+                      <p className="font-sans text-3xl font-semibold tracking-tight text-canopy md:text-[2.5rem] md:leading-none">
                         {formatListPrice(
                           listing.listPrice,
                           listing.transactionType,
@@ -527,10 +486,14 @@ export function ListingDetailView({
                     </>
                   )}
                 </div>
-                <p className="shrink-0 pt-1.5 text-right text-sm font-medium leading-snug text-ink/55 md:hidden">
+                <p className="shrink-0 pt-1.5 text-right text-sm font-semibold leading-snug text-ink/75 md:hidden">
                   {timingLabel}
                 </p>
               </div>
+              <ListingEstimateLine
+                mlsNumber={listing.mlsNumber}
+                eligible={estimateEligible}
+              />
               <div className="mt-2 font-sans leading-snug text-ink">
                 {detailsLocked ? (
                     <h1 className="select-none text-xl font-semibold blur-[5px]">
@@ -554,7 +517,7 @@ export function ListingDetailView({
                                 communityHref,
                               )
                             }
-                            className="text-canopy hover:underline"
+                            className="font-semibold text-canopy underline-offset-2 hover:underline"
                           >
                             {listing.community}
                           </Link>
@@ -586,28 +549,32 @@ export function ListingDetailView({
             </div>
 
             <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:shrink-0 md:items-end">
-              <p className="hidden text-right text-sm font-medium leading-snug text-ink/55 md:block">
+              <p className="hidden text-right text-base font-semibold leading-snug text-ink/75 md:block">
                 {timingLabel}
               </p>
-              <div className={detailsLocked ? "select-none blur-[5px]" : undefined}>
-                <p className="text-sm font-semibold text-ink md:hidden">
-                  {[
-                    listing.segment !== "COMMERCIAL"
-                      ? bedsPlusLabel
-                        ? bedsPlusLabel.includes("+")
-                          ? bedsPlusLabel
-                          : `${bedsPlusLabel} ${bedsPlusLabel === "1" ? "Bed" : "Beds"}`
-                        : `${listing.beds} ${listing.beds === 1 ? "Bed" : "Beds"}`
-                      : null,
-                    listing.segment !== "COMMERCIAL"
-                      ? `${listing.baths} ${listing.baths === 1 ? "Bath" : "Baths"}`
-                      : null,
-                    sqftLabel,
-                    `${listing.parkingSpaces} ${listing.parkingSpaces === 1 ? "Parking" : "Parkings"}`,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
+              <div
+                className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-ink md:hidden ${detailsLocked ? "select-none blur-[5px]" : ""}`}
+              >
+                {listing.segment !== "COMMERCIAL" ? (
+                  <>
+                    <span className="inline-flex items-center gap-1">
+                      <Bed className="size-4 text-canopy" aria-hidden />
+                      {bedsPlusLabel || String(listing.beds)}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Bath className="size-4 text-canopy" aria-hidden />
+                      {listing.baths}
+                    </span>
+                  </>
+                ) : null}
+                <span className="inline-flex items-center gap-1">
+                  <Ruler className="size-4 text-canopy" aria-hidden />
+                  {sqftLabel ?? "—"}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Car className="size-4 text-canopy" aria-hidden />
+                  {listing.parkingSpaces}
+                </span>
               </div>
               {/*
                 Mobile: equal columns so the row fits the content width.
@@ -618,7 +585,8 @@ export function ListingDetailView({
               >
                 {listing.segment !== "COMMERCIAL" ? (
                   <>
-                    <div className="flex min-w-[5.25rem] flex-col items-center justify-center rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
+                    <div className="flex min-w-[5.25rem] flex-col items-center justify-center gap-1 rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
+                      <Bed className="size-4 text-canopy" aria-hidden />
                       <span className="font-sans text-2xl font-semibold leading-none text-ink">
                         {bedsPlusLabel
                           ? bedsPlusLabel.includes("+")
@@ -626,76 +594,48 @@ export function ListingDetailView({
                             : bedsPlusLabel
                           : String(listing.beds)}
                       </span>
-                      <span className="mt-1 text-xs text-ink/50">
+                      <span className="text-xs text-ink/50">
                         {listing.beds === 1 ? "Bed" : "Beds"}
                       </span>
                     </div>
-                    <div className="flex min-w-[5.25rem] flex-col items-center justify-center rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
+                    <div className="flex min-w-[5.25rem] flex-col items-center justify-center gap-1 rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
+                      <Bath className="size-4 text-canopy" aria-hidden />
                       <span className="font-sans text-2xl font-semibold leading-none text-ink">
                         {listing.baths}
                       </span>
-                      <span className="mt-1 text-xs text-ink/50">
+                      <span className="text-xs text-ink/50">
                         {listing.baths === 1 ? "Bath" : "Baths"}
                       </span>
                     </div>
                   </>
                 ) : null}
-                <div className="flex min-w-[5.25rem] flex-col items-center justify-center rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
+                <div className="flex min-w-[5.25rem] flex-col items-center justify-center gap-1 rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
+                  <Ruler className="size-4 text-canopy" aria-hidden />
                   <span className="font-sans text-lg font-semibold leading-none text-ink">
                     {sqftLabel?.replace(/\s*sqft$/i, "") ?? "—"}
                   </span>
-                  <span className="mt-1 text-xs text-ink/50">Sq Ft</span>
+                  <span className="text-xs text-ink/50">Sq Ft</span>
                 </div>
-                <div className="flex min-w-[5.25rem] flex-col items-center justify-center rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
+                <div className="flex min-w-[5.25rem] flex-col items-center justify-center gap-1 rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
+                  <Car className="size-4 text-canopy" aria-hidden />
                   <span className="font-sans text-2xl font-semibold leading-none text-ink">
                     {listing.parkingSpaces}
                   </span>
-                  <span className="mt-1 text-xs text-ink/50">Parking</span>
+                  <span className="text-xs text-ink/50">Parking</span>
                 </div>
               </div>
             </div>
             </div>
-            {!detailsLocked &&
-            (listingFacts?.virtualTourUrl?.trim() ||
-              (Number.isFinite(listing.lat) && Number.isFinite(listing.lng))) ? (
-              <div className="flex gap-2 md:hidden">
-                {Number.isFinite(listing.lat) && Number.isFinite(listing.lng) ? (
-                  <ListingMapViewButton
-                    subject={{
-                      mlsNumber: listing.mlsNumber,
-                      lat: listing.lat,
-                      lng: listing.lng,
-                      addressLabel: formatListingAddressOneLine(listing),
-                      city: listing.city,
-                      listPrice: listing.listPrice,
-                      transactionType: listing.transactionType,
-                      status: listing.status,
-                      propertyType: listing.propertyType,
-                      beds: listing.beds,
-                      bedsLabel: bedsPlusLabel,
-                      baths: listing.baths,
-                      sqft: listing.sqft,
-                      primaryImageUrl: listing.media[0]?.url ?? null,
-                      unitNumber: listing.unitNumber,
-                      addressLine: listing.addressLine,
-                      postalCode: listing.postalCode,
-                      province: listing.province,
-                    }}
-                    className="h-11 min-w-0 flex-1 justify-center rounded-xl border-line bg-surface text-sm shadow-none hover:translate-y-0 hover:bg-mist"
-                  />
-                ) : null}
-                {listingFacts?.virtualTourUrl?.trim() ? (
-                  <a
-                    href={listingFacts.virtualTourUrl.trim()}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl border border-line bg-surface text-sm font-semibold text-ink"
-                  >
-                    <Video className="size-4 text-canopy" aria-hidden />
-                    Virtual tour
-                  </a>
-                ) : null}
-              </div>
+            {!detailsLocked && listingFacts?.virtualTourUrl?.trim() ? (
+              <a
+                href={listingFacts.virtualTourUrl.trim()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-ink md:hidden"
+              >
+                <Video className="size-4 text-canopy" aria-hidden />
+                Virtual tour
+              </a>
             ) : null}
             <DesktopListingActions
               mlsNumber={listing.mlsNumber}
@@ -711,135 +651,113 @@ export function ListingDetailView({
             />
           </div>
 
-          <div className="lg:col-span-2">
-          <ListingDetailSectionNav
-            layout={
-              isListingSheet
-                ? applyDocumentSheetFlags
-                  ? "iframe"
-                  : "panel"
-                : "page"
+          <ListingDetailPanels
+            overview={<ListingNarrative body={listing.description} />}
+            details={
+              <div className="flex flex-col gap-5">
+                <ListingFactsPanel
+                  facts={listing.facts}
+                  propertyTypeLabel={propertyTypeLabel(listing.propertyType)}
+                  mlsNumber={listing.mlsNumber}
+                  community={listing.community}
+                  postalCode={listing.postalCode}
+                  taxesLabel={taxesLabel}
+                  maintenanceLabel={
+                    listing.maintenanceFee
+                      ? `${formatPrice(listing.maintenanceFee)}/mo`
+                      : null
+                  }
+                  parkingSpaces={listing.parkingSpaces}
+                  yearBuilt={listing.yearBuilt}
+                  sqftLabel={formatListingSqftLabel({
+                    sqft: listing.sqft,
+                    livingAreaRange: listingFacts?.livingAreaRange,
+                    unit: "sqft",
+                  })}
+                  daysOnMarket={daysOnMarket}
+                  brokerageName={listing.brokerageName}
+                  beds={listing.beds}
+                  baths={listing.baths}
+                />
+                <ListingRoomsLive mlsNumber={listing.mlsNumber} />
+                <ListingOpenHousesLive mlsNumber={listing.mlsNumber} />
+              </div>
             }
-            sheetMode={isListingSheet}
-            items={[
-              { id: "listing-about", label: "About" },
-              { id: "listing-details", label: "Details" },
-              { id: "listing-rooms", label: "Rooms" },
-              { id: "listing-insights", label: "Insights" },
-              { id: "listing-estimated-value", label: "Estimated Value" },
-              { id: "listing-history", label: "History" },
-              { id: "listing-nearby", label: "Amenities" },
-              { id: "listing-open-houses", label: "Open houses" },
-              { id: "listing-related", label: "Similar" },
-            ]}
-          />
-          <DesktopListingSectionNav />
-          </div>
-
-          <div className="min-w-0 flex flex-col gap-5 sm:gap-6">
-          <div className="order-3 md:contents">
-          <ListingNarrative body={listing.description} />
-          </div>
-
-          <div className="order-5 md:contents">
-          <ListingFactsPanel
-            facts={listing.facts}
-            propertyTypeLabel={propertyTypeLabel(listing.propertyType)}
-            mlsNumber={listing.mlsNumber}
-            community={listing.community}
-            postalCode={listing.postalCode}
-            taxesLabel={taxesLabel}
-            maintenanceLabel={
-              listing.maintenanceFee
-                ? `${formatPrice(listing.maintenanceFee)}/mo`
-                : null
+            history={
+              <ListingHistoryPanel
+                mlsNumber={listing.mlsNumber}
+                addressLabel={addressLabel}
+                propertyType={listing.propertyType}
+                transactionType={listing.transactionType}
+                callbackPath={canonicalPath}
+                canSeeRestricted={canSeeRestricted}
+                signedIn={signedIn}
+                needsEmailVerification={verifyLocked}
+                enableAddressHistoryEnrich
+                rows={listingHistoryRows}
+              />
             }
-            parkingSpaces={listing.parkingSpaces}
-            yearBuilt={listing.yearBuilt}
-            sqftLabel={
-              formatListingSqftLabel({
-                sqft: listing.sqft,
-                livingAreaRange: listingFacts?.livingAreaRange,
-                unit: "sqft",
-              })
+            insights={
+              <ListingInsightsDeferred
+                mlsNumber={listing.mlsNumber}
+                callbackPath={canonicalPath}
+                needsEmailVerification={verifyLocked}
+              />
             }
-            daysOnMarket={daysOnMarket}
-            brokerageName={listing.brokerageName}
-            beds={listing.beds}
-            baths={listing.baths}
+            neighbourhood={
+              <div className="flex flex-col gap-5">
+                <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
+                <NearbyAmenitiesDeferred lat={listing.lat} lng={listing.lng} />
+              </div>
+            }
+            comparableSold={
+              <ListingRelatedSection
+                presentation="comparable-sold"
+                subject={{
+                  mlsNumber: listing.mlsNumber,
+                  city: listing.city,
+                  community: listing.community,
+                  propertyType: listing.propertyType,
+                  beds: listing.beds,
+                  bedsLabel: bedsPlusLabel,
+                  transactionType: listing.transactionType,
+                  segment: listing.segment,
+                }}
+                signedIn={signedIn}
+              />
+            }
+            similarHomes={
+              <ListingRelatedSection
+                presentation="similar"
+                subject={{
+                  mlsNumber: listing.mlsNumber,
+                  city: listing.city,
+                  community: listing.community,
+                  propertyType: listing.propertyType,
+                  beds: listing.beds,
+                  bedsLabel: bedsPlusLabel,
+                  transactionType: listing.transactionType,
+                  segment: listing.segment,
+                }}
+                signedIn={signedIn}
+              />
+            }
+            agentSection={
+              <div className="md:hidden">
+                <MobilePublicAgentSection
+                  agent={publicAgent}
+                  expertWhatsApp={expertWhatsApp}
+                  mlsNumber={listing.mlsNumber}
+                  addressLine={addressLabel}
+                  city={listing.city}
+                  inactive={isInactive}
+                  onContactAgent={
+                    isInactive ? () => setMobileInquiryOpen(true) : undefined
+                  }
+                />
+              </div>
+            }
           />
-          </div>
-
-          <div className="order-6 md:contents">
-          <ListingRoomsLive mlsNumber={listing.mlsNumber} />
-          </div>
-
-          <div className="order-8 md:contents">
-          <ListingHistoryPanel
-            mlsNumber={listing.mlsNumber}
-            addressLabel={addressLabel}
-            propertyType={listing.propertyType}
-            transactionType={listing.transactionType}
-            callbackPath={canonicalPath}
-            canSeeRestricted={canSeeRestricted}
-            signedIn={signedIn}
-            needsEmailVerification={verifyLocked}
-            enableAddressHistoryEnrich
-            rows={listingHistoryRows}
-          />
-          </div>
-
-          <div className="order-7 md:contents">
-          <ListingInsightsDeferred
-            mlsNumber={listing.mlsNumber}
-            callbackPath={canonicalPath}
-            needsEmailVerification={verifyLocked}
-          />
-          </div>
-
-          <div className="order-11 md:hidden">
-            <MobilePublicAgentSection
-              agent={publicAgent}
-              expertWhatsApp={expertWhatsApp}
-              mlsNumber={listing.mlsNumber}
-              addressLine={addressLabel}
-              city={listing.city}
-              inactive={isInactive}
-              onContactAgent={
-                isInactive ? () => setMobileInquiryOpen(true) : undefined
-              }
-            />
-          </div>
-
-          <div className="order-12 md:contents">
-          <ListingRelatedSection
-            subject={{
-              mlsNumber: listing.mlsNumber,
-              city: listing.city,
-              community: listing.community,
-              propertyType: listing.propertyType,
-              beds: listing.beds,
-              bedsLabel: bedsPlusLabel,
-              transactionType: listing.transactionType,
-              segment: listing.segment,
-            }}
-            initialMode="SAME_AREA"
-            signedIn={signedIn}
-          />
-          </div>
-
-          <div className="order-9 flex flex-col gap-5 md:contents">
-            <h2 className="font-sans text-lg font-semibold tracking-tight text-ink md:hidden">
-              Location
-            </h2>
-            <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
-            <NearbyAmenitiesDeferred lat={listing.lat} lng={listing.lng} />
-          </div>
-
-          <div className="order-10 md:contents">
-          <ListingOpenHousesLive mlsNumber={listing.mlsNumber} />
-          </div>
-        </div>
 
         <aside className="min-w-0 space-y-5 sm:space-y-6">
           {detailsLocked ? (

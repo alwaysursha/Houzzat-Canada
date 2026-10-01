@@ -12,6 +12,13 @@ import { cn } from "@/lib/utils";
 
 type RelatedMode = "same-area" | "same-features";
 type RelatedTab = "for-sale" | "sold";
+type RelatedPresentation = "controls" | "similar" | "comparable-sold";
+
+const relatedResponseCache = new Map<string, ListingCardData[]>();
+
+function relatedCacheKey(mlsNumber: string, mode: RelatedMode, tab: RelatedTab) {
+  return `${mlsNumber}|${mode}|${tab}`;
+}
 
 type SubjectSummary = {
   mlsNumber: string;
@@ -38,26 +45,42 @@ export function ListingRelatedSection({
   subject,
   initialMode = "SAME_AREA",
   signedIn,
+  presentation = "controls",
 }: {
   subject: SubjectSummary;
   initialMode?: "SAME_AREA" | "SAME_FEATURES";
   signedIn: boolean;
+  /** Locked panels do not write the user's Nearby/Similar preference. */
+  presentation?: RelatedPresentation;
 }) {
   const chrome = useListingAccountChrome();
-  const [tab, setTab] = useState<RelatedTab>("for-sale");
-  const [mode, setMode] = useState<RelatedMode>(preferenceToMode(initialMode));
+  const locked = presentation !== "controls";
+  const [tab, setTab] = useState<RelatedTab>(
+    presentation === "comparable-sold" ? "sold" : "for-sale",
+  );
+  const [mode, setMode] = useState<RelatedMode>(
+    locked ? "same-features" : preferenceToMode(initialMode),
+  );
   const [items, setItems] = useState<ListingCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const userTouchedMode = useRef(false);
 
   useEffect(() => {
+    if (locked) return;
     if (!chrome.active || !chrome.loaded || userTouchedMode.current) return;
     setMode(preferenceToMode(chrome.relatedListingsMode));
-  }, [chrome.active, chrome.loaded, chrome.relatedListingsMode]);
+  }, [chrome.active, chrome.loaded, chrome.relatedListingsMode, locked]);
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
+      const key = relatedCacheKey(subject.mlsNumber, mode, tab);
+      const cached = relatedResponseCache.get(key);
+      if (cached) {
+        setItems(cached);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
         const params = new URLSearchParams({
@@ -70,7 +93,9 @@ export function ListingRelatedSection({
           signal,
         });
         const data = (await res.json()) as { items?: ListingCardData[] };
-        setItems(res.ok ? (data.items ?? []) : []);
+        const next = res.ok ? (data.items ?? []) : [];
+        relatedResponseCache.set(key, next);
+        setItems(next);
       } catch {
         if (signal?.aborted) return;
         setItems([]);
@@ -147,11 +172,26 @@ export function ListingRelatedSection({
         ? `${recentClosedLabel} near ${areaLabel}`
         : `${forSaleLabel} near ${areaLabel}`;
 
+  const sectionTitle =
+    presentation === "similar"
+      ? "Similar Homes"
+      : presentation === "comparable-sold"
+        ? subject.transactionType === "LEASE"
+          ? "Comparable Leased"
+          : "Comparable Sold"
+        : "Explore nearby homes";
+  const sectionId =
+    presentation === "similar"
+      ? "listing-similar"
+      : presentation === "comparable-sold"
+        ? "listing-comparable"
+        : "listing-related";
+
   return (
     <ListingSection
-      id="listing-related"
+      id={sectionId}
       className="w-full min-w-0"
-      title="Explore nearby homes"
+      title={sectionTitle}
       hint={hint}
       action={
         <Link
@@ -162,6 +202,7 @@ export function ListingRelatedSection({
         </Link>
       }
     >
+      {locked ? null : (
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div
           className="inline-flex rounded-xl border border-line/50 bg-mist/35 p-1"
@@ -226,6 +267,7 @@ export function ListingRelatedSection({
           })}
         </div>
       </div>
+      )}
 
       {saving ? (
         <p className="mt-2 text-xs text-ink/40">Saving preference…</p>

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { HouzzatInsights } from "@/components/listings/insights/HouzzatInsights";
 import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
-import type { ListingInsightsPayload } from "@/lib/market/listing-insights";
+import { formatPrice } from "@/lib/listings/constants";
+import { useListingInsights } from "@/lib/listings/listing-insights-client";
 
 function InsightsSkeleton({ brandDisplayName }: { brandDisplayName: string }) {
   return (
@@ -42,37 +42,7 @@ export function ListingInsightsDeferred({
   needsEmailVerification?: boolean;
 }) {
   const brandDisplayName = useTenantDisplayName("Houzzat");
-  const [insights, setInsights] = useState<ListingInsightsPayload | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const controller = new AbortController();
-
-    async function load() {
-      try {
-        const res = await fetch(
-          `/api/listings/${encodeURIComponent(mlsNumber)}/insights`,
-          { signal: controller.signal },
-        );
-        if (!res.ok) throw new Error(`insights ${res.status}`);
-        const data = (await res.json()) as { insights?: ListingInsightsPayload };
-        if (cancelled) return;
-        if (!data.insights) throw new Error("missing insights");
-        setInsights(data.insights);
-      } catch (error) {
-        if (cancelled || controller.signal.aborted) return;
-        console.error("[ListingInsightsDeferred]", error);
-        setFailed(true);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [mlsNumber]);
+  const { data: insights, failed } = useListingInsights(mlsNumber);
 
   if (insights) {
     return (
@@ -107,4 +77,24 @@ export function ListingInsightsDeferred({
   }
 
   return <InsightsSkeleton brandDisplayName={brandDisplayName} />;
+}
+
+/** Asking-price companion. Uses the same insights payload as the Insights panel. */
+export function ListingEstimateLine({
+  mlsNumber,
+  eligible,
+}: {
+  mlsNumber: string;
+  eligible: boolean;
+}) {
+  const { data } = useListingInsights(mlsNumber, eligible);
+  if (!eligible || !data) return null;
+  const valuation = data.valuation;
+  if (valuation.restricted || valuation.mid == null) return null;
+  return (
+    <p className="mt-1 text-sm text-ink/65">
+      <span className="font-medium">Estimated value</span>{" "}
+      <span className="font-semibold text-canopy">{formatPrice(valuation.mid)}</span>
+    </p>
+  );
 }
