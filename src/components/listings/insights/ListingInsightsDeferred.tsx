@@ -102,7 +102,7 @@ export function ListingEstimateLine({
     return (
       <p
         className={cn(
-          "shrink-0 whitespace-nowrap text-sm font-medium leading-none text-ink/55",
+          "shrink-0 whitespace-nowrap text-sm font-medium leading-none tracking-tight text-ink/55",
           className,
         )}
       >

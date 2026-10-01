@@ -52,10 +52,10 @@ assert.ok(summaryFacts.includes('baths === 1 ? "Bath" : "Baths"'));
 assert.ok(summaryFacts.includes('baths === 1 ? "Bathroom" : "Bathrooms"'));
 assert.ok(summaryFacts.includes("summaryCompactRangeSqft"));
 assert.ok(summaryFacts.includes('parkingSpaces === 1 ? "Spot" : "Spots"'));
-assert.ok(summaryFacts.includes("justify-center"));
-assert.ok(summaryFacts.includes("gap-x-3"));
-assert.ok(summaryFacts.includes("px-2"));
-assert.equal(summaryFacts.includes("justify-between"), false);
+assert.ok(summaryFacts.includes("justify-between"));
+assert.ok(summaryFacts.includes("px-3"));
+assert.equal(summaryFacts.includes("justify-center"), false);
+assert.equal(summaryFacts.includes("gap-x-3"), false);
 assert.ok(summaryFacts.includes("whitespace-nowrap"));
 assert.ok(summaryFacts.includes("flex-col"));
 assert.ok(summaryFacts.includes("md:flex-row"));
@@ -86,7 +86,32 @@ assert.ok(detail.includes('listing.status === "ACTIVE"'));
 assert.ok(detail.includes('listing.transactionType === "SALE"'));
 assert.ok(detail.includes("!showClosedPrice"));
 assert.ok(detail.includes("eligible={estimateEligible}"));
+assert.ok(
+  detail.includes(
+    "flex w-full min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-1 md:block",
+  ),
+);
+assert.ok(detail.includes("flex shrink-0 items-baseline gap-1.5"));
+assert.ok(
+  detail.includes(
+    "ml-auto shrink-0 whitespace-nowrap text-right text-base font-semibold leading-none text-ink/85 md:hidden",
+  ),
+);
+assert.ok(
+  detail.includes(
+    "shrink-0 whitespace-nowrap pt-1.5 text-[15px] font-medium leading-none text-ink/55 md:hidden",
+  ),
+);
 assert.ok(insights.includes("valuation.restricted"));
+const compactEstimate = insights.slice(
+  insights.indexOf("if (compact)"),
+  insights.indexOf("Estimated value"),
+);
+assert.ok(compactEstimate.includes("Est. Value"));
+assert.ok(compactEstimate.includes("text-ink/55"));
+assert.ok(compactEstimate.includes("text-sm font-medium"));
+assert.equal(compactEstimate.includes("clamp("), false);
+assert.equal(compactEstimate.includes("text-canopy"), false);
 assert.ok(insights.includes("valuation.mid == null"));
 assert.ok(insights.includes("useListingInsights"));
 

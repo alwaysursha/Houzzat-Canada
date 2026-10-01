@@ -216,7 +216,7 @@ function SummaryPropertyFacts({
   return (
     <div
       aria-label="Property facts"
-      className={`flex w-full items-start justify-center gap-x-3 px-2 md:flex-nowrap md:items-center md:justify-end md:gap-x-4 md:px-0 lg:gap-x-6 xl:gap-x-8 ${locked ? "select-none blur-[5px]" : ""}`}
+      className={`flex w-full items-start justify-between px-3 md:flex-nowrap md:items-center md:justify-end md:gap-x-4 md:px-0 lg:gap-x-6 xl:gap-x-8 ${locked ? "select-none blur-[5px]" : ""}`}
     >
       {facts.map((fact) => (
         <div
@@ -560,9 +560,9 @@ export function ListingDetailView({
           <div className="flex flex-col gap-5 border-0 bg-transparent px-0 py-1 lg:col-span-2">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0 w-full md:flex-1">
-              <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-3">
-                <div className="flex min-w-0 items-center justify-between gap-3 md:contents">
-                <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <div className="flex w-full min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-1 md:block">
+                <div className="flex shrink-0 items-baseline gap-1.5">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                   {showClosedPrice ? (
                     <SoldForPrice
                       listPrice={listing.listPrice}
@@ -623,16 +623,9 @@ export function ListingDetailView({
                   className="md:hidden"
                 />
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-1 text-right md:hidden">
-                  <p className="text-base font-semibold leading-none text-ink/85">
-                    {timingLabel}
-                  </p>
-                  {detailsLocked ? null : (
-                    <p className="text-[15px] font-medium leading-none text-ink/55">
-                      MLS® {listing.mlsNumber}
-                    </p>
-                  )}
-                </div>
+                <p className="ml-auto shrink-0 whitespace-nowrap text-right text-base font-semibold leading-none text-ink/85 md:hidden">
+                  {timingLabel}
+                </p>
               </div>
               <ListingEstimateLine
                 mlsNumber={listing.mlsNumber}
@@ -646,9 +639,14 @@ export function ListingDetailView({
                   </h1>
                 ) : (
                   <>
-                    <h1 className="text-xl font-semibold tracking-tight md:text-2xl">
-                      {streetLine}
-                    </h1>
+                    <div className="flex items-start justify-between gap-3">
+                      <h1 className="min-w-0 text-xl font-semibold tracking-tight md:text-2xl">
+                        {streetLine}
+                      </h1>
+                      <p className="shrink-0 whitespace-nowrap pt-1.5 text-[15px] font-medium leading-none text-ink/55 md:hidden">
+                        MLS® {listing.mlsNumber}
+                      </p>
+                    </div>
                     <p className="mt-1 text-[15px] font-medium leading-snug text-ink/80 md:text-sm md:text-ink/60">
                       {listing.city.trim()}
                       {communityHref && listing.community ? (
