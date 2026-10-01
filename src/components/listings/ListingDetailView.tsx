@@ -684,11 +684,11 @@ export function ListingDetailView({
                 {timingLabel}
               </p>
               {detailsLocked ? null : (
-                <p className="mt-8 hidden text-right text-base font-medium leading-none text-ink/75 xl:block">
+                <p className="mt-4 hidden text-right text-base font-medium leading-none text-ink/75 xl:block">
                   MLS® {listing.mlsNumber}
                 </p>
               )}
-              <div className="mb-6 mt-auto hidden xl:block">
+              <div className="mb-6 mt-8 hidden xl:block">
                 <SummaryPropertyFacts
                   segment={listing.segment}
                   bedsLabel={bedsPlusLabel}
