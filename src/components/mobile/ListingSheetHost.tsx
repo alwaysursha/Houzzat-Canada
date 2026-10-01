@@ -110,6 +110,24 @@ export function ListingSheetHost() {
   const historyPushedRef = useRef(false);
   const syncingHistoryRef = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [openSnapshot, setOpenSnapshot] = useState(state);
+  const [prevHref, setPrevHref] = useState(state.href);
+  const [leave, setLeave] = useState<ListingSheetState | null>(null);
+  if (state.href !== prevHref) {
+    setPrevHref(state.href);
+    if (state.href) {
+      setOpenSnapshot(state);
+      setLeave(null);
+    } else {
+      const desktopMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia("(min-width: 768px)").matches &&
+        !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      setLeave(desktopMotion ? openSnapshot : null);
+      if (!desktopMotion) setUsePanel(false);
+    }
+  }
+  const shown = state.href ? state : leave;
 
   useEffect(() => {
     try {
@@ -128,10 +146,7 @@ export function ListingSheetHost() {
   // Query/cookie apply immediately; staff wait until session is known.
   // Do not persist staff enablement — sign-out returns to iframe.
   useEffect(() => {
-    if (!state.href) {
-      setUsePanel(false);
-      return;
-    }
+    if (!state.href) return;
     if (isListingPanelEnabled()) {
       setUsePanel(true);
       return;
@@ -181,9 +196,9 @@ export function ListingSheetHost() {
   }, [framed]);
 
   useEffect(() => {
-    if (!state.href) return;
+    if (!shown?.href) return;
     return acquireScrollLock();
-  }, [state.href]);
+  }, [shown?.href]);
 
   // One browser-history entry while the overlay is open (Close clears it).
   // Desktop browsers share joint session history with the same-origin iframe;
@@ -236,8 +251,8 @@ export function ListingSheetHost() {
   }, [state.href]);
 
   const src = useMemo(
-    () => (state.href && !usePanel ? sheetSrc(state.href) : null),
-    [state.href, usePanel],
+    () => (shown?.href && !usePanel ? sheetSrc(shown.href) : null),
+    [shown, usePanel],
   );
 
   // Stable iframe + location.replace: avoid joint-history pushes from src=
@@ -259,8 +274,9 @@ export function ListingSheetHost() {
     abortListingGalleryFetches(mls);
   }, [state.href]);
 
-  if (framed || !state.href) return null;
+  if (framed || !shown?.href) return null;
   if (!usePanel && !src) return null;
+  const leaving = leave != null;
 
   return (
     <div
@@ -270,6 +286,7 @@ export function ListingSheetHost() {
       aria-label="Listing details"
       data-listing-panel={usePanel ? "1" : undefined}
       data-listing-sheet-host=""
+      data-sheet-phase={leaving ? "leave" : "open"}
       style={
         {
           "--site-header-stack": "0px",
@@ -281,9 +298,31 @@ export function ListingSheetHost() {
         [data-listing-sheet-host] {
           --listing-sheet-chrome-height: calc(2.75rem + env(safe-area-inset-top, 0px));
         }
+        @keyframes houzzat-sheet-in {
+          from { opacity: 0; transform: translateX(-50%) translateY(18px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        @keyframes houzzat-sheet-out {
+          from { opacity: 1; transform: translateX(-50%) translateY(0); }
+          to { opacity: 0; transform: translateX(-50%) translateY(18px); }
+        }
+        @keyframes houzzat-sheet-backdrop-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes houzzat-sheet-backdrop-out {
+          from { opacity: 1; }
+          to { opacity: 0; }
+        }
         @media (min-width: 768px) {
           [data-listing-sheet-host] {
             --listing-sheet-chrome-height: calc(${LISTING_SHEET_CHROME_BODY} + env(safe-area-inset-top, 0px));
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          [data-listing-sheet-host] .listing-sheet-backdrop,
+          [data-listing-sheet-host] .listing-sheet-panel {
+            animation: none !important;
           }
         }
       `}</style>
@@ -292,7 +331,7 @@ export function ListingSheetHost() {
         clicks of its own; the dialog still blocks the page underneath.
       */}
       <div
-        className="pointer-events-none absolute inset-0 hidden bg-[#0e1a16]/35 backdrop-blur-[2px] md:block"
+        className={`listing-sheet-backdrop pointer-events-none absolute inset-0 hidden bg-[#0e1a16]/35 backdrop-blur-[2px] md:block ${leaving ? "md:animate-[houzzat-sheet-backdrop-out_180ms_cubic-bezier(0.22,1,0.36,1)_both]" : "md:animate-[houzzat-sheet-backdrop-in_240ms_cubic-bezier(0.22,1,0.36,1)_both]"}`}
         aria-hidden
       />
       {/*
@@ -303,20 +342,26 @@ export function ListingSheetHost() {
         viewport, so its internal fixed bars are unchanged.
       */}
       <div
-        className="absolute inset-0 z-[1] flex min-h-0 flex-col bg-surface md:inset-auto md:top-5 md:bottom-5 md:left-1/2 md:w-[min(1840px,calc(100%-2.5rem))] md:-translate-x-1/2 md:overflow-hidden md:rounded-[18px] md:bg-surface md:shadow-[0_28px_70px_-20px_rgba(16,28,24,0.45),0_8px_24px_-12px_rgba(16,28,24,0.28)]"
+        className={`listing-sheet-panel absolute inset-0 z-[1] flex min-h-0 flex-col bg-surface md:inset-auto md:top-5 md:bottom-5 md:left-1/2 md:w-[min(1840px,calc(100%-2.5rem))] md:-translate-x-1/2 md:overflow-hidden md:rounded-[18px] md:bg-surface md:shadow-[0_28px_70px_-20px_rgba(16,28,24,0.45),0_8px_24px_-12px_rgba(16,28,24,0.28)] ${leaving ? "md:animate-[houzzat-sheet-out_180ms_cubic-bezier(0.22,1,0.36,1)_both]" : "md:animate-[houzzat-sheet-in_240ms_cubic-bezier(0.22,1,0.36,1)_both]"}`}
+        onAnimationEnd={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.animationName !== "houzzat-sheet-out") return;
+          setLeave(null);
+          setUsePanel(false);
+        }}
       >
         <ListingSheetChrome
-          href={state.href}
-          canBack={state.canBack}
-          depth={state.depth}
+          href={shown.href}
+          canBack={shown.canBack}
+          depth={shown.depth}
           usePanel={usePanel}
-          hasBrowse={state.hasBrowse}
-          previousHref={state.previousHref}
-          nextHref={state.nextHref}
+          hasBrowse={shown.hasBrowse}
+          previousHref={shown.previousHref}
+          nextHref={shown.nextHref}
         />
         {usePanel ? (
           Panel ? (
-            <Panel key={state.href} href={state.href} />
+            <Panel key={shown.href} href={shown.href} />
           ) : (
             <div className="flex min-h-0 flex-1 items-center justify-center bg-mist text-sm text-ink/55">
               Loading listing…

@@ -3,6 +3,7 @@
 import {
   Check,
   ChevronLeft,
+  ChevronRight,
   Heart,
   Link2,
   Search,
@@ -548,10 +549,11 @@ export function ListingSheetChrome({
                 onClick={() => {
                   if (previousHref) replaceListingSheet(previousHref);
                 }}
-                className="hidden h-9 items-center rounded-lg border border-line px-3 text-sm font-medium text-ink transition hover:bg-mist active:bg-line/40 disabled:pointer-events-none disabled:text-ink/30 md:inline-flex"
+                className="hidden h-9 items-center gap-0.5 rounded-lg px-1.5 text-sm font-medium text-ink transition hover:bg-mist active:bg-line/40 disabled:pointer-events-none disabled:text-ink/30 md:inline-flex"
                 aria-label="Previous listing"
               >
-                Previous listing
+                <ChevronLeft className="size-4" strokeWidth={2.2} aria-hidden />
+                Previous
               </button>
               <button
                 type="button"
@@ -559,10 +561,11 @@ export function ListingSheetChrome({
                 onClick={() => {
                   if (nextHref) replaceListingSheet(nextHref);
                 }}
-                className="hidden h-9 items-center rounded-lg border border-line px-3 text-sm font-medium text-ink transition hover:bg-mist active:bg-line/40 disabled:pointer-events-none disabled:text-ink/30 md:inline-flex"
+                className="hidden h-9 items-center gap-0.5 rounded-lg px-1.5 text-sm font-medium text-ink transition hover:bg-mist active:bg-line/40 disabled:pointer-events-none disabled:text-ink/30 md:inline-flex"
                 aria-label="Next listing"
               >
-                Next listing
+                Next
+                <ChevronRight className="size-4" strokeWidth={2.2} aria-hidden />
               </button>
             </>
           ) : null}

@@ -701,6 +701,11 @@ export function ListingDetailView({
               </div>
             </div>
             </div>
+            <div
+              className="h-px bg-line/70 md:hidden"
+              role="separator"
+              aria-hidden
+            />
             <div className="xl:hidden md:flex md:justify-end">
               <SummaryPropertyFacts
                 segment={listing.segment}
@@ -723,6 +728,11 @@ export function ListingDetailView({
                 Virtual tour
               </a>
             ) : null}
+            <div
+              className="hidden h-px bg-line/70 md:block"
+              role="separator"
+              aria-hidden
+            />
             <DesktopListingActions
               mlsNumber={listing.mlsNumber}
               shareTitle={addressLabel}
