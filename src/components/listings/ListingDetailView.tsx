@@ -102,6 +102,111 @@ export type ListingDetailViewProps = {
   expertWhatsApp?: string | null;
 };
 
+function formatFactCount(value: number): string {
+  if (Number.isInteger(value)) return String(value);
+  return value.toLocaleString("en-CA", { maximumFractionDigits: 1 });
+}
+
+/** Exact MLS area only. A living-area range is never treated as a number. */
+function summaryExactSqftCaption(sqft: number | null | undefined): string | null {
+  if (sqft == null || !Number.isFinite(sqft) || sqft <= 0) return null;
+  return `${Math.round(sqft).toLocaleString("en-CA")} sqft`;
+}
+
+type SummaryFactIconKind = "bed" | "bath" | "sqft" | "parking";
+
+function SummaryFactIcon({ kind }: { kind: SummaryFactIconKind }) {
+  const className = "size-8 text-canopy md:size-6";
+  switch (kind) {
+    case "bed":
+      return <Bed className={className} aria-hidden />;
+    case "bath":
+      return <Bath className={className} aria-hidden />;
+    case "sqft":
+      return <Ruler className={className} aria-hidden />;
+    case "parking":
+      return <Car className={className} aria-hidden />;
+    default: {
+      const exhaustive: never = kind;
+      throw new Error(`Unknown summary fact: ${exhaustive}`);
+    }
+  }
+}
+
+function SummaryPropertyFacts({
+  segment,
+  bedsLabel,
+  beds,
+  baths,
+  sqft,
+  parkingSpaces,
+  locked,
+}: {
+  segment: string;
+  bedsLabel: string | null;
+  beds: number;
+  baths: number;
+  sqft: number | null;
+  parkingSpaces: number;
+  locked: boolean;
+}) {
+  const facts: { key: string; icon: SummaryFactIconKind; caption: string }[] =
+    [];
+  if (segment !== "COMMERCIAL") {
+    const bedValue =
+      bedsLabel?.trim() ||
+      (Number.isFinite(beds) ? formatFactCount(beds) : "");
+    if (bedValue) {
+      facts.push({
+        key: "beds",
+        icon: "bed",
+        caption: `${bedValue} ${bedValue === "1" ? "Bed" : "Beds"}`,
+      });
+    }
+    if (Number.isFinite(baths)) {
+      facts.push({
+        key: "baths",
+        icon: "bath",
+        caption: `${formatFactCount(baths)} ${baths === 1 ? "Bath" : "Baths"}`,
+      });
+    }
+  }
+  const sqftCaption = summaryExactSqftCaption(sqft);
+  if (sqftCaption) {
+    facts.push({ key: "sqft", icon: "sqft", caption: sqftCaption });
+  }
+  if (Number.isFinite(parkingSpaces)) {
+    facts.push({
+      key: "parking",
+      icon: "parking",
+      caption: `${formatFactCount(parkingSpaces)} ${
+        parkingSpaces === 1 ? "Spot" : "Spots"
+      }`,
+    });
+  }
+  if (facts.length === 0) return null;
+
+  return (
+    <div
+      aria-label="Property facts"
+      className={`grid w-full md:flex md:w-auto md:justify-end md:gap-7 ${locked ? "select-none blur-[5px]" : ""}`}
+      style={{ gridTemplateColumns: `repeat(${facts.length}, minmax(0, 1fr))` }}
+    >
+      {facts.map((fact) => (
+        <div
+          key={fact.key}
+          className="flex min-w-0 flex-col items-center gap-2 text-center md:min-w-[4.75rem]"
+        >
+          <SummaryFactIcon kind={fact.icon} />
+          <span className="text-sm font-semibold leading-tight text-ink sm:text-base md:text-sm">
+            {fact.caption}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DesktopListingActions({
   mlsNumber,
   shareTitle,
@@ -262,11 +367,6 @@ export function ListingDetailView({
   const timingLabel = formatListingTiming(listing);
   const listingFacts = parseListingFacts(listing.facts);
   const bedsPlusLabel = formatBedsPlusLabel(listing.beds, listingFacts);
-  const sqftLabel = formatListingSqftLabel({
-    sqft: listing.sqft,
-    livingAreaRange: listingFacts?.livingAreaRange,
-    unit: "SqFt",
-  });
   const taxesLabel = listing.taxes
     ? listingFacts?.taxYear
       ? `${formatPrice(listing.taxes)} / ${listingFacts.taxYear}`
@@ -552,78 +652,15 @@ export function ListingDetailView({
               <p className="hidden text-right text-base font-semibold leading-snug text-ink/75 md:block">
                 {timingLabel}
               </p>
-              <div
-                className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-ink md:hidden ${detailsLocked ? "select-none blur-[5px]" : ""}`}
-              >
-                {listing.segment !== "COMMERCIAL" ? (
-                  <>
-                    <span className="inline-flex items-center gap-1">
-                      <Bed className="size-4 text-canopy" aria-hidden />
-                      {bedsPlusLabel || String(listing.beds)}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Bath className="size-4 text-canopy" aria-hidden />
-                      {listing.baths}
-                    </span>
-                  </>
-                ) : null}
-                <span className="inline-flex items-center gap-1">
-                  <Ruler className="size-4 text-canopy" aria-hidden />
-                  {sqftLabel ?? "—"}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Car className="size-4 text-canopy" aria-hidden />
-                  {listing.parkingSpaces}
-                </span>
-              </div>
-              {/*
-                Mobile: equal columns so the row fits the content width.
-                Desktop (md+): keep the original fixed min-widths and gaps.
-              */}
-              <div
-                className={`hidden gap-2 md:flex md:items-stretch ${detailsLocked ? "select-none blur-[5px]" : ""}`}
-              >
-                {listing.segment !== "COMMERCIAL" ? (
-                  <>
-                    <div className="flex min-w-[5.25rem] flex-col items-center justify-center gap-1 rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
-                      <Bed className="size-4 text-canopy" aria-hidden />
-                      <span className="font-sans text-2xl font-semibold leading-none text-ink">
-                        {bedsPlusLabel
-                          ? bedsPlusLabel.includes("+")
-                            ? bedsPlusLabel
-                            : bedsPlusLabel
-                          : String(listing.beds)}
-                      </span>
-                      <span className="text-xs text-ink/50">
-                        {listing.beds === 1 ? "Bed" : "Beds"}
-                      </span>
-                    </div>
-                    <div className="flex min-w-[5.25rem] flex-col items-center justify-center gap-1 rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
-                      <Bath className="size-4 text-canopy" aria-hidden />
-                      <span className="font-sans text-2xl font-semibold leading-none text-ink">
-                        {listing.baths}
-                      </span>
-                      <span className="text-xs text-ink/50">
-                        {listing.baths === 1 ? "Bath" : "Baths"}
-                      </span>
-                    </div>
-                  </>
-                ) : null}
-                <div className="flex min-w-[5.25rem] flex-col items-center justify-center gap-1 rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
-                  <Ruler className="size-4 text-canopy" aria-hidden />
-                  <span className="font-sans text-lg font-semibold leading-none text-ink">
-                    {sqftLabel?.replace(/\s*sqft$/i, "") ?? "—"}
-                  </span>
-                  <span className="text-xs text-ink/50">Sq Ft</span>
-                </div>
-                <div className="flex min-w-[5.25rem] flex-col items-center justify-center gap-1 rounded-xl border border-line/70 bg-white px-4 py-3 text-center">
-                  <Car className="size-4 text-canopy" aria-hidden />
-                  <span className="font-sans text-2xl font-semibold leading-none text-ink">
-                    {listing.parkingSpaces}
-                  </span>
-                  <span className="text-xs text-ink/50">Parking</span>
-                </div>
-              </div>
+              <SummaryPropertyFacts
+                segment={listing.segment}
+                bedsLabel={bedsPlusLabel}
+                beds={listing.beds}
+                baths={listing.baths}
+                sqft={listing.sqft}
+                parkingSpaces={listing.parkingSpaces}
+                locked={detailsLocked}
+              />
             </div>
             </div>
             {!detailsLocked && listingFacts?.virtualTourUrl?.trim() ? (

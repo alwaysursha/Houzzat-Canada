@@ -45,7 +45,7 @@ assert.equal(detail.includes("DesktopListingSectionNav"), false);
 assert.equal(detail.includes("scrollIntoView"), false);
 assert.ok(detail.includes("DesktopListingActions"));
 assert.ok(detail.includes("lg:col-span-2"));
-assert.ok(detail.includes("hidden gap-2 md:flex md:items-stretch"));
+assert.ok(detail.includes('aria-label="Property facts"'));
 assert.equal(detail.includes("ListingMapViewButton"), false);
 assert.ok(gallery.includes("ListingGalleryMapSlide"));
 assert.ok(detail.includes("Virtual tour"));
