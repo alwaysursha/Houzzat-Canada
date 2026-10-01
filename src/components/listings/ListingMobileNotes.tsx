@@ -83,7 +83,7 @@ export function ListingMobileNotes({
           )}
         >
           <div className="flex items-center justify-between border-b border-line/70 px-3.5 py-2.5">
-            <h2 id={titleId} className="font-display text-base text-ink">
+            <h2 id={titleId} className="font-sans font-semibold text-base text-ink">
               Your notes
             </h2>
             <button

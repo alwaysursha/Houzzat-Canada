@@ -9,12 +9,22 @@ export type ListingSheetState = {
   href: string | null;
   depth: number;
   canBack: boolean;
+  /** Top frame was opened from an ordered browsing list. */
+  hasBrowse: boolean;
+  previousHref: string | null;
+  nextHref: string | null;
 };
 
-let stack: string[] = [];
+type ListingSheetFrame = {
+  href: string;
+  /** Canonical paths only. Null when this frame has no ordered context. */
+  browse: readonly string[] | null;
+};
+
+let stack: ListingSheetFrame[] = [];
 const listeners = new Set<Listener>();
 
-function normalizeHref(href: string): string {
+export function normalizeListingSheetHref(href: string): string {
   try {
     const url = new URL(href, "https://houzzat.local");
     url.searchParams.delete("sheet");
@@ -24,12 +34,55 @@ function normalizeHref(href: string): string {
   }
 }
 
-function snapshot(): ListingSheetState {
-  const href = stack[stack.length - 1] ?? null;
+function normalizeBrowse(
+  hrefs: readonly string[] | null | undefined,
+  current: string,
+): readonly string[] | null {
+  if (!hrefs || hrefs.length === 0) return null;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of hrefs) {
+    if (typeof raw !== "string" || !raw) continue;
+    const href = normalizeListingSheetHref(raw);
+    if (!href.startsWith("/listing/")) continue;
+    if (seen.has(href)) continue;
+    seen.add(href);
+    out.push(href);
+  }
+  if (!out.includes(current)) return null;
+  return out;
+}
+
+function neighbors(frame: ListingSheetFrame | undefined): {
+  hasBrowse: boolean;
+  previousHref: string | null;
+  nextHref: string | null;
+} {
+  if (!frame?.browse?.length) {
+    return { hasBrowse: false, previousHref: null, nextHref: null };
+  }
+  const index = frame.browse.indexOf(frame.href);
+  if (index < 0) {
+    return { hasBrowse: false, previousHref: null, nextHref: null };
+  }
   return {
-    href,
+    hasBrowse: true,
+    previousHref: index > 0 ? frame.browse[index - 1]! : null,
+    nextHref:
+      index < frame.browse.length - 1 ? frame.browse[index + 1]! : null,
+  };
+}
+
+function snapshot(): ListingSheetState {
+  const frame = stack[stack.length - 1];
+  const adjacent = neighbors(frame);
+  return {
+    href: frame?.href ?? null,
     depth: stack.length,
     canBack: stack.length > 1,
+    hasBrowse: adjacent.hasBrowse,
+    previousHref: adjacent.previousHref,
+    nextHref: adjacent.nextHref,
   };
 }
 
@@ -43,19 +96,45 @@ export function getListingSheetState(): ListingSheetState {
 }
 
 export function getListingSheetHref(): string | null {
-  return stack[stack.length - 1] ?? null;
+  return stack[stack.length - 1]?.href ?? null;
 }
 
-/** Push a listing (or no-op if it's already on top). */
-export function openListingSheet(href: string) {
-  const next = normalizeHref(href);
+/**
+ * Push a listing (or no-op if it's already on top).
+ * `browse` is the ordered context that opened this listing. Omitted context
+ * stays empty — stack history is not reused as Previous/Next.
+ */
+export function openListingSheet(
+  href: string,
+  browse?: readonly string[] | null,
+) {
+  const next = normalizeListingSheetHref(href);
   if (!next) return;
-  if (stack[stack.length - 1] === next) {
+  const top = stack[stack.length - 1];
+  if (top?.href === next) {
     emit();
     return;
   }
-  stack = [...stack, next];
+  stack = [
+    ...stack,
+    { href: next, browse: normalizeBrowse(browse, next) },
+  ];
   emit();
+}
+
+/**
+ * Move the current top listing to another path in ITS browsing context.
+ * Does not push a stack frame and does not touch browser history.
+ */
+export function replaceListingSheet(href: string): boolean {
+  const top = stack[stack.length - 1];
+  if (!top?.browse) return false;
+  const next = normalizeListingSheetHref(href);
+  if (!top.browse.includes(next)) return false;
+  if (top.href === next) return true;
+  stack = [...stack.slice(0, -1), { href: next, browse: top.browse }];
+  emit();
+  return true;
 }
 
 /** Pop one listing. Closes the sheet when the stack is empty. */

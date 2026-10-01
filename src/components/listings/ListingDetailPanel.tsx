@@ -92,7 +92,7 @@ export function ListingDetailPanel({ href }: { href: string }) {
     const verifyHref = `/auth/verify-email?callbackUrl=${encodeURIComponent(callback)}`;
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto bg-mist px-6 py-12 text-center">
-        <p className="font-display text-xl text-ink">
+        <p className="font-sans font-semibold text-xl text-ink">
           {state.body.requiresEmailVerification
             ? "Email verification required"
             : state.body.requiresAuth || state.body.vowBlocked

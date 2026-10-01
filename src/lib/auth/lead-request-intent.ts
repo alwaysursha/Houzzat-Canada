@@ -14,6 +14,11 @@ type OpenAuth = (options: {
 
 export const LEAD_REQUEST_RESTORE_KEY = "houzzat:lead-request-restore";
 export const LEAD_REQUEST_RESTORE_EVENT = "houzzat:lead-request-restore";
+/** Which booking surface started the guest auth handoff. */
+export const LEAD_REQUEST_ENTRY_KEY = "houzzat:lead-request-entry";
+export const LEAD_REQUEST_ENTRY_EVENT = "houzzat:lead-request-entry";
+
+export type LeadRequestEntry = "concierge" | "gallery";
 
 export type LeadRequestKind = "inquiry" | "showing" | "virtual_viewing";
 
@@ -212,6 +217,35 @@ export function peekLeadRequestRestore(): LeadRequestRestore | null {
   return readBrowserRestore();
 }
 
+export function rememberLeadRequestEntry(entry: LeadRequestEntry): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(LEAD_REQUEST_ENTRY_KEY, entry);
+    window.dispatchEvent(new Event(LEAD_REQUEST_ENTRY_EVENT));
+  } catch {
+    // Private mode can deny session storage.
+  }
+}
+
+export function peekLeadRequestEntry(): LeadRequestEntry | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const value = sessionStorage.getItem(LEAD_REQUEST_ENTRY_KEY);
+    if (value === "concierge" || value === "gallery") return value;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function clearLeadRequestEntry(): void {
+  try {
+    sessionStorage.removeItem(LEAD_REQUEST_ENTRY_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function takeLeadRequestRestore(
   mlsNumber: string,
 ): LeadRequestRestore | null {
@@ -222,6 +256,7 @@ export function takeLeadRequestRestore(
     return null;
   }
   sessionStorage.removeItem(LEAD_REQUEST_RESTORE_KEY);
+  clearLeadRequestEntry();
   return restore;
 }
 

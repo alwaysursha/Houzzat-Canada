@@ -513,7 +513,7 @@ export function ListingMapViewModal({
         <div className="min-w-0 max-w-2xl">
           <p
             id={titleId}
-            className="font-display text-lg leading-snug text-ink sm:text-xl"
+            className="font-sans font-semibold text-lg leading-snug text-ink sm:text-xl"
           >
             {subject.addressLabel}
           </p>

@@ -132,7 +132,7 @@ export function DriveTimePanel({
             To{" "}
             <span className="font-medium text-ink/80">{result.label}</span>
           </p>
-          <p className="mt-1 font-display text-2xl text-ink">
+          <p className="mt-1 font-sans font-semibold text-2xl text-ink">
             {formatDriveDistance(result.distanceMeters)}
             <span className="mx-2 text-base font-sans font-medium text-ink/30">
               ·

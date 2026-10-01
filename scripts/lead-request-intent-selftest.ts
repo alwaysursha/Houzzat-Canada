@@ -26,9 +26,14 @@ import {
   phoneFromLeadRequestPrefill,
 } from "../src/lib/auth/lead-request-contact-prefill";
 import {
+  LEAD_REQUEST_ENTRY_KEY,
+  LEAD_REQUEST_RESTORE_KEY,
   leadRequestFormSeed,
   openGuestLeadRequestIntent,
+  peekLeadRequestEntry,
+  rememberLeadRequestEntry,
   resumeLeadRequestIntent,
+  takeLeadRequestRestore,
   type LeadRequestRestore,
 } from "../src/lib/auth/lead-request-intent";
 
@@ -549,6 +554,79 @@ function testSaveFlowsStayAvailable() {
   assert.equal(search.ok, true);
 }
 
+function testBookingSurfacesDoNotShareOneRestore() {
+  const panel = read("src/components/listings/ViewingRequestPanel.tsx");
+  const gallery = read("src/components/listings/ListingGallery.tsx");
+  const booking = read("src/components/listings/ViewingBookingModal.tsx");
+  const mobile = read("src/components/listings/ListingMobileActionBar.tsx");
+  const form = read("src/components/listings/LeadRequestForm.tsx");
+  assert.ok(form.includes("rememberLeadRequestEntry(restoreEntry)"));
+  assert.ok(panel.includes('restoreEntry="concierge"'));
+  assert.ok(panel.includes('peekLeadRequestEntry() === "gallery"'));
+  assert.equal(gallery.includes('restoreEntry="gallery"'), true);
+  assert.ok(gallery.includes("setBookingOpen(true)"));
+  assert.equal(gallery.includes("setViewerOpen(true)"), true);
+  assert.ok(!gallery.includes("setViewerOpen(true);\n      setBookingOpen(true)"));
+  assert.ok(booking.includes("restoreEntry={restoreEntry}"));
+  assert.ok(mobile.includes('restoreEntry="concierge"'));
+  assert.ok(mobile.includes('peekLeadRequestEntry() === "gallery"'));
+  assert.ok(mobile.includes("setBookingOpen(true)"));
+
+  const memory = new Map<string, string>();
+  const storage = {
+    getItem(key: string) {
+      return memory.has(key) ? memory.get(key)! : null;
+    },
+    setItem(key: string, value: string) {
+      memory.set(key, value);
+    },
+    removeItem(key: string) {
+      memory.delete(key);
+    },
+  };
+  const previousWindow = globalThis.window;
+  const previousStorage = globalThis.sessionStorage;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { dispatchEvent() {} },
+  });
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    value: storage,
+  });
+  try {
+    rememberLeadRequestEntry("gallery");
+    assert.equal(peekLeadRequestEntry(), "gallery");
+    storage.setItem(
+      LEAD_REQUEST_RESTORE_KEY,
+      JSON.stringify({
+        mlsNumber: "W1234567",
+        kind: "showing",
+        message: "Saturday afternoon",
+        focusNotes: null,
+        callbackPath: LISTING,
+        restoredAt: NOW,
+      }),
+    );
+    const claimed = takeLeadRequestRestore("W1234567");
+    assert.equal(claimed?.message, "Saturday afternoon");
+    assert.equal(storage.getItem(LEAD_REQUEST_RESTORE_KEY), null);
+    assert.equal(storage.getItem(LEAD_REQUEST_ENTRY_KEY), null);
+    assert.equal(peekLeadRequestEntry(), null);
+    rememberLeadRequestEntry("concierge");
+    assert.equal(peekLeadRequestEntry(), "concierge");
+  } finally {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: previousWindow,
+    });
+    Object.defineProperty(globalThis, "sessionStorage", {
+      configurable: true,
+      value: previousStorage,
+    });
+  }
+}
+
 testAnonymousViewingRequiresAuth();
 testAnonymousInquiryRequiresAuth();
 testPayloadAndIdentityStayMinimal();
@@ -561,6 +639,7 @@ testEntryPointsShareTheForm();
 testSignupPrefillDoesNotEnterTheDraft();
 testSaveFlowsStayAvailable();
 testGa4LeadRequestFiresOnlyAfterSuccessfulLead();
+testBookingSurfacesDoNotShareOneRestore();
 
 void (null as CaptureIntent | null);
 

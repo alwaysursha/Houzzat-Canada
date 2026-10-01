@@ -36,7 +36,7 @@ export function GalleryVerifyLockCard({
       <p
         className={cn(
           "font-semibold text-ink",
-          compact ? "text-xs leading-snug sm:text-sm" : "font-display text-lg sm:text-xl",
+          compact ? "text-xs leading-snug sm:text-sm" : "font-sans font-semibold text-lg sm:text-xl",
         )}
       >
         {GALLERY_VERIFY_COPY.title}

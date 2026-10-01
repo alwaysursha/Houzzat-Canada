@@ -25,6 +25,8 @@ import {
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { pushHref } from "@/lib/listings/navigate-listing";
+import { listingPath } from "@/lib/listings/listing-path";
+import { publishListingBrowseSource } from "@/lib/mobile/listing-browse-source";
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { SaveSearchButton } from "@/components/account/SaveSearchButton";
 import { WatchAreaButton } from "@/components/account/WatchAreaButton";
@@ -440,6 +442,13 @@ export function SearchExperience() {
       void load();
     });
   }, [load]);
+
+  useEffect(() => {
+    publishListingBrowseSource(
+      items.length > 0 ? items.map((listing) => listingPath(listing)) : null,
+    );
+    return () => publishListingBrowseSource(null);
+  }, [items]);
 
   useEffect(() => {
     const lat = searchParams.get("lat");

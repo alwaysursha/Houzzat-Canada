@@ -133,67 +133,38 @@ export function ListingRelatedSection({
   })();
 
   const forSaleLabel =
-    subject.transactionType === "LEASE" ? "More for lease" : "More for sale";
+    subject.transactionType === "LEASE" ? "For lease" : "For sale";
   const recentClosedLabel =
-    subject.transactionType === "LEASE" ? "Recent leased" : "Recent sold";
+    subject.transactionType === "LEASE" ? "Leased" : "Sold";
   const closedVerb =
     subject.transactionType === "LEASE" ? "leased" : "sold";
+  const hint =
+    mode === "same-features"
+      ? tab === "sold"
+        ? `Similar homes ${closedVerb} in ${areaLabel} · ${featuresLabel}`
+        : `Similar homes ${subject.transactionType === "LEASE" ? "for lease" : "for sale"} in ${areaLabel} · ${featuresLabel}`
+      : tab === "sold"
+        ? `${recentClosedLabel} near ${areaLabel}`
+        : `${forSaleLabel} near ${areaLabel}`;
 
   return (
     <ListingSection
       id="listing-related"
       className="w-full min-w-0"
-      eyebrow="Keep exploring"
-      title="Related homes"
-      hint={
-        mode === "same-area"
-          ? `Homes in ${areaLabel}`
-          : `Similar homes in ${areaLabel} · ${featuresLabel}`
-      }
+      title="Explore nearby homes"
+      hint={hint}
       action={
         <Link
           href={seeAllHref}
-          className="rounded-lg bg-canopy/10 px-3 py-2 text-xs font-semibold text-canopy transition hover:bg-canopy/15"
+          className="inline-flex min-h-11 items-center text-sm font-semibold text-canopy hover:underline"
         >
-          See all →
+          View more
         </Link>
       }
     >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div
-          role="tablist"
-          aria-label="Related listings"
-          className="flex gap-1 overflow-x-auto border-b border-line/70 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          {(
-            [
-              { id: "for-sale", label: forSaleLabel },
-              { id: "sold", label: recentClosedLabel },
-            ] as const
-          ).map((entry) => {
-            const active = tab === entry.id;
-            return (
-              <button
-                key={entry.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setTab(entry.id)}
-                className={cn(
-                  "-mb-px shrink-0 border-b-2 px-3 py-2.5 text-sm font-semibold transition sm:px-4",
-                  active
-                    ? "border-canopy text-canopy-deep"
-                    : "border-transparent text-ink/45 hover:text-ink/70",
-                )}
-              >
-                {entry.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div
-          className="inline-flex rounded-xl border border-line/70 bg-mist/50 p-1"
+          className="inline-flex rounded-xl border border-line/50 bg-mist/35 p-1"
           role="group"
           aria-label="Match preference"
         >
@@ -210,13 +181,46 @@ export function ListingRelatedSection({
                 type="button"
                 onClick={() => void selectMode(entry.id)}
                 className={cn(
-                  "rounded-lg px-3 py-2 text-xs font-semibold transition sm:text-sm",
+                  "min-h-11 rounded-lg px-3 text-sm font-semibold transition",
                   active
-                    ? "bg-canopy text-white shadow-sm"
-                    : "text-ink/65 hover:text-canopy",
+                    ? "bg-surface text-ink shadow-[0_1px_0_rgb(20_32_28/0.04)]"
+                    : "text-ink/55 hover:text-ink",
                 )}
               >
                 {entry.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div
+          role="tablist"
+          aria-label="Related listings"
+          className="flex gap-1 border-b border-line/50"
+        >
+          {(
+            [
+              { id: "for-sale", label: forSaleLabel },
+              { id: "sold", label: recentClosedLabel },
+            ] as const
+          ).map((entry) => {
+            const active = tab === entry.id;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(entry.id)}
+                className={cn(
+                  "relative min-h-11 shrink-0 px-3 text-sm font-semibold transition",
+                  active ? "text-ink" : "text-ink/45 hover:text-ink/70",
+                )}
+              >
+                {entry.label}
+                {active ? (
+                  <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-canopy" />
+                ) : null}
               </button>
             );
           })}
@@ -227,26 +231,12 @@ export function ListingRelatedSection({
         <p className="mt-2 text-xs text-ink/40">Saving preference…</p>
       ) : null}
 
-      {mode === "same-features" ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          <span className="rounded-full border border-canopy/20 bg-canopy/5 px-2.5 py-1 text-[11px] font-semibold text-canopy-deep">
-            {propertyTypeLabel(subject.propertyType)}
-          </span>
-          <span className="rounded-full border border-canopy/20 bg-canopy/5 px-2.5 py-1 text-[11px] font-semibold text-canopy-deep">
-            {bedsText} {bedsText === "1" ? "bed" : "beds"}
-          </span>
-          <span className="rounded-full border border-line bg-mist/80 px-2.5 py-1 text-[11px] font-semibold text-ink/60">
-            {areaLabel}
-          </span>
-        </div>
-      ) : null}
-
       <div className="mt-4">
         {loading || items.length > 0 ? (
           <CompactPropertyCardRail
             items={items}
             loading={loading}
-            label={`${forSaleLabel} and ${recentClosedLabel}`}
+            label={hint}
           />
         ) : (
           <p className="rounded-xl border border-dashed border-line/70 bg-mist/40 px-4 py-8 text-center text-sm text-ink/50">

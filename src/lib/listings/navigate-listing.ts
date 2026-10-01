@@ -13,6 +13,7 @@ import {
   isListingSheetOpen,
   openListingSheet,
 } from "@/lib/mobile/listing-sheet-store";
+import { browseSourceForHref } from "@/lib/mobile/listing-browse-source";
 
 export function isListingDetailPath(href: string): boolean {
   try {
@@ -51,13 +52,18 @@ function isInsideListingSheetFrame(): boolean {
 function openListing(href: string) {
   if (typeof window === "undefined") return;
   const path = toAppHref(href);
+  const browse = browseSourceForHref(path);
 
   // Inside the overlay iframe — ask the parent to push onto the sheet stack
   // (avoids nested popups; Back/Close live on the parent chrome).
   if (isInsideListingSheetFrame()) {
     try {
       window.parent.postMessage(
-        { type: LISTING_SHEET_OPEN_MESSAGE, href: path },
+        {
+          type: LISTING_SHEET_OPEN_MESSAGE,
+          href: path,
+          ...(browse ? { browseHrefs: browse } : {}),
+        },
         window.location.origin,
       );
       return;
@@ -66,7 +72,7 @@ function openListing(href: string) {
     }
   }
 
-  openListingSheet(path);
+  openListingSheet(path, browse);
 }
 
 /** True when a non-listing exit should dismiss the overlay instead of soft-nav. */

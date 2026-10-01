@@ -50,7 +50,7 @@ export function ListingLockedGateOverlay({
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-canopy">
                 Client login
               </p>
-              <p className="font-display text-2xl leading-tight text-ink sm:text-3xl">
+              <p className="font-sans font-semibold text-2xl leading-tight text-ink sm:text-3xl">
                 Sign in required
               </p>
               <p className="mx-auto max-w-sm text-sm leading-relaxed text-ink/60 sm:text-[15px]">

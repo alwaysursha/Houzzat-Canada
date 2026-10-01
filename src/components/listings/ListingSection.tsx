@@ -28,7 +28,7 @@ export function ListingSection({
     <Tag
       id={id}
       className={cn(
-        "min-w-0 overflow-hidden rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6",
+        "min-w-0 overflow-hidden rounded-none border-0 bg-transparent p-0 md:rounded-2xl md:border md:border-line/50 md:bg-surface md:p-6",
         id &&
           "scroll-mt-[calc(var(--site-header-stack,4rem)+3.25rem)]",
         className,
@@ -43,14 +43,14 @@ export function ListingSection({
         >
           <div className="min-w-0 max-w-2xl">
             {eyebrow ? (
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
+              <p className="text-xs font-medium text-ink/45">
                 {eyebrow}
               </p>
             ) : null}
             {title ? (
               <h2
                 className={cn(
-                  "font-display text-xl text-ink sm:text-2xl",
+                  "font-sans text-lg font-semibold tracking-tight text-ink sm:text-xl",
                   eyebrow ? "mt-1" : null,
                 )}
               >

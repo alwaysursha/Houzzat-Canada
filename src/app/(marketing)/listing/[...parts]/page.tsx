@@ -17,6 +17,7 @@ import {
   resolveListingEntitlementContextForServerPage,
 } from "@/lib/tenancy/listing-entitlement";
 import { resolveMarketingTenancy } from "@/lib/tenancy/resolve-marketing-tenancy";
+import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import { resolveMarketingWhatsAppNumber } from "@/lib/tenancy/resolve-tenant-whatsapp";
 import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
@@ -167,6 +168,9 @@ export default async function ListingDetailPage({
   }
 
   const tenancy = await resolveMarketingTenancy();
+  const publicAgent = tenancy?.workspaceId
+    ? await resolvePublicAgentIdentity(tenancy.workspaceId)
+    : null;
   const canonicalOrigin = tenancy
     ? await resolveCanonicalPublicOrigin(
         tenancy.workspaceId,
@@ -367,6 +371,7 @@ export default async function ListingDetailPage({
         gateDetails={gateDetails}
         gateSold={gateSold}
         canonicalPath={canonicalPath}
+        publicAgent={publicAgent}
         expertWhatsApp={await resolveMarketingWhatsAppNumber()}
       />
     </>

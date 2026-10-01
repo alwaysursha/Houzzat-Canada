@@ -4,6 +4,7 @@ import { buildListingPanelPayload } from "@/lib/listings/build-listing-panel";
 import { loadListingForDetailPage } from "@/lib/listings/load-listing-for-detail";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
+import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
@@ -63,6 +64,11 @@ export async function GET(request: Request, { params }: Params) {
       });
     }
 
+    const workspaceId = entitlement.workspaceId.trim();
+    const publicAgent = workspaceId
+      ? await resolvePublicAgentIdentity(workspaceId)
+      : null;
+
     // Match RSC: record a view when the authorized payload is returned.
     scheduleWorkerSideEffect(
       prisma.listingView.create({
@@ -70,11 +76,14 @@ export async function GET(request: Request, { params }: Params) {
       }),
     );
 
-    return NextResponse.json(result.payload, {
-      headers: {
-        "Cache-Control": "private, no-store",
+    return NextResponse.json(
+      { ...result.payload, publicAgent },
+      {
+        headers: {
+          "Cache-Control": "private, no-store",
+        },
       },
-    });
+    );
   } catch (error) {
     const name = error instanceof Error ? error.name : "Error";
     const message = error instanceof Error ? error.message : "unknown";

@@ -94,7 +94,7 @@ export function ListingInsightsDeferred({
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
           {brandDisplayName} Insights
         </p>
-        <h2 className="mt-1 font-display text-xl text-ink">
+        <h2 className="mt-1 font-sans font-semibold text-xl text-ink">
           Market insights unavailable
         </h2>
         <p className="mt-2 text-sm text-ink/55">

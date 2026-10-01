@@ -26,7 +26,7 @@ import {
 } from "@/lib/mobile/listing-sheet-store";
 import {
   ListingSheetChrome,
-  listingSheetChromeHeightVar,
+  LISTING_SHEET_CHROME_BODY,
 } from "@/components/mobile/ListingSheetChrome";
 import { RoutePlannerFloatingChip } from "@/components/route-planner/RoutePlannerFloatingChip";
 import { acquireScrollLock } from "@/lib/scroll-lock";
@@ -101,6 +101,9 @@ export function ListingSheetHost() {
     href: null,
     depth: 0,
     canBack: false,
+    hasBrowse: false,
+    previousHref: null,
+    nextHref: null,
   });
   const [usePanel, setUsePanel] = useState(false);
   const [Panel, setPanel] = useState<PanelComponent | null>(null);
@@ -157,10 +160,16 @@ export function ListingSheetHost() {
       const data = event.data as {
         type?: string;
         href?: string;
+        browseHrefs?: unknown;
       } | null;
       if (typeof data?.href !== "string" || !data.href) return;
       if (data.type === LISTING_SHEET_OPEN_MESSAGE) {
-        openListingSheet(data.href);
+        const browse = Array.isArray(data.browseHrefs)
+          ? data.browseHrefs.filter(
+              (item): item is string => typeof item === "string",
+            )
+          : null;
+        openListingSheet(data.href, browse);
         return;
       }
       if (data.type === LISTING_SHEET_LEAVE_MESSAGE) {
@@ -255,45 +264,73 @@ export function ListingSheetHost() {
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex flex-col bg-surface"
+      className="fixed inset-0 z-[200] bg-surface md:bg-transparent"
       role="dialog"
       aria-modal="true"
       aria-label="Listing details"
       data-listing-panel={usePanel ? "1" : undefined}
-      // Panel mode shares the parent viewport (no iframe document flags):
-      // - chrome-height offsets ListingStickyBar / section nav under sheet chrome
-      // - site-header-stack 0 so Book a viewing / scroll-mt don't reserve
-      //   a phantom site header (iframe sheet sets this on <html> instead)
+      data-listing-sheet-host=""
       style={
         {
-          "--listing-sheet-chrome-height": listingSheetChromeHeightVar(),
           "--site-header-stack": "0px",
           "--listing-viewing-sticky-gap": "0px",
         } as CSSProperties
       }
     >
-      <ListingSheetChrome
-        href={state.href}
-        canBack={state.canBack}
-        depth={state.depth}
-        usePanel={usePanel}
+      <style>{`
+        [data-listing-sheet-host] {
+          --listing-sheet-chrome-height: calc(2.75rem + env(safe-area-inset-top, 0px));
+        }
+        @media (min-width: 768px) {
+          [data-listing-sheet-host] {
+            --listing-sheet-chrome-height: calc(${LISTING_SHEET_CHROME_BODY} + env(safe-area-inset-top, 0px));
+          }
+        }
+      `}</style>
+      {/*
+        Desktop/tablet only. The layer covers the viewport but does not take
+        clicks of its own; the dialog still blocks the page underneath.
+      */}
+      <div
+        className="pointer-events-none absolute inset-0 hidden bg-[#0e1a16]/35 backdrop-blur-[2px] md:block"
+        aria-hidden
       />
-      {usePanel ? (
-        Panel ? (
-          <Panel key={state.href} href={state.href} />
-        ) : (
-          <div className="flex min-h-0 flex-1 items-center justify-center bg-mist text-sm text-ink/55">
-            Loading listing…
-          </div>
-        )
-      ) : (
-        <iframe
-          ref={iframeRef}
-          title="Listing"
-          src="about:blank"
-          className="min-h-0 w-full flex-1 border-0 bg-mist"
+      {/*
+        Phones stay edge-to-edge. From md, the same chrome + iframe/panel sit
+        in an inset surface. translateX is the centering transform and also
+        the containing block for panel-mode position:fixed bars, so they pin
+        to this panel instead of the viewport. The iframe keeps its own
+        viewport, so its internal fixed bars are unchanged.
+      */}
+      <div
+        className="absolute inset-0 z-[1] flex min-h-0 flex-col bg-surface md:inset-auto md:top-5 md:bottom-5 md:left-1/2 md:w-[min(1840px,calc(100%-2.5rem))] md:-translate-x-1/2 md:overflow-hidden md:rounded-[18px] md:bg-surface md:shadow-[0_28px_70px_-20px_rgba(16,28,24,0.45),0_8px_24px_-12px_rgba(16,28,24,0.28)]"
+      >
+        <ListingSheetChrome
+          href={state.href}
+          canBack={state.canBack}
+          depth={state.depth}
+          usePanel={usePanel}
+          hasBrowse={state.hasBrowse}
+          previousHref={state.previousHref}
+          nextHref={state.nextHref}
         />
-      )}
+        {usePanel ? (
+          Panel ? (
+            <Panel key={state.href} href={state.href} />
+          ) : (
+            <div className="flex min-h-0 flex-1 items-center justify-center bg-mist text-sm text-ink/55">
+              Loading listing…
+            </div>
+          )
+        ) : (
+          <iframe
+            ref={iframeRef}
+            title="Listing"
+            src="about:blank"
+            className="min-h-0 w-full flex-1 border-0 bg-mist"
+          />
+        )}
+      </div>
       {/*
         Parent page chip is z-60 under this sheet (z-200). iframe cannot host
         that chip (MarketingChromeGate). Mount a sheet-layer chip here so

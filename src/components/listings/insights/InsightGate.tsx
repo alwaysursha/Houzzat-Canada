@@ -73,7 +73,7 @@ export function InsightGate({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-canopy">
                   Client access
                 </p>
-                <p className="font-display text-xl leading-snug text-ink sm:text-2xl">
+                <p className="font-sans font-semibold text-xl leading-snug text-ink sm:text-2xl">
                   {title}
                 </p>
                 <p className="mx-auto text-sm leading-relaxed text-ink/60 break-words">

@@ -3,6 +3,7 @@
  * Prefers WorkspaceProfessionalIdentity for name/designation/cell/brokerage/photo.
  * Bio / markets / email may still come from primary agent profile when present.
  */
+import { cache } from "react";
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 
@@ -28,14 +29,33 @@ function firstNonEmpty(
   return null;
 }
 
+function emptyPublicAgentIdentity(): PublicAgentIdentity {
+  return {
+    name: null,
+    title: null,
+    photoUrl: null,
+    bio: null,
+    brokerageName: null,
+    phone: null,
+    email: null,
+    markets: [],
+  };
+}
+
 /**
- * Resolve primary agent presentation for a workspace.
+ * Resolve the workspace primary/public agent for presentation.
+ * This is not the customer's assigned lead agent.
  * Missing fields stay null — templates must omit gracefully.
+ *
+ * React.cache dedupes a second call in the same server request (marketing
+ * layout already resolves this for non-default templates).
  */
-export async function resolvePublicAgentIdentity(
+export const resolvePublicAgentIdentity = cache(async function resolvePublicAgentIdentity(
   workspaceId: string,
   prisma: PrismaClient = defaultPrisma,
 ): Promise<PublicAgentIdentity> {
+  if (!workspaceId.trim()) return emptyPublicAgentIdentity();
+
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     select: {
@@ -74,18 +94,7 @@ export async function resolvePublicAgentIdentity(
     },
   });
 
-  if (!workspace) {
-    return {
-      name: null,
-      title: null,
-      photoUrl: null,
-      bio: null,
-      brokerageName: null,
-      phone: null,
-      email: null,
-      markets: [],
-    };
-  }
+  if (!workspace) return emptyPublicAgentIdentity();
 
   const agent = workspace.primaryAgent;
   const profile =
@@ -118,4 +127,4 @@ export async function resolvePublicAgentIdentity(
     email: firstNonEmpty(agent?.email, workspace.branding?.contactEmail),
     markets: profile?.markets ?? [],
   };
-}
+});

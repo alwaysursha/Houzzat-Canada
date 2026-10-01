@@ -11,6 +11,7 @@ import { listingPath } from "@/lib/listings/listing-path";
 import type { GalleryMedia } from "@/lib/listings/resolve-gallery";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
 import type { ListingDetail } from "@/lib/listings/types";
+import type { PublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { hasVowAccess } from "@/lib/vow";
 
@@ -86,6 +87,11 @@ export type ListingPanelPayload = {
   listing: ListingPanelListing;
   listingHistoryRows: HistoryRow[];
   sessionContact: ListingPanelSessionContact | null;
+  /**
+   * Same public agent as the listing page. Set by the panel route from the
+   * request workspace. Absent on payloads built without that route.
+   */
+  publicAgent?: PublicAgentIdentity | null;
 };
 
 export type ListingPanelErrorBody = {
