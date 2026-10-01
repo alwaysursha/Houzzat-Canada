@@ -49,11 +49,16 @@ assert.equal(summaryFacts.includes("listing.sqft"), false);
 assert.ok(summaryFacts.includes('bedValue === "1" ? "Bedroom" : "Bedrooms"'));
 assert.ok(summaryFacts.includes('baths === 1 ? "Bathroom" : "Bathrooms"'));
 assert.ok(summaryFacts.includes('parkingSpaces === 1 ? "Spot" : "Spots"'));
-assert.ok(summaryFacts.includes("grid w-full"));
+assert.ok(summaryFacts.includes("justify-between"));
 assert.ok(summaryFacts.includes("whitespace-nowrap"));
 assert.ok(summaryFacts.includes("flex-col"));
 assert.ok(summaryFacts.includes("md:flex-row"));
-assert.ok(summaryFacts.includes("minmax(0, 1fr)"));
+assert.ok(summaryFacts.includes("clamp(0.8125rem,3.6vw,1.125rem)"));
+assert.ok(summaryFacts.includes("md:shrink-0"));
+assert.ok(summaryFacts.includes("md:flex-nowrap"));
+assert.equal(summaryFacts.includes("100cqi"), false);
+assert.equal(summaryFacts.includes("lg:w-auto"), false);
+assert.equal(summaryFacts.includes("minmax(0, 1fr)"), false);
 assert.equal(summaryFacts.includes("border"), false);
 assert.equal(count(detail, "formatListingSqftLabel("), 1);
 assert.ok(

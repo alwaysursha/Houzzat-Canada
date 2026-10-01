@@ -119,7 +119,7 @@ type SummaryFactIconKind = "bed" | "bath" | "sqft" | "parking";
 
 function SummaryFactIcon({ kind }: { kind: SummaryFactIconKind }) {
   const className =
-    "size-[clamp(2.25rem,10vw,3.25rem)] shrink-0 text-canopy md:size-7 lg:size-6 xl:size-7 2xl:size-8";
+    "size-[clamp(1.75rem,7.5vw,2.75rem)] shrink-0 text-canopy md:size-6 lg:size-7 xl:size-8";
   switch (kind) {
     case "bed":
       return <Bed className={className} aria-hidden />;
@@ -194,19 +194,15 @@ function SummaryPropertyFacts({
   return (
     <div
       aria-label="Property facts"
-      className={`@container grid w-full md:flex md:w-full md:items-center md:justify-between md:gap-x-5 lg:w-auto lg:justify-end lg:gap-x-4 xl:gap-x-6 2xl:gap-x-8 ${locked ? "select-none blur-[5px]" : ""}`}
-      style={{
-        gridTemplateColumns: `repeat(${facts.length}, minmax(0, 1fr))`,
-        ["--fact-cols" as string]: facts.length,
-      }}
+      className={`flex w-[calc(100%+2rem)] -mx-4 items-start justify-between sm:w-[calc(100%+3rem)] sm:-mx-6 md:mx-0 md:w-full md:flex-nowrap md:items-center md:justify-end md:gap-x-4 lg:gap-x-6 xl:gap-x-8 ${locked ? "select-none blur-[5px]" : ""}`}
     >
       {facts.map((fact) => (
         <div
           key={fact.key}
-          className="flex min-w-0 flex-col items-center gap-2 text-center md:w-auto md:flex-row md:gap-2.5 md:text-left"
+          className="flex flex-col items-center gap-2 text-center md:w-auto md:shrink-0 md:flex-row md:flex-nowrap md:gap-2 lg:gap-2.5 md:text-left"
         >
           <SummaryFactIcon kind={fact.icon} />
-          <span className="whitespace-nowrap font-semibold leading-none tracking-tight text-ink [font-size:clamp(0.5625rem,calc(100cqi/var(--fact-cols)/9.2),1.25rem)] md:text-lg lg:text-base xl:text-lg 2xl:text-xl">
+          <span className="whitespace-nowrap font-semibold leading-none tracking-tight text-ink text-[clamp(0.8125rem,3.6vw,1.125rem)] md:text-base lg:text-lg xl:text-xl">
             {fact.caption}
           </span>
         </div>
@@ -656,21 +652,21 @@ export function ListingDetailView({
               )}
             </div>
 
-            <div className="flex w-full min-w-0 flex-col gap-3 lg:w-auto lg:shrink-0 lg:items-end">
+            <div className="hidden w-full min-w-0 flex-col gap-3 md:flex lg:w-auto lg:shrink-0 lg:items-end">
               <p className="hidden text-right text-base font-semibold leading-snug text-ink/75 md:block">
                 {timingLabel}
               </p>
-              <SummaryPropertyFacts
-                segment={listing.segment}
-                bedsLabel={bedsPlusLabel}
-                beds={listing.beds}
-                baths={listing.baths}
-                livingAreaRange={listingFacts?.livingAreaRange}
-                parkingSpaces={listing.parkingSpaces}
-                locked={detailsLocked}
-              />
             </div>
             </div>
+            <SummaryPropertyFacts
+              segment={listing.segment}
+              bedsLabel={bedsPlusLabel}
+              beds={listing.beds}
+              baths={listing.baths}
+              livingAreaRange={listingFacts?.livingAreaRange}
+              parkingSpaces={listing.parkingSpaces}
+              locked={detailsLocked}
+            />
             {!detailsLocked && listingFacts?.virtualTourUrl?.trim() ? (
               <a
                 href={listingFacts.virtualTourUrl.trim()}
