@@ -50,7 +50,7 @@ export function ListingSection({
             {title ? (
               <h2
                 className={cn(
-                  "font-display text-xl text-ink sm:text-2xl",
+                  "font-display text-xl font-semibold text-ink sm:text-2xl",
                   eyebrow ? "mt-1" : null,
                 )}
               >

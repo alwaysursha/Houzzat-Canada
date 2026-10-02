@@ -459,7 +459,7 @@ export function ListingSheetChrome({
         )}
         aria-hidden={mobileSearchOpen}
       >
-        <span className="font-display text-[1.7rem] font-semibold leading-none tracking-tight text-white sm:text-[1.85rem]">
+        <span className="listing-wordmark font-display text-[1.7rem] font-semibold leading-none tracking-tight text-white sm:text-[1.85rem]">
           {tenantDisplayName}
         </span>
       </div>

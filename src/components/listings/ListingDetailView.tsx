@@ -145,7 +145,7 @@ export function ListingDetailView({
   const sqftLabel = formatListingSqftLabel({
     sqft: listing.sqft,
     livingAreaRange: listingFacts?.livingAreaRange,
-    unit: "SqFt",
+    unit: "sqft",
   });
   const taxesLabel = listing.taxes
     ? listingFacts?.taxYear
@@ -325,17 +325,22 @@ export function ListingDetailView({
                       size="lg"
                     />
                   ) : detailsLocked ? (
-                    <p className="font-display text-3xl tracking-tight text-ink/55 sm:text-4xl">
-                      <span className="mr-2 font-sans text-base font-semibold text-ink/45 sm:text-lg">
+                    <p className="font-display text-3xl font-bold tracking-tight text-ink/55 sm:text-4xl">
+                      <span className="mr-2 font-sans text-base font-semibold text-ink sm:text-lg">
                         {listing.transactionType === "LEASE"
                           ? "Rent:"
-                          : "Listed:"}
+                          : "Listed for:"}
                       </span>
                       {gateSold.title}
                     </p>
                   ) : (
                     <>
-                      <p className="font-display text-3xl tracking-tight text-canopy sm:text-4xl">
+                      <p className="font-display text-3xl font-bold tracking-tight text-canopy sm:text-4xl">
+                        <span className="mr-2 font-sans text-base font-semibold text-ink sm:text-lg">
+                          {listing.transactionType === "LEASE"
+                            ? "Rent:"
+                            : "Listed for:"}
+                        </span>
                         {formatListPrice(
                           listing.listPrice,
                           listing.transactionType,
@@ -367,26 +372,26 @@ export function ListingDetailView({
                   )}
                 </div>
                 <div className="shrink-0 pt-1.5 text-right md:hidden">
-                  <p className="text-sm font-medium leading-snug text-ink/55">
+                  <p className="text-sm font-semibold leading-snug text-ink/55">
                     {timingLabel}
                   </p>
-                  <p className="text-sm font-medium leading-snug text-ink/55">
+                  <p className="mt-1 text-sm font-semibold leading-snug text-ink/55">
                     MLS® {listing.mlsNumber}
                   </p>
                 </div>
               </div>
               <div className="mt-2 font-display leading-tight text-ink">
                 {detailsLocked ? (
-                  <h1 className="select-none text-xl font-normal blur-[5px] md:text-2xl">
+                  <h1 className="select-none text-xl font-semibold blur-[5px] md:text-2xl">
                     {addressSearchLabel}
                   </h1>
                 ) : (
                   <>
-                    <h1 className="text-xl font-normal md:text-2xl">
+                    <h1 className="text-xl font-semibold md:text-2xl">
                       {streetLine}
                     </h1>
                     {addressLocality ? (
-                      <p className="mt-1 text-base font-normal text-ink/70 md:text-lg">
+                      <p className="mt-1 text-base font-semibold text-ink/70 md:text-lg">
                         {communityHref && listing.community ? (
                           <>
                             {listing.city.trim()}
@@ -413,7 +418,7 @@ export function ListingDetailView({
                 )}
               </div>
               {detailsLocked ? (
-                <p className="mt-1 text-sm text-ink/55">
+                <p className="mt-1 text-base text-ink/55 sm:text-lg">
                   <span className="font-bold text-ink">
                     {propertyTypeLabel(listing.propertyType)}
                   </span>
@@ -423,7 +428,7 @@ export function ListingDetailView({
                   {gateDetails.title}
                 </p>
               ) : (
-                <p className="mt-1 text-sm text-ink/55">
+                <p className="mt-1 text-base text-ink/55 sm:text-lg">
                   <span className="font-bold text-ink">
                     {propertyTypeLabel(listing.propertyType)}
                   </span>
@@ -433,10 +438,10 @@ export function ListingDetailView({
 
             <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:shrink-0 md:items-end">
               <div className="hidden text-right md:block">
-                <p className="text-sm font-medium leading-snug text-ink/55">
+                <p className="text-sm font-semibold leading-snug text-ink/55">
                   {timingLabel}
                 </p>
-                <p className="text-sm font-medium leading-snug text-ink/55">
+                <p className="mt-1 text-sm font-semibold leading-snug text-ink/55">
                   MLS® {listing.mlsNumber}
                 </p>
               </div>
@@ -486,7 +491,7 @@ export function ListingDetailView({
                     aria-hidden
                   />
                   <span className="text-sm font-semibold leading-tight text-ink">
-                    {sqftLabel ?? "n/a SqFt"}
+                    {sqftLabel ?? "n/a sqft"}
                   </span>
                 </div>
                 <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/60 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
@@ -497,7 +502,7 @@ export function ListingDetailView({
                   />
                   <span className="text-sm font-semibold leading-tight text-ink">
                     {listing.parkingSpaces}{" "}
-                    {listing.parkingSpaces === 1 ? "Parking" : "Parkings"}
+                    {listing.parkingSpaces === 1 ? "Spot" : "Spots"}
                   </span>
                 </div>
               </div>

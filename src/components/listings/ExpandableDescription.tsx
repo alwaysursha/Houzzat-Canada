@@ -19,7 +19,7 @@ export function ExpandableDescription({
     <div className="space-y-2">
       <p
         className={cn(
-          "leading-relaxed text-ink/80",
+          "text-lg leading-relaxed text-ink/90",
           !expanded && needsToggle && "line-clamp-4",
           className,
         )}

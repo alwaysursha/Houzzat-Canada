@@ -26,9 +26,9 @@ assert.equal(detail.includes("DesktopListingActions"), false);
 assert.equal(detail.includes("<ListingEstimateLine"), false);
 assert.equal(detail.includes("publicAgent"), false);
 assert.ok(detail.includes("<ListingQaPanel"));
-assert.ok(detail.includes("font-display text-3xl tracking-tight text-canopy"));
+assert.ok(detail.includes("font-display text-3xl font-bold tracking-tight text-canopy"));
 assert.ok(detail.includes("rounded-2xl border border-line/80 bg-surface"));
-assert.ok(section.includes("font-display text-xl text-ink sm:text-2xl"));
+assert.ok(section.includes("font-display text-xl font-semibold text-ink sm:text-2xl"));
 assert.ok(
   section.includes(
     "rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)]",

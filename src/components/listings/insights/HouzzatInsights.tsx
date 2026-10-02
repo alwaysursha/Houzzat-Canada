@@ -90,7 +90,7 @@ function PanelTitle({
           {eyebrow}
         </p>
       ) : null}
-      <h3 className="mt-1 font-display text-xl text-ink sm:text-2xl">{title}</h3>
+      <h3 className="mt-1 font-display text-xl font-semibold text-ink sm:text-2xl">{title}</h3>
       {hint ? <p className="mt-1 text-sm text-ink/55">{hint}</p> : null}
     </header>
   );
@@ -174,11 +174,11 @@ export function HouzzatInsights({
             </p>
             <h2
               id="houzzat-insights-heading"
-              className="mt-2 font-display text-3xl text-ink sm:text-4xl"
+              className="mt-2 font-display text-3xl font-semibold text-ink sm:text-4xl"
             >
               Understand this home in {placeLabel}
             </h2>
-            <p className="mt-2 text-sm leading-relaxed text-ink/60 sm:text-base">
+            <p className="mt-2 text-base leading-relaxed text-ink/75 sm:text-lg">
               Clear market context, costs, and lifestyle signals. Estimates are
               guides, not appraisals.
             </p>
