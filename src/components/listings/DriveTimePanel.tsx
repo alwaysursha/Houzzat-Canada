@@ -359,6 +359,8 @@ export function DriveTimePanel({
   const [peak, setPeak] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
   const [saving, setSaving] = useState<SlotId | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
+  const [measuring, setMeasuring] = useState(false);
 
   if (listingKey !== mlsNumber) {
     const saved = readSaved(mlsNumber);
@@ -366,8 +368,13 @@ export function DriveTimePanel({
     setPlaces(refreshEstimates(saved, originLat, originLng));
     setSelected(SLOTS.find((slot) => saved[slot]) ?? null);
     setEditing(null);
+    setMeasuring(false);
   }
 
+  /**
+   * Load saved Home / Work / School. Do not call Google here — that only runs
+   * when the address is first saved on a listing, or when they tap Get drive times.
+   */
   useEffect(() => {
     let cancelled = false;
     const saved = readSaved(mlsNumber);
@@ -375,11 +382,15 @@ export function DriveTimePanel({
     void (async () => {
       try {
         const res = await fetch("/api/account/commute");
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (!cancelled) setSignedIn(false);
+          return;
+        }
         const data = (await res.json()) as {
           places?: Partial<Record<SlotId, StoredPlace | null>>;
         };
         if (cancelled || !data.places) return;
+        setSignedIn(true);
         const merged: Partial<Record<SlotId, SavedDrive>> = { ...saved };
         for (const slot of SLOTS) {
           const row = data.places[slot];
@@ -400,20 +411,6 @@ export function DriveTimePanel({
                 originLng,
               );
         }
-        if (!cancelled) {
-          for (const slot of SLOTS) {
-            const place = merged[slot];
-            if (!place || place.source === "google") continue;
-            const measured = await lookupSignedInDrive(
-              originLat,
-              originLng,
-              place.lat,
-              place.lng,
-            );
-            if (!measured) continue;
-            merged[slot] = { ...place, ...measured, source: "google" };
-          }
-        }
         if (cancelled) return;
         window.sessionStorage.setItem(storageKey(mlsNumber), JSON.stringify(merged));
         setPlaces(merged);
@@ -424,7 +421,7 @@ export function DriveTimePanel({
           );
         });
       } catch {
-        return;
+        if (!cancelled) setSignedIn(false);
       }
     })();
 
@@ -432,6 +429,37 @@ export function DriveTimePanel({
       cancelled = true;
     };
   }, [mlsNumber, originLat, originLng]);
+
+  const needsDriveMeasure = useMemo(
+    () =>
+      signedIn &&
+      SLOTS.some((slot) => {
+        const place = places[slot];
+        return Boolean(place && place.source !== "google");
+      }),
+    [places, signedIn],
+  );
+
+  async function measureSavedDrives() {
+    if (measuring || !needsDriveMeasure) return;
+    setMeasuring(true);
+    const next: Partial<Record<SlotId, SavedDrive>> = { ...places };
+    for (const slot of SLOTS) {
+      const place = next[slot];
+      if (!place || place.source === "google") continue;
+      const measured = await lookupSignedInDrive(
+        originLat,
+        originLng,
+        place.lat,
+        place.lng,
+      );
+      if (!measured) continue;
+      next[slot] = { ...place, ...measured, source: "google" };
+    }
+    window.sessionStorage.setItem(storageKey(mlsNumber), JSON.stringify(next));
+    setPlaces(next);
+    setMeasuring(false);
+  }
 
   const active = selected ? (places[selected] ?? null) : null;
   const shownSeconds = useMemo(() => {
@@ -472,6 +500,7 @@ export function DriveTimePanel({
         }),
       });
       signedIn = savedAccount.ok;
+      if (signedIn) setSignedIn(true);
     } catch {
       signedIn = false;
     }
@@ -593,6 +622,19 @@ export function DriveTimePanel({
               );
             })}
           </div>
+
+          {needsDriveMeasure ? (
+            <button
+              type="button"
+              onClick={() => {
+                void measureSavedDrives();
+              }}
+              disabled={measuring}
+              className="w-full rounded-xl border border-canopy/25 bg-canopy/5 px-3 py-2.5 text-sm font-semibold text-canopy transition hover:bg-canopy/10 disabled:opacity-60"
+            >
+              {measuring ? "Getting drive times…" : "Get drive times"}
+            </button>
+          ) : null}
 
           {editing ? (
             <div className="space-y-2 rounded-2xl border border-canopy/20 bg-canopy/5 p-2.5">
