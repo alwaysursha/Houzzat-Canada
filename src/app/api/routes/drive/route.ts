@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { requireCustomerUser } from "@/lib/account";
+import { isGoogleRoutesEnabled } from "@/lib/google/billing-guard";
 import { computeDriveRoute } from "@/lib/google/routes";
 
 function parseCoord(value: unknown): number | null {
@@ -11,17 +13,16 @@ function parseCoord(value: unknown): number | null {
 }
 
 export async function POST(request: Request) {
-  if (
-    process.env.GOOGLE_MAPS_BILLING_ENABLED !== "1" ||
-    !process.env.GOOGLE_MAPS_API_KEY?.trim()
-  ) {
+  if (!isGoogleRoutesEnabled()) {
     return NextResponse.json(
-      {
-        error:
-          "Drive time is disabled (Google billing kill-switch). Set GOOGLE_MAPS_BILLING_ENABLED=1 only if you accept Routes API charges.",
-      },
+      { error: "Drive time is using the local estimate." },
       { status: 503 },
     );
+  }
+
+  const user = await requireCustomerUser();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
   let body: unknown;
@@ -78,16 +79,19 @@ export async function POST(request: Request) {
       error instanceof Error
         ? error.message
         : "Could not calculate drive time.";
+    const capped = raw.includes("free cap reached");
     const keyBlocked = /are blocked|PERMISSION_DENIED|API_KEY_SERVICE_BLOCKED/i.test(
       raw,
     );
     return NextResponse.json(
       {
-        error: keyBlocked
-          ? "This Google Maps API key blocks Routes. In Google Cloud → Credentials → your key → API restrictions, add “Routes API” (not only Places), save, then wait a minute and try again."
-          : raw,
+        error: capped
+          ? "Drive time is using the local estimate."
+          : keyBlocked
+            ? "This Google Maps API key blocks Routes. In Google Cloud → Credentials → your key → API restrictions, add “Routes API” (not only Places), save, then wait a minute and try again."
+            : raw,
       },
-      { status: 502 },
+      { status: capped ? 429 : 502 },
     );
   }
 }

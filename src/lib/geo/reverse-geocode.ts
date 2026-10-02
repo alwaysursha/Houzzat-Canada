@@ -1,6 +1,9 @@
+import { isGoogleGeocodingEnabled } from "@/lib/google/billing-guard";
+
 /**
  * Reverse-geocode lat/lng to a display address for customer home capture.
- * Prefers Google when configured; falls back to Nominatim.
+ * Prefers Google only when catalogue geocoding is explicitly opted in.
+ * Falls back to Nominatim.
  */
 
 export async function reverseGeocode(
@@ -16,8 +19,7 @@ async function reverseGoogle(
   lat: number,
   lng: number,
 ): Promise<string | null> {
-  if (process.env.GOOGLE_MAPS_BILLING_ENABLED !== "1") return null;
-  if (process.env.GEOCODE_SKIP_GOOGLE === "1") return null;
+  if (!isGoogleGeocodingEnabled()) return null;
   const key =
     process.env.GOOGLE_MAPS_GEOCODING_API_KEY ||
     process.env.GOOGLE_MAPS_API_KEY ||

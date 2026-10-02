@@ -1019,6 +1019,16 @@ model User {
   homeAddress            String?
   homeLat                Float?
   homeLng                Float?
+  /**
+   * Commute places saved from a listing. Surfaced on lead activity now;
+   * lead profile can read the same columns later.
+   */
+  workAddress            String?
+  workLat                Float?
+  workLng                Float?
+  schoolAddress          String?
+  schoolLat              Float?
+  schoolLng              Float?
   caslConsentAt          DateTime?
   vowAcceptedAt          DateTime?
   vowVersion             String?
@@ -3614,4 +3624,26 @@ model SmsAutomationDispatch {
   @@index([workspaceId, createdAt])
   @@index([leadId, automationKey])
   @@index([status, createdAt])
+}
+
+/**
+ * Successful Google Routes calls for the Pacific month. The free Essentials
+ * cap is 10,000. This counter stops new calls before that.
+ */
+model GoogleRouteUsage {
+  month String @id
+  count Int    @default(0)
+}
+
+/** One saved drive between two coordinates. Repeat views do not call Google. */
+model DriveRouteCache {
+  id               String   @id @default(cuid())
+  originKey        String
+  destKey          String
+  distanceMeters   Int
+  durationSeconds  Int
+  encodedPolyline  String?  @db.Text
+  createdAt        DateTime @default(now())
+
+  @@unique([originKey, destKey])
 }

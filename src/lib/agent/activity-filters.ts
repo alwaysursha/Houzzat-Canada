@@ -179,6 +179,7 @@ export const ACTIVITY_FILTER_GROUPS: ActivityFilterGroup[] = [
           "contact_verify",
           "profile_flags",
           "email_verification_requested",
+          "commute_address",
         ],
       },
       {
@@ -319,6 +320,8 @@ export function friendlyActivityTypeLabel(type: string): string {
     case "UNSUBSCRIBE":
     case "ALERTS_DISABLED":
       return "Unsubscribe";
+    case "COMMUTE_ADDRESS":
+      return "Saved address";
     case "INQUIRY_TAG":
       return "Label";
     case "REMINDER_SET":

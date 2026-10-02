@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Briefcase,
   Car,
@@ -8,10 +8,13 @@ import {
   House,
   Map,
   Maximize2,
-  Pencil,
 } from "lucide-react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
+import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
+import { readThemeColor } from "@/lib/tenancy/read-theme-color";
 import { cn } from "@/lib/utils";
 
 type SlotId = "home" | "work" | "school";
@@ -22,33 +25,93 @@ type SavedDrive = {
   lng: number;
   durationSeconds: number | null;
   distanceMeters: number | null;
+  source?: "google" | "estimate";
+};
+
+type StoredPlace = {
+  address: string;
+  lat: number;
+  lng: number;
 };
 
 const SLOTS: readonly SlotId[] = ["home", "work", "school"];
 
-const SLOT_META: Record<
-  SlotId,
-  { label: string; icon: typeof House; tone: string; selected: string }
-> = {
-  home: {
-    label: "Home",
-    icon: House,
-    tone: "border-[#d7e4ff] bg-[#f4f8ff] text-[#2457d6]",
-    selected: "border-[#2457d6]/35 bg-[#eaf1ff] shadow-[0_8px_20px_-14px_rgba(36,87,214,0.9)]",
-  },
-  work: {
-    label: "Work",
-    icon: Briefcase,
-    tone: "border-[#d5f0df] bg-[#f3fbf6] text-[#17803d]",
-    selected: "border-[#17803d]/35 bg-[#e7f7ed] shadow-[0_8px_20px_-14px_rgba(23,128,61,0.9)]",
-  },
-  school: {
-    label: "School",
-    icon: GraduationCap,
-    tone: "border-[#e4d9ff] bg-[#f7f3ff] text-[#6d28d9]",
-    selected: "border-[#6d28d9]/35 bg-[#f3ecff] shadow-[0_8px_20px_-14px_rgba(109,40,217,0.9)]",
-  },
+const SLOT_META: Record<SlotId, { label: string; icon: typeof House }> = {
+  home: { label: "Home", icon: House },
+  work: { label: "Work", icon: Briefcase },
+  school: { label: "School", icon: GraduationCap },
 };
+
+function slotPhrase(slot: SlotId): string {
+  switch (slot) {
+    case "home":
+      return "Home";
+    case "work":
+      return "Work";
+    case "school":
+      return "School";
+    default: {
+      const exhaustive: never = slot;
+      return exhaustive;
+    }
+  }
+}
+
+/** City driving when the Routes API is off: road factor times a modest urban speed. */
+function estimateDrive(
+  originLat: number,
+  originLng: number,
+  destLat: number,
+  destLng: number,
+): { durationSeconds: number; distanceMeters: number } {
+  const toRad = (degrees: number) => (degrees * Math.PI) / 180;
+  const dLat = toRad(destLat - originLat);
+  const dLng = toRad(destLng - originLng);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(originLat)) *
+      Math.cos(toRad(destLat)) *
+      Math.sin(dLng / 2) ** 2;
+  const straight = 2 * 6371000 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distanceMeters = Math.max(1, Math.round(straight * 1.3));
+  const metersPerSecond = 32_000 / 3600;
+  return {
+    distanceMeters,
+    durationSeconds: Math.max(60, Math.round(distanceMeters / metersPerSecond)),
+  };
+}
+
+function withEstimate(
+  place: StoredPlace,
+  originLat: number,
+  originLng: number,
+): SavedDrive {
+  const drive = estimateDrive(originLat, originLng, place.lat, place.lng);
+  return { ...place, ...drive, source: "estimate" };
+}
+
+async function lookupSignedInDrive(
+  originLat: number,
+  originLng: number,
+  destLat: number,
+  destLng: number,
+): Promise<{ distanceMeters: number; durationSeconds: number } | null> {
+  const res = await fetch("/api/routes/drive", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ originLat, originLng, destLat, destLng }),
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as {
+    distanceMeters?: number;
+    durationSeconds?: number;
+  };
+  if (data.distanceMeters == null || data.durationSeconds == null) return null;
+  return {
+    distanceMeters: data.distanceMeters,
+    durationSeconds: data.durationSeconds,
+  };
+}
 
 function formatDriveDistance(meters: number) {
   const km = meters / 1000;
@@ -87,6 +150,7 @@ function readSaved(mlsNumber: string): Partial<Record<SlotId, SavedDrive>> {
           typeof row.durationSeconds === "number" ? row.durationSeconds : null,
         distanceMeters:
           typeof row.distanceMeters === "number" ? row.distanceMeters : null,
+        source: row.source === "google" ? "google" : "estimate",
       };
     }
     return next;
@@ -113,40 +177,130 @@ function mapsHref(
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
-function RouteSketch({
-  dashed,
+function pinElement(color: string) {
+  const el = document.createElement("div");
+  el.style.width = "14px";
+  el.style.height = "14px";
+  el.style.borderRadius = "999px";
+  el.style.background = color;
+  el.style.border = "2px solid #fff";
+  el.style.boxShadow = "0 1px 4px rgba(16,28,24,0.35)";
+  return el;
+}
+
+function DriveRouteMap({
+  originLat,
+  originLng,
+  dest,
   minutes,
 }: {
-  dashed: boolean;
+  originLat: number;
+  originLng: number;
+  dest: SavedDrive | null;
   minutes: string | null;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || mapRef.current) return;
+    const map = new maplibregl.Map({
+      container,
+      style: OSM_STYLE,
+      center: [originLng, originLat],
+      zoom: 13,
+      minZoom: MAP_MIN_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
+      cooperativeGestures: true,
+      attributionControl: false,
+    });
+    map.addControl(
+      new maplibregl.AttributionControl({ compact: true }),
+      "bottom-left",
+    );
+    mapRef.current = map;
+    return () => {
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
+      map.remove();
+      mapRef.current = null;
+    };
+  }, [originLat, originLng]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    let cancelled = false;
+
+    const draw = () => {
+      if (cancelled) return;
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [
+        new maplibregl.Marker({ element: pinElement("#1a1a1a") })
+          .setLngLat([originLng, originLat])
+          .addTo(map),
+      ];
+      const route = map.getSource("drive-route") as
+        | maplibregl.GeoJSONSource
+        | undefined;
+      if (!dest) {
+        route?.setData({ type: "FeatureCollection", features: [] });
+        map.easeTo({ center: [originLng, originLat], zoom: 14, duration: 400 });
+        return;
+      }
+      markersRef.current.push(
+        new maplibregl.Marker({ element: pinElement("#e11d2e") })
+          .setLngLat([dest.lng, dest.lat])
+          .addTo(map),
+      );
+      const line = {
+        type: "Feature" as const,
+        properties: {},
+        geometry: {
+          type: "LineString" as const,
+          coordinates: [
+            [originLng, originLat],
+            [dest.lng, dest.lat],
+          ],
+        },
+      };
+      if (route) {
+        route.setData(line);
+      } else {
+        map.addSource("drive-route", { type: "geojson", data: line });
+        map.addLayer({
+          id: "drive-route",
+          type: "line",
+          source: "drive-route",
+          paint: {
+            "line-color": readThemeColor("--canopy", "#0F6B4C"),
+            "line-width": 4,
+          },
+          layout: { "line-cap": "round", "line-join": "round" },
+        });
+      }
+      const bounds = new maplibregl.LngLatBounds(
+        [originLng, originLat],
+        [originLng, originLat],
+      );
+      bounds.extend([dest.lng, dest.lat]);
+      map.fitBounds(bounds, { padding: 36, maxZoom: 14, duration: 450 });
+    };
+
+    if (map.isStyleLoaded()) draw();
+    else map.once("load", draw);
+    return () => {
+      cancelled = true;
+    };
+  }, [dest, originLat, originLng]);
+
   return (
-    <div className="relative h-full min-h-36 overflow-hidden rounded-2xl bg-[#e7f0e4]">
-      <svg
-        viewBox="0 0 320 200"
-        className="absolute inset-0 size-full"
-        aria-hidden
-      >
-        <rect width="320" height="200" fill="#e6f1df" />
-        <path d="M0 40 C80 28 120 70 200 52 S300 20 320 36" stroke="#d5e4c8" strokeWidth="18" fill="none" />
-        <path d="M0 120 C70 100 140 150 220 128 S300 150 320 110" stroke="#f3f7ef" strokeWidth="22" fill="none" />
-        <path d="M40 0 V200 M120 0 V200 M200 0 V200 M270 0 V200" stroke="#d3e2c7" strokeWidth="1.2" />
-        <path d="M0 60 H320 M0 130 H320" stroke="#d3e2c7" strokeWidth="1.2" />
-        <path
-          d="M78 46 C110 70 128 118 168 126 S230 150 252 118"
-          stroke="#1a73e8"
-          strokeWidth="5"
-          fill="none"
-          strokeLinecap="round"
-          strokeDasharray={dashed ? "8 7" : undefined}
-        />
-        <circle cx="78" cy="46" r="9" fill="#1a1a1a" />
-        <path d="M78 28c6 0 10 4.2 10 9.6 0 7-10 16.4-10 16.4s-10-9.4-10-16.4c0-5.4 4-9.6 10-9.6z" fill="#1a1a1a" />
-        <circle cx="252" cy="118" r="8" fill="#e11d2e" />
-        <path d="M252 96c6.2 0 11 4.6 11 10.4 0 7.6-11 18-11 18s-11-10.4-11-18C241 100.6 245.8 96 252 96z" fill="#e11d2e" />
-      </svg>
+    <div className="relative h-full min-h-36 overflow-hidden rounded-2xl bg-mist">
+      <div ref={containerRef} className="absolute inset-0" />
       {minutes ? (
-        <span className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#1a73e8] px-2 py-0.5 text-xs font-semibold text-white shadow-sm @min-[40rem]:hidden">
+        <span className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-lg bg-canopy px-2 py-0.5 text-xs font-semibold text-white shadow-sm">
           {minutes}
         </span>
       ) : null}
@@ -165,87 +319,157 @@ export function DriveTimePanel({
   originLng: number;
   originLabel: string;
 }) {
-  const [places, setPlaces] = useState<Partial<Record<SlotId, SavedDrive>>>({});
-  const [selected, setSelected] = useState<SlotId>("work");
-  const [saveAs, setSaveAs] = useState<SlotId>("work");
-  const [editing, setEditing] = useState(false);
+  const [places, setPlaces] = useState<Partial<Record<SlotId, SavedDrive>>>(() =>
+    readSaved(mlsNumber),
+  );
+  const [selected, setSelected] = useState<SlotId | null>(() => {
+    const saved = readSaved(mlsNumber);
+    return SLOTS.find((slot) => saved[slot]) ?? null;
+  });
+  const [listingKey, setListingKey] = useState(mlsNumber);
+  const [editing, setEditing] = useState<SlotId | null>(null);
   const [peak, setPeak] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState<SlotId | null>(null);
+
+  if (listingKey !== mlsNumber) {
+    const saved = readSaved(mlsNumber);
+    setListingKey(mlsNumber);
+    setPlaces(saved);
+    setSelected(SLOTS.find((slot) => saved[slot]) ?? null);
+    setEditing(null);
+  }
 
   useEffect(() => {
+    let cancelled = false;
     const saved = readSaved(mlsNumber);
-    setPlaces(saved);
-    const first = SLOTS.find((slot) => saved[slot]);
-    if (first) {
-      setSelected(first);
-      setSaveAs(first);
-    }
-  }, [mlsNumber]);
 
-  const active = places[selected] ?? null;
+    void (async () => {
+      try {
+        const res = await fetch("/api/account/commute");
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          places?: Partial<Record<SlotId, StoredPlace | null>>;
+        };
+        if (cancelled || !data.places) return;
+        const merged: Partial<Record<SlotId, SavedDrive>> = { ...saved };
+        for (const slot of SLOTS) {
+          const row = data.places[slot];
+          if (!row || typeof row.address !== "string") continue;
+          if (typeof row.lat !== "number" || typeof row.lng !== "number") continue;
+          const existing = saved[slot];
+          const same =
+            existing &&
+            existing.lat === row.lat &&
+            existing.lng === row.lng &&
+            existing.source === "google" &&
+            existing.durationSeconds != null;
+          merged[slot] = same
+            ? { ...existing, address: row.address }
+            : existing &&
+                existing.lat === row.lat &&
+                existing.lng === row.lng &&
+                existing.durationSeconds != null
+              ? { ...existing, address: row.address }
+              : withEstimate(row, originLat, originLng);
+        }
+        if (!cancelled) {
+          for (const slot of SLOTS) {
+            const place = merged[slot];
+            if (!place || place.source === "google") continue;
+            const measured = await lookupSignedInDrive(
+              originLat,
+              originLng,
+              place.lat,
+              place.lng,
+            );
+            if (!measured) continue;
+            merged[slot] = { ...place, ...measured, source: "google" };
+          }
+        }
+        if (cancelled) return;
+        window.sessionStorage.setItem(storageKey(mlsNumber), JSON.stringify(merged));
+        setPlaces(merged);
+        setSelected((current) => {
+          if (current && (saved[current] || data.places?.[current])) return current;
+          return (
+            SLOTS.find((slot) => data.places?.[slot] || saved[slot]) ?? null
+          );
+        });
+      } catch {
+        return;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mlsNumber, originLat, originLng]);
+
+  const active = selected ? (places[selected] ?? null) : null;
   const shownSeconds = useMemo(() => {
     if (active?.durationSeconds == null) return null;
     return peak ? Math.round(active.durationSeconds * 1.35) : active.durationSeconds;
   }, [active, peak]);
+  const minutesLabel =
+    shownSeconds != null ? formatDriveDuration(shownSeconds) : null;
 
   async function savePlace(place: AutocompleteSuggestion) {
-    if (place.lat == null || place.lng == null) return;
-    const destLat = place.lat;
-    const destLng = place.lng;
-    const slot = saveAs;
+    if (!editing || place.lat == null || place.lng == null) return;
+    const slot = editing;
     const label = place.subtitle ?? place.label;
+    const estimated = withEstimate(
+      { address: label, lat: place.lat, lng: place.lng },
+      originLat,
+      originLng,
+    );
     setSelected(slot);
-    setLoading(true);
-    let durationSeconds: number | null = null;
-    let distanceMeters: number | null = null;
-    try {
-      const res = await fetch("/api/routes/drive", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          originLat,
-          originLng,
-          destLat,
-          destLng,
-        }),
-      });
-      const data = (await res.json()) as {
-        distanceMeters?: number;
-        durationSeconds?: number;
-      };
-      if (res.ok && data.distanceMeters != null && data.durationSeconds != null) {
-        distanceMeters = data.distanceMeters;
-        durationSeconds = data.durationSeconds;
-      }
-    } catch {
-      durationSeconds = null;
-      distanceMeters = null;
-    } finally {
-      setLoading(false);
-    }
-    const row: SavedDrive = {
-      address: label,
-      lat: destLat,
-      lng: destLng,
-      durationSeconds,
-      distanceMeters,
-    };
+    setSaving(slot);
+    setEditing(null);
     setPlaces((current) => {
-      const next = { ...current, [slot]: row };
+      const next = { ...current, [slot]: estimated };
       window.sessionStorage.setItem(storageKey(mlsNumber), JSON.stringify(next));
       return next;
     });
-  }
 
-  function chooseSlot(slot: SlotId) {
-    if (places[slot]) {
-      setSelected(slot);
-      setSaveAs(slot);
-      return;
+    let signedIn = false;
+    try {
+      const savedAccount = await fetch("/api/account/commute", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slot,
+          address: label,
+          lat: place.lat,
+          lng: place.lng,
+        }),
+      });
+      signedIn = savedAccount.ok;
+    } catch {
+      signedIn = false;
     }
-    setSaveAs(slot);
-    setEditing(true);
+
+    if (signedIn) {
+      const measured = await lookupSignedInDrive(
+        originLat,
+        originLng,
+        place.lat,
+        place.lng,
+      );
+      if (measured) {
+        const row: SavedDrive = {
+          ...estimated,
+          ...measured,
+          source: "google",
+        };
+        setPlaces((current) => {
+          const next = { ...current, [slot]: row };
+          window.sessionStorage.setItem(storageKey(mlsNumber), JSON.stringify(next));
+          return next;
+        });
+      }
+    }
+    setSaving(null);
   }
 
   return (
@@ -256,7 +480,7 @@ export function DriveTimePanel({
       <div className="flex flex-col gap-3.5 @min-[40rem]:flex-row @min-[40rem]:items-stretch">
         <div className="min-w-0 flex-1 space-y-3">
           <div className="flex items-start gap-3">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#e8f1ff] text-[#2457d6]">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-canopy/10 text-canopy">
               <Car className="size-5" strokeWidth={2.1} aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
@@ -267,65 +491,9 @@ export function DriveTimePanel({
                 From {originLabel}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setEditing((open) => !open)}
-              aria-expanded={editing}
-              className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[#2457d6] transition hover:text-[#1d4ed8]"
-            >
-              {editing ? "Done" : "Edit"}
-              <Pencil className="size-3.5 @min-[40rem]:hidden" aria-hidden />
-            </button>
           </div>
 
-          <div className="relative">
-            <AddressAutocomplete
-              source="google"
-              fillOnly
-              portalDesktopSuggestions
-              placeholder="Enter a destination"
-              inputClassName="h-11 rounded-xl border border-line/80 bg-white pl-10 text-sm shadow-none placeholder:text-ink/40 focus-visible:ring-2 focus-visible:ring-[#2457d6]/30"
-              onPlaceSelect={(place) => {
-                void savePlace(place);
-              }}
-            />
-          </div>
-
-          {editing ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-medium text-ink/45">Save as</span>
-              {SLOTS.map((slot) => {
-                const meta = SLOT_META[slot];
-                return (
-                  <button
-                    key={slot}
-                    type="button"
-                    onClick={() => setSaveAs(slot)}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-xs font-semibold transition",
-                      saveAs === slot
-                        ? meta.selected
-                        : "border-line/80 bg-white text-ink/60 hover:bg-mist",
-                    )}
-                  >
-                    {meta.label}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-
-          <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-ink/80">
-            <input
-              type="checkbox"
-              checked={peak}
-              onChange={(event) => setPeak(event.target.checked)}
-              className="size-4 rounded border-line text-[#2457d6] accent-[#2457d6]"
-            />
-            During peak hours
-          </label>
-
-          <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-1.5">
             {SLOTS.map((slot) => {
               const meta = SLOT_META[slot];
               const Icon = meta.icon;
@@ -338,64 +506,122 @@ export function DriveTimePanel({
                     ? Math.round(place.durationSeconds * 1.35)
                     : place.durationSeconds;
               return (
-                <button
+                <div
                   key={slot}
-                  type="button"
-                  onClick={() => chooseSlot(slot)}
-                  aria-pressed={activeSlot}
                   className={cn(
-                    "flex min-w-0 items-center gap-2 rounded-2xl border px-2 py-2 text-left transition duration-200",
+                    "flex min-w-0 items-center gap-2 rounded-2xl border px-2.5 py-2 transition duration-200",
                     activeSlot
-                      ? meta.selected
-                      : "border-line/70 bg-white hover:border-line hover:bg-mist/40",
+                      ? "border-canopy/35 bg-canopy/5"
+                      : "border-line/70 bg-white",
                   )}
                 >
-                  <Icon
-                    className={cn("size-5 shrink-0", activeSlot ? "" : "text-ink/35")}
-                    strokeWidth={2}
-                    aria-hidden
-                  />
-                  <span className="min-w-0">
-                    <span
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (place) setSelected(slot);
+                      else setEditing(slot);
+                    }}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    aria-pressed={activeSlot}
+                  >
+                    <Icon
                       className={cn(
-                        "block truncate text-[11px] font-semibold leading-tight sm:text-xs",
-                        activeSlot ? "" : "text-ink/70",
+                        "size-4 shrink-0",
+                        activeSlot ? "text-canopy" : "text-ink/40",
                       )}
-                    >
-                      {meta.label}
-                    </span>
-                    <span className="block truncate text-sm font-bold leading-tight tracking-tight">
-                      {loading && saveAs === slot
-                        ? "…"
-                        : seconds != null
-                          ? formatDriveDuration(seconds)
-                          : place
-                            ? "Saved"
-                            : "Add"}
-                    </span>
-                    {place?.distanceMeters != null ? (
-                      <span className="block truncate text-[10px] font-medium opacity-70 @min-[40rem]:hidden">
-                        {formatDriveDistance(place.distanceMeters)}
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-semibold text-ink">
+                        {meta.label}
                       </span>
-                    ) : null}
-                  </span>
-                </button>
+                      <span className="block truncate text-[11px] text-ink/50">
+                        {place?.address ?? "No address yet"}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-sm font-bold tracking-tight text-ink">
+                        {saving === slot
+                          ? "…"
+                          : seconds != null
+                            ? formatDriveDuration(seconds)
+                            : "—"}
+                      </span>
+                      {place?.distanceMeters != null ? (
+                        <span className="block text-[10px] font-medium text-ink/45">
+                          {formatDriveDistance(place.distanceMeters)}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditing(slot)}
+                    className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-canopy transition hover:bg-canopy/10"
+                  >
+                    {place ? "Change" : "Add"}
+                  </button>
+                </div>
               );
             })}
           </div>
+
+          {editing ? (
+            <div className="space-y-2 rounded-2xl border border-canopy/20 bg-canopy/5 p-2.5">
+              <p className="text-xs font-semibold text-ink">
+                Save this address as {slotPhrase(editing)}
+              </p>
+              <AddressAutocomplete
+                key={editing}
+                source="google"
+                fillOnly
+                portalDesktopSuggestions
+                placeholder={`${slotPhrase(editing)} address`}
+                inputClassName="h-11 rounded-xl border border-line/80 bg-white pl-10 text-sm shadow-none placeholder:text-ink/40 focus-visible:ring-2 focus-visible:ring-canopy/30"
+                onPlaceSelect={(place) => {
+                  void savePlace(place);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="text-xs font-semibold text-ink/50 transition hover:text-ink"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : null}
+
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-ink/80">
+            <input
+              type="checkbox"
+              checked={peak}
+              onChange={(event) => setPeak(event.target.checked)}
+              className="size-4 rounded border-line accent-canopy"
+            />
+            During peak hours
+          </label>
         </div>
 
         <div className="flex min-w-0 flex-col gap-2 @min-[40rem]:w-40">
-          <div className={cn("relative transition-[height] duration-300", mapExpanded ? "h-64" : "h-36 @min-[40rem]:h-full @min-[40rem]:min-h-40")}>
-            <RouteSketch
-              dashed={false}
-              minutes={shownSeconds != null ? formatDriveDuration(shownSeconds) : null}
+          <div
+            className={cn(
+              "relative transition-[height] duration-300",
+              mapExpanded ? "h-64" : "h-44 @min-[40rem]:h-full @min-[40rem]:min-h-40",
+            )}
+          >
+            <DriveRouteMap
+              originLat={originLat}
+              originLng={originLng}
+              dest={active}
+              minutes={minutesLabel}
             />
             <button
               type="button"
               onClick={() => setMapExpanded((open) => !open)}
               aria-label={mapExpanded ? "Shrink map" : "Expand map"}
-              className="absolute bottom-2 right-2 flex size-8 items-center justify-center rounded-lg border border-line/70 bg-white/95 text-ink/70 shadow-sm transition hover:text-ink @min-[40rem]:hidden"
+              className="absolute bottom-2 right-2 z-10 flex size-8 items-center justify-center rounded-lg border border-line/70 bg-white/95 text-ink/70 shadow-sm transition hover:text-ink @min-[40rem]:hidden"
             >
               <Maximize2 className="size-3.5" aria-hidden />
             </button>
@@ -404,7 +630,7 @@ export function DriveTimePanel({
             href={mapsHref(originLat, originLng, active)}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 px-1 py-1 text-sm font-semibold text-[#2457d6] transition hover:text-[#1d4ed8] @min-[40rem]:hidden"
+            className="flex items-center gap-2 px-1 py-1 text-sm font-semibold text-canopy transition hover:text-canopy-deep @min-[40rem]:hidden"
           >
             <Map className="size-4" aria-hidden />
             <span className="flex-1">Open in Map</span>

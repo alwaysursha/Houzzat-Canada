@@ -1,4 +1,5 @@
 import { isKnownCityCentroid } from "@/lib/geo/city-centroids";
+import { isGoogleGeocodingEnabled } from "@/lib/google/billing-guard";
 
 export type GeocodePrecision = "street" | "area" | "city";
 
@@ -228,7 +229,7 @@ async function geocodeGoogleGeocoding(
   query: string,
 ): Promise<GeocodeResult | null> {
   // Hard billing kill-switch — never call Google unless explicitly re-enabled.
-  if (process.env.GOOGLE_MAPS_BILLING_ENABLED !== "1") return null;
+  if (!isGoogleGeocodingEnabled()) return null;
   if (Date.now() < googleGeocodingExhaustedUntil) return null;
 
   const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
@@ -292,7 +293,7 @@ async function geocodeGoogleGeocoding(
 async function geocodeGooglePlaces(
   query: string,
 ): Promise<GeocodeResult | null> {
-  if (process.env.GOOGLE_MAPS_BILLING_ENABLED !== "1") return null;
+  if (!isGoogleGeocodingEnabled()) return null;
   if (Date.now() < googlePlacesExhaustedUntil) return null;
 
   const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
@@ -441,9 +442,7 @@ export async function geocodeAddress(
     }
   }
 
-  const googleAllowed =
-    process.env.GOOGLE_MAPS_BILLING_ENABLED === "1" &&
-    process.env.GEOCODE_SKIP_GOOGLE !== "1";
+  const googleAllowed = isGoogleGeocodingEnabled();
 
   if (!result && googleAllowed) {
     try {
@@ -605,7 +604,7 @@ export function buildListingGeocodeQuery(input: {
   province?: string | null;
   postalCode?: string | null;
 }): string {
-  let street = cleanStreetLine(input.addressLine);
+  const street = cleanStreetLine(input.addressLine);
 
   const postal = input.postalCode?.trim() || null;
   const province = (input.province ?? "ON").trim() || "ON";
