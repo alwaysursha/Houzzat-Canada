@@ -299,12 +299,12 @@ export function ListingSheetHost() {
           --listing-sheet-chrome-height: calc(2.75rem + env(safe-area-inset-top, 0px));
         }
         @keyframes houzzat-sheet-in {
-          from { opacity: 0; transform: translateX(-50%) translateY(18px); }
-          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+          from { opacity: 0; transform: translateY(18px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         @keyframes houzzat-sheet-out {
-          from { opacity: 1; transform: translateX(-50%) translateY(0); }
-          to { opacity: 0; transform: translateX(-50%) translateY(18px); }
+          from { opacity: 1; transform: translateY(0); }
+          to { opacity: 0; transform: translateY(18px); }
         }
         @keyframes houzzat-sheet-backdrop-in {
           from { opacity: 0; }
@@ -321,7 +321,7 @@ export function ListingSheetHost() {
         }
         @media (prefers-reduced-motion: reduce) {
           [data-listing-sheet-host] .listing-sheet-backdrop,
-          [data-listing-sheet-host] .listing-sheet-panel {
+          [data-listing-sheet-host] .listing-sheet-motion {
             animation: none !important;
           }
         }
@@ -336,45 +336,50 @@ export function ListingSheetHost() {
       />
       {/*
         Phones stay edge-to-edge. From md, the same chrome + iframe/panel sit
-        in an inset surface. translateX is the centering transform and also
-        the containing block for panel-mode position:fixed bars, so they pin
-        to this panel instead of the viewport. The iframe keeps its own
-        viewport, so its internal fixed bars are unchanged.
+        in an inset surface. The outer box owns left/width and the
+        -translate-x-1/2 centering (Tailwind's translate property). A child
+        animation must not set translateX: that property composes with the
+        keyframe transform and would shift the shell off the left edge.
+        The outer translate is also the containing block for panel-mode
+        position:fixed bars when the motion layer has no transform. The
+        iframe keeps its own viewport, so its internal fixed bars are unchanged.
       */}
-      <div
-        className={`listing-sheet-panel absolute inset-0 z-[1] flex min-h-0 flex-col bg-surface md:inset-auto md:top-5 md:bottom-5 md:left-1/2 md:w-[min(1840px,calc(100%-2.5rem))] md:-translate-x-1/2 md:overflow-hidden md:rounded-[18px] md:bg-surface md:shadow-[0_28px_70px_-20px_rgba(16,28,24,0.45),0_8px_24px_-12px_rgba(16,28,24,0.28)] ${leaving ? "md:animate-[houzzat-sheet-out_180ms_cubic-bezier(0.22,1,0.36,1)_both]" : "md:animate-[houzzat-sheet-in_240ms_cubic-bezier(0.22,1,0.36,1)_both]"}`}
-        onAnimationEnd={(event) => {
-          if (event.target !== event.currentTarget) return;
-          if (event.animationName !== "houzzat-sheet-out") return;
-          setLeave(null);
-          setUsePanel(false);
-        }}
-      >
-        <ListingSheetChrome
-          href={shown.href}
-          canBack={shown.canBack}
-          depth={shown.depth}
-          usePanel={usePanel}
-          hasBrowse={shown.hasBrowse}
-          previousHref={shown.previousHref}
-          nextHref={shown.nextHref}
-        />
-        {usePanel ? (
-          Panel ? (
-            <Panel key={shown.href} href={shown.href} />
-          ) : (
-            <div className="flex min-h-0 flex-1 items-center justify-center bg-mist text-sm text-ink/55">
-              Loading listing…
-            </div>
-          )
-        ) : (
-          <iframe
-            ref={iframeRef}
-            title="Listing"
-            src="about:blank"
-            className="min-h-0 w-full flex-1 border-0 bg-mist"
+      <div className="listing-sheet-panel absolute inset-0 z-[1] flex min-h-0 flex-col md:inset-auto md:top-5 md:bottom-5 md:left-1/2 md:w-[min(1840px,calc(100%-2.5rem))] md:-translate-x-1/2">
+        <div
+          className={`listing-sheet-motion flex min-h-0 w-full flex-1 flex-col bg-surface md:overflow-hidden md:rounded-[18px] md:bg-surface md:shadow-[0_28px_70px_-20px_rgba(16,28,24,0.45),0_8px_24px_-12px_rgba(16,28,24,0.28)] ${leaving ? "md:animate-[houzzat-sheet-out_180ms_cubic-bezier(0.22,1,0.36,1)_forwards]" : "md:animate-[houzzat-sheet-in_240ms_cubic-bezier(0.22,1,0.36,1)_backwards]"}`}
+          onAnimationEnd={(event) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.animationName !== "houzzat-sheet-out") return;
+            setLeave(null);
+            setUsePanel(false);
+          }}
+        >
+          <ListingSheetChrome
+            href={shown.href}
+            canBack={shown.canBack}
+            depth={shown.depth}
+            usePanel={usePanel}
+            hasBrowse={shown.hasBrowse}
+            previousHref={shown.previousHref}
+            nextHref={shown.nextHref}
           />
-        )}
+          {usePanel ? (
+            Panel ? (
+              <Panel key={shown.href} href={shown.href} />
+            ) : (
+              <div className="flex min-h-0 flex-1 items-center justify-center bg-mist text-sm text-ink/55">
+                Loading listing…
+              </div>
+            )
+          ) : (
+            <iframe
+              ref={iframeRef}
+              title="Listing"
+              src="about:blank"
+              className="min-h-0 w-full flex-1 border-0 bg-mist"
+            />
+          )}
+        </div>
       </div>
       {/*
         Parent page chip is z-60 under this sheet (z-200). iframe cannot host
