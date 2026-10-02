@@ -27,7 +27,7 @@ import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
 import { ListingRelatedSection } from "@/components/listings/ListingRelatedSection";
 import { ListingMobileSideMenu } from "@/components/listings/ListingMobileSideMenu";
 import { ListingDetailCoachMarks } from "@/components/listings/ListingDetailCoachMarks";
-import { ListingDetailPanels } from "@/components/listings/ListingDetailPanels";
+import { ListingDetailSectionNav } from "@/components/listings/ListingDetailSectionNav";
 import { ListingSheetDocumentFlags } from "@/components/listings/ListingSheetDocumentFlags";
 import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
 import { ListingMobileNotes } from "@/components/listings/ListingMobileNotes";
@@ -747,39 +747,67 @@ export function ListingDetailView({
             />
           </div>
 
-          <ListingDetailPanels
-            overview={<ListingNarrative body={listing.description} />}
-            details={
-              <div className="flex flex-col gap-5">
-                <ListingFactsPanel
-                  facts={listing.facts}
-                  propertyTypeLabel={propertyTypeLabel(listing.propertyType)}
-                  mlsNumber={listing.mlsNumber}
-                  community={listing.community}
-                  postalCode={listing.postalCode}
-                  taxesLabel={taxesLabel}
-                  maintenanceLabel={
-                    listing.maintenanceFee
-                      ? `${formatPrice(listing.maintenanceFee)}/mo`
-                      : null
-                  }
-                  parkingSpaces={listing.parkingSpaces}
-                  yearBuilt={listing.yearBuilt}
-                  sqftLabel={formatListingSqftLabel({
-                    sqft: listing.sqft,
-                    livingAreaRange: listingFacts?.livingAreaRange,
-                    unit: "sqft",
-                  })}
-                  daysOnMarket={daysOnMarket}
-                  brokerageName={listing.brokerageName}
-                  beds={listing.beds}
-                  baths={listing.baths}
-                />
-                <ListingRoomsLive mlsNumber={listing.mlsNumber} />
-                <ListingOpenHousesLive mlsNumber={listing.mlsNumber} />
-              </div>
-            }
-            history={
+          <div className="min-w-0 flex flex-col gap-5 sm:gap-6">
+            <div className="order-2 md:contents">
+              <ListingDetailSectionNav
+                layout={
+                  isListingSheet
+                    ? applyDocumentSheetFlags
+                      ? "iframe"
+                      : "panel"
+                    : "page"
+                }
+                sheetMode={isListingSheet}
+                items={[
+                  { id: "listing-about", label: "About" },
+                  { id: "listing-details", label: "Details" },
+                  { id: "listing-rooms", label: "Rooms" },
+                  { id: "listing-insights", label: "Insights" },
+                  { id: "listing-estimated-value", label: "Estimated Value" },
+                  { id: "listing-history", label: "History" },
+                  { id: "listing-nearby", label: "Amenities" },
+                  { id: "listing-open-houses", label: "Open houses" },
+                  { id: "listing-related", label: "Similar" },
+                ]}
+              />
+            </div>
+
+            <div className="order-3 md:contents">
+              <ListingNarrative body={listing.description} />
+            </div>
+
+            <div className="order-5 md:contents">
+              <ListingFactsPanel
+                facts={listing.facts}
+                propertyTypeLabel={propertyTypeLabel(listing.propertyType)}
+                mlsNumber={listing.mlsNumber}
+                community={listing.community}
+                postalCode={listing.postalCode}
+                taxesLabel={taxesLabel}
+                maintenanceLabel={
+                  listing.maintenanceFee
+                    ? `${formatPrice(listing.maintenanceFee)}/mo`
+                    : null
+                }
+                parkingSpaces={listing.parkingSpaces}
+                yearBuilt={listing.yearBuilt}
+                sqftLabel={formatListingSqftLabel({
+                  sqft: listing.sqft,
+                  livingAreaRange: listingFacts?.livingAreaRange,
+                  unit: "sqft",
+                })}
+                daysOnMarket={daysOnMarket}
+                brokerageName={listing.brokerageName}
+                beds={listing.beds}
+                baths={listing.baths}
+              />
+            </div>
+
+            <div className="order-6 md:contents">
+              <ListingRoomsLive mlsNumber={listing.mlsNumber} />
+            </div>
+
+            <div className="order-8 md:contents">
               <ListingHistoryPanel
                 mlsNumber={listing.mlsNumber}
                 addressLabel={addressLabel}
@@ -792,23 +820,32 @@ export function ListingDetailView({
                 enableAddressHistoryEnrich
                 rows={listingHistoryRows}
               />
-            }
-            insights={
+            </div>
+
+            <div className="order-7 md:contents">
               <ListingInsightsDeferred
                 mlsNumber={listing.mlsNumber}
                 callbackPath={canonicalPath}
                 needsEmailVerification={verifyLocked}
               />
-            }
-            neighbourhood={
-              <div className="flex flex-col gap-5">
-                <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
-                <NearbyAmenitiesDeferred lat={listing.lat} lng={listing.lng} />
-              </div>
-            }
-            comparableSold={
+            </div>
+
+            <div className="order-11 md:hidden">
+              <MobilePublicAgentSection
+                agent={publicAgent}
+                expertWhatsApp={expertWhatsApp}
+                mlsNumber={listing.mlsNumber}
+                addressLine={addressLabel}
+                city={listing.city}
+                inactive={isInactive}
+                onContactAgent={
+                  isInactive ? () => setMobileInquiryOpen(true) : undefined
+                }
+              />
+            </div>
+
+            <div className="order-12 md:contents">
               <ListingRelatedSection
-                presentation="comparable-sold"
                 subject={{
                   mlsNumber: listing.mlsNumber,
                   city: listing.city,
@@ -819,41 +856,23 @@ export function ListingDetailView({
                   transactionType: listing.transactionType,
                   segment: listing.segment,
                 }}
+                initialMode="SAME_AREA"
                 signedIn={signedIn}
               />
-            }
-            similarHomes={
-              <ListingRelatedSection
-                presentation="similar"
-                subject={{
-                  mlsNumber: listing.mlsNumber,
-                  city: listing.city,
-                  community: listing.community,
-                  propertyType: listing.propertyType,
-                  beds: listing.beds,
-                  bedsLabel: bedsPlusLabel,
-                  transactionType: listing.transactionType,
-                  segment: listing.segment,
-                }}
-                signedIn={signedIn}
-              />
-            }
-            agentSection={
-              <div className="md:hidden">
-                <MobilePublicAgentSection
-                  agent={publicAgent}
-                  expertWhatsApp={expertWhatsApp}
-                  mlsNumber={listing.mlsNumber}
-                  addressLine={addressLabel}
-                  city={listing.city}
-                  inactive={isInactive}
-                  onContactAgent={
-                    isInactive ? () => setMobileInquiryOpen(true) : undefined
-                  }
-                />
-              </div>
-            }
-          />
+            </div>
+
+            <div className="order-9 flex flex-col gap-5 md:contents">
+              <h2 className="font-sans text-lg font-semibold tracking-tight text-ink md:hidden">
+                Location
+              </h2>
+              <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
+              <NearbyAmenitiesDeferred lat={listing.lat} lng={listing.lng} />
+            </div>
+
+            <div className="order-10 md:contents">
+              <ListingOpenHousesLive mlsNumber={listing.mlsNumber} />
+            </div>
+          </div>
 
         <aside className="min-w-0 space-y-5 sm:space-y-6">
           {detailsLocked ? (

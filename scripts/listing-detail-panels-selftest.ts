@@ -1,5 +1,5 @@
 /**
- * In-place listing tabs and the summary refinements around them.
+ * Approved listing summary plus the restored stacked detail sections.
  * Run: pnpm listing-detail-panels:selftest
  */
 import assert from "node:assert/strict";
@@ -14,7 +14,7 @@ function count(source: string, needle: string) {
 }
 
 const detail = read("src/components/listings/ListingDetailView.tsx");
-const panels = read("src/components/listings/ListingDetailPanels.tsx");
+const sticky = read("src/components/listings/ListingStickyBar.tsx");
 const gallery = read("src/components/listings/ListingGallery.tsx");
 const related = read("src/components/listings/ListingRelatedSection.tsx");
 const insights = read("src/components/listings/insights/ListingInsightsDeferred.tsx");
@@ -125,15 +125,19 @@ assert.equal(compactEstimate.includes("text-canopy"), false);
 assert.ok(insights.includes("valuation.mid == null"));
 assert.ok(insights.includes("useListingInsights"));
 
-assert.ok(panels.includes('useState<ListingDetailTab>("overview")'));
-assert.equal(panels.includes("scrollIntoView"), false);
-assert.equal(panels.includes("router.push"), false);
-assert.equal(panels.includes("useRouter"), false);
+assert.equal(detail.includes("ListingDetailPanels"), false);
 assert.equal(detail.includes("scrollIntoView"), false);
 assert.equal(detail.includes("router.push"), false);
-assert.ok(panels.includes("hidden={tab !== panel.id}"));
-assert.ok(panels.includes("Nearby") === false);
-assert.equal(panels.includes("Nearby Listings"), false);
+assert.ok(detail.includes("<ListingDetailSectionNav"));
+assert.ok(detail.includes('{ id: "listing-about", label: "About" }'));
+assert.ok(detail.includes('{ id: "listing-details", label: "Details" }'));
+assert.ok(detail.includes('{ id: "listing-rooms", label: "Rooms" }'));
+assert.ok(detail.includes('{ id: "listing-insights", label: "Insights" }'));
+assert.ok(detail.includes('{ id: "listing-estimated-value", label: "Estimated Value" }'));
+assert.ok(detail.includes('{ id: "listing-history", label: "History" }'));
+assert.ok(detail.includes('{ id: "listing-nearby", label: "Amenities" }'));
+assert.ok(detail.includes('{ id: "listing-open-houses", label: "Open houses" }'));
+assert.ok(detail.includes('{ id: "listing-related", label: "Similar" }'));
 
 assert.equal(count(detail, "<ListingHistoryPanel"), 1);
 assert.equal(count(detail, "<ListingInsightsDeferred"), 1);
@@ -141,31 +145,44 @@ assert.equal(count(detail, "<DriveTimePanel"), 1);
 assert.equal(count(detail, "<NearbyAmenitiesDeferred"), 1);
 assert.equal(count(detail, "<ListingNarrative"), 1);
 assert.equal(count(detail, "<ListingFactsPanel"), 1);
+assert.equal(count(detail, "<ListingRoomsLive"), 1);
+assert.equal(count(detail, "<ListingOpenHousesLive"), 1);
 
-const historyOwner = detail.slice(
-  detail.indexOf("history={"),
-  detail.indexOf("insights={"),
-);
-assert.ok(historyOwner.includes("<ListingHistoryPanel"));
-const insightsOwner = detail.slice(
-  detail.indexOf("insights={"),
-  detail.indexOf("neighbourhood={"),
-);
-assert.ok(insightsOwner.includes("<ListingInsightsDeferred"));
-const neighbourhoodOwner = detail.slice(
-  detail.indexOf("neighbourhood={"),
-  detail.indexOf("comparableSold={"),
-);
-assert.ok(neighbourhoodOwner.includes("<DriveTimePanel"));
-assert.ok(neighbourhoodOwner.includes("<NearbyAmenitiesDeferred"));
+const aboutAt = detail.indexOf("<ListingNarrative");
+const detailsAt = detail.indexOf("<ListingFactsPanel");
+const roomsAt = detail.indexOf("<ListingRoomsLive");
+const historyAt = detail.indexOf("<ListingHistoryPanel");
+const insightsAt = detail.indexOf("<ListingInsightsDeferred");
+const relatedAt = detail.indexOf("<ListingRelatedSection");
+const driveAt = detail.indexOf("<DriveTimePanel");
+const amenitiesAt = detail.indexOf("<NearbyAmenitiesDeferred");
+const openAt = detail.indexOf("<ListingOpenHousesLive");
+assert.ok(aboutAt < detailsAt);
+assert.ok(detailsAt < roomsAt);
+assert.ok(roomsAt < historyAt);
+assert.ok(historyAt < insightsAt);
+assert.ok(insightsAt < relatedAt);
+assert.ok(relatedAt < driveAt);
+assert.ok(driveAt < amenitiesAt);
+assert.ok(amenitiesAt < openAt);
 
-assert.ok(detail.includes('presentation="comparable-sold"'));
-assert.ok(detail.includes('presentation="similar"'));
+assert.equal(detail.includes('presentation="comparable-sold"'), false);
+assert.equal(detail.includes('presentation="similar"'), false);
+assert.ok(detail.includes('initialMode="SAME_AREA"'));
 assert.ok(related.includes('presentation === "comparable-sold" ? "sold"'));
 assert.ok(related.includes('locked ? "same-features"'));
 assert.ok(related.includes("relatedResponseCache"));
 assert.ok(related.includes("if (locked) return;"));
-assert.equal(count(detail, "<ListingRelatedSection"), 2);
+assert.ok(related.includes('{ id: "same-area", label: "Nearby" }'));
+assert.ok(related.includes('{ id: "same-features", label: "Similar homes" }'));
+assert.equal(count(detail, "<ListingRelatedSection"), 1);
+assert.equal(sticky.includes("if (isSheet) return null"), false);
+assert.equal(sticky.includes("SaveListingButton"), false);
+assert.equal(sticky.includes("WatchListingButton"), false);
+assert.equal(sticky.includes("ShareListingButton"), false);
+assert.ok(sticky.includes("ListingBreadcrumbs"));
+assert.equal(count(detail, "<SaveListingButton"), 1);
+assert.equal(count(detail, "<ShareListingButton"), 1);
 
 assert.ok(chrome.includes("hasBrowse"));
 assert.ok(chrome.includes("replaceListingSheet"));

@@ -40,7 +40,8 @@ assert.ok(gallery.includes("openStack()"));
 assert.ok(gallery.includes('restoreEntry="gallery"'));
 assert.equal(gallery.includes("aspect-[4/3]"), false);
 
-assert.ok(detail.includes("ListingDetailPanels"));
+assert.ok(detail.includes("<ListingDetailSectionNav"));
+assert.equal(detail.includes("ListingDetailPanels"), false);
 assert.equal(detail.includes("DesktopListingSectionNav"), false);
 assert.equal(detail.includes("scrollIntoView"), false);
 assert.ok(detail.includes("DesktopListingActions"));
@@ -57,9 +58,11 @@ assert.ok(
   detail.indexOf("<ListingHistoryPanel") <
     detail.indexOf("<ListingInsightsDeferred"),
 );
+assert.ok(detail.includes('initialMode="SAME_AREA"'));
+assert.equal(detail.includes('presentation="similar"'), false);
 assert.ok(
-  detail.indexOf("presentation=\"similar\"") <
-    detail.indexOf("<MobilePublicAgentSection"),
+  detail.indexOf("<MobilePublicAgentSection") <
+    detail.indexOf("<ListingRelatedSection"),
 );
 assert.ok(detail.includes('className="hidden md:block"'));
 

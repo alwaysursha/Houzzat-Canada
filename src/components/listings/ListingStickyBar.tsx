@@ -176,8 +176,6 @@ export function ListingStickyBar({
     };
   }, [stuck, isSheet]);
 
-  if (isSheet) return null;
-
   return (
     <>
       {/*
