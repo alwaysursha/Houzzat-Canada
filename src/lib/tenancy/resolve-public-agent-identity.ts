@@ -14,6 +14,10 @@ export type PublicAgentIdentity = {
   photoUrl: string | null;
   bio: string | null;
   brokerageName: string | null;
+  /** Workspace branding asset — never invented. */
+  brokerageLogoUrl: string | null;
+  /** Workspace professional identity brokerage phone — never invented. */
+  brokeragePhone: string | null;
   phone: string | null;
   email: string | null;
   markets: string[];
@@ -36,6 +40,8 @@ function emptyPublicAgentIdentity(): PublicAgentIdentity {
     photoUrl: null,
     bio: null,
     brokerageName: null,
+    brokerageLogoUrl: null,
+    brokeragePhone: null,
     phone: null,
     email: null,
     markets: [],
@@ -67,6 +73,7 @@ export const resolvePublicAgentIdentity = cache(async function resolvePublicAgen
           agentDesignation: true,
           agentCellPhone: true,
           brokerageRegisteredName: true,
+          brokeragePhone: true,
         },
       },
       branding: {
@@ -74,6 +81,7 @@ export const resolvePublicAgentIdentity = cache(async function resolvePublicAgen
           displayName: true,
           contactEmail: true,
           agentProfilePhotoUrl: true,
+          brokerageLogoUrl: true,
         },
       },
       primaryAgent: {
@@ -117,6 +125,8 @@ export const resolvePublicAgentIdentity = cache(async function resolvePublicAgen
       professional?.brokerageRegisteredName,
       workspace.brokerageAffiliation,
     ),
+    brokerageLogoUrl: firstNonEmpty(workspace.branding?.brokerageLogoUrl),
+    brokeragePhone: firstNonEmpty(professional?.brokeragePhone),
     // Canonical User.phone first; professional identity is website copy/fallback.
     // never branding.contactPhone (business phone).
     phone: firstNonEmpty(

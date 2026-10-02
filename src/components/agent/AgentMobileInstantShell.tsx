@@ -570,6 +570,13 @@ export function AgentMobileInstantShell({
               </Link>
             </nav>
             <div className="border-t border-white/10 p-4">
+              <Link
+                href="/agent/profile"
+                onClick={() => setMenuOpen(false)}
+                className="mb-3 block text-sm font-medium text-white/80 hover:text-white"
+              >
+                Profile
+              </Link>
               <SignOutButton className="text-sm font-medium text-rose-300 hover:text-rose-200" />
             </div>
           </aside>

@@ -66,8 +66,8 @@ export function AgentProfileAdminClient({
         </h1>
         <p className="mt-2 text-sm text-ink/60">
           {profile.canEdit
-            ? "OWNER/ADMIN manage professional and contact information. Lead assignments are not changed by these edits."
-            : "You can view this Agent profile. Only workspace owners and admins can edit it."}
+            ? "Professional and contact information. Lead assignments are not changed by these edits."
+            : "You can view this Agent profile. Owners, admins, or the agent themselves can edit it."}
         </p>
       </div>
 

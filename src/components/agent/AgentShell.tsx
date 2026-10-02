@@ -34,6 +34,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  UserRound,
   Users,
   UsersRound,
   X,
@@ -306,6 +307,23 @@ export function AgentShell({
               {membershipRole} · {email}
             </p>
           ) : null}
+          {!collapsed ? (
+            <Link
+              href="/agent/profile"
+              className="mb-2 block text-xs font-medium text-white/80 transition hover:text-white"
+            >
+              Profile
+            </Link>
+          ) : (
+            <Link
+              href="/agent/profile"
+              className="mb-2 flex justify-center text-white/70 transition hover:text-white"
+              aria-label="Profile"
+              title="Profile"
+            >
+              <UserRound className="size-4" aria-hidden />
+            </Link>
+          )}
           <SignOutButton className="text-xs text-white/70 hover:text-white" />
         </div>
       </aside>
@@ -378,6 +396,13 @@ export function AgentShell({
             <p className="mb-2 truncate text-[11px] text-white/45">
               {membershipRole} · {email}
             </p>
+            <Link
+              href="/agent/profile"
+              onClick={() => setMobileOpen(false)}
+              className="mb-2 block text-xs font-medium text-white/80 transition hover:text-white"
+            >
+              Profile
+            </Link>
             <p className="mb-2 text-[10px] text-white/35">
               Powered by {platformProductName}
             </p>

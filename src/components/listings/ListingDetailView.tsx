@@ -19,6 +19,7 @@ import { ListingNarrative } from "@/components/listings/ListingNarrative";
 import { ListingStickyBar } from "@/components/listings/ListingStickyBar";
 import { NearbyAmenitiesDeferred } from "@/components/listings/NearbyAmenitiesDeferred";
 import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
+import { ListingAgentCard } from "@/components/listings/ListingAgentCard";
 import { ListingRelatedSection } from "@/components/listings/ListingRelatedSection";
 import { ListingMobileSideMenu } from "@/components/listings/ListingMobileSideMenu";
 import { ListingDetailCoachMarks } from "@/components/listings/ListingDetailCoachMarks";
@@ -58,6 +59,7 @@ import { getLatestListPriceChange } from "@/lib/listings/history-rows";
 import type { HistoryRow } from "@/lib/listings/history-rows";
 import type { GalleryMedia } from "@/lib/listings/resolve-gallery";
 import type { ListingDetail } from "@/lib/listings/types";
+import type { PublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import {
   homesForSaleCityPath,
   homesForSaleCommunityPath,
@@ -77,6 +79,8 @@ export type ListingDetailViewProps = {
   gateDetails: AccessGateCopy;
   gateSold: AccessGateCopy;
   canonicalPath: string;
+  /** Workspace public / primary agent for the listing aside. */
+  publicAgent?: PublicAgentIdentity | null;
   /**
    * When true (iframe ?sheet=1), set documentElement sheet CSS vars.
    * In-app ListingDetailPanel must leave this false so the browse page chrome
@@ -103,6 +107,7 @@ export function ListingDetailView({
   gateDetails,
   gateSold,
   canonicalPath,
+  publicAgent = null,
   applyDocumentSheetFlags = true,
 }: ListingDetailViewProps) {
   const personalizationCities: string[] = [];
@@ -611,6 +616,7 @@ export function ListingDetailView({
             initialBody=""
             authCallbackUrl={canonicalPath}
           />
+          <ListingAgentCard agent={publicAgent} />
           <ViewingRequestPanel
             className="hidden md:block"
             mlsNumber={listing.mlsNumber}

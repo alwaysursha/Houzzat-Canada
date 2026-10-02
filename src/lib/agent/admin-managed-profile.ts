@@ -1,7 +1,7 @@
 /**
  * Admin-managed Agent professional / contact identity.
  *
- * OWNER/ADMIN write these fields. Agents may view but not mutate.
+ * OWNER/ADMIN may edit any workspace agent. Agents may edit their own profile.
  * Canonical cellphone is User.phone + User.phoneE164 (SMS notify destination).
  * AgentProfile.phone is kept in lockstep as display copy (CMA, signatures).
  */
@@ -52,8 +52,18 @@ export type AdminManagedAgentProfileView = {
   phoneE164: string | null;
   recoLicenseNumber: string;
   recoLicenseExpiresAt: string;
+  /** Public website designation (OWNER / workspace professional identity). */
+  designation: string;
+  /** Workspace branding portrait when this agent is the public site agent. */
+  photoUrl: string | null;
   canEdit: boolean;
+  /** OWNER branding upload — website headshot with focus crop. */
+  canEditPhoto: boolean;
 };
+
+function canEditAgentProfile(ctx: AgentOrgContext, userId: string): boolean {
+  return workspaceTeamCanManage(ctx) || ctx.user.id === userId;
+}
 
 type ProfileDb = Pick<
   PrismaClient,
@@ -287,6 +297,30 @@ export async function loadWorkspaceAgentProfile(
     membership.user.agentProfile?.lastName?.trim() ||
     splitStaffDisplayName(membership.user.name).lastName;
 
+  const isPublicSiteAgent =
+    membership.role === "OWNER" ||
+    (await db.workspace.findUnique({
+      where: { id: ctx.workspaceId },
+      select: { primaryAgentId: true },
+    }))?.primaryAgentId === membership.user.id;
+
+  let designation = "";
+  let photoUrl: string | null = null;
+  if (isPublicSiteAgent) {
+    const [professional, branding] = await Promise.all([
+      db.workspaceProfessionalIdentity.findUnique({
+        where: { workspaceId: ctx.workspaceId },
+        select: { agentDesignation: true },
+      }),
+      db.workspaceBranding.findUnique({
+        where: { workspaceId: ctx.workspaceId },
+        select: { agentProfilePhotoUrl: true },
+      }),
+    ]);
+    designation = professional?.agentDesignation?.trim() ?? "";
+    photoUrl = branding?.agentProfilePhotoUrl?.trim() || null;
+  }
+
   return {
     ok: true,
     profile: {
@@ -302,7 +336,10 @@ export async function loadWorkspaceAgentProfile(
       recoLicenseExpiresAt: recoExpiryToInputValue(
         membership.user.agentProfile?.recoLicenseExpiresAt ?? null,
       ),
-      canEdit: workspaceTeamCanManage(ctx),
+      designation,
+      photoUrl,
+      canEdit: canEditAgentProfile(ctx, userId),
+      canEditPhoto: Boolean(isPublicSiteAgent && ctx.canManageWorkspace),
     },
   };
 }
@@ -319,7 +356,7 @@ export async function updateWorkspaceAgentProfile(input: {
   if (!input.ctx.workspaceId) {
     return { ok: false, error: "Workspace required.", status: 403 };
   }
-  if (!workspaceTeamCanManage(input.ctx)) {
+  if (!canEditAgentProfile(input.ctx, input.userId)) {
     return { ok: false, error: "Forbidden.", status: 403 };
   }
 
@@ -357,12 +394,22 @@ export async function updateWorkspaceAgentProfile(input: {
       where: { workspaceId: input.ctx.workspaceId },
       select: { workspaceId: true },
     });
+    const designationRaw =
+      input.raw &&
+      typeof input.raw === "object" &&
+      !Array.isArray(input.raw) &&
+      "designation" in input.raw
+        ? (input.raw as { designation?: unknown }).designation
+        : undefined;
+    const designation =
+      typeof designationRaw === "string" ? designationRaw.trim().slice(0, 80) : null;
     if (websiteIdentity) {
       await db.workspaceProfessionalIdentity.update({
         where: { workspaceId: input.ctx.workspaceId },
         data: {
           agentRegisteredName: parsed.data.displayName,
           agentCellPhone: parsed.data.phone,
+          ...(designation !== null ? { agentDesignation: designation || null } : {}),
         },
       });
     }

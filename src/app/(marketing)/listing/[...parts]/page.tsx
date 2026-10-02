@@ -18,6 +18,7 @@ import {
 } from "@/lib/tenancy/listing-entitlement";
 import { resolveMarketingTenancy } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
+import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 import { buildTenantPublicPageMetadata } from "@/lib/tenancy/tenant-seo";
 import {
@@ -244,6 +245,11 @@ export default async function ListingDetailPage({
     }),
   );
 
+  const publicAgent =
+    tenancy?.workspaceId && tenancy.workspaceId !== "legacy"
+      ? await resolvePublicAgentIdentity(tenancy.workspaceId)
+      : null;
+
   const addressLabel = formatListingAddressOneLine(listing);
   const coverUrl =
     listing.media.find((m) => m.isPrimary)?.url ?? listing.media[0]?.url ?? null;
@@ -366,6 +372,7 @@ export default async function ListingDetailPage({
         gateDetails={gateDetails}
         gateSold={gateSold}
         canonicalPath={canonicalPath}
+        publicAgent={publicAgent}
       />
     </>
   );
