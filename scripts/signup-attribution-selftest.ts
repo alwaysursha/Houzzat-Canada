@@ -612,9 +612,10 @@ function testGa4SignUpFiresOnlyAfterCreatedAccount() {
   reportGa4SignUp((...args) => {
     calls.push(args);
   });
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
   assert.deepEqual(calls[0], ["event", "sign_up", { method: "email" }]);
   assert.deepEqual(Object.keys(calls[0]?.[2] as object), ["method"]);
+  assert.deepEqual(calls[1], ["event", "conversion_event_signup", {}]);
 
   reportGa4SignUp(undefined);
   assert.doesNotThrow(() => {
@@ -623,18 +624,29 @@ function testGa4SignUpFiresOnlyAfterCreatedAccount() {
     });
   });
 
+  const helper = read("src/lib/ads/ga4-sign-up.ts");
+  assert.ok(helper.includes('gtag?.("event", "sign_up", { method: "email" })'));
+  assert.ok(
+    helper.includes('gtag?.("event", "conversion_event_signup", {})'),
+  );
+  assert.equal(helper.includes("AdsTrackingPixels"), false);
+  assert.equal(helper.includes("googletagmanager.com"), false);
+
   const form = read("src/components/auth/SignUpForm.tsx");
   const createdAt = form.indexOf("reportGa4SignUp()");
   const signInAt = form.indexOf('signIn("credentials"');
   const existingAt = form.indexOf("status === 409");
   assert.ok(createdAt !== -1 && signInAt !== -1 && createdAt < signInAt);
   assert.ok(existingAt !== -1 && existingAt < createdAt);
+  assert.equal(form.includes("conversion_event_signup"), false);
   const signIn = read("src/components/auth/SignInForm.tsx");
   assert.equal(signIn.includes("sign_up"), false);
   assert.equal(signIn.includes("reportGa4SignUp"), false);
+  assert.equal(signIn.includes("conversion_event_signup"), false);
   const pixels = read("src/components/ads/AdsTrackingPixels.tsx");
   assert.equal(pixels.includes("GTM-"), false);
   assert.equal(pixels.includes("NEXT_PUBLIC_GOOGLE_ADS_ID"), false);
+  assert.equal(pixels.includes("conversion_event_signup"), false);
   const tracking = read("src/lib/ads/workspace-tracking.ts");
   assert.equal((tracking.match(/googletagmanager.com\/gtag\/js/g) ?? []).length, 1);
 }
@@ -674,7 +686,9 @@ async function main() {
   testWatchVerificationUxUnchanged();
   console.log("[17] Property and Area Watch verification UX unchanged");
   testGa4SignUpFiresOnlyAfterCreatedAccount();
-  console.log("[18] GA4 sign_up fires only after a created account");
+  console.log(
+    "[18] GA4 sign_up and Ads conversion_event_signup fire only after a created account",
+  );
   console.log("signup attribution selftest: PASS");
 }
 

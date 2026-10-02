@@ -528,6 +528,9 @@ function testGa4LeadRequestFiresOnlyAfterSuccessfulLead() {
   assert.equal(form.includes("reportGa4SignUp"), false);
   const signup = read("src/lib/ads/ga4-sign-up.ts");
   assert.ok(signup.includes('gtag?.("event", "sign_up", { method: "email" })'));
+  assert.ok(
+    signup.includes('gtag?.("event", "conversion_event_signup", {})'),
+  );
   const signupForm = read("src/components/auth/SignUpForm.tsx");
   assert.equal(signupForm.includes("request_viewing"), false);
   assert.equal(signupForm.includes("contact_agent"), false);

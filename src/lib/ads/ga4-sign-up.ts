@@ -7,12 +7,13 @@ function installedGtag(): GtagFn | undefined {
 }
 
 /**
- * GA4 recommended sign_up. Fires only when the caller already knows the
- * account was created. Missing or broken gtag must not affect signup.
+ * Signup conversions after a new account exists. Fires GA4 sign_up and the
+ * Google Ads native conversion. Missing or broken gtag must not affect signup.
  */
 export function reportGa4SignUp(gtag: GtagFn | undefined = installedGtag()): void {
   try {
     gtag?.("event", "sign_up", { method: "email" });
+    gtag?.("event", "conversion_event_signup", {});
   } catch {
     return;
   }
