@@ -46,6 +46,51 @@ function streetLabel(props: NonNullable<PhotonFeature["properties"]>) {
   return props.housenumber ? `${props.housenumber} ${street}` : street;
 }
 
+function normalizeAddress(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[.,#]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Leading civic number, e.g. "79 Grand Flats Trail" → 79 + the rest. */
+function civicPrefix(query: string): { number: string; rest: string } | null {
+  const match = query.trim().match(/^(\d+[a-zA-Z]?)\s+(.+)$/);
+  if (!match?.[1] || !match[2]) return null;
+  return { number: match[1], rest: match[2] };
+}
+
+/**
+ * OSM often stores the street, not each house. If the typed number plus
+ * street matches that street, show the number the person typed.
+ */
+function labelWithTypedNumber(
+  query: string,
+  props: NonNullable<PhotonFeature["properties"]>,
+  fallback: string,
+) {
+  if (props.housenumber) return fallback;
+  const civic = civicPrefix(query);
+  const street = (props.street || props.name || "").trim();
+  if (!civic || !street) return fallback;
+  const rest = normalizeAddress(civic.rest);
+  const name = normalizeAddress(street);
+  const typedStreet =
+    rest === name || rest.startsWith(`${name} `) || name.startsWith(rest);
+  if (!typedStreet) return fallback;
+  return `${civic.number} ${street}`;
+}
+
+function labelRank(query: string, label: string) {
+  const q = normalizeAddress(query);
+  const l = normalizeAddress(label);
+  if (l === q) return 0;
+  if (l.startsWith(q)) return 1;
+  if (q.startsWith(l)) return 2;
+  return 3;
+}
+
 function isAddressLike(props: NonNullable<PhotonFeature["properties"]>) {
   const type = (props.type ?? "").toLowerCase();
   if (
@@ -111,8 +156,9 @@ export async function photonAddressAutocomplete(
     if (props.countrycode && props.countrycode.toUpperCase() !== "CA") continue;
     if (!isAddressLike(props)) continue;
 
-    const label = streetLabel(props);
-    if (!label) continue;
+    const baseLabel = streetLabel(props);
+    if (!baseLabel) continue;
+    const label = labelWithTypedNumber(q, props, baseLabel);
 
     const city = props.city?.trim() || undefined;
     const province = provinceShort(props.state);
@@ -142,5 +188,6 @@ export async function photonAddressAutocomplete(
     if (out.length >= 7) break;
   }
 
+  out.sort((a, b) => labelRank(q, a.label) - labelRank(q, b.label));
   return out;
 }

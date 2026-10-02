@@ -603,8 +603,7 @@ export function DriveTimePanel({
                 key={`${editing}:${places[editing]?.address ?? ""}`}
                 source="google"
                 fillOnly
-                portalDesktopSuggestions
-                mobileSheetZClassName="z-[260]"
+                fieldMenu
                 initialQuery={places[editing]?.address ?? ""}
                 placeholder={`${slotPhrase(editing)} address`}
                 inputClassName="h-11 rounded-xl border border-line/80 bg-white pl-10 text-sm shadow-none placeholder:text-ink/40 focus-visible:ring-2 focus-visible:ring-canopy/30"

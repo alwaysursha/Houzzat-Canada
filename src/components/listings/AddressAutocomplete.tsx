@@ -157,6 +157,7 @@ export function AddressAutocomplete({
   onClear,
   closeWhenHiddenBehindHeader = false,
   portalDesktopSuggestions = false,
+  fieldMenu = false,
   autoOpenMobileSheet = false,
   onMobileSheetOpenChange,
   mobileSheetZClassName = "z-[200]",
@@ -199,6 +200,11 @@ export function AddressAutocomplete({
    * scroll ancestors — e.g. Drive Time inside ListingSection).
    */
   portalDesktopSuggestions?: boolean;
+  /**
+   * Compact address list attached under this field. Used by Drive time so it
+   * does not reuse the site-wide search menu.
+   */
+  fieldMenu?: boolean;
   /** Open the mobile full-screen search sheet on mount (listing chrome Search). */
   autoOpenMobileSheet?: boolean;
   /** Fires when the mobile search sheet opens or closes. */
@@ -292,7 +298,7 @@ export function AddressAutocomplete({
 
   /** Expand results wider than the input on desktop for listing rows. */
   useLayoutEffect(() => {
-    if (isMobile) {
+    if (fieldMenu || isMobile) {
       setPanelStyle(undefined);
       return;
     }
@@ -360,7 +366,7 @@ export function AddressAutocomplete({
       window.removeEventListener("resize", syncPanel);
       window.removeEventListener("scroll", syncPanel, true);
     };
-  }, [open, query, suggestions.length, isMobile, portalDesktopSuggestions]);
+  }, [open, query, suggestions.length, isMobile, portalDesktopSuggestions, fieldMenu]);
 
   /** Hero: dismiss desktop suggestions once the bar scrolls under the header. */
   useEffect(() => {
@@ -994,6 +1000,16 @@ export function AddressAutocomplete({
   }
 
   function openFromFocus() {
+    if (fieldMenu) {
+      if (
+        selectedQueryRef.current !== null &&
+        query.trim() === selectedQueryRef.current.trim()
+      ) {
+        return;
+      }
+      if (suggestions.length > 0) setOpen(true);
+      return;
+    }
     if (isMobile) {
       setMobileSheetOpen(true);
     } else if (
@@ -1208,9 +1224,13 @@ export function AddressAutocomplete({
   }
 
   const desktopPanelOpen =
+    !fieldMenu &&
     !isMobile &&
     open &&
     (sections.length > 0 || Boolean(searchForRow) || loading);
+
+  const fieldMenuOpen =
+    fieldMenu && open && (flat.length > 0 || loading);
 
   const mobilePortal =
     mounted && isMobile && sheetMounted
@@ -1353,10 +1373,10 @@ export function AddressAutocomplete({
           inputClassName,
         )}
         autoComplete="street-address"
-        readOnly={isMobile}
-        inputMode={isMobile ? "none" : undefined}
+        readOnly={isMobile && !fieldMenu}
+        inputMode={isMobile && !fieldMenu ? "none" : undefined}
         onClick={() => {
-          if (isMobile) openFromFocus();
+          if (isMobile && !fieldMenu) openFromFocus();
         }}
       />
       {query.trim() && !mobileSheetOpen ? (
@@ -1376,6 +1396,57 @@ export function AddressAutocomplete({
         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink/40">
           …
         </span>
+      ) : null}
+      {fieldMenuOpen ? (
+        <div
+          id={listboxId}
+          role="listbox"
+          className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-auto rounded-xl border border-line/80 bg-white py-1 shadow-[0_12px_28px_-16px_rgba(16,28,24,0.45)]"
+        >
+          {flat.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-ink/50">Searching…</p>
+          ) : (
+            <ul>
+              {flat.map((suggestion, index) => {
+                const active = index === activeIndex;
+                return (
+                  <li key={`${listboxId}-field-${index}`}>
+                    <button
+                      type="button"
+                      id={`${listboxId}-opt-${index}`}
+                      role="option"
+                      aria-selected={active}
+                      className={cn(
+                        "flex w-full items-start gap-2 px-3 py-2 text-left transition hover:bg-canopy/5",
+                        active && "bg-canopy/5",
+                      )}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                      }}
+                      onMouseEnter={() => setActiveIndex(index)}
+                      onClick={() => onSuggestionActivate(suggestion)}
+                    >
+                      <MapPin
+                        className="mt-0.5 size-3.5 shrink-0 text-canopy"
+                        aria-hidden
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium leading-snug text-ink">
+                          {suggestion.label}
+                        </span>
+                        {suggestion.subtitle ? (
+                          <span className="mt-0.5 block text-xs leading-snug text-ink/50">
+                            {suggestion.subtitle}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       ) : null}
       {geoError && !mobileSheetOpen ? (
         <p className="absolute left-0 top-full z-50 mt-1 text-sm text-danger">
