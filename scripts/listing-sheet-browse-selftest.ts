@@ -202,8 +202,9 @@ function testGateIframePanelAndDesktopChrome() {
   );
   assert.ok(chrome.includes('aria-label="Back to previous listing"'));
   assert.ok(chrome.includes('aria-label="Close listing"'));
-  assert.equal(chrome.includes('aria-label="Previous listing"'), false);
-  assert.equal(chrome.includes("replaceListingSheet"), false);
+  assert.ok(chrome.includes('aria-label="Previous listing"'));
+  assert.ok(chrome.includes('aria-label="Next listing"'));
+  assert.ok(chrome.includes("replaceListingSheet"));
   assert.equal(chrome.includes("anonymous-listing-access"), false);
 }
 

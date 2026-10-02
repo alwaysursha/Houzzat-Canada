@@ -24,8 +24,10 @@ assert.ok(
   ),
 );
 assert.ok(chrome.includes('aria-label="Back to previous listing"'));
+assert.ok(chrome.includes('aria-label="Previous listing"'));
+assert.ok(chrome.includes('aria-label="Next listing"'));
 assert.ok(chrome.includes("useSavedListingToggle"));
-assert.equal(chrome.includes('aria-label="Previous listing"'), false);
+assert.ok(chrome.includes("replaceListingSheet(previousHref)"));
 
 assert.ok(gallery.includes("hidden md:block"));
 assert.ok(gallery.includes("md:grid-cols-4 md:grid-rows-2"));

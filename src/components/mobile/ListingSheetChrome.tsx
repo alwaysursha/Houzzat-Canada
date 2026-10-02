@@ -3,6 +3,7 @@
 import {
   Check,
   ChevronLeft,
+  ChevronRight,
   Heart,
   Link2,
   Search,
@@ -19,6 +20,7 @@ import {
   backListingSheet,
   closeListingSheet,
   openListingSheet,
+  replaceListingSheet,
 } from "@/lib/mobile/listing-sheet-store";
 import {
   isListingSheetSearchOpen,
@@ -34,9 +36,10 @@ import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { cn } from "@/lib/utils";
 
 
+/** Desktop title row. Mobile body is this row plus the Search/Share/Save row. */
+export const LISTING_SHEET_CHROME_ROW = "3.25rem";
 /** Two-row sheet chrome body height (excludes safe-area; Host adds inset). */
-/** Row 1 (2.75rem) + desktop search band (~3.25rem). Mobile action row matches. */
-export const LISTING_SHEET_CHROME_BODY = "6.5rem";
+export const LISTING_SHEET_CHROME_BODY = "7rem";
 
 const SEARCH_PLACEHOLDER =
   "Search active or sold listings by MLS® #, address or neighbourhood";
@@ -340,6 +343,8 @@ export function ListingSheetChrome({
   depth = 1,
   usePanel = false,
   loading = false,
+  previousHref = null,
+  nextHref = null,
 }: {
   href: string | null;
   canBack: boolean;
@@ -347,6 +352,8 @@ export function ListingSheetChrome({
   depth?: number;
   usePanel?: boolean;
   loading?: boolean;
+  previousHref?: string | null;
+  nextHref?: string | null;
 }) {
   const tenantDisplayName = useTenantDisplayName();
   const isDesktop = useIsDesktopChrome();
@@ -454,27 +461,53 @@ export function ListingSheetChrome({
       */}
       <div
         className={cn(
-          "pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-[1] flex h-11 items-center justify-center transition-opacity duration-200 ease-out",
+          "pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-[1] flex h-[3.25rem] items-center justify-center transition-opacity duration-200 ease-out",
           mobileSearchOpen ? "opacity-0" : "opacity-100",
         )}
         aria-hidden={mobileSearchOpen}
       >
-        <span className="listing-wordmark font-display text-[1.7rem] font-semibold leading-none tracking-tight text-white sm:text-[1.85rem]">
-          {tenantDisplayName}
-        </span>
+        <div className="pointer-events-auto flex items-center gap-1 sm:gap-3">
+          <button
+            type="button"
+            disabled={!previousHref}
+            onClick={() => {
+              if (previousHref) replaceListingSheet(previousHref);
+            }}
+            className="inline-flex h-10 items-center gap-0.5 rounded-lg px-1.5 text-sm font-semibold text-white transition enabled:hover:bg-white/10 enabled:active:bg-white/15 disabled:cursor-not-allowed disabled:opacity-35 md:px-2"
+            aria-label="Previous listing"
+          >
+            <ChevronLeft className="size-5" strokeWidth={2.2} aria-hidden />
+            <span className="hidden sm:inline">Previous</span>
+          </button>
+          <span className="listing-wordmark font-display text-[1.7rem] font-semibold leading-none tracking-tight text-white sm:text-[1.85rem]">
+            {tenantDisplayName}
+          </span>
+          <button
+            type="button"
+            disabled={!nextHref}
+            onClick={() => {
+              if (nextHref) replaceListingSheet(nextHref);
+            }}
+            className="inline-flex h-10 items-center gap-0.5 rounded-lg px-1.5 text-sm font-semibold text-white transition enabled:hover:bg-white/10 enabled:active:bg-white/15 disabled:cursor-not-allowed disabled:opacity-35 md:px-2"
+            aria-label="Next listing"
+          >
+            <span className="hidden sm:inline">Next</span>
+            <ChevronRight className="size-5" strokeWidth={2.2} aria-hidden />
+          </button>
+        </div>
       </div>
 
       <div
         className={cn(
-          "relative z-[2] flex h-11 items-center justify-between gap-1 px-1 transition-opacity duration-200 ease-out sm:px-2",
-          mobileSearchOpen && "pointer-events-none opacity-0",
+          "pointer-events-none relative z-[2] flex h-[3.25rem] items-center justify-between gap-1 px-1 transition-opacity duration-200 ease-out sm:px-2",
+          mobileSearchOpen && "opacity-0",
         )}
       >
-        <span className="min-w-0 max-w-[38%] truncate pl-2 text-sm font-semibold tracking-wide text-white/90">
+        <span className="pointer-events-auto min-w-0 max-w-[38%] truncate pl-2 text-sm font-semibold tracking-wide text-white/90">
           {listingLabel}
         </span>
 
-        <div className="flex shrink-0 items-center justify-end">
+        <div className="pointer-events-auto flex shrink-0 items-center justify-end">
           {canBack ? (
             <button
               type="button"

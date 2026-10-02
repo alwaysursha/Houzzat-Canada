@@ -26,6 +26,7 @@ import {
 } from "@/lib/mobile/listing-sheet-store";
 import {
   LISTING_SHEET_CHROME_BODY,
+  LISTING_SHEET_CHROME_ROW,
   ListingSheetChrome,
 } from "@/components/mobile/ListingSheetChrome";
 import { RoutePlannerFloatingChip } from "@/components/route-planner/RoutePlannerFloatingChip";
@@ -312,7 +313,7 @@ export function ListingSheetHost() {
         }
         @media (min-width: 768px) {
           [data-listing-sheet-host] {
-            --listing-sheet-chrome-height: calc(2.75rem + env(safe-area-inset-top, 0px));
+            --listing-sheet-chrome-height: calc(${LISTING_SHEET_CHROME_ROW} + env(safe-area-inset-top, 0px));
           }
         }
         @media (prefers-reduced-motion: reduce) {
@@ -345,6 +346,8 @@ export function ListingSheetHost() {
             canBack={shown.canBack}
             depth={shown.depth}
             usePanel={usePanel}
+            previousHref={shown.previousHref}
+            nextHref={shown.nextHref}
           />
           {usePanel ? (
             Panel ? (
