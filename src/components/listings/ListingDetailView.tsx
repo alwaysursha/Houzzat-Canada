@@ -62,7 +62,6 @@ import {
   homesForSaleCityPath,
   homesForSaleCommunityPath,
 } from "@/lib/geo/area-paths";
-import { interceptListingSheetExitClick } from "@/lib/listings/navigate-listing";
 
 export type ListingDetailViewProps = {
   listing: ListingDetail;
@@ -488,17 +487,14 @@ export function ListingDetailView({
               </p>
               <Link
                 href="/home-valuation"
-                onClick={(event) =>
-                  interceptListingSheetExitClick(event, "/home-valuation")
-                }
+                target="_blank"
+                rel="noopener noreferrer"
                 className="shrink-0 text-sm font-semibold text-canopy underline underline-offset-2 hover:text-canopy-deep"
               >
                 Find out now
               </Link>
             </div>
           </div>
-
-          <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
 
           <ListingDetailSectionNav
             layout={
@@ -602,6 +598,12 @@ export function ListingDetailView({
             initialBody=""
             authCallbackUrl={canonicalPath}
             className="hidden md:block"
+          />
+          <DriveTimePanel
+            mlsNumber={listing.mlsNumber}
+            originLat={listing.lat}
+            originLng={listing.lng}
+            originLabel={streetLine}
           />
           <ListingMobileNotes
             mlsNumber={listing.mlsNumber}

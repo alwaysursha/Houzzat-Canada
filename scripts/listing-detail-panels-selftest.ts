@@ -29,6 +29,8 @@ assert.equal(detail.includes("<ListingQaPanel"), false);
 assert.equal(detail.includes("Listed for:"), false);
 assert.ok(detail.includes("Prices are changing. Get a free home estimate"));
 assert.ok(detail.includes('href="/home-valuation"'));
+assert.ok(detail.includes('target="_blank"'));
+assert.equal(detail.includes("interceptListingSheetExitClick"), false);
 assert.ok(detail.includes("font-display text-3xl font-bold tracking-tight text-canopy"));
 assert.ok(detail.includes("rounded-2xl border border-line/80 bg-surface"));
 assert.ok(section.includes("font-display text-xl font-semibold text-ink sm:text-2xl"));
