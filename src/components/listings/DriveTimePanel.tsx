@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { useSession } from "next-auth/react";
+import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
@@ -347,13 +349,10 @@ export function DriveTimePanel({
   originLng: number;
   originLabel: string;
 }) {
-  const [places, setPlaces] = useState<Partial<Record<SlotId, SavedDrive>>>(() =>
-    refreshEstimates(readSaved(mlsNumber), originLat, originLng),
+  const [places, setPlaces] = useState<Partial<Record<SlotId, SavedDrive>>>(
+    {},
   );
-  const [selected, setSelected] = useState<SlotId | null>(() => {
-    const saved = refreshEstimates(readSaved(mlsNumber), originLat, originLng);
-    return SLOTS.find((slot) => saved[slot]) ?? null;
-  });
+  const [selected, setSelected] = useState<SlotId | null>(null);
   const [listingKey, setListingKey] = useState(mlsNumber);
   const [editing, setEditing] = useState<SlotId | null>(null);
   const [peak, setPeak] = useState(false);
@@ -361,9 +360,14 @@ export function DriveTimePanel({
   const [saving, setSaving] = useState<SlotId | null>(null);
   const [signedIn, setSignedIn] = useState(false);
   const [measuring, setMeasuring] = useState(false);
+  const { status: sessionStatus } = useSession();
+  const { openAuth } = useAuthModal();
+  const isAuthenticated = sessionStatus === "authenticated";
 
   if (listingKey !== mlsNumber) {
-    const saved = readSaved(mlsNumber);
+    const saved = isAuthenticated
+      ? readSaved(mlsNumber)
+      : ({} as Partial<Record<SlotId, SavedDrive>>);
     setListingKey(mlsNumber);
     setPlaces(refreshEstimates(saved, originLat, originLng));
     setSelected(SLOTS.find((slot) => saved[slot]) ?? null);
@@ -371,11 +375,22 @@ export function DriveTimePanel({
     setMeasuring(false);
   }
 
+  /** Visitors see the panel, but addresses stay account-only. */
+  useEffect(() => {
+    if (sessionStatus !== "unauthenticated") return;
+    window.sessionStorage.removeItem(storageKey(mlsNumber));
+    setPlaces({});
+    setSelected(null);
+    setEditing(null);
+    setSignedIn(false);
+  }, [sessionStatus, mlsNumber]);
+
   /**
    * Load saved Home / Work / School. Do not call Google here — that only runs
    * when the address is first saved on a listing, or when they tap Get drive times.
    */
   useEffect(() => {
+    if (!isAuthenticated) return;
     let cancelled = false;
     const saved = readSaved(mlsNumber);
 
@@ -428,7 +443,20 @@ export function DriveTimePanel({
     return () => {
       cancelled = true;
     };
-  }, [mlsNumber, originLat, originLng]);
+  }, [isAuthenticated, mlsNumber, originLat, originLng]);
+
+  function beginEdit(slot: SlotId) {
+    if (sessionStatus === "loading") return;
+    if (!isAuthenticated) {
+      openAuth({
+        mode: "sign-up",
+        callbackUrl: `/listing/${mlsNumber}`,
+        intent: "DRIVE_TIME",
+      });
+      return;
+    }
+    setEditing(slot);
+  }
 
   const needsDriveMeasure = useMemo(
     () =>
@@ -470,9 +498,18 @@ export function DriveTimePanel({
     shownSeconds != null ? formatDriveDuration(shownSeconds) : null;
 
   async function savePlace(place: AutocompleteSuggestion) {
-    if (!editing || place.lat == null || place.lng == null) return;
+    if (!isAuthenticated || !editing || place.lat == null || place.lng == null) {
+      return;
+    }
     const slot = editing;
-    const label = place.subtitle ?? place.label;
+    // Photon puts street in `label` and city/postal/postal in `subtitle`.
+    // Prefer both so other listings don't only show the city.
+    const street = place.label?.trim() ?? "";
+    const locality = place.subtitle?.trim() ?? "";
+    const label =
+      street && locality && !street.includes(locality)
+        ? `${street}, ${locality}`
+        : street || locality;
     const estimated = withEstimate(
       { address: label, lat: place.lat, lng: place.lng },
       originLat,
@@ -575,7 +612,7 @@ export function DriveTimePanel({
                     type="button"
                     onClick={() => {
                       if (place) setSelected(slot);
-                      else setEditing(slot);
+                      else beginEdit(slot);
                     }}
                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
                     aria-pressed={activeSlot}
@@ -613,7 +650,7 @@ export function DriveTimePanel({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setEditing(slot)}
+                    onClick={() => beginEdit(slot)}
                     className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-canopy transition hover:bg-canopy/10"
                   >
                     {place ? "Change" : "Add"}
@@ -636,7 +673,7 @@ export function DriveTimePanel({
             </button>
           ) : null}
 
-          {editing ? (
+          {editing && isAuthenticated ? (
             <div className="space-y-2 rounded-2xl border border-canopy/20 bg-canopy/5 p-2.5">
               <p className="text-xs font-semibold text-ink">
                 Save this address as {slotPhrase(editing)}

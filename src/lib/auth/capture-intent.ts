@@ -26,6 +26,7 @@ export const CAPTURE_INTENT_TYPES = [
   "CONTACT_AGENT",
   "START_CHAT",
   "ROUTE_PLANNER",
+  "DRIVE_TIME",
 ] as const;
 
 export type CaptureIntentType = (typeof CAPTURE_INTENT_TYPES)[number];
@@ -34,6 +35,7 @@ const MLS_ONLY_INTENT_TYPES = [
   "VIEW_LISTING",
   "SAVE_LISTING",
   "PROPERTY_WATCH",
+  "DRIVE_TIME",
 ] as const;
 
 type MlsOnlyIntentType = (typeof MLS_ONLY_INTENT_TYPES)[number];
@@ -231,7 +233,8 @@ function buildIntent(
   switch (draft.type) {
     case "VIEW_LISTING":
     case "SAVE_LISTING":
-    case "PROPERTY_WATCH": {
+    case "PROPERTY_WATCH":
+    case "DRIVE_TIME": {
       const mlsNumber = normalizeMls(draft.mlsNumber);
       if (!mlsNumber) return rejectInvalid();
       return { ok: true, intent: { ...base, type: draft.type, mlsNumber } };
@@ -349,6 +352,7 @@ function allowedKeys(type: CaptureIntentType): readonly string[] {
     case "VIEW_LISTING":
     case "SAVE_LISTING":
     case "PROPERTY_WATCH":
+    case "DRIVE_TIME":
       return [...base, "mlsNumber"];
     case "REQUEST_VIEWING":
       return [...base, "mlsNumber", "kind", "message", "focusNotes"];
@@ -508,6 +512,7 @@ function parseIntentObject(
     case "VIEW_LISTING":
     case "SAVE_LISTING":
     case "PROPERTY_WATCH":
+    case "DRIVE_TIME":
       return rejectInvalid();
     default: {
       const _exhaustive: never = record.type;

@@ -66,6 +66,11 @@ export function authModalCopy(
         headline: "Plan your viewing route",
         subhead: `${action} to keep this route.`,
       };
+    case "DRIVE_TIME":
+      return {
+        headline: "Check drive times",
+        subhead: `${action} to save Home, Work, and School and see drive times.`,
+      };
     default: {
       const _exhaustive: never = intent;
       return _exhaustive;
