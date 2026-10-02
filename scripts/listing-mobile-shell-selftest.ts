@@ -35,8 +35,9 @@ assert.ok(gallery.includes("openViewerAt(0)"));
 assert.equal(gallery.includes('restoreEntry="gallery"'), false);
 assert.equal(gallery.includes("aspect-[4/3]"), false);
 
-assert.ok(detail.includes("<ListingQaPanel"));
-assert.ok(detail.includes("Quick question?"));
+assert.equal(detail.includes("<ListingQaPanel"), false);
+assert.equal(detail.includes("Quick question?"), false);
+assert.ok(detail.includes("Find out now"));
 assert.ok(detail.includes("font-display text-3xl"));
 assert.equal(detail.includes("ListingMapViewButton"), false);
 assert.equal(detail.includes("order-7 md:contents"), false);
@@ -44,7 +45,7 @@ assert.equal(detail.includes("MobilePublicAgentSection"), false);
 assert.ok(detail.includes("<ListingAccessGate"));
 assert.ok(detail.includes("<ViewingRequestPanel"));
 assert.ok(
-  detail.indexOf("<ListingQaPanel") < detail.indexOf("<DriveTimePanel"),
+  detail.indexOf("Find out now") < detail.indexOf("<DriveTimePanel"),
 );
 assert.ok(
   detail.indexOf("<ListingHistoryPanel") <
@@ -82,6 +83,8 @@ assert.ok(bar.includes("Find similar homes"));
 assert.equal(bar.includes("peekLeadRequestEntry"), false);
 
 assert.ok(panel.includes("Ask about this home"));
+assert.ok(panel.includes("Request Tour"));
+assert.ok(panel.includes("Request Info"));
 assert.ok(detail.includes('<ViewingRequestPanel\n            className="hidden md:block"') || detail.includes('className="hidden md:block"'));
 assert.equal(panel.includes("publicAgent"), false);
 assert.ok(form.includes('kind === "inquiry" ? "CONTACT_AGENT" : "REQUEST_VIEWING"'));

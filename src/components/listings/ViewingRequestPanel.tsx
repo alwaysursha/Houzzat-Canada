@@ -73,6 +73,8 @@ export function ViewingRequestPanel({
   const restore = useLeadRequestRestore(mlsNumber, claim);
   const [mode, setMode] = useState<"showing" | "virtual_viewing">("showing");
   const [modeChosen, setModeChosen] = useState(false);
+  const [panel, setPanel] = useState<"tour" | "info">("tour");
+  const [panelChosen, setPanelChosen] = useState(false);
   const resolvedContact = useListingContactDefaults(contact);
   const watchSegment =
     segment === "COMMERCIAL" ? "COMMERCIAL" : ("RESIDENTIAL" as const);
@@ -86,6 +88,8 @@ export function ViewingRequestPanel({
     (restore?.kind === "showing" || restore?.kind === "virtual_viewing")
       ? restore.kind
       : mode;
+  const activePanel: "tour" | "info" =
+    !panelChosen && restore?.kind === "inquiry" ? "info" : panel;
   const showInquiryOnMobile = narrow && restore?.kind === "inquiry";
   const shellClass = cn(
     // Parent column must be the tall grid aside — do not wrap this in a short
@@ -166,66 +170,120 @@ export function ViewingRequestPanel({
           size="button"
         />
       </div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
-        Next step
-      </p>
-      <h2 className="mt-1 font-display text-xl text-ink sm:text-2xl">
-        Book a viewing
-      </h2>
-      <div className="mt-3 flex gap-2">
+      <div
+        role="tablist"
+        aria-label="Contact this listing"
+        className="grid grid-cols-2 rounded-xl bg-mist/70 p-1"
+      >
         <button
           type="button"
-          className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
-            restoredViewing === "showing"
-              ? "bg-canopy text-white shadow-sm"
-              : "border border-line/70 bg-mist/40 text-ink/70"
+          role="tab"
+          aria-selected={activePanel === "tour"}
+          className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+            activePanel === "tour"
+              ? "bg-surface text-ink shadow-sm"
+              : "text-ink/55"
           }`}
           onClick={() => {
-            setModeChosen(true);
-            setMode("showing");
+            setPanelChosen(true);
+            setPanel("tour");
           }}
         >
-          In-person
+          Request Tour
         </button>
         <button
           type="button"
-          className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
-            restoredViewing === "virtual_viewing"
-              ? "bg-signal text-white shadow-sm"
-              : "border border-line/70 bg-mist/40 text-ink/70"
+          role="tab"
+          aria-selected={activePanel === "info"}
+          className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+            activePanel === "info"
+              ? "bg-surface text-ink shadow-sm"
+              : "text-ink/55"
           }`}
           onClick={() => {
-            setModeChosen(true);
-            setMode("virtual_viewing");
+            setPanelChosen(true);
+            setPanel("info");
           }}
         >
-          Virtual Viewing
+          Request Info
         </button>
       </div>
-      <div className="mt-4">
-        <LeadRequestForm
-          key={`${status}-${restoredViewing}-${restore?.restoredAt ?? "base"}`}
-          mlsNumber={mlsNumber}
-          kind={restoredViewing}
-          callbackPath={authCallbackUrl}
-          defaults={{
-            name: resolvedContact?.name ?? "",
-            email: resolvedContact?.email ?? "",
-            phone: resolvedContact?.phone ?? "",
-            message:
-              restore &&
-              restore.kind === restoredViewing &&
-              restore.message
-                ? restore.message
-                : defaultViewingMessage(mlsNumber, restoredViewing),
-            focusNotes:
-              restore?.kind === "virtual_viewing" &&
-              restoredViewing === "virtual_viewing"
-                ? (restore.focusNotes ?? "")
-                : "",
-          }}
-        />
-      </div>
+      {activePanel === "tour" ? (
+        <>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
+                restoredViewing === "showing"
+                  ? "bg-canopy text-white shadow-sm"
+                  : "border border-line/70 bg-mist/40 text-ink/70"
+              }`}
+              onClick={() => {
+                setModeChosen(true);
+                setMode("showing");
+              }}
+            >
+              In-person
+            </button>
+            <button
+              type="button"
+              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
+                restoredViewing === "virtual_viewing"
+                  ? "bg-signal text-white shadow-sm"
+                  : "border border-line/70 bg-mist/40 text-ink/70"
+              }`}
+              onClick={() => {
+                setModeChosen(true);
+                setMode("virtual_viewing");
+              }}
+            >
+              Virtual Viewing
+            </button>
+          </div>
+          <div className="mt-4">
+            <LeadRequestForm
+              key={`${status}-${restoredViewing}-${restore?.restoredAt ?? "base"}`}
+              mlsNumber={mlsNumber}
+              kind={restoredViewing}
+              callbackPath={authCallbackUrl}
+              defaults={{
+                name: resolvedContact?.name ?? "",
+                email: resolvedContact?.email ?? "",
+                phone: resolvedContact?.phone ?? "",
+                message:
+                  restore &&
+                  restore.kind === restoredViewing &&
+                  restore.message
+                    ? restore.message
+                    : defaultViewingMessage(mlsNumber, restoredViewing),
+                focusNotes:
+                  restore?.kind === "virtual_viewing" &&
+                  restoredViewing === "virtual_viewing"
+                    ? (restore.focusNotes ?? "")
+                    : "",
+              }}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="mt-4">
+          <LeadRequestForm
+            key={`${status}-${restore?.kind === "inquiry" ? restore.restoredAt : "inquiry"}`}
+            mlsNumber={mlsNumber}
+            kind="inquiry"
+            callbackPath={authCallbackUrl}
+            defaults={{
+              name: resolvedContact?.name ?? "",
+              email: resolvedContact?.email ?? "",
+              phone: resolvedContact?.phone ?? "",
+              message:
+                restore?.kind === "inquiry" && restore.message
+                  ? restore.message
+                  : defaultInquiryMessage(mlsNumber),
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

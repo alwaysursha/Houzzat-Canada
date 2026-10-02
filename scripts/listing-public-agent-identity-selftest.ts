@@ -346,7 +346,7 @@ async function main() {
   assert.ok(concierge.includes("kind={restoredViewing}"));
   assert.ok(concierge.includes("virtual_viewing"));
   assert.ok(concierge.includes("Ask about this home"));
-  assert.ok(concierge.includes("Book a viewing"));
+  assert.ok(concierge.includes("Request Tour"));
   assert.ok(concierge.includes("RoutePlannerToggleButton"));
   assert.ok(concierge.includes("hidden md:block"));
   assert.ok(concierge.includes("object-cover"));

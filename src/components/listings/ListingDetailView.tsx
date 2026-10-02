@@ -2,7 +2,7 @@
 
 import { Suspense } from "react";
 import Link from "next/link";
-import { Bath, Bed, Car, Maximize2, ArrowDown, ArrowUp } from "lucide-react";
+import { Bath, Bed, Car, Megaphone, ArrowDown, ArrowUp } from "lucide-react";
 import { ListingNotesPanel } from "@/components/account/ListingNotesPanel";
 import { ListingDetailFooter } from "@/components/listings/ListingDetailFooter";
 import { SavedSearchChipBar } from "@/components/account/SavedSearchChipBar";
@@ -16,7 +16,6 @@ import {
 } from "@/components/listings/ListingRoomsOpenHousesLive";
 import { ListingHistoryPanel } from "@/components/listings/ListingHistoryPanel";
 import { ListingNarrative } from "@/components/listings/ListingNarrative";
-import { ListingQaPanel } from "@/components/listings/ListingQaPanel";
 import { ListingStickyBar } from "@/components/listings/ListingStickyBar";
 import { NearbyAmenitiesDeferred } from "@/components/listings/NearbyAmenitiesDeferred";
 import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
@@ -85,8 +84,6 @@ export type ListingDetailViewProps = {
    * under the overlay is not rewritten.
    */
   applyDocumentSheetFlags?: boolean;
-  /** Hostname-resolved WhatsApp digits — never a global env number. */
-  expertWhatsApp?: string | null;
 };
 
 /**
@@ -108,7 +105,6 @@ export function ListingDetailView({
   gateSold,
   canonicalPath,
   applyDocumentSheetFlags = true,
-  expertWhatsApp = null,
 }: ListingDetailViewProps) {
   const personalizationCities: string[] = [];
   const showClosedPrice =
@@ -132,21 +128,24 @@ export function ListingDetailView({
     { includeRestricted: canSeeRestricted },
   );
   const province = listing.province?.trim() || "ON";
-  const { street: streetLine, locality: addressLocality } =
-    formatListingAddressSearchParts(listing);
+  const { street: streetLine } = formatListingAddressSearchParts(listing);
   const addressLabel = formatListingAddressOneLine(listing);
-  const addressSearchLabel = addressLocality
-    ? `${streetLine}, ${addressLocality}`
-    : streetLine;
   const daysOnMarket = daysOnMarketFromListedAt(listing);
   const timingLabel = formatListingTiming(listing);
   const listingFacts = parseListingFacts(listing.facts);
   const bedsPlusLabel = formatBedsPlusLabel(listing.beds, listingFacts);
-  const sqftLabel = formatListingSqftLabel({
-    sqft: listing.sqft,
-    livingAreaRange: listingFacts?.livingAreaRange,
-    unit: "sqft",
-  });
+  const postalDisplay = (() => {
+    const raw = listing.postalCode?.trim();
+    if (!raw) return null;
+    const compact = raw.replace(/\s+/g, "").toUpperCase();
+    if (/^[A-Z]\d[A-Z]\d[A-Z]\d$/.test(compact)) {
+      return `${compact.slice(0, 3)} ${compact.slice(3)}`;
+    }
+    return raw.toUpperCase();
+  })();
+  const cityLine = [listing.city.trim(), province.toUpperCase(), postalDisplay]
+    .filter(Boolean)
+    .join(", ");
   const taxesLabel = listing.taxes
     ? listingFacts?.taxYear
       ? `${formatPrice(listing.taxes)} / ${listingFacts.taxYear}`
@@ -309,7 +308,8 @@ export function ListingDetailView({
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] lg:gap-10">
         <div className="min-w-0 space-y-5 sm:space-y-6">
-          <div className="flex flex-col gap-5 rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-x-8 md:gap-y-5">
+          <div className="rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6">
+            <div className="flex flex-col gap-5 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-x-8 md:gap-y-5">
             <div className="min-w-0 w-full md:flex-1">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -326,21 +326,11 @@ export function ListingDetailView({
                     />
                   ) : detailsLocked ? (
                     <p className="font-display text-3xl font-bold tracking-tight text-ink/55 sm:text-4xl">
-                      <span className="mr-2 font-sans text-base font-semibold text-ink sm:text-lg">
-                        {listing.transactionType === "LEASE"
-                          ? "Rent:"
-                          : "Listed for:"}
-                      </span>
                       {gateSold.title}
                     </p>
                   ) : (
                     <>
                       <p className="font-display text-3xl font-bold tracking-tight text-canopy sm:text-4xl">
-                        <span className="mr-2 font-sans text-base font-semibold text-ink sm:text-lg">
-                          {listing.transactionType === "LEASE"
-                            ? "Rent:"
-                            : "Listed for:"}
-                        </span>
                         {formatListPrice(
                           listing.listPrice,
                           listing.transactionType,
@@ -382,36 +372,24 @@ export function ListingDetailView({
               </div>
               <div className="mt-2 font-display leading-tight text-ink">
                 {detailsLocked ? (
-                  <h1 className="select-none text-xl font-semibold blur-[5px] md:text-2xl">
-                    {addressSearchLabel}
-                  </h1>
+                  <>
+                    <h1 className="select-none text-xl font-semibold blur-[5px] md:text-2xl">
+                      {streetLine}
+                    </h1>
+                    {cityLine ? (
+                      <p className="mt-1 select-none text-base font-semibold text-ink/70 blur-[5px] md:text-lg">
+                        {cityLine}
+                      </p>
+                    ) : null}
+                  </>
                 ) : (
                   <>
                     <h1 className="text-xl font-semibold md:text-2xl">
                       {streetLine}
                     </h1>
-                    {addressLocality ? (
+                    {cityLine ? (
                       <p className="mt-1 text-base font-semibold text-ink/70 md:text-lg">
-                        {communityHref && listing.community ? (
-                          <>
-                            {listing.city.trim()}
-                            {" - "}
-                            <Link
-                              href={communityHref}
-                              onClick={(event) =>
-                                interceptListingSheetExitClick(
-                                  event,
-                                  communityHref,
-                                )
-                              }
-                              className="text-canopy hover:underline"
-                            >
-                              {listing.community}
-                            </Link>
-                          </>
-                        ) : (
-                          addressLocality
-                        )}
+                        {cityLine}
                       </p>
                     ) : null}
                   </>
@@ -452,8 +430,8 @@ export function ListingDetailView({
               <div
                 className={
                   listing.segment !== "COMMERCIAL"
-                    ? `grid w-full grid-cols-4 gap-2 md:flex md:w-auto md:items-start md:gap-3 ${detailsLocked ? "select-none blur-[5px]" : ""}`
-                    : `grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:items-start md:gap-3 ${detailsLocked ? "select-none blur-[5px]" : ""}`
+                    ? `grid w-full grid-cols-3 gap-2 md:flex md:w-auto md:items-start md:gap-3 ${detailsLocked ? "select-none blur-[5px]" : ""}`
+                    : `flex w-full justify-end md:w-auto md:items-start ${detailsLocked ? "select-none blur-[5px]" : ""}`
                 }
               >
                 {listing.segment !== "COMMERCIAL" ? (
@@ -485,16 +463,6 @@ export function ListingDetailView({
                   </>
                 ) : null}
                 <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/60 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
-                  <Maximize2
-                    className="size-5 text-canopy md:size-6"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  <span className="text-sm font-semibold leading-tight text-ink">
-                    {sqftLabel ?? "n/a sqft"}
-                  </span>
-                </div>
-                <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl bg-mist/60 px-2 py-2.5 text-center md:min-w-[5.25rem] md:px-3">
                   <Car
                     className="size-5 text-canopy md:size-6"
                     strokeWidth={1.75}
@@ -507,16 +475,28 @@ export function ListingDetailView({
                 </div>
               </div>
             </div>
+            </div>
+            <div className="mt-4 flex w-full items-center justify-between gap-3 border-t border-line/70 pt-4">
+              <p className="flex min-w-0 items-start gap-2 text-sm text-ink sm:items-center">
+                <Megaphone
+                  className="mt-0.5 size-4 shrink-0 text-canopy sm:mt-0"
+                  aria-hidden
+                />
+                <span>
+                  Prices are changing. Get a free home estimate
+                </span>
+              </p>
+              <Link
+                href="/home-valuation"
+                onClick={(event) =>
+                  interceptListingSheetExitClick(event, "/home-valuation")
+                }
+                className="shrink-0 text-sm font-semibold text-canopy underline underline-offset-2 hover:text-canopy-deep"
+              >
+                Find out now
+              </Link>
+            </div>
           </div>
-
-          <ListingQaPanel
-            mlsNumber={listing.mlsNumber}
-            addressLine={addressLabel}
-            city={listing.city}
-            title="Quick question?"
-            hint="Message the agent directly on WhatsApp — MLS® and address is already included."
-            expertWhatsApp={expertWhatsApp}
-          />
 
           <DriveTimePanel originLat={listing.lat} originLng={listing.lng} />
 
