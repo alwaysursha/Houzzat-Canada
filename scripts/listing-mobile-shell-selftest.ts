@@ -33,36 +33,40 @@ assert.equal(chrome.includes("Search · Share · Save"), false);
 
 assert.ok(gallery.includes("hidden md:block"));
 assert.ok(gallery.includes("md:grid-cols-4 md:grid-rows-2"));
-assert.ok(gallery.includes("min-h-[52vh] w-full min-w-full"));
-assert.ok(gallery.includes("ListingGalleryMapSlide"));
+assert.ok(gallery.includes("aspect-[4/3]"));
 assert.ok(gallery.includes("object-cover"));
+assert.ok(gallery.includes("openViewerAt(0)"));
 assert.ok(gallery.includes("openStack()"));
 assert.ok(gallery.includes('restoreEntry="gallery"'));
-assert.equal(gallery.includes("aspect-[4/3]"), false);
+assert.equal(gallery.includes("min-h-[52vh] w-full min-w-full"), false);
 
-assert.ok(detail.includes("<ListingDetailSectionNav"));
-assert.equal(detail.includes("ListingDetailPanels"), false);
-assert.equal(detail.includes("DesktopListingSectionNav"), false);
-assert.equal(detail.includes("scrollIntoView"), false);
-assert.ok(detail.includes("DesktopListingActions"));
-assert.ok(detail.includes("lg:col-span-2"));
-assert.ok(detail.includes('aria-label="Property facts"'));
-assert.equal(detail.includes("ListingMapViewButton"), false);
-assert.ok(gallery.includes("ListingGalleryMapSlide"));
+assert.ok(detail.includes("md:rounded-2xl md:border md:border-line/40 md:bg-surface"));
+assert.ok(detail.includes("hidden w-full gap-2 md:flex"));
+assert.ok(detail.includes("ListingMapViewButton"));
 assert.ok(detail.includes("Virtual tour"));
 assert.ok(detail.includes("<ListingAccessGate"));
 assert.ok(detail.includes("<ViewingRequestPanel"));
+assert.ok(detail.includes("order-7 md:contents"));
+assert.ok(detail.includes("order-8 md:contents"));
+assert.ok(detail.includes("order-11 md:hidden"));
+assert.ok(detail.includes("order-12 md:contents"));
 assert.ok(detail.includes("<MobilePublicAgentSection"));
 assert.equal(detail.includes("<ListingQaPanel"), false);
+assert.ok(
+  detail.indexOf("<MobilePublicAgentSection") <
+    detail.indexOf("<ListingRelatedSection"),
+);
 assert.ok(
   detail.indexOf("<ListingHistoryPanel") <
     detail.indexOf("<ListingInsightsDeferred"),
 );
-assert.ok(detail.includes('initialMode="SAME_AREA"'));
-assert.equal(detail.includes('presentation="similar"'), false);
 assert.ok(
-  detail.indexOf("<MobilePublicAgentSection") <
-    detail.indexOf("<ListingRelatedSection"),
+  detail.indexOf("<ListingRelatedSection") <
+    detail.indexOf("<DriveTimePanel"),
+);
+assert.ok(detail.includes('{ id: "listing-insights", label: "Insights" }'));
+assert.ok(
+  detail.indexOf('label: "Insights"') < detail.indexOf('label: "History"'),
 );
 assert.ok(detail.includes('className="hidden md:block"'));
 

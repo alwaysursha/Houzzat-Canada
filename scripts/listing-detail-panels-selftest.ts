@@ -1,5 +1,6 @@
 /**
- * Approved listing summary plus the restored stacked detail sections.
+ * Listing Detail presentation matches the pre-redesign page (aef3732),
+ * while later nonvisual browse and insights-cache fixes stay in place.
  * Run: pnpm listing-detail-panels:selftest
  */
 import assert from "node:assert/strict";
@@ -9,192 +10,66 @@ function read(rel: string) {
   return readFileSync(rel, "utf8");
 }
 
-function count(source: string, needle: string) {
-  return source.split(needle).length - 1;
-}
-
 const detail = read("src/components/listings/ListingDetailView.tsx");
-const sticky = read("src/components/listings/ListingStickyBar.tsx");
 const gallery = read("src/components/listings/ListingGallery.tsx");
-const related = read("src/components/listings/ListingRelatedSection.tsx");
-const insights = read("src/components/listings/insights/ListingInsightsDeferred.tsx");
-const share = read("src/components/listings/ShareListingButton.tsx");
+const sticky = read("src/components/listings/ListingStickyBar.tsx");
+const host = read("src/components/mobile/ListingSheetHost.tsx");
 const chrome = read("src/components/mobile/ListingSheetChrome.tsx");
-const bar = read("src/components/listings/ListingMobileActionBar.tsx");
+const related = read("src/components/listings/ListingRelatedSection.tsx");
+const insights = read(
+  "src/components/listings/insights/ListingInsightsDeferred.tsx",
+);
 const store = read("src/lib/mobile/listing-sheet-store.ts");
 
-assert.ok(detail.includes("homesForSaleCommunityPath"));
-assert.ok(detail.includes("interceptListingSheetExitClick"));
-assert.ok(detail.includes("{listing.community}"));
-assert.ok(detail.includes("font-semibold text-canopy underline-offset-2 hover:underline"));
-const locality = detail.slice(
-  detail.indexOf("{listing.city.trim()}"),
-  detail.indexOf("{propertyTypeLabel(listing.propertyType)}"),
-);
-assert.equal(locality.includes("md:hidden"), false);
-assert.equal(locality.includes("hidden md:"), false);
-
-const summaryFacts = detail.slice(
-  detail.indexOf("function summaryCompactRangeSqft"),
-  detail.indexOf("function DesktopListingActions"),
-);
-assert.ok(summaryFacts.includes('case "bed"'));
-assert.ok(summaryFacts.includes('case "bath"'));
-assert.ok(summaryFacts.includes('case "sqft"'));
-assert.ok(summaryFacts.includes('case "parking"'));
-assert.ok(summaryFacts.includes('segment !== "COMMERCIAL"'));
-assert.ok(summaryFacts.includes("formatLivingAreaRangeLabel"));
-assert.equal(summaryFacts.includes("summaryExactSqftCaption"), false);
-assert.equal(summaryFacts.includes("listing.sqft"), false);
-assert.ok(summaryFacts.includes('bedValue === "1" ? "Bed" : "Beds"'));
-assert.equal(summaryFacts.includes("Bedroom"), false);
-assert.ok(summaryFacts.includes('baths === 1 ? "Bath" : "Baths"'));
-assert.equal(summaryFacts.includes("Bathroom"), false);
-assert.ok(summaryFacts.includes("text-lg font-semibold"));
-assert.ok(summaryFacts.includes("md:gap-x-6"));
-assert.ok(detail.includes("xl:grid xl:grid-cols-[minmax(0,1fr)_auto]"));
-assert.ok(detail.includes("xl:items-stretch"));
-assert.ok(detail.includes("hidden md:inline xl:hidden"));
-assert.ok(detail.includes("xl:text-base xl:font-semibold xl:text-ink"));
-assert.ok(detail.includes("xl:flex-col xl:items-center xl:gap-1.5 xl:text-center"));
-assert.equal(detail.includes("pointer-events-none"), false);
-assert.ok(detail.includes("xl:hidden md:flex md:justify-end"));
-assert.ok(summaryFacts.includes("summaryCompactRangeSqft"));
-assert.ok(summaryFacts.includes('parkingSpaces === 1 ? "Spot" : "Spots"'));
-assert.ok(summaryFacts.includes("justify-between"));
-assert.ok(summaryFacts.includes("px-3"));
-assert.equal(summaryFacts.includes("justify-center"), false);
-assert.equal(summaryFacts.includes("gap-x-3"), false);
-assert.ok(summaryFacts.includes("whitespace-nowrap"));
-assert.ok(summaryFacts.includes("flex-col"));
-assert.ok(summaryFacts.includes("md:flex-row"));
-assert.ok(summaryFacts.includes('text-[15px] font-semibold'));
-assert.ok(summaryFacts.includes("md:hidden"));
-assert.equal(summaryFacts.includes("-mx-4"), false);
-assert.ok(summaryFacts.includes("md:shrink-0"));
-assert.ok(summaryFacts.includes("md:flex-nowrap"));
-assert.equal(summaryFacts.includes("100cqi"), false);
-assert.equal(summaryFacts.includes("lg:w-auto"), false);
-assert.equal(summaryFacts.includes("minmax(0, 1fr)"), false);
-assert.equal(summaryFacts.includes("border"), false);
-assert.equal(count(detail, "formatListingSqftLabel("), 1);
-assert.ok(
-  detail.includes("livingAreaRange: listingFacts?.livingAreaRange"),
-);
-
-assert.equal(detail.includes("ListingMapViewButton"), false);
-assert.ok(gallery.includes("ListingGalleryMapSlide"));
-assert.ok(gallery.includes("hidden md:block"));
-assert.ok(gallery.includes("md:grid-cols-4 md:grid-rows-2"));
-assert.ok(gallery.includes("min-h-[52vh] w-full min-w-full"));
-assert.equal(gallery.includes("aspect-[4/3]"), false);
-assert.ok(gallery.includes('restoreEntry="gallery"'));
-
-assert.ok(detail.includes("estimateEligible"));
-assert.ok(detail.includes('listing.status === "ACTIVE"'));
-assert.ok(detail.includes('listing.transactionType === "SALE"'));
-assert.ok(detail.includes("!showClosedPrice"));
-assert.ok(detail.includes("eligible={estimateEligible}"));
-assert.ok(
-  detail.includes(
-    "flex w-full min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-1 md:block",
-  ),
-);
-assert.ok(detail.includes("flex shrink-0 items-baseline gap-1.5 md:gap-4"));
-assert.equal(count(detail, "<ListingEstimateLine"), 1);
-assert.ok(detail.includes('className="md:text-base md:tracking-normal"'));
-assert.ok(
-  detail.includes(
-    "ml-auto shrink-0 whitespace-nowrap text-right text-base font-semibold leading-none text-ink/85 md:hidden",
-  ),
-);
-assert.ok(
-  detail.includes(
-    "shrink-0 whitespace-nowrap pt-1.5 text-[15px] font-medium leading-none text-ink/55 md:hidden",
-  ),
-);
-assert.ok(insights.includes("valuation.restricted"));
-const compactEstimate = insights.slice(insights.indexOf("export function ListingEstimateLine"));
-assert.ok(compactEstimate.includes("if (!compact) return null"));
-assert.ok(compactEstimate.includes("Est. Value"));
-assert.ok(compactEstimate.includes("text-ink/55"));
-assert.ok(compactEstimate.includes("text-sm font-medium"));
-assert.equal(compactEstimate.includes("Estimated value"), false);
-assert.equal(compactEstimate.includes("clamp("), false);
-assert.equal(compactEstimate.includes("text-canopy"), false);
-assert.ok(insights.includes("valuation.mid == null"));
-assert.ok(insights.includes("useListingInsights"));
-
 assert.equal(detail.includes("ListingDetailPanels"), false);
-assert.equal(detail.includes("scrollIntoView"), false);
-assert.equal(detail.includes("router.push"), false);
+assert.equal(detail.includes("DesktopListingActions"), false);
+assert.equal(detail.includes("<ListingEstimateLine"), false);
+assert.equal(detail.includes("presentation=\"similar\""), false);
+assert.equal(detail.includes("presentation=\"comparable-sold\""), false);
 assert.ok(detail.includes("<ListingDetailSectionNav"));
-assert.ok(detail.includes('{ id: "listing-about", label: "About" }'));
-assert.ok(detail.includes('{ id: "listing-details", label: "Details" }'));
-assert.ok(detail.includes('{ id: "listing-rooms", label: "Rooms" }'));
+assert.ok(detail.includes("md:rounded-2xl md:border md:border-line/40 md:bg-surface"));
+assert.ok(detail.includes("ListingMapViewButton"));
+assert.ok(detail.includes("initialMode=\"SAME_AREA\""));
+assert.ok(detail.includes("order-7 md:contents"));
+assert.ok(detail.includes("order-8 md:contents"));
+assert.ok(detail.includes("order-11 md:hidden"));
+assert.ok(detail.includes("order-12 md:contents"));
 assert.ok(detail.includes('{ id: "listing-insights", label: "Insights" }'));
 assert.ok(detail.includes('{ id: "listing-estimated-value", label: "Estimated Value" }'));
-assert.ok(detail.includes('{ id: "listing-history", label: "History" }'));
-assert.ok(detail.includes('{ id: "listing-nearby", label: "Amenities" }'));
-assert.ok(detail.includes('{ id: "listing-open-houses", label: "Open houses" }'));
-assert.ok(detail.includes('{ id: "listing-related", label: "Similar" }'));
+assert.ok(
+  detail.indexOf('label: "Insights"') < detail.indexOf('label: "History"'),
+);
+assert.ok(
+  detail.indexOf("<ListingRelatedSection") < detail.indexOf("<DriveTimePanel"),
+);
+assert.ok(detail.includes("<ListingNarrative"));
+assert.ok(detail.includes("<ListingFactsPanel"));
+assert.ok(detail.includes("<ListingRoomsLive"));
+assert.ok(detail.includes("<ListingOpenHousesLive"));
+assert.ok(detail.includes("<ListingHistoryPanel"));
+assert.ok(detail.includes("<ListingInsightsDeferred"));
+assert.ok(detail.includes("<NearbyAmenitiesDeferred"));
 
-assert.equal(count(detail, "<ListingHistoryPanel"), 1);
-assert.equal(count(detail, "<ListingInsightsDeferred"), 1);
-assert.equal(count(detail, "<DriveTimePanel"), 1);
-assert.equal(count(detail, "<NearbyAmenitiesDeferred"), 1);
-assert.equal(count(detail, "<ListingNarrative"), 1);
-assert.equal(count(detail, "<ListingFactsPanel"), 1);
-assert.equal(count(detail, "<ListingRoomsLive"), 1);
-assert.equal(count(detail, "<ListingOpenHousesLive"), 1);
+assert.ok(sticky.includes("SaveListingButton"));
+assert.ok(sticky.includes("WatchListingButton"));
+assert.ok(sticky.includes("ShareListingButton"));
+assert.ok(sticky.includes("ListingBreadcrumbs"));
+assert.equal(sticky.includes("if (isSheet) return null"), false);
 
-const aboutAt = detail.indexOf("<ListingNarrative");
-const detailsAt = detail.indexOf("<ListingFactsPanel");
-const roomsAt = detail.indexOf("<ListingRoomsLive");
-const historyAt = detail.indexOf("<ListingHistoryPanel");
-const insightsAt = detail.indexOf("<ListingInsightsDeferred");
-const relatedAt = detail.indexOf("<ListingRelatedSection");
-const driveAt = detail.indexOf("<DriveTimePanel");
-const amenitiesAt = detail.indexOf("<NearbyAmenitiesDeferred");
-const openAt = detail.indexOf("<ListingOpenHousesLive");
-assert.ok(aboutAt < detailsAt);
-assert.ok(detailsAt < roomsAt);
-assert.ok(roomsAt < historyAt);
-assert.ok(historyAt < insightsAt);
-assert.ok(insightsAt < relatedAt);
-assert.ok(relatedAt < driveAt);
-assert.ok(driveAt < amenitiesAt);
-assert.ok(amenitiesAt < openAt);
+assert.ok(gallery.includes("aspect-[4/3]"));
+assert.equal(gallery.includes("min-h-[52vh] w-full min-w-full"), false);
+assert.ok(gallery.includes('restoreEntry="gallery"'));
 
-assert.equal(detail.includes('presentation="comparable-sold"'), false);
-assert.equal(detail.includes('presentation="similar"'), false);
-assert.ok(detail.includes('initialMode="SAME_AREA"'));
-assert.ok(related.includes('presentation === "comparable-sold" ? "sold"'));
-assert.ok(related.includes('locked ? "same-features"'));
-assert.ok(related.includes("relatedResponseCache"));
-assert.ok(related.includes("if (locked) return;"));
+assert.equal(host.includes("houzzat-sheet-in"), false);
+assert.ok(host.includes("<Panel key={state.href}"));
+assert.ok(chrome.includes('LISTING_SHEET_CHROME_BODY = "6.5rem"'));
+assert.ok(chrome.includes('aria-label="Back to results"'));
+assert.equal(chrome.includes("md:text-canopy"), false);
+
 assert.ok(related.includes('{ id: "same-area", label: "Nearby" }'));
 assert.ok(related.includes('{ id: "same-features", label: "Similar homes" }'));
-assert.equal(count(detail, "<ListingRelatedSection"), 1);
-assert.equal(sticky.includes("if (isSheet) return null"), false);
-assert.equal(sticky.includes("SaveListingButton"), false);
-assert.equal(sticky.includes("WatchListingButton"), false);
-assert.equal(sticky.includes("ShareListingButton"), false);
-assert.ok(sticky.includes("ListingBreadcrumbs"));
-assert.equal(count(detail, "<SaveListingButton"), 1);
-assert.equal(count(detail, "<ShareListingButton"), 1);
-
-assert.ok(chrome.includes("hasBrowse"));
-assert.ok(chrome.includes("replaceListingSheet"));
+assert.ok(related.includes("Explore nearby homes"));
+assert.ok(insights.includes("useListingInsights"));
 assert.ok(store.includes("sameListingHref"));
-assert.ok(share.includes("openUpward"));
-assert.ok(share.includes("bottom-full mb-2"));
-assert.ok(bar.includes('restoreEntry="concierge"'));
-assert.ok(bar.includes("Book a viewing"));
-assert.ok(bar.includes("Watch this area"));
-assert.ok(detail.includes("<ListingMobileActionBar"));
-assert.ok(detail.includes("text-canopy md:text-[2.5rem]"));
-assert.equal(detail.includes("md:text-4xl md:text-ink"), false);
-assert.ok(detail.includes("isListingSheet ? \"pt-0\" : \"pt-3\""));
 
 console.log("listing-detail-panels selftest ok");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Link2, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
@@ -29,15 +29,7 @@ export function ShareListingButton({
   const siteName = useTenantDisplayName("Houzzat");
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [openUpward, setOpenUpward] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLSpanElement>(null);
-
-  useLayoutEffect(() => {
-    if (!shareOpen || !triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    setOpenUpward(window.innerHeight - rect.bottom < 220);
-  }, [shareOpen]);
 
   useEffect(() => {
     function onDocClick(event: MouseEvent) {
@@ -73,27 +65,20 @@ export function ShareListingButton({
 
   return (
     <div ref={menuRef} className={cn("relative", className)}>
-      <span ref={triggerRef} className="inline-flex">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          aria-label="Share property"
-          aria-expanded={shareOpen}
-          onClick={() => setShareOpen((open) => !open)}
-        >
-          <Share2 className="h-4 w-4" />
-          Share
-        </Button>
-      </span>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        aria-label="Share property"
+        aria-expanded={shareOpen}
+        onClick={() => setShareOpen((open) => !open)}
+      >
+        <Share2 className="h-4 w-4" />
+        Share
+      </Button>
 
       {shareOpen ? (
-        <div
-          className={cn(
-            "absolute left-0 z-50 w-48 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg",
-            openUpward ? "bottom-full mb-2" : "top-full mt-2",
-          )}
-        >
+        <div className="absolute left-0 top-full z-40 mt-2 w-48 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg">
           <button
             type="button"
             onClick={() => void copyLink()}

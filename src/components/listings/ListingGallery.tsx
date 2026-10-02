@@ -16,7 +16,6 @@ import {
   ListingMapViewButton,
   type ListingMapSubject,
 } from "@/components/listings/ListingMapView";
-import { ListingGalleryMapSlide } from "@/components/listings/ListingGalleryMapSlide";
 import { useClientToolsVerification } from "@/components/auth/ClientToolsVerificationProvider";
 import { useListingContactDefaults } from "@/components/listings/ListingAccountChromeProvider";
 import { GalleryVerifyLockCard } from "@/components/listings/GalleryVerifyLockCard";
@@ -33,7 +32,7 @@ import {
   peekLeadRequestRestore,
 } from "@/lib/auth/lead-request-intent";
 import { cn } from "@/lib/utils";
-import { Images, Lock, MapPinned, Video } from "lucide-react";
+import { Lock, Video } from "lucide-react";
 
 export type GalleryPhoto = {
   id: string;
@@ -196,21 +195,15 @@ export function ListingGallery({
     : hiddenPhotoCount > 0
       ? hiddenPhotoCount
       : Math.max(0, count - 5);
-  const mobileScrollerRef = useRef<HTMLDivElement>(null);
-  const mobileScrollAnimatingRef = useRef(false);
-  const mobileScrollFinishTimerRef = useRef<number | null>(null);
-  const [mobileSlide, setMobileSlide] = useState(0);
-  const hasMapSlide = Boolean(
-    mapSubject &&
-      Number.isFinite(mapSubject.lat) &&
-      Number.isFinite(mapSubject.lng),
+  const mobileThumbs = photos.slice(1, 4);
+  const photoTotal =
+    totalPhotoCount != null && totalPhotoCount > count
+      ? totalPhotoCount
+      : count;
+  const mobileMore = Math.max(
+    0,
+    count - 1 - mobileThumbs.length + (showVerifyLock ? 0 : hiddenPhotoCount),
   );
-  const extraLockSlide = showVerifyLock ? 1 : 0;
-  const mobileSlideCount = count + extraLockSlide + (hasMapSlide ? 1 : 0);
-  const mapSlideIndex = hasMapSlide ? count + extraLockSlide : -1;
-  const onMapSlide = mobileSlide === mapSlideIndex;
-  const onVerifyLockSlide =
-    verifyLockIndex != null && mobileSlide === verifyLockIndex;
 
   const openStack = useCallback(() => {
     setStackOpen(true);
@@ -238,95 +231,6 @@ export function ListingGallery({
     },
     [isMobile, openStack, openViewerAt],
   );
-
-  const syncMobileSlide = useCallback(() => {
-    if (mobileScrollAnimatingRef.current) return;
-    const el = mobileScrollerRef.current;
-    if (!el || el.clientWidth <= 0) return;
-    const next = Math.round(el.scrollLeft / el.clientWidth);
-    setMobileSlide(Math.min(mobileSlideCount - 1, Math.max(0, next)));
-  }, [mobileSlideCount]);
-
-  const goToMobileSlide = useCallback(
-    (slideIndex: number) => {
-      const el = mobileScrollerRef.current;
-      if (!el || el.clientWidth <= 0) return;
-
-      const clamped = Math.min(
-        mobileSlideCount - 1,
-        Math.max(0, slideIndex),
-      );
-      const width = el.clientWidth;
-      const targetLeft = clamped * width;
-
-      // Ignore repeat taps / mid-animation taps — prevents scroll thrash.
-      if (mobileScrollAnimatingRef.current) return;
-      if (Math.abs(el.scrollLeft - targetLeft) < 2) {
-        setMobileSlide(clamped);
-        return;
-      }
-
-      mobileScrollAnimatingRef.current = true;
-      setMobileSlide(clamped);
-      // Ensure map gesture lock is cleared so scroll can run.
-      el.style.overflowX = "";
-
-      el.scrollTo({ left: targetLeft, behavior: "smooth" });
-
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        if (mobileScrollFinishTimerRef.current != null) {
-          window.clearTimeout(mobileScrollFinishTimerRef.current);
-          mobileScrollFinishTimerRef.current = null;
-        }
-        el.removeEventListener("scrollend", onScrollEnd);
-        // Settle exactly on the slide (smooth scroll can stop slightly off).
-        el.scrollLeft = targetLeft;
-        setMobileSlide(clamped);
-        mobileScrollAnimatingRef.current = false;
-      };
-
-      function onScrollEnd() {
-        finish();
-      }
-
-      el.addEventListener("scrollend", onScrollEnd, { once: true });
-      // Safari / older WebKit may not fire scrollend.
-      mobileScrollFinishTimerRef.current = window.setTimeout(finish, 480);
-    },
-    [mobileSlideCount],
-  );
-
-  const lockMobileCarousel = useCallback(() => {
-    if (mobileScrollAnimatingRef.current) return;
-    const el = mobileScrollerRef.current;
-    if (!el) return;
-    el.style.overflowX = "hidden";
-  }, []);
-
-  const unlockMobileCarousel = useCallback(() => {
-    const el = mobileScrollerRef.current;
-    if (!el) return;
-    el.style.overflowX = "";
-  }, []);
-
-  useEffect(() => {
-    const el = mobileScrollerRef.current;
-    if (!el) return;
-    syncMobileSlide();
-    el.addEventListener("scroll", syncMobileSlide, { passive: true });
-    const ro = new ResizeObserver(syncMobileSlide);
-    ro.observe(el);
-    return () => {
-      el.removeEventListener("scroll", syncMobileSlide);
-      ro.disconnect();
-      if (mobileScrollFinishTimerRef.current != null) {
-        window.clearTimeout(mobileScrollFinishTimerRef.current);
-      }
-    };
-  }, [syncMobileSlide, photos.length]);
 
   const closeViewer = useCallback(() => {
     if (bookingOpen) return;
@@ -474,120 +378,31 @@ export function ListingGallery({
 
   return (
     <>
-      {/* ——— Mobile cover: full-bleed swipe carousel (desktop unchanged below) ——— */}
+      {/* ——— Mobile cover: hero + already-loaded previews (desktop grid below) ——— */}
       <div className="relative -mx-4 sm:-mx-6 md:hidden">
-        <div
-          ref={mobileScrollerRef}
+        <button
+          type="button"
+          onClick={() => {
+            if (detailsLocked) return;
+            openViewerAt(0);
+          }}
           className={cn(
-            "flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            "relative block aspect-[4/3] w-full overflow-hidden bg-mist text-left",
             detailsLocked && "blur-[6px] saturate-75",
           )}
-          style={{ WebkitOverflowScrolling: "touch" }}
-          aria-label={`${addressLabel} photos`}
+          aria-label={`Photo 1 of ${photoTotal}. Open gallery.`}
         >
-          {photos.map((photo, i) => {
-            const slideClassName =
-              "relative min-h-[52vh] w-full min-w-full shrink-0 snap-center snap-always overflow-hidden bg-mist text-left";
-            const photoEl = (
-              <ListingPhoto
-                src={photo.url}
-                alt={photo.alt ?? `${addressLabel} photo ${i + 1}`}
-                fill
-                priority={i === 0}
-                className="object-cover"
-                sizes="100vw"
-              />
-            );
-            return (
-              <button
-                key={photo.id}
-                type="button"
-                onClick={() => {
-                  if (detailsLocked) return;
-                  openStack();
-                }}
-                className={slideClassName}
-                aria-label={`Photo ${i + 1} of ${count}. Open gallery.`}
-              >
-                {photoEl}
-              </button>
-            );
-          })}
-
-          {showVerifyLock ? (
-            <div
-              key="gallery-verify-lock"
-              className="relative min-h-[52vh] w-full min-w-full shrink-0 snap-center snap-always overflow-hidden bg-mist"
-              aria-label="Email verification required to see more photos"
-            >
-              <GalleryVerifyLockCard
-                callbackUrl={lockCallback}
-                compact
-              />
-            </div>
-          ) : null}
-
-          {hasMapSlide && mapSubject ? (
-            <ListingGalleryMapSlide
-              lat={mapSubject.lat}
-              lng={mapSubject.lng}
-              addressLabel={mapSubject.addressLabel}
-              mlsNumber={mapSubject.mlsNumber}
-              city={mapSubject.city}
-              transactionType={mapSubject.transactionType}
-              active={mobileSlide === mapSlideIndex}
-              onMapGestureStart={lockMobileCarousel}
-              onMapGestureEnd={unlockMobileCarousel}
-            />
-          ) : null}
-        </div>
-
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between p-3">
-          {mapSubject && hasMapSlide ? (
-            <div className="pointer-events-auto">
-              {onMapSlide ? (
-                <button
-                  type="button"
-                  onClick={() => goToMobileSlide(Math.max(0, count - 1))}
-                  className={COVER_CONTROL_CLASS}
-                >
-                  <span className={COVER_CONTROL_ICON_WRAP}>
-                    <Images className="size-3" aria-hidden />
-                  </span>
-                  Back to photos
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  data-houzzat-listing-coach="map"
-                  onClick={() => goToMobileSlide(mapSlideIndex)}
-                  className={COVER_CONTROL_CLASS}
-                >
-                  <span className={COVER_CONTROL_ICON_WRAP}>
-                    <MapPinned className="size-3" aria-hidden />
-                  </span>
-                  Map view
-                </button>
-              )}
-            </div>
-          ) : (
-            <span />
-          )}
-          <span className="rounded-md bg-ink/70 px-2.5 py-1 text-xs font-semibold tabular-nums text-white shadow-sm backdrop-blur-sm">
-            {mobileSlide + 1} / {mobileSlideCount}
-          </span>
-        </div>
-        {detailsLocked ? (
-          <ListingLockedGateOverlay
-            callbackUrl={lockCallback}
-            needsEmailVerification={needsEmailVerification}
+          <ListingPhoto
+            src={hero.url}
+            alt={hero.alt ?? `${addressLabel} photo 1`}
+            fill
+            priority
+            className="object-cover"
+            sizes="100vw"
           />
-        ) : null}
-        {/* Hide cover tags on the map slide so Expand / Sold / Unlisted stay tappable. */}
-        {!onMapSlide &&
-        !onVerifyLockSlide &&
-        (coverTag || segmentTag || (tourUrl && !detailsLocked)) ? (
-          <div className="pointer-events-none absolute bottom-3 left-3 z-30 flex flex-wrap items-center gap-1.5">
+        </button>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-2 p-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {coverTag ? (
               <span
                 className={cn(
@@ -598,12 +413,72 @@ export function ListingGallery({
               >
                 {coverTag}
               </span>
-            ) : null}
+            ) : (
+              <span />
+            )}
             {segmentTag ? <CoverSegmentTag segmentTag={segmentTag} /> : null}
-            {tourUrl && !detailsLocked ? (
-              <div className="pointer-events-auto">
-                <VirtualTourCoverButton href={tourUrl} />
-              </div>
+          </div>
+          <span className="rounded-md bg-ink/70 px-2.5 py-1 text-xs font-semibold tabular-nums text-white shadow-sm backdrop-blur-sm">
+            1 / {photoTotal}
+          </span>
+        </div>
+        {detailsLocked ? (
+          <ListingLockedGateOverlay
+            callbackUrl={lockCallback}
+            needsEmailVerification={needsEmailVerification}
+          />
+        ) : null}
+        {mobileThumbs.length > 0 || showVerifyLock || mobileMore > 0 ? (
+          <div className="flex gap-1.5 px-4 pt-2">
+            {mobileThumbs.map((photo, i) => {
+              const photoIndex = i + 1;
+              return (
+                <button
+                  key={photo.id}
+                  type="button"
+                  onClick={() => {
+                    if (detailsLocked) return;
+                    openViewerAt(photoIndex);
+                  }}
+                  className={cn(
+                    "relative aspect-[4/3] min-w-0 flex-1 overflow-hidden rounded-lg bg-mist",
+                    detailsLocked && "blur-[6px] saturate-75",
+                  )}
+                  aria-label={`Photo ${photoIndex + 1} of ${photoTotal}. Open gallery.`}
+                >
+                  <ListingPhoto
+                    src={photo.url}
+                    alt=""
+                    fill
+                    className="object-cover"
+                    sizes="33vw"
+                  />
+                </button>
+              );
+            })}
+            {showVerifyLock ? (
+              <button
+                type="button"
+                onClick={() =>
+                  openClientToolsVerification({ callbackUrl: lockCallback })
+                }
+                className="flex aspect-[4/3] min-w-0 flex-1 items-center justify-center rounded-lg bg-mist text-canopy"
+                aria-label="Verify email to unlock more photos"
+              >
+                <Lock className="size-4" aria-hidden />
+              </button>
+            ) : mobileMore > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (detailsLocked) return;
+                  openStack();
+                }}
+                className="flex aspect-[4/3] min-w-0 flex-1 items-center justify-center rounded-lg bg-mist text-sm font-semibold text-ink"
+                aria-label={`Show all ${photoTotal} photos`}
+              >
+                +{mobileMore}
+              </button>
             ) : null}
           </div>
         ) : null}
