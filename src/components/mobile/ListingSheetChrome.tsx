@@ -367,7 +367,6 @@ export function ListingSheetChrome({
     [closeMobileSearch],
   );
 
-  const desktopNav = useListingChromeSearchNav(() => {});
   const mobileNav = useListingChromeSearchNav(closeMobileSearch);
 
   useEffect(() => {
@@ -496,17 +495,6 @@ export function ListingSheetChrome({
             <X className="size-5" strokeWidth={2.2} aria-hidden />
             Close
           </button>
-        </div>
-      </div>
-
-      {/* Desktop: centered search — not edge-to-edge; breathing room in the band. */}
-      <div className="hidden border-t border-white/12 bg-canopy-deep/25 md:block">
-        <div className="mx-auto flex max-w-2xl items-center px-6 py-3 lg:px-8">
-          {searchField(desktopNav, {
-            portalDesktop: true,
-            inputClassName:
-              "h-10 rounded-xl border-0 bg-white pl-10 text-[15px] text-ink shadow-[0_1px_2px_rgb(0_0_0/0.08)] placeholder:text-ink/40 focus-visible:ring-2 focus-visible:ring-white/55",
-          })}
         </div>
       </div>
 

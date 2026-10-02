@@ -190,7 +190,7 @@ function testGateIframePanelAndDesktopChrome() {
   assert.ok(gate.includes('intent: "VIEW_LISTING"'));
   assert.ok(detail.includes("<ListingAccessGate"));
   assert.ok(panel.includes("<ListingDetailView"));
-  assert.ok(host.includes("<Panel key={state.href}"));
+  assert.ok(host.includes("<Panel key={shown.href}"));
   assert.ok(host.includes("browseHrefs"));
   assert.ok(host.includes("openListingSheet(data.href, browse)"));
   assert.ok(nav.includes("browseSourceForHref(path)"));

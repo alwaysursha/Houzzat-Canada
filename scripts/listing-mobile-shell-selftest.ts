@@ -66,7 +66,10 @@ assert.ok(detail.includes('className="hidden md:block"'));
 
 assert.ok(host.includes("openListingSheet(data.href, browse)"));
 assert.ok(host.includes("browseHrefs"));
-assert.equal(host.includes("houzzat-sheet-in"), false);
+assert.ok(host.includes("houzzat-sheet-in"));
+assert.ok(host.includes("transform: translateY(18px)"));
+assert.equal(host.includes("translateX"), false);
+assert.ok(host.includes("md:w-[min(1280px,calc(100%-5rem))]"));
 
 assert.ok(menu.includes("md:hidden"));
 assert.ok(menu.includes("<ShareListingButton"));
