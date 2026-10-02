@@ -7,11 +7,18 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  LISTING_SHEET_HISTORY_MAX_AGE_MS,
   backListingSheet,
+  beginListingSheetNavigationAway,
+  captureListingSheetHistoryMarker,
   closeListingSheet,
+  consumeListingSheetNavigationAway,
+  discardListingSheetMemoryForReload,
   getListingSheetState,
+  historyStateWithoutListingSheet,
   openListingSheet,
   replaceListingSheet,
+  restoreListingSheetFromHistory,
 } from "../src/lib/mobile/listing-sheet-store";
 import {
   browseSourceForHref,
@@ -31,6 +38,7 @@ function read(rel: string) {
 
 function reset() {
   closeListingSheet();
+  consumeListingSheetNavigationAway();
   publishListingBrowseSource(null);
 }
 
@@ -208,6 +216,85 @@ function testGateIframePanelAndDesktopChrome() {
   assert.equal(chrome.includes("anonymous-listing-access"), false);
 }
 
+function testRefreshRestoresTheOpenListingOnly() {
+  reset();
+  const now = 1_700_000_000_000;
+  const href = "/listing/3275-stalybridge-drive-34-oakville/X13852960";
+  openListingSheet(href, [A, href, C]);
+  const marker = captureListingSheetHistoryMarker(now);
+  assert.ok(marker);
+  assert.equal(marker.houzzatListingHref, href);
+
+  discardListingSheetMemoryForReload();
+  assert.equal(getListingSheetState().href, null);
+  assert.equal(restoreListingSheetFromHistory(marker, now), true);
+  let state = getListingSheetState();
+  assert.equal(state.href, href);
+  assert.equal(state.depth, 1);
+  assert.equal(state.previousHref, A);
+  assert.equal(state.nextHref, C);
+  assert.equal(restoreListingSheetFromHistory(marker, now), false);
+  assert.equal(getListingSheetState().depth, 1);
+
+  discardListingSheetMemoryForReload();
+  assert.equal(
+    restoreListingSheetFromHistory(
+      marker,
+      now + LISTING_SHEET_HISTORY_MAX_AGE_MS + 1,
+    ),
+    false,
+  );
+  assert.equal(getListingSheetState().href, null);
+
+  openListingSheet(href, [A, href, C]);
+  replaceListingSheet(C);
+  let history: Record<string, unknown> = {
+    idx: 1,
+    ...captureListingSheetHistoryMarker(now)!,
+  };
+  history = {
+    ...historyStateWithoutListingSheet(history),
+    idx: 1,
+    ...captureListingSheetHistoryMarker(now)!,
+  };
+  discardListingSheetMemoryForReload();
+  assert.equal(restoreListingSheetFromHistory(history, now), true);
+  assert.equal(getListingSheetState().href, C);
+  assert.equal(
+    (historyStateWithoutListingSheet(history) as { idx?: number }).idx,
+    1,
+  );
+
+  closeListingSheet();
+  assert.equal(captureListingSheetHistoryMarker(now), null);
+  const cleared = historyStateWithoutListingSheet(history);
+  assert.equal(cleared.houzzatListingHref, undefined);
+  assert.equal(cleared.houzzatListingSheet, undefined);
+  discardListingSheetMemoryForReload();
+  assert.equal(restoreListingSheetFromHistory(cleared, now), false);
+  assert.equal(getListingSheetState().href, null);
+
+  openListingSheet(href, [A, href, C]);
+  beginListingSheetNavigationAway();
+  assert.equal(getListingSheetState().href, null);
+  assert.equal(consumeListingSheetNavigationAway(), true);
+  assert.equal(restoreListingSheetFromHistory(cleared, now), false);
+
+  const host = read("src/components/mobile/ListingSheetHost.tsx");
+  assert.equal(host.split("window.history.pushState").length - 1, 1);
+  assert.ok(host.includes("restoreListingSheetFromHistory(window.history.state)"));
+  assert.ok(host.includes("historyStateWithoutListingSheet"));
+  assert.ok(host.includes("consumeListingSheetNavigationAway"));
+
+  const chip = read("src/components/route-planner/RoutePlannerFloatingChip.tsx");
+  const nav = read("src/lib/listings/navigate-listing.ts");
+  assert.ok(chip.includes('href="/route-planner"'));
+  assert.ok(chip.includes("interceptListingSheetExitClick(event, \"/route-planner\")"));
+  assert.ok(chip.includes("z-[210]"));
+  assert.ok(nav.includes("beginListingSheetNavigationAway()"));
+  assert.equal(nav.includes("closeListingSheet()"), false);
+}
+
 reset();
 testSearchContextNavigation();
 testReplaceDoesNotGrowStackOrHistoryCalls();
@@ -216,6 +303,7 @@ testNoFakeContextAndGracefulMiss();
 testMlsSlugDriftKeepsBrowse();
 testContextStoresPathsOnly();
 testGateIframePanelAndDesktopChrome();
+testRefreshRestoresTheOpenListingOnly();
 reset();
 
 console.log("listing-sheet-browse selftest ok");

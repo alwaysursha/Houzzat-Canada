@@ -179,6 +179,124 @@ export function isListingSheetOpen(): boolean {
   return stack.length > 0;
 }
 
+/**
+ * Overlay identity lives on the current history entry the host already pushes.
+ * A reload of that entry can reopen the same listing. Closing strips the marker
+ * so a later reload cannot.
+ */
+export const LISTING_SHEET_HISTORY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+export type ListingSheetHistoryMarker = {
+  houzzatListingSheet: true;
+  houzzatListingHref: string;
+  houzzatListingBrowse: readonly string[] | null;
+  houzzatListingSavedAt: number;
+};
+
+const LISTING_SHEET_HISTORY_KEYS = [
+  "houzzatListingSheet",
+  "houzzatListingHref",
+  "houzzatListingBrowse",
+  "houzzatListingSavedAt",
+] as const;
+
+/** Marker for the listing currently on top, or null when the overlay is closed. */
+export function captureListingSheetHistoryMarker(
+  now = Date.now(),
+): ListingSheetHistoryMarker | null {
+  const frame = stack[stack.length - 1];
+  if (!frame) return null;
+  return {
+    houzzatListingSheet: true,
+    houzzatListingHref: frame.href,
+    houzzatListingBrowse: frame.browse ? [...frame.browse] : null,
+    houzzatListingSavedAt: now,
+  };
+}
+
+export function restorableListingFromHistory(
+  state: unknown,
+  now = Date.now(),
+): { href: string; browse: readonly string[] | null } | null {
+  if (!state || typeof state !== "object") return null;
+  const record = state as Partial<ListingSheetHistoryMarker>;
+  if (record.houzzatListingSheet !== true) return null;
+  if (
+    typeof record.houzzatListingHref !== "string" ||
+    !record.houzzatListingHref.startsWith("/listing/")
+  ) {
+    return null;
+  }
+  if (typeof record.houzzatListingSavedAt !== "number") return null;
+  if (!Number.isFinite(record.houzzatListingSavedAt)) return null;
+  if (now < record.houzzatListingSavedAt) return null;
+  if (now - record.houzzatListingSavedAt > LISTING_SHEET_HISTORY_MAX_AGE_MS) {
+    return null;
+  }
+  const browse = Array.isArray(record.houzzatListingBrowse)
+    ? record.houzzatListingBrowse.filter(
+        (href): href is string => typeof href === "string" && href.length > 0,
+      )
+    : null;
+  return {
+    href: record.houzzatListingHref,
+    browse: browse && browse.length > 0 ? browse : null,
+  };
+}
+
+/**
+ * Reopen the listing stored on a history entry. No-ops when memory already
+ * has a sheet (the live page) or the marker is missing/expired.
+ */
+export function restoreListingSheetFromHistory(
+  state: unknown,
+  now = Date.now(),
+): boolean {
+  if (stack.length > 0) return false;
+  const restored = restorableListingFromHistory(state, now);
+  if (!restored) return false;
+  openListingSheet(restored.href, restored.browse);
+  return sameListingHref(getListingSheetHref() ?? "", restored.href);
+}
+
+/** Drop overlay fields and keep the rest of the history entry intact. */
+export function historyStateWithoutListingSheet(
+  state: unknown,
+): Record<string, unknown> {
+  const base =
+    state && typeof state === "object"
+      ? { ...(state as Record<string, unknown>) }
+      : {};
+  for (const key of LISTING_SHEET_HISTORY_KEYS) {
+    delete base[key];
+  }
+  return base;
+}
+
+/**
+ * Reload drops this module. Tests use this to mimic that, without the
+ * history-entry clear that an intentional close performs.
+ */
+export function discardListingSheetMemoryForReload() {
+  stack = [];
+  emit();
+}
+
+let navigatingAway = false;
+
+/** Close the overlay because the page is leaving for a non-listing URL. */
+export function beginListingSheetNavigationAway() {
+  navigatingAway = true;
+  closeListingSheet();
+}
+
+/** Host reads this once when the overlay href becomes empty. */
+export function consumeListingSheetNavigationAway(): boolean {
+  const away = navigatingAway;
+  navigatingAway = false;
+  return away;
+}
+
 export function canListingSheetBack(): boolean {
   return stack.length > 1;
 }

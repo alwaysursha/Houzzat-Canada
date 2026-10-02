@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
+import { interceptListingSheetExitClick } from "@/lib/listings/navigate-listing";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,6 +27,9 @@ export function RoutePlannerFloatingChip({
   return (
     <Link
       href="/route-planner"
+      onClick={(event) =>
+        interceptListingSheetExitClick(event, "/route-planner")
+      }
       data-houzzat-route-planner-target={layer === "sheet" ? "sheet" : ""}
       aria-label={`Route Planner, ${count} homes`}
       aria-hidden={!visible}

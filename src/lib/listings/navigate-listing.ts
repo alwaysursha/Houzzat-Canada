@@ -9,7 +9,7 @@ import { hardGo } from "@/lib/mobile/nav-back";
 import {
   LISTING_SHEET_LEAVE_MESSAGE,
   LISTING_SHEET_OPEN_MESSAGE,
-  closeListingSheet,
+  beginListingSheetNavigationAway,
   isListingSheetOpen,
   openListingSheet,
 } from "@/lib/mobile/listing-sheet-store";
@@ -105,7 +105,7 @@ export function leaveListingSheetThenGo(href: string): void {
   }
 
   if (isListingSheetOpen()) {
-    closeListingSheet();
+    beginListingSheetNavigationAway();
     requestAnimationFrame(() => {
       hardGo(path);
     });

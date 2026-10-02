@@ -19,9 +19,14 @@ import { leaveListingSheetThenGo } from "@/lib/listings/navigate-listing";
 import {
   LISTING_SHEET_LEAVE_MESSAGE,
   LISTING_SHEET_OPEN_MESSAGE,
+  captureListingSheetHistoryMarker,
   closeListingSheet,
+  consumeListingSheetNavigationAway,
+  historyStateWithoutListingSheet,
   openListingSheet,
+  restoreListingSheetFromHistory,
   subscribeListingSheet,
+  type ListingSheetHistoryMarker,
   type ListingSheetState,
 } from "@/lib/mobile/listing-sheet-store";
 import {
@@ -44,9 +49,7 @@ function loadListingDetailPanel(): Promise<PanelComponent> {
   }
   return panelModulePromise;
 }
-type SheetHistoryState = {
-  houzzatListingSheet?: boolean;
-};
+type SheetHistoryState = Partial<ListingSheetHistoryMarker>;
 
 function sheetSrc(href: string): string {
   try {
@@ -109,6 +112,7 @@ export function ListingSheetHost() {
   const [usePanel, setUsePanel] = useState(false);
   const [Panel, setPanel] = useState<PanelComponent | null>(null);
   const historyPushedRef = useRef(false);
+  const sawOpenSheetRef = useRef(false);
   const syncingHistoryRef = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [openSnapshot, setOpenSnapshot] = useState(state);
@@ -141,6 +145,14 @@ export function ListingSheetHost() {
   useEffect(() => {
     if (framed) return;
     return subscribeListingSheet(setState);
+  }, [framed]);
+
+  // Reload keeps the history entry written while the overlay was open.
+  // Restore that listing without pushing another history entry.
+  useEffect(() => {
+    if (framed) return;
+    if (!restoreListingSheetFromHistory(window.history.state)) return;
+    historyPushedRef.current = true;
   }, [framed]);
 
   // Re-read flag when the sheet opens (query/cookie/sessionStorage/staff).
@@ -205,27 +217,54 @@ export function ListingSheetHost() {
   // uses the native back handler instead, which is why mobile looked fine.)
   useEffect(() => {
     if (!state.href) {
-      if (historyPushedRef.current) {
-        historyPushedRef.current = false;
-        syncingHistoryRef.current = true;
-        window.history.back();
-        queueMicrotask(() => {
-          syncingHistoryRef.current = false;
-        });
-      }
+      const away = consumeListingSheetNavigationAway();
+      if (!sawOpenSheetRef.current || !historyPushedRef.current) return;
+      historyPushedRef.current = false;
+      window.history.replaceState(
+        historyStateWithoutListingSheet(window.history.state),
+        "",
+      );
+      if (away) return;
+      syncingHistoryRef.current = true;
+      window.history.back();
+      queueMicrotask(() => {
+        syncingHistoryRef.current = false;
+      });
       return;
     }
 
+    sawOpenSheetRef.current = true;
+    const marker = captureListingSheetHistoryMarker();
     if (!historyPushedRef.current) {
+      const current = window.history.state as SheetHistoryState | null;
+      if (current?.houzzatListingSheet && current.houzzatListingHref) {
+        historyPushedRef.current = true;
+        if (marker) {
+          window.history.replaceState(
+            { ...historyStateWithoutListingSheet(current), ...marker },
+            "",
+          );
+        }
+      } else {
+        const prev = (window.history.state ?? {}) as Record<string, unknown>;
+        window.history.pushState(
+          { ...prev, ...(marker ?? { houzzatListingSheet: true }) },
+          "",
+        );
+        historyPushedRef.current = true;
+      }
+    } else if (marker) {
       const prev = (window.history.state ?? {}) as Record<string, unknown>;
-      window.history.pushState({ ...prev, houzzatListingSheet: true }, "");
-      historyPushedRef.current = true;
+      window.history.replaceState(
+        { ...historyStateWithoutListingSheet(prev), ...marker },
+        "",
+      );
     }
 
     const onPopState = (event: PopStateEvent) => {
       if (syncingHistoryRef.current) return;
       const next = event.state as SheetHistoryState | null;
-      if (next?.houzzatListingSheet) {
+      if (next?.houzzatListingSheet && next.houzzatListingHref) {
         // Still on (or back to) our sheet history entry — keep overlay open.
         return;
       }
