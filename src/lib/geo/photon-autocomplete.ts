@@ -76,13 +76,13 @@ export async function photonAddressAutocomplete(
   url.searchParams.set("limit", "12");
   url.searchParams.set("lang", "en");
   url.searchParams.set("countrycode", "ca");
-  // Southern Ontario bias (GTA-heavy sell leads).
-  url.searchParams.set("bbox", "-80.5,42.8,-78.5,44.5");
+  // Southern Ontario, west through Kitchener–Waterloo and east through the GTA.
+  url.searchParams.set("bbox", "-81.6,42.2,-74.5,45.0");
   url.searchParams.set("lat", "43.7");
   url.searchParams.set("lon", "-79.4");
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4500);
+  const timer = setTimeout(() => controller.abort(), 9000);
   let res: Response;
   try {
     res = await fetch(url.toString(), {

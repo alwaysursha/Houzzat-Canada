@@ -337,8 +337,8 @@ export function AddressAutocomplete({
           left,
           width,
           maxHeight,
-          // Inside listing sheet: below green chrome (z-50). Full page / map overlay: above content.
-          zIndex: inListingSheet ? 40 : 90,
+          // Listing sheet is z-200, so suggestions have to stack above it. Full page stays at 90.
+          zIndex: inListingSheet ? 260 : 90,
         });
         return;
       }
@@ -625,6 +625,7 @@ export function AddressAutocomplete({
 
     const handle = window.setTimeout(async () => {
       setLoading(true);
+      setOpen(true);
       try {
         const params = new URLSearchParams({
           q: query.trim(),
@@ -1207,7 +1208,9 @@ export function AddressAutocomplete({
   }
 
   const desktopPanelOpen =
-    !isMobile && open && (sections.length > 0 || Boolean(searchForRow));
+    !isMobile &&
+    open &&
+    (sections.length > 0 || Boolean(searchForRow) || loading);
 
   const mobilePortal =
     mounted && isMobile && sheetMounted

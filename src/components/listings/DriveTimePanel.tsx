@@ -57,7 +57,7 @@ function slotPhrase(slot: SlotId): string {
   }
 }
 
-/** City driving when the Routes API is off: road factor times a modest urban speed. */
+/** Fallback when Routes has no result. Longer trips use a highway pace. */
 function estimateDrive(
   originLat: number,
   originLng: number,
@@ -74,10 +74,14 @@ function estimateDrive(
       Math.sin(dLng / 2) ** 2;
   const straight = 2 * 6371000 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distanceMeters = Math.max(1, Math.round(straight * 1.3));
-  const metersPerSecond = 32_000 / 3600;
+  const km = distanceMeters / 1000;
+  const kmh = km < 3 ? 30 : km < 12 ? 42 : km < 30 ? 55 : 75;
   return {
     distanceMeters,
-    durationSeconds: Math.max(60, Math.round(distanceMeters / metersPerSecond)),
+    durationSeconds: Math.max(
+      60,
+      Math.round(distanceMeters / ((kmh * 1000) / 3600)),
+    ),
   };
 }
 
@@ -88,6 +92,23 @@ function withEstimate(
 ): SavedDrive {
   const drive = estimateDrive(originLat, originLng, place.lat, place.lng);
   return { ...place, ...drive, source: "estimate" };
+}
+
+function refreshEstimates(
+  saved: Partial<Record<SlotId, SavedDrive>>,
+  originLat: number,
+  originLng: number,
+): Partial<Record<SlotId, SavedDrive>> {
+  const next: Partial<Record<SlotId, SavedDrive>> = {};
+  for (const slot of SLOTS) {
+    const place = saved[slot];
+    if (!place) continue;
+    next[slot] =
+      place.source === "google"
+        ? place
+        : withEstimate(place, originLat, originLng);
+  }
+  return next;
 }
 
 async function lookupSignedInDrive(
@@ -213,15 +234,19 @@ function DriveRouteMap({
       zoom: 13,
       minZoom: MAP_MIN_ZOOM,
       maxZoom: MAP_MAX_ZOOM,
-      cooperativeGestures: true,
       attributionControl: false,
     });
     map.addControl(
       new maplibregl.AttributionControl({ compact: true }),
       "bottom-left",
     );
+    const resize = () => map.resize();
+    map.on("load", resize);
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
     mapRef.current = map;
     return () => {
+      observer.disconnect();
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
       map.remove();
@@ -298,7 +323,10 @@ function DriveRouteMap({
 
   return (
     <div className="relative h-full min-h-36 overflow-hidden rounded-2xl bg-mist">
-      <div ref={containerRef} className="absolute inset-0" />
+      <div
+        ref={containerRef}
+        className="h-full min-h-36 w-full [&_.maplibregl-canvas]:!h-full [&_.maplibregl-canvas]:!w-full"
+      />
       {minutes ? (
         <span className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-lg bg-canopy px-2 py-0.5 text-xs font-semibold text-white shadow-sm">
           {minutes}
@@ -320,10 +348,10 @@ export function DriveTimePanel({
   originLabel: string;
 }) {
   const [places, setPlaces] = useState<Partial<Record<SlotId, SavedDrive>>>(() =>
-    readSaved(mlsNumber),
+    refreshEstimates(readSaved(mlsNumber), originLat, originLng),
   );
   const [selected, setSelected] = useState<SlotId | null>(() => {
-    const saved = readSaved(mlsNumber);
+    const saved = refreshEstimates(readSaved(mlsNumber), originLat, originLng);
     return SLOTS.find((slot) => saved[slot]) ?? null;
   });
   const [listingKey, setListingKey] = useState(mlsNumber);
@@ -335,7 +363,7 @@ export function DriveTimePanel({
   if (listingKey !== mlsNumber) {
     const saved = readSaved(mlsNumber);
     setListingKey(mlsNumber);
-    setPlaces(saved);
+    setPlaces(refreshEstimates(saved, originLat, originLng));
     setSelected(SLOTS.find((slot) => saved[slot]) ?? null);
     setEditing(null);
   }
@@ -358,20 +386,19 @@ export function DriveTimePanel({
           if (!row || typeof row.address !== "string") continue;
           if (typeof row.lat !== "number" || typeof row.lng !== "number") continue;
           const existing = saved[slot];
-          const same =
+          const keepGoogle =
             existing &&
             existing.lat === row.lat &&
             existing.lng === row.lng &&
             existing.source === "google" &&
             existing.durationSeconds != null;
-          merged[slot] = same
+          merged[slot] = keepGoogle
             ? { ...existing, address: row.address }
-            : existing &&
-                existing.lat === row.lat &&
-                existing.lng === row.lng &&
-                existing.durationSeconds != null
-              ? { ...existing, address: row.address }
-              : withEstimate(row, originLat, originLng);
+            : withEstimate(
+                { address: row.address, lat: row.lat, lng: row.lng },
+                originLat,
+                originLng,
+              );
         }
         if (!cancelled) {
           for (const slot of SLOTS) {
@@ -475,7 +502,7 @@ export function DriveTimePanel({
   return (
     <section
       id="listing-drive"
-      className="@container overflow-hidden rounded-[22px] border border-line/80 bg-white p-3.5 shadow-[0_10px_30px_-22px_rgba(16,28,24,0.45)] sm:p-4"
+      className="@container overflow-visible rounded-[22px] border border-line/80 bg-white p-3.5 shadow-[0_10px_30px_-22px_rgba(16,28,24,0.45)] sm:p-4"
     >
       <div className="flex flex-col gap-3.5 @min-[40rem]:flex-row @min-[40rem]:items-stretch">
         <div className="min-w-0 flex-1 space-y-3">
@@ -573,10 +600,12 @@ export function DriveTimePanel({
                 Save this address as {slotPhrase(editing)}
               </p>
               <AddressAutocomplete
-                key={editing}
+                key={`${editing}:${places[editing]?.address ?? ""}`}
                 source="google"
                 fillOnly
                 portalDesktopSuggestions
+                mobileSheetZClassName="z-[260]"
+                initialQuery={places[editing]?.address ?? ""}
                 placeholder={`${slotPhrase(editing)} address`}
                 inputClassName="h-11 rounded-xl border border-line/80 bg-white pl-10 text-sm shadow-none placeholder:text-ink/40 focus-visible:ring-2 focus-visible:ring-canopy/30"
                 onPlaceSelect={(place) => {
