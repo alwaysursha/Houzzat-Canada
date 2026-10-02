@@ -19,9 +19,7 @@ import {
   backListingSheet,
   closeListingSheet,
   openListingSheet,
-  replaceListingSheet,
 } from "@/lib/mobile/listing-sheet-store";
-import { browseSourceForHref } from "@/lib/mobile/listing-browse-source";
 import {
   isListingSheetSearchOpen,
   setListingSheetSearchOpen,
@@ -68,12 +66,10 @@ function SheetShareButton({
   mlsNumber,
   title,
   path,
-  iconOnly = false,
 }: {
   mlsNumber: string;
   title: string;
   path?: string;
-  iconOnly?: boolean;
 }) {
   const siteName = useTenantDisplayName();
   const [shareOpen, setShareOpen] = useState(false);
@@ -118,30 +114,19 @@ function SheetShareButton({
   const encodedTitle = encodeURIComponent(`${title} | ${siteName}`);
 
   return (
-    <div ref={menuRef} className={iconOnly ? "relative" : "relative flex-1"}>
+    <div ref={menuRef} className="relative flex-1">
       <button
         type="button"
         aria-label="Share property"
         aria-expanded={shareOpen}
         onClick={() => setShareOpen((open) => !open)}
-        className={
-          iconOnly
-            ? "inline-flex size-11 items-center justify-center rounded-lg text-white/95 transition hover:bg-white/10 active:bg-white/15"
-            : "flex h-11 w-full flex-col items-center justify-center gap-0.5 rounded-lg text-white/95 transition active:bg-white/15 hover:bg-white/10"
-        }
+        className="flex h-11 w-full flex-col items-center justify-center gap-0.5 rounded-lg text-white/95 transition active:bg-white/15 hover:bg-white/10"
       >
         <Share2 className="size-5" strokeWidth={2.1} aria-hidden />
-        {iconOnly ? null : (
-          <span className="text-[10px] font-semibold tracking-wide">Share</span>
-        )}
+        <span className="text-[10px] font-semibold tracking-wide">Share</span>
       </button>
       {shareOpen ? (
-        <div
-          className={cn(
-            "absolute top-full z-[60] mt-1 w-48 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg",
-            iconOnly ? "right-0" : "left-1/2 -translate-x-1/2",
-          )}
-        >
+        <div className="absolute left-1/2 top-full z-[60] mt-1 w-48 -translate-x-1/2 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg">
           <button
             type="button"
             onClick={() => void copyLink()}
@@ -205,11 +190,9 @@ function SheetShareButton({
 function SheetSaveButton({
   mlsNumber,
   callbackPath,
-  iconOnly = false,
 }: {
   mlsNumber: string;
   callbackPath: string;
-  iconOnly?: boolean;
 }) {
   const { saved, pending, ready, toggle } = useSavedListingToggle({
     mlsNumber,
@@ -222,9 +205,7 @@ function SheetSaveButton({
       disabled={pending || !mlsNumber || !ready}
       onClick={() => void toggle()}
       className={cn(
-        iconOnly
-          ? "inline-flex size-11 items-center justify-center rounded-lg text-white/95 transition hover:bg-white/10 active:bg-white/15"
-          : "flex h-11 w-full flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-white/95 transition active:bg-white/15 hover:bg-white/10",
+        "flex h-11 w-full flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-white/95 transition active:bg-white/15 hover:bg-white/10",
         saved && "text-white",
       )}
       aria-label={saved ? "Remove saved listing" : "Save listing"}
@@ -235,11 +216,9 @@ function SheetSaveButton({
         strokeWidth={2.1}
         aria-hidden
       />
-      {iconOnly ? null : (
-        <span className="text-[10px] font-semibold tracking-wide">
-          {saved ? "Saved" : "Save"}
-        </span>
-      )}
+      <span className="text-[10px] font-semibold tracking-wide">
+        {saved ? "Saved" : "Save"}
+      </span>
     </button>
   );
 }
@@ -272,12 +251,12 @@ function useListingChromeSearchNav(onCloseSearch: () => void) {
       const listingHref =
         suggestion.href ?? `/listing/${suggestion.mlsNumber}`;
       onCloseSearch();
-      openListingSheet(listingHref, browseSourceForHref(listingHref));
+      openListingSheet(listingHref);
       return;
     }
     if (suggestion.href?.startsWith("/listing/")) {
       onCloseSearch();
-      openListingSheet(suggestion.href, browseSourceForHref(suggestion.href));
+      openListingSheet(suggestion.href);
       return;
     }
     if (suggestion.href) {
@@ -310,12 +289,12 @@ function useListingChromeSearchNav(onCloseSearch: () => void) {
       const listingHref =
         selected.href ?? `/listing/${selected.mlsNumber}`;
       onCloseSearch();
-      openListingSheet(listingHref, browseSourceForHref(listingHref));
+      openListingSheet(listingHref);
       return;
     }
     if (selected?.href?.startsWith("/listing/") && !rawQuery) {
       onCloseSearch();
-      openListingSheet(selected.href, browseSourceForHref(selected.href));
+      openListingSheet(selected.href);
       return;
     }
     if (selected?.href && !rawQuery) {
@@ -353,7 +332,7 @@ function useListingChromeSearchNav(onCloseSearch: () => void) {
 /**
  * Listing overlay chrome — two rows:
  * 1) Listing[+count] | centered Houzzat mark + wordmark | Back (if stack) + Close
- * 2) Desktop: full Search bar. Mobile: search opens from the header icon.
+ * 2) Desktop: full Search bar · Mobile: Search · Share · Save (expands to AC sheet)
  */
 export function ListingSheetChrome({
   href,
@@ -361,9 +340,6 @@ export function ListingSheetChrome({
   depth = 1,
   usePanel = false,
   loading = false,
-  hasBrowse = false,
-  previousHref = null,
-  nextHref = null,
 }: {
   href: string | null;
   canBack: boolean;
@@ -371,9 +347,6 @@ export function ListingSheetChrome({
   depth?: number;
   usePanel?: boolean;
   loading?: boolean;
-  hasBrowse?: boolean;
-  previousHref?: string | null;
-  nextHref?: string | null;
 }) {
   const tenantDisplayName = useTenantDisplayName();
   const isDesktop = useIsDesktopChrome();
@@ -498,78 +471,16 @@ export function ListingSheetChrome({
           mobileSearchOpen && "pointer-events-none opacity-0",
         )}
       >
-        <div className="flex min-w-0 items-center md:hidden">
-          <button
-            type="button"
-            onClick={() => closeListingSheet()}
-            className="inline-flex size-11 items-center justify-center rounded-lg text-white transition hover:bg-white/10 active:bg-white/15"
-            aria-label="Close listing"
-          >
-            <X className="size-5" strokeWidth={2.2} aria-hidden />
-          </button>
-          {canBack ? (
-            <button
-              type="button"
-              onClick={() => backListingSheet()}
-              className="inline-flex size-11 items-center justify-center rounded-lg text-white transition hover:bg-white/10 active:bg-white/15"
-              aria-label="Back to previous listing"
-            >
-              <ChevronLeft className="size-5" strokeWidth={2.2} aria-hidden />
-            </button>
-          ) : null}
-        </div>
-        <span
-          className={cn(
-            "min-w-0 max-w-[38%] truncate pl-2 text-sm font-semibold tracking-wide text-white/90",
-            hasBrowse ? "hidden" : "hidden md:inline",
-          )}
-        >
+        <span className="min-w-0 max-w-[38%] truncate pl-2 text-sm font-semibold tracking-wide text-white/90">
           {listingLabel}
         </span>
-        {hasBrowse ? (
-          <button
-            type="button"
-            onClick={() => closeListingSheet()}
-            className="hidden h-11 min-w-0 items-center gap-0.5 rounded-lg px-1.5 text-sm font-semibold text-white transition hover:bg-white/10 active:bg-white/15 md:inline-flex"
-            aria-label="Back to results"
-          >
-            <ChevronLeft className="size-5 shrink-0" strokeWidth={2.2} aria-hidden />
-            <span className="truncate">Back to results</span>
-          </button>
-        ) : null}
 
         <div className="flex shrink-0 items-center justify-end">
-          {hasBrowse ? (
-            <>
-              <button
-                type="button"
-                disabled={!previousHref}
-                onClick={() => {
-                  if (previousHref) replaceListingSheet(previousHref);
-                }}
-                className="hidden h-11 items-center rounded-lg px-2 text-sm font-medium text-white/90 transition hover:bg-white/10 active:bg-white/15 disabled:pointer-events-none disabled:text-white/35 md:inline-flex"
-                aria-label="Previous listing"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                disabled={!nextHref}
-                onClick={() => {
-                  if (nextHref) replaceListingSheet(nextHref);
-                }}
-                className="hidden h-11 items-center rounded-lg px-2 text-sm font-medium text-white/90 transition hover:bg-white/10 active:bg-white/15 disabled:pointer-events-none disabled:text-white/35 md:inline-flex"
-                aria-label="Next listing"
-              >
-                Next
-              </button>
-            </>
-          ) : null}
           {canBack ? (
             <button
               type="button"
               onClick={() => backListingSheet()}
-              className="hidden h-11 items-center justify-center gap-0.5 rounded-lg px-1.5 text-sm font-semibold text-white transition hover:bg-white/10 active:bg-white/15 md:inline-flex"
+              className="inline-flex h-11 items-center justify-center gap-0.5 rounded-lg px-1.5 text-sm font-semibold text-white transition active:bg-white/15 hover:bg-white/10"
               aria-label="Back to previous listing"
             >
               <ChevronLeft className="size-5" strokeWidth={2.2} aria-hidden />
@@ -579,38 +490,12 @@ export function ListingSheetChrome({
           <button
             type="button"
             onClick={() => closeListingSheet()}
-            className="hidden h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-sm font-semibold text-white transition hover:bg-white/10 active:bg-white/15 md:inline-flex"
+            className="inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-sm font-semibold text-white transition active:bg-white/15 hover:bg-white/10"
             aria-label="Close listing"
           >
             <X className="size-5" strokeWidth={2.2} aria-hidden />
             Close
           </button>
-          <div className="flex items-center md:hidden">
-            <button
-              type="button"
-              onClick={() => setMobileSearchOpen(true)}
-              className="inline-flex size-11 items-center justify-center rounded-lg text-white/95 transition hover:bg-white/10 active:bg-white/15"
-              aria-label="Open search"
-              aria-expanded={mobileSearchOpen}
-            >
-              <Search className="size-5" strokeWidth={2.1} aria-hidden />
-            </button>
-            {mlsNumber ? (
-              <SheetSaveButton
-                mlsNumber={mlsNumber}
-                callbackPath={callbackPath}
-                iconOnly
-              />
-            ) : null}
-            {mlsNumber ? (
-              <SheetShareButton
-                mlsNumber={mlsNumber}
-                title={shareTitle}
-                path={callbackPath}
-                iconOnly
-              />
-            ) : null}
-          </div>
         </div>
       </div>
 
@@ -623,6 +508,41 @@ export function ListingSheetChrome({
               "h-10 rounded-xl border-0 bg-white pl-10 text-[15px] text-ink shadow-[0_1px_2px_rgb(0_0_0/0.08)] placeholder:text-ink/40 focus-visible:ring-2 focus-visible:ring-white/55",
           })}
         </div>
+      </div>
+
+      {/* Mobile collapsed: Search · Share · Save */}
+      <div
+        className={cn(
+          "flex items-stretch gap-1 border-t border-white/12 bg-canopy-deep/25 px-2 py-1 transition-[opacity,transform] duration-200 ease-out md:hidden",
+          mobileSearchOpen
+            ? "pointer-events-none absolute inset-x-0 opacity-0"
+            : "relative opacity-100",
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => setMobileSearchOpen(true)}
+          className="flex h-11 min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-white/95 transition active:bg-white/15 hover:bg-white/10"
+          aria-label="Open search"
+          aria-expanded={mobileSearchOpen}
+        >
+          <Search className="size-5" strokeWidth={2.1} aria-hidden />
+          <span className="text-[10px] font-semibold tracking-wide">Search</span>
+        </button>
+        {mlsNumber ? (
+          <SheetShareButton
+            mlsNumber={mlsNumber}
+            title={shareTitle}
+            path={callbackPath}
+          />
+        ) : (
+          <div className="flex-1" aria-hidden />
+        )}
+        {mlsNumber ? (
+          <SheetSaveButton mlsNumber={mlsNumber} callbackPath={callbackPath} />
+        ) : (
+          <div className="flex-1" aria-hidden />
+        )}
       </div>
 
       {/*

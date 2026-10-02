@@ -14,11 +14,7 @@ import {
   peekLeadRequestContactPrefill,
   rememberLeadRequestContactPrefill,
 } from "@/lib/auth/lead-request-contact-prefill";
-import {
-  openGuestLeadRequestIntent,
-  rememberLeadRequestEntry,
-  type LeadRequestEntry,
-} from "@/lib/auth/lead-request-intent";
+import { openGuestLeadRequestIntent } from "@/lib/auth/lead-request-intent";
 
 type Kind = "inquiry" | "showing" | "virtual_viewing";
 
@@ -27,7 +23,6 @@ export function LeadRequestForm({
   kind,
   callbackPath,
   defaults,
-  restoreEntry,
 }: {
   mlsNumber: string;
   kind: Kind;
@@ -40,8 +35,6 @@ export function LeadRequestForm({
     message?: string;
     focusNotes?: string;
   };
-  /** Surface that should claim the restored request after guest auth. */
-  restoreEntry?: LeadRequestEntry;
 }) {
   const tenantName = useTenantDisplayName("Houzzat");
   const { status } = useSession();
@@ -85,7 +78,6 @@ export function LeadRequestForm({
     event.preventDefault();
     if (status !== "authenticated") {
       if (status === "loading") return;
-      if (restoreEntry) rememberLeadRequestEntry(restoreEntry);
       const trimmedPhone = phone.trim();
       rememberLeadRequestContactPrefill(
         trimmedPhone ? { mlsNumber, kind, phone: trimmedPhone } : null,

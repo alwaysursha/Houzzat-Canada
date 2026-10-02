@@ -1,6 +1,3 @@
-"use client";
-
-import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowDownRight,
@@ -9,6 +6,7 @@ import {
   Home,
   MapPin,
   Ruler,
+  Sparkles,
   Users,
 } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
@@ -92,7 +90,7 @@ function PanelTitle({
           {eyebrow}
         </p>
       ) : null}
-      <h3 className="mt-1 font-sans font-semibold text-xl text-ink sm:text-2xl">{title}</h3>
+      <h3 className="mt-1 font-display text-xl text-ink sm:text-2xl">{title}</h3>
       {hint ? <p className="mt-1 text-sm text-ink/55">{hint}</p> : null}
     </header>
   );
@@ -148,13 +146,9 @@ export function HouzzatInsights({
     pulse,
   } = insights;
 
-  const [expanded, setExpanded] = useState(false);
   const taxMonthly =
     ownership.taxesAnnual != null ? Math.round(ownership.taxesAnnual / 12) : 0;
   const maint = ownership.maintenanceMonthly ?? 0;
-  const restrictedCopy = needsEmailVerification
-    ? "Email verification required"
-    : "Sign in required";
 
   return (
     <section
@@ -174,15 +168,19 @@ export function HouzzatInsights({
       <div className="relative min-w-0 space-y-5 p-4 sm:space-y-6 sm:p-6 lg:p-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-2xl">
+            <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-canopy">
+              <Sparkles className="size-3.5" aria-hidden />
+              {brandDisplayName} Insights
+            </p>
             <h2
               id="houzzat-insights-heading"
-              className="font-sans text-lg font-semibold tracking-tight text-ink sm:text-xl"
+              className="mt-2 font-display text-3xl text-ink sm:text-4xl"
             >
-              {brandDisplayName} Insights
+              Understand this home in {placeLabel}
             </h2>
-            <p className="mt-1 text-sm leading-relaxed text-ink/55">
-              Market context for {placeLabel}. Estimates are guides, not
-              appraisals.
+            <p className="mt-2 text-sm leading-relaxed text-ink/60 sm:text-base">
+              Clear market context, costs, and lifestyle signals. Estimates are
+              guides, not appraisals.
             </p>
           </div>
           {needsEmailVerification ? (
@@ -207,85 +205,6 @@ export function HouzzatInsights({
           ) : null}
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <article
-            id="listing-estimated-value"
-            className="rounded-2xl border border-line/50 bg-surface/80 px-4 py-4"
-          >
-            <p className="text-xs font-medium text-ink/45">Estimated value</p>
-            {valuation.restricted ? (
-              <p className="mt-2 font-sans text-2xl font-semibold text-ink">
-                {restrictedCopy}
-              </p>
-            ) : valuation.mid == null ? (
-              <p className="mt-2 text-sm leading-relaxed text-ink/55">
-                Not enough comparable inventory yet to generate an estimate for
-                this home.
-              </p>
-            ) : (
-              <>
-                <p className="mt-2 font-sans text-3xl font-semibold text-canopy sm:text-4xl">
-                  <ResponsivePrice amount={valuation.mid} />
-                </p>
-                {valuation.vsListPct != null ? (
-                  <p className="mt-1 text-xs text-ink/55">
-                    List price is{" "}
-                    <span className="font-semibold text-ink">
-                      {valuation.vsListPct > 0 ? "+" : ""}
-                      {valuation.vsListPct}%
-                    </span>{" "}
-                    vs this estimate
-                  </p>
-                ) : null}
-              </>
-            )}
-          </article>
-
-          <article className="rounded-2xl border border-line/50 bg-surface/80 px-4 py-4">
-            <p className="text-xs font-medium text-ink/45">Market temperature</p>
-            <p className="mt-2 font-sans text-3xl font-semibold text-ink sm:text-4xl">
-              {temperature.score}
-            </p>
-            <p className="mt-1 text-sm font-medium text-ink/70">
-              {temperature.label}
-            </p>
-          </article>
-
-          <article className="rounded-2xl border border-line/50 bg-surface/80 px-4 py-4">
-            <p className="text-xs font-medium text-ink/45">Price position</p>
-            <p className="mt-2 font-sans text-2xl font-semibold text-ink sm:text-3xl">
-              {formatPrice(pricePosition.listPrice)}
-            </p>
-            <div className="mt-2">
-              <DeltaChip value={pricePosition.vsAskPct} />
-            </div>
-          </article>
-
-          <article className="rounded-2xl border border-line/50 bg-surface/80 px-4 py-4">
-            <p className="text-xs font-medium text-ink/45">Similar homes nearby</p>
-            <p className="mt-2 font-sans text-3xl font-semibold text-ink sm:text-4xl">
-              {competition.similarActiveNearby}
-            </p>
-            <p className="mt-1 text-sm text-ink/55">
-              Active listings within {competition.radiusKm} km
-            </p>
-          </article>
-        </div>
-
-        <div className="flex justify-center">
-          <button
-            type="button"
-            className="inline-flex min-h-11 items-center justify-center rounded-xl px-3 text-sm font-semibold text-canopy transition hover:bg-canopy/5"
-            aria-expanded={expanded}
-            aria-controls="houzzat-insights-full"
-            onClick={() => setExpanded((open) => !open)}
-          >
-            {expanded ? "Show fewer insights ↑" : "View full insights ↓"}
-          </button>
-        </div>
-
-        {expanded ? (
-          <div id="houzzat-insights-full" className="space-y-5 sm:space-y-6">
         {/* Hero: temperature + narrative */}
         <Panel className="bg-surface/90">
           <div className="grid gap-6 lg:grid-cols-[200px_1fr] lg:items-center">
@@ -320,19 +239,19 @@ export function HouzzatInsights({
               <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-line/70 pt-4 text-center">
                 <div>
                   <dt className="text-[11px] text-ink/45">Active nearby</dt>
-                  <dd className="font-sans font-semibold text-xl text-ink">
+                  <dd className="font-display text-xl text-ink">
                     {pulse.activeCount}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-[11px] text-ink/45">This DOM</dt>
-                  <dd className="font-sans font-semibold text-xl text-ink">
+                  <dd className="font-display text-xl text-ink">
                     {timing.daysOnMarket}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-[11px] text-ink/45">Similar actives</dt>
-                  <dd className="font-sans font-semibold text-xl text-ink">
+                  <dd className="font-display text-xl text-ink">
                     {competition.similarActiveNearby}
                   </dd>
                 </div>
@@ -342,7 +261,7 @@ export function HouzzatInsights({
         </Panel>
 
         {/* Houzzat Estimated Value — above price timeline */}
-        <Panel>
+        <Panel id="listing-estimated-value">
           <PanelTitle
             eyebrow={`${brandDisplayName} Estimated Value`}
             title="What this home looks worth today"
@@ -364,7 +283,7 @@ export function HouzzatInsights({
               needsEmailVerification={needsEmailVerification}
             >
               <div className="flex h-40 flex-col items-center justify-end gap-3 px-6 pb-5">
-                <p className="font-sans font-semibold text-3xl text-canopy/40">$—,———,———</p>
+                <p className="font-display text-3xl text-canopy/40">$—,———,———</p>
                 <div className="flex w-full max-w-md items-end justify-center gap-4">
                   <div className="h-14 flex-1 rounded-t-lg bg-canopy/15" />
                   <div className="h-28 flex-1 rounded-t-lg bg-canopy/30" />
@@ -384,7 +303,7 @@ export function HouzzatInsights({
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink/40">
                     Estimated value
                   </p>
-                  <p className="font-sans font-semibold text-4xl text-canopy sm:text-5xl">
+                  <p className="font-display text-4xl text-canopy sm:text-5xl">
                     <ResponsivePrice amount={valuation.mid} />
                   </p>
                   {valuation.vsListPct != null ? (
@@ -411,7 +330,7 @@ export function HouzzatInsights({
               <div className="mt-5 grid grid-cols-3 gap-3 text-center">
                 <div className="rounded-xl border border-line bg-mist/50 px-3 py-3">
                   <p className="text-[11px] text-ink/45">Low</p>
-                  <p className="font-sans font-semibold text-xl text-ink">
+                  <p className="font-display text-xl text-ink">
                     {valuation.low != null ? (
                       <ResponsivePrice amount={valuation.low} />
                     ) : (
@@ -421,13 +340,13 @@ export function HouzzatInsights({
                 </div>
                 <div className="rounded-xl border border-canopy/30 bg-canopy/5 px-3 py-3">
                   <p className="text-[11px] text-canopy">Mid</p>
-                  <p className="font-sans font-semibold text-xl text-canopy">
+                  <p className="font-display text-xl text-canopy">
                     <ResponsivePrice amount={valuation.mid} />
                   </p>
                 </div>
                 <div className="rounded-xl border border-line bg-mist/50 px-3 py-3">
                   <p className="text-[11px] text-ink/45">High</p>
-                  <p className="font-sans font-semibold text-xl text-ink">
+                  <p className="font-display text-xl text-ink">
                     {valuation.high != null ? (
                       <ResponsivePrice amount={valuation.high} />
                     ) : (
@@ -458,7 +377,7 @@ export function HouzzatInsights({
               hint="Compared with active listings in this area."
             />
             <div className="mb-4 flex flex-wrap items-end gap-3">
-              <p className="font-sans font-semibold text-3xl text-ink">
+              <p className="font-display text-3xl text-ink">
                 {formatPrice(pricePosition.listPrice)}
               </p>
               <DeltaChip value={pricePosition.vsAskPct} />
@@ -634,7 +553,7 @@ export function HouzzatInsights({
                       >
                         {address}
                       </p>
-                      <p className="mt-1 truncate font-sans font-semibold text-xl text-canopy">
+                      <p className="mt-1 truncate font-display text-xl text-canopy">
                         {c.soldPrice != null ? formatPrice(c.soldPrice) : "—"}
                       </p>
                       <p className="mt-1 truncate text-xs text-ink/50">
@@ -662,7 +581,7 @@ export function HouzzatInsights({
               title="Illustrative monthly carry"
               hint={`Assumes ${formatPrice(ownership.downPaymentExample)} down (20%), ${ownership.ratePct}% / ${ownership.amortYears} yr.`}
             />
-            <p className="font-sans font-semibold text-3xl text-ink">
+            <p className="font-display text-3xl text-ink">
               {formatPrice(ownership.estimatedTotalMonthly)}
               <span className="ml-1 text-base font-sans font-medium text-ink/45">
                 /mo
@@ -707,7 +626,7 @@ export function HouzzatInsights({
               hint={lifestyle.summary}
             />
             <div className="mb-4 flex items-baseline gap-2">
-              <span className="font-sans font-semibold text-3xl text-canopy">
+              <span className="font-display text-3xl text-canopy">
                 {lifestyle.score}
               </span>
               <span className="text-xs font-semibold uppercase tracking-wide text-ink/40">
@@ -752,7 +671,7 @@ export function HouzzatInsights({
 
           <Panel>
             <PanelTitle eyebrow="Competition" title="Similar homes nearby" />
-            <p className="font-sans font-semibold text-4xl text-ink">
+            <p className="font-display text-4xl text-ink">
               {competition.similarActiveNearby}
             </p>
             <p className="mt-1 text-sm text-ink/55">
@@ -832,8 +751,6 @@ export function HouzzatInsights({
           Insights use {brandDisplayName}&apos;s listing inventory and public map amenities.
           Board rules restrict sold/leased detail to registered clients.
         </p>
-          </div>
-        ) : null}
       </div>
     </section>
   );

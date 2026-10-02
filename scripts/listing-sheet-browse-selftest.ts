@@ -200,12 +200,10 @@ function testGateIframePanelAndDesktopChrome() {
       "font-display text-[1.7rem] font-semibold leading-none tracking-tight text-white sm:text-[1.85rem]",
     ),
   );
-  assert.ok(chrome.includes('aria-label="Previous listing"'));
-  assert.ok(chrome.includes('aria-label="Next listing"'));
-  assert.ok(chrome.includes('aria-label="Back to results"'));
-  assert.ok(chrome.includes("md:inline-flex"));
-  assert.ok(chrome.includes("replaceListingSheet(previousHref)"));
-  assert.ok(chrome.includes("replaceListingSheet(nextHref)"));
+  assert.ok(chrome.includes('aria-label="Back to previous listing"'));
+  assert.ok(chrome.includes('aria-label="Close listing"'));
+  assert.equal(chrome.includes('aria-label="Previous listing"'), false);
+  assert.equal(chrome.includes("replaceListingSheet"), false);
   assert.equal(chrome.includes("anonymous-listing-access"), false);
 }
 

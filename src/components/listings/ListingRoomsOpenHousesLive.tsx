@@ -143,7 +143,7 @@ export function ListingOpenHousesLive({ mlsNumber }: { mlsNumber: string }) {
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
         Showings
       </p>
-      <h2 className="mt-1 font-sans font-semibold text-xl text-ink sm:text-2xl">
+      <h2 className="mt-1 font-display text-xl text-ink sm:text-2xl">
         Open houses
       </h2>
       <ul className="mt-4 space-y-2">

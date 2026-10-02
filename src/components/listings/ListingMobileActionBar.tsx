@@ -11,7 +11,6 @@ import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { useListingContactDefaults } from "@/components/listings/ListingAccountChromeProvider";
 import {
   LEAD_REQUEST_RESTORE_EVENT,
-  peekLeadRequestEntry,
   peekLeadRequestRestore,
 } from "@/lib/auth/lead-request-intent";
 import {
@@ -81,7 +80,6 @@ export function ListingMobileActionBar({
     const media = window.matchMedia("(max-width: 767px)");
     function openRestored() {
       if (!media.matches || inactive) return;
-      if (peekLeadRequestEntry() === "gallery") return;
       const pending = peekLeadRequestRestore();
       if (!pending) return;
       if (
@@ -277,7 +275,6 @@ export function ListingMobileActionBar({
           mlsNumber={mlsNumber}
           contact={resolvedContact}
           callbackPath={authCallbackUrl}
-          restoreEntry="concierge"
         />
       ) : null}
     </>

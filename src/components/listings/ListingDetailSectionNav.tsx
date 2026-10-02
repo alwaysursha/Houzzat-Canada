@@ -374,7 +374,7 @@ export function ListingDetailSectionNav({
                 onClick={() => goToSection(item.id)}
                 aria-current={active ? "true" : undefined}
                 className={cn(
-                  "inline-flex h-11 shrink-0 items-center rounded-full px-3.5 font-sans text-sm font-medium transition",
+                  "inline-flex h-11 shrink-0 items-center rounded-full px-3.5 text-sm font-semibold transition",
                   active
                     ? "bg-canopy text-white shadow-sm"
                     : "bg-surface text-ink/65 ring-1 ring-line hover:bg-mist hover:text-ink",

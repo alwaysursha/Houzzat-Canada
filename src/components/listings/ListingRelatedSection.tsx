@@ -12,13 +12,6 @@ import { cn } from "@/lib/utils";
 
 type RelatedMode = "same-area" | "same-features";
 type RelatedTab = "for-sale" | "sold";
-type RelatedPresentation = "controls" | "similar" | "comparable-sold";
-
-const relatedResponseCache = new Map<string, ListingCardData[]>();
-
-function relatedCacheKey(mlsNumber: string, mode: RelatedMode, tab: RelatedTab) {
-  return `${mlsNumber}|${mode}|${tab}`;
-}
 
 type SubjectSummary = {
   mlsNumber: string;
@@ -45,42 +38,26 @@ export function ListingRelatedSection({
   subject,
   initialMode = "SAME_AREA",
   signedIn,
-  presentation = "controls",
 }: {
   subject: SubjectSummary;
   initialMode?: "SAME_AREA" | "SAME_FEATURES";
   signedIn: boolean;
-  /** Locked panels do not write the user's Nearby/Similar preference. */
-  presentation?: RelatedPresentation;
 }) {
   const chrome = useListingAccountChrome();
-  const locked = presentation !== "controls";
-  const [tab, setTab] = useState<RelatedTab>(
-    presentation === "comparable-sold" ? "sold" : "for-sale",
-  );
-  const [mode, setMode] = useState<RelatedMode>(
-    locked ? "same-features" : preferenceToMode(initialMode),
-  );
+  const [tab, setTab] = useState<RelatedTab>("for-sale");
+  const [mode, setMode] = useState<RelatedMode>(preferenceToMode(initialMode));
   const [items, setItems] = useState<ListingCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const userTouchedMode = useRef(false);
 
   useEffect(() => {
-    if (locked) return;
     if (!chrome.active || !chrome.loaded || userTouchedMode.current) return;
     setMode(preferenceToMode(chrome.relatedListingsMode));
-  }, [chrome.active, chrome.loaded, chrome.relatedListingsMode, locked]);
+  }, [chrome.active, chrome.loaded, chrome.relatedListingsMode]);
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
-      const key = relatedCacheKey(subject.mlsNumber, mode, tab);
-      const cached = relatedResponseCache.get(key);
-      if (cached) {
-        setItems(cached);
-        setLoading(false);
-        return;
-      }
       setLoading(true);
       try {
         const params = new URLSearchParams({
@@ -93,9 +70,7 @@ export function ListingRelatedSection({
           signal,
         });
         const data = (await res.json()) as { items?: ListingCardData[] };
-        const next = res.ok ? (data.items ?? []) : [];
-        relatedResponseCache.set(key, next);
-        setItems(next);
+        setItems(res.ok ? (data.items ?? []) : []);
       } catch {
         if (signal?.aborted) return;
         setItems([]);
@@ -158,86 +133,37 @@ export function ListingRelatedSection({
   })();
 
   const forSaleLabel =
-    subject.transactionType === "LEASE" ? "For lease" : "For sale";
+    subject.transactionType === "LEASE" ? "More for lease" : "More for sale";
   const recentClosedLabel =
-    subject.transactionType === "LEASE" ? "Leased" : "Sold";
+    subject.transactionType === "LEASE" ? "Recent leased" : "Recent sold";
   const closedVerb =
     subject.transactionType === "LEASE" ? "leased" : "sold";
-  const hint =
-    mode === "same-features"
-      ? tab === "sold"
-        ? `Similar homes ${closedVerb} in ${areaLabel} · ${featuresLabel}`
-        : `Similar homes ${subject.transactionType === "LEASE" ? "for lease" : "for sale"} in ${areaLabel} · ${featuresLabel}`
-      : tab === "sold"
-        ? `${recentClosedLabel} near ${areaLabel}`
-        : `${forSaleLabel} near ${areaLabel}`;
-
-  const sectionTitle =
-    presentation === "similar"
-      ? "Similar Homes"
-      : presentation === "comparable-sold"
-        ? subject.transactionType === "LEASE"
-          ? "Comparable Leased"
-          : "Comparable Sold"
-        : "Explore nearby homes";
-  const sectionId =
-    presentation === "similar"
-      ? "listing-similar"
-      : presentation === "comparable-sold"
-        ? "listing-comparable"
-        : "listing-related";
 
   return (
     <ListingSection
-      id={sectionId}
+      id="listing-related"
       className="w-full min-w-0"
-      title={sectionTitle}
-      hint={hint}
+      eyebrow="Keep exploring"
+      title="Related homes"
+      hint={
+        mode === "same-area"
+          ? `Homes in ${areaLabel}`
+          : `Similar homes in ${areaLabel} · ${featuresLabel}`
+      }
       action={
         <Link
           href={seeAllHref}
-          className="inline-flex min-h-11 items-center text-sm font-semibold text-canopy hover:underline"
+          className="rounded-lg bg-canopy/10 px-3 py-2 text-xs font-semibold text-canopy transition hover:bg-canopy/15"
         >
-          View more
+          See all →
         </Link>
       }
     >
-      {locked ? null : (
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div
-          className="inline-flex rounded-xl border border-line/50 bg-mist/35 p-1"
-          role="group"
-          aria-label="Match preference"
-        >
-          {(
-            [
-              { id: "same-area", label: "Nearby" },
-              { id: "same-features", label: "Similar homes" },
-            ] as const
-          ).map((entry) => {
-            const active = mode === entry.id;
-            return (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() => void selectMode(entry.id)}
-                className={cn(
-                  "min-h-11 rounded-lg px-3 text-sm font-semibold transition",
-                  active
-                    ? "bg-surface text-ink shadow-[0_1px_0_rgb(20_32_28/0.04)]"
-                    : "text-ink/55 hover:text-ink",
-                )}
-              >
-                {entry.label}
-              </button>
-            );
-          })}
-        </div>
-
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div
           role="tablist"
           aria-label="Related listings"
-          className="flex gap-1 border-b border-line/50"
+          className="flex gap-1 overflow-x-auto border-b border-line/70 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {(
             [
@@ -254,23 +180,65 @@ export function ListingRelatedSection({
                 aria-selected={active}
                 onClick={() => setTab(entry.id)}
                 className={cn(
-                  "relative min-h-11 shrink-0 px-3 text-sm font-semibold transition",
-                  active ? "text-ink" : "text-ink/45 hover:text-ink/70",
+                  "-mb-px shrink-0 border-b-2 px-3 py-2.5 text-sm font-semibold transition sm:px-4",
+                  active
+                    ? "border-canopy text-canopy-deep"
+                    : "border-transparent text-ink/45 hover:text-ink/70",
                 )}
               >
                 {entry.label}
-                {active ? (
-                  <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-canopy" />
-                ) : null}
+              </button>
+            );
+          })}
+        </div>
+
+        <div
+          className="inline-flex rounded-xl border border-line/70 bg-mist/50 p-1"
+          role="group"
+          aria-label="Match preference"
+        >
+          {(
+            [
+              { id: "same-area", label: "Nearby" },
+              { id: "same-features", label: "Similar homes" },
+            ] as const
+          ).map((entry) => {
+            const active = mode === entry.id;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => void selectMode(entry.id)}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-xs font-semibold transition sm:text-sm",
+                  active
+                    ? "bg-canopy text-white shadow-sm"
+                    : "text-ink/65 hover:text-canopy",
+                )}
+              >
+                {entry.label}
               </button>
             );
           })}
         </div>
       </div>
-      )}
 
       {saving ? (
         <p className="mt-2 text-xs text-ink/40">Saving preference…</p>
+      ) : null}
+
+      {mode === "same-features" ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <span className="rounded-full border border-canopy/20 bg-canopy/5 px-2.5 py-1 text-[11px] font-semibold text-canopy-deep">
+            {propertyTypeLabel(subject.propertyType)}
+          </span>
+          <span className="rounded-full border border-canopy/20 bg-canopy/5 px-2.5 py-1 text-[11px] font-semibold text-canopy-deep">
+            {bedsText} {bedsText === "1" ? "bed" : "beds"}
+          </span>
+          <span className="rounded-full border border-line bg-mist/80 px-2.5 py-1 text-[11px] font-semibold text-ink/60">
+            {areaLabel}
+          </span>
+        </div>
       ) : null}
 
       <div className="mt-4">
@@ -278,7 +246,7 @@ export function ListingRelatedSection({
           <CompactPropertyCardRail
             items={items}
             loading={loading}
-            label={hint}
+            label={`${forSaleLabel} and ${recentClosedLabel}`}
           />
         ) : (
           <p className="rounded-xl border border-dashed border-line/70 bg-mist/40 px-4 py-8 text-center text-sm text-ink/50">

@@ -1,10 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { HouzzatInsights } from "@/components/listings/insights/HouzzatInsights";
 import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
-import { formatPrice } from "@/lib/listings/constants";
-import { useListingInsights } from "@/lib/listings/listing-insights-client";
-import { cn } from "@/lib/utils";
+import type { ListingInsightsPayload } from "@/lib/market/listing-insights";
 
 function InsightsSkeleton({ brandDisplayName }: { brandDisplayName: string }) {
   return (
@@ -43,7 +42,37 @@ export function ListingInsightsDeferred({
   needsEmailVerification?: boolean;
 }) {
   const brandDisplayName = useTenantDisplayName("Houzzat");
-  const { data: insights, failed } = useListingInsights(mlsNumber);
+  const [insights, setInsights] = useState<ListingInsightsPayload | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    async function load() {
+      try {
+        const res = await fetch(
+          `/api/listings/${encodeURIComponent(mlsNumber)}/insights`,
+          { signal: controller.signal },
+        );
+        if (!res.ok) throw new Error(`insights ${res.status}`);
+        const data = (await res.json()) as { insights?: ListingInsightsPayload };
+        if (cancelled) return;
+        if (!data.insights) throw new Error("missing insights");
+        setInsights(data.insights);
+      } catch (error) {
+        if (cancelled || controller.signal.aborted) return;
+        console.error("[ListingInsightsDeferred]", error);
+        setFailed(true);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [mlsNumber]);
 
   if (insights) {
     return (
@@ -65,7 +94,7 @@ export function ListingInsightsDeferred({
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
           {brandDisplayName} Insights
         </p>
-        <h2 className="mt-1 font-sans font-semibold text-xl text-ink">
+        <h2 className="mt-1 font-display text-xl text-ink">
           Market insights unavailable
         </h2>
         <p className="mt-2 text-sm text-ink/55">
@@ -78,35 +107,4 @@ export function ListingInsightsDeferred({
   }
 
   return <InsightsSkeleton brandDisplayName={brandDisplayName} />;
-}
-
-/** Asking-price companion. Uses the same insights payload as the Insights panel. */
-export function ListingEstimateLine({
-  mlsNumber,
-  eligible,
-  compact = false,
-  className,
-}: {
-  mlsNumber: string;
-  eligible: boolean;
-  /** Grey “Est. Value” line beside the asking price. Desktop size is passed in className. */
-  compact?: boolean;
-  className?: string;
-}) {
-  const { data } = useListingInsights(mlsNumber, eligible);
-  if (!eligible || !data) return null;
-  const valuation = data.valuation;
-  if (valuation.restricted || valuation.mid == null) return null;
-  const amount = formatPrice(valuation.mid);
-  if (!compact) return null;
-  return (
-    <p
-      className={cn(
-        "shrink-0 whitespace-nowrap text-sm font-medium leading-none tracking-tight text-ink/55",
-        className,
-      )}
-    >
-      Est. Value {amount}
-    </p>
-  );
 }

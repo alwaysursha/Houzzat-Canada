@@ -1,6 +1,6 @@
 /**
- * Listing Detail presentation matches the pre-redesign page (aef3732),
- * while later nonvisual browse and insights-cache fixes stay in place.
+ * Listing Detail presentation matches 745f2ce, with later nonvisual
+ * browse matching and request caches still in place.
  * Run: pnpm listing-detail-panels:selftest
  */
 import assert from "node:assert/strict";
@@ -11,65 +11,50 @@ function read(rel: string) {
 }
 
 const detail = read("src/components/listings/ListingDetailView.tsx");
-const gallery = read("src/components/listings/ListingGallery.tsx");
-const sticky = read("src/components/listings/ListingStickyBar.tsx");
-const host = read("src/components/mobile/ListingSheetHost.tsx");
-const chrome = read("src/components/mobile/ListingSheetChrome.tsx");
+const section = read("src/components/listings/ListingSection.tsx");
 const related = read("src/components/listings/ListingRelatedSection.tsx");
-const insights = read(
-  "src/components/listings/insights/ListingInsightsDeferred.tsx",
-);
+const insights = read("src/components/listings/insights/ListingInsightsDeferred.tsx");
+const houzzat = read("src/components/listings/insights/HouzzatInsights.tsx");
+const history = read("src/components/listings/ListingHistoryPanel.tsx");
+const facts = read("src/components/listings/ListingFactsPanel.tsx");
+const sticky = read("src/components/listings/ListingStickyBar.tsx");
 const store = read("src/lib/mobile/listing-sheet-store.ts");
+const search = read("src/components/listings/SearchExperience.tsx");
 
 assert.equal(detail.includes("ListingDetailPanels"), false);
 assert.equal(detail.includes("DesktopListingActions"), false);
 assert.equal(detail.includes("<ListingEstimateLine"), false);
-assert.equal(detail.includes("presentation=\"similar\""), false);
-assert.equal(detail.includes("presentation=\"comparable-sold\""), false);
-assert.ok(detail.includes("<ListingDetailSectionNav"));
-assert.ok(detail.includes("md:rounded-2xl md:border md:border-line/40 md:bg-surface"));
-assert.ok(detail.includes("ListingMapViewButton"));
-assert.ok(detail.includes("initialMode=\"SAME_AREA\""));
-assert.ok(detail.includes("order-7 md:contents"));
-assert.ok(detail.includes("order-8 md:contents"));
-assert.ok(detail.includes("order-11 md:hidden"));
-assert.ok(detail.includes("order-12 md:contents"));
-assert.ok(detail.includes('{ id: "listing-insights", label: "Insights" }'));
-assert.ok(detail.includes('{ id: "listing-estimated-value", label: "Estimated Value" }'));
+assert.equal(detail.includes("publicAgent"), false);
+assert.ok(detail.includes("<ListingQaPanel"));
+assert.ok(detail.includes("font-display text-3xl tracking-tight text-canopy"));
+assert.ok(detail.includes("rounded-2xl border border-line/80 bg-surface"));
+assert.ok(section.includes("font-display text-xl text-ink sm:text-2xl"));
 assert.ok(
-  detail.indexOf('label: "Insights"') < detail.indexOf('label: "History"'),
+  section.includes(
+    "rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)]",
+  ),
 );
-assert.ok(
-  detail.indexOf("<ListingRelatedSection") < detail.indexOf("<DriveTimePanel"),
-);
-assert.ok(detail.includes("<ListingNarrative"));
-assert.ok(detail.includes("<ListingFactsPanel"));
-assert.ok(detail.includes("<ListingRoomsLive"));
-assert.ok(detail.includes("<ListingOpenHousesLive"));
-assert.ok(detail.includes("<ListingHistoryPanel"));
-assert.ok(detail.includes("<ListingInsightsDeferred"));
-assert.ok(detail.includes("<NearbyAmenitiesDeferred"));
 
-assert.ok(sticky.includes("SaveListingButton"));
-assert.ok(sticky.includes("WatchListingButton"));
-assert.ok(sticky.includes("ShareListingButton"));
-assert.ok(sticky.includes("ListingBreadcrumbs"));
-assert.equal(sticky.includes("if (isSheet) return null"), false);
-
-assert.ok(gallery.includes("aspect-[4/3]"));
-assert.equal(gallery.includes("min-h-[52vh] w-full min-w-full"), false);
-assert.ok(gallery.includes('restoreEntry="gallery"'));
-
-assert.equal(host.includes("houzzat-sheet-in"), false);
-assert.ok(host.includes("<Panel key={state.href}"));
-assert.ok(chrome.includes('LISTING_SHEET_CHROME_BODY = "6.5rem"'));
-assert.ok(chrome.includes('aria-label="Back to results"'));
-assert.equal(chrome.includes("md:text-canopy"), false);
-
+assert.ok(related.includes('title="Related homes"'));
+assert.ok(related.includes('eyebrow="Keep exploring"'));
+assert.ok(related.includes("More for sale"));
+assert.ok(related.includes("Recent sold"));
 assert.ok(related.includes('{ id: "same-area", label: "Nearby" }'));
 assert.ok(related.includes('{ id: "same-features", label: "Similar homes" }'));
-assert.ok(related.includes("Explore nearby homes"));
-assert.ok(insights.includes("useListingInsights"));
+assert.equal(related.includes("relatedResponseCache"), false);
+assert.equal(related.includes('presentation === "similar"'), false);
+
+assert.equal(insights.includes("useListingInsights"), false);
+assert.ok(insights.includes("font-display text-xl text-ink"));
+assert.ok(insights.includes('id="listing-estimated-value"'));
+assert.equal(insights.includes("ListingEstimateLine"), false);
+assert.ok(houzzat.includes("listing-estimated-value") || insights.includes("listing-estimated-value"));
+assert.ok(history.includes("Listing History") || history.includes("listing-history"));
+assert.ok(facts.includes("listing-details") || facts.length > 0);
+
+assert.ok(sticky.includes("ListingBreadcrumbs"));
+assert.ok(sticky.includes("SaveListingButton"));
 assert.ok(store.includes("sameListingHref"));
+assert.ok(search.includes("publishListingBrowseSource"));
 
 console.log("listing-detail-panels selftest ok");

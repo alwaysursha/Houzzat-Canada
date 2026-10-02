@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react";
 import { X } from "lucide-react";
 import { LeadRequestForm } from "@/components/listings/LeadRequestForm";
 import { useLeadRequestRestore } from "@/components/listings/useLeadRequestRestore";
-import type { LeadRequestEntry } from "@/lib/auth/lead-request-intent";
 import { cn } from "@/lib/utils";
 
 export type ViewingContactDefaults = {
@@ -31,7 +30,6 @@ export function ViewingBookingModal({
   contact,
   callbackPath,
   initialKind = "showing",
-  restoreEntry,
 }: {
   open: boolean;
   onClose: () => void;
@@ -39,7 +37,6 @@ export function ViewingBookingModal({
   contact?: ViewingContactDefaults;
   callbackPath?: string;
   initialKind?: "showing" | "virtual_viewing";
-  restoreEntry?: LeadRequestEntry;
 }) {
   const titleId = useId();
   const { status } = useSession();
@@ -126,7 +123,7 @@ export function ViewingBookingModal({
 
         <div className="flex shrink-0 items-start justify-between gap-3 px-5 pb-1 pt-3 sm:px-6 sm:pt-5">
           <div className="min-w-0">
-            <h2 id={titleId} className="font-sans font-semibold text-2xl text-ink">
+            <h2 id={titleId} className="font-display text-2xl text-ink">
               Book a viewing
             </h2>
             <p className="mt-1 text-sm text-ink/60">
@@ -178,7 +175,6 @@ export function ViewingBookingModal({
               mlsNumber={mlsNumber}
               kind={shownKind}
               callbackPath={callbackPath}
-              restoreEntry={restoreEntry}
               defaults={{
                 name: contact?.name ?? "",
                 email: contact?.email ?? "",

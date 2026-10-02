@@ -100,6 +100,5 @@ export function panelPayloadToDetailViewProps(
     gateDetails: payload.access.gateDetails,
     gateSold: payload.access.gateSold,
     canonicalPath: payload.canonicalPath,
-    publicAgent: payload.publicAgent ?? null,
   };
 }

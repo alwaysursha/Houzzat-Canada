@@ -152,7 +152,7 @@ export function ListingMobileSideMenu({
           <div className="min-w-0">
             <p
               id={titleId}
-              className="font-sans font-semibold text-lg tracking-tight text-ink"
+              className="font-display text-lg tracking-tight text-ink"
             >
               Listing menu
             </p>

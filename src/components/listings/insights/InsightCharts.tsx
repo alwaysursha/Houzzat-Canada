@@ -45,7 +45,7 @@ export function TemperatureGauge({
         <circle cx={x} cy={y} r="3.5" fill="var(--ink)" />
       </svg>
       <div className="absolute inset-x-0 bottom-0 text-center">
-        <p className={cn("font-sans font-semibold text-3xl leading-none", tone)}>{clamped}</p>
+        <p className={cn("font-display text-3xl leading-none", tone)}>{clamped}</p>
         <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink/45">
           {label}
         </p>
