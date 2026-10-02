@@ -24,7 +24,6 @@ import {
   consumeListingSheetNavigationAway,
   historyStateWithoutListingSheet,
   openListingSheet,
-  restoreListingSheetFromHistory,
   subscribeListingSheet,
   type ListingSheetHistoryMarker,
   type ListingSheetState,
@@ -147,15 +146,7 @@ export function ListingSheetHost() {
     return subscribeListingSheet(setState);
   }, [framed]);
 
-  // Reload keeps the history entry written while the overlay was open.
-  // Restore that listing without pushing another history entry.
-  useEffect(() => {
-    if (framed) return;
-    if (!restoreListingSheetFromHistory(window.history.state)) return;
-    historyPushedRef.current = true;
-  }, [framed]);
-
-  // Re-read flag when the sheet opens (query/cookie/sessionStorage/staff).
+  // Re-read flag when the sheet opens (query/cookie/panel flag/staff).
   // Query/cookie apply immediately; staff wait until session is known.
   // Do not persist staff enablement — sign-out returns to iframe.
   useEffect(() => {

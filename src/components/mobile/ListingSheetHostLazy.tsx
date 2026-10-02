@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState, type ComponentType } from "react";
-import { subscribeListingSheet } from "@/lib/mobile/listing-sheet-store";
+import {
+  restoreListingSheetFromSession,
+  subscribeListingSheet,
+} from "@/lib/mobile/listing-sheet-store";
 import { ListingSheetChrome } from "@/components/mobile/ListingSheetChrome";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 
@@ -50,6 +53,19 @@ function ListingSheetOpeningChrome() {
 export function ListingSheetHostLazy() {
   const [armed, setArmed] = useState(false);
   const [Host, setHost] = useState<HostComponent | null>(null);
+
+  // The full host mounts only after a listing is open. A reload starts with
+  // an empty store, so this always-mounted shell is what reopens it.
+  // Session storage, not history.state: Next's HistoryUpdater drops custom
+  // history keys on the next router commit.
+  useEffect(() => {
+    try {
+      if (window.self !== window.top) return;
+    } catch {
+      return;
+    }
+    restoreListingSheetFromSession();
+  }, []);
 
   useEffect(() => {
     return subscribeListingSheet((state) => {

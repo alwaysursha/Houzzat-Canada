@@ -122,6 +122,7 @@ export function openListingSheet(
   if (!next) return;
   const top = stack[stack.length - 1];
   if (top?.href === next) {
+    persistListingSheetSession();
     emit();
     return;
   }
@@ -129,6 +130,7 @@ export function openListingSheet(
     ...stack,
     { href: next, browse: normalizeBrowse(browse, next) },
   ];
+  persistListingSheetSession();
   emit();
 }
 
@@ -143,6 +145,7 @@ export function replaceListingSheet(href: string): boolean {
   if (!top.browse.some((href) => sameListingHref(href, next))) return false;
   if (top.href === next) return true;
   stack = [...stack.slice(0, -1), { href: next, browse: top.browse }];
+  persistListingSheetSession();
   emit();
   return true;
 }
@@ -152,10 +155,12 @@ export function backListingSheet(): boolean {
   if (stack.length === 0) return false;
   if (stack.length === 1) {
     stack = [];
+    clearPersistedListingSheet();
     emit();
     return false;
   }
   stack = stack.slice(0, -1);
+  persistListingSheetSession();
   emit();
   return true;
 }
@@ -164,6 +169,7 @@ export function backListingSheet(): boolean {
 export function closeListingSheet() {
   if (stack.length === 0) return;
   stack = [];
+  clearPersistedListingSheet();
   emit();
 }
 
@@ -180,9 +186,11 @@ export function isListingSheetOpen(): boolean {
 }
 
 /**
- * Overlay identity lives on the current history entry the host already pushes.
- * A reload of that entry can reopen the same listing. Closing strips the marker
- * so a later reload cannot.
+ * The host still writes this marker onto the one overlay history entry so
+ * Back / Close can dismiss it. Next's App Router HistoryUpdater replaces
+ * `history.state` with only its own keys after a soft navigation
+ * (`preserveCustomHistoryState: false`), so a real reload cannot trust this
+ * marker. Reload identity lives in tab-scoped sessionStorage instead.
  */
 export const LISTING_SHEET_HISTORY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -274,8 +282,187 @@ export function historyStateWithoutListingSheet(
 }
 
 /**
+ * Tab-scoped overlay identity. Survives a hard reload of this tab and
+ * stays in this tab's session only.
+ */
+export const LISTING_SHEET_SESSION_KEY = "houzzat:listing-sheet";
+
+export type ListingSheetSessionRecord = {
+  v: 1;
+  href: string;
+  browse: readonly string[] | null;
+  /** Underlying page: pathname + search, so filters stay part of the match. */
+  page: string;
+  savedAt: number;
+};
+
+type ListingSheetStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+let persistenceBinding: {
+  storage: ListingSheetStorage | null;
+  pageIdentity: () => string;
+} | null = null;
+
+/** Tests supply storage and the underlying page. Production uses the window. */
+export function bindListingSheetPersistenceForTest(
+  binding: {
+    storage: ListingSheetStorage | null;
+    pageIdentity: () => string;
+  } | null,
+) {
+  persistenceBinding = binding;
+}
+
+function listingSheetStorage(): ListingSheetStorage | null {
+  if (persistenceBinding) return persistenceBinding.storage;
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function currentListingSheetPage(): string {
+  if (persistenceBinding) return persistenceBinding.pageIdentity();
+  if (typeof window === "undefined") return "";
+  return `${window.location.pathname}${window.location.search}`;
+}
+
+function readListingSheetSession(): ListingSheetSessionRecord | null {
+  const storage = listingSheetStorage();
+  if (!storage) return null;
+  let raw: string | null;
+  try {
+    raw = storage.getItem(LISTING_SHEET_SESSION_KEY);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const record = parsed as Partial<ListingSheetSessionRecord>;
+  if (record.v !== 1) return null;
+  if (typeof record.href !== "string" || !record.href.startsWith("/listing/")) {
+    return null;
+  }
+  if (typeof record.page !== "string" || record.page.length === 0) return null;
+  if (typeof record.savedAt !== "number" || !Number.isFinite(record.savedAt)) {
+    return null;
+  }
+  const browse = Array.isArray(record.browse)
+    ? record.browse.filter(
+        (href): href is string => typeof href === "string" && href.length > 0,
+      )
+    : null;
+  return {
+    v: 1,
+    href: record.href,
+    browse: browse && browse.length > 0 ? browse : null,
+    page: record.page,
+    savedAt: record.savedAt,
+  };
+}
+
+function writeListingSheetSession(record: ListingSheetSessionRecord) {
+  const storage = listingSheetStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(LISTING_SHEET_SESSION_KEY, JSON.stringify(record));
+  } catch {
+    // Private mode or quota — the overlay still works for this page view.
+  }
+  ensureHistoryPageSync();
+}
+
+/** Remember the listing currently on top, for this tab and underlying page. */
+export function persistListingSheetSession(now = Date.now()) {
+  const frame = stack[stack.length - 1];
+  const page = currentListingSheetPage();
+  if (!frame || !page) return;
+  writeListingSheetSession({
+    v: 1,
+    href: frame.href,
+    browse: frame.browse ? [...frame.browse] : null,
+    page,
+    savedAt: now,
+  });
+}
+
+export function clearPersistedListingSheet() {
+  const storage = listingSheetStorage();
+  if (!storage) return;
+  try {
+    storage.removeItem(LISTING_SHEET_SESSION_KEY);
+  } catch {
+    // Ignore storage failures; the in-memory stack is already closed.
+  }
+}
+
+/**
+ * Keep the stored underlying page aligned when Search replaces the URL
+ * (filters) while the overlay stays open.
+ */
+export function syncListingSheetPersistedPage() {
+  if (stack.length === 0) return;
+  const page = currentListingSheetPage();
+  if (!page) return;
+  const existing = readListingSheetSession();
+  if (!existing) {
+    persistListingSheetSession();
+    return;
+  }
+  if (existing.page === page) return;
+  writeListingSheetSession({ ...existing, page });
+}
+
+let historyPageSyncInstalled = false;
+
+/**
+ * Next's HistoryUpdater calls replaceState on router commits. That is also
+ * when the Search URL (and therefore the underlying page identity) changes.
+ */
+function ensureHistoryPageSync() {
+  if (historyPageSyncInstalled || persistenceBinding) return;
+  if (typeof window === "undefined") return;
+  historyPageSyncInstalled = true;
+  const original = window.history.replaceState.bind(window.history);
+  window.history.replaceState = function (
+    data: unknown,
+    unused: string,
+    url?: string | URL | null,
+  ) {
+    const result = original(data, unused, url);
+    if (stack.length > 0) syncListingSheetPersistedPage();
+    return result;
+  };
+}
+
+/**
+ * Reopen the listing stored for this tab when the reloaded URL is still the
+ * underlying page and the record is inside the max age. No-ops when memory
+ * already has a sheet or the record was cleared.
+ */
+export function restoreListingSheetFromSession(now = Date.now()): boolean {
+  if (stack.length > 0) return false;
+  const record = readListingSheetSession();
+  if (!record) return false;
+  if (now < record.savedAt) return false;
+  if (now - record.savedAt > LISTING_SHEET_HISTORY_MAX_AGE_MS) return false;
+  const page = currentListingSheetPage();
+  if (!page || record.page !== page) return false;
+  openListingSheet(record.href, record.browse);
+  return sameListingHref(getListingSheetHref() ?? "", record.href);
+}
+
+/**
  * Reload drops this module. Tests use this to mimic that, without the
- * history-entry clear that an intentional close performs.
+ * session clear that an intentional close performs.
  */
 export function discardListingSheetMemoryForReload() {
   stack = [];

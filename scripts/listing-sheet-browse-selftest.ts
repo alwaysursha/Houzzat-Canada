@@ -8,9 +8,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   LISTING_SHEET_HISTORY_MAX_AGE_MS,
+  LISTING_SHEET_SESSION_KEY,
   backListingSheet,
   beginListingSheetNavigationAway,
+  bindListingSheetPersistenceForTest,
   captureListingSheetHistoryMarker,
+  clearPersistedListingSheet,
   closeListingSheet,
   consumeListingSheetNavigationAway,
   discardListingSheetMemoryForReload,
@@ -19,6 +22,9 @@ import {
   openListingSheet,
   replaceListingSheet,
   restoreListingSheetFromHistory,
+  restoreListingSheetFromSession,
+  syncListingSheetPersistedPage,
+  type ListingSheetSessionRecord,
 } from "../src/lib/mobile/listing-sheet-store";
 import {
   browseSourceForHref,
@@ -216,75 +222,161 @@ function testGateIframePanelAndDesktopChrome() {
   assert.equal(chrome.includes("anonymous-listing-access"), false);
 }
 
+class MemorySession {
+  private map = new Map<string, string>();
+  getItem(key: string) {
+    return this.map.get(key) ?? null;
+  }
+  setItem(key: string, value: string) {
+    this.map.set(key, value);
+  }
+  removeItem(key: string) {
+    this.map.delete(key);
+  }
+}
+
+/**
+ * Next App Router HistoryUpdater, after any soft navigation has set
+ * preserveCustomHistoryState to false, replaceState's the entry with only
+ * Next's own keys. The previous selftest kept the custom marker object
+ * alive and called restore on it, so it never saw this wipe.
+ */
+function historyStateAfterNextRouterCommit(
+  previous: Record<string, unknown>,
+): Record<string, unknown> {
+  const tree = previous.__PRIVATE_NEXTJS_INTERNALS_TREE ?? ["", {}];
+  return {
+    __NA: true,
+    __PRIVATE_NEXTJS_INTERNALS_TREE: tree,
+  };
+}
+
+function readSession(storage: MemorySession): ListingSheetSessionRecord | null {
+  const raw = storage.getItem(LISTING_SHEET_SESSION_KEY);
+  return raw ? (JSON.parse(raw) as ListingSheetSessionRecord) : null;
+}
+
 function testRefreshRestoresTheOpenListingOnly() {
+  const storage = new MemorySession();
+  let page = "/search?status=ACTIVE";
+  bindListingSheetPersistenceForTest({
+    storage,
+    pageIdentity: () => page,
+  });
   reset();
-  const now = 1_700_000_000_000;
+
   const href = "/listing/3275-stalybridge-drive-34-oakville/X13852960";
   openListingSheet(href, [A, href, C]);
-  const marker = captureListingSheetHistoryMarker(now);
+  const saved = readSession(storage);
+  assert.ok(saved);
+  assert.equal(saved.href, href);
+  assert.equal(saved.page, page);
+  assert.deepEqual(saved.browse, [A, href, C]);
+
+  const marker = captureListingSheetHistoryMarker();
   assert.ok(marker);
-  assert.equal(marker.houzzatListingHref, href);
+  const survivedReload = historyStateAfterNextRouterCommit({
+    ...marker,
+    __NA: true,
+    __PRIVATE_NEXTJS_INTERNALS_TREE: ["", {}],
+  });
+  assert.equal(survivedReload.houzzatListingHref, undefined);
+  assert.equal(survivedReload.houzzatListingSheet, undefined);
 
   discardListingSheetMemoryForReload();
   assert.equal(getListingSheetState().href, null);
-  assert.equal(restoreListingSheetFromHistory(marker, now), true);
+  assert.equal(restoreListingSheetFromHistory(survivedReload), false);
+  assert.equal(getListingSheetState().href, null);
+  assert.equal(restoreListingSheetFromSession(), true);
   let state = getListingSheetState();
   assert.equal(state.href, href);
   assert.equal(state.depth, 1);
   assert.equal(state.previousHref, A);
   assert.equal(state.nextHref, C);
-  assert.equal(restoreListingSheetFromHistory(marker, now), false);
+  assert.equal(restoreListingSheetFromSession(), false);
   assert.equal(getListingSheetState().depth, 1);
 
+  const openedAt = readSession(storage)!.savedAt;
   discardListingSheetMemoryForReload();
+  storage.setItem(
+    LISTING_SHEET_SESSION_KEY,
+    JSON.stringify({
+      ...readSession(storage),
+      savedAt: openedAt - LISTING_SHEET_HISTORY_MAX_AGE_MS - 1,
+    }),
+  );
   assert.equal(
-    restoreListingSheetFromHistory(
-      marker,
-      now + LISTING_SHEET_HISTORY_MAX_AGE_MS + 1,
-    ),
+    restoreListingSheetFromSession(openedAt),
     false,
   );
   assert.equal(getListingSheetState().href, null);
-
-  openListingSheet(href, [A, href, C]);
-  replaceListingSheet(C);
-  let history: Record<string, unknown> = {
-    idx: 1,
-    ...captureListingSheetHistoryMarker(now)!,
-  };
-  history = {
-    ...historyStateWithoutListingSheet(history),
-    idx: 1,
-    ...captureListingSheetHistoryMarker(now)!,
-  };
-  discardListingSheetMemoryForReload();
-  assert.equal(restoreListingSheetFromHistory(history, now), true);
-  assert.equal(getListingSheetState().href, C);
-  assert.equal(
-    (historyStateWithoutListingSheet(history) as { idx?: number }).idx,
-    1,
+  storage.setItem(
+    LISTING_SHEET_SESSION_KEY,
+    JSON.stringify({ ...saved, savedAt: openedAt }),
   );
 
-  closeListingSheet();
-  assert.equal(captureListingSheetHistoryMarker(now), null);
-  const cleared = historyStateWithoutListingSheet(history);
-  assert.equal(cleared.houzzatListingHref, undefined);
-  assert.equal(cleared.houzzatListingSheet, undefined);
+  page = "/";
   discardListingSheetMemoryForReload();
-  assert.equal(restoreListingSheetFromHistory(cleared, now), false);
-  assert.equal(getListingSheetState().href, null);
+  assert.equal(restoreListingSheetFromSession(openedAt), false);
+  page = "/search?status=ACTIVE&city=Oakville";
+  syncListingSheetPersistedPage();
+  assert.equal(readSession(storage)?.page, "/search?status=ACTIVE");
+  openListingSheet(href, [A, href, C]);
+  page = "/search?status=ACTIVE&city=Oakville";
+  syncListingSheetPersistedPage();
+  assert.equal(readSession(storage)?.page, page);
+  discardListingSheetMemoryForReload();
+  assert.equal(restoreListingSheetFromSession(), true);
+  assert.equal(getListingSheetState().href, href);
+  page = "/search?city=Toronto";
+  discardListingSheetMemoryForReload();
+  assert.equal(restoreListingSheetFromSession(), false);
+
+  page = "/search?status=ACTIVE";
+  openListingSheet(href, [A, href, C]);
+  replaceListingSheet(C);
+  assert.equal(readSession(storage)?.href, C);
+  discardListingSheetMemoryForReload();
+  assert.equal(restoreListingSheetFromSession(), true);
+  assert.equal(getListingSheetState().href, C);
+  assert.equal(getListingSheetState().previousHref, href);
+
+  closeListingSheet();
+  assert.equal(storage.getItem(LISTING_SHEET_SESSION_KEY), null);
+  discardListingSheetMemoryForReload();
+  assert.equal(restoreListingSheetFromSession(), false);
+  assert.equal(restoreListingSheetFromHistory(survivedReload), false);
+
+  openListingSheet(href, [A, href, C]);
+  openListingSheet(C);
+  backListingSheet();
+  assert.equal(readSession(storage)?.href, href);
+  assert.equal(backListingSheet(), false);
+  assert.equal(storage.getItem(LISTING_SHEET_SESSION_KEY), null);
 
   openListingSheet(href, [A, href, C]);
   beginListingSheetNavigationAway();
   assert.equal(getListingSheetState().href, null);
+  assert.equal(storage.getItem(LISTING_SHEET_SESSION_KEY), null);
   assert.equal(consumeListingSheetNavigationAway(), true);
-  assert.equal(restoreListingSheetFromHistory(cleared, now), false);
+  discardListingSheetMemoryForReload();
+  assert.equal(restoreListingSheetFromSession(), false);
+
+  clearPersistedListingSheet();
+  bindListingSheetPersistenceForTest(null);
 
   const host = read("src/components/mobile/ListingSheetHost.tsx");
+  const lazy = read("src/components/mobile/ListingSheetHostLazy.tsx");
+  const store = read("src/lib/mobile/listing-sheet-store.ts");
   assert.equal(host.split("window.history.pushState").length - 1, 1);
-  assert.ok(host.includes("restoreListingSheetFromHistory(window.history.state)"));
+  assert.equal(host.includes("restoreListingSheetFromHistory"), false);
   assert.ok(host.includes("historyStateWithoutListingSheet"));
   assert.ok(host.includes("consumeListingSheetNavigationAway"));
+  assert.ok(host.includes('if (event.key === "Escape") closeListingSheet()'));
+  assert.ok(lazy.includes("restoreListingSheetFromSession()"));
+  assert.ok(lazy.includes("window.self !== window.top"));
+  assert.ok(store.includes("sessionStorage"));
+  assert.equal(store.includes("localStorage"), false);
 
   const chip = read("src/components/route-planner/RoutePlannerFloatingChip.tsx");
   const nav = read("src/lib/listings/navigate-listing.ts");
