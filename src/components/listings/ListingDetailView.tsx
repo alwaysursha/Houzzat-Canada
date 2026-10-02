@@ -307,7 +307,7 @@ export function ListingDetailView({
           />
         </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-10">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] lg:gap-10">
         <div className="min-w-0 space-y-5 sm:space-y-6">
           <div className="flex flex-col gap-5 rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-x-8 md:gap-y-5">
             <div className="min-w-0 w-full md:flex-1">
@@ -366,9 +366,14 @@ export function ListingDetailView({
                     </>
                   )}
                 </div>
-                <p className="shrink-0 pt-1.5 text-right text-sm font-medium leading-snug text-ink/55 md:hidden">
-                  {timingLabel}
-                </p>
+                <div className="shrink-0 pt-1.5 text-right md:hidden">
+                  <p className="text-sm font-medium leading-snug text-ink/55">
+                    {timingLabel}
+                  </p>
+                  <p className="text-sm font-medium leading-snug text-ink/55">
+                    MLS® {listing.mlsNumber}
+                  </p>
+                </div>
               </div>
               <div className="mt-2 font-display leading-tight text-ink">
                 {detailsLocked ? (
@@ -422,16 +427,19 @@ export function ListingDetailView({
                   <span className="font-bold text-ink">
                     {propertyTypeLabel(listing.propertyType)}
                   </span>
-                  {" · "}
-                  MLS® {listing.mlsNumber}
                 </p>
               )}
             </div>
 
             <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:shrink-0 md:items-end">
-              <p className="hidden text-right text-sm font-medium leading-snug text-ink/55 md:block">
-                {timingLabel}
-              </p>
+              <div className="hidden text-right md:block">
+                <p className="text-sm font-medium leading-snug text-ink/55">
+                  {timingLabel}
+                </p>
+                <p className="text-sm font-medium leading-snug text-ink/55">
+                  MLS® {listing.mlsNumber}
+                </p>
+              </div>
               {/*
                 Mobile: equal columns so the row fits the content width.
                 Desktop (md+): keep the original fixed min-widths and gaps.

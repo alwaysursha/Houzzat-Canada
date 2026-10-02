@@ -69,7 +69,7 @@ assert.ok(host.includes("browseHrefs"));
 assert.ok(host.includes("houzzat-sheet-in"));
 assert.ok(host.includes("transform: translateY(18px)"));
 assert.equal(host.includes("translateX"), false);
-assert.ok(host.includes("md:w-[min(1280px,calc(100%-5rem))]"));
+assert.ok(host.includes("md:w-[min(1360px,calc(100%-4rem))]"));
 
 assert.ok(menu.includes("md:hidden"));
 assert.ok(menu.includes("<ShareListingButton"));

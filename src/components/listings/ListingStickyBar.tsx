@@ -210,14 +210,16 @@ export function ListingStickyBar({
         <div
           ref={barRef}
           className={cn(
-            "z-30 -mx-4 transition-[box-shadow,background-color,border-color] duration-300 sm:-mx-6 lg:-mx-10",
+            "z-30 transition-[box-shadow,background-color,border-color] duration-300",
             // Sheet: fixed flush under the overlay Close bar (iframe top = 0).
             // Full page: sticky under the site header stack.
             // Panel overlay sets --listing-sheet-chrome-height so this sits
             // under the green Close bar. Iframe sheet leaves it unset (0).
+            // Page negative margins are omitted in the sheet so the bar cannot
+            // extend past the centered popup.
             isSheet
-              ? "fixed inset-x-0 top-[var(--listing-sheet-chrome-height,0px)] mx-0"
-              : "sticky top-[var(--site-header-stack,4rem)]",
+              ? "fixed inset-x-0 top-[var(--listing-sheet-chrome-height,0px)]"
+              : "sticky top-[var(--site-header-stack,4rem)] -mx-4 sm:-mx-6 lg:-mx-10",
             stuck || isSheet
               ? "border-b border-canopy/20 bg-mist/95 shadow-[0_8px_24px_-12px_rgba(15,107,76,0.35)] backdrop-blur-md"
               : "border-b border-transparent bg-transparent",
