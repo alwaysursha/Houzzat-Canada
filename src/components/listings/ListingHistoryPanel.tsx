@@ -460,7 +460,7 @@ export function ListingHistoryPanel({
     portalReady && verifyOpen
       ? createPortal(
           <div
-            className="fixed inset-0 z-[120] flex items-center justify-center px-4"
+            className="listing-detail-type fixed inset-0 z-[120] flex items-center justify-center px-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby={verifyTitleId}

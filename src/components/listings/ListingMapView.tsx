@@ -507,7 +507,7 @@ export function ListingMapViewModal({
       aria-labelledby={titleId}
       // Above ListingSheetHost (z-200) so desktop Map view is visible in the
       // listing popup — mobile uses the in-gallery map slide instead.
-      className="fixed inset-0 z-[210] flex flex-col bg-mist"
+      className="listing-detail-type fixed inset-0 z-[210] flex flex-col bg-mist"
     >
       <header className="relative z-20 flex shrink-0 items-start justify-between gap-3 border-b border-line/70 bg-surface/95 px-4 py-3 shadow-sm backdrop-blur-md sm:px-5 sm:py-4">
         <div className="min-w-0 max-w-2xl">

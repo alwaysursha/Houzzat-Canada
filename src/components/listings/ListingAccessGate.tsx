@@ -103,7 +103,9 @@ export function ListingAccessGate({
 
   return (
     <>
-      <div inert={blocked ? true : undefined}>{children}</div>
+      <div className="listing-detail-type" inert={blocked ? true : undefined}>
+        {children}
+      </div>
       {blocked ? (
         <button
           type="button"

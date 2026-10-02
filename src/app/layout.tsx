@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { listingDetailFontVariables } from "@/fonts/publica-sans-round";
 import { Providers } from "@/components/Providers";
 import { getHouzzatAndroidBootScript } from "@/lib/mobile/houzzat-android-boot";
 import { getStaleBuildBootScript } from "@/lib/navigation/stale-build-recovery";
@@ -38,7 +39,7 @@ export default function RootLayout({
   return (
     <html
       lang="en-CA"
-      className={`${jakarta.variable} ${fraunces.variable} h-full antialiased`}
+      className={`${jakarta.variable} ${fraunces.variable} ${listingDetailFontVariables} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full">

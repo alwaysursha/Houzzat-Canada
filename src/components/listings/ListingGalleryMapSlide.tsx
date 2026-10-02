@@ -776,7 +776,7 @@ export function ListingGalleryMapSlide({
   if (portalReady && hover) {
     hoverCard = createPortal(
       <div
-        className="fixed z-[120]"
+        className="listing-detail-type fixed z-[120]"
         style={{ left: hover.left, top: hover.top }}
         onMouseLeave={() => setHover(null)}
       >

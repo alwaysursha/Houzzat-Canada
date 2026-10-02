@@ -287,3 +287,37 @@ body {
   }
 }
 
+/*
+  Listing Detail only. Ultra Light is the body face. Medium is the emphasis
+  face. Weight is pinned to each file so the browser does not faux-bold UlLt.
+*/
+.listing-detail-type {
+  font-family: var(--font-publica-ullt), var(--font-jakarta), sans-serif;
+  font-weight: 250;
+  font-synthesis: none;
+}
+
+.listing-detail-type :where(
+  .font-medium,
+  .font-semibold,
+  .font-bold,
+  .font-extrabold,
+  .font-black,
+  .font-display,
+  strong,
+  b,
+  button,
+  [role="button"],
+  [role="tab"]
+) {
+  font-family: var(--font-publica-md), var(--font-jakarta), sans-serif;
+  font-weight: 500;
+  font-synthesis: none;
+}
+
+.listing-detail-type :where(.font-thin, .font-extralight, .font-light, .font-normal) {
+  font-family: var(--font-publica-ullt), var(--font-jakarta), sans-serif;
+  font-weight: 250;
+  font-synthesis: none;
+}
+

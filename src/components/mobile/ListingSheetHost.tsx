@@ -332,7 +332,7 @@ export function ListingSheetHost() {
       */}
       <div className="listing-sheet-panel absolute inset-0 z-[1] flex min-h-0 flex-col md:inset-auto md:top-5 md:bottom-0 md:left-1/2 md:w-[min(1360px,calc(100%-4rem))] md:-translate-x-1/2">
         <div
-          className={`listing-sheet-motion flex min-h-0 w-full flex-1 flex-col bg-surface md:overflow-hidden md:rounded-t-[18px] md:rounded-b-none md:shadow-[0_28px_70px_-20px_rgba(16,28,24,0.45),0_8px_24px_-12px_rgba(16,28,24,0.28)] ${leaving ? "md:animate-[houzzat-sheet-out_180ms_cubic-bezier(0.22,1,0.36,1)_forwards]" : "md:animate-[houzzat-sheet-in_240ms_cubic-bezier(0.22,1,0.36,1)_backwards]"}`}
+          className={`listing-detail-type listing-sheet-motion flex min-h-0 w-full flex-1 flex-col bg-surface md:overflow-hidden md:rounded-t-[18px] md:rounded-b-none md:shadow-[0_28px_70px_-20px_rgba(16,28,24,0.45),0_8px_24px_-12px_rgba(16,28,24,0.28)] ${leaving ? "md:animate-[houzzat-sheet-out_180ms_cubic-bezier(0.22,1,0.36,1)_forwards]" : "md:animate-[houzzat-sheet-in_240ms_cubic-bezier(0.22,1,0.36,1)_backwards]"}`}
           onAnimationEnd={(event) => {
             if (event.target !== event.currentTarget) return;
             if (event.animationName !== "houzzat-sheet-out") return;
