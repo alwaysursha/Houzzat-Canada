@@ -604,6 +604,7 @@ export function ListingDetailView({
             authCallbackUrl={canonicalPath}
             className="hidden md:block"
           />
+          <ListingAgentCard agent={publicAgent} />
           <DriveTimePanel
             mlsNumber={listing.mlsNumber}
             originLat={listing.lat}
@@ -616,7 +617,6 @@ export function ListingDetailView({
             initialBody=""
             authCallbackUrl={canonicalPath}
           />
-          <ListingAgentCard agent={publicAgent} />
           <ViewingRequestPanel
             className="hidden md:block"
             mlsNumber={listing.mlsNumber}

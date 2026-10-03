@@ -24,7 +24,13 @@ const search = read("src/components/listings/SearchExperience.tsx");
 assert.equal(detail.includes("ListingDetailPanels"), false);
 assert.equal(detail.includes("DesktopListingActions"), false);
 assert.equal(detail.includes("<ListingEstimateLine"), false);
-assert.equal(detail.includes("publicAgent"), false);
+assert.ok(detail.includes("<ListingAgentCard agent={publicAgent}"));
+assert.ok(
+  detail.indexOf("<ListingNotesPanel") < detail.indexOf("<ListingAgentCard"),
+);
+assert.ok(
+  detail.indexOf("<ListingAgentCard") < detail.indexOf("<DriveTimePanel"),
+);
 assert.equal(detail.includes("<ListingQaPanel"), false);
 assert.equal(detail.includes("Listed for:"), false);
 assert.ok(detail.includes("Prices are changing. Get a free home estimate"));

@@ -30,11 +30,13 @@ type WorkspaceRow = {
     agentDesignation: string | null;
     agentCellPhone: string | null;
     brokerageRegisteredName: string | null;
+    brokeragePhone: string | null;
   } | null;
   branding: {
     displayName: string | null;
     contactEmail: string | null;
     agentProfilePhotoUrl: string | null;
+    brokerageLogoUrl: string | null;
   } | null;
   primaryAgent: {
     name: string | null;
@@ -60,11 +62,13 @@ function workspace(
       agentDesignation: "Sales Representative",
       agentCellPhone: "416-555-0100",
       brokerageRegisteredName: "Workspace Brokerage",
+      brokeragePhone: "905-555-0100",
     },
     branding: partial.branding ?? {
       displayName: "Workspace",
       contactEmail: partial.email,
       agentProfilePhotoUrl: "https://cdn.example/a.jpg",
+      brokerageLogoUrl: "https://cdn.example/logo.png",
     },
     primaryAgent: partial.primaryAgent ?? {
       name: partial.name,
@@ -97,7 +101,9 @@ function assertPublicOnly(identity: PublicAgentIdentity) {
   const keys = Object.keys(identity).sort();
   assert.deepEqual(keys, [
     "bio",
+    "brokerageLogoUrl",
     "brokerageName",
+    "brokeragePhone",
     "email",
     "markets",
     "name",
@@ -117,11 +123,13 @@ async function main() {
       agentDesignation: "Broker",
       agentCellPhone: "647-555-0199",
       brokerageRegisteredName: "Other Brokerage",
+      brokeragePhone: "905-555-0199",
     },
     branding: {
       displayName: "Other",
       contactEmail: "b@workspace-b.test",
       agentProfilePhotoUrl: "https://cdn.example/b.jpg",
+      brokerageLogoUrl: "https://cdn.example/b-logo.png",
     },
   });
 
@@ -155,11 +163,13 @@ async function main() {
         agentDesignation: "  ",
         agentCellPhone: "",
         brokerageRegisteredName: null,
+        brokeragePhone: null,
       },
       branding: {
         displayName: "Brand",
         contactEmail: null,
         agentProfilePhotoUrl: null,
+        brokerageLogoUrl: null,
       },
       primaryAgent: null,
     },
@@ -335,9 +345,19 @@ async function main() {
   assert.ok(!panel.includes("listing.brokerageName"));
   assert.ok(mapper.includes("publicAgent: payload.publicAgent ?? null"));
   assert.ok(view.includes("publicAgent?: PublicAgentIdentity | null"));
-  assert.ok(view.includes("publicAgent={publicAgent}"));
+  assert.ok(view.includes("<ListingAgentCard agent={publicAgent}"));
   assert.ok(!view.includes("publicAgent.name"));
   assert.equal(view.split("<ViewingRequestPanel").length - 1, 1);
+  const agentCard = read("src/components/listings/ListingAgentCard.tsx");
+  assert.ok(agentCard.includes("Your assigned Agent"));
+  assert.ok(agentCard.includes("photoUrl"));
+  assert.ok(agentCard.includes("brokerageLogoUrl"));
+  assert.ok(agentCard.includes("brokerageName"));
+  assert.ok(agentCard.includes("formatPhoneDisplay"));
+  assert.ok(!agentCard.includes("sessionContact"));
+  assert.ok(!agentCard.includes("Ali Syed"));
+  assert.ok(!agentCard.includes("Contact Agent"));
+  assert.ok(!agentCard.includes("mailto:"));
 
   const concierge = read("src/components/listings/ViewingRequestPanel.tsx");
   assert.ok(concierge.includes("useLeadRequestRestore"));
@@ -348,20 +368,22 @@ async function main() {
   assert.ok(concierge.includes("Ask about this home"));
   assert.ok(concierge.includes("Request Tour"));
   assert.ok(concierge.includes("RoutePlannerToggleButton"));
-  assert.ok(concierge.includes("hidden md:block"));
-  assert.ok(concierge.includes("object-cover"));
-  assert.ok(concierge.includes("`tel:${tel}`"));
-  assert.ok(concierge.includes("Connect with"));
-  assert.ok(!concierge.includes("Your agent"));
-  assert.ok(!concierge.includes("Your assigned agent"));
+  assert.ok(view.includes('className="hidden md:block"'));
+  assert.ok(!concierge.includes("Your assigned Agent"));
   assert.ok(!concierge.includes("Ali Syed"));
   assert.ok(!concierge.includes("Royal LePage"));
   assert.ok(!concierge.includes("647-221-4949"));
-  assert.ok(concierge.includes("hasPublicAgentIdentity"));
-  assert.ok(concierge.includes("function MobilePublicAgentSection"));
-  assert.equal(concierge.split("<ListingQaPanel").length - 1, 2);
-  assert.equal(concierge.split("useLeadRequestRestore(").length - 1, 1);
+  assert.ok(!concierge.includes("MobilePublicAgentSection"));
   assert.ok(!concierge.includes("Twilio"));
+  // Public agent presentation lives on ListingAgentCard (not concierge).
+  assert.ok(agentCard.includes("rounded-full"));
+  assert.ok(agentCard.includes("telHref") || agentCard.includes("tel:"));
+  assert.ok(
+    view.indexOf("<ListingNotesPanel") < view.indexOf("<ListingAgentCard"),
+  );
+  assert.ok(
+    view.indexOf("<ListingAgentCard") < view.indexOf("<DriveTimePanel"),
+  );
   const mobile = read("src/components/listings/ListingMobileActionBar.tsx");
   const booking = read("src/components/listings/ViewingBookingModal.tsx");
   assert.ok(mobile.includes("setBookingOpen(true)"));
