@@ -70,7 +70,7 @@ export function AgentProfessionalFields({
         onChange={(phone) => patch({ phone })}
         disabled={locked}
         autoComplete="tel"
-        hint="Canada/US 10-digit or +E.164. This number is used for Agent SMS notifications."
+        hint="Formats as (647) 221 - 4949. Used for Agent SMS notifications."
       />
       <Field
         id={`${idPrefix}-reco`}

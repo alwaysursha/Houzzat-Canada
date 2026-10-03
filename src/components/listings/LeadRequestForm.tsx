@@ -15,6 +15,7 @@ import {
   rememberLeadRequestContactPrefill,
 } from "@/lib/auth/lead-request-contact-prefill";
 import { openGuestLeadRequestIntent } from "@/lib/auth/lead-request-intent";
+import { formatPhoneDisplay } from "@/lib/phone/format";
 
 type Kind = "inquiry" | "showing" | "virtual_viewing";
 
@@ -166,7 +167,9 @@ export function LeadRequestForm({
           <div className="mt-1 space-y-0.5 text-sm text-ink">
             {name ? <p className="font-medium">{name}</p> : null}
             {email ? <p className="text-ink/70">{email}</p> : null}
-            {phone ? <p className="text-ink/70">{phone}</p> : null}
+            {phone ? (
+              <p className="text-ink/70">{formatPhoneDisplay(phone)}</p>
+            ) : null}
           </div>
         </div>
       ) : (
@@ -189,6 +192,7 @@ export function LeadRequestForm({
             />
           </div>
           <Input
+            type="tel"
             placeholder="Phone (optional)"
             value={phone}
             onChange={(e) => setPhoneDraft(e.target.value)}

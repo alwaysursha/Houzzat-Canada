@@ -15,6 +15,7 @@ import {
   BOOK_DEMO_SUCCESS_TITLE,
 } from "@/lib/platform/public/book-demo-copy";
 import { BOOK_DEMO_TURNSTILE_ERROR_MESSAGE } from "@/lib/platform/public/turnstile-constants";
+import { formatPhoneAsYouType } from "@/lib/phone/format";
 
 type ApiEnvelope =
   | { ok: true; data: { received: true } }
@@ -179,9 +180,10 @@ export function BookDemoForm({ turnstileSiteKey }: BookDemoFormProps) {
             autoComplete="tel"
             inputMode="tel"
             name="phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            value={formatPhoneAsYouType(phone)}
+            onChange={(e) => setPhone(formatPhoneAsYouType(e.target.value))}
             className={fieldClass}
+            placeholder="(647) 221 - 4949"
           />
         </label>
 

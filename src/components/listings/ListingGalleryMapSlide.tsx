@@ -434,6 +434,15 @@ export function ListingGalleryMapSlide({
       maxZoom: MAP_MAX_ZOOM,
       attributionControl: { compact: true },
     });
+    // MapLibre compact attribution starts expanded; keep the "i" chip closed.
+    const attrib = map
+      .getContainer()
+      .querySelector(".maplibregl-ctrl-attrib");
+    if (attrib instanceof HTMLElement) {
+      attrib.classList.add("maplibregl-compact");
+      attrib.classList.remove("maplibregl-compact-show");
+      attrib.setAttribute("open", "");
+    }
     map.addControl(
       new maplibregl.NavigationControl({ showCompass: false }),
       "bottom-right",

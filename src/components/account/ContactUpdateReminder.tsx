@@ -506,7 +506,7 @@ export function ContactUpdateReminder() {
                     autoFocus
                     value={phoneDraft}
                     onChange={(e) => setPhoneDraft(e.target.value)}
-                    placeholder="+1 416 555 0100"
+                    placeholder="(647) 221 - 4949"
                     className="h-12 rounded-xl border-line/90 bg-mist/50 pl-11 text-[15px] shadow-inner focus-visible:bg-surface"
                   />
                 </div>

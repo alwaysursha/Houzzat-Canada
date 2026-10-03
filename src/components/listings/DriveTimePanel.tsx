@@ -242,6 +242,15 @@ function DriveRouteMap({
       new maplibregl.AttributionControl({ compact: true }),
       "bottom-left",
     );
+    // MapLibre compact attribution starts expanded; keep the "i" chip closed.
+    const attrib = map
+      .getContainer()
+      .querySelector(".maplibregl-ctrl-attrib");
+    if (attrib instanceof HTMLElement) {
+      attrib.classList.add("maplibregl-compact");
+      attrib.classList.remove("maplibregl-compact-show");
+      attrib.setAttribute("open", "");
+    }
     const resize = () => map.resize();
     map.on("load", resize);
     const observer = new ResizeObserver(resize);

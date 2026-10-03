@@ -79,6 +79,10 @@ import {
   type PurchaseTimeframeValue,
 } from "@/lib/agent/timeframe";
 import { cn } from "@/lib/utils";
+import {
+  formatPhoneAsYouType,
+  formatPhoneDisplay,
+} from "@/lib/phone/format";
 import { contactSmsHref, contactTelHref } from "@/lib/sms/e164";
 
 type TabId =
@@ -165,6 +169,10 @@ function ContactDisplayRow({
   requestPending?: boolean;
   multiline?: boolean;
 }) {
+  const shown =
+    Icon === Phone || href?.startsWith("tel:")
+      ? formatPhoneDisplay(value) || value
+      : value;
   const valueClass = multiline
     ? "min-w-0 break-words leading-snug"
     : "min-w-0 truncate";
@@ -184,7 +192,7 @@ function ContactDisplayRow({
             )}
           >
             <Icon className="mt-0.5 size-3.5 shrink-0" />
-            <span className={valueClass}>{value}</span>
+            <span className={valueClass}>{shown}</span>
           </a>
         ) : (
           <span
@@ -195,7 +203,7 @@ function ContactDisplayRow({
             )}
           >
             <Icon className="mt-0.5 size-3.5 shrink-0" />
-            <span className={valueClass}>{value || "N/A"}</span>
+            <span className={valueClass}>{shown || "N/A"}</span>
           </span>
         )}
         {updateRequested ? (
@@ -259,7 +267,7 @@ function ContactEditRow({
 }) {
   const placeholder =
     type === "tel"
-      ? "Phone number"
+      ? "(647) 221 - 4949"
       : type === "email"
         ? "Email address"
         : "Home address";
@@ -268,10 +276,16 @@ function ContactEditRow({
     <div className="flex items-center gap-1">
       <input
         type={type}
-        value={value}
+        value={type === "tel" ? formatPhoneAsYouType(value) : value}
         autoFocus
         disabled={pending}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) =>
+          onChange(
+            type === "tel"
+              ? formatPhoneAsYouType(e.target.value)
+              : e.target.value,
+          )
+        }
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();

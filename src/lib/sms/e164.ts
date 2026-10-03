@@ -2,7 +2,12 @@
  * Conservative E.164 normalization for HouzzatPRO SMS.
  * Does not invent a country for ambiguous/international local formats.
  * NANP 10-digit numbers default to +1 (Canada/US operating region).
+ *
+ * Display format for Canada/US is owned by {@link formatPhoneDisplay}:
+ * (647) 221 - 4949
  */
+
+import { formatPhoneDisplay } from "@/lib/phone/format";
 
 const E164_PATTERN = /^\+[1-9]\d{7,14}$/;
 
@@ -91,7 +96,11 @@ export function parsePhoneColumnsForWrite(
   if (!phone) return { ok: true, columns: { phone: null, phoneE164: null } };
   const phoneE164 = normalizeToE164(phone);
   if (!phoneE164) return { ok: false, error: INVALID_CONTACT_PHONE_MESSAGE };
-  return { ok: true, columns: { phone, phoneE164 } };
+  // Persist the site-wide display form; SMS still uses phoneE164.
+  return {
+    ok: true,
+    columns: { phone: formatPhoneDisplay(phoneE164), phoneE164 },
+  };
 }
 
 /** Prisma write helper: keep display `phone` and derived `phoneE164` in lockstep. */

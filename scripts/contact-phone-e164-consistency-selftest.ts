@@ -82,10 +82,10 @@ function testValidNanpSave() {
   const parsed = parsePhoneColumnsForWrite("647-221-4949");
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
-  assert.equal(parsed.columns.phone, "647-221-4949");
+  assert.equal(parsed.columns.phone, "(647) 221 - 4949");
   assert.equal(parsed.columns.phoneE164, "+16472214949");
   const written = phoneColumnsForWrite("4165550199");
-  assert.equal(written.phone, "4165550199");
+  assert.equal(written.phone, "(416) 555 - 0199");
   assert.equal(written.phoneE164, "+14165550199");
 }
 
@@ -93,7 +93,7 @@ function testValidE164Save() {
   const parsed = parsePhoneColumnsForWrite("+14165550199");
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
-  assert.equal(parsed.columns.phone, "+14165550199");
+  assert.equal(parsed.columns.phone, "(416) 555 - 0199");
   assert.equal(parsed.columns.phoneE164, "+14165550199");
 }
 

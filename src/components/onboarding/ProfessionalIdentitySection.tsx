@@ -5,6 +5,7 @@ import {
   OnboardingDraftStatus,
   useOnboardingDraftAutosave,
 } from "@/components/onboarding/onboarding-draft-flush";
+import { formatPhoneAsYouType } from "@/lib/phone/format";
 
 export type ProfessionalIdentityFields = {
   agentRegisteredName: string;
@@ -284,11 +285,18 @@ export function ProfessionalIdentitySection({
                 "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2",
                 lockAgentCell ? "bg-slate-50 text-slate-700" : "",
               ].join(" ")}
-              value={fields.agentCellPhone}
-              onChange={(e) => patchField("agentCellPhone", e.target.value)}
+              type="tel"
+              value={formatPhoneAsYouType(fields.agentCellPhone)}
+              onChange={(e) =>
+                patchField(
+                  "agentCellPhone",
+                  formatPhoneAsYouType(e.target.value),
+                )
+              }
               required={agentPersonalRequired && !lockAgentCell}
               inputMode="tel"
               autoComplete="tel"
+              placeholder="(647) 221 - 4949"
               readOnly={lockAgentCell}
               aria-readonly={lockAgentCell || undefined}
             />
@@ -378,10 +386,17 @@ export function ProfessionalIdentitySection({
             </span>
             <input
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              value={fields.brokeragePhone}
-              onChange={(e) => patchField("brokeragePhone", e.target.value)}
+              type="tel"
+              value={formatPhoneAsYouType(fields.brokeragePhone)}
+              onChange={(e) =>
+                patchField(
+                  "brokeragePhone",
+                  formatPhoneAsYouType(e.target.value),
+                )
+              }
               required
               inputMode="tel"
+              placeholder="(905) 793 - 5000"
             />
           </label>
           <label className="block text-sm text-slate-700">
