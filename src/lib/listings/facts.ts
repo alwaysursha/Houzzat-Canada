@@ -1,5 +1,5 @@
 import type { PropertyType } from "@prisma/client";
-import { propertyTypeLabel } from "@/lib/listings/constants";
+import { formatPrice, propertyTypeLabel } from "@/lib/listings/constants";
 
 /**
  * PropTx / RESO listing fact sheet stored on Listing.facts (Json).
@@ -199,7 +199,7 @@ export type AboutHomePropertyFactId =
 
 export type AboutHomePropertyFact = {
   id: AboutHomePropertyFactId;
-  label: string;
+  /** Compact one-line pill text (no separate field label). */
   value: string;
 };
 
@@ -278,23 +278,41 @@ export function formatAboutHomeFrontageValue(
   if (frontageLength == null || !Number.isFinite(frontageLength) || frontageLength <= 0) {
     return null;
   }
-  return numLabel(frontageLength);
+  const amount = numLabel(frontageLength);
+  return amount ? `${amount} frontage` : null;
 }
 
 export function formatAboutHomeBasementValue(
   basement?: string[] | null,
 ): string | null {
-  return joinList(basement);
+  const joined = joinList(basement);
+  if (!joined) return null;
+  if (/\bbasement\b/i.test(joined)) return joined;
+  return `${joined} basement`;
+}
+
+/** Compact tax pill: "$7,981 taxes · 2025" (year only when known). */
+export function formatAboutHomeTaxesValue(input: {
+  taxes?: number | null;
+  taxYear?: number | null;
+}): string | null {
+  if (input.taxes == null || input.taxes <= 0) return null;
+  const amount = formatPrice(input.taxes);
+  if (input.taxYear != null && input.taxYear >= 1900 && input.taxYear <= 2100) {
+    return `${amount} taxes · ${input.taxYear}`;
+  }
+  return `${amount} taxes`;
 }
 
 /**
- * Compact Property Facts for the About This Home card.
+ * Compact Quick Facts pills for the About This Home card.
  * Omits unavailable values; never emits placeholder text.
  */
 export function buildAboutHomePropertyFacts(input: {
   facts?: ListingFacts | null;
   propertyType?: PropertyType | null;
   taxes?: number | null;
+  /** @deprecated Prefer taxes + facts.taxYear; ignored for pill copy. */
   taxesLabel?: string | null;
   sqft?: number | null;
 }): AboutHomePropertyFact[] {
@@ -307,30 +325,30 @@ export function buildAboutHomePropertyFacts(input: {
     propertyType: input.propertyType,
   });
   if (ownership) {
-    tiles.push({ id: "ownership", label: "Property type", value: ownership });
+    tiles.push({ id: "ownership", value: ownership });
   }
 
-  const taxes =
-    input.taxes != null && input.taxes > 0
-      ? input.taxesLabel?.trim() || null
-      : null;
+  const taxes = formatAboutHomeTaxesValue({
+    taxes: input.taxes,
+    taxYear: facts.taxYear,
+  });
   if (taxes) {
-    tiles.push({ id: "taxes", label: "Property taxes", value: taxes });
+    tiles.push({ id: "taxes", value: taxes });
   }
 
   const basement = formatAboutHomeBasementValue(facts.basement);
   if (basement) {
-    tiles.push({ id: "basement", label: "Basement", value: basement });
+    tiles.push({ id: "basement", value: basement });
   }
 
   const frontage = formatAboutHomeFrontageValue(facts.frontageLength);
   if (frontage) {
-    tiles.push({ id: "frontage", label: "Frontage", value: frontage });
+    tiles.push({ id: "frontage", value: frontage });
   }
 
   const storeys = formatAboutHomeStoreysValue(facts.architecturalStyle);
   if (storeys) {
-    tiles.push({ id: "storeys", label: "Storeys", value: storeys });
+    tiles.push({ id: "storeys", value: storeys });
   }
 
   const living = formatListingSqftLabel({
@@ -339,7 +357,7 @@ export function buildAboutHomePropertyFacts(input: {
     unit: "sqft",
   });
   if (living) {
-    tiles.push({ id: "livingSpace", label: "Living space", value: living });
+    tiles.push({ id: "livingSpace", value: living });
   }
 
   return tiles;

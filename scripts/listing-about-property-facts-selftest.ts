@@ -1,5 +1,5 @@
 /**
- * About This Home Property Facts: PropTx mapping + omit-empty + no hardcoded mock values.
+ * About This Home Quick Facts: PropTx mapping + compact pills + omit-empty.
  * Run: pnpm listing-about-property-facts:selftest
  */
 import assert from "node:assert/strict";
@@ -15,13 +15,15 @@ function read(rel: string) {
 }
 
 const MOCK_VALUES = [
-  "Freehold",
   "$5,420",
   "$5,420 / year",
-  "Finished",
   "29 ft",
   "2 Storey",
   "2,000–2,500 sq ft",
+  "$7,578",
+  "$7,981",
+  "2,000–2,500",
+  "2,500–3,000",
 ];
 
 for (const file of [
@@ -71,16 +73,29 @@ assert.deepEqual(
   ["ownership", "taxes", "basement", "frontage", "storeys", "livingSpace"],
 );
 assert.equal(tiles.find((t) => t.id === "ownership")?.value, "Freehold");
-assert.equal(tiles.find((t) => t.id === "taxes")?.value, "$9,876 / 2019");
+assert.equal(
+  tiles.find((t) => t.id === "taxes")?.value,
+  "$9,876 taxes · 2019",
+);
 assert.equal(
   tiles.find((t) => t.id === "basement")?.value,
-  "Finished, Walk-out",
+  "Finished, Walk-out basement",
 );
-assert.equal(tiles.find((t) => t.id === "frontage")?.value, "41.25");
+assert.equal(tiles.find((t) => t.id === "frontage")?.value, "41.25 frontage");
 assert.equal(tiles.find((t) => t.id === "storeys")?.value, "2-Storey");
 assert.equal(
   tiles.find((t) => t.id === "livingSpace")?.value,
   "1,100–1,500 sqft",
+);
+
+const longBasement = buildAboutHomePropertyFacts({
+  facts: {
+    basement: ["Full", "Separate Entrance", "Finished"],
+  },
+});
+assert.equal(
+  longBasement.find((t) => t.id === "basement")?.value,
+  "Full, Separate Entrance, Finished basement",
 );
 
 assert.equal(
@@ -209,9 +224,13 @@ assert.ok(narrative.includes("ListingAboutPropertyFacts"));
 assert.ok(narrative.includes("stripApproxPinNote"));
 
 const factsUi = read("src/components/listings/ListingAboutPropertyFacts.tsx");
-assert.ok(factsUi.includes("min-[380px]:grid-cols-2"));
-assert.ok(factsUi.includes("xl:grid-cols-3"));
-assert.ok(factsUi.includes("Property facts"));
+assert.ok(factsUi.includes("Quick facts"));
+assert.ok(factsUi.includes("flex flex-wrap"));
+assert.equal(factsUi.includes("Property facts"), false);
+assert.equal(factsUi.includes("grid-cols"), false);
+assert.equal(factsUi.includes("rounded-2xl border border-canopy"), false);
+assert.ok(factsUi.includes("rounded-full"));
+assert.ok(factsUi.includes("bg-canopy/[0.08]"));
 
 const detail = read("src/components/listings/ListingDetailView.tsx");
 assert.ok(detail.includes("taxesLabel={taxesLabel}"));
@@ -230,5 +249,14 @@ assert.equal(insights.includes('eyebrow="Space"'), false);
 
 const mapper = read("src/lib/proptx/map-listing.ts");
 assert.ok(mapper.includes('propertyClass: str(row, "PropertyType", "PropertyClass")'));
+
+const ownershipSrc = read("src/lib/listings/facts.ts");
+assert.ok(ownershipSrc.includes("ownershipTokenFromStructuredText"));
+assert.ok(ownershipSrc.includes("commercialPropertyTypeFact"));
+assert.ok(ownershipSrc.includes("TOWNHOUSE or DETACHED"));
+assert.equal(
+  /isResidentialFreeholdPropertyType|isCondoPropertyType/.test(ownershipSrc),
+  false,
+);
 
 console.log("listing-about-property-facts selftest ok");
