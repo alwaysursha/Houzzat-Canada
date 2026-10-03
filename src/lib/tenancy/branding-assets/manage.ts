@@ -315,4 +315,145 @@ export async function refreshWorkspaceBrandingStatus(input: {
   return syncBrandingStatus(db, input.workspaceId, branding);
 }
 
+/**
+ * CRM profile photo — caller already authorized workspace manager.
+ * Does not use onboarding OWNER-only host gate (ADMIN managers can save too).
+ */
+export async function uploadWorkspaceAgentProfilePhoto(input: {
+  workspaceId: string;
+  file: File;
+  prisma?: PrismaClient;
+}): Promise<{ agentProfilePhotoUrl: string }> {
+  const kind: BrandingAssetKind = "agent-profile";
+  const db = input.prisma ?? defaultPrisma;
+  const workspaceId = input.workspaceId.trim();
+  if (!workspaceId) {
+    throw new OwnerActivationError("Workspace required", "FORBIDDEN", 403);
+  }
+
+  const buffer = await input.file.arrayBuffer();
+  const validated = validateBrandingImageBytes(buffer, kind);
+  if ("code" in validated) {
+    throw new OwnerActivationError(
+      validated.message,
+      validated.code,
+      400,
+    );
+  }
+
+  const branding = await db.workspaceBranding.findUnique({
+    where: { workspaceId },
+    select: {
+      agentProfilePhotoUrl: true,
+      logoUrl: true,
+      brokerageLogoUrl: true,
+      faviconUrl: true,
+    },
+  });
+  if (!branding) {
+    throw new OwnerActivationError(
+      "Workspace branding not found",
+      "NOT_FOUND",
+      404,
+    );
+  }
+
+  const previousUrl = branding.agentProfilePhotoUrl;
+  const uniqueId = randomBytes(12).toString("hex");
+  const objectKey = buildBrandingObjectKey({
+    workspaceId,
+    kind,
+    uniqueId,
+    ext: validated.ext,
+  });
+
+  const put = await putBrandingAssetObject({
+    objectKey,
+    bytes: validated.bytes,
+    contentType: validated.mime,
+  }).catch((error: unknown) => {
+    if (error instanceof BrandingStorageNotConfiguredError) {
+      throw new OwnerActivationError(
+        error.message,
+        error.code,
+        error.status,
+      );
+    }
+    throw error;
+  });
+
+  await db.workspaceBranding.update({
+    where: { workspaceId },
+    data: {
+      agentProfilePhotoUrl: put.publicUrl,
+      version: { increment: 1 },
+    },
+  });
+
+  await deleteBrandingAssetByPersistedUrl({
+    url: previousUrl,
+    workspaceId,
+  });
+
+  await syncBrandingStatus(db, workspaceId, {
+    agentProfilePhotoUrl: put.publicUrl,
+    logoUrl: branding.logoUrl,
+    brokerageLogoUrl: branding.brokerageLogoUrl,
+    faviconUrl: branding.faviconUrl,
+  });
+
+  return { agentProfilePhotoUrl: put.publicUrl };
+}
+
+export async function removeWorkspaceAgentProfilePhoto(input: {
+  workspaceId: string;
+  prisma?: PrismaClient;
+}): Promise<{ agentProfilePhotoUrl: null }> {
+  const db = input.prisma ?? defaultPrisma;
+  const workspaceId = input.workspaceId.trim();
+  if (!workspaceId) {
+    throw new OwnerActivationError("Workspace required", "FORBIDDEN", 403);
+  }
+
+  const branding = await db.workspaceBranding.findUnique({
+    where: { workspaceId },
+    select: {
+      agentProfilePhotoUrl: true,
+      logoUrl: true,
+      brokerageLogoUrl: true,
+      faviconUrl: true,
+    },
+  });
+  if (!branding) {
+    throw new OwnerActivationError(
+      "Workspace branding not found",
+      "NOT_FOUND",
+      404,
+    );
+  }
+
+  const previousUrl = branding.agentProfilePhotoUrl;
+  await db.workspaceBranding.update({
+    where: { workspaceId },
+    data: {
+      agentProfilePhotoUrl: null,
+      version: { increment: 1 },
+    },
+  });
+
+  await deleteBrandingAssetByPersistedUrl({
+    url: previousUrl,
+    workspaceId,
+  });
+
+  await syncBrandingStatus(db, workspaceId, {
+    agentProfilePhotoUrl: null,
+    logoUrl: branding.logoUrl,
+    brokerageLogoUrl: branding.brokerageLogoUrl,
+    faviconUrl: branding.faviconUrl,
+  });
+
+  return { agentProfilePhotoUrl: null };
+}
+
 export type { HostBoundOwnerOnboardingContext };

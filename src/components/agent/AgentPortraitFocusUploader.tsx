@@ -83,12 +83,12 @@ function loadImage(url: string) {
  */
 export function AgentPortraitFocusUploader({
   photoUrl,
-  workspaceId,
   disabled = false,
   onUploaded,
 }: {
   photoUrl: string | null;
-  workspaceId: string;
+  /** @deprecated Kept for call-site compatibility; CRM auth uses session workspace. */
+  workspaceId?: string;
   disabled?: boolean;
   onUploaded: (nextUrl: string | null) => void;
 }) {
@@ -151,23 +151,22 @@ export function AgentPortraitFocusUploader({
       const rect = stageRef.current.getBoundingClientRect();
       const file = await exportCroppedJpeg(draft, rect.width, rect.height);
       const body = new FormData();
-      body.set("kind", "agent-profile");
       body.set("file", file);
-      body.set("workspaceId", workspaceId);
-      const res = await fetch("/api/onboarding/branding-assets", {
+      const res = await fetch("/api/agent/profile/photo", {
         method: "POST",
         body,
       });
       const json = (await res.json()) as {
         ok?: boolean;
+        error?: string;
         message?: string;
-        data?: { assets?: { agentProfilePhotoUrl?: string | null } };
+        agentProfilePhotoUrl?: string | null;
       };
       if (!res.ok || !json.ok) {
-        setError(json.message || "Upload failed.");
+        setError(json.error || json.message || "Upload failed.");
         return;
       }
-      onUploaded(json.data?.assets?.agentProfilePhotoUrl ?? null);
+      onUploaded(json.agentProfilePhotoUrl ?? null);
       closeDraft();
     } catch {
       setError("Could not save this photo.");
@@ -181,21 +180,20 @@ export function AgentPortraitFocusUploader({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/onboarding/branding-assets", {
+      const res = await fetch("/api/agent/profile/photo", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "agent-profile", workspaceId }),
       });
       const json = (await res.json()) as {
         ok?: boolean;
+        error?: string;
         message?: string;
-        data?: { assets?: { agentProfilePhotoUrl?: string | null } };
+        agentProfilePhotoUrl?: string | null;
       };
       if (!res.ok || !json.ok) {
-        setError(json.message || "Could not remove photo.");
+        setError(json.error || json.message || "Could not remove photo.");
         return;
       }
-      onUploaded(json.data?.assets?.agentProfilePhotoUrl ?? null);
+      onUploaded(json.agentProfilePhotoUrl ?? null);
     } catch {
       setError("Could not remove photo.");
     } finally {

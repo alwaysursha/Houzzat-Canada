@@ -339,6 +339,8 @@ export async function loadWorkspaceAgentProfile(
       designation,
       photoUrl,
       canEdit: canEditAgentProfile(ctx, userId),
+      // CRM managers (OWNER/ADMIN) for the public-site agent — upload uses
+      // /api/agent/profile/photo, not onboarding OWNER-only branding.
       canEditPhoto: Boolean(isPublicSiteAgent && ctx.canManageWorkspace),
     },
   };
