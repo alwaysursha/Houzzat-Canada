@@ -100,7 +100,10 @@ export function ListingAgentCard({
       />
 
       <div className="relative z-10 flex flex-col gap-4 px-4 py-4 sm:px-5 sm:py-5">
-        <h2 id="listing-assigned-agent-heading" className="sr-only">
+        <h2
+          id="listing-assigned-agent-heading"
+          className="text-center font-display text-xl font-semibold leading-none tracking-tight text-white"
+        >
           Your assigned Agent
         </h2>
 
