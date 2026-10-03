@@ -63,6 +63,12 @@ assert.ok(houzzat.includes("listing-estimated-value") || insights.includes("list
 assert.ok(history.includes("Listing History") || history.includes("listing-history"));
 assert.ok(facts.includes("listing-details") || facts.length > 0);
 
+const narrative = read("src/components/listings/ListingNarrative.tsx");
+assert.ok(narrative.includes("ListingAboutPropertyFacts"));
+assert.ok(narrative.includes("ExpandableDescription"));
+assert.equal(houzzat.includes("How the home is laid out"), false);
+assert.equal(houzzat.includes('eyebrow="Space"'), false);
+
 assert.ok(sticky.includes("ListingBreadcrumbs"));
 assert.ok(sticky.includes("SaveListingButton"));
 assert.ok(store.includes("sameListingHref"));

@@ -523,7 +523,14 @@ export function ListingDetailView({
             ]}
           />
 
-          <ListingNarrative body={listing.description} />
+          <ListingNarrative
+            body={listing.description}
+            facts={listing.facts}
+            propertyType={listing.propertyType}
+            taxes={listing.taxes}
+            taxesLabel={taxesLabel}
+            sqft={listing.sqft}
+          />
 
           <ListingFactsPanel
             facts={listing.facts}

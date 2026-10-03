@@ -527,6 +527,7 @@ export function mapListingFacts(row: PropTxProperty): ListingFacts | undefined {
     facingDirection: str(row, "DirectionFaces", "FacingDirection"),
     foundationDetails: strList(row, "FoundationDetails", "Foundation"),
     propertySubType: str(row, "PropertySubType", "PropertySubtype"),
+    propertyClass: str(row, "PropertyType", "PropertyClass"),
     roomsTotal: num(row, "RoomsTotal", "RoomCount"),
     bathsTotal: num(row, "BathroomsTotalInteger", "BathroomsTotal"),
     occupancyType: str(row, "OccupantType", "OccupancyType"),

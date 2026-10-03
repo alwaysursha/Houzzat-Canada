@@ -1,3 +1,6 @@
+import type { PropertyType } from "@prisma/client";
+import { propertyTypeLabel } from "@/lib/listings/constants";
+
 /**
  * PropTx / RESO listing fact sheet stored on Listing.facts (Json).
  * Only populated fields are kept — UI hides empty rows.
@@ -65,6 +68,11 @@ export type ListingFacts = {
   facingDirection?: string | null;
   foundationDetails?: string[] | null;
   propertySubType?: string | null;
+  /**
+   * PropTx / RESO `PropertyType` / `PropertyClass` (e.g. "Residential Freehold").
+   * Distinct from Listing.propertyType, which is mapped from PropertySubType.
+   */
+  propertyClass?: string | null;
   roomsTotal?: number | null;
   bathsTotal?: number | null;
   occupancyType?: string | null;
@@ -179,6 +187,162 @@ export function formatListingSqftLabel(input: {
     return `${input.sqft.toLocaleString("en-CA")}${unit}`;
   }
   return null;
+}
+
+export type AboutHomePropertyFactId =
+  | "ownership"
+  | "taxes"
+  | "basement"
+  | "frontage"
+  | "storeys"
+  | "livingSpace";
+
+export type AboutHomePropertyFact = {
+  id: AboutHomePropertyFactId;
+  label: string;
+  value: string;
+};
+
+const STOREY_STYLE_RE =
+  /storey|story|bungalow|back[- ]?split|side[- ]?split|\bloft\b/i;
+
+function ownershipTokenFromStructuredText(
+  raw: string | null | undefined,
+): "Freehold" | "Condo" | null {
+  const lower = raw?.trim().toLowerCase() ?? "";
+  if (!lower) return null;
+  if (lower.includes("freehold")) return "Freehold";
+  if (lower.includes("condo")) return "Condo";
+  return null;
+}
+
+/**
+ * Commercial use class for the Property type tile when ownership/class
+ * is not stated. Residential dwelling enums never imply Freehold/Condo.
+ */
+function commercialPropertyTypeFact(
+  type: PropertyType | null | undefined,
+): string | null {
+  if (!type) return null;
+  switch (type) {
+    case "OFFICE":
+    case "RETAIL":
+    case "INDUSTRIAL":
+    case "MIXED_USE":
+      return propertyTypeLabel(type);
+    case "DETACHED":
+    case "SEMI_DETACHED":
+    case "TOWNHOUSE":
+    case "MULTIPLEX":
+    case "VACANT_LAND":
+    case "CONDO_APT":
+    case "CONDO_TOWNHOUSE":
+    case "OTHER":
+      return null;
+    default: {
+      const _exhaustive: never = type;
+      return _exhaustive;
+    }
+  }
+}
+
+/**
+ * Freehold/Condo only from structured PropTx class text (or a stored
+ * subtype string that itself names freehold/condo). Never inferred from
+ * Houzzat dwelling enums such as TOWNHOUSE or DETACHED.
+ */
+export function formatAboutHomeOwnershipValue(input: {
+  propertyClass?: string | null;
+  propertySubType?: string | null;
+  propertyType?: PropertyType | null;
+}): string | null {
+  return (
+    ownershipTokenFromStructuredText(input.propertyClass) ??
+    ownershipTokenFromStructuredText(input.propertySubType) ??
+    commercialPropertyTypeFact(input.propertyType)
+  );
+}
+
+export function formatAboutHomeStoreysValue(
+  architecturalStyle?: string[] | null,
+): string | null {
+  const hits = (architecturalStyle ?? [])
+    .map((value) => value.trim())
+    .filter((value) => value && STOREY_STYLE_RE.test(value));
+  return hits.length ? hits.join(", ") : null;
+}
+
+export function formatAboutHomeFrontageValue(
+  frontageLength?: number | null,
+): string | null {
+  if (frontageLength == null || !Number.isFinite(frontageLength) || frontageLength <= 0) {
+    return null;
+  }
+  return numLabel(frontageLength);
+}
+
+export function formatAboutHomeBasementValue(
+  basement?: string[] | null,
+): string | null {
+  return joinList(basement);
+}
+
+/**
+ * Compact Property Facts for the About This Home card.
+ * Omits unavailable values; never emits placeholder text.
+ */
+export function buildAboutHomePropertyFacts(input: {
+  facts?: ListingFacts | null;
+  propertyType?: PropertyType | null;
+  taxes?: number | null;
+  taxesLabel?: string | null;
+  sqft?: number | null;
+}): AboutHomePropertyFact[] {
+  const facts = input.facts ?? {};
+  const tiles: AboutHomePropertyFact[] = [];
+
+  const ownership = formatAboutHomeOwnershipValue({
+    propertyClass: facts.propertyClass,
+    propertySubType: facts.propertySubType,
+    propertyType: input.propertyType,
+  });
+  if (ownership) {
+    tiles.push({ id: "ownership", label: "Property type", value: ownership });
+  }
+
+  const taxes =
+    input.taxes != null && input.taxes > 0
+      ? input.taxesLabel?.trim() || null
+      : null;
+  if (taxes) {
+    tiles.push({ id: "taxes", label: "Property taxes", value: taxes });
+  }
+
+  const basement = formatAboutHomeBasementValue(facts.basement);
+  if (basement) {
+    tiles.push({ id: "basement", label: "Basement", value: basement });
+  }
+
+  const frontage = formatAboutHomeFrontageValue(facts.frontageLength);
+  if (frontage) {
+    tiles.push({ id: "frontage", label: "Frontage", value: frontage });
+  }
+
+  const storeys = formatAboutHomeStoreysValue(facts.architecturalStyle);
+  if (storeys) {
+    tiles.push({ id: "storeys", label: "Storeys", value: storeys });
+  }
+
+  const living = formatListingSqftLabel({
+    sqft: input.sqft,
+    livingAreaRange: facts.livingAreaRange,
+    unit: "sqft",
+  });
+  if (living) {
+    tiles.push({ id: "livingSpace", label: "Living space", value: living });
+  }
+
+  return tiles;
 }
 
 /** Build display sections from Listing.facts (+ a few core columns). */

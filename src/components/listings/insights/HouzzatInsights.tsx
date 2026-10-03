@@ -5,7 +5,6 @@ import {
   CalendarDays,
   Home,
   MapPin,
-  Ruler,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -139,7 +138,6 @@ export function HouzzatInsights({
     comps,
     ownership,
     lifestyle,
-    space,
     competition,
     valuation,
     timing,
@@ -637,38 +635,7 @@ export function HouzzatInsights({
           </Panel>
         </div>
 
-        {/* Space + competition + timing */}
-        <div className="grid gap-5 lg:grid-cols-3">
-          <Panel>
-            <PanelTitle eyebrow="Space" title="How the home is laid out" />
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-mist px-3 py-1.5 text-xs font-semibold text-ink">
-                <Home className="size-3.5 text-canopy" aria-hidden />
-                {formatListingBedsLabel(space)} beds · {space.baths} baths
-              </span>
-              {space.sqft ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-mist px-3 py-1.5 text-xs font-semibold text-ink">
-                  <Ruler className="size-3.5 text-canopy" aria-hidden />
-                  {space.sqft.toLocaleString("en-CA")} sqft
-                </span>
-              ) : null}
-            </div>
-            {space.highlights.length ? (
-              <ul className="mt-4 space-y-2 text-sm text-ink/70">
-                {space.highlights.map((h) => (
-                  <li key={h} className="flex gap-2">
-                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-canopy" />
-                    {h}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-3 text-sm text-ink/50">
-                Room-level details appear when the listing sheet includes them.
-              </p>
-            )}
-          </Panel>
-
+        <div className="grid gap-5 lg:grid-cols-2">
           <Panel>
             <PanelTitle eyebrow="Competition" title="Similar homes nearby" />
             <p className="font-display text-4xl text-ink">

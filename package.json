@@ -307,6 +307,7 @@
     "listing-sheet-browse:selftest": "node --import tsx scripts/listing-sheet-browse-selftest.ts",
     "listing-mobile-shell:selftest": "node --import tsx scripts/listing-mobile-shell-selftest.ts",
     "listing-detail-panels:selftest": "node --import tsx scripts/listing-detail-panels-selftest.ts",
+    "listing-about-property-facts:selftest": "node --import tsx scripts/listing-about-property-facts-selftest.ts",
     "listing-public-agent-identity:selftest": "node --import tsx scripts/listing-public-agent-identity-selftest.ts",
     "stage-6.11g10c3-related-by-mls:selftest": "node --import tsx scripts/stage-6.11g10c3-related-by-mls-selftest.ts",
     "poi:sync": "node --import tsx scripts/poi-sync.ts",
