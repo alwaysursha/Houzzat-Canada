@@ -46,7 +46,7 @@ export function ListingAgentCard({
 
   const phoneBody = cell ? (
     <>
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#2f8f6b] text-white shadow-[0_6px_16px_-8px_rgba(0,0,0,0.55)]">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/18 text-white">
         <Phone className="size-4" strokeWidth={2.2} aria-hidden />
       </span>
       <span className="min-w-0 truncate font-display text-[15px] font-medium tracking-tight text-white">
@@ -57,42 +57,37 @@ export function ListingAgentCard({
 
   return (
     <section
-      aria-label="Your assigned Agent"
+      aria-labelledby="listing-assigned-agent-heading"
       className={cn(
-        "relative isolate overflow-hidden rounded-[22px] text-white shadow-[0_18px_40px_-28px_rgba(8,28,20,0.85)]",
+        "relative isolate overflow-hidden rounded-[22px] border border-canopy/25 text-white shadow-[0_10px_30px_-22px_rgba(16,28,24,0.45)]",
         className,
       )}
     >
-      {/* Forest base + emerald depth — CSS only, no raster assets */}
+      {/* Site canopy green — lighter, quieter CSS layers only */}
       <div
         aria-hidden
-        className="absolute inset-0 bg-[linear-gradient(160deg,#0c241c_0%,#14362b_42%,#0f2f25_72%,#0a1f18_100%)]"
+        className="absolute inset-0 bg-[linear-gradient(165deg,#1f6b52_0%,#1a5d47_48%,#175441_100%)]"
       />
       <div
         aria-hidden
-        className="absolute inset-0 bg-[radial-gradient(120%_80%_at_12%_-10%,rgba(52,168,120,0.28),transparent_55%),radial-gradient(90%_70%_at_100%_0%,rgba(34,120,88,0.22),transparent_50%)]"
+        className="absolute inset-0 bg-[radial-gradient(90%_70%_at_50%_-20%,rgba(255,255,255,0.16),transparent_58%)]"
       />
       <div
         aria-hidden
-        className="absolute -left-[35%] top-[18%] h-[85%] w-[150%] rounded-[100%] bg-[radial-gradient(closest-side,rgba(28,90,68,0.55),transparent_72%)]"
+        className="absolute -bottom-[45%] left-1/2 h-[70%] w-[140%] -translate-x-1/2 rounded-[100%] bg-white/[0.06]"
       />
       <div
         aria-hidden
-        className="absolute -right-[20%] top-[-18%] h-[55%] w-[70%] rounded-full bg-[radial-gradient(circle_at_center,rgba(46,140,102,0.35),transparent_68%)]"
-      />
-      <div
-        aria-hidden
-        className="absolute -bottom-[40%] left-[-10%] h-[70%] w-[120%] rounded-[100%] bg-[radial-gradient(closest-side,rgba(12,40,30,0.75),transparent_70%)]"
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0 opacity-[0.14] [background-image:radial-gradient(rgba(255,255,255,0.35)_0.6px,transparent_0.6px)] [background-size:3px_3px]"
+        className="absolute inset-0 opacity-[0.07] [background-image:radial-gradient(rgba(255,255,255,0.9)_0.55px,transparent_0.55px)] [background-size:3.5px_3.5px]"
       />
 
       <div className="relative z-10 flex flex-col px-4 pb-4 pt-3.5 sm:px-5 sm:pb-5 sm:pt-4">
-        <p className="font-display text-[12px] font-medium tracking-[-0.01em] text-white/90">
+        <h2
+          id="listing-assigned-agent-heading"
+          className="text-center font-display text-xl font-semibold leading-none tracking-tight text-white"
+        >
           Your assigned Agent
-        </p>
+        </h2>
 
         {photoUrl ? (
           <div className="mx-auto mt-4 size-[5.25rem] shrink-0 overflow-hidden rounded-full ring-[1.5px] ring-white/85 sm:mt-5 sm:size-[5.75rem]">
@@ -164,12 +159,12 @@ export function ListingAgentCard({
           cellHref ? (
             <a
               href={cellHref}
-              className="mt-4 inline-flex max-w-full items-center gap-2.5 transition hover:opacity-90"
+              className="mt-4 inline-flex w-full max-w-full items-center justify-center gap-2.5 transition hover:opacity-90"
             >
               {phoneBody}
             </a>
           ) : (
-            <p className="mt-4 inline-flex max-w-full items-center gap-2.5">
+            <p className="mt-4 inline-flex w-full max-w-full items-center justify-center gap-2.5">
               {phoneBody}
             </p>
           )
