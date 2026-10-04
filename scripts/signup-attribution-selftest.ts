@@ -612,10 +612,11 @@ function testGa4SignUpFiresOnlyAfterCreatedAccount() {
   reportGa4SignUp((...args) => {
     calls.push(args);
   });
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.deepEqual(calls[0], ["event", "sign_up", { method: "email" }]);
   assert.deepEqual(Object.keys(calls[0]?.[2] as object), ["method"]);
   assert.deepEqual(calls[1], ["event", "conversion_event_signup", {}]);
+  assert.deepEqual(calls[2], ["event", "conversion_event_signup_1", {}]);
 
   reportGa4SignUp(undefined);
   assert.doesNotThrow(() => {
@@ -628,6 +629,9 @@ function testGa4SignUpFiresOnlyAfterCreatedAccount() {
   assert.ok(helper.includes('gtag?.("event", "sign_up", { method: "email" })'));
   assert.ok(
     helper.includes('gtag?.("event", "conversion_event_signup", {})'),
+  );
+  assert.ok(
+    helper.includes('gtag?.("event", "conversion_event_signup_1", {})'),
   );
   assert.equal(helper.includes("AdsTrackingPixels"), false);
   assert.equal(helper.includes("googletagmanager.com"), false);

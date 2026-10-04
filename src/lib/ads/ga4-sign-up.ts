@@ -13,7 +13,10 @@ function installedGtag(): GtagFn | undefined {
 export function reportGa4SignUp(gtag: GtagFn | undefined = installedGtag()): void {
   try {
     gtag?.("event", "sign_up", { method: "email" });
+    // Legacy custom event name (kept for existing GA4/Ads mappings).
     gtag?.("event", "conversion_event_signup", {});
+    // Google Ads conversion created as SIGNUP (1) — event snippet name.
+    gtag?.("event", "conversion_event_signup_1", {});
   } catch {
     return;
   }
