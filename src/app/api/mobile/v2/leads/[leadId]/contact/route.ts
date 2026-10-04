@@ -12,6 +12,7 @@ import { authorizeMobileLeadAccess } from "@/lib/mobile/v2/lead-access";
 import { prisma } from "@/lib/prisma";
 import { isInvalidContactPhoneError, parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 import { scheduleCustomerIntroductionIfFirstValidE164 } from "@/lib/sms/automations";
+import { emailAddressChangeVerificationPatch } from "@/lib/auth/verify-email-nudge";
 
 export const runtime = "nodejs";
 
@@ -140,7 +141,7 @@ export async function PATCH(
               email: nextEmail,
               emailUpdateRequestedAt: null,
               ...(nextEmail !== lead.customer.email
-                ? { emailVerified: null }
+                ? emailAddressChangeVerificationPatch(new Date())
                 : {}),
             }
           : {}),

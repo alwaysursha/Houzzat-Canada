@@ -4,6 +4,7 @@ import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { prisma } from "@/lib/prisma";
 import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 import { scheduleCustomerIntroductionIfFirstValidE164 } from "@/lib/sms/automations";
+import { emailAddressChangeVerificationPatch } from "@/lib/auth/verify-email-nudge";
 
 const nullableText = (max: number) =>
   z
@@ -92,7 +93,7 @@ export async function PATCH(request: Request) {
             email: nextEmail,
             emailUpdateRequestedAt: null,
             ...(nextEmail !== lead.customer.email
-              ? { emailVerified: null }
+              ? emailAddressChangeVerificationPatch(new Date())
               : {}),
           }
         : {}),

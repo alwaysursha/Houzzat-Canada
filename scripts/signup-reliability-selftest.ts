@@ -99,12 +99,12 @@ function testSideEffectsUnchanged() {
     "signup must still capture website lead after DB success",
   );
   assert.ok(
-    signUpRoute.includes("sendEmailVerification"),
-    "signup must still send verification email in side effect",
+    !signUpRoute.includes("sendEmailVerification"),
+    "signup must not send automatic verification email immediately",
   );
   assert.ok(
-    signUpRoute.includes("origin: tenancy.origin"),
-    "signup verification must use tenant origin (not global SITE_URL)",
+    signUpRoute.includes("emailVerifyNudgeDueAt"),
+    "signup must schedule durable 24h verification email due time",
   );
   assert.ok(
     signUpRoute.includes("sendWelcomeEmail"),

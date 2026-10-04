@@ -11,7 +11,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CircleCheck,
   Eye,
   Flame,
   Heart,
@@ -23,7 +22,6 @@ import {
   RefreshCw,
   Search,
   Star,
-  TriangleAlert,
   Upload,
   UserPlus,
 } from "lucide-react";
@@ -31,6 +29,7 @@ import type { LeadStatus } from "@prisma/client";
 import { MassEmailForm } from "@/components/agent/LeadEmailForm";
 import { MassSmsForm } from "@/components/agent/MassSmsForm";
 import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
+import { ContactValidityIcon } from "@/components/agent/ContactValidityIcon";
 import { LeadImportModal } from "@/components/agent/LeadImportModal";
 import { openLeadProfileHref, rememberLeadNavIds } from "@/components/agent/LeadQueryPopup";
 import {
@@ -1059,15 +1058,9 @@ export function LeadsTableClient({
                             className="shrink-0 rounded-sm p-0.5 transition hover:bg-[#f1f5f9] disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
                           >
                             {phone && contactVerified(lead, "phone") ? (
-                              <CircleCheck
-                                className="size-3.5 text-[#6a9e7d]"
-                                strokeWidth={2}
-                              />
+                              <ContactValidityIcon verified />
                             ) : (
-                              <TriangleAlert
-                                className="size-3.5 text-[#d4a574]"
-                                strokeWidth={2}
-                              />
+                              <ContactValidityIcon verified={false} />
                             )}
                           </button>
                           {phone ? (
@@ -1151,15 +1144,9 @@ export function LeadsTableClient({
                               className="shrink-0 rounded-sm p-0.5 transition hover:bg-[#f1f5f9]"
                             >
                               {contactVerified(lead, "email") ? (
-                                <CircleCheck
-                                  className="size-3.5 text-[#6a9e7d]"
-                                  strokeWidth={2}
-                                />
+                                <ContactValidityIcon verified />
                               ) : (
-                                <TriangleAlert
-                                  className="size-3.5 text-[#d4a574]"
-                                  strokeWidth={2}
-                                />
+                                <ContactValidityIcon verified={false} />
                               )}
                             </button>
                             <a

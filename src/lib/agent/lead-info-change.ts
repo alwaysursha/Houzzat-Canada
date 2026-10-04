@@ -9,6 +9,7 @@ import {
   type LeadClassificationFields,
 } from "@/lib/agent/lead-classification";
 import { normalizeLeadEmail } from "@/lib/agent/lead-identity";
+import { emailAddressChangeVerificationPatch } from "@/lib/auth/verify-email-nudge";
 import {
   normalizeToE164,
   parsePhoneColumnsForWrite,
@@ -65,6 +66,8 @@ export type CanonicalCustomerPatch = {
     email?: string;
     emailVerified?: Date | null;
     emailUpdateRequestedAt?: Date | null;
+    emailVerifyNudgeDueAt?: Date | null;
+    emailVerifyNudgeSentAt?: Date | null;
     phone?: string | null;
     phoneE164?: string | null;
     phoneVerifiedAt?: Date | null;
@@ -208,7 +211,7 @@ export function buildCanonicalCustomerPatch(
     emailConflictCandidate = nextEmail;
     data.email = nextEmail;
     data.emailUpdateRequestedAt = null;
-    data.emailVerified = null;
+    Object.assign(data, emailAddressChangeVerificationPatch(new Date()));
     changes.push({
       kind: "email",
       label: current.email?.trim() ? "Email updated" : "Email added",

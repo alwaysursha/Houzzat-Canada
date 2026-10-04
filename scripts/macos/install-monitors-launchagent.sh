@@ -33,6 +33,7 @@ export PATH="$NODE_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:\$PATH"
 {
   echo "===== \$(date -u '+%Y-%m-%dT%H:%M:%SZ') monitors start ====="
   pnpm monitors:run
+  pnpm verify-email-nudge:run
   echo "===== \$(date -u '+%Y-%m-%dT%H:%M:%SZ') monitors done ====="
 } >>"\$LOG_FILE" 2>&1
 EOF

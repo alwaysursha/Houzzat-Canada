@@ -6,10 +6,8 @@ import { pickUtm } from "@/lib/ads/utm";
 import { captureWebsiteLead } from "@/lib/agent/lead-intake";
 import { EXISTING_ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/auth/existing-account-message";
 import { persistSignupConsentEvents } from "@/lib/auth/sign-up-consent";
-import {
-  sendEmailVerification,
-  sendWelcomeEmail,
-} from "@/lib/auth/email-verification";
+import { sendWelcomeEmail } from "@/lib/auth/email-verification";
+import { nextEmailVerifyNudgeDueAt } from "@/lib/auth/verify-email-nudge";
 import {
   findTenantUserIdByEmail,
   normalizeIdentityEmail,
@@ -218,6 +216,7 @@ export async function POST(request: Request) {
         vowAcceptedAt: now,
         vowVersion: VOW_VERSION,
         caslConsentAt: now,
+        emailVerifyNudgeDueAt: nextEmailVerifyNudgeDueAt(now),
       },
     });
 
@@ -248,29 +247,15 @@ export async function POST(request: Request) {
           console.error("[sign-up] lead capture failed", err);
         }
 
-        const [verifyStatus, welcomeStatus] = await Promise.all([
-          sendEmailVerification({
-            email,
-            name: parsed.data.name,
-            callbackUrl: "/",
-            customerId: user.id,
-            workspaceId,
-            // Canonical tenant origin (PLATFORM primary or future custom domain).
-            origin: tenancy.origin,
-          }).catch((err) => {
-            console.error("[sign-up] verification email failed", err);
-            return "failed" as const;
-          }),
-          sendWelcomeEmail({
-            email,
-            name: parsed.data.name,
-            customerId: user.id,
-          }).catch((err) => {
-            console.error("[sign-up] welcome email failed", err);
-            return "failed" as const;
-          }),
-        ]);
-        console.info("[sign-up] emails", { email, verifyStatus, welcomeStatus });
+        const welcomeStatus = await sendWelcomeEmail({
+          email,
+          name: parsed.data.name,
+          customerId: user.id,
+        }).catch((err) => {
+          console.error("[sign-up] welcome email failed", err);
+          return "failed" as const;
+        });
+        console.info("[sign-up] emails", { email, welcomeStatus });
       })(),
     );
 

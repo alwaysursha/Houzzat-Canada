@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Check, BellRing, MapPin, Pencil, Phone, X, type LucideIcon } from "lucide-react";
+import { ContactValidityIcon } from "@/components/agent/ContactValidityIcon";
 import {
   formatPhoneAsYouType,
   formatPhoneDisplay,
@@ -19,6 +20,7 @@ export function ContactDisplayRow({
   requestLabel,
   requestPending,
   multiline = false,
+  validityVerified,
 }: {
   icon: LucideIcon;
   value: string | null | undefined;
@@ -32,6 +34,8 @@ export function ContactDisplayRow({
   requestLabel?: string;
   requestPending?: boolean;
   multiline?: boolean;
+  /** When set, show the Leads-desk validity icon (independent of REQUESTED). */
+  validityVerified?: boolean;
 }) {
   const shown =
     Icon === Phone || href?.startsWith("tel:")
@@ -44,6 +48,14 @@ export function ContactDisplayRow({
   return (
     <div className="w-full min-w-0">
       <div className="flex w-full min-w-0 items-center gap-1.5">
+        {validityVerified !== undefined ? (
+          <span
+            className="shrink-0"
+            title={validityVerified ? "Verified" : "Unverified"}
+          >
+            <ContactValidityIcon verified={validityVerified} />
+          </span>
+        ) : null}
         {href && value ? (
           <a
             href={href}

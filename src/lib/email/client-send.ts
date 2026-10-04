@@ -40,22 +40,29 @@ export async function sendAndLogClientEmail(input: {
   const providerId =
     result.status === "sent" ? (result.providerId ?? null) : null;
 
-  const logged = await logClientEmail({
-    customerId: input.customerId,
-    leadId: input.leadId,
-    toEmail: input.to,
-    rendered: input.rendered,
-    sentById: input.sentById,
-    mlsNumber: input.mlsNumber,
-    organizationId: input.organizationId,
-    providerId,
-  });
+  try {
+    const logged = await logClientEmail({
+      customerId: input.customerId,
+      leadId: input.leadId,
+      toEmail: input.to,
+      rendered: input.rendered,
+      sentById: input.sentById,
+      mlsNumber: input.mlsNumber,
+      organizationId: input.organizationId,
+      providerId,
+    });
 
-  return {
-    ...result,
-    emailLogId: logged?.emailLogId,
-    leadId: logged?.leadId,
-  };
+    return {
+      ...result,
+      emailLogId: logged?.emailLogId,
+      leadId: logged?.leadId,
+    };
+  } catch (error) {
+    // Resend already accepted. Preserve delivery success so callers do not
+    // unclaim and resend when only CRM logging failed.
+    console.error("[email:crm-log]", error);
+    return result;
+  }
 }
 
 export { emailPreferencesUrl };

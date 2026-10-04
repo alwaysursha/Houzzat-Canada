@@ -1014,6 +1014,18 @@ model User {
    */
   phoneUpdateRequestedAt DateTime?
   /**
+   * When the automatic delayed "Verify your email" send becomes eligible
+   * for the current address (signup or email change + 24h).
+   * Pending-queue partial index is SQL-only (see migration
+   * 20261004160000_email_verify_nudge); Prisma cannot express the WHERE.
+   */
+  emailVerifyNudgeDueAt  DateTime?
+  /**
+   * When the automatic delayed verification email was sent (or stubbed).
+   * Manual "Send Verification Email" does not set this.
+   */
+  emailVerifyNudgeSentAt DateTime?
+  /**
    * Client home / location address — used as Route Planner start + admin CRM.
    */
   homeAddress            String?

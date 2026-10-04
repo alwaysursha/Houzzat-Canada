@@ -106,6 +106,9 @@ export function verificationLink(
  * Tenant-bound: Houzzat token cannot verify RE/MAX / Maria User.
  * `origin` must be the tenant's canonical public origin (not global SITE_URL).
  */
+export const VERIFY_EMAIL_KIND = "verify_email";
+export const VERIFY_EMAIL_NUDGE_KIND = "verify_email_nudge";
+
 export async function sendEmailVerification(input: {
   email: string;
   name?: string | null;
@@ -114,6 +117,11 @@ export async function sendEmailVerification(input: {
   workspaceId: string;
   /** Canonical tenant website origin (custom domain or PLATFORM primary). */
   origin: string;
+  /**
+   * `automatic_nudge` is the 24-hour fallback job only.
+   * Manual / locked-product sends stay `manual` (default).
+   */
+  purpose?: "manual" | "automatic_nudge";
 }): Promise<"sent" | "skipped" | "failed"> {
   const origin = input.origin.trim();
   if (!origin) {
@@ -141,6 +149,9 @@ export async function sendEmailVerification(input: {
     name: input.name,
     verifyUrl: link,
   });
+  if (input.purpose === "automatic_nudge") {
+    rendered.kind = VERIFY_EMAIL_NUDGE_KIND;
+  }
 
   const user =
     input.customerId

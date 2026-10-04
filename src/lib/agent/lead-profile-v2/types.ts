@@ -351,6 +351,7 @@ export type LeadProfileV2Customer = {
   isSeller: boolean;
   purchaseTimeframe: string | null;
   emailVerified: string | null;
+  phoneVerified: boolean;
   createdAt: string;
   caslConsentAt: string | null;
   termsAcceptedAt: string | null;

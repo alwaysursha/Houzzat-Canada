@@ -255,6 +255,7 @@ export function LeadProfileV2Rail({
               onRequestUpdate={() => onRequestUpdate("phone")}
               requestLabel="Email and notify the client to confirm phone"
               requestPending={reminderPending === "phone"}
+              validityVerified={Boolean(data.lead.customer?.phoneVerified)}
             />
           )}
           {editingContact === "email" ? (
@@ -281,6 +282,7 @@ export function LeadProfileV2Rail({
               onRequestUpdate={() => onRequestUpdate("email")}
               requestLabel="Email and notify the client to confirm email"
               requestPending={reminderPending === "email"}
+              validityVerified={Boolean(data.lead.customer?.emailVerified)}
             />
           )}
           {editingContact === "address" ? (

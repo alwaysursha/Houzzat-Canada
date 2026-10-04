@@ -14,5 +14,6 @@ export PATH="/Users/ali/.nvm/versions/node/v22.17.0/bin:/opt/homebrew/bin:/usr/l
 {
   echo "===== $(date -u '+%Y-%m-%dT%H:%M:%SZ') monitors start ====="
   pnpm monitors:run
+  pnpm verify-email-nudge:run
   echo "===== $(date -u '+%Y-%m-%dT%H:%M:%SZ') monitors done ====="
 } >>"$LOG_FILE" 2>&1

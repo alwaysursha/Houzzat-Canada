@@ -4,6 +4,7 @@ import { openLeadHandoffHref } from "@/lib/agent/lead-profile-query";
 import { emailEnv } from "@/lib/email/env";
 import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
+import { verifyCustomerEmailFromLeadEmailOpen } from "@/lib/auth/email-open-verification";
 import { authorizeStaffRecipientForLead } from "@/lib/workspace-notification-recipients";
 
 export type ResendWebhookHandleResult =
@@ -106,6 +107,8 @@ async function recordOpened(providerId: string, at: Date) {
     }
   }
 
+  await verifyCustomerEmailFromLeadEmailOpen({ providerId, at });
+
   return true;
 }
 
@@ -173,6 +176,8 @@ async function recordClicked(
       body: log.subject,
     });
   }
+
+  await verifyCustomerEmailFromLeadEmailOpen({ providerId, at });
 
   return true;
 }

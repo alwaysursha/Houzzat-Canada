@@ -175,8 +175,12 @@ function testSourceGuardsSignupAndResendPassOrigin() {
   const verify = read("src/lib/auth/email-verification.ts");
 
   assert.ok(
-    signup.includes("origin: tenancy.origin"),
-    "signup must pass already-resolved tenancy.origin",
+    signup.includes("resolveRequestTenancy"),
+    "signup must resolve workspace tenancy from hostname",
+  );
+  assert.ok(
+    !signup.includes("sendEmailVerification"),
+    "signup must not send the automatic verification email immediately",
   );
   assert.ok(
     !signup.includes("findUnique({\n      where: { email }"),
