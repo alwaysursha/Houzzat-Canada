@@ -72,7 +72,7 @@ function testExactFormattedValue() {
 function testNoSearchFallback() {
   assert.equal(selectV2PrimarySavedSearchRow([]), null);
   const loader = read("src/lib/agent/lead-profile-v2/load-looking-for.ts");
-  assert.ok(loader.includes("primarySearch ? v2SavedSearchLabel(primarySearch) : null"));
+  assert.ok(loader.includes("labelSearch ? v2SavedSearchLabel(labelSearch) : null"));
   const info = read(
     "src/components/agent/lead-profile-v2/LeadProfileV2InfoPanel.tsx",
   );
@@ -119,9 +119,9 @@ function testConflictingSavedSearches() {
   );
 
   const loader = read("src/lib/agent/lead-profile-v2/load-looking-for.ts");
-  assert.ok(loader.includes("{ isPrimary: \"desc\" }"));
-  assert.ok(loader.includes("{ updatedAt: \"desc\" }"));
-  assert.equal(loader.includes("isHomepageActive"), false);
+  assert.ok(loader.includes('isPrimary: "desc"'));
+  assert.ok(loader.includes('updatedAt: "desc"'));
+  assert.ok(loader.includes('isHomepageActive: "desc"'));
   const summary = read("src/lib/agent/lead-summary.ts");
   assert.ok(
     summary.includes("orderBy: [{ isPrimary: \"desc\" }, { updatedAt: \"desc\" }]"),
@@ -130,9 +130,9 @@ function testConflictingSavedSearches() {
 
 function testNoDuplicateQuery() {
   const loader = read("src/lib/agent/lead-profile-v2/load-looking-for.ts");
-  assert.equal(loader.split("prisma.savedSearch.findFirst").length - 1, 1);
-  assert.equal(loader.includes("findMany"), false);
-  assert.equal(loader.includes("loadBuyerIntent("), false);
+  assert.equal(loader.split("prisma.savedSearch.findMany").length - 1, 1);
+  assert.equal(loader.includes("findFirst"), false);
+  assert.ok(loader.includes("loadBuyerIntent("));
   const shell = read("src/lib/agent/lead-profile-v2/load-shell.ts");
   assert.equal(shell.includes("prisma.savedSearch"), false);
 }

@@ -109,8 +109,7 @@ function testForeignWorkspaceLookingForUnavailable() {
     const accessCheck = "if (!lead || !v2CanAccessLead(ctx, lead)) return null";
     assert.ok(loader.includes(accessCheck));
     assert.ok(
-      loader.indexOf(accessCheck) <
-        loader.indexOf("prisma.savedSearch.findFirst"),
+      loader.indexOf(accessCheck) < loader.indexOf("loadBuyerIntent("),
     );
     const route = read("src/app/api/agent/leads-v2/[id]/looking-for/route.ts");
     assert.ok(route.includes("handleAgentLeadGet"));
@@ -130,24 +129,25 @@ function testBoundedFirstPaintQuery() {
   const access = V2_LOOKING_FOR_ACCESS_SELECT as Record<string, unknown>;
   assert.ok("customerId" in access);
   const loader = read("src/lib/agent/lead-profile-v2/load-looking-for.ts");
-  assert.ok(loader.includes("prisma.savedSearch.findFirst"));
-  assert.ok(loader.includes("{ isPrimary: \"desc\" }"));
-  assert.ok(loader.includes("{ updatedAt: \"desc\" }"));
-  assert.equal(loader.includes("isHomepageActive"), false);
-  assert.ok(loader.includes("buyerIntentFromSavedSearches"));
-  assert.equal(loader.includes("loadBuyerIntent("), false);
+  assert.ok(loader.includes("prisma.savedSearch.findMany"));
+  assert.ok(loader.includes('isHomepageActive: "desc"'));
+  assert.ok(loader.includes('isPrimary: "desc"'));
+  assert.ok(loader.includes('updatedAt: "desc"'));
+  assert.ok(loader.includes("loadBuyerIntent("));
+  assert.equal(loader.includes("buyerIntentFromSavedSearches"), false);
   const snapshot = read("src/lib/agent/lead-profile-snapshot.ts");
   assert.ok(snapshot.includes("buyerIntentFromSavedSearches"));
   const summary = read("src/lib/agent/lead-summary.ts");
   assert.ok(
     summary.includes("orderBy: [{ isPrimary: \"desc\" }, { updatedAt: \"desc\" }]"),
   );
+  const mobile = read("src/lib/mobile/v2/load-lead-engagement.ts");
+  assert.ok(mobile.includes("loadBuyerIntent("));
 }
 
 function testNoDuplicateHeavyQueries() {
   const loader = read("src/lib/agent/lead-profile-v2/load-looking-for.ts");
   for (const banned of [
-    "loadBuyerIntent",
     "prisma.listing.findMany",
     "prisma.listingView",
     "prisma.activityEvent",
@@ -160,6 +160,7 @@ function testNoDuplicateHeavyQueries() {
   ]) {
     assert.equal(loader.includes(banned), false, `must not query ${banned}`);
   }
+  assert.ok(loader.includes("loadBuyerIntent("));
 }
 
 function testEmptyAndPartialCriteria() {
@@ -267,8 +268,8 @@ function testConflictingSourcePrecedence() {
   assert.ok(skippedUnusableWhenCollectionPassed.chips.includes("Mississauga"));
 
   const loader = read("src/lib/agent/lead-profile-v2/load-looking-for.ts");
-  assert.ok(loader.includes("findFirst"));
-  assert.equal(loader.includes("findMany"), false);
+  assert.ok(loader.includes("findMany"));
+  assert.equal(loader.includes("findFirst"), false);
 
   const engagement = thinIntent({
     source: "inferred",
@@ -314,13 +315,15 @@ function testLegacyClientPrecedence() {
   assert.ok(host.includes("firstPaint: lookingForResource.panel"));
 }
 
-function testNoDuplicateLoadBuyerIntentOnLookingFor() {
+function testLookingForUsesCanonicalBuyerIntent() {
   const overview = read(
     "src/lib/agent/lead-profile-v2/load-engagement-overview.ts",
   );
   assert.ok(overview.includes("loadBuyerIntent"));
   const looking = read("src/lib/agent/lead-profile-v2/load-looking-for.ts");
-  assert.equal(looking.includes("loadBuyerIntent("), false);
+  assert.ok(looking.includes("loadBuyerIntent("));
+  const mobile = read("src/lib/mobile/v2/load-lead-engagement.ts");
+  assert.ok(mobile.includes("loadBuyerIntent("));
 }
 
 function testPresentationParity() {
@@ -466,7 +469,7 @@ async function main() {
   testEmptyAndPartialCriteria();
   testConflictingSourcePrecedence();
   testLegacyClientPrecedence();
-  testNoDuplicateLoadBuyerIntentOnLookingFor();
+  testLookingForUsesCanonicalBuyerIntent();
   testPresentationParity();
   testTargetedRefresh();
   testLazyLoadAfterShell();

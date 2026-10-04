@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowDown,
   ArrowUp,
@@ -48,6 +49,7 @@ import {
   purchaseTimeframeLabel,
   purchaseTimeframeSortKey,
 } from "@/lib/agent/timeframe";
+import { useFlyoutFixedStyle } from "@/lib/use-flyout-fixed-style";
 import {
   STAFF_OVERLAY_PRIORITY,
   useStaffOverlay,
@@ -227,6 +229,12 @@ export function LeadsTableClient({
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pipelineOpenId, setPipelineOpenId] = useState<string | null>(null);
+  const pipelineTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const pipelineMenuStyle = useFlyoutFixedStyle(
+    Boolean(pipelineOpenId),
+    pipelineTriggerRef,
+    192,
+  );
   const [phoneMenuId, setPhoneMenuId] = useState<string | null>(null);
   const [verifyState, setVerifyState] = useState<
     Record<string, { emailVerified: boolean; phoneVerified: boolean }>
@@ -1213,13 +1221,19 @@ export function LeadsTableClient({
                     <td className="px-2 py-3">
                       <div className="relative inline-block">
                         <button
+                          ref={
+                            pipelineOpenId === lead.id
+                              ? pipelineTriggerRef
+                              : undefined
+                          }
                           type="button"
                           disabled={pending}
-                          onClick={() =>
+                          onClick={(e) => {
+                            pipelineTriggerRef.current = e.currentTarget;
                             setPipelineOpenId((id) =>
                               id === lead.id ? null : lead.id,
-                            )
-                          }
+                            );
+                          }}
                           className={cn(
                             "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide transition hover:opacity-90 disabled:opacity-50",
                             pipelinePillClass(lead.status),
@@ -1237,46 +1251,57 @@ export function LeadsTableClient({
                           {pipelineShortLabel(lead.status)}
                           <ChevronDown className="size-3 shrink-0 opacity-70" />
                         </button>
-                        {pipelineOpenId === lead.id ? (
-                          <>
-                            <button
-                              type="button"
-                              className="fixed inset-0 z-20 cursor-default"
-                              aria-label="Close pipeline menu"
-                              onClick={() => setPipelineOpenId(null)}
-                            />
-                            <div className="absolute left-0 top-full z-30 mt-1 max-h-56 w-48 overflow-y-auto rounded-md border border-[#e2e8f0] bg-white py-1 shadow-lg">
-                              {STATUSES.map((s) => {
-                                const StatusIcon = pipelineIcon(s);
-                                return (
-                                  <button
-                                    key={s}
-                                    type="button"
-                                    disabled={pending || s === lead.status}
-                                    onClick={() => {
-                                      setPipelineOpenId(null);
-                                      if (s !== lead.status) {
-                                        void patchLead(lead.id, { status: s });
-                                      }
-                                    }}
-                                    className={cn(
-                                      "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] font-semibold hover:bg-[#f8fafc] disabled:opacity-40",
-                                      s === lead.status
-                                        ? "text-[#94a3b8]"
-                                        : "text-[#475569]",
-                                    )}
-                                  >
-                                    <StatusIcon
-                                      className="size-3.5 shrink-0 opacity-75"
-                                      strokeWidth={2}
-                                    />
-                                    {pipelineLabel(s)}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </>
-                        ) : null}
+                        {pipelineOpenId === lead.id &&
+                        pipelineMenuStyle &&
+                        typeof document !== "undefined"
+                          ? createPortal(
+                              <>
+                                <button
+                                  type="button"
+                                  className="fixed inset-0 z-[79] cursor-default"
+                                  aria-label="Close pipeline menu"
+                                  onClick={() => setPipelineOpenId(null)}
+                                />
+                                <div
+                                  data-leads-pipeline-menu=""
+                                  style={pipelineMenuStyle}
+                                  className="overflow-y-auto rounded-md border border-[#e2e8f0] bg-white py-1 shadow-lg"
+                                >
+                                  {STATUSES.map((s) => {
+                                    const StatusIcon = pipelineIcon(s);
+                                    return (
+                                      <button
+                                        key={s}
+                                        type="button"
+                                        disabled={pending || s === lead.status}
+                                        onClick={() => {
+                                          setPipelineOpenId(null);
+                                          if (s !== lead.status) {
+                                            void patchLead(lead.id, {
+                                              status: s,
+                                            });
+                                          }
+                                        }}
+                                        className={cn(
+                                          "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] font-semibold hover:bg-[#f8fafc] disabled:opacity-40",
+                                          s === lead.status
+                                            ? "text-[#94a3b8]"
+                                            : "text-[#475569]",
+                                        )}
+                                      >
+                                        <StatusIcon
+                                          className="size-3.5 shrink-0 opacity-75"
+                                          strokeWidth={2}
+                                        />
+                                        {pipelineLabel(s)}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </>,
+                              document.body,
+                            )
+                          : null}
                       </div>
                       {canClaimPond && !lead.assignedAgentId ? (
                         <button

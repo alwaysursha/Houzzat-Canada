@@ -1,13 +1,16 @@
 /**
- * V2 first-paint Looking For loader. Auth is hostname → workspace → ACTIVE
- * member → canAccessLead. Matches current snapshot: one primary saved search
- * via findFirst (isPrimary desc, updatedAt desc) then
- * buyerIntentFromSavedSearches. Does not run the 45-day browse assembler,
- * listing hydration, timeline, emails, or rail counts.
+ * V2 Looking For loader. Auth is hostname → workspace → ACTIVE
+ * member → canAccessLead. Uses the same canonical loadBuyerIntent
+ * assembler as mobile lead engagement (saved searches + 45-day browse).
+ * Does not load timeline, emails, or rail counts.
  */
 import type { AgentOrgContext } from "@/lib/agent";
-import { buyerIntentFromSavedSearches } from "@/lib/agent/buyer-intent";
+import { loadBuyerIntent } from "@/lib/agent/buyer-intent";
 import { v2CanAccessLead } from "@/lib/agent/lead-profile-v2/access";
+import {
+  V2_ENGAGEMENT_MATCHBOARD_CANDIDATE_TAKE,
+  toV2BuyerIntentSavedSearchInput,
+} from "@/lib/agent/lead-profile-v2/engagement-overview-query";
 import {
   toV2LookingForPanel,
   v2SavedSearchLabel,
@@ -24,10 +27,23 @@ export const V2_LOOKING_FOR_ACCESS_SELECT = {
   customer: { select: { name: true } },
 } as const;
 
+/** Same columns loadBuyerIntent + saved-search label need. */
 export const V2_LOOKING_FOR_PRIMARY_SEARCH_SELECT = {
   name: true,
   query: true,
 } as const;
+
+const LOOKING_FOR_SEARCH_ORDER_BY = [
+  { isHomepageActive: "desc" as const },
+  { isPrimary: "desc" as const },
+  { updatedAt: "desc" as const },
+];
+
+if (V2_ENGAGEMENT_MATCHBOARD_CANDIDATE_TAKE !== 10) {
+  throw new Error(
+    "Looking For saved-search take drifted from mobile/engagement take 10",
+  );
+}
 
 export async function loadLeadProfileV2LookingFor(
   ctx: AgentOrgContext,
@@ -41,33 +57,30 @@ export async function loadLeadProfileV2LookingFor(
 
   if (!lead.customerId) {
     return toV2LookingForPanel(
-      buyerIntentFromSavedSearches({
+      await loadBuyerIntent({
+        customerId: null,
         customerName: null,
-        savedSearches: [],
       }),
       null,
     );
   }
 
-  const primarySearch = await prisma.savedSearch.findFirst({
+  const searches = await prisma.savedSearch.findMany({
     where: { userId: lead.customerId },
-    orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
+    orderBy: LOOKING_FOR_SEARCH_ORDER_BY,
+    take: V2_ENGAGEMENT_MATCHBOARD_CANDIDATE_TAKE,
     select: V2_LOOKING_FOR_PRIMARY_SEARCH_SELECT,
   });
 
+  const buyerIntent = await loadBuyerIntent({
+    customerId: lead.customerId,
+    customerName: lead.customer?.name ?? null,
+    savedSearches: toV2BuyerIntentSavedSearchInput(searches),
+  });
+
+  const labelSearch = searches[0];
   return toV2LookingForPanel(
-    buyerIntentFromSavedSearches({
-      customerName: lead.customer?.name ?? null,
-      savedSearches:
-        primarySearch?.name || primarySearch?.query
-          ? [
-              {
-                name: primarySearch.name || "Saved search",
-                query: primarySearch.query,
-              },
-            ]
-          : [],
-    }),
-    primarySearch ? v2SavedSearchLabel(primarySearch) : null,
+    buyerIntent,
+    labelSearch ? v2SavedSearchLabel(labelSearch) : null,
   );
 }

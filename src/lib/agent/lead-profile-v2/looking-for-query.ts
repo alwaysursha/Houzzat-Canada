@@ -23,9 +23,9 @@ export function canApplyV2LookingForResponse(input: {
 }
 
 /**
- * Exact current Lead Profile rail precedence:
- * engagement buyerIntent (full loadBuyerIntent) wins over first-paint
- * saved-search-only Looking For.
+ * Rail precedence: engagement buyerIntent (same loadBuyerIntent assembler)
+ * wins when already loaded; otherwise first-paint Looking For, which now
+ * also uses loadBuyerIntent (saved searches + 45-day browse).
  */
 export function selectV2LookingFor(input: {
   engagementBuyerIntent: LeadProfileV2BuyerIntent | null;
