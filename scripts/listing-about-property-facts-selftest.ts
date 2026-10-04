@@ -74,6 +74,34 @@ assert.deepEqual(
 );
 assert.equal(tiles.find((t) => t.id === "ownership")?.value, "Freehold");
 assert.equal(
+  buildAboutHomePropertyFacts({
+    facts: {
+      propertyClass: "Residential Freehold",
+      propertySubType: "Att/Row/Townhouse",
+    },
+    propertyType: "TOWNHOUSE",
+  }).find((t) => t.id === "ownership")?.value,
+  "Freehold Townhouse",
+);
+assert.equal(
+  buildAboutHomePropertyFacts({
+    facts: {
+      propertySubType: "Condo Townhouse",
+    },
+    propertyType: "CONDO_TOWNHOUSE",
+  }).find((t) => t.id === "ownership")?.value,
+  "Condo Townhouse",
+);
+assert.equal(
+  buildAboutHomePropertyFacts({
+    facts: {
+      propertySubType: "Att/Row/Townhouse",
+    },
+    propertyType: "TOWNHOUSE",
+  }).find((t) => t.id === "ownership"),
+  undefined,
+);
+assert.equal(
   tiles.find((t) => t.id === "taxes")?.value,
   "$9,876 taxes · 2019",
 );
@@ -173,20 +201,36 @@ assert.equal(
     propertySubType: "Condo Townhouse",
     propertyType: "CONDO_TOWNHOUSE",
   }),
-  "Condo",
+  "Condo Townhouse",
 );
 assert.equal(
   formatAboutHomeOwnershipValue({
     propertySubType: "Freehold Townhouse",
     propertyType: "TOWNHOUSE",
   }),
-  "Freehold",
+  "Freehold Townhouse",
 );
 assert.equal(
   formatAboutHomeOwnershipValue({
     propertyClass: "Residential Freehold",
     propertySubType: "Att/Row/Twnhouse",
     propertyType: "TOWNHOUSE",
+  }),
+  "Freehold Townhouse",
+);
+assert.equal(
+  formatAboutHomeOwnershipValue({
+    propertyClass: "Residential Condo & Other",
+    propertySubType: "Att/Row/Townhouse",
+    propertyType: "TOWNHOUSE",
+  }),
+  "Condo Townhouse",
+);
+assert.equal(
+  formatAboutHomeOwnershipValue({
+    propertyClass: "Residential Freehold",
+    propertySubType: "Detached",
+    propertyType: "DETACHED",
   }),
   "Freehold",
 );

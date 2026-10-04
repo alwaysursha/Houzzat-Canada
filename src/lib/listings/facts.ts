@@ -216,6 +216,19 @@ function ownershipTokenFromStructuredText(
   return null;
 }
 
+/** Townhouse style only — does not imply Freehold vs Condo by itself. */
+function isTownhouseStyle(input: {
+  propertySubType?: string | null;
+  propertyType?: PropertyType | null;
+}): boolean {
+  const sub = input.propertySubType?.trim().toLowerCase() ?? "";
+  if (sub && /town|row|att\//.test(sub)) return true;
+  return (
+    input.propertyType === "TOWNHOUSE" ||
+    input.propertyType === "CONDO_TOWNHOUSE"
+  );
+}
+
 /**
  * Commercial use class for the Property type tile when ownership/class
  * is not stated. Residential dwelling enums never imply Freehold/Condo.
@@ -250,17 +263,23 @@ function commercialPropertyTypeFact(
  * Freehold/Condo only from structured PropTx class text (or a stored
  * subtype string that itself names freehold/condo). Never inferred from
  * Houzzat dwelling enums such as TOWNHOUSE or DETACHED.
+ *
+ * When ownership is known and the listing is a townhouse style, return
+ * "Freehold Townhouse" / "Condo Townhouse".
  */
 export function formatAboutHomeOwnershipValue(input: {
   propertyClass?: string | null;
   propertySubType?: string | null;
   propertyType?: PropertyType | null;
 }): string | null {
-  return (
+  const ownership =
     ownershipTokenFromStructuredText(input.propertyClass) ??
-    ownershipTokenFromStructuredText(input.propertySubType) ??
-    commercialPropertyTypeFact(input.propertyType)
-  );
+    ownershipTokenFromStructuredText(input.propertySubType);
+  if (ownership) {
+    if (isTownhouseStyle(input)) return `${ownership} Townhouse`;
+    return ownership;
+  }
+  return commercialPropertyTypeFact(input.propertyType);
 }
 
 export function formatAboutHomeStoreysValue(
@@ -461,7 +480,6 @@ export function buildListingFactSections(input: {
       ? `${numLabel(f.lotSizeArea)}${f.lotSizeUnits ? ` ${f.lotSizeUnits}` : ""}`
       : null;
   pushRow(lot, "Lot size", lotSize);
-  pushRow(lot, "Lot source", f.lotSizeSource);
   if (lot.length) {
     sections.push({ id: "lot", title: "Lot", rows: lot });
   }
