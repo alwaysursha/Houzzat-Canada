@@ -48,14 +48,6 @@ export function ContactDisplayRow({
   return (
     <div className="w-full min-w-0">
       <div className="flex w-full min-w-0 items-center gap-1.5">
-        {validityVerified !== undefined ? (
-          <span
-            className="shrink-0"
-            title={validityVerified ? "Verified" : "Unverified"}
-          >
-            <ContactValidityIcon verified={validityVerified} />
-          </span>
-        ) : null}
         {href && value ? (
           <a
             href={href}
@@ -67,8 +59,16 @@ export function ContactDisplayRow({
               updateRequested ? "max-w-[40%]" : "flex-1",
             )}
           >
-            <Icon className="mt-0.5 size-3.5 shrink-0" />
+            <Icon className="size-3.5 shrink-0" />
             <span className={valueClass}>{shown}</span>
+            {validityVerified !== undefined ? (
+              <span
+                className="shrink-0"
+                title={validityVerified ? "Verified" : "Unverified"}
+              >
+                <ContactValidityIcon verified={validityVerified} />
+              </span>
+            ) : null}
           </a>
         ) : (
           <span
@@ -78,8 +78,16 @@ export function ContactDisplayRow({
               updateRequested ? "shrink-0" : "flex-1",
             )}
           >
-            <Icon className="mt-0.5 size-3.5 shrink-0" />
+            <Icon className="size-3.5 shrink-0" />
             <span className={valueClass}>{shown || "N/A"}</span>
+            {validityVerified !== undefined ? (
+              <span
+                className="shrink-0"
+                title={validityVerified ? "Verified" : "Unverified"}
+              >
+                <ContactValidityIcon verified={validityVerified} />
+              </span>
+            ) : null}
           </span>
         )}
         {updateRequested ? (

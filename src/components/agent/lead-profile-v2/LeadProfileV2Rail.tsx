@@ -230,7 +230,7 @@ export function LeadProfileV2Rail({
             </span>
           ) : null}
         </div>
-        <div className="mt-2 flex w-full min-w-0 flex-col items-stretch gap-2.5 px-0">
+        <div className="mt-2 flex w-full min-w-0 flex-col items-stretch gap-3.5 px-0">
           {editingContact === "phone" ? (
             <ContactEditRow
               type="tel"

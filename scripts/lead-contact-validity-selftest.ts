@@ -31,9 +31,16 @@ assert.ok(table.includes("emailVerified"));
 assert.ok(table.includes("phoneVerified"));
 
 assert.ok(fields.includes("validityVerified"));
-assert.ok(fields.includes("ContactValidityIcon"));
+assert.ok(fields.includes("<span className={valueClass}>{shown}</span>"));
+const shownIdx = fields.indexOf("<span className={valueClass}>{shown}</span>");
+const afterShown = fields.slice(shownIdx);
+assert.ok(
+  afterShown.includes("ContactValidityIcon"),
+  "validity icon must follow the phone/email value",
+);
 assert.ok(rail.includes("validityVerified={Boolean(data.lead.customer?.phoneVerified)}"));
 assert.ok(rail.includes("validityVerified={Boolean(data.lead.customer?.emailVerified)}"));
+assert.ok(rail.includes("gap-3.5"));
 assert.ok(rail.includes("phoneUpdateRequestedAt"));
 assert.ok(rail.includes("emailUpdateRequestedAt"));
 assert.ok(shell.includes("phoneVerifiedAt: true"));
