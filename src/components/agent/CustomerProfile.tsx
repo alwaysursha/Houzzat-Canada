@@ -1108,7 +1108,7 @@ export function CustomerProfile({
       )}
     >
       {variant === "modal" ? (
-        <div className="absolute -left-1 top-24 z-20 hidden flex-col gap-2 sm:flex md:-left-3">
+        <div className="absolute left-0 top-24 z-20 hidden -translate-x-[calc(100%+0.5rem)] flex-col gap-2 sm:flex">
           {actions.map((action) => renderAction(action, "rail"))}
         </div>
       ) : null}

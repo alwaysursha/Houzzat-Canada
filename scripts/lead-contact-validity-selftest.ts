@@ -43,6 +43,12 @@ assert.ok(rail.includes("validityVerified={Boolean(data.lead.customer?.emailVeri
 assert.ok(rail.includes("gap-3.5"));
 assert.ok(rail.includes("phoneUpdateRequestedAt"));
 assert.ok(rail.includes("emailUpdateRequestedAt"));
+assert.ok(
+  rail.includes("-translate-x-[calc(100%+0.5rem)]"),
+  "modal call/text/email rail must sit fully outside the white panel",
+);
+assert.equal(rail.includes("-left-1"), false);
+assert.equal(rail.includes("md:-left-3"), false);
 assert.ok(shell.includes("phoneVerifiedAt: true"));
 assert.ok(shell.includes("phoneVerified: Boolean(lead.customer.phoneVerifiedAt)"));
 
