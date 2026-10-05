@@ -82,6 +82,8 @@ export function renderContactUpdateRequestEmail(input: {
   name?: string | null;
   channel: "email" | "phone";
   accountUrl: string;
+  preferencesManageUrl?: string | null;
+  unsubscribeIntentUrl?: string | null;
 }): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const field = input.channel === "phone" ? "phone number" : "email address";
@@ -103,6 +105,8 @@ export function renderContactUpdateRequestEmail(input: {
       ${ctaButton(input.accountUrl, "Update contact details")}
       <p style="margin:16px 0 0;font-size:13px;color:#047857">It only takes a moment. You can also update this the next time you visit ${escapeHtml(SITE_NAME)}.</p>
     `,
+    preferencesManageUrl: input.preferencesManageUrl,
+    unsubscribeIntentUrl: input.unsubscribeIntentUrl,
   });
   return { subject, text, html, kind: "contact_update_request" };
 }
@@ -342,6 +346,8 @@ export function renderPriceReductionEmail(
     newPrice: number;
     listingUrl: string;
     unsubscribeUrl?: string | null;
+    preferencesManageUrl?: string | null;
+    unsubscribeIntentUrl?: string | null;
   } & ListingCardExtras,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
@@ -361,6 +367,8 @@ export function renderPriceReductionEmail(
     subtitle: "A home on your watch list just dropped in price.",
     preheader: `${input.addressLine} is now ${money(input.newPrice)}`,
     unsubscribeUrl: input.unsubscribeUrl,
+    preferencesManageUrl: input.preferencesManageUrl,
+    unsubscribeIntentUrl: input.unsubscribeIntentUrl,
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 12px;color:#115e59">A property on your watch list just reduced its price.</p>
@@ -393,6 +401,8 @@ export function renderSoldAlertEmail(
     priceLabel: string;
     listingUrl: string;
     unsubscribeUrl?: string | null;
+    preferencesManageUrl?: string | null;
+    unsubscribeIntentUrl?: string | null;
   } & ListingCardExtras,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
@@ -411,6 +421,8 @@ export function renderSoldAlertEmail(
     subtitle: "A property you’re watching changed status.",
     preheader: `${input.addressLine} · ${input.statusLabel}`,
     unsubscribeUrl: input.unsubscribeUrl,
+    preferencesManageUrl: input.preferencesManageUrl,
+    unsubscribeIntentUrl: input.unsubscribeIntentUrl,
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 12px;color:#115e59">A property you’re watching changed status.</p>
@@ -442,6 +454,8 @@ export function renderJustListedEmail(
     price: number;
     listingUrl: string;
     unsubscribeUrl?: string | null;
+    preferencesManageUrl?: string | null;
+    unsubscribeIntentUrl?: string | null;
   } & ListingCardExtras,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
@@ -459,6 +473,8 @@ export function renderJustListedEmail(
     subtitle: "A new home matched your area alert.",
     preheader: `${input.addressLine} · ${money(input.price)}`,
     unsubscribeUrl: input.unsubscribeUrl,
+    preferencesManageUrl: input.preferencesManageUrl,
+    unsubscribeIntentUrl: input.unsubscribeIntentUrl,
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 12px;color:#115e59">A new home matched your area alert for <strong style="color:#064e3b">${escapeHtml(input.areaName)}</strong>.</p>
@@ -490,6 +506,8 @@ export function renderPropertyUpdateEmail(
     changes: string[];
     listingUrl: string;
     unsubscribeUrl?: string | null;
+    preferencesManageUrl?: string | null;
+    unsubscribeIntentUrl?: string | null;
   } & ListingCardExtras,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
@@ -508,6 +526,8 @@ export function renderPropertyUpdateEmail(
     subtitle: "There’s an update on a home you’re watching.",
     preheader: input.title,
     unsubscribeUrl: input.unsubscribeUrl,
+    preferencesManageUrl: input.preferencesManageUrl,
+    unsubscribeIntentUrl: input.unsubscribeIntentUrl,
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 12px;color:#115e59">There’s an update on a home you’re watching.</p>
@@ -538,6 +558,8 @@ export function renderShortlistEmail(input: {
   listings?: EmailPropertyCard[];
   /** Fallback text lines when structured listings are not provided. */
   listingLines?: string[];
+  preferencesManageUrl?: string | null;
+  unsubscribeIntentUrl?: string | null;
 }): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const cards = input.listings ?? [];
@@ -575,6 +597,8 @@ export function renderShortlistEmail(input: {
       }
       ${ctaButton(input.shareUrl, "View shortlist")}
     `,
+    preferencesManageUrl: input.preferencesManageUrl,
+    unsubscribeIntentUrl: input.unsubscribeIntentUrl,
   });
   return { subject, text, html, kind: "shortlist" };
 }
@@ -584,6 +608,8 @@ export function renderAgentMessageEmail(input: {
   subject: string;
   body: string;
   listings?: EmailPropertyCard[];
+  preferencesManageUrl?: string | null;
+  unsubscribeIntentUrl?: string | null;
 }): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const paragraphs = input.body
@@ -600,6 +626,8 @@ export function renderAgentMessageEmail(input: {
       ${paragraphs.map((p) => `<p style="margin:0 0 12px;white-space:pre-wrap;color:#115e59">${escapeHtml(p)}</p>`).join("")}
       ${cards.map((l) => renderEmailPropertyCard(l)).join("")}
     `,
+    preferencesManageUrl: input.preferencesManageUrl,
+    unsubscribeIntentUrl: input.unsubscribeIntentUrl,
   });
   return {
     subject: input.subject,
@@ -617,6 +645,8 @@ export function renderNewsletterEmail(input: {
   ctaUrl?: string | null;
   ctaLabel?: string | null;
   unsubscribeUrl?: string | null;
+  preferencesManageUrl?: string | null;
+  unsubscribeIntentUrl?: string | null;
 }): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const text = [
@@ -632,6 +662,8 @@ export function renderNewsletterEmail(input: {
     subtitle: "Fresh market notes from Houzzat.",
     preheader: input.subject,
     unsubscribeUrl: input.unsubscribeUrl,
+    preferencesManageUrl: input.preferencesManageUrl,
+    unsubscribeIntentUrl: input.unsubscribeIntentUrl,
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <div style="color:#115e59">${input.bodyHtml}</div>
@@ -753,6 +785,8 @@ export function renderSavedSearchDigestEmail(input: {
   listings: DigestListingLine[];
   searchUrl: string;
   unsubscribeUrl?: string | null;
+  preferencesManageUrl?: string | null;
+  unsubscribeIntentUrl?: string | null;
 }): RenderedEmail {
   const count = input.listings.length;
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
@@ -791,6 +825,8 @@ export function renderSavedSearchDigestEmail(input: {
     subtitle: "We've found new homes that match your criteria—take a look.",
     preheader: `${count} new home${count === 1 ? "" : "s"} for ${input.searchName}`,
     unsubscribeUrl: input.unsubscribeUrl,
+    preferencesManageUrl: input.preferencesManageUrl,
+    unsubscribeIntentUrl: input.unsubscribeIntentUrl,
     bodyHtml: `
       ${previewNote}
       ${cards}
@@ -811,6 +847,8 @@ export function renderNeighborhoodWeeklyEmail(input: {
   soldListings: DigestListingLine[];
   ctaUrl: string;
   unsubscribeUrl?: string | null;
+  preferencesManageUrl?: string | null;
+  unsubscribeIntentUrl?: string | null;
 }): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const subject = `Neighborhood weekly · ${input.homeLabel}`;
@@ -862,6 +900,8 @@ export function renderNeighborhoodWeeklyEmail(input: {
     subtitle: `Here’s what happened near ${input.homeLabel} this week.`,
     preheader: `${input.newCount} new · ${input.soldCount} sold near ${input.homeLabel}`,
     unsubscribeUrl: input.unsubscribeUrl,
+    preferencesManageUrl: input.preferencesManageUrl,
+    unsubscribeIntentUrl: input.unsubscribeIntentUrl,
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 16px;color:#115e59">Here’s what happened near <strong style="color:#064e3b">${escapeHtml(input.homeLabel)}</strong> over the past week (≈${input.radiusKm} km).</p>
@@ -888,6 +928,8 @@ export function renderCmaEmail(input: {
   subjectCity: string;
   cmaUrl: string;
   recommendedListPrice?: number | null;
+  preferencesManageUrl?: string | null;
+  unsubscribeIntentUrl?: string | null;
 }): RenderedEmail {
   const greet = input.recipientName?.trim()
     ? `Hi ${input.recipientName.trim()},`
@@ -940,6 +982,8 @@ export function renderCmaEmail(input: {
         ${input.agentEmail ? escapeHtml(input.agentEmail) : ""}
       </p>
     `,
+    preferencesManageUrl: input.preferencesManageUrl,
+    unsubscribeIntentUrl: input.unsubscribeIntentUrl,
   });
   return { subject, text, html, kind: "cma_share" };
 }

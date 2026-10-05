@@ -2,6 +2,10 @@ import {
   evaluateOptionalEmailSuppression,
   resolveEmailSendWorkspace,
 } from "@/lib/communications/send-enforcement";
+import {
+  buildCustomerPreferenceEmailChrome,
+  optionalEmailEligibleForPreferenceChrome,
+} from "@/lib/communications/preference-email-chrome";
 import { prismaCommunicationPreferenceStore } from "@/lib/communications/preference-store";
 import {
   emailPreferencesUrl,
@@ -26,6 +30,7 @@ export async function sendAndLogClientEmail(input: {
   mlsNumber?: string | null;
   organizationId?: string | null;
   replyTo?: string | null;
+  headers?: Record<string, string>;
   /** When false, still send but skip CRM log (e.g. verify before lead exists). */
   logToCrm?: boolean;
 }): Promise<
@@ -50,11 +55,38 @@ export async function sendAndLogClientEmail(input: {
     console.error("[email:suppression-gate]", error);
   }
 
+  let headers = input.headers;
+  if (
+    !headers &&
+    optionalEmailEligibleForPreferenceChrome(input.rendered.kind) &&
+    input.customerId
+  ) {
+    try {
+      const workspaceId = await resolveEmailSendWorkspace({
+        customerId: input.customerId,
+        leadId: input.leadId,
+      });
+      if (workspaceId) {
+        const chrome = await buildCustomerPreferenceEmailChrome({
+          userId: input.customerId,
+          workspaceId,
+          email: input.to,
+        });
+        // Tokens are minted before Resend. A later send failure leaves unused
+        // hashes until TTL cleanup; raw tokens are not recoverable from them.
+        headers = chrome?.headers;
+      }
+    } catch (error) {
+      console.error("[email:preference-chrome]", error);
+    }
+  }
+
   const result = await sendRenderedEmail({
     to: input.to,
     rendered: input.rendered,
     stream: input.stream,
     replyTo: input.replyTo,
+    headers,
   });
 
   if (!result.ok) return result;

@@ -6,6 +6,10 @@ import {
   crmOptionalEmailDenied,
   loadCategoryEmailEnabled,
 } from "@/lib/communications/category-email-gate";
+import {
+  buildCustomerPreferenceEmailChrome,
+  preferenceFooterFields,
+} from "@/lib/communications/preference-email-chrome";
 import { renderAgentMessageEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
 
@@ -95,10 +99,19 @@ export async function POST(request: Request) {
       continue;
     }
 
+    const chrome =
+      lead.customer?.id && lead.workspaceId
+        ? await buildCustomerPreferenceEmailChrome({
+            userId: lead.customer.id,
+            workspaceId: lead.workspaceId,
+            email: toEmail,
+          })
+        : null;
     const rendered = renderAgentMessageEmail({
       name: lead.customer?.name,
       subject: parsed.data.subject,
       body: parsed.data.body,
+      ...preferenceFooterFields(chrome),
     });
 
     const result = await sendAndLogClientEmail({

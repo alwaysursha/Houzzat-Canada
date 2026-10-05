@@ -88,7 +88,7 @@ export function emailPreviewAbsoluteUrl(emailLogId: string) {
   return `${SITE_URL}${emailPreviewPath(emailLogId)}`;
 }
 
-/** Preferences / unsubscribe landing used in alert footers. */
+/** Legacy account/watchlist landing. Optional emails now use secure preference tokens. */
 export function emailPreferencesUrl() {
   return `${SITE_URL}/account/monitors`;
 }

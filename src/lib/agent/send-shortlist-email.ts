@@ -2,6 +2,10 @@ import { createHash } from "crypto";
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import {
+  buildCustomerPreferenceEmailChrome,
+  preferenceFooterFields,
+} from "@/lib/communications/preference-email-chrome";
+import {
   crmOptionalEmailDenied,
   loadCategoryEmailEnabled,
 } from "@/lib/communications/category-email-gate";
@@ -210,12 +214,21 @@ export async function sendShortlistEmail(
     };
   });
 
+  const chrome =
+    lead.customerId && lead.workspaceId
+      ? await buildCustomerPreferenceEmailChrome({
+          userId: lead.customerId,
+          workspaceId: lead.workspaceId,
+          email: toEmail,
+        })
+      : null;
   const rendered = renderShortlistEmail({
     name: lead.customer?.name,
     agentName,
     shareUrl,
     note,
     listings: emailListings,
+    ...preferenceFooterFields(chrome),
   });
   if (input.subject?.trim()) {
     rendered.subject = input.subject.trim();

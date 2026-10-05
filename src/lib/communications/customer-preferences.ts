@@ -41,7 +41,8 @@ export type CustomerCommunicationPreferences = {
   globalEmailEnabled: boolean;
   customerUnsubscribed: boolean;
   optionalEmailEffective: boolean;
-  optionalEmailMismatch: GlobalOptionalEmailMismatch;
+  optionalEmailMismatch: boolean;
+  optionalEmailMismatchReason: GlobalOptionalEmailMismatch;
   mailboxSuppressed: boolean;
   suppressionLookup: SuppressionLookupStatus | "not_applicable";
   categories: EffectiveCategoryPreference[];
@@ -135,7 +136,8 @@ export async function getCustomerCommunicationPreferences(input: {
     globalEmailEnabled: input.emailAlertsEnabled,
     customerUnsubscribed,
     optionalEmailEffective,
-    optionalEmailMismatch,
+    optionalEmailMismatch: optionalEmailMismatch != null,
+    optionalEmailMismatchReason: optionalEmailMismatch,
     mailboxSuppressed,
     suppressionLookup,
     categories,

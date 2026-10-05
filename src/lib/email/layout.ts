@@ -11,6 +11,9 @@ export function emailLayout(input: {
   bodyHtml: string;
   footerNote?: string;
   unsubscribeUrl?: string | null;
+  preferencesManageUrl?: string | null;
+  /** Presentation-only GET intent. Must not be a mutating endpoint. */
+  unsubscribeIntentUrl?: string | null;
   /** Tenant/workspace brand label for hero (defaults to SITE_NAME). */
   brandLabel?: string | null;
   /** Absolute tenant logo URL when available. */
@@ -26,11 +29,20 @@ export function emailLayout(input: {
   const preheader = input.preheader
     ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(input.preheader)}</div>`
     : "";
-  const unsub = input.unsubscribeUrl
+  const unsub = input.preferencesManageUrl
     ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#047857">
+         <a href="${escapeAttr(input.preferencesManageUrl)}" style="color:#047857;text-decoration:underline">Manage email preferences</a>
+         ${
+           input.unsubscribeIntentUrl
+             ? ` · <a href="${escapeAttr(input.unsubscribeIntentUrl)}" style="color:#047857;text-decoration:underline">Unsubscribe</a>`
+             : ""
+         }
+       </p>`
+    : input.unsubscribeUrl
+      ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#047857">
          <a href="${escapeAttr(input.unsubscribeUrl)}" style="color:#047857;text-decoration:underline">Unsubscribe / email preferences</a>
        </p>`
-    : "";
+      : "";
   const subtitle = input.subtitle?.trim()
     ? `<p style="margin:12px 0 0;font-size:15px;line-height:1.5;color:#115e59">${escapeHtml(input.subtitle.trim())}</p>`
     : "";

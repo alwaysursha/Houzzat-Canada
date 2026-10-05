@@ -9,6 +9,10 @@ import {
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import { loadCategoryEmailEnabled } from "@/lib/communications/category-email-gate";
+import {
+  buildCustomerPreferenceEmailChrome,
+  preferenceFooterFields,
+} from "@/lib/communications/preference-email-chrome";
 import { sendPushToUserFirstEnabled } from "@/lib/notifications/push";
 import {
   findNewListingsForSavedQuery,
@@ -18,7 +22,6 @@ import {
   planBuyerDigest,
   savedSearchDigestCursorUpdate,
 } from "@/lib/email/digests/buyer-digest-plan";
-import { emailPreferencesUrl } from "@/lib/email/log";
 import { renderSavedSearchDigestEmail } from "@/lib/email/templates";
 import { formatListPrice } from "@/lib/listings/constants";
 import { withPropertyAlertUtm } from "@/lib/email/property-alert-links";
@@ -117,6 +120,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
       id: true,
       email: true,
       name: true,
+      workspaceId: true,
       lastBuyerDigestAt: true,
     },
     take: opts?.userId ? 1 : 2000,
@@ -215,6 +219,13 @@ export async function runBuyerSavedSearchDigests(opts?: {
         plan.action === "create_from_browse"
           ? plan.name
           : (primary?.name ?? "Saved search");
+      const chrome = user.workspaceId
+        ? await buildCustomerPreferenceEmailChrome({
+            userId: user.id,
+            workspaceId: user.workspaceId,
+            email: user.email,
+          })
+        : null;
       const rendered = renderSavedSearchDigestEmail({
         name: user.name,
         searchName,
@@ -223,7 +234,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
           `${SITE_URL}${searchHref}`,
           "saved_search",
         ),
-        unsubscribeUrl: emailPreferencesUrl(),
+        ...preferenceFooterFields(chrome),
       });
 
       if (opts?.dryRun) {

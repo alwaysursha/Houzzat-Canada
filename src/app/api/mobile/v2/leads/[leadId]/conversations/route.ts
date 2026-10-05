@@ -15,6 +15,10 @@ import {
   loadCategoryEmailEnabled,
 } from "@/lib/communications/category-email-gate";
 import { renderAgentMessageEmail } from "@/lib/email/templates";
+import {
+  buildCustomerPreferenceEmailChrome,
+  preferenceFooterFields,
+} from "@/lib/communications/preference-email-chrome";
 import { authorizeMobileLeadAccess } from "@/lib/mobile/v2/lead-access";
 import { prisma } from "@/lib/prisma";
 
@@ -273,10 +277,18 @@ export async function POST(
       },
     });
 
+    const chrome = lead.customer?.id
+      ? await buildCustomerPreferenceEmailChrome({
+          userId: lead.customer.id,
+          workspaceId: access.workspaceId,
+          email: toEmail,
+        })
+      : null;
     const rendered = renderAgentMessageEmail({
       name: lead.customer?.name,
       subject: parsed.data.subject,
       body: parsed.data.body,
+      ...preferenceFooterFields(chrome),
     });
 
     // Canonical web send path — Resend + LeadEmailLog + LeadActivity.

@@ -6,10 +6,13 @@ import type {
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import { loadCategoryEmailEnabled } from "@/lib/communications/category-email-gate";
+import {
+  buildCustomerPreferenceEmailChrome,
+  preferenceFooterFields,
+} from "@/lib/communications/preference-email-chrome";
 import { withPropertyAlertUtm } from "@/lib/email/property-alert-links";
 import { sendPushToUser } from "@/lib/notifications/push";
 import type { ConsumerPushType } from "@/lib/notifications/catalog";
-import { emailPreferencesUrl } from "@/lib/email/log";
 import {
   renderJustListedEmail,
   renderPriceReductionEmail,
@@ -108,6 +111,7 @@ async function createAlert(input: {
   emailAlertsEnabled: boolean;
   monitorEmailAlerts: boolean;
   watchCategory: "property_watch" | "area_watch";
+  workspaceId?: string | null;
   /** Structured fields for HTML templates when available. */
   template?:
     | ({
@@ -187,7 +191,16 @@ async function createAlert(input: {
     return;
   }
 
-  const unsub = emailPreferencesUrl();
+  const chrome =
+    input.workspaceId && input.email
+      ? await buildCustomerPreferenceEmailChrome({
+          userId: input.userId,
+          workspaceId: input.workspaceId,
+          email: input.email,
+        })
+      : null;
+  const footer = preferenceFooterFields(chrome);
+
   const rendered = (() => {
     const t = input.template;
     if (!t) return null;
@@ -200,7 +213,7 @@ async function createAlert(input: {
         oldPrice: t.oldPrice,
         newPrice: t.newPrice,
         listingUrl: listingUrl(t.mlsNumber),
-        unsubscribeUrl: unsub,
+        ...footer,
         imageUrl: t.imageUrl,
         bedsLabel: t.bedsLabel,
         bathsLabel: t.bathsLabel,
@@ -216,7 +229,7 @@ async function createAlert(input: {
         statusLabel: t.statusLabel,
         priceLabel: t.priceLabel,
         listingUrl: listingUrl(t.mlsNumber),
-        unsubscribeUrl: unsub,
+        ...footer,
         imageUrl: t.imageUrl,
         bedsLabel: t.bedsLabel,
         bathsLabel: t.bathsLabel,
@@ -232,7 +245,7 @@ async function createAlert(input: {
         mlsNumber: t.mlsNumber,
         price: t.price,
         listingUrl: listingUrl(t.mlsNumber),
-        unsubscribeUrl: unsub,
+        ...footer,
         imageUrl: t.imageUrl,
         bedsLabel: t.bedsLabel,
         bathsLabel: t.bathsLabel,
@@ -247,7 +260,7 @@ async function createAlert(input: {
       mlsNumber: t.mlsNumber,
       changes: t.changes,
       listingUrl: listingUrl(t.mlsNumber),
-      unsubscribeUrl: unsub,
+      ...footer,
       imageUrl: t.imageUrl,
       bedsLabel: t.bedsLabel,
       bathsLabel: t.bathsLabel,
@@ -271,7 +284,7 @@ async function createAlert(input: {
         listingUrl: input.mlsNumber
           ? listingUrl(input.mlsNumber)
           : SITE_URL,
-        unsubscribeUrl: unsub,
+        ...footer,
       }),
     });
     return;
@@ -337,6 +350,7 @@ export async function runPropertyMonitorChecks(
             email: true,
             name: true,
             emailAlertsEnabled: true,
+            workspaceId: true,
           },
         },
       },
@@ -416,6 +430,7 @@ export async function runPropertyMonitorChecks(
           email: monitor.user.email,
           name: monitor.user.name,
           emailAlertsEnabled: monitor.user.emailAlertsEnabled,
+          workspaceId: monitor.user.workspaceId,
           monitorEmailAlerts: monitor.emailAlerts,
           watchCategory: "property_watch",
           template: soldLike
@@ -509,6 +524,7 @@ async function processAreaEventPages(input: {
       email: string | null;
       name: string | null;
       emailAlertsEnabled: boolean;
+      workspaceId: string | null;
     };
   };
   /** Shared waterline for this monitor pass (do not reuse mid-pass updates). */
@@ -601,6 +617,7 @@ async function processAreaEventPages(input: {
             emailAlertsEnabled: input.monitor.user.emailAlertsEnabled,
             monitorEmailAlerts: input.monitor.emailAlerts,
             watchCategory: "area_watch",
+            workspaceId: input.monitor.user.workspaceId,
             template: {
               type: "just_listed",
               areaName: input.monitor.name,
@@ -625,6 +642,7 @@ async function processAreaEventPages(input: {
             emailAlertsEnabled: input.monitor.user.emailAlertsEnabled,
             monitorEmailAlerts: input.monitor.emailAlerts,
             watchCategory: "area_watch",
+            workspaceId: input.monitor.user.workspaceId,
             template: {
               type: "sold",
               addressLine: listing.addressLine,
@@ -680,6 +698,7 @@ export async function runAreaMonitorChecks(
             email: true,
             name: true,
             emailAlertsEnabled: true,
+            workspaceId: true,
           },
         },
       },

@@ -34,6 +34,7 @@ export async function sendRenderedEmail(input: {
   replyTo?: string | null;
   /** Optional absolute From override (e.g. HouzzatPRO platform sales). */
   from?: string | null;
+  headers?: Record<string, string>;
 }): Promise<SendEmailResult> {
   if (!isResendConfigured()) {
     console.info(
@@ -56,6 +57,9 @@ export async function sendRenderedEmail(input: {
       html: input.rendered.html,
       text: input.rendered.text,
       ...(input.replyTo ? { replyTo: input.replyTo } : {}),
+      ...(input.headers && Object.keys(input.headers).length
+        ? { headers: input.headers }
+        : {}),
       tags: [{ name: "kind", value: input.rendered.kind.slice(0, 50) }],
     });
 

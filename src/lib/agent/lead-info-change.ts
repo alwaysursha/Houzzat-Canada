@@ -10,6 +10,7 @@ import {
 } from "@/lib/agent/lead-classification";
 import { normalizeLeadEmail } from "@/lib/agent/lead-identity";
 import { emailAddressChangeVerificationPatch } from "@/lib/auth/verify-email-nudge";
+import { revokePreferenceTokensForEmailChange } from "@/lib/communications/preference-token-service";
 import {
   normalizeToE164,
   parsePhoneColumnsForWrite,
@@ -328,6 +329,14 @@ export async function applyCanonicalCustomerContact(
     where: { id: userId },
     data: patch.data,
   });
+
+  if (patch.changes.some((change) => change.kind === "email")) {
+    try {
+      await revokePreferenceTokensForEmailChange({ userId });
+    } catch (error) {
+      console.error("[communications:preference-token-email-change]", error);
+    }
+  }
 
   return { ok: true, changes: patch.changes, applied: true };
 }

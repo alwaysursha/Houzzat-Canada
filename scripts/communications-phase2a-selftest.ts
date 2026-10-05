@@ -673,6 +673,19 @@ async function testCanonicalTransactionFailure() {
 }
 
 async function testContradictoryLegacyStateNotMutatedOnGet() {
+  const consistentOn = ctxFor([{ ...userA }]);
+  const readConsistent = await getCustomerCommunicationPreferences({
+    userId: "user_a",
+    workspaceId: "ws_a",
+    email: "shared@example.com",
+    emailAlertsEnabled: true,
+    preferenceStore: consistentOn.preferenceStore,
+    suppressionStore: consistentOn.suppressionStore,
+  });
+  assert.equal(typeof readConsistent.optionalEmailMismatch, "boolean");
+  assert.equal(readConsistent.optionalEmailMismatch, false);
+  assert.equal(readConsistent.optionalEmailMismatchReason, null);
+
   const onWithUnsub = ctxFor([{ ...userA }]);
   await applyEmailSuppression(onWithUnsub.suppressionStore, {
     workspaceId: "ws_a",
@@ -701,8 +714,10 @@ async function testContradictoryLegacyStateNotMutatedOnGet() {
   assert.equal(readOn.globalEmailEnabled, true);
   assert.equal(readOn.customerUnsubscribed, true);
   assert.equal(readOn.optionalEmailEffective, false);
+  assert.equal(typeof readOn.optionalEmailMismatch, "boolean");
+  assert.equal(readOn.optionalEmailMismatch, true);
   assert.equal(
-    readOn.optionalEmailMismatch,
+    readOn.optionalEmailMismatchReason,
     "global_on_with_customer_unsubscribe",
   );
   assert.equal(
@@ -738,8 +753,10 @@ async function testContradictoryLegacyStateNotMutatedOnGet() {
   assert.equal(readOff.globalEmailEnabled, false);
   assert.equal(readOff.customerUnsubscribed, false);
   assert.equal(readOff.optionalEmailEffective, false);
+  assert.equal(typeof readOff.optionalEmailMismatch, "boolean");
+  assert.equal(readOff.optionalEmailMismatch, true);
   assert.equal(
-    readOff.optionalEmailMismatch,
+    readOff.optionalEmailMismatchReason,
     "global_off_without_customer_unsubscribe",
   );
   assert.equal(

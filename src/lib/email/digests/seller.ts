@@ -2,12 +2,15 @@ import { SITE_URL } from "@/lib/constants";
 import { withPropertyAlertUtm } from "@/lib/email/property-alert-links";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import { loadCategoryEmailEnabled } from "@/lib/communications/category-email-gate";
+import {
+  buildCustomerPreferenceEmailChrome,
+  preferenceFooterFields,
+} from "@/lib/communications/preference-email-chrome";
 import type { DigestRunStats } from "@/lib/email/digests/buyer";
 import {
   findNeighborhoodActivity,
   type DigestListingCard,
 } from "@/lib/email/digests/search";
-import { emailPreferencesUrl } from "@/lib/email/log";
 import { renderNeighborhoodWeeklyEmail } from "@/lib/email/templates";
 import { formatListPrice, formatPrice } from "@/lib/listings/constants";
 import { prisma } from "@/lib/prisma";
@@ -110,6 +113,7 @@ export async function runSellerNeighborhoodReports(opts?: {
       id: true,
       email: true,
       name: true,
+      workspaceId: true,
       homeAddress: true,
       homeLat: true,
       homeLng: true,
@@ -168,6 +172,13 @@ export async function runSellerNeighborhoodReports(opts?: {
       }
 
       const label = homeLabel(user.homeAddress);
+      const chrome = user.workspaceId
+        ? await buildCustomerPreferenceEmailChrome({
+            userId: user.id,
+            workspaceId: user.workspaceId,
+            email: user.email,
+          })
+        : null;
       const rendered = renderNeighborhoodWeeklyEmail({
         name: user.name,
         homeLabel: label,
@@ -182,7 +193,7 @@ export async function runSellerNeighborhoodReports(opts?: {
           toLine(l, { sold: true }),
         ),
         ctaUrl: `${SITE_URL}/owner`,
-        unsubscribeUrl: emailPreferencesUrl(),
+        ...preferenceFooterFields(chrome),
       });
 
       if (opts?.dryRun) {

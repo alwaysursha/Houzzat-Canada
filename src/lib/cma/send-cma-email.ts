@@ -6,6 +6,10 @@
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import {
+  buildCustomerPreferenceEmailChrome,
+  preferenceFooterFields,
+} from "@/lib/communications/preference-email-chrome";
+import {
   crmOptionalEmailDenied,
   loadCategoryEmailEnabled,
 } from "@/lib/communications/category-email-gate";
@@ -132,6 +136,13 @@ export async function sendCmaEmailToLead(input: {
   const agentName =
     report.agent.name?.trim() || report.agent.email || "Your agent";
 
+  const chrome = lead.customer?.id
+    ? await buildCustomerPreferenceEmailChrome({
+        userId: lead.customer.id,
+        workspaceId: input.workspaceId,
+        email: toEmail,
+      })
+    : null;
   const rendered = renderCmaEmail({
     recipientName: lead.customer?.name,
     agentName,
@@ -143,6 +154,7 @@ export async function sendCmaEmailToLead(input: {
     subjectCity: report.city,
     cmaUrl,
     recommendedListPrice: report.recommendedListPrice,
+    ...preferenceFooterFields(chrome),
   });
 
   const result = await sendAndLogClientEmail({
