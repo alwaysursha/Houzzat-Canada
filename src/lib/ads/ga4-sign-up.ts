@@ -8,7 +8,7 @@ export const HOUZZAT_SIGN_UP_GTAG = "__houzzatReportSignUp";
  * detect it; invoked only after a created account.
  */
 export function googleAdsSignUpEventSnippet(): string {
-  return `window.${HOUZZAT_SIGN_UP_GTAG}=function(){gtag('event','sign_up',{method:'email'});gtag('event','conversion_event_signup',{});gtag('event','conversion_event_signup_1',{});};`;
+  return `window.${HOUZZAT_SIGN_UP_GTAG}=function(){gtag('event','sign_up',{method:'email'});gtag('event','conversion_event_signup',{});gtag('event','conversion_event_signup_1',{});gtag('event','conversion_event_signup_2',{});};`;
 }
 
 function installedGtag(): GtagFn | undefined {
@@ -21,8 +21,9 @@ function fireSignUpEvents(gtag: GtagFn | undefined): void {
   gtag?.("event", "sign_up", { method: "email" });
   // Legacy custom event name (kept for existing GA4/Ads mappings).
   gtag?.("event", "conversion_event_signup", {});
-  // Google Ads conversion created as SIGNUP (1) — event snippet name.
+  // Google Ads conversion created as SIGNUP (1) / SIGNUP (2).
   gtag?.("event", "conversion_event_signup_1", {});
+  gtag?.("event", "conversion_event_signup_2", {});
 }
 
 /**

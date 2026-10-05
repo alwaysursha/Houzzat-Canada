@@ -61,7 +61,7 @@ async function testTenantsResolveDifferentGa4Ids() {
   assert.ok(installB);
   assert.equal(installA.src, "https://www.googletagmanager.com/gtag/js?id=G-TENANTA");
   assert.ok(installA.config.startsWith("gtag('config','G-TENANTA');"));
-  assert.ok(installA.config.includes("conversion_event_signup_1"));
+  assert.ok(installA.config.includes("conversion_event_signup_2"));
   assert.equal(installB.src, "https://www.googletagmanager.com/gtag/js?id=AW-200");
   assert.ok(installB.config.includes("gtag('config','G-TENANTB');"));
   assert.ok(installB.config.includes("gtag('config','AW-200');"));
