@@ -723,6 +723,9 @@ model Workspace {
   leadImportRows                    LeadImportRow[]
   conversations                     Conversation[]
   smsSuppressions                   SmsSuppression[]
+  emailSuppressions                 EmailSuppression[]
+  communicationPreferences         CommunicationPreference[]
+  communicationPreferenceEvents     CommunicationPreferenceEvent[]
   inboundSmsQuarantines             InboundSmsQuarantine[]
   outboundSmsDeadLetters            OutboundSmsDeadLetter[]
   smsUsageEvents                    SmsUsageEvent[]
@@ -1088,6 +1091,9 @@ model User {
   agentAppointments         Appointment[]              @relation("AgentAppointments")
   landingPages              LandingPage[]
   consentEvents             ConsentEvent[]
+  emailSuppressions         EmailSuppression[]
+  communicationPreferences  CommunicationPreference[]
+  communicationPreferenceEvents CommunicationPreferenceEvent[]
   savedListings             SavedListing[]
   savedSearches             SavedSearch[]
   listingViews              ListingView[]
@@ -1869,6 +1875,123 @@ model ConsentEvent {
   @@index([userId, kind])
   @@index([leadId])
   @@index([email])
+}
+
+/**
+ * Current-state email suppression. Two scopes share one model:
+ * - MAILBOX: provider/destination suppression (HARD_BOUNCE, COMPLAINT, ADMIN).
+ *   identityKey = emailNormalized. Applies to that address in the workspace.
+ * - CUSTOMER: preference suppression (GLOBAL_UNSUBSCRIBE). identityKey = userId.
+ *   Never unique on email, so a shared mailbox cannot unsubscribe another user.
+ * History lives on CommunicationPreferenceEvent. Changing User.email does not
+ * delete or rewrite these rows.
+ */
+model EmailSuppression {
+  id              String                 @id @default(cuid())
+  workspaceId     String
+  userId          String?
+  emailNormalized String
+  scope           EmailSuppressionScope
+  identityKey     String
+  reason          EmailSuppressionReason
+  source          String
+  providerId      String?
+  leadEmailLogId  String?
+  meta            Json?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, scope, identityKey])
+  @@index([workspaceId, emailNormalized])
+  @@index([emailNormalized])
+  @@index([userId])
+  @@index([providerId])
+}
+
+enum EmailSuppressionScope {
+  MAILBOX
+  CUSTOMER
+}
+
+enum EmailSuppressionReason {
+  HARD_BOUNCE
+  COMPLAINT
+  GLOBAL_UNSUBSCRIBE
+  ADMIN
+}
+
+enum CommunicationChannel {
+  EMAIL
+  PUSH
+}
+
+enum CommunicationCategory {
+  PROPERTY_WATCH
+  AREA_WATCH
+  SAVED_SEARCH
+  BUYER_DIGEST
+  SELLER_REPORT
+  AGENT_COMMUNICATION
+  MARKETING
+  ACCOUNT_SECURITY
+  CONTACT_UPDATE
+  VIEWING
+}
+
+/**
+ * Future category/global policy. Absence of a row = existing production
+ * behavior (do not treat missing as opted out).
+ */
+model CommunicationPreference {
+  id          String                 @id @default(cuid())
+  userId      String
+  workspaceId String
+  category    CommunicationCategory
+  channel     CommunicationChannel
+  enabled     Boolean
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category, channel])
+  @@index([workspaceId, category, channel])
+}
+
+/**
+ * Canonical preference/suppression audit. Distinct from LeadActivity (CRM)
+ * and ConsentEvent (CASL/terms accept).
+ */
+model CommunicationPreferenceEvent {
+  id              String   @id @default(cuid())
+  workspaceId     String?
+  userId          String?
+  leadId          String?
+  emailNormalized String?
+  kind            String
+  category        String?
+  channel         String?
+  previousState   Json?
+  resultingState  Json?
+  source          String
+  providerEventId String?  @unique
+  providerId      String?
+  ip              String?
+  userAgent       String?
+  meta            Json?
+  createdAt       DateTime @default(now())
+
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([userId, createdAt])
+  @@index([emailNormalized, createdAt])
+  @@index([kind, createdAt])
 }
 
 /**

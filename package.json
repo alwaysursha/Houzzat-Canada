@@ -38,6 +38,7 @@
     "monitors:selftest": "node --import tsx scripts/monitors-reliability-selftest.ts",
     "signup:selftest": "node --import tsx scripts/signup-reliability-selftest.ts",
     "email-open-verify:selftest": "node --import tsx scripts/email-open-verify-selftest.ts",
+    "communications-phase1:selftest": "node --import tsx scripts/communications-phase1-selftest.ts",
     "verify-email-nudge:selftest": "node --import tsx scripts/verify-email-nudge-selftest.ts",
     "signup-attribution:selftest": "node --import tsx scripts/signup-attribution-selftest.ts",
     "workspace-tracking:selftest": "node --import tsx scripts/workspace-tracking-selftest.ts",

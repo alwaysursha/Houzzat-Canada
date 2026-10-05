@@ -1,6 +1,8 @@
 import { Resend } from "resend";
 import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
 import { openLeadHandoffHref } from "@/lib/agent/lead-profile-query";
+import { handleResendSuppressionWebhook } from "@/lib/communications/resend-webhook-suppression";
+import type { ResendDeliveryEvent } from "@/lib/communications/resend-delivery";
 import { emailEnv } from "@/lib/email/env";
 import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
@@ -206,34 +208,52 @@ export async function handleResendWebhook(
   }
 
   const type = event.type;
-  if (type !== "email.opened" && type !== "email.clicked") {
-    return { ok: true, handled: false, type };
-  }
+  const providerId =
+    event.data && "email_id" in event.data
+      ? String(event.data.email_id ?? "").trim() || undefined
+      : undefined;
+  const webhookEventId = headers.get("svix-id");
 
-  const providerId = event.data.email_id?.trim();
-  if (!providerId) {
-    return { ok: true, handled: false, type };
-  }
-
-  const at = new Date(event.created_at || Date.now());
-  try {
-    if (type === "email.opened") {
-      const handled = await recordOpened(providerId, at);
-      return { ok: true, handled, type };
+  if (type === "email.opened" || type === "email.clicked") {
+    if (!providerId) {
+      return { ok: true, handled: false, type };
     }
 
-    const link =
-      "click" in event.data && event.data.click
-        ? event.data.click.link
-        : null;
-    const clickAt =
-      "click" in event.data && event.data.click?.timestamp
-        ? new Date(event.data.click.timestamp)
-        : at;
-    const handled = await recordClicked(providerId, clickAt, link);
-    return { ok: true, handled, type };
+    const at = new Date(event.created_at || Date.now());
+    try {
+      if (type === "email.opened") {
+        const handled = await recordOpened(providerId, at);
+        return { ok: true, handled, type };
+      }
+
+      const link =
+        "click" in event.data && event.data.click
+          ? event.data.click.link
+          : null;
+      const clickAt =
+        "click" in event.data && event.data.click?.timestamp
+          ? new Date(event.data.click.timestamp)
+          : at;
+      const handled = await recordClicked(providerId, clickAt, link);
+      return { ok: true, handled, type };
+    } catch (err) {
+      console.error("[resend:webhook] handle failed", type, providerId, err);
+      return { ok: false, error: "Handler failed", status: 500 };
+    }
+  }
+
+  try {
+    const delivery = await handleResendSuppressionWebhook({
+      event: event as ResendDeliveryEvent,
+      webhookEventId,
+    });
+    if (delivery.handled) {
+      return { ok: true, handled: true, type };
+    }
   } catch (err) {
-    console.error("[resend:webhook] handle failed", type, providerId, err);
+    console.error("[resend:webhook] suppression failed", type, providerId, err);
     return { ok: false, error: "Handler failed", status: 500 };
   }
+
+  return { ok: true, handled: false, type };
 }

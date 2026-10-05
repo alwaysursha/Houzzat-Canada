@@ -10,6 +10,7 @@ import type { RenderedEmail } from "@/lib/email/templates";
 export type SendEmailResult =
   | { ok: true; status: "sent"; providerId?: string }
   | { ok: true; status: "skipped" }
+  | { ok: true; status: "suppressed"; reason?: string }
   | { ok: false; status: "failed"; error: string };
 
 let resendClient: Resend | null = null;
