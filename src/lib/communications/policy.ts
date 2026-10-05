@@ -5,6 +5,7 @@ import {
   type CommunicationChannel,
   type CommunicationClass,
 } from "@/lib/communications/classification";
+import { categoryPreferenceOrDefault as categoryEnabledOrDefault } from "@/lib/communications/category-map";
 import {
   legacyBuyerDigestPrimaryEligible,
   legacyBuyerDigestUserEligible,
@@ -115,6 +116,17 @@ export function evaluateCommunicationPolicy(
     };
   }
 
+  if (
+    input.class !== "unclassified" &&
+    input.emailAlertsEnabled === false
+  ) {
+    return {
+      allowed: false,
+      reason: "email_alerts_off",
+      suppressionLookup,
+    };
+  }
+
   if (input.categoryEnabled === false) {
     return {
       allowed: false,
@@ -173,6 +185,13 @@ export function evaluateCommunicationPolicy(
           suppressionLookup,
         };
       }
+      return { allowed: true, reason: "allowed", suppressionLookup };
+    }
+
+    if (
+      input.category === "seller_report" ||
+      input.category === "saved_search"
+    ) {
       return { allowed: true, reason: "allowed", suppressionLookup };
     }
 
@@ -236,7 +255,7 @@ export function evaluateCommunicationPolicy(
 export function categoryPreferenceOrDefault(
   enabled: boolean | undefined,
 ): boolean {
-  return enabled !== false;
+  return categoryEnabledOrDefault(enabled);
 }
 
 export function optionalEmailMayBeSuppressed(

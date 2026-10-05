@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canAccessLead, requireAgentContextFromRequest } from "@/lib/agent";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import {
+  crmOptionalEmailDenied,
+  loadCategoryEmailEnabled,
+} from "@/lib/communications/category-email-gate";
 import { renderAgentMessageEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
 
@@ -69,12 +73,25 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const consented =
-      Boolean(lead.contactConsentAt) ||
-      Boolean(lead.customer?.caslConsentAt);
-    if (!consented || lead.customer?.emailAlertsEnabled === false) {
+    const categoryEnabled = lead.customer?.id
+      ? await loadCategoryEmailEnabled(
+          lead.customer.id,
+          "agent_communication",
+        )
+      : true;
+    const denied = crmOptionalEmailDenied({
+      contactConsentAt: lead.contactConsentAt,
+      caslConsentAt: lead.customer?.caslConsentAt ?? null,
+      emailAlertsEnabled: lead.customer?.emailAlertsEnabled,
+      categoryEnabled,
+    });
+    if (denied) {
       skipped += 1;
-      errors.push(`${toEmail}: no CASL consent / alerts off`);
+      errors.push(
+        denied === "category_off"
+          ? `${toEmail}: agent email category off`
+          : `${toEmail}: no CASL consent / alerts off`,
+      );
       continue;
     }
 

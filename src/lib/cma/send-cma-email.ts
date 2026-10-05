@@ -5,6 +5,10 @@
 
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import {
+  crmOptionalEmailDenied,
+  loadCategoryEmailEnabled,
+} from "@/lib/communications/category-email-gate";
 import { renderCmaEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
 import { resolveWorkspaceBrand } from "@/lib/tenancy/resolve-workspace-brand";
@@ -102,14 +106,24 @@ export async function sendCmaEmailToLead(input: {
     };
   }
 
-  const consented =
-    Boolean(lead.contactConsentAt) || Boolean(lead.customer?.caslConsentAt);
-  if (!consented || lead.customer?.emailAlertsEnabled === false) {
+  const categoryEnabled = lead.customer?.id
+    ? await loadCategoryEmailEnabled(lead.customer.id, "agent_communication")
+    : true;
+  const denied = crmOptionalEmailDenied({
+    contactConsentAt: lead.contactConsentAt,
+    caslConsentAt: lead.customer?.caslConsentAt ?? null,
+    emailAlertsEnabled: lead.customer?.emailAlertsEnabled,
+    categoryEnabled,
+  });
+  if (denied) {
     return {
       ok: false,
       status: 403,
-      code: "CONSENT_REQUIRED",
-      message: "Lead does not have email consent",
+      code: denied === "category_off" ? "CATEGORY_BLOCKED" : "CONSENT_REQUIRED",
+      message:
+        denied === "category_off"
+          ? "Customer opted out of agent email"
+          : "Lead does not have email consent",
     };
   }
 

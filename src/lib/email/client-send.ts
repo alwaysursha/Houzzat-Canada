@@ -2,6 +2,7 @@ import {
   evaluateOptionalEmailSuppression,
   resolveEmailSendWorkspace,
 } from "@/lib/communications/send-enforcement";
+import { prismaCommunicationPreferenceStore } from "@/lib/communications/preference-store";
 import {
   emailPreferencesUrl,
   logClientEmail,
@@ -40,6 +41,7 @@ export async function sendAndLogClientEmail(input: {
       kind: input.rendered.kind,
       workspaceId,
       userId: input.customerId,
+      preferenceStore: prismaCommunicationPreferenceStore(),
     });
     if (suppression.blocked) {
       return { ok: true, status: "suppressed", reason: suppression.reason };

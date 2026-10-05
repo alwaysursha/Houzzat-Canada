@@ -39,6 +39,28 @@ export const COMMUNICATION_CHANNELS = ["email", "push"] as const;
 
 export type CommunicationChannel = (typeof COMMUNICATION_CHANNELS)[number];
 
+/** Customer-controllable EMAIL categories in Phase 2A. */
+export const CUSTOMER_OPTIONAL_EMAIL_CATEGORIES = [
+  "property_watch",
+  "area_watch",
+  "saved_search",
+  "buyer_digest",
+  "seller_report",
+  "agent_communication",
+  "marketing",
+] as const;
+
+export type CustomerOptionalEmailCategory =
+  (typeof CUSTOMER_OPTIONAL_EMAIL_CATEGORIES)[number];
+
+export function isCustomerOptionalEmailCategory(
+  category: CommunicationCategory,
+): category is CustomerOptionalEmailCategory {
+  return (CUSTOMER_OPTIONAL_EMAIL_CATEGORIES as readonly string[]).includes(
+    category,
+  );
+}
+
 export type ClassifiedCommunication = {
   class: CommunicationClass;
   category: CommunicationCategory;

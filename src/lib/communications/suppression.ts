@@ -34,6 +34,11 @@ export type EmailSuppressionStore = {
     identityKey: string;
   }): Promise<EmailSuppressionRecord | null>;
   upsert(record: EmailSuppressionRecord): Promise<{ created: boolean }>;
+  deleteByIdentity(input: {
+    workspaceId: string;
+    scope: EmailSuppressionScope;
+    identityKey: string;
+  }): Promise<EmailSuppressionRecord | null>;
 };
 
 export type SuppressionLookupStatus =
@@ -306,5 +311,36 @@ export function memoryEmailSuppressionStore(): EmailSuppressionStore & {
       rows[index] = record;
       return { created: false };
     },
+    async deleteByIdentity({ workspaceId, scope, identityKey }) {
+      const index = rows.findIndex(
+        (row) =>
+          row.workspaceId === workspaceId &&
+          row.scope === scope &&
+          row.identityKey === identityKey,
+      );
+      if (index === -1) return null;
+      const [removed] = rows.splice(index, 1);
+      return removed ?? null;
+    },
   };
+}
+
+/**
+ * Remove current-state CUSTOMER/GLOBAL_UNSUBSCRIBE only.
+ * Never deletes MAILBOX HARD_BOUNCE/COMPLAINT rows.
+ */
+export async function deactivateCustomerGlobalUnsubscribe(
+  store: EmailSuppressionStore,
+  input: { workspaceId: string; userId: string },
+): Promise<{ removed: boolean; previous: EmailSuppressionRecord | null }> {
+  const existing = await findCustomerEmailSuppression(store, input);
+  if (!existing || existing.reason !== "GLOBAL_UNSUBSCRIBE") {
+    return { removed: false, previous: existing };
+  }
+  const previous = await store.deleteByIdentity({
+    workspaceId: input.workspaceId,
+    scope: "CUSTOMER",
+    identityKey: customerIdentityKey(input.userId),
+  });
+  return { removed: Boolean(previous), previous };
 }

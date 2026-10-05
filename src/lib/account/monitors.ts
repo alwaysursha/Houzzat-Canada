@@ -5,6 +5,7 @@ import type {
 } from "@prisma/client";
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import { loadCategoryEmailEnabled } from "@/lib/communications/category-email-gate";
 import { withPropertyAlertUtm } from "@/lib/email/property-alert-links";
 import { sendPushToUser } from "@/lib/notifications/push";
 import type { ConsumerPushType } from "@/lib/notifications/catalog";
@@ -106,6 +107,7 @@ async function createAlert(input: {
   name?: string | null;
   emailAlertsEnabled: boolean;
   monitorEmailAlerts: boolean;
+  watchCategory: "property_watch" | "area_watch";
   /** Structured fields for HTML templates when available. */
   template?:
     | ({
@@ -178,6 +180,10 @@ async function createAlert(input: {
     !input.monitorEmailAlerts ||
     !input.email
   ) {
+    return;
+  }
+
+  if (!(await loadCategoryEmailEnabled(input.userId, input.watchCategory))) {
     return;
   }
 
@@ -411,6 +417,7 @@ export async function runPropertyMonitorChecks(
           name: monitor.user.name,
           emailAlertsEnabled: monitor.user.emailAlertsEnabled,
           monitorEmailAlerts: monitor.emailAlerts,
+          watchCategory: "property_watch",
           template: soldLike
             ? {
                 type: "sold",
@@ -593,6 +600,7 @@ async function processAreaEventPages(input: {
             name: input.monitor.user.name,
             emailAlertsEnabled: input.monitor.user.emailAlertsEnabled,
             monitorEmailAlerts: input.monitor.emailAlerts,
+            watchCategory: "area_watch",
             template: {
               type: "just_listed",
               areaName: input.monitor.name,
@@ -616,6 +624,7 @@ async function processAreaEventPages(input: {
             name: input.monitor.user.name,
             emailAlertsEnabled: input.monitor.user.emailAlertsEnabled,
             monitorEmailAlerts: input.monitor.emailAlerts,
+            watchCategory: "area_watch",
             template: {
               type: "sold",
               addressLine: listing.addressLine,

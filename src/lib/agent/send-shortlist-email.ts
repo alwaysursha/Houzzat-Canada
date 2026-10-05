@@ -1,6 +1,10 @@
 import { createHash } from "crypto";
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import {
+  crmOptionalEmailDenied,
+  loadCategoryEmailEnabled,
+} from "@/lib/communications/category-email-gate";
 import { renderShortlistEmail } from "@/lib/email/templates";
 import {
   formatListPrice,
@@ -125,14 +129,24 @@ export async function sendShortlistEmail(
     };
   }
 
-  const consented =
-    Boolean(lead.contactConsentAt) || Boolean(lead.customer?.caslConsentAt);
-  if (!consented || lead.customer?.emailAlertsEnabled === false) {
+  const categoryEnabled = lead.customer?.id
+    ? await loadCategoryEmailEnabled(lead.customer.id, "agent_communication")
+    : true;
+  const denied = crmOptionalEmailDenied({
+    contactConsentAt: lead.contactConsentAt,
+    caslConsentAt: lead.customer?.caslConsentAt ?? null,
+    emailAlertsEnabled: lead.customer?.emailAlertsEnabled,
+    categoryEnabled,
+  });
+  if (denied) {
     return {
       ok: false,
       status: 400,
-      code: "CASL_BLOCKED",
-      message: "No CASL consent or email alerts are off",
+      code: denied === "category_off" ? "CATEGORY_BLOCKED" : "CASL_BLOCKED",
+      message:
+        denied === "category_off"
+          ? "Customer opted out of agent email"
+          : "No CASL consent or email alerts are off",
     };
   }
 

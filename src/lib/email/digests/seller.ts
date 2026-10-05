@@ -1,6 +1,7 @@
 import { SITE_URL } from "@/lib/constants";
 import { withPropertyAlertUtm } from "@/lib/email/property-alert-links";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import { loadCategoryEmailEnabled } from "@/lib/communications/category-email-gate";
 import type { DigestRunStats } from "@/lib/email/digests/buyer";
 import {
   findNeighborhoodActivity,
@@ -130,6 +131,11 @@ export async function runSellerNeighborhoodReports(opts?: {
           user.email,
           user.homeAddress,
         );
+        continue;
+      }
+
+      if (!(await loadCategoryEmailEnabled(user.id, "seller_report"))) {
+        stats.skipped += 1;
         continue;
       }
 

@@ -1,8 +1,11 @@
 import {
   classifyEmailKind,
+  isCustomerOptionalEmailCategory,
   isCustomerPolicyExemptClass,
   isOptionalEmailClass,
 } from "@/lib/communications/classification";
+import { customerCategoryEmailEnabled } from "@/lib/communications/customer-preferences";
+import type { CommunicationPreferenceStore } from "@/lib/communications/preference-store";
 import { prismaEmailSuppressionStore } from "@/lib/communications/stores";
 import {
   lookupEmailSuppression,
@@ -77,6 +80,7 @@ export async function evaluateOptionalEmailSuppression(input: {
   workspaceId: string | null;
   userId?: string | null;
   store?: EmailSuppressionStore;
+  preferenceStore?: CommunicationPreferenceStore;
 }): Promise<OptionalEmailSuppressionDecision> {
   const classified = classifyEmailKind(input.kind);
   if (isCustomerPolicyExemptClass(classified.class)) {
@@ -128,6 +132,30 @@ export async function evaluateOptionalEmailSuppression(input: {
       lookupStatus: "unavailable",
     };
   }
+
+  if (
+    input.preferenceStore &&
+    input.userId &&
+    isCustomerOptionalEmailCategory(classified.category)
+  ) {
+    try {
+      const categoryEnabled = await customerCategoryEmailEnabled({
+        store: input.preferenceStore,
+        userId: input.userId,
+        category: classified.category,
+      });
+      if (!categoryEnabled) {
+        return {
+          blocked: true,
+          reason: "category_off",
+          lookupStatus: "not_suppressed",
+        };
+      }
+    } catch (error) {
+      console.error("[email:category-preference-lookup]", error);
+    }
+  }
+
   return {
     blocked: false,
     reason: "allowed",

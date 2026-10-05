@@ -15,6 +15,8 @@ import {
   scheduleCustomerIntroductionIfFirstValidE164,
   scheduleUnsubscribeSmsAutomations,
 } from "@/lib/sms/automations";
+import { setGlobalOptionalEmailPreference } from "@/lib/communications/preference-commands";
+import { prismaPreferenceCommandContext } from "@/lib/communications/prisma-preference-context";
 
 const schema = z.object({
   emailAlertsEnabled: z.boolean().optional(),
@@ -60,10 +62,60 @@ export async function PATCH(request: Request) {
     }
   }
 
+  const nextEmailEnabled = parsed.data.emailAlertsEnabled;
+  const emailChanging =
+    nextEmailEnabled !== undefined &&
+    nextEmailEnabled !== user.emailAlertsEnabled;
+
+  if (emailChanging) {
+    if (!user.workspaceId) {
+      return NextResponse.json({ error: "Workspace required." }, { status: 403 });
+    }
+    const globalResult = await setGlobalOptionalEmailPreference(
+      prismaPreferenceCommandContext(),
+      {
+        userId: user.id,
+        workspaceId: user.workspaceId,
+        enabled: nextEmailEnabled,
+        source: "account_preferences",
+        caslConsentAt: nextEmailEnabled
+          ? (user.caslConsentAt ?? new Date())
+          : undefined,
+      },
+    );
+    if (!globalResult.ok) {
+      const status =
+        globalResult.error === "workspace_mismatch" ||
+        globalResult.error === "workspace_required"
+          ? 403
+          : 400;
+      return NextResponse.json({ error: globalResult.error }, { status });
+    }
+    if (nextEmailEnabled === false) {
+      await logLeadActivityForCustomer({
+        customerId: user.id,
+        type: "unsubscribe",
+        body: "Customer turned off email alerts",
+        actorUserId: user.id,
+        meta: { channel: "email" },
+      });
+    } else {
+      await logLeadActivityForCustomer({
+        customerId: user.id,
+        type: "contact_updated_by_customer",
+        body: "Customer re-enabled email alerts",
+        actorUserId: user.id,
+        meta: { channel: "email", source: "preferences" },
+      });
+    }
+  }
+
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
-      emailAlertsEnabled: parsed.data.emailAlertsEnabled,
+      ...(emailChanging
+        ? {}
+        : { emailAlertsEnabled: parsed.data.emailAlertsEnabled }),
       smsAlertsEnabled: parsed.data.smsAlertsEnabled,
       relatedListingsMode: parsed.data.relatedListingsMode,
       caslConsentAt:
@@ -81,30 +133,6 @@ export async function PATCH(request: Request) {
       vowVersion: true,
     },
   });
-
-  if (
-    parsed.data.emailAlertsEnabled === false &&
-    user.emailAlertsEnabled !== false
-  ) {
-    await logLeadActivityForCustomer({
-      customerId: user.id,
-      type: "unsubscribe",
-      body: "Customer turned off email alerts",
-      actorUserId: user.id,
-      meta: { channel: "email" },
-    });
-  } else if (
-    parsed.data.emailAlertsEnabled === true &&
-    user.emailAlertsEnabled === false
-  ) {
-    await logLeadActivityForCustomer({
-      customerId: user.id,
-      type: "contact_updated_by_customer",
-      body: "Customer re-enabled email alerts",
-      actorUserId: user.id,
-      meta: { channel: "email", source: "preferences" },
-    });
-  }
 
   if (
     parsed.data.smsAlertsEnabled === false &&

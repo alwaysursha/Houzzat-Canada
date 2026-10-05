@@ -62,6 +62,13 @@ type Db = {
         meta: Prisma.InputJsonValue;
       };
     }): Promise<unknown>;
+    deleteMany(args: {
+      where: {
+        workspaceId: string;
+        scope: EmailSuppressionRecord["scope"];
+        identityKey: string;
+      };
+    }): Promise<{ count: number }>;
   };
   communicationPreferenceEvent: {
     findUnique(args: {
@@ -201,6 +208,18 @@ export function prismaEmailSuppressionStore(
         },
       });
       return { created: !existing };
+    },
+    async deleteByIdentity({ workspaceId, scope, identityKey }) {
+      const existing = await db.emailSuppression.findUnique({
+        where: {
+          workspaceId_scope_identityKey: { workspaceId, scope, identityKey },
+        },
+      });
+      if (!existing) return null;
+      await db.emailSuppression.deleteMany({
+        where: { workspaceId, scope, identityKey },
+      });
+      return toSuppressionRecord(existing);
     },
   };
 }

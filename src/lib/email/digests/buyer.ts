@@ -8,6 +8,7 @@ import {
 } from "@/lib/agent/intent-to-search";
 import { SITE_URL } from "@/lib/constants";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import { loadCategoryEmailEnabled } from "@/lib/communications/category-email-gate";
 import { sendPushToUserFirstEnabled } from "@/lib/notifications/push";
 import {
   findNewListingsForSavedQuery,
@@ -183,6 +184,11 @@ export async function runBuyerSavedSearchDigests(opts?: {
           : existingPrimary;
 
       if (primary && !primary.emailAlerts) {
+        stats.skipped += 1;
+        continue;
+      }
+
+      if (!(await loadCategoryEmailEnabled(user.id, "buyer_digest"))) {
         stats.skipped += 1;
         continue;
       }
