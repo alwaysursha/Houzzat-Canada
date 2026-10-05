@@ -318,7 +318,6 @@ export default async function AccountPage() {
       )}
 
       <AlertPreferencesForm
-        emailAlertsEnabled={user.emailAlertsEnabled}
         smsAlertsEnabled={user.smsAlertsEnabled}
         phone={user.phone}
       />

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { NotificationPreferencesForm } from "@/components/notifications/NotificationPreferencesForm";
 import { requireCustomerUser } from "@/lib/account";
@@ -6,6 +7,10 @@ import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Notifications" };
 
+/**
+ * Push-focused account page. Email preferences live on
+ * `/preferences/email` (Communication Preferences).
+ */
 export default async function AccountNotificationsPage() {
   const customer = await requireCustomerUser();
   if (!customer) redirect("/auth/sign-in?callbackUrl=/account/notifications");
@@ -27,14 +32,21 @@ export default async function AccountNotificationsPage() {
           Notifications
         </h1>
         <p className="mt-2 max-w-xl text-sm text-ink/60">
-          Choose which Houzzat alerts reach your phone. Everything starts on —
-          uncheck anything you don’t want.
+          Choose which Houzzat alerts reach your phone. Email categories and
+          unsubscribe controls are in{" "}
+          <Link
+            href="/preferences/email"
+            className="font-semibold text-canopy hover:underline"
+          >
+            Communication Preferences
+          </Link>
+          .
         </p>
       </div>
       <NotificationPreferencesForm
         items={items}
         showDeviceActions
-        intro="Push alerts for your home search. Email alerts are still managed separately on Your Houzzat."
+        intro="Push alerts for your home search. Manage email preferences separately in Communication Preferences."
       />
     </div>
   );

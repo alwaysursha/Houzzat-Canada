@@ -110,6 +110,7 @@ export default async function AccountLayout({
       label: chromeBrand ? tenantAccountLabel(chromeBrand) : "Your account",
     },
     { href: "/account/chat", label: "Chat" },
+    { href: "/preferences/email", label: "Preferences" },
     { href: "/account/notifications", label: "Notifications" },
     { href: "/route-planner", label: "Route Planner" },
     { href: "/account/saved", label: "Saved" },

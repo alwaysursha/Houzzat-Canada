@@ -1,24 +1,35 @@
+import type { Metadata } from "next";
+import { PreferenceCenterClient } from "@/components/preferences/PreferenceCenterClient";
+
 export const dynamic = "force-dynamic";
 
+export const metadata: Metadata = {
+  title: "Communication Preferences",
+  robots: { index: false, follow: false },
+};
+
 /**
- * Phase 2B-1 placeholder. GET must not mutate preferences.
- * Phase 2B-2 will render the Preference Center.
+ * Customer Communication Preference Center.
+ * GET is always non-mutating. Token stays in the request URL / in-memory
+ * client prop only — never persisted to storage or analytics.
  */
-export default async function PreferenceEmailPlaceholderPage({
+export default async function PreferenceEmailPage({
   searchParams,
 }: {
   searchParams: Promise<{ token?: string; action?: string }>;
 }) {
   const params = await searchParams;
-  const intent =
-    params.action === "unsubscribe"
-      ? "unsubscribe presentation intent only — nothing was changed by opening this link."
-      : "opening this link did not change your email subscriptions.";
+  const token =
+    typeof params.token === "string" && params.token.trim().length >= 16
+      ? params.token.trim()
+      : null;
+  const action =
+    typeof params.action === "string" ? params.action.trim() : null;
 
   return (
-    <main style={{ maxWidth: 560, margin: "40px auto", padding: 24 }}>
-      <h1>Email preferences</h1>
-      <p>This Preference Center page is not available yet. {intent}</p>
-    </main>
+    <PreferenceCenterClient
+      initialToken={token}
+      initialAction={action === "unsubscribe" ? "unsubscribe" : null}
+    />
   );
 }

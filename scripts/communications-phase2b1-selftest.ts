@@ -644,7 +644,8 @@ function testSourceContracts() {
   assert.ok(manage.includes("setGlobalOptionalEmailPreference"));
   assert.ok(manage.includes("parsed.data.userId"));
   const page = read("src/app/preferences/email/page.tsx");
-  assert.ok(page.includes("did not change"));
+  assert.ok(page.includes("PreferenceCenterClient"));
+  assert.ok(page.includes("GET is always non-mutating"));
   assert.ok(!page.includes("setGlobalOptionalEmailPreference"));
   const layout = read("src/lib/email/layout.ts");
   assert.ok(layout.includes("Manage email preferences"));
