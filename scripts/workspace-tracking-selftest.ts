@@ -60,9 +60,11 @@ async function testTenantsResolveDifferentGa4Ids() {
   assert.ok(installA);
   assert.ok(installB);
   assert.equal(installA.src, "https://www.googletagmanager.com/gtag/js?id=G-TENANTA");
-  assert.equal(installA.config, "gtag('config','G-TENANTA');");
-  assert.equal(installB.src, "https://www.googletagmanager.com/gtag/js?id=G-TENANTB");
+  assert.ok(installA.config.startsWith("gtag('config','G-TENANTA');"));
+  assert.ok(installA.config.includes("conversion_event_signup_1"));
+  assert.equal(installB.src, "https://www.googletagmanager.com/gtag/js?id=AW-200");
   assert.ok(installB.config.includes("gtag('config','G-TENANTB');"));
+  assert.ok(installB.config.includes("gtag('config','AW-200');"));
   assert.equal(installA.config.includes("G-TENANTB"), false);
   assert.equal(installB.config.includes("G-TENANTA"), false);
   assert.equal(installA.config.includes("G-H6JNE333QF"), false);
@@ -95,7 +97,8 @@ async function testMissingGa4LoadsNoGa4Tag() {
   const adsInstall = googleTagInstall(adsOnly);
   assert.ok(adsInstall);
   assert.equal(adsInstall.src, "https://www.googletagmanager.com/gtag/js?id=AW-300");
-  assert.equal(adsInstall.config, "gtag('config','AW-300');");
+  assert.ok(adsInstall.config.startsWith("gtag('config','AW-300');"));
+  assert.ok(adsInstall.config.includes("conversion_event_signup"));
   assert.equal(adsInstall.config.includes("G-"), false);
 
   assert.equal(workspaceTrackingIds({ ga4MeasurementId: "G-ok';alert(1)" }).ga4MeasurementId, null);

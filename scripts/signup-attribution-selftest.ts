@@ -633,6 +633,7 @@ function testGa4SignUpFiresOnlyAfterCreatedAccount() {
   assert.ok(
     helper.includes('gtag?.("event", "conversion_event_signup_1", {})'),
   );
+  assert.ok(helper.includes("googleAdsSignUpEventSnippet"));
   assert.equal(helper.includes("AdsTrackingPixels"), false);
   assert.equal(helper.includes("googletagmanager.com"), false);
 
@@ -653,6 +654,8 @@ function testGa4SignUpFiresOnlyAfterCreatedAccount() {
   assert.equal(pixels.includes("conversion_event_signup"), false);
   const tracking = read("src/lib/ads/workspace-tracking.ts");
   assert.equal((tracking.match(/googletagmanager.com\/gtag\/js/g) ?? []).length, 1);
+  assert.ok(tracking.includes("googleAdsSignUpEventSnippet"));
+  assert.ok(tracking.includes("ids.googleAdsId ?? ids.ga4MeasurementId"));
 }
 
 function testWatchVerificationUxUnchanged() {

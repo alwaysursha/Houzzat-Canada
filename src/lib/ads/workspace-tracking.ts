@@ -1,3 +1,4 @@
+import { googleAdsSignUpEventSnippet } from "@/lib/ads/ga4-sign-up";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 
 /** Public tag IDs for the workspace website already resolved by tenancy. */
@@ -60,6 +61,7 @@ export type GoogleTagInstall = {
 /**
  * GA4 config is only the workspace measurement ID.
  * An Ads tag may load gtag.js without configuring GA4.
+ * Prefer the Ads ID in the loader URL so the Ads site scanner can see AW-.
  */
 export function googleTagInstall(ids: WorkspaceTrackingIds): GoogleTagInstall | null {
   const configs = [
@@ -67,11 +69,11 @@ export function googleTagInstall(ids: WorkspaceTrackingIds): GoogleTagInstall | 
     ids.googleAdsId ? `gtag('config','${ids.googleAdsId}');` : null,
   ].filter((line): line is string => line !== null);
   if (configs.length === 0) return null;
-  const loaderId = ids.ga4MeasurementId ?? ids.googleAdsId;
+  const loaderId = ids.googleAdsId ?? ids.ga4MeasurementId;
   if (!loaderId) return null;
   return {
     src: `https://www.googletagmanager.com/gtag/js?id=${loaderId}`,
-    config: configs.join(""),
+    config: `${configs.join("")}${googleAdsSignUpEventSnippet()}`,
   };
 }
 
