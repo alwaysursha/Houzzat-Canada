@@ -3,6 +3,11 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
 import { prismaOwnedSavedSearchStore } from "@/lib/account/prisma-monitor-settings";
+import {
+  briefSavedSearchSummary,
+  deleteOwnedSavedSearch,
+} from "@/lib/account/saved-search-ownership";
+import { logSavedSearchRemovedBestEffort } from "@/lib/agent/customer-alert-crm-activity";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { prisma } from "@/lib/prisma";
 
@@ -217,9 +222,23 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Invalid id." }, { status: 400 });
   }
 
-  await prisma.savedSearch.deleteMany({
-    where: { id: parsed.data.id, userId: user!.id },
+  const result = await deleteOwnedSavedSearch(prismaOwnedSavedSearchStore(), {
+    id: parsed.data.id,
+    userId: user!.id,
   });
+
+  if (result.deleted) {
+    await logSavedSearchRemovedBestEffort({
+      customerId: user!.id,
+      workspaceId: user!.workspaceId,
+      savedSearchId: result.item.id,
+      name: result.item.name,
+      isPrimary: result.item.isPrimary,
+      summary: briefSavedSearchSummary(result.item.query),
+      source: "saved_searches",
+      actorUserId: user!.id,
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

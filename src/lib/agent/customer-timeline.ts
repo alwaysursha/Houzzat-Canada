@@ -326,9 +326,64 @@ export function labelActivity(type: ActivityEventType | string) {
       return "Contact updated by customer";
     case "contact_update":
       return "Contact updated";
+    case "property_watch_removed":
+      return "Property Watch stopped";
+    case "area_watch_removed":
+      return "Area Watch stopped";
+    case "saved_search_removed":
+      return "Saved Search deleted";
     default:
       return String(type).replaceAll("_", " ");
   }
+}
+
+function metaRecord(meta: unknown): Record<string, unknown> | null {
+  if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+    return meta as Record<string, unknown>;
+  }
+  return null;
+}
+
+/**
+ * Agent-facing headline for persistent LeadActivity rows.
+ * Does not rewrite stored types/bodies. Email vs SMS vs unknown unsubscribe
+ * is inferred from existing body/meta only.
+ */
+export function leadActivityDisplayTitle(input: {
+  type: string;
+  body?: string | null;
+  meta?: unknown;
+}): string {
+  const body = input.body ?? "";
+  const meta = metaRecord(input.meta);
+  const channel = typeof meta?.channel === "string" ? meta.channel : "";
+  const action = typeof meta?.action === "string" ? meta.action : "";
+
+  if (input.type === "unsubscribe") {
+    if (channel === "sms" || body.toLowerCase().includes("sms")) {
+      return "SMS alerts turned off";
+    }
+    if (
+      channel === "email" ||
+      action === "global_optional_email_off" ||
+      /email alerts/i.test(body)
+    ) {
+      return "Email alerts turned off";
+    }
+    return "Notifications turned off";
+  }
+
+  if (input.type === "contact_updated_by_customer") {
+    if (
+      body === "Customer re-enabled email alerts" ||
+      action === "global_optional_email_on"
+    ) {
+      return "Email alerts resumed";
+    }
+    return "Contact updated by customer";
+  }
+
+  return labelActivity(input.type);
 }
 
 /** Merged second-by-second customer journey for agent CRM. */
@@ -395,17 +450,22 @@ export async function loadCustomerTimeline(input: {
       body: a.body,
       meta,
     });
+    const activityTitle =
+      callOutcome?.title ??
+      (a.type === "email_opened"
+        ? "Email opened"
+        : a.type === "email_clicked"
+          ? "Email link clicked"
+          : leadActivityDisplayTitle({
+              type: a.type,
+              body: a.body,
+              meta,
+            }));
     items.push({
       id: `la-${a.id}`,
       source: "lead",
       type: engagementType,
-      title:
-        callOutcome?.title ??
-        (a.type === "email_opened"
-          ? "Email opened"
-          : a.type === "email_clicked"
-            ? "Email link clicked"
-            : labelActivity(a.type)),
+      title: activityTitle,
       body: callOutcome ? callOutcome.body : a.body,
       mlsNumber:
         typeof meta?.mlsNumber === "string" ? meta.mlsNumber : null,

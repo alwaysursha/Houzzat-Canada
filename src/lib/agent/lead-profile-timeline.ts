@@ -13,6 +13,7 @@ import {
   dedupeNearDuplicateListingViews,
   enrichWithListingCovers,
   labelActivity,
+  leadActivityDisplayTitle,
   serializeTimelineItem,
   type TimelineItem,
   type TimelineItemDto,
@@ -228,17 +229,22 @@ export async function loadPagedLeadTimeline(input: {
       body: a.body,
       meta: a.meta,
     });
+    const activityTitle =
+      callOutcome?.title ??
+      (a.type === "email_opened"
+        ? "Email opened"
+        : a.type === "email_clicked"
+          ? "Email link clicked"
+          : leadActivityDisplayTitle({
+              type: a.type,
+              body: a.body,
+              meta: a.meta,
+            }));
     items.push({
       id: `la-${a.id}`,
       source: "lead",
       type: engagementType,
-      title:
-        callOutcome?.title ??
-        (a.type === "email_opened"
-          ? "Email opened"
-          : a.type === "email_clicked"
-            ? "Email link clicked"
-            : labelActivity(a.type)),
+      title: activityTitle,
       body: callOutcome ? callOutcome.body : a.body,
       mlsNumber: null,
       path: null,

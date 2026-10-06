@@ -56,14 +56,18 @@ function memoryUserStore(
     async findById(id) {
       return users.find((user) => user.id === id) ?? null;
     },
-    async updateEmailAlertsEnabled(input) {
+    async applyEmailAlertsEnabled(input) {
       const user = users.find((row) => row.id === input.userId);
       if (!user) throw new Error("missing user");
-      user.emailAlertsEnabled = input.emailAlertsEnabled;
+      const previousEnabled = user.emailAlertsEnabled;
+      const changed = previousEnabled !== input.emailAlertsEnabled;
+      if (changed) {
+        user.emailAlertsEnabled = input.emailAlertsEnabled;
+      }
       if (input.caslConsentAt !== undefined) {
         user.caslConsentAt = input.caslConsentAt ?? null;
       }
-      return { ...user };
+      return { ...user, previousEnabled, changed };
     },
   };
 }

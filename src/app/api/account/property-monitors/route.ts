@@ -3,10 +3,12 @@ import { z } from "zod";
 import { requireFullCustomerUser } from "@/lib/account";
 import { prismaPropertyMonitorSettingsStore } from "@/lib/account/prisma-monitor-settings";
 import {
+  deleteOwnedPropertyMonitor,
   patchPropertyMonitorEmailAlerts,
   propertyMonitorEmailPatchSchema,
   resolvePropertyMonitorEmailAlertsOnUpsert,
 } from "@/lib/account/property-monitor-settings";
+import { logPropertyWatchRemovedBestEffort } from "@/lib/agent/customer-alert-crm-activity";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
@@ -176,9 +178,20 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Invalid listing." }, { status: 400 });
   }
 
-  await prisma.propertyMonitor.deleteMany({
-    where: { userId: user.id, mlsNumber: parsed.data.mlsNumber },
-  });
+  const { deleted } = await deleteOwnedPropertyMonitor(
+    prismaPropertyMonitorSettingsStore(),
+    { userId: user.id, mlsNumber: parsed.data.mlsNumber },
+  );
+
+  if (deleted) {
+    await logPropertyWatchRemovedBestEffort({
+      customerId: user.id,
+      workspaceId: user.workspaceId,
+      mlsNumber: parsed.data.mlsNumber,
+      source: "account_property_monitors",
+      actorUserId: user.id,
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -91,25 +91,8 @@ export async function PATCH(request: Request) {
           : 400;
       return NextResponse.json({ error: globalResult.error }, { status });
     }
-    if (nextEmailEnabled === false) {
-      await logLeadActivityForCustomer({
-        customerId: user.id,
-        workspaceId: user.workspaceId,
-        type: "unsubscribe",
-        body: "Customer turned off email alerts",
-        actorUserId: user.id,
-        meta: { channel: "email" },
-      });
-    } else {
-      await logLeadActivityForCustomer({
-        customerId: user.id,
-        workspaceId: user.workspaceId,
-        type: "contact_updated_by_customer",
-        body: "Customer re-enabled email alerts",
-        actorUserId: user.id,
-        meta: { channel: "email", source: "preferences" },
-      });
-    }
+    // Global email LeadActivity is emitted once by the canonical
+    // setGlobalOptionalEmailPreference CRM hook (Phase 3C parity).
   }
 
   const updated = await prisma.user.update({

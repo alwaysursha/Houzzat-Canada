@@ -38,13 +38,22 @@ export type PreferenceUserRecord = {
   caslConsentAt: Date | null;
 };
 
+export type ApplyEmailAlertsEnabledResult = PreferenceUserRecord & {
+  previousEnabled: boolean;
+  changed: boolean;
+};
+
 export type PreferenceUserStore = {
   findById(id: string): Promise<PreferenceUserRecord | null>;
-  updateEmailAlertsEnabled(input: {
+  /**
+   * Compare-and-swap emailAlertsEnabled. Concurrent writers serialize on the
+   * User row: only the first transition reports changed=true.
+   */
+  applyEmailAlertsEnabled(input: {
     userId: string;
     emailAlertsEnabled: boolean;
     caslConsentAt?: Date | null;
-  }): Promise<PreferenceUserRecord>;
+  }): Promise<ApplyEmailAlertsEnabledResult>;
 };
 
 export type CanonicalGlobalStores = {
@@ -52,6 +61,14 @@ export type CanonicalGlobalStores = {
   suppressionStore: EmailSuppressionStore;
   auditStore: CommunicationPreferenceAuditStore;
 };
+
+export type GlobalOptionalEmailCrmHook = (input: {
+  userId: string;
+  workspaceId: string;
+  previousEnabled: boolean;
+  nextEnabled: boolean;
+  source: string;
+}) => Promise<void>;
 
 export type PreferenceCommandContext = {
   userStore: PreferenceUserStore;
@@ -61,6 +78,12 @@ export type PreferenceCommandContext = {
   runCanonicalTransaction<T>(
     work: (stores: CanonicalGlobalStores) => Promise<T>,
   ): Promise<T>;
+  /**
+   * Optional post-success CRM hook (Phase 3C). Invoked only after the
+   * canonical transaction commits, and only for actual emailAlertsEnabled
+   * transitions. Must not throw into the mutation path (callers catch).
+   */
+  onGlobalOptionalEmailTransition?: GlobalOptionalEmailCrmHook;
 };
 
 function workspaceOk(
@@ -186,22 +209,23 @@ export async function setGlobalOptionalEmailPreference(
   }
 
   try {
-    return await ctx.runCanonicalTransaction(async (stores) => {
-      const previousEnabled = user.emailAlertsEnabled;
-      const beforeCustomer = await findCustomerEmailSuppression(
-        stores.suppressionStore,
-        { workspaceId: input.workspaceId, userId: user.id },
-      );
-      const hadCustomerUnsubscribe =
-        beforeCustomer?.reason === "GLOBAL_UNSUBSCRIBE";
-
-      const next = await stores.userStore.updateEmailAlertsEnabled({
+    const result = await ctx.runCanonicalTransaction(async (stores) => {
+      const applied = await stores.userStore.applyEmailAlertsEnabled({
         userId: user.id,
         emailAlertsEnabled: input.enabled,
         ...(input.caslConsentAt !== undefined
           ? { caslConsentAt: input.caslConsentAt }
           : {}),
       });
+      const previousEnabled = applied.previousEnabled;
+      const next = applied;
+
+      const beforeCustomer = await findCustomerEmailSuppression(
+        stores.suppressionStore,
+        { workspaceId: input.workspaceId, userId: user.id },
+      );
+      const hadCustomerUnsubscribe =
+        beforeCustomer?.reason === "GLOBAL_UNSUBSCRIBE";
 
       let customerUnsubscribed = hadCustomerUnsubscribe;
       let customerUnsubscribeChanged = false;
@@ -280,6 +304,27 @@ export async function setGlobalOptionalEmailPreference(
         audited: changed,
       };
     });
+
+    // Post-success CRM history (Phase 3C). Outside the preference transaction
+    // so a CRM failure cannot roll back an already-committed preference change.
+    if (
+      result.previousEnabled !== result.nextEnabled &&
+      ctx.onGlobalOptionalEmailTransition
+    ) {
+      try {
+        await ctx.onGlobalOptionalEmailTransition({
+          userId: input.userId,
+          workspaceId: input.workspaceId,
+          previousEnabled: result.previousEnabled,
+          nextEnabled: result.nextEnabled,
+          source: input.source,
+        });
+      } catch (error) {
+        console.error("[communications:global-optional-email-crm]", error);
+      }
+    }
+
+    return result;
   } catch (error) {
     console.error("[communications:global-optional-email]", error);
     throw error;

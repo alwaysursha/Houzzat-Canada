@@ -65,6 +65,8 @@ export const ACTIVITY_FILTER_GROUPS: ActivityFilterGroup[] = [
         types: [
           "WATCH_PROPERTY",
           "WATCH_AREA",
+          "property_watch_removed",
+          "area_watch_removed",
           "property_alert",
           "PROPERTY_ALERT",
           "PROPERTY_ALERT_EMAIL",
@@ -187,6 +189,7 @@ export const ACTIVITY_FILTER_GROUPS: ActivityFilterGroup[] = [
         label: "Saved Search",
         types: [
           "SAVE_SEARCH",
+          "saved_search_removed",
           "search_criteria_created",
           "search_criteria_updated",
         ],
@@ -285,6 +288,12 @@ export function friendlyActivityTypeLabel(type: string): string {
       return "Property alert";
     case "WATCH_AREA":
       return "Area alert";
+    case "PROPERTY_WATCH_REMOVED":
+      return "Property Watch stopped";
+    case "AREA_WATCH_REMOVED":
+      return "Area Watch stopped";
+    case "SAVED_SEARCH_REMOVED":
+      return "Saved Search deleted";
     case "EMAIL":
     case "EMAIL_SENT":
       return "Email";

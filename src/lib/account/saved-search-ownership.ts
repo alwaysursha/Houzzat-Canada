@@ -11,6 +11,7 @@ export type OwnedSavedSearchRow = {
   smsAlerts: boolean;
   isPrimary: boolean;
   isHomepageActive: boolean;
+  query?: unknown;
 };
 
 export type OwnedSavedSearchStore = {
@@ -23,6 +24,7 @@ export type OwnedSavedSearchStore = {
     userId: string;
     emailAlerts: boolean;
   }): Promise<OwnedSavedSearchRow | null>;
+  deleteOwned(input: { id: string; userId: string }): Promise<boolean>;
 };
 
 export async function patchOwnedSavedSearchEmailAlerts(
@@ -46,6 +48,40 @@ export async function patchOwnedSavedSearchEmailAlerts(
   return { ok: true, item: updated };
 }
 
+export function briefSavedSearchSummary(query: unknown): string | null {
+  if (!query || typeof query !== "object" || Array.isArray(query)) return null;
+  const q = query as Record<string, unknown>;
+  const parts: string[] = [];
+  if (typeof q.city === "string" && q.city.trim()) parts.push(q.city.trim());
+  if (typeof q.community === "string" && q.community.trim()) {
+    parts.push(q.community.trim());
+  }
+  if (q.transactionType === "LEASE" || q.transactionType === "SALE") {
+    parts.push(q.transactionType);
+  }
+  return parts.length ? parts.slice(0, 3).join(" · ") : null;
+}
+
+export async function deleteOwnedSavedSearch(
+  store: OwnedSavedSearchStore,
+  input: { userId: string; id: string },
+): Promise<
+  | { deleted: false; item: null }
+  | { deleted: true; item: OwnedSavedSearchRow }
+> {
+  const owned = await store.findOwned({
+    id: input.id,
+    userId: input.userId,
+  });
+  if (!owned) return { deleted: false, item: null };
+  const deleted = await store.deleteOwned({
+    id: input.id,
+    userId: input.userId,
+  });
+  if (!deleted) return { deleted: false, item: null };
+  return { deleted: true, item: owned };
+}
+
 export function memoryOwnedSavedSearchStore(
   rows: OwnedSavedSearchRow[],
 ): OwnedSavedSearchStore & { rows: OwnedSavedSearchRow[] } {
@@ -65,6 +101,14 @@ export function memoryOwnedSavedSearchStore(
       if (!row) return null;
       row.emailAlerts = input.emailAlerts;
       return { ...row };
+    },
+    async deleteOwned(input) {
+      const index = rows.findIndex(
+        (item) => item.id === input.id && item.userId === input.userId,
+      );
+      if (index < 0) return false;
+      rows.splice(index, 1);
+      return true;
     },
   };
 }

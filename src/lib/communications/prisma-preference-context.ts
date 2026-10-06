@@ -1,3 +1,4 @@
+import { logGlobalOptionalEmailCrmActivityBestEffort } from "@/lib/agent/customer-alert-crm-activity";
 import { prisma } from "@/lib/prisma";
 import type {
   CanonicalGlobalStores,
@@ -25,6 +26,9 @@ export function prismaPreferenceCommandContext(): PreferenceCommandContext {
         };
         return work(stores);
       });
+    },
+    async onGlobalOptionalEmailTransition(event) {
+      await logGlobalOptionalEmailCrmActivityBestEffort(event);
     },
   };
 }

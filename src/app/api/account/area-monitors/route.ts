@@ -5,9 +5,11 @@ import { createOrReuseAreaMonitor } from "@/lib/account/area-monitor-create";
 import {
   areaMonitorSettingsPatchData,
   areaMonitorSettingsPatchSchema,
+  deleteOwnedAreaMonitor,
   patchAreaMonitorSettings,
 } from "@/lib/account/area-monitor-settings";
 import { prismaAreaMonitorSettingsStore } from "@/lib/account/prisma-monitor-settings";
+import { logAreaWatchRemovedBestEffort } from "@/lib/agent/customer-alert-crm-activity";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { prisma } from "@/lib/prisma";
 
@@ -153,22 +155,34 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Invalid area." }, { status: 400 });
   }
 
-  if ("id" in parsed.data) {
-    await prisma.areaMonitor.deleteMany({
-      where: { id: parsed.data.id, userId: user.id },
-    });
-  } else {
-    const data = parsed.data;
-    await prisma.areaMonitor.deleteMany({
-      where: {
-        userId: user.id,
-        city: data.city,
-        community: data.community || null,
-        ...(data.transactionType
-          ? { transactionType: data.transactionType }
-          : {}),
-        ...(data.segment ? { segment: data.segment } : {}),
-      },
+  const lookup =
+    "id" in parsed.data
+      ? { userId: user.id, id: parsed.data.id }
+      : {
+          userId: user.id,
+          city: parsed.data.city,
+          community: parsed.data.community || null,
+          transactionType: parsed.data.transactionType,
+          segment: parsed.data.segment,
+        };
+
+  const result = await deleteOwnedAreaMonitor(
+    prismaAreaMonitorSettingsStore(),
+    lookup,
+  );
+
+  if (result.deleted) {
+    await logAreaWatchRemovedBestEffort({
+      customerId: user.id,
+      workspaceId: user.workspaceId,
+      areaMonitorId: result.snapshot.id,
+      city: result.snapshot.city,
+      community: result.snapshot.community,
+      transactionType: result.snapshot.transactionType,
+      segment: result.snapshot.segment,
+      name: result.snapshot.name,
+      source: "account_area_monitors",
+      actorUserId: user.id,
     });
   }
 

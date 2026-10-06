@@ -43,14 +43,18 @@ function memoryUserStore(
     async findById(id) {
       return users.find((user) => user.id === id) ?? null;
     },
-    async updateEmailAlertsEnabled(input) {
+    async applyEmailAlertsEnabled(input) {
       const user = users.find((row) => row.id === input.userId);
       if (!user) throw new Error("missing user");
-      user.emailAlertsEnabled = input.emailAlertsEnabled;
+      const previousEnabled = user.emailAlertsEnabled;
+      const changed = previousEnabled !== input.emailAlertsEnabled;
+      if (changed) {
+        user.emailAlertsEnabled = input.emailAlertsEnabled;
+      }
       if (input.caslConsentAt !== undefined) {
         user.caslConsentAt = input.caslConsentAt ?? null;
       }
-      return { ...user };
+      return { ...user, previousEnabled, changed };
     },
   };
 }
@@ -475,13 +479,18 @@ async function testAccountSettingsOffOn() {
   assert.ok(afterOff.auditKinds.includes("preference_global_email_off"));
   const prefsRoute = read("src/app/api/account/preferences/route.ts");
   assert.ok(prefsRoute.includes("setGlobalOptionalEmailPreference"));
+  // SMS unsubscribe still logs at the route; global email CRM is canonical (3C).
   assert.ok(prefsRoute.includes("logLeadActivityForCustomer"));
-  assert.ok(prefsRoute.includes("Customer turned off email alerts"));
-  assert.ok(prefsRoute.includes("Customer re-enabled email alerts"));
+  assert.ok(prefsRoute.includes("Customer turned off SMS alerts"));
+  assert.ok(!prefsRoute.includes('body: "Customer turned off email alerts"'));
+  assert.ok(!prefsRoute.includes('body: "Customer re-enabled email alerts"'));
   assert.ok(!prefsRoute.includes("deactivateCustomerGlobalUnsubscribe"));
-  const leadBeforeCanonical = prefsRoute.indexOf("setGlobalOptionalEmailPreference");
-  const leadAfter = prefsRoute.indexOf("Customer turned off email alerts");
-  assert.ok(leadBeforeCanonical < leadAfter);
+  const prismaCtx = read("src/lib/communications/prisma-preference-context.ts");
+  assert.ok(prismaCtx.includes("onGlobalOptionalEmailTransition"));
+  assert.ok(prismaCtx.includes("logGlobalOptionalEmailCrmActivityBestEffort"));
+  const commands = read("src/lib/communications/preference-commands.ts");
+  assert.ok(commands.includes("onGlobalOptionalEmailTransition"));
+  assert.ok(commands.includes("previousEnabled !== result.nextEnabled"));
 
   const on = await setGlobalOptionalEmailPreference(ctx, {
     userId: "user_a",

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { TimelineItem } from "@/lib/agent/customer-timeline";
 import { friendlyActivityTypeLabel } from "@/lib/agent/activity-filters";
+import { leadActivityDisplayTitle } from "@/lib/agent/customer-timeline";
 import { isCallOutcomeActivityTitle } from "@/lib/agent/call-outcome-presentation";
 import {
   conversationActivityHeadline,
@@ -299,8 +300,18 @@ function typeLabel(item: TimelineItem) {
     return propertyAlertEmailLabel(item.emailKind);
   }
   if (item.type === "contact_update_request") return "Contact update requested";
-  if (item.type === "contact_updated_by_customer")
-    return "Contact updated by customer";
+  if (
+    item.type === "contact_updated_by_customer" ||
+    item.type === "unsubscribe" ||
+    item.type === "property_watch_removed" ||
+    item.type === "area_watch_removed" ||
+    item.type === "saved_search_removed"
+  ) {
+    return leadActivityDisplayTitle({
+      type: item.type,
+      body: item.body,
+    });
+  }
   if (item.type === "lead_info_updated") return "Lead info updated";
   if (item.type === "contact_update") return "Contact updated";
   if (item.type === "note_pin") return "Note pin";

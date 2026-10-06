@@ -28,6 +28,10 @@ export type PropertyMonitorSettingsStore = {
     mlsNumber: string;
     emailAlerts: boolean;
   }): Promise<PropertyMonitorSettingsRow | null>;
+  deleteOwned(input: {
+    userId: string;
+    mlsNumber: string;
+  }): Promise<boolean>;
 };
 
 /**
@@ -69,6 +73,14 @@ export async function patchPropertyMonitorEmailAlerts(
   };
 }
 
+export async function deleteOwnedPropertyMonitor(
+  store: PropertyMonitorSettingsStore,
+  input: { userId: string; mlsNumber: string },
+): Promise<{ deleted: boolean }> {
+  const deleted = await store.deleteOwned(input);
+  return { deleted };
+}
+
 export function memoryPropertyMonitorSettingsStore(
   rows: PropertyMonitorSettingsRow[],
 ): PropertyMonitorSettingsStore & { rows: PropertyMonitorSettingsRow[] } {
@@ -82,6 +94,15 @@ export function memoryPropertyMonitorSettingsStore(
       if (!row) return null;
       row.emailAlerts = input.emailAlerts;
       return { ...row };
+    },
+    async deleteOwned(input) {
+      const index = rows.findIndex(
+        (item) =>
+          item.userId === input.userId && item.mlsNumber === input.mlsNumber,
+      );
+      if (index < 0) return false;
+      rows.splice(index, 1);
+      return true;
     },
   };
 }
