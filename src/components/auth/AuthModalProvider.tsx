@@ -177,11 +177,11 @@ function AuthModalPanel({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-3 py-4 sm:px-4 sm:py-8">
       {listingGate || phase === "funnel" ? (
-        <div className="absolute inset-0 bg-ink/30 backdrop-blur-[1px]" />
+        <div className="absolute inset-0 bg-ink/10" />
       ) : (
         <button
           type="button"
-          className="absolute inset-0 bg-ink/30 backdrop-blur-[1px]"
+          className="absolute inset-0 bg-ink/25 backdrop-blur-[1px]"
           aria-label="Close sign in"
           onClick={closeAuth}
         />
@@ -191,10 +191,12 @@ function AuthModalPanel({
         aria-modal="true"
         aria-labelledby="auth-modal-title"
         className={cn(
-          "relative z-10 flex w-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-xl",
-          captureCompact || phase === "funnel"
-            ? "max-h-[min(85vh,calc(100dvh-1.5rem))]"
-            : "max-h-[min(78vh,38rem)] max-w-md",
+          "relative z-10 flex w-full flex-col rounded-2xl border border-line/80 bg-surface",
+          phase === "funnel"
+            ? "max-h-[min(88vh,calc(100dvh-1.25rem))] overflow-x-hidden overflow-y-auto shadow-[0_12px_40px_-18px_rgba(16,28,24,0.28)]"
+            : captureCompact
+              ? "max-h-[min(85vh,calc(100dvh-1.5rem))] overflow-hidden shadow-[0_14px_40px_-16px_rgba(16,28,24,0.32)]"
+              : "max-h-[min(78vh,38rem)] max-w-md overflow-hidden shadow-xl",
         )}
         style={
           captureCompact || phase === "funnel"

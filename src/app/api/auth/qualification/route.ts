@@ -6,7 +6,10 @@ import {
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
-import { upsertBuyerConfirmedPreference } from "@/lib/auth/buyer-confirmed-preference";
+import {
+  formatConfirmSearchSummary,
+  upsertBuyerConfirmedPreference,
+} from "@/lib/auth/buyer-confirmed-preference";
 import { applyCanonicalCustomerContact } from "@/lib/agent/lead-info-change";
 import { isPurchaseTimeframe } from "@/lib/agent/timeframe";
 import { prisma } from "@/lib/prisma";
@@ -292,22 +295,11 @@ function extractObservedPreference(
       ? filters.minBeds
       : null;
 
-  let summary: string | null = null;
-  if (cities.length || maxPrice != null) {
-    const parts: string[] = [];
-    if (cities[0]) parts.push(cities[0]);
-    if (maxPrice != null) {
-      if (maxPrice >= 1_000_000 && maxPrice % 100_000 === 0) {
-        const m = maxPrice / 1_000_000;
-        parts.push(
-          `Homes up to $${Number.isInteger(m) ? m : m.toFixed(1)}M`,
-        );
-      } else {
-        parts.push(`Homes up to $${maxPrice.toLocaleString("en-CA")}`);
-      }
-    }
-    summary = parts.join(" · ");
-  }
+  const summary = formatConfirmSearchSummary({
+    cities,
+    minPrice,
+    maxPrice,
+  });
 
   return { cities, maxPrice, minPrice, propertyTypes, minBeds, summary };
 }

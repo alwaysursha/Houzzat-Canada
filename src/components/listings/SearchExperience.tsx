@@ -26,6 +26,7 @@ import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { pushHref } from "@/lib/listings/navigate-listing";
 import { listingPath } from "@/lib/listings/listing-path";
+import { persistBrowseSearchUrl } from "@/lib/auth/browse-search-context";
 import { publishListingBrowseSource } from "@/lib/mobile/listing-browse-source";
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { SaveSearchButton } from "@/components/account/SaveSearchButton";
@@ -39,7 +40,6 @@ import {
 } from "@/components/listings/SearchFilterChips";
 import { SearchFiltersMenu } from "@/components/listings/SearchFiltersMenu";
 import { SearchFiltersSheet } from "@/components/listings/SearchFiltersSheet";
-import { MapSearchCoachMarks } from "@/components/listings/MapSearchCoachMarks";
 import { SearchToolbarChips } from "@/components/listings/SearchResultsContext";
 import { SearchResultsPane } from "@/components/listings/SearchResultsPane";
 import {
@@ -121,9 +121,6 @@ export function SearchExperience() {
   const boundsApplyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appliedBoundsRef = useRef<Bounds | null>(null);
   appliedBoundsRef.current = appliedBounds;
-  const viewToggleRef = useRef<HTMLDivElement>(null);
-  const saveSearchRef = useRef<HTMLDivElement>(null);
-  const [mapMoved, setMapMoved] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [placeQueryCleared, setPlaceQueryCleared] = useState(false);
@@ -232,6 +229,14 @@ export function SearchExperience() {
       sort: parseSearchSort(searchParams.get("sort")),
     }));
   }, [searchParams]);
+
+  // Survive client navigation to listing detail so signup captureContext
+  // still knows city/price (document.referrer is unreliable in the App Router).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!pathname.startsWith("/search")) return;
+    persistBrowseSearchUrl(window.location.href);
+  }, [pathname, searchParams]);
 
   const placeFilterActive = Boolean(
     filters.city.trim() ||
@@ -641,7 +646,6 @@ export function SearchExperience() {
     if (boundsApplyTimer.current) clearTimeout(boundsApplyTimer.current);
     // Debounce so continuous pan/zoom doesn't hammer the API.
     boundsApplyTimer.current = setTimeout(() => {
-      if (prev) setMapMoved(true);
       setAppliedBounds(next);
       // Viewport owns search after the user moves the map — drop place filters.
       setFilters((f) => {
@@ -685,19 +689,6 @@ export function SearchExperience() {
       ? structuredCitiesFromSearch(citiesParam, "").length
       : 0);
   const activeListing = items.find((i) => i.mlsNumber === activeMls) ?? null;
-  const coachFilterIntentKey = [
-    filters.city,
-    filters.community,
-    filters.minPrice,
-    filters.maxPrice,
-    filters.minBeds,
-    filters.minBaths,
-    filters.propertyTypes.join(","),
-    filters.statuses.join(","),
-    filters.openHouseOnly ? "1" : "0",
-    citiesParam,
-    communitiesParam,
-  ].join("|");
 
   const noun =
     filters.segment === "COMMERCIAL"
@@ -894,10 +885,7 @@ export function SearchExperience() {
           </div>
 
           <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div
-              ref={viewToggleRef}
-              className="flex shrink-0 rounded-full border border-line bg-mist p-0.5"
-            >
+            <div className="flex shrink-0 rounded-full border border-line bg-mist p-0.5">
               {(
                 [
                   ["map", MapIcon, "Map"],
@@ -965,7 +953,7 @@ export function SearchExperience() {
                 <option value="price_desc">Price: high to low</option>
               </select>
             </label>
-            <div ref={saveSearchRef} className="inline-flex shrink-0">
+            <div className="inline-flex shrink-0">
               <SaveSearchButton
                 signedIn={signedIn}
                 callbackPath={searchCallbackPath(filters)}
@@ -1042,10 +1030,7 @@ export function SearchExperience() {
             </div>
 
             <div className="flex items-center gap-2">
-              <div
-                ref={isNarrow ? undefined : viewToggleRef}
-                className="flex rounded-full border border-line bg-mist p-0.5"
-              >
+              <div className="flex rounded-full border border-line bg-mist p-0.5">
                 {(
                   [
                     ["map", MapIcon, "Map"],
@@ -1119,7 +1104,7 @@ export function SearchExperience() {
                   <option value="price_desc">Price: high to low</option>
                 </select>
               </label>
-              <div ref={saveSearchRef} className="inline-flex">
+              <div className="inline-flex">
                 <SaveSearchButton
                   signedIn={signedIn}
                   callbackPath={searchCallbackPath(filters)}
@@ -1353,14 +1338,6 @@ export function SearchExperience() {
           callbackPath={searchCallbackPath(filters)}
         />
       ) : null}
-
-      <MapSearchCoachMarks
-        enabled={view === "map"}
-        viewToggleRef={viewToggleRef}
-        saveSearchRef={saveSearchRef}
-        mapMoved={mapMoved}
-        filterIntentKey={coachFilterIntentKey}
-      />
     </div>
   );
 }

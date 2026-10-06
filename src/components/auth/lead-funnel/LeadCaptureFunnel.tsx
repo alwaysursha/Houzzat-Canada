@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { ArrowLeft } from "lucide-react";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import { FunnelProgress } from "@/components/auth/lead-funnel/FunnelProgress";
@@ -15,7 +15,11 @@ import {
   reportPhoneVerificationSkipped,
   reportQualificationCompleted,
 } from "@/lib/auth/funnel-analytics";
-import { describeObservedBudget } from "@/lib/auth/buyer-confirmed-preference";
+import {
+  formatConfirmSearchSummary,
+  formatCurrencyInputDisplay,
+  parseCurrencyInput,
+} from "@/lib/auth/buyer-confirmed-preference";
 import { CONSUMER_BUYING_TIMEFRAMES, purchaseTimeframeLabel } from "@/lib/agent/timeframe";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { Button } from "@/components/ui/button";
@@ -29,7 +33,7 @@ type FunnelStep =
   | "timeframe"
   | "financing"
   | "preference"
-  | "editPrice";
+  | "editSearch";
 
 const STEP_PROGRESS: Record<FunnelStep, number> = {
   otp: 0.12,
@@ -38,7 +42,7 @@ const STEP_PROGRESS: Record<FunnelStep, number> = {
   timeframe: 0.55,
   financing: 0.7,
   preference: 0.88,
-  editPrice: 0.88,
+  editSearch: 0.88,
 };
 
 type ObservedPreference = {
@@ -50,6 +54,11 @@ type ObservedPreference = {
   summary: string | null;
 };
 
+const answerBtn =
+  "w-full rounded-xl border border-line bg-surface px-4 py-3.5 text-left text-sm font-semibold text-ink transition duration-150 hover:border-canopy/40 hover:bg-mist disabled:opacity-60";
+const answerBtnPressed =
+  "border-canopy/50 bg-canopy/5 ring-1 ring-canopy/25";
+
 export function LeadCaptureFunnel({
   onComplete,
 }: {
@@ -59,14 +68,17 @@ export function LeadCaptureFunnel({
   const [history, setHistory] = useState<FunnelStep[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [pressed, setPressed] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
   const [maskedPhone, setMaskedPhone] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState("");
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneDraft, setPhoneDraft] = useState("");
   const [observed, setObserved] = useState<ObservedPreference | null>(null);
   const [listingMls, setListingMls] = useState<string | null>(null);
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
+  const [minPrice, setMinPrice] = useState<number | null>(null);
+  const [maxPrice, setMaxPrice] = useState<number | null>(null);
+  const [editCity, setEditCity] = useState("");
   const [homeAddress, setHomeAddress] = useState("");
   const [homeUnit, setHomeUnit] = useState("");
   const [claimedPlace, setClaimedPlace] = useState<{
@@ -86,16 +98,22 @@ export function LeadCaptureFunnel({
   function go(next: FunnelStep) {
     touchIntent();
     setHistory((h) => [...h, step]);
-    setStep(next);
-    setError(null);
+    startTransition(() => {
+      setStep(next);
+      setError(null);
+      setPressed(null);
+    });
   }
 
   function back() {
     const prev = history[history.length - 1];
     if (!prev) return;
     setHistory((h) => h.slice(0, -1));
-    setStep(prev);
-    setError(null);
+    startTransition(() => {
+      setStep(prev);
+      setError(null);
+      setPressed(null);
+    });
   }
 
   useEffect(() => {
@@ -112,14 +130,12 @@ export function LeadCaptureFunnel({
           };
           setObserved(data.observedPreference ?? null);
           setListingMls(data.listingMls ?? null);
-          if (data.observedPreference?.minPrice != null) {
-            setMinPrice(String(data.observedPreference.minPrice));
-          }
-          if (data.observedPreference?.maxPrice != null) {
-            setMaxPrice(String(data.observedPreference.maxPrice));
-          }
+          setMinPrice(data.observedPreference?.minPrice ?? null);
+          setMaxPrice(data.observedPreference?.maxPrice ?? null);
+          setEditCity(data.observedPreference?.cities?.[0] ?? "");
           if (data.phoneOtpVerifiedAt) {
             setStep("ownership");
+            setHistory([]);
             return;
           }
         }
@@ -135,6 +151,7 @@ export function LeadCaptureFunnel({
         };
         if (data.alreadyVerified) {
           setStep("ownership");
+          setHistory([]);
           return;
         }
         if (res.ok && data.maskedPhone) {
@@ -149,6 +166,31 @@ export function LeadCaptureFunnel({
     })();
   }, []);
 
+  async function postStep(body: Record<string, unknown>): Promise<boolean> {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/qualification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong.");
+        setPressed(null);
+        return false;
+      }
+      return true;
+    } catch {
+      setError("Something went wrong.");
+      setPressed(null);
+      return false;
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function verifyOtp() {
     setPending(true);
     setError(null);
@@ -156,20 +198,19 @@ export function LeadCaptureFunnel({
       const res = await fetch("/api/auth/phone-otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: otpCode }),
+        body: JSON.stringify({ code: otpCode.trim() }),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
         setError(data.error ?? "Incorrect code.");
-        setPending(false);
         return;
       }
       reportPhoneVerified();
-      setPending(false);
       go("ownership");
     } catch {
+      setError("Something went wrong.");
+    } finally {
       setPending(false);
-      setError("Could not verify code.");
     }
   }
 
@@ -178,11 +219,10 @@ export function LeadCaptureFunnel({
     try {
       await fetch("/api/auth/phone-otp/skip", { method: "POST" });
       reportPhoneVerificationSkipped();
-    } catch {
-      /* continue anyway — Lead already captured */
+      go("ownership");
+    } finally {
+      setPending(false);
     }
-    setPending(false);
-    go("ownership");
   }
 
   async function savePhoneEdit() {
@@ -192,59 +232,30 @@ export function LeadCaptureFunnel({
       const res = await fetch("/api/auth/phone-otp/edit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phoneDraft }),
+        body: JSON.stringify({ phone: phoneDraft.trim() }),
       });
-      const data = (await res.json()) as {
+      const data = (await res.json().catch(() => ({}))) as {
         error?: string;
         maskedPhone?: string;
-        otpError?: string;
       };
       if (!res.ok) {
         setError(data.error ?? "Could not update number.");
-        setPending(false);
         return;
       }
-      if (data.maskedPhone) {
-        setMaskedPhone(data.maskedPhone);
-        reportPhoneVerificationSent();
-      }
-      if (data.otpError) setError(data.otpError);
+      if (data.maskedPhone) setMaskedPhone(data.maskedPhone);
       setEditingPhone(false);
       setOtpCode("");
+      reportPhoneVerificationSent();
     } catch {
-      setError("Could not update number.");
-    }
-    setPending(false);
-  }
-
-  async function postStep(body: Record<string, unknown>) {
-    setPending(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/auth/qualification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        setError(data.error ?? "Could not save.");
-        setPending(false);
-        return false;
-      }
+      setError("Something went wrong.");
+    } finally {
       setPending(false);
-      return true;
-    } catch {
-      setError("Could not save.");
-      setPending(false);
-      return false;
     }
   }
 
   async function finish() {
-    await postStep({ step: "complete" });
     reportQualificationCompleted();
-    touchIntent();
+    await postStep({ step: "complete" });
     const peeked = peekPendingIntent(browserCaptureIntentStore(), {
       host: window.location.hostname,
       now: Date.now(),
@@ -262,11 +273,13 @@ export function LeadCaptureFunnel({
     });
   }
 
-  const budgetLabel =
+  const confirmSummary =
     observed?.summary ||
-    (observed?.maxPrice != null
-      ? `We've set your home search to ${describeObservedBudget(observed.maxPrice)}.`
-      : null);
+    formatConfirmSearchSummary({
+      cities: observed?.cities,
+      minPrice: observed?.minPrice,
+      maxPrice: observed?.maxPrice,
+    });
 
   return (
     <div className="relative px-5 pb-5 pt-6">
@@ -275,397 +288,520 @@ export function LeadCaptureFunnel({
         <button
           type="button"
           onClick={back}
-          className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-ink/60 hover:text-ink"
+          className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-ink/60 transition hover:text-ink"
         >
           <ArrowLeft className="size-3.5" />
           Back
         </button>
-      ) : null}
+      ) : (
+        <div className="mb-1 h-0" aria-hidden />
+      )}
 
-      {step === "otp" ? (
-        <div className="space-y-3.5">
-          <h3 className="font-display text-xl text-ink">Verify Your Mobile</h3>
-          {editingPhone ? (
-            <>
-              <p className="text-sm text-ink/70">Enter your corrected mobile number.</p>
-              <Input
-                type="tel"
-                value={phoneDraft}
-                onChange={(e) => setPhoneDraft(e.target.value)}
-                placeholder="(647) 555-1234"
-              />
-              <Button
-                type="button"
-                className="w-full"
-                disabled={pending}
-                onClick={() => void savePhoneEdit()}
-              >
-                Update & Send Code
-              </Button>
-              <button
-                type="button"
-                className="w-full text-sm text-ink/60"
-                onClick={() => setEditingPhone(false)}
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-ink/70">
-                We sent a verification code to{" "}
-                <span className="font-medium text-ink">
-                  {maskedPhone ?? "your mobile"}
-                </span>
-              </p>
-              <Input
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="6-digit code"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
-                className="text-center text-lg tracking-[0.3em]"
-              />
-              <Button
-                type="button"
-                className="w-full"
-                disabled={pending || otpCode.trim().length < 4}
-                onClick={() => void verifyOtp()}
-              >
-                Verify & Continue
-              </Button>
-              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+      <div
+        key={step}
+        className="motion-safe:animate-[funnelStepIn_200ms_ease-out]"
+      >
+        {step === "otp" ? (
+          <div className="space-y-3.5">
+            <h3 className="font-display text-xl leading-snug text-ink">
+              Verify Your Mobile
+            </h3>
+            {editingPhone ? (
+              <>
+                <p className="text-sm leading-relaxed text-ink/70">
+                  Enter your corrected mobile number.
+                </p>
+                <Input
+                  type="tel"
+                  value={phoneDraft}
+                  onChange={(e) => setPhoneDraft(e.target.value)}
+                  placeholder="(647) 555-1234"
+                  className="h-11"
+                />
+                <Button
+                  type="button"
+                  className="h-11 w-full"
+                  disabled={pending}
+                  onClick={() => void savePhoneEdit()}
+                >
+                  Update & Send Code
+                </Button>
                 <button
                   type="button"
-                  className="font-medium text-canopy hover:underline"
-                  onClick={() => {
-                    void fetch("/api/auth/phone-otp/send", { method: "POST" }).then(
-                      (r) => {
+                  className="w-full text-sm text-ink/60"
+                  onClick={() => setEditingPhone(false)}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm leading-relaxed text-ink/70">
+                  We sent a verification code to{" "}
+                  <span className="font-medium text-ink">
+                    {maskedPhone ?? "your mobile"}
+                  </span>
+                </p>
+                <Input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="6-digit code"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  className="h-11 text-center text-lg tracking-[0.3em]"
+                />
+                <Button
+                  type="button"
+                  className="h-11 w-full"
+                  disabled={pending || otpCode.trim().length < 4}
+                  onClick={() => void verifyOtp()}
+                >
+                  Verify & Continue
+                </Button>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <button
+                    type="button"
+                    className="font-medium text-canopy hover:underline"
+                    onClick={() => {
+                      void fetch("/api/auth/phone-otp/send", {
+                        method: "POST",
+                      }).then((r) => {
                         if (r.ok) reportPhoneVerificationSent();
-                      },
-                    );
-                  }}
-                >
-                  Resend Code
-                </button>
+                      });
+                    }}
+                  >
+                    Resend Code
+                  </button>
+                  <button
+                    type="button"
+                    className="font-medium text-ink/60 hover:underline"
+                    onClick={() => {
+                      setPhoneDraft("");
+                      setEditingPhone(true);
+                    }}
+                  >
+                    Edit Number
+                  </button>
+                </div>
                 <button
                   type="button"
-                  className="font-medium text-ink/60 hover:underline"
-                  onClick={() => {
-                    setPhoneDraft("");
-                    setEditingPhone(true);
-                  }}
+                  className="w-full text-sm text-ink/50 hover:text-ink/70"
+                  disabled={pending}
+                  onClick={() => void skipOtp()}
                 >
-                  Edit Number
+                  Skip for now
                 </button>
-              </div>
+              </>
+            )}
+          </div>
+        ) : null}
+
+        {step === "ownership" ? (
+          <div className="space-y-3.5">
+            <h3 className="font-display text-xl leading-snug text-ink">
+              Do you currently own a home?
+            </h3>
+            {(
+              [
+                ["Yes", true],
+                ["No / Rent", false],
+              ] as const
+            ).map(([label, ownsHome]) => (
               <button
+                key={label}
                 type="button"
-                className="w-full text-sm text-ink/50 hover:text-ink/70"
                 disabled={pending}
-                onClick={() => void skipOtp()}
+                className={cn(
+                  answerBtn,
+                  pressed === label && answerBtnPressed,
+                )}
+                onClick={() => {
+                  setPressed(label);
+                  void postStep({ step: "ownership", ownsHome }).then((ok) => {
+                    if (!ok) return;
+                    if (ownsHome) go("claimAddress");
+                    else go("timeframe");
+                  });
+                }}
               >
-                Skip for now
+                {label}
               </button>
-            </>
-          )}
-        </div>
-      ) : null}
-
-      {step === "ownership" ? (
-        <div className="space-y-3.5">
-          <h3 className="font-display text-xl text-ink">
-            Do you currently own a home?
-          </h3>
-          {(
-            [
-              ["Yes", true],
-              ["No / Rent", false],
-            ] as const
-          ).map(([label, ownsHome]) => (
-            <button
-              key={label}
-              type="button"
-              disabled={pending}
-              className={cn(
-                "w-full rounded-xl border border-line px-4 py-3.5 text-left text-sm font-semibold text-ink transition hover:border-canopy/40 hover:bg-mist",
-              )}
-              onClick={() => {
-                void postStep({ step: "ownership", ownsHome }).then((ok) => {
-                  if (!ok) return;
-                  if (ownsHome) go("claimAddress");
-                  else go("timeframe");
-                });
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {step === "claimAddress" ? (
-        <div className="space-y-3.5">
-          <h3 className="font-display text-xl text-ink">Claim Your Address</h3>
-          <p className="text-sm text-ink/70">
-            Keep an eye on what&apos;s happening around your property.
-          </p>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="funnel-claim-address">
-              Property address
-            </label>
-            <AddressAutocomplete
-              source="google"
-              fillOnly
-              portalDesktopSuggestions
-              minChars={2}
-              placeholder="Start typing your address…"
-              inputClassName="h-11 text-sm"
-              onQueryChange={(query) => {
-                setClaimedPlace((prev) => {
-                  if (!prev) return null;
-                  const q = query.trim().toLowerCase();
-                  if (!q) return null;
-                  const street = prev.address.split(",")[0]?.trim().toLowerCase();
-                  if (street && q.includes(street)) return prev;
-                  if (q === prev.address.toLowerCase()) return prev;
-                  return null;
-                });
-              }}
-              onPlaceSelect={(place: AutocompleteSuggestion) => {
-                const address = (
-                  place.city && place.province
-                    ? `${place.label}, ${place.city}, ${place.province}`
-                    : (place.subtitle ?? place.label)
-                ).trim();
-                if (!address || place.type === "action") return;
-                setHomeAddress(address);
-                setClaimedPlace({
-                  address,
-                  lat: place.lat,
-                  lng: place.lng,
-                  placeId: place.placeId,
-                });
-                if (place.unitNumber?.trim() && !homeUnit.trim()) {
-                  setHomeUnit(place.unitNumber.trim());
-                }
-              }}
-            />
+            ))}
           </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="funnel-home-unit">
-              Unit # (if applicable)
-            </label>
-            <Input
-              id="funnel-home-unit"
-              value={homeUnit}
-              onChange={(e) => setHomeUnit(e.target.value)}
-              placeholder="Optional"
-              autoComplete="address-line2"
-            />
-          </div>
-          <p className="text-xs leading-relaxed text-ink/50">
-            Stay updated on new listings, sold homes and market activity around
-            your property.
-          </p>
-          <Button
-            type="button"
-            className="w-full"
-            disabled={pending || !claimedPlace?.address}
-            onClick={() => {
-              void postStep({
-                step: "claimAddress",
-                homeAddress: claimedPlace?.address ?? homeAddress.trim(),
-                homeUnit: homeUnit.trim() || undefined,
-                homeLat: claimedPlace?.lat,
-                homeLng: claimedPlace?.lng,
-                placeId: claimedPlace?.placeId,
-              }).then((ok) => {
-                if (ok) go("timeframe");
-              });
-            }}
-          >
-            Claim My Address
-          </Button>
-          <button
-            type="button"
-            className="w-full text-sm font-medium text-ink/60 hover:text-ink"
-            disabled={pending}
-            onClick={() => {
-              void postStep({ step: "claimAddress", maybeLater: true }).then(
-                (ok) => {
-                  if (ok) go("timeframe");
-                },
-              );
-            }}
-          >
-            Maybe Later
-          </button>
-        </div>
-      ) : null}
+        ) : null}
 
-      {step === "timeframe" ? (
-        <div className="space-y-3.5">
-          <h3 className="font-display text-xl text-ink">
-            When are you planning to buy?
-          </h3>
-          {CONSUMER_BUYING_TIMEFRAMES.map((tf) => (
-            <button
-              key={tf}
+        {step === "claimAddress" ? (
+          <div className="space-y-3.5">
+            <h3 className="font-display text-xl leading-snug text-ink">
+              Claim Your Address
+            </h3>
+            <p className="text-sm leading-relaxed text-ink/70">
+              Keep an eye on what&apos;s happening around your property.
+            </p>
+            <div className="space-y-1.5">
+              <label
+                className="text-sm font-medium"
+                htmlFor="funnel-claim-address"
+              >
+                Property address
+              </label>
+              <AddressAutocomplete
+                source="google"
+                fillOnly
+                fieldMenu
+                fieldMenuExpand
+                fieldMenuMaxItems={5}
+                minChars={2}
+                placeholder="Start typing your address…"
+                inputClassName="h-11 text-sm"
+                initialQuery={homeAddress}
+                onQueryChange={(query) => {
+                  setHomeAddress(query);
+                  setClaimedPlace((prev) => {
+                    if (!prev) return null;
+                    const q = query.trim().toLowerCase();
+                    if (!q) return null;
+                    const street = prev.address
+                      .split(",")[0]
+                      ?.trim()
+                      .toLowerCase();
+                    if (street && q.includes(street)) return prev;
+                    if (q === prev.address.toLowerCase()) return prev;
+                    return null;
+                  });
+                }}
+                onPlaceSelect={(place: AutocompleteSuggestion) => {
+                  const address = (
+                    place.city && place.province
+                      ? `${place.label}, ${place.city}, ${place.province}`
+                      : (place.subtitle ?? place.label)
+                  ).trim();
+                  if (!address || place.type === "action") return;
+                  setHomeAddress(address);
+                  setClaimedPlace({
+                    address,
+                    lat: place.lat,
+                    lng: place.lng,
+                    placeId: place.placeId,
+                  });
+                  if (place.unitNumber?.trim() && !homeUnit.trim()) {
+                    setHomeUnit(place.unitNumber.trim());
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium" htmlFor="funnel-home-unit">
+                Unit # (if applicable)
+              </label>
+              <Input
+                id="funnel-home-unit"
+                value={homeUnit}
+                onChange={(e) => setHomeUnit(e.target.value)}
+                placeholder="Optional"
+                autoComplete="address-line2"
+                className="h-11"
+              />
+            </div>
+            <p className="text-xs leading-relaxed text-ink/50">
+              Stay updated on new listings, sold homes and market activity around
+              your property.
+            </p>
+            <Button
               type="button"
-              disabled={pending}
-              className="w-full rounded-xl border border-line px-4 py-3.5 text-left text-sm font-semibold text-ink transition hover:border-canopy/40 hover:bg-mist"
+              className="h-11 w-full"
+              disabled={pending || !claimedPlace?.address}
               onClick={() => {
+                setPressed("claim");
                 void postStep({
-                  step: "timeframe",
-                  purchaseTimeframe: tf,
+                  step: "claimAddress",
+                  homeAddress: claimedPlace?.address ?? homeAddress.trim(),
+                  homeUnit: homeUnit.trim() || undefined,
+                  homeLat: claimedPlace?.lat,
+                  homeLng: claimedPlace?.lng,
+                  placeId: claimedPlace?.placeId,
                 }).then((ok) => {
-                  if (ok) go("financing");
+                  if (ok) go("timeframe");
                 });
               }}
             >
-              {purchaseTimeframeLabel(tf)}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {step === "financing" ? (
-        <div className="space-y-3.5">
-          <h3 className="font-display text-xl text-ink">
-            Have you been pre-approved for a mortgage?
-          </h3>
-          {(
-            [
-              ["Yes", "PRE_APPROVED"],
-              ["No", "NOT_PRE_APPROVED"],
-              ["Buying with Cash", "CASH"],
-            ] as const
-          ).map(([label, mortgageFinancing]) => (
+              Claim My Address
+            </Button>
             <button
-              key={mortgageFinancing}
               type="button"
+              className="w-full text-sm font-medium text-ink/60 hover:text-ink"
               disabled={pending}
-              className="w-full rounded-xl border border-line px-4 py-3.5 text-left text-sm font-semibold text-ink transition hover:border-canopy/40 hover:bg-mist"
               onClick={() => {
-                void postStep({ step: "financing", mortgageFinancing }).then(
+                void postStep({ step: "claimAddress", maybeLater: true }).then(
                   (ok) => {
-                    if (ok) go("preference");
+                    if (ok) go("timeframe");
                   },
                 );
               }}
             >
-              {label}
+              Maybe Later
             </button>
-          ))}
-        </div>
-      ) : null}
-
-      {step === "preference" ? (
-        <div className="space-y-3.5">
-          <h3 className="font-display text-xl text-ink">
-            {budgetLabel
-              ? `We've set your home search to ${
-                  describeObservedBudget(observed?.maxPrice) ?? "your range"
-                }.`
-              : "Confirm your home search"}
-          </h3>
-          {observed?.summary ? (
-            <p className="text-sm text-ink/70">{observed.summary}</p>
-          ) : (
-            <p className="text-sm text-ink/70">
-              Is this the price range you&apos;re looking for?
-            </p>
-          )}
-          {budgetLabel || observed?.maxPrice != null ? (
-            <p className="text-sm font-medium text-ink">
-              Is this the price range you&apos;re looking for?
-            </p>
-          ) : null}
-          <button
-            type="button"
-            disabled={pending}
-            className="w-full rounded-xl border border-line px-4 py-3.5 text-left text-sm font-semibold text-ink transition hover:border-canopy/40 hover:bg-mist"
-            onClick={() => {
-              void postStep({
-                step: "preference",
-                confirm: true,
-                cities: observed?.cities ?? [],
-                propertyTypes: observed?.propertyTypes ?? [],
-                minPrice: observed?.minPrice ?? null,
-                maxPrice: observed?.maxPrice ?? null,
-                minBeds: observed?.minBeds ?? null,
-              }).then((ok) => {
-                if (ok) void finish();
-              });
-            }}
-          >
-            Yes, that&apos;s right
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            className="w-full rounded-xl border border-line px-4 py-3.5 text-left text-sm font-semibold text-ink transition hover:border-canopy/40 hover:bg-mist"
-            onClick={() => go("editPrice")}
-          >
-            Edit Price Range
-          </button>
-        </div>
-      ) : null}
-
-      {step === "editPrice" ? (
-        <div className="space-y-3.5">
-          <h3 className="font-display text-xl text-ink">Edit Price Range</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium" htmlFor="funnel-min-price">
-                Minimum
-              </label>
-              <Input
-                id="funnel-min-price"
-                inputMode="numeric"
-                value={minPrice}
-                onChange={(e) => setMinPrice(e.target.value)}
-                placeholder="Any"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium" htmlFor="funnel-max-price">
-                Maximum
-              </label>
-              <Input
-                id="funnel-max-price"
-                inputMode="numeric"
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(e.target.value)}
-                placeholder="Any"
-              />
-            </div>
           </div>
-          <Button
-            type="button"
-            className="w-full"
-            disabled={pending}
-            onClick={() => {
-              const min = minPrice.trim() ? Number(minPrice) : null;
-              const max = maxPrice.trim() ? Number(maxPrice) : null;
-              void postStep({
-                step: "preference",
-                confirm: false,
-                cities: observed?.cities ?? [],
-                propertyTypes: observed?.propertyTypes ?? [],
-                minPrice: Number.isFinite(min as number) ? min : null,
-                maxPrice: Number.isFinite(max as number) ? max : null,
-                minBeds: observed?.minBeds ?? null,
-              }).then((ok) => {
-                if (ok) void finish();
-              });
-            }}
-          >
-            Update & Continue
-          </Button>
-        </div>
-      ) : null}
+        ) : null}
+
+        {step === "timeframe" ? (
+          <div className="space-y-3.5">
+            <h3 className="font-display text-xl leading-snug text-ink">
+              When are you planning to buy?
+            </h3>
+            {CONSUMER_BUYING_TIMEFRAMES.map((tf) => (
+              <button
+                key={tf}
+                type="button"
+                disabled={pending}
+                className={cn(answerBtn, pressed === tf && answerBtnPressed)}
+                onClick={() => {
+                  setPressed(tf);
+                  void postStep({
+                    step: "timeframe",
+                    purchaseTimeframe: tf,
+                  }).then((ok) => {
+                    if (ok) go("financing");
+                  });
+                }}
+              >
+                {purchaseTimeframeLabel(tf)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {step === "financing" ? (
+          <div className="space-y-3.5">
+            <h3 className="font-display text-xl leading-snug text-ink">
+              Have you been pre-approved for a mortgage?
+            </h3>
+            {(
+              [
+                ["Yes", "PRE_APPROVED"],
+                ["No", "NOT_PRE_APPROVED"],
+                ["Buying with Cash", "CASH"],
+              ] as const
+            ).map(([label, mortgageFinancing]) => (
+              <button
+                key={mortgageFinancing}
+                type="button"
+                disabled={pending}
+                className={cn(
+                  answerBtn,
+                  pressed === mortgageFinancing && answerBtnPressed,
+                )}
+                onClick={() => {
+                  setPressed(mortgageFinancing);
+                  void postStep({ step: "financing", mortgageFinancing }).then(
+                    (ok) => {
+                      if (ok) go("preference");
+                    },
+                  );
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {step === "preference" ? (
+          <div className="space-y-3.5">
+            <h3 className="font-display text-xl leading-snug text-ink">
+              Confirm your home search
+            </h3>
+            {confirmSummary ? (
+              <p className="rounded-xl border border-line/80 bg-mist/60 px-3.5 py-3 text-base font-semibold leading-snug text-ink">
+                {confirmSummary}
+              </p>
+            ) : (
+              <p className="text-sm leading-relaxed text-ink/70">
+                Tell us what you&apos;re looking for so we can tailor matches.
+              </p>
+            )}
+            <p className="text-sm leading-relaxed text-ink/70">
+              Is this what you&apos;re looking for?
+            </p>
+            <button
+              type="button"
+              disabled={pending}
+              className={cn(
+                answerBtn,
+                pressed === "confirm" && answerBtnPressed,
+              )}
+              onClick={() => {
+                setPressed("confirm");
+                void postStep({
+                  step: "preference",
+                  confirm: true,
+                  cities: observed?.cities ?? [],
+                  propertyTypes: observed?.propertyTypes ?? [],
+                  minPrice: observed?.minPrice ?? null,
+                  maxPrice: observed?.maxPrice ?? null,
+                  minBeds: observed?.minBeds ?? null,
+                }).then((ok) => {
+                  if (ok) void finish();
+                });
+              }}
+            >
+              Yes, that&apos;s right
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              className={cn(answerBtn, pressed === "edit" && answerBtnPressed)}
+              onClick={() => {
+                setEditCity(observed?.cities?.[0] ?? editCity);
+                setMinPrice(observed?.minPrice ?? minPrice);
+                setMaxPrice(observed?.maxPrice ?? maxPrice);
+                go("editSearch");
+              }}
+            >
+              Edit Search
+            </button>
+          </div>
+        ) : null}
+
+        {step === "editSearch" ? (
+          <div className="space-y-3.5">
+            <h3 className="font-display text-xl leading-snug text-ink">
+              Edit Search
+            </h3>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium" htmlFor="funnel-edit-city">
+                Location
+              </label>
+              <AddressAutocomplete
+                source="listings"
+                fillOnly
+                fieldMenu
+                fieldMenuExpand
+                fieldMenuMaxItems={5}
+                locationScope="cityArea"
+                minChars={2}
+                placeholder="City / area"
+                inputClassName="h-11 text-sm"
+                initialQuery={editCity}
+                onQueryChange={(q) => setEditCity(q)}
+                onPlaceSelect={(place: AutocompleteSuggestion) => {
+                  if (
+                    place.type !== "city" &&
+                    place.group !== "cities" &&
+                    place.type !== "community" &&
+                    place.group !== "communities" &&
+                    place.group !== "popular"
+                  ) {
+                    return;
+                  }
+                  const city =
+                    place.type === "community" || place.group === "communities"
+                      ? place.city || place.label
+                      : place.label;
+                  if (city?.trim()) setEditCity(city.trim());
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Price range</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label
+                    className="text-xs font-medium text-ink/55"
+                    htmlFor="funnel-min-price"
+                  >
+                    Minimum
+                  </label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink/40">
+                      $
+                    </span>
+                    <Input
+                      id="funnel-min-price"
+                      inputMode="numeric"
+                      value={formatCurrencyInputDisplay(minPrice)}
+                      onChange={(e) =>
+                        setMinPrice(parseCurrencyInput(e.target.value))
+                      }
+                      placeholder="Any"
+                      className="h-11 pl-7"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label
+                    className="text-xs font-medium text-ink/55"
+                    htmlFor="funnel-max-price"
+                  >
+                    Maximum
+                  </label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink/40">
+                      $
+                    </span>
+                    <Input
+                      id="funnel-max-price"
+                      inputMode="numeric"
+                      value={formatCurrencyInputDisplay(maxPrice)}
+                      onChange={(e) =>
+                        setMaxPrice(parseCurrencyInput(e.target.value))
+                      }
+                      placeholder="Any"
+                      className="h-11 pl-7"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <Button
+              type="button"
+              className="h-11 w-full"
+              disabled={pending}
+              onClick={() => {
+                if (
+                  minPrice != null &&
+                  maxPrice != null &&
+                  minPrice > maxPrice
+                ) {
+                  setError("Minimum cannot be higher than maximum.");
+                  return;
+                }
+                const city = editCity.trim();
+                const cities = city
+                  ? [city]
+                  : (observed?.cities ?? []).filter(Boolean);
+                setPressed("update");
+                void postStep({
+                  step: "preference",
+                  confirm: false,
+                  cities,
+                  propertyTypes: observed?.propertyTypes ?? [],
+                  minPrice,
+                  maxPrice,
+                  minBeds: observed?.minBeds ?? null,
+                }).then((ok) => {
+                  if (!ok) return;
+                  setObserved((prev) => ({
+                    cities,
+                    minPrice,
+                    maxPrice,
+                    propertyTypes: prev?.propertyTypes ?? [],
+                    minBeds: prev?.minBeds ?? null,
+                    summary: formatConfirmSearchSummary({
+                      cities,
+                      minPrice,
+                      maxPrice,
+                    }),
+                  }));
+                  void finish();
+                });
+              }}
+            >
+              Update & Continue
+            </Button>
+          </div>
+        ) : null}
+      </div>
 
       {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
     </div>

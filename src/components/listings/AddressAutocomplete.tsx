@@ -158,6 +158,9 @@ export function AddressAutocomplete({
   closeWhenHiddenBehindHeader = false,
   portalDesktopSuggestions = false,
   fieldMenu = false,
+  fieldMenuExpand = false,
+  fieldMenuMaxItems = 5,
+  locationScope = "any",
   autoOpenMobileSheet = false,
   onMobileSheetOpenChange,
   mobileSheetZClassName = "z-[200]",
@@ -205,6 +208,18 @@ export function AddressAutocomplete({
    * does not reuse the site-wide search menu.
    */
   fieldMenu?: boolean;
+  /**
+   * When used with `fieldMenu`, render suggestions in document flow so a parent
+   * card (e.g. auth funnel) can grow instead of portaling/overlaying.
+   */
+  fieldMenuExpand?: boolean;
+  /** Cap inline/field-menu rows (default 5). */
+  fieldMenuMaxItems?: number;
+  /**
+   * `cityArea` — only city / community / popular-city rows (Edit Search).
+   * `any` — full inventory + address suggestions (default).
+   */
+  locationScope?: "any" | "cityArea";
   /** Open the mobile full-screen search sheet on mount (listing chrome Search). */
   autoOpenMobileSheet?: boolean;
   /** Fires when the mobile search sheet opens or closes. */
@@ -804,6 +819,23 @@ export function AddressAutocomplete({
       return;
     }
     if (suggestion.action === "search_for") {
+      if (locationScope === "cityArea" && fillOnly) {
+        const label = (suggestion.label || query).trim();
+        if (!label) return;
+        selectedQueryRef.current = label;
+        lastEmittedQueryRef.current = label;
+        setQuery(label);
+        setOpen(false);
+        setMobileSheetOpen(false);
+        setSuggestions([]);
+        onQueryChange?.(label);
+        onPlaceSelect?.({
+          type: "city",
+          group: "cities",
+          label,
+        });
+        return;
+      }
       runSearchFor(query);
       return;
     }
@@ -917,15 +949,37 @@ export function AddressAutocomplete({
           }
       : null;
 
-  const displaySuggestions =
-    source === "listings" && query.trim().length < minChars
-      ? [...recentAsSuggestions, ...suggestions]
+  const scopedSuggestions =
+    locationScope === "cityArea"
+      ? suggestions.filter(isCityAreaSuggestion)
       : suggestions;
+  const displaySuggestions =
+    locationScope === "cityArea"
+      ? scopedSuggestions
+      : source === "listings" && query.trim().length < minChars
+        ? [...recentAsSuggestions, ...suggestions]
+        : suggestions;
 
   const sections = groupSuggestions(displaySuggestions, GROUP_ORDER);
+  const cityAreaSearchRow =
+    locationScope === "cityArea" && trimmedQuery.length >= minChars
+      ? ({
+          type: "action" as const,
+          group: "actions" as const,
+          action: "search_for" as const,
+          label: trimmedQuery,
+          subtitle: "Use this city / area",
+        } satisfies AutocompleteSuggestion)
+      : null;
   const flat = flatFromGroups(
     sections,
-    searchForRow ? [searchForRow] : [],
+    locationScope === "cityArea"
+      ? cityAreaSearchRow
+        ? [cityAreaSearchRow]
+        : []
+      : searchForRow
+        ? [searchForRow]
+        : [],
   ).filter((s) => s.action !== "listings_empty");
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -1231,6 +1285,10 @@ export function AddressAutocomplete({
 
   const fieldMenuOpen =
     fieldMenu && open && (flat.length > 0 || loading);
+  const fieldMenuRows = flat.slice(
+    0,
+    Math.max(1, Math.min(12, fieldMenuMaxItems)),
+  );
 
   const mobilePortal =
     mounted && isMobile && sheetMounted
@@ -1401,13 +1459,18 @@ export function AddressAutocomplete({
         <div
           id={listboxId}
           role="listbox"
-          className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-auto rounded-xl border border-line/80 bg-white py-1 shadow-[0_12px_28px_-16px_rgba(16,28,24,0.45)]"
+          className={cn(
+            "overflow-auto rounded-xl border border-line/80 bg-white py-1",
+            fieldMenuExpand
+              ? "relative mt-1.5 max-h-[13.5rem] shadow-none"
+              : "absolute left-0 right-0 top-full z-30 mt-1 max-h-56 shadow-[0_12px_28px_-16px_rgba(16,28,24,0.45)]",
+          )}
         >
-          {flat.length === 0 ? (
+          {fieldMenuRows.length === 0 ? (
             <p className="px-3 py-2 text-sm text-ink/50">Searching…</p>
           ) : (
             <ul>
-              {flat.map((suggestion, index) => {
+              {fieldMenuRows.map((suggestion, index) => {
                 const active = index === activeIndex;
                 return (
                   <li key={`${listboxId}-field-${index}`}>
@@ -1417,7 +1480,7 @@ export function AddressAutocomplete({
                       role="option"
                       aria-selected={active}
                       className={cn(
-                        "flex w-full items-start gap-2 px-3 py-2 text-left transition hover:bg-canopy/5",
+                        "flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition hover:bg-canopy/5",
                         active && "bg-canopy/5",
                       )}
                       onMouseDown={(event) => {
@@ -1430,12 +1493,12 @@ export function AddressAutocomplete({
                         className="mt-0.5 size-3.5 shrink-0 text-canopy"
                         aria-hidden
                       />
-                      <span className="min-w-0">
-                        <span className="block text-sm font-medium leading-snug text-ink">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium leading-snug text-ink">
                           {suggestion.label}
                         </span>
                         {suggestion.subtitle ? (
-                          <span className="mt-0.5 block text-xs leading-snug text-ink/50">
+                          <span className="mt-0.5 block truncate text-xs leading-snug text-ink/50">
                             {suggestion.subtitle}
                           </span>
                         ) : null}
@@ -1463,6 +1526,15 @@ export function AddressAutocomplete({
       {mobilePortal}
     </div>
   );
+}
+
+function isCityAreaSuggestion(suggestion: AutocompleteSuggestion): boolean {
+  if (suggestion.type === "city" || suggestion.group === "cities") return true;
+  if (suggestion.type === "community" || suggestion.group === "communities") {
+    return true;
+  }
+  if (suggestion.group === "popular") return true;
+  return false;
 }
 
 function suggestionKindLabel(suggestion: AutocompleteSuggestion): string | null {

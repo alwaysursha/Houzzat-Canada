@@ -22,7 +22,6 @@ import { DriveTimePanel } from "@/components/listings/DriveTimePanel";
 import { ListingAgentCard } from "@/components/listings/ListingAgentCard";
 import { ListingRelatedSection } from "@/components/listings/ListingRelatedSection";
 import { ListingMobileSideMenu } from "@/components/listings/ListingMobileSideMenu";
-import { ListingDetailCoachMarks } from "@/components/listings/ListingDetailCoachMarks";
 import { ListingDetailSectionNav } from "@/components/listings/ListingDetailSectionNav";
 import { ListingSheetDocumentFlags } from "@/components/listings/ListingSheetDocumentFlags";
 import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
@@ -202,7 +201,6 @@ export function ListingDetailView({
         community={listing.community}
       />
       <RecordRecentView mlsNumber={listing.mlsNumber} />
-      <ListingDetailCoachMarks />
       {applyDocumentSheetFlags ? (
         <Suspense fallback={null}>
           <ListingSheetDocumentFlags />

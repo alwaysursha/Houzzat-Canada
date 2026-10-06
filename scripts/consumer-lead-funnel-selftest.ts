@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import bcrypt from "bcryptjs";
 import {
@@ -32,8 +32,13 @@ import {
 } from "../src/lib/auth/phone-otp";
 import {
   describeObservedBudget,
+  formatConfirmSearchSummary,
+  formatCurrencyInputDisplay,
+  formatPriceBand,
   formatPricePreferenceLabel,
+  parseCurrencyInput,
 } from "../src/lib/auth/buyer-confirmed-preference";
+import { searchFiltersFromSearchUrl } from "../src/lib/auth/browse-search-context";
 import {
   CONSUMER_BUYING_TIMEFRAMES,
   isPurchaseTimeframe,
@@ -235,8 +240,9 @@ async function testEditPhoneCredentialConsistency() {
 function testSignupFormCinc() {
   const form = read("src/components/auth/SignUpForm.tsx");
   assert.ok(form.includes("Full Name"));
-  assert.ok(form.includes("Mobile Number"));
+  assert.ok(form.includes("Phone"));
   assert.ok(form.includes("also used as your password"));
+  assert.equal(form.includes("Mobile Number"), false);
   assert.equal(form.includes("PasswordField"), false);
   assert.equal(form.includes('label="Password"'), false);
   assert.ok(form.includes("credentialMode"));
@@ -332,9 +338,24 @@ function testEnrichmentAndTimeframes() {
   assert.ok(funnel.includes("When are you planning to buy?"));
   assert.ok(funnel.includes("Have you been pre-approved for a mortgage?"));
   assert.ok(funnel.includes("Yes, that&apos;s right"));
-  assert.ok(funnel.includes("Edit Price Range"));
+  assert.ok(funnel.includes("Edit Search"));
+  assert.equal(funnel.includes("Edit Price Range"), false);
+  assert.ok(funnel.includes("Confirm your home search"));
+  assert.ok(funnel.includes("formatConfirmSearchSummary"));
+  assert.ok(funnel.includes("fieldMenuExpand"));
+  assert.equal(funnel.includes("portalDesktopSuggestions"), false);
   assert.ok(funnel.includes('go("claimAddress")'));
+  assert.ok(funnel.includes('go("editSearch")'));
   assert.ok(funnel.includes("No / Rent"));
+  assert.ok(funnel.includes("parseCurrencyInput"));
+  assert.ok(funnel.includes("formatCurrencyInputDisplay"));
+  const progress = read("src/components/auth/lead-funnel/FunnelProgress.tsx");
+  assert.ok(progress.includes("h-1"));
+  assert.ok(progress.includes("duration-300"));
+  assert.equal(progress.includes("STEP_PROGRESS"), false);
+  const ac = read("src/components/listings/AddressAutocomplete.tsx");
+  assert.ok(ac.includes("fieldMenuExpand"));
+  assert.ok(ac.includes("relative mt-1.5"));
   const qual = read("src/app/api/auth/qualification/route.ts");
   assert.ok(qual.includes('step: z.literal("claimAddress")'));
   assert.ok(qual.includes("homeUnit"));
@@ -374,12 +395,122 @@ function testConfirmedPreferenceIsolation() {
     ),
     false,
   );
+  assert.equal(describeObservedBudget(1_000_000), "Up to $1M");
+  assert.equal(formatPriceBand({ maxPrice: 800_000 }), "Up to $800K");
   assert.equal(
-    describeObservedBudget(1_000_000),
-    "under $1M",
+    formatPriceBand({ minPrice: 600_000, maxPrice: 900_000 }),
+    "$600K – $900K",
   );
+  assert.equal(formatPriceBand({ minPrice: 700_000 }), "From $700K");
+  assert.equal(formatPriceBand({}), "Any price");
+  assert.equal(
+    formatConfirmSearchSummary({
+      cities: ["Hamilton"],
+      maxPrice: 800_000,
+    }),
+    "Hamilton · Up to $800K",
+  );
+  assert.equal(
+    formatConfirmSearchSummary({
+      cities: ["Toronto"],
+      minPrice: null,
+      maxPrice: null,
+    }),
+    "Toronto · Any price",
+  );
+  assert.equal(parseCurrencyInput("500000"), 500_000);
+  assert.equal(parseCurrencyInput("$1,000,000"), 1_000_000);
+  assert.equal(formatCurrencyInputDisplay(500_000), "500,000");
   assert.ok(formatPricePreferenceLabel({ maxPrice: 1_000_000 }));
   console.log("[preference] confirmed ≠ SavedSearch PASS");
+}
+
+function testFunnelUxPolish() {
+  const modal = read("src/components/auth/AuthModalProvider.tsx");
+  assert.ok(modal.includes("bg-ink/10"));
+  assert.ok(modal.includes("overflow-y-auto"));
+  assert.ok(modal.includes("shadow-[0_12px_40px_-18px"));
+  const funnel = read("src/components/auth/lead-funnel/LeadCaptureFunnel.tsx");
+  assert.ok(funnel.includes("funnelStepIn"));
+  assert.ok(funnel.includes("STEP_PROGRESS"));
+  assert.ok(funnel.includes("editSearch"));
+  assert.equal(funnel.includes("editPrice"), false);
+  assert.ok(funnel.includes('locationScope="cityArea"'));
+  assert.ok(funnel.includes('source="google"'));
+  assert.ok(funnel.includes("fieldMenuExpand"));
+  const progress = read("src/components/auth/lead-funnel/FunnelProgress.tsx");
+  assert.ok(progress.includes("transition-[width] duration-300 ease-out"));
+  console.log("[ux] confirm/edit search + transitions + backdrop PASS");
+}
+
+function testSearchContextToConfirmSummary() {
+  const browseLib = read("src/lib/auth/browse-search-context.ts");
+  assert.ok(browseLib.includes("BROWSE_SEARCH_CONTEXT_KEY"));
+  assert.ok(browseLib.includes("persistBrowseSearchUrl"));
+  assert.ok(browseLib.includes("searchFiltersFromSearchUrl"));
+  assert.equal(browseLib.includes("savedSearch"), false);
+
+  const searchUi = read("src/components/listings/SearchExperience.tsx");
+  assert.ok(searchUi.includes("persistBrowseSearchUrl"));
+
+  const signup = read("src/components/auth/SignUpForm.tsx");
+  assert.ok(signup.includes("loadBrowseSearchUrl"));
+  assert.ok(signup.includes("searchFiltersFromSearchUrl"));
+
+  const filters = searchFiltersFromSearchUrl(
+    "https://houzzat.com/search?city=Mississauga&transactionType=SALE&maxPrice=1000000",
+  );
+  assert.ok(filters);
+  assert.equal(filters?.city, "Mississauga");
+  assert.equal(filters?.maxPrice, 1_000_000);
+  assert.deepEqual(filters?.cities, ["Mississauga"]);
+
+  assert.equal(
+    formatConfirmSearchSummary({
+      cities: ["Mississauga"],
+      maxPrice: 1_000_000,
+    }),
+    "Mississauga · Up to $1M",
+  );
+
+  // Listing detail URLs must not invent search criteria.
+  assert.equal(
+    searchFiltersFromSearchUrl("https://houzzat.com/listing/foo/W1234567"),
+    null,
+  );
+  // Empty search path without criteria → null (do not invent).
+  assert.equal(
+    searchFiltersFromSearchUrl("https://houzzat.com/search"),
+    null,
+  );
+
+  const qual = read("src/app/api/auth/qualification/route.ts");
+  assert.ok(qual.includes("extractObservedPreference"));
+  assert.ok(qual.includes("formatConfirmSearchSummary"));
+  assert.equal(qual.includes("savedSearch.create"), false);
+  console.log(
+    "[capture] search → listing → signup → Mississauga · Up to $1M PASS",
+  );
+}
+
+function testConsumerTipsRemoved() {
+  assert.equal(
+    existsSync(join(root, "src/components/listings/MapSearchCoachMarks.tsx")),
+    false,
+  );
+  assert.equal(
+    existsSync(
+      join(root, "src/components/listings/ListingDetailCoachMarks.tsx"),
+    ),
+    false,
+  );
+  const search = read("src/components/listings/SearchExperience.tsx");
+  const detail = read("src/components/listings/ListingDetailView.tsx");
+  assert.equal(search.includes("MapSearchCoachMarks"), false);
+  assert.equal(detail.includes("ListingDetailCoachMarks"), false);
+  assert.equal(search.includes("houzzat:map-search-tips"), false);
+  assert.equal(detail.includes("houzzat:listing-detail-tips"), false);
+  console.log("[tips] consumer Tips implementation removed PASS");
 }
 
 function testIntentTtlAndTouch() {
@@ -499,6 +630,9 @@ async function main() {
   testOtpSecuritySurface();
   testEnrichmentAndTimeframes();
   testConfirmedPreferenceIsolation();
+  testFunnelUxPolish();
+  testSearchContextToConfirmSummary();
+  testConsumerTipsRemoved();
   testIntentTtlAndTouch();
   testAttribution();
   testTourReusesViewing();

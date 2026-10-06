@@ -12,6 +12,10 @@ import {
   persistClickIds,
   readClickIdsFromSearchParams,
 } from "@/lib/auth/capture-attribution";
+import {
+  loadBrowseSearchUrl,
+  searchFiltersFromSearchUrl,
+} from "@/lib/auth/browse-search-context";
 import { reportLeadCaptured, reportLeadCaptureStarted } from "@/lib/auth/funnel-analytics";
 import type { CaptureIntentType } from "@/lib/auth/capture-intent";
 import { peekPendingIntent } from "@/lib/auth/capture-intent";
@@ -45,11 +49,12 @@ function readVisitorKeys(): { visitorKey: string | null; sessionKey: string | nu
 
 function resolveSearchUrl(): string | null {
   if (typeof window === "undefined") return null;
+  const browsed = loadBrowseSearchUrl();
+  if (browsed) return browsed;
   try {
     const ref = document.referrer;
     if (ref && /\/search/.test(ref)) return ref.slice(0, 800);
-    const params = new URLSearchParams(window.location.search);
-    if (params.has("city") || params.has("maxPrice") || params.has("q")) {
+    if (window.location.pathname.startsWith("/search")) {
       return window.location.href.slice(0, 800);
     }
   } catch {
@@ -60,38 +65,13 @@ function resolveSearchUrl(): string | null {
 
 function resolveSearchFilters(): Record<string, unknown> | null {
   if (typeof window === "undefined") return null;
+  const fromBrowse = searchFiltersFromSearchUrl(loadBrowseSearchUrl());
+  if (fromBrowse) return fromBrowse;
   try {
-    const sources: URLSearchParams[] = [
-      new URLSearchParams(window.location.search),
-    ];
-    if (document.referrer && /\/search/.test(document.referrer)) {
-      sources.unshift(new URL(document.referrer).searchParams);
-    }
-    for (const params of sources) {
-      const city = params.get("city")?.trim();
-      const maxRaw = params.get("maxPrice") ?? params.get("priceMax");
-      const minRaw = params.get("minPrice") ?? params.get("priceMin");
-      const bedsRaw = params.get("minBeds") ?? params.get("bedsMin");
-      const propertyType = params.get("propertyType")?.trim();
-      const maxPrice = maxRaw != null && maxRaw !== "" ? Number(maxRaw) : null;
-      const minPrice = minRaw != null && minRaw !== "" ? Number(minRaw) : null;
-      const minBeds = bedsRaw != null && bedsRaw !== "" ? Number(bedsRaw) : null;
-      if (
-        !city &&
-        maxPrice == null &&
-        minPrice == null &&
-        minBeds == null &&
-        !propertyType
-      ) {
-        continue;
-      }
-      return {
-        ...(city ? { city } : {}),
-        ...(Number.isFinite(maxPrice as number) ? { maxPrice } : {}),
-        ...(Number.isFinite(minPrice as number) ? { minPrice } : {}),
-        ...(Number.isFinite(minBeds as number) ? { minBeds } : {}),
-        ...(propertyType ? { propertyType } : {}),
-      };
+    const fromReferrer = searchFiltersFromSearchUrl(document.referrer);
+    if (fromReferrer) return fromReferrer;
+    if (window.location.pathname.startsWith("/search")) {
+      return searchFiltersFromSearchUrl(window.location.href);
     }
   } catch {
     /* ignore */
@@ -371,7 +351,7 @@ export function SignUpForm({
       </div>
       <div className="space-y-1.5">
         <label className="text-sm font-medium" htmlFor="auth-signup-phone">
-          Mobile Number
+          Phone
           <span className="ml-1 font-normal text-ink/50">
             (also used as your password)
           </span>
