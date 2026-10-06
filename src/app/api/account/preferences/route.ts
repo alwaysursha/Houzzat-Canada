@@ -94,6 +94,7 @@ export async function PATCH(request: Request) {
     if (nextEmailEnabled === false) {
       await logLeadActivityForCustomer({
         customerId: user.id,
+        workspaceId: user.workspaceId,
         type: "unsubscribe",
         body: "Customer turned off email alerts",
         actorUserId: user.id,
@@ -102,6 +103,7 @@ export async function PATCH(request: Request) {
     } else {
       await logLeadActivityForCustomer({
         customerId: user.id,
+        workspaceId: user.workspaceId,
         type: "contact_updated_by_customer",
         body: "Customer re-enabled email alerts",
         actorUserId: user.id,
@@ -140,6 +142,7 @@ export async function PATCH(request: Request) {
   ) {
     await logLeadActivityForCustomer({
       customerId: user.id,
+      workspaceId: user.workspaceId,
       type: "unsubscribe",
       body: "Customer turned off SMS alerts",
       actorUserId: user.id,
@@ -151,6 +154,7 @@ export async function PATCH(request: Request) {
   if (phoneChanges?.ok && phoneChanges.changes.length) {
     await logContactActivityForCustomer({
       customerId: user.id,
+      workspaceId: user.workspaceId,
       type: "contact_updated_by_customer",
       body: `Customer updated contact: ${phoneChanges.changes.map((c) => c.label).join("; ")}`,
       actorUserId: user.id,

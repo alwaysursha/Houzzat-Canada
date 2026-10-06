@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
+import { prismaOwnedSavedSearchStore } from "@/lib/account/prisma-monitor-settings";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { prisma } from "@/lib/prisma";
 
@@ -143,9 +144,9 @@ export async function PATCH(request: Request) {
 
   const { id, isHomepageActive, isPrimary, query, ...data } = parsed.data;
 
-  const existing = await prisma.savedSearch.findFirst({
-    where: { id, userId: user!.id },
-    select: { id: true },
+  const existing = await prismaOwnedSavedSearchStore().findOwned({
+    id,
+    userId: user!.id,
   });
   if (!existing) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });

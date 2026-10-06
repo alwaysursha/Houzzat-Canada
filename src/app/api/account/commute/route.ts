@@ -153,6 +153,7 @@ export async function PUT(request: Request) {
     if (changed) {
       await logLeadActivityForCustomer({
         customerId: user.id,
+        workspaceId: user.workspaceId,
         type: "commute_address",
         body: `${label}: ${address}`,
         actorUserId: user.id,

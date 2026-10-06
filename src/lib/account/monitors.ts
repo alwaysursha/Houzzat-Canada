@@ -274,6 +274,7 @@ async function createAlert(input: {
       stream: "alerts",
       customerId: input.userId,
       mlsNumber: input.mlsNumber,
+      communicationCategory: input.watchCategory,
       rendered: renderPropertyUpdateEmail({
         name: input.name,
         title: input.title,
@@ -295,6 +296,7 @@ async function createAlert(input: {
     stream: "alerts",
     customerId: input.userId,
     mlsNumber: input.mlsNumber,
+    communicationCategory: input.watchCategory,
     rendered,
   });
 }

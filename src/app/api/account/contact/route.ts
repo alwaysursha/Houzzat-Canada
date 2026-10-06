@@ -137,6 +137,7 @@ export async function PATCH(request: Request) {
       try {
         await logContactActivityForCustomer({
           customerId: user.id,
+          workspaceId: user.workspaceId,
           type: "contact_updated_by_customer",
           body: `Customer updated contact: ${applied.changes.map((c) => c.label).join("; ")}`,
           actorUserId: user.id,

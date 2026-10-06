@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireFullCustomerUser } from "@/lib/account";
+import { prismaPropertyMonitorSettingsStore } from "@/lib/account/prisma-monitor-settings";
+import {
+  patchPropertyMonitorEmailAlerts,
+  propertyMonitorEmailPatchSchema,
+  resolvePropertyMonitorEmailAlertsOnUpsert,
+} from "@/lib/account/property-monitor-settings";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
@@ -75,6 +81,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Listing not found." }, { status: 404 });
   }
 
+  const existing = await prisma.propertyMonitor.findUnique({
+    where: {
+      userId_mlsNumber: {
+        userId: user.id,
+        mlsNumber: listing.mlsNumber,
+      },
+    },
+    select: { id: true, emailAlerts: true },
+  });
+
+  const nextEmailAlerts = resolvePropertyMonitorEmailAlertsOnUpsert({
+    existingEmailAlerts: existing?.emailAlerts ?? null,
+    supplied: parsed.data.emailAlerts,
+  });
+
   const item = await prisma.propertyMonitor.upsert({
     where: {
       userId_mlsNumber: {
@@ -85,13 +106,13 @@ export async function POST(request: Request) {
     create: {
       userId: user.id,
       mlsNumber: listing.mlsNumber,
-      emailAlerts: parsed.data.emailAlerts ?? true,
+      emailAlerts: nextEmailAlerts,
       lastKnownPrice: listing.listPrice,
       lastKnownStatus: listing.status,
       lastKnownOwnerStatus: listing.ownerStatus,
     },
     update: {
-      emailAlerts: parsed.data.emailAlerts ?? true,
+      emailAlerts: nextEmailAlerts,
       lastKnownPrice: listing.listPrice,
       lastKnownStatus: listing.status,
       lastKnownOwnerStatus: listing.ownerStatus,
@@ -107,6 +128,38 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ ok: true, item });
+}
+
+export async function PATCH(request: Request) {
+  const access = await requireFullCustomerUser();
+  if (access.denied) return access.denied;
+  const user = access.user;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid preference." }, { status: 400 });
+  }
+
+  const parsed = propertyMonitorEmailPatchSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid preference." }, { status: 400 });
+  }
+
+  const result = await patchPropertyMonitorEmailAlerts(
+    prismaPropertyMonitorSettingsStore(),
+    {
+      userId: user.id,
+      mlsNumber: parsed.data.mlsNumber,
+      emailAlerts: parsed.data.emailAlerts,
+    },
+  );
+  if (!result.ok) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true, item: result.item });
 }
 
 const deleteSchema = z.object({

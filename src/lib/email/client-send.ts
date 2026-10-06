@@ -1,3 +1,4 @@
+import type { CommunicationCategory } from "@/lib/communications/classification";
 import {
   evaluateOptionalEmailSuppression,
   resolveEmailSendWorkspace,
@@ -33,6 +34,11 @@ export async function sendAndLogClientEmail(input: {
   headers?: Record<string, string>;
   /** When false, still send but skip CRM log (e.g. verify before lead exists). */
   logToCrm?: boolean;
+  /**
+   * Authoritative optional-email category when `rendered.kind` is ambiguous
+   * across origins (e.g. sold_alert from Property Watch vs Area Watch).
+   */
+  communicationCategory?: CommunicationCategory | null;
 }): Promise<
   SendEmailResult & { emailLogId?: string; leadId?: string }
 > {
@@ -46,6 +52,7 @@ export async function sendAndLogClientEmail(input: {
       kind: input.rendered.kind,
       workspaceId,
       userId: input.customerId,
+      category: input.communicationCategory,
       preferenceStore: prismaCommunicationPreferenceStore(),
     });
     if (suppression.blocked) {

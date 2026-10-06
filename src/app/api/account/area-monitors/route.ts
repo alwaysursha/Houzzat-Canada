@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireFullCustomerUser } from "@/lib/account";
 import { createOrReuseAreaMonitor } from "@/lib/account/area-monitor-create";
+import {
+  areaMonitorSettingsPatchData,
+  areaMonitorSettingsPatchSchema,
+  patchAreaMonitorSettings,
+} from "@/lib/account/area-monitor-settings";
+import { prismaAreaMonitorSettingsStore } from "@/lib/account/prisma-monitor-settings";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { prisma } from "@/lib/prisma";
 
@@ -57,6 +63,8 @@ export async function POST(request: Request) {
     transactionType,
     segment,
   };
+  // Defaults apply only when creating a new monitor. Reuse preserves the
+  // existing row's emailAlerts / notifyNew / notifySold (dedicated PATCH).
   const { item, alreadyWatching } = await createOrReuseAreaMonitor(
     {
       findEquivalent: (match) =>
@@ -88,6 +96,38 @@ export async function POST(request: Request) {
   return NextResponse.json(
     alreadyWatching ? { ok: true, item, alreadyWatching: true } : { ok: true, item },
   );
+}
+
+export async function PATCH(request: Request) {
+  const access = await requireFullCustomerUser();
+  if (access.denied) return access.denied;
+  const user = access.user;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid preference." }, { status: 400 });
+  }
+
+  const parsed = areaMonitorSettingsPatchSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid preference." }, { status: 400 });
+  }
+
+  const result = await patchAreaMonitorSettings(
+    prismaAreaMonitorSettingsStore(),
+    {
+      userId: user.id,
+      id: parsed.data.id,
+      ...areaMonitorSettingsPatchData(parsed.data),
+    },
+  );
+  if (!result.ok) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true, item: result.item });
 }
 
 const deleteSchema = z.union([

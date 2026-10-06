@@ -3,6 +3,7 @@ import {
   isCustomerOptionalEmailCategory,
   isCustomerPolicyExemptClass,
   isOptionalEmailClass,
+  type CommunicationCategory,
 } from "@/lib/communications/classification";
 import { customerCategoryEmailEnabled } from "@/lib/communications/customer-preferences";
 import type { CommunicationPreferenceStore } from "@/lib/communications/preference-store";
@@ -74,11 +75,29 @@ export type OptionalEmailSuppressionDecision = {
  * does not newly block them. Lookup failure is exposed, not treated as clear.
  * Missing workspace → do not guess; preserve current send.
  */
+/**
+ * Resolve the category used for optional-email preference checks.
+ * Callers may supply an authoritative category when a shared template kind
+ * (e.g. sold_alert) is used from more than one watch origin.
+ */
+export function resolveOptionalEmailCategory(input: {
+  kind: string;
+  category?: CommunicationCategory | null;
+}): CommunicationCategory {
+  if (input.category) return input.category;
+  return classifyEmailKind(input.kind).category;
+}
+
 export async function evaluateOptionalEmailSuppression(input: {
   to: string;
   kind: string;
   workspaceId: string | null;
   userId?: string | null;
+  /**
+   * Authoritative optional-email category when template kind is ambiguous
+   * across origins (Property Watch vs Area Watch sold emails).
+   */
+  category?: CommunicationCategory | null;
   store?: EmailSuppressionStore;
   preferenceStore?: CommunicationPreferenceStore;
 }): Promise<OptionalEmailSuppressionDecision> {
@@ -133,16 +152,21 @@ export async function evaluateOptionalEmailSuppression(input: {
     };
   }
 
+  const category = resolveOptionalEmailCategory({
+    kind: input.kind,
+    category: input.category,
+  });
+
   if (
     input.preferenceStore &&
     input.userId &&
-    isCustomerOptionalEmailCategory(classified.category)
+    isCustomerOptionalEmailCategory(category)
   ) {
     try {
       const categoryEnabled = await customerCategoryEmailEnabled({
         store: input.preferenceStore,
         userId: input.userId,
-        category: classified.category,
+        category,
       });
       if (!categoryEnabled) {
         return {

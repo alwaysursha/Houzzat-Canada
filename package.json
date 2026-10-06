@@ -42,6 +42,7 @@
     "communications-phase2a:selftest": "node --import tsx scripts/communications-phase2a-selftest.ts",
     "communications-phase2b1:selftest": "node --import tsx scripts/communications-phase2b1-selftest.ts",
     "communications-phase2b2:selftest": "node --import tsx scripts/communications-phase2b2-selftest.ts",
+    "communications-phase3a:selftest": "node --import tsx scripts/communications-phase3a-selftest.ts",
     "verify-email-nudge:selftest": "node --import tsx scripts/verify-email-nudge-selftest.ts",
     "signup-attribution:selftest": "node --import tsx scripts/signup-attribution-selftest.ts",
     "workspace-tracking:selftest": "node --import tsx scripts/workspace-tracking-selftest.ts",
