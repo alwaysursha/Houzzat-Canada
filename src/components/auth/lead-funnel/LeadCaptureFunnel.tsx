@@ -51,6 +51,8 @@ type ObservedPreference = {
   minPrice: number | null;
   propertyTypes: string[];
   minBeds: number | null;
+  minBaths: number | null;
+  transactionType: string | null;
   summary: string | null;
 };
 
@@ -640,6 +642,8 @@ export function LeadCaptureFunnel({
                   minPrice: observed?.minPrice ?? null,
                   maxPrice: observed?.maxPrice ?? null,
                   minBeds: observed?.minBeds ?? null,
+                  minBaths: observed?.minBaths ?? null,
+                  transactionType: observed?.transactionType ?? null,
                 }).then((ok) => {
                   if (ok) void finish();
                 });
@@ -779,6 +783,8 @@ export function LeadCaptureFunnel({
                   minPrice,
                   maxPrice,
                   minBeds: observed?.minBeds ?? null,
+                  minBaths: observed?.minBaths ?? null,
+                  transactionType: observed?.transactionType ?? null,
                 }).then((ok) => {
                   if (!ok) return;
                   setObserved((prev) => ({
@@ -787,6 +793,8 @@ export function LeadCaptureFunnel({
                     maxPrice,
                     propertyTypes: prev?.propertyTypes ?? [],
                     minBeds: prev?.minBeds ?? null,
+                    minBaths: prev?.minBaths ?? null,
+                    transactionType: prev?.transactionType ?? null,
                     summary: formatConfirmSearchSummary({
                       cities,
                       minPrice,

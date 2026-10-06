@@ -38,6 +38,7 @@ import {
   type SearchFilters,
   type SearchViewMode,
 } from "@/components/listings/SearchFilterChips";
+import { SearchDesktopFilterPanel } from "@/components/listings/SearchDesktopFilterPanel";
 import { SearchFiltersMenu } from "@/components/listings/SearchFiltersMenu";
 import { SearchFiltersSheet } from "@/components/listings/SearchFiltersSheet";
 import { SearchToolbarChips } from "@/components/listings/SearchResultsContext";
@@ -723,6 +724,8 @@ export function SearchExperience() {
   const countLabel = pending
     ? "Updating"
     : `${Math.max(0, total).toLocaleString("en-CA")} results`;
+  const desktopCardsLayout = !isNarrow && view === "cards";
+  const mobileCardsLayout = isNarrow && view === "cards";
 
   const savedSearchQuery = useMemo(
     () => ({
@@ -1148,8 +1151,21 @@ export function SearchExperience() {
           "relative min-h-0 flex-1",
           view === "split" && "search-split-stage flex flex-col lg:flex-row",
           view === "split" && resultsSheetOpen && "is-sheet-open",
+          desktopCardsLayout && "flex flex-row",
         )}
       >
+        {desktopCardsLayout ? (
+          <SearchDesktopFilterPanel
+            filters={filters}
+            onChange={updateFilters}
+            cities={structuredCitiesFromSearch(citiesParam, filters.city)}
+            onCitiesChange={replaceStructuredCities}
+            onResetFilters={resetStructuredFilters}
+            resultCount={total}
+            pending={pending}
+            resultNoun={noun}
+          />
+        ) : null}
         {view === "split" ? (
           <style>{`
             @media (max-width: 1023px) {
@@ -1307,10 +1323,13 @@ export function SearchExperience() {
               signedIn={signedIn}
               hasClientAccess={hasClientAccess}
               pending={pending}
-              horizontal={isNarrow}
+              horizontal={isNarrow && view === "split"}
+              mobileFullWidth={mobileCardsLayout}
               wideGrid={!isNarrow && view === "cards"}
               title={resultsCopy.title}
               countLabel={countLabel}
+              countHeadline={resultsCopy.countHeadline}
+              emphasizeCount={mobileCardsLayout}
               emptyHint={
                 polygon
                   ? "Clear the draw or expand it."

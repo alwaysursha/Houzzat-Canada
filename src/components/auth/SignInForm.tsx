@@ -164,13 +164,13 @@ export function SignInForm({
       </Button>
       {onSwitchMode ? (
         <p className="text-center text-sm text-ink/60">
-          New here?{" "}
+          Need access?{" "}
           <button
             type="button"
             onClick={onSwitchMode}
             className="font-semibold text-canopy hover:underline"
           >
-            Create account
+            Continue
           </button>
         </p>
       ) : null}

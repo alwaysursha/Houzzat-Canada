@@ -2,7 +2,8 @@
  * V2 Looking For loader. Auth is hostname → workspace → ACTIVE
  * member → canAccessLead. Uses the same canonical loadBuyerIntent
  * assembler as mobile lead engagement (saved searches + 45-day browse).
- * Prefers BuyerConfirmedPreference when present (does not create SavedSearch).
+ * Prefers BuyerConfirmedPreference when present for Looking For copy.
+ * Qualification also upserts a SavedSearch (digests / homepage) separately.
  * Does not load timeline, emails, or rail counts.
  */
 import type { AgentOrgContext } from "@/lib/agent";

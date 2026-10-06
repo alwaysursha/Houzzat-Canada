@@ -13,8 +13,11 @@ export function SearchResultsPane({
   hasClientAccess = signedIn,
   pending,
   horizontal,
+  mobileFullWidth = false,
   title,
   countLabel,
+  countHeadline,
+  emphasizeCount = false,
   wideGrid = false,
   emptyHint,
 }: {
@@ -26,10 +29,14 @@ export function SearchResultsPane({
   /** VOW unlock — false for visitors and verify-locked. */
   hasClientAccess?: boolean;
   pending: boolean;
-  /** Mobile list: thumbnail beside the facts. */
+  /** Mobile split list: thumbnail beside the facts. */
   horizontal?: boolean;
+  /** Mobile cards view: stacked full-width cards. */
+  mobileFullWidth?: boolean;
   title: string;
   countLabel: string;
+  countHeadline?: string;
+  emphasizeCount?: boolean;
   /** Cards view on a wide screen: more than two columns when the pane is wide. */
   wideGrid?: boolean;
   emptyHint: string;
@@ -56,11 +63,17 @@ export function SearchResultsPane({
           }
         }
       `}</style>
-      <SearchResultsHeading title={title} countLabel={countLabel} />
+      <SearchResultsHeading
+        title={title}
+        countLabel={countLabel}
+        countHeadline={countHeadline}
+        emphasizeCount={emphasizeCount}
+      />
       <div
         className={cn(
           "search-result-grid grid content-start items-start gap-3 p-3 pt-1.5 sm:gap-4 sm:p-4 sm:pt-2",
-          horizontal && "search-result-grid-single grid-cols-1",
+          (horizontal || mobileFullWidth) && "search-result-grid-single grid-cols-1",
+          mobileFullWidth && "gap-2.5 px-2 pt-1 sm:gap-4 sm:px-4 sm:pt-2",
           wideGrid && "search-result-grid-wide",
         )}
       >
@@ -71,6 +84,7 @@ export function SearchResultsPane({
             active={listing.mlsNumber === activeMls}
             onFocus={() => onFocus(listing.mlsNumber)}
             horizontal={horizontal}
+            mobileFullWidth={mobileFullWidth}
             lockedPreview={!hasClientAccess && listing.status !== "ACTIVE"}
           />
         ))}

@@ -50,6 +50,11 @@ export type SearchResultChip = {
 export type SearchResultsCopy = {
   title: string;
   supporting: string;
+  /**
+   * Prominent mobile count line, e.g. "247 Homes for Sale".
+   * Uses the canonical `total` from search pagination — never invented.
+   */
+  countHeadline: string;
   chips: SearchResultChip[];
 };
 
@@ -203,6 +208,24 @@ export function searchResultsCopy(input: SearchResultsCopyInput): SearchResultsC
     ? "Updating results"
     : `${count.toLocaleString("en-CA")} ${countWord} ${count === 1 ? "matches" : "match"} your search`;
 
+  const countNoun =
+    input.segment === "COMMERCIAL"
+      ? count === 1
+        ? "Property"
+        : "Properties"
+      : count === 1
+        ? "Home"
+        : "Homes";
+  const countTxn =
+    input.transactionType === "LEASE"
+      ? "for Lease"
+      : input.transactionType === "ALL"
+        ? "for Sale or Lease"
+        : "for Sale";
+  const countHeadline = input.pending
+    ? "Updating results"
+    : `${count.toLocaleString("en-CA")} ${countNoun} ${countTxn}`;
+
   const chips: SearchResultChip[] = [
     {
       key: "transaction",
@@ -258,5 +281,5 @@ export function searchResultsCopy(input: SearchResultsCopyInput): SearchResultsC
     chips.push({ key: "query", label: `“${query}”`, clearable: true });
   }
 
-  return { title, supporting, chips };
+  return { title, supporting, countHeadline, chips };
 }

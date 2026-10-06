@@ -17,7 +17,10 @@ import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { Input } from "@/components/ui/input";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
 import { savedQueryToSearchHref } from "@/lib/agent/intent-to-search";
-import { parseHomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
+import {
+  parseHomepagePersonalizationQuery,
+  summarizePersonalization,
+} from "@/lib/listings/homepage-personalization";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
@@ -198,6 +201,11 @@ export function HomeCustomerToolsStrip({
   }
 
   const customized = Boolean(activeSearch);
+  const appliedCriteria = activeSearch
+    ? summarizePersonalization(
+        parseHomepagePersonalizationQuery(activeSearch.query),
+      )
+    : "";
   const searchHref = activeSearch
     ? savedQueryToSearchHref(activeSearch.query)
     : "/search";
@@ -244,7 +252,7 @@ export function HomeCustomerToolsStrip({
               >
                 <p className="font-display text-lg tracking-tight text-ink">
                   {customized
-                    ? "Custom Search"
+                    ? "Your custom search is applied"
                     : "Your Houzzat"}
                 </p>
                 {customized && activeSearch ? (
@@ -253,10 +261,10 @@ export function HomeCustomerToolsStrip({
                       <div className="flex items-center overflow-hidden rounded-full border border-signal/30 bg-surface shadow-sm">
                         <Link
                           href={searchHref}
-                          className="max-w-[11rem] truncate px-3 py-1.5 text-xs font-semibold text-ink/85 hover:text-signal"
-                          title={activeSearch.name}
+                          className="max-w-[16rem] truncate px-3 py-1.5 text-xs font-semibold text-ink/85 hover:text-signal"
+                          title={appliedCriteria || activeSearch.name}
                         >
-                          {activeSearch.name}
+                          {appliedCriteria || activeSearch.name}
                         </Link>
                         <button
                           type="button"
@@ -273,7 +281,7 @@ export function HomeCustomerToolsStrip({
                           type="button"
                           disabled={clearing}
                           className="border-l border-signal/20 px-2 py-1.5 text-danger hover:bg-danger/10 disabled:opacity-60 sm:hidden"
-                          aria-label="Clear custom search"
+                          aria-label="Reset search"
                           onClick={() => void clearCustomSearch()}
                         >
                           <X className="h-3.5 w-3.5" strokeWidth={2.5} />
@@ -371,7 +379,7 @@ export function HomeCustomerToolsStrip({
                       onClick={() => void clearCustomSearch()}
                       className="hidden text-xs font-semibold text-canopy hover:underline disabled:opacity-60 sm:inline"
                     >
-                      Clear custom search
+                      Reset search
                     </button>
                   </>
                 ) : null}

@@ -8,6 +8,7 @@ import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { PersonalizeHomepageModal } from "@/components/home/PersonalizeHomepageModal";
 import {
   parseHomepagePersonalizationQuery,
+  summarizePersonalization,
 } from "@/lib/listings/homepage-personalization";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 
@@ -131,14 +132,12 @@ export function HomepagePersonalizationBanner({
         <div className="relative flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 lg:px-10">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
-              Personalized view
+              Your custom search is applied
             </p>
             <p className="mt-0.5 text-sm font-semibold text-white sm:text-base">
-              Custom Search Name · {active.name}
-            </p>
-            <p className="mt-1 text-xs text-white/75">
-              Only listings matching your saved search — not all of the
-              listings.
+              {summarizePersonalization(
+                parseHomepagePersonalizationQuery(active.query),
+              ) || active.name}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -162,7 +161,7 @@ export function HomepagePersonalizationBanner({
               onClick={() => void showAllListings()}
               className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-canopy-deep transition hover:bg-mist"
             >
-              {pending ? "Restoring…" : "Show all listings"}
+              {pending ? "Restoring…" : "Reset search"}
             </button>
           </div>
         </div>

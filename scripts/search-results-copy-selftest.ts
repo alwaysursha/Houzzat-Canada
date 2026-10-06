@@ -37,6 +37,7 @@ const kitchener = searchResultsCopy(
 );
 assert.equal(kitchener.title, "Homes Under $750K in Kitchener");
 assert.equal(kitchener.supporting, "57 homes match your search");
+assert.equal(kitchener.countHeadline, "57 Homes for Sale");
 assert.deepEqual(
   kitchener.chips.map((chip) => chip.label),
   ["For Sale", "Under $750K", "2+ Beds", "2+ Baths", "Kitchener"],
@@ -88,7 +89,13 @@ const lease = searchResultsCopy(
 );
 assert.equal(lease.title, "Rentals Under $2K/mo");
 assert.equal(lease.supporting, "1 rental matches your search");
+assert.equal(lease.countHeadline, "1 Home for Lease");
 assert.equal(lease.chips[0]?.label, "For Lease");
+
+assert.equal(
+  searchResultsCopy(input({ total: 247, transactionType: "SALE" })).countHeadline,
+  "247 Homes for Sale",
+);
 
 const range = searchResultsCopy(
   input({ minPrice: "500000", maxPrice: "750000", city: "Kitchener" }),

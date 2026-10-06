@@ -1,6 +1,7 @@
 /**
  * Confirmed buyer search preference from qualification.
- * Must never create/overwrite SavedSearch or drive digests alone.
+ * Digests still use SavedSearch; qualification also upserts a deterministic
+ * SavedSearch via upsertQualificationSavedSearch (see qualification route).
  */
 
 import type { PrismaClient } from "@prisma/client";

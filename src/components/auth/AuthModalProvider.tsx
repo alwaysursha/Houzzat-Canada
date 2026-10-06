@@ -165,6 +165,8 @@ function AuthModalPanel({
   const copy = intent ? authModalCopy(intent, mode, displayName) : null;
   const listingGate = intent === "VIEW_LISTING";
   const captureCompact = Boolean(intent);
+  /** Capture-first listing gate: bottom Sign in only — no top tabs. */
+  const hideTopAuthTabs = listingGate;
 
   function selectMode(next: AuthMode) {
     if (next === "sign-up") setAuthNotice(null);
@@ -175,9 +177,14 @@ function AuthModalPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-3 py-4 sm:px-4 sm:py-8">
+    <div
+      className={cn(
+        "fixed inset-0 z-[100] flex items-center justify-center px-3 sm:px-4 sm:py-8",
+        listingGate || phase === "funnel" ? "py-3" : "py-4",
+      )}
+    >
       {listingGate || phase === "funnel" ? (
-        <div className="absolute inset-0 bg-ink/10" />
+        <div className="absolute inset-0 bg-ink/[0.06]" />
       ) : (
         <button
           type="button"
@@ -194,14 +201,16 @@ function AuthModalPanel({
           "relative z-10 flex w-full flex-col rounded-2xl border border-line/80 bg-surface",
           phase === "funnel"
             ? "max-h-[min(88vh,calc(100dvh-1.25rem))] overflow-x-hidden overflow-y-auto shadow-[0_12px_40px_-18px_rgba(16,28,24,0.28)]"
-            : captureCompact
-              ? "max-h-[min(85vh,calc(100dvh-1.5rem))] overflow-hidden shadow-[0_14px_40px_-16px_rgba(16,28,24,0.32)]"
-              : "max-h-[min(78vh,38rem)] max-w-md overflow-hidden shadow-xl",
+            : listingGate
+              ? "max-h-[min(72vh,calc(100dvh-2rem))] overflow-hidden shadow-[0_14px_40px_-16px_rgba(16,28,24,0.28)] sm:max-h-[min(85vh,calc(100dvh-1.5rem))]"
+              : captureCompact
+                ? "max-h-[min(85vh,calc(100dvh-1.5rem))] overflow-hidden shadow-[0_14px_40px_-16px_rgba(16,28,24,0.32)]"
+                : "max-h-[min(78vh,38rem)] max-w-md overflow-hidden shadow-xl",
         )}
         style={
           captureCompact || phase === "funnel"
             ? {
-                maxWidth: phase === "funnel" ? 400 : 440,
+                maxWidth: phase === "funnel" ? 400 : listingGate ? 380 : 440,
               }
             : undefined
         }
@@ -215,7 +224,12 @@ function AuthModalPanel({
           </>
         ) : copy ? (
           <>
-            <div className="flex shrink-0 items-start gap-3 border-b border-line px-4 py-3.5 sm:px-5">
+            <div
+              className={cn(
+                "flex shrink-0 items-start gap-3 border-b border-line sm:px-5",
+                listingGate ? "px-4 py-2.5 sm:py-3.5" : "px-4 py-3.5",
+              )}
+            >
               <div className="min-w-0 flex-1">
                 <TenantHeaderBrand
                   displayName={brand?.displayName?.trim() || ""}
@@ -225,13 +239,26 @@ function AuthModalPanel({
                 />
                 <h2
                   id="auth-modal-title"
-                  className="mt-2 font-display text-lg leading-tight text-ink sm:text-xl"
+                  className={cn(
+                    "mt-1.5 font-display leading-tight text-ink sm:mt-2 sm:text-xl",
+                    listingGate ? "text-base sm:text-xl" : "text-lg",
+                  )}
                 >
                   {copy.headline}
                 </h2>
-                <p className="mt-1 text-sm leading-relaxed text-ink/65">
+                <p
+                  className={cn(
+                    "mt-0.5 leading-snug text-ink/65 sm:mt-1 sm:leading-relaxed",
+                    listingGate ? "text-[13px] sm:text-sm" : "text-sm",
+                  )}
+                >
                   {copy.subhead}
                 </p>
+                {copy.freshness ? (
+                  <p className="mt-1 text-[11px] leading-snug text-ink/45 sm:text-xs">
+                    {copy.freshness}
+                  </p>
+                ) : null}
               </div>
               {listingGate ? null : (
                 <button
@@ -244,14 +271,21 @@ function AuthModalPanel({
                 </button>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-2.5 sm:px-5">
-              <AuthModalTabs
-                mode={mode}
-                signInLabel={signInLabel}
-                onMode={selectMode}
-              />
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            {hideTopAuthTabs ? null : (
+              <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-2.5 sm:px-5">
+                <AuthModalTabs
+                  mode={mode}
+                  signInLabel={signInLabel}
+                  onMode={selectMode}
+                />
+              </div>
+            )}
+            <div
+              className={cn(
+                "min-h-0 flex-1 overflow-y-auto px-5",
+                listingGate ? "py-3 sm:py-4" : "py-4",
+              )}
+            >
               {mode === "sign-in" ? (
                 <SignInForm
                   callbackUrl={callbackUrl}
@@ -268,6 +302,7 @@ function AuthModalPanel({
                   initialEmail={signupEmail}
                   intent={intent}
                   ctaLabel={copy.cta}
+                  compact={listingGate}
                   onIdentityChange={(next) => {
                     setSignupName(next.name);
                     setSignupEmail(next.email);
@@ -325,7 +360,7 @@ function AuthModalPanel({
                   initialName={signupName}
                   initialEmail={signupEmail}
                   intent={intent}
-                  ctaLabel="Create Free Account"
+                  ctaLabel="Continue"
                   onIdentityChange={(next) => {
                     setSignupName(next.name);
                     setSignupEmail(next.email);

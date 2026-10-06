@@ -28,6 +28,7 @@ import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
 import { authSuccessReturnPath } from "@/lib/auth/safe-callback-url";
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
 import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
+import { cn } from "@/lib/utils";
 
 export type SignUpSuccessResult = {
   needsQualification: boolean;
@@ -85,7 +86,8 @@ export function SignUpForm({
   initialName = "",
   initialEmail = "",
   intent = null,
-  ctaLabel = "Create Free Account",
+  ctaLabel = "Continue",
+  compact = false,
   onIdentityChange,
   onSuccess,
   onSwitchMode,
@@ -98,6 +100,8 @@ export function SignUpForm({
   initialEmail?: string;
   intent?: CaptureIntentType | null;
   ctaLabel?: string;
+  /** Tighter vertical rhythm for mobile listing-access capture. */
+  compact?: boolean;
   onIdentityChange?: (next: { name: string; email: string }) => void;
   onSuccess?: (result: SignUpSuccessResult) => void;
   onSwitchMode?: () => void;
@@ -310,11 +314,11 @@ export function SignUpForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="space-y-3.5"
+      className={cn(compact ? "space-y-2.5" : "space-y-3.5")}
       autoComplete="on"
       name="houzzat-signup"
     >
-      <div className="space-y-1.5">
+      <div className={cn(compact ? "space-y-1" : "space-y-1.5")}>
         <label className="text-sm font-medium" htmlFor="auth-signup-name">
           Full Name
         </label>
@@ -323,6 +327,7 @@ export function SignUpForm({
           name="name"
           autoComplete="name"
           required
+          className={compact ? "h-10" : undefined}
           value={name}
           onChange={(event) => {
             const next = event.target.value;
@@ -331,7 +336,7 @@ export function SignUpForm({
           }}
         />
       </div>
-      <div className="space-y-1.5">
+      <div className={cn(compact ? "space-y-1" : "space-y-1.5")}>
         <label className="text-sm font-medium" htmlFor="auth-signup-email">
           Email
         </label>
@@ -341,6 +346,7 @@ export function SignUpForm({
           type="email"
           autoComplete="email"
           required
+          className={compact ? "h-10" : undefined}
           value={email}
           onChange={(event) => {
             const next = event.target.value;
@@ -349,7 +355,7 @@ export function SignUpForm({
           }}
         />
       </div>
-      <div className="space-y-1.5">
+      <div className={cn(compact ? "space-y-1" : "space-y-1.5")}>
         <label className="text-sm font-medium" htmlFor="auth-signup-phone">
           Phone
           <span className="ml-1 font-normal text-ink/50">
@@ -364,15 +370,26 @@ export function SignUpForm({
           inputMode="tel"
           required
           placeholder="(647) 555-1234"
+          className={compact ? "h-10" : undefined}
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
         />
       </div>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
-      <Button type="submit" className="w-full" disabled={pending} ref={submitRef}>
+      <Button
+        type="submit"
+        className={cn("w-full", compact && "h-11")}
+        disabled={pending}
+        ref={submitRef}
+      >
         {pending ? "Continuing…" : `${ctaLabel} →`}
       </Button>
-      <p className="text-center text-[11px] leading-relaxed text-ink/50">
+      <p
+        className={cn(
+          "text-center leading-snug text-ink/50",
+          compact ? "text-[10px]" : "text-[11px] leading-relaxed",
+        )}
+      >
         By continuing you agree to our{" "}
         <Link
           href="/terms"

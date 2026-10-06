@@ -86,14 +86,26 @@ export function ContactDisplayRow({
             ) : null}
             {otpVerified !== undefined ? (
               <span
-                className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#64748b]"
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                  otpVerified
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-amber-50 text-amber-800",
+                )}
                 title={
                   otpVerified
                     ? "Consumer OTP verified"
                     : "Consumer OTP unverified"
                 }
               >
-                {otpVerified ? "OTP" : "No OTP"}
+                {otpVerified ? (
+                  <>
+                    <Check className="size-2.5" aria-hidden />
+                    OTP
+                  </>
+                ) : (
+                  "No OTP"
+                )}
               </span>
             ) : null}
           </a>
@@ -121,14 +133,26 @@ export function ContactDisplayRow({
             ) : null}
             {otpVerified !== undefined ? (
               <span
-                className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#64748b]"
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                  otpVerified
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-amber-50 text-amber-800",
+                )}
                 title={
                   otpVerified
                     ? "Consumer OTP verified"
                     : "Consumer OTP unverified"
                 }
               >
-                {otpVerified ? "OTP" : "No OTP"}
+                {otpVerified ? (
+                  <>
+                    <Check className="size-2.5" aria-hidden />
+                    OTP
+                  </>
+                ) : (
+                  "No OTP"
+                )}
               </span>
             ) : null}
           </span>

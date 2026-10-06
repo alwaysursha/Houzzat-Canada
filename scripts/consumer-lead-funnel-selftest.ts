@@ -40,12 +40,28 @@ import {
 } from "../src/lib/auth/buyer-confirmed-preference";
 import { searchFiltersFromSearchUrl } from "../src/lib/auth/browse-search-context";
 import {
+  buildQualificationSavedSearchQuery,
+  createQualificationSavedSearchMemoryDb,
+  qualificationSavedSearchName,
+  queryHasQualificationMarker,
+  resolveQualificationIsPrimary,
+  upsertQualificationSavedSearch,
+} from "../src/lib/auth/qualification-saved-search";
+import {
   CONSUMER_BUYING_TIMEFRAMES,
   isPurchaseTimeframe,
   purchaseTimeframeLabel,
 } from "../src/lib/agent/timeframe";
 import { normalizeToE164 } from "../src/lib/sms/e164";
-import { authModalCopy } from "../src/components/auth/auth-modal-copy";
+import {
+  accessInventoryLine,
+  authModalCopy,
+} from "../src/components/auth/auth-modal-copy";
+import { searchResultsCopy } from "../src/lib/listings/search-results-copy";
+import {
+  parseHomepagePersonalizationQuery,
+  summarizePersonalization,
+} from "../src/lib/listings/homepage-personalization";
 
 const root = join(import.meta.dirname, "..");
 
@@ -262,11 +278,24 @@ function testSignupFormCinc() {
 
 function testAuthModalCompactAndCtas() {
   const modal = read("src/components/auth/AuthModalProvider.tsx");
-  assert.ok(modal.includes("maxWidth: phase === \"funnel\" ? 400 : 440"));
+  assert.ok(modal.includes("hideTopAuthTabs"));
+  assert.ok(modal.includes('listingGate ? 380 : 440'));
   assert.equal(modal.includes("maxWidth: 880"), false);
   assert.equal(modal.includes("AuthBenefitsPanel"), false);
   assert.ok(modal.includes("LeadCaptureFunnel"));
   assert.ok(modal.includes("TourThisHomePrompt"));
+  assert.ok(modal.includes("compact={listingGate}"));
+  // VIEW_LISTING: no top Sign in / Sign up tabs; bottom Sign in remains.
+  assert.ok(modal.includes("hideTopAuthTabs ? null"));
+  assert.ok(read("src/components/auth/SignUpForm.tsx").includes("Already registered?"));
+
+  const viewListing = authModalCopy("VIEW_LISTING", "sign-up", "Houzzat");
+  assert.equal(viewListing.headline, "Free Access");
+  assert.ok(viewListing.subhead.includes("full property details"));
+  assert.equal(viewListing.cta, "Continue to Property");
+  assert.equal(viewListing.freshness, accessInventoryLine());
+  assert.equal(viewListing.subhead.includes("Create your free"), false);
+  assert.equal(viewListing.subhead.includes("free account"), false);
 
   const cases: Array<[Parameters<typeof authModalCopy>[0], string]> = [
     ["VIEW_LISTING", "Continue to Property"],
@@ -282,8 +311,14 @@ function testAuthModalCompactAndCtas() {
   ];
   for (const [intent, cta] of cases) {
     assert.equal(authModalCopy(intent, "sign-up", "Houzzat").cta, cta);
+    assert.equal(
+      authModalCopy(intent, "sign-up", "Houzzat").subhead.toLowerCase().includes(
+        "create your free",
+      ),
+      false,
+    );
   }
-  console.log("[auth modal] compact + contextual CTAs PASS");
+  console.log("[auth modal] Free Access + no top tabs + contextual CTAs PASS");
 }
 
 function testOtpSecuritySurface() {
@@ -362,11 +397,11 @@ function testEnrichmentAndTimeframes() {
   assert.ok(qual.includes("applyCanonicalCustomerContact"));
   assert.equal(qual.includes('step: z.literal("valuation")'), false);
   assert.equal(qual.includes("/api/valuation"), false);
-  assert.equal(qual.includes("savedSearch.create"), false);
+  assert.ok(qual.includes("upsertQualificationSavedSearch"));
   assert.equal(qual.includes("areaMonitor"), false);
   assert.equal(qual.includes("propertyMonitor"), false);
   assert.ok(qual.includes("upsertBuyerConfirmedPreference"));
-  assert.ok(qual.includes("savedSearchTouched: false"));
+  assert.ok(qual.includes("savedSearchTouched: true"));
   assert.ok(qual.includes("PRE_APPROVED"));
   assert.ok(qual.includes("CASH"));
   const crm = read("src/components/agent/lead-profile-v2/LeadProfileV2InfoPanel.tsx");
@@ -383,18 +418,180 @@ function testEnrichmentAndTimeframes() {
   console.log("[enrichment] ownership/claim-address/timeframe/financing/preference PASS");
 }
 
-function testConfirmedPreferenceIsolation() {
+async function testConfirmedPreferenceAndQualificationSearch() {
   const looking = read("src/lib/agent/lead-profile-v2/load-looking-for.ts");
   assert.ok(looking.includes("buyerConfirmedPreference"));
   assert.ok(looking.includes("Confirmed preference"));
   const digest = read("scripts/buyer-digest-saved-search-selftest.ts");
   assert.ok(digest.length > 0);
-  assert.equal(
+  const qualHelper = read("src/lib/auth/qualification-saved-search.ts");
+  assert.ok(qualHelper.includes("QUALIFICATION_HOME_SEARCH_KEY"));
+  assert.ok(qualHelper.includes("upsertQualificationSavedSearch"));
+  assert.ok(qualHelper.includes("resolveQualificationIsPrimary"));
+  assert.ok(qualHelper.includes("Never steals primary"));
+  assert.ok(
     read("src/app/api/auth/qualification/route.ts").includes(
-      "savedSearch.create",
+      "upsertQualificationSavedSearch",
     ),
+  );
+  const q1 = buildQualificationSavedSearchQuery({
+    cities: ["Milton"],
+    maxPrice: 1_000_000,
+    minBeds: 3,
+    minBaths: 2,
+    transactionType: "SALE",
+  });
+  assert.equal(q1.qualificationHomeSearch, true);
+  assert.equal(q1.city, "Milton");
+  assert.equal(q1.maxPrice, "1000000");
+  assert.equal(q1.minBeds, "3");
+  assert.equal(q1.minBaths, "2");
+  assert.equal(
+    qualificationSavedSearchName({ cities: ["Milton"], maxPrice: 1_000_000 }),
+    "Milton · up to $1M",
+  );
+
+  // Pure primary-resolution rules.
+  assert.equal(
+    resolveQualificationIsPrimary({
+      otherPrimaryId: null,
+      qualificationId: null,
+      qualificationIsAlreadyPrimary: false,
+    }),
+    true,
+  );
+  assert.equal(
+    resolveQualificationIsPrimary({
+      otherPrimaryId: "explicit-1",
+      qualificationId: null,
+      qualificationIsAlreadyPrimary: false,
+    }),
     false,
   );
+  assert.equal(
+    resolveQualificationIsPrimary({
+      otherPrimaryId: "explicit-1",
+      qualificationId: "qual-1",
+      qualificationIsAlreadyPrimary: false,
+    }),
+    false,
+  );
+  assert.equal(
+    resolveQualificationIsPrimary({
+      otherPrimaryId: null,
+      qualificationId: "qual-1",
+      qualificationIsAlreadyPrimary: true,
+    }),
+    true,
+  );
+
+  // A. No SavedSearch → one qualification row, primary + homepage.
+  {
+    const mem = createQualificationSavedSearchMemoryDb();
+    const first = await upsertQualificationSavedSearch(mem.db, {
+      userId: "u1",
+      cities: ["Milton"],
+      maxPrice: 1_000_000,
+      minBeds: 3,
+    });
+    assert.equal(first.created, true);
+    assert.equal(first.isPrimary, true);
+    assert.equal(first.isHomepageActive, true);
+    assert.equal(mem.rows.length, 1);
+    assert.ok(queryHasQualificationMarker(mem.rows[0]!.query));
+    assert.equal(mem.rows[0]!.isPrimary, true);
+    assert.equal(mem.rows[0]!.isHomepageActive, true);
+
+    // B. Retry → still one qualification row.
+    const retry = await upsertQualificationSavedSearch(mem.db, {
+      userId: "u1",
+      cities: ["Milton"],
+      maxPrice: 900_000,
+      minBeds: 3,
+    });
+    assert.equal(retry.created, false);
+    assert.equal(retry.updated, true);
+    assert.equal(retry.id, first.id);
+    assert.equal(mem.rows.length, 1);
+    assert.equal(mem.rows[0]!.isPrimary, true);
+    assert.equal(mem.rows[0]!.isHomepageActive, true);
+    assert.equal(
+      (mem.rows[0]!.query as { maxPrice?: string }).maxPrice,
+      "900000",
+    );
+  }
+
+  // C. Existing explicit primary → preserved; qualification homepage only.
+  {
+    const mem = createQualificationSavedSearchMemoryDb();
+    const explicit = mem.seed({
+      userId: "u2",
+      name: "Toronto homes",
+      query: { city: "Toronto", minBeds: "4" },
+      emailAlerts: true,
+      smsAlerts: false,
+      isPrimary: true,
+      isHomepageActive: true,
+    });
+    const qual = await upsertQualificationSavedSearch(mem.db, {
+      userId: "u2",
+      cities: ["Milton"],
+      maxPrice: 1_000_000,
+      minBeds: 3,
+      minBaths: 2,
+    });
+    assert.equal(qual.created, true);
+    assert.equal(qual.isPrimary, false);
+    assert.equal(qual.isHomepageActive, true);
+    assert.equal(mem.rows.length, 2);
+    const explicitAfter = mem.rows.find((r) => r.id === explicit.id)!;
+    assert.equal(explicitAfter.isPrimary, true);
+    assert.equal(explicitAfter.isHomepageActive, false);
+    assert.equal(explicitAfter.name, "Toronto homes");
+    assert.deepEqual(explicitAfter.query, { city: "Toronto", minBeds: "4" });
+    const qualRow = mem.rows.find((r) => r.id === qual.id)!;
+    assert.equal(qualRow.isPrimary, false);
+    assert.equal(qualRow.isHomepageActive, true);
+    assert.ok(queryHasQualificationMarker(qualRow.query));
+
+    // D. Requalification → same qualification row; explicit primary untouched.
+    const again = await upsertQualificationSavedSearch(mem.db, {
+      userId: "u2",
+      cities: ["Oakville"],
+      maxPrice: 1_200_000,
+      minBeds: 4,
+    });
+    assert.equal(again.id, qual.id);
+    assert.equal(again.created, false);
+    assert.equal(mem.rows.length, 2);
+    assert.equal(mem.rows.find((r) => r.id === explicit.id)!.isPrimary, true);
+    assert.equal(
+      mem.rows.find((r) => r.id === explicit.id)!.name,
+      "Toronto homes",
+    );
+    assert.deepEqual(mem.rows.find((r) => r.id === explicit.id)!.query, {
+      city: "Toronto",
+      minBeds: "4",
+    });
+    const qualAfter = mem.rows.find((r) => r.id === qual.id)!;
+    assert.equal(qualAfter.isPrimary, false);
+    assert.equal(qualAfter.isHomepageActive, true);
+    assert.equal((qualAfter.query as { city?: string }).city, "Oakville");
+
+    // E. Homepage reset simulation — clear homepage only; primary flags stay.
+    qualAfter.isHomepageActive = false;
+    assert.equal(mem.rows.length, 2);
+    assert.equal(mem.rows.find((r) => r.id === explicit.id)!.isPrimary, true);
+    assert.equal(mem.rows.find((r) => r.id === qual.id)!.isPrimary, false);
+    assert.equal(
+      mem.rows.find((r) => r.id === qual.id)!.isHomepageActive,
+      false,
+    );
+    assert.ok(
+      queryHasQualificationMarker(mem.rows.find((r) => r.id === qual.id)!.query),
+    );
+  }
+
   assert.equal(describeObservedBudget(1_000_000), "Up to $1M");
   assert.equal(formatPriceBand({ maxPrice: 800_000 }), "Up to $800K");
   assert.equal(
@@ -422,12 +619,14 @@ function testConfirmedPreferenceIsolation() {
   assert.equal(parseCurrencyInput("$1,000,000"), 1_000_000);
   assert.equal(formatCurrencyInputDisplay(500_000), "500,000");
   assert.ok(formatPricePreferenceLabel({ maxPrice: 1_000_000 }));
-  console.log("[preference] confirmed ≠ SavedSearch PASS");
+  console.log(
+    "[preference] confirmed + qualification SavedSearch ownership A–E PASS",
+  );
 }
 
 function testFunnelUxPolish() {
   const modal = read("src/components/auth/AuthModalProvider.tsx");
-  assert.ok(modal.includes("bg-ink/10"));
+  assert.ok(modal.includes("bg-ink/[0.06]"));
   assert.ok(modal.includes("overflow-y-auto"));
   assert.ok(modal.includes("shadow-[0_12px_40px_-18px"));
   const funnel = read("src/components/auth/lead-funnel/LeadCaptureFunnel.tsx");
@@ -487,10 +686,92 @@ function testSearchContextToConfirmSummary() {
   const qual = read("src/app/api/auth/qualification/route.ts");
   assert.ok(qual.includes("extractObservedPreference"));
   assert.ok(qual.includes("formatConfirmSearchSummary"));
-  assert.equal(qual.includes("savedSearch.create"), false);
+  assert.ok(qual.includes("upsertQualificationSavedSearch"));
   console.log(
     "[capture] search → listing → signup → Mississauga · Up to $1M PASS",
   );
+}
+
+function testPostLaunchSearchAndCrm() {
+  // Mobile result count uses canonical total.
+  assert.equal(
+    searchResultsCopy({
+      transactionType: "SALE",
+      segment: "RESIDENTIAL",
+      city: "",
+      community: "",
+      cities: "",
+      communities: "",
+      q: "",
+      minPrice: "",
+      maxPrice: "",
+      minBeds: "",
+      minBaths: "",
+      propertyTypes: [],
+      openHouseOnly: false,
+      statuses: ["ACTIVE"],
+      total: 247,
+      pending: false,
+    }).countHeadline,
+    "247 Homes for Sale",
+  );
+
+  const card = read("src/components/listings/SearchResultCard.tsx");
+  assert.ok(card.includes("MLS® {listing.mlsNumber}"));
+  assert.ok(card.includes("mobileFullWidth"));
+  assert.equal(card.includes("listing.brokerageName"), false);
+
+  const chips = read("src/components/listings/SearchActiveFilterStrip.tsx");
+  assert.ok(chips.includes("+ Beds"));
+  assert.ok(chips.includes("+ Baths"));
+
+  const desktop = read("src/components/listings/SearchDesktopFilterPanel.tsx");
+  assert.ok(desktop.includes("Search filters"));
+  assert.ok(desktop.includes("City / Area"));
+  const experience = read("src/components/listings/SearchExperience.tsx");
+  assert.ok(experience.includes("SearchDesktopFilterPanel"));
+  assert.ok(experience.includes("desktopCardsLayout"));
+  assert.ok(experience.includes("emphasizeCount={mobileCardsLayout}"));
+
+  const ac = read("src/components/listings/AddressAutocomplete.tsx");
+  assert.ok(ac.includes("placesSuggestionCache"));
+  assert.ok(ac.includes("Keep clear/X scoped to the input row"));
+  assert.ok(ac.includes("listingsFetchGenRef.current += 1"));
+
+  const shell = read("src/lib/agent/lead-profile-v2/load-shell.ts");
+  assert.ok(shell.includes("phoneOtpVerifiedAt: true"));
+  assert.ok(shell.includes("phoneOtpVerified: Boolean(lead.customer.phoneOtpVerifiedAt)"));
+  const contact = read("src/components/agent/lead-profile-v2/contact-fields.tsx");
+  assert.ok(contact.includes("Consumer OTP verified"));
+  assert.ok(contact.includes("bg-emerald-50"));
+  assert.ok(contact.includes("otpVerified"));
+  // Agent validity stays separate from consumer OTP.
+  assert.ok(contact.includes("Agent-confirmed phone"));
+
+  const signup = read("src/app/api/auth/sign-up/route.ts");
+  assert.ok(signup.includes("smsAlertsEnabled: false"));
+  assert.ok(signup.includes("emailAlertsEnabled: true"));
+  assert.equal(read("src/lib/auth/phone-otp.ts").includes("smsAlertsEnabled"), false);
+
+  const homepage = read("src/components/home/HomepagePersonalizationBanner.tsx");
+  assert.ok(homepage.includes("Your custom search is applied"));
+  assert.ok(homepage.includes("Reset search"));
+  assert.ok(homepage.includes("isHomepageActive: false"));
+  assert.equal(homepage.includes("DELETE"), false);
+
+  const summary = summarizePersonalization(
+    parseHomepagePersonalizationQuery({
+      city: "Milton",
+      maxPrice: "1000000",
+      minBeds: "3",
+      minBaths: "2",
+    }),
+  );
+  assert.ok(summary.includes("Milton"));
+  assert.ok(summary.includes("3+ Beds"));
+  assert.ok(summary.includes("2+ Baths"));
+
+  console.log("[post-launch] search/CRM/SMS/homepage PASS");
 }
 
 function testConsumerTipsRemoved() {
@@ -629,9 +910,10 @@ async function main() {
   testAuthModalCompactAndCtas();
   testOtpSecuritySurface();
   testEnrichmentAndTimeframes();
-  testConfirmedPreferenceIsolation();
+  await testConfirmedPreferenceAndQualificationSearch();
   testFunnelUxPolish();
   testSearchContextToConfirmSummary();
+  testPostLaunchSearchAndCrm();
   testConsumerTipsRemoved();
   testIntentTtlAndTouch();
   testAttribution();

@@ -53,10 +53,17 @@ function personalizationQuery(
   return {
     minPrice: personalization.minPrice,
     maxPrice: personalization.maxPrice,
+    minBeds: personalization.minBeds,
+    minBaths: personalization.minBaths,
     propertyTypes: personalization.propertyTypes?.join(","),
     communities: personalization.communities?.length
       ? personalization.communities.join("|")
       : undefined,
+    transactionType:
+      personalization.transactionType &&
+      personalization.transactionType !== "ALL"
+        ? personalization.transactionType
+        : undefined,
   };
 }
 

@@ -2418,7 +2418,8 @@ model SavedSearch {
 
 /**
  * Buyer-confirmed search preference from the consumer qualification funnel.
- * Explicit SavedSearch remains separate — digests must not use this alone.
+ * Qualification also upserts a deterministic SavedSearch for digests/homepage;
+ * this row remains the CRM "Looking for" confirmed preference source.
  */
 model BuyerConfirmedPreference {
   id              String   @id @default(cuid())

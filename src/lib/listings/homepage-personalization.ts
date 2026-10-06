@@ -20,11 +20,14 @@ const PROPERTY_TYPES = new Set<string>([
 export type HomepagePersonalizationQuery = {
   minPrice?: string;
   maxPrice?: string;
+  minBeds?: string;
+  minBaths?: string;
   propertyTypes?: string[];
   /** @deprecated Prefer `cities` — kept for older saved searches. */
   city?: string;
   cities?: string[];
   communities?: string[];
+  transactionType?: "SALE" | "LEASE" | "ALL";
 };
 
 function parseStringList(
@@ -73,6 +76,25 @@ export function parseHomepagePersonalizationQuery(
   const cities = parseStringList(q.cities, q.city);
   const communities = parseStringList(q.communities, q.community);
 
+  const minBeds =
+    typeof q.minBeds === "string" && q.minBeds.trim()
+      ? q.minBeds.trim()
+      : typeof q.minBeds === "number" && Number.isFinite(q.minBeds)
+        ? String(Math.round(q.minBeds))
+        : undefined;
+  const minBaths =
+    typeof q.minBaths === "string" && q.minBaths.trim()
+      ? q.minBaths.trim()
+      : typeof q.minBaths === "number" && Number.isFinite(q.minBaths)
+        ? String(Math.round(q.minBaths))
+        : undefined;
+  const transactionType =
+    q.transactionType === "SALE" ||
+    q.transactionType === "LEASE" ||
+    q.transactionType === "ALL"
+      ? q.transactionType
+      : undefined;
+
   return {
     minPrice:
       typeof q.minPrice === "string" && q.minPrice.trim()
@@ -86,10 +108,13 @@ export function parseHomepagePersonalizationQuery(
         : typeof q.maxPrice === "number" && Number.isFinite(q.maxPrice)
           ? String(Math.round(q.maxPrice))
           : undefined,
+    minBeds,
+    minBaths,
     propertyTypes: propertyTypes?.length ? propertyTypes : undefined,
     cities,
     city: cities?.length === 1 ? cities[0] : undefined,
     communities,
+    transactionType,
   };
 }
 
@@ -114,6 +139,13 @@ export function applyPersonalizationToSearchParams(
         ? [personalization.city]
         : undefined;
 
+  const minBeds = personalization.minBeds
+    ? Number(personalization.minBeds)
+    : undefined;
+  const minBaths = personalization.minBaths
+    ? Number(personalization.minBaths)
+    : undefined;
+
   return {
     ...base,
     cities: cities ?? base.cities,
@@ -133,6 +165,15 @@ export function applyPersonalizationToSearchParams(
       minPrice != null && Number.isFinite(minPrice) ? minPrice : base.minPrice,
     maxPrice:
       maxPrice != null && Number.isFinite(maxPrice) ? maxPrice : base.maxPrice,
+    minBeds:
+      minBeds != null && Number.isFinite(minBeds) ? minBeds : base.minBeds,
+    minBaths:
+      minBaths != null && Number.isFinite(minBaths) ? minBaths : base.minBaths,
+    transactionType:
+      personalization.transactionType &&
+      personalization.transactionType !== "ALL"
+        ? personalization.transactionType
+        : base.transactionType,
   };
 }
 
@@ -143,6 +184,9 @@ export function listingMatchesHomepagePersonalization(
     community: string | null;
     propertyType: string;
     listPrice: number;
+    beds?: number | null;
+    baths?: number | null;
+    transactionType?: string | null;
   },
   personalization: HomepagePersonalizationQuery | null | undefined,
 ): boolean {
@@ -200,6 +244,39 @@ export function listingMatchesHomepagePersonalization(
     return false;
   }
 
+  const minBeds = personalization.minBeds
+    ? Number(personalization.minBeds)
+    : undefined;
+  if (
+    minBeds != null &&
+    Number.isFinite(minBeds) &&
+    listing.beds != null &&
+    listing.beds < minBeds
+  ) {
+    return false;
+  }
+
+  const minBaths = personalization.minBaths
+    ? Number(personalization.minBaths)
+    : undefined;
+  if (
+    minBaths != null &&
+    Number.isFinite(minBaths) &&
+    listing.baths != null &&
+    listing.baths < minBaths
+  ) {
+    return false;
+  }
+
+  if (
+    personalization.transactionType &&
+    personalization.transactionType !== "ALL" &&
+    listing.transactionType &&
+    listing.transactionType !== personalization.transactionType
+  ) {
+    return false;
+  }
+
   return true;
 }
 
@@ -219,11 +296,19 @@ export function appendPersonalizationToUrlSearchParams(
   if (cities.length > 1) params.set("cities", cities.join("|"));
   if (personalization.minPrice) params.set("minPrice", personalization.minPrice);
   if (personalization.maxPrice) params.set("maxPrice", personalization.maxPrice);
+  if (personalization.minBeds) params.set("minBeds", personalization.minBeds);
+  if (personalization.minBaths) params.set("minBaths", personalization.minBaths);
   if (personalization.propertyTypes?.length) {
     params.set("propertyTypes", personalization.propertyTypes.join(","));
   }
   if (personalization.communities?.length) {
     params.set("communities", personalization.communities.join("|"));
+  }
+  if (
+    personalization.transactionType &&
+    personalization.transactionType !== "ALL"
+  ) {
+    params.set("transactionType", personalization.transactionType);
   }
   return params;
 }
@@ -276,8 +361,26 @@ export function summarizePersonalization(
         : `${personalization.communities.length} communities`,
     );
   }
-  const price = formatPersonalizationPriceRange(personalization);
-  if (price) parts.push(price.replace(" - ", "–"));
+  if (personalization.maxPrice && !personalization.minPrice) {
+    const amount = Number(personalization.maxPrice);
+    if (Number.isFinite(amount)) {
+      if (amount >= 1_000_000 && amount % 100_000 === 0) {
+        const millions = amount / 1_000_000;
+        parts.push(
+          `Up to $${Number.isInteger(millions) ? millions : millions.toFixed(1)}M`,
+        );
+      } else if (amount >= 1000) {
+        parts.push(`Up to $${Math.round(amount / 1000)}K`);
+      } else {
+        parts.push(`Up to $${amount.toLocaleString("en-CA")}`);
+      }
+    }
+  } else {
+    const price = formatPersonalizationPriceRange(personalization);
+    if (price) parts.push(price.replace(" - ", "–"));
+  }
+  if (personalization.minBeds) parts.push(`${personalization.minBeds}+ Beds`);
+  if (personalization.minBaths) parts.push(`${personalization.minBaths}+ Baths`);
   if (personalization.propertyTypes?.length) {
     parts.push(
       personalization.propertyTypes.length === 1
@@ -285,7 +388,7 @@ export function summarizePersonalization(
         : `${personalization.propertyTypes.length} types`,
     );
   }
-  return parts.slice(0, 3).join(" · ");
+  return parts.join(" · ");
 }
 
 export const HOMEPAGE_SEARCH_DEFAULT_NAME = "Home Search 1";

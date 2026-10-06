@@ -10,6 +10,7 @@ import {
   formatConfirmSearchSummary,
   upsertBuyerConfirmedPreference,
 } from "@/lib/auth/buyer-confirmed-preference";
+import { upsertQualificationSavedSearch } from "@/lib/auth/qualification-saved-search";
 import { applyCanonicalCustomerContact } from "@/lib/agent/lead-info-change";
 import { isPurchaseTimeframe } from "@/lib/agent/timeframe";
 import { prisma } from "@/lib/prisma";
@@ -48,6 +49,7 @@ const preferenceSchema = z.object({
   minPrice: z.number().int().nonnegative().nullable().optional(),
   maxPrice: z.number().int().nonnegative().nullable().optional(),
   minBeds: z.number().int().nonnegative().nullable().optional(),
+  minBaths: z.number().int().nonnegative().nullable().optional(),
   transactionType: z.string().nullable().optional(),
 });
 
@@ -221,8 +223,24 @@ export async function POST(request: Request) {
         transactionType: data.transactionType,
         source: data.confirm ? "confirmed" : "edited",
       });
-      // Explicitly do NOT create or overwrite SavedSearch.
-      return NextResponse.json({ ok: true, savedSearchTouched: false });
+      // Also upsert the deterministic qualification SavedSearch (homepage + digests).
+      const saved = await upsertQualificationSavedSearch(prisma, {
+        userId: user.id,
+        cities: data.cities,
+        communities: data.communities,
+        propertyTypes: data.propertyTypes,
+        minPrice: data.minPrice,
+        maxPrice: data.maxPrice,
+        minBeds: data.minBeds,
+        minBaths: data.minBaths,
+        transactionType: data.transactionType,
+      });
+      return NextResponse.json({
+        ok: true,
+        savedSearchTouched: true,
+        savedSearchId: saved.id,
+        savedSearchCreated: saved.created,
+      });
     }
     case "complete": {
       await prisma.user.update({
@@ -246,6 +264,8 @@ function extractObservedPreference(
   minPrice: number | null;
   propertyTypes: string[];
   minBeds: number | null;
+  minBaths: number | null;
+  transactionType: string | null;
   summary: string | null;
 } {
   const empty = {
@@ -254,6 +274,8 @@ function extractObservedPreference(
     minPrice: null as number | null,
     propertyTypes: [] as string[],
     minBeds: null as number | null,
+    minBaths: null as number | null,
+    transactionType: null as string | null,
     summary: null as string | null,
   };
   if (!captureContext || typeof captureContext !== "object" || Array.isArray(captureContext)) {
@@ -273,14 +295,24 @@ function extractObservedPreference(
       if (typeof c === "string" && c.trim()) cities.push(c.trim());
     }
   }
-  const maxPrice =
-    typeof filters?.maxPrice === "number" && Number.isFinite(filters.maxPrice)
-      ? filters.maxPrice
-      : null;
-  const minPrice =
-    typeof filters?.minPrice === "number" && Number.isFinite(filters.minPrice)
-      ? filters.minPrice
-      : null;
+  const parseMoney = (raw: unknown): number | null => {
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+    if (typeof raw === "string" && raw.trim()) {
+      const n = Number(raw.replace(/[^\d.]/g, ""));
+      return Number.isFinite(n) ? n : null;
+    }
+    return null;
+  };
+  const parseCount = (raw: unknown): number | null => {
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+    if (typeof raw === "string" && raw.trim()) {
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    }
+    return null;
+  };
+  const maxPrice = parseMoney(filters?.maxPrice);
+  const minPrice = parseMoney(filters?.minPrice);
   const propertyTypes: string[] = [];
   if (typeof filters?.propertyType === "string") {
     propertyTypes.push(filters.propertyType);
@@ -289,10 +321,18 @@ function extractObservedPreference(
     for (const t of filters.propertyTypes) {
       if (typeof t === "string") propertyTypes.push(t);
     }
+  } else if (typeof filters?.propertyTypes === "string") {
+    for (const t of filters.propertyTypes.split(",")) {
+      if (t.trim()) propertyTypes.push(t.trim());
+    }
   }
-  const minBeds =
-    typeof filters?.minBeds === "number" && Number.isFinite(filters.minBeds)
-      ? filters.minBeds
+  const minBeds = parseCount(filters?.minBeds);
+  const minBaths = parseCount(filters?.minBaths);
+  const transactionType =
+    filters?.transactionType === "SALE" ||
+    filters?.transactionType === "LEASE" ||
+    filters?.transactionType === "ALL"
+      ? (filters.transactionType as string)
       : null;
 
   const summary = formatConfirmSearchSummary({
@@ -301,5 +341,14 @@ function extractObservedPreference(
     maxPrice,
   });
 
-  return { cities, maxPrice, minPrice, propertyTypes, minBeds, summary };
+  return {
+    cities,
+    maxPrice,
+    minPrice,
+    propertyTypes,
+    minBeds,
+    minBaths,
+    transactionType,
+    summary,
+  };
 }

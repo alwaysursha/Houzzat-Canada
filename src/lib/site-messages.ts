@@ -40,10 +40,10 @@ export const SITE_MESSAGES = {
     cancelLabel: "Keep watching",
   },
   clearHomepageSearch: {
-    title: "Clear custom search?",
+    title: "Reset search?",
     message:
       "Your homepage will stop filtering to this saved search and show all listings again. The search itself stays in your account.",
-    confirmLabel: "Clear custom search",
+    confirmLabel: "Reset search",
     cancelLabel: "Keep personalized",
   },
   removeHomepageSearch: {

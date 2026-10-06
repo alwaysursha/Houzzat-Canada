@@ -3,9 +3,28 @@ import type { CaptureIntentType } from "@/lib/auth/capture-intent";
 export type AuthModalCopy = {
   headline: string;
   subhead: string;
+  /** Optional freshness / inventory line under the subhead. */
+  freshness?: string | null;
   /** Primary signup CTA — contextual continuation. */
   cta: string;
 };
+
+/** User-friendly calendar date for access copy (site-local day). */
+export function formatAccessInventoryDate(now: Date = new Date()): string {
+  return now.toLocaleDateString("en-CA", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/**
+ * Truthful inventory line. Prefer non-dated wording unless callers have
+ * verified MLS freshness metadata (this helper does not claim a sync time).
+ */
+export function accessInventoryLine(_now: Date = new Date()): string {
+  return "See current prices, photos and listing details.";
+}
 
 /**
  * Presentation only. Does not describe storage, access rules, or the signup payload.
@@ -14,16 +33,18 @@ export function authModalCopy(
   intent: CaptureIntentType,
   mode: "sign-in" | "sign-up",
   displayName: string,
+  now: Date = new Date(),
 ): AuthModalCopy {
   const team = displayName.trim() || "your team";
   switch (intent) {
     case "VIEW_LISTING":
       return {
-        headline: mode === "sign-up" ? "Continue to this home" : "Sign in to continue",
+        headline: mode === "sign-up" ? "Free Access" : "Sign in to continue",
         subhead:
           mode === "sign-up"
-            ? `Create your free ${team} account to view this listing.`
-            : `Sign in to view this listing.`,
+            ? "Access full property details and exclusive listings."
+            : "Sign in to view this listing.",
+        freshness: mode === "sign-up" ? accessInventoryLine(now) : null,
         cta: "Continue to Property",
       };
     case "SAVE_LISTING":
@@ -31,7 +52,7 @@ export function authModalCopy(
         headline: "Save this home",
         subhead:
           mode === "sign-up"
-            ? `Create your free ${team} account to save this home.`
+            ? "Save this home so you can come back to it anytime."
             : "Sign in to save this home.",
         cta: "Save This Home",
       };
@@ -40,7 +61,7 @@ export function authModalCopy(
         headline: "Save this search",
         subhead:
           mode === "sign-up"
-            ? `Create your free ${team} account to keep this search.`
+            ? "Keep this search and get updates that match."
             : "Sign in to keep this search.",
         cta: "Save My Search",
       };
@@ -49,7 +70,7 @@ export function authModalCopy(
         headline: "Watch this property",
         subhead:
           mode === "sign-up"
-            ? `Create your free ${team} account to follow this home.`
+            ? "Follow this home for price and status updates."
             : "Sign in to follow this home.",
         cta: "Start Property Watch",
       };
@@ -58,7 +79,7 @@ export function authModalCopy(
         headline: "Watch this area",
         subhead:
           mode === "sign-up"
-            ? `Create your free ${team} account to follow this area.`
+            ? "Follow this area for new listings that match."
             : "Sign in to follow this area.",
         cta: "Start Area Watch",
       };
@@ -67,7 +88,7 @@ export function authModalCopy(
         headline: "Request a viewing",
         subhead:
           mode === "sign-up"
-            ? `Create your free ${team} account to continue.`
+            ? "Continue to request a viewing of this home."
             : "Sign in to continue your viewing request.",
         cta: "Continue to Viewing",
       };
@@ -76,7 +97,7 @@ export function authModalCopy(
         headline: "Contact an agent",
         subhead:
           mode === "sign-up"
-            ? `Create your free ${team} account to contact an agent.`
+            ? `Continue to reach ${team} about this home.`
             : "Sign in to contact an agent.",
         cta: "Contact Agent",
       };
@@ -85,7 +106,7 @@ export function authModalCopy(
         headline: "Start the conversation",
         subhead:
           mode === "sign-up"
-            ? `Create your free ${team} account to chat.`
+            ? "Continue so you can chat about this home."
             : "Sign in to start your conversation.",
         cta: "Start Chat",
       };
@@ -94,7 +115,7 @@ export function authModalCopy(
         headline: "Plan your viewing route",
         subhead:
           mode === "sign-up"
-            ? `Create your free ${team} account to keep this route.`
+            ? "Continue to keep this route for your viewings."
             : "Sign in to keep this route.",
         cta: "Continue Route Planner",
       };
@@ -103,7 +124,7 @@ export function authModalCopy(
         headline: "Check drive times",
         subhead:
           mode === "sign-up"
-            ? `Create your free ${team} account to save Home, Work, and School.`
+            ? "Continue to save Home, Work, and School."
             : "Sign in to see drive times.",
         cta: "Continue Drive Times",
       };

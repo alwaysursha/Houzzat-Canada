@@ -56,6 +56,9 @@ import { Input } from "@/components/ui/input";
 import { useClientAccess } from "@/hooks/use-client-access";
 import { cn } from "@/lib/utils";
 
+/** Short-lived client cache for Places queries (Claim Address / google source). */
+const placesSuggestionCache = new Map<string, AutocompleteSuggestion[]>();
+
 /** Listings always above Google addresses / around-area. */
 const GROUP_ORDER: AutocompleteSuggestionGroup[] = [
   "actions",
@@ -644,12 +647,26 @@ export function AddressAutocomplete({
     const isCurrent = () =>
       !ac.signal.aborted && fetchGen === placesFetchGenRef.current;
 
+    const trimmedPlaces = query.trim();
+    const cached = placesSuggestionCache.get(trimmedPlaces.toLowerCase());
+    if (cached) {
+      setSuggestions(cached);
+      setOpen(cached.length > 0);
+      setActiveIndex(-1);
+      setLoading(false);
+      return () => {
+        ac.abort();
+      };
+    }
+
+    // Immediate loading feedback; short debounce for Places round-trips.
+    setLoading(true);
+    if (fieldMenu || fieldMenuExpand) setOpen(true);
+
     const handle = window.setTimeout(async () => {
-      setLoading(true);
-      setOpen(true);
       try {
         const params = new URLSearchParams({
-          q: query.trim(),
+          q: trimmedPlaces,
           sessionToken,
         });
         const res = await fetch(`/api/places/autocomplete?${params}`, {
@@ -666,23 +683,31 @@ export function AddressAutocomplete({
         ) {
           return;
         }
-        setSuggestions(
-          (data.suggestions ?? []).map((p) => placeToAddressSuggestion(p)),
+        const mapped = (data.suggestions ?? []).map((p) =>
+          placeToAddressSuggestion(p),
         );
-        setOpen((data.suggestions ?? []).length > 0);
+        if (mapped.length > 0) {
+          placesSuggestionCache.set(trimmedPlaces.toLowerCase(), mapped);
+          if (placesSuggestionCache.size > 40) {
+            const first = placesSuggestionCache.keys().next().value;
+            if (first) placesSuggestionCache.delete(first);
+          }
+        }
+        setSuggestions(mapped);
+        setOpen(mapped.length > 0);
         setActiveIndex(-1);
       } catch {
         if (ac.signal.aborted) return;
       } finally {
         if (isCurrent()) setLoading(false);
       }
-    }, 220);
+    }, fieldMenu || fieldMenuExpand ? 90 : 150);
 
     return () => {
       window.clearTimeout(handle);
       ac.abort();
     };
-  }, [query, minChars, source, sessionToken]);
+  }, [query, minChars, source, sessionToken, fieldMenu, fieldMenuExpand]);
 
   async function loadEmptyState() {
     if (source !== "listings") return;
@@ -809,9 +834,20 @@ export function AddressAutocomplete({
   async function choose(suggestion: AutocompleteSuggestion) {
     if (suggestion.action === "listings_empty") return;
 
+    // Close immediately and pin selection so in-flight fetches cannot reopen.
+    const optimisticLabel = (suggestion.subtitle ?? suggestion.label).trim();
+    if (optimisticLabel) {
+      selectedQueryRef.current = optimisticLabel;
+      lastEmittedQueryRef.current = optimisticLabel;
+      setQuery(optimisticLabel);
+      onQueryChange?.(optimisticLabel);
+    }
+    listingsFetchGenRef.current += 1;
+    placesFetchGenRef.current += 1;
     setOpen(false);
     setSuggestions([]);
     setActiveIndex(-1);
+    setLoading(Boolean(suggestion.placeId));
 
     if (suggestion.action === "near_me") {
       setMobileSheetOpen(false);
@@ -1408,53 +1444,60 @@ export function AddressAutocomplete({
 
   return (
     <div ref={boxRef} className={cn("relative", className)}>
-      <Search
-        className="pointer-events-none absolute left-3 top-1/2 z-[1] size-4 -translate-y-1/2 text-ink/40"
-        aria-hidden
-      />
-      <Input
-        value={query}
-        onChange={(event) => onQueryInputChange(event.target.value)}
-        onFocus={openFromFocus}
-        onKeyDown={onKeyDown}
-        placeholder={placeholder}
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={isMobile ? mobileSheetOpen : open}
-        aria-controls={listboxId}
-        aria-activedescendant={
-          activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined
-        }
-        className={cn(
-          "rounded-md pl-10 text-[15px]",
-          query.trim() ? "pr-10" : undefined,
-          inputClassName,
-        )}
-        autoComplete="street-address"
-        readOnly={isMobile && !fieldMenu}
-        inputMode={isMobile && !fieldMenu ? "none" : undefined}
-        onClick={() => {
-          if (isMobile && !fieldMenu) openFromFocus();
-        }}
-      />
-      {query.trim() && !mobileSheetOpen ? (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            clearQuery();
+      {/*
+        Keep clear/X scoped to the input row. When fieldMenuExpand grows the
+        container with suggestion rows, absolute top-1/2 would otherwise sit
+        over a suggestion (stray X on e.g. "Obelisk Way").
+      */}
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 z-[1] size-4 -translate-y-1/2 text-ink/40"
+          aria-hidden
+        />
+        <Input
+          value={query}
+          onChange={(event) => onQueryInputChange(event.target.value)}
+          onFocus={openFromFocus}
+          onKeyDown={onKeyDown}
+          placeholder={placeholder}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={isMobile ? mobileSheetOpen : open}
+          aria-controls={listboxId}
+          aria-activedescendant={
+            activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined
+          }
+          className={cn(
+            "rounded-md pl-10 text-[15px]",
+            query.trim() ? "pr-10" : undefined,
+            inputClassName,
+          )}
+          autoComplete="street-address"
+          readOnly={isMobile && !fieldMenu}
+          inputMode={isMobile && !fieldMenu ? "none" : undefined}
+          onClick={() => {
+            if (isMobile && !fieldMenu) openFromFocus();
           }}
-          className="absolute right-2 top-1/2 z-[1] inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-ink/45 transition hover:bg-ink/5 hover:text-ink/70"
-          aria-label="Clear search"
-        >
-          <X className="size-4" aria-hidden />
-        </button>
-      ) : loading && !mobileSheetOpen ? (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink/40">
-          …
-        </span>
-      ) : null}
+        />
+        {query.trim() && !mobileSheetOpen ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              clearQuery();
+            }}
+            className="absolute right-2 top-1/2 z-[1] inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-ink/45 transition hover:bg-ink/5 hover:text-ink/70"
+            aria-label="Clear search"
+          >
+            <X className="size-4" aria-hidden />
+          </button>
+        ) : loading && !mobileSheetOpen ? (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink/40">
+            …
+          </span>
+        ) : null}
+      </div>
       {fieldMenuOpen ? (
         <div
           id={listboxId}

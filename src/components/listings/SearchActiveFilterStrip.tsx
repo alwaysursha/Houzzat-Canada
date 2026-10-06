@@ -84,7 +84,7 @@ function buildChips(
   if (filters.minBeds) {
     chips.push({
       key: "beds",
-      label: `${filters.minBeds}+ bd`,
+      label: `${filters.minBeds}+ Beds`,
       onClear: () => onChange({ ...filters, minBeds: "" }),
     });
   }
@@ -92,7 +92,7 @@ function buildChips(
   if (filters.minBaths) {
     chips.push({
       key: "baths",
-      label: `${filters.minBaths}+ ba`,
+      label: `${filters.minBaths}+ Baths`,
       onClear: () => onChange({ ...filters, minBaths: "" }),
     });
   }

@@ -14,10 +14,29 @@ const TOOLBAR_OMIT = new Set<SearchResultChipKey>(["place", "query"]);
 export function SearchResultsHeading({
   title,
   countLabel,
+  countHeadline,
+  emphasizeCount = false,
 }: {
   title: string;
   countLabel: string;
+  /** Canonical total line, e.g. "247 Homes for Sale". */
+  countHeadline?: string;
+  /** Mobile card results: lead with the real result count. */
+  emphasizeCount?: boolean;
 }) {
+  if (emphasizeCount && countHeadline) {
+    return (
+      <div className="search-results-heading sticky top-0 z-20 bg-mist px-2.5 py-2.5 sm:px-4 sm:py-2.5">
+        <h1 className="min-w-0 text-[1.35rem] font-semibold leading-tight tracking-tight text-ink sm:text-2xl">
+          {countHeadline}
+        </h1>
+        {title && title !== countHeadline ? (
+          <p className="mt-0.5 truncate text-xs text-ink/45 sm:text-sm">{title}</p>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="search-results-heading sticky top-0 z-20 flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5 bg-mist px-3 py-2 sm:gap-x-3 sm:px-4 sm:py-2.5">
       <style>{`@media (min-width: 640px) { .search-results-heading { flex-wrap: nowrap; } .search-results-heading h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }`}</style>

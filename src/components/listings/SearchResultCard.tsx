@@ -37,13 +37,17 @@ export function SearchResultCard({
   active = false,
   onFocus,
   horizontal = false,
+  /** Mobile cards view: full-width stacked photo + larger type. */
+  mobileFullWidth = false,
   lockedPreview = false,
 }: {
   listing: ListingCardData;
   active?: boolean;
   onFocus?: () => void;
-  /** Mobile list: thumbnail beside the facts. */
+  /** Mobile split list: thumbnail beside the facts. */
   horizontal?: boolean;
+  /** Mobile cards view: stacked full-width card. */
+  mobileFullWidth?: boolean;
   /** Sold/leased teaser for visitors. Still opens the listing. */
   lockedPreview?: boolean;
 }) {
@@ -82,6 +86,8 @@ export function SearchResultCard({
     });
   }
 
+  const stackedMobile = mobileFullWidth && !horizontal;
+
   return (
     <article
       className={cn(
@@ -109,7 +115,11 @@ export function SearchResultCard({
           onFocus={onFocus}
           className={cn(
           "relative block h-full bg-mist",
-          horizontal ? "min-h-[7rem]" : "aspect-[16/10] w-full",
+          horizontal
+            ? "min-h-[7rem]"
+            : stackedMobile
+              ? "aspect-[16/10] w-full min-h-[10.5rem]"
+              : "aspect-[16/10] w-full",
         )}
         >
           {listing.primaryImageUrl ? (
@@ -118,7 +128,11 @@ export function SearchResultCard({
               alt=""
               fill
               className="object-cover"
-              sizes={horizontal ? "136px" : "(max-width: 1023px) 100vw, 28vw"}
+              sizes={
+                horizontal
+                  ? "136px"
+                  : "(max-width: 1023px) 100vw, 28vw"
+              }
             />
           ) : null}
         </ListingLink>
@@ -144,14 +158,20 @@ export function SearchResultCard({
           />
         </button>
       </div>
-      <div className={cn("flex min-w-0 flex-1 flex-col", horizontal && "py-2")}>
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 flex-col",
+          horizontal && "py-2",
+          stackedMobile && "pb-1",
+        )}
+      >
         <ListingLink
           href={path}
           onMouseEnter={onFocus}
           onFocus={onFocus}
           className={cn(
             "block min-w-0",
-            horizontal ? "px-2.5 pt-0.5" : "px-3 pt-2.5",
+            horizontal ? "px-2.5 pt-0.5" : stackedMobile ? "px-3 pt-3" : "px-3 pt-2.5",
           )}
         >
           {lockedPreview ? (
@@ -159,7 +179,12 @@ export function SearchResultCard({
               Restricted listing
             </p>
           ) : (
-            <p className="truncate text-lg font-semibold leading-none tracking-tight text-ink">
+            <p
+              className={cn(
+                "truncate font-semibold leading-none tracking-tight text-ink",
+                stackedMobile ? "text-[1.35rem]" : "text-lg",
+              )}
+            >
               {showClosedPrice ? (
                 <SoldForPrice
                   soldPrice={listing.soldPrice}
@@ -173,29 +198,71 @@ export function SearchResultCard({
               )}
             </p>
           )}
-          <p className="mt-1.5 truncate text-sm font-medium text-ink">{street}</p>
-          <p className="truncate text-xs text-ink/50">{cityLine}</p>
-          <p className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-ink/70">
+          <p
+            className={cn(
+              "mt-1.5 truncate font-medium text-ink",
+              stackedMobile ? "text-[0.95rem]" : "text-sm",
+            )}
+          >
+            {street}
+          </p>
+          <p
+            className={cn(
+              "truncate text-ink/50",
+              stackedMobile ? "text-sm" : "text-xs",
+            )}
+          >
+            {cityLine}
+          </p>
+          <p
+            className={cn(
+              "mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-ink/70",
+              stackedMobile ? "text-sm" : "text-xs",
+            )}
+          >
             {commercial ? null : (
               <>
                 <span className="inline-flex items-center gap-1">
-                  <Bed className="size-3.5 text-ink/40" aria-hidden />
+                  <Bed
+                    className={cn(
+                      "text-ink/40",
+                      stackedMobile ? "size-4" : "size-3.5",
+                    )}
+                    aria-hidden
+                  />
                   {formatListingBedsLabel(listing)}
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <Bath className="size-3.5 text-ink/40" aria-hidden />
+                  <Bath
+                    className={cn(
+                      "text-ink/40",
+                      stackedMobile ? "size-4" : "size-3.5",
+                    )}
+                    aria-hidden
+                  />
                   {formatStat(listing.baths)}
                 </span>
               </>
             )}
             {sqft ? (
               <span className="inline-flex items-center gap-1">
-                <Maximize2 className="size-3.5 text-ink/40" aria-hidden />
+                <Maximize2
+                  className={cn(
+                    "text-ink/40",
+                    stackedMobile ? "size-4" : "size-3.5",
+                  )}
+                  aria-hidden
+                />
                 {sqft}
               </span>
             ) : null}
           </p>
-          <p className="mt-1 truncate text-xs text-ink/45">
+          <p
+            className={cn(
+              "mt-1 truncate text-ink/45",
+              stackedMobile ? "text-sm" : "text-xs",
+            )}
+          >
             {propertyTypeLabel(listing.propertyType)}
           </p>
           {showStatus ? (
@@ -210,9 +277,9 @@ export function SearchResultCard({
               </span>
             </p>
           ) : null}
-          {listing.brokerageName || listing.mlsNumber ? (
+          {/* Search cards: MLS® only — brokerage stays on listing detail / disclosure surfaces. */}
+          {listing.mlsNumber ? (
             <p className="mt-1.5 truncate text-[10px] leading-snug text-ink/40">
-              {listing.brokerageName ? `${listing.brokerageName} · ` : null}
               MLS® {listing.mlsNumber}
             </p>
           ) : null}

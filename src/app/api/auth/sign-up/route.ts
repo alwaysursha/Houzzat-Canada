@@ -282,6 +282,10 @@ export async function POST(request: Request) {
         vowAcceptedAt: now,
         vowVersion: VOW_VERSION,
         caslConsentAt: now,
+        // Signup consent covers email alerts + phone contact (calls).
+        // SMS marketing alerts remain opt-in via Preferences (schema default false).
+        emailAlertsEnabled: true,
+        smsAlertsEnabled: false,
         emailVerifyNudgeDueAt: nextEmailVerifyNudgeDueAt(now),
       },
     });
