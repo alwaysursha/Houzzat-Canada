@@ -9,7 +9,8 @@ import {
   useState,
 } from "react";
 import { CallOutcomeDialog } from "@/components/agent/CallOutcomeDialog";
-import { newCallOutcomeRequestId } from "@/lib/agent/call-outcome-presentation";
+import { useWebCallOutcomeSession } from "@/components/agent/use-web-call-outcome-session";
+import { webCallOutcomeDialogOpen } from "@/lib/agent/call-outcome-web-session";
 import { LeadProfileV2ActivityPanel } from "@/components/agent/lead-profile-v2/LeadProfileV2ActivityPanel";
 import { LeadProfileV2AppointmentsPanel } from "@/components/agent/lead-profile-v2/LeadProfileV2AppointmentsPanel";
 import { LeadProfileV2ConversationsPanel } from "@/components/agent/lead-profile-v2/LeadProfileV2ConversationsPanel";
@@ -91,19 +92,18 @@ export function LeadProfileV2Host({
     setConversationSurface("chat");
   }
   const [refreshing, setRefreshing] = useState(false);
-  const [callOutcomeLeadId, setCallOutcomeLeadId] = useState(leadId);
-  const [callOutcomeRequestId, setCallOutcomeRequestId] = useState<string | null>(
-    null,
+  const {
+    flow: callFlow,
+    returnFocusRef: callReturnFocusRef,
+    beginCall,
+    dismiss: dismissCallOutcome,
+  } = useWebCallOutcomeSession({ resetWhenLeadId: leadId });
+  const beginCallOutcome = useCallback(
+    (target: HTMLElement) => {
+      beginCall({ leadId, target });
+    },
+    [beginCall, leadId],
   );
-  const callReturnFocusRef = useRef<HTMLElement | null>(null);
-  if (leadId !== callOutcomeLeadId) {
-    setCallOutcomeLeadId(leadId);
-    setCallOutcomeRequestId(null);
-  }
-  const beginCallOutcome = useCallback((target: HTMLElement) => {
-    callReturnFocusRef.current = target;
-    setCallOutcomeRequestId((current) => current ?? newCallOutcomeRequestId());
-  }, []);
   const [editingContact, setEditingContact] = useState<
     "phone" | "email" | "address" | null
   >(null);
@@ -831,16 +831,18 @@ export function LeadProfileV2Host({
           </div>
         )}
       </div>
-      {callOutcomeRequestId && data?.lead.customer?.phone ? (
+      {webCallOutcomeDialogOpen(callFlow) &&
+      callFlow.status === "open" &&
+      data?.lead.customer?.phone ? (
         <CallOutcomeDialog
-          leadId={leadId}
+          leadId={callFlow.leadId}
           customerName={name}
           phoneLabel={data.lead.customer.phone}
-          clientRequestId={callOutcomeRequestId}
+          clientRequestId={callFlow.requestId}
           returnFocusRef={callReturnFocusRef}
-          onClose={() => setCallOutcomeRequestId(null)}
+          onClose={dismissCallOutcome}
           onSaved={() => {
-            setCallOutcomeRequestId(null);
+            dismissCallOutcome();
             onTaskAffectingLeadWrite();
           }}
         />

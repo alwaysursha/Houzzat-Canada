@@ -19,6 +19,17 @@ import {
   postAgentCallOutcome,
   type CallOutcomeDb,
 } from "../src/lib/agent/call-outcome";
+import {
+  beginWebCallOutcome,
+  cancelWebCallOutcomeFlow,
+  noteWebCallPageState,
+  noteWebDialerHandedOff,
+  settleWebForegroundFallback,
+  startWebCallOutcomeFlow,
+  webCallOutcomeDialogOpen,
+  webCallOutcomeRequestIdForLead,
+  webCallPageStateFromDocument,
+} from "../src/lib/agent/call-outcome-web-session";
 import { canAccessLead } from "../src/lib/crm-read-scope";
 import { authenticateMobileRequest } from "../src/lib/mobile/v2/auth-guard";
 import {
@@ -1069,10 +1080,41 @@ function testCallControlDoesNotHijackPhoneLinks() {
     "src/components/agent/lead-profile-v2/LeadProfileV2Rail.tsx",
   ]) {
     const src = readFileSync(join(root, rel), "utf8");
-    assert.ok(src.includes("newCallOutcomeRequestId") || src.includes("onCall"));
+    assert.ok(src.includes("beginCall") || src.includes("onCall"));
     assert.ok(src.includes("href={telHref}"));
-    assert.equal(src.includes("CallOutcomeDialog") || src.includes("onCall"), true);
+    assert.ok(src.includes("onTelClick"));
+    assert.equal(src.toLowerCase().includes("twilio"), false, rel);
   }
+  const host = readFileSync(
+    join(root, "src/components/agent/lead-profile-v2/LeadProfileV2Host.tsx"),
+    "utf8",
+  );
+  assert.ok(host.includes("useWebCallOutcomeSession"));
+  assert.ok(host.includes("beginCallOutcome"));
+  assert.ok(host.includes("CallOutcomeDialog"));
+  assert.ok(host.includes("webCallOutcomeDialogOpen"));
+  assert.equal(host.includes("setCallOutcomeRequestId"), false);
+  const table = readFileSync(
+    join(root, "src/components/agent/LeadsTableClient.tsx"),
+    "utf8",
+  );
+  assert.ok(table.includes("useWebCallOutcomeSession"));
+  assert.ok(table.includes("CrmLeadTelLink"));
+  assert.ok(table.includes("CallOutcomeDialog"));
+  const rawTableAnchors = table.match(/<a\s+href=\{telHref\}/g) ?? [];
+  assert.equal(rawTableAnchors.length, 0);
+  const telLink = table.slice(table.indexOf("function CrmLeadTelLink"));
+  assert.equal(telLink.includes("preventDefault"), false);
+  const fields = readFileSync(
+    join(root, "src/components/agent/lead-profile-v2/contact-fields.tsx"),
+    "utf8",
+  );
+  const telAnchor = fields.slice(
+    fields.indexOf("{href && value ? ("),
+    fields.indexOf("{updateRequested ? ("),
+  );
+  assert.ok(telAnchor.includes("href={href}"));
+  assert.equal(telAnchor.includes("preventDefault"), false);
   const mobile = readFileSync(
     join(root, "apps/pro-mobile/src/screens/LeadDetailScreen.tsx"),
     "utf8",
@@ -1088,7 +1130,147 @@ function testCallControlDoesNotHijackPhoneLinks() {
   assert.equal(mobile.toLowerCase().includes("twilio"), false);
 }
 
+function testWebCallOutcomeLifecycle() {
+  const first = "req-web-1";
+  const second = "req-web-2";
+  let flow = startWebCallOutcomeFlow(first, "lead-a");
+  assert.equal(flow.status, "pending_return");
+  assert.equal(webCallOutcomeDialogOpen(flow), false);
+  assert.equal(webCallOutcomeRequestIdForLead(flow, "lead-a"), first);
+
+  const reused = beginWebCallOutcome(flow, { leadId: "lead-a", requestId: second });
+  assert.equal(webCallOutcomeRequestIdForLead(reused, "lead-a"), first);
+
+  flow = noteWebDialerHandedOff(reused);
+  assert.equal(flow.status, "pending_return");
+  flow = noteWebCallPageState(flow, "visible");
+  assert.equal(flow.status, "pending_return");
+  flow = noteWebCallPageState(flow, "hidden");
+  assert.equal(flow.status, "pending_return");
+  if (flow.status !== "pending_return") return;
+  assert.equal(flow.leftPage, true);
+  flow = noteWebCallPageState(flow, "visible");
+  assert.equal(flow.status, "open");
+  if (flow.status !== "open") return;
+  assert.equal(flow.requestId, first);
+  assert.equal(webCallOutcomeDialogOpen(flow), true);
+
+  const extraFocus = noteWebCallPageState(flow, "visible");
+  assert.equal(extraFocus.status, "open");
+  if (extraFocus.status !== "open") return;
+  assert.equal(extraFocus.requestId, first);
+  const extraHidden = noteWebCallPageState(flow, "hidden");
+  assert.equal(extraHidden.status, "open");
+  if (extraHidden.status !== "open") return;
+  assert.equal(extraHidden.requestId, first);
+
+  const stayed = noteWebDialerHandedOff(
+    startWebCallOutcomeFlow("req-stay", "lead-a"),
+  );
+  const opened = settleWebForegroundFallback(stayed, "req-stay", "visible");
+  assert.equal(opened.status, "open");
+  if (opened.status !== "open") return;
+  assert.equal(opened.requestId, "req-stay");
+  assert.equal(
+    settleWebForegroundFallback(stayed, "req-stay", "hidden").status,
+    "pending_return",
+  );
+  assert.equal(
+    settleWebForegroundFallback(cancelWebCallOutcomeFlow(), "req-stay", "visible")
+      .status,
+    "idle",
+  );
+
+  const other = beginWebCallOutcome(flow, {
+    leadId: "lead-b",
+    requestId: second,
+  });
+  assert.equal(other.status, "pending_return");
+  if (other.status !== "pending_return") return;
+  assert.equal(other.requestId, second);
+  assert.equal(other.leadId, "lead-b");
+  assert.equal(webCallPageStateFromDocument({ visibilityState: "hidden" }), "hidden");
+  assert.equal(webCallPageStateFromDocument({ visibilityState: "visible" }), "visible");
+
+  const dismissed = cancelWebCallOutcomeFlow();
+  assert.equal(noteWebCallPageState(dismissed, "hidden").status, "idle");
+  assert.equal(noteWebCallPageState(dismissed, "visible").status, "idle");
+  assert.equal(
+    settleWebForegroundFallback(dismissed, first, "visible").status,
+    "idle",
+  );
+
+  const openSame = beginWebCallOutcome(flow, {
+    leadId: "lead-a",
+    requestId: "req-should-not-replace",
+  });
+  assert.equal(openSame.status, "open");
+  if (openSame.status !== "open") return;
+  assert.equal(openSame.requestId, first);
+
+  const pendingA = noteWebDialerHandedOff(startWebCallOutcomeFlow(first, "lead-a"));
+  const switched = beginWebCallOutcome(pendingA, {
+    leadId: "lead-b",
+    requestId: second,
+  });
+  assert.equal(switched.status, "pending_return");
+  if (switched.status !== "pending_return") return;
+  assert.equal(switched.requestId, second);
+  assert.equal(
+    settleWebForegroundFallback(switched, first, "visible").status,
+    "pending_return",
+  );
+  const pageshowAndFocus = noteWebCallPageState(
+    noteWebCallPageState(
+      { ...switched, handedOff: true, leftPage: true },
+      "visible",
+    ),
+    "visible",
+  );
+  assert.equal(pageshowAndFocus.status, "open");
+  if (pageshowAndFocus.status !== "open") return;
+  assert.equal(pageshowAndFocus.requestId, second);
+}
+
+function testCrmCustomerTelEntryPoints() {
+  const agentDir = join(root, "src/components/agent");
+  const files: string[] = [];
+  function walk(dir: string) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.name.endsWith(".tsx") || entry.name.endsWith(".ts")) {
+        files.push(path);
+      }
+    }
+  }
+  walk(agentDir);
+  const leftover: string[] = [];
+  for (const file of files) {
+    const src = readFileSync(file, "utf8");
+    if (!src.includes("telHref") && !src.includes("contactTelHref")) continue;
+    const rel = file.slice(root.length + 1);
+    const usesCanonical =
+      src.includes("beginCall") ||
+      src.includes("onTelClick") ||
+      src.includes("CrmLeadTelLink") ||
+      src.includes("beginCallOutcome") ||
+      src.includes("onCall");
+    if (!usesCanonical) leftover.push(rel);
+  }
+  assert.deepEqual(leftover, []);
+}
+
 function testBoundariesDidNotMove() {
+  const hook = readFileSync(
+    join(root, "src/components/agent/use-web-call-outcome-session.ts"),
+    "utf8",
+  );
+  assert.ok(hook.includes("visibilitychange"));
+  assert.ok(hook.includes("WEB_DIALER_STAYED_FOREGROUND_MS"));
+  assert.ok(hook.includes("settleWebForegroundFallback"));
+  assert.equal(hook.includes("CallOutcomeDialog"), false);
+
   const files = [
     "src/lib/agent/call-outcome.ts",
     "src/app/api/agent/leads/call-outcome/route.ts",
@@ -1180,6 +1362,8 @@ async function main() {
   await testRejectedClientAuthority();
   testPresentationAndFollowUp();
   testCallControlDoesNotHijackPhoneLinks();
+  testWebCallOutcomeLifecycle();
+  testCrmCustomerTelEntryPoints();
   testBoundariesDidNotMove();
   console.log("call-outcome-selftest: ok");
 }

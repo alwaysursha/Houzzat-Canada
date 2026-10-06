@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { CallOutcomeDialog } from "@/components/agent/CallOutcomeDialog";
-import { newCallOutcomeRequestId } from "@/lib/agent/call-outcome-presentation";
+import { useWebCallOutcomeSession } from "@/components/agent/use-web-call-outcome-session";
+import { webCallOutcomeDialogOpen } from "@/lib/agent/call-outcome-web-session";
 import {
   useCallback,
   useEffect,
@@ -155,6 +156,7 @@ function ContactDisplayRow({
   requestLabel,
   requestPending,
   multiline = false,
+  onTelClick,
 }: {
   icon: typeof Phone;
   value: string | null | undefined;
@@ -168,6 +170,7 @@ function ContactDisplayRow({
   requestLabel?: string;
   requestPending?: boolean;
   multiline?: boolean;
+  onTelClick?: (event: { currentTarget: HTMLElement }) => void;
 }) {
   const shown =
     Icon === Phone || href?.startsWith("tel:")
@@ -190,6 +193,11 @@ function ContactDisplayRow({
               multiline ? "items-start gap-1.5" : "items-center gap-1.5",
               updateRequested ? "max-w-[40%]" : "flex-1",
             )}
+            onClick={
+              href.startsWith("tel:") && onTelClick
+                ? (event) => onTelClick(event)
+                : undefined
+            }
           >
             <Icon className="mt-0.5 size-3.5 shrink-0" />
             <span className={valueClass}>{shown}</span>
@@ -436,15 +444,12 @@ export function CustomerProfile({
   const [noteMessage, setNoteMessage] = useState<string | null>(null);
   const [pinPendingId, setPinPendingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [callOutcomeLeadId, setCallOutcomeLeadId] = useState(leadId);
-  const [callOutcomeRequestId, setCallOutcomeRequestId] = useState<string | null>(
-    null,
-  );
-  const callReturnFocusRef = useRef<HTMLElement | null>(null);
-  if (leadId !== callOutcomeLeadId) {
-    setCallOutcomeLeadId(leadId);
-    setCallOutcomeRequestId(null);
-  }
+  const {
+    flow: callFlow,
+    returnFocusRef: callReturnFocusRef,
+    beginCall,
+    dismiss: dismissCallOutcome,
+  } = useWebCallOutcomeSession({ resetWhenLeadId: leadId });
   const [editingContact, setEditingContact] = useState<
     "phone" | "email" | "address" | null
   >(null);
@@ -1008,8 +1013,7 @@ export function CustomerProfile({
       className: "bg-[#0d9488]",
       label: "Call",
       onClick: (event) => {
-        callReturnFocusRef.current = event.currentTarget;
-        setCallOutcomeRequestId((current) => current ?? newCallOutcomeRequestId());
+        beginCall({ leadId, target: event.currentTarget });
       },
     },
     {
@@ -1248,6 +1252,9 @@ export function CustomerProfile({
                       }
                       requestLabel="Email and notify the client to confirm phone"
                       requestPending={reminderPending === "phone"}
+                      onTelClick={(event) =>
+                        beginCall({ leadId, target: event.currentTarget })
+                      }
                     />
                   )}
                   {editingContact === "email" ? (
@@ -2425,16 +2432,18 @@ export function CustomerProfile({
           </div>
         )}
       </div>
-      {callOutcomeRequestId && phone ? (
+      {webCallOutcomeDialogOpen(callFlow) &&
+      callFlow.status === "open" &&
+      phone ? (
         <CallOutcomeDialog
-          leadId={leadId}
+          leadId={callFlow.leadId}
           customerName={name}
           phoneLabel={phone}
-          clientRequestId={callOutcomeRequestId}
+          clientRequestId={callFlow.requestId}
           returnFocusRef={callReturnFocusRef}
-          onClose={() => setCallOutcomeRequestId(null)}
+          onClose={dismissCallOutcome}
           onSaved={() => {
-            setCallOutcomeRequestId(null);
+            dismissCallOutcome();
             onUpdated();
           }}
         />

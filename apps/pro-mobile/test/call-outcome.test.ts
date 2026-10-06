@@ -22,6 +22,7 @@ import {
   settleForegroundFallback,
   startCallOutcomeFlow,
 } from "../src/lib/call-outcome-session";
+import { presentMobileLeadActivity } from "../src/lib/lead-activity-presentation";
 import {
   CALL_OUTCOME_CHOICES,
   FOLLOW_UP_CHOICES,
@@ -193,6 +194,9 @@ function testScreenWiring() {
   assert.equal(handleSms.includes("call-outcome"), false);
   assert.ok(screen.includes("AppState.addEventListener"));
   assert.ok(screen.includes("CallOutcomeSheet"));
+  assert.ok(screen.includes("presentMobileLeadActivity"));
+  assert.ok(screen.includes("CONTACT_UPDATE_REQUEST"));
+  assert.ok(screen.includes("Contact update requested"));
   assert.ok(screen.includes("handleRefresh()"));
   assert.equal(screen.toLowerCase().includes("twilio"), false);
 
@@ -211,7 +215,45 @@ function testScreenWiring() {
   assert.ok(sheet.includes("KeyboardAvoidingView"));
 }
 
+function testTimelinePresentation() {
+  assert.deepEqual(
+    presentMobileLeadActivity({ type: "CALL", body: "Spoke to Lead" }),
+    { title: "Spoke to Lead", body: null },
+  );
+  assert.deepEqual(
+    presentMobileLeadActivity({ type: "CALL", body: "Left voicemail" }),
+    { title: "Left voicemail", body: null },
+  );
+  assert.deepEqual(
+    presentMobileLeadActivity({ type: "CALL", body: "Invalid phone number" }),
+    { title: "Invalid phone number", body: null },
+  );
+  assert.deepEqual(
+    presentMobileLeadActivity({ type: "CALL", body: "Wrong phone number" }),
+    { title: "Wrong phone number", body: null },
+  );
+  const update = presentMobileLeadActivity({
+    type: "contact_update_request",
+    body: "Agent requested customer to provide the correct phone number",
+  });
+  assert.equal(update.title, "Contact update requested");
+  assert.equal(
+    update.body,
+    "Agent requested customer to provide the correct phone number",
+  );
+  const unknownCall = presentMobileLeadActivity({
+    type: "CALL",
+    body: "Legacy desk call",
+  });
+  assert.equal(unknownCall.title, "");
+  assert.equal(unknownCall.body, "Legacy desk call");
+  const emptyCall = presentMobileLeadActivity({ type: "CALL", body: null });
+  assert.equal(emptyCall.title, "");
+  assert.equal(emptyCall.body, null);
+}
+
 testDialerLifecycle();
 testPayloadAndFollowUp();
 testScreenWiring();
+testTimelinePresentation();
 console.log("pro-mobile call-outcome: ok");

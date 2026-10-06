@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowDown,
@@ -26,7 +26,10 @@ import {
   UserPlus,
 } from "lucide-react";
 import type { LeadStatus } from "@prisma/client";
+import { CallOutcomeDialog } from "@/components/agent/CallOutcomeDialog";
 import { MassEmailForm } from "@/components/agent/LeadEmailForm";
+import { useWebCallOutcomeSession } from "@/components/agent/use-web-call-outcome-session";
+import { webCallOutcomeDialogOpen } from "@/lib/agent/call-outcome-web-session";
 import { MassSmsForm } from "@/components/agent/MassSmsForm";
 import { LeadAccountVerifyMenu } from "@/components/agent/LeadAccountVerifyMenu";
 import { ContactValidityIcon } from "@/components/agent/ContactValidityIcon";
@@ -244,6 +247,12 @@ export function LeadsTableClient({
   const [addPhone, setAddPhone] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [patchError, setPatchError] = useState<string | null>(null);
+  const {
+    flow: callFlow,
+    returnFocusRef: callReturnFocusRef,
+    beginCall,
+    dismiss: dismissCallOutcome,
+  } = useWebCallOutcomeSession();
 
   useStaffOverlay({
     open: addOpen,
@@ -297,6 +306,10 @@ export function LeadsTableClient({
   const start = safePage * pageSize;
   const pageRows = filtered.slice(start, start + pageSize);
   const end = Math.min(filtered.length, start + pageSize);
+  const callLead =
+    callFlow.status === "open"
+      ? leads.find((row) => row.id === callFlow.leadId)
+      : undefined;
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -865,13 +878,15 @@ export function LeadsTableClient({
                     <div className="mt-2.5 space-y-1 text-[13px] text-[#475569]">
                       {phone ? (
                         telHref ? (
-                        <a
+                        <CrmLeadTelLink
                           href={telHref}
+                          leadId={lead.id}
+                          beginCall={beginCall}
                           className="flex items-center gap-2 font-semibold text-[#2b6cb0]"
                         >
                           <Phone className="size-3.5 shrink-0" />
                           {phone}
-                        </a>
+                        </CrmLeadTelLink>
                         ) : (
                         <span className="flex items-center gap-2 font-semibold text-[#475569]">
                           <Phone className="size-3.5 shrink-0" />
@@ -942,13 +957,15 @@ export function LeadsTableClient({
                         Open profile
                       </button>
                       {telHref ? (
-                        <a
+                        <CrmLeadTelLink
                           href={telHref}
+                          leadId={lead.id}
+                          beginCall={beginCall}
                           className="inline-flex items-center justify-center rounded-lg border border-[#d8dee6] px-3 py-2.5 text-[#1e2a38] active:bg-[#f8fafc]"
                           aria-label={`Call ${name}`}
                         >
                           <Phone className="size-4" />
-                        </a>
+                        </CrmLeadTelLink>
                       ) : null}
                     </div>
                   </div>
@@ -1065,12 +1082,14 @@ export function LeadsTableClient({
                           </button>
                           {phone ? (
                             telHref ? (
-                            <a
+                            <CrmLeadTelLink
                               href={telHref}
+                              leadId={lead.id}
+                              beginCall={beginCall}
                               className="min-w-0 truncate hover:underline"
                             >
                               {phone}
-                            </a>
+                            </CrmLeadTelLink>
                             ) : (
                             <span className="min-w-0 truncate">{phone}</span>
                             )
@@ -1100,13 +1119,15 @@ export function LeadsTableClient({
                               />
                               <div className="absolute left-5 top-full z-30 mt-1 w-28 rounded-md border border-[#e2e8f0] bg-white py-1 shadow-lg">
                                 {telHref ? (
-                                <a
+                                <CrmLeadTelLink
                                   href={telHref}
+                                  leadId={lead.id}
+                                  beginCall={beginCall}
                                   className="block px-3 py-1.5 text-[11px] font-semibold text-[#475569] hover:bg-[#f8fafc]"
                                   onClick={() => setPhoneMenuId(null)}
                                 >
                                   Call
-                                </a>
+                                </CrmLeadTelLink>
                                 ) : null}
                                 {smsHref ? (
                                 <a
@@ -1339,9 +1360,14 @@ export function LeadsTableClient({
                       </p>
                       <div className="mt-1 flex items-center gap-1.5 text-[#b0bac5]">
                         {telHref ? (
-                          <a href={telHref} title="Call">
+                          <CrmLeadTelLink
+                            href={telHref}
+                            leadId={lead.id}
+                            beginCall={beginCall}
+                            title="Call"
+                          >
                             <Phone className="size-3.5 hover:text-[#5b9aaa]" />
-                          </a>
+                          </CrmLeadTelLink>
                         ) : (
                           <Phone className="size-3.5 opacity-30" />
                         )}
@@ -1519,6 +1545,61 @@ export function LeadsTableClient({
         onClose={() => setImportOpen(false)}
         onImported={() => router.refresh()}
       />
+      {webCallOutcomeDialogOpen(callFlow) &&
+      callFlow.status === "open" &&
+      callLead?.customer?.phone ? (
+        <CallOutcomeDialog
+          leadId={callFlow.leadId}
+          customerName={
+            callLead.customer.name ||
+            callLead.customer.email ||
+            callLead.source.replaceAll("_", " ")
+          }
+          phoneLabel={callLead.customer.phone}
+          clientRequestId={callFlow.requestId}
+          returnFocusRef={callReturnFocusRef}
+          onClose={dismissCallOutcome}
+          onSaved={() => {
+            dismissCallOutcome();
+            router.refresh();
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function CrmLeadTelLink({
+  href,
+  leadId,
+  beginCall,
+  className,
+  title,
+  onClick,
+  children,
+  "aria-label": ariaLabel,
+}: {
+  href: string;
+  leadId: string;
+  beginCall: (input: { leadId: string; target: HTMLElement }) => void;
+  className?: string;
+  title?: string;
+  onClick?: () => void;
+  children: ReactNode;
+  "aria-label"?: string;
+}) {
+  return (
+    <a
+      href={href}
+      className={className}
+      title={title}
+      aria-label={ariaLabel}
+      onClick={(event) => {
+        beginCall({ leadId, target: event.currentTarget });
+        onClick?.();
+      }}
+    >
+      {children}
+    </a>
   );
 }

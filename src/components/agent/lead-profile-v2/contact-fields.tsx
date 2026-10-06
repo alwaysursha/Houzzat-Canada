@@ -21,6 +21,7 @@ export function ContactDisplayRow({
   requestPending,
   multiline = false,
   validityVerified,
+  onTelClick,
 }: {
   icon: LucideIcon;
   value: string | null | undefined;
@@ -36,6 +37,8 @@ export function ContactDisplayRow({
   multiline?: boolean;
   /** When set, show the Leads-desk validity icon (independent of REQUESTED). */
   validityVerified?: boolean;
+  /** CRM customer Call only — starts the shared Call Outcome session. */
+  onTelClick?: (event: { currentTarget: HTMLElement }) => void;
 }) {
   const shown =
     Icon === Phone || href?.startsWith("tel:")
@@ -58,6 +61,11 @@ export function ContactDisplayRow({
               multiline ? "items-start gap-1.5" : "items-center gap-1.5",
               updateRequested ? "max-w-[40%]" : "flex-1",
             )}
+            onClick={
+              href.startsWith("tel:") && onTelClick
+                ? (event) => onTelClick(event)
+                : undefined
+            }
           >
             <Icon className="size-3.5 shrink-0" />
             <span className={valueClass}>{shown}</span>

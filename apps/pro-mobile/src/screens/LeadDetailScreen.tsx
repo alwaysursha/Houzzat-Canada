@@ -52,6 +52,7 @@ import {
   updateCustomerEmailVerifiedInListCache,
 } from "../lib/lead-list-cache";
 import { unwrapEngagement } from "../lib/engagement-response";
+import { presentMobileLeadActivity } from "../lib/lead-activity-presentation";
 import {
   DIALER_STAYED_FOREGROUND_MS,
   callOutcomeRequestId,
@@ -469,6 +470,16 @@ function activityCategoryMeta(type: string): {
       chipRing: "#7DD3FC",
       dot: "#0EA5E9",
       label: t === "CALL_NOTE" ? "Call note" : "Call",
+    };
+  }
+  if (t === "CONTACT_UPDATE_REQUEST") {
+    return {
+      icon: "📱",
+      chipBg: "#FEF3C7",
+      chipText: "#92400E",
+      chipRing: "#FCD34D",
+      dot: "#D97706",
+      label: "Contact update requested",
     };
   }
   // Must run before the generic VIEW catch-all — VIEWING_PLAN contains "VIEW".
@@ -2205,6 +2216,7 @@ export function LeadDetailScreen({
                         <View style={styles.timelineRail}>
                           {group.items.map((act) => {
                             const meta = activityCategoryMeta(act.type);
+                            const presented = presentMobileLeadActivity(act);
                             const isEmailFamily =
                               /EMAIL|SHORTLIST_EMAILED|AGENT_MESSAGE|DIGEST/i.test(
                                 act.type,
@@ -2305,14 +2317,26 @@ export function LeadDetailScreen({
                                         </Text>
                                       </View>
                                     </View>
-                                  ) : act.body ? (
-                                    <Text
-                                      style={styles.timelineBody}
-                                      numberOfLines={3}
-                                    >
-                                      {act.body}
-                                    </Text>
-                                  ) : null}
+                                  ) : (
+                                    [presented.title, presented.body]
+                                      .filter(
+                                        (line): line is string =>
+                                          Boolean(line && line !== meta.label),
+                                      )
+                                      .filter(
+                                        (line, index, all) =>
+                                          all.indexOf(line) === index,
+                                      )
+                                      .map((line) => (
+                                        <Text
+                                          key={line}
+                                          style={styles.timelineBody}
+                                          numberOfLines={3}
+                                        >
+                                          {line}
+                                        </Text>
+                                      ))
+                                  )}
                                 </View>
                               </View>
                             );
