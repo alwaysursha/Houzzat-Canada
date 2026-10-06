@@ -37,6 +37,7 @@ export default async function AccountWatchlistPage() {
       <MonitorsClient
         propertyMonitors={propertyMonitors}
         areaMonitors={areaMonitors}
+        globalEmailPaused={!user.emailAlertsEnabled}
         alerts={alerts.map((a) => ({
           ...a,
           createdAt: a.createdAt.toISOString(),

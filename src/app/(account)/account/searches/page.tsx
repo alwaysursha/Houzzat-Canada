@@ -2,7 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ApplyHomepageSearchButton } from "@/components/account/ApplyHomepageSearchButton";
 import { DeleteSavedSearchButton } from "@/components/account/DeleteSavedSearchButton";
+import { SavedSearchEmailAlertsToggle } from "@/components/account/SavedSearchEmailAlertsToggle";
 import { requireCustomerUser } from "@/lib/account";
+import { GLOBAL_EMAIL_PAUSED_BANNER } from "@/lib/account/entity-alert-mutations";
 import {
   parseHomepagePersonalizationQuery,
   personalizationToSearchHref,
@@ -68,6 +70,21 @@ export default async function SavedSearchesPage() {
         </p>
       </div>
 
+      {!user.emailAlertsEnabled ? (
+        <div
+          role="status"
+          className="rounded-xl border border-signal/30 bg-signal/[0.08] px-4 py-3 text-sm text-ink/80"
+        >
+          {GLOBAL_EMAIL_PAUSED_BANNER}{" "}
+          <Link
+            href="/preferences/email"
+            className="font-semibold text-canopy underline-offset-2 hover:underline"
+          >
+            Communication Preferences
+          </Link>
+        </div>
+      ) : null}
+
       <ul className="space-y-3">
         {searches.map((search) => {
           const hint =
@@ -77,45 +94,50 @@ export default async function SavedSearchesPage() {
           return (
             <li
               key={search.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4"
+              className="space-y-3 rounded-2xl border border-line bg-surface p-4"
             >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-semibold text-ink">{search.name}</p>
-                  {search.isPrimary ? (
-                    <span className="rounded-md bg-canopy/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-canopy-deep">
-                      Primary
-                    </span>
-                  ) : (
-                    <span className="rounded-md bg-mist px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-ink/45">
-                      Secondary
-                    </span>
-                  )}
-                  {search.isHomepageActive ? (
-                    <span className="rounded-md bg-signal/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-signal">
-                      On homepage
-                    </span>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-ink">{search.name}</p>
+                    {search.isPrimary ? (
+                      <span className="rounded-md bg-canopy/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-canopy-deep">
+                        Primary
+                      </span>
+                    ) : (
+                      <span className="rounded-md bg-mist px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-ink/45">
+                        Secondary
+                      </span>
+                    )}
+                    {search.isHomepageActive ? (
+                      <span className="rounded-md bg-signal/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-signal">
+                        On homepage
+                      </span>
+                    ) : null}
+                  </div>
+                  {hint ? (
+                    <p className="mt-1 text-xs text-ink/50">{hint}</p>
                   ) : null}
                 </div>
-                <p className="mt-1 text-xs text-ink/50">
-                  {hint ? `${hint} · ` : null}
-                  Alerts: {search.emailAlerts ? "email on" : "email off"}
-                  {search.smsAlerts ? " · sms on" : ""}
-                </p>
+                <div className="flex flex-wrap gap-2">
+                  <ApplyHomepageSearchButton
+                    id={search.id}
+                    active={search.isHomepageActive}
+                  />
+                  <Link
+                    href={queryToHref(search.query)}
+                    className="rounded-lg border border-line bg-mist px-3 py-2 text-sm font-semibold text-ink/80"
+                  >
+                    Open
+                  </Link>
+                  <DeleteSavedSearchButton id={search.id} />
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <ApplyHomepageSearchButton
-                  id={search.id}
-                  active={search.isHomepageActive}
-                />
-                <Link
-                  href={queryToHref(search.query)}
-                  className="rounded-lg border border-line bg-mist px-3 py-2 text-sm font-semibold text-ink/80"
-                >
-                  Open
-                </Link>
-                <DeleteSavedSearchButton id={search.id} />
-              </div>
+              <SavedSearchEmailAlertsToggle
+                id={search.id}
+                initialEmailAlerts={search.emailAlerts}
+                isPrimary={search.isPrimary}
+              />
             </li>
           );
         })}
