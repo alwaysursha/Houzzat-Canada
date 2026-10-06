@@ -24,7 +24,7 @@ import {
 import {
   labelActivity,
   leadActivityDisplayTitle,
-} from "../src/lib/agent/customer-timeline";
+} from "../src/lib/agent/activity-display";
 import { friendlyActivityTypeLabel } from "../src/lib/agent/activity-filters";
 import { setGlobalOptionalEmailPreference } from "../src/lib/communications/preference-commands";
 import { memoryPreferenceAuditStore } from "../src/lib/communications/preference-audit";
@@ -823,7 +823,18 @@ function testRouteWiringNoNoise() {
   const timeline = read("src/lib/agent/customer-timeline.ts");
   assert.ok(timeline.includes("WATCH_PROPERTY"));
   assert.ok(timeline.includes("propertyMonitor.findMany"));
-  assert.ok(timeline.includes("leadActivityDisplayTitle"));
+  const display = read("src/lib/agent/activity-display.ts");
+  assert.ok(display.includes("leadActivityDisplayTitle"));
+  assert.ok(!display.includes("prisma"));
+  const crmTimeline = read("src/components/agent/CrmTimeline.tsx");
+  assert.ok(crmTimeline.includes('from "@/lib/agent/activity-display"'));
+  assert.ok(
+    !crmTimeline.includes('from "@/lib/agent/customer-timeline"') ||
+      crmTimeline.includes("import type"),
+  );
+  assert.ok(
+    !crmTimeline.includes("{ leadActivityDisplayTitle } from \"@/lib/agent/customer-timeline\""),
+  );
 }
 
 function testNoEmailLookup() {

@@ -1,4 +1,8 @@
 import {
+  labelActivity,
+  leadActivityDisplayTitle,
+} from "@/lib/agent/activity-display";
+import {
   ALL_ACTIVITY_FILTER_IDS,
   isDefaultActivityFilters,
   timelineItemMatchesFilters,
@@ -12,8 +16,6 @@ import {
   TIMELINE_ACTIVITY_EVENT_SELECT,
   dedupeNearDuplicateListingViews,
   enrichWithListingCovers,
-  labelActivity,
-  leadActivityDisplayTitle,
   serializeTimelineItem,
   type TimelineItem,
   type TimelineItemDto,

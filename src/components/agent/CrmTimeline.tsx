@@ -20,9 +20,9 @@ import {
   UserRound,
   Workflow,
 } from "lucide-react";
-import type { TimelineItem } from "@/lib/agent/customer-timeline";
+import { leadActivityDisplayTitle } from "@/lib/agent/activity-display";
 import { friendlyActivityTypeLabel } from "@/lib/agent/activity-filters";
-import { leadActivityDisplayTitle } from "@/lib/agent/customer-timeline";
+import type { TimelineItem } from "@/lib/agent/customer-timeline";
 import { isCallOutcomeActivityTitle } from "@/lib/agent/call-outcome-presentation";
 import {
   conversationActivityHeadline,
