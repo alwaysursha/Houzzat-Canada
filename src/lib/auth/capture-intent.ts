@@ -10,8 +10,12 @@ import {
  */
 export const CAPTURE_INTENT_STORAGE_KEY = "houzzat:capture-intent";
 
-/** Short enough that a leftover action cannot fire on a later visit. */
-export const CAPTURE_INTENT_TTL_MS = 15 * 60 * 1000;
+/**
+ * Short enough that a leftover action cannot fire on a later visit.
+ * 45 minutes covers a normal OTP + qualification funnel without making
+ * intents permanently stale. Prefer touchPendingCaptureIntent during the funnel.
+ */
+export const CAPTURE_INTENT_TTL_MS = 45 * 60 * 1000;
 
 const CLOCK_SKEW_MS = 60 * 1000;
 const RECORD_VERSION = 1;
@@ -614,6 +618,27 @@ export function peekPendingIntent(
     return { ok: false, reason: "none" };
   }
   return readRecord(raw, ctx);
+}
+
+/**
+ * Refresh createdAt on a still-valid pending intent so OTP/qualification
+ * does not expire the resume action mid-funnel. Does not extend invalid or
+ * cross-host records.
+ */
+export function touchPendingCaptureIntent(
+  store: CaptureIntentStore,
+  ctx: CaptureIntentContext,
+):
+  | { ok: true; intent: CaptureIntent }
+  | { ok: false; reason: CaptureIntentRejectReason } {
+  const peeked = peekPendingIntent(store, ctx);
+  if (!peeked.ok) return peeked;
+  const refreshed: CaptureIntent = {
+    ...peeked.intent,
+    createdAt: ctx.now,
+  };
+  saveCaptureIntent(store, refreshed);
+  return { ok: true, intent: refreshed };
 }
 
 /**

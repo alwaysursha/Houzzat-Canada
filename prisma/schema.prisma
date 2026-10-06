@@ -126,8 +126,31 @@ enum InquiryTag {
 enum PurchaseTimeframe {
   NOW
   ONE_TO_THREE_MONTHS
+  /**
+   * Consumer funnel option "3–6 Months" (additive; do not remap into adjacent buckets).
+   */
+  THREE_TO_SIX_MONTHS
   SIX_TO_TWELVE_MONTHS
   TWELVE_PLUS_MONTHS
+}
+
+/**
+ * How a consumer account's initial password credential was established.
+ * LEGACY = user-chosen password (all pre-funnel accounts).
+ * PHONE_E164 = bcrypt of canonical E.164 used as CINC-style initial credential.
+ */
+enum PasswordCredentialKind {
+  LEGACY
+  PHONE_E164
+}
+
+/**
+ * Consumer mortgage / financing status from qualification funnel.
+ */
+enum MortgageFinancing {
+  PRE_APPROVED
+  NOT_PRE_APPROVED
+  CASH
 }
 
 /**
@@ -624,47 +647,47 @@ model OrganizationInvite {
  * Parallel to Organization — no runtime wiring yet.
  */
 model Workspace {
-  id                    String          @id @default(cuid())
-  slug                  String          @unique
-  name                  String
-  status                WorkspaceStatus @default(ACTIVE)
+  id                        String          @id @default(cuid())
+  slug                      String          @unique
+  name                      String
+  status                    WorkspaceStatus @default(ACTIVE)
   /**
    * Subscription purchaser / billing admin (future).
    */
-  billingOwnerUserId    String?
+  billingOwnerUserId        String?
   /**
    * Designated business-facing agent (future badge/routing UI — not wired).
    */
-  primaryAgentId        String?
+  primaryAgentId            String?
   /**
    * Display/compliance metadata only — NOT a tenant isolation key.
    */
-  brokerageAffiliation  String?
+  brokerageAffiliation      String?
   /**
    * Stage 6.1 — explicit current Subscription pointer (0/1).
    * Historical subscriptions remain via Subscription.workspaceId (1→many).
    */
-  currentSubscriptionId String?         @unique
+  currentSubscriptionId     String?         @unique
   /**
    * Dedicated Twilio long code for this workspace (E.164). Unique when set.
    * Inbound tenant routing key (To-number). Never a cross-tenant From.
    */
-  twilioPhoneE164             String?         @unique
+  twilioPhoneE164           String?         @unique
   /**
    * Twilio subaccount SID (ACxxx) that owns this workspace's Messaging
    * Service and number. Unique when set. Auth tokens are never stored here.
    */
-  twilioSubaccountSid         String?         @unique
+  twilioSubaccountSid       String?         @unique
   /**
    * Twilio Messaging Service SID (MGxxx) in that subaccount. Unique when set.
    */
-  twilioMessagingServiceSid   String?         @unique
+  twilioMessagingServiceSid String?         @unique
   /**
    * Twilio Incoming Phone Number SID (PNxxx). Unique when set.
    */
-  twilioPhoneSid              String?         @unique
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
+  twilioPhoneSid            String?         @unique
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
 
   billingOwner                      User?                                       @relation("WorkspaceBillingOwner", fields: [billingOwnerUserId], references: [id], onDelete: SetNull)
   primaryAgent                      User?                                       @relation("WorkspacePrimaryAgent", fields: [primaryAgentId], references: [id], onDelete: SetNull)
@@ -676,6 +699,8 @@ model Workspace {
   agentTasks                        AgentTask[]
   leadNotes                         LeadNote[]
   leadEmailLogs                     LeadEmailLog[]
+  buyerConfirmedPreferences         BuyerConfirmedPreference[]
+  phoneOtpChallenges                PhoneOtpChallenge[]
   crmRoutingSettings                CrmRoutingSettings?
   domains                           WorkspaceDomain[]
   branding                          WorkspaceBranding?
@@ -724,7 +749,7 @@ model Workspace {
   conversations                     Conversation[]
   smsSuppressions                   SmsSuppression[]
   emailSuppressions                 EmailSuppression[]
-  communicationPreferences         CommunicationPreference[]
+  communicationPreferences          CommunicationPreference[]
   communicationPreferenceEvents     CommunicationPreferenceEvent[]
   communicationPreferenceTokens     CommunicationPreferenceToken[]
   inboundSmsQuarantines             InboundSmsQuarantine[]
@@ -907,12 +932,12 @@ model WorkspaceBranding {
  * Not WorkspaceBranding — display identity stays there.
  */
 model WorkspaceTracking {
-  workspaceId       String   @id
-  ga4MeasurementId  String?
-  googleAdsId       String?
-  metaPixelId       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  workspaceId      String   @id
+  ga4MeasurementId String?
+  googleAdsId      String?
+  metaPixelId      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
@@ -938,26 +963,26 @@ model WorkspaceMember {
 }
 
 model WorkspaceInvite {
-  id          String                @id @default(cuid())
-  workspaceId String
-  email       String
-  role        WorkspaceMemberRole   @default(AGENT)
-  token       String                @unique @default(cuid())
-  invitedById String?
-  status      WorkspaceInviteStatus @default(PENDING)
-  expiresAt   DateTime
-  acceptedAt  DateTime?
+  id                   String                @id @default(cuid())
+  workspaceId          String
+  email                String
+  role                 WorkspaceMemberRole   @default(AGENT)
+  token                String                @unique @default(cuid())
+  invitedById          String?
+  status               WorkspaceInviteStatus @default(PENDING)
+  expiresAt            DateTime
+  acceptedAt           DateTime?
   /**
    * Admin-managed professional snapshot captured at invite time.
    * Applied to User + AgentProfile on provision / accept. Not a second profile.
    */
-  firstName              String?
-  lastName               String?
-  phone                  String?
-  recoLicenseNumber      String?
-  recoLicenseExpiresAt   DateTime?
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
+  firstName            String?
+  lastName             String?
+  phone                String?
+  recoLicenseNumber    String?
+  recoLicenseExpiresAt DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   invitedBy User?     @relation("WorkspaceInviteInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
@@ -968,175 +993,208 @@ model WorkspaceInvite {
 }
 
 model User {
-  id                     String              @id @default(cuid())
+  id                       String                 @id @default(cuid())
   /**
    * Phase 3 — home Workspace for tenant-isolated identity.
    * NULL = platform operator / orphans / pre-split only (never tenant-auth).
    * Uniqueness enforced in SQL partial indexes (see Phase 3 migration):
-   *   UNIQUE (workspaceId, email) WHERE workspaceId IS NOT NULL
-   *   UNIQUE (email) WHERE workspaceId IS NULL
+   * UNIQUE (workspaceId, email) WHERE workspaceId IS NOT NULL
+   * UNIQUE (email) WHERE workspaceId IS NULL
    */
-  workspaceId            String?
-  name                   String?
-  email                  String
-  emailVerified          DateTime?
-  password               String?
-  image                  String?
-  role                   Role                @default(BUYER)
+  workspaceId              String?
+  name                     String?
+  email                    String
+  emailVerified            DateTime?
+  password                 String?
+  /**
+   * Distinguishes legacy chosen passwords from phone-derived initial credentials.
+   * Existing rows default LEGACY — never reinterpret their password hashes.
+   */
+  passwordCredentialKind   PasswordCredentialKind @default(LEGACY)
+  image                    String?
+  role                     Role                   @default(BUYER)
   /**
    * Consumer can use buyer dashboard / buyer search prefs.
    */
-  isBuyer                Boolean             @default(true)
+  isBuyer                  Boolean                @default(true)
   /**
    * Consumer can use seller dashboard (/owner) / seller search prefs.
    */
-  isSeller               Boolean             @default(false)
+  isSeller                 Boolean                @default(false)
   /**
    * Buy/sell horizon — set by customer popup or agent in CRM.
    */
-  purchaseTimeframe      PurchaseTimeframe?
+  purchaseTimeframe        PurchaseTimeframe?
+  /**
+   * Consumer owns a home (qualification funnel). Null = unknown / not asked.
+   */
+  ownsHome                 Boolean?
+  /**
+   * Mortgage / financing status from qualification funnel.
+   */
+  mortgageFinancing        MortgageFinancing?
+  /**
+   * When the consumer completed the post-signup qualification funnel.
+   */
+  qualificationCompletedAt DateTime?
   /**
    * Which consumer dashboard + search context is active.
    */
-  activeMode             ActiveMode          @default(BUYER)
-  phone                  String?
+  activeMode               ActiveMode             @default(BUYER)
+  phone                    String?
   /**
    * Normalized E.164 from `phone` when parseable. Indexed, not unique —
    * the same number may exist on more than one User across workspaces.
    */
-  phoneE164              String?
+  phoneE164                String?
   /**
    * Agent-confirmed phone on CRM lead desk (not SMS OTP).
    */
-  phoneVerifiedAt        DateTime?
+  phoneVerifiedAt          DateTime?
+  /**
+   * Consumer SMS OTP ownership verification (independent of emailVerified
+   * and of agent phoneVerifiedAt).
+   */
+  phoneOtpVerifiedAt       DateTime?
   /**
    * Agent requested customer to update email on next visit.
    */
-  emailUpdateRequestedAt DateTime?
+  emailUpdateRequestedAt   DateTime?
   /**
    * Agent requested customer to update phone on next visit.
    */
-  phoneUpdateRequestedAt DateTime?
+  phoneUpdateRequestedAt   DateTime?
   /**
    * When the automatic delayed "Verify your email" send becomes eligible
    * for the current address (signup or email change + 24h).
    * Pending-queue partial index is SQL-only (see migration
    * 20261004160000_email_verify_nudge); Prisma cannot express the WHERE.
    */
-  emailVerifyNudgeDueAt  DateTime?
+  emailVerifyNudgeDueAt    DateTime?
   /**
    * When the automatic delayed verification email was sent (or stubbed).
    * Manual "Send Verification Email" does not set this.
    */
-  emailVerifyNudgeSentAt DateTime?
+  emailVerifyNudgeSentAt   DateTime?
   /**
    * Client home / location address — used as Route Planner start + admin CRM.
    */
-  homeAddress            String?
-  homeLat                Float?
-  homeLng                Float?
+  homeAddress              String?
+  homeLat                  Float?
+  homeLng                  Float?
+  /**
+   * Optional condo/apartment unit, stored separately from canonical street.
+   * Set by consumer "Claim Your Address" (not Google query text).
+   */
+  homeUnit                 String?
   /**
    * Commute places saved from a listing. Surfaced on lead activity now;
    * lead profile can read the same columns later.
    */
-  workAddress            String?
-  workLat                Float?
-  workLng                Float?
-  schoolAddress          String?
-  schoolLat              Float?
-  schoolLng              Float?
-  caslConsentAt          DateTime?
-  vowAcceptedAt          DateTime?
-  vowVersion             String?
-  termsAcceptedAt        DateTime?
-  termsVersion           String?
-  emailAlertsEnabled     Boolean             @default(true)
-  smsAlertsEnabled       Boolean             @default(false)
-  relatedListingsMode    RelatedListingsMode @default(SAME_AREA)
+  workAddress              String?
+  workLat                  Float?
+  workLng                  Float?
+  schoolAddress            String?
+  schoolLat                Float?
+  schoolLng                Float?
+  caslConsentAt            DateTime?
+  vowAcceptedAt            DateTime?
+  vowVersion               String?
+  termsAcceptedAt          DateTime?
+  termsVersion             String?
+  emailAlertsEnabled       Boolean                @default(true)
+  smsAlertsEnabled         Boolean                @default(false)
+  relatedListingsMode      RelatedListingsMode    @default(SAME_AREA)
   /**
    * Last successful daily Saved Search Digest send.
    */
-  lastBuyerDigestAt      DateTime?
+  lastBuyerDigestAt        DateTime?
   /**
    * Last successful Neighborhood Weekly Report send.
    */
-  lastSellerReportAt     DateTime?
+  lastSellerReportAt       DateTime?
   /**
    * Per-type push toggles (+ nested staffEmail category prefs for HouzzatPro).
    * Missing push key = on. Missing staffEmail category = on.
    * Keys: src/lib/notifications/catalog.ts + staff-categories.ts
    */
-  pushNotificationPrefs  Json?
+  pushNotificationPrefs    Json?
   /**
    * Soft-suspend: blocked from signing in / using the product.
    */
-  disabledAt             DateTime?
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
+  disabledAt               DateTime?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
 
-  accounts                  Account[]
-  sessions                  Session[]
-  agentProfile              AgentProfile?
+  accounts                      Account[]
+  sessions                      Session[]
+  agentProfile                  AgentProfile?
   /**
    * Phase 3 — home workspace (NULL only for platform / orphans / pre-split).
    */
-  workspace                 Workspace?                 @relation("UserHomeWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict)
-  siteVisitors              SiteVisitor[]
-  activityEvents            ActivityEvent[]
-  auditLogs                 AuditLog[]                 @relation("AuditActor")
-  orgMemberships            OrganizationMembership[]
-  leads                     Lead[]                     @relation("CustomerLeads")
-  assignedLeads             Lead[]                     @relation("AssignedLeads")
-  activities                LeadActivity[]
-  appointments              Appointment[]              @relation("CustomerAppointments")
-  agentAppointments         Appointment[]              @relation("AgentAppointments")
-  landingPages              LandingPage[]
-  consentEvents             ConsentEvent[]
-  emailSuppressions         EmailSuppression[]
-  communicationPreferences  CommunicationPreference[]
+  workspace                     Workspace?                     @relation("UserHomeWorkspace", fields: [workspaceId], references: [id], onDelete: Restrict)
+  siteVisitors                  SiteVisitor[]
+  activityEvents                ActivityEvent[]
+  auditLogs                     AuditLog[]                     @relation("AuditActor")
+  orgMemberships                OrganizationMembership[]
+  leads                         Lead[]                         @relation("CustomerLeads")
+  assignedLeads                 Lead[]                         @relation("AssignedLeads")
+  activities                    LeadActivity[]
+  appointments                  Appointment[]                  @relation("CustomerAppointments")
+  agentAppointments             Appointment[]                  @relation("AgentAppointments")
+  landingPages                  LandingPage[]
+  consentEvents                 ConsentEvent[]
+  emailSuppressions             EmailSuppression[]
+  communicationPreferences      CommunicationPreference[]
   communicationPreferenceEvents CommunicationPreferenceEvent[]
   communicationPreferenceTokens CommunicationPreferenceToken[]
-  savedListings             SavedListing[]
-  savedSearches             SavedSearch[]
-  listingViews              ListingView[]
-  listingNotes              ListingNote[]
-  propertyMonitors          PropertyMonitor[]
-  areaMonitors              AreaMonitor[]
-  customerAlerts            CustomerAlert[]
-  adCampaigns               AdCampaign[]
-  cmaReports                CmaReport[]
-  referralHandoffs          ReferralHandoff[]          @relation("AgentHandoffs")
-  ownedListings             Listing[]                  @relation("OwnerListings")
-  ownerOrders               OwnerListingOrder[]        @relation("OwnerOrders")
-  reviewedOwnerListings     Listing[]                  @relation("OwnerListingReviewer")
-  waivedOwnerOrders         OwnerListingOrder[]        @relation("OwnerOrderAdmin")
-  ownerConsents             OwnerListingConsent[]
-  viewingTours              ViewingTour[]              @relation("CustomerViewingTours")
-  agentViewingTours         ViewingTour[]              @relation("AgentViewingTours")
-  assignedTasks             AgentTask[]                @relation("TaskAssignee")
-  createdTasks              AgentTask[]                @relation("TaskCreator")
-  leadNotesAuthored         LeadNote[]                 @relation("LeadNoteAuthor")
-  leadEmailsSent            LeadEmailLog[]             @relation("LeadEmailSender")
-  listingAgentFor           CrmRoutingSettings[]       @relation("ListingAgentSettings")
-  routingWeights            CrmRoutingWeight[]
-  pushDevices               PushDevice[]
-  workspaceMemberships      WorkspaceMember[]
-  workspaceMembersInvited   WorkspaceMember[]          @relation("WorkspaceMemberInvitedBy")
-  workspaceInvitesSent      WorkspaceInvite[]          @relation("WorkspaceInviteInvitedBy")
-  workspacesBillingOwned    Workspace[]                @relation("WorkspaceBillingOwner")
-  workspacesPrimaryAgentFor Workspace[]                @relation("WorkspacePrimaryAgent")
+  savedListings                 SavedListing[]
+  savedSearches                 SavedSearch[]
+  /**
+   * Explicit confirmed buyer search preference from qualification funnel.
+   * Independent of SavedSearch — must never drive digests by itself.
+   */
+  buyerConfirmedPreference      BuyerConfirmedPreference?
+  phoneOtpChallenges            PhoneOtpChallenge[]
+  listingViews                  ListingView[]
+  listingNotes                  ListingNote[]
+  propertyMonitors              PropertyMonitor[]
+  areaMonitors                  AreaMonitor[]
+  customerAlerts                CustomerAlert[]
+  adCampaigns                   AdCampaign[]
+  cmaReports                    CmaReport[]
+  referralHandoffs              ReferralHandoff[]              @relation("AgentHandoffs")
+  ownedListings                 Listing[]                      @relation("OwnerListings")
+  ownerOrders                   OwnerListingOrder[]            @relation("OwnerOrders")
+  reviewedOwnerListings         Listing[]                      @relation("OwnerListingReviewer")
+  waivedOwnerOrders             OwnerListingOrder[]            @relation("OwnerOrderAdmin")
+  ownerConsents                 OwnerListingConsent[]
+  viewingTours                  ViewingTour[]                  @relation("CustomerViewingTours")
+  agentViewingTours             ViewingTour[]                  @relation("AgentViewingTours")
+  assignedTasks                 AgentTask[]                    @relation("TaskAssignee")
+  createdTasks                  AgentTask[]                    @relation("TaskCreator")
+  leadNotesAuthored             LeadNote[]                     @relation("LeadNoteAuthor")
+  leadEmailsSent                LeadEmailLog[]                 @relation("LeadEmailSender")
+  listingAgentFor               CrmRoutingSettings[]           @relation("ListingAgentSettings")
+  routingWeights                CrmRoutingWeight[]
+  pushDevices                   PushDevice[]
+  workspaceMemberships          WorkspaceMember[]
+  workspaceMembersInvited       WorkspaceMember[]              @relation("WorkspaceMemberInvitedBy")
+  workspaceInvitesSent          WorkspaceInvite[]              @relation("WorkspaceInviteInvitedBy")
+  workspacesBillingOwned        Workspace[]                    @relation("WorkspaceBillingOwner")
+  workspacesPrimaryAgentFor     Workspace[]                    @relation("WorkspacePrimaryAgent")
   /**
    * Stage 6.1 — SaaS control-plane operator identity (NOT CRM / WorkspaceMember).
    */
-  platformOperator          PlatformOperator?
-  ownerActivations          WorkspaceOwnerActivation[]
-  leadImportJobs            LeadImportJob[]            @relation("LeadImportImportedBy")
-  conversationAgentReads    Conversation[]             @relation("ConversationAgentLastReadBy")
-  messagesSent              Message[]                  @relation("MessageSender")
-  messagesCreated           Message[]                  @relation("MessageCreatedBy")
-  messagesDeleted           Message[]                  @relation("MessageDeletedBy")
-  messageRevisions          MessageRevision[]          @relation("MessageRevisionActor")
-  messageReactions          MessageReaction[]
+  platformOperator              PlatformOperator?
+  ownerActivations              WorkspaceOwnerActivation[]
+  leadImportJobs                LeadImportJob[]                @relation("LeadImportImportedBy")
+  conversationAgentReads        Conversation[]                 @relation("ConversationAgentLastReadBy")
+  messagesSent                  Message[]                      @relation("MessageSender")
+  messagesCreated               Message[]                      @relation("MessageCreatedBy")
+  messagesDeleted               Message[]                      @relation("MessageDeletedBy")
+  messageRevisions              MessageRevision[]              @relation("MessageRevisionActor")
+  messageReactions              MessageReaction[]
 
   @@index([phoneE164])
   @@index([email])
@@ -1167,8 +1225,8 @@ model Account {
   /**
    * Phase 3 — denormalized workspace for OAuth uniqueness.
    * Partial unique indexes in SQL (Prisma cannot express WHERE clauses):
-   *   UNIQUE (workspaceId, provider, providerAccountId) WHERE workspaceId IS NOT NULL
-   *   UNIQUE (provider, providerAccountId) WHERE workspaceId IS NULL
+   * UNIQUE (workspaceId, provider, providerAccountId) WHERE workspaceId IS NOT NULL
+   * UNIQUE (provider, providerAccountId) WHERE workspaceId IS NULL
    * Tenant Google/social OAuth is DISABLED for V1 — do not link across workspaces.
    */
   workspaceId       String?
@@ -1208,31 +1266,31 @@ model VerificationToken {
 }
 
 model AgentProfile {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  bio       String?  @db.Text
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  bio                  String?   @db.Text
   /**
    * Canonical areas this agent serves (cities and region labels).
    * Per agent, not per workspace. Empty means "not chosen", not MLS denial.
    */
-  markets   String[] @default([])
+  markets              String[]  @default([])
   /**
    * Set when the agent saves service areas, including a clear.
    * Demo/onboarding geography may seed markets only while this is null.
    */
-  marketsCustomizedAt DateTime?
+  marketsCustomizedAt  DateTime?
   /**
    * Display cellphone. Canonical SMS destination remains User.phoneE164.
    * Kept in lockstep with User.phone by Admin-managed profile writes.
    */
-  phone     String?
-  firstName String?
-  lastName  String?
+  phone                String?
+  firstName            String?
+  lastName             String?
   recoLicenseNumber    String?
   recoLicenseExpiresAt DateTime?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  active               Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -1264,6 +1322,11 @@ model Lead {
   utmCampaign      String?
   utmContent       String?
   adCampaignId     String?
+  /**
+   * First-party signup/capture context (intent, MLS snapshot, search filters,
+   * visitor/session keys, click IDs). Additive JSON — never invent Ads names.
+   */
+  captureContext   Json?
   /**
    * CASL-style consent to be contacted by a Houzzat agent about this request.
    */
@@ -1882,9 +1945,9 @@ model ConsentEvent {
 /**
  * Current-state email suppression. Two scopes share one model:
  * - MAILBOX: provider/destination suppression (HARD_BOUNCE, COMPLAINT, ADMIN).
- *   identityKey = emailNormalized. Applies to that address in the workspace.
+ * identityKey = emailNormalized. Applies to that address in the workspace.
  * - CUSTOMER: preference suppression (GLOBAL_UNSUBSCRIBE). identityKey = userId.
- *   Never unique on email, so a shared mailbox cannot unsubscribe another user.
+ * Never unique on email, so a shared mailbox cannot unsubscribe another user.
  * History lives on CommunicationPreferenceEvent. Changing User.email does not
  * delete or rewrite these rows.
  */
@@ -1948,14 +2011,14 @@ enum CommunicationCategory {
  * behavior (do not treat missing as opted out).
  */
 model CommunicationPreference {
-  id          String                 @id @default(cuid())
+  id          String                @id @default(cuid())
   userId      String
   workspaceId String
   category    CommunicationCategory
   channel     CommunicationChannel
   enabled     Boolean
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -2007,8 +2070,8 @@ enum CommunicationPreferenceTokenPurpose {
  * previously sent emails keep working until expiry, revocation, or email change.
  */
 model CommunicationPreferenceToken {
-  id              String                               @id @default(cuid())
-  tokenHash       String                               @unique
+  id              String                              @id @default(cuid())
+  tokenHash       String                              @unique
   purpose         CommunicationPreferenceTokenPurpose
   userId          String
   workspaceId     String
@@ -2017,8 +2080,8 @@ model CommunicationPreferenceToken {
   revokedAt       DateTime?
   lastUsedAt      DateTime?
   source          String
-  createdAt       DateTime                             @default(now())
-  updatedAt       DateTime                             @updatedAt
+  createdAt       DateTime                            @default(now())
+  updatedAt       DateTime                            @updatedAt
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -2232,13 +2295,13 @@ model MlsHealthIncident {
  * The first row establishes the zero-photo baseline and does not alert.
  */
 model MlsHealthSample {
-  id                        String    @id
-  evaluatedAt               DateTime
-  activeZeroPhotos          Int
-  zeroPhotoBaseline         Int
-  zeroPhotoElevatedStreak   Int       @default(0)
-  reconcileRetryCount       Int       @default(0)
-  reconcileRetryHighSince   DateTime?
+  id                      String    @id
+  evaluatedAt             DateTime
+  activeZeroPhotos        Int
+  zeroPhotoBaseline       Int
+  zeroPhotoElevatedStreak Int       @default(0)
+  reconcileRetryCount     Int       @default(0)
+  reconcileRetryHighSince DateTime?
 }
 
 model SavedListing {
@@ -2351,6 +2414,61 @@ model SavedSearch {
   @@index([userId, createdAt])
   @@index([userId, isHomepageActive])
   @@index([userId, isPrimary])
+}
+
+/**
+ * Buyer-confirmed search preference from the consumer qualification funnel.
+ * Explicit SavedSearch remains separate — digests must not use this alone.
+ */
+model BuyerConfirmedPreference {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  userId          String   @unique
+  cities          String[] @default([])
+  communities     String[] @default([])
+  propertyTypes   String[] @default([])
+  minPrice        Int?
+  maxPrice        Int?
+  minBeds         Int?
+  transactionType String?
+  /**
+   * observed | confirmed | edited
+   */
+  source          String   @default("confirmed")
+  confirmedAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, confirmedAt])
+}
+
+/**
+ * Consumer SMS OTP challenge. Code is stored hashed only.
+ * Independent of email verification and agent phoneVerifiedAt.
+ */
+model PhoneOtpChallenge {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  phoneE164   String
+  codeHash    String
+  expiresAt   DateTime
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  consumedAt  DateTime?
+  sentAt      DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, createdAt])
+  @@index([userId, phoneE164, createdAt])
+  @@index([expiresAt])
 }
 
 model ListingView {
@@ -3211,19 +3329,19 @@ model PlatformOperator {
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
 
-  user                    User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
-  createdByOperator       PlatformOperator?          @relation("PlatformOperatorCreatedBy", fields: [createdByOperatorId], references: [id], onDelete: SetNull)
-  createdOperators        PlatformOperator[]         @relation("PlatformOperatorCreatedBy")
-  ownedProspects          PlatformProspect[]         @relation("ProspectOwner")
-  prospectActivities      PlatformProspectActivity[]
-  offersCreated           CommercialOffer[]          @relation("OfferCreator")
-  statusEvents            WorkspaceStatusEvent[]
-  auditEvents             PlatformAuditEvent[]
-  ownerActivationsCreated WorkspaceOwnerActivation[] @relation("OwnerActivationCreator")
-  smsAutomationVersionsCreated   SmsAutomationVersion[] @relation("SmsAutomationVersionCreatedBy")
-  smsAutomationVersionsPublished SmsAutomationVersion[] @relation("SmsAutomationVersionPublishedBy")
-  smsQuickTextsCreated           SmsQuickText[]         @relation("SmsQuickTextCreatedBy")
-  smsQuickTextsUpdated           SmsQuickText[]         @relation("SmsQuickTextUpdatedBy")
+  user                           User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdByOperator              PlatformOperator?          @relation("PlatformOperatorCreatedBy", fields: [createdByOperatorId], references: [id], onDelete: SetNull)
+  createdOperators               PlatformOperator[]         @relation("PlatformOperatorCreatedBy")
+  ownedProspects                 PlatformProspect[]         @relation("ProspectOwner")
+  prospectActivities             PlatformProspectActivity[]
+  offersCreated                  CommercialOffer[]          @relation("OfferCreator")
+  statusEvents                   WorkspaceStatusEvent[]
+  auditEvents                    PlatformAuditEvent[]
+  ownerActivationsCreated        WorkspaceOwnerActivation[] @relation("OwnerActivationCreator")
+  smsAutomationVersionsCreated   SmsAutomationVersion[]     @relation("SmsAutomationVersionCreatedBy")
+  smsAutomationVersionsPublished SmsAutomationVersion[]     @relation("SmsAutomationVersionPublishedBy")
+  smsQuickTextsCreated           SmsQuickText[]             @relation("SmsQuickTextCreatedBy")
+  smsQuickTextsUpdated           SmsQuickText[]             @relation("SmsQuickTextUpdatedBy")
 
   @@index([status, role])
 }
@@ -3701,19 +3819,19 @@ model SmsQuickText {
  * Per-workspace SMS segment usage. No message body. Idempotent on Twilio SID.
  */
 model SmsUsageEvent {
-  id                  String                 @id @default(cuid())
-  workspaceId         String
-  periodStart         DateTime
-  periodEnd           DateTime
-  category            SmsUsageCategory
-  recipientType       SmsUsageRecipientType
-  twilioMessageSid    String?                @unique
-  messageId           String?
-  segmentCount        Int
-  segmentCountSource  SmsSegmentCountSource
-  finalized           Boolean                @default(false)
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  id                 String                @id @default(cuid())
+  workspaceId        String
+  periodStart        DateTime
+  periodEnd          DateTime
+  category           SmsUsageCategory
+  recipientType      SmsUsageRecipientType
+  twilioMessageSid   String?               @unique
+  messageId          String?
+  segmentCount       Int
+  segmentCountSource SmsSegmentCountSource
+  finalized          Boolean               @default(false)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -3727,20 +3845,20 @@ model SmsUsageEvent {
  * Recipients are processed through the existing per-Lead SMS transport.
  */
 model SmsMassBatch {
-  id                 String             @id @default(cuid())
-  workspaceId        String
-  agentUserId        String
-  clientKey          String
-  body               String             @db.Text
-  status             SmsMassBatchStatus @default(PENDING)
-  requestedCount     Int                @default(0)
-  eligibleCount      Int                @default(0)
-  excludedCount      Int                @default(0)
-  successfulCount    Int                @default(0)
-  failedCount        Int                @default(0)
-  estimatedSegments  Int                @default(0)
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  id                String             @id @default(cuid())
+  workspaceId       String
+  agentUserId       String
+  clientKey         String
+  body              String             @db.Text
+  status            SmsMassBatchStatus @default(PENDING)
+  requestedCount    Int                @default(0)
+  eligibleCount     Int                @default(0)
+  excludedCount     Int                @default(0)
+  successfulCount   Int                @default(0)
+  failedCount       Int                @default(0)
+  estimatedSegments Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   workspace  Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   recipients SmsMassBatchRecipient[]
@@ -3775,17 +3893,17 @@ model SmsMassBatchRecipient {
  * idle period, or return-from-inactivity event. Retries must not duplicate SENT.
  */
 model SmsAutomationDispatch {
-  id               String                       @id @default(cuid())
+  id               String                      @id @default(cuid())
   workspaceId      String
   leadId           String
   automationKey    String
   cycleKey         String
-  status           SmsAutomationDispatchStatus  @default(PENDING)
+  status           SmsAutomationDispatchStatus @default(PENDING)
   twilioMessageSid String?
   messageId        String?
   errorCode        String?
-  createdAt        DateTime                     @default(now())
-  updatedAt        DateTime                     @updatedAt
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
   processedAt      DateTime?
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -3805,15 +3923,17 @@ model GoogleRouteUsage {
   count Int    @default(0)
 }
 
-/** One saved drive between two coordinates. Repeat views do not call Google. */
+/**
+ * One saved drive between two coordinates. Repeat views do not call Google.
+ */
 model DriveRouteCache {
-  id               String   @id @default(cuid())
-  originKey        String
-  destKey          String
-  distanceMeters   Int
-  durationSeconds  Int
-  encodedPolyline  String?  @db.Text
-  createdAt        DateTime @default(now())
+  id              String   @id @default(cuid())
+  originKey       String
+  destKey         String
+  distanceMeters  Int
+  durationSeconds Int
+  encodedPolyline String?  @db.Text
+  createdAt       DateTime @default(now())
 
   @@unique([originKey, destKey])
 }

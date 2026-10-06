@@ -29,6 +29,7 @@ import {
   resolveHostnameWorkspaceForAuth,
 } from "@/lib/auth/session-workspace-binding";
 import { discoverTenantIdentitiesForCredentials } from "@/lib/mobile/v2/discover-tenant-identities";
+import { verifyPasswordCredential } from "@/lib/auth/phone-credential";
 import { sanitizeWorkspaceHintId } from "@/lib/platform/activation/onboarding-pro-auth";
 import { isAdminRole, isAgentRole, resolveActiveMode } from "@/lib/roles";
 import { scheduleNotifyCustomerCameOnlineFromSignIn } from "@/lib/notifications/staff-events";
@@ -196,9 +197,13 @@ const providers: Provider[] = [
         }
 
         // Platform path already password-proved via discover or platform compare.
-        // Tenant hostname still needs bcrypt here.
+        // Tenant hostname still needs credential verify (LEGACY vs PHONE_E164).
         if (!hostWs.isPlatform) {
-          const valid = await bcrypt.compare(password, user.password);
+          const valid = await verifyPasswordCredential({
+            kind: user.passwordCredentialKind,
+            submitted: password,
+            storedHash: user.password,
+          });
           if (!valid) {
             recordAuthServerDiagnostic({
               diagId,
@@ -222,7 +227,11 @@ const providers: Provider[] = [
           }
         } else if (boundWorkspaceId == null) {
           // PlatformOperator path already compared above; re-check for safety.
-          const valid = await bcrypt.compare(password, user.password);
+          const valid = await verifyPasswordCredential({
+            kind: user.passwordCredentialKind,
+            submitted: password,
+            storedHash: user.password,
+          });
           if (!valid) {
             return null;
           }

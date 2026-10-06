@@ -350,13 +350,18 @@ export type LeadProfileV2Customer = {
   isBuyer: boolean;
   isSeller: boolean;
   purchaseTimeframe: string | null;
+  ownsHome: boolean | null;
+  mortgageFinancing: string | null;
   emailVerified: string | null;
   phoneVerified: boolean;
+  /** Consumer SMS OTP ownership — independent of agent phoneVerified. */
+  phoneOtpVerified: boolean;
   createdAt: string;
   caslConsentAt: string | null;
   termsAcceptedAt: string | null;
   vowAcceptedAt: string | null;
   homeAddress: string | null;
+  homeUnit: string | null;
   emailUpdateRequestedAt: string | null;
   phoneUpdateRequestedAt: string | null;
 };
@@ -379,6 +384,8 @@ export type LeadProfileV2Lead = {
   utmSource: string | null;
   utmCampaign: string | null;
   utmContent: string | null;
+  /** First-party signup capture snapshot — never invent Ads campaign names. */
+  captureContext: unknown | null;
   customer: LeadProfileV2Customer | null;
   assignedAgent: { id: string; name: string | null; email: string } | null;
   adCampaign: { id: string; name: string } | null;

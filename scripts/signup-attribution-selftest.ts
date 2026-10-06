@@ -354,7 +354,9 @@ function testMalformedAttributionDoesNotInjectLeadFields() {
   assert.equal(route.includes(".passthrough("), false);
   assert.equal((route.match(/prisma\.user\.create\(/g) ?? []).length, 1);
   assert.equal((route.match(/captureWebsiteLead\(/g) ?? []).length, 1);
-  assert.ok(read("src/components/auth/SignUpForm.tsx").includes("...loadPersistedUtm()"));
+  const signupForm = read("src/components/auth/SignUpForm.tsx");
+  assert.ok(signupForm.includes("loadPersistedUtm()"));
+  assert.ok(signupForm.includes("...utm"));
   const intake = read("src/lib/agent/lead-intake.ts");
   const fn = intake.slice(intake.indexOf("export async function captureWebsiteLead"));
   assert.ok(fn.includes("utm: input.utm"));

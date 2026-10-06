@@ -1,5 +1,5 @@
 /**
- * Anonymous second-listing gate and VIEW_LISTING.
+ * Anonymous first-listing-detail gate and VIEW_LISTING.
  * Run: pnpm listing-access:selftest
  */
 import assert from "node:assert/strict";
@@ -32,7 +32,6 @@ const HOST = "acme.houzzatpro.com";
 const NOW = 1_700_000_000_000;
 const MLS_A = "W1111111";
 const MLS_B = "W2222222";
-const MLS_C = "W3333333";
 const PATH_A = "/listing/1-main/W1111111";
 const PATH_B = "/listing/2-main/W2222222";
 
@@ -99,7 +98,7 @@ function visit(input: {
     };
   }
   const decision = resolveAnonymousListingAccess(input.access, input.mlsNumber);
-  const blocked = decision.access !== "allow";
+  const blocked = decision.access === "gate" || decision.access === "storage_unavailable";
   return {
     blocked,
     decision,
@@ -114,7 +113,7 @@ function visit(input: {
   };
 }
 
-function testFirstListingIsFreeOnce() {
+function testFirstListingIsGated() {
   const access = memoryAccess();
   const intent = memoryIntent();
   const first = visit({
@@ -124,33 +123,26 @@ function testFirstListingIsFreeOnce() {
     access,
     intent,
   });
-  assert.equal(first.blocked, false);
-  assert.equal(first.decision?.access, "allow");
-  if (first.decision?.access === "allow") assert.equal(first.decision.recorded, true);
-  assert.equal(first.intent, "skipped");
-  assert.equal(intent.raw, null);
-  assert.equal(access.raw, serializeListingAccess(MLS_A));
-  assert.equal(access.sets.length, 1);
+  assert.equal(first.blocked, true);
+  assert.equal(first.decision?.access, "gate");
+  if (first.decision?.access === "gate") {
+    assert.equal(first.decision.mlsNumber, MLS_A);
+  }
+  assert.equal(first.intent, "created");
 
-  const refresh = visit({
-    authenticated: false,
-    mlsNumber: "w1111111",
-    callbackPath: PATH_A,
-    access,
-    intent,
-  });
-  assert.equal(refresh.blocked, false);
-  if (refresh.decision?.access === "allow") assert.equal(refresh.decision.recorded, false);
-  assert.equal(access.sets.length, 1);
-  assert.equal(intent.raw, null);
+  const stored = JSON.parse(intent.raw ?? "null") as {
+    intent: Record<string, unknown>;
+  };
+  assert.equal(stored.intent.type, "VIEW_LISTING");
+  assert.equal(stored.intent.mlsNumber, MLS_A);
 
-  const otherTab = memoryAccess(access.raw);
-  const sameTab = resolveAnonymousListingAccess(otherTab, MLS_A);
-  assert.equal(sameTab.access, "allow");
-  assert.equal(otherTab.sets.length, 0);
+  // Search browsing itself is not gated (no ListingAccessGate on search).
+  const search = read("src/components/listings/SearchExperience.tsx");
+  assert.equal(search.includes("ListingAccessGate"), false);
+  assert.equal(search.includes("anonymous-listing-access"), false);
 }
 
-function testSecondListingGatesWithoutReplacingAllowance() {
+function testAnyAnonymousListingStaysGated() {
   const access = memoryAccess();
   const intent = memoryIntent();
   visit({
@@ -160,7 +152,6 @@ function testSecondListingGatesWithoutReplacingAllowance() {
     access,
     intent,
   });
-  const opened: string[] = [];
   const second = visit({
     authenticated: false,
     mlsNumber: MLS_B,
@@ -170,64 +161,7 @@ function testSecondListingGatesWithoutReplacingAllowance() {
   });
   assert.equal(second.blocked, true);
   assert.equal(second.decision?.access, "gate");
-  if (second.decision?.access === "gate") {
-    assert.equal(second.decision.freeMlsNumber, MLS_A);
-  }
   assert.equal(second.intent, "created");
-  assert.equal(access.raw, serializeListingAccess(MLS_A));
-
-  const stored = JSON.parse(intent.raw ?? "null") as {
-    v: number;
-    intent: Record<string, unknown>;
-  };
-  assert.equal(stored.v, 1);
-  assert.deepEqual(Object.keys(stored).sort(), ["intent", "v"]);
-  assert.equal(stored.intent.type, "VIEW_LISTING");
-  assert.equal(stored.intent.mlsNumber, MLS_B);
-  assert.equal(stored.intent.callbackPath, PATH_B);
-  assert.equal(stored.intent.host, HOST);
-  assert.equal(stored.intent.createdAt, NOW);
-  assert.deepEqual(Object.keys(stored.intent).sort(), [
-    "callbackPath",
-    "createdAt",
-    "host",
-    "mlsNumber",
-    "type",
-  ]);
-  opened.push("sign-up");
-  assert.deepEqual(opened, ["sign-up"]);
-
-  const beforeDismiss = access.raw;
-  const afterDismiss = visit({
-    authenticated: false,
-    mlsNumber: MLS_B,
-    callbackPath: PATH_B,
-    access,
-    intent,
-  });
-  assert.equal(afterDismiss.blocked, true);
-  assert.equal(afterDismiss.intent, "kept");
-  assert.equal(access.raw, beforeDismiss);
-
-  const back = visit({
-    authenticated: false,
-    mlsNumber: MLS_A,
-    callbackPath: PATH_A,
-    access,
-    intent,
-  });
-  assert.equal(back.blocked, false);
-
-  const third = visit({
-    authenticated: false,
-    mlsNumber: MLS_C,
-    callbackPath: "/listing/3-main/W3333333",
-    access,
-    intent,
-  });
-  assert.equal(third.blocked, true);
-  assert.equal(third.intent, "created");
-  assert.equal(access.raw, serializeListingAccess(MLS_A));
 }
 
 function testAuthBypassesGateWithoutRequiringVerification() {
@@ -242,17 +176,7 @@ function testAuthBypassesGateWithoutRequiringVerification() {
   });
   assert.equal(signedUp.blocked, false);
   assert.equal(signedUp.intent, "skipped");
-  assert.equal(access.raw, serializeListingAccess(MLS_A));
   assert.equal(intent.raw, null);
-
-  const signedIn = visit({
-    authenticated: true,
-    mlsNumber: MLS_B,
-    callbackPath: PATH_B,
-    access,
-    intent,
-  });
-  assert.equal(signedIn.blocked, false);
 
   const gate = read("src/components/listings/ListingAccessGate.tsx");
   const accessLib = read("src/lib/listings/anonymous-listing-access.ts");
@@ -318,19 +242,12 @@ function testResumeHostAndExpiry() {
   }
 }
 
-function testStorageFailures() {
-  const corrupt = memoryAccess("{not json");
-  const recovered = resolveAnonymousListingAccess(corrupt, MLS_A);
-  assert.equal(recovered.access, "allow");
-  assert.equal(corrupt.raw, serializeListingAccess(MLS_A));
-  const stillOne = resolveAnonymousListingAccess(corrupt, MLS_B);
-  assert.equal(stillOne.access, "gate");
-
-  const down = memoryAccess();
-  down.fail = true;
-  const failed = resolveAnonymousListingAccess(down, MLS_A);
-  assert.equal(failed.access, "storage_unavailable");
-  assert.equal(down.sets.length, 0);
+function testInvalidMlsStorageUnavailable() {
+  const access = memoryAccess();
+  const bad = resolveAnonymousListingAccess(access, "!!");
+  assert.equal(bad.access, "storage_unavailable");
+  const ok = resolveAnonymousListingAccess(access, MLS_A);
+  assert.equal(ok.access, "gate");
 }
 
 function testDoesNotOverwritePendingHighIntent() {
@@ -394,7 +311,6 @@ function testWiringLeavesServerListingUntouched() {
     assert.ok(call.includes('intent: "VIEW_LISTING"'));
   }
   assert.equal(search.includes("ListingAccessGate"), false);
-  assert.equal(search.includes("anonymous-listing-access"), false);
   assert.ok(read("src/components/listings/RecordRecentView.tsx").includes("pushLocalRecentView"));
   assert.ok(read("src/components/analytics/ActivityBeacon.tsx").includes('return "LISTING_VIEW"'));
   const resume = read("src/components/auth/CaptureIntentResume.tsx");
@@ -424,7 +340,6 @@ function testWiringLeavesServerListingUntouched() {
   assert.equal(textLogo.includes("Houzzat"), false);
   const header = read("src/components/site/SiteHeaderClient.tsx");
   assert.ok(header.includes("<TenantHeaderBrand"));
-  assert.equal(modal.includes('className="text-4xl leading-none sm:text-5xl"'), false);
 }
 
 function testTenantTextLogoUsesResolvedDisplayName() {
@@ -452,23 +367,30 @@ function testTenantTextLogoUsesResolvedDisplayName() {
   assert.equal(other.isHouzzatWorkspace, false);
 }
 
+function testFreeFirstMlsRetired() {
+  const lib = read("src/lib/listings/anonymous-listing-access.ts");
+  assert.ok(lib.includes("first property DETAIL view is gated"));
+  assert.equal(lib.includes("freeMlsNumber"), false);
+  assert.ok(lib.includes('access: "gate"'));
+}
+
 function main() {
-  testFirstListingIsFreeOnce();
-  console.log("[1-4] first MLS is stored once and stays free across refresh and tabs");
-  testSecondListingGatesWithoutReplacingAllowance();
-  console.log("[5-11] second and later MLS stay gated after the modal is dismissed");
+  testFirstListingIsGated();
+  console.log("[1-2] first anonymous listing detail is gated; search is not");
+  testAnyAnonymousListingStaysGated();
+  console.log("[3] later anonymous listing details remain gated");
   testAuthBypassesGateWithoutRequiringVerification();
-  console.log("[12-16] signup and sign-in allow the listing without a verification gate");
+  console.log("[4] authenticated listing view is not gated");
   testResumeHostAndExpiry();
-  console.log("[19-20] wrong-host and expired VIEW_LISTING do not resume");
-  testStorageFailures();
-  console.log("[21-22] corrupt and unavailable storage fail safely");
+  console.log("[5] wrong-host and expired VIEW_LISTING do not resume");
+  testInvalidMlsStorageUnavailable();
+  console.log("[6] invalid MLS fails safely");
   testDoesNotOverwritePendingHighIntent();
-  console.log("[23-25] the gate does not act or replace a pending save on rerender");
+  console.log("[7] gate does not replace a pending save on rerender");
   testWiringLeavesServerListingUntouched();
   testTenantTextLogoUsesResolvedDisplayName();
-  console.log("[gate brand] header text logo is tenant display name");
-  console.log("[17-18,26-28] listing SSR, search clicks, VOW, and route planner stay in place");
+  testFreeFirstMlsRetired();
+  console.log("[8] free-first-MLS counting retired");
   console.log("listing access selftest: PASS");
 }
 

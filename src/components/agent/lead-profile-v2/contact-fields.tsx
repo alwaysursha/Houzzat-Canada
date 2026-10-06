@@ -21,6 +21,7 @@ export function ContactDisplayRow({
   requestPending,
   multiline = false,
   validityVerified,
+  otpVerified,
   onTelClick,
 }: {
   icon: LucideIcon;
@@ -37,6 +38,8 @@ export function ContactDisplayRow({
   multiline?: boolean;
   /** When set, show the Leads-desk validity icon (independent of REQUESTED). */
   validityVerified?: boolean;
+  /** Consumer SMS OTP ownership — independent of agent validityVerified. */
+  otpVerified?: boolean;
   /** CRM customer Call only — starts the shared Call Outcome session. */
   onTelClick?: (event: { currentTarget: HTMLElement }) => void;
 }) {
@@ -72,9 +75,25 @@ export function ContactDisplayRow({
             {validityVerified !== undefined ? (
               <span
                 className="shrink-0"
-                title={validityVerified ? "Verified" : "Unverified"}
+                title={
+                  validityVerified
+                    ? "Agent-confirmed phone"
+                    : "Not agent-confirmed"
+                }
               >
                 <ContactValidityIcon verified={validityVerified} />
+              </span>
+            ) : null}
+            {otpVerified !== undefined ? (
+              <span
+                className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#64748b]"
+                title={
+                  otpVerified
+                    ? "Consumer OTP verified"
+                    : "Consumer OTP unverified"
+                }
+              >
+                {otpVerified ? "OTP" : "No OTP"}
               </span>
             ) : null}
           </a>
@@ -91,9 +110,25 @@ export function ContactDisplayRow({
             {validityVerified !== undefined ? (
               <span
                 className="shrink-0"
-                title={validityVerified ? "Verified" : "Unverified"}
+                title={
+                  validityVerified
+                    ? "Agent-confirmed phone"
+                    : "Not agent-confirmed"
+                }
               >
                 <ContactValidityIcon verified={validityVerified} />
+              </span>
+            ) : null}
+            {otpVerified !== undefined ? (
+              <span
+                className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#64748b]"
+                title={
+                  otpVerified
+                    ? "Consumer OTP verified"
+                    : "Consumer OTP unverified"
+                }
+              >
+                {otpVerified ? "OTP" : "No OTP"}
               </span>
             ) : null}
           </span>

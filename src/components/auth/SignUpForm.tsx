@@ -6,23 +6,106 @@ import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
 import { reportGa4SignUp } from "@/lib/ads/ga4-sign-up";
-import { PasswordField } from "@/components/auth/PasswordField";
+import {
+  buildCaptureContext,
+  loadPersistedClickIds,
+  persistClickIds,
+  readClickIdsFromSearchParams,
+} from "@/lib/auth/capture-attribution";
+import { reportLeadCaptured, reportLeadCaptureStarted } from "@/lib/auth/funnel-analytics";
+import type { CaptureIntentType } from "@/lib/auth/capture-intent";
+import { peekPendingIntent } from "@/lib/auth/capture-intent";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EXISTING_ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/auth/existing-account-message";
 import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
-import { flyToAccountPortal } from "@/lib/fly-to-account";
 import { authSuccessReturnPath } from "@/lib/auth/safe-callback-url";
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
 import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
+
+export type SignUpSuccessResult = {
+  needsQualification: boolean;
+};
+
+function readVisitorKeys(): { visitorKey: string | null; sessionKey: string | null } {
+  if (typeof window === "undefined") {
+    return { visitorKey: null, sessionKey: null };
+  }
+  try {
+    return {
+      visitorKey: localStorage.getItem("houzzat:visitorKey"),
+      sessionKey: sessionStorage.getItem("houzzat:sessionKey"),
+    };
+  } catch {
+    return { visitorKey: null, sessionKey: null };
+  }
+}
+
+function resolveSearchUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const ref = document.referrer;
+    if (ref && /\/search/.test(ref)) return ref.slice(0, 800);
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("city") || params.has("maxPrice") || params.has("q")) {
+      return window.location.href.slice(0, 800);
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function resolveSearchFilters(): Record<string, unknown> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const sources: URLSearchParams[] = [
+      new URLSearchParams(window.location.search),
+    ];
+    if (document.referrer && /\/search/.test(document.referrer)) {
+      sources.unshift(new URL(document.referrer).searchParams);
+    }
+    for (const params of sources) {
+      const city = params.get("city")?.trim();
+      const maxRaw = params.get("maxPrice") ?? params.get("priceMax");
+      const minRaw = params.get("minPrice") ?? params.get("priceMin");
+      const bedsRaw = params.get("minBeds") ?? params.get("bedsMin");
+      const propertyType = params.get("propertyType")?.trim();
+      const maxPrice = maxRaw != null && maxRaw !== "" ? Number(maxRaw) : null;
+      const minPrice = minRaw != null && minRaw !== "" ? Number(minRaw) : null;
+      const minBeds = bedsRaw != null && bedsRaw !== "" ? Number(bedsRaw) : null;
+      if (
+        !city &&
+        maxPrice == null &&
+        minPrice == null &&
+        minBeds == null &&
+        !propertyType
+      ) {
+        continue;
+      }
+      return {
+        ...(city ? { city } : {}),
+        ...(Number.isFinite(maxPrice as number) ? { maxPrice } : {}),
+        ...(Number.isFinite(minPrice as number) ? { minPrice } : {}),
+        ...(Number.isFinite(minBeds as number) ? { minBeds } : {}),
+        ...(propertyType ? { propertyType } : {}),
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
 
 export function SignUpForm({
   callbackUrl = null,
   displayName = "your team",
   initialName = "",
   initialEmail = "",
-  focusPassword = false,
+  intent = null,
+  ctaLabel = "Create Free Account",
   onIdentityChange,
   onSuccess,
   onSwitchMode,
@@ -33,9 +116,10 @@ export function SignUpForm({
   displayName?: string;
   initialName?: string;
   initialEmail?: string;
-  focusPassword?: boolean;
+  intent?: CaptureIntentType | null;
+  ctaLabel?: string;
   onIdentityChange?: (next: { name: string; email: string }) => void;
-  onSuccess?: () => void;
+  onSuccess?: (result: SignUpSuccessResult) => void;
   onSwitchMode?: () => void;
   onExistingAccount?: (email: string) => void;
   afterConsent?: ReactNode;
@@ -45,10 +129,15 @@ export function SignUpForm({
   const submitRef = useRef<HTMLButtonElement>(null);
   const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
-  const continuedRequest = initialName.trim() !== "" && initialEmail.trim() !== "";
-  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const startedRef = useRef(false);
+
+  if (!startedRef.current) {
+    startedRef.current = true;
+    reportLeadCaptureStarted();
+  }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -57,10 +146,11 @@ export function SignUpForm({
 
     const trimmedName = name.trim();
     const normalizedEmail = email.trim().toLowerCase();
+    const trimmedPhone = phone.trim();
 
     if (!trimmedName) {
       setPending(false);
-      setError("Enter your name.");
+      setError("Enter your full name.");
       return;
     }
     if (!normalizedEmail || !normalizedEmail.includes("@")) {
@@ -68,37 +158,81 @@ export function SignUpForm({
       setError("Enter a valid email address.");
       return;
     }
-    if (password.length < 8) {
+    if (!trimmedPhone) {
       setPending(false);
-      setError("Password must be at least 8 characters.");
+      setError("Enter your mobile number.");
       return;
     }
+
+    try {
+      persistClickIds(readClickIdsFromSearchParams(new URLSearchParams(window.location.search)));
+    } catch {
+      /* ignore */
+    }
+    const clickIds = loadPersistedClickIds();
+    const utm = loadPersistedUtm();
+    const { visitorKey, sessionKey } = readVisitorKeys();
+    const peeked = peekPendingIntent(browserCaptureIntentStore(), {
+      host: window.location.hostname,
+      now: Date.now(),
+    });
+    const pendingIntent = peeked.ok ? peeked.intent : null;
+    const captureIntent = intent ?? pendingIntent?.type ?? null;
+    const mlsNumber =
+      pendingIntent && "mlsNumber" in pendingIntent
+        ? pendingIntent.mlsNumber
+        : null;
+
+    const captureContext = buildCaptureContext({
+      intent: captureIntent,
+      mlsNumber,
+      pathname: window.location.pathname,
+      callbackUrl: callbackUrl ?? pendingIntent?.callbackPath ?? null,
+      searchUrl: resolveSearchUrl(),
+      searchFilters: resolveSearchFilters(),
+      visitorKey,
+      sessionKey,
+      utmSource: utm.utmSource ?? null,
+      utmMedium: utm.utmMedium ?? null,
+      utmCampaign: utm.utmCampaign ?? null,
+      utmContent: utm.utmContent ?? null,
+      referrer: typeof document !== "undefined" ? document.referrer : null,
+      gclid: clickIds.gclid ?? null,
+      gbraid: clickIds.gbraid ?? null,
+      wbraid: clickIds.wbraid ?? null,
+    });
 
     let response: Response;
     try {
       response = await fetch("/api/auth/sign-up", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: trimmedName,
-            email: normalizedEmail,
-            password,
-            acceptTerms: true,
-            ...loadPersistedUtm(),
-          }),
+        body: JSON.stringify({
+          name: trimmedName,
+          email: normalizedEmail,
+          phone: trimmedPhone,
+          acceptTerms: true,
+          credentialMode: "phone_e164",
+          captureContext,
+          ...utm,
+          ...clickIds,
+        }),
       });
     } catch {
       setPending(false);
-      setError(
-        "Could not reach Houzzat. Check your connection and try again.",
-      );
+      setError("Could not reach Houzzat. Check your connection and try again.");
       return;
     }
 
-    let data: { error?: string } = {};
+    let data: { error?: string; needsQualification?: boolean } = {};
     try {
       const raw = await response.text();
-      data = raw ? (JSON.parse(raw) as { error?: string }) : {};
+      data = raw
+        ? (JSON.parse(raw) as {
+            error?: string;
+            needsQualification?: boolean;
+          })
+        : {};
     } catch {
       setPending(false);
       if (response.status === 409) {
@@ -124,7 +258,7 @@ export function SignUpForm({
         return;
       }
       if (response.status === 400) {
-        setError(data.error ?? "Please check your name, email, and password.");
+        setError(data.error ?? "Please check your name, email, and mobile number.");
         return;
       }
       if (response.status === 403) {
@@ -141,16 +275,18 @@ export function SignUpForm({
       return;
     }
 
+    // Paid conversion boundary: User + Lead persisted — fire once.
     reportGa4SignUp();
+    reportLeadCaptured();
 
     await rememberLoginCredentials({
       email: normalizedEmail,
-      password,
+      password: trimmedPhone,
     });
 
     const result = await signIn("credentials", {
       email: normalizedEmail,
-      password,
+      password: trimmedPhone,
       redirect: false,
     });
 
@@ -159,7 +295,7 @@ export function SignUpForm({
     if (result?.error) {
       onSwitchMode?.();
       setError(
-        "Account created — please sign in with your email and password.",
+        "Account created — please sign in with your email and mobile number.",
       );
       return;
     }
@@ -168,13 +304,20 @@ export function SignUpForm({
     await clearIntentionalSignOut({ userId: session?.user?.id });
     await offerBiometricsAfterCredentialsSignIn({
       email: normalizedEmail,
-      password,
+      password: trimmedPhone,
       confirm,
       userId: session?.user?.id,
     });
 
-    const fromRect = submitRef.current?.getBoundingClientRect() ?? null;
-    onSuccess?.();
+    const needsQualification = data.needsQualification !== false;
+    onSuccess?.({ needsQualification });
+
+    if (needsQualification) {
+      window.dispatchEvent(new Event("houzzat:lead-captured"));
+      router.refresh();
+      return;
+    }
+
     const dest = authSuccessReturnPath(callbackUrl);
     if (dest && dest !== window.location.pathname) {
       router.push(dest);
@@ -182,19 +325,18 @@ export function SignUpForm({
       return;
     }
     router.refresh();
-    window.setTimeout(() => flyToAccountPortal(fromRect), 40);
   }
 
   return (
     <form
       onSubmit={onSubmit}
-      className="space-y-4"
+      className="space-y-3.5"
       autoComplete="on"
       name="houzzat-signup"
     >
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <label className="text-sm font-medium" htmlFor="auth-signup-name">
-          Name
+          Full Name
         </label>
         <Input
           id="auth-signup-name"
@@ -209,7 +351,7 @@ export function SignUpForm({
           }}
         />
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <label className="text-sm font-medium" htmlFor="auth-signup-email">
           Email
         </label>
@@ -227,28 +369,31 @@ export function SignUpForm({
           }}
         />
       </div>
-      {continuedRequest ? (
-        <p className="text-sm text-ink/70">
-          Choose a password to finish. Your name and email are still editable.
-        </p>
-      ) : null}
-      <PasswordField
-        id="auth-signup-password"
-        name="new-password"
-        label="Password"
-        autoComplete="new-password"
-        minLength={8}
-        required
-        autoFocus={focusPassword || continuedRequest}
-        value={password}
-        onChange={setPassword}
-      />
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium" htmlFor="auth-signup-phone">
+          Mobile Number
+          <span className="ml-1 font-normal text-ink/50">
+            (also used as your password)
+          </span>
+        </label>
+        <Input
+          id="auth-signup-phone"
+          name="tel"
+          type="tel"
+          autoComplete="tel"
+          inputMode="tel"
+          required
+          placeholder="(647) 555-1234"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+        />
+      </div>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
       <Button type="submit" className="w-full" disabled={pending} ref={submitRef}>
-        {pending ? "Creating…" : "Create Free Account"}
+        {pending ? "Continuing…" : `${ctaLabel} →`}
       </Button>
       <p className="text-center text-[11px] leading-relaxed text-ink/50">
-        By creating an account you agree to our{" "}
+        By continuing you agree to our{" "}
         <Link
           href="/terms"
           className="underline underline-offset-2 hover:text-ink/70"

@@ -473,7 +473,9 @@ function testSignupPrefillDoesNotEnterTheDraft() {
   assert.ok(signup.includes("initialEmail"));
   assert.ok(signup.includes('fetch("/api/auth/sign-up"'));
   assert.equal(signup.includes('fetch("/api/leads"'), false);
-  assert.equal(signup.includes("phone:"), false);
+  // CINC-style signup sends mobile (also initial password) — not a separate password field.
+  assert.ok(signup.includes("phone: trimmedPhone") || signup.includes("phone:"));
+  assert.equal(signup.includes("PasswordField"), false);
   const contact = read("src/lib/auth/lead-request-contact-prefill.ts");
   assert.equal(contact.includes("password"), false);
   assert.equal(contact.includes("workspaceId"), false);
@@ -557,23 +559,42 @@ function testSaveFlowsStayAvailable() {
   assert.equal(search.ok, true);
 }
 
+/**
+ * Restore architecture (current):
+ * REQUEST_VIEWING/CONTACT_AGENT → applyBrowserRestore writes LEAD_REQUEST_RESTORE_KEY
+ * Visible surface claims via useLeadRequestRestore → seeds LeadRequestForm defaults
+ * LeadRequestForm itself does not take restoreEntry / rememberLeadRequestEntry —
+ * that older per-surface entry prop was retired when restore moved to the hook.
+ */
 function testBookingSurfacesDoNotShareOneRestore() {
   const panel = read("src/components/listings/ViewingRequestPanel.tsx");
   const gallery = read("src/components/listings/ListingGallery.tsx");
   const booking = read("src/components/listings/ViewingBookingModal.tsx");
   const mobile = read("src/components/listings/ListingMobileActionBar.tsx");
   const form = read("src/components/listings/LeadRequestForm.tsx");
-  assert.ok(form.includes("rememberLeadRequestEntry(restoreEntry)"));
-  assert.ok(panel.includes('restoreEntry="concierge"'));
-  assert.ok(panel.includes('peekLeadRequestEntry() === "gallery"'));
-  assert.equal(gallery.includes('restoreEntry="gallery"'), true);
+  const tour = read("src/components/auth/lead-funnel/TourThisHomePrompt.tsx");
+  const restoreHook = read("src/components/listings/useLeadRequestRestore.ts");
+
+  assert.ok(restoreHook.includes("takeLeadRequestRestore"));
+  assert.ok(restoreHook.includes("retainLeadRequestIntentHandler"));
+  assert.ok(panel.includes("useLeadRequestRestore"));
+  assert.ok(booking.includes("useLeadRequestRestore"));
+  assert.ok(booking.includes("<LeadRequestForm"));
+  assert.ok(form.includes('fetch("/api/leads"'));
+  assert.ok(form.includes("reportGa4LeadRequest"));
+  assert.equal(form.includes("restoreEntry"), false);
+  assert.equal(form.includes("rememberLeadRequestEntry"), false);
   assert.ok(gallery.includes("setBookingOpen(true)"));
   assert.equal(gallery.includes("setViewerOpen(true)"), true);
-  assert.ok(!gallery.includes("setViewerOpen(true);\n      setBookingOpen(true)"));
-  assert.ok(booking.includes("restoreEntry={restoreEntry}"));
-  assert.ok(mobile.includes('restoreEntry="concierge"'));
-  assert.ok(mobile.includes('peekLeadRequestEntry() === "gallery"'));
+  assert.ok(
+    !gallery.includes("setViewerOpen(true);\n      setBookingOpen(true)"),
+  );
   assert.ok(mobile.includes("setBookingOpen(true)"));
+  assert.ok(mobile.includes("<ViewingBookingModal"));
+  assert.ok(tour.includes("<ViewingBookingModal"));
+  assert.ok(tour.includes("mlsNumber={mlsNumber}"));
+  assert.ok(tour.includes("houzzat:tour-prompt-dismissed"));
+  assert.ok(tour.includes("Maybe Later"));
 
   const memory = new Map<string, string>();
   const storage = {
@@ -598,6 +619,7 @@ function testBookingSurfacesDoNotShareOneRestore() {
     value: storage,
   });
   try {
+    // Entry helpers remain available for takeLeadRequestRestore cleanup.
     rememberLeadRequestEntry("gallery");
     assert.equal(peekLeadRequestEntry(), "gallery");
     storage.setItem(
@@ -613,6 +635,8 @@ function testBookingSurfacesDoNotShareOneRestore() {
     );
     const claimed = takeLeadRequestRestore("W1234567");
     assert.equal(claimed?.message, "Saturday afternoon");
+    assert.equal(claimed?.mlsNumber, "W1234567");
+    assert.equal(claimed?.kind, "showing");
     assert.equal(storage.getItem(LEAD_REQUEST_RESTORE_KEY), null);
     assert.equal(storage.getItem(LEAD_REQUEST_ENTRY_KEY), null);
     assert.equal(peekLeadRequestEntry(), null);

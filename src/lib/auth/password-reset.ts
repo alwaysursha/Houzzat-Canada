@@ -255,7 +255,11 @@ export async function consumePasswordResetToken(
   await prisma.$transaction([
     prisma.user.update({
       where: { id: user.id },
-      data: { password },
+      data: {
+        password,
+        // Chosen password replaces any phone-derived initial credential.
+        passwordCredentialKind: "LEGACY",
+      },
     }),
     prisma.verificationToken.deleteMany({
       where: {

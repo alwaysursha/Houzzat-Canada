@@ -23,6 +23,7 @@ const tenantAuthSelect = {
   isSeller: true,
   activeMode: true,
   password: true,
+  passwordCredentialKind: true,
   disabledAt: true,
   workspaceId: true,
 } as const;
@@ -37,6 +38,7 @@ export type TenantAuthUser = {
   isSeller: boolean;
   activeMode: import("@prisma/client").ActiveMode;
   password: string | null;
+  passwordCredentialKind: import("@prisma/client").PasswordCredentialKind;
   disabledAt: Date | null;
   workspaceId: string | null;
 };

@@ -256,6 +256,7 @@ export function LeadProfileV2Rail({
               requestLabel="Email and notify the client to confirm phone"
               requestPending={reminderPending === "phone"}
               validityVerified={Boolean(data.lead.customer?.phoneVerified)}
+              otpVerified={Boolean(data.lead.customer?.phoneOtpVerified)}
               onTelClick={(event) => onCall(event.currentTarget)}
             />
           )}

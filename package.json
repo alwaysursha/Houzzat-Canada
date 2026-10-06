@@ -52,6 +52,7 @@
     "search-results-copy:selftest": "node --import tsx scripts/search-results-copy-selftest.ts",
     "capture-intent:selftest": "node --import tsx scripts/capture-intent-selftest.ts",
     "listing-access:selftest": "node --import tsx scripts/listing-access-selftest.ts",
+    "consumer-lead-funnel:selftest": "node --import tsx scripts/consumer-lead-funnel-selftest.ts",
     "start-chat:selftest": "node --import tsx scripts/start-chat-selftest.ts",
     "watch-capture:selftest": "node --import tsx scripts/watch-capture-selftest.ts",
     "route-planner-merge:selftest": "node --import tsx scripts/route-planner-merge-selftest.ts",

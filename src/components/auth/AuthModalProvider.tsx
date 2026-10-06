@@ -12,7 +12,8 @@ import {
 } from "react";
 import { X } from "lucide-react";
 import { authModalCopy } from "@/components/auth/auth-modal-copy";
-import { AuthBenefitsPanel } from "@/components/auth/AuthBenefitsPanel";
+import { LeadCaptureFunnel } from "@/components/auth/lead-funnel/LeadCaptureFunnel";
+import { TourThisHomePrompt } from "@/components/auth/lead-funnel/TourThisHomePrompt";
 import { SignInForm } from "@/components/auth/SignInForm";
 import { SignUpForm } from "@/components/auth/SignUpForm";
 import { TenantHeaderBrand } from "@/components/tenancy/TenantHeaderBrand";
@@ -105,7 +106,18 @@ function AuthModalTabs({
   );
 }
 
-function AuthModalPanel() {
+type PanelPhase = "auth" | "funnel";
+
+function AuthModalPanel({
+  phase,
+  onFunnelComplete,
+}: {
+  phase: PanelPhase;
+  onFunnelComplete: (result: {
+    showTour: boolean;
+    mlsNumber: string | null;
+  }) => void;
+}) {
   const { open, mode, callbackUrl, intent, signupPrefill, closeAuth, setMode } =
     useAuthModal();
   const [loginAgain, setLoginAgain] = useState(false);
@@ -152,7 +164,7 @@ function AuthModalPanel() {
   const displayName = brand?.displayName?.trim() || "your team";
   const copy = intent ? authModalCopy(intent, mode, displayName) : null;
   const listingGate = intent === "VIEW_LISTING";
-  const compactBenefits = <AuthBenefitsPanel variant="compact" />;
+  const captureCompact = Boolean(intent);
 
   function selectMode(next: AuthMode) {
     if (next === "sign-up") setAuthNotice(null);
@@ -162,53 +174,14 @@ function AuthModalPanel() {
     setMode(next);
   }
 
-  const forms = (
-    <>
-      {mode === "sign-in" ? (
-        <SignInForm
-          callbackUrl={callbackUrl}
-          initialEmail={prefillEmail}
-          notice={authNotice}
-          onSuccess={closeAuth}
-          onSwitchMode={() => setMode("sign-up")}
-          afterConsent={copy ? <div className="lg:hidden">{compactBenefits}</div> : compactBenefits}
-        />
-      ) : (
-        <SignUpForm
-          callbackUrl={callbackUrl}
-          displayName={displayName}
-          initialName={signupName}
-          initialEmail={signupEmail}
-          focusPassword={Boolean(signupPrefill)}
-          onIdentityChange={(next) => {
-            setSignupName(next.name);
-            setSignupEmail(next.email);
-          }}
-          onSuccess={closeAuth}
-          onSwitchMode={() => {
-            if (signupEmail.trim()) setPrefillEmail(signupEmail.trim());
-            setMode("sign-in");
-          }}
-          onExistingAccount={(email) => {
-            setSignupEmail(email);
-            setPrefillEmail(email);
-            setAuthNotice(EXISTING_ACCOUNT_SIGN_IN_MESSAGE);
-            setMode("sign-in");
-          }}
-          afterConsent={copy ? <div className="lg:hidden">{compactBenefits}</div> : compactBenefits}
-        />
-      )}
-    </>
-  );
-
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-4 sm:py-8">
-      {listingGate ? (
-        <div className="absolute inset-0 bg-ink/50 backdrop-blur-[2px]" />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center px-3 py-4 sm:px-4 sm:py-8">
+      {listingGate || phase === "funnel" ? (
+        <div className="absolute inset-0 bg-ink/30 backdrop-blur-[1px]" />
       ) : (
         <button
           type="button"
-          className="absolute inset-0 bg-ink/50 backdrop-blur-[2px]"
+          className="absolute inset-0 bg-ink/30 backdrop-blur-[1px]"
           aria-label="Close sign in"
           onClick={closeAuth}
         />
@@ -218,19 +191,30 @@ function AuthModalPanel() {
         aria-modal="true"
         aria-labelledby="auth-modal-title"
         className={cn(
-          "relative z-10 flex w-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl",
-          copy ? "max-w-4xl" : "max-h-[min(78vh,38rem)] max-w-md",
+          "relative z-10 flex w-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-xl",
+          captureCompact || phase === "funnel"
+            ? "max-h-[min(85vh,calc(100dvh-1.5rem))]"
+            : "max-h-[min(78vh,38rem)] max-w-md",
         )}
         style={
-          copy
-            ? { maxWidth: 880, maxHeight: "min(78vh, calc(100dvh - 2rem))" }
+          captureCompact || phase === "funnel"
+            ? {
+                maxWidth: phase === "funnel" ? 400 : 440,
+              }
             : undefined
         }
       >
-        {copy ? (
-              <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="lg:grid lg:min-h-full lg:grid-cols-2">
-              <div className="border-b border-line bg-mist px-5 py-5 lg:border-b-0 lg:border-r lg:px-8 lg:py-8">
+        {phase === "funnel" ? (
+          <>
+            <h2 id="auth-modal-title" className="sr-only">
+              Continue your registration
+            </h2>
+            <LeadCaptureFunnel onComplete={onFunnelComplete} />
+          </>
+        ) : copy ? (
+          <>
+            <div className="flex shrink-0 items-start gap-3 border-b border-line px-4 py-3.5 sm:px-5">
+              <div className="min-w-0 flex-1">
                 <TenantHeaderBrand
                   displayName={brand?.displayName?.trim() || ""}
                   logoUrl={brand?.logoUrl ?? null}
@@ -239,40 +223,81 @@ function AuthModalPanel() {
                 />
                 <h2
                   id="auth-modal-title"
-                  className="mt-4 font-display text-xl leading-tight text-ink lg:mt-6 lg:text-3xl"
+                  className="mt-2 font-display text-lg leading-tight text-ink sm:text-xl"
                 >
                   {copy.headline}
                 </h2>
-                <p className="mt-2 text-sm leading-relaxed text-ink/70">{copy.subhead}</p>
-                <div className="mt-6 hidden lg:block">
-                  <AuthBenefitsPanel />
-                </div>
+                <p className="mt-1 text-sm leading-relaxed text-ink/65">
+                  {copy.subhead}
+                </p>
               </div>
-              <div className="flex flex-col">
-                <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-surface px-4 py-3.5 sm:px-5">
-                  <AuthModalTabs mode={mode} signInLabel={signInLabel} onMode={selectMode} />
-                  {listingGate ? null : (
-                    <button
-                      type="button"
-                      onClick={closeAuth}
-                      className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-line text-ink/70 transition hover:bg-mist"
-                      aria-label="Close"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  )}
-                </div>
-                <div className="px-5 py-5">{forms}</div>
-              </div>
+              {listingGate ? null : (
+                <button
+                  type="button"
+                  onClick={closeAuth}
+                  className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-line text-ink/70 transition hover:bg-mist"
+                  aria-label="Close"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
             </div>
-          </div>
+            <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-2.5 sm:px-5">
+              <AuthModalTabs
+                mode={mode}
+                signInLabel={signInLabel}
+                onMode={selectMode}
+              />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              {mode === "sign-in" ? (
+                <SignInForm
+                  callbackUrl={callbackUrl}
+                  initialEmail={prefillEmail}
+                  notice={authNotice}
+                  onSuccess={closeAuth}
+                  onSwitchMode={() => setMode("sign-up")}
+                />
+              ) : (
+                <SignUpForm
+                  callbackUrl={callbackUrl}
+                  displayName={displayName}
+                  initialName={signupName}
+                  initialEmail={signupEmail}
+                  intent={intent}
+                  ctaLabel={copy.cta}
+                  onIdentityChange={(next) => {
+                    setSignupName(next.name);
+                    setSignupEmail(next.email);
+                  }}
+                  onSuccess={() => {
+                    /* funnel phase handled by provider */
+                  }}
+                  onSwitchMode={() => {
+                    if (signupEmail.trim()) setPrefillEmail(signupEmail.trim());
+                    setMode("sign-in");
+                  }}
+                  onExistingAccount={(email) => {
+                    setSignupEmail(email);
+                    setPrefillEmail(email);
+                    setAuthNotice(EXISTING_ACCOUNT_SIGN_IN_MESSAGE);
+                    setMode("sign-in");
+                  }}
+                />
+              )}
+            </div>
+          </>
         ) : (
           <>
             <h2 id="auth-modal-title" className="sr-only">
               {mode === "sign-in" ? signInLabel : "Sign up"}
             </h2>
             <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3.5 sm:px-5">
-              <AuthModalTabs mode={mode} signInLabel={signInLabel} onMode={selectMode} />
+              <AuthModalTabs
+                mode={mode}
+                signInLabel={signInLabel}
+                onMode={selectMode}
+              />
               <button
                 type="button"
                 onClick={closeAuth}
@@ -282,7 +307,43 @@ function AuthModalPanel() {
                 <X className="size-4" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{forms}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+              {mode === "sign-in" ? (
+                <SignInForm
+                  callbackUrl={callbackUrl}
+                  initialEmail={prefillEmail}
+                  notice={authNotice}
+                  onSuccess={closeAuth}
+                  onSwitchMode={() => setMode("sign-up")}
+                />
+              ) : (
+                <SignUpForm
+                  callbackUrl={callbackUrl}
+                  displayName={displayName}
+                  initialName={signupName}
+                  initialEmail={signupEmail}
+                  intent={intent}
+                  ctaLabel="Create Free Account"
+                  onIdentityChange={(next) => {
+                    setSignupName(next.name);
+                    setSignupEmail(next.email);
+                  }}
+                  onSuccess={() => {
+                    /* funnel handled by provider */
+                  }}
+                  onSwitchMode={() => {
+                    if (signupEmail.trim()) setPrefillEmail(signupEmail.trim());
+                    setMode("sign-in");
+                  }}
+                  onExistingAccount={(email) => {
+                    setSignupEmail(email);
+                    setPrefillEmail(email);
+                    setAuthNotice(EXISTING_ACCOUNT_SIGN_IN_MESSAGE);
+                    setMode("sign-in");
+                  }}
+                />
+              )}
+            </div>
           </>
         )}
       </div>
@@ -298,18 +359,36 @@ export function AuthModalProvider({ children }: { children: ReactNode }) {
   const [signupPrefill, setSignupPrefill] = useState<AuthSignupPrefill | null>(
     null,
   );
+  const [phase, setPhase] = useState<PanelPhase>("auth");
+  const [tourPrompt, setTourPrompt] = useState<{
+    mlsNumber: string;
+  } | null>(null);
 
   const openAuth = useCallback((options?: OpenAuthOptions) => {
     setMode(options?.mode ?? "sign-in");
     setCallbackUrl(options?.callbackUrl ?? null);
     setIntent(options?.intent ?? null);
     setSignupPrefill(options?.signupPrefill ?? null);
+    setPhase("auth");
     setOpen(true);
   }, []);
 
   const closeAuth = useCallback(() => {
     setOpen(false);
+    setPhase("auth");
   }, []);
+
+  const onFunnelComplete = useCallback(
+    (result: { showTour: boolean; mlsNumber: string | null }) => {
+      const viewListing = intent === "VIEW_LISTING";
+      setOpen(false);
+      setPhase("auth");
+      if (viewListing && result.showTour && result.mlsNumber) {
+        setTourPrompt({ mlsNumber: result.mlsNumber });
+      }
+    },
+    [intent],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -317,13 +396,13 @@ export function AuthModalProvider({ children }: { children: ReactNode }) {
   }, [open]);
 
   useEffect(() => {
-    if (!open || intent === "VIEW_LISTING") return;
+    if (!open || intent === "VIEW_LISTING" || phase === "funnel") return;
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") closeAuth();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, closeAuth, intent]);
+  }, [open, closeAuth, intent, phase]);
 
   useEffect(() => {
     function onOpenSignIn() {
@@ -332,6 +411,16 @@ export function AuthModalProvider({ children }: { children: ReactNode }) {
     window.addEventListener("houzzat:open-sign-in", onOpenSignIn);
     return () => window.removeEventListener("houzzat:open-sign-in", onOpenSignIn);
   }, [openAuth]);
+
+  // Bridge SignUpForm success → funnel without prop drilling phase setter into form.
+  useEffect(() => {
+    function onCaptured() {
+      setPhase("funnel");
+      setOpen(true);
+    }
+    window.addEventListener("houzzat:lead-captured", onCaptured);
+    return () => window.removeEventListener("houzzat:lead-captured", onCaptured);
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -350,7 +439,10 @@ export function AuthModalProvider({ children }: { children: ReactNode }) {
   return (
     <AuthModalContext.Provider value={value}>
       {children}
-      <AuthModalPanel />
+      <AuthModalPanel phase={phase} onFunnelComplete={onFunnelComplete} />
+      {tourPrompt ? (
+        <TourThisHomePrompt mlsNumber={tourPrompt.mlsNumber} />
+      ) : null}
     </AuthModalContext.Provider>
   );
 }

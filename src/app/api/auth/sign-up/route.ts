@@ -1,10 +1,15 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { pickUtm } from "@/lib/ads/utm";
 import { captureWebsiteLead } from "@/lib/agent/lead-intake";
+import {
+  buildCaptureContext,
+  pickClickIds,
+  type CaptureContext,
+} from "@/lib/auth/capture-attribution";
 import { EXISTING_ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/auth/existing-account-message";
+import { hashPhoneCredential } from "@/lib/auth/phone-credential";
 import { persistSignupConsentEvents } from "@/lib/auth/sign-up-consent";
 import { sendWelcomeEmail } from "@/lib/auth/email-verification";
 import { nextEmailVerifyNudgeDueAt } from "@/lib/auth/verify-email-nudge";
@@ -14,20 +19,20 @@ import {
 } from "@/lib/auth/workspace-identity";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { TERMS_VERSION } from "@/lib/consent";
+import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 import { VOW_VERSION } from "@/lib/vow";
 import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
 
 const schema = z.object({
   name: z.string().trim().min(1, "Enter your name.").max(120),
   email: z.string().trim().email("Enter a valid email address.").max(254),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters.")
-    .max(128),
+  phone: z.string().trim().min(7, "Enter a valid mobile number.").max(40),
   /** Always true from the client — Terms accepted by creating an account. */
   acceptTerms: z.literal(true),
   /** buyer (default) | seller — seller signup / sell-a-home paths */
   intent: z.enum(["buyer", "seller"]).optional(),
+  credentialMode: z.literal("phone_e164").optional(),
+  captureContext: z.record(z.string(), z.unknown()).optional(),
 });
 
 type SignUpStage =
@@ -35,6 +40,7 @@ type SignUpStage =
   | "user_lookup"
   | "password_hash"
   | "user_create"
+  | "lead_capture"
   | "consent_create"
   | "signup_complete";
 
@@ -94,11 +100,14 @@ function validationErrorMessage(error: z.ZodError): string {
     if (field === "acceptTerms") {
       return "You must accept the Terms & Conditions.";
     }
+    if (field === "phone") {
+      return "Enter a valid mobile number.";
+    }
     if (issue.message && typeof issue.message === "string") {
       return issue.message;
     }
   }
-  return "Please check your name, email, and password.";
+  return "Please check your name, email, and mobile number.";
 }
 
 function duplicateEmailResponse() {
@@ -130,6 +139,48 @@ function mapSignUpFailure(
   );
 }
 
+function sanitizeCaptureContext(
+  raw: Record<string, unknown> | undefined,
+  body: Record<string, unknown>,
+): CaptureContext {
+  const click = pickClickIds(body);
+  const base = buildCaptureContext({
+    intent:
+      typeof raw?.intent === "string"
+        ? (raw.intent as CaptureContext["intent"])
+        : null,
+    mlsNumber: typeof raw?.mlsNumber === "string" ? raw.mlsNumber : null,
+    listingAddress:
+      typeof raw?.listingAddress === "string" ? raw.listingAddress : null,
+    listingPrice:
+      typeof raw?.listingPrice === "number" ? raw.listingPrice : null,
+    pathname: typeof raw?.pathname === "string" ? raw.pathname : null,
+    callbackUrl: typeof raw?.callbackUrl === "string" ? raw.callbackUrl : null,
+    searchUrl: typeof raw?.searchUrl === "string" ? raw.searchUrl : null,
+    searchFilters:
+      raw?.searchFilters && typeof raw.searchFilters === "object"
+        ? (raw.searchFilters as Record<string, unknown>)
+        : null,
+    visitorKey: typeof raw?.visitorKey === "string" ? raw.visitorKey : null,
+    sessionKey: typeof raw?.sessionKey === "string" ? raw.sessionKey : null,
+    utmSource: typeof raw?.utmSource === "string" ? raw.utmSource : null,
+    utmMedium: typeof raw?.utmMedium === "string" ? raw.utmMedium : null,
+    utmCampaign: typeof raw?.utmCampaign === "string" ? raw.utmCampaign : null,
+    utmContent: typeof raw?.utmContent === "string" ? raw.utmContent : null,
+    adCampaignId:
+      typeof raw?.adCampaignId === "string" ? raw.adCampaignId : null,
+    landingPageId:
+      typeof raw?.landingPageId === "string" ? raw.landingPageId : null,
+    referrer: typeof raw?.referrer === "string" ? raw.referrer : null,
+    gclid: click.gclid ?? (typeof raw?.gclid === "string" ? raw.gclid : null),
+    gbraid:
+      click.gbraid ?? (typeof raw?.gbraid === "string" ? raw.gbraid : null),
+    wbraid:
+      click.wbraid ?? (typeof raw?.wbraid === "string" ? raw.wbraid : null),
+  });
+  return base;
+}
+
 export async function POST(request: Request) {
   const correlationId = requestCorrelationId(request);
 
@@ -143,11 +194,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const utm = pickUtm(
+  const bodyRecord =
     body && typeof body === "object" && !Array.isArray(body)
       ? (body as Record<string, unknown>)
-      : null,
-  );
+      : {};
+  const utm = pickUtm(bodyRecord);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -175,8 +226,6 @@ export async function POST(request: Request) {
 
     stage = "user_lookup";
     logSignUpStage(stage, { correlationId });
-    // Phase 3: same email in another workspace MUST NOT block signup.
-    // NULL-workspace orphans / platform must NEVER resolve here.
     const existing = await findTenantUserIdByEmail(workspaceId, email);
 
     if (existing) {
@@ -194,10 +243,25 @@ export async function POST(request: Request) {
 
     stage = "password_hash";
     logSignUpStage(stage, { correlationId });
-    const password = await bcrypt.hash(parsed.data.password, 10);
+    const credential = await hashPhoneCredential(parsed.data.phone);
+    if (!credential.ok) {
+      return NextResponse.json({ error: credential.error }, { status: 400 });
+    }
+    const phoneColumns = parsePhoneColumnsForWrite(credential.phoneE164);
+    if (!phoneColumns.ok) {
+      return NextResponse.json(
+        { error: "Enter a valid mobile number." },
+        { status: 400 },
+      );
+    }
+
     const now = new Date();
     const { ip, userAgent } = requestClientMeta(request);
     const asSeller = parsed.data.intent === "seller";
+    const captureContext = sanitizeCaptureContext(
+      parsed.data.captureContext,
+      bodyRecord,
+    );
 
     stage = "user_create";
     logSignUpStage(stage, { correlationId });
@@ -205,12 +269,14 @@ export async function POST(request: Request) {
       data: {
         name: parsed.data.name,
         email,
-        password,
+        password: credential.hash,
+        passwordCredentialKind: "PHONE_E164",
         workspaceId,
         role: "BUYER",
         isBuyer: true,
         isSeller: asSeller,
         activeMode: asSeller ? "SELLER" : "BUYER",
+        ...phoneColumns.columns,
         termsAcceptedAt: now,
         termsVersion: TERMS_VERSION,
         vowAcceptedAt: now,
@@ -229,24 +295,39 @@ export async function POST(request: Request) {
       userAgent,
     });
 
+    // User + Lead must exist before OTP. Await capture (do not defer).
+    stage = "lead_capture";
+    logSignUpStage(stage, { correlationId, userId: user.id });
+    try {
+      const captured = await captureWebsiteLead({
+        source: "SIGNUP",
+        customerId: user.id,
+        name: user.name,
+        email: user.email,
+        phone: credential.phoneE164,
+        isBuyer: true,
+        isSeller: asSeller,
+        score: asSeller ? 40 : 20,
+        utm,
+        request,
+        deferSignupSms: true,
+      });
+      await prisma.lead.update({
+        where: { id: captured.lead.id },
+        data: {
+          captureContext: captureContext as Prisma.InputJsonValue,
+          ...(captureContext.mlsNumber
+            ? { listingMls: captureContext.mlsNumber }
+            : {}),
+        },
+      });
+    } catch (err) {
+      console.error("[sign-up] lead capture failed", err);
+      // User already created — do not roll back. Client can continue OTP.
+    }
+
     scheduleWorkerSideEffect(
       (async () => {
-        try {
-          await captureWebsiteLead({
-            source: "SIGNUP",
-            customerId: user.id,
-            name: user.name,
-            email: user.email,
-            isBuyer: true,
-            isSeller: asSeller,
-            score: asSeller ? 40 : 20,
-            utm,
-            request,
-          });
-        } catch (err) {
-          console.error("[sign-up] lead capture failed", err);
-        }
-
         const welcomeStatus = await sendWelcomeEmail({
           email,
           name: parsed.data.name,
@@ -261,7 +342,11 @@ export async function POST(request: Request) {
 
     stage = "signup_complete";
     logSignUpStage(stage, { correlationId, userId: user.id });
-    return NextResponse.json({ ok: true, userId: user.id });
+    return NextResponse.json({
+      ok: true,
+      userId: user.id,
+      needsQualification: true,
+    });
   } catch (error) {
     return mapSignUpFailure(error, stage, correlationId);
   }

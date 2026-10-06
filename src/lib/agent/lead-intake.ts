@@ -400,6 +400,11 @@ export async function captureWebsiteLead(input: {
   deps?: HostResolutionDeps;
   /** Repeat capture of an existing Lead does not append another activity row. */
   activityOnReuse?: boolean;
+  /**
+   * When true, skip immediate signup SMS automations (e.g. while transactional
+   * OTP SMS is about to send). Caller may schedule later after OTP step.
+   */
+  deferSignupSms?: boolean;
 }) {
   const isBuyer = input.isBuyer ?? true;
   const isSeller = input.isSeller ?? false;
@@ -514,7 +519,9 @@ export async function captureWebsiteLead(input: {
   }
 
   if (input.source === "SIGNUP") {
-    scheduleSignupSmsAutomations(lead.id);
+    if (!input.deferSignupSms) {
+      scheduleSignupSmsAutomations(lead.id);
+    }
   } else {
     scheduleCustomerIntroductionSmsAutomationsForLead(lead.id);
   }

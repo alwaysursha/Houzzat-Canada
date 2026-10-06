@@ -57,8 +57,23 @@ export function LeadProfileV2InfoPanel({
             <InfoRow label="Email" value={data.lead.customer?.email} />
             <InfoRow label="Phone" value={data.lead.customer?.phone} />
             <InfoRow
-              label="Address"
+              label="Claimed property"
               value={data.lead.customer?.homeAddress}
+            />
+            <InfoRow
+              label="Unit #"
+              value={data.lead.customer?.homeUnit}
+            />
+            <InfoRow
+              label="Seller opportunity"
+              value={
+                data.lead.customer?.ownsHome &&
+                data.lead.customer.homeAddress?.trim()
+                  ? "Yes"
+                  : data.lead.customer?.ownsHome
+                    ? "Homeowner — no property claimed"
+                    : null
+              }
             />
             <InfoRow
               label="Listing"
@@ -101,6 +116,58 @@ export function LeadProfileV2InfoPanel({
                 )
               }
             />
+            <InfoRow
+              label="Homeowner"
+              value={
+                data.lead.customer?.ownsHome == null
+                  ? null
+                  : data.lead.customer.ownsHome
+                    ? "Yes"
+                    : "No / Rent"
+              }
+            />
+            <InfoRow
+              label="Mortgage"
+              value={
+                data.lead.customer?.mortgageFinancing === "PRE_APPROVED"
+                  ? "Pre-approved"
+                  : data.lead.customer?.mortgageFinancing === "NOT_PRE_APPROVED"
+                    ? "Not pre-approved"
+                    : data.lead.customer?.mortgageFinancing === "CASH"
+                      ? "Buying with cash"
+                      : null
+              }
+            />
+            <InfoRow
+              label="Mobile OTP"
+              value={
+                data.lead.customer
+                  ? data.lead.customer.phoneOtpVerified
+                    ? "Verified"
+                    : "Unverified"
+                  : null
+              }
+            />
+            <InfoRow
+              label="Captured while viewing"
+              value={(() => {
+                const ctx = data.lead.captureContext;
+                if (!ctx || typeof ctx !== "object" || Array.isArray(ctx)) {
+                  return data.lead.listingMls;
+                }
+                const c = ctx as Record<string, unknown>;
+                const address =
+                  typeof c.listingAddress === "string"
+                    ? c.listingAddress
+                    : null;
+                const mls =
+                  typeof c.mlsNumber === "string"
+                    ? c.mlsNumber
+                    : data.lead.listingMls;
+                if (address && mls) return `${address} · MLS ${mls}`;
+                return address || mls;
+              })()}
+            />
           </DetailColumn>
 
           <DetailColumn title="Assignment">
@@ -121,6 +188,32 @@ export function LeadProfileV2InfoPanel({
             />
             <InfoRow label="Search" value={savedSearchLabel} />
             <InfoRow label="Campaign" value={data.lead.adCampaign?.name} />
+            <InfoRow
+              label="UTM source"
+              value={
+                data.lead.utmSource ||
+                (() => {
+                  const ctx = data.lead.captureContext;
+                  if (!ctx || typeof ctx !== "object" || Array.isArray(ctx)) {
+                    return null;
+                  }
+                  const v = (ctx as Record<string, unknown>).utmSource;
+                  return typeof v === "string" ? v : null;
+                })()
+              }
+            />
+            <InfoRow
+              label="Click ID"
+              value={(() => {
+                const ctx = data.lead.captureContext;
+                if (!ctx || typeof ctx !== "object" || Array.isArray(ctx)) {
+                  return null;
+                }
+                const c = ctx as Record<string, unknown>;
+                const id = c.gclid || c.gbraid || c.wbraid;
+                return typeof id === "string" ? id : null;
+              })()}
+            />
           </DetailColumn>
 
           <DetailColumn title="User data">

@@ -3,24 +3,35 @@ import type { PurchaseTimeframe } from "@prisma/client";
 export const PURCHASE_TIMEFRAMES = [
   "NOW",
   "ONE_TO_THREE_MONTHS",
+  "THREE_TO_SIX_MONTHS",
   "SIX_TO_TWELVE_MONTHS",
   "TWELVE_PLUS_MONTHS",
 ] as const satisfies readonly PurchaseTimeframe[];
 
 export type PurchaseTimeframeValue = (typeof PURCHASE_TIMEFRAMES)[number];
 
+/** Consumer funnel options — no "Just Browsing". */
+export const CONSUMER_BUYING_TIMEFRAMES = [
+  "ONE_TO_THREE_MONTHS",
+  "THREE_TO_SIX_MONTHS",
+  "SIX_TO_TWELVE_MONTHS",
+  "TWELVE_PLUS_MONTHS",
+] as const satisfies readonly PurchaseTimeframeValue[];
+
 const LABELS: Record<PurchaseTimeframeValue, string> = {
   NOW: "Now",
-  ONE_TO_THREE_MONTHS: "1–3 months",
-  SIX_TO_TWELVE_MONTHS: "6–12 months",
-  TWELVE_PLUS_MONTHS: "12+ months",
+  ONE_TO_THREE_MONTHS: "0–3 Months",
+  THREE_TO_SIX_MONTHS: "3–6 Months",
+  SIX_TO_TWELVE_MONTHS: "6–12 Months",
+  TWELVE_PLUS_MONTHS: "12+ Months",
 };
 
 const SORT_ORDER: Record<PurchaseTimeframeValue, number> = {
   NOW: 0,
   ONE_TO_THREE_MONTHS: 1,
-  SIX_TO_TWELVE_MONTHS: 2,
-  TWELVE_PLUS_MONTHS: 3,
+  THREE_TO_SIX_MONTHS: 2,
+  SIX_TO_TWELVE_MONTHS: 3,
+  TWELVE_PLUS_MONTHS: 4,
 };
 
 export function purchaseTimeframeLabel(

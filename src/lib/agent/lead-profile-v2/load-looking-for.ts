@@ -2,6 +2,7 @@
  * V2 Looking For loader. Auth is hostname → workspace → ACTIVE
  * member → canAccessLead. Uses the same canonical loadBuyerIntent
  * assembler as mobile lead engagement (saved searches + 45-day browse).
+ * Prefers BuyerConfirmedPreference when present (does not create SavedSearch).
  * Does not load timeline, emails, or rail counts.
  */
 import type { AgentOrgContext } from "@/lib/agent";
@@ -63,6 +64,45 @@ export async function loadLeadProfileV2LookingFor(
       }),
       null,
     );
+  }
+
+  const confirmed = await prisma.buyerConfirmedPreference.findUnique({
+    where: { userId: lead.customerId },
+  });
+
+  if (confirmed) {
+    const cities = confirmed.cities ?? [];
+    const priceMax = confirmed.maxPrice;
+    const priceLabel =
+      priceMax != null
+        ? priceMax >= 1_000_000 && priceMax % 100_000 === 0
+          ? `Up to $${priceMax / 1_000_000}M — Confirmed`
+          : `Up to $${priceMax.toLocaleString("en-CA")} — Confirmed`
+        : "Confirmed preference";
+    const bits = [
+      cities[0] ?? null,
+      priceLabel,
+      confirmed.minBeds != null ? `${confirmed.minBeds}+ beds` : null,
+    ].filter(Boolean);
+    const panel = await loadBuyerIntent({
+      customerId: lead.customerId,
+      customerName: lead.customer?.name ?? null,
+      savedSearches: [
+        {
+          name: "Confirmed preference",
+          query: {
+            city: cities[0],
+            cities,
+            priceMin: confirmed.minPrice,
+            priceMax: confirmed.maxPrice,
+            bedsMin: confirmed.minBeds,
+            propertyTypes: confirmed.propertyTypes,
+            transactionType: confirmed.transactionType,
+          },
+        },
+      ],
+    });
+    return toV2LookingForPanel(panel, bits.join(" · ") || "Confirmed preference");
   }
 
   const searches = await prisma.savedSearch.findMany({

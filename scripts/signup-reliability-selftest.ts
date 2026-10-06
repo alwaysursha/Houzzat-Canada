@@ -62,7 +62,7 @@ function testConsentBeforeSuccessResponse() {
   const consentIdx = signUpRoute.indexOf("persistSignupConsentEvents");
   const sideEffectIdx = signUpRoute.indexOf("scheduleWorkerSideEffect(");
   const completeIdx = signUpRoute.indexOf('stage = "signup_complete"');
-  const responseIdx = signUpRoute.indexOf("return NextResponse.json({ ok: true");
+  const responseIdx = signUpRoute.indexOf("needsQualification: true");
 
   assert.ok(consentIdx > 0, "persistSignupConsentEvents must be present");
   assert.ok(
@@ -76,6 +76,11 @@ function testConsentBeforeSuccessResponse() {
   assert.ok(
     responseIdx > consentIdx,
     "200 response must come after consent persistence",
+  );
+  const leadCaptureIdx = signUpRoute.indexOf("await captureWebsiteLead");
+  assert.ok(
+    leadCaptureIdx > consentIdx && leadCaptureIdx < responseIdx,
+    "User+Lead capture must complete before the success response (OTP boundary)",
   );
 }
 
