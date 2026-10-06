@@ -60,6 +60,7 @@ const CATEGORIES = [
   "live_activity",
   "tasks",
   "engagement",
+  "customer_alert_changes",
 ] as const;
 
 function isStaffNotificationCategory(value: string): boolean {
@@ -79,6 +80,7 @@ function mergeStaffCategoryPrefs(
     live_activity: ["lead_online", "hot_pipeline"],
     tasks: ["task_due"],
     engagement: ["alert_engagement"],
+    customer_alert_changes: ["customer_alert_change"],
   };
   const next = { ...existing };
   const email =
@@ -109,6 +111,7 @@ function staffCategoriesForUi(prefs: Record<string, unknown>) {
     live_activity: ["lead_online", "hot_pipeline"],
     tasks: ["task_due"],
     engagement: ["alert_engagement"],
+    customer_alert_changes: ["customer_alert_change"],
   };
   return CATEGORIES.map((id) => {
     const types = pushMap[id] || [];
@@ -117,12 +120,16 @@ function staffCategoriesForUi(prefs: Record<string, unknown>) {
       id,
       pushEnabled,
       emailEnabled: email[id] !== false,
-      emailActive: id === "new_leads" || id === "lead_updates",
+      emailActive:
+        id === "new_leads" ||
+        id === "lead_updates" ||
+        id === "customer_alert_changes",
       highStakes:
         id === "new_leads" ||
         id === "lead_assignment" ||
         id === "lead_updates" ||
-        id === "tasks",
+        id === "tasks" ||
+        id === "customer_alert_changes",
     };
   });
 }
@@ -193,7 +200,7 @@ async function runStage510Tests() {
       assert.ok(catSrc.includes(`"${id}"`) || catSrc.includes(`id: "${id}"`));
     }
     const categories = staffCategoriesForUi({});
-    assert.equal(categories.length, 7);
+    assert.equal(categories.length, 8);
     assert.ok(categories.every((c) => c.pushEnabled === true));
     assert.ok(categories.every((c) => c.emailEnabled === true));
     const newLeads = categories.find((c) => c.id === "new_leads");

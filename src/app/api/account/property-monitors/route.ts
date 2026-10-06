@@ -9,6 +9,7 @@ import {
   resolvePropertyMonitorEmailAlertsOnUpsert,
 } from "@/lib/account/property-monitor-settings";
 import { logPropertyWatchRemovedBestEffort } from "@/lib/agent/customer-alert-crm-activity";
+import { scheduleAssignedAgentAwareness } from "@/lib/notifications/assigned-agent-awareness";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
@@ -191,6 +192,13 @@ export async function DELETE(request: Request) {
       source: "account_property_monitors",
       actorUserId: user.id,
     });
+    if (user.workspaceId) {
+      scheduleAssignedAgentAwareness({
+        customerId: user.id,
+        workspaceId: user.workspaceId,
+        event: "property_watch_removed",
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });

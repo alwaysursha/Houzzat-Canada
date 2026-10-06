@@ -8,6 +8,7 @@ import {
   deleteOwnedSavedSearch,
 } from "@/lib/account/saved-search-ownership";
 import { logSavedSearchRemovedBestEffort } from "@/lib/agent/customer-alert-crm-activity";
+import { scheduleAssignedAgentAwareness } from "@/lib/notifications/assigned-agent-awareness";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { prisma } from "@/lib/prisma";
 
@@ -238,6 +239,14 @@ export async function DELETE(request: Request) {
       source: "saved_searches",
       actorUserId: user!.id,
     });
+    if (user!.workspaceId) {
+      scheduleAssignedAgentAwareness({
+        customerId: user!.id,
+        workspaceId: user!.workspaceId,
+        event: "saved_search_removed",
+        savedSearchName: result.item.name,
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });

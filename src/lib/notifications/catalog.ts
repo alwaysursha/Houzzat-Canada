@@ -21,6 +21,7 @@ export const STAFF_PUSH_TYPES = [
   "lead_reassigned",
   "lead_info_updated",
   "chat_message",
+  "customer_alert_change",
 ] as const;
 
 export type ConsumerPushType = (typeof CONSUMER_PUSH_TYPES)[number];
@@ -132,6 +133,12 @@ export const STAFF_PUSH_CATALOG: PushTypeItem[] = [
     id: "chat_message",
     label: "Chat messages",
     description: "A client sent you a new Chat message",
+  },
+  {
+    id: "customer_alert_change",
+    label: "Customer alert changes",
+    description:
+      "An assigned customer stopped a Watch or Saved Search, or turned off email alerts",
   },
 ];
 

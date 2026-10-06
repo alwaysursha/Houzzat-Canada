@@ -9,7 +9,8 @@ export type StaffNotificationCategoryId =
   | "contact_appointments"
   | "live_activity"
   | "tasks"
-  | "engagement";
+  | "engagement"
+  | "customer_alert_changes";
 
 export type StaffCategoryChannel = "push" | "email";
 

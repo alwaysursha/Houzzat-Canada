@@ -84,6 +84,11 @@ export type PreferenceCommandContext = {
    * transitions. Must not throw into the mutation path (callers catch).
    */
   onGlobalOptionalEmailTransition?: GlobalOptionalEmailCrmHook;
+  /**
+   * Optional post-success assigned-agent awareness (Phase 4). Independent of
+   * CRM. Invoked only after commit, only for actual transitions.
+   */
+  onAssignedAgentAwareness?: GlobalOptionalEmailCrmHook;
 };
 
 function workspaceOk(
@@ -321,6 +326,24 @@ export async function setGlobalOptionalEmailPreference(
         });
       } catch (error) {
         console.error("[communications:global-optional-email-crm]", error);
+      }
+    }
+
+    // Post-success assigned-agent awareness (Phase 4). Independent of CRM.
+    if (
+      result.previousEnabled !== result.nextEnabled &&
+      ctx.onAssignedAgentAwareness
+    ) {
+      try {
+        await ctx.onAssignedAgentAwareness({
+          userId: input.userId,
+          workspaceId: input.workspaceId,
+          previousEnabled: result.previousEnabled,
+          nextEnabled: result.nextEnabled,
+          source: input.source,
+        });
+      } catch (error) {
+        console.error("[communications:assigned-agent-awareness]", error);
       }
     }
 

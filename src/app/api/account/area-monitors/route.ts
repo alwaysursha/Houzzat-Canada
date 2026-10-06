@@ -10,6 +10,10 @@ import {
 } from "@/lib/account/area-monitor-settings";
 import { prismaAreaMonitorSettingsStore } from "@/lib/account/prisma-monitor-settings";
 import { logAreaWatchRemovedBestEffort } from "@/lib/agent/customer-alert-crm-activity";
+import {
+  areaWatchAwarenessLabel,
+  scheduleAssignedAgentAwareness,
+} from "@/lib/notifications/assigned-agent-awareness";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { prisma } from "@/lib/prisma";
 
@@ -184,6 +188,17 @@ export async function DELETE(request: Request) {
       source: "account_area_monitors",
       actorUserId: user.id,
     });
+    if (user.workspaceId) {
+      scheduleAssignedAgentAwareness({
+        customerId: user.id,
+        workspaceId: user.workspaceId,
+        event: "area_watch_removed",
+        areaLabel: areaWatchAwarenessLabel({
+          city: result.snapshot.city,
+          community: result.snapshot.community,
+        }),
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });

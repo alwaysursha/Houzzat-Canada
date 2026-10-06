@@ -15,6 +15,7 @@ export const STAFF_NOTIFICATION_CATEGORIES = [
   "live_activity",
   "tasks",
   "engagement",
+  "customer_alert_changes",
 ] as const;
 
 export type StaffNotificationCategory =
@@ -101,6 +102,15 @@ export const STAFF_CATEGORY_CATALOG: StaffCategoryDefinition[] = [
     pushTypes: ["alert_engagement"],
     emailActive: false,
     highStakes: false,
+  },
+  {
+    id: "customer_alert_changes",
+    label: "Customer alert changes",
+    description:
+      "When an assigned customer stops a Property Watch, Area Watch, or Saved Search, or turns off their email alerts.",
+    pushTypes: ["customer_alert_change"],
+    emailActive: true,
+    highStakes: true,
   },
 ];
 

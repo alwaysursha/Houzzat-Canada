@@ -142,6 +142,31 @@ export function renderLeadInfoUpdatedEmail(input: {
   return { subject, text, html, kind: "lead_info_updated" };
 }
 
+export function renderCustomerAlertOffStaffEmail(input: {
+  clientLabel: string;
+  leadUrl: string;
+}): RenderedEmail {
+  const subject = "Customer turned off email alerts";
+  const text = [
+    `${input.clientLabel} turned off optional email alerts.`,
+    "",
+    "This customer will no longer receive optional listing and alert emails.",
+    "",
+    `Open the lead in HouzzatPRO: ${input.leadUrl}`,
+  ].join("\n");
+  const html = emailLayout({
+    title: "Customer turned off email alerts",
+    subtitle: `${input.clientLabel} disabled optional email alerts.`,
+    preheader: subject,
+    bodyHtml: `
+      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(input.clientLabel)} turned off optional email alerts.</p>
+      ${infoCard("This customer will no longer receive optional listing and alert emails.")}
+      ${ctaButton(input.leadUrl, "Open lead in HouzzatPRO")}
+    `,
+  });
+  return { subject, text, html, kind: "customer_alert_change" };
+}
+
 export function renderStaffContactUpdatedEmail(input: {
   clientLabel: string;
   fields: Array<"email" | "phone">;
