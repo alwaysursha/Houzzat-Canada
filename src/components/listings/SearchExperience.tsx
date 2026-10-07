@@ -350,12 +350,13 @@ export function SearchExperience() {
   );
 
   const searchCallbackPath = useCallback(
-    (next: SearchFilters) =>
+    (next: SearchFilters, nextCities?: string[]) =>
       searchPageHref({
         pathname,
         filters: next,
         view,
-        cities: citiesParam,
+        cities:
+          nextCities !== undefined ? nextCities.join("|") : citiesParam,
         communities: communitiesParam,
         q: qParam,
       }),
@@ -473,6 +474,13 @@ export function SearchExperience() {
   function updateFilters(next: SearchFilters) {
     setFilters(next);
     syncUrl(next, view);
+  }
+
+  /** Desktop Filters flyout Apply — one URL write for filters + cities. */
+  function commitFiltersWithCities(next: SearchFilters, nextCities: string[]) {
+    const committed = { ...next, city: "" };
+    setFilters(committed);
+    syncUrl(committed, view, { cities: nextCities.join("|") });
   }
 
   function updateView(next: SearchViewMode) {
@@ -1069,6 +1077,7 @@ export function SearchExperience() {
                 onChange={updateFilters}
                 cities={structuredCitiesFromSearch(citiesParam, filters.city)}
                 onCitiesChange={replaceStructuredCities}
+                onCommitFilters={commitFiltersWithCities}
                 onResetFilters={resetStructuredFilters}
                 resultCount={total}
                 resultNoun={noun}

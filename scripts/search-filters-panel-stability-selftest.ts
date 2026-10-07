@@ -1,0 +1,259 @@
+/**
+ * Phase 1 Search UX: filter panel sizing, draft cities, Apply footer.
+ * Run: node --import tsx scripts/search-filters-panel-stability-selftest.ts
+ */
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { SearchFilters } from "../src/components/listings/SearchFilterChips";
+import { openGuestSaveSearchIntent } from "../src/lib/auth/save-search-intent";
+import type { CaptureIntentStore } from "../src/lib/auth/capture-intent";
+import {
+  searchFiltersFromHref,
+  searchPageHref,
+} from "../src/lib/listings/search-page-href";
+import { computeFlyoutFixedStyle } from "../src/lib/use-flyout-fixed-style";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+function read(rel: string) {
+  return readFileSync(join(root, rel), "utf8");
+}
+
+const menu = read("src/components/listings/SearchFiltersMenu.tsx");
+const sheet = read("src/components/listings/SearchFiltersSheet.tsx");
+const experience = read("src/components/listings/SearchExperience.tsx");
+const flyoutHook = read("src/lib/use-flyout-fixed-style.ts");
+const cityField = read("src/components/listings/StructuredCityField.tsx");
+
+// --- Desktop flyout: definite height + flex scroll/footer ---
+assert.match(menu, /lockHeight:\s*true/);
+assert.match(menu, /data-search-filters-flyout=""/);
+assert.match(menu, /data-search-filters-apply=""/);
+assert.match(menu, /min-h-0 min-w-0 flex-1/);
+assert.match(menu, /overflow-x-hidden overflow-y-auto/);
+assert.match(flyoutHook, /lockHeight/);
+assert.match(flyoutHook, /export function computeFlyoutFixedStyle/);
+assert.match(flyoutHook, /visualViewport/);
+
+// Default consumers must not be forced into lockHeight
+assert.doesNotMatch(
+  read("src/components/account/SavedSearchesMenuButton.tsx"),
+  /lockHeight/,
+);
+assert.doesNotMatch(
+  read("src/components/agent/ActivityFilters.tsx"),
+  /lockHeight/,
+);
+
+// Short desktop viewport: locked height equals maxHeight and stays in budget
+const short = computeFlyoutFixedStyle(
+  { top: 48, bottom: 80, left: 24, right: 120 },
+  { width: 1280, height: 600 },
+  400,
+  { lockHeight: true },
+);
+assert.equal(short.position, "fixed");
+assert.equal(typeof short.maxHeight, "number");
+assert.equal(short.height, short.maxHeight);
+assert.ok((short.maxHeight as number) <= 600 - 80 - 12 - 4);
+assert.ok((short.width as number) <= 400);
+assert.ok(
+  (short.top as number) + (short.height as number) <= 600 - 12,
+  "locked panel must stay inside viewport",
+);
+
+// Trigger near bottom: place above and fit available gap (no MIN_HEIGHT spill)
+const nearBottom = computeFlyoutFixedStyle(
+  { top: 520, bottom: 552, left: 40, right: 140 },
+  { width: 1280, height: 600 },
+  400,
+  { lockHeight: true },
+);
+assert.ok((nearBottom.top as number) < 520, "opens above when below is tight");
+assert.equal(nearBottom.height, nearBottom.maxHeight);
+assert.ok(
+  (nearBottom.top as number) + (nearBottom.height as number) <= 600 - 12,
+);
+assert.ok((nearBottom.height as number) <= 520 - 12 - 4);
+
+// Tiny available gap: lockHeight must not force 140px past the edge
+const tinyGap = computeFlyoutFixedStyle(
+  { top: 40, bottom: 560, left: 24, right: 120 },
+  { width: 1280, height: 600 },
+  400,
+  { lockHeight: true },
+);
+assert.ok((tinyGap.height as number) < 140);
+assert.ok(
+  (tinyGap.top as number) + (tinyGap.height as number) <= 600 - 12,
+);
+
+// Many chips / resize: width clamps; height recalculates for short space
+const cramped = computeFlyoutFixedStyle(
+  { top: 40, bottom: 72, left: 8, right: 100 },
+  { width: 360, height: 420 },
+  400,
+  { lockHeight: true },
+);
+assert.ok((cramped.width as number) <= 360 - 24);
+assert.ok((cramped.height as number) >= 1);
+assert.equal(cramped.height, cramped.maxHeight);
+assert.ok(
+  (cramped.top as number) + (cramped.height as number) <= 420 - 12,
+);
+
+const unlocked = computeFlyoutFixedStyle(
+  { top: 48, bottom: 80, left: 24, right: 120 },
+  { width: 1280, height: 800 },
+  256,
+);
+assert.equal(unlocked.height, undefined);
+assert.ok(typeof unlocked.maxHeight === "number");
+// Unlocked consumers keep previous MIN_HEIGHT inflation behavior
+assert.ok((unlocked.maxHeight as number) >= 140);
+
+// --- Draft cities until Apply ---
+assert.match(menu, /const \[draftCities, setDraftCities\]/);
+assert.match(menu, /onCitiesChange=\{setDraftCities\}/);
+assert.match(menu, /function commitDraft\(/);
+assert.match(menu, /onCommitFilters/);
+assert.match(experience, /commitFiltersWithCities/);
+assert.match(experience, /onCommitFilters=\{commitFiltersWithCities\}/);
+
+// City field only updates via callback — menu wires draft, not live parent
+const locationBlock = menu.slice(
+  menu.indexOf('Section title="Location"'),
+  menu.indexOf("data-search-filters-apply"),
+);
+assert.match(locationBlock, /cities=\{draftCities\}/);
+assert.match(locationBlock, /onCitiesChange=\{setDraftCities\}/);
+assert.doesNotMatch(locationBlock, /onCitiesChange=\{onCitiesChange\}/);
+
+// Close / Escape discard: setOpen(false) without commitDraft
+assert.match(menu, /if \(event\.key === "Escape" && !confirmOpen\) setOpen\(false\)/);
+const closeBtn = menu.slice(
+  menu.indexOf('aria-label="Close filters"'),
+  menu.indexOf('aria-label="Close filters"') + 220,
+);
+assert.match(closeBtn, /setOpen\(false\)/);
+assert.doesNotMatch(closeBtn, /commitDraft/);
+
+// Apply commits cities + filters together, then preserves save/CaptureIntent
+assert.match(menu, /commitDraft\(\);\s*\n\s*const ok = await persist\(false\)/s);
+assert.match(menu, /openGuestSaveSearchIntent/);
+assert.match(menu, /savePrimarySearch/);
+assert.match(menu, /browserCaptureIntentStore/);
+assert.match(menu, /searchCallbackPath\(draft, draftCities\)/);
+
+// Chip wrap / no horizontal blowout
+assert.match(menu, /flex min-w-0 flex-wrap/);
+assert.match(cityField, /min-w-0 flex-wrap/);
+assert.match(cityField, /max-w-full/);
+
+// --- Mobile sheet: viewport + sticky Apply ---
+assert.match(sheet, /data-search-filters-sheet=""/);
+assert.match(sheet, /data-search-filters-apply=""/);
+assert.match(sheet, /visualViewport/);
+assert.match(sheet, /vv\.height/);
+assert.match(sheet, /vv\.offsetTop/);
+assert.match(sheet, /min-h-0 min-w-0 flex-1/);
+assert.match(sheet, /overflow-x-hidden overflow-y-auto/);
+assert.match(sheet, /pb-\[max\(1rem,env\(safe-area-inset-bottom\)\)\]/);
+assert.match(sheet, /houzzatSearchFilters/);
+assert.match(sheet, /acquireScrollLock/);
+assert.match(sheet, /history\.back\(\)/);
+// Listeners attach even if panelRef is briefly null (no early return on ref)
+const vvEffect = sheet.slice(
+  sheet.indexOf("Keep the sheet inside the visual viewport"),
+  sheet.indexOf("Hardware / browser Back closes Filters"),
+);
+assert.doesNotMatch(vvEffect, /if \(!panel\) return;/);
+assert.match(vvEffect, /panelRef\.current/);
+// Live filters preserved (no draftCities in sheet)
+assert.doesNotMatch(sheet, /draftCities/);
+assert.match(sheet, /onCitiesChange=\{onCitiesChange\}/);
+
+// --- URL round-trip (cities + filters) ---
+const baseFilters: SearchFilters = {
+  segment: "RESIDENTIAL",
+  transactionType: "SALE",
+  dataSource: "",
+  city: "",
+  community: "The Beaches",
+  minPrice: "750000",
+  maxPrice: "1200000",
+  minBeds: "3",
+  minBaths: "2",
+  propertyTypes: ["DETACHED", "SEMI_DETACHED", "TOWNHOUSE"],
+  openHouseOnly: false,
+  statuses: ["ACTIVE", "SOLD_CONDITIONAL"],
+  sort: "newest",
+};
+
+const href = searchPageHref({
+  pathname: "/search",
+  filters: baseFilters,
+  view: "split",
+  cities: "Toronto|Mississauga|Oakville",
+});
+const parsed = searchFiltersFromHref(href);
+assert.ok(parsed);
+assert.equal(parsed.community, "The Beaches");
+assert.equal(parsed.minBeds, "3");
+assert.deepEqual(parsed.propertyTypes, [
+  "DETACHED",
+  "SEMI_DETACHED",
+  "TOWNHOUSE",
+]);
+assert.deepEqual(parsed.statuses, ["ACTIVE", "SOLD_CONDITIONAL"]);
+assert.match(href, /cities=Toronto%7CMississauga%7COakville|cities=Toronto\|Mississauga\|Oakville/);
+
+// Experience still serializes cities on commit
+assert.match(
+  experience,
+  /syncUrl\(committed, view, \{ cities: nextCities\.join\("\|"\) \}\)/,
+);
+
+// --- CaptureIntent / Save Search unchanged contract ---
+function memoryStore(): CaptureIntentStore & { raw: string | null } {
+  return {
+    raw: null,
+    get() {
+      return this.raw;
+    },
+    set(value) {
+      this.raw = value;
+    },
+    remove() {
+      this.raw = null;
+    },
+  };
+}
+
+const store = memoryStore();
+let opened: { mode?: string; callbackUrl: string } | null = null;
+const openAuth = (input: { mode?: "sign-in" | "sign-up"; callbackUrl: string }) => {
+  opened = input;
+};
+const callbackPath = searchPageHref({
+  pathname: "/search",
+  filters: baseFilters,
+  view: "map",
+  cities: "Toronto|Vaughan",
+});
+const result = openGuestSaveSearchIntent({
+  callbackPath,
+  host: "www.houzzat.com",
+  now: 1_700_000_000_000,
+  store,
+  openAuth,
+});
+assert.equal(result.ok, true);
+assert.ok(store.raw);
+assert.ok(opened?.callbackUrl.includes("/search"));
+assert.match(opened!.callbackUrl, /cities=/);
+assert.match(store.raw!, /SAVE_SEARCH/);
+
+console.log("search-filters-panel-stability-selftest: ok");

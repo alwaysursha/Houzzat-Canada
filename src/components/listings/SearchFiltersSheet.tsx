@@ -73,14 +73,14 @@ function ChipRow({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex min-w-0 flex-wrap gap-2">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
           className={cn(
-            "rounded-full px-3.5 py-2 text-sm font-semibold transition",
+            "max-w-full truncate rounded-full px-3.5 py-2 text-sm font-semibold transition",
             value === opt.value
               ? "bg-canopy text-white"
               : "bg-surface text-ink/70 ring-1 ring-line hover:bg-line/40",
@@ -101,7 +101,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3 border-b border-line/70 pb-5 last:border-b-0 last:pb-0">
+    <section className="min-w-0 space-y-3 border-b border-line/70 pb-5 last:border-b-0 last:pb-0">
       <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-ink/45">
         {title}
       </h3>
@@ -146,6 +146,7 @@ export function SearchFiltersSheet({
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const historyPushedRef = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const keepHrefRef = useRef("");
   onCloseRef.current = onClose;
@@ -199,6 +200,45 @@ export function SearchFiltersSheet({
       document.removeEventListener("keydown", onKey);
     };
   }, [open, closeViaUi]);
+
+  // Keep the sheet inside the visual viewport so the soft keyboard does not
+  // cover the sticky Apply footer on mobile (esp. landscape / zoom).
+  useEffect(() => {
+    if (!open) return;
+
+    function syncViewport() {
+      const el = panelRef.current;
+      if (!el) return;
+      const vv = window.visualViewport;
+      if (!vv) {
+        el.style.top = "0px";
+        el.style.height = "100%";
+        el.style.bottom = "auto";
+        return;
+      }
+      // Size to the visual viewport only — do not also subtract keyboard from
+      // a parent that is already layout-viewport sized (avoids double shrink).
+      el.style.top = `${vv.offsetTop}px`;
+      el.style.height = `${vv.height}px`;
+      el.style.bottom = "auto";
+    }
+
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", syncViewport);
+    vv?.addEventListener("scroll", syncViewport);
+    return () => {
+      window.removeEventListener("resize", syncViewport);
+      vv?.removeEventListener("resize", syncViewport);
+      vv?.removeEventListener("scroll", syncViewport);
+      const el = panelRef.current;
+      if (!el) return;
+      el.style.top = "";
+      el.style.height = "";
+      el.style.bottom = "";
+    };
+  }, [open, mounted]);
 
   // Hardware / browser Back closes Filters and stays on this Search URL.
   // Capture phase + stopImmediatePropagation so Next's popstate handler does not
@@ -303,11 +343,13 @@ export function SearchFiltersSheet({
         onClick={closeViaUi}
       />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        data-search-filters-sheet=""
         className={cn(
-          "absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-mist shadow-2xl transition-transform duration-300 ease-out",
+          "absolute top-0 right-0 flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden bg-mist shadow-2xl transition-transform duration-300 ease-out",
           entered ? "translate-x-0" : "translate-x-full",
         )}
       >
@@ -333,7 +375,7 @@ export function SearchFiltersSheet({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-5">
+        <div className="min-h-0 min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-5">
           <Section title={isLease ? "Monthly rent" : "List price"}>
             <ChipRow
               value={`${filters.minPrice}|${filters.maxPrice}`}
@@ -525,7 +567,10 @@ export function SearchFiltersSheet({
           </Section>
         </div>
 
-        <div className="shrink-0 border-t border-line bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div
+          data-search-filters-apply=""
+          className="shrink-0 border-t border-line bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+        >
           <Button
             type="button"
             className="h-12 w-full gap-2"

@@ -26,12 +26,16 @@ export function StructuredCityField({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       <span className="text-xs font-semibold uppercase tracking-wide text-ink/45">
         City
       </span>
       {cities.length > 0 ? (
-        <div className="flex flex-wrap gap-2" role="list" aria-label="Selected cities">
+        <div
+          className="flex min-w-0 flex-wrap gap-2"
+          role="list"
+          aria-label="Selected cities"
+        >
           {cities.map((city) => (
             <button
               key={city}
@@ -59,6 +63,7 @@ export function StructuredCityField({
         }}
         placeholder={cities.length > 0 ? "Add a city" : "Toronto"}
         aria-label={cities.length > 0 ? "Add a city" : "City"}
+        className="min-w-0"
       />
     </div>
   );

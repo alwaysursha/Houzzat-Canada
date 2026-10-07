@@ -86,14 +86,14 @@ function ChipRow({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex min-w-0 flex-wrap gap-1.5">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
           className={cn(
-            "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+            "max-w-full truncate rounded-full px-3 py-1.5 text-xs font-semibold transition",
             value === opt.value
               ? "bg-canopy text-white"
               : "bg-mist text-ink/70 hover:bg-line/60",
@@ -114,7 +114,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-2.5 border-b border-line/70 pb-4 last:border-b-0 last:pb-0">
+    <section className="min-w-0 space-y-2.5 border-b border-line/70 pb-4 last:border-b-0 last:pb-0">
       <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/45">
         {title}
       </h3>
@@ -128,6 +128,7 @@ export function SearchFiltersMenu({
   onChange,
   cities,
   onCitiesChange,
+  onCommitFilters,
   onResetFilters,
   resultCount,
   resultNoun = "homes",
@@ -140,11 +141,13 @@ export function SearchFiltersMenu({
   onChange: (next: SearchFilters) => void;
   cities: string[];
   onCitiesChange: (next: string[]) => void;
+  /** Atomic Apply: filters + cities in one URL sync (preferred). */
+  onCommitFilters?: (next: SearchFilters, cities: string[]) => void;
   onResetFilters: () => void;
   resultCount: number;
   resultNoun?: string;
   signedIn: boolean;
-  searchCallbackPath: (filters: SearchFilters) => string;
+  searchCallbackPath: (filters: SearchFilters, cities?: string[]) => string;
   previewExtras?: {
     cities?: string;
     communities?: string;
@@ -162,6 +165,7 @@ export function SearchFiltersMenu({
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [draft, setDraft] = useState(filters);
+  const [draftCities, setDraftCities] = useState(cities);
   const [draftTotal, setDraftTotal] = useState(resultCount);
   const [draftPending, setDraftPending] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -170,7 +174,9 @@ export function SearchFiltersMenu({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const id = useId();
-  const flyoutStyle = useFlyoutFixedStyle(open, buttonRef, 400);
+  const flyoutStyle = useFlyoutFixedStyle(open, buttonRef, 400, {
+    lockHeight: true,
+  });
   const activeCount =
     countActiveSearchFilters({ ...filters, city: "" }) +
     cities.filter((city) => city.trim()).length;
@@ -199,8 +205,9 @@ export function SearchFiltersMenu({
   useEffect(() => {
     if (!open) return;
     setDraft(filters);
+    setDraftCities(cities);
     setDraftTotal(resultCount);
-  }, [open, filters, resultCount]);
+  }, [open, filters, cities, resultCount]);
 
   useEffect(() => {
     if (!open) return;
@@ -232,7 +239,15 @@ export function SearchFiltersMenu({
     const timer = window.setTimeout(async () => {
       try {
         const qs = searchFiltersToListingParams(draft, {
-          ...previewExtras,
+          communities: previewExtras?.communities,
+          q: previewExtras?.q,
+          west: previewExtras?.west,
+          south: previewExtras?.south,
+          east: previewExtras?.east,
+          north: previewExtras?.north,
+          // Draft cities only — never preview against live URL cities.
+          cities:
+            draftCities.length > 0 ? draftCities.join("|") : undefined,
           limit: 1,
         });
         const res = await fetch(`/api/listings/search?${qs}`);
@@ -248,11 +263,21 @@ export function SearchFiltersMenu({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open, draft, previewExtras, resultCount]);
+  }, [open, draft, draftCities, previewExtras, resultCount]);
+
+  function commitDraft() {
+    const next = { ...draft, city: "" };
+    if (onCommitFilters) {
+      onCommitFilters(next, draftCities);
+      return;
+    }
+    onChange(next);
+    onCitiesChange(draftCities);
+  }
 
   async function persist(confirmReplace: boolean) {
     if (!signedIn) {
-      const callbackPath = searchCallbackPath(draft);
+      const callbackPath = searchCallbackPath(draft, draftCities);
       const opened = openGuestSaveSearchIntent({
         callbackPath,
         host: window.location.hostname,
@@ -278,7 +303,10 @@ export function SearchFiltersMenu({
     setSaving(false);
 
     if (outcome.status === "auth") {
-      openAuth({ mode: "sign-in", callbackUrl: searchCallbackPath(draft) });
+      openAuth({
+        mode: "sign-in",
+        callbackUrl: searchCallbackPath(draft, draftCities),
+      });
       return false;
     }
     if (outcome.status === "needs_confirm") {
@@ -302,7 +330,7 @@ export function SearchFiltersMenu({
   }
 
   async function applyAndSave() {
-    onChange(draft);
+    commitDraft();
     const ok = await persist(false);
     if (ok) {
       setOpen(false);
@@ -311,7 +339,7 @@ export function SearchFiltersMenu({
   }
 
   async function confirmUpdate() {
-    onChange(draft);
+    commitDraft();
     const ok = await persist(true);
     if (ok) {
       setConfirmOpen(false);
@@ -325,8 +353,9 @@ export function SearchFiltersMenu({
         ref={menuRef}
         role="dialog"
         aria-labelledby={id}
+        data-search-filters-flyout=""
         style={flyoutStyle}
-        className="flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-xl"
+        className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-xl"
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line/80 px-4 py-3">
           <p id={id} className="text-sm font-semibold text-ink">
@@ -352,7 +381,7 @@ export function SearchFiltersMenu({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
+        <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4">
           <Section title={isLease ? "Monthly rent" : "List price"}>
             <ChipRow
               value={`${draft.minPrice}|${draft.maxPrice}`}
@@ -425,7 +454,7 @@ export function SearchFiltersMenu({
           </Section>
 
           <Section title="Home type">
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex min-w-0 flex-wrap gap-1.5">
               {typeOptions.map((type) => {
                 const selected = draft.propertyTypes.includes(type);
                 return (
@@ -439,14 +468,14 @@ export function SearchFiltersMenu({
                       setDraft({ ...draft, propertyTypes: next });
                     }}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                      "inline-flex max-w-full items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition",
                       selected
                         ? "bg-canopy text-white"
                         : "bg-mist text-ink/70 hover:bg-line/60",
                     )}
                   >
-                    {selected ? <Check className="size-3" aria-hidden /> : null}
-                    {propertyTypeLabel(type)}
+                    {selected ? <Check className="size-3 shrink-0" aria-hidden /> : null}
+                    <span className="truncate">{propertyTypeLabel(type)}</span>
                   </button>
                 );
               })}
@@ -454,7 +483,7 @@ export function SearchFiltersMenu({
           </Section>
 
           <Section title="Status">
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex min-w-0 flex-wrap gap-1.5">
               {statusOptions.map((opt) => {
                 const selected = draft.statuses.includes(opt.value);
                 return (
@@ -478,14 +507,14 @@ export function SearchFiltersMenu({
                       });
                     }}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                      "inline-flex max-w-full items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition",
                       selected
                         ? "bg-canopy text-white"
                         : "bg-mist text-ink/70 hover:bg-line/60",
                     )}
                   >
-                    {selected ? <Check className="size-3" aria-hidden /> : null}
-                    {opt.label}
+                    {selected ? <Check className="size-3 shrink-0" aria-hidden /> : null}
+                    <span className="truncate">{opt.label}</span>
                   </button>
                 );
               })}
@@ -525,9 +554,12 @@ export function SearchFiltersMenu({
           </Section>
 
           <Section title="Location">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <StructuredCityField cities={cities} onCitiesChange={onCitiesChange} />
-              <label className="block space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/45">
+            <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+              <StructuredCityField
+                cities={draftCities}
+                onCitiesChange={setDraftCities}
+              />
+              <label className="block min-w-0 space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/45">
                 Community
                 <Input
                   value={draft.community}
@@ -541,7 +573,10 @@ export function SearchFiltersMenu({
           </Section>
         </div>
 
-        <div className="shrink-0 border-t border-line/80 bg-mist/50 px-4 py-3">
+        <div
+          data-search-filters-apply=""
+          className="shrink-0 border-t border-line/80 bg-mist/50 px-4 py-3"
+        >
           <Button
             type="button"
             className="h-11 w-full gap-2"
