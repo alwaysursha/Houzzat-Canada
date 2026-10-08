@@ -142,12 +142,13 @@ const closeBtn = menu.slice(
 assert.match(closeBtn, /setOpen\(false\)/);
 assert.doesNotMatch(closeBtn, /commitDraft/);
 
-// Apply commits cities + filters together, then preserves save/CaptureIntent
-assert.match(menu, /commitDraft\(\);\s*\n\s*const ok = await persist\(false\)/s);
+// Apply flushes typed city, commits cities + filters together, then save/CaptureIntent
+assert.match(menu, /flushDraftCities/);
+assert.match(menu, /commitDraft\(nextCities\);\s*\n\s*const ok = await persist\(false, nextCities\)/s);
 assert.match(menu, /openGuestSaveSearchIntent/);
 assert.match(menu, /savePrimarySearch/);
 assert.match(menu, /browserCaptureIntentStore/);
-assert.match(menu, /searchCallbackPath\(draft, draftCities\)/);
+assert.match(menu, /searchCallbackPath\(draft, nextCities\)/);
 
 // Chip wrap / no horizontal blowout
 assert.match(menu, /flex min-w-0 flex-wrap/);
@@ -193,9 +194,12 @@ assert.doesNotMatch(vvEffect, /panelRef/);
 // Must not size the panel with top/height only (horizontal drift bug)
 assert.doesNotMatch(sheet, /el\.style\.top = `\$\{vv\.offsetTop\}px`/);
 assert.doesNotMatch(sheet, /el\.style\.height = `\$\{vv\.height\}px`/);
-// Live filters preserved (no draftCities in sheet)
+// Live filters preserved (no draftCities in sheet); Apply flushes city field
 assert.doesNotMatch(sheet, /draftCities/);
 assert.match(sheet, /onCitiesChange=\{onCitiesChange\}/);
+assert.match(sheet, /prepareApplyCities/);
+assert.match(sheet, /intendedPathRef/);
+assert.match(sheet, /searchCallbackPath/);
 
 // Repeated selections / horizontal VV pans must keep overlay aligned (no drift)
 const pans = [

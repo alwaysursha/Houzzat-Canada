@@ -52,7 +52,16 @@ export function briefSavedSearchSummary(query: unknown): string | null {
   if (!query || typeof query !== "object" || Array.isArray(query)) return null;
   const q = query as Record<string, unknown>;
   const parts: string[] = [];
-  if (typeof q.city === "string" && q.city.trim()) parts.push(q.city.trim());
+  if (Array.isArray(q.cities) && q.cities.length) {
+    parts.push(
+      q.cities
+        .map((city) => String(city).trim())
+        .filter(Boolean)
+        .join(", "),
+    );
+  } else if (typeof q.city === "string" && q.city.trim()) {
+    parts.push(q.city.trim());
+  }
   if (typeof q.community === "string" && q.community.trim()) {
     parts.push(q.community.trim());
   }

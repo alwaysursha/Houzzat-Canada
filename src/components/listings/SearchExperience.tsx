@@ -59,6 +59,7 @@ import {
   searchResultsCopy,
   type SearchResultChip,
 } from "@/lib/listings/search-results-copy";
+import { searchFiltersToSavedQuery } from "@/lib/listings/saved-search-query";
 import {
   structuredCitiesFromSearch,
   withStructuredCity,
@@ -198,6 +199,24 @@ export function SearchExperience() {
   const communitiesParam = searchParams.get("communities") ?? "";
   const citiesParam = searchParams.get("cities") ?? "";
   const qParam = searchParams.get("q") ?? "";
+  /**
+   * Optimistic cities while router.replace catches up. Clearing filters.city
+   * before `cities` lands in the URL must not briefly search all cities.
+   */
+  const [citiesOverride, setCitiesOverride] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (citiesOverride == null) return;
+    if (citiesParam === citiesOverride.join("|")) {
+      setCitiesOverride(null);
+    }
+  }, [citiesParam, citiesOverride]);
+
+  const structuredCities = useMemo(() => {
+    if (citiesOverride != null) return citiesOverride;
+    return structuredCitiesFromSearch(citiesParam, filters.city);
+  }, [citiesOverride, citiesParam, filters.city]);
+  const citiesQueryParam = structuredCities.join("|");
 
   // Keep filter state aligned when URL changes (autocomplete / typed city search).
   useEffect(() => {
@@ -242,18 +261,18 @@ export function SearchExperience() {
   const placeFilterActive = Boolean(
     filters.city.trim() ||
       filters.community.trim() ||
-      citiesParam.trim() ||
+      citiesQueryParam.trim() ||
       communitiesParam.trim(),
   );
   const mapGeography = useMemo(
     () => ({
       city: filters.city,
       community: filters.community,
-      cities: citiesParam,
+      cities: citiesQueryParam,
       communities: communitiesParam,
       q: qParam,
     }),
-    [citiesParam, communitiesParam, filters.city, filters.community, qParam],
+    [citiesQueryParam, communitiesParam, filters.city, filters.community, qParam],
   );
   const mapGeographyKey = searchMapGeographyKey(mapGeography);
   geoKeyRef.current = mapGeographyKey;
@@ -263,7 +282,7 @@ export function SearchExperience() {
     if (!placeFilterActive) return;
     setAppliedBounds(null);
     setPolygon(null);
-  }, [placeFilterActive, filters.city, filters.community, citiesParam, communitiesParam]);
+  }, [placeFilterActive, filters.city, filters.community, citiesQueryParam, communitiesParam]);
 
   useEffect(() => {
     return () => {
@@ -331,7 +350,7 @@ export function SearchExperience() {
           ? options.cities
           : options?.clearMultiPlace
             ? ""
-            : citiesParam;
+            : citiesQueryParam;
       router.replace(
         searchPageHref({
           pathname,
@@ -346,7 +365,7 @@ export function SearchExperience() {
         { scroll: false },
       );
     },
-    [citiesParam, communitiesParam, pathname, qParam, router, view],
+    [citiesQueryParam, communitiesParam, pathname, qParam, router, view],
   );
 
   const searchCallbackPath = useCallback(
@@ -356,11 +375,11 @@ export function SearchExperience() {
         filters: next,
         view,
         cities:
-          nextCities !== undefined ? nextCities.join("|") : citiesParam,
+          nextCities !== undefined ? nextCities.join("|") : citiesQueryParam,
         communities: communitiesParam,
         q: qParam,
       }),
-    [citiesParam, communitiesParam, pathname, qParam, view],
+    [citiesQueryParam, communitiesParam, pathname, qParam, view],
   );
 
   const queryString = useMemo(() => {
@@ -372,8 +391,8 @@ export function SearchExperience() {
     }
     params.set("transactionType", filters.transactionType);
     if (filters.dataSource) params.set("dataSource", filters.dataSource);
-    if (citiesParam) {
-      params.set("cities", citiesParam);
+    if (citiesQueryParam) {
+      params.set("cities", citiesQueryParam);
     } else if (filters.city) {
       params.set("city", filters.city);
     }
@@ -414,7 +433,7 @@ export function SearchExperience() {
   }, [
     filters,
     appliedBounds,
-    citiesParam,
+    citiesQueryParam,
     communitiesParam,
     polygon,
     qParam,
@@ -479,6 +498,7 @@ export function SearchExperience() {
   /** Desktop Filters flyout Apply — one URL write for filters + cities. */
   function commitFiltersWithCities(next: SearchFilters, nextCities: string[]) {
     const committed = { ...next, city: "" };
+    setCitiesOverride(nextCities);
     setFilters(committed);
     syncUrl(committed, view, { cities: nextCities.join("|") });
   }
@@ -594,17 +614,16 @@ export function SearchExperience() {
   function onBarSearchClear() {
     setPlaceQueryCleared(true);
     const next = { ...filters, city: "", community: "" };
+    setCitiesOverride([]);
     setFilters(next);
     syncUrl(next, view, { clearMultiPlace: true, clearQuery: true });
   }
 
   function onBarSearchSubmit(raw: string) {
-    const recognized = withStructuredCity(
-      structuredCitiesFromSearch(citiesParam, filters.city),
-      raw,
-    );
+    const recognized = withStructuredCity(structuredCities, raw);
     if (recognized) {
       const next = { ...filters, city: "" };
+      setCitiesOverride(recognized);
       setFilters(next);
       setCityEntryToken((token) => token + 1);
       if (!filters.community.trim()) setPlaceQueryCleared(true);
@@ -661,11 +680,12 @@ export function SearchExperience() {
         const hadPlace = Boolean(
           f.city.trim() ||
             f.community.trim() ||
-            citiesParam.trim() ||
+            citiesQueryParam.trim() ||
             communitiesParam.trim(),
         );
         if (!hadPlace) return f;
         const cleared = { ...f, city: "", community: "" };
+        setCitiesOverride([]);
         syncUrl(cleared, viewRef.current, { clearMultiPlace: true });
         return cleared;
       });
@@ -693,10 +713,7 @@ export function SearchExperience() {
   const showMap = view === "split" || view === "map";
   const showList = view === "split" || view === "cards";
   const activeFilterCount =
-    countActiveSearchFilters(filters) +
-    (citiesParam.trim()
-      ? structuredCitiesFromSearch(citiesParam, "").length
-      : 0);
+    countActiveSearchFilters(filters) + structuredCities.length;
   const activeListing = items.find((i) => i.mlsNumber === activeMls) ?? null;
 
   const noun =
@@ -713,7 +730,7 @@ export function SearchExperience() {
         segment: filters.segment,
         city: filters.city,
         community: filters.community,
-        cities: citiesParam,
+        cities: citiesQueryParam,
         communities: communitiesParam,
         q: qParam,
         minPrice: filters.minPrice,
@@ -726,7 +743,7 @@ export function SearchExperience() {
         total,
         pending,
       }),
-    [citiesParam, communitiesParam, filters, pending, qParam, total],
+    [citiesQueryParam, communitiesParam, filters, pending, qParam, total],
   );
 
   const countLabel = pending
@@ -736,35 +753,20 @@ export function SearchExperience() {
   const mobileCardsLayout = isNarrow && view === "cards";
 
   const savedSearchQuery = useMemo(
-    () => ({
-      segment: filters.segment !== "RESIDENTIAL" ? filters.segment : undefined,
-      transactionType:
-        filters.transactionType !== "ALL" ? filters.transactionType : undefined,
-      dataSource: filters.dataSource || undefined,
-      city: filters.city || undefined,
-      community: filters.community || undefined,
-      propertyTypes: filters.propertyTypes.length
-        ? filters.propertyTypes.join(",")
-        : undefined,
-      minPrice: filters.minPrice || undefined,
-      maxPrice: filters.maxPrice || undefined,
-      minBeds: filters.minBeds || undefined,
-      minBaths: filters.minBaths || undefined,
-      openHouseOnly: filters.openHouseOnly ? "1" : undefined,
-      status: statusesQueryValue(filters.statuses) ?? undefined,
-      sort: filters.sort !== "newest" ? filters.sort : undefined,
-    }),
-    [filters],
+    () => searchFiltersToSavedQuery(filters, { cities: structuredCities }),
+    [filters, structuredCities],
   );
 
   function replaceStructuredCities(nextCities: string[]) {
     const next = { ...filters, city: "" };
+    setCitiesOverride(nextCities);
     setFilters(next);
     syncUrl(next, view, { cities: nextCities.join("|") });
   }
 
   function resetStructuredFilters() {
     const next = resetSearchFilters(filters);
+    setCitiesOverride([]);
     setFilters(next);
     syncUrl(next, view, { cities: "", clearMultiPlace: true });
   }
@@ -796,14 +798,15 @@ export function SearchExperience() {
         return;
       case "place": {
         const next = { ...filters, city: "", community: "" };
+        setCitiesOverride([]);
         setFilters(next);
         syncUrl(next, view, { clearMultiPlace: true });
         return;
       }
       case "city": {
-        const current = structuredCitiesFromSearch(citiesParam, filters.city);
-        const nextCities = current.filter((city) => city !== chip.city);
+        const nextCities = structuredCities.filter((city) => city !== chip.city);
         const next = { ...filters, city: "" };
+        setCitiesOverride(nextCities);
         setFilters(next);
         syncUrl(next, view, { cities: nextCities.join("|") });
         return;
@@ -821,7 +824,7 @@ export function SearchExperience() {
 
   const filterPreviewExtras = useMemo(
     () => ({
-      cities: citiesParam || undefined,
+      cities: citiesQueryParam || undefined,
       communities: communitiesParam || undefined,
       q: qParam || undefined,
       ...(appliedBounds && !placeFilterActive
@@ -834,7 +837,7 @@ export function SearchExperience() {
         : {}),
     }),
     [
-      citiesParam,
+      citiesQueryParam,
       communitiesParam,
       qParam,
       appliedBounds,
@@ -878,7 +881,7 @@ export function SearchExperience() {
               className="min-w-0 flex-1 rounded-full border border-line bg-mist/60 px-1"
             >
               <AddressAutocomplete
-                key={`${citiesParam || filters.city || "none"}:${cityEntryToken}`}
+                key={`${citiesQueryParam || filters.city || "none"}:${cityEntryToken}`}
                 initialQuery={searchBarQuery}
                 transactionType={
                   filters.transactionType === "LEASE" ||
@@ -967,7 +970,7 @@ export function SearchExperience() {
             <div className="inline-flex shrink-0">
               <SaveSearchButton
                 signedIn={signedIn}
-                callbackPath={searchCallbackPath(filters)}
+                callbackPath={searchCallbackPath(filters, structuredCities)}
                 query={savedSearchQuery}
               />
             </div>
@@ -978,7 +981,7 @@ export function SearchExperience() {
               transactionType={filters.transactionType}
               segment={filters.segment}
               idleLabel="Watch"
-              authCallbackUrl={searchCallbackPath(filters)}
+              authCallbackUrl={searchCallbackPath(filters, structuredCities)}
               className="h-8 shrink-0 rounded-full px-2.5"
             />
             <Link
@@ -1024,7 +1027,7 @@ export function SearchExperience() {
               className="min-w-0 flex-1 basis-[16rem] rounded-full border border-line bg-mist/60 px-1"
             >
               <AddressAutocomplete
-                key={`${citiesParam || filters.city || "none"}:${cityEntryToken}`}
+                key={`${citiesQueryParam || filters.city || "none"}:${cityEntryToken}`}
                 initialQuery={searchBarQuery}
                 transactionType={
                   filters.transactionType === "LEASE" ||
@@ -1075,7 +1078,7 @@ export function SearchExperience() {
             <SearchFiltersMenu
                 filters={filters}
                 onChange={updateFilters}
-                cities={structuredCitiesFromSearch(citiesParam, filters.city)}
+                cities={structuredCities}
                 onCitiesChange={replaceStructuredCities}
                 onCommitFilters={commitFiltersWithCities}
                 onResetFilters={resetStructuredFilters}
@@ -1119,7 +1122,7 @@ export function SearchExperience() {
               <div className="inline-flex">
                 <SaveSearchButton
                   signedIn={signedIn}
-                  callbackPath={searchCallbackPath(filters)}
+                  callbackPath={searchCallbackPath(filters, structuredCities)}
                   query={savedSearchQuery}
                 />
               </div>
@@ -1130,7 +1133,7 @@ export function SearchExperience() {
                 transactionType={filters.transactionType}
                 segment={filters.segment}
                 idleLabel="Watch area"
-                authCallbackUrl={searchCallbackPath(filters)}
+                authCallbackUrl={searchCallbackPath(filters, structuredCities)}
                 className="h-8 rounded-full px-2.5"
               />
               <Link
@@ -1167,7 +1170,7 @@ export function SearchExperience() {
           <SearchDesktopFilterPanel
             filters={filters}
             onChange={updateFilters}
-            cities={structuredCitiesFromSearch(citiesParam, filters.city)}
+            cities={structuredCities}
             onCitiesChange={replaceStructuredCities}
             onResetFilters={resetStructuredFilters}
             resultCount={total}
@@ -1356,14 +1359,14 @@ export function SearchExperience() {
           onClose={() => setFiltersOpen(false)}
           filters={filters}
           onChange={updateFilters}
-          cities={structuredCitiesFromSearch(citiesParam, filters.city)}
+          cities={structuredCities}
           onCitiesChange={replaceStructuredCities}
           onResetFilters={resetStructuredFilters}
           resultCount={total}
           pending={pending}
           resultNoun={noun}
           signedIn={signedIn}
-          callbackPath={searchCallbackPath(filters)}
+          searchCallbackPath={searchCallbackPath}
         />
       ) : null}
     </div>

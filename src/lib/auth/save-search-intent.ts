@@ -11,6 +11,7 @@ import {
   searchFiltersToSavedQuery,
 } from "@/lib/listings/saved-search-query";
 import { createPrimarySavedSearch } from "@/lib/listings/save-primary-search";
+import { structuredCitiesFromSearch } from "@/lib/listings/structured-cities";
 
 type OpenAuth = (options: {
   mode?: "sign-in" | "sign-up";
@@ -71,9 +72,18 @@ export function savedSearchPayloadFromCallback(callbackPath: string): {
 } | null {
   const filters = searchFiltersFromHref(callbackPath);
   if (!filters) return null;
+  const qIndex = callbackPath.indexOf("?");
+  const params = new URLSearchParams(
+    qIndex === -1 ? "" : callbackPath.slice(qIndex + 1),
+  );
+  const cities = structuredCitiesFromSearch(
+    params.get("cities") ?? "",
+    filters.city,
+  );
+  const placeExtras = { cities };
   return {
-    name: savedSearchDisplayName(filters),
-    query: searchFiltersToSavedQuery(filters),
+    name: savedSearchDisplayName(filters, placeExtras),
+    query: searchFiltersToSavedQuery(filters, placeExtras),
   };
 }
 

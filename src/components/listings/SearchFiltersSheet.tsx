@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import type { PropertyType } from "@prisma/client";
 import { ArrowLeft, Check, Loader2, RotateCcw } from "lucide-react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
@@ -9,7 +10,10 @@ import { browserCaptureIntentStore } from "@/components/auth/capture-intent-brow
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { StructuredCityField } from "@/components/listings/StructuredCityField";
+import {
+  StructuredCityField,
+  type StructuredCityFieldHandle,
+} from "@/components/listings/StructuredCityField";
 import {
   type SearchFilters,
   type SearchStatusOption,
@@ -125,7 +129,7 @@ export function SearchFiltersSheet({
   pending = false,
   resultNoun = "homes",
   signedIn = false,
-  callbackPath,
+  searchCallbackPath,
 }: {
   open: boolean;
   onClose: () => void;
@@ -138,8 +142,9 @@ export function SearchFiltersSheet({
   pending?: boolean;
   resultNoun?: string;
   signedIn?: boolean;
-  callbackPath: string;
+  searchCallbackPath: (filters: SearchFilters, cities?: string[]) => string;
 }) {
+  const router = useRouter();
   const { openAuth } = useAuthModal();
   const { toast } = useSiteAlert();
   const titleId = useId();
@@ -149,11 +154,25 @@ export function SearchFiltersSheet({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const historyPushedRef = useRef(false);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const cityFieldRef = useRef<StructuredCityFieldHandle>(null);
   const onCloseRef = useRef(onClose);
-  const keepHrefRef = useRef("");
+  const routerRef = useRef(router);
+  /** Relative /search?... built from props / Apply — not window.location. */
+  const intendedPathRef = useRef("");
+  /** Cities last prepared on Apply — used when confirming after the field unmounts. */
+  const applyCitiesRef = useRef(cities);
+  /**
+   * After Apply prepares cities/path, ignore lagging props so a pending
+   * router.replace cannot wipe Mississauga before history restore runs.
+   */
+  const applyIntentLockedRef = useRef(false);
   onCloseRef.current = onClose;
-  if (open && typeof window !== "undefined") {
-    keepHrefRef.current = window.location.href;
+  routerRef.current = router;
+  if (!open) {
+    applyIntentLockedRef.current = false;
+  } else if (!applyIntentLockedRef.current) {
+    intendedPathRef.current = searchCallbackPath(filters, cities);
+    applyCitiesRef.current = cities;
   }
   const isLease = filters.transactionType === "LEASE";
   const pricePresets = isLease ? LEASE_PRICE_PRESETS : SALE_PRICE_PRESETS;
@@ -245,6 +264,8 @@ export function SearchFiltersSheet({
   // Capture phase + stopImmediatePropagation so Next's popstate handler does not
   // treat the same-URL history entry as leaving /search. The marker is not a
   // query param. Manual close uses history.back() so the entry is consumed.
+  // After back, restore the intended /search path (filters + cities from React
+  // props), then router.replace so App Router searchParams match the bar.
   useEffect(() => {
     if (!open) return;
 
@@ -262,14 +283,21 @@ export function SearchFiltersSheet({
       if (!historyPushedRef.current) return;
       event.stopImmediatePropagation();
       historyPushedRef.current = false;
-      const keepHref = keepHrefRef.current;
-      if (keepHref && window.location.href !== keepHref) {
-        const state = {
-          ...((window.history.state ?? {}) as Record<string, unknown>),
-        };
-        delete state.__NA;
-        delete state.__PRIVATE_NEXTJS_INTERNALS_TREE;
-        window.history.replaceState(state, "", keepHref);
+      const path = intendedPathRef.current;
+      if (path) {
+        const absolute = new URL(path, window.location.origin).href;
+        if (window.location.href !== absolute) {
+          const state = {
+            ...((window.history.state ?? {}) as Record<string, unknown>),
+          };
+          delete state.__NA;
+          delete state.__PRIVATE_NEXTJS_INTERNALS_TREE;
+          delete state.houzzatSearchFilters;
+          window.history.replaceState(state, "", absolute);
+        }
+        // replaceState updates the bar; router.replace syncs useSearchParams
+        // after Next may have applied the prior history entry from Back.
+        routerRef.current.replace(path, { scroll: false });
       }
       onCloseRef.current();
     };
@@ -279,7 +307,25 @@ export function SearchFiltersSheet({
     };
   }, [open]);
 
-  async function persist(confirmReplace: boolean) {
+  function prepareApplyCities(): string[] | null {
+    if (!cityFieldRef.current) {
+      const nextCities = applyCitiesRef.current;
+      intendedPathRef.current = searchCallbackPath(filters, nextCities);
+      applyIntentLockedRef.current = true;
+      return nextCities;
+    }
+    const flushed = cityFieldRef.current.flush();
+    if (!flushed.ok) return null;
+    // Lock before onCitiesChange so lagging props cannot overwrite this path.
+    applyCitiesRef.current = flushed.cities;
+    intendedPathRef.current = searchCallbackPath(filters, flushed.cities);
+    applyIntentLockedRef.current = true;
+    return flushed.cities;
+  }
+
+  async function persist(confirmReplace: boolean, applyCities: string[]) {
+    const callbackPath = searchCallbackPath(filters, applyCities);
+    const placeExtras = { cities: applyCities };
     if (!signedIn) {
       const opened = openGuestSaveSearchIntent({
         callbackPath,
@@ -300,8 +346,8 @@ export function SearchFiltersSheet({
     }
     setSaving(true);
     const outcome = await savePrimarySearch({
-      name: savedSearchDisplayName(filters),
-      query: searchFiltersToSavedQuery(filters),
+      name: savedSearchDisplayName(filters, placeExtras),
+      query: searchFiltersToSavedQuery(filters, placeExtras),
       confirmReplace,
     });
     setSaving(false);
@@ -333,6 +379,16 @@ export function SearchFiltersSheet({
     }
     setConfirmOpen(false);
     if (plan.closeFilters) closeViaUi();
+  }
+
+  async function applyAndSave(confirmReplace: boolean) {
+    const nextCities = prepareApplyCities();
+    if (nextCities == null) return;
+    const unchanged =
+      nextCities.length === cities.length &&
+      nextCities.every((city, index) => city === cities[index]);
+    if (!unchanged) onCitiesChange(nextCities);
+    await persist(confirmReplace, nextCities);
   }
 
   if (!mounted) return null;
@@ -569,7 +625,11 @@ export function SearchFiltersSheet({
           </Section>
 
           <Section title="Location">
-            <StructuredCityField cities={cities} onCitiesChange={onCitiesChange} />
+            <StructuredCityField
+              ref={cityFieldRef}
+              cities={cities}
+              onCitiesChange={onCitiesChange}
+            />
             <label className="mt-3 block space-y-1.5 text-sm text-ink/70">
               <span className="text-xs font-semibold uppercase tracking-wide text-ink/45">
                 Community
@@ -593,7 +653,7 @@ export function SearchFiltersSheet({
             type="button"
             className="h-12 w-full gap-2"
             disabled={saving}
-            onClick={() => void persist(false)}
+            onClick={() => void applyAndSave(false)}
           >
             {pending || saving ? (
               <>
@@ -621,7 +681,7 @@ export function SearchFiltersSheet({
       open={confirmOpen}
       pending={saving}
       onCancel={() => setConfirmOpen(false)}
-      onConfirm={() => void persist(true)}
+      onConfirm={() => void applyAndSave(true)}
     />
     </>,
     document.body,

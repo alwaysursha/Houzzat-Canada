@@ -25,7 +25,10 @@ import {
   type SearchFilters,
   type SearchStatusOption,
 } from "@/components/listings/SearchFilterChips";
-import { StructuredCityField } from "@/components/listings/StructuredCityField";
+import {
+  StructuredCityField,
+  type StructuredCityFieldHandle,
+} from "@/components/listings/StructuredCityField";
 import { UpdateSavedSearchDialog } from "@/components/listings/UpdateSavedSearchDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -174,6 +177,9 @@ export function SearchFiltersMenu({
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const cityFieldRef = useRef<StructuredCityFieldHandle>(null);
+  /** Cities prepared on Apply — confirm runs after the flyout unmounts the field. */
+  const applyCitiesRef = useRef(draftCities);
   const id = useId();
   const flyoutStyle = useFlyoutFixedStyle(open, buttonRef, 400, {
     lockHeight: true,
@@ -207,6 +213,7 @@ export function SearchFiltersMenu({
     if (!open) return;
     setDraft(filters);
     setDraftCities(cities);
+    applyCitiesRef.current = cities;
     setDraftTotal(resultCount);
   }, [open, filters, cities, resultCount]);
 
@@ -266,19 +273,36 @@ export function SearchFiltersMenu({
     };
   }, [open, draft, draftCities, previewExtras, resultCount]);
 
-  function commitDraft() {
+  function flushDraftCities(): string[] | null {
+    if (!cityFieldRef.current) {
+      return applyCitiesRef.current;
+    }
+    const flushed = cityFieldRef.current.flush();
+    if (!flushed.ok) return null;
+    applyCitiesRef.current = flushed.cities;
+    if (
+      flushed.cities.length !== draftCities.length ||
+      flushed.cities.some((city, index) => city !== draftCities[index])
+    ) {
+      setDraftCities(flushed.cities);
+    }
+    return flushed.cities;
+  }
+
+  function commitDraft(nextCities: string[]) {
     const next = { ...draft, city: "" };
     if (onCommitFilters) {
-      onCommitFilters(next, draftCities);
+      onCommitFilters(next, nextCities);
       return;
     }
     onChange(next);
-    onCitiesChange(draftCities);
+    onCitiesChange(nextCities);
   }
 
-  async function persist(confirmReplace: boolean) {
+  async function persist(confirmReplace: boolean, nextCities: string[]) {
+    const placeExtras = { cities: nextCities };
     if (!signedIn) {
-      const callbackPath = searchCallbackPath(draft, draftCities);
+      const callbackPath = searchCallbackPath(draft, nextCities);
       const opened = openGuestSaveSearchIntent({
         callbackPath,
         host: window.location.hostname,
@@ -297,8 +321,8 @@ export function SearchFiltersMenu({
     }
     setSaving(true);
     const outcome = await savePrimarySearch({
-      name: savedSearchDisplayName(draft),
-      query: searchFiltersToSavedQuery(draft),
+      name: savedSearchDisplayName(draft, placeExtras),
+      query: searchFiltersToSavedQuery(draft, placeExtras),
       confirmReplace,
     });
     setSaving(false);
@@ -306,7 +330,7 @@ export function SearchFiltersMenu({
     if (outcome.status === "auth") {
       openAuth({
         mode: "sign-in",
-        callbackUrl: searchCallbackPath(draft, draftCities),
+        callbackUrl: searchCallbackPath(draft, nextCities),
       });
       return false;
     }
@@ -335,8 +359,11 @@ export function SearchFiltersMenu({
   }
 
   async function applyAndSave() {
-    commitDraft();
-    const ok = await persist(false);
+    const nextCities = flushDraftCities();
+    if (nextCities == null) return;
+    applyCitiesRef.current = nextCities;
+    commitDraft(nextCities);
+    const ok = await persist(false, nextCities);
     if (ok) {
       setOpen(false);
       setConfirmOpen(false);
@@ -344,8 +371,11 @@ export function SearchFiltersMenu({
   }
 
   async function confirmUpdate() {
-    commitDraft();
-    const ok = await persist(true);
+    const nextCities = flushDraftCities();
+    if (nextCities == null) return;
+    applyCitiesRef.current = nextCities;
+    commitDraft(nextCities);
+    const ok = await persist(true, nextCities);
     if (ok) {
       setConfirmOpen(false);
       setOpen(false);
@@ -561,6 +591,7 @@ export function SearchFiltersMenu({
           <Section title="Location">
             <div className="grid min-w-0 gap-2 sm:grid-cols-2">
               <StructuredCityField
+                ref={cityFieldRef}
                 cities={draftCities}
                 onCitiesChange={setDraftCities}
               />

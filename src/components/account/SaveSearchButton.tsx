@@ -31,9 +31,14 @@ function normalizeQuery(query: Record<string, unknown>): string {
 }
 
 function nameFromQuery(query: Record<string, unknown>): string {
+  const cities = Array.isArray(query.cities)
+    ? query.cities.map((city) => String(city).trim()).filter(Boolean)
+    : [];
   const place =
     (typeof query.community === "string" && query.community) ||
+    (cities.length === 1 ? cities[0] : "") ||
     (typeof query.city === "string" && query.city) ||
+    (cities.length > 1 ? `${cities.length} cities` : "") ||
     "";
   const txn = query.transactionType === "LEASE" ? "rentals" : "homes";
   return place ? `${place} ${txn}` : `My ${txn} search`;

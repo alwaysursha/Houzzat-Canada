@@ -1,28 +1,77 @@
 "use client";
 
-import { useState } from "react";
+import {
+  forwardRef,
+  useImperativeHandle,
+  useState,
+} from "react";
 import { X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { withStructuredCity } from "@/lib/listings/structured-cities";
 
-/** Selected cities plus a field that adds another recognized city. */
-export function StructuredCityField({
-  cities,
-  onCitiesChange,
-}: {
-  cities: string[];
-  onCitiesChange: (next: string[]) => void;
-}) {
-  const [draft, setDraft] = useState("");
+export type StructuredCityFlushResult =
+  | { ok: true; cities: string[]; committed: boolean }
+  | { ok: false; error: string; draft: string };
 
-  function commit() {
-    const next = withStructuredCity(cities, draft);
-    if (!next) return;
+export type StructuredCityFieldHandle = {
+  /**
+   * Resolve typed text into cities. Side-effect free except clearing draft /
+   * error UI — callers must apply `cities` via onCitiesChange / Apply.
+   */
+  flush: () => StructuredCityFlushResult;
+};
+
+const UNRECOGNIZED_CITY_MESSAGE =
+  "Enter a recognized city and press Enter, or choose from your selected cities. Clear the field to apply without a new city.";
+
+/** Selected cities plus a field that adds another recognized city. */
+export const StructuredCityField = forwardRef<
+  StructuredCityFieldHandle,
+  {
+    cities: string[];
+    onCitiesChange: (next: string[]) => void;
+  }
+>(function StructuredCityField({ cities, onCitiesChange }, ref) {
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function resolveDraft(raw: string): StructuredCityFlushResult {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      setError(null);
+      return { ok: true, cities, committed: false };
+    }
+    const next = withStructuredCity(cities, trimmed);
+    if (!next) {
+      const message = UNRECOGNIZED_CITY_MESSAGE;
+      setError(message);
+      return { ok: false, error: message, draft: trimmed };
+    }
     const unchanged =
       next.length === cities.length &&
       next.every((city, index) => city === cities[index]);
-    if (!unchanged) onCitiesChange(next);
+    return { ok: true, cities: next, committed: !unchanged };
+  }
+
+  useImperativeHandle(ref, () => ({
+    flush: () => {
+      const result = resolveDraft(draft);
+      if (result.ok && result.committed) {
+        setDraft("");
+        setError(null);
+      } else if (result.ok) {
+        setError(null);
+      }
+      return result;
+    },
+  }));
+
+  function commit() {
+    const result = resolveDraft(draft);
+    if (!result.ok) return;
+    if (result.committed) onCitiesChange(result.cities);
     setDraft("");
+    setError(null);
   }
 
   return (
@@ -55,7 +104,10 @@ export function StructuredCityField({
       ) : null}
       <Input
         value={draft}
-        onChange={(event) => setDraft(event.target.value)}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          if (error) setError(null);
+        }}
         onKeyDown={(event) => {
           if (event.key !== "Enter") return;
           event.preventDefault();
@@ -63,8 +115,19 @@ export function StructuredCityField({
         }}
         placeholder={cities.length > 0 ? "Add a city" : "Toronto"}
         aria-label={cities.length > 0 ? "Add a city" : "City"}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? "structured-city-error" : undefined}
         className="min-w-0"
       />
+      {error ? (
+        <p
+          id="structured-city-error"
+          role="alert"
+          className="text-xs font-medium text-danger"
+        >
+          {error}
+        </p>
+      ) : null}
     </div>
   );
-}
+});

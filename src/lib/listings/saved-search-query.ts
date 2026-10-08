@@ -5,17 +5,39 @@ function statusesQueryValue(statuses: SearchFilters["statuses"]): string | null 
   return statuses.join(",");
 }
 
-/** Serialize UI filters into the JSON shape stored on SavedSearch.query. */
+function resolvedCities(
+  filters: SearchFilters,
+  extras?: { cities?: readonly string[] },
+): string[] {
+  const fromExtras = (extras?.cities ?? [])
+    .map((city) => city.trim())
+    .filter(Boolean);
+  if (fromExtras.length) return [...new Set(fromExtras)];
+  const one = filters.city.trim();
+  return one ? [one] : [];
+}
+
+/**
+ * Serialize UI filters into the JSON shape stored on SavedSearch.query.
+ * Place fields match qualification / digest / savedQueryToSearchHref:
+ * one city → `city`; multiple → `cities` string[].
+ */
 export function searchFiltersToSavedQuery(
   filters: SearchFilters,
+  extras?: { cities?: readonly string[] },
 ): Record<string, unknown> {
+  const cities = resolvedCities(filters, extras);
   return {
     segment:
       filters.segment !== "RESIDENTIAL" ? filters.segment : undefined,
     transactionType:
       filters.transactionType !== "ALL" ? filters.transactionType : undefined,
     dataSource: filters.dataSource || undefined,
-    city: filters.city || undefined,
+    ...(cities.length === 1
+      ? { city: cities[0] }
+      : cities.length > 1
+        ? { cities }
+        : {}),
     community: filters.community || undefined,
     propertyTypes: filters.propertyTypes.length
       ? filters.propertyTypes.join(",")
@@ -30,8 +52,15 @@ export function searchFiltersToSavedQuery(
   };
 }
 
-export function savedSearchDisplayName(filters: SearchFilters): string {
-  const place = filters.community.trim() || filters.city.trim();
+export function savedSearchDisplayName(
+  filters: SearchFilters,
+  extras?: { cities?: readonly string[] },
+): string {
+  const cities = resolvedCities(filters, extras);
+  const place =
+    filters.community.trim() ||
+    (cities.length === 1 ? cities[0] : "") ||
+    (cities.length > 1 ? `${cities.length} cities` : "");
   const txn =
     filters.transactionType === "LEASE"
       ? "rentals"
