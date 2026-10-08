@@ -272,6 +272,8 @@ export function AddressAutocomplete({
   /** Ignore stale autocomplete responses while the user keeps typing. */
   const listingsFetchGenRef = useRef(0);
   const placesFetchGenRef = useRef(0);
+  /** Ignore stale placeId resolution after a newer selection or clear. */
+  const chooseGenRef = useRef(0);
   const [panelStyle, setPanelStyle] = useState<CSSProperties | undefined>();
 
   const mobileSheetWasOpenRef = useRef(false);
@@ -835,6 +837,8 @@ export function AddressAutocomplete({
     if (suggestion.action === "listings_empty") return;
 
     // Close immediately and pin selection so in-flight fetches cannot reopen.
+    const chooseGen = ++chooseGenRef.current;
+    const stillCurrent = () => chooseGen === chooseGenRef.current;
     const optimisticLabel = (suggestion.subtitle ?? suggestion.label).trim();
     if (optimisticLabel) {
       selectedQueryRef.current = optimisticLabel;
@@ -886,9 +890,11 @@ export function AddressAutocomplete({
           sessionToken,
         });
         const res = await fetch(`/api/places/details?${params}`);
+        if (!stillCurrent()) return;
         const data = (await res.json()) as {
           place?: AutocompleteSuggestion;
         };
+        if (!stillCurrent()) return;
         if (data.place) {
           resolved = {
             ...data.place,
@@ -898,12 +904,13 @@ export function AddressAutocomplete({
           };
         }
       } finally {
-        setLoading(false);
+        if (stillCurrent()) setLoading(false);
       }
 
       // Selecting a Google address on Buy/Rent → show around-options in-panel
       // when caller didn't pass a custom handler that navigates immediately.
       if (source === "listings" && !fillOnly) {
+        if (!stillCurrent()) return;
         const addressRow = placeToAddressSuggestion(resolved);
         const around = suggestionsAroundPlace(resolved, transactionType);
         const filled =
@@ -924,6 +931,8 @@ export function AddressAutocomplete({
         return;
       }
     }
+
+    if (!stillCurrent()) return;
 
     const filled =
       resolved.city && resolved.province
@@ -1073,6 +1082,9 @@ export function AddressAutocomplete({
   }
 
   function clearQuery() {
+    chooseGenRef.current += 1;
+    listingsFetchGenRef.current += 1;
+    placesFetchGenRef.current += 1;
     selectedQueryRef.current = null;
     lastEmittedQueryRef.current = "";
     setResolvedNearHref(null);
@@ -1081,6 +1093,7 @@ export function AddressAutocomplete({
     setSuggestions([]);
     setActiveIndex(-1);
     setOpen(false);
+    setLoading(false);
     onQueryChange?.("");
     onClear?.();
     if (isMobile && mobileSheetOpen) {

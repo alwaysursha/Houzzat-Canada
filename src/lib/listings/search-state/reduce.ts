@@ -83,11 +83,25 @@ function removeChip(
         community: "",
         communities: [],
       };
-    case "city":
+    case "community":
       return {
         ...committed,
-        cities: committed.cities.filter((city) => city !== chip.city),
+        community: "",
+        communities: [],
       };
+    case "city": {
+      const cities = committed.cities.filter((city) => city !== chip.city);
+      // Empty city list must not leave a hidden community constraint.
+      if (cities.length === 0) {
+        return {
+          ...committed,
+          cities: [],
+          community: "",
+          communities: [],
+        };
+      }
+      return { ...committed, cities };
+    }
     case "query":
       return { ...committed, q: "" };
     default: {

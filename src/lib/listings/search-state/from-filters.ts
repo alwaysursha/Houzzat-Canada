@@ -21,12 +21,15 @@ export function commitPatchFromFilters(
   options?: CommitFromFiltersOptions,
 ): Partial<CommittedSearch> {
   let cities = prev.cities;
+  /** Single-city replace via filters.city (not explicit cities[]) drops multi-community. */
+  let replacedViaSingleCity = false;
   if (options?.clearPlace) {
     cities = [];
   } else if (options?.cities !== undefined) {
     cities = options.cities.map((c) => c.trim()).filter(Boolean);
   } else if (filters.city.trim()) {
     cities = [filters.city.trim()];
+    replacedViaSingleCity = true;
   }
 
   return {
@@ -35,7 +38,8 @@ export function commitPatchFromFilters(
     dataSource: filters.dataSource,
     cities,
     community: options?.clearPlace ? "" : filters.community,
-    communities: options?.clearPlace ? [] : prev.communities,
+    communities:
+      options?.clearPlace || replacedViaSingleCity ? [] : prev.communities,
     q: options?.clearQuery ? "" : prev.q,
     minPrice: filters.minPrice,
     maxPrice: filters.maxPrice,

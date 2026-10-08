@@ -51,6 +51,11 @@ export {
   committedPlaceKey,
   withPlaceAwareMapArea,
 } from "@/lib/listings/search-state/place";
+export {
+  clearPlaceWhenCitiesEmpty,
+  placeCommitFromSuggestion,
+  type PlaceCommitResult,
+} from "@/lib/listings/search-state/place-commit";
 export { useCommittedSearch } from "@/lib/listings/search-state/use-committed-search";
 export {
   decideUrlHydrate,

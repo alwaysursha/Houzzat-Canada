@@ -36,6 +36,7 @@ export type SearchResultChipKey =
   | "segment"
   | "place"
   | "city"
+  | "community"
   | "query"
   | "status";
 
@@ -249,7 +250,16 @@ export function searchResultsCopy(input: SearchResultsCopyInput): SearchResultsC
   for (const name of cityNames) {
     chips.push({ key: "city", label: name, clearable: true, city: name });
   }
-  if (place && cityNames.length === 0) {
+  const communityLabel = input.community.trim();
+  if (communityLabel) {
+    chips.push({
+      key: "community",
+      label: communityLabel,
+      clearable: true,
+    });
+  }
+  // Multi-community pipe (or community-only place) when no per-city chips cover it.
+  if (place && cityNames.length === 0 && !communityLabel) {
     chips.push({
       key: "place",
       label: place.many ? `${place.label} ${place.many}` : place.label,

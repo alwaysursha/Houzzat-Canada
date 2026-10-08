@@ -54,9 +54,11 @@ import {
   buildActiveChips,
   buildListingsQuery,
   buildSavedSearchQuery,
+  clearPlaceWhenCitiesEmpty,
   commitPatchFromFilters,
   committedPlaceKey,
   committedToSearchFilters,
+  placeCommitFromSuggestion,
   rebaseDraftPreservingEdits,
   reduceSearch,
   serializeSearchUrl,
@@ -554,6 +556,29 @@ export function SearchExperience() {
       );
       return;
     }
+
+    // City / community / around-area: commit through the controller so
+    // beds/price/type survive. Do not router.push minimal suggestion hrefs.
+    const placeCommit = placeCommitFromSuggestion(suggestion);
+    if (placeCommit) {
+      if (placeCommit.mapCenter) {
+        setMapFrame({
+          token: `suggest:${placeCommit.mapCenter.lat},${placeCommit.mapCenter.lng}:${placeCommit.mapCenter.label}`,
+          kind: "center",
+          lat: placeCommit.mapCenter.lat,
+          lng: placeCommit.mapCenter.lng,
+          zoom: 12,
+        });
+      }
+      if (placeCommit.replacesPlace) {
+        setCityEntryToken((token) => token + 1);
+        if (!placeCommit.patch.community) setPlaceQueryCleared(true);
+      }
+      dispatchCommit(placeCommit.patch);
+      return;
+    }
+
+    // Recent searches and other full /search hrefs (not bare city rows).
     if (suggestion.href?.startsWith("/search")) {
       const staffHref =
         searchBasePath === "/search"
@@ -570,20 +595,6 @@ export function SearchExperience() {
         lng: suggestion.lng,
         zoom: 12,
       });
-    }
-    if (
-      suggestion.type === "city" ||
-      suggestion.type === "community" ||
-      suggestion.type === "place"
-    ) {
-      updateFilters((current) => ({
-        ...current,
-        city: suggestion.city ?? suggestion.subtitle ?? current.city,
-        community:
-          suggestion.type === "community"
-            ? (suggestion.community ?? suggestion.label)
-            : current.community,
-      }));
     }
   }
 
@@ -734,11 +745,22 @@ export function SearchExperience() {
 
   function replaceStructuredCities(nextCities: string[]) {
     const prev = committedRef.current;
+    const placePatch = clearPlaceWhenCitiesEmpty(prev, nextCities);
+    if (nextCities.length === 0) {
+      dispatchCommit(
+        commitPatchFromFilters(
+          prev,
+          { ...committedToSearchFilters(prev), city: "", community: "" },
+          { clearPlace: true },
+        ),
+      );
+      return;
+    }
     dispatchCommit(
       commitPatchFromFilters(
         prev,
         { ...committedToSearchFilters(prev), city: "" },
-        { cities: nextCities },
+        { cities: placePatch.cities ?? nextCities },
       ),
     );
   }
