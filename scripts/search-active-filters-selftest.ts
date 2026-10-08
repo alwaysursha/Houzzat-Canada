@@ -475,12 +475,15 @@ record(11, "Href round-trip restores cities and filters", "RUNTIME", () => {
   assert.equal(parsed.view, "map");
 });
 
-record(11, "Experience syncs filters from searchParams", "STATIC", () => {
+record(11, "Experience hydrates committed search from URL controller", "STATIC", () => {
   const experience = read("src/components/listings/SearchExperience.tsx");
-  assert.match(experience, /Keep filter state aligned when URL changes/);
-  assert.match(experience, /setFilters\(\(prev\) => \(\{/);
-  assert.match(experience, /searchParams\.get\("minBeds"\)/);
-  assert.match(experience, /citiesParamForFilterSync/);
+  assert.match(experience, /useCommittedSearch/);
+  assert.match(experience, /HYDRATE_FROM_URL|serializeSearchUrl/);
+  assert.doesNotMatch(experience, /citiesParamForFilterSync/);
+  assert.doesNotMatch(experience, /setFilters\(\(prev\) => \(\{/);
+  const hook = read("src/lib/listings/search-state/use-committed-search.ts");
+  assert.match(hook, /HYDRATE_FROM_URL/);
+  assert.match(hook, /lastWrittenHrefRef/);
 });
 
 // ---------------------------------------------------------------------------
@@ -505,16 +508,15 @@ record(12, "Saved Search and CaptureIntent contracts unchanged", "STATIC", () =>
   assert.doesNotMatch(sheet, /gtag\(|analytics\.track|posthog/i);
 });
 
-// Wire-up: city removal uses optimistic override (STATIC — defect fix)
-record(7, "City tag removal sets optimistic citiesOverride always", "STATIC", () => {
+// Wire-up: city chip removal goes through canonical REMOVE_CHIP (Stage 2A)
+record(7, "City tag removal uses canonical REMOVE_CHIP", "STATIC", () => {
   const experience = read("src/components/listings/SearchExperience.tsx");
-  const cityCase = experience.slice(
-    experience.indexOf('case "city":'),
-    experience.indexOf('case "query":'),
+  assert.match(experience, /function clearResultChip/);
+  assert.match(
+    experience,
+    /dispatch\(\{\s*type:\s*"REMOVE_CHIP",\s*chip\s*\}\)/,
   );
-  assert.match(cityCase, /setCitiesOverride\(nextCities\)/);
-  assert.match(cityCase, /cities: nextCities\.join\("\|"\)/);
-  assert.doesNotMatch(cityCase, /nextCities\.length > 1 \? nextCities : null/);
+  assert.doesNotMatch(experience, /citiesOverride/);
 });
 
 console.log("\n=== Scenario results ===");

@@ -96,14 +96,15 @@ const experience = readFileSync(
 );
 const map = readFileSync("src/components/listings/SearchMap.tsx", "utf8");
 assert.match(experience, /if \(!meta\?\.userGesture\) return;/);
-assert.match(experience, /loadSeqRef/);
+assert.match(experience, /committedRef/);
+assert.match(experience, /buildListingsQuery\(committedRef\.current\)/);
 assert.doesNotMatch(
   experience,
   /if \(!polygonRef\.current\) setAppliedBounds\(null\)/,
 );
 assert.match(map, /skipBoundsNotify\.current = true/);
 // Gestures update pending bounds only; place filters stay until cleared.
-assert.match(experience, /mapGestureSearchThisAreaState/);
+assert.match(experience, /MAP_GESTURE/);
 assert.match(experience, /function onSearchThisArea/);
 assert.doesNotMatch(
   experience.slice(

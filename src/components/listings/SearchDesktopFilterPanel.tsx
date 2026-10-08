@@ -107,7 +107,9 @@ export function SearchDesktopFilterPanel({
   resultNoun,
 }: {
   filters: SearchFilters;
-  onChange: (next: SearchFilters) => void;
+  onChange: (
+    next: SearchFilters | ((current: SearchFilters) => SearchFilters),
+  ) => void;
   cities: string[];
   onCitiesChange: (cities: string[]) => void;
   onResetFilters: () => void;
@@ -154,13 +156,13 @@ export function SearchDesktopFilterPanel({
               { value: "ALL", label: "Both" },
             ]}
             onChange={(v) =>
-              onChange({
-                ...filters,
+              onChange((current) => ({
+                ...current,
                 transactionType: v as SearchFilters["transactionType"],
                 statuses: ["ACTIVE"],
                 openHouseOnly:
-                  v === "LEASE" ? false : filters.openHouseOnly,
-              })
+                  v === "LEASE" ? false : current.openHouseOnly,
+              }))
             }
           />
         </Section>
@@ -174,13 +176,13 @@ export function SearchDesktopFilterPanel({
               { value: "ALL", label: "All" },
             ]}
             onChange={(v) =>
-              onChange({
-                ...filters,
+              onChange((current) => ({
+                ...current,
                 segment: v as SearchFilters["segment"],
-                minBeds: v === "COMMERCIAL" ? "" : filters.minBeds,
-                minBaths: v === "COMMERCIAL" ? "" : filters.minBaths,
+                minBeds: v === "COMMERCIAL" ? "" : current.minBeds,
+                minBaths: v === "COMMERCIAL" ? "" : current.minBaths,
                 propertyTypes: [],
-              })
+              }))
             }
           />
         </Section>
@@ -192,7 +194,10 @@ export function SearchDesktopFilterPanel({
             <Input
               value={filters.community}
               onChange={(e) =>
-                onChange({ ...filters, community: e.target.value })
+                onChange((current) => ({
+                  ...current,
+                  community: e.target.value,
+                }))
               }
               placeholder="The Beaches"
               className="h-9 font-normal normal-case tracking-normal"
@@ -209,11 +214,11 @@ export function SearchDesktopFilterPanel({
             }))}
             onChange={(v) => {
               const [min, max] = v.split("|");
-              onChange({
-                ...filters,
+              onChange((current) => ({
+                ...current,
                 minPrice: min ?? "",
                 maxPrice: max ?? "",
-              });
+              }));
             }}
           />
           <div className="grid grid-cols-2 gap-2">
@@ -223,10 +228,10 @@ export function SearchDesktopFilterPanel({
               aria-label="Minimum price"
               value={filters.minPrice}
               onChange={(e) =>
-                onChange({
-                  ...filters,
+                onChange((current) => ({
+                  ...current,
                   minPrice: e.target.value.replace(/\D/g, ""),
-                })
+                }))
               }
               className="h-9"
             />
@@ -236,10 +241,10 @@ export function SearchDesktopFilterPanel({
               aria-label="Maximum price"
               value={filters.maxPrice}
               onChange={(e) =>
-                onChange({
-                  ...filters,
+                onChange((current) => ({
+                  ...current,
                   maxPrice: e.target.value.replace(/\D/g, ""),
-                })
+                }))
               }
               className="h-9"
             />
@@ -257,7 +262,9 @@ export function SearchDesktopFilterPanel({
               { value: "4", label: "4+" },
               { value: "5", label: "5+" },
             ]}
-            onChange={(v) => onChange({ ...filters, minBeds: v })}
+            onChange={(v) =>
+              onChange((current) => ({ ...current, minBeds: v }))
+            }
           />
         </Section>
 
@@ -271,7 +278,9 @@ export function SearchDesktopFilterPanel({
               { value: "3", label: "3+" },
               { value: "4", label: "4+" },
             ]}
-            onChange={(v) => onChange({ ...filters, minBaths: v })}
+            onChange={(v) =>
+              onChange((current) => ({ ...current, minBaths: v }))
+            }
           />
         </Section>
 
@@ -284,10 +293,13 @@ export function SearchDesktopFilterPanel({
                   key={type}
                   type="button"
                   onClick={() => {
-                    const next = selected
-                      ? filters.propertyTypes.filter((t) => t !== type)
-                      : [...filters.propertyTypes, type];
-                    onChange({ ...filters, propertyTypes: next });
+                    onChange((current) => {
+                      const isSelected = current.propertyTypes.includes(type);
+                      const next = isSelected
+                        ? current.propertyTypes.filter((t) => t !== type)
+                        : [...current.propertyTypes, type];
+                      return { ...current, propertyTypes: next };
+                    });
                   }}
                   className={cn(
                     "inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-semibold transition",

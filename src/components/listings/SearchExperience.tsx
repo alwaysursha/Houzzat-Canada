@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -47,31 +48,20 @@ import {
   parseSearchQuery,
   searchHrefFromParsed,
 } from "@/lib/listings/parse-search-query";
+import { shouldResetMapAreaForPlaceChange } from "@/lib/listings/map-area-search";
 import {
-  parseInitialStatuses,
-  parseSearchPropertyTypes,
-  parseSearchSort,
-  parseSearchView,
-  searchPageHref,
-  statusesQueryValue,
-} from "@/lib/listings/search-page-href";
-import {
-  searchResultsCopy,
-  type SearchResultChip,
-} from "@/lib/listings/search-results-copy";
-import {
-  appendPlaceAndBoundsParams,
-  listingSearchBoundsBox,
-  mapGestureSearchThisAreaState,
-  searchPlaceKey,
-  shouldResetMapAreaForPlaceChange,
-} from "@/lib/listings/map-area-search";
-import { searchFiltersToSavedQuery } from "@/lib/listings/saved-search-query";
-import { citiesParamForFilterSync } from "@/lib/listings/search-url-cities";
-import {
-  structuredCitiesFromSearch,
-  withStructuredCity,
-} from "@/lib/listings/structured-cities";
+  applyCommitPatch,
+  buildListingsQuery,
+  buildSavedSearchQuery,
+  commitPatchFromFilters,
+  committedPlaceKey,
+  committedToSearchFilters,
+  reduceSearch,
+  serializeSearchUrl,
+  useCommittedSearch,
+  type CommittedSearch,
+} from "@/lib/listings/search-state";
+import { withStructuredCity } from "@/lib/listings/structured-cities";
 import { pointInPolygon, polygonBBox } from "@/lib/maps/geo";
 import {
   listingResultFrame,
@@ -81,6 +71,10 @@ import {
   type MapFrame,
 } from "@/lib/geo/search-map-fit";
 import { cn } from "@/lib/utils";
+import {
+  searchResultsCopy,
+  type SearchResultChip,
+} from "@/lib/listings/search-results-copy";
 
 /** MapLibre stays out of the List/cards bundle until Map (or Split) is shown. */
 const SearchMap = dynamic(
@@ -164,6 +158,20 @@ export function SearchExperience() {
     pathname === "/admin/search" || pathname === "/agent/search"
       ? pathname
       : "/search";
+  const { state: searchState, dispatch } = useCommittedSearch(pathname);
+  const committed = searchState.committed;
+  const pendingMapBounds = searchState.pendingMapBounds;
+  const searchThisAreaVisible = searchState.searchThisAreaVisible;
+  const appliedBounds = committed.mapArea;
+  const view = committed.view;
+  const filters = useMemo(
+    () => committedToSearchFilters(committed),
+    [committed],
+  );
+  const structuredCities = committed.cities;
+  const citiesQueryParam = structuredCities.join("|");
+  const communitiesParam = committed.communities.join("|");
+  const qParam = committed.q;
   const access = useClientAccess();
   /** Session present — for save/watch CTAs. */
   const signedIn = access.isSignedIn;
@@ -173,18 +181,21 @@ export function SearchExperience() {
   const [items, setItems] = useState<ListingCardData[]>([]);
   const [total, setTotal] = useState(0);
   const [activeMls, setActiveMls] = useState<string | null>(null);
-  const [provider, setProvider] = useState("mock");
   const [mapFrame, setMapFrame] = useState<(MapFrame & { token: string }) | null>(
     null,
   );
-  const [appliedBounds, setAppliedBounds] = useState<Bounds | null>(null);
-  /** User-panned viewport awaiting an explicit Search This Area click. */
-  const [pendingMapBounds, setPendingMapBounds] = useState<Bounds | null>(null);
-  const [searchThisAreaVisible, setSearchThisAreaVisible] = useState(false);
+  /** Draw polygon is local geometry; bbox is committed via mapArea. */
   const [polygon, setPolygon] = useState<LngLat[] | null>(null);
   const boundsApplyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const appliedBoundsRef = useRef<Bounds | null>(null);
-  appliedBoundsRef.current = appliedBounds;
+  /**
+   * Latest committed criteria for handlers that may fire before React re-renders.
+   * Updated optimistically in dispatchCommit / view / chip paths; reconciled from
+   * React state in useLayoutEffect so the ref cannot permanently diverge.
+   */
+  const committedRef = useRef(committed);
+  useLayoutEffect(() => {
+    committedRef.current = committed;
+  }, [committed]);
   const [isNarrow, setIsNarrow] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [placeQueryCleared, setPlaceQueryCleared] = useState(false);
@@ -202,7 +213,6 @@ export function SearchExperience() {
   const resultFitKeyRef = useRef<string | null>(null);
   const itemsGeoKeyRef = useRef<string | null>(null);
   const geoKeyRef = useRef("");
-  const loadSeqRef = useRef(0);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1023px)");
@@ -214,146 +224,39 @@ export function SearchExperience() {
     return () => mq.removeEventListener("change", sync);
   }, []);
 
-  const txnParam = searchParams.get("transactionType");
-  const initialTxn: SearchFilters["transactionType"] =
-    txnParam === "LEASE" || txnParam === "ALL" || txnParam === "SALE"
-      ? txnParam
-      : searchParams.get("dataSource") === "fsbo"
-        ? "ALL"
-        : "SALE";
-
-  const [filters, setFilters] = useState<SearchFilters>({
-    segment:
-      (searchParams.get("segment") as SearchFilters["segment"]) ||
-      "RESIDENTIAL",
-    transactionType: initialTxn,
-    dataSource: searchParams.get("dataSource") === "fsbo" ? "fsbo" : "",
-    city: searchParams.get("city") ?? "",
-    community: searchParams.get("community") ?? "",
-    minPrice: searchParams.get("minPrice") ?? "",
-    maxPrice: searchParams.get("maxPrice") ?? "",
-    minBeds: searchParams.get("minBeds") ?? "",
-    minBaths: searchParams.get("minBaths") ?? "",
-    propertyTypes: parseSearchPropertyTypes(searchParams.get("propertyTypes")),
-    openHouseOnly: searchParams.get("openHouseOnly") === "1",
-    statuses: parseInitialStatuses(
-      searchParams.get("status"),
-      initialTxn === "LEASE",
-    ),
-    sort: parseSearchSort(searchParams.get("sort")),
-  });
-
-  const [view, setView] = useState<SearchViewMode>(() =>
-    parseSearchView(searchParams.get("view"), false),
-  );
-  const viewRef = useRef(view);
-  viewRef.current = view;
-
-  // Explicit ?view= stays in sync. No param means the discovery split, which
-  // is the initial state — later search updates must not reset a chosen mode.
-  useEffect(() => {
-    const fromUrl = searchParams.get("view");
-    if (fromUrl === "map" || fromUrl === "cards" || fromUrl === "split") {
-      setView(fromUrl);
-    }
-  }, [searchParams]);
-
-  const communitiesParam = searchParams.get("communities") ?? "";
-  const citiesParam = searchParams.get("cities") ?? "";
-  const qParam = searchParams.get("q") ?? "";
-  /**
-   * Optimistic cities while router.replace catches up. Clearing filters.city
-   * before `cities` lands in the URL must not briefly search all cities.
-   */
-  const [citiesOverride, setCitiesOverride] = useState<string[] | null>(null);
-
-  useEffect(() => {
-    if (citiesOverride == null) return;
-    if (citiesParam === citiesOverride.join("|")) {
-      setCitiesOverride(null);
-    }
-  }, [citiesParam, citiesOverride]);
-
-  const structuredCities = useMemo(() => {
-    if (citiesOverride != null) return citiesOverride;
-    return structuredCitiesFromSearch(citiesParam, filters.city);
-  }, [citiesOverride, citiesParam, filters.city]);
-  const citiesQueryParam = structuredCities.join("|");
-
-  // Keep filter state aligned when URL changes (autocomplete / typed city search).
-  useEffect(() => {
-    const txn = searchParams.get("transactionType");
-    const nextTxn: SearchFilters["transactionType"] =
-      txn === "LEASE" || txn === "ALL" || txn === "SALE"
-        ? txn
-        : searchParams.get("dataSource") === "fsbo"
-          ? "ALL"
-          : "SALE";
-    setFilters((prev) => ({
-      ...prev,
-      segment:
-        (searchParams.get("segment") as SearchFilters["segment"]) ||
-        "RESIDENTIAL",
-      transactionType: nextTxn,
-      dataSource: searchParams.get("dataSource") === "fsbo" ? "fsbo" : "",
-      city: searchParams.get("city") ?? "",
-      community: searchParams.get("community") ?? "",
-      minPrice: searchParams.get("minPrice") ?? "",
-      maxPrice: searchParams.get("maxPrice") ?? "",
-      minBeds: searchParams.get("minBeds") ?? "",
-      minBaths: searchParams.get("minBaths") ?? "",
-      propertyTypes: parseSearchPropertyTypes(searchParams.get("propertyTypes")),
-      openHouseOnly: searchParams.get("openHouseOnly") === "1",
-      statuses: parseInitialStatuses(
-        searchParams.get("status"),
-        nextTxn === "LEASE",
-      ),
-      sort: parseSearchSort(searchParams.get("sort")),
-    }));
-  }, [searchParams]);
-
   // Survive client navigation to listing detail so signup captureContext
   // still knows city/price (document.referrer is unreliable in the App Router).
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!pathname.startsWith("/search")) return;
     persistBrowseSearchUrl(window.location.href);
-  }, [pathname, searchParams]);
+  }, [pathname, committed]);
 
   const placeFilterActive = Boolean(
-    filters.city.trim() ||
-      filters.community.trim() ||
+    filters.community.trim() ||
       citiesQueryParam.trim() ||
       communitiesParam.trim(),
   );
-  const placeKey = searchPlaceKey({
-    city: filters.city,
-    community: filters.community,
-    cities: citiesQueryParam,
-    communities: communitiesParam,
-  });
+  const placeKey = committedPlaceKey(committed);
   const placeKeyRef = useRef(placeKey);
   const mapGeography = useMemo(
     () => ({
       city: filters.city,
-      community: filters.community,
+      community: committed.community,
       cities: citiesQueryParam,
       communities: communitiesParam,
       q: qParam,
     }),
-    [citiesQueryParam, communitiesParam, filters.city, filters.community, qParam],
+    [citiesQueryParam, communitiesParam, committed.community, filters.city, qParam],
   );
   const mapGeographyKey = searchMapGeographyKey(mapGeography);
   geoKeyRef.current = mapGeographyKey;
 
-  // When place criteria change, drop stale Search This Area / draw bounds.
+  // Place change clears session draw polygon; mapArea cleared in reducer.
   useEffect(() => {
     const prev = placeKeyRef.current;
     placeKeyRef.current = placeKey;
     if (!shouldResetMapAreaForPlaceChange(prev, placeKey)) return;
-    setAppliedBounds(null);
-    setPendingMapBounds(null);
-    setSearchThisAreaVisible(false);
     setPolygon(null);
   }, [placeKey]);
 
@@ -417,109 +320,44 @@ export function SearchExperience() {
     setMapFrame({ ...frame, token: `results:${mapGeographyKey}` });
   }, [items, mapGeography, mapGeographyKey, polygon]);
 
-  const syncUrl = useCallback(
-    (
-      next: SearchFilters,
-      nextView: SearchViewMode = view,
-      options?: {
-        clearMultiPlace?: boolean;
-        clearQuery?: boolean;
-        cities?: string;
-      },
-    ) => {
-      const cities = citiesParamForFilterSync({
-        explicitCities: options?.cities,
-        clearMultiPlace: options?.clearMultiPlace,
-        urlCitiesParam: citiesParam,
+  const searchCallbackPath = useCallback(
+    (next: SearchFilters, nextCities?: string[]) => {
+      const patch = commitPatchFromFilters(committed, next, {
+        cities: nextCities,
       });
-      router.replace(
-        searchPageHref({
-          pathname,
-          filters: next,
-          view: nextView,
-          cities,
-          communities: communitiesParam,
-          q: qParam,
-          clearMultiPlace: options?.clearMultiPlace,
-          clearQuery: options?.clearQuery,
-        }),
-        { scroll: false },
+      return serializeSearchUrl(
+        {
+          ...committed,
+          ...patch,
+          cities: patch.cities ?? committed.cities,
+          communities: patch.communities ?? committed.communities,
+          propertyTypes: patch.propertyTypes ?? committed.propertyTypes,
+          statuses: patch.statuses ?? committed.statuses,
+          view: committed.view,
+        },
+        { pathname },
       );
     },
-    [citiesParam, communitiesParam, pathname, qParam, router, view],
+    [committed, pathname],
   );
 
-  const searchCallbackPath = useCallback(
-    (next: SearchFilters, nextCities?: string[]) =>
-      searchPageHref({
-        pathname,
-        filters: next,
-        view,
-        cities:
-          nextCities !== undefined ? nextCities.join("|") : citiesQueryParam,
-        communities: communitiesParam,
-        q: qParam,
-      }),
-    [citiesQueryParam, communitiesParam, pathname, qParam, view],
+  const queryString = useMemo(
+    () => buildListingsQuery(committed),
+    [committed],
   );
-
-  const queryString = useMemo(() => {
-    const params = new URLSearchParams();
-    if (filters.segment && filters.segment !== "ALL") {
-      params.set("segment", filters.segment);
-    } else if (filters.segment === "ALL") {
-      params.set("segment", "ALL");
-    }
-    params.set("transactionType", filters.transactionType);
-    if (filters.dataSource) params.set("dataSource", filters.dataSource);
-    if (filters.propertyTypes.length) {
-      params.set("propertyTypes", filters.propertyTypes.join(","));
-    }
-    if (filters.minPrice) params.set("minPrice", filters.minPrice);
-    if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
-    if (filters.minBeds) params.set("minBeds", filters.minBeds);
-    if (filters.minBaths) params.set("minBaths", filters.minBaths);
-    if (filters.openHouseOnly) params.set("openHouseOnly", "1");
-    const statusQ = statusesQueryValue(filters.statuses);
-    if (statusQ) params.set("status", statusQ);
-    params.set("sort", filters.sort);
-    if (qParam) params.set("q", qParam);
-
-    const box = listingSearchBoundsBox({
-      polygonBox: polygon ? polygonBBox(polygon) : null,
-      appliedBounds,
-    });
-    appendPlaceAndBoundsParams(params, {
-      citiesPipe: citiesQueryParam,
-      city: filters.city,
-      communitiesPipe: communitiesParam,
-      community: filters.community,
-      bounds: box,
-    });
-    // Map views need denser pins; card list stays lighter.
-    const densePins = view === "map" || view === "split";
-    params.set("limit", densePins ? "500" : "60");
-    return params.toString();
-  }, [
-    filters,
-    appliedBounds,
-    citiesQueryParam,
-    communitiesParam,
-    polygon,
-    qParam,
-    view,
-  ]);
 
   const load = useCallback(async () => {
-    const seq = ++loadSeqRef.current;
+    const requestId = queryString;
     const keyAtStart = geoKeyRef.current;
-    const res = await fetch(`/api/listings/search?${queryString}`);
+    const res = await fetch(`/api/listings/search?${requestId}`);
+    if (!res.ok) return;
     const data = (await res.json()) as {
       items?: ListingCardData[];
       total?: number;
       provider?: string;
     };
-    if (seq !== loadSeqRef.current || geoKeyRef.current !== keyAtStart) return;
+    // Drop stale responses when a newer committed query superseded this one.
+    if (buildListingsQuery(committedRef.current) !== requestId) return;
     let nextItems = data.items ?? [];
     if (polygon && polygon.length >= 3) {
       nextItems = nextItems.filter((item) =>
@@ -528,7 +366,6 @@ export function SearchExperience() {
     }
     setItems(nextItems);
     setTotal(polygon ? nextItems.length : (data.total ?? nextItems.length));
-    setProvider(data.provider ?? "mock");
     itemsGeoKeyRef.current = keyAtStart;
   }, [queryString, polygon]);
 
@@ -559,23 +396,39 @@ export function SearchExperience() {
     }
   }, [searchParams]);
 
-  function updateFilters(next: SearchFilters) {
-    setFilters(next);
-    syncUrl(next, view);
+  /** Keep committedRef aligned before React re-renders (rapid click stacking). */
+  function dispatchCommit(patch: Partial<CommittedSearch>) {
+    const prev = committedRef.current;
+    committedRef.current = applyCommitPatch(prev, patch);
+    dispatch({ type: "COMMIT", patch });
   }
 
-  /** Desktop Filters flyout Apply — one URL write for filters + cities. */
+  /**
+   * Commit filter changes against the latest committed snapshot so a stale
+   * `{...filters, field}` closure cannot wipe a newer field from a prior commit.
+   */
+  function updateFilters(
+    next: SearchFilters | ((current: SearchFilters) => SearchFilters),
+  ) {
+    const prev = committedRef.current;
+    const current = committedToSearchFilters(prev);
+    const resolved = typeof next === "function" ? next(current) : next;
+    dispatchCommit(commitPatchFromFilters(prev, resolved));
+  }
+
+  /** Desktop Filters flyout Apply — one commit for filters + cities. */
   function commitFiltersWithCities(next: SearchFilters, nextCities: string[]) {
-    const committed = { ...next, city: "" };
-    setCitiesOverride(nextCities);
-    setFilters(committed);
-    syncUrl(committed, view, { cities: nextCities.join("|") });
+    const prev = committedRef.current;
+    dispatchCommit(
+      commitPatchFromFilters(prev, { ...next, city: "" }, {
+        cities: nextCities,
+      }),
+    );
   }
 
   function updateView(next: SearchViewMode) {
-    viewRef.current = next;
-    setView(next);
-    syncUrl(filters, next);
+    committedRef.current = { ...committedRef.current, view: next };
+    dispatch({ type: "SET_VIEW", view: next });
   }
 
   /** Two-position results sheet. Drag lives on the handle only. Presentation state. */
@@ -668,38 +521,42 @@ export function SearchExperience() {
       suggestion.type === "community" ||
       suggestion.type === "place"
     ) {
-      const next = {
-        ...filters,
-        city: suggestion.city ?? suggestion.subtitle ?? filters.city,
+      updateFilters((current) => ({
+        ...current,
+        city: suggestion.city ?? suggestion.subtitle ?? current.city,
         community:
           suggestion.type === "community"
             ? (suggestion.community ?? suggestion.label)
-            : filters.community,
-      };
-      updateFilters(next);
+            : current.community,
+      }));
     }
   }
 
   function onBarSearchClear() {
     setPlaceQueryCleared(true);
-    const next = { ...filters, city: "", community: "" };
-    setCitiesOverride([]);
-    setFilters(next);
-    syncUrl(next, view, { clearMultiPlace: true, clearQuery: true });
+    const prev = committedRef.current;
+    dispatchCommit(
+      commitPatchFromFilters(
+        prev,
+        { ...committedToSearchFilters(prev), city: "", community: "" },
+        { clearPlace: true, clearQuery: true },
+      ),
+    );
   }
 
   function onBarSearchSubmit(raw: string) {
-    const recognized = withStructuredCity(structuredCities, raw);
+    const prev = committedRef.current;
+    const recognized = withStructuredCity(prev.cities, raw);
     if (recognized) {
-      const next = { ...filters, city: "" };
-      setCitiesOverride(recognized);
-      setFilters(next);
       setCityEntryToken((token) => token + 1);
-      if (!filters.community.trim()) setPlaceQueryCleared(true);
-      syncUrl(next, view, {
-        cities: recognized.join("|"),
-        clearQuery: true,
-      });
+      if (!prev.community.trim()) setPlaceQueryCleared(true);
+      dispatchCommit(
+        commitPatchFromFilters(
+          prev,
+          { ...committedToSearchFilters(prev), city: "" },
+          { cities: recognized, clearQuery: true },
+        ),
+      );
       return;
     }
     setPlaceQueryCleared(false);
@@ -731,29 +588,27 @@ export function SearchExperience() {
     if (boundsApplyTimer.current) clearTimeout(boundsApplyTimer.current);
     // Debounce continuous pan/zoom; camera only until Search This Area.
     boundsApplyTimer.current = setTimeout(() => {
-      const nextState = mapGestureSearchThisAreaState({
-        appliedBounds: appliedBoundsRef.current,
-        nextBounds: next,
-      });
-      setPendingMapBounds(nextState.pendingMapBounds);
-      setSearchThisAreaVisible(nextState.searchThisAreaVisible);
+      dispatch({ type: "MAP_GESTURE", bounds: next });
     }, 280);
   }
 
   function onSearchThisArea() {
     if (!pendingMapBounds) return;
-    setAppliedBounds(pendingMapBounds);
-    setPendingMapBounds(null);
-    setSearchThisAreaVisible(false);
+    committedRef.current = {
+      ...committedRef.current,
+      mapArea: pendingMapBounds,
+    };
+    dispatch({ type: "SEARCH_THIS_AREA" });
   }
 
   function onPolygonChange(ring: LngLat[] | null) {
     setPolygon(ring);
-    setPendingMapBounds(null);
-    setSearchThisAreaVisible(false);
+    if (boundsApplyTimer.current) clearTimeout(boundsApplyTimer.current);
     if (ring && ring.length >= 3) {
-      if (boundsApplyTimer.current) clearTimeout(boundsApplyTimer.current);
-      setAppliedBounds(polygonBBox(ring));
+      dispatchCommit({ mapArea: polygonBBox(ring) });
+    } else {
+      committedRef.current = { ...committedRef.current, mapArea: null };
+      dispatch({ type: "CLEAR_MAP_AREA" });
     }
   }
 
@@ -769,8 +624,10 @@ export function SearchExperience() {
 
   const showMap = view === "split" || view === "map";
   const showList = view === "split" || view === "cards";
+  // City lives in cities[]; do not double-count filters.city.
   const activeFilterCount =
-    countActiveSearchFilters(filters) + structuredCities.length;
+    countActiveSearchFilters({ ...filters, city: "" }) +
+    structuredCities.length;
   const activeListing = items.find((i) => i.mlsNumber === activeMls) ?? null;
 
   const noun =
@@ -810,88 +667,47 @@ export function SearchExperience() {
   const mobileCardsLayout = isNarrow && view === "cards";
 
   const savedSearchQuery = useMemo(
-    () => searchFiltersToSavedQuery(filters, { cities: structuredCities }),
-    [filters, structuredCities],
+    () => buildSavedSearchQuery(committed),
+    [committed],
   );
 
   function replaceStructuredCities(nextCities: string[]) {
-    const next = { ...filters, city: "" };
-    setCitiesOverride(nextCities);
-    setFilters(next);
-    syncUrl(next, view, { cities: nextCities.join("|") });
+    const prev = committedRef.current;
+    dispatchCommit(
+      commitPatchFromFilters(
+        prev,
+        { ...committedToSearchFilters(prev), city: "" },
+        { cities: nextCities },
+      ),
+    );
   }
 
   function resetStructuredFilters() {
-    const next = resetSearchFilters(filters);
-    setCitiesOverride([]);
-    setFilters(next);
-    syncUrl(next, view, { cities: "", clearMultiPlace: true });
+    const prev = committedRef.current;
+    dispatchCommit(
+      commitPatchFromFilters(
+        prev,
+        resetSearchFilters(committedToSearchFilters(prev)),
+        { clearPlace: true },
+      ),
+    );
   }
 
   function clearResultChip(chip: SearchResultChip) {
-    switch (chip.key) {
-      case "transaction":
-        updateFilters({
-          ...filters,
-          transactionType: "SALE",
-          statuses: ["ACTIVE"],
-          openHouseOnly: false,
-        });
-        return;
-      case "price":
-        updateFilters({ ...filters, minPrice: "", maxPrice: "" });
-        return;
-      case "beds":
-        updateFilters({ ...filters, minBeds: "" });
-        return;
-      case "baths":
-        updateFilters({ ...filters, minBaths: "" });
-        return;
-      case "types":
-        updateFilters({ ...filters, propertyTypes: [] });
-        return;
-      case "openHouse":
-        updateFilters({ ...filters, openHouseOnly: false });
-        return;
-      case "segment":
-        updateFilters({
-          ...filters,
-          segment: "RESIDENTIAL",
-          propertyTypes: [],
-        });
-        return;
-      case "status":
-        updateFilters({ ...filters, statuses: ["ACTIVE"] });
-        return;
-      case "place": {
-        const next = { ...filters, city: "", community: "" };
-        setCitiesOverride([]);
-        setFilters(next);
-        syncUrl(next, view, { clearMultiPlace: true });
-        return;
-      }
-      case "city": {
-        // Keep citiesOverride optimistic so a 2→1 (or 1→0) removal cannot
-        // briefly keep the old cities= pipe in queryString while the URL lags.
-        const nextCities = structuredCities.filter((city) => city !== chip.city);
-        const next = { ...filters, city: "" };
-        setCitiesOverride(nextCities);
-        setFilters(next);
-        syncUrl(next, view, {
-          cities: nextCities.join("|"),
-          clearMultiPlace: nextCities.length === 0,
-        });
-        return;
-      }
-      case "query":
-        setPlaceQueryCleared(true);
-        syncUrl(filters, view, { clearQuery: true });
-        return;
-      default: {
-        const unexpected: never = chip.key;
-        return unexpected;
-      }
-    }
+    if (chip.key === "query") setPlaceQueryCleared(true);
+    const next = reduceSearch(
+      {
+        committed: committedRef.current,
+        draft: null,
+        pendingMapBounds: null,
+        searchThisAreaVisible: false,
+        requestSeq: 0,
+        lastIssuedRequestId: null,
+      },
+      { type: "REMOVE_CHIP", chip },
+    );
+    committedRef.current = next.committed;
+    dispatch({ type: "REMOVE_CHIP", chip });
   }
 
   const filterPreviewExtras = useMemo(
@@ -923,13 +739,13 @@ export function SearchExperience() {
                   key={value}
                   type="button"
                   onClick={() => {
-                    updateFilters({
-                      ...filters,
+                    updateFilters((current) => ({
+                      ...current,
                       transactionType: value,
                       statuses: ["ACTIVE"],
                       openHouseOnly:
-                        value === "LEASE" ? false : filters.openHouseOnly,
-                    });
+                        value === "LEASE" ? false : current.openHouseOnly,
+                    }));
                   }}
                   className={cn(
                     "min-h-11 rounded-full px-3.5 text-sm font-semibold transition",
@@ -997,10 +813,10 @@ export function SearchExperience() {
                 aria-label="Sort listings"
                 value={filters.sort}
                 onChange={(e) =>
-                  updateFilters({
-                    ...filters,
+                  updateFilters((current) => ({
+                    ...current,
                     sort: e.target.value as SearchFilters["sort"],
-                  })
+                  }))
                 }
                 className="absolute inset-0 cursor-pointer opacity-0"
               >
@@ -1044,13 +860,13 @@ export function SearchExperience() {
                   key={value}
                   type="button"
                   onClick={() => {
-                    updateFilters({
-                      ...filters,
+                    updateFilters((current) => ({
+                      ...current,
                       transactionType: value,
                       statuses: ["ACTIVE"],
                       openHouseOnly:
-                        value === "LEASE" ? false : filters.openHouseOnly,
-                    });
+                        value === "LEASE" ? false : current.openHouseOnly,
+                    }));
                   }}
                   className={cn(
                     "rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
@@ -1121,10 +937,10 @@ export function SearchExperience() {
                   aria-label="Sort listings"
                   value={filters.sort}
                   onChange={(e) =>
-                    updateFilters({
-                      ...filters,
+                    updateFilters((current) => ({
+                      ...current,
                       sort: e.target.value as SearchFilters["sort"],
-                    })
+                    }))
                   }
                   className="absolute inset-0 cursor-pointer opacity-0"
                 >
@@ -1160,7 +976,9 @@ export function SearchExperience() {
               {filters.dataSource === "fsbo" ? (
                 <button
                   type="button"
-                  onClick={() => updateFilters({ ...filters, dataSource: "" })}
+                  onClick={() =>
+                    updateFilters((current) => ({ ...current, dataSource: "" }))
+                  }
                   className="rounded-full bg-signal/15 px-2.5 py-1 text-xs font-semibold text-signal"
                 >
                   By owner · clear
@@ -1298,13 +1116,15 @@ export function SearchExperience() {
               status={filters.statuses}
               isLease={isLease}
               onStatusToggle={(value) => {
-                const selected = filters.statuses.includes(value);
-                const nextStatuses = selected
-                  ? filters.statuses.length === 1
-                    ? filters.statuses
-                    : filters.statuses.filter((s) => s !== value)
-                  : [...filters.statuses, value];
-                updateFilters({ ...filters, statuses: nextStatuses });
+                updateFilters((current) => {
+                  const selected = current.statuses.includes(value);
+                  const nextStatuses = selected
+                    ? current.statuses.length === 1
+                      ? current.statuses
+                      : current.statuses.filter((s) => s !== value)
+                    : [...current.statuses, value];
+                  return { ...current, statuses: nextStatuses };
+                });
                 setActiveMls(null);
               }}
               onOpenFilters={

@@ -179,25 +179,22 @@ assert.match(menu, /searchCallbackPath\(draft, nextCities\)/);
 
 const experience = read("src/components/listings/SearchExperience.tsx");
 assert.match(experience, /searchCallbackPath=\{searchCallbackPath\}/);
-assert.match(experience, /citiesOverride/);
+assert.match(experience, /useCommittedSearch/);
+assert.match(experience, /buildListingsQuery/);
 assert.match(experience, /citiesQueryParam/);
-assert.match(experience, /setCitiesOverride\(nextCities\)/);
-assert.match(
-  experience,
-  /searchFiltersToSavedQuery\(filters, \{ cities: structuredCities \}\)/,
-);
+assert.doesNotMatch(experience, /citiesOverride/);
+assert.match(experience, /buildSavedSearchQuery\(committed\)/);
 assert.match(
   experience,
   /callbackPath=\{searchCallbackPath\(filters, structuredCities\)\}/,
 );
 assert.match(experience, /queryString/);
-assert.match(experience, /citiesQueryParam/);
-// Fetch must use optimistic cities, not raw URL param alone
+// API query derives from committed criteria (canonical builder)
 const queryBlock = experience.slice(
   experience.indexOf("const queryString = useMemo"),
   experience.indexOf("const load = useCallback"),
 );
-assert.match(queryBlock, /citiesQueryParam/);
+assert.match(queryBlock, /buildListingsQuery\(committed\)/);
 assert.doesNotMatch(queryBlock, /if \(citiesParam\)/);
 
 const intent = read("src/lib/auth/save-search-intent.ts");

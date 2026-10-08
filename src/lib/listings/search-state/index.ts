@@ -26,6 +26,7 @@ export {
 } from "@/lib/listings/search-state/query";
 export { buildActiveChips } from "@/lib/listings/search-state/chips";
 export {
+  applyCommitPatch,
   createSearchStateFromUrl,
   emptySearchState,
   reduceSearch,
@@ -38,3 +39,16 @@ export {
   committedToSearchFilters,
   committedCitiesPipe,
 } from "@/lib/listings/search-state/adapters";
+export {
+  commitPatchFromFilters,
+  type CommitFromFiltersOptions,
+} from "@/lib/listings/search-state/from-filters";
+export {
+  committedPlaceKey,
+  withPlaceAwareMapArea,
+} from "@/lib/listings/search-state/place";
+export { useCommittedSearch } from "@/lib/listings/search-state/use-committed-search";
+export {
+  decideUrlHydrate,
+  type UrlSyncDecision,
+} from "@/lib/listings/search-state/url-sync";

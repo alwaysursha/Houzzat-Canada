@@ -170,17 +170,19 @@ const menu = read("src/components/listings/SearchFiltersMenu.tsx");
 const desktop = read("src/components/listings/SearchDesktopFilterPanel.tsx");
 
 assert.match(experience, /from "@\/lib\/listings\/map-area-search"/);
-assert.match(experience, /mapGestureSearchThisAreaState/);
-assert.match(experience, /appendPlaceAndBoundsParams/);
+assert.match(experience, /useCommittedSearch/);
+assert.match(experience, /buildListingsQuery/);
 assert.match(experience, /shouldResetMapAreaForPlaceChange/);
 assert.match(experience, /function onSearchThisArea/);
+assert.match(experience, /MAP_GESTURE/);
+assert.match(experience, /SEARCH_THIS_AREA/);
 
 const boundsFn = experience.slice(
   experience.indexOf("function onMapBoundsChange"),
   experience.indexOf("function onSearchThisArea"),
 );
 assert.match(boundsFn, /if \(!meta\?\.userGesture\) return/);
-assert.match(boundsFn, /mapGestureSearchThisAreaState/);
+assert.match(boundsFn, /MAP_GESTURE/);
 assert.doesNotMatch(boundsFn, /clearMultiPlace/);
 assert.doesNotMatch(boundsFn, /setCitiesOverride/);
 assert.doesNotMatch(boundsFn, /syncUrl\(/);
@@ -189,9 +191,15 @@ const searchAreaFn = experience.slice(
   experience.indexOf("function onSearchThisArea"),
   experience.indexOf("function onPolygonChange"),
 );
-assert.match(searchAreaFn, /setAppliedBounds\(pendingMapBounds\)/);
+assert.match(searchAreaFn, /SEARCH_THIS_AREA/);
 assert.doesNotMatch(searchAreaFn, /clearMultiPlace/);
 assert.doesNotMatch(searchAreaFn, /setCitiesOverride/);
+
+// Bounds helpers still live in the canonical query + reducer modules
+const queryMod = read("src/lib/listings/search-state/query.ts");
+const reduceMod = read("src/lib/listings/search-state/reduce.ts");
+assert.match(queryMod, /appendPlaceAndBoundsParams/);
+assert.match(reduceMod, /mapGestureSearchThisAreaState/);
 
 assert.match(map, /data-search-this-area/);
 assert.match(map, /Search This Area/);

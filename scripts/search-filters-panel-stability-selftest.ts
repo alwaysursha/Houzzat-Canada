@@ -297,11 +297,14 @@ assert.deepEqual(parsed.propertyTypes, [
 assert.deepEqual(parsed.statuses, ["ACTIVE", "SOLD_CONDITIONAL"]);
 assert.match(href, /cities=Toronto%7CMississauga%7COakville|cities=Toronto\|Mississauga\|Oakville/);
 
-// Experience still serializes cities on commit
+// Experience commits filters + cities through the canonical controller
+assert.match(experience, /function commitFiltersWithCities/);
+assert.match(experience, /commitPatchFromFilters/);
 assert.match(
   experience,
-  /syncUrl\(committed, view, \{ cities: nextCities\.join\("\|"\) \}\)/,
+  /type:\s*"COMMIT"/,
 );
+assert.doesNotMatch(experience, /citiesOverride/);
 
 // --- CaptureIntent / Save Search unchanged contract ---
 function memoryStore(): CaptureIntentStore & { raw: string | null } {

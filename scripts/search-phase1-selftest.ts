@@ -311,12 +311,14 @@ const bounds = experience.slice(
 );
 assert.match(bounds, /if \(!meta\?\.userGesture\) return/);
 // Pan/zoom must not clear place filters — Search This Area is explicit.
-assert.match(bounds, /mapGestureSearchThisAreaState/);
+assert.match(bounds, /MAP_GESTURE/);
 assert.doesNotMatch(bounds, /clearMultiPlace/);
 assert.doesNotMatch(bounds, /setCitiesOverride/);
 assert.doesNotMatch(bounds, /syncUrl\(/);
 assert.match(experience, /function onSearchThisArea/);
+assert.match(experience, /SEARCH_THIS_AREA/);
 assert.match(experience, /from "@\/lib\/listings\/map-area-search"/);
+assert.match(experience, /useCommittedSearch/);
 assert.match(experience, /SearchViewModeSwitch/);
 assert.match(experience, /"Cards"/);
 assert.match(experience, /"Map"/);

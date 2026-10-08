@@ -23,16 +23,19 @@ function mergeCommitted(
   return {
     ...base,
     ...patch,
-    cities: patch.cities ? [...patch.cities] : [...base.cities],
-    communities: patch.communities
-      ? [...patch.communities]
-      : [...base.communities],
-    propertyTypes: patch.propertyTypes
-      ? [...patch.propertyTypes]
-      : [...base.propertyTypes],
-    statuses: patch.statuses ? [...patch.statuses] : [...base.statuses],
-    mapArea:
-      patch.mapArea === undefined ? base.mapArea : patch.mapArea,
+    // Use !== undefined so empty arrays (clear cities) are applied.
+    cities: patch.cities !== undefined ? [...patch.cities] : [...base.cities],
+    communities:
+      patch.communities !== undefined
+        ? [...patch.communities]
+        : [...base.communities],
+    propertyTypes:
+      patch.propertyTypes !== undefined
+        ? [...patch.propertyTypes]
+        : [...base.propertyTypes],
+    statuses:
+      patch.statuses !== undefined ? [...patch.statuses] : [...base.statuses],
+    mapArea: patch.mapArea === undefined ? base.mapArea : patch.mapArea,
   };
 }
 
@@ -91,6 +94,18 @@ function bumpIfQueryChanged(prev: SearchState, next: SearchState): SearchState {
 }
 
 /**
+ * Apply a criteria patch the same way COMMIT does (merge + place-aware mapArea).
+ * Used by the Experience bridge to keep a ref in sync across rapid commits
+ * before React re-renders.
+ */
+export function applyCommitPatch(
+  prev: CommittedSearch,
+  patch: Partial<CommittedSearch>,
+): CommittedSearch {
+  return withPlaceAwareMapArea(prev, mergeCommitted(prev, patch));
+}
+
+/**
  * Pure search-state reducer. No I/O. UI integration is Stage 2.
  */
 export function reduceSearch(
@@ -109,7 +124,14 @@ export function reduceSearch(
     case "COMMIT": {
       const merged = mergeCommitted(state.committed, action.patch);
       const committed = withPlaceAwareMapArea(state.committed, merged);
-      return bumpIfQueryChanged(state, { ...state, committed, draft: null });
+      // Criteria commits invalidate an in-progress Search This Area gesture.
+      return bumpIfQueryChanged(state, {
+        ...state,
+        committed,
+        draft: null,
+        pendingMapBounds: null,
+        searchThisAreaVisible: false,
+      });
     }
     case "SET_VIEW": {
       if (state.committed.view === action.view) return state;
@@ -148,6 +170,8 @@ export function reduceSearch(
         ...state,
         committed,
         draft: null,
+        pendingMapBounds: null,
+        searchThisAreaVisible: false,
       });
     }
     case "DISCARD_DRAFT": {
@@ -191,7 +215,13 @@ export function reduceSearch(
     case "REMOVE_CHIP": {
       const merged = removeChip(state.committed, action.chip);
       const committed = withPlaceAwareMapArea(state.committed, merged);
-      return bumpIfQueryChanged(state, { ...state, committed, draft: null });
+      return bumpIfQueryChanged(state, {
+        ...state,
+        committed,
+        draft: null,
+        pendingMapBounds: null,
+        searchThisAreaVisible: false,
+      });
     }
     case "CLEAR_OPTIONAL": {
       const committed = clearOptionalCriteria(state.committed);
