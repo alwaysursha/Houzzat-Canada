@@ -25,6 +25,7 @@ import {
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
+import { visualViewportOverlayStyle } from "@/lib/visual-viewport-overlay-style";
 
 type FiltersHistoryState = { houzzatSearchFilters?: boolean };
 
@@ -146,7 +147,7 @@ export function SearchFiltersSheet({
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const historyPushedRef = useRef(false);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const keepHrefRef = useRef("");
   onCloseRef.current = onClose;
@@ -189,6 +190,12 @@ export function SearchFiltersSheet({
       return;
     }
     const release = acquireScrollLock();
+    const html = document.documentElement;
+    const prevHtmlOverflowX = html.style.overflowX;
+    const prevBodyOverflowX = document.body.style.overflowX;
+    // Chip focus / live reflow can pan the page horizontally on mobile WebKit.
+    html.style.overflowX = "hidden";
+    document.body.style.overflowX = "hidden";
     const frame = window.requestAnimationFrame(() => setEntered(true));
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") closeViaUi();
@@ -197,30 +204,28 @@ export function SearchFiltersSheet({
     return () => {
       window.cancelAnimationFrame(frame);
       release();
+      html.style.overflowX = prevHtmlOverflowX;
+      document.body.style.overflowX = prevBodyOverflowX;
       document.removeEventListener("keydown", onKey);
     };
   }, [open, closeViaUi]);
 
-  // Keep the sheet inside the visual viewport so the soft keyboard does not
-  // cover the sticky Apply footer on mobile (esp. landscape / zoom).
+  // Keep the portal root inside the visual viewport (keyboard + pinch-zoom).
+  // Apply left/width as well as top/height so horizontal VV pans cannot drift
+  // the sheet when filter chips are selected repeatedly.
   useEffect(() => {
     if (!open) return;
 
     function syncViewport() {
-      const el = panelRef.current;
+      const el = overlayRef.current;
       if (!el) return;
-      const vv = window.visualViewport;
-      if (!vv) {
-        el.style.top = "0px";
-        el.style.height = "100%";
-        el.style.bottom = "auto";
-        return;
-      }
-      // Size to the visual viewport only — do not also subtract keyboard from
-      // a parent that is already layout-viewport sized (avoids double shrink).
-      el.style.top = `${vv.offsetTop}px`;
-      el.style.height = `${vv.height}px`;
-      el.style.bottom = "auto";
+      const style = visualViewportOverlayStyle(window.visualViewport);
+      el.style.left = style.left;
+      el.style.top = style.top;
+      el.style.width = style.width;
+      el.style.height = style.height;
+      el.style.right = style.right;
+      el.style.bottom = style.bottom;
     }
 
     syncViewport();
@@ -232,10 +237,13 @@ export function SearchFiltersSheet({
       window.removeEventListener("resize", syncViewport);
       vv?.removeEventListener("resize", syncViewport);
       vv?.removeEventListener("scroll", syncViewport);
-      const el = panelRef.current;
+      const el = overlayRef.current;
       if (!el) return;
+      el.style.left = "";
       el.style.top = "";
+      el.style.width = "";
       el.style.height = "";
+      el.style.right = "";
       el.style.bottom = "";
     };
   }, [open, mounted]);
@@ -332,7 +340,12 @@ export function SearchFiltersSheet({
   if (!mounted || !open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[90]" role="presentation">
+    <div
+      ref={overlayRef}
+      data-search-filters-overlay=""
+      className="fixed top-0 left-0 z-[90] h-full w-full overflow-hidden overscroll-none"
+      role="presentation"
+    >
       <button
         type="button"
         aria-label="Close filters"
@@ -343,13 +356,12 @@ export function SearchFiltersSheet({
         onClick={closeViaUi}
       />
       <div
-        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         data-search-filters-sheet=""
         className={cn(
-          "absolute top-0 right-0 flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden bg-mist shadow-2xl transition-transform duration-300 ease-out",
+          "absolute inset-y-0 right-0 flex w-full max-w-md min-w-0 flex-col overflow-hidden bg-mist shadow-2xl transition-transform duration-300 ease-out",
           entered ? "translate-x-0" : "translate-x-full",
         )}
       >
@@ -448,7 +460,7 @@ export function SearchFiltersSheet({
           </Section>
 
           <Section title="Home type">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex min-w-0 flex-wrap gap-2">
               {typeOptions.map((type) => {
                 const selected = filters.propertyTypes.includes(type);
                 return (
@@ -462,14 +474,16 @@ export function SearchFiltersSheet({
                       onChange({ ...filters, propertyTypes: next });
                     }}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-3.5 py-2 text-sm font-semibold transition",
+                      "inline-flex max-w-full items-center gap-1 rounded-full px-3.5 py-2 text-sm font-semibold transition",
                       selected
                         ? "bg-canopy text-white"
                         : "bg-surface text-ink/70 ring-1 ring-line hover:bg-line/40",
                     )}
                   >
-                    {selected ? <Check className="size-3.5" aria-hidden /> : null}
-                    {propertyTypeLabel(type)}
+                    {selected ? (
+                      <Check className="size-3.5 shrink-0" aria-hidden />
+                    ) : null}
+                    <span className="truncate">{propertyTypeLabel(type)}</span>
                   </button>
                 );
               })}
@@ -477,7 +491,7 @@ export function SearchFiltersSheet({
           </Section>
 
           <Section title="Status">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex min-w-0 flex-wrap gap-2">
               {statusOptions.map((opt) => {
                 const selected = filters.statuses.includes(opt.value);
                 return (
@@ -501,14 +515,16 @@ export function SearchFiltersSheet({
                       });
                     }}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-3.5 py-2 text-sm font-semibold transition",
+                      "inline-flex max-w-full items-center gap-1 rounded-full px-3.5 py-2 text-sm font-semibold transition",
                       selected
                         ? "bg-canopy text-white"
                         : "bg-surface text-ink/70 ring-1 ring-line hover:bg-line/40",
                     )}
                   >
-                    {selected ? <Check className="size-3.5" aria-hidden /> : null}
-                    {opt.label}
+                    {selected ? (
+                      <Check className="size-3.5 shrink-0" aria-hidden />
+                    ) : null}
+                    <span className="truncate">{opt.label}</span>
                   </button>
                 );
               })}

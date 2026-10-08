@@ -14,6 +14,7 @@ import {
   searchPageHref,
 } from "../src/lib/listings/search-page-href";
 import { computeFlyoutFixedStyle } from "../src/lib/use-flyout-fixed-style";
+import { visualViewportOverlayStyle } from "../src/lib/visual-viewport-overlay-style";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -26,6 +27,7 @@ const sheet = read("src/components/listings/SearchFiltersSheet.tsx");
 const experience = read("src/components/listings/SearchExperience.tsx");
 const flyoutHook = read("src/lib/use-flyout-fixed-style.ts");
 const cityField = read("src/components/listings/StructuredCityField.tsx");
+const vvOverlay = read("src/lib/visual-viewport-overlay-style.ts");
 
 // --- Desktop flyout: definite height + flex scroll/footer ---
 assert.match(menu, /lockHeight:\s*true/);
@@ -154,26 +156,102 @@ assert.match(cityField, /max-w-full/);
 
 // --- Mobile sheet: viewport + sticky Apply ---
 assert.match(sheet, /data-search-filters-sheet=""/);
+assert.match(sheet, /data-search-filters-overlay=""/);
 assert.match(sheet, /data-search-filters-apply=""/);
-assert.match(sheet, /visualViewport/);
-assert.match(sheet, /vv\.height/);
-assert.match(sheet, /vv\.offsetTop/);
+assert.match(sheet, /visualViewportOverlayStyle/);
+assert.match(sheet, /@\/lib\/visual-viewport-overlay-style/);
+assert.match(vvOverlay, /offsetLeft/);
+assert.match(vvOverlay, /offsetTop/);
+assert.match(vvOverlay, /vv\.width/);
+assert.match(vvOverlay, /vv\.height/);
+assert.match(sheet, /overflow-hidden overscroll-none/);
+assert.match(sheet, /fixed top-0 left-0 z-\[90\] h-full w-full/);
+assert.doesNotMatch(
+  sheet.slice(sheet.indexOf("data-search-filters-overlay")),
+  /fixed inset-0/,
+);
+assert.match(sheet, /overflowX = "hidden"/);
+assert.match(sheet, /prevHtmlOverflowX/);
+assert.match(sheet, /prevBodyOverflowX/);
+assert.match(sheet, /absolute inset-y-0 right-0/);
+const scrollLock = read("src/lib/scroll-lock.ts");
+assert.match(scrollLock, /overflowX === "hidden"/);
+assert.match(scrollLock, /documentElement\.style\.overflowX/);
 assert.match(sheet, /min-h-0 min-w-0 flex-1/);
 assert.match(sheet, /overflow-x-hidden overflow-y-auto/);
 assert.match(sheet, /pb-\[max\(1rem,env\(safe-area-inset-bottom\)\)\]/);
 assert.match(sheet, /houzzatSearchFilters/);
 assert.match(sheet, /acquireScrollLock/);
 assert.match(sheet, /history\.back\(\)/);
-// Listeners attach even if panelRef is briefly null (no early return on ref)
+// VV sync targets the overlay root (not the sliding panel alone)
 const vvEffect = sheet.slice(
-  sheet.indexOf("Keep the sheet inside the visual viewport"),
+  sheet.indexOf("Keep the portal root inside the visual viewport"),
   sheet.indexOf("Hardware / browser Back closes Filters"),
 );
-assert.doesNotMatch(vvEffect, /if \(!panel\) return;/);
-assert.match(vvEffect, /panelRef\.current/);
+assert.match(vvEffect, /overlayRef\.current/);
+assert.match(vvEffect, /visualViewportOverlayStyle/);
+assert.doesNotMatch(vvEffect, /panelRef/);
+// Must not size the panel with top/height only (horizontal drift bug)
+assert.doesNotMatch(sheet, /el\.style\.top = `\$\{vv\.offsetTop\}px`/);
+assert.doesNotMatch(sheet, /el\.style\.height = `\$\{vv\.height\}px`/);
 // Live filters preserved (no draftCities in sheet)
 assert.doesNotMatch(sheet, /draftCities/);
 assert.match(sheet, /onCitiesChange=\{onCitiesChange\}/);
+
+// Repeated selections / horizontal VV pans must keep overlay aligned (no drift)
+const pans = [
+  { offsetLeft: 0, offsetTop: 0, width: 390, height: 720 },
+  { offsetLeft: 12, offsetTop: 0, width: 390, height: 720 },
+  { offsetLeft: 28, offsetTop: 8, width: 390, height: 640 },
+  { offsetLeft: 40, offsetTop: 8, width: 390, height: 640 },
+  { offsetLeft: 40, offsetTop: 0, width: 360, height: 720 },
+];
+let prevLeft = 0;
+for (const pan of pans) {
+  const style = visualViewportOverlayStyle(pan);
+  assert.equal(style.left, `${pan.offsetLeft}px`);
+  assert.equal(style.width, `${pan.width}px`);
+  assert.equal(style.top, `${pan.offsetTop}px`);
+  assert.equal(style.height, `${pan.height}px`);
+  assert.equal(style.right, "auto");
+  assert.equal(style.bottom, "auto");
+  // Overlay tracks the pan — relative sheet position inside overlay stays put
+  const leftPx = Number.parseFloat(style.left);
+  assert.equal(leftPx, pan.offsetLeft);
+  prevLeft = leftPx;
+}
+assert.equal(prevLeft, pans[pans.length - 1]!.offsetLeft);
+// Idempotent for the same VV metrics (repeated Baths/Beds taps)
+assert.deepEqual(
+  visualViewportOverlayStyle(pans[2]!),
+  visualViewportOverlayStyle(pans[2]!),
+);
+assert.deepEqual(visualViewportOverlayStyle(null).left, "0px");
+assert.deepEqual(visualViewportOverlayStyle(null).width, "100%");
+
+// Keyboard open (iOS-like): shorter height, possible offsetTop — width/left stable
+const keyboard = visualViewportOverlayStyle({
+  offsetLeft: 0,
+  offsetTop: 40,
+  width: 390,
+  height: 420,
+});
+assert.equal(keyboard.left, "0px");
+assert.equal(keyboard.width, "390px");
+assert.equal(keyboard.top, "40px");
+assert.equal(keyboard.height, "420px");
+
+// Pinch-zoom / horizontal pan: left tracks offsetLeft, width tracks vv.width
+const zoomed = visualViewportOverlayStyle({
+  offsetLeft: 24,
+  offsetTop: 16,
+  width: 320,
+  height: 568,
+});
+assert.equal(zoomed.left, "24px");
+assert.equal(zoomed.width, "320px");
+assert.equal(zoomed.top, "16px");
+assert.equal(zoomed.height, "568px");
 
 // --- URL round-trip (cities + filters) ---
 const baseFilters: SearchFilters = {
