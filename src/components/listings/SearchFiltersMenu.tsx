@@ -41,6 +41,7 @@ import {
   searchFiltersToSavedQuery,
 } from "@/lib/listings/saved-search-query";
 import { planSavedSearchApplyUi } from "@/lib/listings/saved-search-confirm-flow";
+import { rebaseFilterDraftPreservingEdits } from "@/lib/listings/search-state";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { useFlyoutFixedStyle } from "@/lib/use-flyout-fixed-style";
 import { cn } from "@/lib/utils";
@@ -134,6 +135,8 @@ export function SearchFiltersMenu({
   onCitiesChange,
   onCommitFilters,
   onResetFilters,
+  onDraftOpen,
+  onDraftCancel,
   resultCount,
   resultNoun = "homes",
   signedIn,
@@ -148,6 +151,12 @@ export function SearchFiltersMenu({
   /** Atomic Apply: filters + cities in one URL sync (preferred). */
   onCommitFilters?: (next: SearchFilters, cities: string[]) => void;
   onResetFilters: () => void;
+  /**
+   * Canonical draft lifecycle (Stage 2B-1). Compatibility: local draft state
+   * remains for preview/UI until Menu reads SearchState.draft directly.
+   */
+  onDraftOpen?: () => void;
+  onDraftCancel?: () => void;
   resultCount: number;
   resultNoun?: string;
   signedIn: boolean;
@@ -180,6 +189,19 @@ export function SearchFiltersMenu({
   const cityFieldRef = useRef<StructuredCityFieldHandle>(null);
   /** Cities prepared on Apply — confirm runs after the flyout unmounts the field. */
   const applyCitiesRef = useRef(draftCities);
+  /** Committed snapshot at draft open / last rebase base (local adapter). */
+  const draftBaseRef = useRef({ filters, cities });
+  const draftSessionRef = useRef(false);
+  const draftRef = useRef(draft);
+  const draftCitiesRef = useRef(draftCities);
+  const onDraftOpenRef = useRef(onDraftOpen);
+  const onDraftCancelRef = useRef(onDraftCancel);
+  draftRef.current = draft;
+  draftCitiesRef.current = draftCities;
+  onDraftOpenRef.current = onDraftOpen;
+  onDraftCancelRef.current = onDraftCancel;
+  const resultCountRef = useRef(resultCount);
+  resultCountRef.current = resultCount;
   const id = useId();
   const flyoutStyle = useFlyoutFixedStyle(open, buttonRef, 400, {
     lockHeight: true,
@@ -209,13 +231,36 @@ export function SearchFiltersMenu({
     setMounted(true);
   }, []);
 
+  // OPEN_FILTERS / CANCEL_FILTERS + live-commit rebase of local UI draft.
+  // resultCount is excluded — preview totals must not wipe in-progress edits.
   useEffect(() => {
-    if (!open) return;
-    setDraft(filters);
-    setDraftCities(cities);
-    applyCitiesRef.current = cities;
-    setDraftTotal(resultCount);
-  }, [open, filters, cities, resultCount]);
+    if (!open) {
+      if (draftSessionRef.current) {
+        draftSessionRef.current = false;
+        onDraftCancelRef.current?.();
+      }
+      return;
+    }
+    if (!draftSessionRef.current) {
+      draftSessionRef.current = true;
+      draftBaseRef.current = { filters, cities };
+      setDraft(filters);
+      setDraftCities(cities);
+      applyCitiesRef.current = cities;
+      setDraftTotal(resultCountRef.current);
+      onDraftOpenRef.current?.();
+      return;
+    }
+    const rebased = rebaseFilterDraftPreservingEdits(
+      draftBaseRef.current,
+      { filters: draftRef.current, cities: draftCitiesRef.current },
+      { filters, cities },
+    );
+    draftBaseRef.current = { filters, cities };
+    setDraft(rebased.filters);
+    setDraftCities(rebased.cities);
+    applyCitiesRef.current = rebased.cities;
+  }, [open, filters, cities]);
 
   useEffect(() => {
     if (!open) return;

@@ -422,7 +422,8 @@ record(9, "Desktop Cards sidebar wires live onChange to updateFilters", "STATIC"
   assert.match(panel, /onChange=\{updateFilters\}/);
   assert.match(panel, /onCitiesChange=\{replaceStructuredCities\}/);
   assert.match(experience, /SearchActiveFilterStrip/);
-  assert.match(experience, /chips=\{resultsCopy\.chips\}/);
+  assert.match(experience, /buildActiveChips\(committed/);
+  assert.match(experience, /chips=\{activeChips\}/);
 });
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import {
   defaultCommittedSearch,
   initialSearchState,
 } from "@/lib/listings/search-state/defaults";
+import { rebaseDraftPreservingEdits } from "@/lib/listings/search-state/draft-rebase";
 import { parseSearchUrl } from "@/lib/listings/search-state/parse";
 import { withPlaceAwareMapArea } from "@/lib/listings/search-state/place";
 import { listingsRequestId, withIssuedRequest } from "@/lib/listings/search-state/request";
@@ -15,6 +16,16 @@ import type {
   SearchChip,
   SearchState,
 } from "@/lib/listings/search-state/types";
+
+/** When committed changes under an open draft, rebase instead of discarding edits. */
+function withRebasedDraft(
+  prevCommitted: CommittedSearch,
+  draft: CommittedSearch | null,
+  nextCommitted: CommittedSearch,
+): CommittedSearch | null {
+  if (!draft) return null;
+  return rebaseDraftPreservingEdits(prevCommitted, draft, nextCommitted);
+}
 
 function mergeCommitted(
   base: CommittedSearch,
@@ -122,13 +133,15 @@ export function reduceSearch(
       return bumpIfQueryChanged(state, next);
     }
     case "COMMIT": {
-      const merged = mergeCommitted(state.committed, action.patch);
-      const committed = withPlaceAwareMapArea(state.committed, merged);
+      const prevCommitted = state.committed;
+      const merged = mergeCommitted(prevCommitted, action.patch);
+      const committed = withPlaceAwareMapArea(prevCommitted, merged);
       // Criteria commits invalidate an in-progress Search This Area gesture.
+      // Open draft is rebased (not discarded) so Apply cannot wipe live edits.
       return bumpIfQueryChanged(state, {
         ...state,
         committed,
-        draft: null,
+        draft: withRebasedDraft(prevCommitted, state.draft, committed),
         pendingMapBounds: null,
         searchThisAreaVisible: false,
       });
@@ -163,8 +176,8 @@ export function reduceSearch(
       if (!state.draft) return state;
       const committed = withPlaceAwareMapArea(state.committed, {
         ...state.draft,
-        // Apply keeps presentation view from committed chrome unless draft set it.
-        view: state.draft.view,
+        // Presentation chrome stays on committed; Filters UI does not own view.
+        view: state.committed.view,
       });
       return bumpIfQueryChanged(state, {
         ...state,
@@ -191,44 +204,50 @@ export function reduceSearch(
     }
     case "SEARCH_THIS_AREA": {
       if (!state.pendingMapBounds) return state;
+      const prevCommitted = state.committed;
       const committed = {
-        ...state.committed,
+        ...prevCommitted,
         mapArea: state.pendingMapBounds,
       };
       return bumpIfQueryChanged(state, {
         ...state,
         committed,
+        draft: withRebasedDraft(prevCommitted, state.draft, committed),
         pendingMapBounds: null,
         searchThisAreaVisible: false,
       });
     }
     case "CLEAR_MAP_AREA": {
       if (!state.committed.mapArea && !state.pendingMapBounds) return state;
-      const committed = { ...state.committed, mapArea: null };
+      const prevCommitted = state.committed;
+      const committed = { ...prevCommitted, mapArea: null };
       return bumpIfQueryChanged(state, {
         ...state,
         committed,
+        draft: withRebasedDraft(prevCommitted, state.draft, committed),
         pendingMapBounds: null,
         searchThisAreaVisible: false,
       });
     }
     case "REMOVE_CHIP": {
-      const merged = removeChip(state.committed, action.chip);
-      const committed = withPlaceAwareMapArea(state.committed, merged);
+      const prevCommitted = state.committed;
+      const merged = removeChip(prevCommitted, action.chip);
+      const committed = withPlaceAwareMapArea(prevCommitted, merged);
       return bumpIfQueryChanged(state, {
         ...state,
         committed,
-        draft: null,
+        draft: withRebasedDraft(prevCommitted, state.draft, committed),
         pendingMapBounds: null,
         searchThisAreaVisible: false,
       });
     }
     case "CLEAR_OPTIONAL": {
-      const committed = clearOptionalCriteria(state.committed);
+      const prevCommitted = state.committed;
+      const committed = clearOptionalCriteria(prevCommitted);
       return bumpIfQueryChanged(state, {
         ...state,
         committed,
-        draft: null,
+        draft: withRebasedDraft(prevCommitted, state.draft, committed),
         pendingMapBounds: null,
         searchThisAreaVisible: false,
       });

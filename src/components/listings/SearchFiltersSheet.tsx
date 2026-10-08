@@ -28,6 +28,7 @@ import {
   searchFiltersToSavedQuery,
 } from "@/lib/listings/saved-search-query";
 import { planSavedSearchApplyUi } from "@/lib/listings/saved-search-confirm-flow";
+import { rebaseFilterDraftPreservingEdits } from "@/lib/listings/search-state";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
@@ -127,6 +128,8 @@ export function SearchFiltersSheet({
   onCitiesChange,
   onCommitFilters,
   onResetFilters,
+  onDraftOpen,
+  onDraftCancel,
   resultCount,
   pending = false,
   resultNoun = "homes",
@@ -143,6 +146,12 @@ export function SearchFiltersSheet({
   /** Atomic Apply: filters + cities in one URL sync (preferred). */
   onCommitFilters?: (next: SearchFilters, cities: string[]) => void;
   onResetFilters: () => void;
+  /**
+   * Canonical draft lifecycle (Stage 2B-1). Compatibility: local draft state
+   * remains for preview/UI until Sheet reads SearchState.draft directly.
+   */
+  onDraftOpen?: () => void;
+  onDraftCancel?: () => void;
   resultCount: number;
   pending?: boolean;
   resultNoun?: string;
@@ -184,6 +193,18 @@ export function SearchFiltersSheet({
    * router.replace cannot wipe Mississauga before history restore runs.
    */
   const applyIntentLockedRef = useRef(false);
+  const draftBaseRef = useRef({ filters, cities });
+  const draftSessionRef = useRef(false);
+  const draftRef = useRef(draft);
+  const draftCitiesRef = useRef(draftCities);
+  const onDraftOpenRef = useRef(onDraftOpen);
+  const onDraftCancelRef = useRef(onDraftCancel);
+  const resultCountRef = useRef(resultCount);
+  draftRef.current = draft;
+  draftCitiesRef.current = draftCities;
+  onDraftOpenRef.current = onDraftOpen;
+  onDraftCancelRef.current = onDraftCancel;
+  resultCountRef.current = resultCount;
   onCloseRef.current = onClose;
   routerRef.current = router;
   if (!open) {
@@ -215,13 +236,35 @@ export function SearchFiltersSheet({
     setMounted(true);
   }, []);
 
+  // OPEN_FILTERS / CANCEL_FILTERS + live-commit rebase of local UI draft.
   useEffect(() => {
-    if (!open) return;
-    setDraft(filters);
-    setDraftCities(cities);
-    applyCitiesRef.current = cities;
-    setDraftTotal(resultCount);
-  }, [open, filters, cities, resultCount]);
+    if (!open) {
+      if (draftSessionRef.current) {
+        draftSessionRef.current = false;
+        onDraftCancelRef.current?.();
+      }
+      return;
+    }
+    if (!draftSessionRef.current) {
+      draftSessionRef.current = true;
+      draftBaseRef.current = { filters, cities };
+      setDraft(filters);
+      setDraftCities(cities);
+      applyCitiesRef.current = cities;
+      setDraftTotal(resultCountRef.current);
+      onDraftOpenRef.current?.();
+      return;
+    }
+    const rebased = rebaseFilterDraftPreservingEdits(
+      draftBaseRef.current,
+      { filters: draftRef.current, cities: draftCitiesRef.current },
+      { filters, cities },
+    );
+    draftBaseRef.current = { filters, cities };
+    setDraft(rebased.filters);
+    setDraftCities(rebased.cities);
+    applyCitiesRef.current = rebased.cities;
+  }, [open, filters, cities]);
 
   useEffect(() => {
     if (!open) return;

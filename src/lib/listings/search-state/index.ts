@@ -26,6 +26,10 @@ export {
 } from "@/lib/listings/search-state/query";
 export { buildActiveChips } from "@/lib/listings/search-state/chips";
 export {
+  rebaseDraftPreservingEdits,
+  rebaseFilterDraftPreservingEdits,
+} from "@/lib/listings/search-state/draft-rebase";
+export {
   applyCommitPatch,
   createSearchStateFromUrl,
   emptySearchState,

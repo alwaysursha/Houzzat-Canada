@@ -51,14 +51,17 @@ import {
 import { shouldResetMapAreaForPlaceChange } from "@/lib/listings/map-area-search";
 import {
   applyCommitPatch,
+  buildActiveChips,
   buildListingsQuery,
   buildSavedSearchQuery,
   commitPatchFromFilters,
   committedPlaceKey,
   committedToSearchFilters,
+  rebaseDraftPreservingEdits,
   reduceSearch,
   serializeSearchUrl,
   useCommittedSearch,
+  withPlaceAwareMapArea,
   type CommittedSearch,
 } from "@/lib/listings/search-state";
 import { withStructuredCity } from "@/lib/listings/structured-cities";
@@ -193,6 +196,8 @@ export function SearchExperience() {
    * React state in useLayoutEffect so the ref cannot permanently diverge.
    */
   const committedRef = useRef(committed);
+  /** Committed snapshot when Filters draft began (three-way Apply merge). */
+  const draftBaseRef = useRef<CommittedSearch | null>(null);
   useLayoutEffect(() => {
     committedRef.current = committed;
   }, [committed]);
@@ -416,14 +421,64 @@ export function SearchExperience() {
     dispatchCommit(commitPatchFromFilters(prev, resolved));
   }
 
-  /** Desktop Filters flyout Apply — one commit for filters + cities. */
+  /** OPEN_FILTERS — seed canonical draft from committed (no API search). */
+  function beginFiltersDraft() {
+    draftBaseRef.current = { ...committedRef.current };
+    dispatch({ type: "BEGIN_DRAFT" });
+  }
+
+  /** CANCEL_FILTERS — discard canonical draft; URL/results unchanged. */
+  function discardFiltersDraft() {
+    draftBaseRef.current = null;
+    dispatch({ type: "DISCARD_DRAFT" });
+  }
+
+  /**
+   * APPLY_FILTERS — three-way merge then atomic APPLY_DRAFT.
+   * Local UI draft fields that differ from draft-open base win; untouched
+   * fields keep the latest committed (live desktop / chip edits).
+   * Save Search / CaptureIntent stay in Menu/Sheet after this commit.
+   */
   function commitFiltersWithCities(next: SearchFilters, nextCities: string[]) {
-    const prev = committedRef.current;
-    dispatchCommit(
-      commitPatchFromFilters(prev, { ...next, city: "" }, {
+    const remote = committedRef.current;
+    const base = draftBaseRef.current ?? remote;
+    const local = applyCommitPatch(
+      base,
+      commitPatchFromFilters(base, { ...next, city: "" }, {
         cities: nextCities,
       }),
     );
+    const merged = rebaseDraftPreservingEdits(base, local, remote);
+    const applied = withPlaceAwareMapArea(remote, {
+      ...merged,
+      view: remote.view,
+    });
+    committedRef.current = applied;
+    draftBaseRef.current = null;
+    // Seed draft to merged payload then apply (uses Stage 1 draft actions).
+    dispatch({ type: "BEGIN_DRAFT" });
+    dispatch({
+      type: "PATCH_DRAFT",
+      patch: {
+        segment: applied.segment,
+        transactionType: applied.transactionType,
+        dataSource: applied.dataSource,
+        cities: applied.cities,
+        community: applied.community,
+        communities: applied.communities,
+        q: applied.q,
+        minPrice: applied.minPrice,
+        maxPrice: applied.maxPrice,
+        minBeds: applied.minBeds,
+        minBaths: applied.minBaths,
+        propertyTypes: applied.propertyTypes,
+        openHouseOnly: applied.openHouseOnly,
+        statuses: applied.statuses,
+        sort: applied.sort,
+        mapArea: applied.mapArea,
+      },
+    });
+    dispatch({ type: "APPLY_DRAFT" });
   }
 
   function updateView(next: SearchViewMode) {
@@ -660,6 +715,12 @@ export function SearchExperience() {
     [citiesQueryParam, communitiesParam, filters, pending, qParam, total],
   );
 
+  /** Active tags — canonical helper over committed only (same taxonomy as resultsCopy). */
+  const activeChips = useMemo(
+    () => buildActiveChips(committed, { total, pending }),
+    [committed, pending, total],
+  );
+
   const countLabel = pending
     ? "Updating"
     : `${Math.max(0, total).toLocaleString("en-CA")} results`;
@@ -698,7 +759,7 @@ export function SearchExperience() {
     const next = reduceSearch(
       {
         committed: committedRef.current,
-        draft: null,
+        draft: searchState.draft,
         pendingMapBounds: null,
         searchThisAreaVisible: false,
         requestSeq: 0,
@@ -916,6 +977,8 @@ export function SearchExperience() {
                 onCitiesChange={replaceStructuredCities}
                 onCommitFilters={commitFiltersWithCities}
                 onResetFilters={resetStructuredFilters}
+                onDraftOpen={beginFiltersDraft}
+                onDraftCancel={discardFiltersDraft}
                 resultCount={total}
                 resultNoun={noun}
                 signedIn={signedIn}
@@ -989,7 +1052,7 @@ export function SearchExperience() {
         )}
         <SearchActiveFilterStrip
           className="mt-1.5"
-          chips={resultsCopy.chips}
+          chips={activeChips}
           onClearChip={clearResultChip}
           onClearAll={resetStructuredFilters}
         />
@@ -1209,6 +1272,8 @@ export function SearchExperience() {
           onCitiesChange={replaceStructuredCities}
           onCommitFilters={commitFiltersWithCities}
           onResetFilters={resetStructuredFilters}
+          onDraftOpen={beginFiltersDraft}
+          onDraftCancel={discardFiltersDraft}
           resultCount={total}
           pending={pending}
           resultNoun={noun}
