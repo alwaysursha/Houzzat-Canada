@@ -1,0 +1,73 @@
+{
+  "result": {
+    "buttons": [
+      {
+        "text": "Share",
+        "aria": "Share property",
+        "disabled": false
+      },
+      {
+        "text": "Save listing",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Watch property",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Watch area",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Watchlist",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Share",
+        "aria": "Share property",
+        "disabled": false
+      },
+      {
+        "text": "Save listing",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Watch property",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Watch area",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Request Tour",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Request Info",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Request in-person showing",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Chat",
+        "aria": "Chat with your agent",
+        "disabled": false
+      }
+    ],
+    "dialog": "Listing menuShortcuts for this homeFollow this listingShareSave listingWatch propertyWatch area",
+    "authVisible": true
+  }
+}

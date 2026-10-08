@@ -1,0 +1,38 @@
+{
+  "result": {
+    "viewport": {
+      "w": 360,
+      "h": 740
+    },
+    "scrollParent": {
+      "tag": "DIV",
+      "id": null,
+      "className": "h-full overflow-y-auto overscroll-contain bg-mist/50",
+      "overflowY": "auto",
+      "before": {
+        "scrollTop": 0,
+        "scrollHeight": 26212,
+        "clientHeight": 369,
+        "maxScroll": 25843
+      },
+      "afterMaxScrollTop": 25843.5,
+      "maxScroll": 25843
+    },
+    "gridPaddingBottom": "192px",
+    "endClearance": {
+      "lastBottom": 448.7,
+      "chatTop": 560,
+      "clearsAboveChat": true,
+      "gap": 111.3
+    },
+    "midFacts": {
+      "factsOverlap": true,
+      "under": {
+        "tag": "P",
+        "isListingLink": true,
+        "isSave": false,
+        "text": "Oakville, ON L6M 5P6"
+      }
+    }
+  }
+}

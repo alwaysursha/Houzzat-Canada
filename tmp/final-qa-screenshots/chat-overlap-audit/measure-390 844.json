@@ -1,0 +1,139 @@
+{
+  "result": {
+    "viewport": {
+      "w": 360,
+      "h": 740
+    },
+    "boxes": {
+      "chat": {
+        "x": 300,
+        "y": 560,
+        "w": 44,
+        "h": 44,
+        "top": 560,
+        "left": 300,
+        "right": 344,
+        "bottom": 604
+      },
+      "card": {
+        "x": 8,
+        "y": -530,
+        "w": 344,
+        "h": 422.7,
+        "top": -530,
+        "left": 8,
+        "right": 352,
+        "bottom": -107.3
+      },
+      "image": {
+        "x": 9,
+        "y": -529,
+        "w": 342,
+        "h": 213.8,
+        "top": -529,
+        "left": 9,
+        "right": 351,
+        "bottom": -315.3
+      },
+      "save": {
+        "x": 311,
+        "y": -521,
+        "w": 32,
+        "h": 32,
+        "top": -521,
+        "left": 311,
+        "right": 343,
+        "bottom": -489
+      },
+      "price": {
+        "x": 21,
+        "y": -303.3,
+        "w": 318,
+        "h": 32.4,
+        "top": -303.3,
+        "left": 21,
+        "right": 339,
+        "bottom": -270.9
+      },
+      "title": {
+        "x": 21,
+        "y": -264.9,
+        "w": 318,
+        "h": 22.8,
+        "top": -264.9,
+        "left": 21,
+        "right": 339,
+        "bottom": -242,
+        "text": "292 Still's Lane"
+      },
+      "viewDetailsOrContact": null,
+      "cardLink": {
+        "x": 9,
+        "y": -529,
+        "w": 342,
+        "h": 213.8,
+        "top": -529,
+        "left": 9,
+        "right": 351,
+        "bottom": -315.3
+      },
+      "bottomNav": {
+        "x": 0,
+        "y": 679,
+        "w": 360,
+        "h": 61,
+        "top": 679,
+        "left": 0,
+        "right": 360,
+        "bottom": 740
+      }
+    },
+    "overlaps": {
+      "card": {
+        "intersects": false,
+        "area": 0
+      },
+      "image": {
+        "intersects": false,
+        "area": 0
+      },
+      "save": {
+        "intersects": false,
+        "area": 0
+      },
+      "price": {
+        "intersects": false,
+        "area": 0
+      },
+      "title": {
+        "intersects": false,
+        "area": 0
+      },
+      "viewDetailsOrContact": {
+        "intersects": false,
+        "area": 0
+      },
+      "cardLinkHitArea": {
+        "intersects": false,
+        "area": 0
+      }
+    },
+    "underFab": {
+      "tag": "P",
+      "aria": null,
+      "href": "/listing/3322-umar-avenue-oakville/W13877934",
+      "text": "$1,179,800",
+      "isSave": false,
+      "isCardLink": true,
+      "isInteractive": true
+    },
+    "clearance": {
+      "applied": true,
+      "gridPaddingBottom": "192px",
+      "gridPaddingBottomPx": 192,
+      "cssVarMobileBottomNav": "calc(3.75rem + 0px)",
+      "hasSearchResultGrid": true,
+      "cardCount": 60
+    }
+  }
+}

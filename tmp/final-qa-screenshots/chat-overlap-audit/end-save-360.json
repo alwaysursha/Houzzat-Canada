@@ -1,0 +1,49 @@
+{
+  "result": {
+    "viewport": {
+      "w": 360,
+      "h": 740
+    },
+    "chat": {
+      "top": 560,
+      "bottom": 604,
+      "left": 300,
+      "right": 344,
+      "w": 44,
+      "h": 44
+    },
+    "endOfDocument": {
+      "lastBottom": 26292.2,
+      "chatTop": 560,
+      "clearsAboveChat": false,
+      "gap": -25732.2,
+      "gridPaddingBottomPx": 192,
+      "scrollTop": 0,
+      "maxScroll": 0
+    },
+    "saveAlignedUnderFab": {
+      "save": {
+        "top": 349,
+        "bottom": 381,
+        "left": 311,
+        "right": 343,
+        "w": 32,
+        "h": 32
+      },
+      "overlapsChat": false,
+      "hitIsChat": false,
+      "hitIsSave": true,
+      "hitAria": "svg"
+    },
+    "midFactsUnderFab": {
+      "factsOverlapsChat": true,
+      "saveOverlapsChat": false,
+      "under": {
+        "tag": "A",
+        "isListingLink": true,
+        "isSave": false,
+        "text": "$599,0002450 Old Bronte Road 510Oakville, ON L6M 5"
+      }
+    }
+  }
+}

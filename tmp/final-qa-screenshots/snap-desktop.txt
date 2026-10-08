@@ -1,0 +1,54 @@
+ ›   Error: Nonexistent flag: --interactive
+ ›   See more help with --help
+
+USAGE
+  $ browse snapshot [--auto-connect] [--cdp <url|port>] [--chrome-arg
+    <flag>...] [--headed] [--headless] [--ignore-default-chrome-arg <flag>...]
+    [--local] [--no-default-chrome-args] [--proxies] [--remote] [-s <name>]
+    [--target-id <target-id>] [--verified] [--full] [--compact] [--filter
+    <text|/regex/>] [--max-depth <depth>]
+
+FLAGS
+  -s, --session=<name>                       Named browser session to use.
+                                             Defaults to BROWSE_SESSION or
+                                             default.
+      --auto-connect                         Auto-discover and attach to a local
+                                             browser with remote debugging
+                                             enabled.
+      --cdp=<url|port>                       Attach directly to a CDP endpoint.
+                                             Accepts a port, http(s) URL, or
+                                             ws(s) URL.
+      --chrome-arg=<flag>...                 Add a Chrome launch arg for managed
+                                             local sessions. Repeatable.
+      --compact                              Deprecated and has no effect; use
+                                             --full to include the ref maps.
+      --filter=<text|/regex/>                Filter output lines by text or
+                                             /regex/ while preserving matching
+                                             ancestors.
+      --full                                 Also include the ref maps
+                                             (xpathMap, urlMap).
+      --headed                               Show a visible browser window for
+                                             managed local sessions.
+      --headless                             Run managed local sessions in
+                                             headless mode.
+      --ignore-default-chrome-arg=<flag>...  Drop one of Chrome's default launch
+                                             args for managed local sessions.
+                                             Repeatable.
+      --local                                Use a managed local browser
+                                             session.
+      --max-depth=<depth>                    Trim snapshot output deeper than
+                                             this tree depth.
+      --no-default-chrome-args               Launch managed local Chrome without
+                                             any of its default launch args.
+      --proxies                              Route the remote session through
+                                             Browserbase proxies. Requires
+                                             --remote.
+      --remote                               Use a remote Browserbase browser
+                                             session.
+      --target-id=<target-id>                Select a specific CDP target when
+                                             attaching to an existing browser.
+      --verified                             Open the remote session as a
+                                             Verified (advanced-stealth)
+                                             browser. Requires --remote and a
+                                             Browserbase Scale plan.
+

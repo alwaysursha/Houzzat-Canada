@@ -1,0 +1,7 @@
+{
+  "result": {
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&view=cards",
+    "dialog": "Your HouzzatChatNotificationsSaved searchesSaved listingsWatchlistNotesRoute PlannerPersonalize homepageAccountSign in",
+    "hasSignIn": false
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "result": {
+    "viewport": {
+      "w": 390,
+      "h": 844
+    },
+    "boxes": {
+      "chat": {
+        "x": 330,
+        "y": 664,
+        "w": 44,
+        "h": 44,
+        "top": 664,
+        "left": 330,
+        "right": 374,
+        "bottom": 708
+      },
+      "card": {
+        "x": 8,
+        "y": 340,
+        "w": 374,
+        "h": 441.5,
+        "top": 340,
+        "left": 8,
+        "right": 382,
+        "bottom": 781.5
+      },
+      "image": {
+        "x": 9,
+        "y": 341,
+        "w": 372,
+        "h": 232.5,
+        "top": 341,
+        "left": 9,
+        "right": 381,
+        "bottom": 573.5
+      },
+      "save": {
+        "x": 341,
+        "y": 349,
+        "w": 32,
+        "h": 32,
+        "top": 349,
+        "left": 341,
+        "right": 373,
+        "bottom": 381
+      },
+      "price": {
+        "x": 21,
+        "y": 585.5,
+        "w": 348,
+        "h": 32.4,
+        "top": 585.5,
+        "left": 21,
+        "right": 369,
+        "bottom": 617.9
+      },
+      "title": {
+        "x": 21,
+        "y": 623.9,
+        "w": 348,
+        "h": 22.8,
+        "top": 623.9,
+        "left": 21,
+        "right": 369,
+        "bottom": 646.7,
+        "text": "292 Still's Lane"
+      },
+      "viewDetailsOrContact": null,
+      "cardLink": {
+        "x": 9,
+        "y": 341,
+        "w": 372,
+        "h": 232.5,
+        "top": 341,
+        "left": 9,
+        "right": 381,
+        "bottom": 573.5
+      },
+      "bottomNav": {
+        "x": 0,
+        "y": 783,
+        "w": 390,
+        "h": 61,
+        "top": 783,
+        "left": 0,
+        "right": 390,
+        "bottom": 844
+      }
+    },
+    "overlaps": {
+      "card": {
+        "intersects": true,
+        "area": 1936
+      },
+      "image": {
+        "intersects": false,
+        "area": 0
+      },
+      "save": {
+        "intersects": false,
+        "area": 0
+      },
+      "price": {
+        "intersects": false,
+        "area": 0
+      },
+      "title": {
+        "intersects": false,
+        "area": 0
+      },
+      "viewDetailsOrContact": {
+        "intersects": false,
+        "area": 0
+      },
+      "cardLinkHitArea": {
+        "intersects": false,
+        "area": 0
+      }
+    },
+    "underFab": {
+      "tag": "P",
+      "aria": null,
+      "href": "/listing/292-stills-lane-oakville/W13878164",
+      "text": "431,500–2,000 sqft",
+      "isSave": false,
+      "isCardLink": true,
+      "isInteractive": true
+    },
+    "clearance": {
+      "applied": true,
+      "gridPaddingBottom": "192px",
+      "gridPaddingBottomPx": 192,
+      "cssVarMobileBottomNav": "calc(3.75rem + 0px)",
+      "hasSearchResultGrid": true,
+      "cardCount": 60
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "result": {
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&cities=Oakville%7CMississauga&view=cards",
+    "results": "3,802",
+    "cityMix": {
+      "Oakville": 2,
+      "Mississauga": 10
+    },
+    "sample": [
+      "$689,0001825 Hyde Mill CrescentMississauga, ON L5N 0A73+131,200–1,399 sqftCondo aptMLS® W13878418",
+      "$520,0001575 Lakeshore Road W 263Mississauga, ON L5J 0B111600–699 sqftCondo aptMLS® W13878388",
+      "$599,9003421 Ridgeway Drive 1Mississauga, ON L5L 0B9231,200–1,399 sqftCondo townhouseMLS® W13878366",
+      "$1,149,9001035 Southdown Road 1402Mississauga, ON L5J 0A22+121,400–1,599 sqftCondo aptMLS® W13878356"
+    ],
+    "h1": "Homes in Oakville and Mississauga"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "result": {
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&view=cards",
+    "h1": "Homes in Oakville",
+    "results": "0",
+    "imgs": 0,
+    "hydrationText": false
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "result": {
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&maxPrice=750000&view=cards",
+    "view": "cards",
+    "maxPrice": "750000",
+    "city": "Oakville",
+    "markers": 0,
+    "canvas": false,
+    "h1": "Homes Under $750K in Oakville"
+  }
+}

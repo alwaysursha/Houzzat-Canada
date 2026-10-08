@@ -1,0 +1,48 @@
+{
+  "result": {
+    "ok": true,
+    "items": [
+      {
+        "text": "",
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "disabled": false
+      },
+      {
+        "text": "Share",
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "disabled": false
+      },
+      {
+        "text": "Save listing",
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "disabled": false
+      },
+      {
+        "text": "Watch property",
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "disabled": false
+      },
+      {
+        "text": "Watch area",
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "disabled": false
+      }
+    ],
+    "dialogTitle": "Listing menuShortcuts for this homeFollow this listingShareSave listingWatch pro"
+  }
+}

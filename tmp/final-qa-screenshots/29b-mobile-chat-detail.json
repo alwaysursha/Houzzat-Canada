@@ -1,0 +1,47 @@
+{
+  "result": {
+    "chat": {
+      "top": 560,
+      "left": 300,
+      "w": 44,
+      "h": 44
+    },
+    "visible": [
+      {
+        "tag": "ARTICLE",
+        "cls": "group relative isolate z-0 flex min-w-0 overflow-hidden roun",
+        "x": 8,
+        "y": 340,
+        "w": 344,
+        "h": 423,
+        "bottom": 763,
+        "right": 352,
+        "intersects": true,
+        "position": "relative"
+      }
+    ],
+    "clearanceEls": [
+      {
+        "cls": "[height:env(safe-area-inset-top,0px)]",
+        "pb": "0px",
+        "mb": "0px"
+      },
+      {
+        "cls": "fixed inset-x-0 top-[calc(4rem+env(safe-area-inset-top,0px))] z-[39] border-b bo",
+        "pb": "0px",
+        "mb": "0px"
+      },
+      {
+        "cls": "shrink-0 border-t border-line/80 bg-surface px-3 py-1 sm:px-4 sm:py-1.5 [[data-m",
+        "pb": "4px",
+        "mb": "0px"
+      },
+      {
+        "cls": "fixed inset-x-0 bottom-0 z-[57] border-t border-line/80 bg-surface/95 backdrop-b",
+        "pb": "0px",
+        "mb": "0px"
+      }
+    ],
+    "listPb": "0px"
+  }
+}

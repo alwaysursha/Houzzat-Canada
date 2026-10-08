@@ -1,0 +1,59 @@
+{
+  "result": {
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&view=cards",
+    "h1": "Homes in Oakville",
+    "results": "1,190",
+    "cards": 120,
+    "sample": [
+      {
+        "href": "/listing/3322-umar-avenue-oakville/W13877934",
+        "text": "",
+        "hasImg": true
+      },
+      {
+        "href": "/listing/3322-umar-avenue-oakville/W13877934",
+        "text": "$1,179,800 3322 Umar Avenue Oakville, ON L6M 5S3 3+1 3 1,500–2,000 sqft Townhouse MLS® W13877934",
+        "hasImg": false
+      },
+      {
+        "href": "/listing/2350-natasha-circle-oakville/W13877904",
+        "text": "",
+        "hasImg": true
+      }
+    ],
+    "imgs": [
+      {
+        "src": "https://trreb-image.ampre.ca/jRCklV4v2V3DgWO66dz18IIa-V2USmJ2Y7L1juGdwsY/rs:fit:1920:1920/aq:size:51",
+        "w": 1289,
+        "h": 854,
+        "complete": true
+      },
+      {
+        "src": "https://trreb-image.ampre.ca/QHUKa2SL7zQH2wVJXkUVzc1W6W9Pe78-PX1A2Wtg-_c/rs:fit:1920:1920/aq:size:51",
+        "w": 1920,
+        "h": 1080,
+        "complete": true
+      },
+      {
+        "src": "https://trreb-image.ampre.ca/kPkhJTPOhxA2hXqbEl6fl2tP88m5JYQ721TsZXT1syk/rs:fit:1920:1920/aq:size:51",
+        "w": 1920,
+        "h": 1438,
+        "complete": true
+      },
+      {
+        "src": "https://trreb-image.ampre.ca/Vt1pljNeY5ANvF91Lfx04fhjwr8hSp_WOcTuTlxgGbs/rs:fit:1920:1920/aq:size:51",
+        "w": 1920,
+        "h": 1080,
+        "complete": true
+      },
+      {
+        "src": "https://trreb-image.ampre.ca/oTNJfhgSgDibIIG1oRhh9FA7OXjKTzBCsMkohwtpk5Y/rs:fit:1920:1920/aq:size:51",
+        "w": 1920,
+        "h": 1279,
+        "complete": true
+      }
+    ],
+    "hydrationInBody": false,
+    "issueOverlay": false
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "result": {
+    "viewport": {
+      "w": 360,
+      "h": 740
+    },
+    "chat": {
+      "top": 560,
+      "left": 300,
+      "right": 344,
+      "bottom": 604,
+      "w": 44,
+      "h": 44
+    },
+    "probes": [
+      {
+        "label": "first",
+        "href": "/listing/292-stills-lane-oakville/W13878164",
+        "overlaps": {
+          "card": true,
+          "save": false,
+          "factsLink": true,
+          "photoLink": false
+        },
+        "saveReachable": true,
+        "leftListingOk": {
+          "ok": true,
+          "x": 57,
+          "y": 381
+        },
+        "underFab": {
+          "tag": "P",
+          "href": "/listing/292-stills-lane-oakville/W13878164",
+          "isSave": false,
+          "isListingLink": true,
+          "text": "$2,899,000"
+        },
+        "saveInViewport": true
+      },
+      {
+        "label": "middle",
+        "href": "/listing/2485-taunton-road-234-oakville/W13872652",
+        "overlaps": {
+          "card": true,
+          "save": false,
+          "factsLink": true,
+          "photoLink": false
+        },
+        "saveReachable": false,
+        "leftListingOk": {
+          "ok": false,
+          "x": 57,
+          "y": 285.9
+        },
+        "underFab": {
+          "tag": "A",
+          "href": "/listing/2485-taunton-road-234-oakville/W13872652",
+          "isSave": false,
+          "isListingLink": true,
+          "text": "$499,9002485 Taunton Road 234Oakville, ON L6H 3R81+11700–799"
+        },
+        "saveInViewport": true
+      },
+      {
+        "label": "last",
+        "href": "/listing/1376-hazel-mccleary-drive-oakville/W13865530",
+        "overlaps": {
+          "card": true,
+          "save": false,
+          "factsLink": true,
+          "photoLink": false
+        },
+        "saveReachable": false,
+        "leftListingOk": {
+          "ok": false,
+          "x": 57,
+          "y": 259
+        },
+        "underFab": {
+          "tag": "A",
+          "href": "/listing/1376-hazel-mccleary-drive-oakville/W13865530",
+          "isSave": false,
+          "isListingLink": true,
+          "text": "$958,8001376 Hazel Mccleary DriveOakville, ON L6J 7B1331,100"
+        },
+        "saveInViewport": true
+      }
+    ],
+    "endClear": {
+      "lastBottom": 640.7,
+      "chatTop": 560,
+      "clearsAboveChat": false,
+      "gap": -80.7,
+      "gridPb": 192
+    }
+  }
+}

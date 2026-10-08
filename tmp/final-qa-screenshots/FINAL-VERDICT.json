@@ -1,0 +1,73 @@
+{
+  "verdict": "NO-GO",
+  "host": "http://houzzat.com:3000",
+  "hostsMappingPresent": true,
+  "checks": {
+    "tenant_inventory": {
+      "status": "PASS",
+      "evidence": "Oakville ~1189\u20131191 homes; multi-city 3802; Host houzzat.com"
+    },
+    "real_listing": {
+      "status": "PASS",
+      "evidence": "W13877982 / W13877934 load with SSR content"
+    },
+    "map_split": {
+      "status": "PASS",
+      "evidence": "Map 120 markers + canvas; Split markers+cards; artifacts 23b/24"
+    },
+    "filter_persist": {
+      "status": "PASS",
+      "evidence": "maxPrice=750000+city persist Cards\u2194Map\u2194Split (22\u201325)"
+    },
+    "multi_city": {
+      "status": "PASS",
+      "evidence": "Oakville|Mississauga 3,802 homes; mixed samples (31)"
+    },
+    "save_search_guest": {
+      "status": "PASS",
+      "evidence": "prior 09d auth dialog after criteria change"
+    },
+    "watch_area_guest": {
+      "status": "PASS",
+      "evidence": "prior 10 auth dialog"
+    },
+    "save_listing_guest": {
+      "status": "PASS",
+      "evidence": "card Save property \u2192 Sign in to save this home (26)"
+    },
+    "lead_capture_view_listing": {
+      "status": "PASS",
+      "evidence": "Free Access name/email/phone \u2014 not submitted (27/27b/28)"
+    },
+    "second_listing_gate": {
+      "status": "PASS",
+      "evidence": "Every anonymous detail gated (free-first retired); listing2 Free Access (28)"
+    },
+    "request_tour_info": {
+      "status": "PASS_WITH_NOTE",
+      "evidence": "SSR Request Tour/Info present but inert under VIEW_LISTING gate; not submitted"
+    },
+    "mobile_layout": {
+      "status": "PASS",
+      "evidence": "360 toolbar/chips/results render (final-mobile-360.png)"
+    },
+    "mobile_chat_clearance": {
+      "status": "FAIL",
+      "evidence": "Chat FAB overlaps first property card at 360\u00d7740; article intersects FAB (29/29b); screenshot final-mobile-360.png"
+    },
+    "hydration_console": {
+      "status": "PASS",
+      "evidence": "No hydration text; empty nextjs-portal only (dev tools); no error overlay text (30*)"
+    }
+  },
+  "blockers": [
+    "Mobile Chat FAB overlaps listing cards at 360px (clearance regression / insufficient bottom padding)."
+  ],
+  "notes": [
+    "Listing menu dialog sometimes present under Free Access (benign UX noise).",
+    "Dev server was restarted with next --webpack during QA after prior Turbopack persistence crash; app code unchanged.",
+    "Hosts mapping NOT removed."
+  ],
+  "cleanup_after_ack": "sudo sed -i '' '/houzzat\\.com/d' /etc/hosts   # or restore from tmp/hosts.backup.* / /tmp/hosts.backup.pre-houzzat-qa",
+  "artifactDir": "/Volumes/T7/Web Projects/teamalisyedrealestate/tmp/final-qa-screenshots"
+}

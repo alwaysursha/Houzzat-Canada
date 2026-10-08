@@ -1,0 +1,188 @@
+{
+  "verdict": "GO",
+  "verdictNote": "Stage 3B-1 mobileChatClearance is applied and end-of-list clearance works. Prior NO-GO overstated mid-scroll FAB\u2229card geometry as a clearance failure. Residual: FAB can occlude a 44\u00d744 portion of the facts ListingLink while scrolling; Save and photo link remain usable; listing still openable outside the FAB footprint.",
+  "importantControlsObstructed": {
+    "save": false,
+    "photoListingLink": false,
+    "factsListingLink": "PARTIAL \u2014 only within FAB footprint (~44\u00d744) during scroll",
+    "viewDetailsContact": "N/A \u2014 not present on SearchResultCard",
+    "bottomNav": false
+  },
+  "stage3b1Clearance": {
+    "appliedToResultsGrid": true,
+    "gridPaddingBottomPx": 192,
+    "cssVarMobileBottomNav": "calc(3.75rem + 0px)",
+    "scrollContainer": "DIV.h-full.overflow-y-auto.overscroll-contain (not document)",
+    "endOfListClearsChat": {
+      "360": true,
+      "390": true,
+      "430": true,
+      "gapPx": 111.3
+    }
+  },
+  "measurementsInitial": {
+    "360x740": {
+      "chat": {
+        "x": 300,
+        "y": 560,
+        "w": 44,
+        "h": 44
+      },
+      "card": {
+        "x": 8,
+        "y": 340,
+        "w": 344,
+        "h": 422.7
+      },
+      "image": {
+        "x": 9,
+        "y": 341,
+        "w": 342,
+        "h": 213.8
+      },
+      "save": {
+        "x": 311,
+        "y": 349,
+        "w": 32,
+        "h": 32
+      },
+      "price": {
+        "x": 21,
+        "y": 566.8,
+        "w": 318,
+        "h": 32.4
+      },
+      "title": {
+        "x": 21,
+        "y": 605.1,
+        "w": 318,
+        "h": 22.8
+      },
+      "bottomNav": {
+        "x": 0,
+        "y": 679,
+        "w": 360,
+        "h": 61
+      },
+      "overlapAreaPx2": {
+        "card": 1936,
+        "price": 1259.7,
+        "save": 0,
+        "image": 0,
+        "title": 0
+      },
+      "underFab": "facts ListingLink (price) \u2014 interactive"
+    },
+    "390x844": {
+      "chat": {
+        "x": 330,
+        "y": 664,
+        "w": 44,
+        "h": 44
+      },
+      "card": {
+        "x": 8,
+        "y": 340,
+        "w": 374,
+        "h": 441.5
+      },
+      "image": {
+        "x": 9,
+        "y": 341,
+        "w": 372,
+        "h": 232.5
+      },
+      "save": {
+        "x": 341,
+        "y": 349,
+        "w": 32,
+        "h": 32
+      },
+      "price": {
+        "x": 21,
+        "y": 585.5,
+        "w": 348,
+        "h": 32.4
+      },
+      "title": {
+        "x": 21,
+        "y": 623.9,
+        "w": 348,
+        "h": 22.8
+      },
+      "bottomNav": {
+        "x": 0,
+        "y": 783,
+        "w": 390,
+        "h": 61
+      },
+      "overlapAreaPx2": {
+        "card": 1936,
+        "price": 0,
+        "save": 0,
+        "image": 0,
+        "title": 0
+      },
+      "underFab": "facts ListingLink (sqft/meta) \u2014 interactive"
+    },
+    "430x932": {
+      "chat": {
+        "x": 370,
+        "y": 752,
+        "w": 44,
+        "h": 44
+      },
+      "card": {
+        "x": 8,
+        "y": 340,
+        "w": 414,
+        "h": 466.5
+      },
+      "image": {
+        "x": 9,
+        "y": 341,
+        "w": 412,
+        "h": 257.5
+      },
+      "save": {
+        "x": 381,
+        "y": 349,
+        "w": 32,
+        "h": 32
+      },
+      "price": {
+        "x": 21,
+        "y": 610.5,
+        "w": 388,
+        "h": 32.4
+      },
+      "title": {
+        "x": 21,
+        "y": 648.9,
+        "w": 388,
+        "h": 22.8
+      },
+      "bottomNav": {
+        "x": 0,
+        "y": 871,
+        "w": 430,
+        "h": 61
+      },
+      "overlapAreaPx2": {
+        "card": 1936,
+        "price": 0,
+        "save": 0,
+        "image": 0,
+        "title": 0
+      },
+      "underFab": "non-interactive DIV (card chrome/gap) at initial park"
+    }
+  },
+  "rootCause": "Stage 3B-1 paddingBottom on .search-result-grid (192px) correctly keeps the last cards clear of the fixed Chat FAB inside the mobile results scroller. A fixed FAB will still geometrically intersect mid-scroll cards; at 360 the resting FAB sits on the facts ListingLink (price row), so that 44\u00d744 zone receives Chat clicks instead of listing navigation. This is not a missing-clearance bug.",
+  "proposedMinimalCorrection": {
+    "ifProductWantsZeroFactsOcclusion": "In SearchResultsPane only (when mobileChatClearance), add paddingRight: 3.5rem to .search-result-grid \u2014 same gutter already used for empty-state actions \u2014 so card content stays left of the FAB column. No SearchResultCard, Chat behavior, toolbar, or bottom-nav changes.",
+    "requiredForGO": false
+  },
+  "artifacts": "tmp/final-qa-screenshots/chat-overlap-audit/",
+  "codeChanges": false
+}

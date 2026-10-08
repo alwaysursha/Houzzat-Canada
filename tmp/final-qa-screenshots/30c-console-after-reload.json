@@ -1,0 +1,8 @@
+{
+  "result": {
+    "logs": [],
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&cities=Oakville%7CMississauga&view=cards",
+    "results": "3,802",
+    "hydrationBody": false
+  }
+}

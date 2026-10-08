@@ -1,0 +1,10 @@
+{
+  "result": {
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&view=cards",
+    "h1": "Homes in Oakville",
+    "results": "1,191",
+    "cards": 120,
+    "empty": false,
+    "bodySnippet": "Press back again to exit\nHouzzat\nSearch\nMap Search\nWhat's my Home Worth?\nBuy\nRent\nBoth\nCards\nMap\nSplit\nFilters\n1\nSaved Search\nWatch area\nPlan viewings\nFor Sale\nOakville\nClear all\n\nFilters\n\n1,191 homes\n\nReset\nRESIDENTIAL / COMMERCIAL\nResidential\nCommercial\nAll\nLOCATION\n\nCity / Area\n\nCITY\n1 selected\nOakville\nRemove Oakville\nCOMMUNITY\nLIST PRICE\nAny\nUnder $750k\n$750k–$1.2M\n$1.2M–$2M\n$2M+\nBEDS\nAny\n1+\n"
+  }
+}

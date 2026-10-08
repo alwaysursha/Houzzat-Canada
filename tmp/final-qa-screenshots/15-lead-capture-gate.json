@@ -1,0 +1,61 @@
+{
+  "result": {
+    "ok": true,
+    "title": "Free Access",
+    "hasName": true,
+    "hasEmail": true,
+    "hasPhone": true,
+    "hasContinue": true,
+    "hasTerms": true,
+    "labels": [
+      {
+        "tag": "LABEL",
+        "type": null,
+        "name": null,
+        "text": "Full Name"
+      },
+      {
+        "tag": "INPUT",
+        "type": null,
+        "name": "name",
+        "text": ""
+      },
+      {
+        "tag": "LABEL",
+        "type": null,
+        "name": null,
+        "text": "Email"
+      },
+      {
+        "tag": "INPUT",
+        "type": "email",
+        "name": "email",
+        "text": ""
+      },
+      {
+        "tag": "LABEL",
+        "type": null,
+        "name": null,
+        "text": "Phone(also used as your password)"
+      },
+      {
+        "tag": "INPUT",
+        "type": "tel",
+        "name": "tel",
+        "text": ""
+      },
+      {
+        "tag": "BUTTON",
+        "type": "submit",
+        "name": null,
+        "text": "Continue to Property →"
+      },
+      {
+        "tag": "BUTTON",
+        "type": "button",
+        "name": null,
+        "text": "Sign in"
+      }
+    ]
+  }
+}

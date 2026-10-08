@@ -1,0 +1,15 @@
+{
+  "mode": "managed-local",
+  "pages": [
+    {
+      "index": 0,
+      "targetId": "9E8A22565F53612DF41C7DEB9E98680A",
+      "title": "Search GTA Homes for Sale | Houzzat",
+      "url": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&view=cards"
+    }
+  ],
+  "selectedTargetId": "9E8A22565F53612DF41C7DEB9E98680A",
+  "session": "search-v2-qa-2",
+  "title": "Search GTA Homes for Sale | Houzzat",
+  "url": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&view=cards"
+}

@@ -1,0 +1,139 @@
+{
+  "result": {
+    "viewport": {
+      "w": 430,
+      "h": 932
+    },
+    "boxes": {
+      "chat": {
+        "x": 370,
+        "y": 752,
+        "w": 44,
+        "h": 44,
+        "top": 752,
+        "left": 370,
+        "right": 414,
+        "bottom": 796
+      },
+      "card": {
+        "x": 8,
+        "y": 340,
+        "w": 414,
+        "h": 466.5,
+        "top": 340,
+        "left": 8,
+        "right": 422,
+        "bottom": 806.5
+      },
+      "image": {
+        "x": 9,
+        "y": 341,
+        "w": 412,
+        "h": 257.5,
+        "top": 341,
+        "left": 9,
+        "right": 421,
+        "bottom": 598.5
+      },
+      "save": {
+        "x": 381,
+        "y": 349,
+        "w": 32,
+        "h": 32,
+        "top": 349,
+        "left": 381,
+        "right": 413,
+        "bottom": 381
+      },
+      "price": {
+        "x": 21,
+        "y": 610.5,
+        "w": 388,
+        "h": 32.4,
+        "top": 610.5,
+        "left": 21,
+        "right": 409,
+        "bottom": 642.9
+      },
+      "title": {
+        "x": 21,
+        "y": 648.9,
+        "w": 388,
+        "h": 22.8,
+        "top": 648.9,
+        "left": 21,
+        "right": 409,
+        "bottom": 671.7,
+        "text": "292 Still's Lane"
+      },
+      "viewDetailsOrContact": null,
+      "cardLink": {
+        "x": 9,
+        "y": 341,
+        "w": 412,
+        "h": 257.5,
+        "top": 341,
+        "left": 9,
+        "right": 421,
+        "bottom": 598.5
+      },
+      "bottomNav": {
+        "x": 0,
+        "y": 871,
+        "w": 430,
+        "h": 61,
+        "top": 871,
+        "left": 0,
+        "right": 430,
+        "bottom": 932
+      }
+    },
+    "overlaps": {
+      "card": {
+        "intersects": true,
+        "area": 1936
+      },
+      "image": {
+        "intersects": false,
+        "area": 0
+      },
+      "save": {
+        "intersects": false,
+        "area": 0
+      },
+      "price": {
+        "intersects": false,
+        "area": 0
+      },
+      "title": {
+        "intersects": false,
+        "area": 0
+      },
+      "viewDetailsOrContact": {
+        "intersects": false,
+        "area": 0
+      },
+      "cardLinkHitArea": {
+        "intersects": false,
+        "area": 0
+      }
+    },
+    "underFab": {
+      "tag": "DIV",
+      "aria": null,
+      "href": null,
+      "text": "",
+      "isSave": false,
+      "isCardLink": false,
+      "isInteractive": false
+    },
+    "clearance": {
+      "applied": true,
+      "gridPaddingBottom": "192px",
+      "gridPaddingBottomPx": 192,
+      "cssVarMobileBottomNav": "calc(3.75rem + 0px)",
+      "hasSearchResultGrid": true,
+      "cardCount": 60
+    }
+  }
+}

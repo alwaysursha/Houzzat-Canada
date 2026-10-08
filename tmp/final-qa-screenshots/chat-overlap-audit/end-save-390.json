@@ -1,0 +1,49 @@
+{
+  "result": {
+    "viewport": {
+      "w": 390,
+      "h": 844
+    },
+    "chat": {
+      "top": 664,
+      "bottom": 708,
+      "left": 330,
+      "right": 374,
+      "w": 44,
+      "h": 44
+    },
+    "endOfDocument": {
+      "lastBottom": 27417.2,
+      "chatTop": 664,
+      "clearsAboveChat": false,
+      "gap": -26753.2,
+      "gridPaddingBottomPx": 192,
+      "scrollTop": 0,
+      "maxScroll": 0
+    },
+    "saveAlignedUnderFab": {
+      "save": {
+        "top": 349,
+        "bottom": 381,
+        "left": 341,
+        "right": 373,
+        "w": 32,
+        "h": 32
+      },
+      "overlapsChat": false,
+      "hitIsChat": false,
+      "hitIsSave": true,
+      "hitAria": "svg"
+    },
+    "midFactsUnderFab": {
+      "factsOverlapsChat": true,
+      "saveOverlapsChat": false,
+      "under": {
+        "tag": "DIV",
+        "isListingLink": false,
+        "isSave": false,
+        "text": ""
+      }
+    }
+  }
+}

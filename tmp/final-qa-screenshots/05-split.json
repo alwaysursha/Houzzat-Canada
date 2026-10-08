@@ -1,0 +1,9 @@
+{
+  "result": {
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&sort=price_asc",
+    "markers": 0,
+    "cards": 475,
+    "canvas": true,
+    "results": "1,191"
+  }
+}

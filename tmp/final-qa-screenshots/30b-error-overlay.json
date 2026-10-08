@@ -1,0 +1,16 @@
+{
+  "result": {
+    "portals": [
+      {
+        "tag": "NEXTJS-PORTAL",
+        "attrs": [
+          "style=--nextjs-dev-tools-scale: 1;"
+        ],
+        "text": "",
+        "display": "block",
+        "visibility": "visible"
+      }
+    ],
+    "errText": []
+  }
+}

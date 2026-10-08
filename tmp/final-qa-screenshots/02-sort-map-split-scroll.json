@@ -1,0 +1,54 @@
+{
+  "result": {
+    "steps": [
+      {
+        "phase": "baseline",
+        "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&view=cards",
+        "count": "1,190",
+        "cards": 120,
+        "first": "$1,179,800 3322 Umar Avenue Oakville, ON L6M 5S3 3+1 3 1,500–2,000 sqft Townhouse MLS® W13877934"
+      },
+      {
+        "phase": "sort_price_asc",
+        "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&sort=price_asc&view=cards",
+        "count": "1,190",
+        "cards": 120,
+        "first": "$1,179,800 3322 Umar Avenue Oakville, ON L6M 5S3 3+1 3 1,500–2,000 sqft Townhouse MLS® W13877934",
+        "sortValue": "price_asc"
+      },
+      {
+        "phase": "map",
+        "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&sort=price_asc&view=map",
+        "count": null,
+        "markersOrCanvas": 62,
+        "mapCanvas": true,
+        "bodyHasMap": true
+      },
+      {
+        "phase": "split",
+        "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&sort=price_asc&view=map",
+        "count": "1,190",
+        "cards": 120,
+        "mapCanvas": true,
+        "first": "$1,179,800 3322 Umar Avenue Oakville, ON L6M 5S3 3+1 3 1,500–2,000 sqft Townhouse MLS® W13877934"
+      },
+      {
+        "phase": "scroll",
+        "beforeScroll": 120,
+        "afterScroll": 120,
+        "grew": false,
+        "count": "1,190"
+      },
+      {
+        "phase": "filter_persist",
+        "withBeds": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&minBeds=3&sort=price_asc&view=cards",
+        "mapHref": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&minBeds=3&sort=price_asc&view=cards",
+        "splitHref": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&minBeds=3&sort=price_asc&view=cards",
+        "cardsHref": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&minBeds=3&sort=price_asc&view=cards",
+        "stillHasMinBeds": true,
+        "count": null
+      }
+    ],
+    "errors": []
+  }
+}

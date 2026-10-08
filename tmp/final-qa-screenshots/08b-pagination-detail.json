@@ -1,0 +1,17 @@
+{
+  "result": {
+    "mores": [
+      {
+        "text": "More",
+        "disabled": false,
+        "aria": "More tools"
+      }
+    ],
+    "candidates": [
+      "More"
+    ],
+    "before": 60,
+    "after": 60,
+    "grew": false
+  }
+}

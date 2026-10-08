@@ -1,0 +1,13 @@
+{
+  "result": {
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&sort=price_asc&view=cards",
+    "prices": [
+      "$1",
+      "$8,000",
+      "$15,000",
+      "$25,000",
+      "$30,000"
+    ],
+    "first": "$1 2483 Burnhamthorpe Road Oakville, ON L6M 4H1 3 3 2,000–2,500 sqft Detached MLS® W13594854"
+  }
+}

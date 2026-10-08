@@ -1,0 +1,15 @@
+{
+  "mode": "managed-local",
+  "pages": [
+    {
+      "index": 0,
+      "targetId": "65D7AC1353E4CB16101DEC76CF39AF80",
+      "title": "houzzat.com",
+      "url": "chrome-error://chromewebdata/"
+    }
+  ],
+  "selectedTargetId": "65D7AC1353E4CB16101DEC76CF39AF80",
+  "session": "final-qa-c",
+  "title": "houzzat.com",
+  "url": "chrome-error://chromewebdata/"
+}

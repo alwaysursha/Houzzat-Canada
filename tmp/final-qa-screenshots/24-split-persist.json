@@ -1,0 +1,11 @@
+{
+  "result": {
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&maxPrice=750000",
+    "view": null,
+    "maxPrice": "750000",
+    "city": "Oakville",
+    "markers": 120,
+    "canvas": true,
+    "cards": 240
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "result": {
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Oakville&view=cards",
+    "vw": 360,
+    "vh": 740,
+    "results": "1,189",
+    "visibleCards": 2,
+    "chat": {
+      "x": 300,
+      "y": 560,
+      "w": 44,
+      "h": 44,
+      "bottom": 604,
+      "right": 344
+    },
+    "overlap": true,
+    "minGapAboveChat": 5.25,
+    "padBottom": "0px",
+    "h1": "1,189 Homes for Sale"
+  }
+}

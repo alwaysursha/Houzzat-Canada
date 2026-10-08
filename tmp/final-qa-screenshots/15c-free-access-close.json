@@ -1,0 +1,33 @@
+{
+  "result": {
+    "dialogRect": {
+      "x": 450,
+      "y": 186.75,
+      "w": 380,
+      "h": 526.5
+    },
+    "close": [
+      {
+        "text": "Continue to Property →",
+        "aria": null,
+        "rect": {
+          "x": 471,
+          "y": 567.25,
+          "w": 338,
+          "h": 44
+        }
+      },
+      {
+        "text": "Sign in",
+        "aria": null,
+        "rect": {
+          "x": 683.796875,
+          "y": 676.25,
+          "w": 43.9296875,
+          "h": 20
+        }
+      }
+    ],
+    "parentCls": "fixed inset-0 z-[100] flex items-center justify-center px-3 sm:px-4 sm:py-8 py-3"
+  }
+}

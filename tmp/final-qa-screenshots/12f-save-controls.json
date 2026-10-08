@@ -1,0 +1,51 @@
+{
+  "result": {
+    "count": 4,
+    "all": [
+      {
+        "tag": "BUTTON",
+        "text": "Save listing",
+        "aria": null,
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "disabled": false,
+        "cls": "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transitio"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Save listing",
+        "aria": null,
+        "x": 832,
+        "y": 102,
+        "w": 115,
+        "h": 36,
+        "disabled": false,
+        "cls": "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transitio"
+      },
+      {
+        "tag": "A",
+        "text": "For SaleW13873908$635,999Added 22 hours ago3285 Carding Mill",
+        "aria": "3285 Carding Mill Trail 403, 1008 - GO Glenorchy, Oakville",
+        "x": 1122,
+        "y": 6332,
+        "w": 338,
+        "h": 338,
+        "disabled": false,
+        "cls": "absolute inset-0 block"
+      },
+      {
+        "tag": "A",
+        "text": "Saved Homes",
+        "aria": null,
+        "x": 907,
+        "y": 8465,
+        "w": 99,
+        "h": 44,
+        "disabled": false,
+        "cls": "inline-flex min-h-11 items-center text-[15px] leading-snug text-ink/70 transitio"
+      }
+    ]
+  }
+}
