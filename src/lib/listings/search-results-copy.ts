@@ -226,39 +226,18 @@ export function searchResultsCopy(input: SearchResultsCopyInput): SearchResultsC
     ? "Updating results"
     : `${count.toLocaleString("en-CA")} ${countNoun} ${countTxn}`;
 
-  const chips: SearchResultChip[] = [
-    {
-      key: "transaction",
-      label: transactionLabel(input.transactionType),
-      clearable: false,
-    },
-  ];
-  if (price) chips.push({ key: "price", label: price, clearable: true });
-  const beds = input.minBeds.trim();
-  if (beds) chips.push({ key: "beds", label: `${beds}+ Beds`, clearable: true });
-  const baths = input.minBaths.trim();
-  if (baths) chips.push({ key: "baths", label: `${baths}+ Baths`, clearable: true });
-  if (input.propertyTypes.length === 1) {
-    chips.push({
-      key: "types",
-      label: propertyTypeLabel(input.propertyTypes[0]!),
-      clearable: true,
-    });
-  } else if (input.propertyTypes.length > 1) {
-    chips.push({
-      key: "types",
-      label: `${input.propertyTypes.length} home types`,
-      clearable: true,
-    });
-  }
-  if (input.openHouseOnly) {
-    chips.push({ key: "openHouse", label: "Open house", clearable: true });
-  }
+  const chips: SearchResultChip[] = [];
+  // Buy/Rent: always surface committed transaction; removable when not default Sale.
+  chips.push({
+    key: "transaction",
+    label: transactionLabel(input.transactionType),
+    clearable: input.transactionType !== "SALE",
+  });
   if (input.segment === "COMMERCIAL") {
     chips.push({ key: "segment", label: "Commercial", clearable: true });
+  } else if (input.segment === "ALL") {
+    chips.push({ key: "segment", label: "All segments", clearable: true });
   }
-  const status = statusLabel(input.statuses, lease);
-  if (status) chips.push({ key: "status", label: status, clearable: true });
   const listedCities = splitList(input.cities);
   const singleCity =
     listedCities.length === 0 &&
@@ -277,8 +256,31 @@ export function searchResultsCopy(input: SearchResultsCopyInput): SearchResultsC
       clearable: true,
     });
   }
-  if (query && place) {
+  if (query) {
     chips.push({ key: "query", label: `“${query}”`, clearable: true });
+  }
+  if (price) chips.push({ key: "price", label: price, clearable: true });
+  const beds = input.minBeds.trim();
+  if (beds) chips.push({ key: "beds", label: `${beds}+ Beds`, clearable: true });
+  const baths = input.minBaths.trim();
+  if (baths) chips.push({ key: "baths", label: `${baths}+ Baths`, clearable: true });
+  if (input.propertyTypes.length === 1) {
+    chips.push({
+      key: "types",
+      label: propertyTypeLabel(input.propertyTypes[0]!),
+      clearable: true,
+    });
+  } else if (input.propertyTypes.length > 1) {
+    chips.push({
+      key: "types",
+      label: `${input.propertyTypes.length} home types`,
+      clearable: true,
+    });
+  }
+  const status = statusLabel(input.statuses, lease);
+  if (status) chips.push({ key: "status", label: status, clearable: true });
+  if (input.openHouseOnly) {
+    chips.push({ key: "openHouse", label: "Open houses", clearable: true });
   }
 
   return { title, supporting, countHeadline, chips };

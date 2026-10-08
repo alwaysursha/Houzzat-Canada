@@ -147,23 +147,27 @@ assert.match(sheet, /applyIntentLockedRef/);
 assert.match(sheet, /applyIntentLockedRef\.current = true/);
 assert.match(sheet, /searchCallbackPath\(filters, cities\)/);
 assert.match(sheet, /routerRef\.current\.replace\(path/);
-assert.match(sheet, /prepareApplyCities/);
+assert.match(sheet, /flushDraftCities/);
+assert.match(sheet, /commitDraft/);
+assert.match(sheet, /onCommitFilters/);
+assert.match(sheet, /setDraftCities/);
 assert.match(sheet, /applyAndSave/);
 assert.match(sheet, /cityFieldRef/);
-assert.match(sheet, /searchFiltersToSavedQuery\(filters, placeExtras\)/);
+assert.match(sheet, /searchFiltersToSavedQuery\(draft, placeExtras\)/);
 assert.doesNotMatch(sheet, /keepHrefRef\.current = window\.location\.href/);
 assert.match(sheet, /houzzatSearchFilters/);
 assert.match(sheet, /history\.back\(\)/);
 assert.match(sheet, /UpdateSavedSearchDialog/);
-// Lock before parent city sync so stale props cannot overwrite Apply path
-const prepareBlock = sheet.slice(
-  sheet.indexOf("function prepareApplyCities"),
-  sheet.indexOf("async function persist"),
+// Lock + commit before persist so Back restore keeps applied Mississauga path
+const applyBlock = sheet.slice(
+  sheet.indexOf("async function applyAndSave"),
+  sheet.indexOf("if (!mounted)"),
 );
-assert.match(prepareBlock, /applyIntentLockedRef\.current = true/);
+assert.match(applyBlock, /applyIntentLockedRef\.current = true/);
+assert.match(applyBlock, /commitDraft\(nextCities\)/);
 assert.ok(
-  prepareBlock.indexOf("applyIntentLockedRef.current = true") <
-    prepareBlock.indexOf("return flushed.cities"),
+  applyBlock.indexOf("applyIntentLockedRef.current = true") <
+    applyBlock.indexOf("commitDraft(nextCities)"),
 );
 
 const menu = read("src/components/listings/SearchFiltersMenu.tsx");

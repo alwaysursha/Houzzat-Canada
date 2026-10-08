@@ -38,10 +38,10 @@ import {
   type SearchFilters,
   type SearchViewMode,
 } from "@/components/listings/SearchFilterChips";
+import { SearchActiveFilterStrip } from "@/components/listings/SearchActiveFilterStrip";
 import { SearchDesktopFilterPanel } from "@/components/listings/SearchDesktopFilterPanel";
 import { SearchFiltersMenu } from "@/components/listings/SearchFiltersMenu";
 import { SearchFiltersSheet } from "@/components/listings/SearchFiltersSheet";
-import { SearchToolbarChips } from "@/components/listings/SearchResultsContext";
 import { SearchResultsPane } from "@/components/listings/SearchResultsPane";
 import {
   parseSearchQuery,
@@ -67,6 +67,7 @@ import {
   shouldResetMapAreaForPlaceChange,
 } from "@/lib/listings/map-area-search";
 import { searchFiltersToSavedQuery } from "@/lib/listings/saved-search-query";
+import { citiesParamForFilterSync } from "@/lib/listings/search-url-cities";
 import {
   structuredCitiesFromSearch,
   withStructuredCity,
@@ -366,6 +367,8 @@ export function SearchExperience() {
     ? ""
     : filters.community.trim() ||
       filters.city.trim() ||
+      (structuredCities.length === 1 ? structuredCities[0]! : "") ||
+      (structuredCities.length > 1 ? structuredCities.join(", ") : "") ||
       qParam.trim() ||
       "";
 
@@ -374,11 +377,18 @@ export function SearchExperience() {
     if (
       !qParam.trim() &&
       !filters.city.trim() &&
-      !filters.community.trim()
+      !filters.community.trim() &&
+      structuredCities.length === 0
     ) {
       setPlaceQueryCleared(false);
     }
-  }, [placeQueryCleared, qParam, filters.city, filters.community]);
+  }, [
+    placeQueryCleared,
+    qParam,
+    filters.city,
+    filters.community,
+    structuredCities.length,
+  ]);
 
   // Move the map once when the place changes. Known cities use existing
   // centroids. Neighbourhoods and other free text wait for listing coordinates.
@@ -417,12 +427,11 @@ export function SearchExperience() {
         cities?: string;
       },
     ) => {
-      const cities =
-        options?.cities !== undefined
-          ? options.cities
-          : options?.clearMultiPlace
-            ? ""
-            : citiesQueryParam;
+      const cities = citiesParamForFilterSync({
+        explicitCities: options?.cities,
+        clearMultiPlace: options?.clearMultiPlace,
+        urlCitiesParam: citiesParam,
+      });
       router.replace(
         searchPageHref({
           pathname,
@@ -437,7 +446,7 @@ export function SearchExperience() {
         { scroll: false },
       );
     },
-    [citiesQueryParam, communitiesParam, pathname, qParam, router, view],
+    [citiesParam, communitiesParam, pathname, qParam, router, view],
   );
 
   const searchCallbackPath = useCallback(
@@ -822,6 +831,12 @@ export function SearchExperience() {
   function clearResultChip(chip: SearchResultChip) {
     switch (chip.key) {
       case "transaction":
+        updateFilters({
+          ...filters,
+          transactionType: "SALE",
+          statuses: ["ACTIVE"],
+          openHouseOnly: false,
+        });
         return;
       case "price":
         updateFilters({ ...filters, minPrice: "", maxPrice: "" });
@@ -839,7 +854,11 @@ export function SearchExperience() {
         updateFilters({ ...filters, openHouseOnly: false });
         return;
       case "segment":
-        updateFilters({ ...filters, segment: "RESIDENTIAL" });
+        updateFilters({
+          ...filters,
+          segment: "RESIDENTIAL",
+          propertyTypes: [],
+        });
         return;
       case "status":
         updateFilters({ ...filters, statuses: ["ACTIVE"] });
@@ -852,11 +871,16 @@ export function SearchExperience() {
         return;
       }
       case "city": {
+        // Keep citiesOverride optimistic so a 2→1 (or 1→0) removal cannot
+        // briefly keep the old cities= pipe in queryString while the URL lags.
         const nextCities = structuredCities.filter((city) => city !== chip.city);
         const next = { ...filters, city: "" };
         setCitiesOverride(nextCities);
         setFilters(next);
-        syncUrl(next, view, { cities: nextCities.join("|") });
+        syncUrl(next, view, {
+          cities: nextCities.join("|"),
+          clearMultiPlace: nextCities.length === 0,
+        });
         return;
       }
       case "query":
@@ -959,10 +983,6 @@ export function SearchExperience() {
                   </span>
                 ) : null}
             </button>
-            <SearchToolbarChips
-              chips={resultsCopy.chips}
-              onClearChip={clearResultChip}
-            />
 
             <label className="group relative inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-full border border-line bg-surface px-2.5">
               <ArrowUpDown className="size-3.5 shrink-0 text-canopy" aria-hidden />
@@ -1087,10 +1107,6 @@ export function SearchExperience() {
                 searchCallbackPath={searchCallbackPath}
                 hidePlaceChip
               />
-              <SearchToolbarChips
-                chips={resultsCopy.chips}
-                onClearChip={clearResultChip}
-              />
             <label className="group relative inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-xs transition hover:border-canopy/40">
                 <ArrowUpDown className="size-3.5 shrink-0 text-canopy" aria-hidden />
                 <span className="text-xs font-semibold text-ink">
@@ -1153,6 +1169,12 @@ export function SearchExperience() {
           </div>
         </div>
         )}
+        <SearchActiveFilterStrip
+          className="mt-1.5"
+          chips={resultsCopy.chips}
+          onClearChip={clearResultChip}
+          onClearAll={resetStructuredFilters}
+        />
       </div>
 
       <div
@@ -1365,12 +1387,14 @@ export function SearchExperience() {
           onChange={updateFilters}
           cities={structuredCities}
           onCitiesChange={replaceStructuredCities}
+          onCommitFilters={commitFiltersWithCities}
           onResetFilters={resetStructuredFilters}
           resultCount={total}
           pending={pending}
           resultNoun={noun}
           signedIn={signedIn}
           searchCallbackPath={searchCallbackPath}
+          previewExtras={filterPreviewExtras}
         />
       ) : null}
     </div>

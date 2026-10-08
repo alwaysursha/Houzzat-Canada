@@ -24,6 +24,7 @@ import { propertyTypeLabel } from "@/lib/listings/constants";
 import { savePrimarySearch } from "@/lib/listings/save-primary-search";
 import {
   savedSearchDisplayName,
+  searchFiltersToListingParams,
   searchFiltersToSavedQuery,
 } from "@/lib/listings/saved-search-query";
 import { planSavedSearchApplyUi } from "@/lib/listings/saved-search-confirm-flow";
@@ -124,12 +125,14 @@ export function SearchFiltersSheet({
   onChange,
   cities,
   onCitiesChange,
+  onCommitFilters,
   onResetFilters,
   resultCount,
   pending = false,
   resultNoun = "homes",
   signedIn = false,
   searchCallbackPath,
+  previewExtras,
 }: {
   open: boolean;
   onClose: () => void;
@@ -137,12 +140,23 @@ export function SearchFiltersSheet({
   onChange: (next: SearchFilters) => void;
   cities: string[];
   onCitiesChange: (next: string[]) => void;
+  /** Atomic Apply: filters + cities in one URL sync (preferred). */
+  onCommitFilters?: (next: SearchFilters, cities: string[]) => void;
   onResetFilters: () => void;
   resultCount: number;
   pending?: boolean;
   resultNoun?: string;
   signedIn?: boolean;
   searchCallbackPath: (filters: SearchFilters, cities?: string[]) => string;
+  previewExtras?: {
+    cities?: string;
+    communities?: string;
+    q?: string;
+    west?: number;
+    south?: number;
+    east?: number;
+    north?: number;
+  };
 }) {
   const router = useRouter();
   const { openAuth } = useAuthModal();
@@ -150,6 +164,10 @@ export function SearchFiltersSheet({
   const titleId = useId();
   const [mounted, setMounted] = useState(false);
   const [entered, setEntered] = useState(false);
+  const [draft, setDraft] = useState(filters);
+  const [draftCities, setDraftCities] = useState(cities);
+  const [draftTotal, setDraftTotal] = useState(resultCount);
+  const [draftPending, setDraftPending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const historyPushedRef = useRef(false);
@@ -157,7 +175,7 @@ export function SearchFiltersSheet({
   const cityFieldRef = useRef<StructuredCityFieldHandle>(null);
   const onCloseRef = useRef(onClose);
   const routerRef = useRef(router);
-  /** Relative /search?... built from props / Apply — not window.location. */
+  /** Relative /search?... built from committed props / Apply — not window.location. */
   const intendedPathRef = useRef("");
   /** Cities last prepared on Apply — used when confirming after the field unmounts. */
   const applyCitiesRef = useRef(cities);
@@ -171,13 +189,14 @@ export function SearchFiltersSheet({
   if (!open) {
     applyIntentLockedRef.current = false;
   } else if (!applyIntentLockedRef.current) {
+    // Back without Apply restores committed criteria, not uncommitted draft.
     intendedPathRef.current = searchCallbackPath(filters, cities);
-    applyCitiesRef.current = cities;
+    applyCitiesRef.current = draftCities;
   }
-  const isLease = filters.transactionType === "LEASE";
+  const isLease = draft.transactionType === "LEASE";
   const pricePresets = isLease ? LEASE_PRICE_PRESETS : SALE_PRICE_PRESETS;
   const typeOptions =
-    filters.segment === "COMMERCIAL" ? COMMERCIAL_TYPES : RESIDENTIAL_TYPES;
+    draft.segment === "COMMERCIAL" ? COMMERCIAL_TYPES : RESIDENTIAL_TYPES;
   const statusOptions: { value: SearchStatusOption; label: string }[] = isLease
     ? [
         { value: "ACTIVE", label: "For lease" },
@@ -195,6 +214,45 @@ export function SearchFiltersSheet({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setDraft(filters);
+    setDraftCities(cities);
+    applyCitiesRef.current = cities;
+    setDraftTotal(resultCount);
+  }, [open, filters, cities, resultCount]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setDraftPending(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const qs = searchFiltersToListingParams(draft, {
+          communities: previewExtras?.communities,
+          q: previewExtras?.q,
+          west: previewExtras?.west,
+          south: previewExtras?.south,
+          east: previewExtras?.east,
+          north: previewExtras?.north,
+          cities: draftCities.length > 0 ? draftCities.join("|") : undefined,
+          limit: 1,
+        });
+        const res = await fetch(`/api/listings/search?${qs}`);
+        const data = (await res.json()) as { total?: number };
+        if (!cancelled) setDraftTotal(data.total ?? 0);
+      } catch {
+        if (!cancelled) setDraftTotal(resultCount);
+      } finally {
+        if (!cancelled) setDraftPending(false);
+      }
+    }, 280);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, draft, draftCities, previewExtras, resultCount]);
 
   const closeViaUi = useCallback(() => {
     if (historyPushedRef.current) {
@@ -307,24 +365,34 @@ export function SearchFiltersSheet({
     };
   }, [open]);
 
-  function prepareApplyCities(): string[] | null {
+  function flushDraftCities(): string[] | null {
     if (!cityFieldRef.current) {
-      const nextCities = applyCitiesRef.current;
-      intendedPathRef.current = searchCallbackPath(filters, nextCities);
-      applyIntentLockedRef.current = true;
-      return nextCities;
+      return applyCitiesRef.current;
     }
     const flushed = cityFieldRef.current.flush();
     if (!flushed.ok) return null;
-    // Lock before onCitiesChange so lagging props cannot overwrite this path.
     applyCitiesRef.current = flushed.cities;
-    intendedPathRef.current = searchCallbackPath(filters, flushed.cities);
-    applyIntentLockedRef.current = true;
+    if (
+      flushed.cities.length !== draftCities.length ||
+      flushed.cities.some((city, index) => city !== draftCities[index])
+    ) {
+      setDraftCities(flushed.cities);
+    }
     return flushed.cities;
   }
 
+  function commitDraft(nextCities: string[]) {
+    const next = { ...draft, city: "" };
+    if (onCommitFilters) {
+      onCommitFilters(next, nextCities);
+      return;
+    }
+    onChange(next);
+    onCitiesChange(nextCities);
+  }
+
   async function persist(confirmReplace: boolean, applyCities: string[]) {
-    const callbackPath = searchCallbackPath(filters, applyCities);
+    const callbackPath = searchCallbackPath(draft, applyCities);
     const placeExtras = { cities: applyCities };
     if (!signedIn) {
       const opened = openGuestSaveSearchIntent({
@@ -346,8 +414,8 @@ export function SearchFiltersSheet({
     }
     setSaving(true);
     const outcome = await savePrimarySearch({
-      name: savedSearchDisplayName(filters, placeExtras),
-      query: searchFiltersToSavedQuery(filters, placeExtras),
+      name: savedSearchDisplayName(draft, placeExtras),
+      query: searchFiltersToSavedQuery(draft, placeExtras),
       confirmReplace,
     });
     setSaving(false);
@@ -382,12 +450,13 @@ export function SearchFiltersSheet({
   }
 
   async function applyAndSave(confirmReplace: boolean) {
-    const nextCities = prepareApplyCities();
+    const nextCities = flushDraftCities();
     if (nextCities == null) return;
-    const unchanged =
-      nextCities.length === cities.length &&
-      nextCities.every((city, index) => city === cities[index]);
-    if (!unchanged) onCitiesChange(nextCities);
+    // Lock before commit so Back restore keeps the applied Mississauga path.
+    applyCitiesRef.current = nextCities;
+    intendedPathRef.current = searchCallbackPath(draft, nextCities);
+    applyIntentLockedRef.current = true;
+    commitDraft(nextCities);
     await persist(confirmReplace, nextCities);
   }
 
@@ -448,19 +517,19 @@ export function SearchFiltersSheet({
         <div className="min-h-0 min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-5">
           <Section title="Buy / Rent">
             <ChipRow
-              value={filters.transactionType}
+              value={draft.transactionType}
               options={[
                 { value: "SALE", label: "Buy" },
                 { value: "LEASE", label: "Rent" },
                 { value: "ALL", label: "Both" },
               ]}
               onChange={(v) =>
-                onChange({
-                  ...filters,
+                setDraft({
+                  ...draft,
                   transactionType: v as SearchFilters["transactionType"],
                   statuses: ["ACTIVE"],
                   openHouseOnly:
-                    v === "LEASE" ? false : filters.openHouseOnly,
+                    v === "LEASE" ? false : draft.openHouseOnly,
                 })
               }
             />
@@ -468,18 +537,18 @@ export function SearchFiltersSheet({
 
           <Section title="Residential / Commercial">
             <ChipRow
-              value={filters.segment}
+              value={draft.segment}
               options={[
                 { value: "RESIDENTIAL", label: "Residential" },
                 { value: "COMMERCIAL", label: "Commercial" },
                 { value: "ALL", label: "All" },
               ]}
               onChange={(v) =>
-                onChange({
-                  ...filters,
+                setDraft({
+                  ...draft,
                   segment: v as SearchFilters["segment"],
-                  minBeds: v === "COMMERCIAL" ? "" : filters.minBeds,
-                  minBaths: v === "COMMERCIAL" ? "" : filters.minBaths,
+                  minBeds: v === "COMMERCIAL" ? "" : draft.minBeds,
+                  minBaths: v === "COMMERCIAL" ? "" : draft.minBaths,
                   propertyTypes: [],
                 })
               }
@@ -489,17 +558,17 @@ export function SearchFiltersSheet({
           <Section title="Location">
             <StructuredCityField
               ref={cityFieldRef}
-              cities={cities}
-              onCitiesChange={onCitiesChange}
+              cities={draftCities}
+              onCitiesChange={setDraftCities}
             />
             <label className="mt-3 block space-y-1.5 text-sm text-ink/70">
               <span className="text-xs font-semibold uppercase tracking-wide text-ink/45">
                 Community
               </span>
               <Input
-                value={filters.community}
+                value={draft.community}
                 onChange={(e) =>
-                  onChange({ ...filters, community: e.target.value })
+                  setDraft({ ...draft, community: e.target.value })
                 }
                 placeholder="The Beaches"
               />
@@ -508,15 +577,15 @@ export function SearchFiltersSheet({
 
           <Section title={isLease ? "Monthly rent" : "List price"}>
             <ChipRow
-              value={`${filters.minPrice}|${filters.maxPrice}`}
+              value={`${draft.minPrice}|${draft.maxPrice}`}
               options={pricePresets.map((p) => ({
                 value: `${p.min}|${p.max}`,
                 label: p.label,
               }))}
               onChange={(v) => {
                 const [min, max] = v.split("|");
-                onChange({
-                  ...filters,
+                setDraft({
+                  ...draft,
                   minPrice: min ?? "",
                   maxPrice: max ?? "",
                 });
@@ -526,10 +595,10 @@ export function SearchFiltersSheet({
               <Input
                 inputMode="numeric"
                 placeholder="Min"
-                value={filters.minPrice}
+                value={draft.minPrice}
                 onChange={(e) =>
-                  onChange({
-                    ...filters,
+                  setDraft({
+                    ...draft,
                     minPrice: e.target.value.replace(/\D/g, ""),
                   })
                 }
@@ -537,10 +606,10 @@ export function SearchFiltersSheet({
               <Input
                 inputMode="numeric"
                 placeholder="Max"
-                value={filters.maxPrice}
+                value={draft.maxPrice}
                 onChange={(e) =>
-                  onChange({
-                    ...filters,
+                  setDraft({
+                    ...draft,
                     maxPrice: e.target.value.replace(/\D/g, ""),
                   })
                 }
@@ -550,7 +619,7 @@ export function SearchFiltersSheet({
 
           <Section title="Beds">
             <ChipRow
-              value={filters.minBeds || ""}
+              value={draft.minBeds || ""}
               options={[
                 { value: "", label: "Any" },
                 { value: "1", label: "1+" },
@@ -559,13 +628,13 @@ export function SearchFiltersSheet({
                 { value: "4", label: "4+" },
                 { value: "5", label: "5+" },
               ]}
-              onChange={(v) => onChange({ ...filters, minBeds: v })}
+              onChange={(v) => setDraft({ ...draft, minBeds: v })}
             />
           </Section>
 
           <Section title="Baths">
             <ChipRow
-              value={filters.minBaths || ""}
+              value={draft.minBaths || ""}
               options={[
                 { value: "", label: "Any" },
                 { value: "1", label: "1+" },
@@ -573,23 +642,23 @@ export function SearchFiltersSheet({
                 { value: "3", label: "3+" },
                 { value: "4", label: "4+" },
               ]}
-              onChange={(v) => onChange({ ...filters, minBaths: v })}
+              onChange={(v) => setDraft({ ...draft, minBaths: v })}
             />
           </Section>
 
           <Section title="Home type">
             <div className="flex min-w-0 flex-wrap gap-2">
               {typeOptions.map((type) => {
-                const selected = filters.propertyTypes.includes(type);
+                const selected = draft.propertyTypes.includes(type);
                 return (
                   <button
                     key={type}
                     type="button"
                     onClick={() => {
                       const next = selected
-                        ? filters.propertyTypes.filter((t) => t !== type)
-                        : [...filters.propertyTypes, type];
-                      onChange({ ...filters, propertyTypes: next });
+                        ? draft.propertyTypes.filter((t) => t !== type)
+                        : [...draft.propertyTypes, type];
+                      setDraft({ ...draft, propertyTypes: next });
                     }}
                     className={cn(
                       "inline-flex max-w-full items-center gap-1 rounded-full px-3.5 py-2 text-sm font-semibold transition",
@@ -611,25 +680,25 @@ export function SearchFiltersSheet({
           <Section title="Status">
             <div className="flex min-w-0 flex-wrap gap-2">
               {statusOptions.map((opt) => {
-                const selected = filters.statuses.includes(opt.value);
+                const selected = draft.statuses.includes(opt.value);
                 return (
                   <button
                     key={opt.value}
                     type="button"
                     onClick={() => {
                       if (selected) {
-                        if (filters.statuses.length === 1) return;
-                        onChange({
-                          ...filters,
-                          statuses: filters.statuses.filter(
+                        if (draft.statuses.length === 1) return;
+                        setDraft({
+                          ...draft,
+                          statuses: draft.statuses.filter(
                             (s) => s !== opt.value,
                           ),
                         });
                         return;
                       }
-                      onChange({
-                        ...filters,
-                        statuses: [...filters.statuses, opt.value],
+                      setDraft({
+                        ...draft,
+                        statuses: [...draft.statuses, opt.value],
                       });
                     }}
                     className={cn(
@@ -651,10 +720,10 @@ export function SearchFiltersSheet({
               <label className="mt-1 flex cursor-pointer items-center gap-2 text-sm text-ink/75">
                 <input
                   type="checkbox"
-                  checked={filters.openHouseOnly}
+                  checked={draft.openHouseOnly}
                   onChange={(e) =>
-                    onChange({
-                      ...filters,
+                    setDraft({
+                      ...draft,
                       openHouseOnly: e.target.checked,
                     })
                   }
@@ -676,7 +745,7 @@ export function SearchFiltersSheet({
             disabled={saving}
             onClick={() => void applyAndSave(false)}
           >
-            {pending || saving ? (
+            {draftPending || pending || saving ? (
               <>
                 <Loader2 className="size-4 animate-spin" aria-hidden />
                 {saving ? "Saving…" : "Updating…"}
@@ -685,7 +754,7 @@ export function SearchFiltersSheet({
               <>
                 Apply ·{" "}
                 <span className="tabular-nums">
-                  {resultCount.toLocaleString("en-CA")}
+                  {draftTotal.toLocaleString("en-CA")}
                 </span>{" "}
                 {resultNoun}
               </>

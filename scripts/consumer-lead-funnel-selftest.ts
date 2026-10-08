@@ -722,8 +722,11 @@ function testPostLaunchSearchAndCrm() {
   assert.equal(card.includes("listing.brokerageName"), false);
 
   const chips = read("src/components/listings/SearchActiveFilterStrip.tsx");
-  assert.ok(chips.includes("+ Beds"));
-  assert.ok(chips.includes("+ Baths"));
+  assert.ok(chips.includes("Active filters"));
+  assert.ok(chips.includes("Clear all"));
+  const chipCopy = read("src/lib/listings/search-results-copy.ts");
+  assert.ok(chipCopy.includes("+ Beds"));
+  assert.ok(chipCopy.includes("+ Baths"));
 
   const desktop = read("src/components/listings/SearchDesktopFilterPanel.tsx");
   assert.ok(desktop.includes("Search filters"));

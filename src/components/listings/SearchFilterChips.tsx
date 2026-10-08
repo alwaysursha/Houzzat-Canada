@@ -61,6 +61,7 @@ export function resetSearchFilters(filters: SearchFilters): SearchFilters {
   return {
     ...filters,
     segment: "RESIDENTIAL",
+    transactionType: "SALE",
     city: "",
     community: "",
     minPrice: "",

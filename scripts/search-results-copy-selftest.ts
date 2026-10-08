@@ -40,7 +40,11 @@ assert.equal(kitchener.supporting, "57 homes match your search");
 assert.equal(kitchener.countHeadline, "57 Homes for Sale");
 assert.deepEqual(
   kitchener.chips.map((chip) => chip.label),
-  ["For Sale", "Under $750K", "2+ Beds", "2+ Baths", "Kitchener"],
+  ["For Sale", "Kitchener", "Under $750K", "2+ Beds", "2+ Baths"],
+);
+assert.equal(
+  kitchener.chips.find((chip) => chip.key === "transaction")?.clearable,
+  false,
 );
 assert.equal(kitchener.title.includes("Houzzat"), false);
 
@@ -91,6 +95,7 @@ assert.equal(lease.title, "Rentals Under $2K/mo");
 assert.equal(lease.supporting, "1 rental matches your search");
 assert.equal(lease.countHeadline, "1 Home for Lease");
 assert.equal(lease.chips[0]?.label, "For Lease");
+assert.equal(lease.chips[0]?.clearable, true);
 
 assert.equal(
   searchResultsCopy(input({ total: 247, transactionType: "SALE" })).countHeadline,

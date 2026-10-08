@@ -198,10 +198,12 @@ assert.doesNotMatch(vvEffect, /panelRef/);
 // Must not size the panel with top/height only (horizontal drift bug)
 assert.doesNotMatch(sheet, /el\.style\.top = `\$\{vv\.offsetTop\}px`/);
 assert.doesNotMatch(sheet, /el\.style\.height = `\$\{vv\.height\}px`/);
-// Live filters preserved (no draftCities in sheet); Apply flushes city field
-assert.doesNotMatch(sheet, /draftCities/);
-assert.match(sheet, /onCitiesChange=\{onCitiesChange\}/);
-assert.match(sheet, /prepareApplyCities/);
+// Draft until Apply (parity with desktop FiltersMenu); flush + atomic commit
+assert.match(sheet, /const \[draftCities, setDraftCities\]/);
+assert.match(sheet, /onCitiesChange=\{setDraftCities\}/);
+assert.match(sheet, /flushDraftCities/);
+assert.match(sheet, /commitDraft/);
+assert.match(sheet, /onCommitFilters/);
 assert.match(sheet, /intendedPathRef/);
 assert.match(sheet, /searchCallbackPath/);
 
