@@ -170,13 +170,12 @@ assert.doesNotMatch(
   sheet.slice(sheet.indexOf("data-search-filters-overlay")),
   /fixed inset-0/,
 );
-assert.match(sheet, /overflowX = "hidden"/);
-assert.match(sheet, /prevHtmlOverflowX/);
-assert.match(sheet, /prevBodyOverflowX/);
 assert.match(sheet, /absolute inset-y-0 right-0/);
 const scrollLock = read("src/lib/scroll-lock.ts");
-assert.match(scrollLock, /overflowX === "hidden"/);
+assert.match(scrollLock, /overflowX = "hidden"/);
 assert.match(scrollLock, /documentElement\.style\.overflowX/);
+assert.match(scrollLock, /lockCount === 1/);
+assert.doesNotMatch(sheet, /prevHtmlOverflowX/);
 assert.match(sheet, /min-h-0 min-w-0 flex-1/);
 assert.match(sheet, /overflow-x-hidden overflow-y-auto/);
 assert.match(sheet, /pb-\[max\(1rem,env\(safe-area-inset-bottom\)\)\]/);

@@ -22,6 +22,7 @@ import {
   savedSearchDisplayName,
   searchFiltersToSavedQuery,
 } from "@/lib/listings/saved-search-query";
+import { planSavedSearchApplyUi } from "@/lib/listings/saved-search-confirm-flow";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
@@ -190,12 +191,6 @@ export function SearchFiltersSheet({
       return;
     }
     const release = acquireScrollLock();
-    const html = document.documentElement;
-    const prevHtmlOverflowX = html.style.overflowX;
-    const prevBodyOverflowX = document.body.style.overflowX;
-    // Chip focus / live reflow can pan the page horizontally on mobile WebKit.
-    html.style.overflowX = "hidden";
-    document.body.style.overflowX = "hidden";
     const frame = window.requestAnimationFrame(() => setEntered(true));
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") closeViaUi();
@@ -204,8 +199,6 @@ export function SearchFiltersSheet({
     return () => {
       window.cancelAnimationFrame(frame);
       release();
-      html.style.overflowX = prevHtmlOverflowX;
-      document.body.style.overflowX = prevBodyOverflowX;
       document.removeEventListener("keydown", onKey);
     };
   }, [open, closeViaUi]);
@@ -316,10 +309,6 @@ export function SearchFiltersSheet({
       openAuth({ mode: "sign-in", callbackUrl: callbackPath });
       return;
     }
-    if (outcome.status === "needs_confirm") {
-      setConfirmOpen(true);
-      return;
-    }
     if (outcome.status === "error") {
       toast({
         message: outcome.message || SITE_MESSAGES.genericErrorToast,
@@ -327,19 +316,32 @@ export function SearchFiltersSheet({
       });
       return;
     }
-    toast({
-      message: confirmReplace
-        ? "Primary search updated. Previous search kept as secondary."
-        : "Search saved to your buyer profile.",
-      tone: "success",
-    });
+    const plan = planSavedSearchApplyUi(outcome.status);
+    if (plan.openConfirm) {
+      // Close Filters first so confirmation is not stacked on the VV overlay.
+      setConfirmOpen(true);
+      closeViaUi();
+      return;
+    }
+    if (plan.toastSuccess) {
+      toast({
+        message: confirmReplace
+          ? "Primary search updated. Previous search kept as secondary."
+          : "Search saved to your buyer profile.",
+        tone: "success",
+      });
+    }
     setConfirmOpen(false);
-    closeViaUi();
+    if (plan.closeFilters) closeViaUi();
   }
 
-  if (!mounted || !open) return null;
+  if (!mounted) return null;
+  // Keep mounted while the saved-search confirmation is open after Filters closes.
+  if (!open && !confirmOpen) return null;
 
   return createPortal(
+    <>
+    {open ? (
     <div
       ref={overlayRef}
       data-search-filters-overlay=""
@@ -613,13 +615,15 @@ export function SearchFiltersSheet({
           </p>
         </div>
       </div>
-      <UpdateSavedSearchDialog
-        open={confirmOpen}
-        pending={saving}
-        onCancel={() => setConfirmOpen(false)}
-        onConfirm={() => void persist(true)}
-      />
-    </div>,
+    </div>
+    ) : null}
+    <UpdateSavedSearchDialog
+      open={confirmOpen}
+      pending={saving}
+      onCancel={() => setConfirmOpen(false)}
+      onConfirm={() => void persist(true)}
+    />
+    </>,
     document.body,
   );
 }

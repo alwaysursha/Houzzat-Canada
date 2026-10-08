@@ -37,6 +37,7 @@ import {
   searchFiltersToListingParams,
   searchFiltersToSavedQuery,
 } from "@/lib/listings/saved-search-query";
+import { planSavedSearchApplyUi } from "@/lib/listings/saved-search-confirm-flow";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { useFlyoutFixedStyle } from "@/lib/use-flyout-fixed-style";
 import { cn } from "@/lib/utils";
@@ -309,10 +310,6 @@ export function SearchFiltersMenu({
       });
       return false;
     }
-    if (outcome.status === "needs_confirm") {
-      setConfirmOpen(true);
-      return false;
-    }
     if (outcome.status === "error") {
       toast({
         message: outcome.message || SITE_MESSAGES.genericErrorToast,
@@ -320,13 +317,21 @@ export function SearchFiltersMenu({
       });
       return false;
     }
-    toast({
-      message: confirmReplace
-        ? "Primary search updated. Previous search kept as secondary."
-        : "Search saved to your buyer profile.",
-      tone: "success",
-    });
-    return true;
+    const plan = planSavedSearchApplyUi(outcome.status);
+    if (plan.openConfirm) {
+      setConfirmOpen(true);
+      setOpen(false);
+      return false;
+    }
+    if (plan.toastSuccess) {
+      toast({
+        message: confirmReplace
+          ? "Primary search updated. Previous search kept as secondary."
+          : "Search saved to your buyer profile.",
+        tone: "success",
+      });
+    }
+    return plan.closeFilters;
   }
 
   async function applyAndSave() {
