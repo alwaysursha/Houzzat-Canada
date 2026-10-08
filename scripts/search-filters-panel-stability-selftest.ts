@@ -124,8 +124,9 @@ assert.match(menu, /onCommitFilters/);
 assert.match(experience, /commitFiltersWithCities/);
 assert.match(experience, /onCommitFilters=\{commitFiltersWithCities\}/);
 
-// City field only updates via callback — menu wires draft, not live parent
-assert.match(menu, /title="Buy \/ Rent"/);
+// Buy/Rent lives in the desktop toolbar; More Filters starts at segment/location.
+assert.doesNotMatch(menu, /title="Buy \/ Rent"/);
+assert.match(experience, /aria-label="Buy or rent"/);
 assert.match(menu, /title="Location"/);
 const locationBlock = menu.slice(
   menu.indexOf('Section title="Location"'),

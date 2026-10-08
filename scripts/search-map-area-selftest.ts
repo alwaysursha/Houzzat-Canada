@@ -210,27 +210,41 @@ assert.match(experience, /\["cards", LayoutGrid, "Cards"\]/);
 assert.match(experience, /aria-pressed=\{view === mode\}/);
 assert.match(experience, /updateView/);
 
-// Exactly one Buy/Rent and one Residential/Commercial section per panel
-for (const [label, src] of [
-  ["sheet", sheet],
-  ["menu", menu],
-  ["desktop", desktop],
-] as const) {
-  const buy = src.match(/title="Buy \/ Rent"/g) ?? [];
-  const segment = src.match(/title="Residential \/ Commercial"/g) ?? [];
-  assert.equal(buy.length, 1, `${label}: duplicate Buy/Rent`);
-  assert.equal(segment.length, 1, `${label}: duplicate segment`);
-  const buyBlock = src.slice(
-    src.indexOf('title="Buy / Rent"'),
-    src.indexOf('title="Residential / Commercial"'),
+// Mobile sheet keeps Buy/Rent. Desktop toolbar owns Buy/Rent — menu + sidebar omit it.
+{
+  const sheetBuy = sheet.match(/title="Buy \/ Rent"/g) ?? [];
+  assert.equal(sheetBuy.length, 1, "sheet: exactly one Buy/Rent");
+  const buyBlock = sheet.slice(
+    sheet.indexOf('title="Buy / Rent"'),
+    sheet.indexOf('title="Residential / Commercial"'),
   );
   assert.match(buyBlock, /value: "SALE", label: "Buy"/);
   assert.match(buyBlock, /value: "LEASE", label: "Rent"/);
   assert.doesNotMatch(buyBlock, /label: "For sale"/);
   assert.doesNotMatch(buyBlock, /label: "For lease"/);
-  const buyAt = src.indexOf('title="Buy / Rent"');
-  const locAt = src.indexOf('title="Location"');
-  assert.ok(buyAt > 0 && locAt > buyAt, `${label}: Location after Buy/Rent`);
+  const buyAt = sheet.indexOf('title="Buy / Rent"');
+  const locAt = sheet.indexOf('title="Location"');
+  assert.ok(buyAt > 0 && locAt > buyAt, "sheet: Location after Buy/Rent");
+}
+assert.equal(
+  (menu.match(/title="Buy \/ Rent"/g) ?? []).length,
+  0,
+  "menu: Buy/Rent lives in desktop toolbar",
+);
+assert.equal(
+  (desktop.match(/title="Buy \/ Rent"/g) ?? []).length,
+  0,
+  "desktop sidebar: Buy/Rent lives in desktop toolbar",
+);
+assert.match(experience, /aria-label="Buy or rent"/);
+assert.match(experience, /\["ALL", "Both"\]/);
+for (const [label, src] of [
+  ["sheet", sheet],
+  ["menu", menu],
+  ["desktop", desktop],
+] as const) {
+  const segment = src.match(/title="Residential \/ Commercial"/g) ?? [];
+  assert.equal(segment.length, 1, `${label}: duplicate segment`);
 }
 
 assert.match(sheet, /data-search-filters-apply/);

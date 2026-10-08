@@ -123,7 +123,10 @@ function SearchViewModeSwitch({
 }) {
   return (
     <div
-      className="flex shrink-0 rounded-full border border-line bg-mist p-0.5"
+      className={cn(
+        "flex shrink-0 rounded-full border border-line/80 bg-mist/80 p-0.5",
+        size === "md" && "shadow-[inset_0_0_0_1px_rgba(213,224,218,0.35)]",
+      )}
       role="group"
       aria-label="Search view"
     >
@@ -137,13 +140,13 @@ function SearchViewModeSwitch({
             title={label}
             onClick={() => onChange(mode)}
             className={cn(
-              "inline-flex items-center justify-center gap-1 rounded-full font-semibold transition",
+              "inline-flex items-center justify-center gap-1.5 rounded-full font-semibold transition",
               size === "sm"
-                ? "h-8 px-2.5 text-xs"
-                : "h-9 px-3 text-xs sm:text-sm",
+                ? "h-8 min-w-8 px-2.5 text-xs"
+                : "h-9 min-w-9 px-3 text-xs sm:text-sm",
               view === mode
-                ? "bg-surface text-canopy shadow-sm"
-                : "text-ink/45 hover:text-ink",
+                ? "bg-canopy text-white shadow-sm"
+                : "text-ink/45 hover:bg-surface/80 hover:text-ink",
             )}
           >
             <Icon className="size-3.5 shrink-0 sm:size-4" aria-hidden />
@@ -679,12 +682,13 @@ export function SearchExperience() {
   }
 
   const isLease = filters.transactionType === "LEASE";
+  /** Desktop toolbar owns Buy/Rent/Both; mobile keeps Buy/Rent (+ Both for FSBO). */
   const transactionButtons: Array<[SearchFilters["transactionType"], string]> =
     [
       ["SALE", "Buy"],
       ["LEASE", "Rent"],
     ];
-  if (filters.dataSource === "fsbo") {
+  if (!isNarrow || filters.dataSource === "fsbo") {
     transactionButtons.push(["ALL", "Both"]);
   }
 
@@ -812,7 +816,13 @@ export function SearchExperience() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 border-b border-line/80 bg-surface px-3 py-2 sm:px-4 sm:py-2.5">
+      <div
+        className={cn(
+          "shrink-0 border-b border-line/70 bg-surface px-3 py-2 sm:px-4 sm:py-2.5",
+          !isNarrow &&
+            "bg-surface/95 px-4 py-3 shadow-[0_1px_0_rgba(20,32,28,0.04)] backdrop-blur-[2px] lg:px-5",
+        )}
+      >
         {isNarrow ? (
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
@@ -935,9 +945,13 @@ export function SearchExperience() {
           </div>
         </div>
         ) : (
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-full bg-mist p-0.5">
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2.5 lg:gap-3">
+            <div
+              className="flex shrink-0 rounded-full bg-mist p-0.5 ring-1 ring-line/60"
+              role="group"
+              aria-label="Buy or rent"
+            >
               {transactionButtons.map(([value, label]) => (
                 <button
                   key={value}
@@ -965,7 +979,7 @@ export function SearchExperience() {
 
             <div
               data-search-bar
-              className="min-w-0 flex-1 basis-[16rem] rounded-full border border-line bg-mist/60 px-1"
+              className="min-w-0 flex-1 basis-[18rem] rounded-full border border-line/90 bg-surface px-1.5 shadow-[0_1px_2px_rgba(20,32,28,0.04)] ring-1 ring-transparent transition focus-within:border-canopy/40 focus-within:ring-canopy/15"
             >
               <AddressAutocomplete
                 key={`${citiesQueryParam || filters.city || "none"}:${cityEntryToken}`}
@@ -977,7 +991,7 @@ export function SearchExperience() {
                     : undefined
                 }
                 placeholder="City, neighbourhood, address, or MLS® #"
-                inputClassName="h-9 border-0 bg-transparent shadow-none focus-visible:ring-0"
+                inputClassName="h-10 border-0 bg-transparent shadow-none focus-visible:ring-0"
                 onPlaceSelect={onPlaceSelect}
                 onSearchSubmit={onBarSearchSubmit}
                 onClear={onBarSearchClear}
@@ -991,7 +1005,7 @@ export function SearchExperience() {
             />
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <SearchFiltersMenu
                 filters={filters}
                 onChange={updateFilters}
@@ -1008,32 +1022,6 @@ export function SearchExperience() {
                 searchCallbackPath={searchCallbackPath}
                 hidePlaceChip
               />
-            <label className="group relative inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-xs transition hover:border-canopy/40">
-                <ArrowUpDown className="size-3.5 shrink-0 text-canopy" aria-hidden />
-                <span className="text-xs font-semibold text-ink">
-                  {filters.sort === "newest"
-                    ? "Newest"
-                    : filters.sort === "price_desc"
-                      ? "Price ↓"
-                      : "Price ↑"}
-                </span>
-                <ChevronDown className="size-3.5 shrink-0 text-ink/35" aria-hidden />
-                <select
-                  aria-label="Sort listings"
-                  value={filters.sort}
-                  onChange={(e) =>
-                    updateFilters((current) => ({
-                      ...current,
-                      sort: e.target.value as SearchFilters["sort"],
-                    }))
-                  }
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                >
-                  <option value="newest">Newest</option>
-                  <option value="price_asc">Price: low to high</option>
-                  <option value="price_desc">Price: high to low</option>
-                </select>
-              </label>
               <div className="inline-flex">
                 <SaveSearchButton
                   signedIn={signedIn}
@@ -1049,11 +1037,11 @@ export function SearchExperience() {
                 segment={filters.segment}
                 idleLabel="Watch area"
                 authCallbackUrl={searchCallbackPath(filters, structuredCities)}
-                className="h-8 rounded-full px-2.5"
+                className="h-9 rounded-full px-3"
               />
               <Link
                 href="/route-planner"
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-canopy/20 bg-canopy/10 px-2.5 text-xs font-semibold text-canopy transition hover:bg-canopy/15"
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-canopy/25 bg-canopy/10 px-3 text-xs font-semibold text-canopy transition hover:bg-canopy/15"
               >
                 <RouteStartIcon />
                 Plan viewings
@@ -1064,7 +1052,7 @@ export function SearchExperience() {
                   onClick={() =>
                     updateFilters((current) => ({ ...current, dataSource: "" }))
                   }
-                  className="rounded-full bg-signal/15 px-2.5 py-1 text-xs font-semibold text-signal"
+                  className="rounded-full bg-signal/15 px-2.5 py-1.5 text-xs font-semibold text-signal"
                 >
                   By owner · clear
                 </button>
@@ -1073,7 +1061,7 @@ export function SearchExperience() {
         </div>
         )}
         <SearchActiveFilterStrip
-          className="mt-1.5"
+          className={cn("mt-1.5", !isNarrow && "mt-2.5")}
           chips={activeChips}
           onClearChip={clearResultChip}
           onClearAll={resetStructuredFilters}
@@ -1224,8 +1212,8 @@ export function SearchExperience() {
         {showList ? (
           <div
             className={cn(
-              "min-h-0 bg-mist/40",
-              view === "cards" && "h-full w-full",
+              "min-h-0 min-w-0 bg-mist/40",
+              view === "cards" && "h-full w-full flex-1",
               view === "split" && "search-results-sheet border-line/70 lg:border-l",
             )}
           >
@@ -1269,6 +1257,36 @@ export function SearchExperience() {
               countLabel={countLabel}
               countHeadline={resultsCopy.countHeadline}
               emphasizeCount={mobileCardsLayout}
+              headingTrailing={
+                !isNarrow ? (
+                  <label className="group relative inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line/90 bg-surface px-3 text-xs shadow-[0_1px_2px_rgba(20,32,28,0.03)] transition hover:border-canopy/35">
+                    <ArrowUpDown className="size-3.5 shrink-0 text-canopy" aria-hidden />
+                    <span className="text-xs font-semibold text-ink">
+                      {filters.sort === "newest"
+                        ? "Newest"
+                        : filters.sort === "price_desc"
+                          ? "Price ↓"
+                          : "Price ↑"}
+                    </span>
+                    <ChevronDown className="size-3.5 shrink-0 text-ink/35" aria-hidden />
+                    <select
+                      aria-label="Sort listings"
+                      value={filters.sort}
+                      onChange={(e) =>
+                        updateFilters((current) => ({
+                          ...current,
+                          sort: e.target.value as SearchFilters["sort"],
+                        }))
+                      }
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                    >
+                      <option value="newest">Newest</option>
+                      <option value="price_asc">Price: low to high</option>
+                      <option value="price_desc">Price: high to low</option>
+                    </select>
+                  </label>
+                ) : undefined
+              }
               emptyHint={
                 polygon
                   ? "Clear the draw or expand it."
@@ -1278,6 +1296,38 @@ export function SearchExperience() {
                       ? "Try adjusting filters, or clear the city to search a wider area."
                       : "Adjust your filters, or pan the map and tap Search This Area."
               }
+              emptyActions={[
+                ...(polygon
+                  ? [
+                      {
+                        label: "Clear drawn area",
+                        onClick: () => onPolygonChange(null),
+                        tone: "primary" as const,
+                      },
+                    ]
+                  : []),
+                ...(placeFilterActive
+                  ? [
+                      {
+                        label: "Clear location",
+                        onClick: () => replaceStructuredCities([]),
+                        tone: polygon ? ("default" as const) : ("primary" as const),
+                      },
+                    ]
+                  : []),
+                {
+                  label: "Reset filters",
+                  onClick: resetStructuredFilters,
+                },
+                ...(isNarrow
+                  ? [
+                      {
+                        label: "Open filters",
+                        onClick: () => setFiltersOpen(true),
+                      },
+                    ]
+                  : []),
+              ]}
             />
             </div>
           </div>

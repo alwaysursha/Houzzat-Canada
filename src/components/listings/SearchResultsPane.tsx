@@ -1,9 +1,16 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import { SearchResultCard } from "@/components/listings/SearchResultCard";
 import { SearchResultsHeading } from "@/components/listings/SearchResultsContext";
 import { cn } from "@/lib/utils";
+
+export type SearchEmptyAction = {
+  label: string;
+  onClick: () => void;
+  tone?: "default" | "primary";
+};
 
 export function SearchResultsPane({
   items,
@@ -20,6 +27,8 @@ export function SearchResultsPane({
   emphasizeCount = false,
   wideGrid = false,
   emptyHint,
+  emptyActions,
+  headingTrailing,
 }: {
   items: ListingCardData[];
   activeMls: string | null;
@@ -40,10 +49,14 @@ export function SearchResultsPane({
   /** Cards view on a wide screen: more than two columns when the pane is wide. */
   wideGrid?: boolean;
   emptyHint: string;
+  /** Existing filter-adjustment actions when the result set is empty. */
+  emptyActions?: SearchEmptyAction[];
+  /** Desktop sort (and related) controls in the results heading. */
+  headingTrailing?: ReactNode;
 }) {
   return (
     <div
-      className="h-full overflow-y-auto overscroll-contain bg-mist/40"
+      className="h-full overflow-y-auto overscroll-contain bg-mist/50"
       style={{ containerType: "inline-size" }}
     >
       <style>{`
@@ -68,6 +81,7 @@ export function SearchResultsPane({
         countLabel={countLabel}
         countHeadline={countHeadline}
         emphasizeCount={emphasizeCount}
+        trailing={headingTrailing}
       />
       <div
         className={cn(
@@ -89,11 +103,32 @@ export function SearchResultsPane({
           />
         ))}
         {items.length === 0 && !pending ? (
-          <div className="col-span-full px-2 py-6 text-center">
-            <p className="text-sm font-medium text-ink/70">
+          <div className="col-span-full mx-auto max-w-md px-3 py-10 text-center">
+            <p className="text-base font-semibold tracking-tight text-ink/80">
               No listings match this search.
             </p>
-            <p className="mt-1 text-sm text-ink/45">{emptyHint}</p>
+            <p className="mt-1.5 text-sm leading-relaxed text-ink/45">
+              {emptyHint}
+            </p>
+            {emptyActions && emptyActions.length > 0 ? (
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                {emptyActions.map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={action.onClick}
+                    className={cn(
+                      "inline-flex h-9 items-center rounded-full px-3.5 text-xs font-semibold transition",
+                      action.tone === "primary"
+                        ? "bg-canopy text-white shadow-sm hover:bg-canopy/90"
+                        : "border border-line/90 bg-surface text-ink/70 hover:border-canopy/35 hover:text-ink",
+                    )}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>

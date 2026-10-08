@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import type {
   SearchResultChip,
@@ -16,6 +17,7 @@ export function SearchResultsHeading({
   countLabel,
   countHeadline,
   emphasizeCount = false,
+  trailing,
 }: {
   title: string;
   countLabel: string;
@@ -23,6 +25,8 @@ export function SearchResultsHeading({
   countHeadline?: string;
   /** Mobile card results: lead with the real result count. */
   emphasizeCount?: boolean;
+  /** Desktop: sort (and related) controls aligned with the count. */
+  trailing?: ReactNode;
 }) {
   if (emphasizeCount && countHeadline) {
     return (
@@ -38,12 +42,20 @@ export function SearchResultsHeading({
   }
 
   return (
-    <div className="search-results-heading sticky top-0 z-20 flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5 bg-mist px-3 py-2 sm:gap-x-3 sm:px-4 sm:py-2.5">
-      <style>{`@media (min-width: 640px) { .search-results-heading { flex-wrap: nowrap; } .search-results-heading h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }`}</style>
-      <h1 className="min-w-0 text-lg font-semibold leading-snug tracking-tight text-ink sm:text-2xl sm:leading-tight">
-        {title}
-      </h1>
-      <p className="shrink-0 text-xs text-ink/45 sm:text-sm">{countLabel}</p>
+    <div className="search-results-heading sticky top-0 z-20 border-b border-line/40 bg-mist/95 px-3 py-2.5 backdrop-blur-[1px] sm:px-4 sm:py-3">
+      <div className="flex min-w-0 items-end justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-lg font-semibold leading-snug tracking-tight text-ink sm:text-[1.35rem] sm:leading-tight lg:text-[1.5rem]">
+            {title}
+          </h1>
+          <p className="mt-0.5 text-xs font-medium tabular-nums text-ink/45 sm:text-sm">
+            {countLabel}
+          </p>
+        </div>
+        {trailing ? (
+          <div className="flex shrink-0 items-center gap-2">{trailing}</div>
+        ) : null}
+      </div>
     </div>
   );
 }

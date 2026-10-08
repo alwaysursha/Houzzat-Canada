@@ -55,17 +55,17 @@ function ChipRow({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-1">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
           className={cn(
-            "rounded-full px-2.5 py-1.5 text-xs font-semibold transition",
+            "rounded-full px-2 py-1 text-[11px] font-semibold transition xl:px-2.5 xl:py-1.5 xl:text-xs",
             value === opt.value
-              ? "bg-canopy text-white"
-              : "bg-mist text-ink/70 hover:bg-line/60",
+              ? "bg-canopy text-white shadow-sm"
+              : "bg-mist/90 text-ink/70 ring-1 ring-line/70 hover:bg-line/50 hover:text-ink",
           )}
         >
           {opt.label}
@@ -84,7 +84,7 @@ function Section({
 }) {
   return (
     <section className="space-y-2">
-      <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/45">
+      <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/40 xl:text-[11px]">
         {title}
       </h3>
       {children}
@@ -95,6 +95,7 @@ function Section({
 /**
  * Persistent left filter rail for desktop card results.
  * Same canonical SearchFilters state as the mobile sheet / toolbar menu.
+ * Buy/Rent lives in the desktop toolbar — not repeated here.
  */
 export function SearchDesktopFilterPanel({
   filters,
@@ -124,13 +125,31 @@ export function SearchDesktopFilterPanel({
 
   return (
     <aside
-      className="hidden h-full w-[17.5rem] shrink-0 flex-col border-r border-line/70 bg-surface lg:flex xl:w-[19rem]"
+      className="search-desktop-filter-panel hidden h-full w-64 shrink-0 flex-col border-r border-line/60 bg-surface lg:flex"
       aria-label="Search filters"
     >
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line/70 px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-ink">Filters</p>
-          <p className="mt-0.5 text-xs tabular-nums text-ink/45">
+      <style>{`
+        /* Guardrail: Tailwind arbitrary widths were omitted from the CSS bundle,
+           which let the sidebar content-size to ~half the stage. */
+        aside.search-desktop-filter-panel {
+          width: 15.5rem;
+          max-width: 18.75rem;
+        }
+        @media (min-width: 1280px) {
+          aside.search-desktop-filter-panel { width: 17rem; }
+        }
+        @media (min-width: 1440px) {
+          aside.search-desktop-filter-panel { width: 18rem; }
+        }
+      `}</style>
+      <div className="relative flex shrink-0 items-center justify-between gap-2 border-b border-line/60 px-3 py-2.5 xl:px-4 xl:py-3">
+        <div
+          className="absolute inset-y-2.5 left-0 w-0.5 rounded-full bg-canopy xl:inset-y-3"
+          aria-hidden
+        />
+        <div className="min-w-0 pl-1">
+          <p className="text-sm font-semibold tracking-tight text-ink">Filters</p>
+          <p className="mt-0.5 text-[11px] tabular-nums text-ink/45 xl:text-xs">
             {pending
               ? "Updating…"
               : `${resultCount.toLocaleString("en-CA")} ${resultNoun}`}
@@ -139,34 +158,14 @@ export function SearchDesktopFilterPanel({
         <button
           type="button"
           onClick={onResetFilters}
-          className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold text-ink/55 transition hover:bg-mist hover:text-danger"
+          className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-ink/50 transition hover:bg-mist hover:text-danger xl:px-2.5"
         >
           <RotateCcw className="size-3.5" aria-hidden />
           Reset
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-4">
-        <Section title="Buy / Rent">
-          <ChipRow
-            value={filters.transactionType}
-            options={[
-              { value: "SALE", label: "Buy" },
-              { value: "LEASE", label: "Rent" },
-              { value: "ALL", label: "Both" },
-            ]}
-            onChange={(v) =>
-              onChange((current) => ({
-                ...current,
-                transactionType: v as SearchFilters["transactionType"],
-                statuses: ["ACTIVE"],
-                openHouseOnly:
-                  v === "LEASE" ? false : current.openHouseOnly,
-              }))
-            }
-          />
-        </Section>
-
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[linear-gradient(180deg,rgba(238,243,240,0.35)_0%,rgba(255,255,255,0)_6rem)] px-3 py-3.5 xl:space-y-5 xl:px-4 xl:py-4">
         <Section title="Residential / Commercial">
           <ChipRow
             value={filters.segment}
@@ -188,8 +187,9 @@ export function SearchDesktopFilterPanel({
         </Section>
 
         <Section title="Location">
+          <p className="sr-only">City / Area</p>
           <StructuredCityField cities={cities} onCitiesChange={onCitiesChange} />
-          <label className="mt-2 block min-w-0 space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/45">
+          <label className="mt-2 block min-w-0 space-y-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink/40 xl:text-xs">
             Community
             <Input
               value={filters.community}
@@ -200,7 +200,7 @@ export function SearchDesktopFilterPanel({
                 }))
               }
               placeholder="The Beaches"
-              className="h-9 font-normal normal-case tracking-normal"
+              className="h-9 border-line/80 bg-surface font-normal normal-case tracking-normal shadow-none focus-visible:border-canopy/40 focus-visible:ring-canopy/15"
             />
           </label>
         </Section>
@@ -221,7 +221,7 @@ export function SearchDesktopFilterPanel({
               }));
             }}
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-1.5 xl:gap-2">
             <Input
               inputMode="numeric"
               placeholder="Min"
@@ -233,7 +233,7 @@ export function SearchDesktopFilterPanel({
                   minPrice: e.target.value.replace(/\D/g, ""),
                 }))
               }
-              className="h-9"
+              className="h-9 border-line/80 shadow-none focus-visible:border-canopy/40 focus-visible:ring-canopy/15"
             />
             <Input
               inputMode="numeric"
@@ -246,7 +246,7 @@ export function SearchDesktopFilterPanel({
                   maxPrice: e.target.value.replace(/\D/g, ""),
                 }))
               }
-              className="h-9"
+              className="h-9 border-line/80 shadow-none focus-visible:border-canopy/40 focus-visible:ring-canopy/15"
             />
           </div>
         </Section>
@@ -285,7 +285,7 @@ export function SearchDesktopFilterPanel({
         </Section>
 
         <Section title="Property type">
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1 xl:gap-1.5">
             {typeOptions.map((type) => {
               const selected = filters.propertyTypes.includes(type);
               return (
@@ -302,10 +302,10 @@ export function SearchDesktopFilterPanel({
                     });
                   }}
                   className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-semibold transition",
+                    "inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold transition xl:px-2.5 xl:py-1.5 xl:text-xs",
                     selected
-                      ? "bg-canopy text-white"
-                      : "bg-mist text-ink/70 ring-1 ring-line hover:bg-line/40",
+                      ? "bg-canopy text-white shadow-sm"
+                      : "bg-mist/90 text-ink/70 ring-1 ring-line/70 hover:bg-line/50 hover:text-ink",
                   )}
                 >
                   {selected ? (

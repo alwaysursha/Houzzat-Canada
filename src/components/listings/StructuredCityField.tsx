@@ -81,7 +81,7 @@ export const StructuredCityField = forwardRef<
       </span>
       {cities.length > 0 ? (
         <div
-          className="flex min-w-0 flex-wrap gap-2"
+          className="flex min-w-0 flex-wrap content-start gap-1.5"
           role="list"
           aria-label="Selected cities"
         >
@@ -93,10 +93,12 @@ export const StructuredCityField = forwardRef<
               onClick={() =>
                 onCitiesChange(cities.filter((selected) => selected !== city))
               }
-              className="inline-flex h-8 max-w-full items-center gap-1 rounded-full border border-canopy/35 bg-canopy/10 px-3 text-xs font-semibold text-canopy"
+              className="group inline-flex h-8 max-w-full items-center gap-1 rounded-full border border-canopy/30 bg-canopy/[0.08] py-0 pl-2.5 pr-1 text-xs font-semibold text-canopy transition hover:border-canopy/50 hover:bg-canopy/15 sm:pl-3 sm:pr-1.5"
             >
-              <span className="truncate">{city}</span>
-              <X className="size-3.5 shrink-0 opacity-70" aria-hidden />
+              <span className="min-w-0 truncate">{city}</span>
+              <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-canopy/70 transition group-hover:bg-canopy/15 group-hover:text-canopy">
+                <X className="size-3.5" aria-hidden />
+              </span>
               <span className="sr-only">Remove {city}</span>
             </button>
           ))}
@@ -117,7 +119,7 @@ export const StructuredCityField = forwardRef<
         aria-label={cities.length > 0 ? "Add a city" : "City"}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? "structured-city-error" : undefined}
-        className="min-w-0"
+        className="min-w-0 h-9 border-line/80 shadow-none focus-visible:border-canopy/40 focus-visible:ring-canopy/15"
       />
       {error ? (
         <p

@@ -26,7 +26,7 @@ export function SearchActiveFilterStrip({
   return (
     <div
       className={cn(
-        "flex min-w-0 flex-wrap gap-2 overflow-x-hidden",
+        "flex min-w-0 flex-wrap items-center gap-1.5 overflow-x-hidden sm:gap-2",
         className,
       )}
       role="list"
@@ -53,10 +53,12 @@ export function SearchActiveFilterStrip({
             aria-label={`Remove ${chip.label}`}
             title={`Remove ${chip.label}`}
             onClick={() => onClearChip(chip)}
-            className="inline-flex h-8 max-w-[14rem] items-center gap-1.5 rounded-full border border-canopy/35 bg-canopy/10 px-3 text-xs font-semibold text-canopy transition hover:bg-canopy/15"
+            className="group inline-flex h-8 max-w-[14rem] items-center gap-1 rounded-full border border-canopy/30 bg-canopy/[0.08] py-0 pl-3 pr-1.5 text-xs font-semibold text-canopy transition hover:border-canopy/50 hover:bg-canopy/15"
           >
             <span className="truncate">{chip.label}</span>
-            <X className="size-3.5 shrink-0 opacity-70" aria-hidden />
+            <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-canopy/70 transition group-hover:bg-canopy/15 group-hover:text-canopy">
+              <X className="size-3.5" aria-hidden />
+            </span>
           </button>
         );
       })}
@@ -64,7 +66,7 @@ export function SearchActiveFilterStrip({
         type="button"
         aria-label="Clear all filters"
         onClick={onClearAll}
-        className="inline-flex h-8 items-center rounded-full px-2.5 text-xs font-semibold text-ink/50 transition hover:text-danger"
+        className="inline-flex h-8 items-center rounded-full px-2.5 text-xs font-semibold text-ink/45 transition hover:bg-mist hover:text-danger"
       >
         Clear all
       </button>

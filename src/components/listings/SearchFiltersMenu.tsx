@@ -119,8 +119,8 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="min-w-0 space-y-2.5 border-b border-line/70 pb-4 last:border-b-0 last:pb-0">
-      <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/45">
+    <section className="min-w-0 space-y-2.5 border-b border-line/50 pb-4 last:border-b-0 last:pb-0">
+      <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/40">
         {title}
       </h3>
       {children}
@@ -203,7 +203,7 @@ export function SearchFiltersMenu({
   const resultCountRef = useRef(resultCount);
   resultCountRef.current = resultCount;
   const id = useId();
-  const flyoutStyle = useFlyoutFixedStyle(open, buttonRef, 400, {
+  const flyoutStyle = useFlyoutFixedStyle(open, buttonRef, 480, {
     lockHeight: true,
   });
   const activeCount =
@@ -435,17 +435,22 @@ export function SearchFiltersMenu({
         aria-labelledby={id}
         data-search-filters-flyout=""
         style={flyoutStyle}
-        className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-xl"
+        className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line/80 bg-surface shadow-[0_12px_40px_rgba(20,32,28,0.12)]"
       >
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line/80 px-4 py-3">
-          <p id={id} className="text-sm font-semibold text-ink">
-            Search filters
-          </p>
-          <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line/70 px-5 py-3.5">
+          <div className="min-w-0">
+            <p id={id} className="text-sm font-semibold tracking-tight text-ink">
+              More filters
+            </p>
+            <p className="mt-0.5 text-[11px] text-ink/45">
+              Buy / Rent stays in the toolbar · Apply saves to your profile
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={onResetFilters}
-              className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-ink/50 transition hover:bg-mist hover:text-danger"
+              className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold text-ink/50 transition hover:bg-mist hover:text-danger"
             >
               <RotateCcw className="size-3.5" aria-hidden />
               Reset
@@ -454,34 +459,14 @@ export function SearchFiltersMenu({
               type="button"
               aria-label="Close filters"
               onClick={() => setOpen(false)}
-              className="rounded-lg p-1.5 text-ink/40 transition hover:bg-mist hover:text-ink"
+              className="rounded-full p-1.5 text-ink/40 transition hover:bg-mist hover:text-ink"
             >
               <X className="size-4" aria-hidden />
             </button>
           </div>
         </div>
 
-        <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4">
-          <Section title="Buy / Rent">
-            <ChipRow
-              value={draft.transactionType}
-              options={[
-                { value: "SALE", label: "Buy" },
-                { value: "LEASE", label: "Rent" },
-                { value: "ALL", label: "Both" },
-              ]}
-              onChange={(v) =>
-                setDraft({
-                  ...draft,
-                  transactionType: v as SearchFilters["transactionType"],
-                  statuses: ["ACTIVE"],
-                  openHouseOnly:
-                    v === "LEASE" ? false : draft.openHouseOnly,
-                })
-              }
-            />
-          </Section>
-
+        <div className="min-h-0 min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain px-5 py-4">
           <Section title="Residential / Commercial">
             <ChipRow
               value={draft.segment}
@@ -503,13 +488,13 @@ export function SearchFiltersMenu({
           </Section>
 
           <Section title="Location">
-            <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+            <div className="min-w-0 space-y-3">
               <StructuredCityField
                 ref={cityFieldRef}
                 cities={draftCities}
                 onCitiesChange={setDraftCities}
               />
-              <label className="block min-w-0 space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/45">
+              <label className="block min-w-0 space-y-1.5 text-xs font-semibold uppercase tracking-wide text-ink/40">
                 Community
                 <Input
                   value={draft.community}
@@ -517,6 +502,7 @@ export function SearchFiltersMenu({
                     setDraft({ ...draft, community: e.target.value })
                   }
                   placeholder="The Beaches"
+                  className="h-9 border-line/80 font-normal normal-case tracking-normal shadow-none focus-visible:border-canopy/40 focus-visible:ring-canopy/15"
                 />
               </label>
             </div>
@@ -677,7 +663,7 @@ export function SearchFiltersMenu({
 
         <div
           data-search-filters-apply=""
-          className="shrink-0 border-t border-line/80 bg-mist/50 px-4 py-3"
+          className="shrink-0 border-t border-line/70 bg-mist/40 px-5 py-3.5"
         >
           <Button
             type="button"
@@ -733,10 +719,10 @@ export function SearchFiltersMenu({
           aria-haspopup="dialog"
           onClick={() => setOpen((v) => !v)}
           className={cn(
-            "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition",
+            "inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold shadow-[0_1px_2px_rgba(20,32,28,0.03)] transition",
             activeCount > 0 || open
-              ? "border-canopy/50 bg-canopy/10 text-canopy"
-              : "border-line bg-surface text-ink/75 hover:border-canopy/35",
+              ? "border-canopy/45 bg-canopy/10 text-canopy"
+              : "border-line/90 bg-surface text-ink/75 hover:border-canopy/35",
           )}
         >
           <ListFilter className="size-3.5" aria-hidden />
