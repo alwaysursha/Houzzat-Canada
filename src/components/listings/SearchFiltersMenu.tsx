@@ -437,7 +437,10 @@ export function SearchFiltersMenu({
         style={flyoutStyle}
         className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line/80 bg-surface shadow-[0_12px_40px_rgba(20,32,28,0.12)]"
       >
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line/70 px-5 py-3.5">
+        <div
+          className="flex shrink-0 items-center justify-between gap-2 border-b border-line/70 py-3.5"
+          style={{ paddingLeft: "1.25rem", paddingRight: "1.25rem" }}
+        >
           <div className="min-w-0">
             <p id={id} className="text-sm font-semibold tracking-tight text-ink">
               More filters
@@ -466,7 +469,10 @@ export function SearchFiltersMenu({
           </div>
         </div>
 
-        <div className="min-h-0 min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain px-5 py-4">
+        <div
+          className="min-h-0 min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain py-4"
+          style={{ paddingLeft: "1.25rem", paddingRight: "1.25rem" }}
+        >
           <Section title="Residential / Commercial">
             <ChipRow
               value={draft.segment}
@@ -663,7 +669,8 @@ export function SearchFiltersMenu({
 
         <div
           data-search-filters-apply=""
-          className="shrink-0 border-t border-line/70 bg-mist/40 px-5 py-3.5"
+          className="shrink-0 border-t border-line/70 bg-mist/40 py-3.5"
+          style={{ paddingLeft: "1.25rem", paddingRight: "1.25rem" }}
         >
           <Button
             type="button"

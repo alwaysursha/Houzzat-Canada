@@ -535,7 +535,10 @@ export function SearchFiltersSheet({
           entered ? "translate-x-0" : "translate-x-full",
         )}
       >
-        <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface px-3 py-2.5 pt-[max(0.65rem,env(safe-area-inset-top))]">
+        <div
+          className="flex shrink-0 items-center gap-2 border-b border-line bg-surface py-2.5 pt-[max(0.65rem,env(safe-area-inset-top))]"
+          style={{ paddingLeft: "1.25rem", paddingRight: "1.25rem" }}
+        >
           <button
             type="button"
             onClick={closeViaUi}
@@ -557,7 +560,10 @@ export function SearchFiltersSheet({
           </button>
         </div>
 
-        <div className="min-h-0 min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-5">
+        <div
+          className="min-h-0 min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain py-5"
+          style={{ paddingLeft: "1.25rem", paddingRight: "1.25rem" }}
+        >
           <Section title="Buy / Rent">
             <ChipRow
               value={draft.transactionType}
@@ -780,7 +786,8 @@ export function SearchFiltersSheet({
 
         <div
           data-search-filters-apply=""
-          className="shrink-0 border-t border-line bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+          className="shrink-0 border-t border-line bg-surface pb-[max(1rem,env(safe-area-inset-bottom))] pt-4"
+          style={{ paddingLeft: "1.25rem", paddingRight: "1.25rem" }}
         >
           <Button
             type="button"

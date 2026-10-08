@@ -142,7 +142,7 @@ export function SearchDesktopFilterPanel({
           aside.search-desktop-filter-panel { width: 18rem; }
         }
       `}</style>
-      <div className="relative flex shrink-0 items-center justify-between gap-2 border-b border-line/60 px-3 py-2.5 xl:px-4 xl:py-3">
+      <div className="relative flex shrink-0 items-center justify-between gap-2 border-b border-line/60 px-4 py-2.5 xl:py-3">
         <div
           className="absolute inset-y-2.5 left-0 w-0.5 rounded-full bg-canopy xl:inset-y-3"
           aria-hidden
@@ -165,7 +165,7 @@ export function SearchDesktopFilterPanel({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[linear-gradient(180deg,rgba(238,243,240,0.35)_0%,rgba(255,255,255,0)_6rem)] px-3 py-3.5 xl:space-y-5 xl:px-4 xl:py-4">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[linear-gradient(180deg,rgba(238,243,240,0.35)_0%,rgba(255,255,255,0)_6rem)] px-4 py-3.5 xl:space-y-5 xl:py-4">
         <Section title="Residential / Commercial">
           <ChipRow
             value={filters.segment}
