@@ -33,6 +33,9 @@ const nextConfig: NextConfig = {
   // Local tenant browsing uses http://houzzat.com:<dev port>. Next blocks
   // the dev HMR/debug socket unless that host is allowlisted.
   allowedDevOrigins: ["houzzat.com"],
+  // Hide the Next.js "N" route indicator in local screenshots. Dev-only;
+  // production builds never render this overlay. Errors still surface.
+  devIndicators: false,
   generateBuildId: async () => houzzatBuildId,
   env: {
     NEXT_PUBLIC_HOUZZAT_BUILD: houzzatBuildId,

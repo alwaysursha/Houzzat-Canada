@@ -15,6 +15,8 @@ import {
   type StructuredCityFieldHandle,
 } from "@/components/listings/StructuredCityField";
 import {
+  countActiveSearchFilters,
+  resetSearchFilters,
   type SearchFilters,
   type SearchStatusOption,
 } from "@/components/listings/SearchFilterChips";
@@ -82,21 +84,24 @@ function ChipRow({
 }) {
   return (
     <div className="flex min-w-0 flex-wrap gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => onChange(opt.value)}
-          className={cn(
-            "max-w-full truncate rounded-full px-3.5 py-2 text-sm font-semibold transition",
-            value === opt.value
-              ? "bg-canopy text-white"
-              : "bg-surface text-ink/70 ring-1 ring-line hover:bg-line/40",
-          )}
-        >
-          {opt.label}
-        </button>
-      ))}
+      {options.map((opt) => {
+        const selected = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              "inline-flex min-h-10 max-w-full items-center justify-center truncate rounded-full px-3.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canopy/35 focus-visible:ring-offset-2 focus-visible:ring-offset-mist",
+              selected
+                ? "bg-canopy text-white shadow-sm"
+                : "bg-surface text-ink/70 ring-1 ring-line/90 hover:bg-canopy/[0.06] hover:text-ink hover:ring-canopy/25",
+            )}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -109,8 +114,8 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="min-w-0 space-y-3 border-b border-line/70 pb-5 last:border-b-0 last:pb-0">
-      <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-ink/45">
+    <section className="min-w-0 space-y-3 rounded-2xl border border-line/60 bg-surface p-3.5 shadow-[0_1px_2px_rgba(20,32,28,0.03)]">
+      <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/40">
         {title}
       </h3>
       {children}
@@ -127,7 +132,6 @@ export function SearchFiltersSheet({
   cities,
   onCitiesChange,
   onCommitFilters,
-  onResetFilters,
   onDraftOpen,
   onDraftCancel,
   resultCount,
@@ -145,7 +149,6 @@ export function SearchFiltersSheet({
   onCitiesChange: (next: string[]) => void;
   /** Atomic Apply: filters + cities in one URL sync (preferred). */
   onCommitFilters?: (next: SearchFilters, cities: string[]) => void;
-  onResetFilters: () => void;
   /**
    * Canonical draft lifecycle (Stage 2B-1). Compatibility: local draft state
    * remains for preview/UI until Sheet reads SearchState.draft directly.
@@ -231,6 +234,9 @@ export function SearchFiltersSheet({
         { value: "SOLD", label: "Sold" },
         { value: "UNLISTED", label: "Unlisted" },
       ];
+  const draftActiveCount =
+    countActiveSearchFilters({ ...draft, city: "" }) +
+    draftCities.filter((city) => city.trim()).length;
 
   useEffect(() => {
     setMounted(true);
@@ -536,24 +542,41 @@ export function SearchFiltersSheet({
         )}
       >
         <div
-          className="flex shrink-0 items-center gap-2 border-b border-line bg-surface py-2.5 pt-[max(0.65rem,env(safe-area-inset-top))]"
+          className="relative z-10 flex shrink-0 items-center gap-2 border-b border-line/80 bg-surface py-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-[0_1px_0_rgba(20,32,28,0.04)]"
           style={{ paddingLeft: "1.25rem", paddingRight: "1.25rem" }}
         >
           <button
             type="button"
             onClick={closeViaUi}
-            className="inline-flex size-10 items-center justify-center rounded-full text-ink/70 transition hover:bg-mist hover:text-ink"
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-ink/70 transition hover:bg-mist hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canopy/35"
             aria-label="Back to search"
           >
             <ArrowLeft className="size-5" aria-hidden />
           </button>
-          <h2 id={titleId} className="flex-1 text-base font-semibold text-ink">
-            Filters
-          </h2>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h2 id={titleId} className="text-lg font-semibold tracking-tight text-ink">
+                Filters
+              </h2>
+              {draftActiveCount > 0 ? (
+                <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-canopy px-1.5 py-0.5 text-[11px] font-bold leading-none text-white">
+                  {draftActiveCount}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-0.5 text-xs text-ink/45">
+              Choose your filters, then apply
+            </p>
+          </div>
           <button
             type="button"
-            onClick={onResetFilters}
-            className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-ink/60 transition hover:bg-mist hover:text-danger"
+            onClick={() => {
+              // Draft-only: do not call shared resetStructuredFilters / commit.
+              setDraft(resetSearchFilters(draft));
+              setDraftCities([]);
+              applyCitiesRef.current = [];
+            }}
+            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-ink/55 transition hover:bg-mist hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canopy/35"
           >
             <RotateCcw className="size-3.5" aria-hidden />
             Reset
@@ -561,7 +584,7 @@ export function SearchFiltersSheet({
         </div>
 
         <div
-          className="min-h-0 min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain py-5"
+          className="min-h-0 min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto overscroll-contain py-4"
           style={{ paddingLeft: "1.25rem", paddingRight: "1.25rem" }}
         >
           <Section title="Buy / Rent">
@@ -609,6 +632,7 @@ export function SearchFiltersSheet({
               ref={cityFieldRef}
               cities={draftCities}
               onCitiesChange={setDraftCities}
+              presentation="sheet"
             />
             <label className="mt-3 block space-y-1.5 text-sm text-ink/70">
               <span className="text-xs font-semibold uppercase tracking-wide text-ink/45">
@@ -620,6 +644,7 @@ export function SearchFiltersSheet({
                   setDraft({ ...draft, community: e.target.value })
                 }
                 placeholder="The Beaches"
+                className="h-11 rounded-xl border-line/80 shadow-none focus-visible:border-canopy/40 focus-visible:ring-canopy/15"
               />
             </label>
           </Section>
@@ -640,29 +665,43 @@ export function SearchFiltersSheet({
                 });
               }}
             />
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                inputMode="numeric"
-                placeholder="Min"
-                value={draft.minPrice}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    minPrice: e.target.value.replace(/\D/g, ""),
-                  })
-                }
-              />
-              <Input
-                inputMode="numeric"
-                placeholder="Max"
-                value={draft.maxPrice}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    maxPrice: e.target.value.replace(/\D/g, ""),
-                  })
-                }
-              />
+            <div className="grid grid-cols-2 gap-2.5">
+              <label className="min-w-0 space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-ink/40">
+                  Min
+                </span>
+                <Input
+                  inputMode="numeric"
+                  aria-label="Minimum price"
+                  placeholder="No min"
+                  value={draft.minPrice}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      minPrice: e.target.value.replace(/\D/g, ""),
+                    })
+                  }
+                  className="h-11 rounded-xl border-line/80 shadow-none focus-visible:border-canopy/40 focus-visible:ring-canopy/15"
+                />
+              </label>
+              <label className="min-w-0 space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-ink/40">
+                  Max
+                </span>
+                <Input
+                  inputMode="numeric"
+                  aria-label="Maximum price"
+                  placeholder="No max"
+                  value={draft.maxPrice}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      maxPrice: e.target.value.replace(/\D/g, ""),
+                    })
+                  }
+                  className="h-11 rounded-xl border-line/80 shadow-none focus-visible:border-canopy/40 focus-visible:ring-canopy/15"
+                />
+              </label>
             </div>
           </Section>
 
@@ -710,10 +749,10 @@ export function SearchFiltersSheet({
                       setDraft({ ...draft, propertyTypes: next });
                     }}
                     className={cn(
-                      "inline-flex max-w-full items-center gap-1 rounded-full px-3.5 py-2 text-sm font-semibold transition",
+                      "inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canopy/35 focus-visible:ring-offset-2 focus-visible:ring-offset-mist",
                       selected
-                        ? "bg-canopy text-white"
-                        : "bg-surface text-ink/70 ring-1 ring-line hover:bg-line/40",
+                        ? "bg-canopy text-white shadow-sm"
+                        : "bg-surface text-ink/70 ring-1 ring-line/90 hover:bg-canopy/[0.06] hover:text-ink hover:ring-canopy/25",
                     )}
                   >
                     {selected ? (
@@ -751,10 +790,10 @@ export function SearchFiltersSheet({
                       });
                     }}
                     className={cn(
-                      "inline-flex max-w-full items-center gap-1 rounded-full px-3.5 py-2 text-sm font-semibold transition",
+                      "inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canopy/35 focus-visible:ring-offset-2 focus-visible:ring-offset-mist",
                       selected
-                        ? "bg-canopy text-white"
-                        : "bg-surface text-ink/70 ring-1 ring-line hover:bg-line/40",
+                        ? "bg-canopy text-white shadow-sm"
+                        : "bg-surface text-ink/70 ring-1 ring-line/90 hover:bg-canopy/[0.06] hover:text-ink hover:ring-canopy/25",
                     )}
                   >
                     {selected ? (
@@ -766,19 +805,39 @@ export function SearchFiltersSheet({
               })}
             </div>
             {!isLease ? (
-              <label className="mt-1 flex cursor-pointer items-center gap-2 text-sm text-ink/75">
-                <input
-                  type="checkbox"
-                  checked={draft.openHouseOnly}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      openHouseOnly: e.target.checked,
-                    })
-                  }
-                />
-                Open houses only
-              </label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={draft.openHouseOnly}
+                onClick={() =>
+                  setDraft({
+                    ...draft,
+                    openHouseOnly: !draft.openHouseOnly,
+                  })
+                }
+                className={cn(
+                  "mt-1 flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border px-3.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canopy/35",
+                  draft.openHouseOnly
+                    ? "border-canopy/30 bg-canopy/[0.08] text-canopy"
+                    : "border-line/80 bg-mist/60 text-ink/70 hover:border-canopy/25",
+                )}
+              >
+                <span className="text-sm font-semibold">Open houses only</span>
+                <span
+                  className={cn(
+                    "inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition",
+                    draft.openHouseOnly ? "bg-canopy" : "bg-line",
+                  )}
+                  aria-hidden
+                >
+                  <span
+                    className={cn(
+                      "size-5 rounded-full bg-white shadow-sm transition",
+                      draft.openHouseOnly ? "translate-x-5" : "translate-x-0",
+                    )}
+                  />
+                </span>
+              </button>
             ) : null}
           </Section>
 
@@ -786,12 +845,12 @@ export function SearchFiltersSheet({
 
         <div
           data-search-filters-apply=""
-          className="shrink-0 border-t border-line bg-surface pb-[max(1rem,env(safe-area-inset-bottom))] pt-4"
+          className="relative z-10 shrink-0 border-t border-line/80 bg-surface pb-[max(1rem,env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-6px_16px_rgba(20,32,28,0.05)]"
           style={{ paddingLeft: "1.25rem", paddingRight: "1.25rem" }}
         >
           <Button
             type="button"
-            className="h-12 w-full gap-2"
+            className="h-12 w-full gap-2 rounded-full text-base font-semibold shadow-sm"
             disabled={saving}
             onClick={() => void applyAndSave(false)}
           >
@@ -810,7 +869,7 @@ export function SearchFiltersSheet({
               </>
             )}
           </Button>
-          <p className="mt-2 text-center text-[11px] text-ink/45">
+          <p className="mt-2 text-center text-[11px] leading-snug text-ink/45">
             Saves to your buyer profile for property alerts
           </p>
         </div>

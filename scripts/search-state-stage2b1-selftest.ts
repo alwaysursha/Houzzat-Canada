@@ -24,7 +24,10 @@ import {
   serializeSearchUrl,
   withPlaceAwareMapArea,
 } from "../src/lib/listings/search-state";
-import type { SearchFilters } from "../src/components/listings/SearchFilterChips";
+import {
+  resetSearchFilters,
+  type SearchFilters,
+} from "../src/components/listings/SearchFilterChips";
 
 function read(rel: string): string {
   return readFileSync(resolve(process.cwd(), rel), "utf8");
@@ -403,6 +406,51 @@ check("Menu/Sheet keep Apply→persist Save Search order", "STATIC", () => {
   assert.match(sheet, /savePrimarySearch/);
   assert.match(sheet, /onDraftOpen/);
   assert.match(sheet, /onDraftCancel/);
+});
+
+check("Sheet Reset clears local draft only (not shared commit)", "STATIC", () => {
+  assert.match(sheet, /setDraft\(resetSearchFilters\(draft\)\)/);
+  assert.match(sheet, /setDraftCities\(\[\]\)/);
+  assert.match(sheet, /import \{[\s\S]*resetSearchFilters[\s\S]*\} from "@\/components\/listings\/SearchFilterChips"/);
+  assert.doesNotMatch(sheet, /onClick=\{onResetFilters\}/);
+  assert.doesNotMatch(sheet, /onResetFilters/);
+  // Shared committed reset remains for desktop / chips / empty-state only.
+  assert.match(experience, /function resetStructuredFilters/);
+  assert.match(experience, /SearchFiltersMenu[\s\S]*onResetFilters=\{resetStructuredFilters\}/);
+  assert.match(experience, /SearchDesktopFilterPanel[\s\S]*onResetFilters=\{resetStructuredFilters\}/);
+  assert.match(experience, /onClearAll=\{resetStructuredFilters\}/);
+  const sheetMount = experience.slice(
+    experience.lastIndexOf("<SearchFiltersSheet"),
+    experience.lastIndexOf("<SearchFiltersSheet") + 900,
+  );
+  assert.doesNotMatch(sheetMount, /onResetFilters/);
+});
+
+check("Draft-only Reset scope matches resetSearchFilters + empty cities", "RUNTIME", () => {
+  const seed: SearchFilters = {
+    ...committedToSearchFilters(defaultCommittedSearch()),
+    transactionType: "LEASE",
+    segment: "COMMERCIAL",
+    maxPrice: "750000",
+    minBeds: "3",
+    minBaths: "2",
+    propertyTypes: ["DETACHED"],
+    openHouseOnly: true,
+    statuses: ["SOLD"],
+  };
+  const cities = ["Mississauga", "Oakville"];
+  const draftAfterReset = resetSearchFilters(seed);
+  const citiesAfterReset: string[] = [];
+  assert.equal(draftAfterReset.transactionType, "SALE");
+  assert.equal(draftAfterReset.segment, "RESIDENTIAL");
+  assert.equal(draftAfterReset.maxPrice, "");
+  assert.equal(draftAfterReset.minBeds, "");
+  assert.deepEqual(draftAfterReset.statuses, ["ACTIVE"]);
+  assert.deepEqual(citiesAfterReset, []);
+  // Committed snapshot would remain until Apply — simulate Cancel.
+  assert.equal(seed.maxPrice, "750000");
+  assert.equal(seed.minBeds, "3");
+  assert.deepEqual(cities, ["Mississauga", "Oakville"]);
 });
 
 check("Reducer rebases draft on COMMIT/REMOVE_CHIP (not null)", "STATIC", () => {

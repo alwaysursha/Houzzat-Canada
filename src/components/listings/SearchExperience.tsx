@@ -1349,7 +1349,6 @@ export function SearchExperience() {
           cities={structuredCities}
           onCitiesChange={replaceStructuredCities}
           onCommitFilters={commitFiltersWithCities}
-          onResetFilters={resetStructuredFilters}
           onDraftOpen={beginFiltersDraft}
           onDraftCancel={discardFiltersDraft}
           resultCount={total}
