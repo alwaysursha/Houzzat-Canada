@@ -102,5 +102,24 @@ assert.doesNotMatch(
   /if \(!polygonRef\.current\) setAppliedBounds\(null\)/,
 );
 assert.match(map, /skipBoundsNotify\.current = true/);
+// Gestures update pending bounds only; place filters stay until cleared.
+assert.match(experience, /mapGestureSearchThisAreaState/);
+assert.match(experience, /function onSearchThisArea/);
+assert.doesNotMatch(
+  experience.slice(
+    experience.indexOf("function onMapBoundsChange"),
+    experience.indexOf("function onSearchThisArea"),
+  ),
+  /clearMultiPlace/,
+);
+assert.doesNotMatch(
+  experience.slice(
+    experience.indexOf("function onMapBoundsChange"),
+    experience.indexOf("function onSearchThisArea"),
+  ),
+  /setCitiesOverride/,
+);
+assert.match(map, /data-search-this-area/);
+assert.match(map, /Search This Area/);
 
 console.log("search-map-fit-selftest: ok");

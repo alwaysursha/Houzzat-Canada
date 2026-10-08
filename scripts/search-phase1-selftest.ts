@@ -307,12 +307,20 @@ const experience = readFileSync(
 );
 const bounds = experience.slice(
   experience.indexOf("function onMapBoundsChange"),
-  experience.indexOf("function onPolygonChange"),
+  experience.indexOf("function onSearchThisArea"),
 );
 assert.match(bounds, /if \(!meta\?\.userGesture\) return/);
-assert.match(bounds, /city: ""/);
-assert.match(bounds, /community: ""/);
-assert.doesNotMatch(bounds, /q:\s*""/);
+// Pan/zoom must not clear place filters — Search This Area is explicit.
+assert.match(bounds, /mapGestureSearchThisAreaState/);
+assert.doesNotMatch(bounds, /clearMultiPlace/);
+assert.doesNotMatch(bounds, /setCitiesOverride/);
+assert.doesNotMatch(bounds, /syncUrl\(/);
+assert.match(experience, /function onSearchThisArea/);
+assert.match(experience, /from "@\/lib\/listings\/map-area-search"/);
+assert.match(experience, /SearchViewModeSwitch/);
+assert.match(experience, /"Cards"/);
+assert.match(experience, /"Map"/);
+assert.match(experience, /"Split"/);
 
 const searchRoute = readFileSync(
   new URL("../src/app/api/listings/search/route.ts", import.meta.url),

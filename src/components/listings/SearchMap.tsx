@@ -121,6 +121,8 @@ export function SearchMap({
   onSelect,
   onClearSelection,
   onBoundsChange,
+  searchThisAreaVisible = false,
+  onSearchThisArea,
   mapFrame,
   initialCameraRef,
   framedTokenRef,
@@ -143,6 +145,9 @@ export function SearchMap({
     bounds: Bounds,
     meta?: { userGesture: boolean },
   ) => void;
+  /** Show after the user pans/zooms; applies viewport without clearing filters. */
+  searchThisAreaVisible?: boolean;
+  onSearchThisArea?: () => void;
   /** One-shot camera command. The same token is not replayed after a remount. */
   mapFrame?: ({ token: string } & (
     | { kind: "center"; lat: number; lng: number; zoom: number }
@@ -667,6 +672,19 @@ export function SearchMap({
                 {activeFilterCount}
               </span>
             ) : null}
+          </button>
+        </div>
+      ) : null}
+
+      {searchThisAreaVisible && onSearchThisArea && !drawing ? (
+        <div className="pointer-events-none absolute inset-x-0 top-14 z-20 flex justify-center px-3">
+          <button
+            type="button"
+            data-search-this-area=""
+            onClick={onSearchThisArea}
+            className="pointer-events-auto inline-flex max-w-[min(100%,20rem)] items-center justify-center rounded-full bg-canopy px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-canopy/90"
+          >
+            Search This Area
           </button>
         </div>
       ) : null}

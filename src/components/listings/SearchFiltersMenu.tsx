@@ -417,6 +417,66 @@ export function SearchFiltersMenu({
         </div>
 
         <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4">
+          <Section title="Buy / Rent">
+            <ChipRow
+              value={draft.transactionType}
+              options={[
+                { value: "SALE", label: "Buy" },
+                { value: "LEASE", label: "Rent" },
+                { value: "ALL", label: "Both" },
+              ]}
+              onChange={(v) =>
+                setDraft({
+                  ...draft,
+                  transactionType: v as SearchFilters["transactionType"],
+                  statuses: ["ACTIVE"],
+                  openHouseOnly:
+                    v === "LEASE" ? false : draft.openHouseOnly,
+                })
+              }
+            />
+          </Section>
+
+          <Section title="Residential / Commercial">
+            <ChipRow
+              value={draft.segment}
+              options={[
+                { value: "RESIDENTIAL", label: "Residential" },
+                { value: "COMMERCIAL", label: "Commercial" },
+                { value: "ALL", label: "All" },
+              ]}
+              onChange={(v) =>
+                setDraft({
+                  ...draft,
+                  segment: v as SearchFilters["segment"],
+                  minBeds: v === "COMMERCIAL" ? "" : draft.minBeds,
+                  minBaths: v === "COMMERCIAL" ? "" : draft.minBaths,
+                  propertyTypes: [],
+                })
+              }
+            />
+          </Section>
+
+          <Section title="Location">
+            <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+              <StructuredCityField
+                ref={cityFieldRef}
+                cities={draftCities}
+                onCitiesChange={setDraftCities}
+              />
+              <label className="block min-w-0 space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/45">
+                Community
+                <Input
+                  value={draft.community}
+                  onChange={(e) =>
+                    setDraft({ ...draft, community: e.target.value })
+                  }
+                  placeholder="The Beaches"
+                />
+              </label>
+            </div>
+          </Section>
+
           <Section title={isLease ? "Monthly rent" : "List price"}>
             <ChipRow
               value={`${draft.minPrice}|${draft.maxPrice}`}
@@ -568,45 +628,6 @@ export function SearchFiltersMenu({
             ) : null}
           </Section>
 
-          <Section title="Segment">
-            <ChipRow
-              value={draft.segment}
-              options={[
-                { value: "RESIDENTIAL", label: "Residential" },
-                { value: "COMMERCIAL", label: "Commercial" },
-                { value: "ALL", label: "All" },
-              ]}
-              onChange={(v) =>
-                setDraft({
-                  ...draft,
-                  segment: v as SearchFilters["segment"],
-                  minBeds: v === "COMMERCIAL" ? "" : draft.minBeds,
-                  minBaths: v === "COMMERCIAL" ? "" : draft.minBaths,
-                  propertyTypes: [],
-                })
-              }
-            />
-          </Section>
-
-          <Section title="Location">
-            <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-              <StructuredCityField
-                ref={cityFieldRef}
-                cities={draftCities}
-                onCitiesChange={setDraftCities}
-              />
-              <label className="block min-w-0 space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/45">
-                Community
-                <Input
-                  value={draft.community}
-                  onChange={(e) =>
-                    setDraft({ ...draft, community: e.target.value })
-                  }
-                  placeholder="The Beaches"
-                />
-              </label>
-            </div>
-          </Section>
         </div>
 
         <div

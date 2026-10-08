@@ -25,8 +25,10 @@ assert.match(experience, /--search-sheet:\s*61%/);
 assert.match(experience, /--search-sheet:\s*89%/);
 assert.match(experience, /width:\s*48%/);
 assert.match(experience, /\["split", Columns2, "Split"\]/);
+assert.match(experience, /\["cards", LayoutGrid, "Cards"\]/);
+assert.match(experience, /SearchViewModeSwitch/);
 assert.doesNotMatch(experience, /setView\("cards"\)/);
-assert.match(experience, /Adjust your filters or search this map area\./);
+assert.match(experience, /Search This Area/);
 assert.match(experience, /prefers-reduced-motion: reduce/);
 assert.doesNotMatch(experience, /Show listings/);
 

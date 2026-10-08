@@ -446,6 +446,66 @@ export function SearchFiltersSheet({
         </div>
 
         <div className="min-h-0 min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-5">
+          <Section title="Buy / Rent">
+            <ChipRow
+              value={filters.transactionType}
+              options={[
+                { value: "SALE", label: "Buy" },
+                { value: "LEASE", label: "Rent" },
+                { value: "ALL", label: "Both" },
+              ]}
+              onChange={(v) =>
+                onChange({
+                  ...filters,
+                  transactionType: v as SearchFilters["transactionType"],
+                  statuses: ["ACTIVE"],
+                  openHouseOnly:
+                    v === "LEASE" ? false : filters.openHouseOnly,
+                })
+              }
+            />
+          </Section>
+
+          <Section title="Residential / Commercial">
+            <ChipRow
+              value={filters.segment}
+              options={[
+                { value: "RESIDENTIAL", label: "Residential" },
+                { value: "COMMERCIAL", label: "Commercial" },
+                { value: "ALL", label: "All" },
+              ]}
+              onChange={(v) =>
+                onChange({
+                  ...filters,
+                  segment: v as SearchFilters["segment"],
+                  minBeds: v === "COMMERCIAL" ? "" : filters.minBeds,
+                  minBaths: v === "COMMERCIAL" ? "" : filters.minBaths,
+                  propertyTypes: [],
+                })
+              }
+            />
+          </Section>
+
+          <Section title="Location">
+            <StructuredCityField
+              ref={cityFieldRef}
+              cities={cities}
+              onCitiesChange={onCitiesChange}
+            />
+            <label className="mt-3 block space-y-1.5 text-sm text-ink/70">
+              <span className="text-xs font-semibold uppercase tracking-wide text-ink/45">
+                Community
+              </span>
+              <Input
+                value={filters.community}
+                onChange={(e) =>
+                  onChange({ ...filters, community: e.target.value })
+                }
+                placeholder="The Beaches"
+              />
+            </label>
+          </Section>
+
           <Section title={isLease ? "Monthly rent" : "List price"}>
             <ChipRow
               value={`${filters.minPrice}|${filters.maxPrice}`}
@@ -604,45 +664,6 @@ export function SearchFiltersSheet({
             ) : null}
           </Section>
 
-          <Section title="Segment">
-            <ChipRow
-              value={filters.segment}
-              options={[
-                { value: "RESIDENTIAL", label: "Residential" },
-                { value: "COMMERCIAL", label: "Commercial" },
-                { value: "ALL", label: "All" },
-              ]}
-              onChange={(v) =>
-                onChange({
-                  ...filters,
-                  segment: v as SearchFilters["segment"],
-                  minBeds: v === "COMMERCIAL" ? "" : filters.minBeds,
-                  minBaths: v === "COMMERCIAL" ? "" : filters.minBaths,
-                  propertyTypes: [],
-                })
-              }
-            />
-          </Section>
-
-          <Section title="Location">
-            <StructuredCityField
-              ref={cityFieldRef}
-              cities={cities}
-              onCitiesChange={onCitiesChange}
-            />
-            <label className="mt-3 block space-y-1.5 text-sm text-ink/70">
-              <span className="text-xs font-semibold uppercase tracking-wide text-ink/45">
-                Community
-              </span>
-              <Input
-                value={filters.community}
-                onChange={(e) =>
-                  onChange({ ...filters, community: e.target.value })
-                }
-                placeholder="The Beaches"
-              />
-            </label>
-          </Section>
         </div>
 
         <div

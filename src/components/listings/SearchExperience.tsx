@@ -59,6 +59,13 @@ import {
   searchResultsCopy,
   type SearchResultChip,
 } from "@/lib/listings/search-results-copy";
+import {
+  appendPlaceAndBoundsParams,
+  listingSearchBoundsBox,
+  mapGestureSearchThisAreaState,
+  searchPlaceKey,
+  shouldResetMapAreaForPlaceChange,
+} from "@/lib/listings/map-area-search";
 import { searchFiltersToSavedQuery } from "@/lib/listings/saved-search-query";
 import {
   structuredCitiesFromSearch,
@@ -97,6 +104,57 @@ type Bounds = {
 
 type LngLat = [number, number];
 
+const VIEW_MODES = [
+  ["cards", LayoutGrid, "Cards"],
+  ["map", MapIcon, "Map"],
+  ["split", Columns2, "Split"],
+] as const;
+
+function SearchViewModeSwitch({
+  view,
+  onChange,
+  hideSplit = false,
+  size = "md",
+}: {
+  view: SearchViewMode;
+  onChange: (mode: SearchViewMode) => void;
+  hideSplit?: boolean;
+  size?: "sm" | "md";
+}) {
+  return (
+    <div
+      className="flex shrink-0 rounded-full border border-line bg-mist p-0.5"
+      role="group"
+      aria-label="Search view"
+    >
+      {VIEW_MODES.filter(([mode]) => !(hideSplit && mode === "split")).map(
+        ([mode, Icon, label]) => (
+          <button
+            key={mode}
+            type="button"
+            aria-label={label}
+            aria-pressed={view === mode}
+            title={label}
+            onClick={() => onChange(mode)}
+            className={cn(
+              "inline-flex items-center justify-center gap-1 rounded-full font-semibold transition",
+              size === "sm"
+                ? "h-8 px-2.5 text-xs"
+                : "h-9 px-3 text-xs sm:text-sm",
+              view === mode
+                ? "bg-surface text-canopy shadow-sm"
+                : "text-ink/45 hover:text-ink",
+            )}
+          >
+            <Icon className="size-3.5 shrink-0 sm:size-4" aria-hidden />
+            <span>{label}</span>
+          </button>
+        ),
+      )}
+    </div>
+  );
+}
+
 export function SearchExperience() {
   const router = useRouter();
   const pathname = usePathname();
@@ -119,6 +177,9 @@ export function SearchExperience() {
     null,
   );
   const [appliedBounds, setAppliedBounds] = useState<Bounds | null>(null);
+  /** User-panned viewport awaiting an explicit Search This Area click. */
+  const [pendingMapBounds, setPendingMapBounds] = useState<Bounds | null>(null);
+  const [searchThisAreaVisible, setSearchThisAreaVisible] = useState(false);
   const [polygon, setPolygon] = useState<LngLat[] | null>(null);
   const boundsApplyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appliedBoundsRef = useRef<Bounds | null>(null);
@@ -264,6 +325,13 @@ export function SearchExperience() {
       citiesQueryParam.trim() ||
       communitiesParam.trim(),
   );
+  const placeKey = searchPlaceKey({
+    city: filters.city,
+    community: filters.community,
+    cities: citiesQueryParam,
+    communities: communitiesParam,
+  });
+  const placeKeyRef = useRef(placeKey);
   const mapGeography = useMemo(
     () => ({
       city: filters.city,
@@ -277,12 +345,16 @@ export function SearchExperience() {
   const mapGeographyKey = searchMapGeographyKey(mapGeography);
   geoKeyRef.current = mapGeographyKey;
 
-  // Place search owns the criteria — drop stale map-area bounds.
+  // When place criteria change, drop stale Search This Area / draw bounds.
   useEffect(() => {
-    if (!placeFilterActive) return;
+    const prev = placeKeyRef.current;
+    placeKeyRef.current = placeKey;
+    if (!shouldResetMapAreaForPlaceChange(prev, placeKey)) return;
     setAppliedBounds(null);
+    setPendingMapBounds(null);
+    setSearchThisAreaVisible(false);
     setPolygon(null);
-  }, [placeFilterActive, filters.city, filters.community, citiesQueryParam, communitiesParam]);
+  }, [placeKey]);
 
   useEffect(() => {
     return () => {
@@ -391,16 +463,6 @@ export function SearchExperience() {
     }
     params.set("transactionType", filters.transactionType);
     if (filters.dataSource) params.set("dataSource", filters.dataSource);
-    if (citiesQueryParam) {
-      params.set("cities", citiesQueryParam);
-    } else if (filters.city) {
-      params.set("city", filters.city);
-    }
-    if (communitiesParam) {
-      params.set("communities", communitiesParam);
-    } else if (filters.community) {
-      params.set("community", filters.community);
-    }
     if (filters.propertyTypes.length) {
       params.set("propertyTypes", filters.propertyTypes.join(","));
     }
@@ -414,18 +476,17 @@ export function SearchExperience() {
     params.set("sort", filters.sort);
     if (qParam) params.set("q", qParam);
 
-    const box = polygon
-      ? polygonBBox(polygon)
-      : appliedBounds;
-    // City / multi-city / community search must not be AND'd with the map
-    // viewport — the first map frame is often the wrong city and returns 0.
-    // Bounds apply for map pan auto-search, draw-polygon, or no place filter.
-    if (box && (polygon || !placeFilterActive)) {
-      params.set("west", String(box.west));
-      params.set("south", String(box.south));
-      params.set("east", String(box.east));
-      params.set("north", String(box.north));
-    }
+    const box = listingSearchBoundsBox({
+      polygonBox: polygon ? polygonBBox(polygon) : null,
+      appliedBounds,
+    });
+    appendPlaceAndBoundsParams(params, {
+      citiesPipe: citiesQueryParam,
+      city: filters.city,
+      communitiesPipe: communitiesParam,
+      community: filters.community,
+      bounds: box,
+    });
     // Map views need denser pins; card list stays lighter.
     const densePins = view === "map" || view === "split";
     params.set("limit", densePins ? "500" : "60");
@@ -437,7 +498,6 @@ export function SearchExperience() {
     communitiesParam,
     polygon,
     qParam,
-    placeFilterActive,
     view,
   ]);
 
@@ -654,46 +714,34 @@ export function SearchExperience() {
     if (meta?.userGesture && geoKeyRef.current) {
       mapPinnedToRef.current = geoKeyRef.current;
     }
-    // Opening the map and a programmatic fit are not a new search.
-    // A real pan or zoom still owns the viewport.
+    // Programmatic flyTo / fitBounds never change search criteria.
     if (!meta?.userGesture) return;
     // Draw-polygon mode owns the search area until cleared.
     if (polygon) return;
 
-    const prev = appliedBoundsRef.current;
-    if (
-      prev &&
-      Math.abs(next.west - prev.west) < 0.0008 &&
-      Math.abs(next.south - prev.south) < 0.0008 &&
-      Math.abs(next.east - prev.east) < 0.0008 &&
-      Math.abs(next.north - prev.north) < 0.0008
-    ) {
-      return;
-    }
-
     if (boundsApplyTimer.current) clearTimeout(boundsApplyTimer.current);
-    // Debounce so continuous pan/zoom doesn't hammer the API.
+    // Debounce continuous pan/zoom; camera only until Search This Area.
     boundsApplyTimer.current = setTimeout(() => {
-      setAppliedBounds(next);
-      // Viewport owns search after the user moves the map — drop place filters.
-      setFilters((f) => {
-        const hadPlace = Boolean(
-          f.city.trim() ||
-            f.community.trim() ||
-            citiesQueryParam.trim() ||
-            communitiesParam.trim(),
-        );
-        if (!hadPlace) return f;
-        const cleared = { ...f, city: "", community: "" };
-        setCitiesOverride([]);
-        syncUrl(cleared, viewRef.current, { clearMultiPlace: true });
-        return cleared;
+      const nextState = mapGestureSearchThisAreaState({
+        appliedBounds: appliedBoundsRef.current,
+        nextBounds: next,
       });
-    }, prev ? 400 : 0);
+      setPendingMapBounds(nextState.pendingMapBounds);
+      setSearchThisAreaVisible(nextState.searchThisAreaVisible);
+    }, 280);
+  }
+
+  function onSearchThisArea() {
+    if (!pendingMapBounds) return;
+    setAppliedBounds(pendingMapBounds);
+    setPendingMapBounds(null);
+    setSearchThisAreaVisible(false);
   }
 
   function onPolygonChange(ring: LngLat[] | null) {
     setPolygon(ring);
+    setPendingMapBounds(null);
+    setSearchThisAreaVisible(false);
     if (ring && ring.length >= 3) {
       if (boundsApplyTimer.current) clearTimeout(boundsApplyTimer.current);
       setAppliedBounds(polygonBBox(ring));
@@ -827,7 +875,7 @@ export function SearchExperience() {
       cities: citiesQueryParam || undefined,
       communities: communitiesParam || undefined,
       q: qParam || undefined,
-      ...(appliedBounds && !placeFilterActive
+      ...(appliedBounds
         ? {
             west: appliedBounds.west,
             south: appliedBounds.south,
@@ -836,13 +884,7 @@ export function SearchExperience() {
           }
         : {}),
     }),
-    [
-      citiesQueryParam,
-      communitiesParam,
-      qParam,
-      appliedBounds,
-      placeFilterActive,
-    ],
+    [citiesQueryParam, communitiesParam, qParam, appliedBounds],
   );
 
   return (
@@ -899,31 +941,11 @@ export function SearchExperience() {
           </div>
 
           <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="flex shrink-0 rounded-full border border-line bg-mist p-0.5">
-              {(
-                [
-                  ["map", MapIcon, "Map"],
-                  ["split", Columns2, "Split"],
-                  ["cards", LayoutGrid, "List"],
-                ] as const
-              ).map(([mode, Icon, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  aria-label={label}
-                  title={label}
-                  onClick={() => updateView(mode)}
-                  className={cn(
-                    "inline-flex size-8 items-center justify-center rounded-full transition",
-                    view === mode
-                      ? "bg-surface text-canopy shadow-sm"
-                      : "text-ink/45 hover:text-ink",
-                  )}
-                >
-                  <Icon className="size-4" aria-hidden />
-                </button>
-              ))}
-            </div>
+            <SearchViewModeSwitch
+              view={view}
+              onChange={updateView}
+              size="sm"
+            />
             <button
               type="button"
               onClick={() => setFiltersOpen(true)}
@@ -1043,35 +1065,11 @@ export function SearchExperience() {
               />
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex rounded-full border border-line bg-mist p-0.5">
-                {(
-                  [
-                    ["map", MapIcon, "Map"],
-                    ["split", Columns2, "Split"],
-                    ["cards", LayoutGrid, "Cards"],
-                  ] as const
-                )
-                  .filter(([mode]) => !(isNarrow && mode === "split"))
-                  .map(([mode, Icon, label]) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      aria-label={label}
-                      title={label}
-                      onClick={() => updateView(mode)}
-                      className={cn(
-                        "inline-flex size-9 items-center justify-center rounded-full transition",
-                        view === mode
-                          ? "bg-surface text-canopy shadow-sm"
-                          : "text-ink/45 hover:text-ink",
-                      )}
-                    >
-                      <Icon className="size-4" aria-hidden />
-                    </button>
-                  ))}
-              </div>
-            </div>
+            <SearchViewModeSwitch
+              view={view}
+              onChange={updateView}
+              hideSplit={isNarrow}
+            />
           </div>
 
           <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -1271,6 +1269,8 @@ export function SearchExperience() {
               onSelect={setActiveMls}
               onClearSelection={() => setActiveMls(null)}
               onBoundsChange={onMapBoundsChange}
+              searchThisAreaVisible={searchThisAreaVisible}
+              onSearchThisArea={onSearchThisArea}
               polygon={polygon}
               onPolygonChange={onPolygonChange}
               status={filters.statuses}
@@ -1345,7 +1345,11 @@ export function SearchExperience() {
               emptyHint={
                 polygon
                   ? "Clear the draw or expand it."
-                  : "Adjust your filters or search this map area."
+                  : searchThisAreaVisible
+                    ? "Tap Search This Area to refresh results for the map view."
+                    : placeFilterActive
+                      ? "Try adjusting filters, or clear the city to search a wider area."
+                      : "Adjust your filters, or pan the map and tap Search This Area."
               }
             />
             </div>

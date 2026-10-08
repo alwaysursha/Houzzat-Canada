@@ -125,6 +125,8 @@ assert.match(experience, /commitFiltersWithCities/);
 assert.match(experience, /onCommitFilters=\{commitFiltersWithCities\}/);
 
 // City field only updates via callback — menu wires draft, not live parent
+assert.match(menu, /title="Buy \/ Rent"/);
+assert.match(menu, /title="Location"/);
 const locationBlock = menu.slice(
   menu.indexOf('Section title="Location"'),
   menu.indexOf("data-search-filters-apply"),
@@ -132,6 +134,8 @@ const locationBlock = menu.slice(
 assert.match(locationBlock, /cities=\{draftCities\}/);
 assert.match(locationBlock, /onCitiesChange=\{setDraftCities\}/);
 assert.doesNotMatch(locationBlock, /onCitiesChange=\{onCitiesChange\}/);
+assert.match(sheet, /title="Buy \/ Rent"/);
+assert.match(sheet, /title="Residential \/ Commercial"/);
 
 // Close / Escape discard: setOpen(false) without commitDraft
 assert.match(menu, /if \(event\.key === "Escape" && !confirmOpen\) setOpen\(false\)/);

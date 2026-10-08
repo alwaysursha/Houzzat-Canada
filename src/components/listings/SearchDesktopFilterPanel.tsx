@@ -145,12 +145,12 @@ export function SearchDesktopFilterPanel({
       </div>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-4">
-        <Section title="Transaction">
+        <Section title="Buy / Rent">
           <ChipRow
             value={filters.transactionType}
             options={[
-              { value: "SALE", label: "For sale" },
-              { value: "LEASE", label: "For lease" },
+              { value: "SALE", label: "Buy" },
+              { value: "LEASE", label: "Rent" },
               { value: "ALL", label: "Both" },
             ]}
             onChange={(v) =>
@@ -165,8 +165,39 @@ export function SearchDesktopFilterPanel({
           />
         </Section>
 
-        <Section title="City / Area">
+        <Section title="Residential / Commercial">
+          <ChipRow
+            value={filters.segment}
+            options={[
+              { value: "RESIDENTIAL", label: "Residential" },
+              { value: "COMMERCIAL", label: "Commercial" },
+              { value: "ALL", label: "All" },
+            ]}
+            onChange={(v) =>
+              onChange({
+                ...filters,
+                segment: v as SearchFilters["segment"],
+                minBeds: v === "COMMERCIAL" ? "" : filters.minBeds,
+                minBaths: v === "COMMERCIAL" ? "" : filters.minBaths,
+                propertyTypes: [],
+              })
+            }
+          />
+        </Section>
+
+        <Section title="Location">
           <StructuredCityField cities={cities} onCitiesChange={onCitiesChange} />
+          <label className="mt-2 block min-w-0 space-y-1 text-xs font-semibold uppercase tracking-wide text-ink/45">
+            Community
+            <Input
+              value={filters.community}
+              onChange={(e) =>
+                onChange({ ...filters, community: e.target.value })
+              }
+              placeholder="The Beaches"
+              className="h-9 font-normal normal-case tracking-normal"
+            />
+          </label>
         </Section>
 
         <Section title={isLease ? "Monthly rent" : "List price"}>
