@@ -26,7 +26,7 @@ export function SearchActiveFilterStrip({
   return (
     <div
       className={cn(
-        "flex min-w-0 flex-wrap items-center gap-1.5 overflow-x-hidden sm:gap-2",
+        "flex min-w-0 items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:gap-2 sm:overflow-x-hidden sm:pb-0",
         className,
       )}
       role="list"
@@ -39,7 +39,7 @@ export function SearchActiveFilterStrip({
             <span
               key={key}
               role="listitem"
-              className="inline-flex h-8 max-w-[14rem] items-center rounded-full border border-canopy/20 bg-canopy/10 px-2.5 text-xs font-semibold text-canopy"
+              className="inline-flex h-9 max-w-[14rem] shrink-0 items-center rounded-full border border-canopy/20 bg-canopy/10 px-3 text-xs font-semibold text-canopy sm:h-8 sm:px-2.5"
             >
               <span className="truncate">{chip.label}</span>
             </span>
@@ -53,10 +53,10 @@ export function SearchActiveFilterStrip({
             aria-label={`Remove ${chip.label}`}
             title={`Remove ${chip.label}`}
             onClick={() => onClearChip(chip)}
-            className="group inline-flex h-8 max-w-[14rem] items-center gap-1 rounded-full border border-canopy/30 bg-canopy/[0.08] py-0 pl-3 pr-1.5 text-xs font-semibold text-canopy transition hover:border-canopy/50 hover:bg-canopy/15"
+            className="group inline-flex h-9 max-w-[14rem] shrink-0 items-center gap-1 rounded-full border border-canopy/30 bg-canopy/[0.08] py-0 pl-3 pr-1 text-xs font-semibold text-canopy transition hover:border-canopy/50 hover:bg-canopy/15 sm:h-8 sm:pr-1.5"
           >
-            <span className="truncate">{chip.label}</span>
-            <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-canopy/70 transition group-hover:bg-canopy/15 group-hover:text-canopy">
+            <span className="min-w-0 truncate">{chip.label}</span>
+            <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-canopy/70 transition group-hover:bg-canopy/15 group-hover:text-canopy sm:size-6">
               <X className="size-3.5" aria-hidden />
             </span>
           </button>
@@ -66,7 +66,7 @@ export function SearchActiveFilterStrip({
         type="button"
         aria-label="Clear all filters"
         onClick={onClearAll}
-        className="inline-flex h-8 items-center rounded-full px-2.5 text-xs font-semibold text-ink/45 transition hover:bg-mist hover:text-danger"
+        className="inline-flex h-9 shrink-0 items-center rounded-full px-2.5 text-xs font-semibold text-ink/45 transition hover:bg-mist hover:text-danger sm:h-8"
       >
         Clear all
       </button>

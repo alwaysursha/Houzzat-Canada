@@ -29,6 +29,8 @@ export function SearchResultsPane({
   emptyHint,
   emptyActions,
   headingTrailing,
+  /** Reserve space so the fixed Chat FAB does not cover actions on narrow search. */
+  mobileChatClearance = false,
 }: {
   items: ListingCardData[];
   activeMls: string | null;
@@ -53,6 +55,7 @@ export function SearchResultsPane({
   emptyActions?: SearchEmptyAction[];
   /** Desktop sort (and related) controls in the results heading. */
   headingTrailing?: ReactNode;
+  mobileChatClearance?: boolean;
 }) {
   return (
     <div
@@ -90,6 +93,15 @@ export function SearchResultsPane({
           mobileFullWidth && "gap-2.5 px-2 pt-1 sm:gap-4 sm:px-4 sm:pt-2",
           wideGrid && "search-result-grid-wide",
         )}
+        style={
+          mobileChatClearance
+            ? {
+                // Chat FAB: bottom = nav + 4.75rem, size-11 (+ gap) — keep last cards clear.
+                paddingBottom:
+                  "calc(var(--mobile-bottom-nav, 0px) + 4.75rem + 2.75rem + 0.75rem)",
+              }
+            : undefined
+        }
       >
         {items.map((listing) => (
           <SearchResultCard
@@ -103,7 +115,7 @@ export function SearchResultsPane({
           />
         ))}
         {items.length === 0 && !pending ? (
-          <div className="col-span-full mx-auto max-w-md px-3 py-10 text-center">
+          <div className="col-span-full mx-auto max-w-md px-3 py-8 text-center sm:py-10">
             <p className="text-base font-semibold tracking-tight text-ink/80">
               No listings match this search.
             </p>
@@ -111,14 +123,24 @@ export function SearchResultsPane({
               {emptyHint}
             </p>
             {emptyActions && emptyActions.length > 0 ? (
-              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+              <div
+                className="mt-4 flex flex-col items-stretch gap-2 sm:mt-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center"
+                style={
+                  mobileChatClearance
+                    ? {
+                        // Keep full-width empty actions out of the Chat FAB column.
+                        paddingRight: "3.5rem",
+                      }
+                    : undefined
+                }
+              >
                 {emptyActions.map((action) => (
                   <button
                     key={action.label}
                     type="button"
                     onClick={action.onClick}
                     className={cn(
-                      "inline-flex h-9 items-center rounded-full px-3.5 text-xs font-semibold transition",
+                      "inline-flex h-10 items-center justify-center rounded-full px-3.5 text-xs font-semibold transition sm:h-9",
                       action.tone === "primary"
                         ? "bg-canopy text-white shadow-sm hover:bg-canopy/90"
                         : "border border-line/90 bg-surface text-ink/70 hover:border-canopy/35 hover:text-ink",

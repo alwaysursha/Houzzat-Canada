@@ -115,11 +115,14 @@ function SearchViewModeSwitch({
   onChange,
   hideSplit = false,
   size = "md",
+  labels = "always",
 }: {
   view: SearchViewMode;
   onChange: (mode: SearchViewMode) => void;
   hideSplit?: boolean;
   size?: "sm" | "md";
+  /** Mobile compact: icons only (labels stay as aria-label / title). */
+  labels?: "always" | "sr-only";
 }) {
   return (
     <div
@@ -142,15 +145,25 @@ function SearchViewModeSwitch({
             className={cn(
               "inline-flex items-center justify-center gap-1.5 rounded-full font-semibold transition",
               size === "sm"
-                ? "h-8 min-w-8 px-2.5 text-xs"
+                ? labels === "sr-only"
+                  ? "size-9"
+                  : "h-8 min-w-8 px-2.5 text-xs"
                 : "h-9 min-w-9 px-3 text-xs sm:text-sm",
               view === mode
                 ? "bg-canopy text-white shadow-sm"
                 : "text-ink/45 hover:bg-surface/80 hover:text-ink",
             )}
           >
-            <Icon className="size-3.5 shrink-0 sm:size-4" aria-hidden />
-            <span>{label}</span>
+            <Icon
+              className={cn(
+                "shrink-0",
+                size === "sm" ? "size-4" : "size-3.5 sm:size-4",
+              )}
+              aria-hidden
+            />
+            <span className={labels === "sr-only" ? "sr-only" : undefined}>
+              {label}
+            </span>
           </button>
         ),
       )}
@@ -824,9 +837,34 @@ export function SearchExperience() {
         )}
       >
         {isNarrow ? (
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <div className="flex shrink-0 rounded-full bg-mist p-0.5">
+        <div className="space-y-2">
+          <div
+            data-search-bar
+            className="min-w-0 rounded-full border border-line/90 bg-surface px-1.5 shadow-[0_1px_2px_rgba(20,32,28,0.04)] ring-1 ring-transparent transition focus-within:border-canopy/40 focus-within:ring-canopy/15"
+          >
+            <AddressAutocomplete
+              key={`${citiesQueryParam || filters.city || "none"}:${cityEntryToken}`}
+              initialQuery={searchBarQuery}
+              transactionType={
+                filters.transactionType === "LEASE" ||
+                filters.transactionType === "SALE"
+                  ? filters.transactionType
+                  : undefined
+              }
+              placeholder="City, neighbourhood, address…"
+              inputClassName="h-11 border-0 bg-transparent shadow-none focus-visible:ring-0"
+              onPlaceSelect={onPlaceSelect}
+              onSearchSubmit={onBarSearchSubmit}
+              onClear={onBarSearchClear}
+            />
+          </div>
+
+          <div className="flex min-w-0 items-center gap-1.5">
+            <div
+              className="flex shrink-0 rounded-full bg-mist p-0.5 ring-1 ring-line/60"
+              role="group"
+              aria-label="Buy or rent"
+            >
               {transactionButtons.map(([value, label]) => (
                 <button
                   key={value}
@@ -841,7 +879,7 @@ export function SearchExperience() {
                     }));
                   }}
                   className={cn(
-                    "min-h-11 rounded-full px-3.5 text-sm font-semibold transition",
+                    "min-h-10 rounded-full px-2.5 text-sm font-semibold transition",
                     filters.transactionType === value
                       ? "bg-canopy text-white shadow-sm"
                       : "text-ink/55 hover:text-ink",
@@ -851,73 +889,35 @@ export function SearchExperience() {
                 </button>
               ))}
             </div>
-            <div
-              data-search-bar
-              className="min-w-0 flex-1 rounded-full border border-line bg-mist/60 px-1"
-            >
-              <AddressAutocomplete
-                key={`${citiesQueryParam || filters.city || "none"}:${cityEntryToken}`}
-                initialQuery={searchBarQuery}
-                transactionType={
-                  filters.transactionType === "LEASE" ||
-                  filters.transactionType === "SALE"
-                    ? filters.transactionType
-                    : undefined
-                }
-                placeholder="City, neighbourhood, address…"
-                inputClassName="h-11 border-0 bg-transparent shadow-none focus-visible:ring-0"
-                onPlaceSelect={onPlaceSelect}
-                onSearchSubmit={onBarSearchSubmit}
-                onClear={onBarSearchClear}
-              />
-            </div>
-          </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(true)}
+              className={cn(
+                "inline-flex h-10 shrink-0 items-center justify-center gap-1 rounded-full border px-2.5 text-sm font-semibold transition",
+                activeFilterCount > 0
+                  ? "border-canopy/45 bg-canopy/10 text-canopy"
+                  : "border-line/90 bg-surface text-ink/75",
+              )}
+            >
+              <ListFilter className="size-4 shrink-0" aria-hidden />
+              Filters
+              {activeFilterCount > 0 ? (
+                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-canopy px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </button>
+
             <SearchViewModeSwitch
               view={view}
               onChange={updateView}
               size="sm"
+              labels="sr-only"
             />
-            <button
-              type="button"
-              onClick={() => setFiltersOpen(true)}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-xs font-semibold text-ink"
-            >
-                <ListFilter className="size-3.5" aria-hidden />
-                Filters
-                {activeFilterCount > 0 ? (
-                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-canopy px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-                    {activeFilterCount}
-                  </span>
-                ) : null}
-            </button>
+          </div>
 
-            <label className="group relative inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-full border border-line bg-surface px-2.5">
-              <ArrowUpDown className="size-3.5 shrink-0 text-canopy" aria-hidden />
-              <span className="text-xs font-semibold text-ink">
-                {filters.sort === "newest"
-                  ? "Newest"
-                  : filters.sort === "price_desc"
-                    ? "Price ↓"
-                    : "Price ↑"}
-              </span>
-              <select
-                aria-label="Sort listings"
-                value={filters.sort}
-                onChange={(e) =>
-                  updateFilters((current) => ({
-                    ...current,
-                    sort: e.target.value as SearchFilters["sort"],
-                  }))
-                }
-                className="absolute inset-0 cursor-pointer opacity-0"
-              >
-                <option value="newest">Newest</option>
-                <option value="price_asc">Price: low to high</option>
-                <option value="price_desc">Price: high to low</option>
-              </select>
-            </label>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="inline-flex shrink-0">
               <SaveSearchButton
                 signedIn={signedIn}
@@ -933,11 +933,11 @@ export function SearchExperience() {
               segment={filters.segment}
               idleLabel="Watch"
               authCallbackUrl={searchCallbackPath(filters, structuredCities)}
-              className="h-8 shrink-0 rounded-full px-2.5"
+              className="h-9 shrink-0 rounded-full px-2.5"
             />
             <Link
               href="/route-planner"
-              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-canopy/20 bg-canopy/10 px-2.5 text-xs font-semibold text-canopy"
+              className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-canopy/25 bg-canopy/10 px-2.5 text-xs font-semibold text-canopy"
             >
               <RouteStartIcon />
               Plan
@@ -1061,7 +1061,7 @@ export function SearchExperience() {
         </div>
         )}
         <SearchActiveFilterStrip
-          className={cn("mt-1.5", !isNarrow && "mt-2.5")}
+          className={cn("mt-2", !isNarrow && "mt-2.5")}
           chips={activeChips}
           onClearChip={clearResultChip}
           onClearAll={resetStructuredFilters}
@@ -1253,39 +1253,45 @@ export function SearchExperience() {
               horizontal={isNarrow && view === "split"}
               mobileFullWidth={mobileCardsLayout}
               wideGrid={!isNarrow && view === "cards"}
+              mobileChatClearance={isNarrow}
               title={resultsCopy.title}
               countLabel={countLabel}
               countHeadline={resultsCopy.countHeadline}
               emphasizeCount={mobileCardsLayout}
               headingTrailing={
-                !isNarrow ? (
-                  <label className="group relative inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line/90 bg-surface px-3 text-xs shadow-[0_1px_2px_rgba(20,32,28,0.03)] transition hover:border-canopy/35">
-                    <ArrowUpDown className="size-3.5 shrink-0 text-canopy" aria-hidden />
-                    <span className="text-xs font-semibold text-ink">
-                      {filters.sort === "newest"
-                        ? "Newest"
-                        : filters.sort === "price_desc"
-                          ? "Price ↓"
-                          : "Price ↑"}
-                    </span>
+                <label
+                  className={cn(
+                    "group relative inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line/90 bg-surface text-xs shadow-[0_1px_2px_rgba(20,32,28,0.03)] transition hover:border-canopy/35",
+                    isNarrow ? "h-9 px-2.5" : "h-9 px-3",
+                  )}
+                >
+                  <ArrowUpDown className="size-3.5 shrink-0 text-canopy" aria-hidden />
+                  <span className="text-xs font-semibold text-ink">
+                    {filters.sort === "newest"
+                      ? "Newest"
+                      : filters.sort === "price_desc"
+                        ? "Price ↓"
+                        : "Price ↑"}
+                  </span>
+                  {!isNarrow ? (
                     <ChevronDown className="size-3.5 shrink-0 text-ink/35" aria-hidden />
-                    <select
-                      aria-label="Sort listings"
-                      value={filters.sort}
-                      onChange={(e) =>
-                        updateFilters((current) => ({
-                          ...current,
-                          sort: e.target.value as SearchFilters["sort"],
-                        }))
-                      }
-                      className="absolute inset-0 cursor-pointer opacity-0"
-                    >
-                      <option value="newest">Newest</option>
-                      <option value="price_asc">Price: low to high</option>
-                      <option value="price_desc">Price: high to low</option>
-                    </select>
-                  </label>
-                ) : undefined
+                  ) : null}
+                  <select
+                    aria-label="Sort listings"
+                    value={filters.sort}
+                    onChange={(e) =>
+                      updateFilters((current) => ({
+                        ...current,
+                        sort: e.target.value as SearchFilters["sort"],
+                      }))
+                    }
+                    className="absolute inset-0 cursor-pointer opacity-0"
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="price_asc">Price: low to high</option>
+                    <option value="price_desc">Price: high to low</option>
+                  </select>
+                </label>
               }
               emptyHint={
                 polygon

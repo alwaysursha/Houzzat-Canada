@@ -25,18 +25,33 @@ export function SearchResultsHeading({
   countHeadline?: string;
   /** Mobile card results: lead with the real result count. */
   emphasizeCount?: boolean;
-  /** Desktop: sort (and related) controls aligned with the count. */
+  /** Sort (and related) controls aligned with the count. */
   trailing?: ReactNode;
 }) {
   if (emphasizeCount && countHeadline) {
     return (
-      <div className="search-results-heading sticky top-0 z-20 bg-mist px-2.5 py-2.5 sm:px-4 sm:py-2.5">
-        <h1 className="min-w-0 text-[1.35rem] font-semibold leading-tight tracking-tight text-ink sm:text-2xl">
-          {countHeadline}
-        </h1>
-        {title && title !== countHeadline ? (
-          <p className="mt-0.5 truncate text-xs text-ink/45 sm:text-sm">{title}</p>
-        ) : null}
+      <div className="search-results-heading sticky top-0 z-20 border-b border-line/35 bg-mist/95 px-2.5 py-2.5 backdrop-blur-[1px] sm:px-4">
+        <div className="flex min-w-0 items-start justify-between gap-2.5">
+          <div className="min-w-0 flex-1">
+            <h1 className="min-w-0 text-[1.25rem] font-semibold leading-tight tracking-tight text-ink sm:text-[1.35rem]">
+              {countHeadline}
+            </h1>
+            {title && title !== countHeadline ? (
+              <p className="mt-0.5 truncate text-xs text-ink/45 sm:text-sm">
+                {title}
+              </p>
+            ) : (
+              <p className="mt-0.5 text-xs font-medium tabular-nums text-ink/45">
+                {countLabel}
+              </p>
+            )}
+          </div>
+          {trailing ? (
+            <div className="flex shrink-0 items-center gap-2 pt-0.5">
+              {trailing}
+            </div>
+          ) : null}
+        </div>
       </div>
     );
   }
