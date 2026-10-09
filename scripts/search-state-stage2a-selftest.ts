@@ -110,7 +110,7 @@ function paramsOf(qs: string): URLSearchParams {
   state = reduceSearch(state, { type: "SET_VIEW", view: "cards" });
   assert.match(serializeSearchUrl(state.committed), /view=cards/);
   state = reduceSearch(state, { type: "SET_VIEW", view: "split" });
-  assert.doesNotMatch(serializeSearchUrl(state.committed), /view=/);
+  assert.match(serializeSearchUrl(state.committed), /view=split/);
 
   const qs = href.includes("?") ? href.slice(href.indexOf("?") + 1) : "";
   state = reduceSearch(state, {

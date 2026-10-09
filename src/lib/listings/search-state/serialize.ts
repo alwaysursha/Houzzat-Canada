@@ -46,7 +46,9 @@ export function serializeSearchUrl(
   if (statusQ) params.set("status", statusQ);
   if (committed.sort !== "newest") params.set("sort", committed.sort);
   if (committed.q.trim()) params.set("q", committed.q.trim());
-  if (committed.view !== "split") params.set("view", committed.view);
+  // Always emit view (including split) so explicit Split survives URL sync /
+  // refresh and the mobile Cards default can distinguish fresh vs chosen.
+  params.set("view", committed.view);
 
   const qs = params.toString();
   return qs ? `${pathname}?${qs}` : pathname;

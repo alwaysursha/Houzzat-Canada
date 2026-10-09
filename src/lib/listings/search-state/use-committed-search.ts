@@ -46,6 +46,8 @@ export function useCommittedSearch(pathname: string): {
   const lastWrittenHrefRef = useRef<string | null>(null);
   const expectingOwnNavigationRef = useRef(false);
   const isPopNavigationRef = useRef(false);
+  /** Mobile Cards default applies at most once per mount (never after explicit view). */
+  const mobileCardsDefaultDoneRef = useRef(false);
 
   const pageHref = useMemo(
     () => serializeSearchUrl(state.committed, { pathname }),
@@ -106,15 +108,22 @@ export function useCommittedSearch(pathname: string): {
   }, [searchParams, pathname]);
 
   /**
-   * Mobile Cards default after mount when `view` is omitted.
-   * Runs after URL seed/hydrate effects so SET_VIEW → serialize → replace
-   * is treated as own navigation (no Cards↔Split hydrate loop).
-   * Explicit view=… is never overridden; resize alone does not re-run
-   * (effect keyed on searchParams only).
+   * Mobile Cards default after mount when `view` is omitted (fresh search).
+   * One-shot per mount: must not re-run when the user later chooses Split
+   * (Split used to omit `view` from the URL, which re-triggered this effect).
+   * Explicit view=… in the URL skips the default. Resize alone does not re-run.
    */
   useEffect(() => {
-    if (searchParams.get("view")) return;
-    if (!window.matchMedia("(max-width: 1023px)").matches) return;
+    if (mobileCardsDefaultDoneRef.current) return;
+    if (searchParams.get("view")) {
+      mobileCardsDefaultDoneRef.current = true;
+      return;
+    }
+    if (!window.matchMedia("(max-width: 1023px)").matches) {
+      mobileCardsDefaultDoneRef.current = true;
+      return;
+    }
+    mobileCardsDefaultDoneRef.current = true;
     dispatch({ type: "SET_VIEW", view: "cards" });
   }, [searchParams]);
 
