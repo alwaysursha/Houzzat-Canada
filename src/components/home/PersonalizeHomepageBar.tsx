@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { SlidersHorizontal } from "lucide-react";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { HomepagePersonalizedListings } from "@/components/home/HomepagePersonalizedListings";
@@ -50,8 +49,7 @@ export function PersonalizeHomepageBar({
   if (!ready || !source) return null;
 
   const chipLabels = buildHomepageCriteriaChipLabels(source.committed);
-  const heading =
-    source.kind === "primary" ? "Your home search" : "Your recent search";
+  const heading = "Recommended for you";
 
   return (
     <>
@@ -67,36 +65,24 @@ export function PersonalizeHomepageBar({
         )}
       >
         <div className="relative">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-            <div className="min-w-0 flex-1">
-              <p className="font-display text-xl tracking-tight text-ink sm:text-2xl">
-                {heading}
-              </p>
-              {chipLabels.length > 0 ? (
-                <ul
-                  className="mt-3 flex flex-wrap gap-2"
-                  aria-label="Search criteria"
+          <p className="font-display text-xl tracking-tight text-ink sm:text-2xl">
+            {heading}
+          </p>
+          {chipLabels.length > 0 ? (
+            <ul
+              className="mt-3 flex flex-wrap gap-2"
+              aria-label="Search criteria"
+            >
+              {chipLabels.map((label) => (
+                <li
+                  key={label}
+                  className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-canopy-deep shadow-[0_1px_0_rgba(20,32,28,0.04)] ring-1 ring-canopy/15"
                 >
-                  {chipLabels.map((label) => (
-                    <li
-                      key={label}
-                      className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-canopy-deep shadow-[0_1px_0_rgba(20,32,28,0.04)] ring-1 ring-canopy/15"
-                    >
-                      {label}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <Link
-                href={source.href}
-                className="inline-flex h-10 items-center justify-center rounded-full border border-canopy/35 bg-white/90 px-4 text-sm font-semibold text-canopy transition hover:border-canopy/55 hover:bg-white"
-              >
-                View results
-              </Link>
-            </div>
-          </div>
+                  {label}
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
           <div className="mt-4">
             <button

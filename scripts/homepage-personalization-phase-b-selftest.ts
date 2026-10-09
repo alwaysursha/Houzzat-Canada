@@ -69,6 +69,9 @@ assert.ok(bar.includes("useHomepageSearchSource"));
 assert.ok(bar.includes("HomepagePersonalizedListings"));
 assert.ok(bar.includes("buildHomepageCriteriaChipLabels"));
 assert.ok(bar.includes("sourceKind={source.kind}"));
+assert.ok(bar.includes("Recommended for you"));
+assert.equal(bar.includes("View results"), false);
+assert.equal(bar.includes("Your home search"), false);
 
 const modal = read("src/components/home/PersonalizeHomepageModal.tsx");
 assert.ok(modal.includes("seededOpenRef"));
@@ -82,6 +85,8 @@ assert.ok(modal.includes("retainSaveSearchIntentHandler"));
 const listings = read("src/components/home/HomepagePersonalizedListings.tsx");
 assert.ok(listings.includes("buildListingsQuery"));
 assert.equal(listings.includes("appendPersonalizationToUrlSearchParams"), false);
+assert.equal(listings.includes("Homes for you"), false);
+assert.ok(listings.includes('href={href}'));
 
 const saveIntent = read("src/lib/auth/save-search-intent.ts");
 assert.ok(saveIntent.includes("HOMEPAGE_APPLY_CAPTURE_PARAM"));

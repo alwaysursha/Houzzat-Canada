@@ -27,7 +27,6 @@ export function HomepagePersonalizedListings({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const href = source.href;
-  const kind = source.kind;
 
   useEffect(() => {
     let cancelled = false;
@@ -76,17 +75,14 @@ export function HomepagePersonalizedListings({
     };
   }, [href]);
 
-  const title =
-    kind === "primary" ? "Homes for you" : "Homes matching your search";
-
   return (
     <div className="mt-4">
       <HomeListingRail
         id="rail-homepage-personalized"
-        title={title}
         href={href}
         items={items}
         loading={loading}
+        railLabel="Recommended homes"
         emptyLabel={
           error
             ? error

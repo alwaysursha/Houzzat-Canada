@@ -213,10 +213,19 @@ assert.ok(modal.includes("overscroll-contain"));
 // --- Homepage bar ---
 const bar = read("src/components/home/PersonalizeHomepageBar.tsx");
 assert.ok(bar.includes("Edit homepage search"));
-assert.ok(bar.includes("View results"));
+assert.ok(bar.includes("Recommended for you"));
+assert.equal(bar.includes("View results"), false);
+assert.equal(bar.includes("Your home search"), false);
 assert.ok(bar.includes("from-canopy/[0.14]"));
 assert.equal(bar.includes(">Edit<"), false);
 assert.equal(bar.includes("md:hidden"), false);
+
+const personalized = read(
+  "src/components/home/HomepagePersonalizedListings.tsx",
+);
+assert.equal(personalized.includes("Homes for you"), false);
+assert.equal(personalized.includes("Homes matching your search"), false);
+assert.ok(personalized.includes("HomeListingRail"));
 
 // --- Rails city-only scope ---
 const rails = read("src/components/home/HomepageMarketRails.tsx");
