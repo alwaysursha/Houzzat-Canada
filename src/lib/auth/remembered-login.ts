@@ -56,6 +56,11 @@ export function clearManualSignInRequired() {
 export async function rememberLoginCredentials(input: {
   email: string;
   password: string;
+  /**
+   * When false, skip Password Credential Manager (localStorage only).
+   * Use on signup so a store prompt cannot cover the qualification funnel.
+   */
+  credentialManager?: boolean;
 }): Promise<void> {
   if (!canUseDom()) return;
   const email = input.email.trim().toLowerCase();
@@ -65,26 +70,32 @@ export async function rememberLoginCredentials(input: {
   markClientSession(email);
   clearManualSignInRequired();
 
-  try {
-    const PasswordCredentialCtor = (
-      window as Window & {
-        PasswordCredential?: new (data: {
-          id: string;
-          password: string;
-          name?: string;
-        }) => Credential;
+  if (input.credentialManager !== false) {
+    try {
+      const PasswordCredentialCtor = (
+        window as Window & {
+          PasswordCredential?: new (data: {
+            id: string;
+            password: string;
+            name?: string;
+          }) => Credential;
+        }
+      ).PasswordCredential;
+      if (PasswordCredentialCtor && navigator.credentials?.store) {
+        const cred = new PasswordCredentialCtor({
+          id: email,
+          password,
+          name: email,
+        });
+        // Never await — Credential Manager can hang behind modals (mobile Chrome)
+        // and freeze CTAs that previously awaited this helper.
+        void navigator.credentials.store(cred).catch(() => {
+          /* Browser declined or timed out — local remember still applies. */
+        });
       }
-    ).PasswordCredential;
-    if (PasswordCredentialCtor && navigator.credentials?.store) {
-      const cred = new PasswordCredentialCtor({
-        id: email,
-        password,
-        name: email,
-      });
-      await navigator.credentials.store(cred);
+    } catch {
+      // Browser declined — fall through to local remember.
     }
-  } catch {
-    // Browser declined — fall through to local remember.
   }
 
   // Fallback so Safari / browsers without PasswordCredential still prefill.

@@ -263,16 +263,28 @@ export function SignUpForm({
     reportGa4SignUp();
     reportLeadCaptured();
 
-    await rememberLoginCredentials({
+    // Local remember only — never Credential Manager during signup (no hang / no overlay).
+    void rememberLoginCredentials({
       email: normalizedEmail,
       password: trimmedPhone,
+      credentialManager: false,
     });
 
-    const result = await signIn("credentials", {
-      email: normalizedEmail,
-      password: trimmedPhone,
-      redirect: false,
-    });
+    let result: Awaited<ReturnType<typeof signIn>>;
+    try {
+      result = await signIn("credentials", {
+        email: normalizedEmail,
+        password: trimmedPhone,
+        redirect: false,
+      });
+    } catch {
+      setPending(false);
+      onSwitchMode?.();
+      setError(
+        "Account created — please sign in with your email and mobile number.",
+      );
+      return;
+    }
 
     setPending(false);
 
@@ -284,20 +296,24 @@ export function SignUpForm({
       return;
     }
 
-    const session = await getSession();
-    await clearIntentionalSignOut({ userId: session?.user?.id });
-    await offerBiometricsAfterCredentialsSignIn({
+    const needsQualification = data.needsQualification !== false;
+    onSuccess?.({ needsQualification });
+
+    // Advance qualification UI before optional post-auth prompts / refresh.
+    if (needsQualification) {
+      window.dispatchEvent(new Event("houzzat:lead-captured"));
+    }
+
+    const session = await getSession().catch(() => null);
+    void clearIntentionalSignOut({ userId: session?.user?.id });
+    void offerBiometricsAfterCredentialsSignIn({
       email: normalizedEmail,
       password: trimmedPhone,
       confirm,
       userId: session?.user?.id,
     });
 
-    const needsQualification = data.needsQualification !== false;
-    onSuccess?.({ needsQualification });
-
     if (needsQualification) {
-      window.dispatchEvent(new Event("houzzat:lead-captured"));
       router.refresh();
       return;
     }

@@ -264,6 +264,17 @@ function testSignupFormCinc() {
   assert.ok(form.includes("credentialMode"));
   assert.ok(form.includes("reportGa4SignUp"));
   assert.ok(form.includes("reportLeadCaptured"));
+  // Credential Manager must not block Continue → qualification.
+  assert.ok(form.includes("void rememberLoginCredentials"));
+  assert.ok(form.includes("credentialManager: false"));
+  assert.ok(form.includes('houzzat:lead-captured'));
+  assert.ok(form.includes("void offerBiometricsAfterCredentialsSignIn"));
+  assert.equal(form.includes("SIGN_IN_TIMEOUT"), false);
+  assert.equal(form.includes("Promise.race"), false);
+  const remembered = read("src/lib/auth/remembered-login.ts");
+  assert.ok(remembered.includes("void navigator.credentials.store"));
+  assert.equal(remembered.includes("await navigator.credentials.store"), false);
+  assert.ok(remembered.includes("credentialManager"));
   const route = read("src/app/api/auth/sign-up/route.ts");
   assert.ok(route.includes("hashPhoneCredential"));
   assert.ok(route.includes('passwordCredentialKind: "PHONE_E164"'));
