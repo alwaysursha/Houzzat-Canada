@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -26,6 +27,7 @@ import { EXISTING_ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/auth/existing-account-me
 import type { CaptureIntentType } from "@/lib/auth/capture-intent";
 import { hadClientSession } from "@/lib/auth/remembered-login";
 import { acquireScrollLock } from "@/lib/scroll-lock";
+import { visualViewportOverlayStyle } from "@/lib/visual-viewport-overlay-style";
 import { cn } from "@/lib/utils";
 
 export type AuthMode = "sign-in" | "sign-up";
@@ -120,6 +122,7 @@ function AuthModalPanel({
 }) {
   const { open, mode, callbackUrl, intent, signupPrefill, closeAuth, setMode } =
     useAuthModal();
+  const overlayRef = useRef<HTMLDivElement>(null);
   const [loginAgain, setLoginAgain] = useState(false);
   const [prefillEmail, setPrefillEmail] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
@@ -158,6 +161,41 @@ function AuthModalPanel({
     setLoginAgain(hadClientSession());
   }, [open]);
 
+  // Pin Free Access / auth chrome to the visual viewport so mobile keyboards
+  // and browser toolbar resize cannot leave inputs or CTAs off-screen.
+  useEffect(() => {
+    if (!open) return;
+    function syncViewport() {
+      const el = overlayRef.current;
+      if (!el) return;
+      const style = visualViewportOverlayStyle(window.visualViewport);
+      el.style.left = style.left;
+      el.style.top = style.top;
+      el.style.width = style.width;
+      el.style.height = style.height;
+      el.style.right = style.right;
+      el.style.bottom = style.bottom;
+    }
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", syncViewport);
+    vv?.addEventListener("scroll", syncViewport);
+    return () => {
+      window.removeEventListener("resize", syncViewport);
+      vv?.removeEventListener("resize", syncViewport);
+      vv?.removeEventListener("scroll", syncViewport);
+      const el = overlayRef.current;
+      if (!el) return;
+      el.style.left = "";
+      el.style.top = "";
+      el.style.width = "";
+      el.style.height = "";
+      el.style.right = "";
+      el.style.bottom = "";
+    };
+  }, [open]);
+
   if (!open) return null;
 
   const signInLabel = loginAgain ? "Login again" : "Sign in";
@@ -178,9 +216,12 @@ function AuthModalPanel({
 
   return (
     <div
+      ref={overlayRef}
       className={cn(
-        "fixed inset-0 z-[100] flex items-center justify-center px-3 sm:px-4 sm:py-8",
-        listingGate || phase === "funnel" ? "py-3" : "py-4",
+        "fixed inset-0 z-[100] flex items-center justify-center overflow-hidden overscroll-none px-3 sm:px-4 sm:py-8",
+        listingGate || phase === "funnel"
+          ? "py-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          : "py-4",
       )}
     >
       {listingGate || phase === "funnel" ? (

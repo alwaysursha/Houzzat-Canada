@@ -61,3 +61,16 @@ export {
   decideUrlHydrate,
   type UrlSyncDecision,
 } from "@/lib/listings/search-state/url-sync";
+export {
+  ACTIVE_SEARCH_MEMORY_KEY_PREFIX,
+  ACTIVE_SEARCH_MEMORY_VERSION,
+  activeSearchMemoryKey,
+  activeSearchMemoryScope,
+  clearActiveSearchMemory,
+  isConsumerSearchPath,
+  loadActiveSearchMemory,
+  resolveActiveSearchRestoreHref,
+  saveActiveSearchMemory,
+  urlHasExplicitSearchCriteria,
+  urlHasExplicitView,
+} from "@/lib/listings/search-state/active-search-memory";

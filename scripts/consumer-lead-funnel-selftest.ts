@@ -867,6 +867,12 @@ function testTourReusesViewing() {
   assert.ok(tour.includes("ViewingBookingModal"));
   assert.ok(tour.includes("Tour This Home"));
   assert.ok(tour.includes("Maybe Later"));
+  assert.ok(tour.includes("Like this home?"));
+  assert.ok(tour.includes("Want to view this home in person?"));
+  assert.equal(tour.includes("MLS ${mlsNumber}"), false);
+  assert.equal(tour.includes("Want to see"), false);
+  assert.ok(tour.includes("safe-area-inset-bottom"));
+  assert.ok(tour.includes("--mobile-bottom-nav"));
   assert.ok(tour.includes("pointer-events-none"));
   assert.ok(tour.includes("houzzat:tour-prompt-dismissed"));
   console.log("[tour] soft prompt reuses ViewingBookingModal PASS");

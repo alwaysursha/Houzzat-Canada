@@ -2,12 +2,21 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
+  useState,
   type Dispatch,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  isConsumerSearchPath,
+  loadActiveSearchMemory,
+  resolveActiveSearchRestoreHref,
+  saveActiveSearchMemory,
+  urlHasExplicitSearchCriteria,
+} from "@/lib/listings/search-state/active-search-memory";
 import { parseSearchUrl } from "@/lib/listings/search-state/parse";
 import {
   createSearchStateFromUrl,
@@ -16,6 +25,16 @@ import {
 import { serializeSearchUrl } from "@/lib/listings/search-state/serialize";
 import { decideUrlHydrate } from "@/lib/listings/search-state/url-sync";
 import type { SearchAction, SearchState } from "@/lib/listings/search-state/types";
+
+function toSearchRelativeHref(href: string): string {
+  if (href.startsWith("/search")) return href;
+  try {
+    const u = new URL(href, "https://houzzat.local");
+    return `${u.pathname}${u.search}`;
+  } catch {
+    return href;
+  }
+}
 
 /**
  * Stage 2A controller: committed SearchState is the authority.
@@ -26,6 +45,7 @@ import type { SearchAction, SearchState } from "@/lib/listings/search-state/type
  * - External push (autocomplete) → searchParams change while idle → hydrate
  * - Self-written hrefs + in-flight replace intermediates are not hydrated
  *   (so a delayed searchParams update cannot overwrite newer commits).
+ * - Active Search Memory restores when /search has no explicit criteria.
  *
  * Compatibility lifetime: lastWrittenHrefRef / expectingOwnNavigationRef are
  * the only adapters between Next.js searchParams and the reducer. Remove when
@@ -42,12 +62,18 @@ export function useCommittedSearch(pathname: string): {
     searchParams,
     (params) => createSearchStateFromUrl(params),
   );
+  /** False on consumer /search until Active Search restore decides (one frame). */
+  const [urlSyncReady, setUrlSyncReady] = useState(
+    () => !isConsumerSearchPath(pathname),
+  );
 
   const lastWrittenHrefRef = useRef<string | null>(null);
   const expectingOwnNavigationRef = useRef(false);
   const isPopNavigationRef = useRef(false);
   /** Mobile Cards default applies at most once per mount (never after explicit view). */
   const mobileCardsDefaultDoneRef = useRef(false);
+  const skipNextPersistRef = useRef(false);
+  const restoreAttemptedRef = useRef(false);
 
   const pageHref = useMemo(
     () => serializeSearchUrl(state.committed, { pathname }),
@@ -62,20 +88,99 @@ export function useCommittedSearch(pathname: string): {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  // Commit / view → URL (canonical write path).
-  useEffect(() => {
-    if (lastWrittenHrefRef.current === null) {
-      lastWrittenHrefRef.current = pageHref;
+  // Active Search Memory: restore before paint when the URL has no criteria.
+  useLayoutEffect(() => {
+    if (restoreAttemptedRef.current) return;
+    restoreAttemptedRef.current = true;
+
+    if (!isConsumerSearchPath(pathname)) {
+      setUrlSyncReady(true);
       return;
     }
-    if (pageHref === lastWrittenHrefRef.current) return;
+
+    if (urlHasExplicitSearchCriteria(searchParams)) {
+      setUrlSyncReady(true);
+      return;
+    }
+
+    const memory = loadActiveSearchMemory();
+    if (!memory) {
+      setUrlSyncReady(true);
+      return;
+    }
+
+    const restoreHref = resolveActiveSearchRestoreHref({
+      memoryHref: memory.href,
+      currentParams: searchParams,
+    });
+    if (!restoreHref) {
+      setUrlSyncReady(true);
+      return;
+    }
+
+    const currentHref = serializeSearchUrl(parseSearchUrl(searchParams), {
+      pathname,
+    });
+    if (restoreHref === currentHref) {
+      setUrlSyncReady(true);
+      return;
+    }
+
+    skipNextPersistRef.current = true;
+    const restoreParams = new URLSearchParams(
+      restoreHref.includes("?")
+        ? restoreHref.slice(restoreHref.indexOf("?") + 1)
+        : "",
+    );
+    dispatch({ type: "HYDRATE_FROM_URL", params: restoreParams });
+    lastWrittenHrefRef.current = restoreHref;
+    expectingOwnNavigationRef.current = true;
+    if (restoreParams.get("view")) {
+      mobileCardsDefaultDoneRef.current = true;
+    }
+    router.replace(restoreHref, { scroll: false });
+    setUrlSyncReady(true);
+  }, [pathname, router, searchParams]);
+
+  // Commit / view → URL (canonical write path) + Active Search persist.
+  useEffect(() => {
+    if (!urlSyncReady) return;
+
+    if (lastWrittenHrefRef.current === null) {
+      lastWrittenHrefRef.current = pageHref;
+      // Persist the landing/committed criteria (including first explicit URL).
+      if (isConsumerSearchPath(pathname)) {
+        if (skipNextPersistRef.current) {
+          skipNextPersistRef.current = false;
+        } else {
+          saveActiveSearchMemory(toSearchRelativeHref(pageHref));
+        }
+      }
+      return;
+    }
+    // Restore already pointed lastWrittenHref at the remembered href. Consume
+    // skipNextPersist here so the next deliberate commit (reset / new city)
+    // still writes Active Search Memory.
+    if (pageHref === lastWrittenHrefRef.current) {
+      skipNextPersistRef.current = false;
+      return;
+    }
     lastWrittenHrefRef.current = pageHref;
     expectingOwnNavigationRef.current = true;
     router.replace(pageHref, { scroll: false });
-  }, [pageHref, router]);
+
+    if (!isConsumerSearchPath(pathname)) return;
+    if (skipNextPersistRef.current) {
+      skipNextPersistRef.current = false;
+      return;
+    }
+    saveActiveSearchMemory(toSearchRelativeHref(pageHref));
+  }, [pageHref, router, pathname, urlSyncReady]);
 
   // External URL → hydrate (Back/Forward, autocomplete push, shared links).
   useEffect(() => {
+    if (!urlSyncReady) return;
+
     const fromUrl = serializeSearchUrl(parseSearchUrl(searchParams), {
       pathname,
     });
@@ -99,21 +204,28 @@ export function useCommittedSearch(pathname: string): {
         expectingOwnNavigationRef.current = false;
         dispatch({ type: "HYDRATE_FROM_URL", params: searchParams });
         lastWrittenHrefRef.current = fromUrl;
+        if (
+          isConsumerSearchPath(pathname) &&
+          urlHasExplicitSearchCriteria(searchParams)
+        ) {
+          saveActiveSearchMemory(toSearchRelativeHref(fromUrl));
+        }
         return;
       default: {
         const unexpected: never = decision;
         return unexpected;
       }
     }
-  }, [searchParams, pathname]);
+  }, [searchParams, pathname, urlSyncReady]);
 
   /**
    * Mobile Cards default after mount when `view` is omitted (fresh search).
-   * One-shot per mount: must not re-run when the user later chooses Split
-   * (Split used to omit `view` from the URL, which re-triggered this effect).
-   * Explicit view=… in the URL skips the default. Resize alone does not re-run.
+   * One-shot per mount: must not re-run when the user later chooses Split.
+   * Explicit view=… in the URL skips the default. Active Search restore marks
+   * the default done when memory already carried a view.
    */
   useEffect(() => {
+    if (!urlSyncReady) return;
     if (mobileCardsDefaultDoneRef.current) return;
     if (searchParams.get("view")) {
       mobileCardsDefaultDoneRef.current = true;
@@ -125,7 +237,7 @@ export function useCommittedSearch(pathname: string): {
     }
     mobileCardsDefaultDoneRef.current = true;
     dispatch({ type: "SET_VIEW", view: "cards" });
-  }, [searchParams]);
+  }, [searchParams, urlSyncReady]);
 
   return { state, dispatch };
 }

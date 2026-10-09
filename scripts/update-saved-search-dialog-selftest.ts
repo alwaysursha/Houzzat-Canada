@@ -54,16 +54,33 @@ assert.deepEqual(planSavedSearchApplyUi("error"), {
 // --- Behavioral: nested scroll locks keep overflow-x until last release ---
 __resetScrollLockForTests();
 const html = { style: { overflow: "", overflowX: "" } };
-const body = { style: { overflow: "", overflowX: "" } };
+const body = {
+  style: {
+    overflow: "",
+    overflowX: "",
+    position: "",
+    top: "",
+    left: "",
+    right: "",
+    width: "",
+    overscrollBehaviorY: "",
+  },
+};
 const doc = {
   documentElement: html,
   body,
 };
+let scrolledTo: number | null = null;
 const previousDocument = (globalThis as { document?: unknown }).document;
 const previousWindow = (globalThis as { window?: unknown }).window;
 (globalThis as { document: unknown }).document = doc;
 (globalThis as { window: unknown }).window = {
   addEventListener() {},
+  scrollY: 120,
+  pageYOffset: 120,
+  scrollTo(_x: number, y: number) {
+    scrolledTo = y;
+  },
 };
 
 try {
@@ -75,10 +92,13 @@ try {
   assert.equal(body.style.overflow, "hidden");
   assert.equal(html.style.overflowX, "hidden");
   assert.equal(body.style.overflowX, "hidden");
+  assert.equal(body.style.position, "fixed");
+  assert.equal(body.style.top, "-120px");
 
   // Filters → confirmation: second lock acquires while first still held
   const releaseConfirm = acquireScrollLock();
   assert.equal(hasActiveScrollLock(), true);
+  assert.equal(body.style.position, "fixed");
 
   // Filters cleanup must NOT clear overflow while confirmation is locked
   releaseFilters();
@@ -86,12 +106,16 @@ try {
   assert.equal(body.style.overflow, "hidden");
   assert.equal(html.style.overflowX, "hidden");
   assert.equal(body.style.overflowX, "hidden");
+  assert.equal(body.style.position, "fixed");
 
   releaseConfirm();
   assert.equal(hasActiveScrollLock(), false);
   assert.equal(body.style.overflow, "");
   assert.equal(html.style.overflowX, "");
   assert.equal(body.style.overflowX, "");
+  assert.equal(body.style.position, "");
+  assert.equal(body.style.top, "");
+  assert.equal(scrolledTo, 120);
 
   // Interrupted / double-release safety
   const once = acquireScrollLock();
@@ -99,6 +123,7 @@ try {
   once();
   assert.equal(hasActiveScrollLock(), false);
   assert.equal(body.style.overflow, "");
+  assert.equal(body.style.position, "");
 } finally {
   __resetScrollLockForTests();
   if (previousDocument === undefined) {
@@ -116,6 +141,8 @@ try {
 // Scroll-lock owns overflow-x (components must not stomp nested restores)
 assert.match(scrollLockSrc, /overflowX = "hidden"/);
 assert.match(scrollLockSrc, /lockCount === 1/);
+assert.match(scrollLockSrc, /position = "fixed"/);
+assert.match(scrollLockSrc, /scrollTo/);
 assert.doesNotMatch(sheet, /prevHtmlOverflowX/);
 assert.doesNotMatch(dialog, /prevHtmlOverflowX/);
 

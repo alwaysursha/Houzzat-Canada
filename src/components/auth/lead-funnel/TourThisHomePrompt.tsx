@@ -30,11 +30,12 @@ function markDismissed(mlsNumber: string): void {
  */
 export function TourThisHomePrompt({
   mlsNumber,
-  address,
+  address: _address,
   thumbnailUrl,
   contact,
 }: {
   mlsNumber: string;
+  /** Retained for callers; copy no longer interpolates address / MLS. */
   address?: string | null;
   thumbnailUrl?: string | null;
   contact?: {
@@ -43,6 +44,7 @@ export function TourThisHomePrompt({
     phone?: string | null;
   };
 }) {
+  void _address;
   const [visible, setVisible] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
 
@@ -72,7 +74,7 @@ export function TourThisHomePrompt({
     <>
       {visible ? (
         <div
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-[90] flex justify-center px-3 pb-4 sm:justify-end sm:px-6 sm:pb-6"
+          className="pointer-events-none fixed inset-x-0 z-[90] flex justify-center px-3 sm:justify-end sm:px-6 sm:bottom-6 bottom-[max(calc(var(--mobile-bottom-nav,0px)+5.5rem),calc(env(safe-area-inset-bottom,0px)+5.5rem))]"
           role="dialog"
           aria-label="Tour this home"
         >
@@ -89,8 +91,7 @@ export function TourThisHomePrompt({
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-ink">Like this home?</p>
                 <p className="mt-0.5 text-sm text-ink/70">
-                  Want to see{" "}
-                  {address?.trim() || `MLS ${mlsNumber}`} in person?
+                  Want to view this home in person?
                 </p>
               </div>
               <button
