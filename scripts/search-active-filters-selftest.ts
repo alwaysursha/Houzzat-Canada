@@ -205,10 +205,19 @@ record(2, "Dismiss without Apply does not commit draft", "STATIC", () => {
   // Close / Back do not call commitDraft
   const closeViaUi = sheet.slice(
     sheet.indexOf("const closeViaUi"),
-    sheet.indexOf("useEffect(() => {\n    if (!open) {\n      setEntered"),
+    sheet.indexOf("const closeAfterApply"),
   );
   assert.doesNotMatch(closeViaUi, /commitDraft/);
   assert.match(closeViaUi, /history\.back\(\)/);
+  // Apply must close without history.back (Home ← Search stack)
+  assert.match(sheet, /const closeAfterApply/);
+  assert.match(sheet, /Close Filters after Apply without history\.back/);
+  const persistBlock = sheet.slice(
+    sheet.indexOf("async function persist("),
+    sheet.indexOf("async function applyAndSave"),
+  );
+  assert.match(persistBlock, /closeAfterApply\(\)/);
+  assert.doesNotMatch(persistBlock, /closeViaUi\(\)/);
   // Intended path while open (unlocked) is committed props, not draft
   assert.match(
     sheet,

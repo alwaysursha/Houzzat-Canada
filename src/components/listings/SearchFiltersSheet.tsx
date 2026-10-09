@@ -311,6 +311,30 @@ export function SearchFiltersSheet({
     onCloseRef.current();
   }, []);
 
+  /**
+   * Close Filters after Apply without history.back().
+   * history.back() would pop to the pre-Search entry (often Home) once the
+   * filters marker sits on top of a Home → Search stack.
+   */
+  const closeAfterApply = useCallback(() => {
+    if (historyPushedRef.current) {
+      historyPushedRef.current = false;
+      const path = intendedPathRef.current;
+      if (path) {
+        const absolute = new URL(path, window.location.origin).href;
+        const state = {
+          ...((window.history.state ?? {}) as Record<string, unknown>),
+        };
+        delete state.__NA;
+        delete state.__PRIVATE_NEXTJS_INTERNALS_TREE;
+        delete state.houzzatSearchFilters;
+        window.history.replaceState(state, "", absolute);
+        routerRef.current.replace(path, { scroll: false });
+      }
+    }
+    onCloseRef.current();
+  }, []);
+
   useEffect(() => {
     if (!open) {
       setEntered(false);
@@ -458,7 +482,7 @@ export function SearchFiltersSheet({
         message: "Sign in to save this search to your buyer profile.",
         tone: "info",
       });
-      closeViaUi();
+      closeAfterApply();
       return;
     }
     setSaving(true);
@@ -483,7 +507,7 @@ export function SearchFiltersSheet({
     if (plan.openConfirm) {
       // Close Filters first so confirmation is not stacked on the VV overlay.
       setConfirmOpen(true);
-      closeViaUi();
+      closeAfterApply();
       return;
     }
     if (plan.toastSuccess) {
@@ -495,7 +519,7 @@ export function SearchFiltersSheet({
       });
     }
     setConfirmOpen(false);
-    if (plan.closeFilters) closeViaUi();
+    if (plan.closeFilters) closeAfterApply();
   }
 
   async function applyAndSave(confirmReplace: boolean) {

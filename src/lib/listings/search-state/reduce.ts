@@ -139,6 +139,8 @@ export function reduceSearch(
 ): SearchState {
   switch (action.type) {
     case "HYDRATE_FROM_URL": {
+      // Viewport-dependent defaults are applied after mount in useCommittedSearch
+      // so SSR and client hydrate from the same URL (omitted view → Split).
       const committed = parseSearchUrl(action.params);
       const next: SearchState = {
         ...initialSearchState(committed),

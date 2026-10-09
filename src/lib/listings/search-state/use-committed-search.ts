@@ -105,5 +105,18 @@ export function useCommittedSearch(pathname: string): {
     }
   }, [searchParams, pathname]);
 
+  /**
+   * Mobile Cards default after mount when `view` is omitted.
+   * Runs after URL seed/hydrate effects so SET_VIEW → serialize → replace
+   * is treated as own navigation (no Cards↔Split hydrate loop).
+   * Explicit view=… is never overridden; resize alone does not re-run
+   * (effect keyed on searchParams only).
+   */
+  useEffect(() => {
+    if (searchParams.get("view")) return;
+    if (!window.matchMedia("(max-width: 1023px)").matches) return;
+    dispatch({ type: "SET_VIEW", view: "cards" });
+  }, [searchParams]);
+
   return { state, dispatch };
 }

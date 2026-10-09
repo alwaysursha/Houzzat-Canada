@@ -131,14 +131,18 @@ assert.match(cityField, /useImperativeHandle/);
 assert.match(cityField, /flush:/);
 assert.match(cityField, /withStructuredCity/);
 assert.match(cityField, /role="alert"/);
-assert.match(cityField, /recognized city/i);
+assert.match(cityField, /Choose a city from the list/i);
+assert.match(cityField, /role="listbox"/);
+assert.match(cityField, /Add another city/);
+assert.match(cityField, /\/api\/listings\/autocomplete/);
 // Apply flush must not call onCitiesChange (avoids prop lag wiping intended path)
 const flushImpl = cityField.slice(
   cityField.indexOf("useImperativeHandle(ref,"),
-  cityField.indexOf("function commit("),
+  cityField.indexOf("function selectCity("),
 );
 assert.doesNotMatch(flushImpl, /onCitiesChange/);
-assert.match(cityField, /function commit\(\) \{\s*const result = resolveDraft\(draft\);/s);
+assert.match(cityField, /function selectCity\(/);
+assert.match(cityField, /function commitFromKeyboard\(/);
 assert.match(cityField, /if \(result\.committed\) onCitiesChange\(result\.cities\)/);
 
 const sheet = read("src/components/listings/SearchFiltersSheet.tsx");
@@ -157,6 +161,8 @@ assert.match(sheet, /searchFiltersToSavedQuery\(draft, placeExtras\)/);
 assert.doesNotMatch(sheet, /keepHrefRef\.current = window\.location\.href/);
 assert.match(sheet, /houzzatSearchFilters/);
 assert.match(sheet, /history\.back\(\)/);
+assert.match(sheet, /closeAfterApply/);
+assert.match(sheet, /Close Filters after Apply without history\.back/);
 assert.match(sheet, /UpdateSavedSearchDialog/);
 // Lock + commit before persist so Back restore keeps applied Mississauga path
 const applyBlock = sheet.slice(

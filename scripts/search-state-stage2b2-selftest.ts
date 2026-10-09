@@ -450,6 +450,23 @@ check("Menu/Sheet still draft-rebase location cities", "STATIC", () => {
   assert.match(sheet, /StructuredCityField/);
 });
 
+check("Mobile omits view → Cards after mount (SSR-safe)", "STATIC", () => {
+  const reduce = read("src/lib/listings/search-state/reduce.ts");
+  assert.doesNotMatch(reduce, /isMobileSearchViewDefault/);
+  assert.doesNotMatch(reduce, /matchMedia/);
+  const controller = read(
+    "src/lib/listings/search-state/use-committed-search.ts",
+  );
+  assert.match(controller, /SET_VIEW/);
+  assert.match(controller, /max-width:\s*1023px/);
+  assert.match(controller, /searchParams\.get\("view"\)/);
+  const href = read("src/lib/listings/search-page-href.ts");
+  assert.match(
+    href,
+    /return isMobileDefault \? "cards" : "split"/,
+  );
+});
+
 if (failed > 0) {
   console.error(`\n${failed} check(s) failed`);
   process.exit(1);
