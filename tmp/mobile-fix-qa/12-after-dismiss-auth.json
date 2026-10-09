@@ -1,0 +1,7 @@
+{
+  "result": {
+    "path": "/search",
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&cities=Mississauga%7COakville&view=cards",
+    "cities": "Mississauga|Oakville"
+  }
+}

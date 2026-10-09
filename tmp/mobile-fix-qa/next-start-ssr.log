@@ -1,0 +1,11 @@
+▲ Next.js 16.2.9
+- Local:         http://localhost:3000
+- Network:       http://0.0.0.0:3000
+✓ Ready in 233ms
+Error: ENOENT: no such file or directory, open '/Volumes/T7/Web Projects/teamalisyedrealestate/.next/prerender-manifest.json'
+    at ignore-listed frames {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Volumes/T7/Web Projects/teamalisyedrealestate/.next/prerender-manifest.json'
+}

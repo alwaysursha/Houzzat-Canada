@@ -1,0 +1,38 @@
+▲ Next.js 16.2.9 (webpack)
+- Local:         http://localhost:3000
+- Network:       http://0.0.0.0:3000
+- Environments: .env.local
+✓ Ready in 607ms
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+- Experiments (use with caution):
+  · optimizePackageImports
+  ✓ webpackMemoryOptimizations
+
+○ Compiling /search ...
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":747,"resolved":true,"host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":881,"resolved":true,"host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1017,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 1430ms (next.js: 51ms, proxy.ts: 13ms, application-code: 1367ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":10,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1662µs, proxy.ts: 8ms, application-code: 1997ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":7,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 1131ms (next.js: 1481µs, proxy.ts: 7ms, application-code: 1123ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":7,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 1159ms (next.js: 1140µs, proxy.ts: 5ms, application-code: 1152ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":6,"resolved":true,"host":"127.0.0.1"}
+ GET /search 200 in 1167ms (next.js: 1085µs, proxy.ts: 5ms, application-code: 1162ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":188,"resolved":true,"host":"houzzat.com"}
+ GET /search?cities=Toronto 200 in 1483ms (next.js: 3ms, proxy.ts: 25ms, application-code: 1455ms)
+○ Compiling /api/analytics/beacon ...
+ POST /api/analytics/beacon 200 in 6.3s (next.js: 5.3s, proxy.ts: 8ms, application-code: 1028ms)
+ GET /api/auth/session 200 in 6.8s (next.js: 6.8s, proxy.ts: 9ms, application-code: 13ms)
+ GET /api/auth/session 200 in 28ms (next.js: 16ms, proxy.ts: 7ms, application-code: 5ms)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&sort=newest&cities=Toronto&limit=500 200 in 8.2s (next.js: 5.2s, proxy.ts: 12ms, application-code: 2.9s)

@@ -1,0 +1,71 @@
+search-state-stage1-selftest: ok
+search-state-stage2a-selftest: ok
+PASS [RUNTIME] OPEN_FILTERS seeds draft; committed unchanged
+PASS [RUNTIME] CANCEL_FILTERS discards draft edits
+PASS [RUNTIME] APPLY_FILTERS commits complete draft
+PASS [RUNTIME] Remove property-type chip clears types only
+PASS [RUNTIME] Clear price chip clears min and max
+PASS [RUNTIME] Clear beds and baths chips independently
+PASS [RUNTIME] Remove one city preserves the other
+PASS [RUNTIME] Remove all cities clears place
+PASS [RUNTIME] Rapid functional commits stack beds+price+baths+type
+PASS [RUNTIME] Live chip removal during draft survives Apply (three-way)
+PASS [RUNTIME] APPLY_DRAFT preserves view from committed chrome
+PASS [RUNTIME] Cards→Map→Split→Cards keeps criteria key
+PASS [RUNTIME] URL round-trip restores applied filters
+PASS [RUNTIME] buildActiveChips covers place/price/beds/baths/type/status
+PASS [RUNTIME] Filter-draft rebase helper matches committed policy
+PASS [STATIC] Experience wires draft open/cancel + APPLY path
+PASS [STATIC] Menu/Sheet keep Apply→persist Save Search order
+PASS [STATIC] Sheet Reset clears local draft only (not shared commit)
+PASS [RUNTIME] Draft-only Reset scope matches resetSearchFilters + empty cities
+PASS [STATIC] Reducer rebases draft on COMMIT/REMOVE_CHIP (not null)
+PASS [STATIC] Desktop panel still live-commits via onChange
+PASS [STATIC] withPlaceAwareMapArea used on Apply path
+
+Stage 2B-1 selftest: all checks passed
+PASS [RUNTIME] City suggestion replaces place and preserves beds/price
+PASS [RUNTIME] Community suggestion sets city/community relationship
+PASS [RUNTIME] Multi-city add, remove one, clear all
+PASS [RUNTIME] Removing last city clears community constraint
+PASS [RUNTIME] Community chip clear keeps city
+PASS [RUNTIME] View Cards→Map→Split→Cards keeps criteria key
+PASS [RUNTIME] Named place clears mapArea; MAP_GESTURE does not
+PASS [RUNTIME] Location chip removal during draft survives Apply
+PASS [RUNTIME] clearPlaceWhenCitiesEmpty drops community
+PASS [RUNTIME] placeCommit ignores listing/recent/search_for
+PASS [RUNTIME] Around-area actions commit like city/community
+PASS [RUNTIME] URL round-trip restores cities and community
+PASS [RUNTIME] filters.city replace clears communities pipe
+PASS [STATIC] Experience uses placeCommitFromSuggestion before href push
+PASS [STATIC] Autocomplete guards stale choose + fetch generations
+PASS [STATIC] Community chip key wired in copy + reducer
+PASS [STATIC] Menu/Sheet still draft-rebase location cities
+PASS [STATIC] Mobile omits view → Cards after mount (SSR-safe)
+
+Stage 2B-2 selftest: all checks passed
+
+=== Scenario results ===
+PASS  #1 [RUNTIME] Mobile Apply commits Mississauga+price+beds+baths
+PASS  #2 [STATIC] Dismiss without Apply does not commit draft
+PASS  #2 [RUNTIME] Uncommitted draft differs from committed empty search
+PASS  #3 [RUNTIME] Saved Search confirm plan keeps filters committed
+PASS  #3 [STATIC] Sheet commits before confirm; cancel only closes dialog
+PASS  #4 [RUNTIME] Guest CaptureIntent callback preserves cities+filters
+PASS  #4 [STATIC] Sheet guest path uses openGuestSaveSearchIntent + draft callback
+PASS  #5 [RUNTIME] Remove Mississauga tag clears URL and API city
+PASS  #6 [RUNTIME] Remove price/beds/types tags update URL and API
+PASS  #7 [RUNTIME] Multi-city remove one preserves remaining + optimistic cities
+PASS  #8 [RUNTIME] Clear All resets optional filters to defaults
+PASS  #9 [STATIC] Desktop Cards sidebar wires live onChange to updateFilters
+PASS  #10 [RUNTIME] View transitions preserve committed filters
+PASS  #11 [RUNTIME] Href round-trip restores cities and filters
+PASS  #11 [STATIC] Experience hydrates committed search from URL controller
+PASS  #12 [STATIC] Saved Search and CaptureIntent contracts unchanged
+PASS  #7 [STATIC] City tag removal uses canonical REMOVE_CHIP
+search-active-filters-selftest: ok
+search-location-correctness-selftest: ok
+mobile-search-back-selftest: ok
+search-filters-sheet-history-selftest: ok
+capture-intent selftest passed
+SELFTESTS_OK

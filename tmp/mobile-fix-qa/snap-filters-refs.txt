@@ -1,0 +1,10 @@
+[0-110] combobox: City, neighbourhood, address…
+[0-270] button: Filters 1
+[0-324] button: Clear all filters
+[0-352] option: Newest [selected]
+[0-4132] button: Close filters
+[0-4020] button: Back to search
+[0-4022] button: Reset
+[0-4042] textbox: Add another city
+[0-4049] button: Add another city
+[0-4127] button: Apply · 2,610 homes

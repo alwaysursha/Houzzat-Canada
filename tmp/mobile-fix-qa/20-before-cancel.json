@@ -1,0 +1,9 @@
+{
+  "result": {
+    "chips": [
+      "Mississauga",
+      "Brampton"
+    ],
+    "href": "http://houzzat.com:3000/search?cities=Mississauga&view=cards"
+  }
+}

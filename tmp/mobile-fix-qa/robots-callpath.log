@@ -1,0 +1,8 @@
+◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
+◇ injected env (36) from .env.local // tip: ⌁ auth for agents [www.vestauth.com]
+calling resolveMarketingCanonicalOrigin...
+THREW TypeError TypeError resolveMarketingCanonicalOrigin is not a function
+stack: TypeError: resolveMarketingCanonicalOrigin is not a function
+    at main ([eval]:30:26)
+keys: []
+type: undefined error: resolveMarketingCanonicalOrigin is not a function

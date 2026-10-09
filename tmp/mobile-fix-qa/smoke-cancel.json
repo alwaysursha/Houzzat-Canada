@@ -1,0 +1,10 @@
+{
+  "result": {
+    "cancel": {
+      "path": "/",
+      "cities": null,
+      "onHome": true,
+      "open": false
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "result": {
+    "path": "/search",
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&cities=Mississauga%7COakville&view=cards",
+    "cities": "Mississauga|Oakville",
+    "view": "cards",
+    "onSearch": true,
+    "onHome": false,
+    "filtersOpen": false,
+    "authOrSave": true,
+    "dialogs": [
+      "HouzzatSave this searchSign in to keep this search.Sign inSign upEmailPasswordForgot your password?Sign inNeed access? Continue"
+    ],
+    "h1": "43,948 Homes for Sale",
+    "pressed": [
+      "Cards"
+    ]
+  }
+}

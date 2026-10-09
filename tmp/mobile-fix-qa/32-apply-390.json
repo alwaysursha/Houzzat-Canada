@@ -1,0 +1,10 @@
+{
+  "result": {
+    "path": "/",
+    "cities": null,
+    "view": null,
+    "onHome": true,
+    "pressed": [],
+    "auth": false
+  }
+}

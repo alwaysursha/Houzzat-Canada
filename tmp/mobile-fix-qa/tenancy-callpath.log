@@ -1,0 +1,13 @@
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+◇ injected env (36) from .env.local // tip: ⌘ override existing { override: true }
+exports [ 'default', 'module.exports' ]
+calling resolveMarketingTenancy...
+THREW TypeError TypeError mod.resolveMarketingTenancy is not a function
+isErrorEvent false
+type undefined
+stack: TypeError: mod.resolveMarketingTenancy is not a function
+    at main ([eval]:31:25)
+SITE host used for probe: houzzat.com
+resolveRequestTenancy THREW TypeError resolveRequestTenancy is not a function
+stack: TypeError: resolveRequestTenancy is not a function
+    at main ([eval]:45:26)

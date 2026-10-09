@@ -1,0 +1,8 @@
+
+> houzzat@0.1.0 dev /Volumes/T7/Web Projects/teamalisyedrealestate
+> bash scripts/dev.sh -- --port 3000
+
+→ Starting local database...
+◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+◇ injected env (36) from .env.local // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+Fetching latest updates for this subcommand...

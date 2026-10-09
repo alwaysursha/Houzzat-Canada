@@ -1,0 +1,87 @@
+▲ Next.js 16.2.9 (webpack)
+- Local:         http://localhost:3000
+- Network:       http://0.0.0.0:3000
+- Environments: .env.local
+✓ Ready in 1970ms
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+- Experiments (use with caution):
+  · optimizePackageImports
+  ✓ webpackMemoryOptimizations
+
+○ Compiling /search ...
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 1389ms (next.js: 2ms, proxy.ts: 132ms, application-code: 1254ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":4039,"resolved":true,"host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":4761,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1451µs, proxy.ts: 6ms, application-code: 1993ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":5264,"resolved":true,"host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":2636,"resolved":true,"host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":8,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1211µs, proxy.ts: 4ms, application-code: 1997ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":9,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1226µs, proxy.ts: 7ms, application-code: 1995ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":8,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 1999ms (next.js: 3ms, proxy.ts: 7ms, application-code: 1989ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":8,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 1999ms (next.js: 3ms, proxy.ts: 7ms, application-code: 1990ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":12,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1973µs, proxy.ts: 6ms, application-code: 1993ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":12,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 1999ms (next.js: 1705µs, proxy.ts: 11ms, application-code: 1987ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":9,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1361µs, proxy.ts: 8ms, application-code: 1992ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":9,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1074µs, proxy.ts: 6ms, application-code: 1995ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":6,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 1999ms (next.js: 1048µs, proxy.ts: 6ms, application-code: 1992ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":9,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 1999ms (next.js: 1512µs, proxy.ts: 7ms, application-code: 1990ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":12,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1821µs, proxy.ts: 5ms, application-code: 1996ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":6,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1290µs, proxy.ts: 6ms, application-code: 1998ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":7,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 1998ms (next.js: 1575µs, proxy.ts: 6ms, application-code: 1990ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":17,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1197µs, proxy.ts: 5ms, application-code: 1998ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":7,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1322µs, proxy.ts: 6ms, application-code: 1996ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2000ms (next.js: 1281µs, proxy.ts: 5ms, application-code: 1993ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1115µs, proxy.ts: 5ms, application-code: 1998ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":6577,"resolved":true,"host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":7,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1130µs, proxy.ts: 5ms, application-code: 1997ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":6088,"resolved":true,"host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":8,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 1669µs, proxy.ts: 5ms, application-code: 1996ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":9,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 4ms, proxy.ts: 6ms, application-code: 1991ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":8,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 693ms (next.js: 6ms, proxy.ts: 8ms, application-code: 679ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":6,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 535ms (next.js: 1442µs, proxy.ts: 5ms, application-code: 528ms)

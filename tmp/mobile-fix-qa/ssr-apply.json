@@ -1,0 +1,13 @@
+{
+  "result": {
+    "path": "/search",
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Mississauga&view=cards",
+    "cities": "Mississauga",
+    "view": "cards",
+    "onHome": false,
+    "pressed": [
+      "Cards"
+    ],
+    "hydration": []
+  }
+}

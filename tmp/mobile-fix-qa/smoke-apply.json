@@ -1,0 +1,13 @@
+{
+  "result": {
+    "apply": {
+      "path": "/",
+      "href": "chrome-error://chromewebdata/",
+      "cities": null,
+      "view": null,
+      "onHome": true,
+      "pressed": [],
+      "hydration": []
+    }
+  }
+}

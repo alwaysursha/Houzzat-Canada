@@ -1,0 +1,107 @@
+▲ Next.js 16.2.9 (webpack)
+- Local:         http://localhost:3000
+- Network:       http://0.0.0.0:3000
+- Environments: .env.local
+✓ Ready in 622ms
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+- Experiments (use with caution):
+  · optimizePackageImports
+  ✓ webpackMemoryOptimizations
+
+○ Compiling /search ...
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":615,"resolved":true,"host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":710,"resolved":true,"host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":783,"resolved":true,"host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":867,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 1724ms (next.js: 7ms, proxy.ts: 13ms, application-code: 1704ms)
+ GET /search?cities=Mississauga 200 in 10.2s (next.js: 6.6s, proxy.ts: 126ms, application-code: 3.4s)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":9,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 1848ms (next.js: 2ms, proxy.ts: 8ms, application-code: 1838ms)
+○ Compiling /api/listings/search ...
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":713,"resolved":true,"host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":874,"resolved":true,"host":"127.0.0.1"}
+ GET /api/auth/session 200 in 5.6s (next.js: 5.6s, proxy.ts: 20ms, application-code: 10ms)
+ GET /api/auth/session 200 in 37ms (next.js: 25ms, proxy.ts: 8ms, application-code: 4ms)
+ POST /api/analytics/beacon 200 in 6.3s (next.js: 4.4s, proxy.ts: 13ms, application-code: 1894ms)
+ GET /search?cities=Toronto 200 in 4.7s (next.js: 2.4s, proxy.ts: 124ms, application-code: 2.2s)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&sort=newest&cities=Mississauga&limit=500 200 in 7.4s (next.js: 4.3s, proxy.ts: 19ms, application-code: 3.1s)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&sort=newest&cities=Mississauga&limit=60 200 in 7.5s (next.js: 3.9s, proxy.ts: 406ms, application-code: 3.2s)
+ POST /api/analytics/beacon 200 in 1462ms (next.js: 1264µs, proxy.ts: 28ms, application-code: 1433ms)
+ GET /search?transactionType=SALE&city=Mississauga&view=cards 200 in 7.6s (next.js: 3.9s, proxy.ts: 13ms, application-code: 3.7s)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":16,"resolved":true,"host":"houzzat.com"}
+ GET /search?cities=Toronto 200 in 2.0s (next.js: 8ms, proxy.ts: 10ms, application-code: 2.0s)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":34,"resolved":true,"host":"houzzat.com"}
+ GET /api/auth/session 200 in 72ms (next.js: 45ms, proxy.ts: 14ms, application-code: 12ms)
+ GET /api/auth/session 200 in 30ms (next.js: 5ms, proxy.ts: 15ms, application-code: 11ms)
+ POST /api/analytics/beacon 200 in 1453ms (next.js: 4ms, proxy.ts: 17ms, application-code: 1431ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":12,"resolved":true,"host":"houzzat.com"}
+ GET /search?transactionType=SALE&city=Mississauga&view=cards 200 in 3.1s (next.js: 8ms, proxy.ts: 38ms, application-code: 3.0s)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&sort=newest&cities=Toronto&limit=500 200 in 3.3s (next.js: 6ms, proxy.ts: 10ms, application-code: 3.3s)
+ GET /api/auth/session 200 in 117ms (next.js: 29ms, proxy.ts: 79ms, application-code: 9ms)
+ GET /api/auth/session 200 in 16ms (next.js: 6ms, proxy.ts: 6ms, application-code: 4ms)
+ POST /api/analytics/beacon 200 in 1771ms (next.js: 11ms, proxy.ts: 81ms, application-code: 1680ms)
+ GET /search?cities=Toronto 200 in 3.5s (next.js: 3ms, proxy.ts: 8ms, application-code: 3.5s)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&sort=newest&cities=Mississauga&limit=60 200 in 2.5s (next.js: 1741µs, proxy.ts: 25ms, application-code: 2.5s)
+ GET /api/auth/session 200 in 32ms (next.js: 15ms, proxy.ts: 11ms, application-code: 6ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":10,"resolved":true,"host":"houzzat.com"}
+ GET /api/auth/session 200 in 73ms (next.js: 12ms, proxy.ts: 53ms, application-code: 8ms)
+ POST /api/analytics/beacon 200 in 818ms (next.js: 3ms, proxy.ts: 11ms, application-code: 804ms)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&sort=newest&cities=Toronto&limit=500 200 in 2.8s (next.js: 3ms, proxy.ts: 6ms, application-code: 2.8s)
+ POST /api/analytics/beacon 200 in 1819ms (next.js: 1050µs, proxy.ts: 6ms, application-code: 1811ms)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&sort=newest&cities=Toronto&limit=60 200 in 3.1s (next.js: 6ms, proxy.ts: 12ms, application-code: 3.1s)
+ GET /search?transactionType=SALE&city=Toronto&view=cards 200 in 3.4s (next.js: 4ms, proxy.ts: 30ms, application-code: 3.4s)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":11,"resolved":true,"host":"houzzat.com"}
+ GET /search?cities=Toronto&view=map 200 in 812ms (next.js: 1258µs, proxy.ts: 6ms, application-code: 805ms)
+ GET /api/auth/session 200 in 47ms (next.js: 31ms, proxy.ts: 9ms, application-code: 7ms)
+ GET /api/auth/session 200 in 12ms (next.js: 3ms, proxy.ts: 5ms, application-code: 5ms)
+ POST /api/analytics/beacon 200 in 366ms (next.js: 4ms, proxy.ts: 10ms, application-code: 351ms)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&sort=newest&cities=Toronto&limit=500 200 in 1728ms (next.js: 1863µs, proxy.ts: 23ms, application-code: 1703ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":14,"resolved":true,"host":"houzzat.com"}
+ GET /search?cities=Mississauga 200 in 746ms (next.js: 5ms, proxy.ts: 13ms, application-code: 728ms)
+ GET /api/auth/session 200 in 82ms (next.js: 49ms, proxy.ts: 22ms, application-code: 11ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":15,"resolved":true,"host":"houzzat.com"}
+ GET /api/auth/session 200 in 72ms (next.js: 8ms, proxy.ts: 58ms, application-code: 6ms)
+ POST /api/analytics/beacon 200 in 754ms (next.js: 6ms, proxy.ts: 25ms, application-code: 724ms)
+ POST /api/analytics/beacon 200 in 554ms (next.js: 1176µs, proxy.ts: 6ms, application-code: 547ms)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&sort=newest&cities=Mississauga&limit=500 200 in 1676ms (next.js: 12ms, proxy.ts: 52ms, application-code: 1612ms)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&sort=newest&cities=Mississauga&limit=60 200 in 1852ms (next.js: 6ms, proxy.ts: 43ms, application-code: 1803ms)
+ GET /search?transactionType=SALE&city=Mississauga&view=cards 200 in 1863ms (next.js: 2ms, proxy.ts: 16ms, application-code: 1845ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":9,"resolved":true,"host":"houzzat.com"}
+ GET /search?cities=Toronto&view=cards 200 in 772ms (next.js: 1420µs, proxy.ts: 6ms, application-code: 765ms)
+ GET /api/auth/session 200 in 145ms (next.js: 53ms, proxy.ts: 89ms, application-code: 3ms)
+ GET /api/auth/session 200 in 11ms (next.js: 2ms, proxy.ts: 4ms, application-code: 4ms)
+ POST /api/analytics/beacon 200 in 475ms (next.js: 23ms, proxy.ts: 102ms, application-code: 350ms)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&sort=newest&cities=Toronto&limit=60 200 in 1235ms (next.js: 21ms, proxy.ts: 80ms, application-code: 1135ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":11,"resolved":true,"host":"houzzat.com"}
+ GET /search?cities=Mississauga&view=cards 200 in 740ms (next.js: 1282µs, proxy.ts: 6ms, application-code: 733ms)
+ GET /api/auth/session 200 in 30ms (next.js: 14ms, proxy.ts: 11ms, application-code: 5ms)
+ GET /api/auth/session 200 in 15ms (next.js: 4ms, proxy.ts: 7ms, application-code: 4ms)
+ POST /api/analytics/beacon 200 in 577ms (next.js: 3ms, proxy.ts: 12ms, application-code: 563ms)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&sort=newest&cities=Mississauga&limit=60 200 in 1158ms (next.js: 1100µs, proxy.ts: 6ms, application-code: 1151ms)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&cities=Mississauga&sort=newest&limit=1 200 in 875ms (next.js: 1025µs, proxy.ts: 4ms, application-code: 870ms)
+ GET /api/listings/autocomplete?q=Oakville 200 in 2.8s (next.js: 2.3s, proxy.ts: 5ms, application-code: 508ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":115,"resolved":true,"host":"houzzat.com"}
+ POST /api/analytics/beacon 200 in 513ms (next.js: 98ms, proxy.ts: 6ms, application-code: 408ms)
+ GET /search?transactionType=SALE&city=Mississauga&view=cards 200 in 1408ms (next.js: 290ms, proxy.ts: 10ms, application-code: 1108ms)
+ GET /api/listings/search?segment=RESIDENTIAL&transactionType=SALE&cities=Mississauga&sort=newest&limit=1 200 in 888ms (next.js: 34ms, proxy.ts: 4ms, application-code: 850ms)
+ POST /api/analytics/beacon 200 in 189ms (next.js: 1136µs, proxy.ts: 5ms, application-code: 183ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"houzzat.com"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":3,"resolved":true,"host":"houzzat.com"}
+ GET /search?transactionType=SALE&city=Mississauga&view=cards 200 in 802ms (next.js: 1421µs, proxy.ts: 5ms, application-code: 796ms)

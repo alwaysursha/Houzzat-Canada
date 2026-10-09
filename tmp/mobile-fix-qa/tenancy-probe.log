@@ -1,0 +1,13 @@
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+◇ injected env (36) from .env.local // tip: ⌘ override existing { override: true }
+probe site host: houzzat.com
+tenant domain scope flag env present: true
+isTenantDomainScopeWorkspace: false
+resolveRequestTenancy: {
+  ok: true,
+  hostname: 'houzzat.com',
+  workspaceId: 'cmt7kfcth0000gvu0bqsycsvz'
+}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+resolveMarketingTenancy: { hostname: 'houzzat.com', workspaceId: 'cmt7kfcth0000gvu0bqsycsvz' }

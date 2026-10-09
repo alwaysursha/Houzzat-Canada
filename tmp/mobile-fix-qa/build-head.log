@@ -1,0 +1,534 @@
+
+> houzzat@0.1.0 build /Volumes/T7/Web Projects/teamalisyedrealestate
+> COPYFILE_DISABLE=1 bash scripts/strip-appledouble.sh && COPYFILE_DISABLE=1 bash scripts/next-production-build.sh && COPYFILE_DISABLE=1 bash scripts/strip-appledouble.sh
+
+▲ Next.js 16.2.9 (webpack)
+- Environments: .env.local
+- Experiments (use with caution):
+  · optimizePackageImports
+  ✓ webpackMemoryOptimizations
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+⚠ Compiled with warnings in 2.2s
+
+./node_modules/.pnpm/jose@6.2.3/node_modules/jose/dist/webapi/lib/deflate.js
+A Node.js API is used (CompressionStream at line: 10) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+./node_modules/.pnpm/jose@6.2.3/node_modules/jose/dist/webapi/lib/deflate.js
+./node_modules/.pnpm/jose@6.2.3/node_modules/jose/dist/webapi/jwe/flattened/decrypt.js
+./node_modules/.pnpm/jose@6.2.3/node_modules/jose/dist/webapi/index.js
+./node_modules/.pnpm/@auth+core@0.41.3/node_modules/@auth/core/jwt.js
+./node_modules/.pnpm/@auth+core@0.41.3/node_modules/@auth/core/lib/init.js
+./node_modules/.pnpm/@auth+core@0.41.3/node_modules/@auth/core/lib/index.js
+./node_modules/.pnpm/@auth+core@0.41.3/node_modules/@auth/core/index.js
+./node_modules/.pnpm/next-auth@5.0.0-beta.31_next@16.2.9_react-dom@19.2.4_react@19.2.4__react@19.2.4__react@19.2.4/node_modules/next-auth/index.js
+./src/auth.edge.ts
+
+./node_modules/.pnpm/jose@6.2.3/node_modules/jose/dist/webapi/lib/deflate.js
+A Node.js API is used (DecompressionStream at line: 26) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+./node_modules/.pnpm/jose@6.2.3/node_modules/jose/dist/webapi/lib/deflate.js
+./node_modules/.pnpm/jose@6.2.3/node_modules/jose/dist/webapi/jwe/flattened/decrypt.js
+./node_modules/.pnpm/jose@6.2.3/node_modules/jose/dist/webapi/index.js
+./node_modules/.pnpm/@auth+core@0.41.3/node_modules/@auth/core/jwt.js
+./node_modules/.pnpm/@auth+core@0.41.3/node_modules/@auth/core/lib/init.js
+./node_modules/.pnpm/@auth+core@0.41.3/node_modules/@auth/core/lib/index.js
+./node_modules/.pnpm/@auth+core@0.41.3/node_modules/@auth/core/index.js
+./node_modules/.pnpm/next-auth@5.0.0-beta.31_next@16.2.9_react-dom@19.2.4_react@19.2.4__react@19.2.4__react@19.2.4/node_modules/next-auth/index.js
+./src/auth.edge.ts
+
+✓ Compiled successfully in 2.1min
+  Running TypeScript ...
+  Finished TypeScript in 28.8s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/190) ...
+  Generating static pages using 7 workers (47/190) 
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+  Generating static pages using 7 workers (94/190) 
+  Generating static pages using 7 workers (142/190) 
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":367,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":2,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":2,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+✓ Generating static pages using 7 workers (190/190) in 56s
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /account
+├ ƒ /account/activity
+├ ƒ /account/chat
+├ ƒ /account/monitors
+├ ƒ /account/notes
+├ ƒ /account/notifications
+├ ƒ /account/route-planner
+├ ƒ /account/saved
+├ ƒ /account/searches
+├ ƒ /account/watchlist
+├ ƒ /activate/[token]
+├ ƒ /admin
+├ ƒ /admin/ads
+├ ƒ /admin/ads/[id]
+├ ƒ /admin/ads/new
+├ ƒ /admin/analytics
+├ ƒ /admin/fsbo
+├ ƒ /admin/landings
+├ ƒ /admin/lead-routing
+├ ƒ /admin/mls
+├ ƒ /admin/notifications
+├ ƒ /admin/partners
+├ ƒ /admin/people
+├ ƒ /admin/people/[id]
+├ ƒ /admin/pre-construction
+├ ƒ /admin/search
+├ ƒ /admin/visitors
+├ ƒ /admin/visitors/sessions/[id]
+├ ƒ /agent
+├ ƒ /agent/appointments
+├ ƒ /agent/chats
+├ ƒ /agent/cma
+├ ƒ /agent/emails/[id]
+├ ƒ /agent/inbox
+├ ƒ /agent/leads
+├ ƒ /agent/leads/[id]
+├ ƒ /agent/notifications
+├ ƒ /agent/open-lead/[leadId]
+├ ƒ /agent/profile
+├ ƒ /agent/search
+├ ƒ /agent/statistics
+├ ƒ /agent/tasks
+├ ƒ /agent/team
+├ ƒ /agent/team/[userId]
+├ ƒ /agent/workspace
+├ ƒ /api/account/access
+├ ƒ /api/account/active-mode
+├ ƒ /api/account/area-monitors
+├ ƒ /api/account/communication-preferences
+├ ƒ /api/account/commute
+├ ƒ /api/account/contact
+├ ƒ /api/account/contact-status
+├ ƒ /api/account/conversation
+├ ƒ /api/account/conversation/messages
+├ ƒ /api/account/conversation/read
+├ ƒ /api/account/home-location
+├ ƒ /api/account/home-shell
+├ ƒ /api/account/monitors/check
+├ ƒ /api/account/notes
+├ ƒ /api/account/notes/[mlsNumber]
+├ ƒ /api/account/preferences
+├ ƒ /api/account/property-monitors
+├ ƒ /api/account/recent-views/sync
+├ ƒ /api/admin/ads/campaigns
+├ ƒ /api/admin/ads/campaigns/[id]
+├ ƒ /api/admin/ads/campaigns/[id]/publish
+├ ƒ /api/admin/fsbo
+├ ƒ /api/admin/fsbo/[id]
+├ ƒ /api/admin/landings
+├ ƒ /api/admin/lead-routing
+├ ƒ /api/admin/mls/probe
+├ ƒ /api/admin/mls/sync
+├ ƒ /api/admin/partners
+├ ƒ /api/admin/people/[id]
+├ ƒ /api/admin/people/[id]/assign-agent
+├ ƒ /api/admin/poi/sync
+├ ƒ /api/admin/pre-construction
+├ ƒ /api/admin/workspace-canary/push
+├ ƒ /api/admin/workspace-canary/push-delivery
+├ ƒ /api/agent/activity
+├ ƒ /api/agent/appointments
+├ ƒ /api/agent/cma
+├ ƒ /api/agent/conversations
+├ ƒ /api/agent/desk
+├ ƒ /api/agent/email
+├ ƒ /api/agent/emails/[id]
+├ ƒ /api/agent/handoffs
+├ ƒ /api/agent/inquiry-tag
+├ ƒ /api/agent/launchpad
+├ ƒ /api/agent/leads
+├ ƒ /api/agent/leads-v2/[id]/alerts
+├ ƒ /api/agent/leads-v2/[id]/appointments
+├ ƒ /api/agent/leads-v2/[id]/area-monitors
+├ ƒ /api/agent/leads-v2/[id]/emails
+├ ƒ /api/agent/leads-v2/[id]/engagement-overview
+├ ƒ /api/agent/leads-v2/[id]/listing-notes
+├ ƒ /api/agent/leads-v2/[id]/looking-for
+├ ƒ /api/agent/leads-v2/[id]/next-reminder
+├ ƒ /api/agent/leads-v2/[id]/property-watches
+├ ƒ /api/agent/leads-v2/[id]/rail
+├ ƒ /api/agent/leads-v2/[id]/route-planner
+├ ƒ /api/agent/leads-v2/[id]/saved-homes
+├ ƒ /api/agent/leads-v2/[id]/saved-searches
+├ ƒ /api/agent/leads-v2/[id]/shell
+├ ƒ /api/agent/leads-v2/[id]/tasks
+├ ƒ /api/agent/leads-v2/[id]/timeline
+├ ƒ /api/agent/leads/[id]/activity
+├ ƒ /api/agent/leads/[id]/appointments
+├ ƒ /api/agent/leads/[id]/conversation
+├ ƒ /api/agent/leads/[id]/conversation/messages
+├ ƒ /api/agent/leads/[id]/conversation/read
+├ ƒ /api/agent/leads/[id]/emails
+├ ƒ /api/agent/leads/[id]/engagement
+├ ƒ /api/agent/leads/[id]/summary
+├ ƒ /api/agent/leads/[id]/tasks
+├ ƒ /api/agent/leads/[id]/timeline
+├ ƒ /api/agent/leads/call-outcome
+├ ƒ /api/agent/leads/contact
+├ ƒ /api/agent/leads/contact-reminder
+├ ƒ /api/agent/leads/import
+├ ƒ /api/agent/leads/list
+├ ƒ /api/agent/leads/profile-flags
+├ ƒ /api/agent/leads/sms-mass
+├ ƒ /api/agent/leads/sms-mass/[id]
+├ ƒ /api/agent/leads/sms-mass/preview
+├ ƒ /api/agent/leads/verify-contact
+├ ƒ /api/agent/notes
+├ ƒ /api/agent/open-lead/[leadId]
+├ ƒ /api/agent/profile/photo
+├ ƒ /api/agent/searches
+├ ƒ /api/agent/shortlist-email
+├ ƒ /api/agent/tasks
+├ ƒ /api/agent/team
+├ ƒ /api/agent/team/members/[userId]
+├ ƒ /api/agent/workspace
+├ ƒ /api/analytics/beacon
+├ ƒ /api/auth/[...nextauth]
+├ ƒ /api/auth/forgot-password
+├ ƒ /api/auth/invite/[token]
+├ ƒ /api/auth/logout
+├ ƒ /api/auth/phone-otp/edit
+├ ƒ /api/auth/phone-otp/send
+├ ƒ /api/auth/phone-otp/skip
+├ ƒ /api/auth/phone-otp/verify
+├ ƒ /api/auth/qualification
+├ ƒ /api/auth/request-verification
+├ ƒ /api/auth/reset-password
+├ ƒ /api/auth/sign-up
+├ ƒ /api/auth/verify-email
+├ ƒ /api/auth/verify-email/same-user
+├ ƒ /api/cron/digests
+├ ƒ /api/cron/monitors
+├ ƒ /api/cron/sms-automations
+├ ƒ /api/cron/verify-email-nudge
+├ ƒ /api/geo/home-areas
+├ ƒ /api/health
+├ ƒ /api/leads
+├ ƒ /api/listings/[mlsNumber]
+├ ƒ /api/listings/[mlsNumber]/account-chrome
+├ ƒ /api/listings/[mlsNumber]/address-history/enrich
+├ ƒ /api/listings/[mlsNumber]/ask
+├ ƒ /api/listings/[mlsNumber]/gallery
+├ ƒ /api/listings/[mlsNumber]/insights
+├ ƒ /api/listings/[mlsNumber]/panel
+├ ƒ /api/listings/[mlsNumber]/rooms-open-houses
+├ ƒ /api/listings/autocomplete
+├ ƒ /api/listings/by-mls
+├ ƒ /api/listings/communities
+├ ƒ /api/listings/home-rails
+├ ƒ /api/listings/nearby
+├ ƒ /api/listings/open-houses
+├ ƒ /api/listings/photo
+├ ƒ /api/listings/related
+├ ƒ /api/listings/search
+├ ƒ /api/listings/sync-status
+├ ƒ /api/me
+├ ƒ /api/mobile/auth-diagnostic
+├ ƒ /api/mobile/v2/activity
+├ ƒ /api/mobile/v2/appointments
+├ ƒ /api/mobile/v2/appointments/[appointmentId]
+├ ƒ /api/mobile/v2/auth/discover
+├ ƒ /api/mobile/v2/auth/login
+├ ƒ /api/mobile/v2/auth/logout
+├ ƒ /api/mobile/v2/auth/refresh
+├ ƒ /api/mobile/v2/cma
+├ ƒ /api/mobile/v2/cma/[id]
+├ ƒ /api/mobile/v2/cma/[id]/email
+├ ƒ /api/mobile/v2/cma/[id]/find-comps
+├ ƒ /api/mobile/v2/cma/[id]/pdf
+├ ƒ /api/mobile/v2/communications
+├ ƒ /api/mobile/v2/communications/[emailId]
+├ ƒ /api/mobile/v2/conversations
+├ ƒ /api/mobile/v2/launchpad
+├ ƒ /api/mobile/v2/lead-routing
+├ ƒ /api/mobile/v2/leads
+├ ƒ /api/mobile/v2/leads/[leadId]
+├ ƒ /api/mobile/v2/leads/[leadId]/appointments
+├ ƒ /api/mobile/v2/leads/[leadId]/appointments/[appointmentId]
+├ ƒ /api/mobile/v2/leads/[leadId]/contact
+├ ƒ /api/mobile/v2/leads/[leadId]/contact-reminder
+├ ƒ /api/mobile/v2/leads/[leadId]/conversation
+├ ƒ /api/mobile/v2/leads/[leadId]/conversation/messages
+├ ƒ /api/mobile/v2/leads/[leadId]/conversation/read
+├ ƒ /api/mobile/v2/leads/[leadId]/conversations
+├ ƒ /api/mobile/v2/leads/[leadId]/conversations/[emailId]
+├ ƒ /api/mobile/v2/leads/[leadId]/engagement
+├ ƒ /api/mobile/v2/leads/[leadId]/notes
+├ ƒ /api/mobile/v2/leads/[leadId]/notes/[noteId]
+├ ƒ /api/mobile/v2/leads/[leadId]/profile-flags
+├ ƒ /api/mobile/v2/leads/[leadId]/status
+├ ƒ /api/mobile/v2/leads/[leadId]/tasks
+├ ƒ /api/mobile/v2/leads/[leadId]/tasks/[taskId]
+├ ƒ /api/mobile/v2/leads/[leadId]/verify-contact
+├ ƒ /api/mobile/v2/leads/[leadId]/viewings-planner
+├ ƒ /api/mobile/v2/leads/[leadId]/viewings-planner/optimize
+├ ƒ /api/mobile/v2/leads/[leadId]/viewings-planner/save
+├ ƒ /api/mobile/v2/leads/[leadId]/viewings-planner/share-activity
+├ ƒ /api/mobile/v2/notification-preferences
+├ ƒ /api/mobile/v2/places/autocomplete
+├ ƒ /api/mobile/v2/places/geocode
+├ ƒ /api/mobile/v2/profile/service-areas
+├ ƒ /api/mobile/v2/properties/[mlsNumber]
+├ ƒ /api/mobile/v2/properties/[mlsNumber]/saved
+├ ƒ /api/mobile/v2/properties/saved
+├ ƒ /api/mobile/v2/properties/search
+├ ƒ /api/mobile/v2/properties/shortlist-email
+├ ƒ /api/mobile/v2/push/register
+├ ƒ /api/mobile/v2/push/unregister
+├ ƒ /api/mobile/v2/statistics
+├ ƒ /api/mobile/v2/tasks
+├ ƒ /api/mobile/v2/tasks/[taskId]
+├ ƒ /api/mobile/v2/team
+├ ƒ /api/mobile/v2/team/[membershipId]
+├ ƒ /api/mobile/v2/team/[membershipId]/remove
+├ ƒ /api/mobile/v2/team/invite
+├ ƒ /api/mobile/v2/team/invites/[inviteId]/cancel
+├ ƒ /api/mobile/v2/team/invites/[inviteId]/resend
+├ ƒ /api/mobile/v2/team/primary-agent
+├ ƒ /api/mobile/v2/workspaces
+├ ƒ /api/mobile/v2/workspaces/[workspaceId]/session
+├ ƒ /api/mobile/workspace-bootstrap
+├ ƒ /api/mobile/workspace-handoff
+├ ƒ /api/nearby
+├ ƒ /api/notifications/preferences
+├ ƒ /api/notifications/register
+├ ƒ /api/notifications/test
+├ ƒ /api/notifications/unregister
+├ ƒ /api/onboarding
+├ ƒ /api/onboarding/branding-assets
+├ ƒ /api/onboarding/team-members
+├ ƒ /api/onboarding/team-members/[memberId]
+├ ƒ /api/onboarding/team-members/[memberId]/photo
+├ ƒ /api/onboarding/team-profile
+├ ƒ /api/onboarding/template-preview
+├ ƒ /api/onboarding/website-domains
+├ ƒ /api/onboarding/website-domains/[domainId]
+├ ƒ /api/onboarding/website-domains/[domainId]/verify
+├ ƒ /api/owner/appointments
+├ ƒ /api/owner/checkout/[orderId]
+├ ƒ /api/owner/listings
+├ ƒ /api/owner/listings/[id]
+├ ƒ /api/owner/upload
+├ ƒ /api/partners/handoffs/[token]
+├ ƒ /api/places/autocomplete
+├ ƒ /api/places/details
+├ ƒ /api/platform/public/book-demo
+├ ƒ /api/platform/public/checkout/continue
+├ ƒ /api/platform/public/checkout/status
+├ ƒ /api/platform/public/offers/[token]/accept
+├ ƒ /api/platform/public/offers/[token]/checkout
+├ ƒ /api/platform/v1/audit
+├ ƒ /api/platform/v1/me
+├ ƒ /api/platform/v1/offers
+├ ƒ /api/platform/v1/offers/[offerId]
+├ ƒ /api/platform/v1/offers/[offerId]/cancel
+├ ƒ /api/platform/v1/offers/[offerId]/resend-invitation
+├ ƒ /api/platform/v1/offers/[offerId]/send
+├ ƒ /api/platform/v1/prospects
+├ ƒ /api/platform/v1/prospects/[prospectId]
+├ ƒ /api/platform/v1/prospects/[prospectId]/activities
+├ ƒ /api/platform/v1/prospects/[prospectId]/demo
+├ ƒ /api/platform/v1/prospects/[prospectId]/status
+├ ƒ /api/platform/v1/provisioning
+├ ƒ /api/platform/v1/provisioning/[runId]
+├ ƒ /api/platform/v1/sms-automations
+├ ƒ /api/platform/v1/sms-automations/[key]
+├ ƒ /api/platform/v1/sms-automations/[key]/preview
+├ ƒ /api/platform/v1/sms-automations/[key]/publish
+├ ƒ /api/platform/v1/sms-automations/[key]/rollback
+├ ƒ /api/platform/v1/sms-quick-texts
+├ ƒ /api/platform/v1/sms-quick-texts/[id]
+├ ƒ /api/platform/v1/sms-quick-texts/[id]/preview
+├ ƒ /api/platform/v1/subscriptions
+├ ƒ /api/platform/v1/subscriptions/[subscriptionId]
+├ ƒ /api/platform/v1/subscriptions/[subscriptionId]/provision
+├ ƒ /api/platform/v1/summary
+├ ƒ /api/platform/v1/workspaces
+├ ƒ /api/platform/v1/workspaces/[workspaceId]
+├ ƒ /api/platform/v1/workspaces/[workspaceId]/reactivate
+├ ƒ /api/platform/v1/workspaces/[workspaceId]/send-activation
+├ ƒ /api/platform/v1/workspaces/[workspaceId]/suspend
+├ ƒ /api/pre-construction/inquiry
+├ ƒ /api/preferences/email
+├ ƒ /api/preferences/email/one-click
+├ ƒ /api/public-config
+├ ƒ /api/public/activate/[token]
+├ ƒ /api/route-planner
+├ ƒ /api/route-planner/optimize
+├ ƒ /api/route-planner/request
+├ ƒ /api/route-planner/route-geometry
+├ ƒ /api/route-planner/share
+├ ƒ /api/route-planner/share/[token]
+├ ƒ /api/route-planner/stops
+├ ƒ /api/routes/drive
+├ ƒ /api/saved-listings
+├ ƒ /api/saved-searches
+├ ƒ /api/stripe/webhook
+├ ƒ /api/tenancy/favicon
+├ ƒ /api/tools/affordability-lead
+├ ƒ /api/tools/seller-readiness
+├ ƒ /api/valuation
+├ ƒ /api/vow/accept
+├ ƒ /api/webhooks/resend
+├ ƒ /api/webhooks/twilio/inbound
+├ ƒ /api/webhooks/twilio/status
+├ ○ /apple-icon.png
+├ ƒ /areas
+├ ƒ /areas/[slug]
+├ ƒ /auth/invite/[token]
+├ ƒ /auth/reset-password
+├ ƒ /auth/sign-in
+├ ƒ /auth/sign-out
+├ ƒ /auth/sign-up
+├ ƒ /auth/verify-email
+├ ƒ /blog
+├ ƒ /book-a-demo
+├ ƒ /cma/[token]
+├ ƒ /coming-soon
+├ ƒ /contact
+├ ƒ /customer-stories
+├ ƒ /delete-account
+├ ƒ /faq
+├ ƒ /home-valuation
+├ ƒ /homes-for-sale
+├ ƒ /homes-for-sale/[city]
+├ ƒ /homes-for-sale/[city]/[community]
+├ ○ /icon.png
+├ ƒ /listing/[...parts]
+├ ƒ /lp/[slug]
+├ ƒ /onboarding
+├ ƒ /open-houses
+├ ƒ /open-houzzat-pro
+├ ƒ /owner
+├ ƒ /owner/checkout/[orderId]
+├ ƒ /owner/inquiries
+├ ƒ /owner/listings/[id]
+├ ƒ /owner/new
+├ ƒ /owner/orders
+├ ƒ /owner/viewings
+├ ƒ /partners
+├ ƒ /partners/portal/[portalToken]
+├ ƒ /platform
+├ ƒ /platform/access-denied
+├ ƒ /platform/audit
+├ ƒ /platform/offers
+├ ƒ /platform/offers/[offerId]
+├ ƒ /platform/offers/[offerId]/edit
+├ ƒ /platform/offers/new
+├ ƒ /platform/prospects
+├ ƒ /platform/prospects/[prospectId]
+├ ƒ /platform/provisioning
+├ ƒ /platform/provisioning/[runId]
+├ ƒ /platform/sms-automations
+├ ƒ /platform/sms-automations/[key]
+├ ƒ /platform/sms-quick-texts
+├ ƒ /platform/sms-quick-texts/[id]
+├ ƒ /platform/sms-quick-texts/new
+├ ƒ /platform/subscriptions
+├ ƒ /platform/subscriptions/[subscriptionId]
+├ ƒ /platform/workspaces
+├ ƒ /platform/workspaces/[workspaceId]
+├ ƒ /pre-construction
+├ ƒ /preferences/email
+├ ƒ /pricing
+├ ƒ /privacy
+├ ƒ /pro
+├ ƒ /pro/for-staff
+├ ƒ /pro/mobile/diag
+├ ƒ /pro/mobile/handoff
+├ ƒ /pro/sign-in
+├ ƒ /product
+├ ƒ /product-updates
+├ ƒ /product/alerts
+├ ƒ /product/conversations
+├ ƒ /product/crm
+├ ƒ /product/lead-capture
+├ ƒ /product/lead-routing
+├ ƒ /product/mls-search
+├ ƒ /product/mobile
+├ ƒ /product/properties
+├ ƒ /product/viewing-planner
+├ ƒ /product/website
+├ ƒ /r/[token]
+├ ƒ /resources
+├ ƒ /robots.txt
+├ ƒ /route-planner
+├ ƒ /route-planner/share/[token]
+├ ƒ /search
+├ ƒ /share/homes/[token]
+├ ƒ /sitemap/[__metadata_id__]
+├ ƒ /solutions/agents
+├ ƒ /solutions/brokerages
+├ ƒ /solutions/client-experience
+├ ƒ /solutions/convert-leads
+├ ƒ /solutions/generate-leads
+├ ƒ /solutions/teams
+├ ƒ /solutions/work-from-anywhere
+├ ƒ /subscribe/[token]
+├ ƒ /subscribe/[token]/checkout
+├ ƒ /subscribe/payment/status
+├ ƒ /support
+├ ƒ /templates
+├ ƒ /terms
+├ ƒ /tools/affordability
+├ ƒ /tools/seller-readiness
+└ ƒ /viewings/share/[token]
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

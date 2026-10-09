@@ -1,0 +1,9 @@
+{
+  "result": {
+    "href": "http://houzzat.com:3000/search?transactionType=SALE&city=Mississauga&view=cards",
+    "cities": null,
+    "view": "cards",
+    "filtersOpen": false,
+    "onHome": false
+  }
+}

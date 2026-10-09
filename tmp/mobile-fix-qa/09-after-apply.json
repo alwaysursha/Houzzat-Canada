@@ -1,0 +1,13 @@
+{
+  "result": {
+    "path": "/search",
+    "href": "http://houzzat.com:3000/search?transactionType=SALE",
+    "cities": null,
+    "view": null,
+    "onSearch": true,
+    "onHome": false,
+    "auth": false,
+    "filtersOpen": true,
+    "h1": "43,948 Homes for Sale"
+  }
+}

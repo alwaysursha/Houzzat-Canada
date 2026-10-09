@@ -1,0 +1,14 @@
+
+> houzzat@0.1.0 build /Volumes/T7/Web Projects/teamalisyedrealestate
+> COPYFILE_DISABLE=1 bash scripts/strip-appledouble.sh && COPYFILE_DISABLE=1 bash scripts/next-production-build.sh && COPYFILE_DISABLE=1 bash scripts/strip-appledouble.sh
+
+▲ Next.js 16.2.9 (webpack)
+- Environments: .env.local
+- Experiments (use with caution):
+  · optimizePackageImports
+  ✓ webpackMemoryOptimizations
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+sh: line 1: 16245 Terminated: 15          COPYFILE_DISABLE=1 bash scripts/next-production-build.sh
+ ELIFECYCLE  Command failed with exit code 143.

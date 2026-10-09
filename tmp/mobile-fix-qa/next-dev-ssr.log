@@ -1,0 +1,24 @@
+▲ Next.js 16.2.9 (webpack)
+- Local:         http://localhost:3000
+- Network:       http://0.0.0.0:3000
+- Environments: .env.local
+✓ Ready in 848ms
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+- Experiments (use with caution):
+  · optimizePackageImports
+  ✓ webpackMemoryOptimizations
+
+○ Compiling /search ...
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1046,"resolved":true,"host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1129,"resolved":true,"host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":436,"resolved":true,"host":"127.0.0.1"}
+ GET /search 200 in 1700ms (next.js: 461ms, proxy.ts: 12ms, application-code: 1226ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":6,"resolved":true,"host":"127.0.0.1"}
+ GET /search 200 in 584ms (next.js: 1411µs, proxy.ts: 7ms, application-code: 576ms)
+[ssr-hang] {"event":"ssr-hang.tenancy.start","host":"127.0.0.1"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":7,"resolved":true,"host":"127.0.0.1"}
+ GET /search?cities=Toronto 200 in 558ms (next.js: 1234µs, proxy.ts: 6ms, application-code: 551ms)

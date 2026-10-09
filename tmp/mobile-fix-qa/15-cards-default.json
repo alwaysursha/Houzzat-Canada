@@ -1,0 +1,11 @@
+{
+  "result": {
+    "view": null,
+    "pressed": [
+      "Split",
+      "For sale"
+    ],
+    "path": "/search",
+    "href": "http://houzzat.com:3000/search?cities=Toronto"
+  }
+}

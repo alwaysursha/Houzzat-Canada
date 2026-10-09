@@ -1,0 +1,11 @@
+{
+  "result": {
+    "chips": [
+      "Mississauga",
+      "Brampton",
+      "Oakville"
+    ],
+    "n": 3,
+    "addBtn": true
+  }
+}

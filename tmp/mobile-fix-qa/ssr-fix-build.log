@@ -1,0 +1,100 @@
+
+> houzzat@0.1.0 build /Volumes/T7/Web Projects/teamalisyedrealestate
+> COPYFILE_DISABLE=1 bash scripts/strip-appledouble.sh && COPYFILE_DISABLE=1 bash scripts/next-production-build.sh && COPYFILE_DISABLE=1 bash scripts/strip-appledouble.sh
+
+▲ Next.js 16.2.9 (webpack)
+- Environments: .env.local
+- Experiments (use with caution):
+  · optimizePackageImports
+  ✓ webpackMemoryOptimizations
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 2.1min
+  Running TypeScript ...
+  Finished TypeScript in 31.9s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/190) ...
+  Generating static pages using 7 workers (47/190) 
+  Generating static pages using 7 workers (94/190) 
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+  Generating static pages using 7 workers (142/190) 
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":287,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":352,"resolved":true}
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/0.xml (attempt 1 of 3) because it took more than 60 seconds. Retrying again shortly.
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/1.xml (attempt 1 of 3) because it took more than 60 seconds. Retrying again shortly.
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/3.xml (attempt 1 of 3) because it took more than 60 seconds. Retrying again shortly.
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/4.xml (attempt 1 of 3) because it took more than 60 seconds. Retrying again shortly.
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/5.xml (attempt 1 of 3) because it took more than 60 seconds. Retrying again shortly.
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/1.xml (attempt 2 of 3) because it took more than 60 seconds. Retrying again shortly.
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/0.xml (attempt 2 of 3) because it took more than 60 seconds. Retrying again shortly.
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/3.xml (attempt 2 of 3) because it took more than 60 seconds. Retrying again shortly.
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/4.xml (attempt 2 of 3) because it took more than 60 seconds. Retrying again shortly.
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/5.xml (attempt 2 of 3) because it took more than 60 seconds. Retrying again shortly.
+  Generating static pages using 7 workers (172/190) 
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":678,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":652,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":623,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":628,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":588,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":542,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":538,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":538,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":535,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":500,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":2,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+✓ Generating static pages using 7 workers (190/190) in 3.0min
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":1,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":2,"resolved":true}
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.success","ms":0,"resolved":true}
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/17.xml (attempt 1 of 3) because it took more than 60 seconds. Retrying again shortly.
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/17.xml (attempt 2 of 3) because it took more than 60 seconds. Retrying again shortly.
+Failed to build /sitemap/[__metadata_id__]/route: /sitemap/17.xml after 3 attempts.
+Export encountered an error on /sitemap/[__metadata_id__]/route: /sitemap/17.xml, exiting the build.
+⨯ Next.js build worker exited with code: 1 and signal: null
+ ELIFECYCLE  Command failed with exit code 1.

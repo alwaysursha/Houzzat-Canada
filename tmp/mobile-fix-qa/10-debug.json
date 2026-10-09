@@ -1,0 +1,16 @@
+{
+  "result": {
+    "buttons": [
+      {
+        "text": "MississaugaRemove Mississauga",
+        "aria": null
+      },
+      {
+        "text": "OakvilleRemove Oakville",
+        "aria": null
+      }
+    ],
+    "apply": "Apply · 3,802 homes",
+    "sheet": true
+  }
+}

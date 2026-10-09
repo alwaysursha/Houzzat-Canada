@@ -1,0 +1,9 @@
+[0-352] option: Newest [selected]
+[0-353] option: Price: low to high
+[0-354] option: Price: high to low
+[0-4020] button: Back to search
+[0-4022] button: Reset
+[0-4042] textbox: Add another city
+[0-4221] option: Brampton [selected]
+[0-4049] button: Add another city
+[0-4127] button: Apply · 2,610 homes

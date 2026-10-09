@@ -1,0 +1,134 @@
+
+<--- Last few GCs --->
+
+[3766:0x765a800000]    44425 ms: Mark-Compact 2012.9 (2080.1) -> 1995.8 (2080.1) MB, pooled: 4 MB, 889.83 / 0.00 ms  (average mu = 0.203, current mu = 0.217) allocation failure; scavenge might not succeed
+[3766:0x765a800000]    45290 ms: Mark-Compact 2012.0 (2080.4) -> 1995.9 (2080.4) MB, pooled: 3 MB, 835.67 / 0.04 ms  (average mu = 0.126, current mu = 0.034) allocation failure; scavenge might not succeed
+
+
+<--- JS stacktrace --->
+
+FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 0x1024b1cac node::OOMErrorHandler(char const*, v8::OOMDetails const&) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+ 2: 0x102687998 v8::internal::V8::FatalProcessOutOfMemory(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+ 3: 0x1028970c0 v8::internal::Heap::stack() [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+ 4: 0x1028ad538 v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags)::$_1::operator()() const [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+ 5: 0x1028acdcc void heap::base::Stack::SetMarkerAndCallbackImpl<v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags)::$_1>(heap::base::Stack*, void*, void const*) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+ 6: 0x103066f78 PushAllRegistersAndIterateStack [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+ 7: 0x102895280 v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+ 8: 0x102889a48 v8::internal::HeapAllocator::AllocateRawWithLightRetrySlowPath(int, v8::internal::AllocationType, v8::internal::AllocationOrigin, v8::internal::AllocationAlignment) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+ 9: 0x10288a280 v8::internal::HeapAllocator::AllocateRawWithRetryOrFailSlowPath(int, v8::internal::AllocationType, v8::internal::AllocationOrigin, v8::internal::AllocationAlignment) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+10: 0x10286d5a0 v8::internal::Factory::NewFillerObject(int, v8::internal::AllocationAlignment, v8::internal::AllocationType, v8::internal::AllocationOrigin) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+11: 0x102c89050 v8::internal::Runtime_AllocateInYoungGeneration(int, unsigned long*, v8::internal::Isolate*) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+12: 0x103149af4 Builtins_CEntry_Return1_ArgvOnStack_NoBuiltinExit [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+13: 0x10e8d8e5c 
+14: 0x10dbe158c 
+15: 0x10dc68f84 
+16: 0x10dfef450 
+17: 0x10ea2ee1c 
+18: 0x10e923600 
+19: 0x10df1549c 
+20: 0x10dfccbac 
+21: 0x10dff3320 
+22: 0x10e8dd8e8 
+23: 0x10dfcb6b0 
+24: 0x10dff3320 
+25: 0x10e68a104 
+26: 0x10e8e6c7c 
+27: 0x10dc77c5c 
+28: 0x10dc2b634 
+29: 0x10e06f1a8 
+30: 0x10e54adcc 
+31: 0x10ddd8674 
+32: 0x10dff318c 
+33: 0x10e8dd8e8 
+34: 0x10e00927c 
+35: 0x10dff3358 
+36: 0x10e68a104 
+37: 0x10e8e6c7c 
+38: 0x10dc77c5c 
+39: 0x10dc2b548 
+40: 0x10e06f1a8 
+41: 0x10e54adcc 
+42: 0x10ddd8674 
+43: 0x10dff318c 
+44: 0x10e04d6a8 
+45: 0x10dff2e40 
+46: 0x10e011340 
+47: 0x10e8714a4 
+48: 0x10e69bd38 
+49: 0x10e7e6878 
+50: 0x10e354d34 
+51: 0x10dc21388 
+52: 0x10e211f20 
+53: 0x10e3d9ae8 
+54: 0x10e7e6dfc 
+55: 0x10dbfba50 
+56: 0x10dc21788 
+57: 0x10ddaf47c 
+58: 0x10dc214e8 
+59: 0x10e737cb4 
+60: 0x10dc214b8 
+61: 0x10ea27d70 
+62: 0x10e9e774c 
+63: 0x10dc217c0 
+64: 0x10e211f20 
+65: 0x10e3d9c30 
+66: 0x10e5b8458 
+67: 0x10e5b948c 
+68: 0x10e5b9718 
+69: 0x10e5d93b8 
+70: 0x10e5b985c 
+71: 0x10e5a4abc 
+72: 0x10e054310 
+73: 0x10e6ac9ac 
+74: 0x10daf756c 
+75: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+76: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+77: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+78: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+79: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+80: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+81: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+82: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+83: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+84: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+85: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+86: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+87: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+88: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+89: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+90: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+91: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+92: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+93: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+94: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+95: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+96: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+97: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+98: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+99: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+100: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+101: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+102: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+103: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+104: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+105: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+106: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+107: 0x1030b4ef0 Builtins_InterpreterEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+108: 0x1030b2c0c Builtins_JSEntryTrampoline [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+109: 0x1030b28f4 Builtins_JSEntry [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+110: 0x1027eefbc v8::internal::(anonymous namespace)::Invoke(v8::internal::Isolate*, v8::internal::(anonymous namespace)::InvokeParams const&) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+111: 0x1027ee918 v8::internal::Execution::Call(v8::internal::Isolate*, v8::internal::Handle<v8::internal::Object>, v8::internal::Handle<v8::internal::Object>, int, v8::internal::Handle<v8::internal::Object>*) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+112: 0x10269df04 v8::Function::Call(v8::Local<v8::Context>, v8::Local<v8::Value>, int, v8::Local<v8::Value>*) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+113: 0x10248c050 node::builtins::BuiltinLoader::CompileAndCall(v8::Local<v8::Context>, char const*, node::Realm*) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+114: 0x102544d14 node::Realm::ExecuteBootstrapper(char const*) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+115: 0x102469db0 node::StartExecution(node::Environment*, char const*) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+116: 0x102469d04 node::StartExecution(node::Environment*, std::__1::function<v8::MaybeLocal<v8::Value> (node::StartExecutionCallbackInfo const&)>) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+117: 0x1023b63e0 node::LoadEnvironment(node::Environment*, std::__1::function<v8::MaybeLocal<v8::Value> (node::StartExecutionCallbackInfo const&)>, std::__1::function<void (node::Environment*, v8::Local<v8::Value>, v8::Local<v8::Value>)>) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+118: 0x1024fce10 node::NodeMainInstance::Run() [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+119: 0x10246d008 node::Start(int, char**) [/Users/ali/.nvm/versions/node/v22.17.0/bin/node]
+120: 0x196627e80 start [/usr/lib/dyld]
+undefined
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command was killed with SIGABRT (Aborted): tsc --noEmit -p tsconfig.json

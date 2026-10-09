@@ -1,0 +1,38 @@
+
+> houzzat@0.1.0 build /Volumes/T7/Web Projects/teamalisyedrealestate
+> COPYFILE_DISABLE=1 bash scripts/strip-appledouble.sh && COPYFILE_DISABLE=1 bash scripts/next-production-build.sh && COPYFILE_DISABLE=1 bash scripts/strip-appledouble.sh
+
+▲ Next.js 16.2.9 (webpack)
+- Environments: .env.local
+- Experiments (use with caution):
+  · optimizePackageImports
+  ✓ webpackMemoryOptimizations
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 102s
+  Running TypeScript ...
+  Finished TypeScript in 61s ...
+  Collecting page data using 7 workers ...
+[sitemap] generateSitemaps failed; using a single chunk ErrorEvent {
+  type: 'error',
+  defaultPrevented: false,
+  cancelable: false,
+  timeStamp: 1945.932333
+}
+  Generating static pages using 7 workers (0/171) ...
+  Generating static pages using 7 workers (42/171) 
+  Generating static pages using 7 workers (85/171) 
+  Generating static pages using 7 workers (128/171) 
+[ssr-hang] {"event":"ssr-hang.tenancy.start"}
+[ssr-hang] {"event":"ssr-hang.tenancy.failure","ms":290,"errorName":"Error"}
+Error occurred prerendering page "/robots.txt". Read more: https://nextjs.org/docs/messages/prerender-error
+ErrorEvent {
+  type: 'error',
+  defaultPrevented: false,
+  cancelable: false,
+  timeStamp: 8561.068917
+}
+Export encountered an error on /robots.txt/route: /robots.txt, exiting the build.
+⨯ Next.js build worker exited with code: 1 and signal: null
+ ELIFECYCLE  Command failed with exit code 1.

@@ -1,0 +1,10 @@
+{
+  "result": {
+    "href": "http://houzzat.com:3000/search?cities=Mississauga&view=cards",
+    "filtersOpen": true,
+    "chips": [
+      "Mississauga"
+    ],
+    "historyLen": 3
+  }
+}

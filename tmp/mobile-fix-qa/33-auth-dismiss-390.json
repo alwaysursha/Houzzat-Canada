@@ -1,0 +1,7 @@
+{
+  "result": {
+    "path": "/",
+    "onHome": true,
+    "href": "chrome-error://chromewebdata/"
+  }
+}

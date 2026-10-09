@@ -1,0 +1,10 @@
+{
+  "result": {
+    "inputValue": "Mississauga",
+    "listOpen": true,
+    "opts": [
+      "Mississauga"
+    ],
+    "fetchCheck": "manual"
+  }
+}
