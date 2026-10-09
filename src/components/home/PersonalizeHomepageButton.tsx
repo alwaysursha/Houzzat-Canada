@@ -1,9 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { PersonalizeHomepageModal } from "@/components/home/PersonalizeHomepageModal";
 import { Button } from "@/components/ui/button";
+import { HOMEPAGE_SEARCH_DEFAULT_NAME } from "@/lib/listings/homepage-personalization";
+import {
+  committedFromActiveSearchHref,
+  homepagePersonalizationQueryFromCommitted,
+  isMeaningfulActiveSearchHref,
+} from "@/lib/listings/homepage-search-source";
+import { loadActiveSearchMemory } from "@/lib/listings/search-state/active-search-memory";
 import { cn } from "@/lib/utils";
 
 export function PersonalizeHomepageButton({
@@ -14,6 +21,19 @@ export function PersonalizeHomepageButton({
   variant?: "hero" | "tools";
 }) {
   const [open, setOpen] = useState(false);
+
+  const activeInitial = useMemo(() => {
+    if (!open) return undefined;
+    const memory = loadActiveSearchMemory();
+    if (!memory || !isMeaningfulActiveSearchHref(memory.href)) return undefined;
+    const committed = committedFromActiveSearchHref(memory.href);
+    if (!committed) return undefined;
+    const query = homepagePersonalizationQueryFromCommitted(committed);
+    return {
+      name: HOMEPAGE_SEARCH_DEFAULT_NAME,
+      ...query,
+    };
+  }, [open]);
 
   return (
     <>
@@ -43,6 +63,8 @@ export function PersonalizeHomepageButton({
         open={open}
         onClose={() => setOpen(false)}
         cities={cities}
+        sourceKind={activeInitial ? "active" : undefined}
+        initial={activeInitial}
       />
     </>
   );

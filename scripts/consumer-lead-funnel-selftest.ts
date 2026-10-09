@@ -383,11 +383,13 @@ function testEnrichmentAndTimeframes() {
   assert.equal(funnel.includes("home-valuation"), false);
   assert.ok(funnel.includes("When are you planning to buy?"));
   assert.ok(funnel.includes("Have you been pre-approved for a mortgage?"));
-  assert.ok(funnel.includes("Yes, that&apos;s right"));
-  assert.ok(funnel.includes("Edit Search"));
+  assert.ok(funnel.includes("Yes, That&apos;s right"));
+  assert.ok(funnel.includes("No, Edit Search"));
   assert.equal(funnel.includes("Edit Price Range"), false);
-  assert.ok(funnel.includes("Confirm your home search"));
+  assert.ok(funnel.includes("Is this search correct?"));
+  assert.equal(funnel.includes("Confirm your home search"), false);
   assert.ok(funnel.includes("formatConfirmSearchSummary"));
+  assert.ok(funnel.includes("confirmChips"));
   assert.ok(funnel.includes("fieldMenuExpand"));
   assert.equal(funnel.includes("portalDesktopSuggestions"), false);
   assert.ok(funnel.includes('go("claimAddress")'));

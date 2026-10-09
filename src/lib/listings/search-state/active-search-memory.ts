@@ -12,6 +12,13 @@ import type { CommittedSearch } from "@/lib/listings/search-state/types";
 
 export const ACTIVE_SEARCH_MEMORY_VERSION = 1 as const;
 export const ACTIVE_SEARCH_MEMORY_KEY_PREFIX = "houzzat:active-search-v1";
+/** Fired after Active Search Memory is written or cleared (same-tab listeners). */
+export const ACTIVE_SEARCH_CHANGED_EVENT = "houzzat:active-search-changed";
+
+function emitActiveSearchChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(ACTIVE_SEARCH_CHANGED_EVENT));
+}
 
 type ActiveSearchRecord = {
   v: typeof ACTIVE_SEARCH_MEMORY_VERSION;
@@ -141,6 +148,7 @@ export function saveActiveSearchMemory(
       activeSearchMemoryKey(options?.scope),
       JSON.stringify(record),
     );
+    emitActiveSearchChanged();
   } catch {
     /* private mode / quota */
   }
@@ -150,6 +158,7 @@ export function clearActiveSearchMemory(scope?: string): void {
   if (!canUseStorage()) return;
   try {
     localStorage.removeItem(activeSearchMemoryKey(scope));
+    emitActiveSearchChanged();
   } catch {
     /* ignore */
   }

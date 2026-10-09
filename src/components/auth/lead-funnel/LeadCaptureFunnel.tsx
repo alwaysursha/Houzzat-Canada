@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import type { PropertyType } from "@prisma/client";
 import { ArrowLeft } from "lucide-react";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import { FunnelProgress } from "@/components/auth/lead-funnel/FunnelProgress";
@@ -21,6 +22,10 @@ import {
   parseCurrencyInput,
 } from "@/lib/auth/buyer-confirmed-preference";
 import { CONSUMER_BUYING_TIMEFRAMES, purchaseTimeframeLabel } from "@/lib/agent/timeframe";
+import {
+  formatPriceCompact,
+  propertyTypeLabel,
+} from "@/lib/listings/constants";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -275,18 +280,43 @@ export function LeadCaptureFunnel({
     });
   }
 
-  const confirmSummary =
-    observed?.summary ||
-    formatConfirmSearchSummary({
-      cities: observed?.cities,
-      minPrice: observed?.minPrice,
-      maxPrice: observed?.maxPrice,
-    });
+  const confirmChips: string[] = [];
+  if (observed?.cities?.length) {
+    confirmChips.push(observed.cities.filter(Boolean).join(", "));
+  }
+  if (observed?.propertyTypes?.length === 1) {
+    confirmChips.push(
+      propertyTypeLabel(observed.propertyTypes[0] as PropertyType),
+    );
+  } else if (observed?.propertyTypes && observed.propertyTypes.length > 1) {
+    confirmChips.push(`${observed.propertyTypes.length} home types`);
+  }
+  if (observed?.minPrice != null || observed?.maxPrice != null) {
+    const min =
+      observed.minPrice != null
+        ? formatPriceCompact(observed.minPrice)
+        : null;
+    const max =
+      observed.maxPrice != null
+        ? formatPriceCompact(observed.maxPrice)
+        : null;
+    if (min && max) confirmChips.push(`${min}–${max}`);
+    else if (max) confirmChips.push(`Under ${max}`);
+    else if (min) confirmChips.push(`From ${min}`);
+  }
+  if (observed?.minBeds != null) {
+    confirmChips.push(`${observed.minBeds}+ Beds`);
+  }
+  if (observed?.minBaths != null) {
+    confirmChips.push(`${observed.minBaths}+ Baths`);
+  }
+
+  const hideBack = step === "preference" || step === "otp";
 
   return (
     <div className="relative px-5 pb-5 pt-6">
       <FunnelProgress value={STEP_PROGRESS[step]} />
-      {history.length > 0 && step !== "otp" ? (
+      {history.length > 0 && !hideBack ? (
         <button
           type="button"
           onClick={back}
@@ -611,20 +641,23 @@ export function LeadCaptureFunnel({
         {step === "preference" ? (
           <div className="space-y-3.5">
             <h3 className="font-display text-xl leading-snug text-ink">
-              Confirm your home search
+              Is this search correct?
             </h3>
-            {confirmSummary ? (
-              <p className="rounded-xl border border-line/80 bg-mist/60 px-3.5 py-3 text-base font-semibold leading-snug text-ink">
-                {confirmSummary}
-              </p>
-            ) : (
-              <p className="text-sm leading-relaxed text-ink/70">
-                Tell us what you&apos;re looking for so we can tailor matches.
-              </p>
-            )}
-            <p className="text-sm leading-relaxed text-ink/70">
-              Is this what you&apos;re looking for?
-            </p>
+            {confirmChips.length > 0 ? (
+              <ul
+                className="flex flex-wrap gap-1.5"
+                aria-label="Search criteria"
+              >
+                {confirmChips.map((label) => (
+                  <li
+                    key={label}
+                    className="rounded-md border border-line bg-mist/70 px-2.5 py-1 text-xs font-semibold text-ink"
+                  >
+                    {label}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <button
               type="button"
               disabled={pending}
@@ -649,7 +682,7 @@ export function LeadCaptureFunnel({
                 });
               }}
             >
-              Yes, that&apos;s right
+              Yes, That&apos;s right
             </button>
             <button
               type="button"
@@ -662,7 +695,7 @@ export function LeadCaptureFunnel({
                 go("editSearch");
               }}
             >
-              Edit Search
+              No, Edit Search
             </button>
           </div>
         ) : null}

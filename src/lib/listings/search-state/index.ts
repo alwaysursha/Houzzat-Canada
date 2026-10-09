@@ -62,6 +62,7 @@ export {
   type UrlSyncDecision,
 } from "@/lib/listings/search-state/url-sync";
 export {
+  ACTIVE_SEARCH_CHANGED_EVENT,
   ACTIVE_SEARCH_MEMORY_KEY_PREFIX,
   ACTIVE_SEARCH_MEMORY_VERSION,
   activeSearchMemoryKey,

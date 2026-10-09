@@ -26,6 +26,33 @@ const SAVED_SEARCH_CONFIRM_KEY = "houzzat:saved-search-needs-confirm";
 const SAVED_SEARCHES_CHANGED_EVENT = "houzzat:saved-searches-changed";
 
 /**
+ * Marker on SAVE_SEARCH callbackPath for homepage Save & Apply.
+ * Stripped from SavedSearch.query by searchFiltersFromHref (unknown key).
+ */
+export const HOMEPAGE_APPLY_CAPTURE_PARAM = "houzzatHomepage";
+
+/** Append homepage-apply marker for guest Save & Apply from personalize modal. */
+export function withHomepageApplyCaptureFlag(callbackPath: string): string {
+  try {
+    const url = new URL(callbackPath, "https://houzzat.local");
+    url.searchParams.set(HOMEPAGE_APPLY_CAPTURE_PARAM, "1");
+    return `${url.pathname}${url.search}`;
+  } catch {
+    const join = callbackPath.includes("?") ? "&" : "?";
+    return `${callbackPath}${join}${HOMEPAGE_APPLY_CAPTURE_PARAM}=1`;
+  }
+}
+
+export function callbackRequestsHomepageApply(callbackPath: string): boolean {
+  try {
+    const url = new URL(callbackPath, "https://houzzat.local");
+    return url.searchParams.get(HOMEPAGE_APPLY_CAPTURE_PARAM) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Anonymous Save Search. The callback path is the full /search URL.
  * Signed-in saves do not call this.
  */
@@ -88,8 +115,10 @@ export function savedSearchPayloadFromCallback(callbackPath: string): {
 }
 
 type SavedSearchRow = {
+  id?: string;
   query?: Record<string, unknown> | null;
   isPrimary?: boolean;
+  isHomepageActive?: boolean;
 };
 
 export type ResumeSavedSearchResult =
@@ -149,11 +178,20 @@ async function listSavedSearches(): Promise<
   return { ok: true, items: data.items ?? [] };
 }
 
-async function createSavedSearch(input: {
-  name: string;
-  query: Record<string, unknown>;
-}): Promise<SavedSearchCallResult> {
-  const outcome = await createPrimarySavedSearch(input);
+async function createSavedSearch(
+  input: {
+    name: string;
+    query: Record<string, unknown>;
+  },
+  options?: { applyToHomepage?: boolean },
+): Promise<SavedSearchCallResult> {
+  const outcome = await createPrimarySavedSearch({
+    ...input,
+    // Homepage Save & Apply: homepage flag only (matches PersonalizeHomepageModal).
+    // Search Filters Save Search: primary only (default).
+    asPrimary: options?.applyToHomepage ? false : true,
+    applyToHomepage: options?.applyToHomepage ?? false,
+  });
   if (outcome.status === "saved") return { ok: true };
   return {
     ok: false,
@@ -185,8 +223,12 @@ export async function resumeSavedSearchIntent(
   if (intent.type !== "SAVE_SEARCH") return "ignored";
   const payload = savedSearchPayloadFromCallback(intent.callbackPath);
   if (!payload) return "failed";
+  const applyToHomepage = callbackRequestsHomepageApply(intent.callbackPath);
   const list = deps.list ?? listSavedSearches;
-  const create = deps.create ?? createSavedSearch;
+  const create =
+    deps.create ??
+    ((input: { name: string; query: Record<string, unknown> }) =>
+      createSavedSearch(input, { applyToHomepage }));
   const onSaved = deps.onSaved ?? notifySavedSearchesChanged;
   const onNeedsConfirm = deps.onNeedsConfirm ?? requestSavedSearchConfirm;
   try {
@@ -202,6 +244,20 @@ export async function resumeSavedSearchIntent(
       stableSavedSearchQueryKey(primary.query) ===
         stableSavedSearchQueryKey(payload.query)
     ) {
+      // Same criteria already saved — no duplicate row. Promote homepage flag if needed.
+      if (
+        applyToHomepage &&
+        primary.id &&
+        primary.isHomepageActive !== true
+      ) {
+        const patch = await fetch("/api/saved-searches", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: primary.id, isHomepageActive: true }),
+          credentials: "same-origin",
+        });
+        if (!patch.ok) return "failed";
+      }
       onSaved();
       return "saved";
     }

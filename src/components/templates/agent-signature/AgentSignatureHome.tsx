@@ -1,3 +1,4 @@
+import { PersonalizeHomepageBar } from "@/components/home/PersonalizeHomepageBar";
 import { AgentSignatureBuySellSection } from "@/components/templates/agent-signature/AgentSignatureBuySellSection";
 import { AgentSignatureCommunities } from "@/components/templates/agent-signature/AgentSignatureCommunities";
 import { AgentSignatureContactSection } from "@/components/templates/agent-signature/AgentSignatureContactSection";
@@ -34,6 +35,9 @@ export function AgentSignatureHome({
     >
       <AgentSignatureHero view={view} />
       <AgentSignatureSearchSection />
+      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-10">
+        <PersonalizeHomepageBar cities={suggestionCities} variant="signature" />
+      </div>
       <AgentSignatureFeaturedProperties cities={suggestionCities} />
       <AgentSignatureMeetSection view={view} />
       <AgentSignatureBuySellSection view={view} />

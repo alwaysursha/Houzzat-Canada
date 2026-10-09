@@ -1,21 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import type { PropertyType } from "@prisma/client";
 import { X } from "lucide-react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { CityMultiInput } from "@/components/home/CityMultiInput";
 import { PriceRangeSlider } from "@/components/home/PriceRangeSlider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  openGuestSaveSearchIntent,
+  retainSaveSearchIntentHandler,
+  withHomepageApplyCaptureFlag,
+} from "@/lib/auth/save-search-intent";
 import { propertyTypeLabel } from "@/lib/listings/constants";
 import {
   HOMEPAGE_PRICE_SLIDER_MAX,
   HOMEPAGE_SEARCH_DEFAULT_NAME,
 } from "@/lib/listings/homepage-personalization";
+import {
+  committedFromHomepagePersonalizationQuery,
+  homepageSearchHrefFromCommitted,
+  type HomepageSearchSourceKind,
+} from "@/lib/listings/homepage-search-source";
+import { saveActiveSearchMemory } from "@/lib/listings/search-state/active-search-memory";
 import { hardGo } from "@/lib/mobile/nav-back";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { SITE_MESSAGES } from "@/lib/site-messages";
@@ -32,10 +45,45 @@ const RESIDENTIAL_TYPES: PropertyType[] = [
   "OTHER",
 ];
 
+const BED_OPTIONS = ["1", "2", "3", "4", "5"] as const;
+const BATH_OPTIONS = ["1", "2", "3", "4"] as const;
+
+export type PersonalizeHomepageInitial = {
+  name?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  minBeds?: string;
+  minBaths?: string;
+  propertyTypes?: string[];
+  city?: string;
+  cities?: string[];
+  communities?: string[];
+  transactionType?: "SALE" | "LEASE" | "ALL";
+};
+
 function parsePrice(value?: string) {
   if (!value?.trim()) return null;
   const n = Number(value.replace(/[^0-9]/g, ""));
   return Number.isFinite(n) ? n : null;
+}
+
+function seedFromInitial(initial?: PersonalizeHomepageInitial) {
+  const initialCities =
+    initial?.cities?.length
+      ? initial.cities
+      : initial?.city
+        ? [initial.city]
+        : [];
+  return {
+    name: initial?.name?.trim() || HOMEPAGE_SEARCH_DEFAULT_NAME,
+    minPrice: parsePrice(initial?.minPrice) ?? 0,
+    maxPrice: parsePrice(initial?.maxPrice) ?? HOMEPAGE_PRICE_SLIDER_MAX,
+    minBeds: initial?.minBeds?.trim() || "",
+    minBaths: initial?.minBaths?.trim() || "",
+    propertyTypes: initial?.propertyTypes ? [...initial.propertyTypes] : [],
+    cities: [...initialCities],
+    transactionType: initial?.transactionType ?? ("SALE" as const),
+  };
 }
 
 export function PersonalizeHomepageModal({
@@ -44,50 +92,55 @@ export function PersonalizeHomepageModal({
   cities: _popularCities,
   initial,
   searchId,
+  sourceKind,
 }: {
   open: boolean;
   onClose: () => void;
   /** Kept for call-site compatibility; cities are typed manually now. */
   cities?: string[];
   searchId?: string;
-  initial?: {
-    name?: string;
-    minPrice?: string;
-    maxPrice?: string;
-    propertyTypes?: string[];
-    city?: string;
-    cities?: string[];
-    communities?: string[];
-  };
+  /** Which homepage source opened the editor (for copy / Active Search sync). */
+  sourceKind?: HomepageSearchSourceKind;
+  initial?: PersonalizeHomepageInitial;
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { status: sessionStatus } = useSession();
   const { openAuth } = useAuthModal();
   const { confirm, toast } = useSiteAlert();
-  const [name, setName] = useState(
-    initial?.name ?? HOMEPAGE_SEARCH_DEFAULT_NAME,
-  );
+  const signedIn = sessionStatus === "authenticated";
+  const seededOpenRef = useRef(false);
+  const [name, setName] = useState(HOMEPAGE_SEARCH_DEFAULT_NAME);
   const [minPrice, setMinPrice] = useState(0);
   const [maxPrice, setMaxPrice] = useState(HOMEPAGE_PRICE_SLIDER_MAX);
+  const [minBeds, setMinBeds] = useState("");
+  const [minBaths, setMinBaths] = useState("");
   const [propertyTypes, setPropertyTypes] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
+  const [transactionType, setTransactionType] = useState<"SALE" | "LEASE" | "ALL">(
+    "SALE",
+  );
   const [pending, setPending] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Snapshot criteria once when the dialog opens — Cancel discards drafts.
   useEffect(() => {
-    if (!open) return;
-    const initialCities =
-      initial?.cities?.length
-        ? initial.cities
-        : initial?.city
-          ? [initial.city]
-          : [];
-    setName(initial?.name?.trim() || HOMEPAGE_SEARCH_DEFAULT_NAME);
-    setMinPrice(parsePrice(initial?.minPrice) ?? 0);
-    setMaxPrice(parsePrice(initial?.maxPrice) ?? HOMEPAGE_PRICE_SLIDER_MAX);
-    setPropertyTypes(initial?.propertyTypes ?? []);
-    setCities(initialCities);
+    if (!open) {
+      seededOpenRef.current = false;
+      return;
+    }
+    if (seededOpenRef.current) return;
+    seededOpenRef.current = true;
+    const seed = seedFromInitial(initial);
+    setName(seed.name);
+    setMinPrice(seed.minPrice);
+    setMaxPrice(seed.maxPrice);
+    setMinBeds(seed.minBeds);
+    setMinBaths(seed.minBaths);
+    setPropertyTypes(seed.propertyTypes);
+    setCities(seed.cities);
+    setTransactionType(seed.transactionType);
     setError(null);
   }, [open, initial]);
 
@@ -103,6 +156,38 @@ export function PersonalizeHomepageModal({
       release();
     };
   }, [open, onClose]);
+
+  // Keep SAVE_SEARCH resume registered while this editor exists (guest Save & Apply).
+  useEffect(() => {
+    return retainSaveSearchIntentHandler({
+      onSaved: () => {
+        toast({ message: "Homepage search saved.", tone: "success" });
+        window.dispatchEvent(
+          new Event("houzzat:homepage-personalization-changed"),
+        );
+        window.dispatchEvent(new Event("houzzat:saved-searches-changed"));
+        if (pathname === "/") router.refresh();
+      },
+      onFailed: () => {
+        toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+      },
+    });
+  }, [toast, pathname, router]);
+
+  function syncActiveSearchMemory() {
+    const committed = committedFromHomepagePersonalizationQuery({
+      minPrice: minPrice > 0 ? String(minPrice) : undefined,
+      maxPrice:
+        maxPrice < HOMEPAGE_PRICE_SLIDER_MAX ? String(maxPrice) : undefined,
+      minBeds: minBeds || undefined,
+      minBaths: minBaths || undefined,
+      propertyTypes: propertyTypes.length ? propertyTypes : undefined,
+      cities: cities.length ? cities : undefined,
+      city: cities.length === 1 ? cities[0] : undefined,
+      transactionType,
+    });
+    saveActiveSearchMemory(homepageSearchHrefFromCommitted(committed));
+  }
 
   function goHomeAndRefresh() {
     window.dispatchEvent(new Event("houzzat:saved-searches-changed"));
@@ -125,6 +210,20 @@ export function PersonalizeHomepageModal({
     );
   }
 
+  function draftCommitted() {
+    return committedFromHomepagePersonalizationQuery({
+      minPrice: minPrice > 0 ? String(minPrice) : undefined,
+      maxPrice:
+        maxPrice < HOMEPAGE_PRICE_SLIDER_MAX ? String(maxPrice) : undefined,
+      minBeds: minBeds || undefined,
+      minBaths: minBaths || undefined,
+      propertyTypes: propertyTypes.length ? propertyTypes : undefined,
+      cities: cities.length ? cities : undefined,
+      city: cities.length === 1 ? cities[0] : undefined,
+      transactionType,
+    });
+  }
+
   async function onSave() {
     setPending(true);
     setError(null);
@@ -134,11 +233,41 @@ export function PersonalizeHomepageModal({
     if (maxPrice < HOMEPAGE_PRICE_SLIDER_MAX) {
       query.maxPrice = String(maxPrice);
     }
+    if (minBeds) query.minBeds = minBeds;
+    if (minBaths) query.minBaths = minBaths;
     if (propertyTypes.length) query.propertyTypes = propertyTypes;
     if (cities.length === 1) query.city = cities[0];
     if (cities.length > 1) query.cities = cities;
+    if (transactionType !== "SALE") query.transactionType = transactionType;
 
     const searchName = name.trim() || HOMEPAGE_SEARCH_DEFAULT_NAME;
+    const callbackPath = withHomepageApplyCaptureFlag(
+      homepageSearchHrefFromCommitted(draftCommitted()),
+    );
+
+    // Browsing memory only — never writes Primary / alerts by itself.
+    syncActiveSearchMemory();
+
+    // Anonymous: CaptureIntent SAVE_SEARCH preserves criteria; resume after auth.
+    if (!signedIn) {
+      const opened = openGuestSaveSearchIntent({
+        callbackPath,
+        host: window.location.hostname,
+        now: Date.now(),
+        store: browserCaptureIntentStore(),
+        openAuth,
+      });
+      if (!opened.ok) {
+        openAuth({ mode: "sign-in", callbackUrl: callbackPath });
+      }
+      toast({
+        message: "Sign in to save this search to your homepage.",
+        tone: "info",
+      });
+      setPending(false);
+      onClose();
+      return;
+    }
 
     try {
       const res = searchId
@@ -170,7 +299,16 @@ export function PersonalizeHomepageModal({
 
       if (!res.ok) {
         if (data.requiresAuth) {
-          openAuth({ mode: "sign-in", callbackUrl: "/" });
+          const opened = openGuestSaveSearchIntent({
+            callbackPath,
+            host: window.location.hostname,
+            now: Date.now(),
+            store: browserCaptureIntentStore(),
+            openAuth,
+          });
+          if (!opened.ok) {
+            openAuth({ mode: "sign-in", callbackUrl: callbackPath });
+          }
           setError("Sign in to save your homepage search.");
           return;
         }
@@ -192,7 +330,6 @@ export function PersonalizeHomepageModal({
 
   async function onReset() {
     if (!searchId) return;
-    // Close first so the confirm dialog is visible and scroll locks unwind cleanly.
     onClose();
     const ok = await confirm({
       ...SITE_MESSAGES.clearHomepageSearch,
@@ -227,6 +364,13 @@ export function PersonalizeHomepageModal({
 
   if (!open) return null;
 
+  const editingPrimary = Boolean(searchId);
+  const title = editingPrimary
+    ? "Edit homepage search"
+    : sourceKind === "active"
+      ? "Edit recent search"
+      : "Create Custom Search";
+
   const panel = (
     <div
       role="dialog"
@@ -245,11 +389,12 @@ export function PersonalizeHomepageModal({
               id="personalize-home-title"
               className="font-display text-2xl text-ink"
             >
-              {searchId ? "Edit homepage search" : "Create Custom Search"}
+              {title}
             </p>
             <p className="mt-1 text-sm text-ink/55">
-              Save a search and apply it to your homepage. You can create more
-              later from your account.
+              {editingPrimary
+                ? "Update your Primary Home Search. Cancel leaves it unchanged."
+                : "Save & Apply sets your Primary Home Search. Cancel leaves browsing unchanged."}
             </p>
           </div>
           <button
@@ -272,6 +417,36 @@ export function PersonalizeHomepageModal({
             />
           </label>
 
+          <fieldset className="space-y-2">
+            <legend className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+              Transaction
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["SALE", "Buy"],
+                  ["LEASE", "Rent"],
+                  ["ALL", "Both"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={transactionType === value}
+                  onClick={() => setTransactionType(value)}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+                    transactionType === value
+                      ? "bg-ink text-white"
+                      : "border border-line bg-mist/60 text-ink/70 hover:border-canopy/40",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
               Price
@@ -284,6 +459,81 @@ export function PersonalizeHomepageModal({
                 setMaxPrice(nextMax);
               }}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                Beds
+              </legend>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  aria-pressed={!minBeds}
+                  onClick={() => setMinBeds("")}
+                  className={cn(
+                    "rounded-lg px-2.5 py-1.5 text-xs font-semibold",
+                    !minBeds
+                      ? "bg-ink text-white"
+                      : "border border-line bg-mist/60 text-ink/70",
+                  )}
+                >
+                  Any
+                </button>
+                {BED_OPTIONS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    aria-pressed={minBeds === n}
+                    onClick={() => setMinBeds(n)}
+                    className={cn(
+                      "rounded-lg px-2.5 py-1.5 text-xs font-semibold",
+                      minBeds === n
+                        ? "bg-ink text-white"
+                        : "border border-line bg-mist/60 text-ink/70",
+                    )}
+                  >
+                    {n}+
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                Baths
+              </legend>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  aria-pressed={!minBaths}
+                  onClick={() => setMinBaths("")}
+                  className={cn(
+                    "rounded-lg px-2.5 py-1.5 text-xs font-semibold",
+                    !minBaths
+                      ? "bg-ink text-white"
+                      : "border border-line bg-mist/60 text-ink/70",
+                  )}
+                >
+                  Any
+                </button>
+                {BATH_OPTIONS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    aria-pressed={minBaths === n}
+                    onClick={() => setMinBaths(n)}
+                    className={cn(
+                      "rounded-lg px-2.5 py-1.5 text-xs font-semibold",
+                      minBaths === n
+                        ? "bg-ink text-white"
+                        : "border border-line bg-mist/60 text-ink/70",
+                    )}
+                  >
+                    {n}+
+                  </button>
+                ))}
+              </div>
+            </fieldset>
           </div>
 
           <fieldset className="space-y-2">

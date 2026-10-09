@@ -35,10 +35,14 @@ async function countExistingSearches(): Promise<
   return { status: "ok", count: data.items?.length ?? 0 };
 }
 
-/** Create a new primary saved search (demotes previous primary to secondary). */
+/** Create a saved search; defaults to primary (demotes previous primary). */
 export async function createPrimarySavedSearch(input: {
   name: string;
   query: Record<string, unknown>;
+  /** When true, marks this search as the homepage personalization source. */
+  applyToHomepage?: boolean;
+  /** Defaults true for Save Search / CaptureIntent resume compatibility. */
+  asPrimary?: boolean;
 }): Promise<PrimarySaveOutcome> {
   const res = await fetch("/api/saved-searches", {
     method: "POST",
@@ -47,7 +51,8 @@ export async function createPrimarySavedSearch(input: {
       name: input.name,
       query: input.query,
       emailAlerts: true,
-      asPrimary: true,
+      asPrimary: input.asPrimary ?? true,
+      applyToHomepage: input.applyToHomepage ?? false,
     }),
   });
   if (res.status === 401) return { status: "auth" };

@@ -1,3 +1,4 @@
+import { PersonalizeHomepageBar } from "@/components/home/PersonalizeHomepageBar";
 import { TeamSignatureBuySellSection } from "@/components/templates/team-signature/TeamSignatureBuySellSection";
 import { TeamSignatureCommunities } from "@/components/templates/team-signature/TeamSignatureCommunities";
 import { TeamSignatureContactSection } from "@/components/templates/team-signature/TeamSignatureContactSection";
@@ -34,6 +35,9 @@ export function TeamSignatureHome({
     >
       <TeamSignatureHero view={view} />
       <TeamSignatureSearchSection />
+      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-10">
+        <PersonalizeHomepageBar cities={suggestionCities} variant="signature" />
+      </div>
       <TeamSignatureTrustStrip view={view} />
       <TeamSignatureFeaturedProperties cities={suggestionCities} />
       <TeamSignatureMeetSection view={view} />
