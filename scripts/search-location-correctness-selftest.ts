@@ -62,7 +62,10 @@ assert.equal(single.minPrice, "750000");
 assert.equal(single.minBeds, "3");
 assert.equal(single.minBaths, "2");
 assert.equal(single.status, "ACTIVE,SOLD_CONDITIONAL");
-assert.equal(savedSearchDisplayName(baseFilters, { cities: ["Mississauga"] }), "Mississauga homes");
+assert.equal(
+  savedSearchDisplayName(baseFilters, { cities: ["Mississauga"] }),
+  "Mississauga Listings · 3+ Beds · 2+ Baths · $750K–$1.2M",
+);
 
 // --- Saved query: multi-city uses `cities` array (digest + href contract) ---
 const multi = searchFiltersToSavedQuery(baseFilters, {
@@ -72,7 +75,7 @@ assert.equal(multi.city, undefined);
 assert.deepEqual(multi.cities, ["Mississauga", "Brampton"]);
 assert.equal(
   savedSearchDisplayName(baseFilters, { cities: ["Mississauga", "Brampton"] }),
-  "2 cities homes",
+  "Mississauga & Brampton Listings · 3+ Beds · 2+ Baths · $750K–$1.2M",
 );
 
 // Legacy filters.city still works when extras omitted

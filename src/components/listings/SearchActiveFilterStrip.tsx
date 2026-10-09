@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import type { SearchResultChip } from "@/lib/listings/search-results-copy";
 import { cn } from "@/lib/utils";
@@ -8,20 +9,25 @@ import { cn } from "@/lib/utils";
  * Removable chips for committed Search criteria (below the toolbar).
  * Labels come from searchResultsCopy — e.g. "3+ Beds", "2+ Baths" — so the
  * strip cannot drift from the URL / API query.
+ *
+ * Optional `leading` (mobile Searches dropdown) sits inline with chips;
+ * Clear all stays at the end. Horizontal scroll on narrow viewports.
  */
 export function SearchActiveFilterStrip({
   chips,
   onClearChip,
   onClearAll,
   className,
+  leading,
 }: {
   chips: SearchResultChip[];
   onClearChip: (chip: SearchResultChip) => void;
   onClearAll: () => void;
   className?: string;
+  leading?: ReactNode;
 }) {
   const removable = chips.filter((chip) => chip.clearable);
-  if (removable.length === 0) return null;
+  if (removable.length === 0 && !leading) return null;
 
   return (
     <div
@@ -32,6 +38,11 @@ export function SearchActiveFilterStrip({
       role="list"
       aria-label="Active filters"
     >
+      {leading ? (
+        <div className="shrink-0" role="listitem">
+          {leading}
+        </div>
+      ) : null}
       {chips.map((chip) => {
         const key = chip.city ? `${chip.key}:${chip.city}` : chip.key;
         if (!chip.clearable) {
@@ -62,14 +73,16 @@ export function SearchActiveFilterStrip({
           </button>
         );
       })}
-      <button
-        type="button"
-        aria-label="Clear all filters"
-        onClick={onClearAll}
-        className="inline-flex h-9 shrink-0 items-center rounded-full px-2.5 text-xs font-semibold text-ink/45 transition hover:bg-mist hover:text-danger sm:h-8"
-      >
-        Clear all
-      </button>
+      {removable.length > 0 ? (
+        <button
+          type="button"
+          aria-label="Clear all filters"
+          onClick={onClearAll}
+          className="inline-flex h-9 shrink-0 items-center rounded-full px-2.5 text-xs font-semibold text-ink/45 transition hover:bg-mist hover:text-danger sm:h-8"
+        >
+          Clear all
+        </button>
+      ) : null}
     </div>
   );
 }

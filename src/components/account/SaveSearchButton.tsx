@@ -14,8 +14,15 @@ import {
   retainSaveSearchIntentHandler,
   SAVED_SEARCH_NEEDS_CONFIRM_EVENT,
   stableSavedSearchQueryKey,
+  withSaveAsNewCaptureFlag,
 } from "@/lib/auth/save-search-intent";
-import { savePrimarySearch } from "@/lib/listings/save-primary-search";
+import {
+  saveAsNewSearch,
+  savePrimarySearch,
+} from "@/lib/listings/save-primary-search";
+import {
+  savedSearchDisplayNameFromQuery,
+} from "@/lib/listings/saved-search-query";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
@@ -30,31 +37,23 @@ function normalizeQuery(query: Record<string, unknown>): string {
   return stableSavedSearchQueryKey(query);
 }
 
-function nameFromQuery(query: Record<string, unknown>): string {
-  const cities = Array.isArray(query.cities)
-    ? query.cities.map((city) => String(city).trim()).filter(Boolean)
-    : [];
-  const place =
-    (typeof query.community === "string" && query.community) ||
-    (cities.length === 1 ? cities[0] : "") ||
-    (typeof query.city === "string" && query.city) ||
-    (cities.length > 1 ? `${cities.length} cities` : "") ||
-    "";
-  const txn = query.transactionType === "LEASE" ? "rentals" : "homes";
-  return place ? `${place} ${txn}` : `My ${txn} search`;
-}
-
 export function SaveSearchButton({
   query,
   signedIn,
   callbackPath,
   className,
+  label = "Saved Search",
+  /** Prefer “Save as new” confirm copy (never silently overwrite a saved row). */
+  saveAsNew = false,
 }: {
   query: Record<string, unknown>;
   signedIn: boolean;
   /** Full search URL, including the query string. */
   callbackPath: string;
   className?: string;
+  /** Button label (dropdown uses “Save as new”). */
+  label?: string;
+  saveAsNew?: boolean;
 }) {
   const { openAuth } = useAuthModal();
   const { openClientToolsVerification } = useClientToolsVerification();
@@ -148,24 +147,31 @@ export function SaveSearchButton({
 
   async function persist(confirmReplace: boolean) {
     if (!signedIn) {
+      const guestCallback = saveAsNew
+        ? withSaveAsNewCaptureFlag(callbackPath)
+        : callbackPath;
       const opened = openGuestSaveSearchIntent({
-        callbackPath,
+        callbackPath: guestCallback,
         host: window.location.hostname,
         now: Date.now(),
         store: browserCaptureIntentStore(),
         openAuth,
       });
       if (!opened.ok) {
-        openAuth({ mode: "sign-in", callbackUrl: callbackPath });
+        openAuth({ mode: "sign-in", callbackUrl: guestCallback });
       }
       return;
     }
     setPending(true);
-    const outcome = await savePrimarySearch({
-      name: nameFromQuery(query),
-      query,
-      confirmReplace,
-    });
+    const name = savedSearchDisplayNameFromQuery(query);
+    // Save as new: always create a separate row; never touch Primary / homepage.
+    const outcome = saveAsNew
+      ? await saveAsNewSearch({ name, query })
+      : await savePrimarySearch({
+          name,
+          query,
+          confirmReplace,
+        });
     setPending(false);
 
     if (outcome.status === "auth") {
@@ -189,9 +195,11 @@ export function SaveSearchButton({
     clearSavedSearchConfirm();
     setConfirmOpen(false);
     toast({
-      message: confirmReplace
-        ? "Primary search updated. Previous search kept as secondary."
-        : "Search saved to your buyer profile.",
+      message: saveAsNew
+        ? "New search saved. Previous Primary left unchanged."
+        : confirmReplace
+          ? "Primary search updated. Previous search kept as secondary."
+          : "Search saved to your buyer profile.",
       tone: "success",
     });
   }
@@ -206,16 +214,19 @@ export function SaveSearchButton({
         title={
           disabled
             ? "No new search criteria to save"
-            : "Save this search to your buyer profile"
+            : saveAsNew
+              ? "Save as a new search (does not overwrite existing)"
+              : "Save this search to your buyer profile"
         }
         onClick={() => void persist(false)}
         className={cn("h-8 rounded-full px-2.5", disabled && "border-line/70 text-ink/35", className)}
       >
-        {pending ? "Saving…" : "Saved Search"}
+        {pending ? "Saving…" : label}
       </Button>
       <UpdateSavedSearchDialog
         open={confirmOpen}
         pending={pending}
+        saveAsNew={saveAsNew}
         onCancel={() => {
           clearSavedSearchConfirm();
           setConfirmOpen(false);

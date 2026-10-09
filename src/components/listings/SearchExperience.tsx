@@ -44,6 +44,7 @@ import { SearchDesktopFilterPanel } from "@/components/listings/SearchDesktopFil
 import { SearchFiltersMenu } from "@/components/listings/SearchFiltersMenu";
 import { SearchFiltersSheet } from "@/components/listings/SearchFiltersSheet";
 import { SearchResultsPane } from "@/components/listings/SearchResultsPane";
+import { SearchesDropdown } from "@/components/listings/SearchesDropdown";
 import {
   parseSearchQuery,
   searchHrefFromParsed,
@@ -916,33 +917,7 @@ export function SearchExperience() {
               labels="sr-only"
             />
           </div>
-
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="inline-flex shrink-0">
-              <SaveSearchButton
-                signedIn={signedIn}
-                callbackPath={searchCallbackPath(filters, structuredCities)}
-                query={savedSearchQuery}
-              />
-            </div>
-            <WatchAreaButton
-              signedIn={signedIn}
-              city={filters.city}
-              community={filters.community || undefined}
-              transactionType={filters.transactionType}
-              segment={filters.segment}
-              idleLabel="Watch"
-              authCallbackUrl={searchCallbackPath(filters, structuredCities)}
-              className="h-9 shrink-0 rounded-full px-2.5"
-            />
-            <Link
-              href="/route-planner"
-              className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-canopy/25 bg-canopy/10 px-2.5 text-xs font-semibold text-canopy"
-            >
-              <RouteStartIcon />
-              Plan
-            </Link>
-          </div>
+          {/* Plan / Watch remain in the listing sticky bar & side menu on mobile. */}
         </div>
         ) : (
         <div className="space-y-2.5">
@@ -1065,6 +1040,15 @@ export function SearchExperience() {
           chips={activeChips}
           onClearChip={clearResultChip}
           onClearAll={resetStructuredFilters}
+          leading={
+            isNarrow ? (
+              <SearchesDropdown
+                signedIn={signedIn}
+                callbackPath={searchCallbackPath(filters, structuredCities)}
+                savedSearchQuery={savedSearchQuery}
+              />
+            ) : undefined
+          }
         />
       </div>
 

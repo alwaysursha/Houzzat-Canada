@@ -391,6 +391,7 @@ export function summarizePersonalization(
   return parts.join(" · ");
 }
 
-export const HOMEPAGE_SEARCH_DEFAULT_NAME = "Home Search 1";
+/** Placeholder only — real saves use criteria-derived names. */
+export const HOMEPAGE_SEARCH_DEFAULT_NAME = "Home Search";
 export const HOMEPAGE_PRICE_SLIDER_MAX = 6_000_000;
 export const HOMEPAGE_PRICE_SLIDER_STEP = 25_000;

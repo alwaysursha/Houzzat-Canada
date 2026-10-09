@@ -59,70 +59,58 @@ export function PersonalizeHomepageBar({
         aria-label={heading}
         data-homepage-search-source={source.kind}
         className={cn(
+          "relative overflow-hidden",
           variant === "signature"
-            ? "rounded-2xl border border-ink/10 bg-surface/90 px-4 py-4 sm:px-5"
-            : "border-y border-canopy/20 bg-canopy/[0.07] px-0 py-3 md:py-3",
+            ? "rounded-2xl bg-gradient-to-br from-canopy/[0.12] via-emerald-50/80 to-teal-50/50 px-4 py-5 sm:px-5 sm:py-6"
+            : // Bleed to content-pad edges (no boxed border seams / horizontal overflow).
+              "-mx-4 bg-gradient-to-br from-canopy/[0.14] via-[#e8f5ef] to-[#f0faf5] px-4 py-5 sm:-mx-6 sm:px-6 sm:py-6 md:py-7 lg:-mx-10 lg:px-10",
         )}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p
-              className={cn(
-                "text-sm font-semibold",
-                variant === "signature" ? "text-ink" : "text-ink",
-              )}
-            >
-              {heading}
-            </p>
-            {chipLabels.length > 0 ? (
-              <ul
-                className="mt-2 flex flex-wrap gap-1.5"
-                aria-label="Search criteria"
+        <div className="relative">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-xl tracking-tight text-ink sm:text-2xl">
+                {heading}
+              </p>
+              {chipLabels.length > 0 ? (
+                <ul
+                  className="mt-3 flex flex-wrap gap-2"
+                  aria-label="Search criteria"
+                >
+                  {chipLabels.map((label) => (
+                    <li
+                      key={label}
+                      className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-canopy-deep shadow-[0_1px_0_rgba(20,32,28,0.04)] ring-1 ring-canopy/15"
+                    >
+                      {label}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Link
+                href={source.href}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-canopy/35 bg-white/90 px-4 text-sm font-semibold text-canopy transition hover:border-canopy/55 hover:bg-white"
               >
-                {chipLabels.map((label) => (
-                  <li
-                    key={label}
-                    className="rounded-md border border-canopy/35 bg-surface px-2.5 py-1 text-xs font-semibold text-canopy-deep"
-                  >
-                    {label}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+                View results
+              </Link>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={source.href}
-              className="rounded-md border border-canopy/45 bg-surface px-3 py-1.5 text-xs font-semibold text-canopy transition hover:bg-canopy/5"
-            >
-              View results
-            </Link>
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-canopy/45 bg-canopy px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-canopy-deep"
-            >
-              <SlidersHorizontal className="size-3.5" aria-hidden />
-              Edit
-            </button>
-          </div>
-        </div>
 
-        {/* Mobile filled CTA duplicate for default template rhythm */}
-        {variant === "default" ? (
-          <div className="mt-3 md:hidden">
+          <div className="mt-4">
             <button
               type="button"
               onClick={() => setModalOpen(true)}
-              className="relative flex w-full items-center justify-center gap-2.5 rounded-xl bg-canopy px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-canopy-deep"
+              className="relative flex w-full items-center justify-center gap-2.5 rounded-xl bg-canopy px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-canopy-deep sm:w-auto sm:min-w-[14rem] sm:px-5"
             >
               <SlidersHorizontal className="size-4" aria-hidden />
               Edit homepage search
             </button>
           </div>
-        ) : null}
 
-        <HomepagePersonalizedListings source={source} />
+          <HomepagePersonalizedListings source={source} />
+        </div>
       </section>
 
       <PersonalizeHomepageModal

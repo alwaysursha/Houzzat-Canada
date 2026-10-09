@@ -10,6 +10,9 @@ import {
   type Dispatch,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { pushLocalRecentSearch } from "@/lib/listings/recent-searches-local";
+import { savedSearchDisplayName } from "@/lib/listings/saved-search-query";
+import { committedToSearchFilters } from "@/lib/listings/search-state/adapters";
 import {
   isConsumerSearchPath,
   loadActiveSearchMemory,
@@ -24,7 +27,11 @@ import {
 } from "@/lib/listings/search-state/reduce";
 import { serializeSearchUrl } from "@/lib/listings/search-state/serialize";
 import { decideUrlHydrate } from "@/lib/listings/search-state/url-sync";
-import type { SearchAction, SearchState } from "@/lib/listings/search-state/types";
+import type {
+  CommittedSearch,
+  SearchAction,
+  SearchState,
+} from "@/lib/listings/search-state/types";
 
 function toSearchRelativeHref(href: string): string {
   if (href.startsWith("/search")) return href;
@@ -34,6 +41,21 @@ function toSearchRelativeHref(href: string): string {
   } catch {
     return href;
   }
+}
+
+/** Local Recent Searches only — never creates server SavedSearch rows. */
+function rememberRecentCommittedSearch(
+  href: string,
+  committed: CommittedSearch,
+) {
+  const relative = toSearchRelativeHref(href);
+  // Default /search or view-only must not pollute history.
+  if (!urlHasExplicitSearchCriteria(relative)) return;
+  const filters = committedToSearchFilters(committed);
+  pushLocalRecentSearch({
+    label: savedSearchDisplayName(filters, { cities: committed.cities }),
+    href: relative,
+  });
 }
 
 /**
@@ -153,7 +175,9 @@ export function useCommittedSearch(pathname: string): {
         if (skipNextPersistRef.current) {
           skipNextPersistRef.current = false;
         } else {
-          saveActiveSearchMemory(toSearchRelativeHref(pageHref));
+          const relative = toSearchRelativeHref(pageHref);
+          saveActiveSearchMemory(relative);
+          rememberRecentCommittedSearch(relative, state.committed);
         }
       }
       return;
@@ -174,8 +198,10 @@ export function useCommittedSearch(pathname: string): {
       skipNextPersistRef.current = false;
       return;
     }
-    saveActiveSearchMemory(toSearchRelativeHref(pageHref));
-  }, [pageHref, router, pathname, urlSyncReady]);
+    const relative = toSearchRelativeHref(pageHref);
+    saveActiveSearchMemory(relative);
+    rememberRecentCommittedSearch(relative, state.committed);
+  }, [pageHref, router, pathname, urlSyncReady, state.committed]);
 
   // External URL → hydrate (Back/Forward, autocomplete push, shared links).
   useEffect(() => {
@@ -208,7 +234,12 @@ export function useCommittedSearch(pathname: string): {
           isConsumerSearchPath(pathname) &&
           urlHasExplicitSearchCriteria(searchParams)
         ) {
-          saveActiveSearchMemory(toSearchRelativeHref(fromUrl));
+          const relative = toSearchRelativeHref(fromUrl);
+          saveActiveSearchMemory(relative);
+          rememberRecentCommittedSearch(
+            relative,
+            parseSearchUrl(searchParams),
+          );
         }
         return;
       default: {

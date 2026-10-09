@@ -11,6 +11,7 @@ import { browserCaptureIntentStore } from "@/components/auth/capture-intent-brow
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { CityMultiInput } from "@/components/home/CityMultiInput";
 import { PriceRangeSlider } from "@/components/home/PriceRangeSlider";
+import type { SearchFilters } from "@/components/listings/SearchFilterChips";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,11 +29,17 @@ import {
   homepageSearchHrefFromCommitted,
   type HomepageSearchSourceKind,
 } from "@/lib/listings/homepage-search-source";
+import {
+  isGenericSavedSearchName,
+  resolveSavedSearchName,
+  savedSearchDisplayName,
+} from "@/lib/listings/saved-search-query";
 import { saveActiveSearchMemory } from "@/lib/listings/search-state/active-search-memory";
 import { hardGo } from "@/lib/mobile/nav-back";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
+import { visualViewportOverlayStyle } from "@/lib/visual-viewport-overlay-style";
 
 const RESIDENTIAL_TYPES: PropertyType[] = [
   "DETACHED",
@@ -67,6 +74,35 @@ function parsePrice(value?: string) {
   return Number.isFinite(n) ? n : null;
 }
 
+function draftFiltersForName(input: {
+  minPrice: number;
+  maxPrice: number;
+  minBeds: string;
+  minBaths: string;
+  propertyTypes: string[];
+  cities: string[];
+  transactionType: "SALE" | "LEASE" | "ALL";
+}) {
+  return {
+    segment: "RESIDENTIAL" as const,
+    transactionType: input.transactionType,
+    dataSource: "" as const,
+    city: input.cities.length === 1 ? input.cities[0]! : "",
+    community: "",
+    propertyTypes: input.propertyTypes as PropertyType[],
+    minPrice: input.minPrice > 0 ? String(input.minPrice) : "",
+    maxPrice:
+      input.maxPrice < HOMEPAGE_PRICE_SLIDER_MAX
+        ? String(input.maxPrice)
+        : "",
+    minBeds: input.minBeds,
+    minBaths: input.minBaths,
+    openHouseOnly: false,
+    statuses: ["ACTIVE"] as SearchFilters["statuses"],
+    sort: "newest" as const,
+  };
+}
+
 function seedFromInitial(initial?: PersonalizeHomepageInitial) {
   const initialCities =
     initial?.cities?.length
@@ -74,8 +110,7 @@ function seedFromInitial(initial?: PersonalizeHomepageInitial) {
       : initial?.city
         ? [initial.city]
         : [];
-  return {
-    name: initial?.name?.trim() || HOMEPAGE_SEARCH_DEFAULT_NAME,
+  const draft = {
     minPrice: parsePrice(initial?.minPrice) ?? 0,
     maxPrice: parsePrice(initial?.maxPrice) ?? HOMEPAGE_PRICE_SLIDER_MAX,
     minBeds: initial?.minBeds?.trim() || "",
@@ -83,6 +118,15 @@ function seedFromInitial(initial?: PersonalizeHomepageInitial) {
     propertyTypes: initial?.propertyTypes ? [...initial.propertyTypes] : [],
     cities: [...initialCities],
     transactionType: initial?.transactionType ?? ("SALE" as const),
+  };
+  const autoName = savedSearchDisplayName(draftFiltersForName(draft), {
+    cities: draft.cities,
+  });
+  const existing = initial?.name?.trim() || "";
+  return {
+    ...draft,
+    name:
+      existing && !isGenericSavedSearchName(existing) ? existing : autoName,
   };
 }
 
@@ -123,6 +167,12 @@ export function PersonalizeHomepageModal({
   const [pending, setPending] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Snapshot criteria once when the dialog opens — Cancel discards drafts.
   useEffect(() => {
@@ -156,6 +206,42 @@ export function PersonalizeHomepageModal({
       release();
     };
   }, [open, onClose]);
+
+  // Pin to visual viewport (keyboard / Android Chrome / iOS Safari resize).
+  useEffect(() => {
+    if (!open) return;
+
+    function syncViewport() {
+      const el = overlayRef.current;
+      if (!el) return;
+      const style = visualViewportOverlayStyle(window.visualViewport);
+      el.style.left = style.left;
+      el.style.top = style.top;
+      el.style.width = style.width;
+      el.style.height = style.height;
+      el.style.right = style.right;
+      el.style.bottom = style.bottom;
+    }
+
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", syncViewport);
+    vv?.addEventListener("scroll", syncViewport);
+    return () => {
+      window.removeEventListener("resize", syncViewport);
+      vv?.removeEventListener("resize", syncViewport);
+      vv?.removeEventListener("scroll", syncViewport);
+      const el = overlayRef.current;
+      if (!el) return;
+      el.style.left = "";
+      el.style.top = "";
+      el.style.width = "";
+      el.style.height = "";
+      el.style.right = "";
+      el.style.bottom = "";
+    };
+  }, [open, mounted]);
 
   // Keep SAVE_SEARCH resume registered while this editor exists (guest Save & Apply).
   useEffect(() => {
@@ -240,7 +326,19 @@ export function PersonalizeHomepageModal({
     if (cities.length > 1) query.cities = cities;
     if (transactionType !== "SALE") query.transactionType = transactionType;
 
-    const searchName = name.trim() || HOMEPAGE_SEARCH_DEFAULT_NAME;
+    const searchName = resolveSavedSearchName({
+      existingName: name,
+      filters: draftFiltersForName({
+        minPrice,
+        maxPrice,
+        minBeds,
+        minBaths,
+        propertyTypes,
+        cities,
+        transactionType,
+      }),
+      cities,
+    });
     const callbackPath = withHomepageApplyCaptureFlag(
       homepageSearchHrefFromCommitted(draftCommitted()),
     );
@@ -362,7 +460,7 @@ export function PersonalizeHomepageModal({
     }
   }
 
-  if (!open) return null;
+  if (!mounted || !open) return null;
 
   const editingPrimary = Boolean(searchId);
   const title = editingPrimary
@@ -373,25 +471,28 @@ export function PersonalizeHomepageModal({
 
   const panel = (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="personalize-home-title"
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-ink/55 p-4 pb-[max(1rem,calc(var(--mobile-bottom-nav,0px)+0.5rem))] pt-[max(1rem,env(safe-area-inset-top,0px))] sm:items-center sm:pb-4"
+      ref={overlayRef}
+      data-personalize-homepage-modal=""
+      className="fixed top-0 left-0 z-[120] flex h-full w-full items-end justify-center overflow-hidden overscroll-none bg-ink/55 px-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] pb-[max(0.75rem,calc(env(safe-area-inset-bottom,0px)+var(--mobile-bottom-nav,0px)))] sm:items-center sm:px-4 sm:pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
       onClick={onClose}
+      role="presentation"
     >
       <div
-        className="flex max-h-[min(90vh,calc(100dvh-var(--mobile-bottom-nav,0px)-2rem))] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="personalize-home-title"
+        className="flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-line bg-surface/95 px-5 py-4 backdrop-blur">
-          <div>
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-line bg-surface px-4 py-3 sm:px-5 sm:py-4">
+          <div className="min-w-0">
             <p
               id="personalize-home-title"
-              className="font-display text-2xl text-ink"
+              className="font-display text-xl text-ink sm:text-2xl"
             >
               {title}
             </p>
-            <p className="mt-1 text-sm text-ink/55">
+            <p className="mt-1 text-xs text-ink/55 sm:text-sm">
               {editingPrimary
                 ? "Update your Primary Home Search. Cancel leaves it unchanged."
                 : "Save & Apply sets your Primary Home Search. Cancel leaves browsing unchanged."}
@@ -400,14 +501,14 @@ export function PersonalizeHomepageModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-ink/50 transition hover:bg-mist hover:text-ink"
+            className="shrink-0 rounded-full p-2 text-ink/50 transition hover:bg-mist hover:text-ink"
             aria-label="Close"
           >
             <X className="size-5" />
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5 sm:py-5">
           <label className="block space-y-1.5 text-xs font-semibold uppercase tracking-wide text-ink/50">
             Search name
             <Input
@@ -575,7 +676,7 @@ export function PersonalizeHomepageModal({
           ) : null}
         </div>
 
-        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur">
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line bg-surface px-4 py-3 sm:px-5 sm:py-4">
           <div className="flex flex-wrap items-center gap-2">
             {searchId ? (
               <Button
@@ -606,6 +707,5 @@ export function PersonalizeHomepageModal({
     </div>
   );
 
-  if (typeof document === "undefined") return null;
   return createPortal(panel, document.body);
 }

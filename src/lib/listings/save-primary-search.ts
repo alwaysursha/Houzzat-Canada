@@ -92,3 +92,19 @@ export async function savePrimarySearch(input: {
     query: input.query,
   });
 }
+
+/**
+ * Ordinary “Save as new”: create a separate SavedSearch without changing
+ * alert Primary or Primary Home Search (isHomepageActive).
+ */
+export async function saveAsNewSearch(input: {
+  name: string;
+  query: Record<string, unknown>;
+}): Promise<PrimarySaveOutcome> {
+  return createPrimarySavedSearch({
+    name: input.name,
+    query: input.query,
+    asPrimary: false,
+    applyToHomepage: false,
+  });
+}

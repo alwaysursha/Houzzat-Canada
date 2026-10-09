@@ -13,11 +13,14 @@ export function UpdateSavedSearchDialog({
   pending,
   onConfirm,
   onCancel,
+  saveAsNew = false,
 }: {
   open: boolean;
   pending?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Create a separate SavedSearch; never change Primary / overwrite criteria. */
+  saveAsNew?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -156,15 +159,15 @@ export function UpdateSavedSearchDialog({
             id="update-search-title"
             className="text-base font-semibold text-ink"
           >
-            Update your saved search?
+            {saveAsNew ? "Save as a new search?" : "Update your saved search?"}
           </h2>
           <p
             id="update-search-desc"
             className="mt-2 text-sm leading-relaxed break-words text-ink/65"
           >
-            You already have a search saved to your buyer profile. Updating makes
-            this the primary search for property alerts. Your previous search will
-            be kept as secondary.
+            {saveAsNew
+              ? "You already have a search saved. Saving as new creates another search without changing your Primary Home Search or alert Primary. Existing names and alert settings stay intact."
+              : "You already have a search saved to your buyer profile. Updating makes this the primary search for property alerts. Your previous search will be kept as secondary."}
           </p>
           <div className="mt-5 flex flex-col-reverse gap-2 min-[380px]:flex-row min-[380px]:flex-wrap min-[380px]:justify-end">
             <Button
@@ -184,7 +187,11 @@ export function UpdateSavedSearchDialog({
               onClick={onConfirm}
               className="w-full min-[380px]:w-auto"
             >
-              {pending ? "Updating…" : "Update search"}
+              {pending
+                ? "Saving…"
+                : saveAsNew
+                  ? "Save as new"
+                  : "Update search"}
             </Button>
           </div>
         </div>

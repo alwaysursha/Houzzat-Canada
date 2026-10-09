@@ -554,7 +554,10 @@ function testAnonymousFilteredSearchKeepsQuery() {
   }
   const payload = savedSearchPayloadFromCallback(href);
   assert.ok(payload);
-  assert.equal(payload?.name, "The Beaches rentals");
+  assert.equal(
+    payload?.name,
+    "The Beaches Condos for Lease · 2+ Beds · 1+ Baths · $3K–$4K/mo",
+  )
   assert.equal(payload?.query.city, "Toronto");
   assert.equal(payload?.query.community, "The Beaches");
   assert.equal(payload?.query.minBeds, "2");

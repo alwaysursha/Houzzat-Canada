@@ -13,6 +13,7 @@
  */
 
 import { signOut } from "next-auth/react";
+import { clearAccountLocalBrowseCaches } from "@/lib/auth/account-local-cleanup";
 import {
   isSafeSignOutDestination,
   resolveCompleteSignOutDestination,
@@ -114,6 +115,14 @@ export async function performHardSignOut(options?: {
   // Require an explicit Sign in click on the next visit (no silent auto-login).
   try {
     markManualSignInRequired();
+  } catch {
+    // ignore
+  }
+
+  // Drop prior-account / guest browse caches before the next identity arrives.
+  // Does not run during signup resume — only explicit sign-out.
+  try {
+    clearAccountLocalBrowseCaches();
   } catch {
     // ignore
   }

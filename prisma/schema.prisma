@@ -700,6 +700,7 @@ model Workspace {
   leadNotes                         LeadNote[]
   leadEmailLogs                     LeadEmailLog[]
   buyerConfirmedPreferences         BuyerConfirmedPreference[]
+  customerBrowseStates              CustomerBrowseState[]
   phoneOtpChallenges                PhoneOtpChallenge[]
   crmRoutingSettings                CrmRoutingSettings?
   domains                           WorkspaceDomain[]
@@ -1150,6 +1151,11 @@ model User {
   communicationPreferenceTokens CommunicationPreferenceToken[]
   savedListings                 SavedListing[]
   savedSearches                 SavedSearch[]
+  /**
+   * Cross-device Active Search + Recent Searches (browse memory only).
+   * Never creates SavedSearch / alerts.
+   */
+  customerBrowseState           CustomerBrowseState?
   /**
    * Explicit confirmed buyer search preference from qualification funnel.
    * Independent of SavedSearch — must never drive digests by itself.
@@ -2414,6 +2420,37 @@ model SavedSearch {
   @@index([userId, createdAt])
   @@index([userId, isHomepageActive])
   @@index([userId, isPrimary])
+}
+
+/**
+ * Account-backed browse memory for cross-device Active Search + Recent Searches.
+ * Not a SavedSearch — never creates alerts or Primary Home Search.
+ */
+model CustomerBrowseState {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  workspaceId      String
+  /**
+   * Canonical /search?... href (view stripped). Null when cleared.
+   */
+  activeSearchHref String?   @db.Text
+  activeUpdatedAt  DateTime?
+  /**
+   * [{ label, href, at }] — max 8, server-normalized.
+   */
+  recentSearches   Json      @default("[]")
+  /**
+   * Monotonic revision for concurrency / stale-write rejection.
+   */
+  revision         Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId])
+  @@index([workspaceId, updatedAt])
 }
 
 /**

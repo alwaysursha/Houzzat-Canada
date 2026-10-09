@@ -3,6 +3,7 @@
 import { Suspense, useMemo } from "react";
 import { SessionProvider } from "next-auth/react";
 import { ContactUpdateReminder } from "@/components/account/ContactUpdateReminder";
+import { BrowseStateSync } from "@/components/account/BrowseStateSync";
 import { RecentViewsSync } from "@/components/account/RecentViewsSync";
 import { SavedListingsProvider } from "@/components/account/SavedListingsProvider";
 import { PropertyWatchesProvider } from "@/components/account/PropertyWatchesProvider";
@@ -49,6 +50,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 <CaptureIntentResume />
                 <SoftNavShield />
                 <NavigationRecovery />
+                <BrowseStateSync />
                 <RecentViewsSync />
                 <Suspense fallback={null}>
                   {isActivityBeaconEnabled() ? <ActivityBeacon /> : null}

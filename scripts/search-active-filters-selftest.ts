@@ -298,7 +298,10 @@ record(4, "Guest CaptureIntent callback preserves cities+filters", "RUNTIME", ()
     cities: committed.cities,
   });
   assert.equal(saved.city, "Mississauga");
-  assert.equal(savedSearchDisplayName(committed.filters, { cities: committed.cities }), "Mississauga homes");
+  assert.equal(
+    savedSearchDisplayName(committed.filters, { cities: committed.cities }),
+    "Mississauga Listings · 3+ Beds · 2+ Baths · From $750K",
+  );
 });
 
 record(4, "Sheet guest path uses openGuestSaveSearchIntent + draft callback", "STATIC", () => {

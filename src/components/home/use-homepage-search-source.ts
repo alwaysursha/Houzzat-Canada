@@ -14,6 +14,8 @@ import {
   isMeaningfulActiveSearchHref,
   type HomepageSearchSource,
 } from "@/lib/listings/homepage-search-source";
+import { savedSearchDisplayName } from "@/lib/listings/saved-search-query";
+import { committedToSearchFilters } from "@/lib/listings/search-state/adapters";
 import {
   ACTIVE_SEARCH_CHANGED_EVENT,
   loadActiveSearchMemory,
@@ -33,7 +35,9 @@ function sourceFromActiveMemory(): HomepageSearchSource | null {
   if (!committed) return null;
   return {
     kind: "active",
-    name: HOMEPAGE_SEARCH_DEFAULT_NAME,
+    name: savedSearchDisplayName(committedToSearchFilters(committed), {
+      cities: committed.cities,
+    }),
     committed,
     query: homepagePersonalizationQueryFromCommitted(committed),
     href: homepageSearchHrefFromCommitted(committed),

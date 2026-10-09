@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { HomeListingRail } from "@/components/home/HomeListingRail";
 import { HomeOpenHousesRail } from "@/components/home/HomeOpenHousesRail";
 import { HomeSoldRail } from "@/components/home/HomeSoldRail";
+import { useHomepageSearchSource } from "@/components/home/use-homepage-search-source";
 import { EMAIL_VERIFIED_EVENT } from "@/lib/auth/verification-success-signal";
 import {
   citiesQueryParam,
@@ -27,6 +28,7 @@ import {
   shouldUpgradeHomeRailsRegion,
 } from "@/lib/mobile/location-policy";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
+
 const RAIL_LIMIT = 12;
 
 type HomeRailsPayload = {
@@ -37,6 +39,7 @@ type HomeRailsPayload = {
   commercial?: ListingCardData[];
 };
 
+/** Cities from homepage personalization query (Primary or Active). */
 function personalizationCities(
   personalization: HomepagePersonalizationQuery | null | undefined,
 ): string[] {
@@ -46,38 +49,11 @@ function personalizationCities(
   return [];
 }
 
-function personalizationQuery(
-  personalization: HomepagePersonalizationQuery | null,
-): Record<string, string | undefined> {
-  if (!personalization) return {};
-  return {
-    minPrice: personalization.minPrice,
-    maxPrice: personalization.maxPrice,
-    minBeds: personalization.minBeds,
-    minBaths: personalization.minBaths,
-    propertyTypes: personalization.propertyTypes?.join(","),
-    communities: personalization.communities?.length
-      ? personalization.communities.join("|")
-      : undefined,
-    transactionType:
-      personalization.transactionType &&
-      personalization.transactionType !== "ALL"
-        ? personalization.transactionType
-        : undefined,
-  };
-}
-
-function homeRailsUrl(
-  cities: string,
-  extras: Record<string, string | undefined>,
-) {
+function homeRailsUrl(cities: string) {
   const q = new URLSearchParams({
     cities,
     limit: String(RAIL_LIMIT),
   });
-  for (const [key, value] of Object.entries(extras)) {
-    if (value) q.set(key, value);
-  }
   return `/api/listings/home-rails?${q.toString()}`;
 }
 
@@ -90,16 +66,29 @@ export function HomepageMarketRails({
   isClient: boolean;
   needsEmailVerification?: boolean;
   vowOnlyGuest: boolean;
+  /** Server Primary (SSR hint). Client Primary ≻ Active wins via hook. */
   personalization: HomepagePersonalizationQuery | null;
 }) {
+  const { source, ready: sourceReady } = useHomepageSearchSource();
+
+  /**
+   * City scope only — never buyer price/beds/property-type filters on category
+   * rails. Primary Home Search cities win; else meaningful Active Search.
+   */
+  const scopedCities = useMemo(() => {
+    if (sourceReady && source?.query) {
+      return personalizationCities(source.query);
+    }
+    // Hydrate window: keep SSR Primary cities to avoid a geo flash.
+    return personalizationCities(personalization);
+  }, [sourceReady, source, personalization]);
+
   const [region, setRegion] = useState<MarketRegion>(() =>
-    resolveRegionFromCity(personalizationCities(personalization)[0] ?? null)
-      .region,
+    resolveRegionFromCity(scopedCities[0] ?? null).region,
   );
-  const [overrideCities, setOverrideCities] = useState<string[] | null>(() => {
-    const cities = personalizationCities(personalization);
-    return cities.length ? cities : null;
-  });
+  const [overrideCities, setOverrideCities] = useState<string[] | null>(() =>
+    scopedCities.length ? scopedCities : null,
+  );
   const loadedRef = useRef(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [newListings, setNewListings] = useState<ListingCardData[]>([]);
@@ -114,11 +103,7 @@ export function HomepageMarketRails({
   const isClientRef = useRef(isClient);
   isClientRef.current = isClient;
 
-  const personalizedCities = personalizationCities(personalization);
-  const personalizationKey = JSON.stringify({
-    cities: personalizedCities,
-    ...personalizationQuery(personalization),
-  });
+  const cityScopeKey = scopedCities.join("|");
 
   useEffect(() => {
     function onEmailVerified() {
@@ -137,10 +122,9 @@ export function HomepageMarketRails({
     const upgradedRegionIds = new Set<string>();
 
     async function resolveBrowseRegion(): Promise<MarketRegion> {
-      const personalizedCities = personalizationCities(personalization);
-      if (personalizedCities.length) {
-        setOverrideCities(personalizedCities);
-        return resolveRegionFromCity(personalizedCities[0] ?? null).region;
+      if (scopedCities.length) {
+        setOverrideCities(scopedCities);
+        return resolveRegionFromCity(scopedCities[0] ?? null).region;
       }
       setOverrideCities(null);
 
@@ -160,15 +144,16 @@ export function HomepageMarketRails({
       const thisRequest = ++requestId;
       setRegion(nextRegion);
 
+      // Personalized city scope uses exact selected cities — never expand to
+      // unrelated region cities as fallback matches.
       const cities = citiesQueryParam(
         cityOverride?.length ? cityOverride : nextRegion.cities,
       );
-      const extras = personalizationQuery(personalization);
       const clientAccess = isClientRef.current;
 
       try {
         const res = await fetch(
-          homeRailsUrl(cities, extras),
+          homeRailsUrl(cities),
           homeRailsClientFetchInit(clientAccess),
         );
         if (!res.ok) throw new Error(`home-rails ${res.status}`);
@@ -194,11 +179,7 @@ export function HomepageMarketRails({
     }
 
     function tryGeoUpgrade(lat: number, lng: number) {
-      if (
-        vowOnlyGuest ||
-        personalizationCities(personalization).length ||
-        cancelled
-      ) {
+      if (vowOnlyGuest || scopedCities.length || cancelled) {
         return;
       }
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
@@ -225,13 +206,12 @@ export function HomepageMarketRails({
       }
 
       const nextRegion = await resolveBrowseRegion();
-      const personalizedCities = personalizationCities(personalization);
       await loadForRegion(
         nextRegion,
-        personalizedCities.length ? personalizedCities : null,
+        scopedCities.length ? scopedCities : null,
       );
 
-      if (personalizedCities.length || cancelled) return;
+      if (scopedCities.length || cancelled) return;
 
       // Passive only — never request OS permission from market rails.
       try {
@@ -257,10 +237,6 @@ export function HomepageMarketRails({
     }
 
     window.addEventListener(HOME_GEO_EVENT, onGeo);
-    // Defer market fetch slightly so the hero paints first — still starts
-    // quickly via idle timeout so the finished page is not slower overall.
-    // Access-change refetches (isClient / email verified) skip the first-paint
-    // delay so sold prices update promptly after login/verification.
     const deferMs = loadedRef.current || isClient || accessEpoch > 0 ? 0 : 900;
     const cancelSchedule = scheduleAfterFirstPaint(
       () => {
@@ -273,22 +249,15 @@ export function HomepageMarketRails({
       cancelSchedule();
       window.removeEventListener(HOME_GEO_EVENT, onGeo);
     };
-  }, [personalizationKey, vowOnlyGuest, isClient, accessEpoch]);
+  }, [cityScopeKey, vowOnlyGuest, isClient, accessEpoch, scopedCities]);
 
   const citiesParam = citiesQueryParam(
     overrideCities?.length ? overrideCities : region.cities,
   );
 
+  /** Category rails: city scope only + each rail’s own status/txn/segment rules. */
   const seeAll = (extra: Record<string, string>) => {
     const q = new URLSearchParams({ cities: citiesParam, ...extra });
-    if (personalization?.minPrice) q.set("minPrice", personalization.minPrice);
-    if (personalization?.maxPrice) q.set("maxPrice", personalization.maxPrice);
-    if (personalization?.propertyTypes?.length) {
-      q.set("propertyTypes", personalization.propertyTypes.join(","));
-    }
-    if (personalization?.communities?.length) {
-      q.set("communities", personalization.communities.join("|"));
-    }
     return `/search?${q.toString()}`;
   };
 
