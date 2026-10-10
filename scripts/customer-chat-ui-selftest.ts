@@ -121,14 +121,24 @@ function testSendBodyIsBodyOnly() {
   const sent = customerChatSendBody("Hello there");
   assert.deepEqual(sent, { body: "Hello there" });
   assert.deepEqual(Object.keys(sent), ["body"]);
+  assert.deepEqual(customerChatSendBody("Hello", "msg_1"), {
+    body: "Hello",
+    replyToMessageId: "msg_1",
+  });
   const hook = read("src/components/customer-chat/useCustomerChatThread.ts");
-  assert.ok(hook.includes("JSON.stringify(customerChatSendBody(body))"));
-  assert.equal(hook.includes("leadId"), false);
-  assert.equal(hook.includes("workspaceId"), false);
-  assert.equal(hook.includes("conversationId"), false);
-  assert.equal(hook.includes("assignedAgentId"), false);
-  assert.equal(hook.includes("senderUserId"), false);
-  assert.equal(hook.includes("senderName"), false);
+  assert.ok(
+    hook.includes("customerChatSendBody(body, options?.replyToMessageId)"),
+  );
+  const sendFnStart = hook.indexOf("const send = useCallback");
+  const sendFnEnd = hook.indexOf("const reactToMessage = useCallback");
+  assert.ok(sendFnStart >= 0 && sendFnEnd > sendFnStart);
+  const sendFn = hook.slice(sendFnStart, sendFnEnd);
+  assert.equal(sendFn.includes("leadId"), false);
+  assert.equal(sendFn.includes("workspaceId"), false);
+  assert.equal(sendFn.includes("conversationId"), false);
+  assert.equal(sendFn.includes("assignedAgentId"), false);
+  assert.equal(sendFn.includes("senderUserId"), false);
+  assert.equal(sendFn.includes("senderName"), false);
 }
 
 function testComposerParity() {

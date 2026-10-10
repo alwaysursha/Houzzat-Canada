@@ -701,6 +701,9 @@ export function LeadProfileV2Host({
               onRetry: chat.reload,
               onLoadOlder: chat.loadOlder,
               onSend: chat.send,
+              onReact: chat.reactToMessage,
+              onSearch: chat.searchMessages,
+              onEnsureMessage: chat.ensureMessageLoaded,
             }}
           />
         );

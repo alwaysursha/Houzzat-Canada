@@ -101,6 +101,17 @@ export type LeadProfileV2ChatMessage = {
   editedAt: string | null;
   deletedAt: string | null;
   replyToMessageId: string | null;
+  replyTo?: {
+    id: string;
+    senderName: string;
+    body: string | null;
+    deleted: boolean;
+  } | null;
+  reactions?: Array<{
+    key: string;
+    count: number;
+    reactedByMe: boolean;
+  }>;
   createdAt: string;
   deliveredAt: string | null;
   smsSource: string | null;
@@ -123,6 +134,7 @@ export type LeadProfileV2ChatPanel = {
     createdAt: string;
     lastMessageAt: string | null;
     created: boolean;
+    customerLastReadAt?: string | null;
   };
   assignedAgentId: string | null;
   viewer: {

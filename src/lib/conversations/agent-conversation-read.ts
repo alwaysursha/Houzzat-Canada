@@ -27,6 +27,7 @@ import {
   type AgentOrgContext,
 } from "@/lib/agent";
 import {
+  findLeadConversation,
   getOrCreateLeadConversation,
   type LeadConversationDb,
   type LeadConversationRecord,
@@ -37,6 +38,11 @@ import {
   type AgentCutoff,
   type ConversationReadStateDb,
 } from "@/lib/conversations/read-state";
+import type { ConversationContextDb } from "@/lib/chat/message-context";
+import {
+  enrichChatMessages,
+  loadAuthorizedMessageContextRows,
+} from "@/lib/conversations/chat-rich-features";
 import { presentSmsAutomationMessagePayload } from "@/lib/conversations/sms-automation-payload";
 
 export const AGENT_CONVERSATION_PAGE_SIZE = 40;
@@ -97,6 +103,17 @@ export type AgentConversationMessage = {
   editedAt: string | null;
   deletedAt: string | null;
   replyToMessageId: string | null;
+  replyTo: {
+    id: string;
+    senderName: string;
+    body: string | null;
+    deleted: boolean;
+  } | null;
+  reactions: Array<{
+    key: string;
+    count: number;
+    reactedByMe: boolean;
+  }>;
   createdAt: string;
   deliveredAt: string | null;
   smsSource: MessageSmsSource | null;
@@ -119,6 +136,7 @@ export type AgentConversationReadPayload = {
     createdAt: string;
     lastMessageAt: string | null;
     created: boolean;
+    customerLastReadAt: string | null;
   };
   assignedAgentId: string | null;
   viewer: {
@@ -258,6 +276,10 @@ function presentConversationPayload(
 
 export function presentAgentConversationMessage(
   row: AgentConversationMessageRow,
+  extras?: {
+    replyTo?: AgentConversationMessage["replyTo"];
+    reactions?: AgentConversationMessage["reactions"];
+  },
 ): AgentConversationMessage {
   const deleted = Boolean(row.deletedAt);
   const payload = presentConversationPayload(row, deleted);
@@ -272,6 +294,8 @@ export function presentAgentConversationMessage(
     editedAt: row.editedAt ? row.editedAt.toISOString() : null,
     deletedAt: row.deletedAt ? row.deletedAt.toISOString() : null,
     replyToMessageId: row.replyToMessageId,
+    replyTo: extras?.replyTo ?? null,
+    reactions: extras?.reactions ?? [],
     createdAt: row.createdAt.toISOString(),
     deliveredAt: row.deliveredAt ? row.deliveredAt.toISOString() : null,
     smsSource: row.smsSource,
@@ -284,6 +308,7 @@ async function loadTranscriptPage(
   db: AgentConversationReadDb,
   conversation: LeadConversationRecord,
   page: AgentConversationPageParams,
+  viewerUserId: string,
 ): Promise<{
   messages: AgentConversationMessage[];
   hasMore: boolean;
@@ -316,8 +341,23 @@ async function loadTranscriptPage(
   const newestFirst = hasMore ? rows.slice(0, page.limit) : rows;
   const chronological = [...newestFirst].reverse();
   const oldest = chronological[0];
+  const extras = await enrichChatMessages(
+    db as unknown as Parameters<typeof enrichChatMessages>[0],
+    {
+      workspaceId: conversation.workspaceId,
+      conversationId: conversation.id,
+      viewerUserId,
+      messages: chronological,
+    },
+  ).catch(() => new Map());
   return {
-    messages: chronological.map(presentAgentConversationMessage),
+    messages: chronological.map((row) => {
+      const rich = extras.get(row.id);
+      return presentAgentConversationMessage(row, {
+        replyTo: rich?.replyTo ?? null,
+        reactions: rich?.reactions ?? [],
+      });
+    }),
     hasMore,
     nextCursor:
       hasMore && oldest
@@ -360,7 +400,7 @@ export async function openAgentLeadConversation(
   if (!created.ok) return null;
 
   const [transcript, unread] = await Promise.all([
-    loadTranscriptPage(db, created.conversation, page),
+    loadTranscriptPage(db, created.conversation, page, ctx.user.id),
     loadUnreadView(db, lead.workspaceId, lead.id),
   ]);
 
@@ -376,6 +416,9 @@ export async function openAgentLeadConversation(
         ? created.conversation.lastMessageAt.toISOString()
         : null,
       created: created.created,
+      customerLastReadAt: created.conversation.customerLastReadAt
+        ? created.conversation.customerLastReadAt.toISOString()
+        : null,
     },
     assignedAgentId: lead.assignedAgentId,
     viewer: {
@@ -389,6 +432,78 @@ export async function openAgentLeadConversation(
       limit: page.limit,
       hasMore: transcript.hasMore,
       nextCursor: transcript.nextCursor,
+    },
+  };
+}
+
+/**
+ * Bounded context window around one message for jump-to-message.
+ * Requires canAccessLead. Never marks read. Never creates messages.
+ */
+export async function loadAgentLeadConversationMessageContext(
+  db: AgentConversationReadDb,
+  ctx: AgentOrgContext,
+  leadId: string,
+  messageId: string,
+): Promise<{
+  ok: true;
+  data: {
+    anchorMessageId: string;
+    messages: AgentConversationMessage[];
+    page: {
+      hasMoreOlder: boolean;
+      hasMoreNewer: boolean;
+      olderCursor: string | null;
+    };
+  };
+} | { ok: false; reason: "LEAD_NOT_FOUND" | "MESSAGE_NOT_FOUND" }> {
+  const lead = await loadAccessibleAgentConversationLead(db, ctx, leadId);
+  if (!lead?.workspaceId) {
+    return { ok: false, reason: "LEAD_NOT_FOUND" };
+  }
+  const conversation = await findLeadConversation(db, {
+    workspaceId: lead.workspaceId,
+    leadId: lead.id,
+  });
+  if (!conversation) {
+    return { ok: false, reason: "MESSAGE_NOT_FOUND" };
+  }
+
+  const context = await loadAuthorizedMessageContextRows<AgentConversationMessageRow>(
+    db as unknown as ConversationContextDb,
+    {
+      workspaceId: lead.workspaceId,
+      conversationId: conversation.id,
+      messageId,
+      select: AGENT_CONVERSATION_MESSAGE_SELECT,
+    },
+  );
+  if (!context) {
+    return { ok: false, reason: "MESSAGE_NOT_FOUND" };
+  }
+
+  const extras = await enrichChatMessages(
+    db as unknown as Parameters<typeof enrichChatMessages>[0],
+    {
+      workspaceId: lead.workspaceId,
+      conversationId: conversation.id,
+      viewerUserId: ctx.user.id,
+      messages: context.messages,
+    },
+  ).catch(() => new Map());
+
+  return {
+    ok: true,
+    data: {
+      anchorMessageId: context.anchorMessageId,
+      messages: context.messages.map((row) => {
+        const rich = extras.get(row.id);
+        return presentAgentConversationMessage(row, {
+          replyTo: rich?.replyTo ?? null,
+          reactions: rich?.reactions ?? [],
+        });
+      }),
+      page: context.page,
     },
   };
 }

@@ -364,6 +364,9 @@ function SelectedThread({
         onRetry={chat.reload}
         onLoadOlder={chat.loadOlder}
         onSend={chat.send}
+        onReact={chat.reactToMessage}
+        onSearch={chat.searchMessages}
+        onEnsureMessage={chat.ensureMessageLoaded}
         composerId="agent-chats-composer"
         frame="plain"
       />

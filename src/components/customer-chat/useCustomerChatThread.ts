@@ -9,8 +9,12 @@ import {
   CUSTOMER_CHAT_READ_ROUTE,
   CUSTOMER_CHAT_SEND_ROUTE,
   appendCustomerChatSentMessage,
+  customerChatContextRoute,
   customerChatGetUrl,
+  customerChatReactionRoute,
+  customerChatSearchUrl,
   customerChatSendBody,
+  mergeCustomerChatContext,
   mergeCustomerChatMessages,
   parseCustomerChatLoadError,
   parseCustomerChatSendFailure,
@@ -27,6 +31,7 @@ import {
 import type {
   CustomerChatGetPayload,
   CustomerChatLoadErrorKind,
+  CustomerChatMessage,
   CustomerChatSendFailure,
   CustomerChatSendPayload,
 } from "@/lib/customer-chat/types";
@@ -38,7 +43,11 @@ function emptyPayload(): CustomerChatGetPayload {
     page: { limit: 40, hasMore: false, nextCursor: null },
     canSend: true,
     blocked: false,
-    read: { customerLastReadAt: null, unreadCount: 0 },
+    read: {
+      customerLastReadAt: null,
+      agentLastReadAt: null,
+      unreadCount: 0,
+    },
     agent: null,
   };
 }
@@ -280,7 +289,10 @@ export function useCustomerChatThread(
   }, [fetchPage, payload]);
 
   const send = useCallback(
-    async (body: string): Promise<boolean> => {
+    async (
+      body: string,
+      options?: { replyToMessageId?: string | null },
+    ): Promise<boolean> => {
       const canSend = Boolean(payload && payload.canSend && !payload.blocked);
       if (
         shouldSkipCustomerChatSubmit({
@@ -298,7 +310,9 @@ export function useCustomerChatThread(
         const res = await fetch(CUSTOMER_CHAT_SEND_ROUTE, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(customerChatSendBody(body)),
+          body: JSON.stringify(
+            customerChatSendBody(body, options?.replyToMessageId),
+          ),
         });
         const json = await readJson(res);
         if (!res.ok) {
@@ -356,6 +370,103 @@ export function useCustomerChatThread(
     [openAuth, openClientToolsVerification, payload],
   );
 
+  const reactToMessage = useCallback(
+    async (messageId: string, key: string): Promise<boolean> => {
+      try {
+        const res = await fetch(customerChatReactionRoute(messageId), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key }),
+        });
+        if (!res.ok) return false;
+        const json = (await res.json()) as {
+          reactions?: CustomerChatGetPayload["messages"][number]["reactions"];
+        };
+        setPayload((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            messages: prev.messages.map((message) =>
+              message.id === messageId
+                ? { ...message, reactions: json.reactions ?? [] }
+                : message,
+            ),
+          };
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [],
+  );
+
+  const searchMessages = useCallback(
+    async (query: string, cursor?: string | null) => {
+      const res = await fetch(customerChatSearchUrl(query, cursor), {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        throw new Error("search failed");
+      }
+      return (await res.json()) as {
+        query: string;
+        hits: Array<{
+          id: string;
+          body: string;
+          senderName: string;
+          senderKind: string;
+          createdAt: string;
+        }>;
+        page: {
+          limit: number;
+          hasMore: boolean;
+          nextCursor: string | null;
+        };
+      };
+    },
+    [],
+  );
+
+  const ensureMessageLoaded = useCallback(
+    async (messageId: string): Promise<boolean> => {
+      const id = messageId.trim();
+      if (!id) return false;
+      const already = payload?.messages.some((message) => message.id === id);
+      if (already) return true;
+      try {
+        const res = await fetch(customerChatContextRoute(id), {
+          method: "GET",
+          cache: "no-store",
+        });
+        if (!res.ok) return false;
+        const json = (await res.json()) as {
+          messages?: CustomerChatMessage[];
+          page?: {
+            hasMoreOlder: boolean;
+            olderCursor: string | null;
+          };
+        };
+        if (!json.messages?.length) return false;
+        setPayload((prev) => {
+          const base = prev ?? emptyPayload();
+          return mergeCustomerChatContext(base, {
+            messages: json.messages ?? [],
+            page: {
+              hasMoreOlder: Boolean(json.page?.hasMoreOlder),
+              olderCursor: json.page?.olderCursor ?? null,
+            },
+          });
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [payload?.messages],
+  );
+
   return {
     payload,
     loading,
@@ -366,6 +477,9 @@ export function useCustomerChatThread(
     reload,
     loadOlder,
     send,
+    reactToMessage,
+    searchMessages,
+    ensureMessageLoaded,
     getRoute: CUSTOMER_CHAT_GET_ROUTE,
     sendRoute: CUSTOMER_CHAT_SEND_ROUTE,
     readRoute: CUSTOMER_CHAT_READ_ROUTE,

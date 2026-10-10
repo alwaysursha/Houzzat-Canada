@@ -7,6 +7,7 @@ import {
   canApplyV2ChatResponse,
   clearV2ChatUnread,
   composerSendPayload,
+  mergeV2ChatContext,
   mergeV2ChatMessages,
   shouldMarkV2ChatRead,
   shouldSkipDuplicateV2ChatOlder,
@@ -14,10 +15,14 @@ import {
   V2_CHAT_GET_ROUTE,
   V2_CHAT_READ_ROUTE,
   V2_CHAT_RESOURCE_KEY,
+  V2_CHAT_SEARCH_ROUTE,
   V2_CHAT_SEND_ROUTE,
+  v2ChatContextUrl,
   v2ChatGetUrl,
   v2ChatOlderCursorKey,
+  v2ChatReactionUrl,
   v2ChatReadUrl,
+  v2ChatSearchUrl,
   v2ChatSendUrl,
 } from "@/lib/agent/lead-profile-v2/chat-query";
 import {
@@ -290,7 +295,11 @@ export function useAgentChatThread(
   }, [fetchPage, panel]);
 
   const send = useCallback(
-    async (body: string, channel: "CHAT" | "SMS" = "CHAT"): Promise<boolean> => {
+    async (
+      body: string,
+      channel: "CHAT" | "SMS" = "CHAT",
+      options?: { replyToMessageId?: string | null },
+    ): Promise<boolean> => {
       if (
         shouldSkipV2ChatSubmit({
           body,
@@ -314,7 +323,11 @@ export function useAgentChatThread(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(
-              composerSendPayload(body, channel),
+              composerSendPayload(
+                body,
+                channel,
+                channel === "CHAT" ? options?.replyToMessageId : null,
+              ),
             ),
           },
         );
@@ -341,6 +354,97 @@ export function useAgentChatThread(
     [leadId, panel],
   );
 
+  const reactToMessage = useCallback(
+    async (messageId: string, key: string): Promise<boolean> => {
+      try {
+        const json = await fetchV2Json<{
+          reactions?: LeadProfileV2ChatMessage["reactions"];
+        }>(
+          v2ChatReactionUrl(leadId, messageId),
+          V2_CHAT_SEND_ROUTE,
+          undefined,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key }),
+          },
+        );
+        if (leadIdRef.current !== leadId) return false;
+        setPanel((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            messages: prev.messages.map((message) =>
+              message.id === messageId
+                ? { ...message, reactions: json.reactions ?? [] }
+                : message,
+            ),
+          };
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [leadId],
+  );
+
+  const searchMessages = useCallback(
+    async (query: string, cursor?: string | null) => {
+      const json = await fetchV2Json<{
+        query: string;
+        hits: Array<{
+          id: string;
+          body: string;
+          senderName: string;
+          senderKind: string;
+          createdAt: string;
+        }>;
+        page: {
+          limit: number;
+          hasMore: boolean;
+          nextCursor: string | null;
+        };
+      }>(v2ChatSearchUrl(leadId, query, cursor), V2_CHAT_SEARCH_ROUTE);
+      return json;
+    },
+    [leadId],
+  );
+
+  const ensureMessageLoaded = useCallback(
+    async (messageId: string): Promise<boolean> => {
+      const id = messageId.trim();
+      if (!id) return false;
+      if (panel?.messages.some((message) => message.id === id)) return true;
+      try {
+        const json = await fetchV2Json<{
+          messages: LeadProfileV2ChatMessage[];
+          page: {
+            hasMoreOlder: boolean;
+            olderCursor: string | null;
+          };
+        }>(v2ChatContextUrl(leadId, id), V2_CHAT_GET_ROUTE);
+        if (leadIdRef.current !== leadId) return false;
+        if (!json.messages?.length) return false;
+        setPanel((prev) =>
+          prev
+            ? mergeV2ChatContext(prev, {
+                messages: json.messages,
+                page: {
+                  hasMoreOlder: Boolean(json.page?.hasMoreOlder),
+                  olderCursor: json.page?.olderCursor ?? null,
+                },
+              })
+            : prev,
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [leadId, panel?.messages],
+  );
+
   const loading = enabled && !error && panel === null;
 
   return {
@@ -354,5 +458,8 @@ export function useAgentChatThread(
     invalidate,
     loadOlder,
     send,
+    reactToMessage,
+    searchMessages,
+    ensureMessageLoaded,
   };
 }

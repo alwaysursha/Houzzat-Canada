@@ -211,6 +211,7 @@
     "agent-chat-customer-push:selftest": "node --import tsx scripts/agent-chat-customer-push-selftest.ts",
     "customer-chat-ui:selftest": "node --import tsx scripts/customer-chat-ui-selftest.ts",
     "customer-chat-floating:selftest": "node --import tsx scripts/customer-chat-floating-selftest.ts",
+    "chat-rich-messaging:selftest": "node --import tsx scripts/chat-rich-messaging-selftest.ts",
     "agent-inbox-list:selftest": "node --import tsx scripts/agent-inbox-list-selftest.ts",
     "agent-inbox-api:selftest": "node --import tsx scripts/agent-inbox-api-selftest.ts",
     "agent-chats-inbox-ui:selftest": "node --import tsx scripts/agent-chats-inbox-ui-selftest.ts",

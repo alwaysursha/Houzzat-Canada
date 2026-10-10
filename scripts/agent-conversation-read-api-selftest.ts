@@ -785,7 +785,9 @@ async function testUnreadComesFromCanonicalService() {
     assert.equal(data?.unread.agentCursorValid, canonical.agentCursorValid);
     assert.equal(data?.unread.dividerMessageId, newer.id);
     assert.equal("customerUnreadCount" in (data ?? {}), false);
-    assert.equal("customerLastReadAt" in (data?.conversation ?? {}), false);
+    // customerLastReadAt is exposed for agent-side Read receipts on own messages.
+    assert.equal("customerLastReadAt" in (data?.conversation ?? {}), true);
+    assert.equal(data?.conversation.customerLastReadAt ?? null, null);
   });
 }
 
@@ -944,7 +946,8 @@ function testRouteSourceContract() {
   assert.ok(service.includes("getOrCreateLeadConversation"));
   assert.ok(service.includes("getConversationUnreadState"));
   assert.ok(service.includes("markConversationReadByAgent"));
-  assert.ok(!service.includes("customerLastReadAt"));
+  // Peer customer cursor is returned for Sent/Read labels; unread counts stay agent-side.
+  assert.ok(service.includes("customerLastReadAt"));
   assert.ok(!service.includes("customerUnreadCount"));
   assert.ok(!service.includes("twilioMessageSid"));
   assert.ok(!service.includes("smsFrom"));

@@ -9,6 +9,19 @@ export type CustomerChatSenderKind =
 
 export type CustomerChatMessageKind = "TEXT" | "SYSTEM_CARD" | string;
 
+export type CustomerChatQuotedMessage = {
+  id: string;
+  senderName: string;
+  body: string | null;
+  deleted: boolean;
+};
+
+export type CustomerChatReaction = {
+  key: string;
+  count: number;
+  reactedByMe: boolean;
+};
+
 export type CustomerChatMessage = {
   id: string;
   channel: string;
@@ -18,6 +31,10 @@ export type CustomerChatMessage = {
   body: string | null;
   editedAt: string | null;
   deletedAt: string | null;
+  replyToMessageId?: string | null;
+  replyTo?: CustomerChatQuotedMessage | null;
+  deliveredAt?: string | null;
+  reactions?: CustomerChatReaction[];
   createdAt: string;
   payload: unknown;
 };
@@ -30,6 +47,7 @@ export type CustomerChatConversation = {
 
 export type CustomerChatReadView = {
   customerLastReadAt: string | null;
+  agentLastReadAt?: string | null;
   unreadCount: number;
 };
 

@@ -7,6 +7,13 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
+import { ChatConversationSearch } from "@/components/chat/ChatConversationSearch";
+import { ChatEmojiPicker } from "@/components/chat/ChatEmojiPicker";
+import {
+  ChatQuotedPreview,
+  ChatReactionBar,
+  ChatReceiptLabel,
+} from "@/components/chat/ChatMessageExtras";
 import {
   V2_CHAT_TEXT_MAX_LENGTH,
   composerSendButtonLabel,
@@ -32,6 +39,8 @@ import type {
   LeadProfileV2ChatMessage,
   LeadProfileV2ChatPanel,
 } from "@/lib/agent/lead-profile-v2/types";
+import { insertEmojiAtCursor } from "@/lib/chat/emoji-catalog";
+import type { ChatQuotedMessage } from "@/lib/chat/message-reply";
 import { cn } from "@/lib/utils";
 
 export function AgentChatTranscriptPane({
@@ -44,6 +53,9 @@ export function AgentChatTranscriptPane({
   onRetry,
   onLoadOlder,
   onSend,
+  onReact,
+  onSearch,
+  onEnsureMessage,
   composerId = "v2-chat-composer",
   frame = "card",
 }: {
@@ -55,7 +67,25 @@ export function AgentChatTranscriptPane({
   sendError: string | null;
   onRetry: () => void;
   onLoadOlder: () => void;
-  onSend: (body: string, channel?: "CHAT" | "SMS") => Promise<boolean>;
+  onSend: (
+    body: string,
+    channel?: "CHAT" | "SMS",
+    options?: { replyToMessageId?: string | null },
+  ) => Promise<boolean>;
+  onReact?: (messageId: string, key: string) => Promise<boolean>;
+  onSearch?: (
+    query: string,
+    cursor?: string | null,
+  ) => Promise<{
+    hits: Array<{
+      id: string;
+      body: string;
+      senderName: string;
+      createdAt: string;
+    }>;
+    page: { hasMore: boolean; nextCursor: string | null };
+  }>;
+  onEnsureMessage?: (messageId: string) => Promise<boolean>;
   composerId?: string;
   frame?: "card" | "plain";
 }) {
@@ -66,6 +96,11 @@ export function AgentChatTranscriptPane({
   const [appliedInboundId, setAppliedInboundId] = useState<string | null>(null);
   const [composerLeadId, setComposerLeadId] = useState(
     panel?.conversation.leadId ?? null,
+  );
+  const [replyTo, setReplyTo] = useState<ChatQuotedMessage | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [pendingNavigateId, setPendingNavigateId] = useState<string | null>(
+    null,
   );
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -95,7 +130,10 @@ export function AgentChatTranscriptPane({
     setChannel(nextComposer.channel);
     setManualChannel(nextComposer.manualChannel);
     setAppliedInboundId(nextComposer.appliedInboundId);
-    if (nextComposer.resetDraft) setDraft("");
+    if (nextComposer.resetDraft) {
+      setDraft("");
+      setReplyTo(null);
+    }
   }
   const displayedChannel = nextComposer.channel;
   const composerMode = v2ChatComposerMode({
@@ -117,6 +155,7 @@ export function AgentChatTranscriptPane({
     panel?.messages ?? [],
     panel?.unread.dividerMessageId ?? null,
   );
+  const peerLastReadAt = panel?.conversation.customerLastReadAt ?? null;
 
   useLayoutEffect(() => {
     const el = scrollerRef.current;
@@ -160,7 +199,57 @@ export function AgentChatTranscriptPane({
     const selected = selectAgentComposerChannel(next);
     setChannel(selected.channel);
     setManualChannel(selected.manualChannel);
+    if (next === "SMS") setReplyTo(null);
   }
+
+  function insertEmoji(emoji: string) {
+    const el = textareaRef.current;
+    const start = el?.selectionStart ?? draft.length;
+    const end = el?.selectionEnd ?? draft.length;
+    const next = insertEmojiAtCursor({
+      value: draft,
+      emoji,
+      selectionStart: start,
+      selectionEnd: end,
+    });
+    setDraft(next.value);
+    requestAnimationFrame(() => {
+      if (!textareaRef.current) return;
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(
+        next.selectionStart,
+        next.selectionEnd,
+      );
+    });
+  }
+
+  async function navigateToMessage(messageId: string) {
+    setPendingNavigateId(messageId);
+    if (panel?.messages.some((message) => message.id === messageId)) return;
+    if (!onEnsureMessage) {
+      setPendingNavigateId(null);
+      return;
+    }
+    const loaded = await onEnsureMessage(messageId);
+    if (!loaded) setPendingNavigateId(null);
+  }
+
+  useEffect(() => {
+    if (!pendingNavigateId) return;
+    if (!panel?.messages.some((message) => message.id === pendingNavigateId)) {
+      return;
+    }
+    stickToBottomRef.current = false;
+    const messageId = pendingNavigateId;
+    setPendingNavigateId(null);
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`agent-chat-msg-${messageId}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightId(messageId);
+      window.setTimeout(() => setHighlightId(null), 1600);
+    });
+  }, [pendingNavigateId, panel?.messages]);
 
   async function submit() {
     if (
@@ -174,10 +263,17 @@ export function AgentChatTranscriptPane({
     ) {
       return;
     }
-    const payload = composerSendPayload(draft, displayedChannel);
-    const sent = await onSend(payload.body, payload.channel);
+    const payload = composerSendPayload(
+      draft,
+      displayedChannel,
+      displayedChannel === "CHAT" ? replyTo?.id ?? null : null,
+    );
+    const sent = await onSend(payload.body, payload.channel, {
+      replyToMessageId: payload.replyToMessageId ?? null,
+    });
     if (sent) {
       setDraft("");
+      setReplyTo(null);
       stickToBottomRef.current = true;
       textareaRef.current?.focus();
     }
@@ -203,6 +299,16 @@ export function AgentChatTranscriptPane({
           "min-h-[20rem] rounded-lg border border-[#e2e8f0] lg:min-h-0",
       )}
     >
+      {onSearch ? (
+        <div className="flex shrink-0 justify-end border-b border-[#e2e8f0] px-3 py-1.5 sm:px-4">
+          <ChatConversationSearch
+            onSearch={onSearch}
+            onSelect={(messageId) => {
+              void navigateToMessage(messageId);
+            }}
+          />
+        </div>
+      ) : null}
       <div
         ref={scrollerRef}
         onScroll={handleScroll}
@@ -263,7 +369,27 @@ export function AgentChatTranscriptPane({
                     <ChatRow
                       message={row.message}
                       grouped={row.grouped}
+                      highlighted={highlightId === row.message.id}
                       viewerUserId={panel?.viewer.userId ?? null}
+                      peerLastReadAt={peerLastReadAt}
+                      onReply={() => {
+                        if (row.message.deletedAt) return;
+                        setReplyTo({
+                          id: row.message.id,
+                          senderName: row.message.senderName,
+                          body: row.message.body,
+                          deleted: false,
+                        });
+                        textareaRef.current?.focus();
+                      }}
+                      onReact={(key) => {
+                        if (!onReact) return;
+                        void onReact(row.message.id, key);
+                      }}
+                      onNavigateQuote={(messageId) => {
+                        void navigateToMessage(messageId);
+                      }}
+                      canReact={Boolean(onReact)}
                     />
                   </li>
                 ))}
@@ -325,6 +451,12 @@ export function AgentChatTranscriptPane({
                   ))}
                 </div>
               ) : null}
+              {replyTo && !smsSelected ? (
+                <ChatQuotedPreview
+                  quote={replyTo}
+                  onCancel={() => setReplyTo(null)}
+                />
+              ) : null}
               <label className="sr-only" htmlFor={composerId}>
                 {smsSelected ? "SMS message" : "Chat message"}
               </label>
@@ -348,17 +480,23 @@ export function AgentChatTranscriptPane({
                 </p>
               ) : null}
               <div className="flex items-center justify-between gap-2">
-                <p className="min-w-0 text-[11px] leading-4 text-[#94a3b8]">
-                  <span className="hidden sm:inline">
-                    Enter to send · Shift+Enter for a new line
-                  </span>
-                  {remaining <= 200 ? (
-                    <span>
-                      <span className="hidden sm:inline"> · </span>
-                      {remaining} left
+                <div className="flex min-w-0 items-center gap-2">
+                  <ChatEmojiPicker
+                    onPick={insertEmoji}
+                    disabled={sending || (smsSelected && !smsEnabled)}
+                  />
+                  <p className="min-w-0 text-[11px] leading-4 text-[#94a3b8]">
+                    <span className="hidden sm:inline">
+                      Enter to send · Shift+Enter for a new line
                     </span>
-                  ) : null}
-                </p>
+                    {remaining <= 200 ? (
+                      <span>
+                        <span className="hidden sm:inline"> · </span>
+                        {remaining} left
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => void submit()}
@@ -409,11 +547,23 @@ export function AgentChatTranscriptPane({
 function ChatRow({
   message,
   grouped,
+  highlighted,
   viewerUserId,
+  peerLastReadAt,
+  onReply,
+  onReact,
+  onNavigateQuote,
+  canReact,
 }: {
   message: LeadProfileV2ChatMessage;
   grouped: boolean;
+  highlighted: boolean;
   viewerUserId: string | null;
+  peerLastReadAt: string | null;
+  onReply: () => void;
+  onReact: (key: string) => void;
+  onNavigateQuote: (messageId: string) => void;
+  canReact: boolean;
 }) {
   if (message.kind === "SYSTEM_CARD") {
     return (
@@ -448,7 +598,14 @@ function ChatRow({
   const delivery = v2SmsDeliveryLabel(message);
 
   return (
-    <div className={cn("flex", mine ? "justify-end" : "justify-start")}>
+    <div
+      id={`agent-chat-msg-${message.id}`}
+      className={cn(
+        "flex rounded-xl transition",
+        highlighted ? "bg-[#eef6ff] ring-1 ring-[#2b6cb0]/20" : null,
+        mine ? "justify-end" : "justify-start",
+      )}
+    >
       <div
         className={cn(
           "max-w-[85%] sm:max-w-[72%]",
@@ -498,6 +655,15 @@ function ChatRow({
             ) : null}
           </p>
         )}
+        {message.replyTo ? (
+          <div className="mb-1">
+            <ChatQuotedPreview
+              quote={message.replyTo}
+              compact
+              onNavigate={() => onNavigateQuote(message.replyTo!.id)}
+            />
+          </div>
+        ) : null}
         <div
           className={cn(
             "rounded-2xl px-3 py-2 text-sm leading-5",
@@ -514,6 +680,29 @@ function ChatRow({
             {body}
           </p>
         </div>
+        <ChatReceiptLabel
+          isOwnMessage={mine}
+          messageCreatedAt={message.createdAt}
+          deliveredAt={message.deliveredAt}
+          peerLastReadAt={peerLastReadAt}
+        />
+        {!deleted && !sms ? (
+          <div className="mt-1 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onReply}
+              className="text-[11px] font-semibold text-[#94a3b8] hover:text-[#2b6cb0]"
+            >
+              Reply
+            </button>
+          </div>
+        ) : null}
+        {canReact && !deleted ? (
+          <ChatReactionBar
+            reactions={message.reactions ?? []}
+            onToggle={onReact}
+          />
+        ) : null}
       </div>
     </div>
   );

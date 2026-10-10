@@ -11,7 +11,15 @@ import {
 import { ArrowLeft, Minus, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { AccountVerifyEmailAction } from "@/components/account/AccountVerifyEmailAction";
+import { ChatConversationSearch } from "@/components/chat/ChatConversationSearch";
+import { ChatEmojiPicker } from "@/components/chat/ChatEmojiPicker";
+import {
+  ChatQuotedPreview,
+  ChatReactionBar,
+  ChatReceiptLabel,
+} from "@/components/chat/ChatMessageExtras";
 import { useCustomerChatThread } from "@/components/customer-chat/useCustomerChatThread";
+import { insertEmojiAtCursor } from "@/lib/chat/emoji-catalog";
 import {
   CUSTOMER_CHAT_PAGE_HREF,
   CUSTOMER_CHAT_TEXT_MAX_LENGTH,
@@ -76,10 +84,18 @@ export function CustomerChatScreen({
     reload,
     loadOlder,
     send,
+    reactToMessage,
+    searchMessages,
+    ensureMessageLoaded,
   } = useCustomerChatThread({ chatVisible, enabled: true });
   const [localDraft, setLocalDraft] = useState("");
   const draft = controlledDraft ?? localDraft;
   const setDraft = onDraftChange ?? setLocalDraft;
+  const [replyTo, setReplyTo] = useState<CustomerChatMessage | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [pendingNavigateId, setPendingNavigateId] = useState<string | null>(
+    null,
+  );
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
@@ -176,13 +192,62 @@ export function CustomerChatScreen({
     ) {
       return;
     }
-    const sent = await send(draft);
+    const sent = await send(draft, {
+      replyToMessageId: replyTo?.id ?? null,
+    });
     if (sent) {
       setDraft("");
+      setReplyTo(null);
       stickToBottomRef.current = true;
       textareaRef.current?.focus();
     }
   }
+
+  function insertEmoji(emoji: string) {
+    const el = textareaRef.current;
+    const start = el?.selectionStart ?? draft.length;
+    const end = el?.selectionEnd ?? draft.length;
+    const next = insertEmojiAtCursor({
+      value: draft,
+      emoji,
+      selectionStart: start,
+      selectionEnd: end,
+    });
+    setDraft(next.value);
+    requestAnimationFrame(() => {
+      if (!textareaRef.current) return;
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(
+        next.selectionStart,
+        next.selectionEnd,
+      );
+    });
+  }
+
+  async function navigateToMessage(messageId: string) {
+    setPendingNavigateId(messageId);
+    const loaded = await ensureMessageLoaded(messageId);
+    if (!loaded) {
+      setPendingNavigateId(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!pendingNavigateId) return;
+    if (!payload?.messages.some((message) => message.id === pendingNavigateId)) {
+      return;
+    }
+    stickToBottomRef.current = false;
+    const messageId = pendingNavigateId;
+    setPendingNavigateId(null);
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`chat-msg-${messageId}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightId(messageId);
+      window.setTimeout(() => setHighlightId(null), 1600);
+    });
+  }, [pendingNavigateId, payload?.messages]);
 
   function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     const action = customerChatComposerKeyAction({
@@ -309,30 +374,38 @@ export function CustomerChatScreen({
                 )}
               </div>
             </div>
-            {chrome === "floating" ? (
-              <div className="flex shrink-0 items-center gap-1">
-                {onMinimize ? (
-                  <button
-                    type="button"
-                    onClick={onMinimize}
-                    aria-label="Minimize chat"
-                    className="inline-flex size-8 items-center justify-center rounded-lg text-ink/55 hover:bg-mist hover:text-ink"
-                  >
-                    <Minus className="size-4" aria-hidden />
-                  </button>
-                ) : null}
-                {onClose ? (
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    aria-label="Close chat"
-                    className="inline-flex size-8 items-center justify-center rounded-lg text-ink/55 hover:bg-mist hover:text-ink"
-                  >
-                    <X className="size-4" aria-hidden />
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
+            <div className="flex shrink-0 items-center gap-1">
+              <ChatConversationSearch
+                onSearch={searchMessages}
+                onSelect={(messageId) => {
+                  void navigateToMessage(messageId);
+                }}
+              />
+              {chrome === "floating" ? (
+                <>
+                  {onMinimize ? (
+                    <button
+                      type="button"
+                      onClick={onMinimize}
+                      aria-label="Minimize chat"
+                      className="inline-flex size-8 items-center justify-center rounded-lg text-ink/55 hover:bg-mist hover:text-ink"
+                    >
+                      <Minus className="size-4" aria-hidden />
+                    </button>
+                  ) : null}
+                  {onClose ? (
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      aria-label="Close chat"
+                      className="inline-flex size-8 items-center justify-center rounded-lg text-ink/55 hover:bg-mist hover:text-ink"
+                    >
+                      <X className="size-4" aria-hidden />
+                    </button>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
           </div>
         </header>
       )}
@@ -421,6 +494,15 @@ export function CustomerChatScreen({
                     <CustomerChatRow
                       message={row.message}
                       grouped={row.grouped}
+                      highlighted={highlightId === row.message.id}
+                      peerLastReadAt={payload?.read.agentLastReadAt ?? null}
+                      onReply={() => setReplyTo(row.message)}
+                      onReact={(key) => {
+                        void reactToMessage(row.message.id, key);
+                      }}
+                      onNavigateQuote={(messageId) => {
+                        void navigateToMessage(messageId);
+                      }}
                     />
                   </li>
                 ))}
@@ -444,6 +526,20 @@ export function CustomerChatScreen({
           )}
         >
           <div className="space-y-1.5">
+            {replyTo ? (
+              <ChatQuotedPreview
+                quote={{
+                  id: replyTo.id,
+                  senderName: replyTo.senderName || "Message",
+                  body: replyTo.body,
+                  deleted: Boolean(replyTo.deletedAt),
+                }}
+                onCancel={() => setReplyTo(null)}
+                onNavigate={() => {
+                  void navigateToMessage(replyTo.id);
+                }}
+              />
+            ) : null}
             <label className="sr-only" htmlFor={COMPOSER_ID}>
               Message to your agent
             </label>
@@ -461,17 +557,23 @@ export function CustomerChatScreen({
               className="w-full resize-none rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink outline-none ring-canopy/40 focus:ring-2 disabled:opacity-60"
             />
             <div className="flex items-center justify-between gap-2">
-              <p className="min-w-0 text-[11px] leading-4 text-ink/40">
-                <span className="hidden sm:inline">
-                  Enter to send · Shift+Enter for a new line
-                </span>
-                {remaining <= 200 ? (
-                  <span>
-                    <span className="hidden sm:inline"> · </span>
-                    {remaining} left
+              <div className="flex min-w-0 items-center gap-2">
+                <ChatEmojiPicker
+                  disabled={sending || !canSend}
+                  onPick={insertEmoji}
+                />
+                <p className="min-w-0 text-[11px] leading-4 text-ink/40">
+                  <span className="hidden sm:inline">
+                    Enter to send · Shift+Enter for a new line
                   </span>
-                ) : null}
-              </p>
+                  {remaining <= 200 ? (
+                    <span>
+                      <span className="hidden sm:inline"> · </span>
+                      {remaining} left
+                    </span>
+                  ) : null}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => void submit()}
@@ -539,9 +641,19 @@ function AgentAvatar({
 function CustomerChatRow({
   message,
   grouped,
+  highlighted = false,
+  peerLastReadAt,
+  onReply,
+  onReact,
+  onNavigateQuote,
 }: {
   message: CustomerChatMessage;
   grouped: boolean;
+  highlighted?: boolean;
+  peerLastReadAt: string | null;
+  onReply: () => void;
+  onReact: (key: string) => void;
+  onNavigateQuote: (messageId: string) => void;
 }) {
   const align = customerChatBubbleAlign(message.senderKind, message.kind);
   if (align === "center") {
@@ -564,7 +676,14 @@ function CustomerChatRow({
   const sentAt = new Date(message.createdAt).toLocaleString("en-CA");
 
   return (
-    <div className={cn("flex min-w-0", mine ? "justify-end" : "justify-start")}>
+    <div
+      id={`chat-msg-${message.id}`}
+      className={cn(
+        "flex min-w-0 rounded-xl transition",
+        highlighted ? "bg-canopy/5 ring-1 ring-canopy/20" : null,
+        mine ? "justify-end" : "justify-start",
+      )}
+    >
       <div
         className={cn("min-w-0 max-w-[min(85%,28rem)]", mine ? "items-end" : "items-start")}
         aria-label={`${label}, ${sentAt}${sms ? ", SMS" : ""}${
@@ -605,6 +724,15 @@ function CustomerChatRow({
             <span className="ml-1.5 font-medium text-ink/40">{sentAt}</span>
           </p>
         )}
+        {message.replyTo ? (
+          <div className="mb-1">
+            <ChatQuotedPreview
+              quote={message.replyTo}
+              compact
+              onNavigate={() => onNavigateQuote(message.replyTo!.id)}
+            />
+          </div>
+        ) : null}
         <div
           className={cn(
             "rounded-2xl px-3 py-2 text-sm leading-5 shadow-sm",
@@ -619,6 +747,25 @@ function CustomerChatRow({
             {body}
           </p>
         </div>
+        <ChatReceiptLabel
+          isOwnMessage={mine}
+          messageCreatedAt={message.createdAt}
+          deliveredAt={message.deliveredAt}
+          peerLastReadAt={peerLastReadAt}
+        />
+        <div className="mt-1 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onReply}
+            className="text-[11px] font-semibold text-ink/45 hover:text-canopy-deep"
+          >
+            Reply
+          </button>
+        </div>
+        <ChatReactionBar
+          reactions={message.reactions ?? []}
+          onToggle={onReact}
+        />
       </div>
     </div>
   );

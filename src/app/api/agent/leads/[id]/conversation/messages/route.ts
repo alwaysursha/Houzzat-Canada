@@ -67,13 +67,18 @@ export async function POST(request: Request, { params }: Params) {
     const result =
       channel === "SMS"
         ? await sendAgentLeadSmsMessage(prisma, ctx, id, parsed.data.body)
-        : await sendAgentLeadChatMessage(prisma, ctx, id, parsed.data.body);
+        : await sendAgentLeadChatMessage(prisma, ctx, id, parsed.data.body, {
+            replyToMessageId: parsed.data.replyToMessageId ?? null,
+          });
     if (!result.ok) {
       if (result.reason === "FORBIDDEN") {
         return reply(403, { error: "Forbidden" });
       }
       if (result.reason === "INVALID_BODY") {
         return reply(400, { error: "Invalid payload" });
+      }
+      if (result.reason === "INVALID_REPLY") {
+        return reply(400, { error: "Invalid reply target" });
       }
       if (result.reason === "NOT_ASSIGNED") {
         return reply(403, {

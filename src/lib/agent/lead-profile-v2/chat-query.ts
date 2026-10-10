@@ -3,6 +3,10 @@ import type {
   LeadProfileV2ChatMessage,
   LeadProfileV2ChatPanel,
 } from "@/lib/agent/lead-profile-v2/types";
+import {
+  applyContextPageState,
+  mergeMessagesWithContext,
+} from "@/lib/chat/message-context";
 import { smsAutomationTranscriptLabel } from "@/lib/platform/sms-automations/catalog";
 
 export const V2_CHAT_RESOURCE_KEY = "conversation-chat";
@@ -11,6 +15,8 @@ export const V2_CHAT_DELETED_TOMBSTONE = "This message was deleted";
 export const V2_CHAT_GET_ROUTE = "/api/agent/leads/[id]/conversation";
 export const V2_CHAT_SEND_ROUTE = "/api/agent/leads/[id]/conversation/messages";
 export const V2_CHAT_READ_ROUTE = "/api/agent/leads/[id]/conversation/read";
+export const V2_CHAT_SEARCH_ROUTE =
+  "/api/agent/leads/[id]/conversation/search";
 
 export type V2ChatSurface = "chat" | "email";
 
@@ -32,6 +38,25 @@ export function v2ChatSendUrl(leadId: string) {
 
 export function v2ChatReadUrl(leadId: string) {
   return `/api/agent/leads/${leadId}/conversation/read`;
+}
+
+export function v2ChatReactionUrl(leadId: string, messageId: string) {
+  return `/api/agent/leads/${encodeURIComponent(leadId)}/conversation/messages/${encodeURIComponent(messageId)}/reactions`;
+}
+
+export function v2ChatContextUrl(leadId: string, messageId: string) {
+  return `/api/agent/leads/${encodeURIComponent(leadId)}/conversation/messages/${encodeURIComponent(messageId)}/context`;
+}
+
+export function v2ChatSearchUrl(
+  leadId: string,
+  query: string,
+  cursor?: string | null,
+) {
+  const params = new URLSearchParams();
+  params.set("q", query);
+  if (cursor) params.set("cursor", cursor);
+  return `/api/agent/leads/${encodeURIComponent(leadId)}/conversation/search?${params.toString()}`;
 }
 
 export function canApplyV2ChatResponse(input: {
@@ -84,6 +109,38 @@ export function appendV2ChatSentMessage(
       created: false,
     },
     messages: mergeV2ChatMessages(panel.messages, [message], "append"),
+  };
+}
+
+export function mergeV2ChatContext(
+  panel: LeadProfileV2ChatPanel,
+  context: {
+    messages: LeadProfileV2ChatMessage[];
+    page: {
+      hasMoreOlder: boolean;
+      olderCursor: string | null;
+    };
+  },
+): LeadProfileV2ChatPanel {
+  const messages = mergeMessagesWithContext(panel.messages, context.messages);
+  const oldest = messages[0] ?? null;
+  const contextOldest = context.messages[0] ?? null;
+  const pageState = applyContextPageState({
+    previousHasMore: panel.page.hasMore,
+    previousNextCursor: panel.page.nextCursor,
+    contextHasMoreOlder: context.page.hasMoreOlder,
+    contextOlderCursor: context.page.olderCursor,
+    mergedOldestId: oldest?.id ?? null,
+    contextOldestId: contextOldest?.id ?? null,
+  });
+  return {
+    ...panel,
+    messages,
+    page: {
+      ...panel.page,
+      hasMore: pageState.hasMore,
+      nextCursor: pageState.nextCursor,
+    },
   };
 }
 
@@ -206,8 +263,20 @@ export function selectAgentComposerChannel(
 export function composerSendPayload(
   body: string,
   displayedChannel: AgentComposerChannel,
-): { body: string; channel: AgentComposerChannel } {
-  return { body, channel: displayedChannel };
+  replyToMessageId?: string | null,
+): {
+  body: string;
+  channel: AgentComposerChannel;
+  replyToMessageId?: string;
+} {
+  const payload: {
+    body: string;
+    channel: AgentComposerChannel;
+    replyToMessageId?: string;
+  } = { body, channel: displayedChannel };
+  const reply = replyToMessageId?.trim();
+  if (reply) payload.replyToMessageId = reply;
+  return payload;
 }
 
 export function composerSendButtonLabel(input: {

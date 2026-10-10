@@ -44,7 +44,25 @@ export function LeadProfileV2ConversationsPanel({
     sendError: string | null;
     onRetry: () => void;
     onLoadOlder: () => void;
-    onSend: (body: string) => Promise<boolean>;
+    onSend: (
+      body: string,
+      channel?: "CHAT" | "SMS",
+      options?: { replyToMessageId?: string | null },
+    ) => Promise<boolean>;
+    onReact?: (messageId: string, key: string) => Promise<boolean>;
+    onSearch?: (
+      query: string,
+      cursor?: string | null,
+    ) => Promise<{
+      hits: Array<{
+        id: string;
+        body: string;
+        senderName: string;
+        createdAt: string;
+      }>;
+      page: { hasMore: boolean; nextCursor: string | null };
+    }>;
+    onEnsureMessage?: (messageId: string) => Promise<boolean>;
   };
 }) {
   const [previewEmailId, setPreviewEmailId] = useState<string | null>(null);
@@ -97,6 +115,9 @@ export function LeadProfileV2ConversationsPanel({
             onRetry={chat.onRetry}
             onLoadOlder={chat.onLoadOlder}
             onSend={chat.onSend}
+            onReact={chat.onReact}
+            onSearch={chat.onSearch}
+            onEnsureMessage={chat.onEnsureMessage}
           />
         </div>
       ) : (

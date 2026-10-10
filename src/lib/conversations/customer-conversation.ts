@@ -42,7 +42,6 @@ import {
 } from "@/lib/conversations/agent-conversation-read";
 import {
   AGENT_CHAT_TEXT_MAX_LENGTH,
-  agentChatSendRequestSchema,
   normalizeAgentChatText,
 } from "@/lib/conversations/agent-conversation-send";
 import {
@@ -74,7 +73,14 @@ import {
   recordConversationLeadActivity,
   type ConversationLeadActivityDb,
 } from "@/lib/conversations/sms-lead-activity";
+import {
+  enrichChatMessages,
+  handleConversationSearchRequest,
+  handleToggleConversationReaction,
+  loadAuthorizedMessageContextRows,
+} from "@/lib/conversations/chat-rich-features";
 import { presentSmsAutomationMessagePayload } from "@/lib/conversations/sms-automation-payload";
+import { normalizeChatReactionKey } from "@/lib/chat/emoji-catalog";
 import { customerChatAgentPhotoAllowed } from "@/lib/customer-chat/floating-chat";
 import { parseJsonText } from "@/lib/http/json-body";
 import { scheduleNotifyAssignedAgentOfCustomerChatMessage } from "@/lib/notifications/customer-chat-agent-push";
@@ -83,11 +89,17 @@ import {
   resolveWorkspaceFromRequest,
   type HostResolutionDeps,
 } from "@/lib/tenancy/resolve-workspace-host";
+import { z } from "zod";
 
 export const CUSTOMER_CONVERSATION_PAGE_SIZE = AGENT_CONVERSATION_PAGE_SIZE;
 export const CUSTOMER_CONVERSATION_PAGE_MAX = AGENT_CONVERSATION_PAGE_MAX;
 export const CUSTOMER_CHAT_TEXT_MAX_LENGTH = AGENT_CHAT_TEXT_MAX_LENGTH;
-export const customerChatSendRequestSchema = agentChatSendRequestSchema;
+export const customerChatSendRequestSchema = z
+  .object({
+    body: z.string(),
+    replyToMessageId: z.string().trim().min(1).max(64).optional().nullable(),
+  })
+  .strict();
 
 export const CUSTOMER_CONVERSATION_MESSAGE_SELECT = {
   id: true,
@@ -98,7 +110,9 @@ export const CUSTOMER_CONVERSATION_MESSAGE_SELECT = {
   body: true,
   editedAt: true,
   deletedAt: true,
+  replyToMessageId: true,
   createdAt: true,
+  deliveredAt: true,
   payload: true,
 } as const;
 
@@ -116,6 +130,19 @@ export type CustomerConversationMessage = {
   body: string | null;
   editedAt: string | null;
   deletedAt: string | null;
+  replyToMessageId: string | null;
+  replyTo: {
+    id: string;
+    senderName: string;
+    body: string | null;
+    deleted: boolean;
+  } | null;
+  deliveredAt: string | null;
+  reactions: Array<{
+    key: string;
+    count: number;
+    reactedByMe: boolean;
+  }>;
   createdAt: string;
   payload: Prisma.JsonValue | null;
 };
@@ -128,6 +155,8 @@ export type CustomerConversationSummary = {
 
 export type CustomerConversationReadView = {
   customerLastReadAt: string | null;
+  /** Peer (assigned agent) conversation cursor — for Read receipts on own messages. */
+  agentLastReadAt: string | null;
   unreadCount: number;
 };
 
@@ -202,6 +231,10 @@ function encodeTranscriptCursor(createdAt: Date, id: string): string {
 
 export function presentCustomerConversationMessage(
   row: CustomerConversationMessageRow,
+  extras?: {
+    replyTo?: CustomerConversationMessage["replyTo"];
+    reactions?: CustomerConversationMessage["reactions"];
+  },
 ): CustomerConversationMessage {
   const deleted = Boolean(row.deletedAt);
   const payload =
@@ -217,6 +250,10 @@ export function presentCustomerConversationMessage(
     body: deleted ? null : row.body,
     editedAt: row.editedAt ? row.editedAt.toISOString() : null,
     deletedAt: row.deletedAt ? row.deletedAt.toISOString() : null,
+    replyToMessageId: row.replyToMessageId,
+    replyTo: extras?.replyTo ?? null,
+    deliveredAt: row.deliveredAt ? row.deliveredAt.toISOString() : null,
+    reactions: extras?.reactions ?? [],
     createdAt: row.createdAt.toISOString(),
     payload,
   };
@@ -229,7 +266,11 @@ function emptyGetPayload(limit: number): CustomerConversationGetPayload {
     page: { limit, hasMore: false, nextCursor: null },
     canSend: true,
     blocked: false,
-    read: { customerLastReadAt: null, unreadCount: 0 },
+    read: {
+      customerLastReadAt: null,
+      agentLastReadAt: null,
+      unreadCount: 0,
+    },
     agent: null,
   };
 }
@@ -429,6 +470,7 @@ async function loadTranscriptPage(
   db: CustomerConversationDb,
   conversation: LeadConversationRecord,
   page: { limit: number; cursor: { createdAt: Date; id: string } | null },
+  viewerUserId: string,
 ): Promise<{
   messages: CustomerConversationMessage[];
   hasMore: boolean;
@@ -461,8 +503,23 @@ async function loadTranscriptPage(
   const newestFirst = hasMore ? rows.slice(0, page.limit) : rows;
   const chronological = [...newestFirst].reverse();
   const oldest = chronological[0];
+  const extras = await enrichChatMessages(
+    db as unknown as Parameters<typeof enrichChatMessages>[0],
+    {
+      workspaceId: conversation.workspaceId,
+      conversationId: conversation.id,
+      viewerUserId,
+      messages: chronological,
+    },
+  ).catch(() => new Map());
   return {
-    messages: chronological.map(presentCustomerConversationMessage),
+    messages: chronological.map((row) => {
+      const rich = extras.get(row.id);
+      return presentCustomerConversationMessage(row, {
+        replyTo: rich?.replyTo ?? null,
+        reactions: rich?.reactions ?? [],
+      });
+    }),
     hasMore,
     nextCursor:
       hasMore && oldest
@@ -528,7 +585,12 @@ async function loadExistingCustomerTranscript(
       }));
 
   const [transcript, unread, agent] = await Promise.all([
-    loadTranscriptPage(db, created.conversation, page),
+    loadTranscriptPage(
+      db,
+      created.conversation,
+      page,
+      resolved.customerUserId,
+    ),
     getConversationUnreadState(db, {
       workspaceId: resolved.workspaceId,
       leadId: resolved.leadId,
@@ -552,6 +614,9 @@ async function loadExistingCustomerTranscript(
     read: {
       customerLastReadAt: created.conversation.customerLastReadAt
         ? created.conversation.customerLastReadAt.toISOString()
+        : null,
+      agentLastReadAt: created.conversation.agentLastReadAt
+        ? created.conversation.agentLastReadAt.toISOString()
         : null,
       unreadCount: unread.customerUnreadCount,
     },
@@ -662,9 +727,13 @@ export async function handleCustomerConversationSend(
     createdByUserId: access.user.id,
     senderName,
     body: text,
+    replyToMessageId: parsed.data.replyToMessageId ?? null,
   });
 
   if (!created.ok) {
+    if (created.reason === "INVALID_REPLY") {
+      return jsonResult(400, { error: "Invalid reply target" });
+    }
     return jsonResult(400, { error: "Invalid payload" });
   }
 
@@ -704,20 +773,45 @@ export async function handleCustomerConversationSend(
     });
   }
 
+  const rich = await enrichChatMessages(
+    deps.db as unknown as Parameters<typeof enrichChatMessages>[0],
+    {
+      workspaceId: ensured.workspaceId,
+      conversationId: created.conversation.id,
+      viewerUserId: access.user.id,
+      messages: [
+        {
+          id: created.message.id,
+          replyToMessageId: created.message.replyToMessageId,
+          deliveredAt: created.message.deliveredAt,
+        },
+      ],
+    },
+  ).catch(() => new Map());
+  const extras = rich.get(created.message.id);
+
   const payload: CustomerConversationSendPayload = {
     conversation: presentConversation(created.conversation),
-    message: presentCustomerConversationMessage({
-      id: created.message.id,
-      channel: created.message.channel,
-      kind: created.message.kind,
-      senderKind: created.message.senderKind,
-      senderName: created.message.senderName,
-      body: created.message.body,
-      editedAt: null,
-      deletedAt: null,
-      createdAt: created.message.createdAt,
-      payload: created.message.payload,
-    }),
+    message: presentCustomerConversationMessage(
+      {
+        id: created.message.id,
+        channel: created.message.channel,
+        kind: created.message.kind,
+        senderKind: created.message.senderKind,
+        senderName: created.message.senderName,
+        body: created.message.body,
+        editedAt: null,
+        deletedAt: null,
+        replyToMessageId: created.message.replyToMessageId,
+        createdAt: created.message.createdAt,
+        deliveredAt: created.message.deliveredAt,
+        payload: created.message.payload,
+      },
+      {
+        replyTo: extras?.replyTo ?? null,
+        reactions: extras?.reactions ?? [],
+      },
+    ),
   };
   return jsonResult(200, payload);
 }
@@ -804,4 +898,191 @@ export async function handleCustomerConversationRead(
     },
   };
   return jsonResult(200, payload);
+}
+
+export async function handleCustomerConversationReaction(
+  request: Request,
+  messageId: string,
+  deps: CustomerConversationApiDeps,
+): Promise<CustomerConversationHttpResult> {
+  const api = mergeApiDeps(deps);
+  const access = await api.requireSendAccess();
+  if (!access.ok) {
+    return jsonResult(access.status, access.body);
+  }
+  if (!isConsumerRole(access.user.role)) {
+    return jsonResult(404, { error: "Not found" });
+  }
+
+  const parsedJson = parseJsonText(await request.text());
+  if (parsedJson.parse !== "ok") {
+    return jsonResult(400, { error: "Invalid payload" });
+  }
+  const keyRaw =
+    parsedJson.data &&
+    typeof parsedJson.data === "object" &&
+    !Array.isArray(parsedJson.data) &&
+    typeof (parsedJson.data as { key?: unknown }).key === "string"
+      ? (parsedJson.data as { key: string }).key
+      : "";
+  if (!normalizeChatReactionKey(keyRaw)) {
+    return jsonResult(400, { error: "Invalid reaction" });
+  }
+
+  const resolved = await api.resolveCustomerChatLead({
+    request,
+    untrustedClientHints: null,
+    hostDeps: deps.hostDeps,
+    deps: deps.resolverDeps,
+  });
+  if (!resolved.ok) {
+    return mapResolverFailure(resolved.reason);
+  }
+
+  const conversation = await findLeadConversation(deps.db, {
+    workspaceId: resolved.workspaceId,
+    leadId: resolved.leadId,
+  });
+  if (!conversation) {
+    return jsonResult(404, { error: "Not found" });
+  }
+
+  const result = await handleToggleConversationReaction(
+    deps.db as unknown as Parameters<typeof handleToggleConversationReaction>[0],
+    {
+      workspaceId: resolved.workspaceId,
+      conversationId: conversation.id,
+      messageId,
+      userId: access.user.id,
+      key: keyRaw,
+    },
+  );
+  if (!result.ok) {
+    return jsonResult(result.status, result.body);
+  }
+  return jsonResult(result.status, result.body);
+}
+
+export async function handleCustomerConversationSearch(
+  request: Request,
+  deps: CustomerConversationApiDeps,
+): Promise<CustomerConversationHttpResult> {
+  const api = mergeApiDeps(deps);
+  const access = await api.requireSendAccess();
+  if (!access.ok) {
+    return jsonResult(access.status, access.body);
+  }
+  if (!isConsumerRole(access.user.role)) {
+    return jsonResult(404, { error: "Not found" });
+  }
+
+  const resolved = await api.resolveCustomerChatLead({
+    request,
+    untrustedClientHints: null,
+    hostDeps: deps.hostDeps,
+    deps: deps.resolverDeps,
+  });
+  if (!resolved.ok) {
+    if (resolved.reason === "LEAD_NOT_FOUND") {
+      return jsonResult(200, {
+        query: "",
+        hits: [],
+        page: { limit: 20, hasMore: false, nextCursor: null },
+      });
+    }
+    return mapResolverFailure(resolved.reason);
+  }
+
+  const conversation = await findLeadConversation(deps.db, {
+    workspaceId: resolved.workspaceId,
+    leadId: resolved.leadId,
+  });
+  if (!conversation) {
+    return jsonResult(200, {
+      query: "",
+      hits: [],
+      page: { limit: 20, hasMore: false, nextCursor: null },
+    });
+  }
+
+  const result = await handleConversationSearchRequest(
+    deps.db as unknown as Parameters<typeof handleConversationSearchRequest>[0],
+    {
+      workspaceId: resolved.workspaceId,
+      conversationId: conversation.id,
+      url: new URL(request.url),
+    },
+  );
+  if (!result.ok) {
+    return jsonResult(result.status, result.body);
+  }
+  return jsonResult(result.status, result.body);
+}
+
+export async function handleCustomerConversationMessageContext(
+  request: Request,
+  messageId: string,
+  deps: CustomerConversationApiDeps,
+): Promise<CustomerConversationHttpResult> {
+  const api = mergeApiDeps(deps);
+  const access = await api.requireSendAccess();
+  if (!access.ok) {
+    return jsonResult(access.status, access.body);
+  }
+  if (!isConsumerRole(access.user.role)) {
+    return jsonResult(404, { error: "Not found" });
+  }
+
+  const resolved = await api.resolveCustomerChatLead({
+    request,
+    untrustedClientHints: null,
+    hostDeps: deps.hostDeps,
+    deps: deps.resolverDeps,
+  });
+  if (!resolved.ok) {
+    return mapResolverFailure(resolved.reason);
+  }
+
+  const conversation = await findLeadConversation(deps.db, {
+    workspaceId: resolved.workspaceId,
+    leadId: resolved.leadId,
+  });
+  if (!conversation) {
+    return jsonResult(404, { error: "Not found" });
+  }
+
+  const context = await loadAuthorizedMessageContextRows<CustomerConversationMessageRow>(
+    deps.db as unknown as Parameters<typeof loadAuthorizedMessageContextRows>[0],
+    {
+      workspaceId: resolved.workspaceId,
+      conversationId: conversation.id,
+      messageId,
+      select: CUSTOMER_CONVERSATION_MESSAGE_SELECT,
+    },
+  );
+  if (!context) {
+    return jsonResult(404, { error: "Not found" });
+  }
+
+  const extras = await enrichChatMessages(
+    deps.db as unknown as Parameters<typeof enrichChatMessages>[0],
+    {
+      workspaceId: resolved.workspaceId,
+      conversationId: conversation.id,
+      viewerUserId: access.user.id,
+      messages: context.messages,
+    },
+  ).catch(() => new Map());
+
+  return jsonResult(200, {
+    anchorMessageId: context.anchorMessageId,
+    messages: context.messages.map((row) => {
+      const rich = extras.get(row.id);
+      return presentCustomerConversationMessage(row, {
+        replyTo: rich?.replyTo ?? null,
+        reactions: rich?.reactions ?? [],
+      });
+    }),
+    page: context.page,
+  });
 }
