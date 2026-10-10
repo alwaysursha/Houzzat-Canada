@@ -159,7 +159,9 @@ function testClientNeverUsesGlobalEnv() {
 function testPublicUnavailableCopy() {
   const qa = read("src/components/listings/ListingQaPanel.tsx");
   const planner = read("src/components/route-planner/RoutePlannerClient.tsx");
-  assert.ok(qa.includes("WHATSAPP_UNAVAILABLE_COPY"));
+  // Quick Question uses HouzzatPRO Chat; WhatsApp unavailable copy remains on planner.
+  assert.ok(qa.includes("Chat with your agent"));
+  assert.ok(!qa.includes("buildListingExpertWhatsAppUrl"));
   assert.ok(planner.includes("WHATSAPP_UNAVAILABLE_COPY"));
   assert.ok(!qa.includes(".env.local"));
   assert.ok(!planner.includes(".env.local"));

@@ -31,6 +31,7 @@ import { ListingAccessGate } from "@/components/listings/ListingAccessGate";
 import { RecordRecentView } from "@/components/listings/RecordRecentView";
 import { SeoLocationBridge } from "@/components/site/SeoLocationContext";
 import { ListingInsightsDeferred } from "@/components/listings/insights/ListingInsightsDeferred";
+import { ListingQaPanel } from "@/components/listings/ListingQaPanel";
 import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
 import type { ViewingContactDefaults } from "@/components/listings/ViewingBookingModal";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
@@ -518,6 +519,7 @@ export function ListingDetailView({
               { id: "listing-related", label: "Similar" },
               { id: "listing-nearby", label: "Amenities" },
               { id: "listing-open-houses", label: "Open houses" },
+              { id: "listing-ask", label: "Ask" },
             ]}
           />
 
@@ -610,6 +612,13 @@ export function ListingDetailView({
             className="hidden md:block"
           />
           <ListingAgentCard agent={publicAgent} />
+          <ListingQaPanel
+            mlsNumber={listing.mlsNumber}
+            addressLine={streetLine}
+            city={listing.city}
+            title="Quick question?"
+            hint="Ask about this home in HouzzatPRO Chat. Your draft is kept until you send it."
+          />
           <DriveTimePanel
             mlsNumber={listing.mlsNumber}
             originLat={listing.lat}

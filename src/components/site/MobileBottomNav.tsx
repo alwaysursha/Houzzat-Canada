@@ -30,6 +30,7 @@ import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { useOptionalCustomerChatController } from "@/components/customer-chat/CustomerChatProvider";
 import { CUSTOMER_CHAT_PAGE_HREF } from "@/lib/customer-chat/query";
 import { openGuestStartChatIntent } from "@/lib/auth/start-chat-intent";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
@@ -503,6 +504,7 @@ function MoreSheet({
   const { status } = useSession();
   const signedIn = status === "authenticated";
   const { openAuth } = useAuthModal();
+  const chat = useOptionalCustomerChatController();
   const routePlanner = useRoutePlanner();
   const routeCount = routePlanner?.count ?? 0;
 
@@ -535,12 +537,29 @@ function MoreSheet({
       </div>
       <nav className="max-h-[min(60vh,28rem)] space-y-1 overflow-y-auto px-2 py-2">
         {signedIn ? (
-          <MoreLink
-            href={CUSTOMER_CHAT_PAGE_HREF}
-            icon={<MessageCircle className="size-4" aria-hidden />}
-            label="Chat"
-            onNavigate={onNavigateAway}
-          />
+          chat ? (
+            <button
+              type="button"
+              aria-label="Chat with your agent"
+              onClick={() => {
+                onNavigateAway();
+                chat.open({ forceExpand: true });
+              }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-ink transition hover:bg-mist active:scale-[0.99]"
+            >
+              <span className="inline-flex size-9 items-center justify-center rounded-lg bg-canopy/10 text-canopy">
+                <MessageCircle className="size-4" aria-hidden />
+              </span>
+              Chat
+            </button>
+          ) : (
+            <MoreLink
+              href={CUSTOMER_CHAT_PAGE_HREF}
+              icon={<MessageCircle className="size-4" aria-hidden />}
+              label="Chat"
+              onNavigate={onNavigateAway}
+            />
+          )
         ) : (
           <button
             type="button"

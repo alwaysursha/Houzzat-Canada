@@ -75,6 +75,7 @@ import {
   type ConversationLeadActivityDb,
 } from "@/lib/conversations/sms-lead-activity";
 import { presentSmsAutomationMessagePayload } from "@/lib/conversations/sms-automation-payload";
+import { customerChatAgentPhotoAllowed } from "@/lib/customer-chat/floating-chat";
 import { parseJsonText } from "@/lib/http/json-body";
 import { scheduleNotifyAssignedAgentOfCustomerChatMessage } from "@/lib/notifications/customer-chat-agent-push";
 import { isConsumerRole } from "@/lib/roles";
@@ -130,6 +131,11 @@ export type CustomerConversationReadView = {
   unreadCount: number;
 };
 
+export type CustomerConversationAgentIdentity = {
+  name: string | null;
+  photoUrl: string | null;
+};
+
 export type CustomerConversationGetPayload = {
   conversation: CustomerConversationSummary | null;
   messages: CustomerConversationMessage[];
@@ -141,6 +147,7 @@ export type CustomerConversationGetPayload = {
   canSend: boolean;
   blocked: boolean;
   read: CustomerConversationReadView;
+  agent: CustomerConversationAgentIdentity | null;
 };
 
 export type CustomerConversationSendPayload = {
@@ -181,6 +188,12 @@ export type CustomerConversationApiDeps = {
   allowCustomerChatSend?: typeof allowCustomerChatSend;
   requireSendAccess?: () => Promise<CustomerSendAccess>;
   scheduleAssignedAgentChatPush?: typeof scheduleNotifyAssignedAgentOfCustomerChatMessage;
+  resolveAssignedAgentIdentity?: (
+    input: {
+      workspaceId: string;
+      assignedAgentId: string | null;
+    },
+  ) => Promise<CustomerConversationAgentIdentity | null>;
 };
 
 function encodeTranscriptCursor(createdAt: Date, id: string): string {
@@ -217,7 +230,95 @@ function emptyGetPayload(limit: number): CustomerConversationGetPayload {
     canSend: true,
     blocked: false,
     read: { customerLastReadAt: null, unreadCount: 0 },
+    agent: null,
   };
+}
+
+function firstNonEmpty(
+  ...values: Array<string | null | undefined>
+): string | null {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
+/**
+ * Assigned-agent header identity for the customer's lead assignee only.
+ * Name: assignee User.name (plus workspace professional registered name when
+ * the assignee is the primary agent). Photo: workspace branding
+ * agentProfilePhotoUrl only when assignee === primaryAgentId — never User.image,
+ * never brokerageLogoUrl, never a branding portrait for a different assignee.
+ */
+export async function resolveAssignedCustomerChatAgentIdentity(input: {
+  workspaceId: string;
+  assignedAgentId: string | null;
+  db: {
+    user: {
+      findUnique: (args: {
+        where: { id: string };
+        select: { name: true };
+      }) => Promise<{ name: string | null } | null>;
+    };
+    workspace: {
+      findUnique: (args: {
+        where: { id: string };
+        select: {
+          primaryAgentId: true;
+          branding: { select: { agentProfilePhotoUrl: true } };
+          professionalIdentity: {
+            select: { agentRegisteredName: true };
+          };
+        };
+      }) => Promise<{
+        primaryAgentId: string | null;
+        branding: { agentProfilePhotoUrl: string | null } | null;
+        professionalIdentity: { agentRegisteredName: string | null } | null;
+      } | null>;
+    };
+  };
+}): Promise<CustomerConversationAgentIdentity | null> {
+  const agentId = input.assignedAgentId?.trim() || null;
+  if (!agentId) return null;
+
+  const [user, workspace] = await Promise.all([
+    input.db.user.findUnique({
+      where: { id: agentId },
+      select: { name: true },
+    }),
+    input.db.workspace.findUnique({
+      where: { id: input.workspaceId },
+      select: {
+        primaryAgentId: true,
+        branding: { select: { agentProfilePhotoUrl: true } },
+        professionalIdentity: {
+          select: { agentRegisteredName: true },
+        },
+      },
+    }),
+  ]);
+
+  if (!user) return null;
+
+  const photoAllowed = customerChatAgentPhotoAllowed({
+    assignedAgentId: agentId,
+    primaryAgentId: workspace?.primaryAgentId,
+  });
+  const name = firstNonEmpty(
+    photoAllowed
+      ? workspace?.professionalIdentity?.agentRegisteredName
+      : null,
+    user.name,
+  );
+  const photoUrl = photoAllowed
+    ? firstNonEmpty(workspace?.branding?.agentProfilePhotoUrl)
+    : null;
+
+  if (!name && !photoUrl) {
+    return { name: null, photoUrl: null };
+  }
+  return { name, photoUrl };
 }
 
 function presentConversation(
@@ -395,14 +496,15 @@ export async function handleCustomerConversationGet(
     return mapResolverFailure(resolved.reason);
   }
 
-  return loadExistingCustomerTranscript(deps.db, resolved, page.value);
+  return loadExistingCustomerTranscript(deps, resolved, page.value);
 }
 
 async function loadExistingCustomerTranscript(
-  db: CustomerConversationDb,
+  deps: CustomerConversationApiDeps,
   resolved: CustomerChatLeadSuccess,
   page: { limit: number; cursor: { createdAt: Date; id: string } | null },
 ): Promise<CustomerConversationHttpResult> {
+  const db = deps.db;
   const created = await getOrCreateLeadConversation(db, {
     workspaceId: resolved.workspaceId,
     leadId: resolved.leadId,
@@ -412,12 +514,29 @@ async function loadExistingCustomerTranscript(
   }
 
   const blocked = created.conversation.status === "BLOCKED";
-  const [transcript, unread] = await Promise.all([
+  const resolveAgent =
+    deps.resolveAssignedAgentIdentity ??
+    ((input: {
+      workspaceId: string;
+      assignedAgentId: string | null;
+    }) =>
+      resolveAssignedCustomerChatAgentIdentity({
+        ...input,
+        db: db as unknown as Parameters<
+          typeof resolveAssignedCustomerChatAgentIdentity
+        >[0]["db"],
+      }));
+
+  const [transcript, unread, agent] = await Promise.all([
     loadTranscriptPage(db, created.conversation, page),
     getConversationUnreadState(db, {
       workspaceId: resolved.workspaceId,
       leadId: resolved.leadId,
     }),
+    resolveAgent({
+      workspaceId: resolved.workspaceId,
+      assignedAgentId: resolved.assignedAgentId,
+    }).catch(() => null),
   ]);
 
   const payload: CustomerConversationGetPayload = {
@@ -436,6 +555,7 @@ async function loadExistingCustomerTranscript(
         : null,
       unreadCount: unread.customerUnreadCount,
     },
+    agent,
   };
   return jsonResult(200, payload);
 }

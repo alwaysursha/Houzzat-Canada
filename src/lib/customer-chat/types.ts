@@ -33,6 +33,12 @@ export type CustomerChatReadView = {
   unreadCount: number;
 };
 
+/** Assigned agent presentation for the customer chat header. Never invents status. */
+export type CustomerChatAgentIdentity = {
+  name: string | null;
+  photoUrl: string | null;
+};
+
 export type CustomerChatGetPayload = {
   conversation: CustomerChatConversation | null;
   messages: CustomerChatMessage[];
@@ -44,6 +50,7 @@ export type CustomerChatGetPayload = {
   canSend: boolean;
   blocked: boolean;
   read: CustomerChatReadView;
+  agent: CustomerChatAgentIdentity | null;
 };
 
 export type CustomerChatSendPayload = {

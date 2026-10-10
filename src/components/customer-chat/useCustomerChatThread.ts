@@ -39,8 +39,16 @@ function emptyPayload(): CustomerChatGetPayload {
     canSend: true,
     blocked: false,
     read: { customerLastReadAt: null, unreadCount: 0 },
+    agent: null,
   };
 }
+
+export type UseCustomerChatThreadOptions = {
+  /** When false, transcript still loads/polls but read receipts are not posted. */
+  chatVisible?: boolean;
+  /** When false, skip network (floating shell closed). */
+  enabled?: boolean;
+};
 
 async function readJson(res: Response): Promise<unknown> {
   try {
@@ -52,7 +60,11 @@ async function readJson(res: Response): Promise<unknown> {
   }
 }
 
-export function useCustomerChatThread() {
+export function useCustomerChatThread(
+  options: UseCustomerChatThreadOptions = {},
+) {
+  const chatVisible = options.chatVisible !== false;
+  const enabled = options.enabled !== false;
   const { openAuth } = useAuthModal();
   const { openClientToolsVerification } = useClientToolsVerification();
   const [payload, setPayload] = useState<CustomerChatGetPayload | null>(null);
@@ -74,7 +86,6 @@ export function useCustomerChatThread() {
   const markedReadIdRef = useRef<string | null>(null);
   const loadedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
-
   const fetchPage = useCallback(async (input: {
     cursor?: string | null;
     prepend: boolean;
@@ -141,6 +152,7 @@ export function useCustomerChatThread() {
             canSend: json.canSend,
             blocked: json.blocked,
             read: json.read,
+            agent: json.agent ?? prev.agent,
             messages: mergeLiveConversationMessages(
               prev.messages,
               json.messages,
@@ -182,13 +194,18 @@ export function useCustomerChatThread() {
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     void fetchPage({ prepend: false });
     return () => {
       abortRef.current?.abort();
     };
-  }, [fetchPage]);
+  }, [enabled, fetchPage]);
 
   useEffect(() => {
+    if (!enabled) return;
     const tick = () => {
       if (
         !conversationLivePollShouldTick({
@@ -213,13 +230,13 @@ export function useCustomerChatThread() {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", tick);
     };
-  }, [fetchPage]);
+  }, [enabled, fetchPage]);
 
   useEffect(() => {
     const openId = payload?.conversation?.id ?? null;
     if (
       !shouldMarkCustomerChatRead({
-        chatVisible: true,
+        chatVisible,
         openId,
         alreadyMarkedId: markedReadIdRef.current,
       })
@@ -248,7 +265,7 @@ export function useCustomerChatThread() {
         markedReadIdRef.current = null;
       }
     })();
-  }, [payload]);
+  }, [payload, chatVisible]);
 
   const reload = useCallback(() => {
     loadedRef.current = false;

@@ -6,7 +6,9 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
+import { ArrowLeft, Minus, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { AccountVerifyEmailAction } from "@/components/account/AccountVerifyEmailAction";
 import { useCustomerChatThread } from "@/components/customer-chat/useCustomerChatThread";
@@ -25,12 +27,45 @@ import {
   customerSmsAutomationBadge,
   customerUnreadDividerMessageId,
 } from "@/lib/customer-chat/query";
+import {
+  CUSTOMER_CHAT_FLOATING_SIZE,
+  clampCustomerChatWindowPosition,
+  formatCustomerChatListingBanner,
+  presentCustomerChatAgentInitials,
+  presentCustomerChatAgentName,
+  type CustomerChatListingContext,
+  type CustomerChatWindowPosition,
+} from "@/lib/customer-chat/floating-chat";
 import type { CustomerChatMessage } from "@/lib/customer-chat/types";
 import { cn } from "@/lib/utils";
 
 const COMPOSER_ID = "customer-chat-composer";
 
-export function CustomerChatScreen() {
+export type CustomerChatChrome = "page" | "floating" | "mobile-sheet";
+
+export function CustomerChatScreen({
+  chrome = "page",
+  draft: controlledDraft,
+  onDraftChange,
+  listingContext = null,
+  onClose,
+  onMinimize,
+  chatVisible = true,
+  hideOuterHeader = false,
+  position,
+  onPositionChange,
+}: {
+  chrome?: CustomerChatChrome;
+  draft?: string;
+  onDraftChange?: (value: string) => void;
+  listingContext?: CustomerChatListingContext | null;
+  onClose?: () => void;
+  onMinimize?: () => void;
+  chatVisible?: boolean;
+  hideOuterHeader?: boolean;
+  position?: CustomerChatWindowPosition;
+  onPositionChange?: (value: CustomerChatWindowPosition) => void;
+} = {}) {
   const {
     payload,
     loading,
@@ -41,14 +76,24 @@ export function CustomerChatScreen() {
     reload,
     loadOlder,
     send,
-  } = useCustomerChatThread();
-  const [draft, setDraft] = useState("");
+  } = useCustomerChatThread({ chatVisible, enabled: true });
+  const [localDraft, setLocalDraft] = useState("");
+  const draft = controlledDraft ?? localDraft;
+  const setDraft = onDraftChange ?? setLocalDraft;
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
   const stickToBottomRef = useRef(true);
   const previousHeightRef = useRef(0);
   const pendingPrependRef = useRef(false);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
+  const [dragging, setDragging] = useState(false);
   const firstMessageId = payload?.messages[0]?.id ?? null;
   const lastMessageId =
     payload?.messages[payload.messages.length - 1]?.id ?? null;
@@ -66,6 +111,10 @@ export function CustomerChatScreen() {
     payload?.messages ?? [],
     dividerMessageId,
   );
+  const agentName = presentCustomerChatAgentName(payload?.agent);
+  const agentInitials = presentCustomerChatAgentInitials(payload?.agent);
+  const agentPhoto = payload?.agent?.photoUrl?.trim() || null;
+  const listingBanner = formatCustomerChatListingBanner(listingContext);
 
   useLayoutEffect(() => {
     const el = scrollerRef.current;
@@ -145,27 +194,156 @@ export function CustomerChatScreen() {
     void submit();
   }
 
+  function onHeaderPointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (chrome !== "floating" || !position || !onPositionChange) return;
+    if ((event.target as HTMLElement).closest("button")) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: position.x,
+      originY: position.y,
+    };
+    setDragging(true);
+  }
+
+  function onHeaderPointerMove(event: ReactPointerEvent<HTMLElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !onPositionChange) return;
+    onPositionChange(
+      clampCustomerChatWindowPosition(
+        {
+          x: drag.originX + (event.clientX - drag.startX),
+          y: drag.originY + (event.clientY - drag.startY),
+        },
+        { width: window.innerWidth, height: window.innerHeight },
+        CUSTOMER_CHAT_FLOATING_SIZE,
+      ),
+    );
+  }
+
+  function onHeaderPointerUp(event: ReactPointerEvent<HTMLElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    setDragging(false);
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+  }
+
   const remaining = CUSTOMER_CHAT_TEXT_MAX_LENGTH - draft.length;
   const verificationRequired = sendError?.kind === "verification";
+  const floatingChrome = chrome === "floating" || chrome === "mobile-sheet";
 
   return (
     <section
       ref={rootRef}
       className={cn(
-        "flex min-h-0 flex-col overflow-hidden bg-surface",
-        "-mx-4 -mt-10 -mb-[calc(2.5rem+var(--mobile-bottom-nav,0px))] h-[calc(100dvh-5.75rem-env(safe-area-inset-top,0px)-var(--mobile-bottom-nav,0px))] pb-[var(--customer-chat-keyboard,0px)]",
-        "md:mx-auto md:mt-0 md:mb-0 md:h-[min(42rem,calc(100dvh-9rem))] md:max-w-2xl md:rounded-2xl md:border md:border-line md:pb-0",
+        "flex min-h-0 flex-col overflow-hidden",
+        chrome === "page" &&
+          "bg-surface -mx-4 -mt-10 -mb-[calc(2.5rem+var(--mobile-bottom-nav,0px))] h-[calc(100dvh-5.75rem-env(safe-area-inset-top,0px)-var(--mobile-bottom-nav,0px))] pb-[var(--customer-chat-keyboard,0px)] md:mx-auto md:mt-0 md:mb-0 md:h-[min(42rem,calc(100dvh-9rem))] md:max-w-2xl md:rounded-2xl md:border md:border-line md:pb-0",
+        chrome === "floating" && "h-full bg-transparent",
+        chrome === "mobile-sheet" &&
+          "h-full bg-transparent pb-[calc(var(--customer-chat-keyboard,0px)+env(safe-area-inset-bottom,0px))]",
       )}
     >
-      <header className="shrink-0 border-b border-line/80 px-4 py-3 sm:px-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/45">
-          Chat
-        </p>
-        <h1 className="font-display text-xl text-ink sm:text-2xl">
-          Chat with your agent
-        </h1>
-        <p className="mt-0.5 text-sm text-ink/55">Your Agent</p>
-      </header>
+      {hideOuterHeader && chrome === "floating" ? null : (
+        <header
+          onPointerDown={onHeaderPointerDown}
+          onPointerMove={onHeaderPointerMove}
+          onPointerUp={onHeaderPointerUp}
+          onPointerCancel={onHeaderPointerUp}
+          className={cn(
+            "shrink-0 border-b border-canopy/10 px-4 py-3 sm:px-5",
+            floatingChrome &&
+              "bg-gradient-to-r from-[#f3fbf7] via-white to-[#eef8f3]",
+            chrome === "floating" &&
+              position &&
+              onPositionChange &&
+              (dragging ? "cursor-grabbing" : "cursor-grab"),
+          )}
+        >
+          <div className="flex items-start gap-3">
+            {chrome === "mobile-sheet" && onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close chat"
+                className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-line bg-white text-ink/70 hover:bg-mist"
+              >
+                <ArrowLeft className="size-4" aria-hidden />
+              </button>
+            ) : null}
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <AgentAvatar
+                name={agentName}
+                initials={agentInitials}
+                photoUrl={agentPhoto}
+              />
+              <div className="min-w-0">
+                {chrome === "page" ? (
+                  <>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/45">
+                      Chat
+                    </p>
+                    <h1 className="truncate font-display text-xl text-ink sm:text-2xl">
+                      Chat with your agent
+                    </h1>
+                    <p className="mt-0.5 truncate text-sm text-ink/55">
+                      {agentName}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="truncate font-display text-lg text-ink">
+                      {agentName}
+                    </h2>
+                    <p className="truncate text-xs text-ink/50">
+                      HouzzatPRO Chat
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+            {chrome === "floating" ? (
+              <div className="flex shrink-0 items-center gap-1">
+                {onMinimize ? (
+                  <button
+                    type="button"
+                    onClick={onMinimize}
+                    aria-label="Minimize chat"
+                    className="inline-flex size-8 items-center justify-center rounded-lg text-ink/55 hover:bg-mist hover:text-ink"
+                  >
+                    <Minus className="size-4" aria-hidden />
+                  </button>
+                ) : null}
+                {onClose ? (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label="Close chat"
+                    className="inline-flex size-8 items-center justify-center rounded-lg text-ink/55 hover:bg-mist hover:text-ink"
+                  >
+                    <X className="size-4" aria-hidden />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </header>
+      )}
+
+      {listingBanner ? (
+        <div className="shrink-0 border-b border-canopy/10 bg-[#f3fbf7] px-4 py-2 text-[12px] font-medium text-canopy-deep">
+          <p className="truncate" title={listingBanner}>
+            About {listingBanner}
+          </p>
+        </div>
+      ) : null}
 
       <div
         ref={scrollerRef}
@@ -259,7 +437,12 @@ export function CustomerChatScreen() {
           </p>
         </div>
       ) : loading || loadError ? null : (
-        <div className="shrink-0 border-t border-line bg-mist/50 px-3 py-2.5 sm:px-4">
+        <div
+          className={cn(
+            "shrink-0 border-t border-canopy/10 px-3 py-2.5 sm:px-4",
+            floatingChrome ? "bg-white/90 backdrop-blur-sm" : "bg-mist/50",
+          )}
+        >
           <div className="space-y-1.5">
             <label className="sr-only" htmlFor={COMPOSER_ID}>
               Message to your agent
@@ -321,6 +504,35 @@ export function CustomerChatScreen() {
         </div>
       )}
     </section>
+  );
+}
+
+function AgentAvatar({
+  name,
+  initials,
+  photoUrl,
+}: {
+  name: string;
+  initials: string;
+  photoUrl: string | null;
+}) {
+  if (photoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- workspace branding CDN URLs vary by tenant
+      <img
+        src={photoUrl}
+        alt={name}
+        className="size-10 shrink-0 rounded-full object-cover ring-2 ring-canopy/15"
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-canopy text-[12px] font-bold text-white shadow-sm"
+    >
+      {initials}
+    </span>
   );
 }
 
@@ -395,12 +607,12 @@ function CustomerChatRow({
         )}
         <div
           className={cn(
-            "rounded-2xl px-3 py-2 text-sm leading-5",
+            "rounded-2xl px-3 py-2 text-sm leading-5 shadow-sm",
             deleted
               ? "bg-mist italic text-ink/55 ring-1 ring-line"
               : mine
                 ? "bg-canopy text-white"
-                : "bg-mist text-ink",
+                : "bg-white text-ink ring-1 ring-canopy/10",
           )}
         >
           <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">

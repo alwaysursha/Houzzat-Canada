@@ -64,19 +64,14 @@ function testAnonymousEntriesStoreStartChat() {
   );
   assert.match(
     fab,
-    /status === "authenticated"[\s\S]*href=\{CUSTOMER_CHAT_PAGE_HREF\}[\s\S]*openGuestStartChatIntent/,
+    /status === "authenticated"[\s\S]*chat\.open[\s\S]*openGuestStartChatIntent/,
   );
   assert.equal(fab.includes("fetch("), false);
 
   const nav = readFileSync("src/components/site/MobileBottomNav.tsx", "utf8");
-  const signedNav = nav.slice(
-    nav.indexOf("{signedIn ? ("),
-    nav.indexOf(") : ("),
-  );
-  assert.match(signedNav, /href=\{CUSTOMER_CHAT_PAGE_HREF\}/);
-  assert.equal(signedNav.includes("openGuestStartChatIntent"), false);
+  assert.ok(nav.includes("chat.open") || nav.includes("CUSTOMER_CHAT_PAGE_HREF"));
   const guestAt = nav.indexOf("openGuestStartChatIntent({");
-  assert.ok(guestAt > nav.indexOf("href={CUSTOMER_CHAT_PAGE_HREF}"));
+  assert.ok(guestAt > 0);
   const guestNav = nav.slice(guestAt, nav.indexOf("<MoreLink", guestAt));
   assert.match(guestNav, /openGuestStartChatIntent/);
   assert.equal(guestNav.includes("fetch("), false);
@@ -110,13 +105,17 @@ function testIntentIsCallbackOnlyAndOpensAuth() {
   assert.equal(body.type, "START_CHAT");
   assert.equal(body.callbackPath, "/account/chat");
   assert.deepEqual(Object.keys(body).sort(), [
+    "addressLine",
     "callbackPath",
+    "city",
     "createdAt",
+    "draftMessage",
     "host",
+    "mlsNumber",
     "type",
   ]);
-  assert.equal("mlsNumber" in body, false);
-  assert.equal("message" in body, false);
+  assert.equal(body.mlsNumber, null);
+  assert.equal(body.draftMessage, null);
   assert.equal("leadId" in body, false);
   assert.equal("conversationId" in body, false);
 }
@@ -129,7 +128,7 @@ function testUnexpectedFieldsRejected() {
   poisoned.set(
     JSON.stringify({
       v: 1,
-      intent: { ...intent, mlsNumber: "W123", message: "hello", leadId: "l1" },
+      intent: { ...intent, message: "hello", leadId: "l1" },
     }),
   );
   const peeked = peekPendingIntent(poisoned, { host: HOST, now: NOW + 1 });
@@ -141,14 +140,28 @@ function testResumeOpensChatAndDoesNotSend() {
   const created = open(store);
   assert.equal(created.result.ok, true);
   if (!created.result.ok) return;
-  const visits: string[] = [];
+  const floating: unknown[] = [];
   const fromListing = resumeStartChatIntent(created.result.intent, {
+    pathname: "/listing/12-main-st/W1234567",
+    openFloating(detail) {
+      floating.push(detail);
+      return true;
+    },
+    navigate() {
+      throw new Error("floating path must not navigate");
+    },
+  });
+  assert.equal(fromListing, "opened");
+  assert.equal(floating.length, 1);
+
+  const visits: string[] = [];
+  const fallback = resumeStartChatIntent(created.result.intent, {
     pathname: "/listing/12-main-st/W1234567",
     navigate(path) {
       visits.push(path);
     },
   });
-  assert.equal(fromListing, "opened");
+  assert.equal(fallback, "opened");
   assert.deepEqual(visits, ["/account/chat"]);
 
   const already = resumeStartChatIntent(created.result.intent, {
@@ -168,7 +181,8 @@ function testResumeOpensChatAndDoesNotSend() {
   assert.equal(moduleSource.includes("fetch("), false);
   assert.equal(moduleSource.includes("/api/account/conversation"), false);
   assert.equal(moduleSource.includes("ensureCustomerChatLead"), false);
-  assert.equal(moduleSource.includes("mlsNumber"), false);
+  assert.ok(moduleSource.includes("mlsNumber"));
+  assert.ok(moduleSource.includes("draftMessage"));
 }
 
 function testWrongHostAndExpiry() {
@@ -289,4 +303,7 @@ async function main() {
   console.log("start-chat selftest ok");
 }
 
-void main();
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

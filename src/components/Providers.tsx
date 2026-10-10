@@ -23,6 +23,7 @@ import { HouzzatPullToRefresh } from "@/components/mobile/HouzzatPullToRefresh";
 import { PushNotificationsBootstrap } from "@/components/mobile/PushNotificationsBootstrap";
 import { shouldRefetchSessionOnWindowFocus } from "@/lib/mobile/session-revalidate-policy";
 import { RoutePlannerProvider } from "@/components/route-planner/RoutePlannerProvider";
+import { CustomerChatProvider } from "@/components/customer-chat/CustomerChatProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const refetchOnWindowFocus = useMemo(() => {
@@ -42,21 +43,23 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <SiteAlertProvider>
             <AuthModalProvider>
               <ClientToolsVerificationProvider>
-                <CapacitorBootstrap />
-                <HouzzatAndroidBootCover />
-                <PushNotificationsBootstrap />
-                <BiometricLockGate />
-                <RememberClientSession />
-                <CaptureIntentResume />
-                <SoftNavShield />
-                <NavigationRecovery />
-                <BrowseStateSync />
-                <RecentViewsSync />
-                <Suspense fallback={null}>
-                  {isActivityBeaconEnabled() ? <ActivityBeacon /> : null}
-                </Suspense>
-                <ContactUpdateReminder />
-                <HouzzatPullToRefresh>{children}</HouzzatPullToRefresh>
+                <CustomerChatProvider>
+                  <CapacitorBootstrap />
+                  <HouzzatAndroidBootCover />
+                  <PushNotificationsBootstrap />
+                  <BiometricLockGate />
+                  <RememberClientSession />
+                  <CaptureIntentResume />
+                  <SoftNavShield />
+                  <NavigationRecovery />
+                  <BrowseStateSync />
+                  <RecentViewsSync />
+                  <Suspense fallback={null}>
+                    {isActivityBeaconEnabled() ? <ActivityBeacon /> : null}
+                  </Suspense>
+                  <ContactUpdateReminder />
+                  <HouzzatPullToRefresh>{children}</HouzzatPullToRefresh>
+                </CustomerChatProvider>
               </ClientToolsVerificationProvider>
             </AuthModalProvider>
           </SiteAlertProvider>

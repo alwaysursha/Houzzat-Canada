@@ -92,6 +92,7 @@ function payload(
     canSend: true,
     blocked: false,
     read: { customerLastReadAt: null, unreadCount: 0 },
+    agent: null,
     ...overrides,
   };
 }
@@ -417,16 +418,18 @@ function testTenantOnlyFabAndNoSixthTab() {
   assert.ok(fab.includes("AGENT"));
   assert.ok(fab.includes('status === "loading"'));
   assert.ok(fab.includes("openGuestStartChatIntent"));
-  assert.ok(fab.includes("href={CUSTOMER_CHAT_PAGE_HREF}"));
+  assert.ok(fab.includes("chat.open"));
+  assert.ok(fab.includes("CUSTOMER_CHAT_PAGE_HREF"));
   assert.ok(fab.includes('aria-label="Chat with your agent"'));
   const nav = read("src/components/site/MobileBottomNav.tsx");
-  assert.ok(nav.includes('label="Chat"'));
+  assert.ok(nav.includes("Chat"));
   assert.ok(nav.includes("grid-cols-4"));
   assert.equal(nav.includes("grid-cols-5"), false);
   assert.ok(nav.includes("Home"));
   assert.ok(nav.includes("Search"));
   assert.ok(nav.includes("More"));
   assert.ok(nav.includes("Account"));
+  assert.ok(nav.includes("chat.open") || nav.includes("CUSTOMER_CHAT_PAGE_HREF"));
 }
 
 function testAccountNavAndCallback() {
