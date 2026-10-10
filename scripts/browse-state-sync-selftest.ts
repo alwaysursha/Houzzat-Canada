@@ -269,6 +269,15 @@ assert.ok(cleanup.includes("invalidateBrowseStateApplies"));
 
 const hardSignOut = read("src/lib/auth/hard-sign-out.ts");
 assert.ok(hardSignOut.includes("clearAccountLocalBrowseCaches"));
+assert.ok(hardSignOut.includes("shouldUseAuthJsSignOut"));
+assert.ok(hardSignOut.includes("NEXT_PUBLIC_IS_VERCEL"));
+// Cookie clear must run before local browse cleanup (avoids sync Set-Cookie race).
+const firstLogoutClear = hardSignOut.indexOf("await postLogoutClear()");
+const localClear = hardSignOut.indexOf("clearAccountLocalBrowseCaches()");
+assert.ok(firstLogoutClear > 0 && localClear > firstLogoutClear);
+
+const middleware = read("src/middleware.ts");
+assert.ok(middleware.includes("api/account/browse-state"));
 
 const providers = read("src/components/Providers.tsx");
 assert.ok(providers.includes("BrowseStateSync"));

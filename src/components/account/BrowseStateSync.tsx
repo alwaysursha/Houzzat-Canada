@@ -108,6 +108,8 @@ export function BrowseStateSync() {
     }
 
     function schedulePush() {
+      // After logout, mergedRef is cleared — never enqueue another push.
+      if (!mergedRef.current) return;
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
       pushTimerRef.current = setTimeout(() => {
         void flushPush();
@@ -116,8 +118,9 @@ export function BrowseStateSync() {
 
     async function flushPush() {
       if (inFlightPushRef.current || !mergedRef.current) return;
-      inFlightPushRef.current = true;
       const applyGenAtStart = currentBrowseApplyGeneration();
+      if (!stillSignedInValid(applyGenAtStart)) return;
+      inFlightPushRef.current = true;
       try {
         const local = readLocalBrowseSnapshot();
         const result = await putBrowseState({
@@ -164,8 +167,9 @@ export function BrowseStateSync() {
       const now = Date.now();
       if (now - lastFocusFetchRef.current < FOCUS_THROTTLE_MS) return;
       if (document.visibilityState !== "visible") return;
-      lastFocusFetchRef.current = now;
       const applyGenAtStart = currentBrowseApplyGeneration();
+      if (!stillSignedInValid(applyGenAtStart)) return;
+      lastFocusFetchRef.current = now;
       const state = await fetchBrowseState();
       if (!stillSignedInValid(applyGenAtStart) || !state) return;
       revisionRef.current = state.revision;

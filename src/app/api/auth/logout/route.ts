@@ -62,9 +62,11 @@ function expireCookie(
 }
 
 function applyClears(response: NextResponse, request: Request) {
-  const alsoDelete = isHouzzatVercelTestHost(
-    extractTrustedRequestHostname(request),
-  );
+  // cookies.delete helps on Vercel JWT sessions. Cloudflare logout stays
+  // expire-Set-Cookie only (header-budget / Workers cookie behavior).
+  const alsoDelete =
+    Boolean(process.env.VERCEL) ||
+    isHouzzatVercelTestHost(extractTrustedRequestHostname(request));
   const header = request.headers.get("cookie") ?? "";
   for (const name of collectAuthCookieNamesToClear(header)) {
     expireCookie(response, name, alsoDelete);

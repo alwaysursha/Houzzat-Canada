@@ -298,7 +298,9 @@ export const config = {
      *
      * Exclude /api/auth/logout and /api/auth/signout — Auth.js middleware
      * re-issues session cookies, which undoes hard cookie clears on sign-out.
+     * Also exclude browse-state sync: in-flight PUTs during logout must not
+     * refresh the JWT after /api/auth/logout has expired it.
      */
-    "/((?!_next/static|_next/image|api/auth/logout|api/auth/signout|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|api/auth/logout|api/auth/signout|api/account/browse-state|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

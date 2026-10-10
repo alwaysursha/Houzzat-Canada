@@ -39,6 +39,8 @@ const nextConfig: NextConfig = {
   generateBuildId: async () => houzzatBuildId,
   env: {
     NEXT_PUBLIC_HOUZZAT_BUILD: houzzatBuildId,
+    // Client hard-sign-out uses Auth.js signOut on Vercel only (never on CF Workers).
+    NEXT_PUBLIC_IS_VERCEL: process.env.VERCEL ? "1" : "",
   },
   serverExternalPackages: [
     "@prisma/client",

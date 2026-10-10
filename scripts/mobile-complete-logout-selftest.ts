@@ -279,21 +279,25 @@ function testLogoutWiring() {
   assert.ok(hard.includes("resolveDestination"));
   assert.ok(hard.includes('from "next-auth/react"'));
   assert.ok(hard.includes("signOut({ redirect: false })"));
+  assert.ok(hard.includes("shouldUseAuthJsSignOut"));
+  assert.ok(hard.includes("NEXT_PUBLIC_IS_VERCEL"));
   assert.ok(hard.includes("isHouzzatVercelTestHost(window.location.hostname)"));
-  const vercelTestIdx = hard.indexOf("isHouzzatVercelTestHost(window.location.hostname)");
+  const authJsGateIdx = hard.indexOf("shouldUseAuthJsSignOut");
   const authJsSignOutIdx = hard.indexOf("await authJsSignOutClear()");
-  assert.ok(vercelTestIdx > 0 && authJsSignOutIdx > vercelTestIdx);
+  assert.ok(authJsGateIdx > 0 && authJsSignOutIdx > authJsGateIdx);
   assert.ok(hard.includes("/api/auth/signout?callbackUrl="));
   assert.ok(route.includes("resolveCompleteSignOutDestination"));
   assert.ok(route.includes("isSafeSignOutReturnUrl"));
   assert.ok(route.includes("PRO_SIGNED_OUT_SIGN_IN_URL") || route.includes("PRO_SIGNED_OUT_SIGN_IN_PATH"));
   assert.ok(route.includes("isHouzzatVercelTestHost"));
+  assert.ok(route.includes("process.env.VERCEL"));
   assert.ok(route.includes("response.cookies.delete"));
   assert.ok(route.includes("if (alsoDelete)"));
   assert.ok(button.includes("unregisterCurrentPushDevice"));
   assert.ok(button.includes("performHardSignOut"));
   assert.ok(middleware.includes("api/auth/logout"));
   assert.ok(middleware.includes("api/auth/signout"));
+  assert.ok(middleware.includes("api/account/browse-state"));
   // Must not widen cookie Domain.
   assert.ok(!route.includes("domain:"));
   assert.ok(!route.includes('Domain='));

@@ -103,6 +103,21 @@ async function getLogoutClearFetch(): Promise<void> {
 }
 
 /**
+ * Vercel (incl. production) needs Auth.js signOut to drop the JWT session.
+ * Cloudflare Workers must not call Auth.js signOut — it re-issues the cookie.
+ * NEXT_PUBLIC_IS_VERCEL is set at build time from process.env.VERCEL.
+ */
+function shouldUseAuthJsSignOut(): boolean {
+  if (
+    typeof window !== "undefined" &&
+    isHouzzatVercelTestHost(window.location.hostname)
+  ) {
+    return true;
+  }
+  return process.env.NEXT_PUBLIC_IS_VERCEL === "1";
+}
+
+/**
  * Clear Auth.js cookies via POST, confirm session is gone, hard-navigate.
  * Never throws for navigation — callers should not catch around the assign.
  */
@@ -119,7 +134,22 @@ export async function performHardSignOut(options?: {
     // ignore
   }
 
-  // Drop prior-account / guest browse caches before the next identity arrives.
+  const useAuthJs = shouldUseAuthJsSignOut();
+
+  if (useAuthJs) {
+    // Auth.js POST /api/auth/signout while CSRF cookie still exists.
+    // Custom expire-only Set-Cookie alone is unreliable on Vercel JWT sessions.
+    // Cloudflare Workers must not call this (re-issues the session cookie).
+    await authJsSignOutClear();
+  }
+
+  // Clear cookies BEFORE local browse cleanup. Clearing Active/Recent search
+  // emits events that can trigger in-flight /api/account/browse-state calls;
+  // Auth.js middleware may refresh the session cookie on those responses and
+  // undo a later logout clear.
+  await postLogoutClear();
+
+  // Drop prior-account / guest browse caches (invalidates sync + cancels pushes).
   // Does not run during signup resume — only explicit sign-out.
   try {
     clearAccountLocalBrowseCaches();
@@ -127,30 +157,19 @@ export async function performHardSignOut(options?: {
     // ignore
   }
 
-  const vercelTest =
-    typeof window !== "undefined" &&
-    isHouzzatVercelTestHost(window.location.hostname);
-
-  if (vercelTest) {
-    // Auth.js POST /api/auth/signout while CSRF cookie still exists.
-    // Custom expire-only Set-Cookie does not drop the Vercel JWT session.
-    // Cloudflare Workers must not call this (re-issues the session cookie).
-    await authJsSignOutClear();
-  }
-
-  // Clear leftover cookies on the *current* host (tenant or platform).
+  // Second clear covers any Set-Cookie refresh that raced with the first clear.
   await postLogoutClear();
 
   let stillAuthed = await fetchAuthSessionUser();
   if (stillAuthed) {
-    if (vercelTest) {
+    if (useAuthJs) {
       await authJsSignOutClear();
     }
     await getLogoutClearFetch();
     stillAuthed = await fetchAuthSessionUser();
   }
 
-  if (vercelTest && stillAuthed) {
+  if (useAuthJs && stillAuthed) {
     window.location.assign(
       "/api/auth/signout?callbackUrl=%2Fpro%2Fsign-in%3FsignedOut%3D1",
     );
