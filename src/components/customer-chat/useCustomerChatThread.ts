@@ -23,6 +23,11 @@ import {
   shouldSkipDuplicateCustomerChatOlder,
 } from "@/lib/customer-chat/query";
 import {
+  buildVoiceNoteUploadFormData,
+  customerChatVoiceNoteUploadRoute,
+  newVoiceNoteUploadId,
+} from "@/lib/chat/voice-notes/client-upload";
+import {
   CONVERSATION_LIVE_POLL_MS,
   conversationLivePollShouldTick,
   conversationLiveVisible,
@@ -370,6 +375,81 @@ export function useCustomerChatThread(
     [openAuth, openClientToolsVerification, payload],
   );
 
+  const sendVoiceNote = useCallback(
+    async (input: {
+      blob: Blob;
+      mimeType: string;
+      durationMs: number;
+      replyToMessageId?: string | null;
+    }): Promise<boolean> => {
+      const canSend = Boolean(payload && payload.canSend && !payload.blocked);
+      if (!canSend || sendInFlightRef.current) return false;
+      sendInFlightRef.current = true;
+      setSending(true);
+      setSendError(null);
+      const uploadId = newVoiceNoteUploadId();
+      try {
+        const res = await fetch(customerChatVoiceNoteUploadRoute(), {
+          method: "POST",
+          body: buildVoiceNoteUploadFormData({
+            blob: input.blob,
+            mimeType: input.mimeType,
+            durationMs: input.durationMs,
+            uploadId,
+            replyToMessageId: input.replyToMessageId,
+          }),
+        });
+        const json = await readJson(res);
+        if (!res.ok) {
+          const failure = parseCustomerChatSendFailure(
+            res.status,
+            json,
+            res.headers.get("Retry-After"),
+          );
+          setSendError(failure);
+          if (failure.kind === "verification") {
+            openClientToolsVerification({
+              callbackUrl: CUSTOMER_CHAT_PAGE_HREF,
+            });
+          }
+          if (failure.kind === "auth") {
+            openAuth({
+              mode: "sign-in",
+              callbackUrl: CUSTOMER_CHAT_PAGE_HREF,
+            });
+          }
+          return false;
+        }
+        const sent = json as CustomerChatSendPayload;
+        setPayload((prev) => {
+          const base = prev ?? emptyPayload();
+          return {
+            ...appendCustomerChatSentMessage(
+              base,
+              sent.conversation,
+              sent.message,
+            ),
+            conversation: sent.conversation,
+            canSend: true,
+            blocked: false,
+          };
+        });
+        return true;
+      } catch {
+        setSendError({
+          kind: "generic",
+          message: "Couldn’t send your voice note. Please try again.",
+          retryAfterSec: null,
+        });
+        return false;
+      } finally {
+        sendInFlightRef.current = false;
+        setSending(false);
+      }
+    },
+    [openAuth, openClientToolsVerification, payload],
+  );
+
   const reactToMessage = useCallback(
     async (messageId: string, key: string): Promise<boolean> => {
       try {
@@ -477,6 +557,7 @@ export function useCustomerChatThread(
     reload,
     loadOlder,
     send,
+    sendVoiceNote,
     reactToMessage,
     searchMessages,
     ensureMessageLoaded,

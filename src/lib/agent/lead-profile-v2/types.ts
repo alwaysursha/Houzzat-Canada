@@ -112,6 +112,13 @@ export type LeadProfileV2ChatMessage = {
     count: number;
     reactedByMe: boolean;
   }>;
+  attachments?: Array<{
+    id: string;
+    kind: "VOICE_NOTE";
+    mimeType: string;
+    byteSize: number;
+    durationMs: number | null;
+  }>;
   createdAt: string;
   deliveredAt: string | null;
   smsSource: string | null;

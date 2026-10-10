@@ -22,6 +22,14 @@ export type CustomerChatReaction = {
   reactedByMe: boolean;
 };
 
+export type CustomerChatAttachment = {
+  id: string;
+  kind: "VOICE_NOTE";
+  mimeType: string;
+  byteSize: number;
+  durationMs: number | null;
+};
+
 export type CustomerChatMessage = {
   id: string;
   channel: string;
@@ -35,6 +43,7 @@ export type CustomerChatMessage = {
   replyTo?: CustomerChatQuotedMessage | null;
   deliveredAt?: string | null;
   reactions?: CustomerChatReaction[];
+  attachments?: CustomerChatAttachment[];
   createdAt: string;
   payload: unknown;
 };

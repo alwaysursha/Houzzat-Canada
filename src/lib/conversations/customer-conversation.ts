@@ -143,6 +143,13 @@ export type CustomerConversationMessage = {
     count: number;
     reactedByMe: boolean;
   }>;
+  attachments: Array<{
+    id: string;
+    kind: "VOICE_NOTE";
+    mimeType: string;
+    byteSize: number;
+    durationMs: number | null;
+  }>;
   createdAt: string;
   payload: Prisma.JsonValue | null;
 };
@@ -234,6 +241,7 @@ export function presentCustomerConversationMessage(
   extras?: {
     replyTo?: CustomerConversationMessage["replyTo"];
     reactions?: CustomerConversationMessage["reactions"];
+    attachments?: CustomerConversationMessage["attachments"];
   },
 ): CustomerConversationMessage {
   const deleted = Boolean(row.deletedAt);
@@ -254,6 +262,7 @@ export function presentCustomerConversationMessage(
     replyTo: extras?.replyTo ?? null,
     deliveredAt: row.deliveredAt ? row.deliveredAt.toISOString() : null,
     reactions: extras?.reactions ?? [],
+    attachments: deleted ? [] : extras?.attachments ?? [],
     createdAt: row.createdAt.toISOString(),
     payload,
   };
@@ -518,6 +527,7 @@ async function loadTranscriptPage(
       return presentCustomerConversationMessage(row, {
         replyTo: rich?.replyTo ?? null,
         reactions: rich?.reactions ?? [],
+        attachments: rich?.attachments ?? [],
       });
     }),
     hasMore,
@@ -810,6 +820,7 @@ export async function handleCustomerConversationSend(
       {
         replyTo: extras?.replyTo ?? null,
         reactions: extras?.reactions ?? [],
+        attachments: extras?.attachments ?? [],
       },
     ),
   };
@@ -1081,6 +1092,7 @@ export async function handleCustomerConversationMessageContext(
       return presentCustomerConversationMessage(row, {
         replyTo: rich?.replyTo ?? null,
         reactions: rich?.reactions ?? [],
+        attachments: rich?.attachments ?? [],
       });
     }),
     page: context.page,

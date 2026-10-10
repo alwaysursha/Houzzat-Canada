@@ -26,6 +26,11 @@ import {
   v2ChatSendUrl,
 } from "@/lib/agent/lead-profile-v2/chat-query";
 import {
+  agentChatVoiceNoteUploadRoute,
+  buildVoiceNoteUploadFormData,
+  newVoiceNoteUploadId,
+} from "@/lib/chat/voice-notes/client-upload";
+import {
   CONVERSATION_LIVE_POLL_MS,
   conversationLivePollShouldTick,
   conversationLiveVisible,
@@ -354,6 +359,54 @@ export function useAgentChatThread(
     [leadId, panel],
   );
 
+  const sendVoiceNote = useCallback(
+    async (input: {
+      blob: Blob;
+      mimeType: string;
+      durationMs: number;
+      replyToMessageId?: string | null;
+    }): Promise<boolean> => {
+      if (!panel?.viewer.canMarkRead || sendInFlightRef.current) return false;
+      sendInFlightRef.current = true;
+      setSending(true);
+      setSendError(null);
+      const uploadId = newVoiceNoteUploadId();
+      try {
+        const json = await fetchV2Json<{ message: LeadProfileV2ChatMessage }>(
+          agentChatVoiceNoteUploadRoute(leadId),
+          V2_CHAT_SEND_ROUTE,
+          undefined,
+          {
+            method: "POST",
+            body: buildVoiceNoteUploadFormData({
+              blob: input.blob,
+              mimeType: input.mimeType,
+              durationMs: input.durationMs,
+              uploadId,
+              replyToMessageId: input.replyToMessageId,
+            }),
+          },
+        );
+        if (leadIdRef.current !== leadId) return false;
+        setPanel((prev) =>
+          prev ? appendV2ChatSentMessage(prev, json.message) : prev,
+        );
+        listenersRef.current?.onSent?.(json.message);
+        return true;
+      } catch (err) {
+        if (leadIdRef.current !== leadId) return false;
+        const message =
+          err instanceof Error ? err.message : "Failed to send voice note";
+        setSendError(message);
+        return false;
+      } finally {
+        sendInFlightRef.current = false;
+        setSending(false);
+      }
+    },
+    [leadId, panel?.viewer.canMarkRead],
+  );
+
   const reactToMessage = useCallback(
     async (messageId: string, key: string): Promise<boolean> => {
       try {
@@ -458,6 +511,7 @@ export function useAgentChatThread(
     invalidate,
     loadOlder,
     send,
+    sendVoiceNote,
     reactToMessage,
     searchMessages,
     ensureMessageLoaded,

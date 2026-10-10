@@ -114,6 +114,13 @@ export type AgentConversationMessage = {
     count: number;
     reactedByMe: boolean;
   }>;
+  attachments: Array<{
+    id: string;
+    kind: "VOICE_NOTE";
+    mimeType: string;
+    byteSize: number;
+    durationMs: number | null;
+  }>;
   createdAt: string;
   deliveredAt: string | null;
   smsSource: MessageSmsSource | null;
@@ -279,6 +286,7 @@ export function presentAgentConversationMessage(
   extras?: {
     replyTo?: AgentConversationMessage["replyTo"];
     reactions?: AgentConversationMessage["reactions"];
+    attachments?: AgentConversationMessage["attachments"];
   },
 ): AgentConversationMessage {
   const deleted = Boolean(row.deletedAt);
@@ -296,6 +304,7 @@ export function presentAgentConversationMessage(
     replyToMessageId: row.replyToMessageId,
     replyTo: extras?.replyTo ?? null,
     reactions: extras?.reactions ?? [],
+    attachments: deleted ? [] : extras?.attachments ?? [],
     createdAt: row.createdAt.toISOString(),
     deliveredAt: row.deliveredAt ? row.deliveredAt.toISOString() : null,
     smsSource: row.smsSource,
@@ -356,6 +365,7 @@ async function loadTranscriptPage(
       return presentAgentConversationMessage(row, {
         replyTo: rich?.replyTo ?? null,
         reactions: rich?.reactions ?? [],
+        attachments: rich?.attachments ?? [],
       });
     }),
     hasMore,
@@ -501,6 +511,7 @@ export async function loadAgentLeadConversationMessageContext(
         return presentAgentConversationMessage(row, {
           replyTo: rich?.replyTo ?? null,
           reactions: rich?.reactions ?? [],
+          attachments: rich?.attachments ?? [],
         });
       }),
       page: context.page,

@@ -27,15 +27,23 @@ import {
   loadConversationMessageContext,
   type ConversationContextDb,
 } from "@/lib/chat/message-context";
+import {
+  loadVoiceAttachmentsByMessageIds,
+  type VoiceAttachmentLookupDb,
+} from "@/lib/chat/voice-notes/attachments";
+import type { VoiceNoteAttachmentView } from "@/lib/chat/voice-notes/send";
 
 export type ChatRichMessageExtras = {
   replyToMessageId: string | null;
   replyTo: ChatQuotedMessage | null;
   deliveredAt: string | null;
   reactions: MessageReactionSummary[];
+  attachments: VoiceNoteAttachmentView[];
 };
 
-export type ChatRichEnrichDb = MessageReactionDb & MessageReplyLookupDb;
+export type ChatRichEnrichDb = MessageReactionDb &
+  MessageReplyLookupDb &
+  VoiceAttachmentLookupDb;
 
 export async function enrichChatMessages<
   T extends {
@@ -56,7 +64,7 @@ export async function enrichChatMessages<
   if (input.messages.length === 0) return map;
 
   const messageIds = input.messages.map((m) => m.id);
-  const [reactionRows, quotes] = await Promise.all([
+  const [reactionRows, quotes, attachments] = await Promise.all([
     loadMessageReactionRows(db, {
       workspaceId: input.workspaceId,
       messageIds,
@@ -66,6 +74,10 @@ export async function enrichChatMessages<
       conversationId: input.conversationId,
       replyToMessageIds: input.messages.map((m) => m.replyToMessageId),
     }),
+    loadVoiceAttachmentsByMessageIds(db, {
+      workspaceId: input.workspaceId,
+      messageIds,
+    }).catch(() => new Map<string, VoiceNoteAttachmentView[]>()),
   ]);
 
   for (const message of input.messages) {
@@ -92,6 +104,7 @@ export async function enrichChatMessages<
         messageId: message.id,
         viewerUserId: input.viewerUserId,
       }),
+      attachments: attachments.get(message.id) ?? [],
     });
   }
   return map;

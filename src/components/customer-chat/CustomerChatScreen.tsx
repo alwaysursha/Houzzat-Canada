@@ -18,8 +18,14 @@ import {
   ChatReactionBar,
   ChatReceiptLabel,
 } from "@/components/chat/ChatMessageExtras";
+import { ChatVoicePlayer } from "@/components/chat/ChatVoicePlayer";
+import { ChatVoiceRecorder } from "@/components/chat/ChatVoiceRecorder";
 import { useCustomerChatThread } from "@/components/customer-chat/useCustomerChatThread";
 import { insertEmojiAtCursor } from "@/lib/chat/emoji-catalog";
+import {
+  customerChatVoiceAudioRoute,
+  messageVoiceNoteAttachment,
+} from "@/lib/chat/voice-notes/client-upload";
 import {
   CUSTOMER_CHAT_PAGE_HREF,
   CUSTOMER_CHAT_TEXT_MAX_LENGTH,
@@ -84,6 +90,7 @@ export function CustomerChatScreen({
     reload,
     loadOlder,
     send,
+    sendVoiceNote,
     reactToMessage,
     searchMessages,
     ensureMessageLoaded,
@@ -92,6 +99,7 @@ export function CustomerChatScreen({
   const draft = controlledDraft ?? localDraft;
   const setDraft = onDraftChange ?? setLocalDraft;
   const [replyTo, setReplyTo] = useState<CustomerChatMessage | null>(null);
+  const [voiceBusy, setVoiceBusy] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [pendingNavigateId, setPendingNavigateId] = useState<string | null>(
     null,
@@ -540,55 +548,93 @@ export function CustomerChatScreen({
                 }}
               />
             ) : null}
-            <label className="sr-only" htmlFor={COMPOSER_ID}>
-              Message to your agent
-            </label>
-            <textarea
-              id={COMPOSER_ID}
-              ref={textareaRef}
-              value={draft}
-              maxLength={CUSTOMER_CHAT_TEXT_MAX_LENGTH}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={onComposerKeyDown}
-              rows={2}
-              disabled={sending || !canSend}
-              enterKeyHint="send"
-              placeholder="Write a message…"
-              className="w-full resize-none rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink outline-none ring-canopy/40 focus:ring-2 disabled:opacity-60"
-            />
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-2">
-                <ChatEmojiPicker
+            {voiceBusy ? null : (
+              <>
+                <label className="sr-only" htmlFor={COMPOSER_ID}>
+                  Message to your agent
+                </label>
+                <textarea
+                  id={COMPOSER_ID}
+                  ref={textareaRef}
+                  value={draft}
+                  maxLength={CUSTOMER_CHAT_TEXT_MAX_LENGTH}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={onComposerKeyDown}
+                  rows={2}
                   disabled={sending || !canSend}
-                  onPick={insertEmoji}
+                  enterKeyHint="send"
+                  placeholder="Write a message…"
+                  className="w-full resize-none rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink outline-none ring-canopy/40 focus:ring-2 disabled:opacity-60"
                 />
-                <p className="min-w-0 text-[11px] leading-4 text-ink/40">
-                  <span className="hidden sm:inline">
-                    Enter to send · Shift+Enter for a new line
-                  </span>
-                  {remaining <= 200 ? (
-                    <span>
-                      <span className="hidden sm:inline"> · </span>
-                      {remaining} left
-                    </span>
-                  ) : null}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void submit()}
-                disabled={
-                  !customerChatComposerCanSubmit({
-                    body: draft,
-                    pending: sending,
-                    canSend,
-                  })
-                }
-                aria-label="Send message"
-                className="shrink-0 rounded-xl bg-canopy px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-canopy-deep disabled:opacity-50"
+              </>
+            )}
+            <div
+              className={cn(
+                "flex items-center gap-2",
+                voiceBusy ? "w-full" : "justify-between",
+              )}
+            >
+              <div
+                className={cn(
+                  "flex min-w-0 items-center gap-2",
+                  voiceBusy ? "w-full" : null,
+                )}
               >
-                {sending ? "Sending…" : "Send"}
-              </button>
+                {voiceBusy ? null : (
+                  <ChatEmojiPicker
+                    disabled={sending || !canSend}
+                    onPick={insertEmoji}
+                  />
+                )}
+                <div className={cn(voiceBusy ? "w-full" : "shrink-0")}>
+                  <ChatVoiceRecorder
+                    disabled={sending || !canSend}
+                    sending={sending}
+                    tone="customer"
+                    onPhaseChange={(phase) => setVoiceBusy(phase !== "idle")}
+                    onSend={async (voiceDraft) => {
+                      const ok = await sendVoiceNote({
+                        blob: voiceDraft.blob,
+                        mimeType: voiceDraft.mimeType,
+                        durationMs: voiceDraft.durationMs,
+                        replyToMessageId: replyTo?.id ?? null,
+                      });
+                      if (ok) setReplyTo(null);
+                      return ok;
+                    }}
+                  />
+                </div>
+                {voiceBusy ? null : (
+                  <p className="min-w-0 text-[11px] leading-4 text-ink/40">
+                    <span className="hidden sm:inline">
+                      Enter to send · Shift+Enter for a new line
+                    </span>
+                    {remaining <= 200 ? (
+                      <span>
+                        <span className="hidden sm:inline"> · </span>
+                        {remaining} left
+                      </span>
+                    ) : null}
+                  </p>
+                )}
+              </div>
+              {voiceBusy ? null : (
+                <button
+                  type="button"
+                  onClick={() => void submit()}
+                  disabled={
+                    !customerChatComposerCanSubmit({
+                      body: draft,
+                      pending: sending,
+                      canSend,
+                    })
+                  }
+                  aria-label="Send message"
+                  className="shrink-0 rounded-xl bg-canopy px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-canopy-deep disabled:opacity-50"
+                >
+                  {sending ? "Sending…" : "Send"}
+                </button>
+              )}
             </div>
             {sendError ? (
               <div className="space-y-2" role="alert">
@@ -673,6 +719,9 @@ function CustomerChatRow({
   const label = mine ? "You" : message.senderName || "Your Agent";
   const body = customerChatMessageBody(message);
   const deleted = Boolean(message.deletedAt);
+  const voice = deleted
+    ? null
+    : messageVoiceNoteAttachment(message.attachments);
   const sentAt = new Date(message.createdAt).toLocaleString("en-CA");
 
   return (
@@ -733,20 +782,28 @@ function CustomerChatRow({
             />
           </div>
         ) : null}
-        <div
-          className={cn(
-            "rounded-2xl px-3 py-2 text-sm leading-5 shadow-sm",
-            deleted
-              ? "bg-mist italic text-ink/55 ring-1 ring-line"
-              : mine
-                ? "bg-canopy text-white"
-                : "bg-white text-ink ring-1 ring-canopy/10",
-          )}
-        >
-          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-            {body}
-          </p>
-        </div>
+        {voice ? (
+          <ChatVoicePlayer
+            src={customerChatVoiceAudioRoute(message.id, voice.id)}
+            durationMs={voice.durationMs}
+            tone={mine ? "outgoing" : "incoming"}
+          />
+        ) : (
+          <div
+            className={cn(
+              "rounded-2xl px-3 py-2 text-sm leading-5 shadow-sm",
+              deleted
+                ? "bg-mist italic text-ink/55 ring-1 ring-line"
+                : mine
+                  ? "bg-canopy text-white"
+                  : "bg-white text-ink ring-1 ring-canopy/10",
+            )}
+          >
+            <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+              {body}
+            </p>
+          </div>
+        )}
         <ChatReceiptLabel
           isOwnMessage={mine}
           messageCreatedAt={message.createdAt}

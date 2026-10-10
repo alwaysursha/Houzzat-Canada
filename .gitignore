@@ -24,6 +24,9 @@
 cloudflare-env.d.ts
 .wrangler
 
+# private chat media (local voice-note storage; never public/)
+/private/chat-media/
+
 # misc
 .DS_Store
 ._*

@@ -49,6 +49,12 @@ export function LeadProfileV2ConversationsPanel({
       channel?: "CHAT" | "SMS",
       options?: { replyToMessageId?: string | null },
     ) => Promise<boolean>;
+    onSendVoice?: (input: {
+      blob: Blob;
+      mimeType: string;
+      durationMs: number;
+      replyToMessageId?: string | null;
+    }) => Promise<boolean>;
     onReact?: (messageId: string, key: string) => Promise<boolean>;
     onSearch?: (
       query: string,
@@ -115,6 +121,7 @@ export function LeadProfileV2ConversationsPanel({
             onRetry={chat.onRetry}
             onLoadOlder={chat.onLoadOlder}
             onSend={chat.onSend}
+            onSendVoice={chat.onSendVoice}
             onReact={chat.onReact}
             onSearch={chat.onSearch}
             onEnsureMessage={chat.onEnsureMessage}

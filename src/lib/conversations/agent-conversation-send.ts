@@ -126,7 +126,11 @@ export function presentSentMessage(
     providerStatus: message.providerStatus,
     payload: message.payload,
   };
-  return presentAgentConversationMessage(row);
+  return presentAgentConversationMessage(row, {
+    attachments: [],
+    reactions: [],
+    replyTo: null,
+  });
 }
 
 export async function sendAgentLeadChatMessage(
