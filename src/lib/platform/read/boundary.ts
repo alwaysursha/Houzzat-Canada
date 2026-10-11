@@ -10,6 +10,10 @@
  * Phase 1 exception: `src/lib/platform/signup-analytics` may LEFT JOIN Lead
  * for aggregate-only attribution counts (UTM / click-ID buckets). It must never
  * return Lead rows, PII, or CRM loaders.
+ *
+ * Phase 2D exception: `src/lib/platform/funnel-analytics` may aggregate
+ * FunnelEvent and LEFT JOIN Lead for converter acquisition channel buckets only.
+ * It must never return FunnelEvent/Lead/User row payloads or PII.
  */
 
 export const PLATFORM_READ_BOUNDARY = {

@@ -1,5 +1,6 @@
 import { SignupAnalyticsDashboard } from "@/components/platform/SignupAnalyticsDashboard";
 import {
+  getPlatformFunnelAnalytics,
   getPlatformSignupAnalytics,
   PlatformApiClientError,
 } from "@/lib/platform/ui/api-client";
@@ -26,14 +27,32 @@ export default async function PlatformSignupAnalyticsPage({
 
   let report = null;
   let errorMessage: string | null = null;
+  let funnelReport = null;
+  let funnelErrorMessage: string | null = null;
 
-  try {
-    report = await getPlatformSignupAnalytics(filters);
-  } catch (error) {
+  const [signupResult, funnelResult] = await Promise.allSettled([
+    getPlatformSignupAnalytics(filters),
+    getPlatformFunnelAnalytics(filters),
+  ]);
+
+  if (signupResult.status === "fulfilled") {
+    report = signupResult.value;
+  } else {
+    const error = signupResult.reason;
     errorMessage =
       error instanceof PlatformApiClientError
         ? error.message
         : "Unable to load signup analytics.";
+  }
+
+  if (funnelResult.status === "fulfilled") {
+    funnelReport = funnelResult.value;
+  } else {
+    const error = funnelResult.reason;
+    funnelErrorMessage =
+      error instanceof PlatformApiClientError
+        ? error.message
+        : "Unable to load conversion funnel.";
   }
 
   return (
@@ -41,6 +60,8 @@ export default async function PlatformSignupAnalyticsPage({
       report={report}
       errorMessage={errorMessage}
       filters={filters}
+      funnelReport={funnelReport}
+      funnelErrorMessage={funnelErrorMessage}
     />
   );
 }

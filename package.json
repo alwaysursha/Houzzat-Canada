@@ -52,6 +52,7 @@
     "funnel-events:selftest": "node --import tsx scripts/funnel-events-phase2a-selftest.ts",
     "funnel-events:phase2b:selftest": "node --import tsx scripts/funnel-events-phase2b-selftest.ts",
     "funnel-events:phase2c:selftest": "node --import tsx scripts/funnel-events-phase2c-selftest.ts",
+    "funnel-analytics:selftest": "node --import tsx scripts/funnel-analytics-phase2d-selftest.ts",
     "workspace-tracking:selftest": "node --import tsx scripts/workspace-tracking-selftest.ts",
     "search-results-copy:selftest": "node --import tsx scripts/search-results-copy-selftest.ts",
     "capture-intent:selftest": "node --import tsx scripts/capture-intent-selftest.ts",

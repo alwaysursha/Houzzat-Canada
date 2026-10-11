@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FunnelAnalyticsSection } from "@/components/platform/FunnelAnalyticsSection";
 import {
   PlatformEmptyState,
   PlatformErrorState,
@@ -8,6 +9,7 @@ import {
   PlatformStatGrid,
   PlatformTableWrap,
 } from "@/components/platform/PlatformUi";
+import type { FunnelAnalyticsReport } from "@/lib/platform/funnel-analytics";
 import type { SignupAnalyticsReport } from "@/lib/platform/signup-analytics";
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -38,12 +40,16 @@ type SignupAnalyticsDashboardProps = {
   report: SignupAnalyticsReport | null;
   errorMessage: string | null;
   filters: SignupAnalyticsFilters;
+  funnelReport?: FunnelAnalyticsReport | null;
+  funnelErrorMessage?: string | null;
 };
 
 export function SignupAnalyticsDashboard({
   report,
   errorMessage,
   filters,
+  funnelReport = null,
+  funnelErrorMessage = null,
 }: SignupAnalyticsDashboardProps) {
   const preset = filters.preset ?? report?.meta.preset ?? "30d";
   const workspaceId = filters.workspaceId ?? "";
@@ -52,7 +58,7 @@ export function SignupAnalyticsDashboard({
     <>
       <PlatformPageHeader
         title="Signup Analytics"
-        description="Consumer registration counts across HouzzatPRO tenants. Aggregates only — no CRM records or personal data."
+        description="Consumer registration counts and visitor-to-engagement conversion funnel across HouzzatPRO tenants. Aggregates only — no CRM records or personal data."
       />
 
       <form
@@ -298,6 +304,11 @@ export function SignupAnalyticsDashboard({
           </PlatformPanel>
         </div>
       )}
+
+      <FunnelAnalyticsSection
+        report={funnelReport}
+        errorMessage={funnelErrorMessage}
+      />
     </>
   );
 }
