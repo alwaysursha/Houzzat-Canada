@@ -8,6 +8,7 @@ import type { PlatformMeData } from "@/lib/platform/ui/types";
 const NAV = [
   { href: "/platform", label: "Dashboard", exact: true },
   { href: "/platform/workspaces", label: "Workspaces" },
+  { href: "/platform/signup-analytics", label: "Signup Analytics" },
   { href: "/platform/prospects", label: "Prospects" },
   { href: "/platform/offers", label: "Offers" },
   { href: "/platform/subscriptions", label: "Subscriptions" },

@@ -48,6 +48,7 @@
     "communications-phase4:selftest": "node --import tsx scripts/communications-phase4-selftest.ts",
     "verify-email-nudge:selftest": "node --import tsx scripts/verify-email-nudge-selftest.ts",
     "signup-attribution:selftest": "node --import tsx scripts/signup-attribution-selftest.ts",
+    "signup-analytics:selftest": "node --import tsx scripts/signup-analytics-phase1-selftest.ts",
     "workspace-tracking:selftest": "node --import tsx scripts/workspace-tracking-selftest.ts",
     "search-results-copy:selftest": "node --import tsx scripts/search-results-copy-selftest.ts",
     "capture-intent:selftest": "node --import tsx scripts/capture-intent-selftest.ts",

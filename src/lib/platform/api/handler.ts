@@ -12,6 +12,7 @@ import { OwnerActivationError } from "@/lib/platform/activation/errors";
 import { WorkspaceStatusActionError } from "@/lib/platform/workspaces/status";
 import { SmsAutomationActionError } from "@/lib/platform/sms-automations/errors";
 import { SmsQuickTextActionError } from "@/lib/platform/sms-quick-texts/errors";
+import { SignupAnalyticsQueryError } from "@/lib/platform/signup-analytics";
 
 export class PlatformApiError extends Error {
   readonly status: number;
@@ -42,6 +43,7 @@ export async function withPlatformOperator<T>(
       error instanceof OwnerActivationError ||
       error instanceof SmsAutomationActionError ||
       error instanceof SmsQuickTextActionError ||
+      error instanceof SignupAnalyticsQueryError ||
       error instanceof Prisma.PrismaClientKnownRequestError
     ) {
       throw error;
@@ -87,6 +89,9 @@ export function toPlatformHttpError(error: unknown) {
     return platformError(error.status, error.code, error.message);
   }
   if (error instanceof SmsQuickTextActionError) {
+    return platformError(error.status, error.code, error.message);
+  }
+  if (error instanceof SignupAnalyticsQueryError) {
     return platformError(error.status, error.code, error.message);
   }
   if (error instanceof Prisma.PrismaClientKnownRequestError) {

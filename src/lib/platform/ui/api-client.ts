@@ -1,4 +1,5 @@
 import { cookies, headers } from "next/headers";
+import type { SignupAnalyticsReport } from "@/lib/platform/signup-analytics";
 import type {
   PlatformApiEnvelope,
   PlatformListPage,
@@ -86,6 +87,23 @@ export async function getPlatformMe(): Promise<PlatformMeData> {
 
 export async function getPlatformSummary(): Promise<PlatformSummaryData> {
   return platformApiFetch<PlatformSummaryData>("/api/platform/v1/summary");
+}
+
+export async function getPlatformSignupAnalytics(query?: {
+  workspaceId?: string | null;
+  preset?: string | null;
+  from?: string | null;
+  to?: string | null;
+}): Promise<SignupAnalyticsReport> {
+  const params = new URLSearchParams();
+  if (query?.workspaceId) params.set("workspaceId", query.workspaceId);
+  if (query?.preset) params.set("preset", query.preset);
+  if (query?.from) params.set("from", query.from);
+  if (query?.to) params.set("to", query.to);
+  const qs = params.toString();
+  return platformApiFetch<SignupAnalyticsReport>(
+    `/api/platform/v1/signup-analytics${qs ? `?${qs}` : ""}`,
+  );
 }
 
 export async function listPlatformWorkspaces(query?: {

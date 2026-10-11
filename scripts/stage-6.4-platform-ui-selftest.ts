@@ -35,6 +35,7 @@ console.log("\n=== STAGE 6.4 — PLATFORM READ-ONLY UI ===\n");
     "src/app/platform/(shell)/page.tsx",
     "src/app/platform/(shell)/workspaces/page.tsx",
     "src/app/platform/(shell)/workspaces/[workspaceId]/page.tsx",
+    "src/app/platform/(shell)/signup-analytics/page.tsx",
     "src/app/platform/(shell)/prospects/page.tsx",
     "src/app/platform/(shell)/prospects/[prospectId]/page.tsx",
     "src/app/platform/(shell)/offers/page.tsx",
@@ -132,6 +133,7 @@ console.log("\n=== STAGE 6.4 — PLATFORM READ-ONLY UI ===\n");
   const navLabels = [
     "Dashboard",
     "Workspaces",
+    "Signup Analytics",
     "Prospects",
     "Offers",
     "Subscriptions",
