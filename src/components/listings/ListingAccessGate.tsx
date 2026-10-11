@@ -5,6 +5,8 @@ import { useSession } from "next-auth/react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { syncViewListingGate } from "@/lib/auth/view-listing-intent";
+import { reportFunnelEvent } from "@/lib/funnel/browser";
+import { shouldReportRegistrationGateShown } from "@/lib/funnel/client-signals";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { normalizeListingAccessMls } from "@/lib/listings/anonymous-listing-access";
 
@@ -58,8 +60,21 @@ export function ListingAccessGate({
       now: Date.now(),
       store: browserCaptureIntentStore(),
     });
-    if (presentedMls.current === normalizedMls) return;
+    if (
+      !shouldReportRegistrationGateShown({
+        blocked,
+        normalizedMls,
+        alreadyPresentedMls: presentedMls.current,
+      })
+    ) {
+      return;
+    }
     presentedMls.current = normalizedMls;
+    reportFunnelEvent({
+      eventName: "registration_gate_shown",
+      mlsNumber: normalizedMls,
+      meta: { source: "listing_access_gate", pathClass: "listing_detail" },
+    });
     openAuth({
       mode: "sign-up",
       callbackUrl: callbackPath,

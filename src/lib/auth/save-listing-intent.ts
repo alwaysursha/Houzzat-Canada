@@ -6,6 +6,7 @@ import {
   type CaptureIntentStore,
 } from "@/lib/auth/capture-intent";
 import { registerCaptureIntentHandler } from "@/lib/auth/capture-intent-dispatch";
+import { reportPostRegistrationContinued } from "@/lib/funnel/browser";
 
 type OpenAuth = (options: {
   mode?: "sign-in" | "sign-up";
@@ -80,6 +81,10 @@ export async function resumeSavedListingIntent(
       return "failed";
     }
     onSaved();
+    reportPostRegistrationContinued({
+      intentType: "SAVE_LISTING",
+      mlsNumber: intent.mlsNumber,
+    });
     return "saved";
   } catch {
     return "failed";

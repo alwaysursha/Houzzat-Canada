@@ -771,6 +771,10 @@ model Workspace {
    * Phase 1 identity — OAuth Account rows denormalized to a workspace (future).
    */
   accounts                          Account[]                                   @relation("AccountWorkspace")
+  /**
+   * Phase 2A — tenant-scoped visitor→registration funnel analytics (not CRM).
+   */
+  funnelEvents                      FunnelEvent[]
 
   @@index([status])
 }
@@ -1209,6 +1213,10 @@ model User {
    * Chat V1 — agent-owned CHAT quick replies in a workspace (not platform SMS catalog).
    */
   agentChatQuickReplies         AgentChatQuickReply[]
+  /**
+   * Phase 2A — funnel analytics linkage after registration (optional on events).
+   */
+  funnelEvents                  FunnelEvent[]
 
   @@index([phoneE164])
   @@index([email])
@@ -3394,6 +3402,62 @@ model ActivityEvent {
   @@index([userId, createdAt])
   @@index([type, createdAt])
   @@index([mlsNumber, createdAt])
+}
+
+/**
+ * Phase 2A — Master Admin visitor→registration funnel (tenant-scoped).
+ * Distinct from ActivityEvent (CRM journey). No PII columns.
+ * registration_completed may omit visitorKey/sessionKey.
+ */
+enum FunnelEventName {
+  visitor_session_started
+  search_results_viewed
+  property_card_clicked
+  listing_detail_opened
+  registration_gate_shown
+  registration_started
+  registration_completed
+  post_registration_continued
+  registration_engaged
+}
+
+model FunnelEvent {
+  id          String          @id @default(cuid())
+  workspaceId String
+  eventName   FunnelEventName
+  /**
+   * When the funnel step occurred (client clock clamped; server uses now for completion).
+   */
+  occurredAt  DateTime
+  /**
+   * Opaque browser visitor id. Optional for server registration_completed.
+   */
+  visitorKey  String?
+  /**
+   * Opaque tab/session id. Optional for server registration_completed.
+   */
+  sessionKey  String?
+  userId      String?
+  mlsNumber   String?
+  /**
+   * Idempotency key unique per workspace (never includes PII).
+   */
+  dedupeKey   String
+  /**
+   * Strictly limited non-PII metadata (intent type, path class, etc.).
+   */
+  meta        Json?
+  createdAt   DateTime        @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, dedupeKey])
+  @@index([workspaceId, eventName, occurredAt])
+  @@index([workspaceId, visitorKey, occurredAt])
+  @@index([workspaceId, sessionKey, occurredAt])
+  @@index([workspaceId, userId, occurredAt])
+  @@index([workspaceId, occurredAt])
 }
 
 /**

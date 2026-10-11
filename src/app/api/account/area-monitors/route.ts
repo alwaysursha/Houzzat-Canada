@@ -15,6 +15,7 @@ import {
   scheduleAssignedAgentAwareness,
 } from "@/lib/notifications/assigned-agent-awareness";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
+import { scheduleRegistrationEngaged } from "@/lib/funnel/phase2c";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -98,6 +99,12 @@ export async function POST(request: Request) {
       meta: { areaMonitorId: item.id, city, community },
     });
   }
+
+  scheduleRegistrationEngaged({
+    request,
+    user,
+    engagementType: "AREA_WATCH",
+  });
 
   return NextResponse.json(
     alreadyWatching ? { ok: true, item, alreadyWatching: true } : { ok: true, item },

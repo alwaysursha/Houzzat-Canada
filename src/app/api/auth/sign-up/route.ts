@@ -21,6 +21,7 @@ import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { TERMS_VERSION } from "@/lib/consent";
 import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 import { VOW_VERSION } from "@/lib/vow";
+import { recordRegistrationCompletedEventSafe } from "@/lib/funnel";
 import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
 
 const schema = z.object({
@@ -343,6 +344,16 @@ export async function POST(request: Request) {
         console.info("[sign-up] emails", { email, welcomeStatus });
       })(),
     );
+
+    // Phase 2A — fail-soft funnel analytics (never blocks signup / Ads).
+    void recordRegistrationCompletedEventSafe({
+      workspaceId,
+      userId: user.id,
+      visitorKey: captureContext.visitorKey,
+      sessionKey: captureContext.sessionKey,
+      mlsNumber: captureContext.mlsNumber,
+      intentType: captureContext.intent ?? null,
+    });
 
     stage = "signup_complete";
     logSignUpStage(stage, { correlationId, userId: user.id });

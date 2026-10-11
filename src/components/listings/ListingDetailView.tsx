@@ -27,6 +27,7 @@ import { ListingSheetDocumentFlags } from "@/components/listings/ListingSheetDoc
 import { ListingMobileActionBar } from "@/components/listings/ListingMobileActionBar";
 import { ListingMobileNotes } from "@/components/listings/ListingMobileNotes";
 import { ListingAccountChromeProvider } from "@/components/listings/ListingAccountChromeProvider";
+import { FunnelListingOpenedBeacon } from "@/components/analytics/FunnelListingOpenedBeacon";
 import { ListingAccessGate } from "@/components/listings/ListingAccessGate";
 import { RecordRecentView } from "@/components/listings/RecordRecentView";
 import { SeoLocationBridge } from "@/components/site/SeoLocationContext";
@@ -197,6 +198,7 @@ export function ListingDetailView({
       callbackPath={canonicalPath}
       signedIn={signedIn}
     >
+      <FunnelListingOpenedBeacon mlsNumber={listing.mlsNumber} />
       <SeoLocationBridge
         city={listing.city}
         community={listing.community}

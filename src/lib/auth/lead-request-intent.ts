@@ -4,6 +4,7 @@ import {
   type CaptureIntentStore,
 } from "@/lib/auth/capture-intent";
 import { registerCaptureIntentHandler } from "@/lib/auth/capture-intent-dispatch";
+import { reportPostRegistrationContinued } from "@/lib/funnel/browser";
 
 type OpenAuth = (options: {
   mode?: "sign-in" | "sign-up";
@@ -169,7 +170,7 @@ let stopContact: (() => void) | null = null;
 
 function applyBrowserRestore(intent: CaptureIntent): void {
   if (typeof window === "undefined") return;
-  resumeLeadRequestIntent(intent, {
+  const result = resumeLeadRequestIntent(intent, {
     pathname: window.location.pathname,
     now: Date.now(),
     writeRestore: (value) => {
@@ -180,6 +181,19 @@ function applyBrowserRestore(intent: CaptureIntent): void {
       sessionStorage.removeItem(LEAD_REQUEST_RESTORE_KEY);
     },
   });
+  if (
+    result === "restored" &&
+    (intent.type === "REQUEST_VIEWING" || intent.type === "CONTACT_AGENT")
+  ) {
+    const mls =
+      "mlsNumber" in intent && typeof intent.mlsNumber === "string"
+        ? intent.mlsNumber
+        : null;
+    reportPostRegistrationContinued({
+      intentType: intent.type,
+      mlsNumber: mls,
+    });
+  }
 }
 
 function readBrowserRestore(): LeadRequestRestore | null {

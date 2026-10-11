@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireFullCustomerUser } from "@/lib/account";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
+import { scheduleRegistrationEngaged } from "@/lib/funnel/phase2c";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 
@@ -135,6 +136,13 @@ export async function POST(request: Request) {
       title: `Saved ${listing.mlsNumber}`,
     }),
   );
+
+  scheduleRegistrationEngaged({
+    request,
+    user,
+    engagementType: "SAVE_LISTING",
+    mlsNumber: listing.mlsNumber,
+  });
 
   return NextResponse.json({ ok: true, item });
 }

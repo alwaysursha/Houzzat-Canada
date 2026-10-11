@@ -6,6 +6,7 @@ import {
   type CaptureIntentStore,
 } from "@/lib/auth/capture-intent";
 import { registerCaptureIntentHandler } from "@/lib/auth/capture-intent-dispatch";
+import { reportPostRegistrationContinued } from "@/lib/funnel/browser";
 
 export type ViewListingIntentWrite = "created" | "kept" | "skipped" | "invalid";
 
@@ -86,6 +87,12 @@ export function ensureViewListingIntentHandler(): void {
   if (viewListingRegistered) return;
   viewListingRegistered = true;
   registerCaptureIntentHandler("VIEW_LISTING", (intent) => {
-    resumeViewListingIntent(intent);
+    const result = resumeViewListingIntent(intent);
+    if (result === "opened" && intent.type === "VIEW_LISTING") {
+      reportPostRegistrationContinued({
+        intentType: "VIEW_LISTING",
+        mlsNumber: intent.mlsNumber,
+      });
+    }
   });
 }

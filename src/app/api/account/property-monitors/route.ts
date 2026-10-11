@@ -11,6 +11,7 @@ import {
 import { logPropertyWatchRemovedBestEffort } from "@/lib/agent/customer-alert-crm-activity";
 import { scheduleAssignedAgentAwareness } from "@/lib/notifications/assigned-agent-awareness";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
+import { scheduleRegistrationEngaged } from "@/lib/funnel/phase2c";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
 
@@ -128,6 +129,13 @@ export async function POST(request: Request) {
     mlsNumber: listing.mlsNumber,
     path: listingPath(listing),
     title: `Watching ${listing.mlsNumber}`,
+  });
+
+  scheduleRegistrationEngaged({
+    request,
+    user,
+    engagementType: "PROPERTY_WATCH",
+    mlsNumber: listing.mlsNumber,
   });
 
   return NextResponse.json({ ok: true, item });

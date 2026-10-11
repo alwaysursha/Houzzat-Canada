@@ -5,6 +5,7 @@ import {
   type CaptureIntentStore,
 } from "@/lib/auth/capture-intent";
 import { registerCaptureIntentHandler } from "@/lib/auth/capture-intent-dispatch";
+import { reportPostRegistrationContinued } from "@/lib/funnel/browser";
 import { searchFiltersFromHref } from "@/lib/listings/search-page-href";
 import {
   savedSearchDisplayName,
@@ -22,6 +23,14 @@ export const SAVED_SEARCH_NEEDS_CONFIRM_EVENT =
   "houzzat:saved-search-needs-confirm";
 
 const SAVED_SEARCH_CONFIRM_KEY = "houzzat:saved-search-needs-confirm";
+
+/**
+ * Internal correlation: capture-intent resume asked for replace confirmation.
+ * Cleared on cancel/fail without emitting continuation; consumed on successful save.
+ * Not a user identity — opaque session flag only.
+ */
+const FUNNEL_SAVE_SEARCH_CONTINUATION_KEY =
+  "houzzat:funnel-continuation-save-search";
 
 const SAVED_SEARCHES_CHANGED_EVENT = "houzzat:saved-searches-changed";
 
@@ -190,6 +199,55 @@ export function clearSavedSearchConfirm(): void {
   }
 }
 
+/** Mark that a pending confirm dialog originated from SAVE_SEARCH resume. */
+export function markPendingSaveSearchContinuation(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(FUNNEL_SAVE_SEARCH_CONTINUATION_KEY, "1");
+  } catch {
+    // private mode
+  }
+}
+
+export function clearPendingSaveSearchContinuation(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(FUNNEL_SAVE_SEARCH_CONTINUATION_KEY);
+  } catch {
+    // private mode
+  }
+}
+
+export function hasPendingSaveSearchContinuation(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return sessionStorage.getItem(FUNNEL_SAVE_SEARCH_CONTINUATION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * After a successful confirmed save: emit continuation once if resume-pending.
+ * Returns whether a pending flag was consumed (for tests).
+ */
+export function reportSaveSearchContinuationIfPending(): boolean {
+  if (typeof window === "undefined") return false;
+  let pending = false;
+  try {
+    pending =
+      sessionStorage.getItem(FUNNEL_SAVE_SEARCH_CONTINUATION_KEY) === "1";
+    if (pending) {
+      sessionStorage.removeItem(FUNNEL_SAVE_SEARCH_CONTINUATION_KEY);
+    }
+  } catch {
+    return false;
+  }
+  if (!pending) return false;
+  reportPostRegistrationContinued({ intentType: "SAVE_SEARCH" });
+  return true;
+}
+
 async function listSavedSearches(): Promise<
   | { ok: true; items: SavedSearchRow[] }
   | { ok: false; verification: boolean }
@@ -290,6 +348,7 @@ export async function resumeSavedSearchIntent(
         if (!patch.ok) return "failed";
       }
       onSaved();
+      reportPostRegistrationContinued({ intentType: "SAVE_SEARCH" });
       return "saved";
     }
     // Save as new: create a separate row without confirm / Primary change.
@@ -300,9 +359,12 @@ export async function resumeSavedSearchIntent(
         return "failed";
       }
       onSaved();
+      reportPostRegistrationContinued({ intentType: "SAVE_SEARCH" });
       return "saved";
     }
     if (listed.items.length > 0) {
+      // Intent already claimed — correlate confirm→save for funnel continuation.
+      markPendingSaveSearchContinuation();
       onNeedsConfirm();
       return "needs_confirm";
     }
@@ -312,6 +374,7 @@ export async function resumeSavedSearchIntent(
       return "failed";
     }
     onSaved();
+    reportPostRegistrationContinued({ intentType: "SAVE_SEARCH" });
     return "saved";
   } catch {
     return "failed";
