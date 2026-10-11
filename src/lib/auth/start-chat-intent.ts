@@ -12,6 +12,7 @@ import {
   type CaptureIntentStore,
 } from "@/lib/auth/capture-intent";
 import { registerCaptureIntentHandler } from "@/lib/auth/capture-intent-dispatch";
+import { reportPostRegistrationContinued } from "@/lib/funnel/browser";
 
 type OpenAuth = (options: {
   mode?: "sign-in" | "sign-up";
@@ -141,6 +142,9 @@ export function ensureStartChatIntentHandler(): void {
   if (startChatRegistered) return;
   startChatRegistered = true;
   registerCaptureIntentHandler("START_CHAT", (intent) => {
-    resumeStartChatIntent(intent);
+    const result = resumeStartChatIntent(intent);
+    if (result === "opened") {
+      reportPostRegistrationContinued({ intentType: "START_CHAT" });
+    }
   });
 }

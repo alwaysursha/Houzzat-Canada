@@ -1,15 +1,21 @@
 /**
- * Phase 2A — tenant-scoped visitor→registration funnel analytics.
+ * Phase 2A/2B/2C — tenant-scoped visitor→registration funnel analytics.
  *
  * Consent / retention (document before production enable):
- * - FunnelEvent stores opaque visitor/session keys and listing MLS only — not
- *   names, emails, or phone numbers.
+ * - FunnelEvent stores opaque visitor/session keys, listing MLS, and allowlisted
+ *   meta (intentType / source / searchHash) — not names, emails, or phones.
  * - First-party product analytics for Master Admin conversion measurement.
+ * - Never expose individual consumer activity rows through Master Admin funnel APIs
+ *   (aggregate reporting only — Phase 2D).
  * - If a cookie/consent banner is introduced for analytics, gate the public
  *   ingest client the same way as ActivityBeacon.
  * - Recommended retention: aggregate reporting retained; consider pruning raw
  *   FunnelEvent rows older than 24 months once volume warrants it (not automated here).
  * - FUNNEL_EVENTS_ENABLED defaults off until explicitly enabled for testing.
+ *
+ * Phase 2C attribution (see phase2c.ts):
+ * - post_registration_continued: within 45m of user.createdAt (capture-intent TTL).
+ * - registration_engaged: within 7d of user.createdAt; excludes listing-view-only.
  */
 
 export const FUNNEL_EVENT_NAMES = [
@@ -29,6 +35,8 @@ export type FunnelEventName = (typeof FUNNEL_EVENT_NAMES)[number];
 /** Client ingest must never accept these (server-authoritative only). */
 export const FUNNEL_SERVER_ONLY_EVENT_NAMES = [
   "registration_completed",
+  "post_registration_continued",
+  "registration_engaged",
 ] as const satisfies readonly FunnelEventName[];
 
 export const FUNNEL_CLIENT_EVENT_NAMES = FUNNEL_EVENT_NAMES.filter(

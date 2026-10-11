@@ -54,6 +54,24 @@ console.log("\n=== FUNNEL EVENTS PHASE 2A ===\n");
   assert.throws(
     () =>
       parseClientFunnelPayload({
+        eventName: "post_registration_continued",
+        visitorKey: "v1",
+        sessionKey: "s1",
+      }),
+    (e: unknown) => e instanceof FunnelSanitizeError && e.code === "SERVER_ONLY_EVENT",
+  );
+  assert.throws(
+    () =>
+      parseClientFunnelPayload({
+        eventName: "registration_engaged",
+        visitorKey: "v1",
+        sessionKey: "s1",
+      }),
+    (e: unknown) => e instanceof FunnelSanitizeError && e.code === "SERVER_ONLY_EVENT",
+  );
+  assert.throws(
+    () =>
+      parseClientFunnelPayload({
         eventName: "registration_gate_shown",
         visitorKey: "v1",
         sessionKey: "s1",

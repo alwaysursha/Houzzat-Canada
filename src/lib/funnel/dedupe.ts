@@ -14,6 +14,19 @@ export function buildRegistrationCompletedDedupeKey(userId: string): string {
   return `registration_completed:user:${userId.trim()}`;
 }
 
+/** Once per user — first successful capture-intent resume after registration. */
+export function buildPostRegistrationContinuedDedupeKey(userId: string): string {
+  return `post_registration_continued:user:${userId.trim()}`;
+}
+
+/** Once per user + engagement type (e.g. SAVE_LISTING). */
+export function buildRegistrationEngagedDedupeKey(
+  userId: string,
+  engagementType: string,
+): string {
+  return `registration_engaged:user:${userId.trim()}:${engagementType.trim()}`;
+}
+
 function clientDedupeContext(
   eventName: FunnelEventName,
   mlsNumber: string | null,
@@ -25,14 +38,14 @@ function clientDedupeContext(
     case "property_card_clicked":
     case "listing_detail_opened":
     case "registration_gate_shown":
-    case "post_registration_continued":
       return mlsNumber ?? "-";
     case "registration_started":
     case "visitor_session_started":
-    case "registration_engaged":
       return "once";
     case "registration_completed":
-      // Client path never reaches here; keep a non-colliding stub.
+    case "post_registration_continued":
+    case "registration_engaged":
+      // Server-only events never reach client parse; non-colliding stub.
       return "forbidden";
     default: {
       const _exhaustive: never = eventName;

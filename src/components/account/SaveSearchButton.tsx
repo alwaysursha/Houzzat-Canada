@@ -9,8 +9,10 @@ import { UpdateSavedSearchDialog } from "@/components/listings/UpdateSavedSearch
 import { Button } from "@/components/ui/button";
 import {
   openGuestSaveSearchIntent,
+  clearPendingSaveSearchContinuation,
   clearSavedSearchConfirm,
   readSavedSearchConfirm,
+  reportSaveSearchContinuationIfPending,
   retainSaveSearchIntentHandler,
   SAVED_SEARCH_NEEDS_CONFIRM_EVENT,
   stableSavedSearchQueryKey,
@@ -183,6 +185,7 @@ export function SaveSearchButton({
       return;
     }
     if (outcome.status === "error") {
+      // Leave resume-continuation pending so a retry after confirm can still count.
       toast({
         message: outcome.message || SITE_MESSAGES.genericErrorToast,
         tone: "error",
@@ -192,6 +195,8 @@ export function SaveSearchButton({
 
     setSavedBaselineKey(currentKey);
     setSessionBaselineKey(currentKey);
+    // Only fires when confirm originated from capture-intent resume (session flag).
+    reportSaveSearchContinuationIfPending();
     clearSavedSearchConfirm();
     setConfirmOpen(false);
     toast({
@@ -228,6 +233,7 @@ export function SaveSearchButton({
         pending={pending}
         saveAsNew={saveAsNew}
         onCancel={() => {
+          clearPendingSaveSearchContinuation();
           clearSavedSearchConfirm();
           setConfirmOpen(false);
         }}

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
 import { resolveAdCampaignId, utmLeadFields } from "@/lib/ads/attribution";
 import { pickUtm } from "@/lib/ads/utm";
+import { scheduleRegistrationEngaged } from "@/lib/funnel/phase2c";
 import {
   publicLeadNotificationCopy,
   publicLeadRoutingErrorResponse,
@@ -268,6 +269,14 @@ export async function POST(request: Request) {
         `${listing.addressLine}, ${listing.city}`,
       );
     }
+
+    scheduleRegistrationEngaged({
+      request,
+      user: customer,
+      engagementType:
+        data.kind === "inquiry" ? "CONTACT_AGENT" : "REQUEST_VIEWING",
+      mlsNumber: listing.mlsNumber,
+    });
 
     return NextResponse.json({ ok: true, leadId: lead.id });
   } catch (error) {

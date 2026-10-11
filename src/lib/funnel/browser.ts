@@ -261,6 +261,34 @@ export function reportPropertyCardClicked(
   });
 }
 
+/**
+ * Authenticated capture-intent resume success → post_registration_continued.
+ * Server attaches userId from session; fail-soft; no client userId.
+ */
+export function reportPostRegistrationContinued(input: {
+  intentType: string;
+  mlsNumber?: string | null;
+}): void {
+  if (typeof window === "undefined") return;
+  try {
+    const doFetch = fetchImpl ?? globalThis.fetch.bind(globalThis);
+    void doFetch("/api/analytics/funnel/continued", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        intentType: input.intentType,
+        mlsNumber: input.mlsNumber ?? null,
+      }),
+      keepalive: true,
+    }).catch(() => {
+      // Non-blocking analytics.
+    });
+  } catch {
+    // Non-blocking analytics.
+  }
+}
+
 /** Clear local dedupe (tests only). */
 export function clearFunnelBrowserDedupeForTests(): void {
   confirmedLocal.clear();

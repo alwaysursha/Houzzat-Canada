@@ -22,7 +22,30 @@ export {
   FUNNEL_CLIENT_DEDUPE_PREFIX,
   buildClientFunnelDedupeKey,
   buildRegistrationCompletedDedupeKey,
+  buildPostRegistrationContinuedDedupeKey,
+  buildRegistrationEngagedDedupeKey,
 } from "./dedupe";
+
+export {
+  FUNNEL_CONTINUATION_WINDOW_MS,
+  FUNNEL_ENGAGEMENT_WINDOW_MS,
+  FUNNEL_ENGAGEMENT_TYPES,
+  FUNNEL_CONTINUATION_INTENT_TYPES,
+  isFunnelEngagementType,
+  isFunnelContinuationIntentType,
+  isEligibleFunnelConsumer,
+  resolveFunnelConsumerEligibility,
+  isWithinFunnelAttributionWindow,
+  resolveFunnelWorkspaceId,
+  recordPostRegistrationContinuedEvent,
+  recordPostRegistrationContinuedEventSafe,
+  recordRegistrationEngagedEvent,
+  recordRegistrationEngagedEventSafe,
+  scheduleRegistrationEngaged,
+  type FunnelEngagementType,
+  type FunnelContinuationIntentType,
+  type FunnelEligibilityDb,
+} from "./phase2c";
 
 export {
   resolveListingLinkClickAction,

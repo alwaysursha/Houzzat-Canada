@@ -10,6 +10,7 @@ import {
 import { logSavedSearchRemovedBestEffort } from "@/lib/agent/customer-alert-crm-activity";
 import { scheduleAssignedAgentAwareness } from "@/lib/notifications/assigned-agent-awareness";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
+import { scheduleRegistrationEngaged } from "@/lib/funnel/phase2c";
 import { prisma } from "@/lib/prisma";
 
 /** Saved searches are account prefs — require sign-in only (not email verify). */
@@ -106,6 +107,12 @@ export async function POST(request: Request) {
       path: "/account/searches",
       title: `Saved search: ${item.name}`,
       meta: { searchId: item.id },
+    });
+
+    scheduleRegistrationEngaged({
+      request,
+      user: user!,
+      engagementType: "SAVE_SEARCH",
     });
 
     return NextResponse.json({ ok: true, item });

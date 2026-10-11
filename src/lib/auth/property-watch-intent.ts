@@ -5,6 +5,7 @@ import {
   type CaptureIntentStore,
 } from "@/lib/auth/capture-intent";
 import { registerCaptureIntentHandler } from "@/lib/auth/capture-intent-dispatch";
+import { reportPostRegistrationContinued } from "@/lib/funnel/browser";
 
 export type PropertyWatchResumeResult =
   | "watched"
@@ -45,6 +46,10 @@ export async function resumePropertyWatchIntent(
   const result = await post(intent.mlsNumber);
   if (result.ok) {
     notifyPropertyWatchesChanged();
+    reportPostRegistrationContinued({
+      intentType: "PROPERTY_WATCH",
+      mlsNumber: intent.mlsNumber,
+    });
     return "watched";
   }
   if (result.verification) return "verification";

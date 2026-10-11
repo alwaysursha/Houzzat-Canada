@@ -7,6 +7,7 @@ import {
   type CaptureIntentStore,
 } from "@/lib/auth/capture-intent";
 import { registerCaptureIntentHandler } from "@/lib/auth/capture-intent-dispatch";
+import { reportPostRegistrationContinued } from "@/lib/funnel/browser";
 
 export type AreaWatchResumeResult = "watched" | "verification" | "failed";
 
@@ -55,6 +56,7 @@ export async function resumeAreaWatchIntent(
   });
   if (result.ok) {
     notifyAreaWatchesChanged();
+    reportPostRegistrationContinued({ intentType: "AREA_WATCH" });
     return "watched";
   }
   if (result.verification) return "verification";
