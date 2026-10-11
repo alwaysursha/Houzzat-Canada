@@ -37,8 +37,8 @@ assert.ok(gallery.includes("openViewerAt(0)"));
 assert.equal(gallery.includes('restoreEntry="gallery"'), false);
 assert.equal(gallery.includes("aspect-[4/3]"), false);
 
-assert.equal(detail.includes("<ListingQaPanel"), false);
-assert.equal(detail.includes("Quick question?"), false);
+assert.ok(detail.includes("<ListingQaPanel"));
+assert.ok(detail.includes("Quick question?"));
 assert.ok(detail.includes("Find out now"));
 assert.ok(detail.includes("font-display text-3xl"));
 assert.equal(detail.includes("ListingMapViewButton"), false);

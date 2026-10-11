@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { MessageCircle } from "lucide-react";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
+import { useOptionalCustomerChatController } from "@/components/customer-chat/CustomerChatProvider";
 import { CUSTOMER_CHAT_PAGE_HREF } from "@/lib/customer-chat/query";
 import { openGuestStartChatIntent } from "@/lib/auth/start-chat-intent";
 import { resolveAppShell } from "@/lib/mobile/app-shell";
@@ -20,6 +21,7 @@ export function CustomerChatFab() {
   const pathname = usePathname() || "/";
   const { status, data } = useSession();
   const { openAuth } = useAuthModal();
+  const chat = useOptionalCustomerChatController();
   const role = data?.user?.role;
   const [houzzatProShell, setHouzzatProShell] = useState(false);
 
@@ -43,6 +45,7 @@ export function CustomerChatFab() {
 
   if (houzzatProShell || isStaff || onChatPage || onPro) return null;
   if (status === "loading") return null;
+  if (status === "authenticated" && chat?.mode === "open") return null;
 
   const aboveListingBar = pathname.startsWith("/listing/");
   const className = cn(
@@ -66,14 +69,21 @@ export function CustomerChatFab() {
 
   if (status === "authenticated") {
     return (
-      <a
-        href={CUSTOMER_CHAT_PAGE_HREF}
+      <button
+        type="button"
         aria-label="Chat with your agent"
         data-customer-chat-entry=""
         className={className}
+        onClick={() => {
+          if (chat) {
+            chat.open({ forceExpand: true });
+            return;
+          }
+          window.location.assign(CUSTOMER_CHAT_PAGE_HREF);
+        }}
       >
         {inner}
-      </a>
+      </button>
     );
   }
 

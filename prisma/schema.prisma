@@ -748,6 +748,10 @@ model Workspace {
   leadImportJobs                    LeadImportJob[]
   leadImportRows                    LeadImportRow[]
   conversations                     Conversation[]
+  /**
+   * Chat V1 — per-agent native CHAT quick replies (not SmsQuickText).
+   */
+  agentChatQuickReplies             AgentChatQuickReply[]
   smsSuppressions                   SmsSuppression[]
   emailSuppressions                 EmailSuppression[]
   communicationPreferences          CommunicationPreference[]
@@ -1201,6 +1205,10 @@ model User {
   messagesDeleted               Message[]                      @relation("MessageDeletedBy")
   messageRevisions              MessageRevision[]              @relation("MessageRevisionActor")
   messageReactions              MessageReaction[]
+  /**
+   * Chat V1 — agent-owned CHAT quick replies in a workspace (not platform SMS catalog).
+   */
+  agentChatQuickReplies         AgentChatQuickReply[]
 
   @@index([phoneE164])
   @@index([email])
@@ -1271,6 +1279,15 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+/**
+ * Agent chat availability preference (Chat V1).
+ * Online still requires a fresh presenceUntil — never infer from JWT/session.
+ */
+enum AgentAvailabilityPreference {
+  AVAILABLE
+  AWAY
+}
+
 model AgentProfile {
   id                   String    @id @default(cuid())
   userId               String    @unique
@@ -1295,6 +1312,15 @@ model AgentProfile {
   recoLicenseNumber    String?
   recoLicenseExpiresAt DateTime?
   active               Boolean   @default(true)
+  /**
+   * Manual Available/Away preference. Does not imply Online by itself.
+   */
+  availabilityPreference AgentAvailabilityPreference @default(AVAILABLE)
+  /**
+   * Ephemeral presence TTL. Readers treat as present only while in the future.
+   * Null/expired + AVAILABLE → Offline (not Online). Not routing/eligibility.
+   */
+  presenceUntil        DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
@@ -1699,10 +1725,25 @@ model Conversation {
   customerLastReadAt    DateTime?
   agentLastReadAt       DateTime?
   /**
+   * Ephemeral typing indicators (Chat V1). Client heartbeats refresh these;
+   * readers treat as typing only while the timestamp is in the future. Not messages.
+   */
+  customerTypingUntil   DateTime?
+  agentTypingUntil      DateTime?
+  /**
    * User who last opened/read as assignee. Unread cursor is valid only when this
    * equals Lead.assignedAgentId. Do not set on reassignment — set on agent read.
    */
   agentLastReadByUserId String?
+  /**
+   * Agent unread-reminder dedupe (Chat V1). Streak identity is the first unread
+   * incoming message id for the current assignee (agentDividerMessageId), not
+   * lastMessageAt. Soft ids only — no Message/User FKs. Cron claims by
+   * conditional update before send.
+   */
+  agentUnreadReminderMessageId String?
+  agentUnreadReminderAgentId   String?
+  agentUnreadRemindedAt        DateTime?
 
   workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   lead            Lead      @relation(fields: [workspaceId, leadId], references: [workspaceId, id], onDelete: Cascade)
@@ -1714,6 +1755,29 @@ model Conversation {
   @@index([workspaceId, lastMessageAt])
   @@index([leadId])
   @@index([agentLastReadByUserId])
+}
+
+/**
+ * Agent-managed native CHAT quick replies (Chat V1).
+ * Scoped to workspace + owner agent. Plain text only — insert into composer,
+ * never auto-send. Distinct from platform-global SmsQuickText.
+ * Count/length limits are enforced in the API layer.
+ */
+model AgentChatQuickReply {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  name        String
+  body        String   @db.Text
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, sortOrder])
+  @@index([userId])
 }
 
 /**

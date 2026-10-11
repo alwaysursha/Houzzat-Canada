@@ -9,6 +9,27 @@ export type CustomerChatSenderKind =
 
 export type CustomerChatMessageKind = "TEXT" | "SYSTEM_CARD" | string;
 
+export type CustomerChatQuotedMessage = {
+  id: string;
+  senderName: string;
+  body: string | null;
+  deleted: boolean;
+};
+
+export type CustomerChatReaction = {
+  key: string;
+  count: number;
+  reactedByMe: boolean;
+};
+
+export type CustomerChatAttachment = {
+  id: string;
+  kind: "VOICE_NOTE";
+  mimeType: string;
+  byteSize: number;
+  durationMs: number | null;
+};
+
 export type CustomerChatMessage = {
   id: string;
   channel: string;
@@ -18,6 +39,11 @@ export type CustomerChatMessage = {
   body: string | null;
   editedAt: string | null;
   deletedAt: string | null;
+  replyToMessageId?: string | null;
+  replyTo?: CustomerChatQuotedMessage | null;
+  deliveredAt?: string | null;
+  reactions?: CustomerChatReaction[];
+  attachments?: CustomerChatAttachment[];
   createdAt: string;
   payload: unknown;
 };
@@ -30,7 +56,14 @@ export type CustomerChatConversation = {
 
 export type CustomerChatReadView = {
   customerLastReadAt: string | null;
+  agentLastReadAt?: string | null;
   unreadCount: number;
+};
+
+/** Assigned agent presentation for the customer chat header. Never invents status. */
+export type CustomerChatAgentIdentity = {
+  name: string | null;
+  photoUrl: string | null;
 };
 
 export type CustomerChatGetPayload = {
@@ -44,6 +77,14 @@ export type CustomerChatGetPayload = {
   canSend: boolean;
   blocked: boolean;
   read: CustomerChatReadView;
+  agent: CustomerChatAgentIdentity | null;
+  /** Peer (agent) typing — boolean only; never raw timestamps. */
+  peerTyping?: boolean;
+  /**
+   * Coarse assigned-agent availability. Never timestamps / preference / session.
+   * Missing → treat as offline on the client.
+   */
+  agentAvailability?: "online" | "away" | "offline";
 };
 
 export type CustomerChatSendPayload = {

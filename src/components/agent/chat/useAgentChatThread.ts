@@ -7,6 +7,7 @@ import {
   canApplyV2ChatResponse,
   clearV2ChatUnread,
   composerSendPayload,
+  mergeV2ChatContext,
   mergeV2ChatMessages,
   shouldMarkV2ChatRead,
   shouldSkipDuplicateV2ChatOlder,
@@ -14,12 +15,21 @@ import {
   V2_CHAT_GET_ROUTE,
   V2_CHAT_READ_ROUTE,
   V2_CHAT_RESOURCE_KEY,
+  V2_CHAT_SEARCH_ROUTE,
   V2_CHAT_SEND_ROUTE,
+  v2ChatContextUrl,
   v2ChatGetUrl,
   v2ChatOlderCursorKey,
+  v2ChatReactionUrl,
   v2ChatReadUrl,
+  v2ChatSearchUrl,
   v2ChatSendUrl,
 } from "@/lib/agent/lead-profile-v2/chat-query";
+import {
+  agentChatVoiceNoteUploadRoute,
+  buildVoiceNoteUploadFormData,
+  newVoiceNoteUploadId,
+} from "@/lib/chat/voice-notes/client-upload";
 import {
   CONVERSATION_LIVE_POLL_MS,
   conversationLivePollShouldTick,
@@ -112,6 +122,7 @@ export function useAgentChatThread(
                   unread: json.unread,
                   smsSend: json.smsSend,
                   viewer: json.viewer,
+                  peerTyping: Boolean(json.peerTyping),
                   messages: mergeLiveConversationMessages(
                     prev.messages,
                     json.messages,
@@ -290,7 +301,11 @@ export function useAgentChatThread(
   }, [fetchPage, panel]);
 
   const send = useCallback(
-    async (body: string, channel: "CHAT" | "SMS" = "CHAT"): Promise<boolean> => {
+    async (
+      body: string,
+      channel: "CHAT" | "SMS" = "CHAT",
+      options?: { replyToMessageId?: string | null },
+    ): Promise<boolean> => {
       if (
         shouldSkipV2ChatSubmit({
           body,
@@ -314,7 +329,11 @@ export function useAgentChatThread(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(
-              composerSendPayload(body, channel),
+              composerSendPayload(
+                body,
+                channel,
+                channel === "CHAT" ? options?.replyToMessageId : null,
+              ),
             ),
           },
         );
@@ -341,6 +360,163 @@ export function useAgentChatThread(
     [leadId, panel],
   );
 
+  const sendVoiceNote = useCallback(
+    async (input: {
+      blob: Blob;
+      mimeType: string;
+      durationMs: number;
+      replyToMessageId?: string | null;
+    }): Promise<boolean> => {
+      if (!panel?.viewer.canMarkRead || sendInFlightRef.current) return false;
+      sendInFlightRef.current = true;
+      setSending(true);
+      setSendError(null);
+      const uploadId = newVoiceNoteUploadId();
+      try {
+        const json = await fetchV2Json<{ message: LeadProfileV2ChatMessage }>(
+          agentChatVoiceNoteUploadRoute(leadId),
+          V2_CHAT_SEND_ROUTE,
+          undefined,
+          {
+            method: "POST",
+            body: buildVoiceNoteUploadFormData({
+              blob: input.blob,
+              mimeType: input.mimeType,
+              durationMs: input.durationMs,
+              uploadId,
+              replyToMessageId: input.replyToMessageId,
+            }),
+          },
+        );
+        if (leadIdRef.current !== leadId) return false;
+        setPanel((prev) =>
+          prev ? appendV2ChatSentMessage(prev, json.message) : prev,
+        );
+        listenersRef.current?.onSent?.(json.message);
+        return true;
+      } catch (err) {
+        if (leadIdRef.current !== leadId) return false;
+        const message =
+          err instanceof Error ? err.message : "Failed to send voice note";
+        setSendError(message);
+        return false;
+      } finally {
+        sendInFlightRef.current = false;
+        setSending(false);
+      }
+    },
+    [leadId, panel?.viewer.canMarkRead],
+  );
+
+  /**
+   * Append a LISTING_SHARE message already created by the picker (M4V endpoint).
+   * Does not POST again — picker owns idempotency + retries.
+   */
+  const appendListingShareMessage = useCallback(
+    async (message: LeadProfileV2ChatMessage): Promise<boolean> => {
+      if (!panel?.viewer.canMarkRead) return false;
+      if (leadIdRef.current !== leadId) return false;
+      if (!message?.id) return false;
+      setPanel((prev) =>
+        prev ? appendV2ChatSentMessage(prev, message) : prev,
+      );
+      listenersRef.current?.onSent?.(message);
+      return true;
+    },
+    [leadId, panel?.viewer.canMarkRead],
+  );
+
+  const reactToMessage = useCallback(
+    async (messageId: string, key: string): Promise<boolean> => {
+      try {
+        const json = await fetchV2Json<{
+          reactions?: LeadProfileV2ChatMessage["reactions"];
+        }>(
+          v2ChatReactionUrl(leadId, messageId),
+          V2_CHAT_SEND_ROUTE,
+          undefined,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key }),
+          },
+        );
+        if (leadIdRef.current !== leadId) return false;
+        setPanel((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            messages: prev.messages.map((message) =>
+              message.id === messageId
+                ? { ...message, reactions: json.reactions ?? [] }
+                : message,
+            ),
+          };
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [leadId],
+  );
+
+  const searchMessages = useCallback(
+    async (query: string, cursor?: string | null) => {
+      const json = await fetchV2Json<{
+        query: string;
+        hits: Array<{
+          id: string;
+          body: string;
+          senderName: string;
+          senderKind: string;
+          createdAt: string;
+        }>;
+        page: {
+          limit: number;
+          hasMore: boolean;
+          nextCursor: string | null;
+        };
+      }>(v2ChatSearchUrl(leadId, query, cursor), V2_CHAT_SEARCH_ROUTE);
+      return json;
+    },
+    [leadId],
+  );
+
+  const ensureMessageLoaded = useCallback(
+    async (messageId: string): Promise<boolean> => {
+      const id = messageId.trim();
+      if (!id) return false;
+      if (panel?.messages.some((message) => message.id === id)) return true;
+      try {
+        const json = await fetchV2Json<{
+          messages: LeadProfileV2ChatMessage[];
+          page: {
+            hasMoreOlder: boolean;
+            olderCursor: string | null;
+          };
+        }>(v2ChatContextUrl(leadId, id), V2_CHAT_GET_ROUTE);
+        if (leadIdRef.current !== leadId) return false;
+        if (!json.messages?.length) return false;
+        setPanel((prev) =>
+          prev
+            ? mergeV2ChatContext(prev, {
+                messages: json.messages,
+                page: {
+                  hasMoreOlder: Boolean(json.page?.hasMoreOlder),
+                  olderCursor: json.page?.olderCursor ?? null,
+                },
+              })
+            : prev,
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [leadId, panel?.messages],
+  );
+
   const loading = enabled && !error && panel === null;
 
   return {
@@ -354,5 +530,10 @@ export function useAgentChatThread(
     invalidate,
     loadOlder,
     send,
+    sendVoiceNote,
+    appendListingShareMessage,
+    reactToMessage,
+    searchMessages,
+    ensureMessageLoaded,
   };
 }

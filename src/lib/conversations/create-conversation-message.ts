@@ -30,6 +30,7 @@ import {
   type LeadConversationDb,
   type LeadConversationRecord,
 } from "@/lib/conversations/lead-conversation";
+import { parseListingSharePayload } from "@/lib/conversations/listing-share/payload";
 import {
   isSmsAutomationTextPayload,
 } from "@/lib/conversations/sms-automation-payload";
@@ -57,6 +58,7 @@ export const CONVERSATION_MESSAGE_SELECT = {
   senderName: true,
   createdByUserId: true,
   body: true,
+  replyToMessageId: true,
   createdAt: true,
   deliveredAt: true,
   smsSource: true,
@@ -78,7 +80,10 @@ export type ConversationMessageTx = {
 };
 
 export type ConversationMessageDb = LeadConversationDb & {
-  message: Pick<PrismaClient["message"], "findUnique" | "create">;
+  message: Pick<
+    PrismaClient["message"],
+    "findUnique" | "findFirst" | "create"
+  >;
   conversation: Pick<
     PrismaClient["conversation"],
     "findUnique" | "create" | "update"
@@ -98,6 +103,7 @@ export type CreateConversationMessageInput = {
   senderName: string;
   createdByUserId?: string | null;
   body?: string | null;
+  replyToMessageId?: string | null;
   payload?: Prisma.InputJsonValue | null;
   smsSource?: MessageSmsSource | null;
   twilioMessageSid?: string | null;
@@ -112,6 +118,7 @@ export type CreateConversationMessageReason =
   | "INVALID_SENDER"
   | "INVALID_CONTENT"
   | "INVALID_CHANNEL"
+  | "INVALID_REPLY"
   | "TWILIO_SID_CONFLICT";
 
 export type CreateConversationMessageResult =
@@ -276,6 +283,17 @@ function normalizeContent(
   if (input.kind === "TEXT") {
     if (!body) return { ok: false };
     if (payload == null) return { ok: true, body, payload: null };
+    // CHAT: only trusted LISTING_SHARE snapshots (server-built). Never SMS automation.
+    if (input.channel === "CHAT") {
+      const share = parseListingSharePayload(payload);
+      if (!share.ok) return { ok: false };
+      return {
+        ok: true,
+        body,
+        payload: share.payload as Prisma.InputJsonValue,
+      };
+    }
+    // SMS: automation key payload only (existing).
     if (input.channel !== "SMS" || !isSmsAutomationTextPayload(payload)) {
       return { ok: false };
     }
@@ -375,6 +393,21 @@ export async function createConversationMessage(
 
   const conversation = conversationResult.conversation;
 
+  const replyToMessageId = emptyToNull(input.replyToMessageId);
+  if (replyToMessageId) {
+    const replyTarget = await db.message.findFirst({
+      where: {
+        id: replyToMessageId,
+        workspaceId: conversation.workspaceId,
+        conversationId: conversation.id,
+      },
+      select: { id: true },
+    });
+    if (!replyTarget) {
+      return { ok: false, reason: "INVALID_REPLY" };
+    }
+  }
+
   if (normalized.twilioMessageSid) {
     const existingSid = await findMessageByTwilioSid(
       db,
@@ -406,6 +439,7 @@ export async function createConversationMessage(
     senderName: normalized.senderName,
     createdByUserId: normalized.createdByUserId,
     body: normalized.body,
+    replyToMessageId,
     createdAt,
     smsSource: normalized.smsSource,
     twilioMessageSid: normalized.twilioMessageSid,

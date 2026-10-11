@@ -17,6 +17,11 @@
       "binding": "BRANDING_ASSETS",
       "bucket_name": "houzzatpro-branding-assets",
       "preview_bucket_name": "houzzatpro-branding-assets-preview"
+    },
+    {
+      "binding": "CHAT_MEDIA",
+      "bucket_name": "houzzatpro-chat-media",
+      "preview_bucket_name": "houzzatpro-chat-media-preview"
     }
   ],
   "services": [

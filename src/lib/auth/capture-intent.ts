@@ -94,6 +94,12 @@ export type CaptureIntent =
     })
   | (CaptureIntentBase & {
       type: "START_CHAT";
+      /** Optional listing context for Quick Question → Chat. */
+      mlsNumber: string | null;
+      addressLine: string | null;
+      city: string | null;
+      /** Prefill only — never auto-sent. */
+      draftMessage: string | null;
     })
   | (CaptureIntentBase & {
       type: "ROUTE_PLANNER";
@@ -135,6 +141,10 @@ export type CaptureIntentDraft =
   | {
       type: "START_CHAT";
       callbackPath: string;
+      mlsNumber?: string | null;
+      addressLine?: string | null;
+      city?: string | null;
+      draftMessage?: string | null;
     }
   | {
       type: "ROUTE_PLANNER";
@@ -326,8 +336,36 @@ function buildIntent(
         },
       };
     }
-    case "START_CHAT":
-      return { ok: true, intent: { ...base, type: "START_CHAT" } };
+    case "START_CHAT": {
+      const hasMls =
+        draft.mlsNumber != null && String(draft.mlsNumber).trim() !== "";
+      const mlsNumber = hasMls ? normalizeMls(String(draft.mlsNumber)) : null;
+      if (hasMls && !mlsNumber) return rejectInvalid();
+      const addressLine = normalizeOptionalText(
+        draft.addressLine ?? null,
+        MESSAGE_MAX,
+      );
+      if (addressLine === undefined) return rejectInvalid();
+      const city = normalizeOptionalText(draft.city ?? null, MESSAGE_MAX);
+      if (city === undefined) return rejectInvalid();
+      const draftMessage = normalizeOptionalText(
+        draft.draftMessage ?? null,
+        MESSAGE_MAX,
+      );
+      if (draftMessage === undefined) return rejectInvalid();
+      if (!mlsNumber && (addressLine || city)) return rejectInvalid();
+      return {
+        ok: true,
+        intent: {
+          ...base,
+          type: "START_CHAT",
+          mlsNumber,
+          addressLine,
+          city,
+          draftMessage,
+        },
+      };
+    }
     case "ROUTE_PLANNER": {
       if (draft.mlsNumber == null || draft.mlsNumber === "") {
         return {
@@ -363,8 +401,15 @@ function allowedKeys(type: CaptureIntentType): readonly string[] {
     case "CONTACT_AGENT":
       return [...base, "mlsNumber", "message"];
     case "SAVE_SEARCH":
-    case "START_CHAT":
       return base;
+    case "START_CHAT":
+      return [
+        ...base,
+        "mlsNumber",
+        "addressLine",
+        "city",
+        "draftMessage",
+      ];
     case "AREA_WATCH":
       return [...base, "city", "community", "transactionType", "segment"];
     case "ROUTE_PLANNER":
@@ -455,11 +500,42 @@ function parseIntentObject(
         { host: storedHost, createdAt: record.createdAt },
       );
     }
-    case "START_CHAT":
+    case "START_CHAT": {
+      if (record.mlsNumber != null && typeof record.mlsNumber !== "string") {
+        return rejectInvalid();
+      }
+      if (
+        record.addressLine != null &&
+        typeof record.addressLine !== "string"
+      ) {
+        return rejectInvalid();
+      }
+      if (record.city != null && typeof record.city !== "string") {
+        return rejectInvalid();
+      }
+      if (
+        record.draftMessage != null &&
+        typeof record.draftMessage !== "string"
+      ) {
+        return rejectInvalid();
+      }
       return buildIntent(
-        { type: "START_CHAT", callbackPath: record.callbackPath },
+        {
+          type: "START_CHAT",
+          callbackPath: record.callbackPath,
+          mlsNumber:
+            typeof record.mlsNumber === "string" ? record.mlsNumber : null,
+          addressLine:
+            typeof record.addressLine === "string" ? record.addressLine : null,
+          city: typeof record.city === "string" ? record.city : null,
+          draftMessage:
+            typeof record.draftMessage === "string"
+              ? record.draftMessage
+              : null,
+        },
         { host: storedHost, createdAt: record.createdAt },
       );
+    }
     case "ROUTE_PLANNER": {
       if (record.mlsNumber != null && typeof record.mlsNumber !== "string") {
         return rejectInvalid();

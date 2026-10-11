@@ -92,6 +92,7 @@ function payload(
     canSend: true,
     blocked: false,
     read: { customerLastReadAt: null, unreadCount: 0 },
+    agent: null,
     ...overrides,
   };
 }
@@ -120,14 +121,24 @@ function testSendBodyIsBodyOnly() {
   const sent = customerChatSendBody("Hello there");
   assert.deepEqual(sent, { body: "Hello there" });
   assert.deepEqual(Object.keys(sent), ["body"]);
+  assert.deepEqual(customerChatSendBody("Hello", "msg_1"), {
+    body: "Hello",
+    replyToMessageId: "msg_1",
+  });
   const hook = read("src/components/customer-chat/useCustomerChatThread.ts");
-  assert.ok(hook.includes("JSON.stringify(customerChatSendBody(body))"));
-  assert.equal(hook.includes("leadId"), false);
-  assert.equal(hook.includes("workspaceId"), false);
-  assert.equal(hook.includes("conversationId"), false);
-  assert.equal(hook.includes("assignedAgentId"), false);
-  assert.equal(hook.includes("senderUserId"), false);
-  assert.equal(hook.includes("senderName"), false);
+  assert.ok(
+    hook.includes("customerChatSendBody(body, options?.replyToMessageId)"),
+  );
+  const sendFnStart = hook.indexOf("const send = useCallback");
+  const sendFnEnd = hook.indexOf("const reactToMessage = useCallback");
+  assert.ok(sendFnStart >= 0 && sendFnEnd > sendFnStart);
+  const sendFn = hook.slice(sendFnStart, sendFnEnd);
+  assert.equal(sendFn.includes("leadId"), false);
+  assert.equal(sendFn.includes("workspaceId"), false);
+  assert.equal(sendFn.includes("conversationId"), false);
+  assert.equal(sendFn.includes("assignedAgentId"), false);
+  assert.equal(sendFn.includes("senderUserId"), false);
+  assert.equal(sendFn.includes("senderName"), false);
 }
 
 function testComposerParity() {
@@ -417,16 +428,18 @@ function testTenantOnlyFabAndNoSixthTab() {
   assert.ok(fab.includes("AGENT"));
   assert.ok(fab.includes('status === "loading"'));
   assert.ok(fab.includes("openGuestStartChatIntent"));
-  assert.ok(fab.includes("href={CUSTOMER_CHAT_PAGE_HREF}"));
+  assert.ok(fab.includes("chat.open"));
+  assert.ok(fab.includes("CUSTOMER_CHAT_PAGE_HREF"));
   assert.ok(fab.includes('aria-label="Chat with your agent"'));
   const nav = read("src/components/site/MobileBottomNav.tsx");
-  assert.ok(nav.includes('label="Chat"'));
+  assert.ok(nav.includes("Chat"));
   assert.ok(nav.includes("grid-cols-4"));
   assert.equal(nav.includes("grid-cols-5"), false);
   assert.ok(nav.includes("Home"));
   assert.ok(nav.includes("Search"));
   assert.ok(nav.includes("More"));
   assert.ok(nav.includes("Account"));
+  assert.ok(nav.includes("chat.open") || nav.includes("CUSTOMER_CHAT_PAGE_HREF"));
 }
 
 function testAccountNavAndCallback() {

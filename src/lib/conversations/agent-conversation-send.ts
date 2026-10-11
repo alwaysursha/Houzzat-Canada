@@ -27,11 +27,16 @@
 import { z } from "zod";
 import type { AgentOrgContext, AgentUser } from "@/lib/agent";
 import {
+  clearConversationTypingOnSend,
+  type ConversationTypingDb,
+} from "@/lib/chat/typing/update";
+import {
   loadAccessibleAgentConversationLead,
   presentAgentConversationMessage,
   type AgentConversationMessage,
   type AgentConversationMessageRow,
 } from "@/lib/conversations/agent-conversation-read";
+import { enrichChatMessages } from "@/lib/conversations/chat-rich-features";
 import {
   createConversationMessage,
   type ConversationMessageDb,
@@ -51,6 +56,7 @@ export const AGENT_CHAT_TEXT_MAX_LENGTH = 4000;
 export const agentChatSendRequestSchema = z
   .object({
     body: z.string(),
+    replyToMessageId: z.string().trim().min(1).max(64).optional().nullable(),
   })
   .strict();
 
@@ -58,6 +64,7 @@ export const agentConversationSendRequestSchema = z
   .object({
     body: z.string(),
     channel: z.enum(["CHAT", "SMS"]).optional(),
+    replyToMessageId: z.string().trim().min(1).max(64).optional().nullable(),
   })
   .strict();
 
@@ -85,7 +92,7 @@ export type SendAgentLeadChatMessageResult =
   | { ok: true; data: AgentChatSendPayload }
   | {
       ok: false;
-      reason: "LEAD_NOT_FOUND" | "FORBIDDEN" | "INVALID_BODY";
+      reason: "LEAD_NOT_FOUND" | "FORBIDDEN" | "INVALID_BODY" | "INVALID_REPLY";
     };
 
 export function frozenAgentSenderName(
@@ -116,14 +123,18 @@ export function presentSentMessage(
     body: message.body,
     editedAt: null,
     deletedAt: null,
-    replyToMessageId: null,
+    replyToMessageId: message.replyToMessageId,
     createdAt: message.createdAt,
     deliveredAt: message.deliveredAt,
     smsSource: message.smsSource,
     providerStatus: message.providerStatus,
     payload: message.payload,
   };
-  return presentAgentConversationMessage(row);
+  return presentAgentConversationMessage(row, {
+    attachments: [],
+    reactions: [],
+    replyTo: null,
+  });
 }
 
 export async function sendAgentLeadChatMessage(
@@ -131,7 +142,9 @@ export async function sendAgentLeadChatMessage(
   ctx: AgentOrgContext,
   leadId: string,
   body: string,
-  deps: SendAgentLeadChatMessageDeps = {},
+  deps: SendAgentLeadChatMessageDeps & {
+    replyToMessageId?: string | null;
+  } = {},
 ): Promise<SendAgentLeadChatMessageResult> {
   const text = normalizeAgentChatText(body);
   if (!text) {
@@ -161,9 +174,13 @@ export async function sendAgentLeadChatMessage(
     createdByUserId: ctx.user.id,
     senderName,
     body: text,
+    replyToMessageId: deps.replyToMessageId ?? null,
   });
 
   if (!created.ok) {
+    if (created.reason === "INVALID_REPLY") {
+      return { ok: false, reason: "INVALID_REPLY" };
+    }
     if (
       created.reason === "LEAD_NOT_IN_WORKSPACE" ||
       created.reason === "INVALID_INPUT"
@@ -172,6 +189,12 @@ export async function sendAgentLeadChatMessage(
     }
     return { ok: false, reason: "INVALID_BODY" };
   }
+
+  await clearConversationTypingOnSend(db as unknown as ConversationTypingDb, {
+    workspaceId: lead.workspaceId,
+    conversationId: created.conversation.id,
+    side: "agent",
+  }).catch(() => undefined);
 
   try {
     await recordConversationLeadActivity(db, {
@@ -207,6 +230,23 @@ export async function sendAgentLeadChatMessage(
     // Chat persist already succeeded.
   }
 
+  const rich = await enrichChatMessages(
+    db as unknown as Parameters<typeof enrichChatMessages>[0],
+    {
+      workspaceId: lead.workspaceId,
+      conversationId: created.conversation.id,
+      viewerUserId: ctx.user.id,
+      messages: [
+        {
+          id: created.message.id,
+          replyToMessageId: created.message.replyToMessageId,
+          deliveredAt: created.message.deliveredAt,
+        },
+      ],
+    },
+  ).catch(() => new Map());
+  const extras = rich.get(created.message.id);
+  const presented = presentSentMessage(created.message);
   return {
     ok: true,
     data: {
@@ -218,7 +258,11 @@ export async function sendAgentLeadChatMessage(
           : null,
         created: created.conversationCreated,
       },
-      message: presentSentMessage(created.message),
+      message: {
+        ...presented,
+        replyTo: extras?.replyTo ?? presented.replyTo,
+        reactions: extras?.reactions ?? presented.reactions,
+      },
     },
   };
 }

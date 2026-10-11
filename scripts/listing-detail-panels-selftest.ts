@@ -31,7 +31,8 @@ assert.ok(
 assert.ok(
   detail.indexOf("<ListingAgentCard") < detail.indexOf("<DriveTimePanel"),
 );
-assert.equal(detail.includes("<ListingQaPanel"), false);
+assert.ok(detail.includes("<ListingQaPanel"));
+assert.ok(detail.includes('id: "listing-ask"'));
 assert.equal(detail.includes("Listed for:"), false);
 assert.ok(detail.includes("Prices are changing. Get a free home estimate"));
 assert.ok(detail.includes('href="/home-valuation"'));

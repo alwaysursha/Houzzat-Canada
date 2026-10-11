@@ -9,8 +9,12 @@ import {
   CUSTOMER_CHAT_READ_ROUTE,
   CUSTOMER_CHAT_SEND_ROUTE,
   appendCustomerChatSentMessage,
+  customerChatContextRoute,
   customerChatGetUrl,
+  customerChatReactionRoute,
+  customerChatSearchUrl,
   customerChatSendBody,
+  mergeCustomerChatContext,
   mergeCustomerChatMessages,
   parseCustomerChatLoadError,
   parseCustomerChatSendFailure,
@@ -19,14 +23,21 @@ import {
   shouldSkipDuplicateCustomerChatOlder,
 } from "@/lib/customer-chat/query";
 import {
+  buildVoiceNoteUploadFormData,
+  customerChatVoiceNoteUploadRoute,
+  newVoiceNoteUploadId,
+} from "@/lib/chat/voice-notes/client-upload";
+import {
   CONVERSATION_LIVE_POLL_MS,
   conversationLivePollShouldTick,
   conversationLiveVisible,
   mergeLiveConversationMessages,
 } from "@/lib/conversations/conversation-live-poll";
+import { presentCustomerChatAgentAvailability } from "@/lib/customer-chat/floating-chat";
 import type {
   CustomerChatGetPayload,
   CustomerChatLoadErrorKind,
+  CustomerChatMessage,
   CustomerChatSendFailure,
   CustomerChatSendPayload,
 } from "@/lib/customer-chat/types";
@@ -38,9 +49,23 @@ function emptyPayload(): CustomerChatGetPayload {
     page: { limit: 40, hasMore: false, nextCursor: null },
     canSend: true,
     blocked: false,
-    read: { customerLastReadAt: null, unreadCount: 0 },
+    read: {
+      customerLastReadAt: null,
+      agentLastReadAt: null,
+      unreadCount: 0,
+    },
+    agent: null,
+    peerTyping: false,
+    agentAvailability: "offline",
   };
 }
+
+export type UseCustomerChatThreadOptions = {
+  /** When false, transcript still loads/polls but read receipts are not posted. */
+  chatVisible?: boolean;
+  /** When false, skip network (floating shell closed). */
+  enabled?: boolean;
+};
 
 async function readJson(res: Response): Promise<unknown> {
   try {
@@ -52,7 +77,11 @@ async function readJson(res: Response): Promise<unknown> {
   }
 }
 
-export function useCustomerChatThread() {
+export function useCustomerChatThread(
+  options: UseCustomerChatThreadOptions = {},
+) {
+  const chatVisible = options.chatVisible !== false;
+  const enabled = options.enabled !== false;
   const { openAuth } = useAuthModal();
   const { openClientToolsVerification } = useClientToolsVerification();
   const [payload, setPayload] = useState<CustomerChatGetPayload | null>(null);
@@ -74,7 +103,6 @@ export function useCustomerChatThread() {
   const markedReadIdRef = useRef<string | null>(null);
   const loadedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
-
   const fetchPage = useCallback(async (input: {
     cursor?: string | null;
     prepend: boolean;
@@ -141,6 +169,11 @@ export function useCustomerChatThread() {
             canSend: json.canSend,
             blocked: json.blocked,
             read: json.read,
+            agent: json.agent ?? prev.agent,
+            peerTyping: Boolean(json.peerTyping),
+            agentAvailability: presentCustomerChatAgentAvailability(
+              json.agentAvailability,
+            ),
             messages: mergeLiveConversationMessages(
               prev.messages,
               json.messages,
@@ -182,13 +215,18 @@ export function useCustomerChatThread() {
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     void fetchPage({ prepend: false });
     return () => {
       abortRef.current?.abort();
     };
-  }, [fetchPage]);
+  }, [enabled, fetchPage]);
 
   useEffect(() => {
+    if (!enabled) return;
     const tick = () => {
       if (
         !conversationLivePollShouldTick({
@@ -213,13 +251,13 @@ export function useCustomerChatThread() {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", tick);
     };
-  }, [fetchPage]);
+  }, [enabled, fetchPage]);
 
   useEffect(() => {
     const openId = payload?.conversation?.id ?? null;
     if (
       !shouldMarkCustomerChatRead({
-        chatVisible: true,
+        chatVisible,
         openId,
         alreadyMarkedId: markedReadIdRef.current,
       })
@@ -248,7 +286,7 @@ export function useCustomerChatThread() {
         markedReadIdRef.current = null;
       }
     })();
-  }, [payload]);
+  }, [payload, chatVisible]);
 
   const reload = useCallback(() => {
     loadedRef.current = false;
@@ -263,7 +301,10 @@ export function useCustomerChatThread() {
   }, [fetchPage, payload]);
 
   const send = useCallback(
-    async (body: string): Promise<boolean> => {
+    async (
+      body: string,
+      options?: { replyToMessageId?: string | null },
+    ): Promise<boolean> => {
       const canSend = Boolean(payload && payload.canSend && !payload.blocked);
       if (
         shouldSkipCustomerChatSubmit({
@@ -281,7 +322,9 @@ export function useCustomerChatThread() {
         const res = await fetch(CUSTOMER_CHAT_SEND_ROUTE, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(customerChatSendBody(body)),
+          body: JSON.stringify(
+            customerChatSendBody(body, options?.replyToMessageId),
+          ),
         });
         const json = await readJson(res);
         if (!res.ok) {
@@ -339,6 +382,178 @@ export function useCustomerChatThread() {
     [openAuth, openClientToolsVerification, payload],
   );
 
+  const sendVoiceNote = useCallback(
+    async (input: {
+      blob: Blob;
+      mimeType: string;
+      durationMs: number;
+      replyToMessageId?: string | null;
+    }): Promise<boolean> => {
+      const canSend = Boolean(payload && payload.canSend && !payload.blocked);
+      if (!canSend || sendInFlightRef.current) return false;
+      sendInFlightRef.current = true;
+      setSending(true);
+      setSendError(null);
+      const uploadId = newVoiceNoteUploadId();
+      try {
+        const res = await fetch(customerChatVoiceNoteUploadRoute(), {
+          method: "POST",
+          body: buildVoiceNoteUploadFormData({
+            blob: input.blob,
+            mimeType: input.mimeType,
+            durationMs: input.durationMs,
+            uploadId,
+            replyToMessageId: input.replyToMessageId,
+          }),
+        });
+        const json = await readJson(res);
+        if (!res.ok) {
+          const failure = parseCustomerChatSendFailure(
+            res.status,
+            json,
+            res.headers.get("Retry-After"),
+          );
+          setSendError(failure);
+          if (failure.kind === "verification") {
+            openClientToolsVerification({
+              callbackUrl: CUSTOMER_CHAT_PAGE_HREF,
+            });
+          }
+          if (failure.kind === "auth") {
+            openAuth({
+              mode: "sign-in",
+              callbackUrl: CUSTOMER_CHAT_PAGE_HREF,
+            });
+          }
+          return false;
+        }
+        const sent = json as CustomerChatSendPayload;
+        setPayload((prev) => {
+          const base = prev ?? emptyPayload();
+          return {
+            ...appendCustomerChatSentMessage(
+              base,
+              sent.conversation,
+              sent.message,
+            ),
+            conversation: sent.conversation,
+            canSend: true,
+            blocked: false,
+          };
+        });
+        return true;
+      } catch {
+        setSendError({
+          kind: "generic",
+          message: "Couldn’t send your voice note. Please try again.",
+          retryAfterSec: null,
+        });
+        return false;
+      } finally {
+        sendInFlightRef.current = false;
+        setSending(false);
+      }
+    },
+    [openAuth, openClientToolsVerification, payload],
+  );
+
+  const reactToMessage = useCallback(
+    async (messageId: string, key: string): Promise<boolean> => {
+      try {
+        const res = await fetch(customerChatReactionRoute(messageId), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key }),
+        });
+        if (!res.ok) return false;
+        const json = (await res.json()) as {
+          reactions?: CustomerChatGetPayload["messages"][number]["reactions"];
+        };
+        setPayload((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            messages: prev.messages.map((message) =>
+              message.id === messageId
+                ? { ...message, reactions: json.reactions ?? [] }
+                : message,
+            ),
+          };
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [],
+  );
+
+  const searchMessages = useCallback(
+    async (query: string, cursor?: string | null) => {
+      const res = await fetch(customerChatSearchUrl(query, cursor), {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        throw new Error("search failed");
+      }
+      return (await res.json()) as {
+        query: string;
+        hits: Array<{
+          id: string;
+          body: string;
+          senderName: string;
+          senderKind: string;
+          createdAt: string;
+        }>;
+        page: {
+          limit: number;
+          hasMore: boolean;
+          nextCursor: string | null;
+        };
+      };
+    },
+    [],
+  );
+
+  const ensureMessageLoaded = useCallback(
+    async (messageId: string): Promise<boolean> => {
+      const id = messageId.trim();
+      if (!id) return false;
+      const already = payload?.messages.some((message) => message.id === id);
+      if (already) return true;
+      try {
+        const res = await fetch(customerChatContextRoute(id), {
+          method: "GET",
+          cache: "no-store",
+        });
+        if (!res.ok) return false;
+        const json = (await res.json()) as {
+          messages?: CustomerChatMessage[];
+          page?: {
+            hasMoreOlder: boolean;
+            olderCursor: string | null;
+          };
+        };
+        if (!json.messages?.length) return false;
+        setPayload((prev) => {
+          const base = prev ?? emptyPayload();
+          return mergeCustomerChatContext(base, {
+            messages: json.messages ?? [],
+            page: {
+              hasMoreOlder: Boolean(json.page?.hasMoreOlder),
+              olderCursor: json.page?.olderCursor ?? null,
+            },
+          });
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [payload?.messages],
+  );
+
   return {
     payload,
     loading,
@@ -349,6 +564,10 @@ export function useCustomerChatThread() {
     reload,
     loadOlder,
     send,
+    sendVoiceNote,
+    reactToMessage,
+    searchMessages,
+    ensureMessageLoaded,
     getRoute: CUSTOMER_CHAT_GET_ROUTE,
     sendRoute: CUSTOMER_CHAT_SEND_ROUTE,
     readRoute: CUSTOMER_CHAT_READ_ROUTE,

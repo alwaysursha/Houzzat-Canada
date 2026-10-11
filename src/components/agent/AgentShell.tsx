@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AgentMobileInstantShell } from "@/components/agent/AgentMobileInstantShell";
+import { AgentAvailabilityControl } from "@/components/agent/presence/AgentAvailabilityControl";
+import { AgentPresenceProvider } from "@/components/agent/presence/AgentPresenceProvider";
 import {
   Bell,
   CalendarDays,
@@ -234,14 +236,17 @@ export function AgentShell({
   // (query ignored) so the existing Chat route children mount in the WebView.
   if (isProNative && !isChatsPage) {
     return (
-      <AgentMobileInstantShell
-        brandDisplayName={brandDisplayName}
-        orgName={orgName}
-      />
+      <AgentPresenceProvider>
+        <AgentMobileInstantShell
+          brandDisplayName={brandDisplayName}
+          orgName={orgName}
+        />
+      </AgentPresenceProvider>
     );
   }
 
   return (
+    <AgentPresenceProvider>
     <div className="flex min-h-dvh bg-mist text-ink">
       {/* Desktop sidebar */}
       <aside
@@ -302,6 +307,19 @@ export function AgentShell({
         </nav>
 
         <div className="border-t border-white/10 p-3">
+          {!collapsed ? (
+            <div className="mb-3">
+              <AgentAvailabilityControl tone="dark" />
+            </div>
+          ) : (
+            <div className="mb-3 flex justify-center">
+              <AgentAvailabilityControl
+                tone="dark"
+                compact
+                showHint={false}
+              />
+            </div>
+          )}
           {!collapsed ? (
             <p className="mb-2 truncate text-[11px] text-white/45">
               {membershipRole} · {email}
@@ -393,6 +411,9 @@ export function AgentShell({
             ) : null}
           </nav>
           <div className="border-t border-white/10 p-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
+            <div className="mb-3">
+              <AgentAvailabilityControl tone="dark" />
+            </div>
             <p className="mb-2 truncate text-[11px] text-white/45">
               {membershipRole} · {email}
             </p>
@@ -413,7 +434,12 @@ export function AgentShell({
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Desktop top bar */}
-        <header className="sticky top-0 z-50 hidden h-12 items-center justify-end gap-1 border-b border-[#d8dee6] bg-[#1e2a38] px-4 text-white lg:flex">
+        <header className="sticky top-0 z-50 hidden h-12 items-center justify-end gap-3 border-b border-[#d8dee6] bg-[#1e2a38] px-4 text-white lg:flex">
+          <AgentAvailabilityControl
+            tone="dark"
+            compact
+            showHint={false}
+          />
           <ActivityGlobeButton
             open={activityOpen}
             onClick={() => setActivityOpen((v) => !v)}
@@ -438,6 +464,12 @@ export function AgentShell({
               {orgName}
             </p>
           </div>
+          <AgentAvailabilityControl
+            tone="dark"
+            compact
+            showHint={false}
+            className="hidden sm:block"
+          />
           <ActivityGlobeButton
             open={activityOpen}
             onClick={() => setActivityOpen((v) => !v)}
@@ -525,5 +557,6 @@ export function AgentShell({
         onClose={() => setActivityOpen(false)}
       />
     </div>
+    </AgentPresenceProvider>
   );
 }

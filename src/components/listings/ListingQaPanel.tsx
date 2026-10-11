@@ -1,11 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { ListingSection } from "@/components/listings/ListingSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useExpertWhatsAppNumber } from "@/components/whatsapp/useExpertWhatsAppNumber";
-import { buildListingExpertWhatsAppUrl, WHATSAPP_UNAVAILABLE_COPY } from "@/lib/whatsapp";
+import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
+import { useOptionalCustomerChatController } from "@/components/customer-chat/CustomerChatProvider";
+import { openGuestStartChatIntent } from "@/lib/auth/start-chat-intent";
+import {
+  normalizeCustomerChatDraft,
+  normalizeCustomerChatListingContext,
+} from "@/lib/customer-chat/floating-chat";
+import { CUSTOMER_CHAT_PAGE_HREF } from "@/lib/customer-chat/query";
 
 export function ListingQaPanel({
   mlsNumber,
@@ -13,30 +21,51 @@ export function ListingQaPanel({
   city,
   title,
   hint,
-  expertWhatsApp = null,
 }: {
   mlsNumber: string;
   addressLine: string;
   city: string;
   title: string;
   hint: string;
+  /** @deprecated WhatsApp expert number is unused; kept for call-site compatibility. */
   expertWhatsApp?: string | null;
 }) {
   const [question, setQuestion] = useState("");
-  const { digits: phoneDigits, ready } = useExpertWhatsAppNumber(expertWhatsApp);
+  const { status } = useSession();
+  const { openAuth } = useAuthModal();
+  const chat = useOptionalCustomerChatController();
 
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!phoneDigits) return;
-
-    const url = buildListingExpertWhatsAppUrl({
-      phoneDigits,
+    const listingContext = normalizeCustomerChatListingContext({
       mlsNumber,
       addressLine,
       city,
-      question,
     });
-    window.open(url, "_blank", "noopener,noreferrer");
+    if (!listingContext) return;
+    const draft = normalizeCustomerChatDraft(question);
+
+    if (status === "authenticated") {
+      if (chat) {
+        chat.open({
+          listingContext,
+          draft: draft || null,
+          forceExpand: true,
+        });
+        return;
+      }
+      window.location.assign(CUSTOMER_CHAT_PAGE_HREF);
+      return;
+    }
+
+    openGuestStartChatIntent({
+      host: window.location.hostname,
+      now: Date.now(),
+      store: browserCaptureIntentStore(),
+      openAuth,
+      listingContext,
+      draftMessage: draft || null,
+    });
   }
 
   return (
@@ -45,26 +74,18 @@ export function ListingQaPanel({
       title={title || "Quick question?"}
       hint={hint}
     >
-      {!ready ? (
-        <p className="text-sm text-ink/50">Loading WhatsApp…</p>
-      ) : !phoneDigits ? (
-        <p className="rounded-xl border border-line bg-mist/60 px-4 py-3 text-sm text-ink/75">
-          {WHATSAPP_UNAVAILABLE_COPY}
-        </p>
-      ) : (
-        <form onSubmit={onSubmit} className="flex flex-col gap-2 sm:flex-row">
-          <Input
-            placeholder="Ask anything about this home…"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            aria-label="Your question for the expert"
-            className="bg-mist/40"
-          />
-          <Button type="submit" className="shrink-0 sm:min-w-[10.5rem]">
-            Message on WhatsApp
-          </Button>
-        </form>
-      )}
+      <form onSubmit={onSubmit} className="flex flex-col gap-2 sm:flex-row">
+        <Input
+          placeholder="Ask anything about this home…"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          aria-label="Your question for the expert"
+          className="bg-mist/40"
+        />
+        <Button type="submit" className="shrink-0 sm:min-w-[10.5rem]">
+          Chat with your agent
+        </Button>
+      </form>
     </ListingSection>
   );
 }

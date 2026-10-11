@@ -10,6 +10,10 @@ import {
   v2ChatComposerKeyAction,
   v2ChatPrependScrollTop,
 } from "@/lib/agent/lead-profile-v2/chat-query";
+import {
+  applyContextPageState,
+  mergeMessagesWithContext,
+} from "@/lib/chat/message-context";
 import type {
   CustomerChatGetPayload,
   CustomerChatLoadErrorKind,
@@ -19,12 +23,38 @@ import type {
 } from "@/lib/customer-chat/types";
 import { smsAutomationTranscriptLabel } from "@/lib/platform/sms-automations/catalog";
 
+/** Lightweight marker check — avoids importing listing-share (server snapshot deps). */
+function isListingShareCardPayload(payload: unknown): boolean {
+  return Boolean(
+    payload &&
+      typeof payload === "object" &&
+      !Array.isArray(payload) &&
+      (payload as { card?: unknown }).card === "LISTING_SHARE",
+  );
+}
+
 export const CUSTOMER_CHAT_PAGE_HREF = "/account/chat";
 export const CUSTOMER_CHAT_GET_ROUTE = "/api/account/conversation";
 export const CUSTOMER_CHAT_SEND_ROUTE = "/api/account/conversation/messages";
 export const CUSTOMER_CHAT_READ_ROUTE = "/api/account/conversation/read";
+export const CUSTOMER_CHAT_SEARCH_ROUTE = "/api/account/conversation/search";
 export const CUSTOMER_CHAT_TEXT_MAX_LENGTH = V2_CHAT_TEXT_MAX_LENGTH;
 export const CUSTOMER_CHAT_DELETED_TOMBSTONE = V2_CHAT_DELETED_TOMBSTONE;
+
+export function customerChatReactionRoute(messageId: string) {
+  return `${CUSTOMER_CHAT_SEND_ROUTE}/${encodeURIComponent(messageId)}/reactions`;
+}
+
+export function customerChatContextRoute(messageId: string) {
+  return `${CUSTOMER_CHAT_SEND_ROUTE}/${encodeURIComponent(messageId)}/context`;
+}
+
+export function customerChatSearchUrl(query: string, cursor?: string | null) {
+  const params = new URLSearchParams();
+  params.set("q", query);
+  if (cursor) params.set("cursor", cursor);
+  return `${CUSTOMER_CHAT_SEARCH_ROUTE}?${params.toString()}`;
+}
 
 export const customerChatComposerKeyAction = v2ChatComposerKeyAction;
 export const customerChatComposerCanSubmit = v2ChatComposerCanSubmit;
@@ -37,8 +67,14 @@ export function customerChatGetUrl(cursor?: string | null) {
   return `${CUSTOMER_CHAT_GET_ROUTE}?${params.toString()}`;
 }
 
-export function customerChatSendBody(body: string): { body: string } {
-  return { body };
+export function customerChatSendBody(
+  body: string,
+  replyToMessageId?: string | null,
+): { body: string; replyToMessageId?: string } {
+  const payload: { body: string; replyToMessageId?: string } = { body };
+  const reply = replyToMessageId?.trim();
+  if (reply) payload.replyToMessageId = reply;
+  return payload;
 }
 
 export function mergeCustomerChatMessages(
@@ -51,6 +87,38 @@ export function mergeCustomerChatMessages(
   const unique = next.filter((row) => !seen.has(row.id));
   if (mode === "prepend") return [...unique, ...prev];
   return [...prev, ...unique];
+}
+
+export function mergeCustomerChatContext(
+  payload: CustomerChatGetPayload,
+  context: {
+    messages: CustomerChatMessage[];
+    page: {
+      hasMoreOlder: boolean;
+      olderCursor: string | null;
+    };
+  },
+): CustomerChatGetPayload {
+  const messages = mergeMessagesWithContext(payload.messages, context.messages);
+  const oldest = messages[0] ?? null;
+  const contextOldest = context.messages[0] ?? null;
+  const pageState = applyContextPageState({
+    previousHasMore: payload.page.hasMore,
+    previousNextCursor: payload.page.nextCursor,
+    contextHasMoreOlder: context.page.hasMoreOlder,
+    contextOlderCursor: context.page.olderCursor,
+    mergedOldestId: oldest?.id ?? null,
+    contextOldestId: contextOldest?.id ?? null,
+  });
+  return {
+    ...payload,
+    messages,
+    page: {
+      ...payload.page,
+      hasMore: pageState.hasMore,
+      nextCursor: pageState.nextCursor,
+    },
+  };
 }
 
 export function appendCustomerChatSentMessage(
@@ -112,6 +180,12 @@ export function shouldGroupCustomerChatMessage(
   if (previous.senderKind !== current.senderKind) return false;
   if (previous.channel !== current.channel) return false;
   if (customerSmsAutomationBadge(previous.payload) || customerSmsAutomationBadge(current.payload)) {
+    return false;
+  }
+  if (
+    isListingShareCardPayload(previous.payload) ||
+    isListingShareCardPayload(current.payload)
+  ) {
     return false;
   }
   return previous.senderName === current.senderName;

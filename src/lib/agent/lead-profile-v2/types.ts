@@ -101,6 +101,24 @@ export type LeadProfileV2ChatMessage = {
   editedAt: string | null;
   deletedAt: string | null;
   replyToMessageId: string | null;
+  replyTo?: {
+    id: string;
+    senderName: string;
+    body: string | null;
+    deleted: boolean;
+  } | null;
+  reactions?: Array<{
+    key: string;
+    count: number;
+    reactedByMe: boolean;
+  }>;
+  attachments?: Array<{
+    id: string;
+    kind: "VOICE_NOTE";
+    mimeType: string;
+    byteSize: number;
+    durationMs: number | null;
+  }>;
   createdAt: string;
   deliveredAt: string | null;
   smsSource: string | null;
@@ -123,6 +141,7 @@ export type LeadProfileV2ChatPanel = {
     createdAt: string;
     lastMessageAt: string | null;
     created: boolean;
+    customerLastReadAt?: string | null;
   };
   assignedAgentId: string | null;
   viewer: {
@@ -149,6 +168,8 @@ export type LeadProfileV2ChatPanel = {
     hasMore: boolean;
     nextCursor: string | null;
   };
+  /** Peer (customer) typing — boolean only; never raw timestamps. */
+  peerTyping?: boolean;
 };
 
 export type LeadProfileV2BuyerIntentCriteria = {
