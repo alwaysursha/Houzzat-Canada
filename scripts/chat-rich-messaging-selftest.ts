@@ -800,6 +800,7 @@ function testUiWiring() {
 
   assert.ok(customerScreen.includes("ChatEmojiPicker"));
   assert.ok(customerScreen.includes("ChatReactionBar"));
+  assert.ok(customerScreen.includes("ChatMessageActions"));
   assert.ok(customerScreen.includes("ChatQuotedPreview"));
   assert.ok(customerScreen.includes("ChatReceiptLabel"));
   assert.ok(customerScreen.includes("ChatConversationSearch"));
@@ -809,6 +810,7 @@ function testUiWiring() {
   assert.ok(customerScreen.includes("navigateToMessage"));
   assert.ok(customerScreen.includes("replyToMessageId"));
   assert.ok(customerScreen.includes("agentLastReadAt"));
+  assert.ok(customerScreen.includes("chatComposerTrailingAction"));
 
   assert.ok(customerHook.includes("reactToMessage"));
   assert.ok(customerHook.includes("searchMessages"));
@@ -819,6 +821,7 @@ function testUiWiring() {
 
   assert.ok(agentPane.includes("ChatEmojiPicker"));
   assert.ok(agentPane.includes("ChatReactionBar"));
+  assert.ok(agentPane.includes("ChatMessageActions"));
   assert.ok(agentPane.includes("ChatQuotedPreview"));
   assert.ok(agentPane.includes("ChatReceiptLabel"));
   assert.ok(agentPane.includes("ChatConversationSearch"));
@@ -827,6 +830,7 @@ function testUiWiring() {
   assert.ok(agentPane.includes("onSearch"));
   assert.ok(agentPane.includes("onEnsureMessage"));
   assert.ok(agentPane.includes("navigateToMessage"));
+  assert.ok(agentPane.includes("chatComposerTrailingAction"));
 
   assert.ok(agentHook.includes("reactToMessage"));
   assert.ok(agentHook.includes("searchMessages"));

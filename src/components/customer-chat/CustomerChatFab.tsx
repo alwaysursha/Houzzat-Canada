@@ -71,7 +71,7 @@ export function CustomerChatFab() {
     return (
       <button
         type="button"
-        aria-label="Chat with your agent"
+        aria-label="Open chat"
         data-customer-chat-entry=""
         className={className}
         onClick={() => {
@@ -90,7 +90,7 @@ export function CustomerChatFab() {
   return (
     <button
       type="button"
-      aria-label="Chat with your agent"
+      aria-label="Open chat"
       data-customer-chat-entry=""
       className={className}
       onClick={() => {

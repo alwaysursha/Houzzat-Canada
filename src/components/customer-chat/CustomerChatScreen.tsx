@@ -9,7 +9,7 @@ import {
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { ArrowLeft, Minus, X } from "lucide-react";
+import { ArrowLeft, Minus, Send, X } from "lucide-react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { AccountVerifyEmailAction } from "@/components/account/AccountVerifyEmailAction";
 import { ChatConversationSearch } from "@/components/chat/ChatConversationSearch";
@@ -18,6 +18,7 @@ import {
   ChatListingShareCard,
   resolveChatListingShareView,
 } from "@/components/chat/ChatListingShareCard";
+import { ChatMessageActions } from "@/components/chat/ChatMessageActions";
 import {
   ChatQuotedPreview,
   ChatReactionBar,
@@ -29,6 +30,7 @@ import { ChatVoiceRecorder } from "@/components/chat/ChatVoiceRecorder";
 import { useChatTypingPublisher } from "@/components/chat/useChatTypingPublisher";
 import { useCustomerChatThread } from "@/components/customer-chat/useCustomerChatThread";
 import { insertEmojiAtCursor } from "@/lib/chat/emoji-catalog";
+import { chatComposerTrailingAction } from "@/lib/chat/composer-ui";
 import {
   customerChatTypingRoute,
   peerTypingFromPayload,
@@ -348,6 +350,17 @@ export function CustomerChatScreen({
   const verificationRequired = sendError?.kind === "verification";
   const floatingChrome = chrome === "floating" || chrome === "mobile-sheet";
 
+  // Push / notification "Reply" deep link focuses the composer (no fake inline reply UI).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("compose") !== "1") return;
+    if (!canSend || loading) return;
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+  }, [canSend, loading, chrome]);
+
   return (
     <section
       ref={rootRef}
@@ -369,7 +382,9 @@ export function CustomerChatScreen({
           className={cn(
             "shrink-0 border-b border-canopy/10 px-4 py-3 sm:px-5",
             floatingChrome &&
-              "bg-gradient-to-r from-[#f3fbf7] via-white to-[#eef8f3]",
+              "border-b border-[#d7e8df] bg-white",
+            chrome === "mobile-sheet" &&
+              "bg-white text-[#12241c]",
             chrome === "floating" &&
               position &&
               onPositionChange &&
@@ -382,7 +397,7 @@ export function CustomerChatScreen({
                 type="button"
                 onClick={onClose}
                 aria-label="Close chat"
-                className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-line bg-white text-ink/70 hover:bg-mist"
+                className="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-[#d7e8df] bg-white text-[#12241c] hover:bg-[#eef8f3]"
               >
                 <ArrowLeft className="size-4" aria-hidden />
               </button>
@@ -399,17 +414,14 @@ export function CustomerChatScreen({
                     <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/45">
                       Chat
                     </p>
-                    <h1 className="truncate font-display text-xl text-ink sm:text-2xl">
-                      Chat with your agent
-                    </h1>
-                    <p className="mt-0.5 truncate text-sm text-ink/55">
+                    <h1 className="truncate font-display text-[1.25rem] text-[#12241c] sm:text-2xl">
                       {agentName}
-                    </p>
+                    </h1>
                     <AgentAvailabilityLine availability={agentAvailability} />
                   </>
                 ) : (
                   <>
-                    <h2 className="truncate font-display text-lg text-ink">
+                    <h2 className="truncate text-[17px] font-semibold tracking-tight text-[#12241c] sm:text-lg">
                       {agentName}
                     </h2>
                     <AgentAvailabilityLine availability={agentAvailability} />
@@ -431,7 +443,7 @@ export function CustomerChatScreen({
                       type="button"
                       onClick={onMinimize}
                       aria-label="Minimize chat"
-                      className="inline-flex size-8 items-center justify-center rounded-lg text-ink/55 hover:bg-mist hover:text-ink"
+                      className="inline-flex size-9 items-center justify-center rounded-lg text-[#1a2e24] hover:bg-[#eef8f3]"
                     >
                       <Minus className="size-4" aria-hidden />
                     </button>
@@ -441,7 +453,7 @@ export function CustomerChatScreen({
                       type="button"
                       onClick={onClose}
                       aria-label="Close chat"
-                      className="inline-flex size-8 items-center justify-center rounded-lg text-ink/55 hover:bg-mist hover:text-ink"
+                      className="inline-flex size-9 items-center justify-center rounded-lg text-[#1a2e24] hover:bg-[#eef8f3]"
                     >
                       <X className="size-4" aria-hidden />
                     </button>
@@ -467,7 +479,7 @@ export function CustomerChatScreen({
         role="log"
         aria-label="Chat transcript"
         aria-live="polite"
-        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3 sm:px-4"
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-[#f4faf7] px-3 py-3 sm:px-4"
       >
         {loading ? (
           <ChatSkeleton />
@@ -522,7 +534,7 @@ export function CustomerChatScreen({
                 </p>
               </div>
             ) : (
-              <ol className="space-y-1.5">
+              <ol className="space-y-2.5">
                 {rows.map((row) => (
                   <li key={row.message.id}>
                     {row.showDivider ? (
@@ -585,13 +597,41 @@ export function CustomerChatScreen({
             ) : null}
             <ChatTypingIndicator
               visible={peerTyping}
-              label="Agent is typing…"
+              label={`${agentName.split(" ")[0] || "Agent"} is typing…`}
               tone="customer"
             />
-            {voiceBusy ? null : (
-              <>
+            {voiceBusy ? (
+              <ChatVoiceRecorder
+                disabled={sending || !canSend}
+                sending={sending}
+                tone="customer"
+                onPhaseChange={(phase) => {
+                  const busy = phase !== "idle";
+                  setVoiceBusy(busy);
+                  if (busy) clearTyping();
+                }}
+                onSend={async (voiceDraft) => {
+                  const ok = await sendVoiceNote({
+                    blob: voiceDraft.blob,
+                    mimeType: voiceDraft.mimeType,
+                    durationMs: voiceDraft.durationMs,
+                    replyToMessageId: replyTo?.id ?? null,
+                  });
+                  if (ok) {
+                    clearTyping();
+                    setReplyTo(null);
+                  }
+                  return ok;
+                }}
+              />
+            ) : (
+              <div className="flex items-end gap-1.5 rounded-[1.35rem] border border-[#d7e8df] bg-white px-2 py-1.5 shadow-sm">
+                <ChatEmojiPicker
+                  disabled={sending || !canSend}
+                  onPick={insertEmoji}
+                />
                 <label className="sr-only" htmlFor={COMPOSER_ID}>
-                  Message to your agent
+                  Message to {agentName}
                 </label>
                 <textarea
                   id={COMPOSER_ID}
@@ -603,92 +643,70 @@ export function CustomerChatScreen({
                     signalTyping();
                   }}
                   onKeyDown={onComposerKeyDown}
-                  rows={2}
+                  rows={1}
                   disabled={sending || !canSend}
                   enterKeyHint="send"
                   placeholder="Write a message…"
-                  className="w-full resize-none rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink outline-none ring-canopy/40 focus:ring-2 disabled:opacity-60"
+                  className="max-h-28 min-h-[2.5rem] flex-1 resize-none bg-transparent px-1.5 py-2 text-[16px] leading-5 text-[#12241c] outline-none disabled:opacity-60"
                 />
-              </>
-            )}
-            <div
-              className={cn(
-                "flex items-center gap-2",
-                voiceBusy ? "w-full" : "justify-between",
-              )}
-            >
-              <div
-                className={cn(
-                  "flex min-w-0 items-center gap-2",
-                  voiceBusy ? "w-full" : null,
-                )}
-              >
-                {voiceBusy ? null : (
-                  <ChatEmojiPicker
-                    disabled={sending || !canSend}
-                    onPick={insertEmoji}
-                  />
-                )}
-                <div className={cn(voiceBusy ? "w-full" : "shrink-0")}>
-                  <ChatVoiceRecorder
-                    disabled={sending || !canSend}
-                    sending={sending}
-                    tone="customer"
-                    onPhaseChange={(phase) => {
-                      const busy = phase !== "idle";
-                      setVoiceBusy(busy);
-                      if (busy) clearTyping();
-                    }}
-                    onSend={async (voiceDraft) => {
-                      const ok = await sendVoiceNote({
-                        blob: voiceDraft.blob,
-                        mimeType: voiceDraft.mimeType,
-                        durationMs: voiceDraft.durationMs,
-                        replyToMessageId: replyTo?.id ?? null,
-                      });
-                      if (ok) {
-                        clearTyping();
-                        setReplyTo(null);
+                <div className="relative size-10 shrink-0">
+                  {chatComposerTrailingAction({ body: draft, voiceBusy }) ===
+                  "send" ? (
+                    <button
+                      type="button"
+                      onClick={() => void submit()}
+                      disabled={
+                        !customerChatComposerCanSubmit({
+                          body: draft,
+                          pending: sending,
+                          canSend,
+                        })
                       }
-                      return ok;
-                    }}
-                  />
+                      aria-label="Send message"
+                      className="inline-flex size-10 items-center justify-center rounded-full bg-[#0f6b4c] text-white hover:bg-[#0c5740] disabled:opacity-50"
+                    >
+                      {sending ? (
+                        <span className="text-[10px] font-bold">…</span>
+                      ) : (
+                        <Send className="size-4" aria-hidden />
+                      )}
+                    </button>
+                  ) : (
+                    <div className="flex size-10 items-center justify-center">
+                      <ChatVoiceRecorder
+                        disabled={sending || !canSend}
+                        sending={sending}
+                        tone="customer"
+                        onPhaseChange={(phase) => {
+                          const busy = phase !== "idle";
+                          setVoiceBusy(busy);
+                          if (busy) clearTyping();
+                        }}
+                        onSend={async (voiceDraft) => {
+                          const ok = await sendVoiceNote({
+                            blob: voiceDraft.blob,
+                            mimeType: voiceDraft.mimeType,
+                            durationMs: voiceDraft.durationMs,
+                            replyToMessageId: replyTo?.id ?? null,
+                          });
+                          if (ok) {
+                            clearTyping();
+                            setReplyTo(null);
+                          }
+                          return ok;
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
-                {voiceBusy ? null : (
-                  <p className="min-w-0 text-[11px] leading-4 text-ink/40">
-                    <span className="hidden sm:inline">
-                      Enter to send · Shift+Enter for a new line
-                    </span>
-                    {remaining <= 200 ? (
-                      <span>
-                        <span className="hidden sm:inline"> · </span>
-                        {remaining} left
-                      </span>
-                    ) : null}
-                  </p>
-                )}
               </div>
-              {voiceBusy ? null : (
-                <button
-                  type="button"
-                  onClick={() => void submit()}
-                  disabled={
-                    !customerChatComposerCanSubmit({
-                      body: draft,
-                      pending: sending,
-                      canSend,
-                    })
-                  }
-                  aria-label="Send message"
-                  className="shrink-0 rounded-xl bg-canopy px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-canopy-deep disabled:opacity-50"
-                >
-                  {sending ? "Sending…" : "Send"}
-                </button>
-              )}
-            </div>
+            )}
+            {remaining <= 200 && !voiceBusy ? (
+              <p className="text-[12px] text-[#7a9a8b]">{remaining} left</p>
+            ) : null}
             {sendError ? (
               <div className="space-y-2" role="alert">
-                <p className="text-[12px] font-medium text-signal">
+                <p className="text-[13px] font-medium text-signal">
                   {sendError.message} Your message was kept.
                 </p>
                 {verificationRequired ? (
@@ -746,14 +764,14 @@ function AgentAvatar({
       <img
         src={photoUrl}
         alt={name}
-        className="size-10 shrink-0 rounded-full object-cover ring-2 ring-canopy/15"
+        className="size-11 shrink-0 rounded-full object-cover ring-2 ring-[#d7e8df]"
       />
     );
   }
   return (
     <span
       aria-hidden
-      className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-canopy text-[12px] font-bold text-white shadow-sm"
+      className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-[#0f6b4c] text-[13px] font-bold text-white shadow-sm"
     >
       {initials}
     </span>
@@ -792,7 +810,9 @@ function CustomerChatRow({
   const mine = align === "right";
   const sms = message.channel === "SMS";
   const automationBadge = customerSmsAutomationBadge(message.payload);
-  const label = mine ? "You" : message.senderName || "Your Agent";
+  const label = mine
+    ? "You"
+    : message.senderName?.trim() || presentCustomerChatAgentName(null);
   const body = customerChatMessageBody(message);
   const deleted = Boolean(message.deletedAt);
   const voice = deleted
@@ -804,107 +824,119 @@ function CustomerChatRow({
       : { kind: "none" as const };
   const sentAt = new Date(message.createdAt).toLocaleString("en-CA");
 
+  const bubble = (
+    <>
+      {grouped ? (
+        <p
+          className={cn(
+            "mb-0.5 text-[12px] font-medium text-[#5b7a6c]",
+            mine ? "text-right" : "text-left",
+          )}
+        >
+          {sms ? <span className="mr-1 font-semibold">SMS</span> : null}
+          {automationBadge ? (
+            <span className="mr-1 font-semibold">{automationBadge}</span>
+          ) : null}
+          {sentAt}
+        </p>
+      ) : (
+        <p
+          className={cn(
+            "mb-0.5 text-[13px] font-semibold",
+            mine ? "text-right text-[#0c5740]" : "text-[#1a2e24]",
+          )}
+        >
+          {label}
+          {sms ? (
+            <span className="ml-1.5 rounded bg-[#eef8f3] px-1 py-px text-[10px] font-bold uppercase tracking-wide text-[#3d6a57]">
+              SMS
+            </span>
+          ) : null}
+          {automationBadge ? (
+            <span className="ml-1.5 rounded bg-[#eef8f3] px-1 py-px text-[10px] font-semibold tracking-wide text-[#3d6a57]">
+              {automationBadge}
+            </span>
+          ) : null}
+          <span className="ml-1.5 font-medium text-[#5b7a6c]">{sentAt}</span>
+        </p>
+      )}
+      {message.replyTo ? (
+        <div className="mb-1">
+          <ChatQuotedPreview
+            quote={message.replyTo}
+            compact
+            onNavigate={() => onNavigateQuote(message.replyTo!.id)}
+          />
+        </div>
+      ) : null}
+      {voice ? (
+        <ChatVoicePlayer
+          src={customerChatVoiceAudioRoute(message.id, voice.id)}
+          durationMs={voice.durationMs}
+          tone={mine ? "outgoing" : "incoming"}
+        />
+      ) : listingShare.kind !== "none" ? (
+        <ChatListingShareCard payload={message.payload} />
+      ) : (
+        <div
+          className={cn(
+            "rounded-2xl px-3.5 py-2.5 text-[16px] leading-6 shadow-sm",
+            deleted
+              ? "bg-[#eef8f3] italic text-[#5b7a6c] ring-1 ring-[#d7e8df]"
+              : mine
+                ? "bg-[#d8f3e7] text-[#12241c]"
+                : "bg-white text-[#12241c] ring-1 ring-[#d7e8df]",
+          )}
+        >
+          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {body}
+          </p>
+        </div>
+      )}
+      <ChatReceiptLabel
+        isOwnMessage={mine}
+        messageCreatedAt={message.createdAt}
+        deliveredAt={message.deliveredAt}
+        peerLastReadAt={peerLastReadAt}
+      />
+      <ChatReactionBar
+        reactions={message.reactions ?? []}
+        onToggle={onReact}
+      />
+    </>
+  );
+
   return (
     <div
       id={`chat-msg-${message.id}`}
       className={cn(
         "flex min-w-0 rounded-xl transition",
-        highlighted ? "bg-canopy/5 ring-1 ring-canopy/20" : null,
+        highlighted ? "bg-[#e7f6ef] ring-1 ring-[#0f6b4c]/20" : null,
         mine ? "justify-end" : "justify-start",
       )}
     >
       <div
-        className={cn("min-w-0 max-w-[min(85%,28rem)]", mine ? "items-end" : "items-start")}
+        className={cn(
+          "min-w-0 max-w-[min(88%,32rem)]",
+          mine ? "items-end" : "items-start",
+        )}
         aria-label={`${label}, ${sentAt}${sms ? ", SMS" : ""}${
           automationBadge ? `, ${automationBadge}` : ""
         }${deleted ? ", deleted" : ""}`}
       >
-        {grouped ? (
-          <p
-            className={cn(
-              "mb-0.5 text-[10px] font-medium text-ink/40",
-              mine ? "text-right" : "text-left",
-            )}
+        {!deleted && !sms ? (
+          <ChatMessageActions
+            align={mine ? "end" : "start"}
+            canReply
+            canReact
+            onReply={onReply}
+            onReact={onReact}
           >
-            {sms ? <span className="mr-1 font-semibold">SMS</span> : null}
-            {automationBadge ? (
-              <span className="mr-1 font-semibold">{automationBadge}</span>
-            ) : null}
-            {sentAt}
-          </p>
+            {bubble}
+          </ChatMessageActions>
         ) : (
-          <p
-            className={cn(
-              "mb-0.5 text-[11px] font-semibold",
-              mine ? "text-right text-canopy-deep" : "text-ink/65",
-            )}
-          >
-            {label}
-            {sms ? (
-              <span className="ml-1.5 rounded bg-mist px-1 py-px text-[9px] font-bold uppercase tracking-wide text-ink/55">
-                SMS
-              </span>
-            ) : null}
-            {automationBadge ? (
-              <span className="ml-1.5 rounded bg-mist px-1 py-px text-[9px] font-semibold tracking-wide text-ink/55">
-                {automationBadge}
-              </span>
-            ) : null}
-            <span className="ml-1.5 font-medium text-ink/40">{sentAt}</span>
-          </p>
+          bubble
         )}
-        {message.replyTo ? (
-          <div className="mb-1">
-            <ChatQuotedPreview
-              quote={message.replyTo}
-              compact
-              onNavigate={() => onNavigateQuote(message.replyTo!.id)}
-            />
-          </div>
-        ) : null}
-        {voice ? (
-          <ChatVoicePlayer
-            src={customerChatVoiceAudioRoute(message.id, voice.id)}
-            durationMs={voice.durationMs}
-            tone={mine ? "outgoing" : "incoming"}
-          />
-        ) : listingShare.kind !== "none" ? (
-          <ChatListingShareCard payload={message.payload} />
-        ) : (
-          <div
-            className={cn(
-              "rounded-2xl px-3 py-2 text-sm leading-5 shadow-sm",
-              deleted
-                ? "bg-mist italic text-ink/55 ring-1 ring-line"
-                : mine
-                  ? "bg-canopy text-white"
-                  : "bg-white text-ink ring-1 ring-canopy/10",
-            )}
-          >
-            <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-              {body}
-            </p>
-          </div>
-        )}
-        <ChatReceiptLabel
-          isOwnMessage={mine}
-          messageCreatedAt={message.createdAt}
-          deliveredAt={message.deliveredAt}
-          peerLastReadAt={peerLastReadAt}
-        />
-        <div className="mt-1 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onReply}
-            className="text-[11px] font-semibold text-ink/45 hover:text-canopy-deep"
-          >
-            Reply
-          </button>
-        </div>
-        <ChatReactionBar
-          reactions={message.reactions ?? []}
-          onToggle={onReact}
-        />
       </div>
     </div>
   );

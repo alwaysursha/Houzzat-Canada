@@ -1,6 +1,5 @@
 "use client";
 
-import { CHAT_REACTION_KEYS } from "@/lib/chat/emoji-catalog";
 import {
   chatQuotePreviewBody,
   type ChatQuotedMessage,
@@ -64,6 +63,10 @@ export function ChatQuotedPreview({
   );
 }
 
+/**
+ * Compact reaction badges — only when reactions exist.
+ * Adding reactions is via ChatMessageActions (hover / long-press).
+ */
 export function ChatReactionBar({
   reactions,
   onToggle,
@@ -73,6 +76,7 @@ export function ChatReactionBar({
   onToggle: (key: string) => void;
   disabled?: boolean;
 }) {
+  if (reactions.length === 0) return null;
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1">
       {reactions.map((reaction) => (
@@ -84,7 +88,7 @@ export function ChatReactionBar({
           aria-label={`React ${reaction.key}`}
           onClick={() => onToggle(reaction.key)}
           className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px]",
+            "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[12px]",
             reaction.reactedByMe
               ? "border-canopy/30 bg-canopy/10 text-canopy-deep"
               : "border-line bg-white text-ink/65 hover:border-canopy/25",
@@ -94,20 +98,6 @@ export function ChatReactionBar({
           <span className="font-semibold">{reaction.count}</span>
         </button>
       ))}
-      <div className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-line px-1 py-0.5">
-        {CHAT_REACTION_KEYS.map((key) => (
-          <button
-            key={key}
-            type="button"
-            disabled={disabled}
-            aria-label={`Add ${key}`}
-            onClick={() => onToggle(key)}
-            className="size-5 rounded text-[12px] hover:bg-mist disabled:opacity-50"
-          >
-            {key}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
@@ -131,7 +121,7 @@ export function ChatReceiptLabel({
   });
   if (!status) return null;
   return (
-    <p className="mt-0.5 text-right text-[10px] font-medium text-ink/40">
+    <p className="mt-0.5 text-right text-[12px] font-medium text-ink/50">
       {chatReceiptLabel(status)}
     </p>
   );

@@ -13,10 +13,11 @@ import type {
 } from "../src/lib/notifications/push";
 import {
   AGENT_CHAT_CUSTOMER_PUSH_BODY_FALLBACK,
+  AGENT_CHAT_CUSTOMER_PUSH_COMPOSE_HREF,
   AGENT_CHAT_CUSTOMER_PUSH_PREVIEW_MAX,
-  AGENT_CHAT_CUSTOMER_PUSH_TITLE,
   AGENT_CHAT_CUSTOMER_PUSH_TYPE,
   agentChatCustomerPushPreview,
+  agentChatCustomerPushTitle,
   buildAgentChatCustomerPushPayload,
   formatAgentChatCustomerEnqueueLog,
   formatAgentChatCustomerFcmResultLog,
@@ -34,6 +35,7 @@ import {
   isPushTypeEnabled,
   shellForAudience,
 } from "../src/lib/notifications/catalog";
+import { CUSTOMER_CHAT_GENERIC_UNREAD_COPY } from "../src/lib/customer-chat/floating-chat";
 import { CUSTOMER_CHAT_PAGE_HREF } from "../src/lib/customer-chat/query";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -161,14 +163,31 @@ function testPreviewAndPayload() {
     agentChatCustomerPushPreview(long).length <= AGENT_CHAT_CUSTOMER_PUSH_PREVIEW_MAX,
     true,
   );
+  assert.equal(
+    agentChatCustomerPushTitle("Ali Syed"),
+    "Ali Syed sent you a message",
+  );
+  assert.equal(
+    agentChatCustomerPushTitle(null),
+    CUSTOMER_CHAT_GENERIC_UNREAD_COPY,
+  );
+  assert.equal(
+    agentChatCustomerPushPreview("Voice note"),
+    "Sent you a voice message",
+  );
+  assert.equal(
+    agentChatCustomerPushPreview("An agent shared a property with you."),
+    "Shared a property with you",
+  );
   const payload = buildAgentChatCustomerPushPayload({
     body: "Hello from Ali",
+    senderName: "Ali Syed",
   });
   assert.equal(payload.type, "agent_chat");
-  assert.equal(payload.title, AGENT_CHAT_CUSTOMER_PUSH_TITLE);
+  assert.equal(payload.title, "Ali Syed sent you a message");
   assert.equal(payload.body, "Hello from Ali");
-  assert.equal(payload.href, CUSTOMER_CHAT_PAGE_HREF);
-  assert.equal(payload.href, "/account/chat");
+  assert.equal(payload.href, AGENT_CHAT_CUSTOMER_PUSH_COMPOSE_HREF);
+  assert.equal(payload.href, `${CUSTOMER_CHAT_PAGE_HREF}?compose=1`);
   assert.deepEqual(Object.keys(payload).sort(), ["body", "href", "title", "type"]);
 }
 
@@ -211,7 +230,11 @@ async function testHappyPathOnce() {
   assert.equal(deps.scheduled, 0);
   assert.equal(deps.pushes[0]?.userId, CUSTOMER_A);
   assert.equal(deps.pushes[0]?.payload.type, "agent_chat");
-  assert.equal(deps.pushes[0]?.payload.href, "/account/chat");
+  assert.equal(deps.pushes[0]?.payload.href, "/account/chat?compose=1");
+  assert.equal(
+    deps.pushes[0]?.payload.title,
+    "Ali Syed sent you a message",
+  );
   assert.equal(deps.loadLeadCalls, 1);
 }
 

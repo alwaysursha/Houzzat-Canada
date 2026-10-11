@@ -6,12 +6,18 @@
  * the SMS itself is the notification.
  *
  * Type `agent_chat` is consumer-only (houzzat shell). Do not reuse the
- * staff Chat-to-Agent push type. Deep link is `/account/chat`.
+ * staff Chat-to-Agent push type. Deep link is `/account/chat?compose=1`.
  *
  * Dedupe: `created === false` skips. One newly inserted Message.id → at
  * most one outer schedule.
  */
 import { CUSTOMER_CHAT_PAGE_HREF } from "@/lib/customer-chat/query";
+import {
+  CUSTOMER_CHAT_FALLBACK_AGENT_NAME,
+  CUSTOMER_CHAT_GENERIC_UNREAD_COPY,
+} from "@/lib/customer-chat/floating-chat";
+import { VOICE_NOTE_MESSAGE_BODY } from "@/lib/chat/voice-notes/constants";
+import { LISTING_SHARE_MESSAGE_BODY } from "@/lib/conversations/listing-share/payload";
 import { isPushTypeEnabled } from "@/lib/notifications/catalog";
 import {
   deliverPushToUsersNow,
@@ -27,8 +33,12 @@ import type {
 
 export const AGENT_CHAT_CUSTOMER_PUSH_TYPE = "agent_chat" as const;
 export const AGENT_CHAT_CUSTOMER_PUSH_PREVIEW_MAX = 120;
-export const AGENT_CHAT_CUSTOMER_PUSH_TITLE = "New message from your agent";
-export const AGENT_CHAT_CUSTOMER_PUSH_BODY_FALLBACK = "You received a new message";
+/** @deprecated Prefer agentChatCustomerPushTitle(agentName). Kept for selftests. */
+export const AGENT_CHAT_CUSTOMER_PUSH_TITLE = CUSTOMER_CHAT_GENERIC_UNREAD_COPY;
+export const AGENT_CHAT_CUSTOMER_PUSH_BODY_FALLBACK =
+  "You received a new message";
+export const AGENT_CHAT_CUSTOMER_PUSH_COMPOSE_HREF =
+  `${CUSTOMER_CHAT_PAGE_HREF}?compose=1` as const;
 
 export type AgentChatCustomerPushMessage = {
   id: string;
@@ -84,12 +94,28 @@ export function isAgentChatCustomerPushEligible(
   );
 }
 
+export function agentChatCustomerPushTitle(
+  senderName: string | null | undefined,
+): string {
+  const name = senderName?.trim();
+  if (!name || name === CUSTOMER_CHAT_FALLBACK_AGENT_NAME) {
+    return CUSTOMER_CHAT_GENERIC_UNREAD_COPY;
+  }
+  return `${name} sent you a message`;
+}
+
 export function agentChatCustomerPushPreview(
   body: string | null | undefined,
 ): string {
   if (body == null) return AGENT_CHAT_CUSTOMER_PUSH_BODY_FALLBACK;
   const normalized = body.replace(/\s+/g, " ").trim();
   if (!normalized) return AGENT_CHAT_CUSTOMER_PUSH_BODY_FALLBACK;
+  if (normalized === VOICE_NOTE_MESSAGE_BODY) {
+    return "Sent you a voice message";
+  }
+  if (normalized === LISTING_SHARE_MESSAGE_BODY) {
+    return "Shared a property with you";
+  }
   if (normalized.length <= AGENT_CHAT_CUSTOMER_PUSH_PREVIEW_MAX) {
     return normalized;
   }
@@ -103,12 +129,13 @@ export function agentChatCustomerPushPreview(
 
 export function buildAgentChatCustomerPushPayload(input: {
   body: string | null;
+  senderName?: string | null;
 }): PushPayload {
   return {
     type: AGENT_CHAT_CUSTOMER_PUSH_TYPE,
-    title: AGENT_CHAT_CUSTOMER_PUSH_TITLE,
+    title: agentChatCustomerPushTitle(input.senderName),
     body: agentChatCustomerPushPreview(input.body),
-    href: CUSTOMER_CHAT_PAGE_HREF,
+    href: AGENT_CHAT_CUSTOMER_PUSH_COMPOSE_HREF,
   };
 }
 
@@ -216,6 +243,7 @@ export async function notifyCustomerOfAgentChatMessage(
 
     const payload = buildAgentChatCustomerPushPayload({
       body: input.message.body,
+      senderName: input.message.senderName,
     });
     console.info(
       formatAgentChatCustomerEnqueueLog({

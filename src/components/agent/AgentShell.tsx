@@ -247,7 +247,7 @@ export function AgentShell({
 
   return (
     <AgentPresenceProvider>
-    <div className="flex min-h-dvh bg-mist text-ink">
+    <div className="flex h-dvh max-h-dvh overflow-hidden bg-mist text-ink">
       {/* Desktop sidebar */}
       <aside
         className={cn(
