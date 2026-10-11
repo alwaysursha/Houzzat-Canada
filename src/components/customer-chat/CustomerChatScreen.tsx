@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -14,14 +15,25 @@ import { AccountVerifyEmailAction } from "@/components/account/AccountVerifyEmai
 import { ChatConversationSearch } from "@/components/chat/ChatConversationSearch";
 import { ChatEmojiPicker } from "@/components/chat/ChatEmojiPicker";
 import {
+  ChatListingShareCard,
+  resolveChatListingShareView,
+} from "@/components/chat/ChatListingShareCard";
+import {
   ChatQuotedPreview,
   ChatReactionBar,
   ChatReceiptLabel,
 } from "@/components/chat/ChatMessageExtras";
+import { ChatTypingIndicator } from "@/components/chat/ChatTypingIndicator";
 import { ChatVoicePlayer } from "@/components/chat/ChatVoicePlayer";
 import { ChatVoiceRecorder } from "@/components/chat/ChatVoiceRecorder";
+import { useChatTypingPublisher } from "@/components/chat/useChatTypingPublisher";
 import { useCustomerChatThread } from "@/components/customer-chat/useCustomerChatThread";
 import { insertEmojiAtCursor } from "@/lib/chat/emoji-catalog";
+import {
+  customerChatTypingRoute,
+  peerTypingFromPayload,
+  postTypingActive,
+} from "@/lib/chat/typing/client";
 import {
   customerChatVoiceAudioRoute,
   messageVoiceNoteAttachment,
@@ -44,9 +56,12 @@ import {
 import {
   CUSTOMER_CHAT_FLOATING_SIZE,
   clampCustomerChatWindowPosition,
+  customerChatAgentAvailabilityLabel,
   formatCustomerChatListingBanner,
+  presentCustomerChatAgentAvailability,
   presentCustomerChatAgentInitials,
   presentCustomerChatAgentName,
+  type CustomerChatAgentAvailability,
   type CustomerChatListingContext,
   type CustomerChatWindowPosition,
 } from "@/lib/customer-chat/floating-chat";
@@ -104,6 +119,24 @@ export function CustomerChatScreen({
   const [pendingNavigateId, setPendingNavigateId] = useState<string | null>(
     null,
   );
+  const conversationId = payload?.conversation?.id ?? null;
+  const blocked = Boolean(payload?.blocked) || sendError?.kind === "blocked";
+  const canSend = Boolean(payload?.canSend) && !blocked && !loadError;
+  const peerTyping = peerTypingFromPayload(payload?.peerTyping);
+  const typingEnabled =
+    chatVisible && canSend && !voiceBusy && Boolean(conversationId);
+  const publishTyping = useCallback(
+    (active: boolean) =>
+      postTypingActive(customerChatTypingRoute(), active, {
+        keepalive: !active,
+      }),
+    [],
+  );
+  const { signalTyping, clearTyping } = useChatTypingPublisher({
+    enabled: typingEnabled,
+    scopeKey: conversationId,
+    publish: publishTyping,
+  });
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
@@ -122,8 +155,6 @@ export function CustomerChatScreen({
   const lastMessageId =
     payload?.messages[payload.messages.length - 1]?.id ?? null;
 
-  const blocked = Boolean(payload?.blocked) || sendError?.kind === "blocked";
-  const canSend = Boolean(payload?.canSend) && !blocked && !loadError;
   const dividerMessageId = payload
     ? customerUnreadDividerMessageId(
         payload.messages,
@@ -138,6 +169,9 @@ export function CustomerChatScreen({
   const agentName = presentCustomerChatAgentName(payload?.agent);
   const agentInitials = presentCustomerChatAgentInitials(payload?.agent);
   const agentPhoto = payload?.agent?.photoUrl?.trim() || null;
+  const agentAvailability = presentCustomerChatAgentAvailability(
+    payload?.agentAvailability,
+  );
   const listingBanner = formatCustomerChatListingBanner(listingContext);
 
   useLayoutEffect(() => {
@@ -204,6 +238,7 @@ export function CustomerChatScreen({
       replyToMessageId: replyTo?.id ?? null,
     });
     if (sent) {
+      clearTyping();
       setDraft("");
       setReplyTo(null);
       stickToBottomRef.current = true;
@@ -222,6 +257,7 @@ export function CustomerChatScreen({
       selectionEnd: end,
     });
     setDraft(next.value);
+    signalTyping();
     requestAnimationFrame(() => {
       if (!textareaRef.current) return;
       textareaRef.current.focus();
@@ -369,15 +405,14 @@ export function CustomerChatScreen({
                     <p className="mt-0.5 truncate text-sm text-ink/55">
                       {agentName}
                     </p>
+                    <AgentAvailabilityLine availability={agentAvailability} />
                   </>
                 ) : (
                   <>
                     <h2 className="truncate font-display text-lg text-ink">
                       {agentName}
                     </h2>
-                    <p className="truncate text-xs text-ink/50">
-                      HouzzatPRO Chat
-                    </p>
+                    <AgentAvailabilityLine availability={agentAvailability} />
                   </>
                 )}
               </div>
@@ -548,6 +583,11 @@ export function CustomerChatScreen({
                 }}
               />
             ) : null}
+            <ChatTypingIndicator
+              visible={peerTyping}
+              label="Agent is typing…"
+              tone="customer"
+            />
             {voiceBusy ? null : (
               <>
                 <label className="sr-only" htmlFor={COMPOSER_ID}>
@@ -558,7 +598,10 @@ export function CustomerChatScreen({
                   ref={textareaRef}
                   value={draft}
                   maxLength={CUSTOMER_CHAT_TEXT_MAX_LENGTH}
-                  onChange={(event) => setDraft(event.target.value)}
+                  onChange={(event) => {
+                    setDraft(event.target.value);
+                    signalTyping();
+                  }}
                   onKeyDown={onComposerKeyDown}
                   rows={2}
                   disabled={sending || !canSend}
@@ -591,7 +634,11 @@ export function CustomerChatScreen({
                     disabled={sending || !canSend}
                     sending={sending}
                     tone="customer"
-                    onPhaseChange={(phase) => setVoiceBusy(phase !== "idle")}
+                    onPhaseChange={(phase) => {
+                      const busy = phase !== "idle";
+                      setVoiceBusy(busy);
+                      if (busy) clearTyping();
+                    }}
                     onSend={async (voiceDraft) => {
                       const ok = await sendVoiceNote({
                         blob: voiceDraft.blob,
@@ -599,7 +646,10 @@ export function CustomerChatScreen({
                         durationMs: voiceDraft.durationMs,
                         replyToMessageId: replyTo?.id ?? null,
                       });
-                      if (ok) setReplyTo(null);
+                      if (ok) {
+                        clearTyping();
+                        setReplyTo(null);
+                      }
                       return ok;
                     }}
                   />
@@ -652,6 +702,32 @@ export function CustomerChatScreen({
         </div>
       )}
     </section>
+  );
+}
+
+function AgentAvailabilityLine({
+  availability,
+}: {
+  availability: CustomerChatAgentAvailability;
+}) {
+  const label = customerChatAgentAvailabilityLabel(availability);
+  return (
+    <p
+      className="mt-0.5 flex h-4 items-center gap-1.5 text-xs text-ink/50"
+      role="status"
+      aria-label={label}
+    >
+      <span
+        className={cn(
+          "size-1.5 shrink-0 rounded-full",
+          availability === "online" && "bg-emerald-500",
+          availability === "away" && "bg-amber-500",
+          availability === "offline" && "bg-ink/30",
+        )}
+        aria-hidden
+      />
+      <span className="truncate font-medium">{label}</span>
+    </p>
   );
 }
 
@@ -722,6 +798,10 @@ function CustomerChatRow({
   const voice = deleted
     ? null
     : messageVoiceNoteAttachment(message.attachments);
+  const listingShare =
+    !deleted && !voice && message.kind === "TEXT" && message.channel === "CHAT"
+      ? resolveChatListingShareView(message.payload)
+      : { kind: "none" as const };
   const sentAt = new Date(message.createdAt).toLocaleString("en-CA");
 
   return (
@@ -788,6 +868,8 @@ function CustomerChatRow({
             durationMs={voice.durationMs}
             tone={mine ? "outgoing" : "incoming"}
           />
+        ) : listingShare.kind !== "none" ? (
+          <ChatListingShareCard payload={message.payload} />
         ) : (
           <div
             className={cn(

@@ -72,6 +72,36 @@ export function presentCustomerChatAgentInitials(
   return `${parts[0]![0] ?? ""}${parts[parts.length - 1]![0] ?? ""}`.toUpperCase();
 }
 
+/** Coarse customer-facing availability. Missing/invalid → offline (never invent Online). */
+export type CustomerChatAgentAvailability = "online" | "away" | "offline";
+
+export function presentCustomerChatAgentAvailability(
+  value: string | null | undefined,
+): CustomerChatAgentAvailability {
+  if (value === "online" || value === "away" || value === "offline") {
+    return value;
+  }
+  return "offline";
+}
+
+export function customerChatAgentAvailabilityLabel(
+  value: CustomerChatAgentAvailability,
+): string {
+  switch (value) {
+    case "online":
+      return "Online";
+    case "away":
+      return "Away";
+    case "offline":
+      return "Offline";
+    default: {
+      const _exhaustive: never = value;
+      void _exhaustive;
+      return "Offline";
+    }
+  }
+}
+
 export function formatCustomerChatListingBanner(
   listing: CustomerChatListingContext | null | undefined,
 ): string | null {

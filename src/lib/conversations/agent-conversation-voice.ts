@@ -8,6 +8,10 @@ import {
   loadAuthorizedVoiceAttachmentAudio,
   type VoiceAttachmentLookupDb,
 } from "@/lib/chat/voice-notes/attachments";
+import {
+  clearConversationTypingOnSend,
+  type ConversationTypingDb,
+} from "@/lib/chat/typing/update";
 import { readVoiceNoteMultipart } from "@/lib/chat/voice-notes/http";
 import {
   sendConversationVoiceNote,
@@ -94,6 +98,12 @@ export async function sendAgentLeadVoiceNote(
     return { ok: false, status: result.status, body: result.body };
   }
 
+  await clearConversationTypingOnSend(db as unknown as ConversationTypingDb, {
+    workspaceId: lead.workspaceId,
+    conversationId: conversation.id,
+    side: "agent",
+  }).catch(() => undefined);
+
   if (result.created) {
     try {
       await recordConversationLeadActivity(db, {
@@ -178,6 +188,17 @@ export async function sendAgentLeadVoiceNote(
   };
 }
 
+/**
+ * Private R2 voice playback for agents.
+ *
+ * Policy (aligned with voice upload / listing-share send):
+ * - Current assignee may play.
+ * - Team/admin viewers who canAccessLead but are not the assignee cannot play.
+ * - Cross-workspace / unauthorized → Not found (no existence leak via access gate).
+ * - Disabled staff are rejected earlier by requireAgentContextFromRequest.
+ *
+ * Customer playback is handled separately via customer ownership resolution.
+ */
 export async function loadAgentLeadVoiceAttachmentAudio(
   db: AgentConversationSendDb & VoiceNoteSendDb & VoiceAttachmentLookupDb,
   ctx: AgentOrgContext,
@@ -188,6 +209,10 @@ export async function loadAgentLeadVoiceAttachmentAudio(
   const lead = await loadAccessibleAgentConversationLead(db, ctx, leadId);
   if (!lead?.workspaceId) {
     return Response.json({ error: "Not found" }, { status: 404 });
+  }
+  // Match upload: private media is assignee-only, even when transcript GET is wider.
+  if (!lead.assignedAgentId || lead.assignedAgentId !== ctx.user.id) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   const conversation = await findLeadConversation(db, {
     workspaceId: lead.workspaceId,

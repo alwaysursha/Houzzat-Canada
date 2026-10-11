@@ -9,6 +9,16 @@ import {
 } from "@/lib/chat/message-context";
 import { smsAutomationTranscriptLabel } from "@/lib/platform/sms-automations/catalog";
 
+/** Lightweight marker check — avoids importing listing-share (server snapshot deps). */
+function isListingShareCardPayload(payload: unknown): boolean {
+  return Boolean(
+    payload &&
+      typeof payload === "object" &&
+      !Array.isArray(payload) &&
+      (payload as { card?: unknown }).card === "LISTING_SHARE",
+  );
+}
+
 export const V2_CHAT_RESOURCE_KEY = "conversation-chat";
 export const V2_CHAT_TEXT_MAX_LENGTH = 4000;
 export const V2_CHAT_DELETED_TOMBSTONE = "This message was deleted";
@@ -399,6 +409,13 @@ export function shouldGroupV2ChatMessage(
   if (previous.senderUserId !== current.senderUserId) return false;
   if (previous.channel !== current.channel) return false;
   if (v2SmsAutomationBadge(previous.payload) || v2SmsAutomationBadge(current.payload)) {
+    return false;
+  }
+  // LISTING_SHARE cards stand alone (same pattern as SMS automation badges).
+  if (
+    isListingShareCardPayload(previous.payload) ||
+    isListingShareCardPayload(current.payload)
+  ) {
     return false;
   }
   return previous.senderName === current.senderName;

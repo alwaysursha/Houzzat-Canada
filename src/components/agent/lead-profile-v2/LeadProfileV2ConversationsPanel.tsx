@@ -7,6 +7,7 @@ import { LeadEmailForm } from "@/components/agent/LeadEmailForm";
 import { LeadProfileV2ChatPane } from "@/components/agent/lead-profile-v2/LeadProfileV2ChatPane";
 import type { V2ChatSurface } from "@/lib/agent/lead-profile-v2/chat-query";
 import type {
+  LeadProfileV2ChatMessage,
   LeadProfileV2ChatPanel,
   LeadProfileV2EmailsPanel,
 } from "@/lib/agent/lead-profile-v2/types";
@@ -55,6 +56,9 @@ export function LeadProfileV2ConversationsPanel({
       durationMs: number;
       replyToMessageId?: string | null;
     }) => Promise<boolean>;
+    onSendListingShare?: (
+      message: LeadProfileV2ChatMessage,
+    ) => Promise<boolean>;
     onReact?: (messageId: string, key: string) => Promise<boolean>;
     onSearch?: (
       query: string,
@@ -122,6 +126,7 @@ export function LeadProfileV2ConversationsPanel({
             onLoadOlder={chat.onLoadOlder}
             onSend={chat.onSend}
             onSendVoice={chat.onSendVoice}
+            onSendListingShare={chat.onSendListingShare}
             onReact={chat.onReact}
             onSearch={chat.onSearch}
             onEnsureMessage={chat.onEnsureMessage}

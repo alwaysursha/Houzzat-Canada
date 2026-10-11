@@ -20,6 +20,8 @@ import {
   isCustomerChatMobileViewport,
   normalizeCustomerChatDraft,
   normalizeCustomerChatListingContext,
+  customerChatAgentAvailabilityLabel,
+  presentCustomerChatAgentAvailability,
   presentCustomerChatAgentInitials,
   presentCustomerChatAgentName,
   readCustomerChatBatchKey,
@@ -256,8 +258,33 @@ function testAgentIdentityFallback() {
   const screen = read("src/components/customer-chat/CustomerChatScreen.tsx");
   assert.ok(screen.includes("presentCustomerChatAgentName"));
   assert.ok(screen.includes("AgentAvatar"));
+  assert.ok(screen.includes("AgentAvailabilityLine"));
+  assert.ok(screen.includes("presentCustomerChatAgentAvailability"));
+  assert.ok(screen.includes("customerChatAgentAvailabilityLabel"));
   assert.equal(screen.includes("Usually replies"), false);
-  assert.equal(screen.includes("Online"), false);
+  assert.equal(screen.includes("response time"), false);
+  assert.equal(screen.includes("presenceUntil"), false);
+  assert.equal(screen.includes("availabilityPreference"), false);
+
+  assert.equal(presentCustomerChatAgentAvailability("online"), "online");
+  assert.equal(presentCustomerChatAgentAvailability("away"), "away");
+  assert.equal(presentCustomerChatAgentAvailability("offline"), "offline");
+  assert.equal(presentCustomerChatAgentAvailability(undefined), "offline");
+  assert.equal(presentCustomerChatAgentAvailability(null), "offline");
+  assert.equal(presentCustomerChatAgentAvailability("ONLINE"), "offline");
+  assert.equal(presentCustomerChatAgentAvailability(""), "offline");
+  assert.equal(customerChatAgentAvailabilityLabel("online"), "Online");
+  assert.equal(customerChatAgentAvailabilityLabel("away"), "Away");
+  assert.equal(customerChatAgentAvailabilityLabel("offline"), "Offline");
+
+  const hook = read("src/components/customer-chat/useCustomerChatThread.ts");
+  assert.ok(hook.includes("agentAvailability"));
+  assert.ok(hook.includes('agentAvailability: "offline"'));
+  assert.ok(hook.includes("live && prev"));
+  assert.ok(hook.includes("presentCustomerChatAgentAvailability"));
+  assert.ok(
+    hook.includes("agentAvailability: presentCustomerChatAgentAvailability"),
+  );
 }
 
 function testAutoOpenBatchDedupAndDismissal() {

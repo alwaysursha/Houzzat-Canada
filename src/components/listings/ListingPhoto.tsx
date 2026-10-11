@@ -1,6 +1,7 @@
 "use client";
 
-import Image from "next/image";
+import Image, { type ImageProps } from "next/image";
+import type { SyntheticEvent } from "react";
 import { cn } from "@/lib/utils";
 
 type ListingPhotoProps = {
@@ -11,6 +12,7 @@ type ListingPhotoProps = {
   priority?: boolean;
   quality?: number;
   draggable?: boolean;
+  onError?: (event: SyntheticEvent<HTMLImageElement, Event>) => void;
 } & (
   | { fill: true; width?: never; height?: never }
   | { fill?: false; width: number; height: number }
@@ -31,6 +33,7 @@ export function ListingPhoto({
   priority,
   quality,
   draggable,
+  onError,
 }: ListingPhotoProps) {
   const useNextImage =
     src.includes("images.unsplash.com") || src.startsWith("/");
@@ -49,9 +52,12 @@ export function ListingPhoto({
         referrerPolicy="no-referrer"
         draggable={draggable}
         sizes={sizes}
+        onError={onError}
       />
     );
   }
+
+  const nextOnError = onError as ImageProps["onError"] | undefined;
 
   if (fill) {
     return (
@@ -64,6 +70,7 @@ export function ListingPhoto({
         priority={priority}
         quality={quality}
         draggable={draggable}
+        onError={nextOnError}
       />
     );
   }
@@ -79,6 +86,7 @@ export function ListingPhoto({
       priority={priority}
       quality={quality}
       draggable={draggable}
+      onError={nextOnError}
     />
   );
 }

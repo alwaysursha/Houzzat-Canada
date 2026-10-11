@@ -48,6 +48,17 @@ import {
   allowCustomerChatSend,
 } from "@/lib/conversations/customer-chat-rate-limit";
 import {
+  resolveAssignedAgentAvailability,
+  type CustomerAgentAvailability,
+} from "@/lib/chat/presence/state";
+import { loadAgentPresenceState, type AgentPresenceDb } from "@/lib/chat/presence/update";
+import { isTypingActive } from "@/lib/chat/typing/state";
+import {
+  clearConversationTypingOnSend,
+  loadConversationTypingState,
+  type ConversationTypingDb,
+} from "@/lib/chat/typing/update";
+import {
   ensureCustomerChatLead,
   frozenCustomerChatDisplayName,
   resolveCustomerChatLead,
@@ -79,6 +90,7 @@ import {
   handleToggleConversationReaction,
   loadAuthorizedMessageContextRows,
 } from "@/lib/conversations/chat-rich-features";
+import { presentListingSharePayload } from "@/lib/conversations/listing-share/payload";
 import { presentSmsAutomationMessagePayload } from "@/lib/conversations/sms-automation-payload";
 import { normalizeChatReactionKey } from "@/lib/chat/emoji-catalog";
 import { customerChatAgentPhotoAllowed } from "@/lib/customer-chat/floating-chat";
@@ -184,6 +196,13 @@ export type CustomerConversationGetPayload = {
   blocked: boolean;
   read: CustomerConversationReadView;
   agent: CustomerConversationAgentIdentity | null;
+  /** True when the assigned agent’s typing TTL is still active. */
+  peerTyping: boolean;
+  /**
+   * Coarse assigned-agent availability only. Never timestamps / preference /
+   * session details. Unassigned or ineligible → offline (never online).
+   */
+  agentAvailability: CustomerAgentAvailability;
 };
 
 export type CustomerConversationSendPayload = {
@@ -245,10 +264,13 @@ export function presentCustomerConversationMessage(
   },
 ): CustomerConversationMessage {
   const deleted = Boolean(row.deletedAt);
-  const payload =
-    !deleted && row.kind === "TEXT" && row.channel === "SMS"
-      ? presentSmsAutomationMessagePayload(row.payload)
-      : null;
+  let payload: CustomerConversationMessage["payload"] = null;
+  if (!deleted && row.kind === "TEXT" && row.channel === "SMS") {
+    payload = presentSmsAutomationMessagePayload(row.payload);
+  } else if (!deleted && row.kind === "TEXT" && row.channel === "CHAT") {
+    const share = presentListingSharePayload(row.payload);
+    payload = share ? (share as unknown as CustomerConversationMessage["payload"]) : null;
+  }
   return {
     id: row.id,
     channel: row.channel,
@@ -281,6 +303,8 @@ function emptyGetPayload(limit: number): CustomerConversationGetPayload {
       unreadCount: 0,
     },
     agent: null,
+    peerTyping: false,
+    agentAvailability: "offline",
   };
 }
 
@@ -594,7 +618,10 @@ async function loadExistingCustomerTranscript(
         >[0]["db"],
       }));
 
-  const [transcript, unread, agent] = await Promise.all([
+  const canResolvePresence =
+    Boolean(resolved.assignedAgentId) && resolved.assignedAgentEligible;
+
+  const [transcript, unread, agent, typing, presence] = await Promise.all([
     loadTranscriptPage(
       db,
       created.conversation,
@@ -609,6 +636,16 @@ async function loadExistingCustomerTranscript(
       workspaceId: resolved.workspaceId,
       assignedAgentId: resolved.assignedAgentId,
     }).catch(() => null),
+    loadConversationTypingState(db as unknown as ConversationTypingDb, {
+      workspaceId: resolved.workspaceId,
+      conversationId: created.conversation.id,
+    }).catch(() => null),
+    canResolvePresence && resolved.assignedAgentId
+      ? loadAgentPresenceState(
+          db as unknown as AgentPresenceDb,
+          resolved.assignedAgentId,
+        ).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   const payload: CustomerConversationGetPayload = {
@@ -631,6 +668,12 @@ async function loadExistingCustomerTranscript(
       unreadCount: unread.customerUnreadCount,
     },
     agent,
+    peerTyping: isTypingActive(typing?.agentTypingUntil ?? null),
+    agentAvailability: resolveAssignedAgentAvailability({
+      assignedAgentId: resolved.assignedAgentId,
+      assignedAgentEligible: resolved.assignedAgentEligible,
+      presence,
+    }),
   };
   return jsonResult(200, payload);
 }
@@ -746,6 +789,15 @@ export async function handleCustomerConversationSend(
     }
     return jsonResult(400, { error: "Invalid payload" });
   }
+
+  await clearConversationTypingOnSend(
+    deps.db as unknown as ConversationTypingDb,
+    {
+      workspaceId: ensured.workspaceId,
+      conversationId: created.conversation.id,
+      side: "customer",
+    },
+  ).catch(() => undefined);
 
   try {
     await recordConversationLeadActivity(deps.db, {

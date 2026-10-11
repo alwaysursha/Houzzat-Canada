@@ -38,6 +38,10 @@ import {
 } from "@/lib/tenancy/resolve-workspace-host";
 import { requireFullCustomerUser } from "@/lib/account";
 import { VOICE_NOTE_MESSAGE_BODY } from "@/lib/chat/voice-notes/constants";
+import {
+  clearConversationTypingOnSend,
+  type ConversationTypingDb,
+} from "@/lib/chat/typing/update";
 
 function jsonResult(
   status: number,
@@ -139,6 +143,15 @@ export async function handleCustomerConversationVoiceNoteSend(
   if (!result.ok) {
     return jsonResult(result.status, result.body);
   }
+
+  await clearConversationTypingOnSend(
+    deps.db as unknown as ConversationTypingDb,
+    {
+      workspaceId: ensured.workspaceId,
+      conversationId: conversation.id,
+      side: "customer",
+    },
+  ).catch(() => undefined);
 
   if (result.created) {
     try {

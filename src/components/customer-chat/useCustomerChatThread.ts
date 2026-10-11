@@ -33,6 +33,7 @@ import {
   conversationLiveVisible,
   mergeLiveConversationMessages,
 } from "@/lib/conversations/conversation-live-poll";
+import { presentCustomerChatAgentAvailability } from "@/lib/customer-chat/floating-chat";
 import type {
   CustomerChatGetPayload,
   CustomerChatLoadErrorKind,
@@ -54,6 +55,8 @@ function emptyPayload(): CustomerChatGetPayload {
       unreadCount: 0,
     },
     agent: null,
+    peerTyping: false,
+    agentAvailability: "offline",
   };
 }
 
@@ -167,6 +170,10 @@ export function useCustomerChatThread(
             blocked: json.blocked,
             read: json.read,
             agent: json.agent ?? prev.agent,
+            peerTyping: Boolean(json.peerTyping),
+            agentAvailability: presentCustomerChatAgentAvailability(
+              json.agentAvailability,
+            ),
             messages: mergeLiveConversationMessages(
               prev.messages,
               json.messages,

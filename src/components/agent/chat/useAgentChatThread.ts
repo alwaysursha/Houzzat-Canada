@@ -122,6 +122,7 @@ export function useAgentChatThread(
                   unread: json.unread,
                   smsSend: json.smsSend,
                   viewer: json.viewer,
+                  peerTyping: Boolean(json.peerTyping),
                   messages: mergeLiveConversationMessages(
                     prev.messages,
                     json.messages,
@@ -407,6 +408,24 @@ export function useAgentChatThread(
     [leadId, panel?.viewer.canMarkRead],
   );
 
+  /**
+   * Append a LISTING_SHARE message already created by the picker (M4V endpoint).
+   * Does not POST again — picker owns idempotency + retries.
+   */
+  const appendListingShareMessage = useCallback(
+    async (message: LeadProfileV2ChatMessage): Promise<boolean> => {
+      if (!panel?.viewer.canMarkRead) return false;
+      if (leadIdRef.current !== leadId) return false;
+      if (!message?.id) return false;
+      setPanel((prev) =>
+        prev ? appendV2ChatSentMessage(prev, message) : prev,
+      );
+      listenersRef.current?.onSent?.(message);
+      return true;
+    },
+    [leadId, panel?.viewer.canMarkRead],
+  );
+
   const reactToMessage = useCallback(
     async (messageId: string, key: string): Promise<boolean> => {
       try {
@@ -512,6 +531,7 @@ export function useAgentChatThread(
     loadOlder,
     send,
     sendVoiceNote,
+    appendListingShareMessage,
     reactToMessage,
     searchMessages,
     ensureMessageLoaded,

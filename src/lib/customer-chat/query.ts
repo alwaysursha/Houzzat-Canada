@@ -23,6 +23,16 @@ import type {
 } from "@/lib/customer-chat/types";
 import { smsAutomationTranscriptLabel } from "@/lib/platform/sms-automations/catalog";
 
+/** Lightweight marker check — avoids importing listing-share (server snapshot deps). */
+function isListingShareCardPayload(payload: unknown): boolean {
+  return Boolean(
+    payload &&
+      typeof payload === "object" &&
+      !Array.isArray(payload) &&
+      (payload as { card?: unknown }).card === "LISTING_SHARE",
+  );
+}
+
 export const CUSTOMER_CHAT_PAGE_HREF = "/account/chat";
 export const CUSTOMER_CHAT_GET_ROUTE = "/api/account/conversation";
 export const CUSTOMER_CHAT_SEND_ROUTE = "/api/account/conversation/messages";
@@ -170,6 +180,12 @@ export function shouldGroupCustomerChatMessage(
   if (previous.senderKind !== current.senderKind) return false;
   if (previous.channel !== current.channel) return false;
   if (customerSmsAutomationBadge(previous.payload) || customerSmsAutomationBadge(current.payload)) {
+    return false;
+  }
+  if (
+    isListingShareCardPayload(previous.payload) ||
+    isListingShareCardPayload(current.payload)
+  ) {
     return false;
   }
   return previous.senderName === current.senderName;

@@ -28,6 +28,7 @@ import { LaunchpadTodoCarousel } from "@/components/agent/LaunchpadTodoCarousel"
 import { TaskForm, TaskCompleteButton } from "@/components/agent/TaskForm";
 import { LeadQuickPopup } from "@/components/agent/LeadQuickPopup";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { AgentAvailabilityControl } from "@/components/agent/presence/AgentAvailabilityControl";
 import { fetchWithMobileCache, invalidateMobileCache } from "@/lib/mobile/mobile-cache";
 import { hardGo } from "@/lib/mobile/nav-back";
 import { pipelineLabel, pipelinePillClass } from "@/lib/agent/pipeline";
@@ -167,6 +168,11 @@ export function AgentMobileInstantShell({
         </div>
 
         <div className="flex items-center gap-1.5">
+          <AgentAvailabilityControl
+            tone="dark"
+            compact
+            showHint={false}
+          />
           <button
             type="button"
             onClick={handleRefresh}

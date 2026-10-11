@@ -78,6 +78,13 @@ export type CustomerChatGetPayload = {
   blocked: boolean;
   read: CustomerChatReadView;
   agent: CustomerChatAgentIdentity | null;
+  /** Peer (agent) typing — boolean only; never raw timestamps. */
+  peerTyping?: boolean;
+  /**
+   * Coarse assigned-agent availability. Never timestamps / preference / session.
+   * Missing → treat as offline on the client.
+   */
+  agentAvailability?: "online" | "away" | "offline";
 };
 
 export type CustomerChatSendPayload = {

@@ -26,6 +26,11 @@ import {
   canAccessLead,
   type AgentOrgContext,
 } from "@/lib/agent";
+import { isTypingActive } from "@/lib/chat/typing/state";
+import {
+  loadConversationTypingState,
+  type ConversationTypingDb,
+} from "@/lib/chat/typing/update";
 import {
   findLeadConversation,
   getOrCreateLeadConversation,
@@ -43,6 +48,7 @@ import {
   enrichChatMessages,
   loadAuthorizedMessageContextRows,
 } from "@/lib/conversations/chat-rich-features";
+import { presentListingSharePayload } from "@/lib/conversations/listing-share/payload";
 import { presentSmsAutomationMessagePayload } from "@/lib/conversations/sms-automation-payload";
 
 export const AGENT_CONVERSATION_PAGE_SIZE = 40;
@@ -158,6 +164,8 @@ export type AgentConversationReadPayload = {
     hasMore: boolean;
     nextCursor: string | null;
   };
+  /** True when the customer’s typing TTL is still active. */
+  peerTyping: boolean;
 };
 
 export type MarkAgentConversationReadPayload = {
@@ -277,6 +285,10 @@ function presentConversationPayload(
   if (row.kind === "SYSTEM_CARD") return row.payload ?? null;
   if (row.kind === "TEXT" && row.channel === "SMS") {
     return presentSmsAutomationMessagePayload(row.payload);
+  }
+  if (row.kind === "TEXT" && row.channel === "CHAT") {
+    const share = presentListingSharePayload(row.payload);
+    return share ? (share as unknown as Prisma.JsonValue) : null;
   }
   return null;
 }
@@ -409,9 +421,13 @@ export async function openAgentLeadConversation(
   });
   if (!created.ok) return null;
 
-  const [transcript, unread] = await Promise.all([
+  const [transcript, unread, typing] = await Promise.all([
     loadTranscriptPage(db, created.conversation, page, ctx.user.id),
     loadUnreadView(db, lead.workspaceId, lead.id),
+    loadConversationTypingState(db as unknown as ConversationTypingDb, {
+      workspaceId: lead.workspaceId,
+      conversationId: created.conversation.id,
+    }).catch(() => null),
   ]);
 
   const isAssignedAgent = lead.assignedAgentId === ctx.user.id;
@@ -443,6 +459,7 @@ export async function openAgentLeadConversation(
       hasMore: transcript.hasMore,
       nextCursor: transcript.nextCursor,
     },
+    peerTyping: isTypingActive(typing?.customerTypingUntil ?? null),
   };
 }
 

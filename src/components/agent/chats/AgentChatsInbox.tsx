@@ -365,6 +365,7 @@ function SelectedThread({
         onLoadOlder={chat.loadOlder}
         onSend={chat.send}
         onSendVoice={chat.sendVoiceNote}
+        onSendListingShare={chat.appendListingShareMessage}
         onReact={chat.reactToMessage}
         onSearch={chat.searchMessages}
         onEnsureMessage={chat.ensureMessageLoaded}

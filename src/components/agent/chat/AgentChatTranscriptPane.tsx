@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -10,12 +11,26 @@ import {
 import { ChatConversationSearch } from "@/components/chat/ChatConversationSearch";
 import { ChatEmojiPicker } from "@/components/chat/ChatEmojiPicker";
 import {
+  ChatListingShareCard,
+  resolveChatListingShareView,
+} from "@/components/chat/ChatListingShareCard";
+import { ChatListingSharePicker } from "@/components/chat/ChatListingSharePicker";
+import {
   ChatQuotedPreview,
   ChatReactionBar,
   ChatReceiptLabel,
 } from "@/components/chat/ChatMessageExtras";
+import { ChatQuickReplyPicker } from "@/components/chat/ChatQuickReplyPicker";
+import { ChatTypingIndicator } from "@/components/chat/ChatTypingIndicator";
 import { ChatVoicePlayer } from "@/components/chat/ChatVoicePlayer";
 import { ChatVoiceRecorder } from "@/components/chat/ChatVoiceRecorder";
+import { useChatTypingPublisher } from "@/components/chat/useChatTypingPublisher";
+import { insertQuickReplyAtCursor } from "@/lib/chat/quick-replies/client";
+import {
+  agentChatTypingRoute,
+  peerTypingFromPayload,
+  postTypingActive,
+} from "@/lib/chat/typing/client";
 import {
   V2_CHAT_TEXT_MAX_LENGTH,
   composerSendButtonLabel,
@@ -60,6 +75,7 @@ export function AgentChatTranscriptPane({
   onLoadOlder,
   onSend,
   onSendVoice,
+  onSendListingShare,
   onReact,
   onSearch,
   onEnsureMessage,
@@ -85,6 +101,7 @@ export function AgentChatTranscriptPane({
     durationMs: number;
     replyToMessageId?: string | null;
   }) => Promise<boolean>;
+  onSendListingShare?: (message: LeadProfileV2ChatMessage) => Promise<boolean>;
   onReact?: (messageId: string, key: string) => Promise<boolean>;
   onSearch?: (
     query: string,
@@ -124,6 +141,8 @@ export function AgentChatTranscriptPane({
   const firstMessageId = panel?.messages[0]?.id ?? null;
   const lastMessageId = panel?.messages[panel.messages.length - 1]?.id ?? null;
   const leadId = panel?.conversation.leadId ?? null;
+  const conversationId = panel?.conversation.id ?? null;
+  const peerTyping = peerTypingFromPayload(panel?.peerTyping);
   const inbound = latestInboundCustomerComposerChannel(panel?.messages ?? []);
   const nextComposer = nextAgentComposerChannelState({
     leadId,
@@ -170,6 +189,26 @@ export function AgentChatTranscriptPane({
     panel?.unread.dividerMessageId ?? null,
   );
   const peerLastReadAt = panel?.conversation.customerLastReadAt ?? null;
+  const typingEnabled =
+    canSend &&
+    !smsSelected &&
+    !voiceBusy &&
+    Boolean(leadId) &&
+    Boolean(conversationId);
+  const publishTyping = useCallback(
+    (active: boolean) => {
+      if (!leadId) return Promise.resolve(false);
+      return postTypingActive(agentChatTypingRoute(leadId), active, {
+        keepalive: !active,
+      });
+    },
+    [leadId],
+  );
+  const { signalTyping, clearTyping } = useChatTypingPublisher({
+    enabled: typingEnabled,
+    scopeKey: conversationId,
+    publish: publishTyping,
+  });
 
   useLayoutEffect(() => {
     const el = scrollerRef.current;
@@ -227,6 +266,7 @@ export function AgentChatTranscriptPane({
       selectionEnd: end,
     });
     setDraft(next.value);
+    if (!smsSelected) signalTyping();
     requestAnimationFrame(() => {
       if (!textareaRef.current) return;
       textareaRef.current.focus();
@@ -235,6 +275,33 @@ export function AgentChatTranscriptPane({
         next.selectionEnd,
       );
     });
+  }
+
+  /** Insert quick-reply body at caret. Never sends. Preserves replyTo. */
+  function insertQuickReply(body: string): boolean {
+    if (smsSelected) return false;
+    const el = textareaRef.current;
+    const start = el?.selectionStart ?? draft.length;
+    const end = el?.selectionEnd ?? draft.length;
+    const next = insertQuickReplyAtCursor({
+      value: draft,
+      text: body,
+      selectionStart: start,
+      selectionEnd: end,
+      maxLength: V2_CHAT_TEXT_MAX_LENGTH,
+    });
+    if (!next.ok) return false;
+    setDraft(next.value);
+    signalTyping();
+    requestAnimationFrame(() => {
+      if (!textareaRef.current) return;
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(
+        next.selectionStart,
+        next.selectionEnd,
+      );
+    });
+    return true;
   }
 
   async function navigateToMessage(messageId: string) {
@@ -286,6 +353,7 @@ export function AgentChatTranscriptPane({
       replyToMessageId: payload.replyToMessageId ?? null,
     });
     if (sent) {
+      clearTyping();
       setDraft("");
       setReplyTo(null);
       stickToBottomRef.current = true;
@@ -473,6 +541,13 @@ export function AgentChatTranscriptPane({
                   onCancel={() => setReplyTo(null)}
                 />
               ) : null}
+              {!smsSelected ? (
+                <ChatTypingIndicator
+                  visible={peerTyping}
+                  label="Customer is typing…"
+                  tone="agent"
+                />
+              ) : null}
               {voiceBusy ? null : (
                 <>
                   <label className="sr-only" htmlFor={composerId}>
@@ -483,7 +558,10 @@ export function AgentChatTranscriptPane({
                     ref={textareaRef}
                     value={draft}
                     maxLength={V2_CHAT_TEXT_MAX_LENGTH}
-                    onChange={(event) => setDraft(event.target.value)}
+                    onChange={(event) => {
+                      setDraft(event.target.value);
+                      if (!smsSelected) signalTyping();
+                    }}
                     onKeyDown={onComposerKeyDown}
                     rows={2}
                     disabled={sending || (smsSelected && !smsEnabled)}
@@ -512,10 +590,31 @@ export function AgentChatTranscriptPane({
                   )}
                 >
                   {voiceBusy ? null : (
-                    <ChatEmojiPicker
-                      onPick={insertEmoji}
-                      disabled={sending || (smsSelected && !smsEnabled)}
-                    />
+                    <>
+                      <ChatEmojiPicker
+                        onPick={insertEmoji}
+                        disabled={sending || (smsSelected && !smsEnabled)}
+                      />
+                      {!smsSelected ? (
+                        <ChatQuickReplyPicker
+                          onInsert={insertQuickReply}
+                          disabled={sending || !canSend}
+                        />
+                      ) : null}
+                      {!smsSelected && leadId && onSendListingShare ? (
+                        <ChatListingSharePicker
+                          leadId={leadId}
+                          disabled={sending || !canSend}
+                          onShared={async (message) => {
+                            const ok = await onSendListingShare(
+                              message as LeadProfileV2ChatMessage,
+                            );
+                            if (ok) clearTyping();
+                            return ok;
+                          }}
+                        />
+                      ) : null}
+                    </>
                   )}
                   {!smsSelected && onSendVoice ? (
                     <div className={cn(voiceBusy ? "w-full" : "shrink-0")}>
@@ -523,9 +622,11 @@ export function AgentChatTranscriptPane({
                         disabled={sending || !canSend}
                         sending={sending}
                         tone="agent"
-                        onPhaseChange={(phase) =>
-                          setVoiceBusy(phase !== "idle")
-                        }
+                        onPhaseChange={(phase) => {
+                          const busy = phase !== "idle";
+                          setVoiceBusy(busy);
+                          if (busy) clearTyping();
+                        }}
                         onSend={async (voiceDraft) => {
                           const ok = await onSendVoice({
                             blob: voiceDraft.blob,
@@ -533,7 +634,10 @@ export function AgentChatTranscriptPane({
                             durationMs: voiceDraft.durationMs,
                             replyToMessageId: replyTo?.id ?? null,
                           });
-                          if (ok) setReplyTo(null);
+                          if (ok) {
+                            clearTyping();
+                            setReplyTo(null);
+                          }
                           return ok;
                         }}
                       />
@@ -657,6 +761,10 @@ function ChatRow({
     deleted || !leadId
       ? null
       : messageVoiceNoteAttachment(message.attachments);
+  const listingShare =
+    !deleted && !voice && message.kind === "TEXT" && message.channel === "CHAT"
+      ? resolveChatListingShareView(message.payload)
+      : { kind: "none" as const };
   const sentAt = new Date(message.createdAt).toLocaleString("en-CA");
   const sms = message.channel === "SMS";
   const delivery = v2SmsDeliveryLabel(message);
@@ -734,6 +842,8 @@ function ChatRow({
             durationMs={voice.durationMs}
             tone={mine ? "outgoing" : "incoming"}
           />
+        ) : listingShare.kind !== "none" ? (
+          <ChatListingShareCard payload={message.payload} />
         ) : (
           <div
             className={cn(

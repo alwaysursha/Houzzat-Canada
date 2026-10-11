@@ -30,6 +30,7 @@ import {
   type LeadConversationDb,
   type LeadConversationRecord,
 } from "@/lib/conversations/lead-conversation";
+import { parseListingSharePayload } from "@/lib/conversations/listing-share/payload";
 import {
   isSmsAutomationTextPayload,
 } from "@/lib/conversations/sms-automation-payload";
@@ -282,6 +283,17 @@ function normalizeContent(
   if (input.kind === "TEXT") {
     if (!body) return { ok: false };
     if (payload == null) return { ok: true, body, payload: null };
+    // CHAT: only trusted LISTING_SHARE snapshots (server-built). Never SMS automation.
+    if (input.channel === "CHAT") {
+      const share = parseListingSharePayload(payload);
+      if (!share.ok) return { ok: false };
+      return {
+        ok: true,
+        body,
+        payload: share.payload as Prisma.InputJsonValue,
+      };
+    }
+    // SMS: automation key payload only (existing).
     if (input.channel !== "SMS" || !isSmsAutomationTextPayload(payload)) {
       return { ok: false };
     }

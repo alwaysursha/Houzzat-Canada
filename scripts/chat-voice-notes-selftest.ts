@@ -662,6 +662,12 @@ function testUiWiringAndNoPublicBranding() {
 
   const agentVoice = read("src/lib/conversations/agent-conversation-voice.ts");
   assert.ok(agentVoice.includes("VOICE_NOTE_MESSAGE_BODY"));
+  // Playback must stay assignee-gated (M4Z) — not canAccessLead-only.
+  assert.ok(agentVoice.includes("assignedAgentId !== ctx.user.id"));
+  const playback = agentVoice.slice(
+    agentVoice.indexOf("loadAgentLeadVoiceAttachmentAudio"),
+  );
+  assert.ok(playback.includes("Forbidden"));
 
   const player = read("src/components/chat/ChatVoicePlayer.tsx");
   assert.ok(player.includes("1.5"));

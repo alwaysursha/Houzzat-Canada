@@ -168,6 +168,8 @@ export type LeadProfileV2ChatPanel = {
     hasMore: boolean;
     nextCursor: string | null;
   };
+  /** Peer (customer) typing — boolean only; never raw timestamps. */
+  peerTyping?: boolean;
 };
 
 export type LeadProfileV2BuyerIntentCriteria = {

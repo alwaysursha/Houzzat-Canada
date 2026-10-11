@@ -27,6 +27,10 @@
 import { z } from "zod";
 import type { AgentOrgContext, AgentUser } from "@/lib/agent";
 import {
+  clearConversationTypingOnSend,
+  type ConversationTypingDb,
+} from "@/lib/chat/typing/update";
+import {
   loadAccessibleAgentConversationLead,
   presentAgentConversationMessage,
   type AgentConversationMessage,
@@ -185,6 +189,12 @@ export async function sendAgentLeadChatMessage(
     }
     return { ok: false, reason: "INVALID_BODY" };
   }
+
+  await clearConversationTypingOnSend(db as unknown as ConversationTypingDb, {
+    workspaceId: lead.workspaceId,
+    conversationId: created.conversation.id,
+    side: "agent",
+  }).catch(() => undefined);
 
   try {
     await recordConversationLeadActivity(db, {
