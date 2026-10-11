@@ -10,6 +10,7 @@ import {
   FUNNEL_SERVER_ONLY_EVENT_NAMES,
   type FunnelEventName,
 } from "@/lib/funnel/constants";
+import { buildClientFunnelDedupeKey } from "@/lib/funnel/dedupe";
 
 const PII_META_BLOCKLIST = [
   "email",
@@ -72,14 +73,6 @@ export function cleanMlsNumber(value: unknown): string | null {
   if (!mls || mls.length > FUNNEL_MAX_MLS_LEN) return null;
   if (!/^[A-Z0-9]{3,32}$/.test(mls)) return null;
   return mls;
-}
-
-export function cleanDedupeKey(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const t = value.trim().slice(0, FUNNEL_MAX_DEDUPE_LEN);
-  if (!t) return null;
-  if (t.includes("@")) return null;
-  return t;
 }
 
 export function sanitizeFunnelMeta(
@@ -196,16 +189,13 @@ export function parseClientFunnelPayload(
   const occurredAt = clampOccurredAt(raw.occurredAt, now);
   const meta = sanitizeFunnelMeta(raw.meta);
 
-  const clientDedupe = cleanDedupeKey(raw.dedupeKey);
-  const dedupeKey =
-    clientDedupe ??
-    [
-      eventRaw,
-      visitorKey,
-      sessionKey,
-      mlsNumber ?? "-",
-      String(Math.floor(occurredAt.getTime() / 60_000)),
-    ].join(":");
+  // Never trust client-supplied dedupeKey — canonicalize server-side.
+  const dedupeKey = buildClientFunnelDedupeKey({
+    eventName: eventRaw,
+    sessionKey,
+    mlsNumber,
+    meta,
+  });
 
   if (dedupeKey.length > FUNNEL_MAX_DEDUPE_LEN) {
     throw new FunnelSanitizeError(
@@ -220,7 +210,7 @@ export function parseClientFunnelPayload(
     sessionKey,
     occurredAt,
     mlsNumber,
-    dedupeKey: dedupeKey.slice(0, FUNNEL_MAX_DEDUPE_LEN),
+    dedupeKey,
     meta,
   };
 }

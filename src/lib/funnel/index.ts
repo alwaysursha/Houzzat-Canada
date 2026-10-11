@@ -19,6 +19,18 @@ export {
 } from "./sanitize";
 
 export {
+  FUNNEL_CLIENT_DEDUPE_PREFIX,
+  buildClientFunnelDedupeKey,
+  buildRegistrationCompletedDedupeKey,
+} from "./dedupe";
+
+export {
+  resolveListingLinkClickAction,
+  shouldReportRegistrationGateShown,
+  shouldReportRegistrationStarted,
+} from "./client-signals";
+
+export {
   writeFunnelEvent,
   ingestClientFunnelEvent,
   recordRegistrationCompletedEvent,

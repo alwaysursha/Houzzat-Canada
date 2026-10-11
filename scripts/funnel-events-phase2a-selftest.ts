@@ -107,6 +107,10 @@ console.log("\n=== FUNNEL EVENTS PHASE 2A ===\n");
     intentType: "VIEW_LISTING",
     pathClass: "search_card",
   });
+  assert.equal(
+    ok.dedupeKey,
+    "c:property_card_clicked:sk_abc:W1234567",
+  );
   console.log("[3] Payload validation + PII meta strip... PASS");
 }
 
@@ -350,7 +354,8 @@ async function runAsyncCases(): Promise<void> {
       sessionKey: "sk1",
       // workspaceId forbidden — already tested; without it writes server workspace
       mlsNumber: "X1234567",
-      dedupeKey: "listing:sk1:X1234567",
+      // Client-supplied dedupeKey must be ignored
+      dedupeKey: "client-spoofed-collision-with-registration_completed:user:x",
     },
     env: { FUNNEL_EVENTS_ENABLED: "1" },
     db: {
@@ -364,6 +369,7 @@ async function runAsyncCases(): Promise<void> {
   });
   assert.equal(result.ok, true);
   assert.equal(rows[0]?.workspaceId, "ws_resolved");
+  assert.equal(rows[0]?.dedupeKey, "c:listing_detail_opened:sk1:X1234567");
   console.log("[12] Server tenancy workspace wins... PASS");
 }
 }

@@ -28,6 +28,11 @@ import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { pushHref } from "@/lib/listings/navigate-listing";
 import { listingPath } from "@/lib/listings/listing-path";
 import { persistBrowseSearchUrl } from "@/lib/auth/browse-search-context";
+import {
+  funnelPolygonFingerprint,
+  funnelSearchViewHash,
+  reportFunnelEvent,
+} from "@/lib/funnel/browser";
 import { publishListingBrowseSource } from "@/lib/mobile/listing-browse-source";
 import { RouteStartIcon } from "@/components/icons/RouteStartIcon";
 import { SaveSearchButton } from "@/components/account/SaveSearchButton";
@@ -53,6 +58,7 @@ import { shouldResetMapAreaForPlaceChange } from "@/lib/listings/map-area-search
 import {
   applyCommitPatch,
   buildActiveChips,
+  buildCriteriaKey,
   buildListingsQuery,
   buildSavedSearchQuery,
   clearPlaceWhenCitiesEmpty,
@@ -391,6 +397,16 @@ export function SearchExperience() {
     setItems(nextItems);
     setTotal(polygon ? nextItems.length : (data.total ?? nextItems.length));
     itemsGeoKeyRef.current = keyAtStart;
+    // Criteria identity (not view/limit). Polygon fp when client filter changes results.
+    const criteriaKey = buildCriteriaKey(committedRef.current);
+    const polyFp = funnelPolygonFingerprint(polygon);
+    reportFunnelEvent({
+      eventName: "search_results_viewed",
+      meta: {
+        searchHash: funnelSearchViewHash(criteriaKey, polyFp),
+        source: "search",
+      },
+    });
   }, [queryString, polygon]);
 
   useEffect(() => {

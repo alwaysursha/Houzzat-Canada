@@ -333,6 +333,7 @@ export function ListingCard({
       ) : (
         <ListingLink
           href={listingPath(listing)}
+          funnelPathClass="listing_card"
           onMouseEnter={onFocus}
           onFocus={onFocus}
           onClick={

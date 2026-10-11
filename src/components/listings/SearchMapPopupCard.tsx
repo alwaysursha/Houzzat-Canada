@@ -25,6 +25,7 @@ import { ListingLink } from "@/components/listings/ListingLink";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { formatListingSqftLabel } from "@/lib/listings/facts";
 import { SoldForPrice } from "@/components/listings/SoldForPrice";
+import { reportPropertyCardClicked } from "@/lib/funnel/browser";
 import { openListingPath } from "@/lib/listings/navigate-listing";
 import { cn } from "@/lib/utils";
 
@@ -323,11 +324,19 @@ export function SearchMapPopupCard({
         alt={street}
         statusBadge={statusBadge}
         onActivate={() => {
+          reportPropertyCardClicked(href, {
+            source: "map_popup",
+            pathClass: "map_card",
+          });
           openListingPath(href);
         }}
       />
 
-      <ListingLink href={href} className="block transition hover:bg-mist/40">
+      <ListingLink
+        href={href}
+        funnelPathClass="map_card"
+        className="block transition hover:bg-mist/40"
+      >
         {details}
       </ListingLink>
     </div>

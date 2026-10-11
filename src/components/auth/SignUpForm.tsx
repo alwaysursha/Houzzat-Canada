@@ -17,6 +17,8 @@ import {
   searchFiltersFromSearchUrl,
 } from "@/lib/auth/browse-search-context";
 import { reportLeadCaptured, reportLeadCaptureStarted } from "@/lib/auth/funnel-analytics";
+import { reportFunnelEvent } from "@/lib/funnel/browser";
+import { shouldReportRegistrationStarted } from "@/lib/funnel/client-signals";
 import type { CaptureIntentType } from "@/lib/auth/capture-intent";
 import { peekPendingIntent } from "@/lib/auth/capture-intent";
 import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
@@ -117,14 +119,36 @@ export function SignUpForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const startedRef = useRef(false);
+  const funnelStartedRef = useRef(false);
 
   if (!startedRef.current) {
     startedRef.current = true;
     reportLeadCaptureStarted();
   }
 
+  function markRegistrationStarted(opts: {
+    fieldValue?: string | null;
+    isSubmit?: boolean;
+  }) {
+    if (
+      !shouldReportRegistrationStarted({
+        alreadyStarted: funnelStartedRef.current,
+        fieldValue: opts.fieldValue,
+        isSubmit: opts.isSubmit,
+      })
+    ) {
+      return;
+    }
+    funnelStartedRef.current = true;
+    reportFunnelEvent({
+      eventName: "registration_started",
+      meta: { source: "sign_up_form" },
+    });
+  }
+
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
+    markRegistrationStarted({ isSubmit: true });
     setPending(true);
     setError(null);
 
@@ -347,6 +371,7 @@ export function SignUpForm({
           value={name}
           onChange={(event) => {
             const next = event.target.value;
+            markRegistrationStarted({ fieldValue: next });
             setName(next);
             onIdentityChange?.({ name: next, email });
           }}
@@ -366,6 +391,7 @@ export function SignUpForm({
           value={email}
           onChange={(event) => {
             const next = event.target.value;
+            markRegistrationStarted({ fieldValue: next });
             setEmail(next);
             onIdentityChange?.({ name, email: next });
           }}
@@ -388,7 +414,11 @@ export function SignUpForm({
           placeholder="(647) 555-1234"
           className={compact ? "h-10" : undefined}
           value={phone}
-          onChange={(event) => setPhone(event.target.value)}
+          onChange={(event) => {
+            const next = event.target.value;
+            markRegistrationStarted({ fieldValue: next });
+            setPhone(next);
+          }}
         />
       </div>
       {error ? <p className="text-sm text-danger">{error}</p> : null}

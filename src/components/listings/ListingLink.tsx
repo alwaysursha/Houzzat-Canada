@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import type { ComponentProps, MouseEvent } from "react";
+import { reportPropertyCardClicked } from "@/lib/funnel/browser";
+import { resolveListingLinkClickAction } from "@/lib/funnel/client-signals";
 import {
   mlsNumberFromListingHref,
   prefetchListingGallery,
@@ -10,6 +12,8 @@ import { openListingPath } from "@/lib/listings/navigate-listing";
 
 type ListingLinkProps = Omit<ComponentProps<typeof Link>, "prefetch"> & {
   href: string;
+  /** Optional funnel pathClass (search_card, map_card, compact_card, …). */
+  funnelPathClass?: string;
 };
 
 /**
@@ -21,6 +25,7 @@ export function ListingLink({
   onClick,
   onPointerEnter,
   onFocus,
+  funnelPathClass,
   children,
   ...props
 }: ListingLinkProps) {
@@ -31,17 +36,21 @@ export function ListingLink({
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
     onClick?.(event);
-    if (event.defaultPrevented) return;
-    // Allow modified clicks (new tab / download) to use the real href.
-    if (
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey ||
-      event.button !== 0
-    ) {
-      return;
+    const action = resolveListingLinkClickAction({
+      metaKey: event.metaKey,
+      ctrlKey: event.ctrlKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+      button: event.button,
+      defaultPrevented: event.defaultPrevented,
+    });
+    if (action.trackCardClick) {
+      reportPropertyCardClicked(href, {
+        source: "listing_link",
+        ...(funnelPathClass ? { pathClass: funnelPathClass } : {}),
+      });
     }
+    if (!action.openOverlay) return;
     // Start gallery fetch before the sheet iframe mounts.
     warmGallery();
     event.preventDefault();

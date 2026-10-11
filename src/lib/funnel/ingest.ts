@@ -4,6 +4,7 @@ import {
   isFunnelEventsEnabled,
   type FunnelEventName,
 } from "@/lib/funnel/constants";
+import { buildRegistrationCompletedDedupeKey } from "@/lib/funnel/dedupe";
 import {
   cleanMlsNumber,
   cleanOpaqueKey,
@@ -196,7 +197,7 @@ export async function recordRegistrationCompletedEvent(input: {
       sessionKey: cleanOpaqueKey(input.sessionKey),
       userId,
       mlsNumber: cleanMlsNumber(input.mlsNumber),
-      dedupeKey: `registration_completed:user:${userId}`,
+      dedupeKey: buildRegistrationCompletedDedupeKey(userId),
       meta,
     },
     input.db ?? defaultPrisma,

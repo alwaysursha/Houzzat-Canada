@@ -110,6 +110,7 @@ export function SearchResultCard({
         ) : null}
         <ListingLink
           href={path}
+          funnelPathClass="search_card"
           aria-label={`${street}, ${cityLine}`}
           onMouseEnter={onFocus}
           onFocus={onFocus}
@@ -167,6 +168,7 @@ export function SearchResultCard({
       >
         <ListingLink
           href={path}
+          funnelPathClass="search_card"
           onMouseEnter={onFocus}
           onFocus={onFocus}
           className={cn(

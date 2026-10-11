@@ -87,6 +87,7 @@ export function CompactPropertyCard({
     >
       <ListingLink
         href={listingPath(listing)}
+        funnelPathClass="compact_card"
         className="absolute inset-0 block"
         aria-label={`${street}, ${place}`}
         onMouseEnter={onFocus}
