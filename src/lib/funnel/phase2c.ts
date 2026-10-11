@@ -200,6 +200,11 @@ export async function recordPostRegistrationContinuedEvent(input: {
   db?: Db;
   eligibilityDb?: FunnelEligibilityDb;
 }): Promise<FunnelIngestResult> {
+  // Skip eligibility DB work entirely when tracking is disabled.
+  if (!isFunnelEventsEnabled(input.env ?? process.env)) {
+    return { ok: true, status: "disabled", id: null };
+  }
+
   const eligible = await resolveFunnelConsumerEligibility({
     userId: input.userId,
     role: input.role,
@@ -278,6 +283,11 @@ export async function recordRegistrationEngagedEvent(input: {
   db?: Db;
   eligibilityDb?: FunnelEligibilityDb;
 }): Promise<FunnelIngestResult> {
+  // Skip eligibility DB work entirely when tracking is disabled.
+  if (!isFunnelEventsEnabled(input.env ?? process.env)) {
+    return { ok: true, status: "disabled", id: null };
+  }
+
   const eligible = await resolveFunnelConsumerEligibility({
     userId: input.userId,
     role: input.role,
@@ -361,7 +371,12 @@ export function scheduleRegistrationEngaged(input: {
   };
   engagementType: FunnelEngagementType;
   mlsNumber?: string | null;
+  /** Optional env override for tests — production uses process.env. */
+  env?: NodeJS.ProcessEnv;
 }): void {
+  // Flag-off: no async work, no tenancy resolve, no eligibility DB, no writes.
+  if (!isFunnelEventsEnabled(input.env ?? process.env)) return;
+
   // Sync role gate — avoid scheduling for AGENT/ADMIN; full seat check is async.
   if (!isEligibleFunnelConsumer({ role: input.user.role })) return;
 
@@ -379,6 +394,7 @@ export function scheduleRegistrationEngaged(input: {
         engagementType: input.engagementType,
         mlsNumber: input.mlsNumber,
         registeredAt: input.user.createdAt,
+        env: input.env ?? process.env,
       });
     } catch (error) {
       console.error("[funnel] scheduleRegistrationEngaged failed softly", error);

@@ -798,6 +798,79 @@ async function main(): Promise<void> {
     assert.equal(aged.status, "disabled");
     assert.equal(rows.length, 3);
 
+    // Flag disabled: no eligibility lookup and no FunnelEvent write
+    let eligibilityCalls = 0;
+    const countingEligibilityDb: FunnelEligibilityDb = {
+      user: {
+        async findFirst(args) {
+          eligibilityCalls += 1;
+          return ordinaryEligibilityDb().user.findFirst(args);
+        },
+      },
+    };
+    const writesBeforeFlagOff = rows.length;
+    const engDisabled = await recordRegistrationEngagedEvent({
+      workspaceId: "ws_a",
+      userId: "u_flag_off",
+      role: "BUYER",
+      eligibilityDb: countingEligibilityDb,
+      engagementType: "SAVE_LISTING",
+      registeredAt,
+      now,
+      env: {},
+      db,
+    });
+    assert.equal(engDisabled.status, "disabled");
+    assert.equal(eligibilityCalls, 0);
+    assert.equal(rows.length, writesBeforeFlagOff);
+
+    const contDisabled = await recordPostRegistrationContinuedEvent({
+      workspaceId: "ws_a",
+      userId: "u_flag_off",
+      role: "BUYER",
+      eligibilityDb: countingEligibilityDb,
+      intentType: "SAVE_LISTING",
+      registeredAt,
+      now,
+      env: { FUNNEL_EVENTS_ENABLED: "0" },
+      db,
+    });
+    assert.equal(contDisabled.status, "disabled");
+    assert.equal(eligibilityCalls, 0);
+    assert.equal(rows.length, writesBeforeFlagOff);
+
+    // scheduleRegistrationEngaged flag-off: no async eligibility/write work
+    scheduleRegistrationEngaged({
+      request: new Request("https://acme.houzzatpro.com/api/saved-listings"),
+      user: {
+        id: "u_sched_off",
+        workspaceId: "ws_a",
+        createdAt: registeredAt,
+        role: "BUYER",
+      },
+      engagementType: "SAVE_LISTING",
+      env: {},
+    });
+    await new Promise((r) => setTimeout(r, 30));
+    assert.equal(rows.length, writesBeforeFlagOff);
+    assert.equal(eligibilityCalls, 0);
+
+    // Flag enabled: eligibility still consulted and write proceeds
+    const engEnabled = await recordRegistrationEngagedEvent({
+      workspaceId: "ws_a",
+      userId: "u_flag_on",
+      role: "BUYER",
+      eligibilityDb: countingEligibilityDb,
+      engagementType: "CONTACT_AGENT",
+      registeredAt,
+      now,
+      env: { FUNNEL_EVENTS_ENABLED: "1" },
+      db,
+    });
+    assert.equal(engEnabled.status, "written");
+    assert.equal(eligibilityCalls, 1);
+    assert.equal(rows.length, writesBeforeFlagOff + 1);
+
     // APIs pass authenticated user (role from session), never client body
     const listings = read("src/app/api/saved-listings/route.ts");
     assert.ok(listings.includes("scheduleRegistrationEngaged"));
@@ -812,6 +885,12 @@ async function main(): Promise<void> {
     assert.ok(!phase.includes("conversion_event_signup"));
     assert.ok(!continued.includes("reportGa4SignUp"));
     assert.ok(!listings.includes("conversion_event_signup"));
+
+    // Source: schedule checks flag before eligibility / async work
+    assert.ok(phase.includes("Flag-off: no async work"));
+    assert.ok(
+      phase.includes("Skip eligibility DB work entirely when tracking is disabled"),
+    );
 
     console.log(
       "[10] Consumer eligibility (role/seat/operator/window/fail-soft)... PASS",
