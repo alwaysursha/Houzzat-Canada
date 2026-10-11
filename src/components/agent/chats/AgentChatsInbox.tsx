@@ -326,13 +326,13 @@ function SelectedThread({
   const subtitle = [email, phone].filter(Boolean).join(" · ");
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-2 border-b border-[#e2e8f0] bg-white px-3 py-2.5 sm:px-4">
         <button
           type="button"
           onClick={onBack}
           aria-label="Back to chats"
-          className="inline-flex size-10 items-center justify-center rounded-lg text-[#475569] hover:bg-[#f8fafc] lg:hidden"
+          className="inline-flex size-10 items-center justify-center rounded-lg text-[#1e2a38] hover:bg-[#f8fafc] lg:hidden"
         >
           <ArrowLeft className="size-5" />
         </button>
@@ -342,9 +342,11 @@ function SelectedThread({
           unread={false}
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-[#1e2a38]">{name}</p>
+          <p className="truncate text-[15px] font-semibold text-[#1e2a38] sm:text-base">
+            {name}
+          </p>
           {subtitle ? (
-            <p className="truncate text-[11px] text-[#64748b]">{subtitle}</p>
+            <p className="truncate text-[12px] text-[#64748b]">{subtitle}</p>
           ) : null}
         </div>
         <Link
@@ -372,7 +374,7 @@ function SelectedThread({
         composerId="agent-chats-composer"
         frame="plain"
       />
-    </>
+    </div>
   );
 }
 

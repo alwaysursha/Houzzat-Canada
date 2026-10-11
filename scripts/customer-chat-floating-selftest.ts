@@ -28,6 +28,7 @@ import {
   readCustomerChatSessionDraft,
   readCustomerChatSessionListing,
   shouldAutoOpenCustomerChatForUnread,
+  customerChatUnreadPreviewBody,
   shouldDeferCustomerChatAutoOpen,
   shouldPeekCustomerChatUnread,
   writeCustomerChatBatchKey,
@@ -103,7 +104,9 @@ function testOpenMinimizeCloseWiring() {
   );
   const screen = read("src/components/customer-chat/CustomerChatScreen.tsx");
   assert.ok(provider.includes("CustomerChatFloatingWindow"));
+  assert.ok(provider.includes("CustomerChatUnreadPreview"));
   assert.ok(provider.includes('mode === "open"'));
+  assert.ok(provider.includes('setMode("preview")'));
   assert.ok(provider.includes('setMode("minimized")') || provider.includes("minimize"));
   assert.ok(provider.includes("closeWithDismiss"));
   assert.ok(floating.includes('chrome="floating"'));
@@ -216,15 +219,35 @@ function testGuestAuthResumeKeepsDraft() {
 }
 
 function testAgentIdentityFallback() {
+  assert.equal(CUSTOMER_CHAT_FALLBACK_AGENT_NAME, "Houzzat");
   assert.equal(presentCustomerChatAgentName(null), CUSTOMER_CHAT_FALLBACK_AGENT_NAME);
   assert.equal(
     presentCustomerChatAgentName({ name: "  Ali Syed  ", photoUrl: null }),
     "Ali Syed",
   );
-  assert.equal(presentCustomerChatAgentInitials(null), "YA");
+  assert.equal(presentCustomerChatAgentInitials(null), "HZ");
   assert.equal(
     presentCustomerChatAgentInitials({ name: "Ali Syed", photoUrl: null }),
     "AS",
+  );
+  assert.equal(
+    customerChatUnreadPreviewBody({ body: "Voice note", hasVoiceAttachment: true }),
+    "Sent you a voice message",
+  );
+  assert.equal(
+    customerChatUnreadPreviewBody({ body: "Hi", isListingShare: true }),
+    "Shared a property with you",
+  );
+  assert.equal(
+    shouldAutoOpenCustomerChatForUnread({
+      authenticated: true,
+      mode: "preview",
+      batchKey: "c:1:m",
+      alreadyOpenedBatchKey: null,
+      dismissedBatchKey: null,
+      deferAutoOpen: false,
+    }),
+    false,
   );
   assert.equal(
     customerChatAgentPhotoAllowed({
@@ -353,6 +376,17 @@ function testAutoOpenBatchDedupAndDismissal() {
     shouldAutoOpenCustomerChatForUnread({
       authenticated: true,
       mode: "open",
+      batchKey: batch,
+      alreadyOpenedBatchKey: null,
+      dismissedBatchKey: null,
+      deferAutoOpen: false,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldAutoOpenCustomerChatForUnread({
+      authenticated: true,
+      mode: "preview",
       batchKey: batch,
       alreadyOpenedBatchKey: null,
       dismissedBatchKey: null,

@@ -76,7 +76,7 @@ export function CustomerChatFloatingWindow() {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Chat with your agent"
+        aria-label="Chat"
         data-customer-chat-floating=""
         className="fixed inset-0 z-[70] flex flex-col bg-gradient-to-b from-[#f7fcf9] via-white to-[#eef8f3] pt-[env(safe-area-inset-top,0px)]"
       >
@@ -95,7 +95,7 @@ export function CustomerChatFloatingWindow() {
   return (
     <div
       role="dialog"
-      aria-label="Chat with your agent"
+      aria-label="Chat"
       data-customer-chat-floating=""
       className={cn(
         "fixed z-[60] overflow-hidden rounded-[1.35rem]",

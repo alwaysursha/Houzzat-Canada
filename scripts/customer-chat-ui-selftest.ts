@@ -176,11 +176,21 @@ function testComposerParity() {
     true,
   );
   const screen = read("src/components/customer-chat/CustomerChatScreen.tsx");
-  assert.ok(screen.includes("Enter to send"));
-  assert.ok(screen.includes("Shift+Enter"));
+  // Enter-to-send is wired through customerChatComposerKeyAction (hint copy removed from chrome).
+  assert.equal(
+    customerChatComposerKeyAction({ key: "Enter", shiftKey: false }),
+    "send",
+  );
+  assert.equal(
+    customerChatComposerKeyAction({ key: "Enter", shiftKey: true }),
+    "newline",
+  );
+  assert.ok(screen.includes("customerChatComposerKeyAction"));
+  assert.ok(screen.includes("onComposerKeyDown"));
   assert.ok(screen.includes('aria-label="Send message"'));
   assert.ok(screen.includes("Write a message…"));
-  assert.ok(screen.includes("Message to your agent"));
+  assert.ok(screen.includes("Message to {agentName}"));
+  assert.ok(screen.includes("chatComposerTrailingAction"));
 }
 
 function testTranscriptAlignmentAndTombstone() {
@@ -226,8 +236,8 @@ function testTranscriptAlignmentAndTombstone() {
   const screen = read("src/components/customer-chat/CustomerChatScreen.tsx");
   assert.ok(screen.includes("whitespace-pre-wrap"));
   assert.ok(screen.includes("[overflow-wrap:anywhere]"));
-  assert.ok(screen.includes("Chat with your agent"));
-  assert.ok(screen.includes("Your Agent"));
+  assert.ok(screen.includes("presentCustomerChatAgentName"));
+  assert.ok(screen.includes("ChatMessageActions"));
   assert.ok(screen.includes("customerChatEmptyTitle"));
   assert.ok(screen.includes("customerChatEmptyCopy"));
   assert.ok(screen.includes("customerSmsAutomationBadge"));
@@ -430,7 +440,7 @@ function testTenantOnlyFabAndNoSixthTab() {
   assert.ok(fab.includes("openGuestStartChatIntent"));
   assert.ok(fab.includes("chat.open"));
   assert.ok(fab.includes("CUSTOMER_CHAT_PAGE_HREF"));
-  assert.ok(fab.includes('aria-label="Chat with your agent"'));
+  assert.ok(fab.includes('aria-label="Open chat"'));
   const nav = read("src/components/site/MobileBottomNav.tsx");
   assert.ok(nav.includes("Chat"));
   assert.ok(nav.includes("grid-cols-4"));

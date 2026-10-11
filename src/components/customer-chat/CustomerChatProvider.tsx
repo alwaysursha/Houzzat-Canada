@@ -13,14 +13,17 @@ import {
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { CustomerChatFloatingWindow } from "@/components/customer-chat/CustomerChatFloatingWindow";
+import { CustomerChatUnreadPreview } from "@/components/customer-chat/CustomerChatUnreadPreview";
 import {
   CUSTOMER_CHAT_GET_ROUTE,
   CUSTOMER_CHAT_PAGE_HREF,
+  customerChatMessageBody,
 } from "@/lib/customer-chat/query";
 import {
   CUSTOMER_CHAT_OPEN_EVENT,
   clearCustomerChatSessionState,
   customerChatUnreadAutoOpenBatchKey,
+  customerChatUnreadPreviewBody,
   findLatestUnreadAgentMessageId,
   isCustomerChatMobileViewport,
   normalizeCustomerChatDraft,
@@ -38,11 +41,14 @@ import {
   writeCustomerChatWindowPosition,
   type CustomerChatListingContext,
   type CustomerChatOpenDetail,
+  type CustomerChatUnreadPreviewState,
   type CustomerChatWindowMode,
   type CustomerChatWindowPosition,
 } from "@/lib/customer-chat/floating-chat";
 import type { CustomerChatGetPayload } from "@/lib/customer-chat/types";
 import { resolveAppShell } from "@/lib/mobile/app-shell";
+import { VOICE_NOTE_MESSAGE_BODY } from "@/lib/chat/voice-notes/constants";
+import { LISTING_SHARE_MESSAGE_BODY } from "@/lib/conversations/listing-share/payload";
 
 type CustomerChatController = {
   mode: CustomerChatWindowMode;
@@ -50,6 +56,7 @@ type CustomerChatController = {
   listingContext: CustomerChatListingContext | null;
   position: CustomerChatWindowPosition;
   isMobile: boolean;
+  preview: CustomerChatUnreadPreviewState | null;
   open: (detail?: CustomerChatOpenDetail) => void;
   minimize: () => void;
   expand: () => void;
@@ -115,6 +122,8 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
 
   const [houzzatProShell, setHouzzatProShell] = useState(false);
   const [mode, setMode] = useState<CustomerChatWindowMode>("closed");
+  const [preview, setPreview] =
+    useState<CustomerChatUnreadPreviewState | null>(null);
   const [draft, setDraftState] = useState("");
   const [listingContext, setListingState] =
     useState<CustomerChatListingContext | null>(null);
@@ -181,6 +190,7 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
     prevUserIdRef.current = userId;
     if (!userId) {
       setMode("closed");
+      setPreview(null);
       setDraftState("");
       setListingState(null);
       openedBatchRef.current = null;
@@ -259,16 +269,19 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
       if (detail?.draft != null) {
         setDraft(detail.draft);
       }
+      setPreview(null);
       setMode("open");
     },
     [setDraft, setListingContext],
   );
 
   const minimize = useCallback(() => {
+    setPreview(null);
     setMode("minimized");
   }, []);
 
   const expand = useCallback(() => {
+    setPreview(null);
     setMode("open");
   }, []);
 
@@ -343,8 +356,44 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
         ) {
           return;
         }
+        if (!batchKey || !latestUnreadAgentMessageId) return;
         rememberOpenedBatch(batchKey);
-        setMode("open");
+        const latestMessage =
+          json.messages.find(
+            (message) => message.id === latestUnreadAgentMessageId,
+          ) ?? null;
+        const messageBody = latestMessage
+          ? customerChatMessageBody(latestMessage)
+          : "";
+        const hasVoice =
+          Boolean(
+            latestMessage?.attachments?.some(
+              (attachment) => attachment.kind === "VOICE_NOTE",
+            ),
+          ) || messageBody === VOICE_NOTE_MESSAGE_BODY;
+        const isListingShare =
+          messageBody === LISTING_SHARE_MESSAGE_BODY ||
+          Boolean(
+            latestMessage?.payload &&
+              typeof latestMessage.payload === "object" &&
+              (latestMessage.payload as { card?: string }).card ===
+                "LISTING_SHARE",
+          );
+        setPreview({
+          batchKey,
+          agentName: json.agent?.name ?? null,
+          agentPhotoUrl: json.agent?.photoUrl ?? null,
+          messagePreview: customerChatUnreadPreviewBody({
+            body: messageBody,
+            hasVoiceAttachment: hasVoice,
+            isListingShare,
+          }),
+          messageCreatedAt: latestMessage?.createdAt ?? null,
+          unreadCount: json.read.unreadCount,
+          latestUnreadAgentMessageId,
+        });
+        // Compact preview instead of forcing the full conversation open.
+        setMode("preview");
       } catch {
         // best-effort peek
       } finally {
@@ -377,6 +426,7 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
     if (immediate) {
       rememberDismissedBatch(immediate);
     }
+    setPreview(null);
     setMode("closed");
 
     void (async () => {
@@ -414,6 +464,7 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
       listingContext,
       position,
       isMobile,
+      preview,
       open,
       minimize,
       expand,
@@ -428,6 +479,7 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
       listingContext,
       position,
       isMobile,
+      preview,
       open,
       minimize,
       expand,
@@ -441,6 +493,9 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
   return (
     <CustomerChatContext.Provider value={controller}>
       {children}
+      {floatingEnabled && mode === "preview" && preview ? (
+        <CustomerChatUnreadPreview preview={preview} />
+      ) : null}
       {floatingEnabled && (mode === "open" || mode === "minimized") ? (
         <CustomerChatFloatingWindow />
       ) : null}

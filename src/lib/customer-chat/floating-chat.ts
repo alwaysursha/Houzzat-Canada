@@ -7,7 +7,11 @@ import { CUSTOMER_CHAT_TEXT_MAX_LENGTH } from "@/lib/customer-chat/query";
 
 export const CUSTOMER_CHAT_OPEN_EVENT = "houzzat:customer-chat-open";
 
-export const CUSTOMER_CHAT_FALLBACK_AGENT_NAME = "Your Agent";
+/** Privacy-safe label when assigned agent name is unavailable. */
+export const CUSTOMER_CHAT_FALLBACK_AGENT_NAME = "Houzzat";
+
+export const CUSTOMER_CHAT_GENERIC_UNREAD_COPY =
+  "You have a new message from Houzzat";
 
 export type CustomerChatListingContext = {
   mlsNumber: string;
@@ -20,7 +24,21 @@ export type CustomerChatAgentIdentity = {
   photoUrl: string | null;
 };
 
-export type CustomerChatWindowMode = "closed" | "open" | "minimized";
+export type CustomerChatWindowMode =
+  | "closed"
+  | "open"
+  | "minimized"
+  | "preview";
+
+export type CustomerChatUnreadPreviewState = {
+  batchKey: string;
+  agentName: string | null;
+  agentPhotoUrl: string | null;
+  messagePreview: string;
+  messageCreatedAt: string | null;
+  unreadCount: number;
+  latestUnreadAgentMessageId: string;
+};
 
 export type CustomerChatWindowPosition = {
   x: number;
@@ -66,7 +84,7 @@ export function presentCustomerChatAgentInitials(
   agent: CustomerChatAgentIdentity | null | undefined,
 ): string {
   const name = agent?.name?.trim();
-  if (!name) return "YA";
+  if (!name) return "HZ";
   const parts = name.split(/\s+/).filter(Boolean);
   if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
   return `${parts[0]![0] ?? ""}${parts[parts.length - 1]![0] ?? ""}`.toUpperCase();
@@ -304,6 +322,24 @@ export function shouldPeekCustomerChatUnread(input: {
   return true;
 }
 
+export function customerChatUnreadPreviewBody(input: {
+  body: string | null | undefined;
+  kind?: string | null;
+  hasVoiceAttachment?: boolean;
+  isListingShare?: boolean;
+}): string {
+  if (input.hasVoiceAttachment || input.body === "Voice note") {
+    return "Sent you a voice message";
+  }
+  if (input.isListingShare || /shared a (listing|property)/i.test(input.body ?? "")) {
+    return "Shared a property with you";
+  }
+  const normalized = (input.body ?? "").replace(/\s+/g, " ").trim();
+  if (!normalized) return CUSTOMER_CHAT_GENERIC_UNREAD_COPY;
+  if (normalized.length <= 160) return normalized;
+  return `${normalized.slice(0, 157).trimEnd()}…`;
+}
+
 /**
  * Workspace branding portrait is only valid for the workspace primary agent.
  * Never attach branding.agentProfilePhotoUrl to a different assignee.
@@ -370,7 +406,7 @@ export function shouldAutoOpenCustomerChatForUnread(input: {
 }): boolean {
   if (!input.authenticated) return false;
   if (!input.batchKey) return false;
-  if (input.mode === "open") return false;
+  if (input.mode === "open" || input.mode === "preview") return false;
   if (input.deferAutoOpen) return false;
   if (input.alreadyOpenedBatchKey === input.batchKey) return false;
   if (input.dismissedBatchKey === input.batchKey) return false;
