@@ -126,9 +126,12 @@ export function isListingShareableToGuestRecipient(
   listing: Pick<ListingShareSourceListing, "status" | "dataSource">,
 ): boolean {
   if (!isOnMarketListingStatus(listing.status)) return false;
+  // ListingShareSourceListing allows null; ListingDetail.dataSource is string.
+  // Null is treated as non-FSBO (same vow floor as MLS inventory).
+  const dataSource = listing.dataSource ?? "mls";
   const access = resolveListingDetailAccess(null, {
     status: listing.status as ListingStatus,
-    dataSource: listing.dataSource,
+    dataSource,
   });
   if (access.detailsLocked || access.vowBlocked) return false;
   return true;

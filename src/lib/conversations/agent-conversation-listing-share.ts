@@ -76,35 +76,40 @@ export type AgentListingShareRequest = z.infer<
   typeof agentListingShareRequestSchema
 >;
 
-export type AgentListingShareDb = AgentConversationSendDb &
-  ConversationLeadActivityDb &
-  ConversationMessageDb & {
-    listing: {
-      findUnique: (args: Record<string, unknown>) => Promise<
-        | (ListingShareSourceListing & {
-            media?: Array<{ url: string; isPrimary: boolean; sortOrder: number }>;
-          })
-        | null
-      >;
-    };
-    message: ConversationMessageDb["message"] & {
-      findUnique: (args: Record<string, unknown>) => Promise<ConversationMessageRecord | null>;
-    };
-    leadActivity: ConversationLeadActivityDb["leadActivity"] & {
-      findFirst: (args: Record<string, unknown>) => Promise<{
-        id: string;
-        meta: unknown;
-      } | null>;
-      create: (args: Record<string, unknown>) => Promise<{ id: string }>;
-    };
-    $executeRaw: (
-      strings: TemplateStringsArray,
-      ...values: unknown[]
-    ) => Promise<unknown>;
-    $transaction: <T>(
-      fn: (tx: AgentListingShareTx) => Promise<T>,
-    ) => Promise<T>;
+// Omit ConversationMessageDb.$transaction so the callback tx is AgentListingShareTx
+// (with $executeRaw for pg_advisory_xact_lock), not the narrower ConversationMessageTx.
+export type AgentListingShareDb = Omit<
+  AgentConversationSendDb & ConversationLeadActivityDb & ConversationMessageDb,
+  "$transaction" | "$executeRaw"
+> & {
+  listing: {
+    findUnique: (args: Record<string, unknown>) => Promise<
+      | (ListingShareSourceListing & {
+          media?: Array<{ url: string; isPrimary: boolean; sortOrder: number }>;
+        })
+      | null
+    >;
   };
+  message: ConversationMessageDb["message"] & {
+    findUnique: (
+      args: Record<string, unknown>,
+    ) => Promise<ConversationMessageRecord | null>;
+  };
+  leadActivity: ConversationLeadActivityDb["leadActivity"] & {
+    findFirst: (args: Record<string, unknown>) => Promise<{
+      id: string;
+      meta: unknown;
+    } | null>;
+    create: (args: Record<string, unknown>) => Promise<{ id: string }>;
+  };
+  $executeRaw: (
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ) => Promise<unknown>;
+  $transaction: <T>(
+    fn: (tx: AgentListingShareTx) => Promise<T>,
+  ) => Promise<T>;
+};
 
 export type AgentListingShareTx = {
   $executeRaw: AgentListingShareDb["$executeRaw"];
@@ -260,18 +265,20 @@ export async function sendAgentLeadListingShare(
   if (!senderName) return { ok: false, reason: "INVALID_BODY" };
 
   const lead = await loadAccessibleAgentConversationLead(db, ctx, leadId);
-  if (!lead?.workspaceId) {
+  // Narrow once — TS does not preserve property narrowing inside $transaction.
+  const workspaceId = lead?.workspaceId?.trim() || "";
+  if (!lead || !workspaceId) {
     return { ok: false, reason: "LEAD_NOT_FOUND" };
   }
   if (!lead.assignedAgentId || lead.assignedAgentId !== ctx.user.id) {
     return { ok: false, reason: "FORBIDDEN" };
   }
-  if (deps.entitlement.workspaceId !== lead.workspaceId) {
+  if (deps.entitlement.workspaceId !== workspaceId) {
     return { ok: false, reason: "LISTING_FORBIDDEN" };
   }
 
   const conversationResult = await getOrCreateLeadConversation(db, {
-    workspaceId: lead.workspaceId,
+    workspaceId,
     leadId: lead.id,
   });
   if (!conversationResult.ok) {
@@ -284,7 +291,7 @@ export async function sendAgentLeadListingShare(
 
   const snapshot = buildListingShareSnapshot({
     entitlement: deps.entitlement,
-    trustedWorkspaceId: lead.workspaceId,
+    trustedWorkspaceId: workspaceId,
     listing: loaded.listing,
     primaryMediaUrl: loaded.primaryMediaUrl,
     now: deps.now,
@@ -294,7 +301,7 @@ export async function sendAgentLeadListingShare(
     return { ok: false, reason: "LISTING_FORBIDDEN" };
   }
 
-  const lockWorkspaceConversation = `${lead.workspaceId}:${conversation.id}`;
+  const lockWorkspaceConversation = `${workspaceId}:${conversation.id}`;
   const lockAgentKey = `${ctx.user.id}:${idempotencyKey}`;
 
   type TxResult =
@@ -334,7 +341,7 @@ export async function sendAgentLeadListingShare(
         const meta = readIdempotencyMeta(existing.meta);
         if (
           !meta ||
-          meta.workspaceId !== lead.workspaceId ||
+          meta.workspaceId !== workspaceId ||
           meta.conversationId !== conversation.id ||
           meta.agentUserId !== ctx.user.id
         ) {
@@ -349,7 +356,7 @@ export async function sendAgentLeadListingShare(
         const message = await tx.message.findUnique({
           where: {
             workspaceId_id: {
-              workspaceId: lead.workspaceId,
+              workspaceId,
               id: meta.messageId,
             },
           },
@@ -372,7 +379,7 @@ export async function sendAgentLeadListingShare(
       const createdAt = deps.now ?? new Date();
       const message = await tx.message.create({
         data: {
-          workspaceId: lead.workspaceId,
+          workspaceId,
           conversationId: conversation.id,
           leadId: lead.id,
           channel: "CHAT",
@@ -390,7 +397,7 @@ export async function sendAgentLeadListingShare(
       const updatedConversation = await tx.conversation.update({
         where: {
           workspaceId_id: {
-            workspaceId: lead.workspaceId,
+            workspaceId,
             id: conversation.id,
           },
         },
@@ -406,7 +413,7 @@ export async function sendAgentLeadListingShare(
           body: LISTING_SHARE_MESSAGE_BODY,
           meta: {
             idempotencyKey,
-            workspaceId: lead.workspaceId,
+            workspaceId,
             conversationId: updatedConversation.id,
             agentUserId: ctx.user.id,
             messageId: message.id,
@@ -439,7 +446,7 @@ export async function sendAgentLeadListingShare(
 
   if (!replayed) {
     await clearConversationTypingOnSend(db as unknown as ConversationTypingDb, {
-      workspaceId: lead.workspaceId,
+      workspaceId,
       conversationId: conversationOut.id,
       side: "agent",
     }).catch(() => undefined);
@@ -447,7 +454,7 @@ export async function sendAgentLeadListingShare(
     try {
       await recordConversationLeadActivity(db, {
         leadId: lead.id,
-        workspaceId: lead.workspaceId,
+        workspaceId,
         messageId: message.id,
         body: LISTING_SHARE_MESSAGE_BODY,
         channel: "CHAT",
@@ -463,7 +470,7 @@ export async function sendAgentLeadListingShare(
         deps.scheduleCustomerPush ?? scheduleNotifyCustomerOfAgentChatMessage;
       schedule({
         leadId: lead.id,
-        trustedWorkspaceId: lead.workspaceId,
+        trustedWorkspaceId: workspaceId,
         created: true,
         message: {
           id: message.id,
@@ -482,7 +489,7 @@ export async function sendAgentLeadListingShare(
   const rich = await enrichChatMessages(
     db as unknown as Parameters<typeof enrichChatMessages>[0],
     {
-      workspaceId: lead.workspaceId,
+      workspaceId,
       conversationId: conversationOut.id,
       viewerUserId: ctx.user.id,
       messages: [
