@@ -1057,13 +1057,11 @@ export function SearchExperience() {
           onClearChip={clearResultChip}
           onClearAll={resetStructuredFilters}
           leading={
-            isNarrow ? (
-              <SearchesDropdown
-                signedIn={signedIn}
-                callbackPath={searchCallbackPath(filters, structuredCities)}
-                savedSearchQuery={savedSearchQuery}
-              />
-            ) : undefined
+            <SearchesDropdown
+              signedIn={signedIn}
+              callbackPath={searchCallbackPath(filters, structuredCities)}
+              savedSearchQuery={savedSearchQuery}
+            />
           }
         />
       </div>

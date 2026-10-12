@@ -11,8 +11,9 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Bookmark, ChevronDown, Clock3, Crosshair } from "lucide-react";
+import { Bookmark, ChevronDown, Clock3, Crosshair, X } from "lucide-react";
 import { SaveSearchButton } from "@/components/account/SaveSearchButton";
+import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import { savedQueryToSearchHref } from "@/lib/agent/intent-to-search";
 import { BROWSE_STATE_CHANGED_EVENT } from "@/lib/listings/browse-state-client";
 import {
@@ -21,6 +22,7 @@ import {
   type LocalRecentSearch,
 } from "@/lib/listings/recent-searches-local";
 import { savedSearchDisplayNameFromQuery } from "@/lib/listings/saved-search-query";
+import { SITE_MESSAGES } from "@/lib/site-messages";
 import { cn } from "@/lib/utils";
 
 type SavedSearchItem = {
@@ -92,11 +94,13 @@ export function SearchesDropdown({
   className?: string;
 }) {
   const router = useRouter();
+  const { confirm, toast } = useSiteAlert();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [recent, setRecent] = useState<LocalRecentSearch[]>([]);
   const [saved, setSaved] = useState<SavedSearchItem[]>([]);
   const [savedLoading, setSavedLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -188,6 +192,37 @@ export function SearchesDropdown({
     router.push(href);
   }
 
+  async function removeSavedSearch(id: string) {
+    const ok = await confirm({
+      ...SITE_MESSAGES.deleteSavedSearch,
+      destructive: true,
+    });
+    if (!ok) return;
+
+    setDeletingId(id);
+    try {
+      const res = await fetch("/api/saved-searches", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) {
+        toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+        return;
+      }
+      setSaved((prev) => prev.filter((item) => item.id !== id));
+      toast({ message: "Saved search deleted.", tone: "success" });
+      window.dispatchEvent(new Event("houzzat:saved-searches-changed"));
+      window.dispatchEvent(
+        new Event("houzzat:homepage-personalization-changed"),
+      );
+    } catch {
+      toast({ message: SITE_MESSAGES.genericErrorToast, tone: "error" });
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   const panel =
     open && flyoutStyle && mounted ? (
       <div
@@ -264,11 +299,14 @@ export function SearchesDropdown({
           ) : (
             <ul className="space-y-0.5" aria-label="Saved searches">
               {saved.map((item) => (
-                <li key={item.id}>
+                <li
+                  key={item.id}
+                  className="flex items-stretch gap-0.5 rounded-lg hover:bg-canopy/10"
+                >
                   <button
                     type="button"
                     onClick={() => go(savedQueryToSearchHref(item.query ?? {}))}
-                    className="flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left text-sm text-ink transition hover:bg-canopy/10"
+                    className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2 py-2 text-left text-sm text-ink transition"
                   >
                     <Bookmark
                       className="mt-0.5 size-3.5 shrink-0 text-canopy"
@@ -277,6 +315,19 @@ export function SearchesDropdown({
                     <span className="min-w-0 flex-1 truncate font-medium">
                       {item.name}
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete saved search ${item.name}`}
+                    disabled={deletingId === item.id}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void removeSavedSearch(item.id);
+                    }}
+                    className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                  >
+                    <X className="size-3.5" aria-hidden strokeWidth={2.5} />
                   </button>
                 </li>
               ))}

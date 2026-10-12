@@ -193,9 +193,21 @@ assert.equal((experience.match(/>\s*Plan\s*</g) ?? []).length, 0);
 const dropdown = read("src/components/listings/SearchesDropdown.tsx");
 assert.ok(dropdown.includes("Recent Searches"));
 assert.ok(dropdown.includes("Saved Searches"));
-assert.ok(dropdown.includes("Save this search"));
+assert.ok(dropdown.includes("Save as new") || dropdown.includes("Save this search"));
 assert.ok(dropdown.includes("savedQueryToSearchHref"));
 assert.ok(dropdown.includes("readLocalRecentSearches"));
+assert.ok(dropdown.includes("Delete saved search"));
+assert.ok(dropdown.includes('method: "DELETE"'));
+assert.ok(experience.includes("leading={"));
+assert.equal(
+  (experience.match(/isNarrow \?\s*\(\s*<SearchesDropdown/g) ?? []).length,
+  0,
+);
+
+const header = read("src/components/site/SiteHeaderClient.tsx");
+assert.ok(header.includes('label: "Search Listings"'));
+assert.equal(header.includes("Map Search"), false);
+assert.ok(header.includes('href: "/search"'));
 
 const strip = read("src/components/listings/SearchActiveFilterStrip.tsx");
 assert.ok(strip.includes("leading"));

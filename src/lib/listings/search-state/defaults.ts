@@ -19,7 +19,7 @@ export function defaultCommittedSearch(
     openHouseOnly: false,
     statuses: ["ACTIVE"],
     sort: "newest",
-    view: "split",
+    view: "cards",
     mapArea: null,
     ...overrides,
   };

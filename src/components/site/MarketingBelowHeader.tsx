@@ -54,47 +54,49 @@ export function MarketingBelowHeader({
   }, []);
 
   if (isPro) {
-    return <main className="min-h-0">{children}</main>;
+    return <main className="min-h-0 flex-1">{children}</main>;
   }
 
   const hideChrome = immersive || listingSheet || framed;
 
   return (
     <SeoLocationProvider>
-      {!hideChrome ? <HomepagePersonalizationBanner cities={cities} /> : null}
-      {!hideChrome ? <SavedSearchChipBar cities={cities} /> : null}
-      <main
-        className={
-          hideChrome
-            ? "min-h-0"
-            : "pb-[var(--mobile-bottom-nav,0px)] md:pb-0"
-        }
-      >
-        {!hideChrome && pathname !== "/" ? (
-          <AccountVerifiedSuccessBanner />
+      <div className="flex min-h-0 flex-1 flex-col">
+        {!hideChrome ? <HomepagePersonalizationBanner cities={cities} /> : null}
+        {!hideChrome ? <SavedSearchChipBar cities={cities} /> : null}
+        <main
+          className={
+            hideChrome
+              ? "min-h-0 flex-1"
+              : "min-h-0 flex-1 pb-[var(--mobile-bottom-nav,0px)] md:pb-0"
+          }
+        >
+          {!hideChrome && pathname !== "/" ? (
+            <AccountVerifiedSuccessBanner />
+          ) : null}
+          {children}
+        </main>
+        {!hideChrome &&
+        !isAgentSignatureTemplateId(chromeBrand.templateId) &&
+        !isTeamSignatureTemplateId(chromeBrand.templateId) ? (
+          <SeoFooterLinks fallbackCities={cities} />
         ) : null}
-        {children}
-      </main>
-      {!hideChrome &&
-      !isAgentSignatureTemplateId(chromeBrand.templateId) &&
-      !isTeamSignatureTemplateId(chromeBrand.templateId) ? (
-        <SeoFooterLinks fallbackCities={cities} />
-      ) : null}
-      {!hideChrome ? (
-        isAgentSignatureTemplateId(chromeBrand.templateId) ? (
-          <AgentSignatureFooter
-            view={resolveAgentSignatureView(chromeBrand)}
-            fallbackCities={cities}
-          />
-        ) : isTeamSignatureTemplateId(chromeBrand.templateId) ? (
-          <TeamSignatureFooter
-            view={resolveTeamSignatureView(chromeBrand)}
-            fallbackCities={cities}
-          />
-        ) : (
-          <SiteFooter chromeBrand={chromeBrand} />
-        )
-      ) : null}
+        {!hideChrome ? (
+          isAgentSignatureTemplateId(chromeBrand.templateId) ? (
+            <AgentSignatureFooter
+              view={resolveAgentSignatureView(chromeBrand)}
+              fallbackCities={cities}
+            />
+          ) : isTeamSignatureTemplateId(chromeBrand.templateId) ? (
+            <TeamSignatureFooter
+              view={resolveTeamSignatureView(chromeBrand)}
+              fallbackCities={cities}
+            />
+          ) : (
+            <SiteFooter chromeBrand={chromeBrand} />
+          )
+        ) : null}
+      </div>
     </SeoLocationProvider>
   );
 }

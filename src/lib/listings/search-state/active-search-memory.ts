@@ -166,7 +166,7 @@ export function clearActiveSearchMemory(scope?: string): void {
 
 /**
  * Build the restore href from memory, optionally applying an explicit `view`
- * from the current URL (Map Search nav) without discarding remembered criteria.
+ * from the current URL (Search Listings nav) without discarding remembered criteria.
  */
 export function resolveActiveSearchRestoreHref(input: {
   memoryHref: string;

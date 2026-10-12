@@ -72,6 +72,20 @@ function assertCriteriaEqual(a: CommittedSearch, b: CommittedSearch) {
 }
 
 // ---------------------------------------------------------------------------
+// 1b. Cards is the default view (explicit map/split preserved)
+// ---------------------------------------------------------------------------
+{
+  assert.equal(defaultCommittedSearch().view, "cards");
+  assert.equal(parseSearchUrl("transactionType=SALE").view, "cards");
+  assert.equal(parseSearchUrl("transactionType=SALE&view=map").view, "map");
+  assert.equal(parseSearchUrl("transactionType=SALE&view=split").view, "split");
+  assert.equal(
+    parseSearchUrl("transactionType=SALE", { isMobileDefaultView: false }).view,
+    "cards",
+  );
+}
+
+// ---------------------------------------------------------------------------
 // 2. Legacy URL compatibility + mixed precedence
 // ---------------------------------------------------------------------------
 {
@@ -168,7 +182,9 @@ function assertCriteriaEqual(a: CommittedSearch, b: CommittedSearch) {
     filters: { ...filters, city: "Mississauga" },
     view: "cards",
   });
-  assert.equal(serializeSearchUrl(committed), legacyHref);
+  // searchPageHref omits default cards; serializeSearchUrl always emits view.
+  assert.equal(serializeSearchUrl(committed), `${legacyHref}&view=cards`);
+  assert.doesNotMatch(legacyHref, /view=/);
 }
 
 // ---------------------------------------------------------------------------

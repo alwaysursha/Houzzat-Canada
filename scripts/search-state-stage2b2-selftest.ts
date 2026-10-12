@@ -458,7 +458,6 @@ check("Mobile omits view → Cards after mount (SSR-safe, one-shot)", "STATIC", 
     "src/lib/listings/search-state/use-committed-search.ts",
   );
   assert.match(controller, /SET_VIEW/);
-  assert.match(controller, /max-width:\s*1023px/);
   assert.match(controller, /searchParams\.get\("view"\)/);
   assert.match(controller, /mobileCardsDefaultDoneRef/);
   const serialize = read("src/lib/listings/search-state/serialize.ts");
@@ -468,10 +467,8 @@ check("Mobile omits view → Cards after mount (SSR-safe, one-shot)", "STATIC", 
     /if \(committed\.view !== "split"\) params\.set\("view"/,
   );
   const href = read("src/lib/listings/search-page-href.ts");
-  assert.match(
-    href,
-    /return isMobileDefault \? "cards" : "split"/,
-  );
+  assert.match(href, /return "cards"/);
+  assert.match(href, /if \(input\.view !== "cards"\) params\.set\("view"/);
 });
 
 if (failed > 0) {
