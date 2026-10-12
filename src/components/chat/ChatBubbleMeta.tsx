@@ -39,7 +39,7 @@ export function ChatBubbleMeta({
   return (
     <span
       className={cn(
-        "float-right ml-2 inline-flex translate-y-0.5 items-center gap-0.5 whitespace-nowrap text-[11px] font-medium leading-none",
+        "inline-flex items-end gap-0.5 whitespace-nowrap text-[11px] font-medium leading-none",
         tone === "outgoing" ? "text-[#3d6a57]/75" : "text-[#5b7a6c]/80",
         className,
       )}
@@ -76,8 +76,8 @@ export function ChatBubbleBodyWithMeta({
   children?: ReactNode;
 }) {
   return (
-    <div className="text-[16px] leading-6">
-      <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+    <div className="text-[16px] leading-6 [overflow-wrap:anywhere]">
+      <span className="whitespace-pre-wrap break-words">
         {children ?? body}
       </span>
       <ChatBubbleMeta
@@ -86,7 +86,9 @@ export function ChatBubbleBodyWithMeta({
         deliveredAt={deliveredAt}
         peerLastReadAt={peerLastReadAt}
         tone={tone}
+        className="float-right ml-2 relative top-[0.5em]"
       />
+      <span className="clear-both block h-0 w-0 overflow-hidden" aria-hidden />
     </div>
   );
 }
