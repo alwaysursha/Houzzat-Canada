@@ -133,6 +133,19 @@ const marketingLayout = read("src/app/(marketing)/layout.tsx");
 assert.ok(marketingLayout.includes("flex min-h-dvh flex-col"));
 const belowHeader = read("src/components/site/MarketingBelowHeader.tsx");
 assert.ok(belowHeader.includes("flex min-h-0 flex-1 flex-col"));
-assert.ok(belowHeader.includes("min-h-0 flex-1"));
+assert.ok(belowHeader.includes('main className="min-h-0 flex-1"'));
+// Mobile bottom-nav clearance must sit after the footer, not as main padding
+// (main padding left a blank mist band between homepage content and footer).
+assert.ok(
+  belowHeader.includes(
+    'pb-[var(--mobile-bottom-nav,0px)] md:pb-0',
+  ),
+);
+assert.equal(
+  belowHeader.includes(
+    'min-h-0 flex-1 pb-[var(--mobile-bottom-nav,0px)] md:pb-0',
+  ),
+  false,
+);
 
 console.log("homepage-personalization-phase-b selftest: PASS");

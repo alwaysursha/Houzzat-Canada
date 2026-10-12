@@ -64,37 +64,33 @@ export function MarketingBelowHeader({
       <div className="flex min-h-0 flex-1 flex-col">
         {!hideChrome ? <HomepagePersonalizationBanner cities={cities} /> : null}
         {!hideChrome ? <SavedSearchChipBar cities={cities} /> : null}
-        <main
-          className={
-            hideChrome
-              ? "min-h-0 flex-1"
-              : "min-h-0 flex-1 pb-[var(--mobile-bottom-nav,0px)] md:pb-0"
-          }
-        >
+        <main className="min-h-0 flex-1">
           {!hideChrome && pathname !== "/" ? (
             <AccountVerifiedSuccessBanner />
           ) : null}
           {children}
         </main>
-        {!hideChrome &&
-        !isAgentSignatureTemplateId(chromeBrand.templateId) &&
-        !isTeamSignatureTemplateId(chromeBrand.templateId) ? (
-          <SeoFooterLinks fallbackCities={cities} />
-        ) : null}
+        {/* Bottom-nav clearance after footer — not on main (avoids a blank band above the footer). */}
         {!hideChrome ? (
-          isAgentSignatureTemplateId(chromeBrand.templateId) ? (
-            <AgentSignatureFooter
-              view={resolveAgentSignatureView(chromeBrand)}
-              fallbackCities={cities}
-            />
-          ) : isTeamSignatureTemplateId(chromeBrand.templateId) ? (
-            <TeamSignatureFooter
-              view={resolveTeamSignatureView(chromeBrand)}
-              fallbackCities={cities}
-            />
-          ) : (
-            <SiteFooter chromeBrand={chromeBrand} />
-          )
+          <div className="pb-[var(--mobile-bottom-nav,0px)] md:pb-0">
+            {!isAgentSignatureTemplateId(chromeBrand.templateId) &&
+            !isTeamSignatureTemplateId(chromeBrand.templateId) ? (
+              <SeoFooterLinks fallbackCities={cities} />
+            ) : null}
+            {isAgentSignatureTemplateId(chromeBrand.templateId) ? (
+              <AgentSignatureFooter
+                view={resolveAgentSignatureView(chromeBrand)}
+                fallbackCities={cities}
+              />
+            ) : isTeamSignatureTemplateId(chromeBrand.templateId) ? (
+              <TeamSignatureFooter
+                view={resolveTeamSignatureView(chromeBrand)}
+                fallbackCities={cities}
+              />
+            ) : (
+              <SiteFooter chromeBrand={chromeBrand} />
+            )}
+          </div>
         ) : null}
       </div>
     </SeoLocationProvider>
