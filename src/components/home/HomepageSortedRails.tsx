@@ -29,7 +29,7 @@ export function HomepageSortedRails({
   /** When true, rails with 0 results sort after rails with results (stable). */
   reorderEmptyLast: boolean;
   personalization: HomepagePersonalizationQuery | null;
-  /** Default-order listing rails; Near me is inserted after `recently-viewed`. */
+  /** Default-order listing rails; Recommended sits above `recently-viewed`, Near me after. */
   sections: HomepageRailSection[];
   cities?: string[];
 }) {
@@ -55,47 +55,37 @@ export function HomepageSortedRails({
     [],
   );
 
+  const personalizeRail: HomepageRailSection = {
+    id: "personalize-homepage",
+    resultCount: 1,
+    node: <PersonalizeHomepageBar cities={cities} />,
+  };
+  const nearMeRail: HomepageRailSection = {
+    id: "near-me",
+    resultCount: nearMe.resultCount,
+    node: (
+      <HomeNearMeRail
+        personalization={personalization}
+        onStatusChange={onNearMeStatusChange}
+      />
+    ),
+  };
+
   const rails: HomepageRailSection[] = [];
   let nearMeInserted = false;
   for (const section of sections) {
-    rails.push(section);
     if (section.id === "recently-viewed") {
-      rails.push({
-        id: "near-me",
-        resultCount: nearMe.resultCount,
-        node: (
-          <HomeNearMeRail
-            personalization={personalization}
-            onStatusChange={onNearMeStatusChange}
-          />
-        ),
-      });
-      rails.push({
-        id: "personalize-homepage",
-        resultCount: 1,
-        node: <PersonalizeHomepageBar cities={cities} />,
-      });
+      // Recommended for you → Recently viewed → Near me → remaining
+      rails.push(personalizeRail);
+      rails.push(section);
+      rails.push(nearMeRail);
       nearMeInserted = true;
+      continue;
     }
+    rails.push(section);
   }
   if (!nearMeInserted) {
-    rails.unshift(
-      {
-        id: "near-me",
-        resultCount: nearMe.resultCount,
-        node: (
-          <HomeNearMeRail
-            personalization={personalization}
-            onStatusChange={onNearMeStatusChange}
-          />
-        ),
-      },
-      {
-        id: "personalize-homepage",
-        resultCount: 1,
-        node: <PersonalizeHomepageBar cities={cities} />,
-      },
-    );
+    rails.unshift(personalizeRail, nearMeRail);
   }
 
   return (

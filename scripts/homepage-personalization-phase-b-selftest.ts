@@ -72,6 +72,24 @@ assert.ok(bar.includes("sourceKind={source.kind}"));
 assert.ok(bar.includes("Recommended for you"));
 assert.equal(bar.includes("View results"), false);
 assert.equal(bar.includes("Your home search"), false);
+// Chips + Edit homepage search share one row (button not full-width stack).
+assert.ok(bar.includes("flex-wrap items-center"));
+assert.ok(bar.includes("sm:ml-auto"));
+assert.equal(bar.includes("w-full items-center justify-center"), false);
+
+const sortedRails = read("src/components/home/HomepageSortedRails.tsx");
+assert.ok(sortedRails.includes('id: "personalize-homepage"'));
+assert.ok(sortedRails.includes("rails.push(personalizeRail)"));
+assert.ok(sortedRails.includes("rails.push(section)"));
+assert.ok(sortedRails.includes("rails.push(nearMeRail)"));
+// Recommended must be inserted before Recently viewed (not after).
+{
+  const insertBlock = sortedRails.slice(
+    sortedRails.indexOf('section.id === "recently-viewed"'),
+    sortedRails.indexOf("nearMeInserted = true"),
+  );
+  assert.ok(insertBlock.indexOf("personalizeRail") < insertBlock.indexOf("rails.push(section)"));
+}
 
 const modal = read("src/components/home/PersonalizeHomepageModal.tsx");
 assert.ok(modal.includes("seededOpenRef"));
@@ -110,5 +128,11 @@ const funnel = read("src/components/auth/lead-funnel/LeadCaptureFunnel.tsx");
 assert.ok(funnel.includes("Is this search correct?"));
 assert.ok(funnel.includes("Yes, That&apos;s right"));
 assert.ok(funnel.includes("No, Edit Search"));
+
+const marketingLayout = read("src/app/(marketing)/layout.tsx");
+assert.ok(marketingLayout.includes("flex min-h-dvh flex-col"));
+const belowHeader = read("src/components/site/MarketingBelowHeader.tsx");
+assert.ok(belowHeader.includes("flex min-h-0 flex-1 flex-col"));
+assert.ok(belowHeader.includes("min-h-0 flex-1"));
 
 console.log("homepage-personalization-phase-b selftest: PASS");

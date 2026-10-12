@@ -53,7 +53,9 @@ import {
   CUSTOMER_CHAT_OVERLAY_PRIORITY,
   isCustomerChatHistoryState,
   pushCustomerChatOverlay,
+  shouldCloseCustomerChatOnPopState,
 } from "@/lib/customer-chat/chat-overlay";
+import { isListingSheetOpen } from "@/lib/mobile/listing-sheet-store";
 import { VOICE_NOTE_MESSAGE_BODY } from "@/lib/chat/voice-notes/constants";
 import { LISTING_SHARE_MESSAGE_BODY } from "@/lib/conversations/listing-share/payload";
 
@@ -510,17 +512,30 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
       historyPushedRef.current = true;
     }
 
-    function onPopState() {
+    function onPopState(event: PopStateEvent) {
       if (
-        modeRef.current === "open" ||
-        modeRef.current === "preview" ||
-        modeRef.current === "minimized"
+        modeRef.current !== "open" &&
+        modeRef.current !== "preview" &&
+        modeRef.current !== "minimized"
       ) {
-        closingFromPopRef.current = true;
-        historyPushedRef.current = false;
-        closeWithDismiss();
-        closingFromPopRef.current = false;
+        return;
       }
+      // View Property → listing sheet Close uses history.back(); keep chat open
+      // when the landing history entry still carries the chat overlay marker.
+      if (
+        !shouldCloseCustomerChatOnPopState({
+          eventState: event.state,
+          historyState: window.history.state,
+          listingSheetOpen: isListingSheetOpen(),
+        })
+      ) {
+        historyPushedRef.current = true;
+        return;
+      }
+      closingFromPopRef.current = true;
+      historyPushedRef.current = false;
+      closeWithDismiss();
+      closingFromPopRef.current = false;
     }
     window.addEventListener("popstate", onPopState);
     return () => {

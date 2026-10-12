@@ -250,8 +250,8 @@ export function useCommittedSearch(pathname: string): {
   }, [searchParams, pathname, urlSyncReady]);
 
   /**
-   * Mobile Cards default after mount when `view` is omitted (fresh search).
-   * One-shot per mount: must not re-run when the user later chooses Split.
+   * Cards default after mount when `view` is omitted (fresh search).
+   * One-shot per mount: must not re-run when the user later chooses Map/Split.
    * Explicit view=… in the URL skips the default. Active Search restore marks
    * the default done when memory already carried a view.
    */
@@ -262,13 +262,10 @@ export function useCommittedSearch(pathname: string): {
       mobileCardsDefaultDoneRef.current = true;
       return;
     }
-    if (!window.matchMedia("(max-width: 1023px)").matches) {
-      mobileCardsDefaultDoneRef.current = true;
-      return;
-    }
     mobileCardsDefaultDoneRef.current = true;
+    if (state.committed.view === "cards") return;
     dispatch({ type: "SET_VIEW", view: "cards" });
-  }, [searchParams, urlSyncReady]);
+  }, [searchParams, urlSyncReady, state.committed.view]);
 
   return { state, dispatch };
 }

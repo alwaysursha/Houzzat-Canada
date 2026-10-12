@@ -36,6 +36,10 @@ import {
   writeCustomerChatSessionListing,
 } from "../src/lib/customer-chat/floating-chat";
 import {
+  CUSTOMER_CHAT_HISTORY_STATE_KEY,
+  shouldCloseCustomerChatOnPopState,
+} from "../src/lib/customer-chat/chat-overlay";
+import {
   draftFromStartChatIntent,
   listingContextFromStartChatIntent,
   openGuestStartChatIntent,
@@ -546,6 +550,42 @@ function testExistingFlowsPreserved() {
   assert.ok(startChat.includes("Does not send a message"));
 }
 
+function testListingSheetPopStateKeepsChatOpen() {
+  const chatMarker = { [CUSTOMER_CHAT_HISTORY_STATE_KEY]: true as const };
+  // Desktop/mobile: closing listing sheet lands on chat history entry.
+  assert.equal(
+    shouldCloseCustomerChatOnPopState({
+      eventState: chatMarker,
+      historyState: chatMarker,
+      listingSheetOpen: false,
+    }),
+    false,
+  );
+  // While listing sheet is open, ignore joint-history pops.
+  assert.equal(
+    shouldCloseCustomerChatOnPopState({
+      eventState: null,
+      historyState: chatMarker,
+      listingSheetOpen: true,
+    }),
+    false,
+  );
+  // Genuine Back away from chat overlay still closes.
+  assert.equal(
+    shouldCloseCustomerChatOnPopState({
+      eventState: null,
+      historyState: null,
+      listingSheetOpen: false,
+    }),
+    true,
+  );
+
+  const provider = read("src/components/customer-chat/CustomerChatProvider.tsx");
+  assert.ok(provider.includes("shouldCloseCustomerChatOnPopState"));
+  assert.ok(provider.includes("isListingSheetOpen"));
+  assert.ok(provider.includes("PopStateEvent"));
+}
+
 const tests: Array<[string, () => void]> = [
   ["window clamp + mobile", testWindowClampAndMobile],
   ["open/minimize/close wiring", testOpenMinimizeCloseWiring],
@@ -556,6 +596,7 @@ const tests: Array<[string, () => void]> = [
   ["defer typing/forms", testDeferTypingAndForms],
   ["logout isolation", testLogoutAccountSwitchIsolation],
   ["dismiss persistence + peek guards", testDismissPersistenceAndPeekGuards],
+  ["listing sheet popstate keeps chat", testListingSheetPopStateKeepsChatOpen],
   ["existing flows", testExistingFlowsPreserved],
 ];
 

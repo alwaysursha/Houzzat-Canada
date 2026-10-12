@@ -455,7 +455,7 @@ record(10, "View transitions preserve committed filters", "RUNTIME", () => {
     assert.equal(parsed.minBeds, "3");
     assert.equal(parsed.minPrice, "750000");
     assert.equal(apiQuery(state).get("cities"), "Mississauga");
-    if (view === "split") {
+    if (view === "cards") {
       assert.equal(parsed.view, null); // default omitted
     } else {
       assert.equal(parsed.view, view);

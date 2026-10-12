@@ -68,29 +68,30 @@ export function PersonalizeHomepageBar({
           <p className="font-display text-xl tracking-tight text-ink sm:text-2xl">
             {heading}
           </p>
-          {chipLabels.length > 0 ? (
-            <ul
-              className="mt-3 flex flex-wrap gap-2"
-              aria-label="Search criteria"
-            >
-              {chipLabels.map((label) => (
-                <li
-                  key={label}
-                  className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-canopy-deep shadow-[0_1px_0_rgba(20,32,28,0.04)] ring-1 ring-canopy/15"
-                >
-                  {label}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          <div className="mt-4">
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+            {chipLabels.length > 0 ? (
+              <ul
+                className="flex min-w-0 flex-1 flex-wrap gap-2"
+                aria-label="Search criteria"
+              >
+                {chipLabels.map((label) => (
+                  <li
+                    key={label}
+                    className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-canopy-deep shadow-[0_1px_0_rgba(20,32,28,0.04)] ring-1 ring-canopy/15"
+                  >
+                    {label}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="min-w-0 flex-1" />
+            )}
             <button
               type="button"
               onClick={() => setModalOpen(true)}
-              className="relative flex w-full items-center justify-center gap-2.5 rounded-xl bg-canopy px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-canopy-deep sm:w-auto sm:min-w-[14rem] sm:px-5"
+              className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-canopy px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-canopy-deep sm:ml-auto"
             >
-              <SlidersHorizontal className="size-4" aria-hidden />
+              <SlidersHorizontal className="size-3.5" aria-hidden />
               Edit homepage search
             </button>
           </div>

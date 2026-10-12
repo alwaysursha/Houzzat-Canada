@@ -20,7 +20,7 @@ import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { cn } from "@/lib/utils";
 
 const SITE_NAV = [
-  { href: "/search?view=map", label: "Map Search" },
+  { href: "/search", label: "Search Listings" },
   { href: "/home-valuation", label: "What's my Home Worth?" },
 ];
 

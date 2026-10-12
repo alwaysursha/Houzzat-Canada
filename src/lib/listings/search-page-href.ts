@@ -77,10 +77,11 @@ export function parseSearchSort(raw: string | null): SearchFilters["sort"] {
 
 export function parseSearchView(
   raw: string | null,
-  isMobileDefault: boolean,
+  _isMobileDefault?: boolean,
 ): SearchViewMode {
   if (raw === "map" || raw === "cards" || raw === "split") return raw;
-  return isMobileDefault ? "cards" : "split";
+  // Cards is the consumer default; explicit view=map|split deep links win.
+  return "cards";
 }
 
 export function parseSearchPropertyTypes(raw: string | null): PropertyType[] {
@@ -131,7 +132,7 @@ export function searchPageHref(input: {
   if (statusQ) params.set("status", statusQ);
   if (next.sort !== "newest") params.set("sort", next.sort);
   if (!input.clearQuery && input.q) params.set("q", input.q);
-  if (input.view !== "split") params.set("view", input.view);
+  if (input.view !== "cards") params.set("view", input.view);
   const qs = params.toString();
   return qs ? `${input.pathname}?${qs}` : input.pathname;
 }

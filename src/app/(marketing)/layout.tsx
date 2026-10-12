@@ -200,7 +200,7 @@ export default async function MarketingLayout({
           isHouzzatWorkspace={chromeBrand.isHouzzatWorkspace}
           templateId={chromeBrand.templateId}
         />
-        <div className="min-h-dvh">
+        <div className="flex min-h-dvh flex-col">
           {chromeBrand.templatePreview?.active ? (
             <OwnerTemplatePreviewBar
               displayLabel={chromeBrand.templatePreview.displayLabel}

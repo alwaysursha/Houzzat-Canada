@@ -62,3 +62,19 @@ export function isCustomerChatHistoryState(
         true,
   );
 }
+
+/**
+ * Listing-sheet Close uses history.back() while the chat history marker often
+ * remains on the landing entry. Keep chat open in that case; only dismiss when
+ * Back truly leaves the chat overlay entry (and no listing sheet is open).
+ */
+export function shouldCloseCustomerChatOnPopState(input: {
+  eventState: unknown;
+  historyState: unknown;
+  listingSheetOpen: boolean;
+}): boolean {
+  if (input.listingSheetOpen) return false;
+  if (isCustomerChatHistoryState(input.eventState)) return false;
+  if (isCustomerChatHistoryState(input.historyState)) return false;
+  return true;
+}
