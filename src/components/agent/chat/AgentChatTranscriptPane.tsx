@@ -993,7 +993,7 @@ function ChatRow({
       ) : (
         <div
           className={cn(
-            "rounded-2xl px-3.5 py-2 shadow-sm",
+            "rounded-2xl px-3.5 pb-1.5 pt-2 shadow-sm",
             deleted
               ? "bg-[#f8fafc] italic text-[#64748b] ring-1 ring-[#e2e8f0]"
               : mine
@@ -1006,7 +1006,7 @@ function ChatRow({
           {listingUrl ? <ChatMessageListingUrlCard body={body} /> : null}
           {linkPreview ? <ChatMessageLinkCard preview={linkPreview} /> : null}
           {hideUrlBody ? (
-            <div className="mt-1 flex justify-end">
+            <div className="mt-1 flex items-end justify-end">
               <ChatBubbleMeta
                 createdAt={message.createdAt}
                 isOwnMessage={mine}
