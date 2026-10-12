@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react";
 import { AccountVerifiedSuccessBanner } from "@/components/auth/AccountVerifiedSuccessBanner";
 import { HomeCustomerToolsStrip } from "@/components/home/HomeCustomerToolsStrip";
 import { HomeCustomerToolsTease } from "@/components/home/HomeCustomerToolsTease";
-import { HomeListingRail } from "@/components/home/HomeListingRail";
 import { HomeOwnerListingRail } from "@/components/home/HomeOwnerListingRail";
 import { HomeRecentlyViewedRail } from "@/components/home/HomeRecentlyViewedRail";
 import { HomepageMarketRails } from "@/components/home/HomepageMarketRails";
@@ -16,18 +15,21 @@ import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 
 function ToolsStripSkeleton() {
   return (
+    // Desktop-only — same as settled HomeCustomerToolsStrip (avoids post-login height flash).
     <div
-      className="border-b border-line/80 bg-surface px-4 py-3 sm:px-6 lg:px-10"
+      className="hidden md:block"
       aria-busy="true"
       aria-label="Loading account shortcuts"
     >
-      <div className="flex gap-3 overflow-hidden">
-        {Array.from({ length: 5 }, (_, i) => (
-          <div
-            key={i}
-            className="h-9 w-28 shrink-0 animate-pulse rounded-lg bg-mist"
-          />
-        ))}
+      <div className="border-b border-line/80 bg-surface px-4 py-3 sm:px-6 lg:px-10">
+        <div className="flex gap-3 overflow-hidden">
+          {Array.from({ length: 5 }, (_, i) => (
+            <div
+              key={i}
+              className="h-9 w-28 shrink-0 animate-pulse rounded-lg bg-mist"
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -211,45 +213,38 @@ export function HomeDeferredBody({
           personalization={resolved.personalization}
           cities={cities}
           sections={[
-            ...(awaitingAccountShell
+            // While home-shell loads after sign-in, keep the guest local-fallback
+            // rail (null when empty) — do not mount a tall loading skeleton that
+            // inflates document height during fly-to-account.
+            ...(awaitingAccountShell ||
+            guestRecent ||
+            resolved.recentlyViewed.length > 0 ||
+            resolved.personalized
               ? [
                   {
                     id: "recently-viewed",
-                    resultCount: 1,
+                    resultCount:
+                      awaitingAccountShell || guestRecent
+                        ? 1
+                        : resolved.recentlyViewed.length,
                     node: (
-                      <HomeListingRail
-                        id="rail-recently-viewed"
-                        title="Recently viewed"
-                        href="/account"
-                        items={[]}
-                        loading
+                      <HomeRecentlyViewedRail
+                        items={
+                          awaitingAccountShell ? [] : resolved.recentlyViewed
+                        }
+                        useLocalFallback={Boolean(
+                          awaitingAccountShell || guestRecent,
+                        )}
+                        emptyLabel={
+                          !awaitingAccountShell && resolved.personalized
+                            ? "None of your recently viewed homes match your homepage search."
+                            : undefined
+                        }
                       />
                     ),
                   },
                 ]
-              : guestRecent ||
-                  resolved.recentlyViewed.length > 0 ||
-                  resolved.personalized
-                ? [
-                    {
-                      id: "recently-viewed",
-                      resultCount: guestRecent
-                        ? 1
-                        : resolved.recentlyViewed.length,
-                      node: (
-                        <HomeRecentlyViewedRail
-                          items={resolved.recentlyViewed}
-                          useLocalFallback={Boolean(guestRecent)}
-                          emptyLabel={
-                            resolved.personalized
-                              ? "None of your recently viewed homes match your homepage search."
-                              : undefined
-                          }
-                        />
-                      ),
-                    },
-                  ]
-                : []),
+              : []),
             {
               id: "market-rails",
               resultCount: 1,
