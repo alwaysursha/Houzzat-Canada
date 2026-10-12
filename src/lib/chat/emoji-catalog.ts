@@ -15,14 +15,24 @@ export type ChatEmojiCategory = {
   emojis: readonly string[];
 };
 
-/** Common reactions + composer shortcuts. */
-export const CHAT_REACTION_KEYS = [
+/**
+ * Quick-reaction strip (WhatsApp-inspired order).
+ * Legacy 😊 remains allowed for existing MessageReaction rows.
+ */
+export const CHAT_QUICK_REACTION_KEYS = [
   "👍",
   "❤️",
   "😂",
-  "😊",
   "😮",
+  "😢",
   "🙏",
+  "😡",
+] as const;
+
+/** Allowed reaction keys (quick set + legacy smile). */
+export const CHAT_REACTION_KEYS = [
+  ...CHAT_QUICK_REACTION_KEYS,
+  "😊",
 ] as const;
 
 export type ChatReactionKey = (typeof CHAT_REACTION_KEYS)[number];
@@ -31,7 +41,7 @@ export const CHAT_EMOJI_CATEGORIES: readonly ChatEmojiCategory[] = [
   {
     id: "frequent",
     label: "Frequent",
-    emojis: [...CHAT_REACTION_KEYS, "🎉", "🔥", "✨", "👏", "💯"],
+    emojis: [...CHAT_QUICK_REACTION_KEYS, "😊", "🎉", "🔥", "✨", "👏", "💯"],
   },
   {
     id: "smileys",
@@ -216,6 +226,8 @@ const EMOJI_ALIASES: Record<string, readonly string[]> = {
   "😂": ["laugh", "lol", "joy", "tears"],
   "😊": ["smile", "happy", "blush"],
   "😮": ["wow", "surprised", "open mouth", "oh"],
+  "😢": ["cry", "sad", "tear"],
+  "😡": ["angry", "mad", "rage"],
   "🙏": ["pray", "thanks", "please", "folded"],
   "🎉": ["party", "celebrate", "tada"],
   "🔥": ["fire", "lit", "hot"],

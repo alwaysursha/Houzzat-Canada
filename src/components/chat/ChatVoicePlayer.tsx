@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
 
 const SPEEDS = [1, 1.5, 2] as const;
 
+/**
+ * Voice playback for light mint/white bubbles — high-contrast controls.
+ */
 export function ChatVoicePlayer({
   src,
   durationMs,
@@ -44,10 +47,10 @@ export function ChatVoicePlayer({
     return (
       <div
         className={cn(
-          "flex min-w-[12rem] items-center gap-2 rounded-xl px-3 py-2 text-[12px]",
+          "flex min-w-[12rem] items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-medium",
           tone === "outgoing"
-            ? "bg-white/15 text-white/85"
-            : "bg-mist text-ink/60",
+            ? "bg-[#0f6b4c]/10 text-[#1a2e24]"
+            : "bg-[#eef2f7] text-[#334155]",
         )}
         role="status"
       >
@@ -81,11 +84,28 @@ export function ChatVoicePlayer({
       ? Math.min(100, Math.max(0, (currentMs / knownDurationMs) * 100))
       : 0;
 
+  const accent =
+    tone === "outgoing"
+      ? {
+          shell: "bg-[#0f6b4c]/12 text-[#12241c]",
+          play: "bg-[#0f6b4c] text-white hover:bg-[#0c5740]",
+          track: "bg-[#0f6b4c]/20",
+          fill: "bg-[#0f6b4c]",
+          speed: "bg-white text-[#0f6b4c] ring-1 ring-[#0f6b4c]/25",
+        }
+      : {
+          shell: "bg-white text-[#0f172a] ring-1 ring-[#d7e8df]",
+          play: "bg-[#0f6b4c] text-white hover:bg-[#0c5740]",
+          track: "bg-[#d7e8df]",
+          fill: "bg-[#0f6b4c]",
+          speed: "bg-[#f4faf7] text-[#1a2e24] ring-1 ring-[#d7e8df]",
+        };
+
   return (
     <div
       className={cn(
         "flex min-w-[13.5rem] max-w-[18rem] items-center gap-2 rounded-xl px-2.5 py-2",
-        tone === "outgoing" ? "bg-white/12 text-white" : "bg-mist text-ink",
+        accent.shell,
       )}
     >
       <audio
@@ -121,24 +141,27 @@ export function ChatVoicePlayer({
         onClick={togglePlay}
         aria-label={playing ? "Pause voice note" : "Play voice note"}
         className={cn(
-          "inline-flex size-8 shrink-0 items-center justify-center rounded-full",
-          tone === "outgoing"
-            ? "bg-white/20 text-white hover:bg-white/30"
-            : "bg-white text-canopy-deep shadow-sm hover:bg-white",
+          "inline-flex size-10 shrink-0 items-center justify-center rounded-full shadow-sm",
+          accent.play,
         )}
       >
         {playing ? (
-          <Pause className="size-3.5 fill-current" aria-hidden />
+          <Pause className="size-4 fill-current" aria-hidden />
         ) : (
-          <Play className="size-3.5 fill-current" aria-hidden />
+          <Play className="size-4 fill-current" aria-hidden />
         )}
       </button>
       <div className="min-w-0 flex-1 space-y-1">
-        <div className="relative h-2 overflow-hidden rounded-full bg-black/10">
+        <div
+          className={cn(
+            "relative h-2.5 overflow-hidden rounded-full",
+            accent.track,
+          )}
+        >
           <div
             className={cn(
               "absolute inset-y-0 left-0 rounded-full transition-[width] duration-100",
-              tone === "outgoing" ? "bg-white/80" : "bg-canopy",
+              accent.fill,
             )}
             style={{ width: `${progress}%` }}
           />
@@ -152,7 +175,7 @@ export function ChatVoicePlayer({
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           />
         </div>
-        <div className="flex items-center justify-between gap-2 text-[10px] font-semibold tabular-nums opacity-80">
+        <div className="flex items-center justify-between gap-2 text-[11px] font-semibold tabular-nums text-[#1a2e24]/75">
           <span>
             {loading
               ? "Loading…"
@@ -170,10 +193,8 @@ export function ChatVoicePlayer({
           setSpeedIndex((index) => (index + 1) % SPEEDS.length)
         }
         className={cn(
-          "shrink-0 rounded-md px-1.5 py-1 text-[10px] font-bold tabular-nums",
-          tone === "outgoing"
-            ? "bg-white/15 text-white hover:bg-white/25"
-            : "bg-white text-ink/70 hover:bg-white",
+          "shrink-0 rounded-md px-1.5 py-1 text-[11px] font-bold tabular-nums",
+          accent.speed,
         )}
       >
         {SPEEDS[speedIndex]}×

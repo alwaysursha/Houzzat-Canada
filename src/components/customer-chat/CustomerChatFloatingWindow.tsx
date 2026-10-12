@@ -1,14 +1,28 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useCustomerChatController } from "@/components/customer-chat/CustomerChatProvider";
 import { CustomerChatScreen } from "@/components/customer-chat/CustomerChatScreen";
+import { ChatAgentAvatar } from "@/components/chat/ChatAgentAvatar";
 import {
   CUSTOMER_CHAT_FLOATING_SIZE,
   clampCustomerChatWindowPosition,
   presentCustomerChatAgentInitials,
+  presentCustomerChatAgentName,
 } from "@/lib/customer-chat/floating-chat";
 import { cn } from "@/lib/utils";
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mq.matches);
+    const onChange = () => setReduced(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
+}
 
 export function CustomerChatFloatingWindow() {
   const {
@@ -23,6 +37,22 @@ export function CustomerChatFloatingWindow() {
     setDraft,
     setPosition,
   } = useCustomerChatController();
+  const reducedMotion = usePrefersReducedMotion();
+  const [entered, setEntered] = useState(reducedMotion);
+
+  useEffect(() => {
+    if (mode !== "open") {
+      setEntered(reducedMotion);
+      return;
+    }
+    if (reducedMotion) {
+      setEntered(true);
+      return;
+    }
+    setEntered(false);
+    const id = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(id);
+  }, [mode, reducedMotion]);
 
   useEffect(() => {
     if (mode !== "open" || isMobile) return;
@@ -63,9 +93,13 @@ export function CustomerChatFloatingWindow() {
               }
         }
       >
-        <span className="inline-flex size-7 items-center justify-center rounded-full bg-canopy text-[11px] font-bold text-white">
-          {presentCustomerChatAgentInitials(null)}
-        </span>
+        <ChatAgentAvatar
+          name={presentCustomerChatAgentName(null)}
+          initials={presentCustomerChatAgentInitials(null)}
+          photoUrl={null}
+          size="sm"
+          className="ring-1 ring-canopy/20"
+        />
         Chat
       </button>
     );
@@ -78,7 +112,18 @@ export function CustomerChatFloatingWindow() {
         aria-modal="true"
         aria-label="Chat"
         data-customer-chat-floating=""
-        className="fixed inset-0 z-[70] flex flex-col bg-gradient-to-b from-[#f7fcf9] via-white to-[#eef8f3] pt-[env(safe-area-inset-top,0px)]"
+        className={cn(
+          "fixed inset-0 z-[70] flex flex-col bg-gradient-to-b from-[#f7fcf9] via-white to-[#eef8f3] pt-[env(safe-area-inset-top,0px)]",
+          !reducedMotion && "transition-transform duration-250 ease-out",
+          entered || reducedMotion
+            ? "translate-y-0 opacity-100"
+            : "translate-y-3 opacity-0",
+        )}
+        style={
+          reducedMotion
+            ? undefined
+            : { transitionDuration: "260ms" }
+        }
       >
         <CustomerChatScreen
           chrome="mobile-sheet"
@@ -101,12 +146,17 @@ export function CustomerChatFloatingWindow() {
         "fixed z-[60] overflow-hidden rounded-[1.35rem]",
         "border border-canopy/15 bg-gradient-to-b from-white via-[#f8fcfa] to-[#eef8f3]",
         "shadow-[0_22px_60px_rgba(10,77,56,0.22)]",
+        !reducedMotion && "origin-bottom-right transition-[opacity,transform] duration-250 ease-out",
+        entered || reducedMotion
+          ? "scale-100 opacity-100"
+          : "scale-95 opacity-0",
       )}
       style={{
         left: position.x,
         top: position.y,
         width: CUSTOMER_CHAT_FLOATING_SIZE.width,
         height: CUSTOMER_CHAT_FLOATING_SIZE.height,
+        transitionDuration: reducedMotion ? undefined : "260ms",
       }}
     >
       <CustomerChatScreen

@@ -234,8 +234,10 @@ function testTranscriptAlignmentAndTombstone() {
   );
   assert.equal(customerSmsAutomationBadge(null), null);
   const screen = read("src/components/customer-chat/CustomerChatScreen.tsx");
-  assert.ok(screen.includes("whitespace-pre-wrap"));
-  assert.ok(screen.includes("[overflow-wrap:anywhere]"));
+  const bubbleMeta = read("src/components/chat/ChatBubbleMeta.tsx");
+  assert.ok(bubbleMeta.includes("whitespace-pre-wrap"));
+  assert.ok(bubbleMeta.includes("[overflow-wrap:anywhere]"));
+  assert.ok(screen.includes("ChatBubbleBodyWithMeta"));
   assert.ok(screen.includes("presentCustomerChatAgentName"));
   assert.ok(screen.includes("ChatMessageActions"));
   assert.ok(screen.includes("customerChatEmptyTitle"));

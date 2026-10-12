@@ -37,14 +37,18 @@ import {
   closeTopStaffOverlay,
   hasStaffOverlay,
 } from "@/lib/mobile/staff-overlay-stack";
+import {
+  closeTopCustomerChatOverlay,
+  hasCustomerChatOverlay,
+} from "@/lib/customer-chat/chat-overlay";
 
 /**
  * Native-shell polish when Houzzat runs inside Capacitor.
  *
  * Back priority:
  * listing chrome search → mobile AC search sheet → listing sheet →
- * staff drawers/modals → hard-nav memory → Chat thread→list →
- * staff home → history → exit.
+ * customer floating chat → staff drawers/modals → hard-nav memory →
+ * Chat thread→list → staff home → history → exit.
  * Closing overlays never leaves body scroll locked (acquireScrollLock).
  *
  * Also syncs the UX-only `houzzat_shell` cookie (never used for authorization).
@@ -93,6 +97,10 @@ export function CapacitorBootstrap() {
         } else {
           closeListingSheet();
         }
+        return;
+      }
+
+      if (hasCustomerChatOverlay() && closeTopCustomerChatOverlay()) {
         return;
       }
 

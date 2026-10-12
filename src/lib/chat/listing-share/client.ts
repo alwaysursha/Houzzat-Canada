@@ -163,7 +163,9 @@ export type PostAgentListingShareResult =
 
 export async function postAgentListingShare(
   leadId: string,
-  body: { listingId: string; idempotencyKey: string },
+  body:
+    | { listingId: string; idempotencyKey: string; mlsNumber?: undefined }
+    | { mlsNumber: string; idempotencyKey: string; listingId?: undefined },
   signal?: AbortSignal,
 ): Promise<PostAgentListingShareResult> {
   try {
@@ -173,7 +175,8 @@ export async function postAgentListingShare(
       headers: { "Content-Type": "application/json" },
       signal,
       body: JSON.stringify({
-        listingId: body.listingId,
+        ...(body.listingId ? { listingId: body.listingId } : {}),
+        ...(body.mlsNumber ? { mlsNumber: body.mlsNumber } : {}),
         idempotencyKey: body.idempotencyKey,
       }),
     });
