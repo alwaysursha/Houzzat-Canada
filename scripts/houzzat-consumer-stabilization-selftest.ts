@@ -36,6 +36,12 @@ function testHomepagePersonalizationReload() {
   assert.match(body, /EMAIL_VERIFIED_EVENT/);
   assert.match(body, /\/api\/account\/home-shell/);
   assert.match(body, /cache:\s*["']no-store["']/);
+  // Post-login await must not inject a tall Recently viewed loading skeleton
+  // (that growth coincided with fly-to-account and looked like animation overflow).
+  assert.match(body, /awaitingAccountShell \|\|/);
+  assert.match(body, /awaitingAccountShell \|\| guestRecent/);
+  assert.equal(body.includes("HomeListingRail"), false);
+  assert.match(body, /hidden md:block/);
   console.log("[1] homepage personalization-changed reloads shell... PASS");
 }
 
@@ -230,9 +236,12 @@ function testHomepageSoldRailsAccessRefresh() {
   assert.match(rails, /EMAIL_VERIFIED_EVENT/);
   assert.match(rails, /accessEpoch/);
   assert.match(rails, /isClient/);
+  // City-scope key (Primary/Active cities) — replaced personalizationKey in c4960ed
+  // when category rails stopped applying buyer price/beds/type filters.
+  assert.match(rails, /cityScopeKey/);
   assert.match(
     rails,
-    /\[personalizationKey,\s*vowOnlyGuest,\s*isClient,\s*accessEpoch\]/,
+    /\[cityScopeKey,\s*vowOnlyGuest,\s*isClient,\s*accessEpoch,\s*scopedCities\]/,
   );
   assert.match(rails, /setAccessEpoch/);
 
