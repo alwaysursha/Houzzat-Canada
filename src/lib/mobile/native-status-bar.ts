@@ -9,7 +9,12 @@ import type { AppShell } from "@/lib/mobile/app-shell";
  * - Light → dark icons (for light backgrounds)
  */
 
-type Surface = "pro-agent" | "pro-light" | "pro-mint" | "consumer";
+type Surface =
+  | "pro-agent"
+  | "pro-light"
+  | "pro-mint"
+  | "consumer"
+  | "consumer-light";
 
 function surfaceFor(pathname: string, shell: AppShell, lightOverlay: boolean): Surface {
   if (shell === "houzzatpro") {
@@ -18,6 +23,11 @@ function surfaceFor(pathname: string, shell: AppShell, lightOverlay: boolean): S
     // Admin and Agent shells both use the dark header (#1e2a38), so they need light/white icons
     if (pathname.startsWith("/admin") || pathname.startsWith("/agent")) return "pro-agent";
     return "pro-light";
+  }
+  // Light overlays (floating chat sheet, light modals) need dark status-bar icons.
+  if (lightOverlay) return "consumer-light";
+  if (pathname === "/account/chat" || pathname.startsWith("/account/chat/")) {
+    return "consumer-light";
   }
   return "consumer";
 }
@@ -48,6 +58,11 @@ export async function applyNativeStatusBar(input: {
     case "consumer":
       await StatusBar.setBackgroundColor({ color: "#1A7B59" });
       await StatusBar.setStyle({ style: Style.Dark });
+      return;
+    case "consumer-light":
+      // Style.Light → dark icons on light mint/white chat surfaces.
+      await StatusBar.setBackgroundColor({ color: "#F4FAF7" });
+      await StatusBar.setStyle({ style: Style.Light });
       return;
     default: {
       const _exhaustive: never = surface;

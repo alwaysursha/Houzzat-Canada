@@ -41,19 +41,43 @@ import {
   resolveChatListingShareView,
 } from "@/components/chat/ChatListingShareCard";
 import { ChatListingSharePicker } from "@/components/chat/ChatListingSharePicker";
+import { ChatBubbleBodyWithMeta, ChatBubbleMeta } from "@/components/chat/ChatBubbleMeta";
+import { ChatMessageLinkCard } from "@/components/chat/ChatComposerLinkPreview";
+import {
+  ChatComposerListingPreview,
+  ChatMessageListingUrlCard,
+  useChatComposerListingPreview,
+} from "@/components/chat/ChatListingUrlPreview";
+import { ChatLinkifiedText } from "@/components/chat/ChatLinkifiedText";
 import { ChatMessageActions } from "@/components/chat/ChatMessageActions";
 import {
   ChatQuotedPreview,
   ChatReactionBar,
-  ChatReceiptLabel,
 } from "@/components/chat/ChatMessageExtras";
 import { ChatQuickReplyPicker } from "@/components/chat/ChatQuickReplyPicker";
+import {
+  ChatDateSeparator,
+  ChatStickyDateLabel,
+} from "@/components/chat/ChatTranscriptDates";
 import { ChatTypingIndicator } from "@/components/chat/ChatTypingIndicator";
 import { ChatVoicePlayer } from "@/components/chat/ChatVoicePlayer";
 import { ChatVoiceRecorder } from "@/components/chat/ChatVoiceRecorder";
 import { useChatTypingPublisher } from "@/components/chat/useChatTypingPublisher";
+import {
+  chatMessageDayKey,
+  shouldShowChatDaySeparator,
+} from "@/lib/chat/chat-date";
 import { chatComposerTrailingAction } from "@/lib/chat/composer-ui";
 import { insertEmojiAtCursor } from "@/lib/chat/emoji-catalog";
+import { buildComposerLinkPreview } from "@/lib/chat/link-preview";
+import {
+  extractChatListingMls,
+  isListingUrlOnlyBody,
+} from "@/lib/chat/listing-url-preview";
+import {
+  newListingShareIdempotencyKey,
+  postAgentListingShare,
+} from "@/lib/chat/listing-share/client";
 import type { ChatQuotedMessage } from "@/lib/chat/message-reply";
 import { insertQuickReplyAtCursor } from "@/lib/chat/quick-replies/client";
 import {
@@ -132,6 +156,14 @@ export function AgentChatTranscriptPane({
   );
   const [replyTo, setReplyTo] = useState<ChatQuotedMessage | null>(null);
   const [voiceBusy, setVoiceBusy] = useState(false);
+  const [linkPreviewDismissedHref, setLinkPreviewDismissedHref] = useState<
+    string | null
+  >(null);
+  const listingComposerPreview = useChatComposerListingPreview({
+    draft,
+    dismissedHref: linkPreviewDismissedHref,
+    enabled: true,
+  });
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [pendingNavigateId, setPendingNavigateId] = useState<string | null>(
     null,
@@ -336,6 +368,36 @@ export function AgentChatTranscriptPane({
   }, [pendingNavigateId, panel?.messages]);
 
   async function submit() {
+    // Paste-only Houzzat listing URL → LISTING_SHARE (no duplicate TEXT+card).
+    if (
+      !smsSelected &&
+      leadId &&
+      onSendListingShare &&
+      listingComposerPreview.status === "ready" &&
+      listingComposerPreview.shareable &&
+      listingComposerPreview.href !== linkPreviewDismissedHref &&
+      isListingUrlOnlyBody(draft)
+    ) {
+      if (sending || !canSend) return;
+      const result = await postAgentListingShare(leadId, {
+        listingId: listingComposerPreview.listingId,
+        idempotencyKey: newListingShareIdempotencyKey(),
+      });
+      if (!result.ok) return;
+      const ok = await onSendListingShare(
+        result.message as LeadProfileV2ChatMessage,
+      );
+      if (ok) {
+        clearTyping();
+        setDraft("");
+        setReplyTo(null);
+        setLinkPreviewDismissedHref(null);
+        stickToBottomRef.current = true;
+        textareaRef.current?.focus();
+      }
+      return;
+    }
+
     if (
       !v2ChatComposerCanSubmit({
         body: draft,
@@ -359,6 +421,7 @@ export function AgentChatTranscriptPane({
       clearTyping();
       setDraft("");
       setReplyTo(null);
+      setLinkPreviewDismissedHref(null);
       stickToBottomRef.current = true;
       textareaRef.current?.focus();
     }
@@ -395,11 +458,15 @@ export function AgentChatTranscriptPane({
         </div>
       ) : null}
       <div
+        className="relative min-h-0 flex-1"
+      >
+        <ChatStickyDateLabel scrollerRef={scrollerRef} />
+      <div
         ref={scrollerRef}
         onScroll={handleScroll}
         role="log"
         aria-label="Chat transcript"
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4"
+        className="h-full min-h-0 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4"
       >
         {loading ? (
           <ChatSkeleton />
@@ -440,8 +507,21 @@ export function AgentChatTranscriptPane({
               </p>
             ) : (
               <ol className="space-y-2.5">
-                {rows.map((row) => (
+                {rows.map((row, index) => {
+                  const previous = rows[index - 1]?.message ?? null;
+                  const showDay = shouldShowChatDaySeparator({
+                    previousCreatedAt: previous?.createdAt,
+                    currentCreatedAt: row.message.createdAt,
+                  });
+                  const dayKey = chatMessageDayKey(row.message.createdAt);
+                  return (
                   <li key={row.message.id} className="min-w-0">
+                    {showDay ? (
+                      <ChatDateSeparator
+                        createdAt={row.message.createdAt}
+                        dayKey={dayKey}
+                      />
+                    ) : null}
                     {row.showDivider ? (
                       <div className="my-3 flex items-center gap-2">
                         <span className="h-px flex-1 bg-[#e2e8f0]" />
@@ -478,11 +558,13 @@ export function AgentChatTranscriptPane({
                       canReact={Boolean(onReact)}
                     />
                   </li>
-                ))}
+                  );
+                })}
               </ol>
             )}
           </>
         )}
+      </div>
       </div>
       {composerMode === "hidden" ? null : (
         <div className="shrink-0 border-t border-[#e2e8f0] bg-[#f8fafc] px-3 py-2.5 sm:px-4">
@@ -542,6 +624,12 @@ export function AgentChatTranscriptPane({
                 <ChatQuotedPreview
                   quote={replyTo}
                   onCancel={() => setReplyTo(null)}
+                />
+              ) : null}
+              {!smsSelected ? (
+                <ChatComposerListingPreview
+                  state={listingComposerPreview}
+                  onDismiss={(href) => setLinkPreviewDismissedHref(href)}
                 />
               ) : null}
               {!smsSelected ? (
@@ -616,7 +704,17 @@ export function AgentChatTranscriptPane({
                     value={draft}
                     maxLength={V2_CHAT_TEXT_MAX_LENGTH}
                     onChange={(event) => {
-                      setDraft(event.target.value);
+                      const next = event.target.value;
+                      setDraft(next);
+                      if (linkPreviewDismissedHref) {
+                        const preview = buildComposerLinkPreview(next);
+                        if (
+                          !preview ||
+                          preview.href !== linkPreviewDismissedHref
+                        ) {
+                          setLinkPreviewDismissedHref(null);
+                        }
+                      }
                       if (!smsSelected) signalTyping();
                     }}
                     onKeyDown={onComposerKeyDown}
@@ -625,9 +723,9 @@ export function AgentChatTranscriptPane({
                     placeholder={
                       smsSelected ? "Write an SMS…" : "Write a message…"
                     }
-                    className="max-h-28 min-h-[2.5rem] flex-1 resize-none bg-transparent px-1.5 py-2 text-[16px] leading-5 text-[#1e2a38] outline-none disabled:opacity-60"
+                    className="max-h-28 min-h-10 flex-1 resize-none bg-transparent px-1.5 py-2.5 text-[16px] leading-5 text-[#1e2a38] outline-none placeholder:leading-5 disabled:opacity-60"
                   />
-                  <div className="relative size-10 shrink-0">
+                  <div className="relative flex size-10 shrink-0 items-center justify-center self-end">
                     {chatComposerTrailingAction({
                       body: draft,
                       voiceBusy,
@@ -649,7 +747,7 @@ export function AgentChatTranscriptPane({
                             ? "Send SMS message"
                             : "Send Chat message"
                         }
-                        className="inline-flex size-10 items-center justify-center rounded-full bg-[#2b6cb0] text-white hover:bg-[#245a94] disabled:opacity-50"
+                        className="inline-flex size-10 items-center justify-center rounded-full bg-[#2b6cb0] text-white shadow-sm hover:bg-[#245a94] disabled:opacity-50"
                       >
                         {sending ? (
                           <span className="text-[10px] font-bold">…</span>
@@ -658,31 +756,29 @@ export function AgentChatTranscriptPane({
                         )}
                       </button>
                     ) : !smsSelected && onSendVoice ? (
-                      <div className="flex size-10 items-center justify-center">
-                        <ChatVoiceRecorder
-                          disabled={sending || !canSend}
-                          sending={sending}
-                          tone="agent"
-                          onPhaseChange={(phase) => {
-                            const busy = phase !== "idle";
-                            setVoiceBusy(busy);
-                            if (busy) clearTyping();
-                          }}
-                          onSend={async (voiceDraft) => {
-                            const ok = await onSendVoice({
-                              blob: voiceDraft.blob,
-                              mimeType: voiceDraft.mimeType,
-                              durationMs: voiceDraft.durationMs,
-                              replyToMessageId: replyTo?.id ?? null,
-                            });
-                            if (ok) {
-                              clearTyping();
-                              setReplyTo(null);
-                            }
-                            return ok;
-                          }}
-                        />
-                      </div>
+                      <ChatVoiceRecorder
+                        disabled={sending || !canSend}
+                        sending={sending}
+                        tone="agent"
+                        onPhaseChange={(phase) => {
+                          const busy = phase !== "idle";
+                          setVoiceBusy(busy);
+                          if (busy) clearTyping();
+                        }}
+                        onSend={async (voiceDraft) => {
+                          const ok = await onSendVoice({
+                            blob: voiceDraft.blob,
+                            mimeType: voiceDraft.mimeType,
+                            durationMs: voiceDraft.durationMs,
+                            replyToMessageId: replyTo?.id ?? null,
+                          });
+                          if (ok) {
+                            clearTyping();
+                            setReplyTo(null);
+                          }
+                          return ok;
+                        }}
+                      />
                     ) : (
                       <button
                         type="button"
@@ -794,27 +890,23 @@ function ChatRow({
     !deleted && !voice && message.kind === "TEXT" && message.channel === "CHAT"
       ? resolveChatListingShareView(message.payload)
       : { kind: "none" as const };
+  const listingUrl =
+    !deleted && !voice && listingShare.kind === "none"
+      ? extractChatListingMls(body)
+      : null;
+  const linkPreview =
+    !deleted && !voice && listingShare.kind === "none" && !listingUrl
+      ? buildComposerLinkPreview(body)
+      : null;
+  const hideUrlBody = Boolean(listingUrl && isListingUrlOnlyBody(body));
   const sentAt = new Date(message.createdAt).toLocaleString("en-CA");
   const sms = message.channel === "SMS";
   const delivery = v2SmsDeliveryLabel(message);
+  const tone = mine ? ("outgoing" as const) : ("incoming" as const);
 
   const bubble = (
     <>
-      {grouped ? (
-        <p
-          className={cn(
-            "mb-0.5 text-[12px] font-medium text-[#64748b]",
-            mine ? "text-right" : "text-left",
-          )}
-        >
-          {sms ? <span className="mr-1 font-semibold">SMS</span> : null}
-          {automationBadge ? (
-            <span className="mr-1 font-semibold">{automationBadge}</span>
-          ) : null}
-          {sentAt}
-          {delivery ? <span className="ml-1">· {delivery}</span> : null}
-        </p>
-      ) : (
+      {!grouped ? (
         <p
           className={cn(
             "mb-0.5 text-[13px] font-semibold",
@@ -832,12 +924,24 @@ function ChatRow({
               {automationBadge}
             </span>
           ) : null}
-          <span className="ml-1.5 font-medium text-[#64748b]">{sentAt}</span>
           {delivery ? (
-            <span className="ml-1 font-medium text-[#64748b]">· {delivery}</span>
+            <span className="ml-1.5 font-medium text-[#64748b]">{delivery}</span>
           ) : null}
         </p>
-      )}
+      ) : sms || automationBadge || delivery ? (
+        <p
+          className={cn(
+            "mb-0.5 text-[12px] font-medium text-[#64748b]",
+            mine ? "text-right" : "text-left",
+          )}
+        >
+          {sms ? <span className="mr-1 font-semibold">SMS</span> : null}
+          {automationBadge ? (
+            <span className="mr-1 font-semibold">{automationBadge}</span>
+          ) : null}
+          {delivery ? <span>{delivery}</span> : null}
+        </p>
+      ) : null}
       {message.replyTo ? (
         <div className="mb-1">
           <ChatQuotedPreview
@@ -848,17 +952,48 @@ function ChatRow({
         </div>
       ) : null}
       {voice && leadId ? (
-        <ChatVoicePlayer
-          src={agentChatVoiceAudioRoute(leadId, message.id, voice.id)}
-          durationMs={voice.durationMs}
-          tone={mine ? "outgoing" : "incoming"}
-        />
+        <div
+          className={cn(
+            "rounded-2xl px-2.5 py-2 shadow-sm",
+            mine
+              ? "bg-[#dbeafe]"
+              : customer
+                ? "bg-white ring-1 ring-[#e2e8f0]"
+                : "bg-[#eef6ff] ring-1 ring-[#dbeafe]",
+          )}
+        >
+          <ChatVoicePlayer
+            src={agentChatVoiceAudioRoute(leadId, message.id, voice.id)}
+            durationMs={voice.durationMs}
+            tone={tone}
+          />
+          <div className="mt-1 flex justify-end">
+            <ChatBubbleMeta
+              createdAt={message.createdAt}
+              isOwnMessage={mine}
+              deliveredAt={message.deliveredAt}
+              peerLastReadAt={peerLastReadAt}
+              tone={tone}
+            />
+          </div>
+        </div>
       ) : listingShare.kind !== "none" ? (
-        <ChatListingShareCard payload={message.payload} />
+        <div>
+          <ChatListingShareCard payload={message.payload} />
+          <div className="mt-1 flex justify-end px-1">
+            <ChatBubbleMeta
+              createdAt={message.createdAt}
+              isOwnMessage={mine}
+              deliveredAt={message.deliveredAt}
+              peerLastReadAt={peerLastReadAt}
+              tone={tone}
+            />
+          </div>
+        </div>
       ) : (
         <div
           className={cn(
-            "rounded-2xl px-3.5 py-2.5 text-[16px] leading-6 shadow-sm",
+            "rounded-2xl px-3.5 py-2 shadow-sm",
             deleted
               ? "bg-[#f8fafc] italic text-[#64748b] ring-1 ring-[#e2e8f0]"
               : mine
@@ -868,17 +1003,31 @@ function ChatRow({
                   : "bg-[#eef6ff] text-[#0f172a] ring-1 ring-[#dbeafe]",
           )}
         >
-          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-            {body}
-          </p>
+          {listingUrl ? <ChatMessageListingUrlCard body={body} /> : null}
+          {linkPreview ? <ChatMessageLinkCard preview={linkPreview} /> : null}
+          {hideUrlBody ? (
+            <div className="mt-1 flex justify-end">
+              <ChatBubbleMeta
+                createdAt={message.createdAt}
+                isOwnMessage={mine}
+                deliveredAt={message.deliveredAt}
+                peerLastReadAt={peerLastReadAt}
+                tone={tone}
+              />
+            </div>
+          ) : (
+            <ChatBubbleBodyWithMeta
+              createdAt={message.createdAt}
+              isOwnMessage={mine}
+              deliveredAt={message.deliveredAt}
+              peerLastReadAt={peerLastReadAt}
+              tone={tone}
+            >
+              <ChatLinkifiedText text={body} />
+            </ChatBubbleBodyWithMeta>
+          )}
         </div>
       )}
-      <ChatReceiptLabel
-        isOwnMessage={mine}
-        messageCreatedAt={message.createdAt}
-        deliveredAt={message.deliveredAt}
-        peerLastReadAt={peerLastReadAt}
-      />
       {canReact && !deleted ? (
         <ChatReactionBar
           reactions={message.reactions ?? []}

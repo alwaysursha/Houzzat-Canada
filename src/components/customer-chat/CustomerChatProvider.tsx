@@ -47,6 +47,13 @@ import {
 } from "@/lib/customer-chat/floating-chat";
 import type { CustomerChatGetPayload } from "@/lib/customer-chat/types";
 import { resolveAppShell } from "@/lib/mobile/app-shell";
+import { setNativeStatusBarLightOverlay } from "@/lib/mobile/native-status-bar";
+import {
+  CUSTOMER_CHAT_HISTORY_STATE_KEY,
+  CUSTOMER_CHAT_OVERLAY_PRIORITY,
+  isCustomerChatHistoryState,
+  pushCustomerChatOverlay,
+} from "@/lib/customer-chat/chat-overlay";
 import { VOICE_NOTE_MESSAGE_BODY } from "@/lib/chat/voice-notes/constants";
 import { LISTING_SHARE_MESSAGE_BODY } from "@/lib/conversations/listing-share/payload";
 
@@ -141,6 +148,8 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
   const modeRef = useRef(mode);
   modeRef.current = mode;
   const peekInFlightRef = useRef(false);
+  const historyPushedRef = useRef(false);
+  const closingFromPopRef = useRef(false);
 
   const storage = useMemo(() => browserStorage() ?? memoryStorage(), []);
 
@@ -429,6 +438,13 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
     setPreview(null);
     setMode("closed");
 
+    if (historyPushedRef.current && !closingFromPopRef.current) {
+      historyPushedRef.current = false;
+      if (isCustomerChatHistoryState(window.history.state)) {
+        window.history.back();
+      }
+    }
+
     void (async () => {
       try {
         const res = await fetch(CUSTOMER_CHAT_GET_ROUTE, {
@@ -456,6 +472,71 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
       }
     })();
   }, [rememberDismissedBatch]);
+
+  // Capacitor / browser Back: close open/preview overlays (preserve draft).
+  useEffect(() => {
+    if (!floatingEnabled) return;
+    const overlayOpen =
+      mode === "open" || mode === "preview" || mode === "minimized";
+    if (!overlayOpen) return;
+
+    const release = pushCustomerChatOverlay({
+      id:
+        mode === "preview"
+          ? "customer-chat-preview"
+          : mode === "minimized"
+            ? "customer-chat-minimized"
+            : "customer-chat-open",
+      priority:
+        mode === "preview"
+          ? CUSTOMER_CHAT_OVERLAY_PRIORITY.preview
+          : CUSTOMER_CHAT_OVERLAY_PRIORITY.open,
+      close: () => {
+        closeWithDismiss();
+      },
+    });
+
+    if (!historyPushedRef.current && !isCustomerChatHistoryState(window.history.state)) {
+      const prev =
+        window.history.state && typeof window.history.state === "object"
+          ? window.history.state
+          : {};
+      window.history.pushState(
+        { ...prev, [CUSTOMER_CHAT_HISTORY_STATE_KEY]: true },
+        "",
+      );
+      historyPushedRef.current = true;
+    } else if (isCustomerChatHistoryState(window.history.state)) {
+      historyPushedRef.current = true;
+    }
+
+    function onPopState() {
+      if (
+        modeRef.current === "open" ||
+        modeRef.current === "preview" ||
+        modeRef.current === "minimized"
+      ) {
+        closingFromPopRef.current = true;
+        historyPushedRef.current = false;
+        closeWithDismiss();
+        closingFromPopRef.current = false;
+      }
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      release();
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, [closeWithDismiss, floatingEnabled, mode]);
+
+  // Dark status-bar icons while light floating chat covers the viewport.
+  useEffect(() => {
+    if (!floatingEnabled) return;
+    const light =
+      mode === "open" || mode === "preview" || mode === "minimized";
+    setNativeStatusBarLightOverlay(light);
+    return () => setNativeStatusBarLightOverlay(false);
+  }, [floatingEnabled, mode]);
 
   const controller = useMemo<CustomerChatController>(
     () => ({

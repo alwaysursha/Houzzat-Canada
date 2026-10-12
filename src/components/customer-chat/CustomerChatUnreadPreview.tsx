@@ -2,6 +2,7 @@
 
 import { useRef, useState, type KeyboardEvent } from "react";
 import { Send, X } from "lucide-react";
+import { ChatAgentAvatar } from "@/components/chat/ChatAgentAvatar";
 import { ChatVoiceRecorder } from "@/components/chat/ChatVoiceRecorder";
 import { useCustomerChatController } from "@/components/customer-chat/CustomerChatProvider";
 import { useCustomerChatThread } from "@/components/customer-chat/useCustomerChatThread";
@@ -106,21 +107,11 @@ export function CustomerChatUnreadPreview({
     >
       <div className="overflow-hidden rounded-2xl border border-[#d7e8df] bg-[#fbfefc] shadow-[0_18px_48px_rgba(15,61,46,0.18)]">
         <div className="flex items-start gap-3 border-b border-[#e6f2ec] bg-white px-3.5 py-3">
-          {preview.agentPhotoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={preview.agentPhotoUrl}
-              alt=""
-              className="size-11 shrink-0 rounded-full object-cover ring-2 ring-[#d7e8df]"
-            />
-          ) : (
-            <span
-              aria-hidden
-              className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-[#0f6b4c] text-[12px] font-bold text-white"
-            >
-              {initials}
-            </span>
-          )}
+          <ChatAgentAvatar
+            name={agentName}
+            initials={initials}
+            photoUrl={preview.agentPhotoUrl}
+          />
           <div className="min-w-0 flex-1">
             <p className="truncate text-[15px] font-semibold leading-5 text-[#12241c]">
               {agentName} sent a message

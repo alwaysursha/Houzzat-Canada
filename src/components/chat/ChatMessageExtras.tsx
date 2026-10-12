@@ -102,6 +102,10 @@ export function ChatReactionBar({
   );
 }
 
+/**
+ * @deprecated Prefer ChatBubbleMeta ticks inside the bubble.
+ * Kept for selftests / transitional call sites.
+ */
 export function ChatReceiptLabel({
   isOwnMessage,
   messageCreatedAt,
@@ -121,7 +125,7 @@ export function ChatReceiptLabel({
   });
   if (!status) return null;
   return (
-    <p className="mt-0.5 text-right text-[12px] font-medium text-ink/50">
+    <p className="sr-only">
       {chatReceiptLabel(status)}
     </p>
   );

@@ -12,6 +12,7 @@ import {
   stopMediaStream,
 } from "@/lib/chat/voice-notes/recording-client";
 import { VOICE_NOTE_MAX_DURATION_MS } from "@/lib/chat/voice-notes/constants";
+import { chatHaptic } from "@/lib/chat/chat-haptics";
 import { cn } from "@/lib/utils";
 
 export type ChatVoiceDraft = {
@@ -89,6 +90,7 @@ export function ChatVoiceRecorder({
       setError(support.message);
       return;
     }
+    chatHaptic("voice-start");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -151,6 +153,7 @@ export function ChatVoiceRecorder({
   function stopRecording() {
     const recorder = mediaRecorderRef.current;
     if (!recorder || recorder.state === "inactive") return;
+    chatHaptic("voice-stop");
     recorder.stop();
     mediaRecorderRef.current = null;
   }
@@ -282,8 +285,10 @@ export function ChatVoiceRecorder({
         aria-label="Record voice note"
         onClick={() => void startRecording()}
         className={cn(
-          "inline-flex size-8 items-center justify-center rounded-lg disabled:opacity-50",
-          accent,
+          "inline-flex size-10 items-center justify-center rounded-full text-white shadow-sm disabled:opacity-50",
+          tone === "agent"
+            ? "bg-[#2b6cb0] hover:bg-[#1d4f86]"
+            : "bg-[#0f6b4c] hover:bg-[#0c5740]",
         )}
       >
         <Mic className="size-4" aria-hidden />

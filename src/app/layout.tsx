@@ -10,6 +10,12 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // Prefer dark system status-bar icons on light surfaces (Safari / installed PWA).
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F4FAF7" },
+    { media: "(prefers-color-scheme: dark)", color: "#F4FAF7" },
+  ],
+  colorScheme: "light",
 };
 
 const jakarta = localFont({

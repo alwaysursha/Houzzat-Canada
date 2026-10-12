@@ -162,19 +162,19 @@ function testTranscriptParity() {
     assert.doesNotMatch(src, /\/api\/listings\//);
   }
 
-  // Plain TEXT path still present
+  // Plain TEXT path still present (wrapping lives in shared ChatBubbleMeta)
   assert.match(agent, /v2ChatMessageBody/);
   assert.match(customer, /customerChatMessageBody/);
-  assert.match(agent, /whitespace-pre-wrap/);
-  assert.match(customer, /whitespace-pre-wrap/);
+  const bubbleMeta = read("src/components/chat/ChatBubbleMeta.tsx");
+  assert.match(bubbleMeta, /whitespace-pre-wrap/);
 
   // Voice / reactions / receipts unchanged
   assert.match(agent, /ChatVoicePlayer/);
   assert.match(customer, /ChatVoicePlayer/);
   assert.match(agent, /ChatReactionBar/);
   assert.match(customer, /ChatReactionBar/);
-  assert.match(agent, /ChatReceiptLabel/);
-  assert.match(customer, /ChatReceiptLabel/);
+  assert.match(agent, /ChatBubbleBodyWithMeta/);
+  assert.match(customer, /ChatBubbleBodyWithMeta/);
 }
 
 function testGroupingBreaksOnShare() {

@@ -123,15 +123,14 @@ export default async function AccountLayout({
   ];
 
   const displayName = chromeBrand?.displayName ?? "Account";
-  const primaryColor = chromeBrand?.colors.primary ?? "#1A7B59";
 
   const shell = (
     <div className="min-h-full bg-mist">
       <header className="sticky top-0 z-40">
+        {/* Light safe-area fill so system status-bar icons stay readable (dark-on-light). */}
         <div
           aria-hidden
-          className="[height:env(safe-area-inset-top,0px)]"
-          style={{ backgroundColor: primaryColor }}
+          className="bg-[#F4FAF7] [height:env(safe-area-inset-top,0px)]"
         />
         <div className="border-b border-line/80 bg-mist/85 backdrop-blur-md">
           <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">

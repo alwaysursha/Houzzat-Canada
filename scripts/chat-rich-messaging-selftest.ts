@@ -802,7 +802,7 @@ function testUiWiring() {
   assert.ok(customerScreen.includes("ChatReactionBar"));
   assert.ok(customerScreen.includes("ChatMessageActions"));
   assert.ok(customerScreen.includes("ChatQuotedPreview"));
-  assert.ok(customerScreen.includes("ChatReceiptLabel"));
+  assert.ok(customerScreen.includes("ChatBubbleBodyWithMeta"));
   assert.ok(customerScreen.includes("ChatConversationSearch"));
   assert.ok(customerScreen.includes("reactToMessage"));
   assert.ok(customerScreen.includes("searchMessages"));
@@ -823,7 +823,7 @@ function testUiWiring() {
   assert.ok(agentPane.includes("ChatReactionBar"));
   assert.ok(agentPane.includes("ChatMessageActions"));
   assert.ok(agentPane.includes("ChatQuotedPreview"));
-  assert.ok(agentPane.includes("ChatReceiptLabel"));
+  assert.ok(agentPane.includes("ChatBubbleBodyWithMeta"));
   assert.ok(agentPane.includes("ChatConversationSearch"));
   assert.ok(agentPane.includes("customerLastReadAt"));
   assert.ok(agentPane.includes("onReact"));
