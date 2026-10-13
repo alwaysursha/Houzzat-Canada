@@ -135,15 +135,17 @@ function testNativeChatsBypassIsRouteSpecific() {
   const layout = read("src/app/(agent)/agent/layout.tsx");
 
   assert.ok(shell.includes('const isChatsPage = pathname === "/agent/chats"'));
+  assert.ok(shell.includes("shouldUseProNativeInstantShell"));
   assert.ok(shell.includes("if (isProNative && !isChatsPage)"));
   assert.equal(shell.includes("if (isProNative) {"), false);
 
   const nativeStart = shell.indexOf("if (isProNative && !isChatsPage)");
   assert.ok(nativeStart >= 0);
   const webReturn = shell.indexOf(
-    '<div className="flex min-h-dvh bg-mist text-ink">',
+    'className="flex h-dvh max-h-dvh overflow-hidden bg-mist text-ink"',
     nativeStart,
   );
+  assert.ok(webReturn > nativeStart, "full responsive AgentShell return missing");
   const nativeBlock = shell.slice(nativeStart, webReturn);
   assert.ok(nativeBlock.includes("<AgentMobileInstantShell"));
   assert.equal(nativeBlock.includes("{children}"), false);

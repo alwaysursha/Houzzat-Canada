@@ -30,6 +30,13 @@ export function nativeUserAgentMarker(appId: string): string {
   return `${NATIVE_UA_PRODUCT}/${NATIVE_UA_VERSION} (${appId})`;
 }
 
+/**
+ * Presentation-only marker for the private sideload PRO Android WebView.
+ * Appended AFTER the trusted PRO marker so middleware still maps shell to
+ * houzzatpro via `com.houzzat.pro`. Never used for auth or authorization.
+ */
+export const HOUZZATPRO_PRIVATE_UI_UA_MARKER = "HouzzatProPrivateUI/1";
+
 const NATIVE_UA_PATTERN = new RegExp(
   `${NATIVE_UA_PRODUCT}\\/\\d+\\s*\\(([^)]*)\\)`,
 );
@@ -112,6 +119,23 @@ export function nativeAppIdFromUserAgent(
   const match = NATIVE_UA_PATTERN.exec(userAgent);
   if (!match) return null;
   return match[1]?.trim() || "";
+}
+
+/**
+ * Whether AgentShell should mount AgentMobileInstantShell.
+ * UX / layout selection only — never grants roles or bypasses gates.
+ *
+ * - Production PRO UA (`com.houzzat.pro`, no private marker) → InstantShell
+ * - Private PRO UA (private marker present) → full responsive CRM
+ * - Mobile Chrome / no PRO claim → full responsive CRM
+ * - Unknown native appId → no InstantShell (staff routes still gated elsewhere)
+ */
+export function shouldUseProNativeInstantShell(
+  userAgent: string | null | undefined,
+): boolean {
+  if (!userAgent) return false;
+  if (userAgent.includes(HOUZZATPRO_PRIVATE_UI_UA_MARKER)) return false;
+  return nativeAppIdFromUserAgent(userAgent) === HOUZZATPRO_APP_ID;
 }
 
 export function mapNativeAppId(appId: string | null | undefined): AppShell {

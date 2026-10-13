@@ -13,6 +13,7 @@ import {
 import { BrandLogoMark } from "@/components/tenancy/BrandLogoMark";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import { setNativeStatusBarLightOverlay } from "@/lib/mobile/native-status-bar";
+import { shouldUseProNativeInstantShell } from "@/lib/mobile/app-shell";
 import {
   STAFF_OVERLAY_PRIORITY,
   useStaffOverlay,
@@ -174,13 +175,15 @@ export function AgentShell({
   const router = useRouter();
   const prefetchedRoutesRef = useRef<Set<string>>(new Set());
 
+  // InstantShell for production PRO native only. Private PRO UA bypasses
+  // InstantShell and mounts the same responsive CRM as mobile Chrome.
   const [isProNative, setIsProNative] = useState(false);
 
   useEffect(() => {
     if (typeof navigator === "undefined") return;
-    const isNative = navigator.userAgent.includes("com.houzzat.pro");
-    setIsProNative(isNative);
-    if (!isNative) return;
+    const useInstantShell = shouldUseProNativeInstantShell(navigator.userAgent);
+    setIsProNative(useInstantShell);
+    if (!useInstantShell) return;
 
     // Idle prefetch of primary CRM routes once current page stabilizes
     const timer = setTimeout(() => {
