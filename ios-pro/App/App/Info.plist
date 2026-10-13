@@ -79,6 +79,8 @@
 	<string>HouzzatPro uses your location for listing tools near you.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>HouzzatPro uses Face ID to unlock the app and sign you in securely.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>HouzzatPro uses the microphone so you can send voice messages in Chat.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

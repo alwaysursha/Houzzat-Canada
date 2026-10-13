@@ -108,7 +108,13 @@ function testRecordingLifecycleHelpers() {
 
   const denied = mapMicrophonePermissionError({ name: "NotAllowedError" });
   assert.equal(denied.reason, "DENIED");
-  assert.match(denied.message, /Site settings|address bar/i);
+  assert.match(denied.message, /address bar|Permissions|Microphone/i);
+  const nativeDenied = mapMicrophonePermissionError(
+    { name: "NotAllowedError" },
+    { nativeApp: true },
+  );
+  assert.equal(nativeDenied.reason, "DENIED");
+  assert.match(nativeDenied.message, /device Settings|Permissions/i);
   assert.equal(
     mapMicrophonePermissionError({ name: "NotFoundError" }).reason,
     "UNAVAILABLE",
@@ -661,17 +667,20 @@ function testUiWiringAndNoPublicBranding() {
   assert.ok(customerUi.includes("ChatVoiceRecorder"));
   assert.ok(customerUi.includes("ChatVoicePlayer"));
   assert.ok(customerUi.includes("sendVoiceNote"));
-  // Mic trailing slot must not force size-10 (clips idle mic errors).
-  assert.ok(
-    customerUi.includes(
-      'relative flex shrink-0 flex-col items-end justify-end self-end',
-    ),
-  );
+  // Single stable recorder instance (remount on voiceBusy caused a second mic tap).
+  assert.equal(customerUi.split("<ChatVoiceRecorder").length - 1, 1);
+  assert.ok(customerUi.includes("onErrorChange"));
+  assert.ok(customerUi.includes("micError"));
+  assert.ok(customerUi.includes("placeholder:truncate"));
+  assert.ok(customerUi.includes("min-w-0 flex-1"));
 
   const agentUi = read("src/components/agent/chat/AgentChatTranscriptPane.tsx");
   assert.ok(agentUi.includes("ChatVoiceRecorder"));
   assert.ok(agentUi.includes("ChatVoicePlayer"));
   assert.ok(agentUi.includes("onSendVoice"));
+  assert.equal(agentUi.split("<ChatVoiceRecorder").length - 1, 1);
+  assert.ok(agentUi.includes("onErrorChange"));
+  assert.ok(agentUi.includes("micError"));
   // Premium mint shell parity with Customer Chat V1.
   assert.ok(agentUi.includes("bg-[#d8f3e7]"));
   assert.ok(agentUi.includes("bg-[#0f6b4c]"));
@@ -680,9 +689,13 @@ function testUiWiringAndNoPublicBranding() {
 
   const recorder = read("src/components/chat/ChatVoiceRecorder.tsx");
   assert.ok(recorder.includes("createVoiceMediaRecorder"));
-  // Idle mic errors render above the button in normal flow (not absolute-below).
-  assert.ok(recorder.includes('flex flex-col items-end gap-1'));
+  assert.ok(recorder.includes("onErrorChange"));
+  assert.ok(recorder.includes("startingRef"));
+  assert.ok(recorder.includes("getUserMedia"));
+  // Idle = mic button only; parent renders errors above the composer row.
+  assert.ok(recorder.includes('aria-label="Record voice note"'));
   assert.equal(recorder.includes("top-[calc(100%"), false);
+  assert.equal(recorder.includes("absolute"), false);
 
   const inbox = read("src/components/agent/chats/AgentChatsInbox.tsx");
   assert.ok(inbox.includes("sendVoiceNote"));

@@ -57,6 +57,7 @@ import {
 } from "@/lib/customer-chat/chat-overlay";
 import { isListingSheetOpen } from "@/lib/mobile/listing-sheet-store";
 import { VOICE_NOTE_MESSAGE_BODY } from "@/lib/chat/voice-notes/constants";
+import { messageVoiceNoteAttachment } from "@/lib/chat/voice-notes/client-upload";
 import { LISTING_SHARE_MESSAGE_BODY } from "@/lib/conversations/listing-share/payload";
 
 type CustomerChatController = {
@@ -376,12 +377,11 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
         const messageBody = latestMessage
           ? customerChatMessageBody(latestMessage)
           : "";
+        const voiceAttachment = messageVoiceNoteAttachment(
+          latestMessage?.attachments,
+        );
         const hasVoice =
-          Boolean(
-            latestMessage?.attachments?.some(
-              (attachment) => attachment.kind === "VOICE_NOTE",
-            ),
-          ) || messageBody === VOICE_NOTE_MESSAGE_BODY;
+          Boolean(voiceAttachment) || messageBody === VOICE_NOTE_MESSAGE_BODY;
         const isListingShare =
           messageBody === LISTING_SHARE_MESSAGE_BODY ||
           Boolean(
@@ -402,6 +402,8 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
           messageCreatedAt: latestMessage?.createdAt ?? null,
           unreadCount: json.read.unreadCount,
           latestUnreadAgentMessageId,
+          voiceAttachmentId: voiceAttachment?.id ?? null,
+          voiceDurationMs: voiceAttachment?.durationMs ?? null,
         });
         // Compact preview instead of forcing the full conversation open.
         setMode("preview");

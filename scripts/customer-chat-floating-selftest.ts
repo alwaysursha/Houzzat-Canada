@@ -238,6 +238,23 @@ function testAgentIdentityFallback() {
     customerChatUnreadPreviewBody({ body: "Voice note", hasVoiceAttachment: true }),
     "Sent you a voice message",
   );
+  const unreadPreview = read(
+    "src/components/customer-chat/CustomerChatUnreadPreview.tsx",
+  );
+  assert.ok(unreadPreview.includes("ChatVoicePlayer"));
+  assert.ok(unreadPreview.includes("customerChatVoiceAudioRoute"));
+  assert.ok(unreadPreview.includes("voiceAttachmentId"));
+  assert.equal(unreadPreview.split("<ChatVoiceRecorder").length - 1, 1);
+  assert.ok(unreadPreview.includes("onErrorChange"));
+  assert.ok(unreadPreview.includes("line-clamp-4"));
+  assert.ok(unreadPreview.includes("safe-area-inset-bottom"));
+  assert.ok(unreadPreview.includes("stopPreviewControlBubble"));
+  const providerSrc = read(
+    "src/components/customer-chat/CustomerChatProvider.tsx",
+  );
+  assert.ok(providerSrc.includes("voiceAttachmentId"));
+  assert.ok(providerSrc.includes("voiceDurationMs"));
+  assert.ok(providerSrc.includes("messageVoiceNoteAttachment"));
   assert.equal(
     customerChatUnreadPreviewBody({ body: "Hi", isListingShare: true }),
     "Shared a property with you",

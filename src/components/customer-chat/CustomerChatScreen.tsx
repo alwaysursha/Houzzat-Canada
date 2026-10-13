@@ -138,6 +138,7 @@ export function CustomerChatScreen({
   const setDraft = onDraftChange ?? setLocalDraft;
   const [replyTo, setReplyTo] = useState<CustomerChatMessage | null>(null);
   const [voiceBusy, setVoiceBusy] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
   const [linkPreviewDismissedHref, setLinkPreviewDismissedHref] = useState<
     string | null
   >(null);
@@ -654,63 +655,58 @@ export function CustomerChatScreen({
               label={`${agentName.split(" ")[0] || "Agent"} is typing…`}
               tone="customer"
             />
-            {voiceBusy ? (
-              <ChatVoiceRecorder
-                disabled={sending || !canSend}
-                sending={sending}
-                tone="customer"
-                onPhaseChange={(phase) => {
-                  const busy = phase !== "idle";
-                  setVoiceBusy(busy);
-                  if (busy) clearTyping();
-                }}
-                onSend={async (voiceDraft) => {
-                  const ok = await sendVoiceNote({
-                    blob: voiceDraft.blob,
-                    mimeType: voiceDraft.mimeType,
-                    durationMs: voiceDraft.durationMs,
-                    replyToMessageId: replyTo?.id ?? null,
-                  });
-                  if (ok) {
-                    clearTyping();
-                    setReplyTo(null);
-                  }
-                  return ok;
-                }}
-              />
-            ) : (
-              <div className="flex items-end gap-1.5 rounded-[1.35rem] border border-[#d7e8df] bg-white px-2 py-1 shadow-sm">
-                <ChatEmojiPicker
-                  disabled={sending || !canSend}
-                  onPick={insertEmoji}
-                />
-                <label className="sr-only" htmlFor={COMPOSER_ID}>
-                  Message to {agentName}
-                </label>
-                <textarea
-                  id={COMPOSER_ID}
-                  ref={textareaRef}
-                  value={draft}
-                  maxLength={CUSTOMER_CHAT_TEXT_MAX_LENGTH}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setDraft(next);
-                    if (linkPreviewDismissedHref) {
-                      const preview = buildComposerLinkPreview(next);
-                      if (!preview || preview.href !== linkPreviewDismissedHref) {
-                        setLinkPreviewDismissedHref(null);
+            {micError && !voiceBusy ? (
+              <p
+                className="rounded-lg border border-signal/25 bg-white px-2.5 py-1.5 text-[11px] leading-snug text-signal"
+                role="alert"
+              >
+                {micError}
+              </p>
+            ) : null}
+            {/* Single ChatVoiceRecorder instance — remounting on voiceBusy caused a second mic tap. */}
+            <div
+              className={cn(
+                "flex gap-1.5",
+                voiceBusy
+                  ? "w-full"
+                  : "items-end rounded-[1.35rem] border border-[#d7e8df] bg-white px-2 py-1 shadow-sm",
+              )}
+            >
+              {!voiceBusy ? (
+                <>
+                  <ChatEmojiPicker
+                    disabled={sending || !canSend}
+                    onPick={insertEmoji}
+                  />
+                  <label className="sr-only" htmlFor={COMPOSER_ID}>
+                    Message to {agentName}
+                  </label>
+                  <textarea
+                    id={COMPOSER_ID}
+                    ref={textareaRef}
+                    value={draft}
+                    maxLength={CUSTOMER_CHAT_TEXT_MAX_LENGTH}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setDraft(next);
+                      if (linkPreviewDismissedHref) {
+                        const preview = buildComposerLinkPreview(next);
+                        if (
+                          !preview ||
+                          preview.href !== linkPreviewDismissedHref
+                        ) {
+                          setLinkPreviewDismissedHref(null);
+                        }
                       }
-                    }
-                    signalTyping();
-                  }}
-                  onKeyDown={onComposerKeyDown}
-                  rows={1}
-                  disabled={sending || !canSend}
-                  enterKeyHint="send"
-                  placeholder="Write a message…"
-                  className="max-h-28 min-h-10 flex-1 resize-none bg-transparent px-1.5 py-2.5 text-[16px] leading-5 text-[#12241c] outline-none placeholder:leading-5 disabled:opacity-60"
-                />
-                <div className="relative flex shrink-0 flex-col items-end justify-end self-end">
+                      signalTyping();
+                    }}
+                    onKeyDown={onComposerKeyDown}
+                    rows={1}
+                    disabled={sending || !canSend}
+                    enterKeyHint="send"
+                    placeholder="Write a message…"
+                    className="max-h-28 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-1.5 py-2.5 text-[16px] leading-5 text-[#12241c] outline-none placeholder:truncate placeholder:whitespace-nowrap disabled:opacity-60"
+                  />
                   {chatComposerTrailingAction({ body: draft, voiceBusy }) ===
                   "send" ? (
                     <button
@@ -724,7 +720,7 @@ export function CustomerChatScreen({
                         })
                       }
                       aria-label="Send message"
-                      className="inline-flex size-10 items-center justify-center rounded-full bg-[#0f6b4c] text-white shadow-sm hover:bg-[#0c5740] disabled:opacity-50"
+                      className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-[#0f6b4c] text-white shadow-sm hover:bg-[#0c5740] disabled:opacity-50"
                     >
                       {sending ? (
                         <span className="text-[10px] font-bold">…</span>
@@ -732,34 +728,45 @@ export function CustomerChatScreen({
                         <Send className="size-4" aria-hidden />
                       )}
                     </button>
-                  ) : (
-                    <ChatVoiceRecorder
-                      disabled={sending || !canSend}
-                      sending={sending}
-                      tone="customer"
-                      onPhaseChange={(phase) => {
-                        const busy = phase !== "idle";
-                        setVoiceBusy(busy);
-                        if (busy) clearTyping();
-                      }}
-                      onSend={async (voiceDraft) => {
-                        const ok = await sendVoiceNote({
-                          blob: voiceDraft.blob,
-                          mimeType: voiceDraft.mimeType,
-                          durationMs: voiceDraft.durationMs,
-                          replyToMessageId: replyTo?.id ?? null,
-                        });
-                        if (ok) {
-                          clearTyping();
-                          setReplyTo(null);
-                        }
-                        return ok;
-                      }}
-                    />
-                  )}
+                  ) : null}
+                </>
+              ) : null}
+              {canSend &&
+              (voiceBusy ||
+                chatComposerTrailingAction({ body: draft, voiceBusy }) ===
+                  "mic") ? (
+                <div className={cn(voiceBusy ? "min-w-0 w-full" : "shrink-0")}>
+                  <ChatVoiceRecorder
+                    disabled={sending || !canSend}
+                    sending={sending}
+                    tone="customer"
+                    onErrorChange={setMicError}
+                    onPhaseChange={(phase) => {
+                      const busy = phase !== "idle";
+                      setVoiceBusy(busy);
+                      if (busy) {
+                        clearTyping();
+                        setMicError(null);
+                      }
+                    }}
+                    onSend={async (voiceDraft) => {
+                      const ok = await sendVoiceNote({
+                        blob: voiceDraft.blob,
+                        mimeType: voiceDraft.mimeType,
+                        durationMs: voiceDraft.durationMs,
+                        replyToMessageId: replyTo?.id ?? null,
+                      });
+                      if (ok) {
+                        clearTyping();
+                        setReplyTo(null);
+                        setMicError(null);
+                      }
+                      return ok;
+                    }}
+                  />
                 </div>
-              </div>
-            )}
+              ) : null}
+            </div>
             {remaining <= 200 && !voiceBusy ? (
               <p className="text-[12px] text-[#7a9a8b]">{remaining} left</p>
             ) : null}

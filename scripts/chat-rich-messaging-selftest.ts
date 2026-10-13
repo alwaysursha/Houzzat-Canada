@@ -799,6 +799,12 @@ function testUiWiring() {
   const inbox = read("src/components/agent/chats/AgentChatsInbox.tsx");
 
   assert.ok(customerScreen.includes("ChatEmojiPicker"));
+  const emojiPicker = read("src/components/chat/ChatEmojiPicker.tsx");
+  assert.ok(emojiPicker.includes("createPortal"));
+  assert.ok(emojiPicker.includes("document.body"));
+  assert.ok(emojiPicker.includes("position: \"fixed\"") || emojiPicker.includes('position: "fixed"'));
+  assert.ok(emojiPicker.includes("zIndex: 220"));
+  assert.ok(emojiPicker.includes("Closed = unmounted portal") || emojiPicker.includes("mounted && panel"));
   assert.ok(customerScreen.includes("ChatReactionBar"));
   assert.ok(customerScreen.includes("ChatMessageActions"));
   assert.ok(customerScreen.includes("ChatQuotedPreview"));

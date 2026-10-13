@@ -44,6 +44,8 @@
 	<string>Houzzat uses Face ID to unlock the app and sign you in securely.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Houzzat uses your location to show listings near you.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Houzzat uses the microphone so you can send voice messages in Chat.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

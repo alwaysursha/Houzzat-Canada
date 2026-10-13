@@ -38,6 +38,9 @@ export type CustomerChatUnreadPreviewState = {
   messageCreatedAt: string | null;
   unreadCount: number;
   latestUnreadAgentMessageId: string;
+  /** When set, preview shows ChatVoicePlayer instead of generic voice copy. */
+  voiceAttachmentId: string | null;
+  voiceDurationMs: number | null;
 };
 
 export type CustomerChatWindowPosition = {

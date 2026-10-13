@@ -29,23 +29,32 @@ export function ChatVoiceRecorder({
   sending = false,
   onSend,
   onPhaseChange,
+  onErrorChange,
   tone = "customer",
 }: {
   disabled?: boolean;
   sending?: boolean;
   onSend: (draft: ChatVoiceDraft) => Promise<boolean>;
   onPhaseChange?: (phase: ChatVoiceRecorderPhase) => void;
+  /** Parent should render idle errors above the composer row. */
+  onErrorChange?: (error: string | null) => void;
   tone?: "customer" | "agent";
 }) {
   const [phase, setPhaseState] = useState<ChatVoiceRecorderPhase>("idle");
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setErrorState] = useState<string | null>(null);
   const [draft, setDraft] = useState<ChatVoiceDraft | null>(null);
+
+  function setError(next: string | null) {
+    setErrorState(next);
+    onErrorChange?.(next);
+  }
 
   function setPhase(next: ChatVoiceRecorderPhase) {
     setPhaseState(next);
     onPhaseChange?.(next);
   }
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -53,6 +62,7 @@ export function ChatVoiceRecorder({
   const timerRef = useRef<number | null>(null);
   const mimeRef = useRef<string>("audio/webm");
   const previewUrlRef = useRef<string | null>(null);
+  const startingRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -71,6 +81,7 @@ export function ChatVoiceRecorder({
       streamRef.current = null;
       revokeObjectUrl(previewUrlRef.current);
       previewUrlRef.current = null;
+      startingRef.current = false;
     };
   }, []);
 
@@ -90,6 +101,10 @@ export function ChatVoiceRecorder({
   }
 
   async function startRecording() {
+    if (startingRef.current) return;
+    if (phase !== "idle") return;
+    if (disabled || sending) return;
+    startingRef.current = true;
     setError(null);
     const support = probeVoiceRecordingSupport({
       hasMediaDevices: Boolean(navigator.mediaDevices?.getUserMedia),
@@ -98,11 +113,12 @@ export function ChatVoiceRecorder({
     });
     if (!support.ok) {
       setError(support.message);
+      startingRef.current = false;
       return;
     }
     chatHaptic("voice-start");
     try {
-      // Permission prompt only after this explicit tap.
+      // Same user gesture: request permission (if needed) then start recording.
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -124,11 +140,10 @@ export function ChatVoiceRecorder({
         clearTimer();
         stopMediaStream(streamRef.current);
         streamRef.current = null;
+        startingRef.current = false;
         const durationMs = Math.max(0, Date.now() - startedAtRef.current);
         const blobType =
-          mimeRef.current ||
-          chunksRef.current[0]?.type ||
-          "audio/webm";
+          mimeRef.current || chunksRef.current[0]?.type || "audio/webm";
         mimeRef.current = blobType;
         const blob = new Blob(chunksRef.current, { type: blobType });
         chunksRef.current = [];
@@ -162,6 +177,7 @@ export function ChatVoiceRecorder({
       const mapped = mapMicrophonePermissionError(err);
       setError(mapped.message);
       setPhase("idle");
+      startingRef.current = false;
     }
   }
 
@@ -184,6 +200,7 @@ export function ChatVoiceRecorder({
     stopMediaStream(streamRef.current);
     streamRef.current = null;
     chunksRef.current = [];
+    startingRef.current = false;
     setPhase("idle");
     setElapsedMs(0);
   }
@@ -203,12 +220,8 @@ export function ChatVoiceRecorder({
     if (ok) discardDraft();
   }
 
-  const accent =
-    tone === "agent"
-      ? "text-canopy-deep hover:bg-canopy/10"
-      : "text-canopy-deep hover:bg-canopy/10";
-  const primaryBtn =
-    "bg-[#0f6b4c] hover:bg-[#0c5740]";
+  const accent = "text-canopy-deep hover:bg-canopy/10";
+  const primaryBtn = "bg-[#0f6b4c] hover:bg-[#0c5740]";
 
   if (phase === "recording") {
     return (
@@ -294,30 +307,19 @@ export function ChatVoiceRecorder({
     );
   }
 
-  // Idle: keep errors in normal flow ABOVE the mic so they are never clipped
-  // by the chat pane overflow / mobile bottom nav (absolute-below was truncated).
+  // Idle mic only — errors are rendered by the parent above the composer row.
   return (
-    <div className="flex flex-col items-end gap-1">
-      {error ? (
-        <p
-          className="max-w-[min(18rem,calc(100vw-3rem))] rounded-lg border border-signal/25 bg-white px-2.5 py-1.5 text-left text-[11px] leading-snug text-signal shadow-sm"
-          role="alert"
-        >
-          {error}
-        </p>
-      ) : null}
-      <button
-        type="button"
-        disabled={disabled || sending}
-        aria-label="Record voice note"
-        onClick={() => void startRecording()}
-        className={cn(
-          "inline-flex size-10 items-center justify-center rounded-full text-white shadow-sm disabled:opacity-50",
-          primaryBtn,
-        )}
-      >
-        <Mic className="size-4" aria-hidden />
-      </button>
-    </div>
+    <button
+      type="button"
+      disabled={disabled || sending || startingRef.current}
+      aria-label="Record voice note"
+      onClick={() => void startRecording()}
+      className={cn(
+        "inline-flex size-10 shrink-0 items-center justify-center rounded-full text-white shadow-sm disabled:opacity-50",
+        primaryBtn,
+      )}
+    >
+      <Mic className="size-4" aria-hidden />
+    </button>
   );
 }

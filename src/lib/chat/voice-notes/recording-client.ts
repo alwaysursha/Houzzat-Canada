@@ -49,16 +49,34 @@ export function probeVoiceRecordingSupport(input: {
   return { ok: true };
 }
 
-export function mapMicrophonePermissionError(error: unknown): VoicePermissionFailure {
+/** Detect Capacitor native shell without importing @capacitor/core (SSR-safe). */
+export function isNativeCapacitorShell(): boolean {
+  if (typeof window === "undefined") return false;
+  const cap = (
+    window as unknown as {
+      Capacitor?: { isNativePlatform?: () => boolean };
+    }
+  ).Capacitor;
+  return Boolean(cap?.isNativePlatform?.());
+}
+
+export function mapMicrophonePermissionError(
+  error: unknown,
+  opts?: { nativeApp?: boolean },
+): VoicePermissionFailure {
   const name =
     error && typeof error === "object" && "name" in error
       ? String((error as { name?: unknown }).name)
       : "";
+  const native =
+    opts?.nativeApp ??
+    (typeof window !== "undefined" ? isNativeCapacitorShell() : false);
   if (name === "NotAllowedError" || name === "PermissionDeniedError") {
     return {
       reason: "DENIED",
-      message:
-        "Microphone access was denied. Tap the lock icon in the address bar → Site settings → Microphone → Allow, then try again.",
+      message: native
+        ? "Microphone access was denied. Open your device Settings → Apps → Houzzat → Permissions → Microphone → Allow, then try again."
+        : "Microphone access was denied. Tap the lock icon near the address bar → Permissions → Microphone → Allow, then try again.",
     };
   }
   if (name === "NotFoundError" || name === "DevicesNotFoundError") {
@@ -77,7 +95,9 @@ export function mapMicrophonePermissionError(error: unknown): VoicePermissionFai
   if (name === "SecurityError") {
     return {
       reason: "DENIED",
-      message: "Microphone is blocked in this browser. Allow mic access for this site, then try again.",
+      message: native
+        ? "Microphone is blocked for Houzzat. Enable Microphone in device Settings, then try again."
+        : "Microphone is blocked in this browser. Allow mic access for this site, then try again.",
     };
   }
   if (name === "AbortError") {

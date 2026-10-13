@@ -75,7 +75,7 @@ export function agentChatVoiceAudioRoute(
 }
 
 export function messageVoiceNoteAttachment<
-  T extends { kind: string; id: string },
+  T extends { kind: string; id: string; durationMs?: number | null },
 >(attachments: T[] | null | undefined): T | null {
   if (!attachments?.length) return null;
   return attachments.find((row) => row.kind === "VOICE_NOTE") ?? null;

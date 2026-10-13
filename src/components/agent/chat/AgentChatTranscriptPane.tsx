@@ -156,6 +156,7 @@ export function AgentChatTranscriptPane({
   );
   const [replyTo, setReplyTo] = useState<ChatQuotedMessage | null>(null);
   const [voiceBusy, setVoiceBusy] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
   const [linkPreviewDismissedHref, setLinkPreviewDismissedHref] = useState<
     string | null
   >(null);
@@ -644,88 +645,78 @@ export function AgentChatTranscriptPane({
                   {smsBlockedReason ?? "SMS is unavailable."}
                 </p>
               ) : null}
-              {voiceBusy ? (
-                !smsSelected && onSendVoice ? (
-                  <ChatVoiceRecorder
-                    disabled={sending || !canSend}
-                    sending={sending}
-                    tone="customer"
-                    onPhaseChange={(phase) => {
-                      const busy = phase !== "idle";
-                      setVoiceBusy(busy);
-                      if (busy) clearTyping();
-                    }}
-                    onSend={async (voiceDraft) => {
-                      const ok = await onSendVoice({
-                        blob: voiceDraft.blob,
-                        mimeType: voiceDraft.mimeType,
-                        durationMs: voiceDraft.durationMs,
-                        replyToMessageId: replyTo?.id ?? null,
-                      });
-                      if (ok) {
-                        clearTyping();
-                        setReplyTo(null);
-                      }
-                      return ok;
-                    }}
-                  />
-                ) : null
-              ) : (
-                <div className="flex items-end gap-1.5 rounded-[1.35rem] border border-[#d7e8df] bg-white px-2 py-1.5 shadow-sm">
-                  <ChatEmojiPicker
-                    onPick={insertEmoji}
-                    disabled={sending || (smsSelected && !smsEnabled)}
-                  />
-                  {!smsSelected ? (
-                    <ChatQuickReplyPicker
-                      onInsert={insertQuickReply}
-                      disabled={sending || !canSend}
+              {micError && !voiceBusy && !smsSelected ? (
+                <p
+                  className="rounded-lg border border-signal/25 bg-white px-2.5 py-1.5 text-[11px] leading-snug text-signal"
+                  role="alert"
+                >
+                  {micError}
+                </p>
+              ) : null}
+              {/* Single ChatVoiceRecorder — remounting on voiceBusy required a second mic tap. */}
+              <div
+                className={cn(
+                  "flex gap-1.5",
+                  voiceBusy && !smsSelected
+                    ? "w-full"
+                    : "items-end rounded-[1.35rem] border border-[#d7e8df] bg-white px-2 py-1.5 shadow-sm",
+                )}
+              >
+                {!voiceBusy || smsSelected ? (
+                  <>
+                    <ChatEmojiPicker
+                      onPick={insertEmoji}
+                      disabled={sending || (smsSelected && !smsEnabled)}
                     />
-                  ) : null}
-                  {!smsSelected && leadId && onSendListingShare ? (
-                    <ChatListingSharePicker
-                      leadId={leadId}
-                      disabled={sending || !canSend}
-                      onShared={async (message) => {
-                        const ok = await onSendListingShare(
-                          message as LeadProfileV2ChatMessage,
-                        );
-                        if (ok) clearTyping();
-                        return ok;
-                      }}
-                    />
-                  ) : null}
-                  <label className="sr-only" htmlFor={composerId}>
-                    {smsSelected ? "SMS message" : "Chat message"}
-                  </label>
-                  <textarea
-                    id={composerId}
-                    ref={textareaRef}
-                    value={draft}
-                    maxLength={V2_CHAT_TEXT_MAX_LENGTH}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      setDraft(next);
-                      if (linkPreviewDismissedHref) {
-                        const preview = buildComposerLinkPreview(next);
-                        if (
-                          !preview ||
-                          preview.href !== linkPreviewDismissedHref
-                        ) {
-                          setLinkPreviewDismissedHref(null);
+                    {!smsSelected ? (
+                      <ChatQuickReplyPicker
+                        onInsert={insertQuickReply}
+                        disabled={sending || !canSend}
+                      />
+                    ) : null}
+                    {!smsSelected && leadId && onSendListingShare ? (
+                      <ChatListingSharePicker
+                        leadId={leadId}
+                        disabled={sending || !canSend}
+                        onShared={async (message) => {
+                          const ok = await onSendListingShare(
+                            message as LeadProfileV2ChatMessage,
+                          );
+                          if (ok) clearTyping();
+                          return ok;
+                        }}
+                      />
+                    ) : null}
+                    <label className="sr-only" htmlFor={composerId}>
+                      {smsSelected ? "SMS message" : "Chat message"}
+                    </label>
+                    <textarea
+                      id={composerId}
+                      ref={textareaRef}
+                      value={draft}
+                      maxLength={V2_CHAT_TEXT_MAX_LENGTH}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setDraft(next);
+                        if (linkPreviewDismissedHref) {
+                          const preview = buildComposerLinkPreview(next);
+                          if (
+                            !preview ||
+                            preview.href !== linkPreviewDismissedHref
+                          ) {
+                            setLinkPreviewDismissedHref(null);
+                          }
                         }
+                        if (!smsSelected) signalTyping();
+                      }}
+                      onKeyDown={onComposerKeyDown}
+                      rows={1}
+                      disabled={sending || (smsSelected && !smsEnabled)}
+                      placeholder={
+                        smsSelected ? "Write an SMS…" : "Write a message…"
                       }
-                      if (!smsSelected) signalTyping();
-                    }}
-                    onKeyDown={onComposerKeyDown}
-                    rows={1}
-                    disabled={sending || (smsSelected && !smsEnabled)}
-                    placeholder={
-                      smsSelected ? "Write an SMS…" : "Write a message…"
-                    }
-                    className="max-h-28 min-h-10 flex-1 resize-none bg-transparent px-1.5 py-2.5 text-[16px] leading-5 text-[#12241c] outline-none placeholder:leading-5 disabled:opacity-60"
-                  />
-                  <div className="relative flex shrink-0 flex-col items-end justify-end self-end">
+                      className="max-h-28 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-1.5 py-2.5 text-[16px] leading-5 text-[#12241c] outline-none placeholder:truncate placeholder:whitespace-nowrap disabled:opacity-60"
+                    />
                     {chatComposerTrailingAction({
                       body: draft,
                       voiceBusy,
@@ -747,7 +738,7 @@ export function AgentChatTranscriptPane({
                             ? "Send SMS message"
                             : "Send Chat message"
                         }
-                        className="inline-flex size-10 items-center justify-center rounded-full bg-[#0f6b4c] text-white shadow-sm hover:bg-[#0c5740] disabled:opacity-50"
+                        className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-[#0f6b4c] text-white shadow-sm hover:bg-[#0c5740] disabled:opacity-50"
                       >
                         {sending ? (
                           <span className="text-[10px] font-bold">…</span>
@@ -755,31 +746,13 @@ export function AgentChatTranscriptPane({
                           <Send className="size-4" aria-hidden />
                         )}
                       </button>
-                    ) : !smsSelected && onSendVoice ? (
-                      <ChatVoiceRecorder
-                        disabled={sending || !canSend}
-                        sending={sending}
-                        tone="customer"
-                        onPhaseChange={(phase) => {
-                          const busy = phase !== "idle";
-                          setVoiceBusy(busy);
-                          if (busy) clearTyping();
-                        }}
-                        onSend={async (voiceDraft) => {
-                          const ok = await onSendVoice({
-                            blob: voiceDraft.blob,
-                            mimeType: voiceDraft.mimeType,
-                            durationMs: voiceDraft.durationMs,
-                            replyToMessageId: replyTo?.id ?? null,
-                          });
-                          if (ok) {
-                            clearTyping();
-                            setReplyTo(null);
-                          }
-                          return ok;
-                        }}
-                      />
-                    ) : (
+                    ) : null}
+                    {!smsSelected &&
+                    !onSendVoice &&
+                    chatComposerTrailingAction({
+                      body: draft,
+                      voiceBusy,
+                    }) === "mic" ? (
                       <button
                         type="button"
                         onClick={() => void submit()}
@@ -796,14 +769,54 @@ export function AgentChatTranscriptPane({
                           channel: displayedChannel,
                           sending,
                         })}
-                        className="inline-flex size-10 items-center justify-center rounded-full bg-[#0f6b4c] text-white disabled:opacity-50"
+                        className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-[#0f6b4c] text-white disabled:opacity-50"
                       >
                         <Send className="size-4" aria-hidden />
                       </button>
-                    )}
+                    ) : null}
+                  </>
+                ) : null}
+                {!smsSelected &&
+                onSendVoice &&
+                (voiceBusy ||
+                  chatComposerTrailingAction({
+                    body: draft,
+                    voiceBusy,
+                  }) === "mic") ? (
+                  <div
+                    className={cn(voiceBusy ? "min-w-0 w-full" : "shrink-0")}
+                  >
+                    <ChatVoiceRecorder
+                      disabled={sending || !canSend}
+                      sending={sending}
+                      tone="customer"
+                      onErrorChange={setMicError}
+                      onPhaseChange={(phase) => {
+                        const busy = phase !== "idle";
+                        setVoiceBusy(busy);
+                        if (busy) {
+                          clearTyping();
+                          setMicError(null);
+                        }
+                      }}
+                      onSend={async (voiceDraft) => {
+                        const ok = await onSendVoice({
+                          blob: voiceDraft.blob,
+                          mimeType: voiceDraft.mimeType,
+                          durationMs: voiceDraft.durationMs,
+                          replyToMessageId: replyTo?.id ?? null,
+                        });
+                        if (ok) {
+                          clearTyping();
+                          setReplyTo(null);
+                          setMicError(null);
+                        }
+                        return ok;
+                      }}
+                    />
                   </div>
-                </div>
-              )}
+                ) : null}
+              </div>
               {remaining <= 200 && !voiceBusy ? (
                 <p className="text-[12px] text-ink/40">{remaining} left</p>
               ) : null}
