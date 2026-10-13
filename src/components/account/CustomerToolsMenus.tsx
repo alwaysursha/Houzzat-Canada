@@ -135,7 +135,8 @@ function ToolsFlyoutMenu({
       onMouseEnter={openMenu}
       onMouseLeave={scheduleClose}
       className={cn(
-        "transition",
+        // Always fixed so closed body portals do not extend document height.
+        "fixed transition",
         menuOpen && flyoutStyle
           ? "pointer-events-auto visible opacity-100"
           : "pointer-events-none invisible opacity-0",
@@ -545,7 +546,8 @@ export function WatchlistMenuButton() {
       onMouseEnter={openMenu}
       onMouseLeave={scheduleClose}
       className={cn(
-        "transition",
+        // Always fixed so closed body portals do not extend document height.
+        "fixed transition",
         menuOpen && flyoutStyle
           ? "pointer-events-auto visible opacity-100"
           : "pointer-events-none invisible opacity-0",

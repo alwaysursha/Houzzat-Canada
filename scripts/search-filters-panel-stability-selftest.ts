@@ -44,6 +44,20 @@ assert.doesNotMatch(
   read("src/components/account/SavedSearchesMenuButton.tsx"),
   /lockHeight/,
 );
+
+// Closed customer-tool flyouts stay portaled on body; without position:fixed they
+// re-enter document flow and create scrollable empty space below the footer.
+const savedSearchesMenu = read(
+  "src/components/account/SavedSearchesMenuButton.tsx",
+);
+const customerToolsMenus = read("src/components/account/CustomerToolsMenus.tsx");
+assert.match(savedSearchesMenu, /"fixed transition"/);
+assert.match(customerToolsMenus, /"fixed transition"/);
+assert.equal(
+  (customerToolsMenus.match(/"fixed transition"/g) || []).length,
+  2,
+  "Saved homes + watchlist flyouts must both stay fixed when closed",
+);
 assert.doesNotMatch(
   read("src/components/agent/ActivityFilters.tsx"),
   /lockHeight/,

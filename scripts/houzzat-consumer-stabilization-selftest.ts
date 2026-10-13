@@ -45,6 +45,19 @@ function testHomepagePersonalizationReload() {
   console.log("[1] homepage personalization-changed reloads shell... PASS");
 }
 
+function testClosedToolFlyoutsStayFixed() {
+  // After login, tools strip portals saved-search / saved-homes / watchlist
+  // menus onto body. Closed panels clear useFlyoutFixedStyle; without CSS
+  // position:fixed they stay in normal flow and create empty space below footer.
+  const saved = read("src/components/account/SavedSearchesMenuButton.tsx");
+  const tools = read("src/components/account/CustomerToolsMenus.tsx");
+  assert.match(saved, /createPortal\(panel,\s*document\.body\)/);
+  assert.match(saved, /"fixed transition"/);
+  assert.match(tools, /"fixed transition"/);
+  assert.equal((tools.match(/"fixed transition"/g) || []).length, 2);
+  console.log("[1b] closed customer-tool flyouts stay position:fixed... PASS");
+}
+
 function testClientAccessEmailVerified() {
   const hook = read("src/hooks/use-client-access.ts");
   assert.match(hook, /EMAIL_VERIFIED_EVENT/);
@@ -262,6 +275,7 @@ function testHomepageSoldRailsAccessRefresh() {
 
 function main() {
   testHomepagePersonalizationReload();
+  testClosedToolFlyoutsStayFixed();
   testClientAccessEmailVerified();
   testNotesNotGatedOnAccessLoading();
   testListingCardClientBoundary();

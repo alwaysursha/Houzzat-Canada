@@ -149,7 +149,10 @@ export function SavedSearchesMenuButton({
       onMouseEnter={openMenu}
       onMouseLeave={scheduleClose}
       className={cn(
-        "transition",
+        // Always fixed: closed portals clear flyoutStyle (no position), and
+        // invisible/opacity-0 still occupy document flow — that inflated
+        // scrollHeight below the footer after login mounted these menus.
+        "fixed transition",
         menuOpen && flyoutStyle
           ? "pointer-events-auto visible opacity-100"
           : "pointer-events-none invisible opacity-0",

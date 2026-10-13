@@ -92,6 +92,9 @@ export function useFlyoutFixedStyle(
 
   useLayoutEffect(() => {
     if (!open) {
+      // Clear open coordinates. Consumers that keep the portal mounted while
+      // closed must also keep position:fixed (e.g. Tailwind `fixed`) — without
+      // it, invisible panels re-enter document flow and grow scrollHeight.
       setStyle(undefined);
       return;
     }
