@@ -183,6 +183,9 @@ export type MobileLaunchpadCachePayload = {
   contactedCount: number;
   avgResponseMins: number;
   hotCount: number;
+  unreadMessageCount: number;
+  unreadConversationCount: number;
+  unreadMessages: Array<Record<string, unknown>>;
   callNewLeads: Array<Record<string, unknown>>;
   contactedLeads: Array<Record<string, unknown>>;
   openTasks: Array<Record<string, unknown>>;

@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Mic, Square, Trash2, Send } from "lucide-react";
 import {
   canSendRecordedVoiceNote,
+  createVoiceMediaRecorder,
   formatVoiceDurationMs,
   mapMicrophonePermissionError,
-  preferredMediaRecorderMimeType,
   probeVoiceRecordingSupport,
   revokeObjectUrl,
   stopMediaStream,
@@ -57,8 +57,18 @@ export function ChatVoiceRecorder({
   useEffect(() => {
     return () => {
       if (timerRef.current != null) window.clearInterval(timerRef.current);
-      stopMediaStream(streamRef.current);
+      const recorder = mediaRecorderRef.current;
+      if (recorder && recorder.state !== "inactive") {
+        try {
+          recorder.onstop = () => undefined;
+          recorder.stop();
+        } catch {
+          // ignore
+        }
+      }
       mediaRecorderRef.current = null;
+      stopMediaStream(streamRef.current);
+      streamRef.current = null;
       revokeObjectUrl(previewUrlRef.current);
       previewUrlRef.current = null;
     };
@@ -92,15 +102,20 @@ export function ChatVoiceRecorder({
     }
     chatHaptic("voice-start");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Permission prompt only after this explicit tap.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
       streamRef.current = stream;
-      const mimeType = preferredMediaRecorderMimeType((value) =>
-        MediaRecorder.isTypeSupported(value),
+      const { recorder, mimeType } = createVoiceMediaRecorder(
+        stream,
+        (value) => MediaRecorder.isTypeSupported(value),
+        MediaRecorder,
       );
-      mimeRef.current = mimeType || "audio/webm";
-      const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream);
+      mimeRef.current = mimeType;
       chunksRef.current = [];
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
@@ -109,20 +124,20 @@ export function ChatVoiceRecorder({
         clearTimer();
         stopMediaStream(streamRef.current);
         streamRef.current = null;
-        const durationMs = Math.max(
-          0,
-          Date.now() - startedAtRef.current,
-        );
-        const blob = new Blob(chunksRef.current, {
-          type: mimeRef.current,
-        });
+        const durationMs = Math.max(0, Date.now() - startedAtRef.current);
+        const blobType =
+          mimeRef.current ||
+          chunksRef.current[0]?.type ||
+          "audio/webm";
+        mimeRef.current = blobType;
+        const blob = new Blob(chunksRef.current, { type: blobType });
         chunksRef.current = [];
         revokeObjectUrl(previewUrlRef.current);
         const previewUrl = URL.createObjectURL(blob);
         previewUrlRef.current = previewUrl;
         setDraft({
           blob,
-          mimeType: mimeRef.current,
+          mimeType: blobType,
           durationMs,
           previewUrl,
         });
@@ -190,12 +205,14 @@ export function ChatVoiceRecorder({
 
   const accent =
     tone === "agent"
-      ? "text-[#2b6cb0] hover:bg-[#eef6ff]"
+      ? "text-canopy-deep hover:bg-canopy/10"
       : "text-canopy-deep hover:bg-canopy/10";
+  const primaryBtn =
+    "bg-[#0f6b4c] hover:bg-[#0c5740]";
 
   if (phase === "recording") {
     return (
-      <div className="flex w-full items-center gap-2 rounded-xl border border-line bg-white px-2 py-1.5">
+      <div className="flex w-full items-center gap-2 rounded-xl border border-[#d7e8df] bg-white px-2 py-1.5">
         <span className="inline-flex size-2 animate-pulse rounded-full bg-signal" />
         <p className="min-w-0 flex-1 text-sm font-semibold tabular-nums text-ink">
           {formatVoiceDurationMs(elapsedMs)}
@@ -225,7 +242,7 @@ export function ChatVoiceRecorder({
 
   if (phase === "preview" && draft) {
     return (
-      <div className="w-full space-y-1.5 rounded-xl border border-line bg-white px-2 py-1.5">
+      <div className="w-full space-y-1.5 rounded-xl border border-[#d7e8df] bg-white px-2 py-1.5">
         <audio
           src={draft.previewUrl}
           controls
@@ -260,7 +277,7 @@ export function ChatVoiceRecorder({
               aria-label="Send voice note"
               className={cn(
                 "inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50",
-                tone === "agent" ? "bg-[#2b6cb0]" : "bg-canopy",
+                primaryBtn,
               )}
             >
               <Send className="size-3.5" aria-hidden />
@@ -269,7 +286,7 @@ export function ChatVoiceRecorder({
           </div>
         </div>
         {error ? (
-          <p className="text-[11px] text-signal" role="alert">
+          <p className="text-[11px] leading-snug text-signal" role="alert">
             {error}
           </p>
         ) : null}
@@ -277,8 +294,18 @@ export function ChatVoiceRecorder({
     );
   }
 
+  // Idle: keep errors in normal flow ABOVE the mic so they are never clipped
+  // by the chat pane overflow / mobile bottom nav (absolute-below was truncated).
   return (
-    <div className="relative">
+    <div className="flex flex-col items-end gap-1">
+      {error ? (
+        <p
+          className="max-w-[min(18rem,calc(100vw-3rem))] rounded-lg border border-signal/25 bg-white px-2.5 py-1.5 text-left text-[11px] leading-snug text-signal shadow-sm"
+          role="alert"
+        >
+          {error}
+        </p>
+      ) : null}
       <button
         type="button"
         disabled={disabled || sending}
@@ -286,21 +313,11 @@ export function ChatVoiceRecorder({
         onClick={() => void startRecording()}
         className={cn(
           "inline-flex size-10 items-center justify-center rounded-full text-white shadow-sm disabled:opacity-50",
-          tone === "agent"
-            ? "bg-[#2b6cb0] hover:bg-[#1d4f86]"
-            : "bg-[#0f6b4c] hover:bg-[#0c5740]",
+          primaryBtn,
         )}
       >
         <Mic className="size-4" aria-hidden />
       </button>
-      {error ? (
-        <p
-          className="absolute left-0 top-[calc(100%+0.25rem)] z-20 w-56 rounded-lg border border-line bg-white px-2 py-1.5 text-[11px] text-signal shadow-sm"
-          role="alert"
-        >
-          {error}
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   loadLaunchpadContactRequested,
   loadLaunchpadHotLeads,
   loadLaunchpadOnlineLeads,
+  loadLaunchpadUnreadMessages,
 } from "@/lib/agent/launchpad-deferred";
 
 function ModuleCardSkeleton() {
@@ -76,13 +77,14 @@ async function LaunchpadQuickModulesBody({
   dueTodayCount: number;
   tasks: QuickModuleTask[];
 }) {
-  const [avgResponseMins, onlineLeads, hot] = await Promise.all([
+  const [avgResponseMins, onlineLeads, hot, unread] = await Promise.all([
     loadLaunchpadAvgResponseMins({
       ctx,
       focusAgentId,
     }),
     loadLaunchpadOnlineLeads({ ctx, deskView, focusAgentId }),
     loadLaunchpadHotLeads(ctx),
+    loadLaunchpadUnreadMessages(ctx),
   ]);
 
   return (
@@ -99,6 +101,9 @@ async function LaunchpadQuickModulesBody({
       onlineLeads={onlineLeads}
       hotCount={hot.hotCount}
       hotLeads={hot.hotLeads}
+      unreadMessageCount={unread.unreadMessageCount}
+      unreadConversationCount={unread.unreadConversationCount}
+      unreadMessages={unread.messages}
     />
   );
 }

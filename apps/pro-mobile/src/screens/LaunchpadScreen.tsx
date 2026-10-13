@@ -37,6 +37,7 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 type ModuleId =
   | "callNew"
   | "contacted"
+  | "messages"
   | "tasks"
   | "statistics"
   | "online"
@@ -79,12 +80,23 @@ type ContactRequestedPreview = {
   isOnline?: boolean;
 };
 
+type UnreadMessagePreview = {
+  conversationId: string;
+  leadId: string;
+  displayName: string;
+  preview: string | null;
+  channel: string | null;
+  unreadCount: number;
+  lastMessageAt: string;
+};
+
 type LaunchpadData = MobileLaunchpadCachePayload & {
   callNewLeads: LeadPreview[];
   contactedLeads: LeadPreview[];
   openTasks: TaskPreview[];
   onlineLeads: LeadPreview[];
   hotLeads: LeadPreview[];
+  unreadMessages: UnreadMessagePreview[];
   contactRequested: ContactRequestedPreview[];
 };
 
@@ -92,6 +104,7 @@ interface LaunchpadScreenProps {
   onNavigateToLeads: (statusFilter?: string) => void;
   onNavigateToTasks: () => void;
   onNavigateToStatistics: () => void;
+  onNavigateToChats: () => void;
   onOpenLead: (leadId: string, leadIds?: string[]) => void;
 }
 
@@ -137,6 +150,9 @@ function emptyLaunchpad(workspaceId: string): LaunchpadData {
     contactedCount: 0,
     avgResponseMins: 0,
     hotCount: 0,
+    unreadMessageCount: 0,
+    unreadConversationCount: 0,
+    unreadMessages: [],
     callNewLeads: [],
     contactedLeads: [],
     openTasks: [],
@@ -150,6 +166,7 @@ export function LaunchpadScreen({
   onNavigateToLeads,
   onNavigateToTasks,
   onNavigateToStatistics,
+  onNavigateToChats,
   onOpenLead,
 }: LaunchpadScreenProps) {
   const { activeWorkspace, activeMembership } = useAuth();
@@ -212,6 +229,16 @@ export function LaunchpadScreen({
           openTasks: (payload.openTasks as TaskPreview[]) ?? [],
           onlineLeads: (payload.onlineLeads as LeadPreview[]) ?? [],
           hotLeads: (payload.hotLeads as LeadPreview[]) ?? [],
+          unreadMessageCount:
+            typeof payload.unreadMessageCount === "number"
+              ? payload.unreadMessageCount
+              : 0,
+          unreadConversationCount:
+            typeof payload.unreadConversationCount === "number"
+              ? payload.unreadConversationCount
+              : 0,
+          unreadMessages:
+            (payload.unreadMessages as UnreadMessagePreview[]) ?? [],
           contactRequested:
             (payload.contactRequested as ContactRequestedPreview[]) ?? [],
         };
@@ -307,6 +334,32 @@ export function LaunchpadScreen({
             openLeadFromList(
               id,
               data.contactedLeads.map((l) => l.id),
+            )
+          }
+        />
+      ),
+    },
+    {
+      id: "messages",
+      title: "New Messages",
+      subtitle:
+        data.unreadMessageCount === 0
+          ? "No unread texts or chats"
+          : data.unreadConversationCount === 1
+            ? `${data.unreadMessageCount} unread message${data.unreadMessageCount === 1 ? "" : "s"}`
+            : `${data.unreadMessageCount} unread · ${data.unreadConversationCount} conversations`,
+      accentColor: "#0284C7",
+      icon: <Text style={styles.moduleIconText}>💬</Text>,
+      linkLabel: "Open chats inbox",
+      onLink: onNavigateToChats,
+      body: (
+        <MessageList
+          messages={data.unreadMessages}
+          empty="No unread texts or chats right now."
+          onSelect={(leadId) =>
+            openLeadFromList(
+              leadId,
+              data.unreadMessages.map((m) => m.leadId),
             )
           }
         />
@@ -643,6 +696,56 @@ function LeadList({
   );
 }
 
+function MessageList({
+  messages,
+  empty,
+  onSelect,
+}: {
+  messages: UnreadMessagePreview[];
+  empty: string;
+  onSelect: (leadId: string) => void;
+}) {
+  if (messages.length === 0) {
+    return <Text style={styles.emptyLine}>{empty}</Text>;
+  }
+  return (
+    <View style={styles.listStack}>
+      {messages.map((message) => {
+        const channel =
+          message.channel === "SMS"
+            ? "SMS"
+            : message.channel === "CHAT"
+              ? "Chat"
+              : null;
+        return (
+          <TouchableOpacity
+            key={message.conversationId}
+            style={styles.listRow}
+            activeOpacity={0.75}
+            onPress={() => onSelect(message.leadId)}
+          >
+            <View style={styles.listRowMain}>
+              <Text style={styles.listRowTitle} numberOfLines={1}>
+                {message.displayName}
+              </Text>
+              <Text style={styles.listRowMeta} numberOfLines={1}>
+                {channel ? `${channel} · ` : ""}
+                {message.preview?.trim() || "New message"}
+              </Text>
+            </View>
+            <View style={styles.unreadPill}>
+              <Text style={styles.unreadPillText}>
+                {message.unreadCount > 99 ? "99+" : message.unreadCount}
+              </Text>
+            </View>
+            <Text style={styles.listChevron}>›</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
 function TaskList({
   tasks,
   empty,
@@ -888,6 +991,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: "#94A3B8",
     marginLeft: 8,
+  },
+  unreadPill: {
+    backgroundColor: "#E0F2FE",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    marginLeft: 8,
+  },
+  unreadPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0369A1",
   },
   statsBody: {
     alignItems: "center",

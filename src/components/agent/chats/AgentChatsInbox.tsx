@@ -272,7 +272,7 @@ export function AgentChatsInbox() {
 
       <section
         className={cn(
-          "min-h-0 min-w-0 flex-1 flex-col bg-[#f7f9fb]",
+          "min-h-0 min-w-0 flex-1 flex-col bg-[#f4faf7]",
           selectedLeadId ? "flex" : "hidden lg:flex",
         )}
       >
@@ -327,12 +327,12 @@ function SelectedThread({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <header className="flex shrink-0 items-center gap-2 border-b border-[#e2e8f0] bg-white px-3 py-2.5 sm:px-4">
+      <header className="flex shrink-0 items-center gap-2 border-b border-[#d7e8df] bg-white px-3 py-2.5 sm:px-4">
         <button
           type="button"
           onClick={onBack}
           aria-label="Back to chats"
-          className="inline-flex size-10 items-center justify-center rounded-lg text-[#1e2a38] hover:bg-[#f8fafc] lg:hidden"
+          className="inline-flex size-10 items-center justify-center rounded-xl border border-[#d7e8df] text-[#12241c] hover:bg-[#eef8f3] lg:hidden"
         >
           <ArrowLeft className="size-5" />
         </button>
@@ -342,16 +342,16 @@ function SelectedThread({
           unread={false}
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold text-[#1e2a38] sm:text-base">
+          <p className="truncate text-[15px] font-semibold text-[#12241c] sm:text-base">
             {name}
           </p>
           {subtitle ? (
-            <p className="truncate text-[12px] text-[#64748b]">{subtitle}</p>
+            <p className="truncate text-[12px] text-[#5b7a6c]">{subtitle}</p>
           ) : null}
         </div>
         <Link
           href={chatsViewLeadHref(leadId)}
-          className="shrink-0 rounded-lg border border-[#d8dee6] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#1e2a38] hover:bg-[#f8fafc]"
+          className="shrink-0 rounded-xl border border-[#d7e8df] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#12241c] hover:bg-[#eef8f3]"
         >
           View Lead
         </Link>

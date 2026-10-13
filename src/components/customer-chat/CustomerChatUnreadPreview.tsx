@@ -174,7 +174,7 @@ export function CustomerChatUnreadPreview({
                 enterKeyHint="send"
                 className="max-h-24 min-h-[2.25rem] flex-1 resize-none bg-transparent px-2 py-1.5 text-[16px] leading-5 text-[#12241c] outline-none placeholder:text-[#7a9a8b]"
               />
-              <div className="relative size-10 shrink-0">
+              <div className="relative flex shrink-0 flex-col items-end justify-end">
                 {trailing === "send" ? (
                   <button
                     type="button"
@@ -188,23 +188,21 @@ export function CustomerChatUnreadPreview({
                     <Send className="size-4" aria-hidden />
                   </button>
                 ) : (
-                  <div className="flex size-10 items-center justify-center">
-                    <ChatVoiceRecorder
-                      disabled={sending}
-                      sending={sending}
-                      tone="customer"
-                      onPhaseChange={(phase) => setVoiceBusy(phase !== "idle")}
-                      onSend={async (voiceDraft) => {
-                        const ok = await sendVoiceNote({
-                          blob: voiceDraft.blob,
-                          mimeType: voiceDraft.mimeType,
-                          durationMs: voiceDraft.durationMs,
-                        });
-                        if (ok) expand();
-                        return ok;
-                      }}
-                    />
-                  </div>
+                  <ChatVoiceRecorder
+                    disabled={sending}
+                    sending={sending}
+                    tone="customer"
+                    onPhaseChange={(phase) => setVoiceBusy(phase !== "idle")}
+                    onSend={async (voiceDraft) => {
+                      const ok = await sendVoiceNote({
+                        blob: voiceDraft.blob,
+                        mimeType: voiceDraft.mimeType,
+                        durationMs: voiceDraft.durationMs,
+                      });
+                      if (ok) expand();
+                      return ok;
+                    }}
+                  />
                 )}
               </div>
             </div>

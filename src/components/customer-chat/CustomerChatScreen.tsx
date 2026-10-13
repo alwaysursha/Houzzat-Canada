@@ -710,7 +710,7 @@ export function CustomerChatScreen({
                   placeholder="Write a message…"
                   className="max-h-28 min-h-10 flex-1 resize-none bg-transparent px-1.5 py-2.5 text-[16px] leading-5 text-[#12241c] outline-none placeholder:leading-5 disabled:opacity-60"
                 />
-                <div className="relative flex size-10 shrink-0 items-center justify-center self-end">
+                <div className="relative flex shrink-0 flex-col items-end justify-end self-end">
                   {chatComposerTrailingAction({ body: draft, voiceBusy }) ===
                   "send" ? (
                     <button

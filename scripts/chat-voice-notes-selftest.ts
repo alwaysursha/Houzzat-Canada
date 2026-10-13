@@ -33,6 +33,7 @@ import {
 } from "../src/lib/chat/voice-notes/rate-limit";
 import {
   canSendRecordedVoiceNote,
+  createVoiceMediaRecorder,
   formatVoiceDurationMs,
   mapMicrophonePermissionError,
   preferredMediaRecorderMimeType,
@@ -105,13 +106,20 @@ function testRecordingLifecycleHelpers() {
     false,
   );
 
-  assert.equal(
-    mapMicrophonePermissionError({ name: "NotAllowedError" }).reason,
-    "DENIED",
-  );
+  const denied = mapMicrophonePermissionError({ name: "NotAllowedError" });
+  assert.equal(denied.reason, "DENIED");
+  assert.match(denied.message, /Site settings|address bar/i);
   assert.equal(
     mapMicrophonePermissionError({ name: "NotFoundError" }).reason,
     "UNAVAILABLE",
+  );
+  assert.equal(
+    mapMicrophonePermissionError({ name: "NotReadableError" }).reason,
+    "UNAVAILABLE",
+  );
+  assert.equal(
+    mapMicrophonePermissionError({ name: "SecurityError" }).reason,
+    "DENIED",
   );
   assert.equal(
     mapMicrophonePermissionError({ name: "AbortError" }).reason,
@@ -122,6 +130,25 @@ function testRecordingLifecycleHelpers() {
     preferredMediaRecorderMimeType((mime) => mime === "audio/webm"),
     "audio/webm",
   );
+
+  // Preferred MIME rejected by constructor → fall back to bare MediaRecorder.
+  class FakeRecorder {
+    mimeType = "audio/ogg";
+    constructor(
+      _stream: unknown,
+      options?: { mimeType?: string },
+    ) {
+      if (options?.mimeType) {
+        throw new Error("unsupported mime");
+      }
+    }
+  }
+  const created = createVoiceMediaRecorder(
+    {} as MediaStream,
+    () => true,
+    FakeRecorder as unknown as typeof MediaRecorder,
+  );
+  assert.equal(created.mimeType, "audio/ogg");
   assert.equal(formatVoiceDurationMs(65_000), "1:05");
   assert.equal(
     canSendRecordedVoiceNote({
@@ -634,11 +661,28 @@ function testUiWiringAndNoPublicBranding() {
   assert.ok(customerUi.includes("ChatVoiceRecorder"));
   assert.ok(customerUi.includes("ChatVoicePlayer"));
   assert.ok(customerUi.includes("sendVoiceNote"));
+  // Mic trailing slot must not force size-10 (clips idle mic errors).
+  assert.ok(
+    customerUi.includes(
+      'relative flex shrink-0 flex-col items-end justify-end self-end',
+    ),
+  );
 
   const agentUi = read("src/components/agent/chat/AgentChatTranscriptPane.tsx");
   assert.ok(agentUi.includes("ChatVoiceRecorder"));
   assert.ok(agentUi.includes("ChatVoicePlayer"));
   assert.ok(agentUi.includes("onSendVoice"));
+  // Premium mint shell parity with Customer Chat V1.
+  assert.ok(agentUi.includes("bg-[#d8f3e7]"));
+  assert.ok(agentUi.includes("bg-[#0f6b4c]"));
+  assert.equal(agentUi.includes("bg-[#dbeafe]"), false);
+  assert.equal(agentUi.includes("bg-[#2b6cb0]"), false);
+
+  const recorder = read("src/components/chat/ChatVoiceRecorder.tsx");
+  assert.ok(recorder.includes("createVoiceMediaRecorder"));
+  // Idle mic errors render above the button in normal flow (not absolute-below).
+  assert.ok(recorder.includes('flex flex-col items-end gap-1'));
+  assert.equal(recorder.includes("top-[calc(100%"), false);
 
   const inbox = read("src/components/agent/chats/AgentChatsInbox.tsx");
   assert.ok(inbox.includes("sendVoiceNote"));

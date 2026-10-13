@@ -264,6 +264,10 @@ function testWiring() {
   assert.ok(agent.includes("ChatStickyDateLabel"));
   assert.ok(agent.includes("postAgentListingShare"));
   assert.ok(agent.includes("ChatComposerListingPreview"));
+  // Agent chat premium mint bubbles (Customer Chat V1 parity).
+  assert.ok(agent.includes("bg-[#d8f3e7]"));
+  assert.ok(agent.includes("bg-[#f4faf7]"));
+  assert.equal(agent.includes("bg-[#dbeafe]"), false);
   assert.ok(actions.includes("CHAT_QUICK_REACTION_KEYS"));
   assert.ok(actions.includes("SWIPE_THRESHOLD_PX"));
   assert.ok(actions.includes("chatHaptic"));

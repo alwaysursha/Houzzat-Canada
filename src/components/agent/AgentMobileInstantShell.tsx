@@ -222,6 +222,11 @@ export function AgentMobileInstantShell({
                   onlineLeads={launchpadData.onlineLeads || []}
                   hotCount={launchpadData.hotCount || 0}
                   hotLeads={launchpadData.hotLeads || []}
+                  unreadMessageCount={launchpadData.unreadMessageCount || 0}
+                  unreadConversationCount={
+                    launchpadData.unreadConversationCount || 0
+                  }
+                  unreadMessages={launchpadData.unreadMessages || []}
                 />
 
                 {/* Todo Carousel */}

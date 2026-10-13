@@ -6,6 +6,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   CheckCircle2,
   ChevronRight,
+  MessageCircle,
   Phone,
   Radio,
   Timer,
@@ -13,6 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { LeadQuickPopup } from "@/components/agent/LeadQuickPopup";
+import { chatsPageHref } from "@/lib/agent/chats-inbox-query";
 import { pipelineShortLabel } from "@/lib/agent/pipeline";
 import type { LeadStatus } from "@prisma/client";
 import { cn } from "@/lib/utils";
@@ -36,15 +38,26 @@ export type QuickModuleTask = {
   } | null;
 };
 
+export type QuickModuleMessage = {
+  conversationId: string;
+  leadId: string;
+  displayName: string;
+  preview: string | null;
+  channel: string | null;
+  unreadCount: number;
+  lastMessageAt: string;
+};
+
 type ModuleId =
   | "callNew"
   | "contacted"
+  | "messages"
   | "tasks"
   | "statistics"
   | "online"
   | "hot";
 
-type Tone = "danger" | "warn" | "info" | "ok" | "live";
+type Tone = "danger" | "warn" | "info" | "ok" | "live" | "msg";
 
 const TONE_CLASS: Record<Tone, string> = {
   danger: "border-l-[#e11d48] text-[#e11d48]",
@@ -52,6 +65,7 @@ const TONE_CLASS: Record<Tone, string> = {
   info: "border-l-[#2b6cb0] text-[#2b6cb0]",
   ok: "border-l-canopy text-canopy-deep",
   live: "border-l-emerald-500 text-emerald-600",
+  msg: "border-l-[#0284c7] text-[#0369a1]",
 };
 
 function relativeAgo(iso: string | null | undefined) {
@@ -87,6 +101,9 @@ export function QuickModulesPanel({
   onlineLeads,
   hotCount,
   hotLeads,
+  unreadMessageCount,
+  unreadConversationCount,
+  unreadMessages,
 }: {
   deskView: string;
   callNewCount: number;
@@ -102,6 +119,9 @@ export function QuickModulesPanel({
   >;
   hotCount: number;
   hotLeads: QuickModuleLead[];
+  unreadMessageCount: number;
+  unreadConversationCount: number;
+  unreadMessages: QuickModuleMessage[];
 }) {
   const [openId, setOpenId] = useState<ModuleId | null>(null);
   const [openedIds, setOpenedIds] = useState<Set<ModuleId>>(() => new Set());
@@ -114,6 +134,7 @@ export function QuickModulesPanel({
   const hotHref = "/agent/leads?view=mine";
   const tasksHref = "/agent/tasks";
   const statsHref = "/agent/statistics";
+  const messagesHref = chatsPageHref();
 
   const profileLeadIds = (() => {
     switch (openId) {
@@ -127,8 +148,16 @@ export function QuickModulesPanel({
         return hotLeads.map((l) => l.id);
       case "tasks":
         return tasks.map((t) => t.lead?.id).filter(Boolean) as string[];
-      default:
+      case "messages":
+        return unreadMessages.map((m) => m.leadId);
+      case "statistics":
         return [];
+      case null:
+        return [];
+      default: {
+        const _exhaustive: never = openId;
+        return _exhaustive;
+      }
     }
   })();
 
@@ -201,6 +230,26 @@ export function QuickModulesPanel({
           leads={contactedLeads}
           empty="No follow-up leads right now."
           onSelect={setProfileId}
+        />
+      ),
+    },
+    {
+      id: "messages",
+      title: "New Messages",
+      subtitle:
+        unreadMessageCount === 0
+          ? "No unread texts or chats"
+          : unreadConversationCount === 1
+            ? `${unreadMessageCount} unread message${unreadMessageCount === 1 ? "" : "s"}`
+            : `${unreadMessageCount} unread · ${unreadConversationCount} conversations`,
+      tone: "msg",
+      icon: MessageCircle,
+      href: messagesHref,
+      linkLabel: "Open chats inbox",
+      body: (
+        <MessageList
+          messages={unreadMessages}
+          empty="No unread texts or chats right now."
         />
       ),
     },
@@ -481,6 +530,54 @@ function TaskList({
                 <ChevronRight className="mt-1 size-3.5 shrink-0 text-[#cbd5e1]" />
               ) : null}
             </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function MessageList({
+  messages,
+  empty,
+}: {
+  messages: QuickModuleMessage[];
+  empty: string;
+}) {
+  if (messages.length === 0) {
+    return (
+      <p className="px-3 py-8 text-center text-sm text-[#94a3b8]">{empty}</p>
+    );
+  }
+  return (
+    <ul className="space-y-0.5">
+      {messages.map((message) => {
+        const channel =
+          message.channel === "SMS"
+            ? "SMS"
+            : message.channel === "CHAT"
+              ? "Chat"
+              : null;
+        return (
+          <li key={message.conversationId}>
+            <Link
+              href={chatsPageHref(message.leadId)}
+              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition hover:bg-white"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-semibold text-[#1e2a38]">
+                  {message.displayName}
+                </p>
+                <p className="truncate text-[11px] text-[#64748b]">
+                  {channel ? `${channel} · ` : ""}
+                  {message.preview?.trim() || "New message"}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-[#0284c7]/12 px-1.5 py-0.5 text-[10px] font-bold text-[#0369a1]">
+                {message.unreadCount > 99 ? "99+" : message.unreadCount}
+              </span>
+              <ChevronRight className="size-3.5 shrink-0 text-[#cbd5e1]" />
+            </Link>
           </li>
         );
       })}

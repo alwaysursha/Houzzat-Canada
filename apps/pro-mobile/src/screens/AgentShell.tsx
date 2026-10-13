@@ -159,6 +159,7 @@ type AgentTabContextValue = {
   selectPrimaryTab: (route: Exclude<AgentTabRouteName, "Tasks" | "More">) => void;
   navigateToLeads: (statusFilter?: string) => void;
   navigateToTasks: () => void;
+  navigateToChats: () => void;
   openStatistics: () => void;
   openLeadOnLeads: (leadId: string, leadIds?: string[]) => void;
   selectLead: (leadId: string, leadIds: string[]) => void;
@@ -190,6 +191,7 @@ function LaunchpadTab() {
     <LaunchpadScreen
       onNavigateToLeads={ctx.navigateToLeads}
       onNavigateToTasks={ctx.navigateToTasks}
+      onNavigateToChats={ctx.navigateToChats}
       onNavigateToStatistics={ctx.openStatistics}
       onOpenLead={(leadId, leadIds) => ctx.openLeadOnLeads(leadId, leadIds)}
     />
@@ -687,6 +689,9 @@ export function AgentShell({
     },
     navigateToLeads: handleNavigateToLeads,
     navigateToTasks: handleNavigateToTasks,
+    navigateToChats: () => {
+      navigateTab("chats", "chats");
+    },
     openStatistics: () => {
       setActiveUtility("statistics");
       setActiveDrawerId("statistics");

@@ -57,7 +57,8 @@ export function mapMicrophonePermissionError(error: unknown): VoicePermissionFai
   if (name === "NotAllowedError" || name === "PermissionDeniedError") {
     return {
       reason: "DENIED",
-      message: "Microphone access was denied. Enable it in your browser settings.",
+      message:
+        "Microphone access was denied. Tap the lock icon in the address bar → Site settings → Microphone → Allow, then try again.",
     };
   }
   if (name === "NotFoundError" || name === "DevicesNotFoundError") {
@@ -66,15 +67,54 @@ export function mapMicrophonePermissionError(error: unknown): VoicePermissionFai
       message: "No microphone was found on this device.",
     };
   }
+  if (name === "NotReadableError" || name === "TrackStartError") {
+    return {
+      reason: "UNAVAILABLE",
+      message:
+        "Microphone is busy or blocked by another app. Close other apps using the mic, then try again.",
+    };
+  }
+  if (name === "SecurityError") {
+    return {
+      reason: "DENIED",
+      message: "Microphone is blocked in this browser. Allow mic access for this site, then try again.",
+    };
+  }
   if (name === "AbortError") {
     return {
       reason: "DISMISSED",
-      message: "Microphone permission was dismissed.",
+      message: "Microphone permission was dismissed. Tap the mic and allow access when prompted.",
     };
   }
   return {
     reason: "UNAVAILABLE",
     message: "Couldn’t start the microphone. Please try again.",
+  };
+}
+
+/** Create MediaRecorder with preferred MIME, falling back if the type is rejected. */
+export function createVoiceMediaRecorder(
+  stream: MediaStream,
+  isTypeSupported: (mime: string) => boolean,
+  MediaRecorderCtor: typeof MediaRecorder,
+): { recorder: MediaRecorder; mimeType: string } {
+  const preferred = preferredMediaRecorderMimeType(isTypeSupported);
+  if (preferred) {
+    try {
+      const recorder = new MediaRecorderCtor(stream, { mimeType: preferred });
+      return {
+        recorder,
+        mimeType: recorder.mimeType || preferred,
+      };
+    } catch {
+      // Fall through — some Android WebViews reject options even when
+      // isTypeSupported returns true.
+    }
+  }
+  const recorder = new MediaRecorderCtor(stream);
+  return {
+    recorder,
+    mimeType: recorder.mimeType || preferred || "audio/webm",
   };
 }
 

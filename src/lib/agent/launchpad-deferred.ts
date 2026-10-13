@@ -5,6 +5,11 @@ import { leadScopeWhere } from "@/lib/agent";
 import { leadWhereForDesk } from "@/lib/crm-read-scope";
 import { computeHotnessMap, ONLINE_MS } from "@/lib/agent/hotness";
 import { displayedCrmClassification } from "@/lib/agent/lead-classification";
+import {
+  AGENT_INBOX_PAGE_MAX,
+  createPrismaAgentInboxListDb,
+  listAgentInboxConversations,
+} from "@/lib/conversations/agent-inbox-list";
 import { prisma } from "@/lib/prisma";
 
 /** Recent responses only — enough for a Launchpad avg, not a full history scan. */
@@ -12,6 +17,17 @@ const RESPONSE_SAMPLE = 150;
 const HOT_CANDIDATE_TAKE = 30;
 const ONLINE_LEADS_TAKE = 40;
 const CONTACT_REQUESTED_TAKE = 24;
+const UNREAD_MESSAGES_PREVIEW_TAKE = 12;
+
+export type LaunchpadUnreadMessage = {
+  conversationId: string;
+  leadId: string;
+  displayName: string;
+  preview: string | null;
+  channel: string | null;
+  unreadCount: number;
+  lastMessageAt: string;
+};
 
 export async function loadLaunchpadAvgResponseMins(input: {
   ctx: AgentOrgContext;
@@ -107,6 +123,48 @@ export async function loadLaunchpadOnlineLeads(input: {
       const bt = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
       return bt - at;
     });
+}
+
+/**
+ * Unread SMS + Chat for the signed-in agent (assigned-to-me inbox).
+ * Same Conversation unread rules as /agent/chats.
+ */
+export async function loadLaunchpadUnreadMessages(ctx: AgentOrgContext): Promise<{
+  unreadMessageCount: number;
+  unreadConversationCount: number;
+  messages: LaunchpadUnreadMessage[];
+}> {
+  const result = await listAgentInboxConversations(
+    createPrismaAgentInboxListDb(prisma),
+    ctx,
+    {
+      q: null,
+      filter: "unread",
+      limit: AGENT_INBOX_PAGE_MAX,
+      cursor: null,
+    },
+  );
+
+  const unreadMessageCount = result.conversations.reduce(
+    (sum, row) => sum + row.unread.count,
+    0,
+  );
+
+  return {
+    unreadMessageCount,
+    unreadConversationCount: result.conversations.length,
+    messages: result.conversations
+      .slice(0, UNREAD_MESSAGES_PREVIEW_TAKE)
+      .map((row) => ({
+        conversationId: row.conversationId,
+        leadId: row.leadId,
+        displayName: row.lead.displayName,
+        preview: row.latestMessage?.preview ?? null,
+        channel: row.latestMessage?.channel ?? null,
+        unreadCount: row.unread.count,
+        lastMessageAt: row.lastMessageAt,
+      })),
+  };
 }
 
 /** Request-cached so Hot card + Quick Modules share one hotness pass (same ctx ref). */

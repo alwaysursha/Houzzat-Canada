@@ -11,6 +11,8 @@ import {
   loadLaunchpadContactRequested,
   loadLaunchpadHotLeads,
   loadLaunchpadOnlineLeads,
+  loadLaunchpadUnreadMessages,
+  type LaunchpadUnreadMessage,
 } from "@/lib/agent/launchpad-deferred";
 import {
   agentTaskTenantWhere,
@@ -75,6 +77,9 @@ export type LaunchpadPayload = {
     customer: { name: string | null; email: string } | null;
     meta?: string | null;
   }>;
+  unreadMessageCount: number;
+  unreadConversationCount: number;
+  unreadMessages: LaunchpadUnreadMessage[];
   contactRequested: Array<{
     id: string;
     source: string;
@@ -148,6 +153,7 @@ export async function loadLaunchpadPayload(
     avgResponseMins,
     onlineLeads,
     hot,
+    unread,
     contactRequested,
   ] = await Promise.all([
     prisma.agentTask.findMany({
@@ -225,6 +231,7 @@ export async function loadLaunchpadPayload(
     loadLaunchpadAvgResponseMins({ ctx, focusAgentId }),
     loadLaunchpadOnlineLeads({ ctx, deskView, focusAgentId }),
     loadLaunchpadHotLeads(ctx),
+    loadLaunchpadUnreadMessages(ctx),
     loadLaunchpadContactRequested({ ctx, focusAgentId }),
   ]);
 
@@ -267,6 +274,9 @@ export async function loadLaunchpadPayload(
     onlineLeads,
     hotCount: hot.hotCount,
     hotLeads: hot.hotLeads,
+    unreadMessageCount: unread.unreadMessageCount,
+    unreadConversationCount: unread.unreadConversationCount,
+    unreadMessages: unread.messages,
     contactRequested,
   };
 }

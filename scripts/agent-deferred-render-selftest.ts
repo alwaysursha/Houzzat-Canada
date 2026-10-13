@@ -24,6 +24,16 @@ function testQuickModulesLazyMountWiring() {
 
   // Verify toggle manages openedIds
   assert.ok(qmSrc.includes("setOpenedIds((prev) =>"));
+
+  // New Messages module (unread SMS + Chat from assigned inbox)
+  assert.ok(qmSrc.includes('id: "messages"'));
+  assert.ok(qmSrc.includes('title: "New Messages"'));
+  assert.ok(qmSrc.includes("unreadMessages"));
+  assert.ok(qmSrc.includes("chatsPageHref"));
+
+  const deferred = read("src/lib/agent/launchpad-deferred.ts");
+  assert.ok(deferred.includes("loadLaunchpadUnreadMessages"));
+  assert.ok(deferred.includes('filter: "unread"'));
 }
 
 function testContactRequestedOptimizationWiring() {

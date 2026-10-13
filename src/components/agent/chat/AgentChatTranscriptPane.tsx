@@ -442,13 +442,13 @@ export function AgentChatTranscriptPane({
   return (
     <div
       className={cn(
-        "flex min-h-0 flex-1 flex-col overflow-hidden bg-white",
+        "flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f4faf7]",
         frame === "card" &&
-          "min-h-[20rem] rounded-lg border border-[#e2e8f0] lg:min-h-0",
+          "min-h-[20rem] rounded-2xl border border-[#d7e8df] bg-white lg:min-h-0",
       )}
     >
       {onSearch ? (
-        <div className="flex shrink-0 justify-end border-b border-[#e2e8f0] px-3 py-1.5 sm:px-4">
+        <div className="flex shrink-0 justify-end border-b border-[#d7e8df] bg-white/90 px-3 py-1.5 sm:px-4">
           <ChatConversationSearch
             onSearch={onSearch}
             onSelect={(messageId) => {
@@ -472,12 +472,12 @@ export function AgentChatTranscriptPane({
           <ChatSkeleton />
         ) : error ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-10 text-center">
-            <p className="text-sm text-[#64748b]">Couldn’t load chat.</p>
+            <p className="text-sm text-ink/65">Couldn’t load chat.</p>
             <button
               type="button"
               onClick={onRetry}
               aria-label="Retry loading chat"
-              className="rounded-lg border border-[#d8dee6] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#1e2a38] hover:bg-[#f8fafc]"
+              className="rounded-xl border border-[#d7e8df] bg-mist px-3 py-1.5 text-[12px] font-semibold text-ink hover:border-canopy/40"
             >
               Retry
             </button>
@@ -495,14 +495,14 @@ export function AgentChatTranscriptPane({
                       ? "Loading earlier messages"
                       : "Load earlier messages"
                   }
-                  className="rounded-full border border-[#d8dee6] bg-white px-3 py-1 text-[11px] font-semibold text-[#475569] hover:bg-[#f8fafc] disabled:opacity-60"
+                  className="rounded-full border border-[#d7e8df] bg-white px-3 py-1 text-[11px] font-semibold text-[#3d6a57] hover:bg-[#eef8f3] disabled:opacity-60"
                 >
                   {busy ? "Loading earlier messages…" : "Load earlier messages"}
                 </button>
               </div>
             ) : null}
             {(panel?.messages.length ?? 0) === 0 ? (
-              <p className="px-3 py-10 text-center text-sm text-[#64748b]">
+              <p className="px-3 py-10 text-center text-sm text-ink/55">
                 {v2ChatEmptyCopy(canSend)}
               </p>
             ) : (
@@ -524,11 +524,11 @@ export function AgentChatTranscriptPane({
                     ) : null}
                     {row.showDivider ? (
                       <div className="my-3 flex items-center gap-2">
-                        <span className="h-px flex-1 bg-[#e2e8f0]" />
-                        <span className="text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">
+                        <span className="h-px flex-1 bg-[#d7e8df]" />
+                        <span className="text-[12px] font-semibold uppercase tracking-wide text-[#3d6a57]">
                           New messages
                         </span>
-                        <span className="h-px flex-1 bg-[#e2e8f0]" />
+                        <span className="h-px flex-1 bg-[#d7e8df]" />
                       </div>
                     ) : null}
                     <ChatRow
@@ -567,13 +567,13 @@ export function AgentChatTranscriptPane({
       </div>
       </div>
       {composerMode === "hidden" ? null : (
-        <div className="shrink-0 border-t border-[#e2e8f0] bg-[#f8fafc] px-3 py-2.5 sm:px-4">
+        <div className="shrink-0 border-t border-canopy/10 bg-mist/50 px-3 py-2.5 sm:px-4">
           {canSend ? (
             <div className="space-y-1.5">
               <div
                 role="tablist"
                 aria-label="Message channel"
-                className="inline-flex rounded-lg border border-[#d8dee6] bg-white p-0.5"
+                className="inline-flex rounded-lg border border-[#d7e8df] bg-white p-0.5"
               >
                 <button
                   type="button"
@@ -583,8 +583,8 @@ export function AgentChatTranscriptPane({
                   className={cn(
                     "rounded-md px-2.5 py-1 text-[12px] font-semibold",
                     !smsSelected
-                      ? "bg-[#2b6cb0] text-white shadow-sm ring-1 ring-[#1d4f86]"
-                      : "text-[#64748b] hover:text-[#1e2a38]",
+                      ? "bg-[#0f6b4c] text-white shadow-sm ring-1 ring-[#0c5740]"
+                      : "text-[#5b7a6c] hover:text-[#12241c]",
                   )}
                 >
                   Chat
@@ -598,8 +598,8 @@ export function AgentChatTranscriptPane({
                   className={cn(
                     "rounded-md px-2.5 py-1 text-[12px] font-semibold disabled:opacity-50",
                     smsSelected
-                      ? "bg-[#2b6cb0] text-white shadow-sm ring-1 ring-[#1d4f86]"
-                      : "text-[#64748b] hover:text-[#1e2a38]",
+                      ? "bg-[#0f6b4c] text-white shadow-sm ring-1 ring-[#0c5740]"
+                      : "text-[#5b7a6c] hover:text-[#12241c]",
                   )}
                 >
                   SMS
@@ -613,7 +613,7 @@ export function AgentChatTranscriptPane({
                       key={quickText.id}
                       onClick={() => setDraft(quickText.rendered)}
                       disabled={sending}
-                      className="rounded-full border border-[#d8dee6] bg-white px-2.5 py-1 text-[12px] font-semibold text-[#475569] hover:bg-[#eef6ff] hover:text-[#1e2a38] disabled:opacity-50"
+                      className="rounded-full border border-[#d7e8df] bg-white px-2.5 py-1 text-[12px] font-semibold text-[#3d6a57] hover:bg-[#eef8f3] hover:text-[#12241c] disabled:opacity-50"
                     >
                       {quickText.name}
                     </button>
@@ -636,11 +636,11 @@ export function AgentChatTranscriptPane({
                 <ChatTypingIndicator
                   visible={peerTyping}
                   label="Customer is typing…"
-                  tone="agent"
+                  tone="customer"
                 />
               ) : null}
               {smsSelected && !smsEnabled ? (
-                <p className="text-[13px] text-[#64748b]" role="status">
+                <p className="text-[13px] text-ink/55" role="status">
                   {smsBlockedReason ?? "SMS is unavailable."}
                 </p>
               ) : null}
@@ -649,7 +649,7 @@ export function AgentChatTranscriptPane({
                   <ChatVoiceRecorder
                     disabled={sending || !canSend}
                     sending={sending}
-                    tone="agent"
+                    tone="customer"
                     onPhaseChange={(phase) => {
                       const busy = phase !== "idle";
                       setVoiceBusy(busy);
@@ -671,7 +671,7 @@ export function AgentChatTranscriptPane({
                   />
                 ) : null
               ) : (
-                <div className="flex items-end gap-1.5 rounded-[1.35rem] border border-[#d8dee6] bg-white px-2 py-1.5 shadow-sm">
+                <div className="flex items-end gap-1.5 rounded-[1.35rem] border border-[#d7e8df] bg-white px-2 py-1.5 shadow-sm">
                   <ChatEmojiPicker
                     onPick={insertEmoji}
                     disabled={sending || (smsSelected && !smsEnabled)}
@@ -723,9 +723,9 @@ export function AgentChatTranscriptPane({
                     placeholder={
                       smsSelected ? "Write an SMS…" : "Write a message…"
                     }
-                    className="max-h-28 min-h-10 flex-1 resize-none bg-transparent px-1.5 py-2.5 text-[16px] leading-5 text-[#1e2a38] outline-none placeholder:leading-5 disabled:opacity-60"
+                    className="max-h-28 min-h-10 flex-1 resize-none bg-transparent px-1.5 py-2.5 text-[16px] leading-5 text-[#12241c] outline-none placeholder:leading-5 disabled:opacity-60"
                   />
-                  <div className="relative flex size-10 shrink-0 items-center justify-center self-end">
+                  <div className="relative flex shrink-0 flex-col items-end justify-end self-end">
                     {chatComposerTrailingAction({
                       body: draft,
                       voiceBusy,
@@ -747,7 +747,7 @@ export function AgentChatTranscriptPane({
                             ? "Send SMS message"
                             : "Send Chat message"
                         }
-                        className="inline-flex size-10 items-center justify-center rounded-full bg-[#2b6cb0] text-white shadow-sm hover:bg-[#245a94] disabled:opacity-50"
+                        className="inline-flex size-10 items-center justify-center rounded-full bg-[#0f6b4c] text-white shadow-sm hover:bg-[#0c5740] disabled:opacity-50"
                       >
                         {sending ? (
                           <span className="text-[10px] font-bold">…</span>
@@ -759,7 +759,7 @@ export function AgentChatTranscriptPane({
                       <ChatVoiceRecorder
                         disabled={sending || !canSend}
                         sending={sending}
-                        tone="agent"
+                        tone="customer"
                         onPhaseChange={(phase) => {
                           const busy = phase !== "idle";
                           setVoiceBusy(busy);
@@ -796,7 +796,7 @@ export function AgentChatTranscriptPane({
                           channel: displayedChannel,
                           sending,
                         })}
-                        className="inline-flex size-10 items-center justify-center rounded-full bg-[#2b6cb0] text-white disabled:opacity-50"
+                        className="inline-flex size-10 items-center justify-center rounded-full bg-[#0f6b4c] text-white disabled:opacity-50"
                       >
                         <Send className="size-4" aria-hidden />
                       </button>
@@ -805,11 +805,11 @@ export function AgentChatTranscriptPane({
                 </div>
               )}
               {remaining <= 200 && !voiceBusy ? (
-                <p className="text-[12px] text-[#94a3b8]">{remaining} left</p>
+                <p className="text-[12px] text-ink/40">{remaining} left</p>
               ) : null}
               {sendError ? (
                 <p
-                  className="text-[13px] font-medium text-[#b45309]"
+                  className="text-[13px] font-medium text-signal"
                   role="alert"
                 >
                   {sendError}
@@ -820,7 +820,7 @@ export function AgentChatTranscriptPane({
               ) : null}
             </div>
           ) : (
-            <p className="text-[13px] text-[#64748b]">
+            <p className="text-[13px] text-ink/55">
               {readOnlyReason ??
                 "Only the assigned agent can send chat messages."}
             </p>
@@ -857,7 +857,7 @@ function ChatRow({
   if (message.kind === "SYSTEM_CARD") {
     return (
       <div className="flex justify-center py-1">
-        <p className="rounded-full bg-[#f1f5f9] px-3 py-1 text-[11px] font-semibold text-[#475569]">
+        <p className="rounded-full bg-mist px-3 py-1 text-[11px] font-semibold text-ink/55">
           {v2ChatSystemCardLabel(message.payload)}
         </p>
       </div>
@@ -910,28 +910,28 @@ function ChatRow({
         <p
           className={cn(
             "mb-0.5 text-[13px] font-semibold",
-            mine ? "text-right text-[#1d4f86]" : "text-[#334155]",
+            mine ? "text-right text-[#0c5740]" : "text-[#1a2e24]",
           )}
         >
           {label}
           {sms ? (
-            <span className="ml-1.5 rounded bg-[#e2e8f0] px-1 py-px text-[10px] font-bold uppercase tracking-wide text-[#475569]">
+            <span className="ml-1.5 rounded bg-[#eef8f3] px-1 py-px text-[10px] font-bold uppercase tracking-wide text-[#3d6a57]">
               SMS
             </span>
           ) : null}
           {automationBadge ? (
-            <span className="ml-1.5 rounded bg-[#ede9fe] px-1 py-px text-[10px] font-semibold tracking-wide text-[#5b21b6]">
+            <span className="ml-1.5 rounded bg-[#eef8f3] px-1 py-px text-[10px] font-semibold tracking-wide text-[#3d6a57]">
               {automationBadge}
             </span>
           ) : null}
           {delivery ? (
-            <span className="ml-1.5 font-medium text-[#64748b]">{delivery}</span>
+            <span className="ml-1.5 font-medium text-[#5b7a6c]">{delivery}</span>
           ) : null}
         </p>
       ) : sms || automationBadge || delivery ? (
         <p
           className={cn(
-            "mb-0.5 text-[12px] font-medium text-[#64748b]",
+            "mb-0.5 text-[12px] font-medium text-[#5b7a6c]",
             mine ? "text-right" : "text-left",
           )}
         >
@@ -956,10 +956,10 @@ function ChatRow({
           className={cn(
             "rounded-2xl px-2.5 py-2 shadow-sm",
             mine
-              ? "bg-[#dbeafe]"
+              ? "bg-[#d8f3e7]"
               : customer
-                ? "bg-white ring-1 ring-[#e2e8f0]"
-                : "bg-[#eef6ff] ring-1 ring-[#dbeafe]",
+                ? "bg-white ring-1 ring-[#d7e8df]"
+                : "bg-white ring-1 ring-[#d7e8df]",
           )}
         >
           <ChatVoicePlayer
@@ -995,12 +995,12 @@ function ChatRow({
           className={cn(
             "rounded-2xl px-3.5 pb-1.5 pt-2 shadow-sm",
             deleted
-              ? "bg-[#f8fafc] italic text-[#64748b] ring-1 ring-[#e2e8f0]"
+              ? "bg-[#eef8f3] italic text-[#5b7a6c] ring-1 ring-[#d7e8df]"
               : mine
-                ? "bg-[#dbeafe] text-[#0f172a]"
+                ? "bg-[#d8f3e7] text-[#12241c]"
                 : customer
-                  ? "bg-white text-[#0f172a] ring-1 ring-[#e2e8f0]"
-                  : "bg-[#eef6ff] text-[#0f172a] ring-1 ring-[#dbeafe]",
+                  ? "bg-white text-[#12241c] ring-1 ring-[#d7e8df]"
+                  : "bg-white text-[#12241c] ring-1 ring-[#d7e8df]",
           )}
         >
           {listingUrl ? <ChatMessageListingUrlCard body={body} /> : null}
@@ -1042,7 +1042,7 @@ function ChatRow({
       id={`agent-chat-msg-${message.id}`}
       className={cn(
         "flex min-w-0 rounded-xl transition",
-        highlighted ? "bg-[#eef6ff] ring-1 ring-[#2b6cb0]/20" : null,
+        highlighted ? "bg-[#e7f6ef] ring-1 ring-[#0f6b4c]/20" : null,
         mine ? "justify-end" : "justify-start",
       )}
     >
@@ -1076,9 +1076,9 @@ function ChatRow({
 function ChatSkeleton() {
   return (
     <div className="space-y-3 py-2" aria-hidden="true">
-      <div className="h-10 w-2/3 rounded-2xl bg-[#f1f5f9]" />
-      <div className="ml-auto h-10 w-1/2 rounded-2xl bg-[#e8eef7]" />
-      <div className="h-10 w-3/5 rounded-2xl bg-[#f1f5f9]" />
+      <div className="h-10 w-2/3 rounded-2xl bg-[#e7f0eb]" />
+      <div className="ml-auto h-10 w-1/2 rounded-2xl bg-[#d8f3e7]" />
+      <div className="h-10 w-3/5 rounded-2xl bg-[#e7f0eb]" />
     </div>
   );
 }
