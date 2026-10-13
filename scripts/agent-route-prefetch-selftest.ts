@@ -17,16 +17,18 @@ function read(rel: string) {
 function testNativeRoutePrefetchWiring() {
   const agentShellSrc = read("src/components/agent/AgentShell.tsx");
 
-  // Verify Pro native check
-  assert.ok(agentShellSrc.includes("navigator.userAgent.includes(\"com.houzzat.pro\")"));
+  // InstantShell detection (production PRO) — full CRM still prefetches.
+  assert.ok(agentShellSrc.includes("shouldUseProNativeInstantShell"));
 
-  // Verify router.prefetch usage
+  // Verify router.prefetch usage (runs for InstantShell and full CRM)
   assert.ok(agentShellSrc.includes("router.prefetch(route)"));
+  assert.ok(agentShellSrc.includes("useInstantShell ? 1200 : 400"));
 
   // Verify prefetch route allowlist
-  assert.ok(agentShellSrc.includes("\"/agent\""));
-  assert.ok(agentShellSrc.includes("\"/agent/leads\""));
-  assert.ok(agentShellSrc.includes("\"/agent/tasks\""));
+  assert.ok(agentShellSrc.includes('"/agent"'));
+  assert.ok(agentShellSrc.includes('"/agent/leads"'));
+  assert.ok(agentShellSrc.includes('"/agent/tasks"'));
+  assert.ok(agentShellSrc.includes('"/agent/chats"'));
 
   // Verify duplicate suppression set
   assert.ok(agentShellSrc.includes("prefetchedRoutesRef.current.has(route)"));

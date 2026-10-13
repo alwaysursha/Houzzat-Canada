@@ -183,18 +183,27 @@ export function AgentShell({
     if (typeof navigator === "undefined") return;
     const useInstantShell = shouldUseProNativeInstantShell(navigator.userAgent);
     setIsProNative(useInstantShell);
-    if (!useInstantShell) return;
 
-    // Idle prefetch of primary CRM routes once current page stabilizes
-    const timer = setTimeout(() => {
-      const HIGH_VALUE_ROUTES = ["/agent", "/agent/leads", "/agent/tasks"];
-      for (const route of HIGH_VALUE_ROUTES) {
-        if (route !== pathname && !prefetchedRoutesRef.current.has(route)) {
-          prefetchedRoutesRef.current.add(route);
-          router.prefetch(route);
+    // Idle RSC prefetch of primary CRM routes. Full responsive CRM (Chrome /
+    // private PRO) navigates these as real pages; InstantShell barely uses
+    // them but prefetch is harmless. Faster delay on the full-CRM path.
+    const timer = setTimeout(
+      () => {
+        const HIGH_VALUE_ROUTES = [
+          "/agent",
+          "/agent/leads",
+          "/agent/tasks",
+          "/agent/chats",
+        ];
+        for (const route of HIGH_VALUE_ROUTES) {
+          if (route !== pathname && !prefetchedRoutesRef.current.has(route)) {
+            prefetchedRoutesRef.current.add(route);
+            router.prefetch(route);
+          }
         }
-      }
-    }, 1200);
+      },
+      useInstantShell ? 1200 : 400,
+    );
 
     return () => clearTimeout(timer);
   }, [pathname, router]);
