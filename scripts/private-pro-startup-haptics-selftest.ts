@@ -29,12 +29,15 @@ const PRIVATE_PRO_UA =
 const CHROME_UA =
   "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36";
 
-function testAgentProfileRouteConfirmed() {
-  assert.equal(PRIVATE_PRO_DEFAULT_LANDING_PATH, "/agent/profile");
-  const page = read("src/app/(agent)/agent/profile/page.tsx");
-  assert.ok(page.includes('title: "Profile · CRM"'));
-  assert.ok(page.includes("AgentSelfProfileClient"));
-  assert.ok(page.includes('requireAgentPageContext("/agent/profile")'));
+function testLaunchpadRouteConfirmed() {
+  assert.equal(PRIVATE_PRO_DEFAULT_LANDING_PATH, "/agent");
+  const page = read("src/app/(agent)/agent/page.tsx");
+  assert.ok(page.includes('title: "Launchpad · Agent CRM"'));
+  assert.ok(page.includes("LaunchpadDeferredQuickModules"));
+  assert.ok(page.includes("Quick Modules"));
+  const modules = read("src/components/agent/QuickModulesPanel.tsx");
+  assert.ok(modules.includes("Call New Leads"));
+  assert.ok(modules.includes("Online Leads"));
 }
 
 function testPrivateStartupRemap() {
@@ -43,13 +46,14 @@ function testPrivateStartupRemap() {
   assert.equal(resolveWorkspaceMemberMobileDestination("ADMIN"), "/admin");
   assert.equal(resolveWorkspaceMemberMobileDestination("AGENT"), "/agent");
 
+  // Private OWNER/ADMIN → Launchpad; AGENT already Launchpad.
   assert.equal(
     resolveHouzzatProPrivateStartupDestination("/admin", PRIVATE_PRO_UA),
-    "/agent/profile",
+    "/agent",
   );
   assert.equal(
     resolveHouzzatProPrivateStartupDestination("/agent", PRIVATE_PRO_UA),
-    "/agent/profile",
+    "/agent",
   );
 
   // Production PRO + Chrome unchanged.
@@ -81,6 +85,13 @@ function testPrivateStartupRemap() {
     ),
     "/admin/people",
   );
+  assert.equal(
+    resolveHouzzatProPrivateStartupDestination(
+      "/agent/profile",
+      PRIVATE_PRO_UA,
+    ),
+    "/agent/profile",
+  );
 
   // Private still uses full CRM shell (not InstantShell).
   assert.equal(shouldUseProNativeInstantShell(PRIVATE_PRO_UA), false);
@@ -104,8 +115,12 @@ function testWiring() {
   const haptics = read("src/lib/mobile/nav-selection-haptics.ts");
   assert.ok(haptics.includes("@capacitor/haptics"));
   assert.ok(haptics.includes("HOUZZATPRO_PRIVATE_UI_UA_MARKER"));
-  assert.ok(haptics.includes("prefers-reduced-motion"));
-  assert.ok(haptics.includes("selectionStart"));
+  assert.ok(haptics.includes("ImpactStyle.Light"));
+  assert.ok(haptics.includes("Haptics.impact"));
+  assert.equal(haptics.includes("navigator.vibrate"), false);
+  // selectionStart alone is a silent arm on Android — must not be the tap call path.
+  assert.equal(haptics.includes("Haptics.selectionStart"), false);
+  assert.equal(haptics.includes("Capacitor.isNativePlatform()"), true);
 
   const plugins = read(
     "android-pro-private/app/src/main/assets/capacitor.plugins.json",
@@ -121,7 +136,7 @@ function testWiring() {
 }
 
 function main() {
-  testAgentProfileRouteConfirmed();
+  testLaunchpadRouteConfirmed();
   testPrivateStartupRemap();
   testWiring();
   console.log("private-pro-startup-haptics-selftest: ok");
