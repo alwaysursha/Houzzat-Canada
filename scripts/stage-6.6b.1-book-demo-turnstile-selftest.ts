@@ -111,7 +111,7 @@ async function main() {
     console.log("[4] Hostname binding rejects tenant hosts... PASS");
   }
 
-  // 5. Wrong action rejected
+  // 5. Wrong / missing action rejected
   {
     assert.throws(
       () =>
@@ -119,6 +119,16 @@ async function main() {
           success: true,
           hostname: "houzzatpro.com",
           action: "other_form",
+        }),
+      (e: unknown) =>
+        e instanceof BookDemoPublicError &&
+        e.code === "TURNSTILE_ACTION_MISMATCH",
+    );
+    assert.throws(
+      () =>
+        assertTurnstileSiteverifyContext({
+          success: true,
+          hostname: "houzzatpro.com",
         }),
       (e: unknown) =>
         e instanceof BookDemoPublicError &&

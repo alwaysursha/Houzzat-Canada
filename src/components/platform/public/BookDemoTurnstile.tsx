@@ -65,12 +65,17 @@ type BookDemoTurnstileProps = {
   siteKey: string;
   onTokenChange: (token: string | null) => void;
   resetSignal: number;
+  /** Defaults to Book a Demo action. Pass form-specific actions for other public flows. */
+  action?: string;
+  errorMessage?: string;
 };
 
 export function BookDemoTurnstile({
   siteKey,
   onTokenChange,
   resetSignal,
+  action = BOOK_DEMO_TURNSTILE_ACTION,
+  errorMessage = BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
 }: BookDemoTurnstileProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
@@ -114,14 +119,14 @@ export function BookDemoTurnstile({
 
         widgetIdRef.current = window.turnstile.render(containerRef.current, {
           sitekey: siteKey,
-          action: BOOK_DEMO_TURNSTILE_ACTION,
+          action,
           theme: "light",
           callback: (token: string) => {
             onTokenChangeRef.current(token);
           },
           "error-callback": () => {
             onTokenChangeRef.current(null);
-            setLoadError(BOOK_DEMO_TURNSTILE_ERROR_MESSAGE);
+            setLoadError(errorMessage);
           },
           "expired-callback": () => {
             onTokenChangeRef.current(null);
@@ -129,7 +134,7 @@ export function BookDemoTurnstile({
         });
       } catch {
         if (!cancelled) {
-          setLoadError(BOOK_DEMO_TURNSTILE_ERROR_MESSAGE);
+          setLoadError(errorMessage);
         }
       }
     }
@@ -147,7 +152,7 @@ export function BookDemoTurnstile({
         widgetIdRef.current = null;
       }
     };
-  }, [siteKey]);
+  }, [siteKey, action, errorMessage]);
 
   useEffect(() => {
     if (resetSignal > 0) {

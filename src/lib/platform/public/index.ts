@@ -97,6 +97,9 @@ export {
   BOOK_DEMO_TURNSTILE_ACTION,
   BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
   BOOK_DEMO_TURNSTILE_ALLOWED_HOSTNAMES,
+  SELLER_READINESS_TURNSTILE_ACTION,
+  SELLER_READINESS_TURNSTILE_ERROR_MESSAGE,
+  SELLER_READINESS_TURNSTILE_ALLOWED_HOSTNAMES,
   TURNSTILE_TEST_SITE_KEY_PASS,
   TURNSTILE_TEST_SECRET_KEY_PASS,
   TURNSTILE_TEST_SECRET_KEY_FAIL,
@@ -108,6 +111,8 @@ export {
   assertTurnstileSiteverifyContext,
   readTurnstileSiteKey,
   turnstileTestPassSecret,
+  hostnameFromPublicRequest,
   type TurnstileSiteverifyResponse,
   type VerifyTurnstileInput,
+  type AssertTurnstileContextOptions,
 } from "./turnstile-verify";

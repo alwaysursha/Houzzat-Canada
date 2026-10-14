@@ -1,12 +1,29 @@
-/** Client-safe Turnstile constants for Book a Demo. Never put the secret here. */
+/** Client-safe Turnstile constants. Never put the secret here. */
 
 export const BOOK_DEMO_TURNSTILE_ACTION = "houzzatpro_book_demo";
 
 export const BOOK_DEMO_TURNSTILE_ERROR_MESSAGE =
   "Please complete the security verification and try again.";
 
-/** Hostnames allowed in siteverify `hostname` for production widgets. */
+/** Hostnames allowed in siteverify `hostname` for Book a Demo widgets. */
 export const BOOK_DEMO_TURNSTILE_ALLOWED_HOSTNAMES = [
+  "houzzatpro.com",
+  "www.houzzatpro.com",
+] as const;
+
+/** Seller Readiness / public tool lead forms (tenant marketing hosts). */
+export const SELLER_READINESS_TURNSTILE_ACTION = "seller_readiness";
+
+export const SELLER_READINESS_TURNSTILE_ERROR_MESSAGE =
+  "Please complete the security verification and try again.";
+
+/**
+ * Baseline hostnames for Seller Readiness siteverify.
+ * Custom tenant domains may also pass when they match the request Host.
+ */
+export const SELLER_READINESS_TURNSTILE_ALLOWED_HOSTNAMES = [
+  "houzzat.com",
+  "www.houzzat.com",
   "houzzatpro.com",
   "www.houzzatpro.com",
 ] as const;

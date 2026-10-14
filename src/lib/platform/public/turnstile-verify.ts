@@ -1,5 +1,5 @@
 /**
- * Stage 6.6B.1 — Cloudflare Turnstile server verification for Book a Demo.
+ * Cloudflare Turnstile server verification for public forms.
  * Fail closed. Secret never leaves the server.
  */
 
@@ -23,12 +23,30 @@ export type TurnstileSiteverifyResponse = {
   cdata?: string;
 };
 
+export type AssertTurnstileContextOptions = {
+  /** Defaults to Book a Demo action for backward compatibility. */
+  expectedAction?: string;
+  /** Defaults to Book a Demo hostname allowlist. */
+  allowedHostnames?: readonly string[];
+  /**
+   * When set, siteverify hostname may match this request host
+   * (supports custom tenant marketing domains).
+   */
+  requestHostname?: string | null;
+  /** Generic client-facing message (defaults to Book a Demo copy). */
+  errorMessage?: string;
+};
+
 export type VerifyTurnstileInput = {
   token: string;
   remoteIp?: string | null;
   /** Override for tests — never use in production handlers without injection. */
   secret?: string;
   fetchImpl?: typeof fetch;
+  expectedAction?: string;
+  allowedHostnames?: readonly string[];
+  requestHostname?: string | null;
+  errorMessage?: string;
 };
 
 function readTurnstileSecret(): string | null {
@@ -45,62 +63,71 @@ export function readTurnstileSiteKey(): string | null {
   return siteKey || null;
 }
 
-function isHostnameAllowed(hostname: string | undefined): boolean {
-  if (!hostname) return false;
-  const normalized = hostname.trim().toLowerCase();
+function normalizeHostname(hostname: string | undefined | null): string {
+  return (hostname ?? "").trim().toLowerCase().replace(/\.$/, "");
+}
+
+function isLocalHostname(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "0.0.0.0"
+  );
+}
+
+function isHostnameAllowed(
+  hostname: string | undefined,
+  options?: AssertTurnstileContextOptions,
+): boolean {
+  const normalized = normalizeHostname(hostname);
+  if (!normalized) return false;
+  if (isLocalHostname(normalized)) return true;
+
+  const allowlist =
+    options?.allowedHostnames ?? BOOK_DEMO_TURNSTILE_ALLOWED_HOSTNAMES;
   if (
-    (BOOK_DEMO_TURNSTILE_ALLOWED_HOSTNAMES as readonly string[]).includes(
-      normalized,
-    )
+    (allowlist as readonly string[]).includes(normalized)
   ) {
     return true;
   }
-  // Cloudflare dummy keys return "localhost" (or similar) during local/test use.
-  if (
-    normalized === "localhost" ||
-    normalized === "127.0.0.1" ||
-    normalized === "0.0.0.0"
-  ) {
+
+  const requestHost = normalizeHostname(options?.requestHostname ?? null);
+  if (requestHost && requestHost === normalized) {
     return true;
   }
+
   return false;
 }
 
 export function assertTurnstileSiteverifyContext(
   result: TurnstileSiteverifyResponse,
+  options?: AssertTurnstileContextOptions,
 ): void {
+  const errorMessage =
+    options?.errorMessage ?? BOOK_DEMO_TURNSTILE_ERROR_MESSAGE;
+  const expectedAction =
+    options?.expectedAction ?? BOOK_DEMO_TURNSTILE_ACTION;
+
   if (!result.success) {
-    throw new BookDemoPublicError(
-      BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
-      "TURNSTILE_FAILED",
-      400,
-    );
+    throw new BookDemoPublicError(errorMessage, "TURNSTILE_FAILED", 400);
   }
-  if (!isHostnameAllowed(result.hostname)) {
+  if (!isHostnameAllowed(result.hostname, options)) {
     throw new BookDemoPublicError(
-      BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
+      errorMessage,
       "TURNSTILE_HOSTNAME_MISMATCH",
       400,
     );
   }
-  const action = result.action?.trim();
-  if (action) {
-    const hostname = (result.hostname ?? "").trim().toLowerCase();
-    const localHost =
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname === "0.0.0.0";
-    // Cloudflare dummy keys may echo action "test"; production widgets must match.
-    if (
-      action !== BOOK_DEMO_TURNSTILE_ACTION &&
-      !(localHost && action === "test")
-    ) {
-      throw new BookDemoPublicError(
-        BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
-        "TURNSTILE_ACTION_MISMATCH",
-        400,
-      );
-    }
+  const action = result.action?.trim() ?? "";
+  const hostname = normalizeHostname(result.hostname);
+  const localHost = isLocalHostname(hostname);
+  // Fail closed when action is missing or mismatched. Dummy keys may echo "test".
+  if (action !== expectedAction && !(localHost && action === "test")) {
+    throw new BookDemoPublicError(
+      errorMessage,
+      "TURNSTILE_ACTION_MISMATCH",
+      400,
+    );
   }
 }
 
@@ -111,22 +138,20 @@ export function assertTurnstileSiteverifyContext(
 export async function verifyTurnstileToken(
   input: VerifyTurnstileInput,
 ): Promise<TurnstileSiteverifyResponse> {
+  const errorMessage =
+    input.errorMessage ?? BOOK_DEMO_TURNSTILE_ERROR_MESSAGE;
   const token = input.token?.trim();
   if (!token) {
-    throw new BookDemoPublicError(
-      BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
-      "TURNSTILE_REQUIRED",
-      400,
-    );
+    throw new BookDemoPublicError(errorMessage, "TURNSTILE_REQUIRED", 400);
   }
 
   const secret = input.secret?.trim() || readTurnstileSecret();
   if (!secret) {
     console.error(
-      "[platform-public-book-demo] TURNSTILE_SECRET_KEY is not configured",
+      "[turnstile] TURNSTILE_SECRET_KEY is not configured",
     );
     throw new BookDemoPublicError(
-      BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
+      errorMessage,
       "TURNSTILE_NOT_CONFIGURED",
       503,
     );
@@ -148,21 +173,18 @@ export async function verifyTurnstileToken(
       body,
     });
   } catch (error) {
-    console.error("[platform-public-book-demo] turnstile siteverify network", error);
+    console.error("[turnstile] siteverify network", error);
     throw new BookDemoPublicError(
-      BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
+      errorMessage,
       "TURNSTILE_UNAVAILABLE",
       503,
     );
   }
 
   if (!response.ok) {
-    console.error(
-      "[platform-public-book-demo] turnstile siteverify HTTP",
-      response.status,
-    );
+    console.error("[turnstile] siteverify HTTP", response.status);
     throw new BookDemoPublicError(
-      BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
+      errorMessage,
       "TURNSTILE_UNAVAILABLE",
       503,
     );
@@ -173,17 +195,30 @@ export async function verifyTurnstileToken(
     result = (await response.json()) as TurnstileSiteverifyResponse;
   } catch {
     throw new BookDemoPublicError(
-      BOOK_DEMO_TURNSTILE_ERROR_MESSAGE,
+      errorMessage,
       "TURNSTILE_UNAVAILABLE",
       503,
     );
   }
 
-  assertTurnstileSiteverifyContext(result);
+  assertTurnstileSiteverifyContext(result, {
+    expectedAction: input.expectedAction,
+    allowedHostnames: input.allowedHostnames,
+    requestHostname: input.requestHostname,
+    errorMessage,
+  });
   return result;
 }
 
 /** Selftest helper — always-pass dummy secret from Cloudflare docs. */
 export function turnstileTestPassSecret(): string {
   return TURNSTILE_TEST_SECRET_KEY_PASS;
+}
+
+/** Hostname from public request (Cloudflare / proxy aware). */
+export function hostnameFromPublicRequest(request: Request): string | null {
+  const forwarded = request.headers.get("x-forwarded-host");
+  const host = (forwarded || request.headers.get("host") || "").trim();
+  if (!host) return null;
+  return normalizeHostname(host.split(",")[0]?.split(":")[0] ?? "");
 }

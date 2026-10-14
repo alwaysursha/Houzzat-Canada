@@ -2,8 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
+import { BookDemoTurnstile } from "@/components/platform/public/BookDemoTurnstile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  SELLER_READINESS_TURNSTILE_ACTION,
+  SELLER_READINESS_TURNSTILE_ERROR_MESSAGE,
+} from "@/lib/platform/public/turnstile-constants";
+import {
+  SELLER_READINESS_GENERIC_ERROR,
+  SELLER_READINESS_HONEYPOT_FIELD,
+} from "@/lib/tools/seller-readiness-abuse";
 
 const CHECKS = [
   { id: "repairs", label: "Major repairs or reno done / budgeted", weight: 15 },
@@ -14,11 +23,21 @@ const CHECKS = [
   { id: "price", label: "Reviewed recent area comps / valuation", weight: 20 },
 ] as const;
 
-export function SellerReadinessForm() {
+type SellerReadinessFormProps = {
+  turnstileSiteKey: string | null;
+};
+
+export function SellerReadinessForm({
+  turnstileSiteKey,
+}: SellerReadinessFormProps) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [address, setAddress] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [honeypot, setHoneypot] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [resetSignal, setResetSignal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -36,21 +55,57 @@ export function SellerReadinessForm() {
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
+    setError(null);
+
+    if (!turnstileSiteKey) {
+      setError(SELLER_READINESS_TURNSTILE_ERROR_MESSAGE);
+      return;
+    }
+    if (!turnstileToken) {
+      setError(SELLER_READINESS_TURNSTILE_ERROR_MESSAGE);
+      return;
+    }
+
     setPending(true);
-    await fetch("/api/tools/seller-readiness", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        address,
-        name,
-        email,
-        score,
-        checks: checked,
-        ...loadPersistedUtm(),
-      }),
-    });
-    setPending(false);
-    setDone(true);
+    try {
+      const response = await fetch("/api/tools/seller-readiness", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address,
+          name,
+          email,
+          score,
+          checks: checked,
+          turnstileToken,
+          [SELLER_READINESS_HONEYPOT_FIELD]: honeypot,
+          ...loadPersistedUtm(),
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        setError(
+          typeof payload?.error === "string" && payload.error.trim()
+            ? payload.error
+            : SELLER_READINESS_GENERIC_ERROR,
+        );
+        setTurnstileToken(null);
+        setResetSignal((n) => n + 1);
+        return;
+      }
+
+      setDone(true);
+    } catch {
+      setError(SELLER_READINESS_GENERIC_ERROR);
+      setTurnstileToken(null);
+      setResetSignal((n) => n + 1);
+    } finally {
+      setPending(false);
+    }
   }
 
   if (done) {
@@ -91,18 +146,20 @@ export function SellerReadinessForm() {
         ))}
       </ul>
 
-      <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
+      <div className="relative space-y-3 rounded-2xl border border-line bg-surface p-5">
         <Input
           required
           placeholder="Property address"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
+          autoComplete="street-address"
         />
         <Input
           required
           placeholder="Your name"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          autoComplete="name"
         />
         <Input
           required
@@ -110,8 +167,50 @@ export function SellerReadinessForm() {
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
         />
-        <Button type="submit" className="w-full" disabled={pending}>
+        {/* Honeypot — hidden from humans, visible to naive bots */}
+        <div
+          aria-hidden="true"
+          className="absolute -left-[9999px] h-0 w-0 overflow-hidden"
+        >
+          <label>
+            Company URL
+            <input
+              tabIndex={-1}
+              autoComplete="off"
+              name={SELLER_READINESS_HONEYPOT_FIELD}
+              value={honeypot}
+              onChange={(e) => setHoneypot(e.target.value)}
+            />
+          </label>
+        </div>
+
+        {turnstileSiteKey ? (
+          <BookDemoTurnstile
+            siteKey={turnstileSiteKey}
+            onTokenChange={setTurnstileToken}
+            resetSignal={resetSignal}
+            action={SELLER_READINESS_TURNSTILE_ACTION}
+            errorMessage={SELLER_READINESS_TURNSTILE_ERROR_MESSAGE}
+          />
+        ) : (
+          <p className="text-sm text-red-700" role="alert">
+            {SELLER_READINESS_TURNSTILE_ERROR_MESSAGE}
+          </p>
+        )}
+
+        {error ? (
+          <p className="text-sm text-red-700" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={pending || !turnstileSiteKey || !turnstileToken}
+        >
           {pending ? "Saving…" : "Get a launch plan"}
         </Button>
       </div>

@@ -128,6 +128,7 @@
     "stage-6.5b.1-houzzatpro-support:selftest": "node --import tsx scripts/stage-6.5b.1-houzzatpro-support-selftest.ts",
     "stage-6.6b-public-book-demo:selftest": "node --import tsx scripts/stage-6.6b-public-book-demo-selftest.ts",
     "stage-6.6b.1-book-demo-turnstile:selftest": "node --import tsx scripts/stage-6.6b.1-book-demo-turnstile-selftest.ts",
+    "seller-readiness-abuse:selftest": "node --import tsx scripts/seller-readiness-abuse-selftest.ts",
     "stage-6.6c-demo-request-emails:selftest": "node --import tsx scripts/stage-6.6c-demo-request-emails-selftest.ts",
     "stage-6.6d-demo-scheduled-emails:selftest": "node --import tsx scripts/stage-6.6d-demo-scheduled-emails-selftest.ts",
     "stage-6.7a-commercial-offer-management:selftest": "node --import tsx scripts/stage-6.7a-commercial-offer-management-selftest.ts",
