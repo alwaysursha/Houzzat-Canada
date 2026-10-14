@@ -32,6 +32,7 @@ import {
 import { BrandLogoMark } from "@/components/tenancy/BrandLogoMark";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import { resolveAppShell } from "@/lib/mobile/app-shell";
+import { triggerStaffNavSelectionHaptic } from "@/lib/mobile/nav-selection-haptics";
 import {
   STAFF_OVERLAY_PRIORITY,
   useStaffOverlay,
@@ -500,20 +501,29 @@ export function AdminShell({
                       key={item.href}
                       href={item.href}
                       className={className}
+                      onClick={() => triggerStaffNavSelectionHaptic()}
                     >
                       {body}
                     </StaffHardLink>
                   );
                 }
                 return (
-                  <Link key={item.href} href={item.href} className={className}>
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={className}
+                    onClick={() => triggerStaffNavSelectionHaptic()}
+                  >
                     {body}
                   </Link>
                 );
               })}
               <button
                 type="button"
-                onClick={() => setMobileOpen(true)}
+                onClick={() => {
+                  triggerStaffNavSelectionHaptic();
+                  setMobileOpen(true);
+                }}
                 className={cn(
                   "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition",
                   moreActive || mobileOpen ? "text-canopy" : "text-ink/45",

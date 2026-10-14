@@ -14,6 +14,7 @@ import { BrandLogoMark } from "@/components/tenancy/BrandLogoMark";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
 import { setNativeStatusBarLightOverlay } from "@/lib/mobile/native-status-bar";
 import { shouldUseProNativeInstantShell } from "@/lib/mobile/app-shell";
+import { triggerStaffNavSelectionHaptic } from "@/lib/mobile/nav-selection-haptics";
 import {
   STAFF_OVERLAY_PRIORITY,
   useStaffOverlay,
@@ -525,6 +526,7 @@ export function AgentShell({
                   key={item.href}
                   href={item.href}
                   prefetch={item.href === "/agent/leads" ? false : true}
+                  onClick={() => triggerStaffNavSelectionHaptic()}
                   className={cn(
                     "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition active:opacity-70",
                     active ? "text-canopy" : "text-ink/45",
@@ -544,7 +546,10 @@ export function AgentShell({
             })}
             <button
               type="button"
-              onClick={() => setMobileOpen(true)}
+              onClick={() => {
+                triggerStaffNavSelectionHaptic();
+                setMobileOpen(true);
+              }}
               className={cn(
                 "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-semibold transition active:opacity-70",
                 moreActive || mobileOpen ? "text-canopy" : "text-ink/45",

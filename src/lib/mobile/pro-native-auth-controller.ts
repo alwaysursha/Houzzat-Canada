@@ -36,7 +36,23 @@ import {
   sanitizeOwnerOnboardingReturnPath,
   sanitizeWorkspaceHintId,
 } from "@/lib/platform/activation/onboarding-pro-auth";
-import { isSuccessfulHandoffClientDestination } from "@/lib/mobile/workspace-destination";
+import {
+  isSuccessfulHandoffClientDestination,
+  resolveHouzzatProPrivateStartupDestination,
+} from "@/lib/mobile/workspace-destination";
+
+function currentUserAgent(): string | null {
+  if (typeof navigator === "undefined") return null;
+  return navigator.userAgent;
+}
+
+/** Role CRM defaults → Agent Profile on HouzzatPro Private only. */
+function finalizeStaffStartupDestination(destination: string): string {
+  return resolveHouzzatProPrivateStartupDestination(
+    destination,
+    currentUserAgent(),
+  );
+}
 
 export type NativeAuthState =
   | "SIGNED_OUT"
@@ -578,8 +594,9 @@ class ProNativeAuthController {
         }
 
         if (bootstrap.kind === "tenant_destination") {
-          const destination =
-            this.pendingReturnPath ?? bootstrap.destination;
+          const destination = finalizeStaffStartupDestination(
+            this.pendingReturnPath ?? bootstrap.destination,
+          );
           this.transitionTo("FINAL_NAVIGATION", {
             destination,
             activeWorkspaceId: bootstrap.membership.workspaceId,
@@ -745,16 +762,20 @@ class ProNativeAuthController {
           return { ok: false, error: err };
         }
 
-        this.transitionTo("TENANT_SESSION_READY", { destination });
-        this.logDiagnostic("HANDOFF_EXCHANGE_SUCCESS", destination);
+        const finalDestination = finalizeStaffStartupDestination(destination);
+
+        this.transitionTo("TENANT_SESSION_READY", {
+          destination: finalDestination,
+        });
+        this.logDiagnostic("HANDOFF_EXCHANGE_SUCCESS", finalDestination);
 
         this.transitionTo("FINAL_NAVIGATION");
-        this.logDiagnostic("FINAL_NAVIGATION_STARTED", destination);
+        this.logDiagnostic("FINAL_NAVIGATION_STARTED", finalDestination);
 
         this.transitionTo("COMPLETE");
-        hardGo(destination);
+        hardGo(finalDestination);
 
-        return { ok: true, destination };
+        return { ok: true, destination: finalDestination };
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Exchange network error";
         const safeError = `Workspace handoff failed (${msg}).`;

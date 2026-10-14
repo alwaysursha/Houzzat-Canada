@@ -40,6 +40,7 @@ import {
   OWNER_ONBOARDING_AUTH_QUERY,
   parseOwnerOnboardingAuthSearchParams,
 } from "@/lib/platform/activation/onboarding-pro-auth";
+import { resolveHouzzatProPrivateStartupDestination } from "@/lib/mobile/workspace-destination";
 
 type BootstrapResponse = {
   authenticated: boolean;
@@ -276,7 +277,11 @@ export function ProWorkspaceBootstrap() {
           hardGo(pendingHref);
           return;
         }
-        hardGo(returnPath ?? bootstrap.destination);
+        const destination = resolveHouzzatProPrivateStartupDestination(
+          returnPath ?? bootstrap.destination,
+          typeof navigator !== "undefined" ? navigator.userAgent : null,
+        );
+        hardGo(destination);
         return;
       }
 
@@ -350,7 +355,12 @@ export function ProWorkspaceBootstrap() {
       } else if (frozen.destination === "/agent") {
         recordMobileDiagEvent("DESTINATION_AGENT");
       }
-      hardGo(frozen.destination);
+      hardGo(
+        resolveHouzzatProPrivateStartupDestination(
+          frozen.destination,
+          typeof navigator !== "undefined" ? navigator.userAgent : null,
+        ),
+      );
       return;
     }
     if (frozen.kind === "handoff" && frozen.membership) {
