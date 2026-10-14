@@ -27,7 +27,7 @@ importers:
         specifier: ^8.2.1
         version: 8.2.1(@capacitor/core@8.5.0)
       '@capacitor/haptics':
-        specifier: 8.0.2
+        specifier: ^8.0.2
         version: 8.0.2(@capacitor/core@8.5.0)
       '@capacitor/ios':
         specifier: ^8.5.0
