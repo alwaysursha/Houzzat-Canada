@@ -7,6 +7,7 @@ import {
   AgentProfessionalFields,
   type AgentProfessionalFormValue,
 } from "@/components/agent/AgentProfessionalFields";
+import { staffHardNavigate } from "@/components/site/StaffHardLink";
 import { Button } from "@/components/ui/button";
 import {
   STAFF_OVERLAY_PRIORITY,
@@ -72,6 +73,7 @@ export function TeamAdminClient({
   const [pending, setPending] = useState(false);
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
   const [memberActionId, setMemberActionId] = useState<string | null>(null);
+  const [busyLaunchpadId, setBusyLaunchpadId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
   const [transferToUserId, setTransferToUserId] = useState("");
@@ -96,6 +98,32 @@ export function TeamAdminClient({
     seatLimit == null
       ? `${usedSeats} ${usedSeats === 1 ? "seat" : "seats"} used`
       : `${usedSeats} of ${seatLimit} seats used`;
+
+  async function accessMemberLaunchpad(member: Member) {
+    if (!canManage || busyLaunchpadId) return;
+    setBusyLaunchpadId(member.id);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/agent/desk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deskAgentId: member.user.id }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      if (!res.ok) {
+        setMsg(json?.error || "Unable to open Launchpad for this agent.");
+        return;
+      }
+      // Full navigation into Agent CRM with desk cookie set (no session swap).
+      staffHardNavigate("/agent");
+    } catch {
+      setMsg("Unable to open Launchpad for this agent.");
+    } finally {
+      setBusyLaunchpadId(null);
+    }
+  }
 
   useStaffOverlay({
     open: Boolean(deleteTarget),
@@ -334,7 +362,7 @@ export function TeamAdminClient({
                   </p>
                   <p className="text-xs text-ink/45">{m.user.email}</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex max-w-full flex-wrap items-center gap-2">
                   {isWorkspace ? (
                     <Link
                       href={`/agent/team/${m.user.id}`}
@@ -342,6 +370,22 @@ export function TeamAdminClient({
                     >
                       {canManage ? "Edit profile" : "View profile"}
                     </Link>
+                  ) : null}
+                  {canManage &&
+                  isWorkspace &&
+                  m.role === "AGENT" &&
+                  m.user.agentActive &&
+                  (m.status ? m.status === "ACTIVE" : true) ? (
+                    <button
+                      type="button"
+                      disabled={busyLaunchpadId === m.id}
+                      onClick={() => void accessMemberLaunchpad(m)}
+                      className="rounded-lg border border-canopy/30 bg-canopy/5 px-2.5 py-1.5 text-[12px] font-semibold text-canopy hover:bg-canopy/10 disabled:opacity-50"
+                    >
+                      {busyLaunchpadId === m.id
+                        ? "Opening…"
+                        : "Access Launchpad"}
+                    </button>
                   ) : null}
                   <span className="rounded-md bg-mist px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-ink/60">
                     {m.role}

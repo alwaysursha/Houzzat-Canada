@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { ActiveWorkspaceGate } from "@/components/agent/ActiveWorkspaceGate";
-import { AgentDeferredLeaderBanner } from "@/components/agent/AgentDeferredLeaderBanner";
 import { AgentShell } from "@/components/agent/AgentShell";
 import { StaffRouteConsumerGate } from "@/components/mobile/StaffRouteConsumerGate";
 import { ListingSheetHostLazy } from "@/components/mobile/ListingSheetHostLazy";
@@ -101,7 +100,6 @@ export default async function AgentLayout({
       >
         {ctx.requiresWorkspaceSelection ? <ActiveWorkspaceGate /> : null}
         <StaffRouteConsumerGate />
-        {ctx.canSeeTeamLeads ? <AgentDeferredLeaderBanner /> : null}
         <Suspense fallback={null}>{children}</Suspense>
       </AgentShell>
       <ListingSheetHostLazy />
