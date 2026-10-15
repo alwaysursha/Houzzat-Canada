@@ -16,7 +16,7 @@ import {
   soldCompIdentityKey,
   type SoldCompCandidate,
 } from "../src/lib/market/home-value-estimate";
-import { estimateHomeValueV1Baseline } from "../src/lib/market/home-value-estimate-v1-baseline";
+import { estimateHomeValueV2Baseline } from "../src/lib/market/home-value-estimate-v2-baseline";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -187,46 +187,49 @@ async function testEnginesHonorInjection() {
     inventoryOverride: inventory,
   };
 
-  const v1 = await estimateHomeValueV1Baseline(common);
-  const v2 = await estimateHomeValue(common);
-  assert.equal(v1.status, "OK");
+  const v2 = await estimateHomeValueV2Baseline(common);
+  const v3 = await estimateHomeValue(common);
   assert.equal(v2.status, "OK");
-  if (v1.status === "OK" && v2.status === "OK") {
-    assert.ok(v1.mid < 1_000_000, "V1 must ignore future 1.5M");
+  assert.equal(v3.status, "OK");
+  if (v2.status === "OK" && v3.status === "OK") {
     assert.ok(v2.mid < 1_000_000, "V2 must ignore future 1.5M");
-    assert.ok(v1.mid >= 700_000 && v1.mid <= 780_000);
+    assert.ok(v3.mid < 1_000_000, "V3 must ignore future 1.5M");
     assert.ok(v2.mid >= 700_000 && v2.mid <= 780_000);
+    assert.ok(v3.mid >= 700_000 && v3.mid <= 780_000);
+    assert.ok(
+      v3.evidenceStage === "neighbourhood" ||
+        v3.evidenceStage === "city" ||
+        v3.evidenceStage === "region",
+    );
   }
   console.log("[engines] injection + anti-leakage PASS");
 }
 
 function testSourceGuards() {
   const baseline = readFileSync(
-    join(root, "src/lib/market/home-value-estimate-v1-baseline.ts"),
+    join(root, "src/lib/market/home-value-estimate-v2-baseline.ts"),
     "utf8",
   );
-  assert.ok(baseline.includes("estimateHomeValueV1Baseline"));
-  assert.ok(baseline.includes("backtests only"));
-  assert.ok(
-    baseline.includes("do not wire to /api/valuation"),
-    "baseline must stay off the production API",
-  );
+  assert.ok(baseline.includes("estimateHomeValueV2Baseline"));
+  assert.ok(baseline.includes("Frozen V2 baseline"));
 
-  const v2 = readFileSync(
+  const v3 = readFileSync(
     join(root, "src/lib/market/home-value-estimate.ts"),
     "utf8",
   );
-  assert.ok(v2.includes("inventoryOverride"));
-  assert.ok(v2.includes("soldAtBefore"));
-  assert.ok(v2.includes("filterHistoricalCandidates"));
+  assert.ok(v3.includes("inventoryOverride"));
+  assert.ok(v3.includes("soldAtBefore"));
+  assert.ok(v3.includes("filterHistoricalCandidates"));
+  assert.ok(v3.includes("evidenceStage"));
+  assert.ok(v3.includes("REGION_MAX_KM"));
 
   const api = readFileSync(
     join(root, "src/app/api/valuation/route.ts"),
     "utf8",
   );
   assert.equal(api.includes("inventoryOverride"), false);
-  assert.equal(api.includes("estimateHomeValueV1Baseline"), false);
-  assert.ok(api.includes("hasClientAccess"));
+  assert.equal(api.includes("estimateHomeValueV2Baseline"), false);
+  assert.ok(api.includes("hasClientAccess") || api.includes("valuationSoldAccessDenial"));
 
   const backtest = readFileSync(
     join(root, "scripts/home-value-historical-backtest.ts"),
@@ -234,6 +237,7 @@ function testSourceGuards() {
   );
   assert.ok(backtest.includes("read-only"));
   assert.ok(backtest.includes("holdout"));
+  assert.ok(backtest.includes("estimateHomeValueV2Baseline"));
   assert.equal(backtest.includes("prisma.listing.create"), false);
   assert.equal(backtest.includes("prisma.listing.update"), false);
   console.log("[source] guards PASS");

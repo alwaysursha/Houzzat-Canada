@@ -134,6 +134,7 @@ export type AccuracyBucketStats = {
   within5: number | null;
   within10: number | null;
   within15: number | null;
+  within20: number | null;
 };
 
 export function summarizeAccuracy(apes: number[], nInsufficient: number): AccuracyBucketStats {
@@ -152,5 +153,6 @@ export function summarizeAccuracy(apes: number[], nInsufficient: number): Accura
     within5: pctWithin(5),
     within10: pctWithin(10),
     within15: pctWithin(15),
+    within20: pctWithin(20),
   };
 }

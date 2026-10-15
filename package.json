@@ -230,6 +230,7 @@
     "seller-claim-registration:selftest": "node --import tsx scripts/seller-claim-registration-selftest.ts",
     "home-value-estimate-v1:selftest": "node --import tsx scripts/home-value-estimate-v1-selftest.ts",
     "home-value-estimate-v2:selftest": "node --import tsx scripts/home-value-estimate-v1-selftest.ts",
+    "home-value-estimate-v3:selftest": "node --import tsx scripts/home-value-estimate-v3-selftest.ts",
     "home-value-historical-backtest": "node --import tsx scripts/home-value-historical-backtest.ts",
     "home-value-historical-backtest:selftest": "node --import tsx scripts/home-value-historical-backtest-selftest.ts",
     "home-value-presentation:selftest": "node --import tsx scripts/home-value-presentation-selftest.ts",

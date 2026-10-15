@@ -1,11 +1,12 @@
 /**
- * Read-only V1 vs V2 historical accuracy backtest on entitled Neon SOLD inventory.
+ * Read-only V2 vs V3 historical accuracy backtest on entitled Neon SOLD inventory.
  *
  * Run: pnpm home-value-historical-backtest
  *
  * - No DB writes, no sync, no schema changes
  * - Aggregate metrics only (no sold prices / addresses in logs)
  * - Holdout split by mlsNumber hash (final metrics = holdout)
+ * - Do not tune thresholds using this holdout
  */
 import { createHash } from "node:crypto";
 import { config } from "dotenv";
@@ -20,8 +21,9 @@ import {
   parseBasementFinishFromFacts,
   soldCompIdentityKey,
   type SoldCompCandidate,
+  type ValuationEvidenceStage,
 } from "../src/lib/market/home-value-estimate";
-import { estimateHomeValueV1Baseline } from "../src/lib/market/home-value-estimate-v1-baseline";
+import { estimateHomeValueV2Baseline } from "../src/lib/market/home-value-estimate-v2-baseline";
 import { parseListingFacts } from "../src/lib/listings/facts";
 import { prisma } from "../src/lib/prisma";
 import {
@@ -42,7 +44,15 @@ const RESIDENTIAL: PropertyType[] = [
   "MULTIPLEX",
 ];
 
-const MAX_SUBJECTS = Number(process.env.HOME_VALUE_BACKTEST_MAX_SUBJECTS ?? 400);
+const FOCUS_CITIES = [
+  "Kitchener",
+  "Waterloo",
+  "Cambridge",
+  "Mississauga",
+  "Brampton",
+] as const;
+
+const MAX_SUBJECTS = Number(process.env.HOME_VALUE_BACKTEST_MAX_SUBJECTS ?? 500);
 const MIN_SOLD_PRICE = 50_000;
 
 type SubjectRow = {
@@ -81,11 +91,11 @@ function printBucket(label: string, s: AccuracyBucketStats) {
       label,
       `valid=${s.nValid}`,
       `insufficient=${s.nInsufficient} (${fmtPct(s.insufficientRate * 100, 1)})`,
+      `coverage=${fmtPct((1 - s.insufficientRate) * 100, 1)}`,
       `MdAPE=${fmtPct(s.mdape)}`,
       `MAPE=${fmtPct(s.mape)}`,
-      `±5%=${fmtPct(s.within5)}`,
       `±10%=${fmtPct(s.within10)}`,
-      `±15%=${fmtPct(s.within15)}`,
+      `±20%=${fmtPct(s.within20)}`,
     ].join(" | "),
   );
 }
@@ -98,6 +108,7 @@ function toCandidate(row: SubjectRow): SoldCompCandidate {
     beds: row.beds,
     baths: row.baths,
     sqft: row.sqft,
+    livingAreaRange: facts?.livingAreaRange ?? null,
     lat: row.lat,
     lng: row.lng,
     propertyType: row.propertyType,
@@ -140,6 +151,10 @@ type EngineErrors = {
   reasons: Map<string, number>;
   byType: Map<string, { apes: number[]; nInsufficient: number }>;
   byCity: Map<string, { apes: number[]; nInsufficient: number }>;
+  byStage: Map<string, { apes: number[]; nInsufficient: number }>;
+  missingSize: { apes: number[]; nInsufficient: number };
+  pairedWorse: number;
+  pairedBetter: number;
   flags: {
     futureLeakAttempts: number;
     subjectLeakAttempts: number;
@@ -153,6 +168,10 @@ function emptyErrors(): EngineErrors {
     reasons: new Map(),
     byType: new Map(),
     byCity: new Map(),
+    byStage: new Map(),
+    missingSize: { apes: [], nInsufficient: 0 },
+    pairedWorse: 0,
+    pairedBetter: 0,
     flags: { futureLeakAttempts: 0, subjectLeakAttempts: 0 },
   };
 }
@@ -170,12 +189,18 @@ function bucketGet(
 }
 
 async function runEngineOnSubject(opts: {
-  engine: "v1" | "v2";
+  engine: "v2" | "v3";
   subject: SubjectRow;
   inventory: SoldCompCandidate[];
   entitlement: WorkspaceListingEntitlement;
-}): Promise<{ mid: number | null; insufficient: boolean; reason?: string }> {
+}): Promise<{
+  mid: number | null;
+  insufficient: boolean;
+  reason?: string;
+  evidenceStage?: ValuationEvidenceStage;
+}> {
   const asOf = opts.subject.soldAt;
+  const facts = parseListingFacts(opts.subject.facts);
   const identity = soldCompIdentityKey(toCandidate(opts.subject));
   const common = {
     city: opts.subject.city,
@@ -183,14 +208,13 @@ async function runEngineOnSubject(opts: {
     beds: opts.subject.beds,
     baths: opts.subject.baths,
     sqft: opts.subject.sqft,
+    livingAreaRange: facts?.livingAreaRange ?? null,
     propertyType: opts.subject.propertyType,
     lat: opts.subject.lat,
     lng: opts.subject.lng,
     parkingSpaces: opts.subject.parkingSpaces,
     yearBuilt: opts.subject.yearBuilt,
-    basement: parseBasementFinishFromFacts(
-      parseListingFacts(opts.subject.facts)?.basement,
-    ),
+    basement: parseBasementFinishFromFacts(facts?.basement),
     entitlement: opts.entitlement,
     now: asOf,
     soldAtBefore: asOf,
@@ -200,25 +224,29 @@ async function runEngineOnSubject(opts: {
   };
 
   const result =
-    opts.engine === "v1"
-      ? await estimateHomeValueV1Baseline(common)
+    opts.engine === "v2"
+      ? await estimateHomeValueV2Baseline(common)
       : await estimateHomeValue(common);
 
   if (result.status !== "OK") {
     return { mid: null, insufficient: true, reason: result.reason };
   }
-  return { mid: result.mid, insufficient: false };
+  return {
+    mid: result.mid,
+    insufficient: false,
+    evidenceStage:
+      "evidenceStage" in result
+        ? (result.evidenceStage as ValuationEvidenceStage)
+        : undefined,
+  };
 }
 
 async function main() {
-  console.log("home-value-historical-backtest: starting (read-only)");
+  console.log("home-value-historical-backtest: starting (read-only V2 vs V3)");
 
   if (!process.env.DATABASE_URL?.trim()) {
     console.log(
       "LIMITATION: DATABASE_URL is not set. Cannot run live backtest.",
-    );
-    console.log(
-      "Pure leakage/metrics selftest remains available via home-value-historical-backtest:selftest",
     );
     process.exit(2);
   }
@@ -241,7 +269,8 @@ async function main() {
     process.exit(2);
   }
 
-  // Pull a broad entitled sold pool (no address/price logging).
+  const focusLower = FOCUS_CITIES.map((c) => c.toLowerCase());
+
   const soldRows = await prisma.listing.findMany({
     where: {
       AND: [
@@ -254,6 +283,9 @@ async function main() {
           soldAt: { not: null },
           propertyType: { in: RESIDENTIAL },
           beds: { gte: 0 },
+          OR: focusLower.map((c) => ({
+            city: { equals: c, mode: "insensitive" as const },
+          })),
         },
       ],
     },
@@ -277,7 +309,6 @@ async function main() {
       facts: true,
     },
     orderBy: [{ soldAt: "desc" }],
-    // Wider history so each subject has a real 12-month prior comp window.
     take: 50_000,
   });
 
@@ -290,12 +321,12 @@ async function main() {
   );
 
   console.log(
-    `inventory: entitled_sold_rows=${usable.length} workspace=${entitlement.workspaceId} authorities=${entitlement.authorities.length}`,
+    `inventory: focus_sold_rows=${usable.length} cities=${FOCUS_CITIES.join(",")} workspace=${entitlement.workspaceId}`,
   );
 
   if (usable.length < 50) {
     console.log(
-      "LIMITATION: Fewer than 50 entitled sold rows — sample too thin for a meaningful backtest.",
+      "LIMITATION: Fewer than 50 entitled sold rows in focus cities.",
     );
     process.exit(2);
   }
@@ -304,84 +335,74 @@ async function main() {
     toCandidate(r as SubjectRow),
   );
 
-  // Subjects = newer portion of the entitled pool so prior comps exist in-inventory.
-  // Require at least 30d of lookback inside the fetched pool; if the pool span is
-  // shorter, fall back to the newest half of rows.
   const newestMs = usable[0]!.soldAt.getTime();
   const oldestMs = usable[usable.length - 1]!.soldAt.getTime();
   const spanDays = (newestMs - oldestMs) / (1000 * 60 * 60 * 24);
   const lookbackDays = spanDays >= 120 ? 90 : spanDays >= 60 ? 30 : 0;
   const minSubjectSoldAt = oldestMs + lookbackDays * 24 * 60 * 60 * 1000;
 
-  // Prefer subjects with exact sqft so both engines can produce comparable OK rates
-  // (condos require sqft; freehold without sqft often hits inconsistent_comp_sizes).
-  // This is sample selection for evaluation — not formula calibration.
-  let subjects = usable.filter(
-    (r) =>
-      r.soldAt.getTime() >= minSubjectSoldAt &&
-      r.sqft != null &&
-      r.sqft > 0,
-  );
-  if (subjects.length < 80) {
-    subjects = usable.filter((r) => r.sqft != null && r.sqft > 0);
-  }
-  if (subjects.length < 40) {
-    subjects = usable.slice(0, Math.max(40, Math.floor(usable.length / 2)));
-  }
-  // Stratify lightly by type so one type does not dominate the holdout.
-  const perType: SubjectRow[] = [];
-  const typeBuckets = new Map<string, SubjectRow[]>();
+  // Include missing-size freeholds (V3 coverage target). Condos without size
+  // remain excluded from subject pool when they lack range+sqft.
+  let subjects = usable.filter((r) => {
+    if (r.soldAt.getTime() < minSubjectSoldAt) return false;
+    const condo =
+      r.propertyType === "CONDO_APT" || r.propertyType === "CONDO_TOWNHOUSE";
+    if (!condo) return true;
+    if (r.sqft != null && r.sqft > 0) return true;
+    const facts = parseListingFacts(r.facts);
+    return Boolean(facts?.livingAreaRange?.trim());
+  });
+
+  // Stratify by city × size-known/missing so the holdout reports both cohorts.
+  // Sample design only — does not change engine thresholds.
+  const perCity: SubjectRow[] = [];
+  const citySizeBuckets = new Map<string, SubjectRow[]>();
   for (const s of subjects) {
-    const list = typeBuckets.get(s.propertyType) ?? [];
+    const hasSqft = s.sqft != null && s.sqft > 0;
+    const key = `${s.city.trim().toLowerCase()}|${hasSqft ? "sqft" : "nosqft"}`;
+    const list = citySizeBuckets.get(key) ?? [];
     list.push(s as SubjectRow);
-    typeBuckets.set(s.propertyType, list);
+    citySizeBuckets.set(key, list);
   }
-  const types = [...typeBuckets.keys()].sort();
+  const bucketKeys = [...citySizeBuckets.keys()].sort();
   let guard = 0;
-  while (perType.length < MAX_SUBJECTS && guard < MAX_SUBJECTS * 4) {
+  while (perCity.length < MAX_SUBJECTS && guard < MAX_SUBJECTS * 8) {
     guard += 1;
     let added = false;
-    for (const t of types) {
-      const list = typeBuckets.get(t);
+    for (const key of bucketKeys) {
+      const list = citySizeBuckets.get(key);
       const next = list?.shift();
       if (!next) continue;
-      perType.push(next);
+      perCity.push(next);
       added = true;
-      if (perType.length >= MAX_SUBJECTS) break;
+      if (perCity.length >= MAX_SUBJECTS) break;
     }
     if (!added) break;
   }
-  subjects = perType;
-  console.log(
-    `pool_span_days=${spanDays.toFixed(0)} lookback_days=${lookbackDays} subject_candidates=${subjects.length} (sqft-known stratified)`,
-  );
+  subjects = perCity;
 
   const holdoutSubjects = subjects.filter((s) => isHoldout(s.mlsNumber));
   const developSubjects = subjects.filter((s) => !isHoldout(s.mlsNumber));
 
   console.log(
-    `subjects: total=${subjects.length} holdout=${holdoutSubjects.length} develop=${developSubjects.length} (metrics below = HOLDOUT)`,
+    `pool_span_days=${spanDays.toFixed(0)} lookback_days=${lookbackDays} subjects=${subjects.length} holdout=${holdoutSubjects.length} develop=${developSubjects.length}`,
   );
-
-  if (holdoutSubjects.length < 20) {
-    console.log(
-      "LIMITATION: Holdout subject count < 20 after split — reporting develop+holdout separately; treat results as exploratory.",
-    );
-  }
+  console.log(
+    `missing_sqft_subjects=${subjects.filter((s) => s.sqft == null || s.sqft <= 0).length}`,
+  );
 
   async function evaluate(
     label: string,
     subjectList: SubjectRow[],
-  ): Promise<{ v1: EngineErrors; v2: EngineErrors }> {
-    const v1 = emptyErrors();
+  ): Promise<{ v2: EngineErrors; v3: EngineErrors }> {
     const v2 = emptyErrors();
+    const v3 = emptyErrors();
 
     for (const subject of subjectList) {
-      // Leakage probes (aggregate counts only).
       const asOf = subject.soldAt.getTime();
-      const futureInPool = inventory.filter((c) => c.soldAt.getTime() >= asOf).length;
-      if (futureInPool > 0) v1.flags.futureLeakAttempts += 1;
-      // Engines must exclude via soldAtBefore — counted as "attempts present in raw pool".
+      const futureInPool = inventory.filter((c) => c.soldAt.getTime() >= asOf)
+        .length;
+      if (futureInPool > 0) v2.flags.futureLeakAttempts += 1;
 
       const subjectId = soldCompIdentityKey(toCandidate(subject));
       const subjectInPool = inventory.some(
@@ -390,25 +411,43 @@ async function main() {
           soldCompIdentityKey(c) === subjectId,
       );
       if (subjectInPool) {
-        v1.flags.subjectLeakAttempts += 1;
         v2.flags.subjectLeakAttempts += 1;
+        v3.flags.subjectLeakAttempts += 1;
       }
 
-      for (const engine of ["v1", "v2"] as const) {
-        const err = engine === "v1" ? v1 : v2;
-        const out = await runEngineOnSubject({
-          engine,
+      const missingSize = subject.sqft == null || subject.sqft <= 0;
+      const outs: Record<
+        "v2" | "v3",
+        Awaited<ReturnType<typeof runEngineOnSubject>>
+      > = {
+        v2: await runEngineOnSubject({
+          engine: "v2",
           subject,
           inventory,
           entitlement,
-        });
+        }),
+        v3: await runEngineOnSubject({
+          engine: "v3",
+          subject,
+          inventory,
+          entitlement,
+        }),
+      };
+
+      for (const engine of ["v2", "v3"] as const) {
+        const err = engine === "v2" ? v2 : v3;
+        const out = outs[engine];
         const typeBucket = bucketGet(err.byType, subject.propertyType);
         const cityBucket = bucketGet(err.byCity, subject.city);
+        const stageKey = out.evidenceStage ?? "none";
+        const stageBucket = bucketGet(err.byStage, stageKey);
 
         if (out.insufficient || out.mid == null) {
           err.nInsufficient += 1;
           typeBucket.nInsufficient += 1;
           cityBucket.nInsufficient += 1;
+          stageBucket.nInsufficient += 1;
+          if (missingSize) err.missingSize.nInsufficient += 1;
           const reason = out.reason ?? "unknown";
           err.reasons.set(reason, (err.reasons.get(reason) ?? 0) + 1);
           continue;
@@ -418,161 +457,174 @@ async function main() {
           err.nInsufficient += 1;
           typeBucket.nInsufficient += 1;
           cityBucket.nInsufficient += 1;
+          if (missingSize) err.missingSize.nInsufficient += 1;
           continue;
         }
         err.apes.push(ape.ape);
         typeBucket.apes.push(ape.ape);
         cityBucket.apes.push(ape.ape);
+        stageBucket.apes.push(ape.ape);
+        if (missingSize) err.missingSize.apes.push(ape.ape);
+      }
+
+      // Paired accuracy: both OK.
+      if (
+        !outs.v2.insufficient &&
+        !outs.v3.insufficient &&
+        outs.v2.mid != null &&
+        outs.v3.mid != null
+      ) {
+        const a2 = absolutePercentageError(outs.v2.mid, subject.soldPrice);
+        const a3 = absolutePercentageError(outs.v3.mid, subject.soldPrice);
+        if (a2 && a3) {
+          if (a3.ape > a2.ape + 5) v3.pairedWorse += 1;
+          if (a3.ape + 5 < a2.ape) v3.pairedBetter += 1;
+        }
       }
     }
 
     console.log(`\n=== ${label} ===`);
-    printBucket("V1", summarizeAccuracy(v1.apes, v1.nInsufficient));
     printBucket("V2", summarizeAccuracy(v2.apes, v2.nInsufficient));
+    printBucket("V3", summarizeAccuracy(v3.apes, v3.nInsufficient));
 
-    const s1 = summarizeAccuracy(v1.apes, v1.nInsufficient);
-    const s2 = summarizeAccuracy(v2.apes, v2.nInsufficient);
-    if (s1.mdape != null && s2.mdape != null) {
-      const delta = s1.mdape - s2.mdape;
-      console.log(
-        `MdAPE delta (V1 − V2): ${delta.toFixed(2)} pp — ${
-          delta > 0.25
-            ? "V2 BETTER"
-            : delta < -0.25
-              ? "V2 WORSE"
-              : "ROUGHLY SIMILAR"
-        }`,
-      );
-    }
-    if (s1.within10 != null && s2.within10 != null) {
-      console.log(
-        `Within ±10% delta (V2 − V1): ${(s2.within10 - s1.within10).toFixed(2)} pp`,
-      );
-    }
-
-    console.log("by property type (holdout/segment):");
-    const types = new Set([...v1.byType.keys(), ...v2.byType.keys()]);
+    console.log("by property type:");
+    const types = new Set([...v2.byType.keys(), ...v3.byType.keys()]);
     for (const t of [...types].sort()) {
       const a = summarizeAccuracy(
-        v1.byType.get(t)?.apes ?? [],
-        v1.byType.get(t)?.nInsufficient ?? 0,
-      );
-      const b = summarizeAccuracy(
         v2.byType.get(t)?.apes ?? [],
         v2.byType.get(t)?.nInsufficient ?? 0,
       );
+      const b = summarizeAccuracy(
+        v3.byType.get(t)?.apes ?? [],
+        v3.byType.get(t)?.nInsufficient ?? 0,
+      );
       console.log(
-        `  ${t}: V1 MdAPE=${fmtPct(a.mdape)} n=${a.nValid}/${a.nValid + a.nInsufficient} | V2 MdAPE=${fmtPct(b.mdape)} n=${b.nValid}/${b.nValid + b.nInsufficient}`,
+        `  ${t}: V2 cov=${fmtPct((1 - a.insufficientRate) * 100)} MdAPE=${fmtPct(a.mdape)} n=${a.nValid}/${a.nValid + a.nInsufficient} | V3 cov=${fmtPct((1 - b.insufficientRate) * 100)} MdAPE=${fmtPct(b.mdape)} n=${b.nValid}/${b.nValid + b.nInsufficient}`,
       );
     }
 
-    console.log("top cities by subject count:");
-    const cityCounts = [...v2.byCity.entries()]
-      .map(([city, row]) => ({
-        city,
-        n: row.apes.length + row.nInsufficient,
-      }))
-      .sort((a, b) => b.n - a.n)
-      .slice(0, 8);
-    for (const { city } of cityCounts) {
+    console.log("by focus city:");
+    for (const city of FOCUS_CITIES) {
+      const key = city;
       const a = summarizeAccuracy(
-        v1.byCity.get(city)?.apes ?? [],
-        v1.byCity.get(city)?.nInsufficient ?? 0,
+        v2.byCity.get(key)?.apes ??
+          [...v2.byCity.entries()].find(
+            ([c]) => c.toLowerCase() === key.toLowerCase(),
+          )?.[1].apes ??
+          [],
+        v2.byCity.get(key)?.nInsufficient ??
+          [...v2.byCity.entries()].find(
+            ([c]) => c.toLowerCase() === key.toLowerCase(),
+          )?.[1].nInsufficient ??
+          0,
+      );
+      const bEntry = [...v3.byCity.entries()].find(
+        ([c]) => c.toLowerCase() === key.toLowerCase(),
       );
       const b = summarizeAccuracy(
-        v2.byCity.get(city)?.apes ?? [],
-        v2.byCity.get(city)?.nInsufficient ?? 0,
+        bEntry?.[1].apes ?? [],
+        bEntry?.[1].nInsufficient ?? 0,
       );
+      if (a.nValid + a.nInsufficient === 0 && b.nValid + b.nInsufficient === 0) {
+        continue;
+      }
       console.log(
-        `  ${city}: V1 MdAPE=${fmtPct(a.mdape)} n=${a.nValid} | V2 MdAPE=${fmtPct(b.mdape)} n=${b.nValid}`,
+        `  ${city}: V2 cov=${fmtPct((1 - a.insufficientRate) * 100)} MdAPE=${fmtPct(a.mdape)} ±10%=${fmtPct(a.within10)} | V3 cov=${fmtPct((1 - b.insufficientRate) * 100)} MdAPE=${fmtPct(b.mdape)} ±10%=${fmtPct(b.within10)}`,
       );
     }
 
-    console.log(
-      `leakage flags (raw pool contains future/subject before engine filter): future_pool_hits=${v1.flags.futureLeakAttempts} subject_pool_hits=${v1.flags.subjectLeakAttempts}`,
-    );
-    console.log(
-      "note: engines apply soldAtBefore + excludeMls/identity — future/subject must not enter estimates",
-    );
-    if (v1.reasons.size || v2.reasons.size) {
-      console.log("insufficient reasons V1:", Object.fromEntries(v1.reasons));
-      console.log("insufficient reasons V2:", Object.fromEntries(v2.reasons));
+    console.log("by V3 evidence stage:");
+    for (const [stage, row] of [...v3.byStage.entries()].sort()) {
+      const s = summarizeAccuracy(row.apes, row.nInsufficient);
+      console.log(
+        `  ${stage}: valid=${s.nValid} insuff=${s.nInsufficient} MdAPE=${fmtPct(s.mdape)} ±10%=${fmtPct(s.within10)} ±20%=${fmtPct(s.within20)}`,
+      );
     }
 
-    return { v1, v2 };
+    const missV2 = summarizeAccuracy(
+      v2.missingSize.apes,
+      v2.missingSize.nInsufficient,
+    );
+    const missV3 = summarizeAccuracy(
+      v3.missingSize.apes,
+      v3.missingSize.nInsufficient,
+    );
+    console.log(
+      `missing-size subjects: V2 valid=${missV2.nValid} insuff=${missV2.nInsufficient} MdAPE=${fmtPct(missV2.mdape)} | V3 valid=${missV3.nValid} insuff=${missV3.nInsufficient} MdAPE=${fmtPct(missV3.mdape)} ±20%=${fmtPct(missV3.within20)}`,
+    );
+    console.log(
+      `paired both-OK: V3 materially worse(+5pp APE)=${v3.pairedWorse} better=${v3.pairedBetter}`,
+    );
+    console.log("insufficient reasons V2:", Object.fromEntries(v2.reasons));
+    console.log("insufficient reasons V3:", Object.fromEntries(v3.reasons));
+
+    return { v2, v3 };
   }
 
-  // develop | holdout | both (default). Use develop for calibration; holdout once.
-  const split = (process.env.HOME_VALUE_BACKTEST_SPLIT ?? "both")
+  const split = (process.env.HOME_VALUE_BACKTEST_SPLIT ?? "holdout")
     .trim()
     .toLowerCase();
 
   if (split === "develop" || split === "both") {
     if (developSubjects.length > 0) {
-      const develop = await evaluate(
+      await evaluate(
         "DEVELOP (calibration only — not final judgment)",
         developSubjects as SubjectRow[],
       );
-      if (split === "develop") {
-        const d1 = summarizeAccuracy(develop.v1.apes, develop.v1.nInsufficient);
-        const d2 = summarizeAccuracy(develop.v2.apes, develop.v2.nInsufficient);
-        console.log("\n=== CALIBRATION NOTE (develop only) ===");
-        console.log(
-          `V1 valid=${d1.nValid} MdAPE=${fmtPct(d1.mdape)} ±10%=${fmtPct(d1.within10)} insuff=${fmtPct(d1.insufficientRate * 100, 1)}`,
-        );
-        console.log(
-          `V2 valid=${d2.nValid} MdAPE=${fmtPct(d2.mdape)} ±10%=${fmtPct(d2.within10)} insuff=${fmtPct(d2.insufficientRate * 100, 1)}`,
-        );
-        console.log(
-          "Holdout not run (HOME_VALUE_BACKTEST_SPLIT=develop). Re-run with holdout/both for final assessment.",
-        );
-        console.log("home-value-historical-backtest: done");
-        return;
-      }
     }
   }
 
   if (split === "holdout" || split === "both") {
     const holdout = await evaluate(
-      "HOLDOUT (primary)",
+      "HOLDOUT (primary — do not tune on this)",
       holdoutSubjects as SubjectRow[],
     );
 
-    const h1 = summarizeAccuracy(holdout.v1.apes, holdout.v1.nInsufficient);
     const h2 = summarizeAccuracy(holdout.v2.apes, holdout.v2.nInsufficient);
+    const h3 = summarizeAccuracy(holdout.v3.apes, holdout.v3.nInsufficient);
 
-    console.log("\n=== VERDICT (holdout) ===");
-    if (
-      h1.mdape == null ||
-      h2.mdape == null ||
-      h1.nValid < 10 ||
-      h2.nValid < 10
-    ) {
-      console.log(
-        "INCONCLUSIVE — insufficient valid estimates on holdout after entitlement/filters.",
-      );
+    console.log("\n=== VERDICT (holdout V2 vs V3) ===");
+    if (h3.nValid + h3.nInsufficient < 20) {
+      console.log("INCONCLUSIVE — holdout sample too thin.");
     } else {
-      const coverageBetter = h2.nValid > h1.nValid;
-      const coverageWorse = h2.nValid < h1.nValid;
-      if (h2.mdape + 0.25 < h1.mdape && !coverageWorse) {
+      const covGain =
+        (1 - h3.insufficientRate) * 100 - (1 - h2.insufficientRate) * 100;
+      const mdapeDelta =
+        h2.mdape != null && h3.mdape != null ? h3.mdape - h2.mdape : null;
+      const within10Delta =
+        h2.within10 != null && h3.within10 != null
+          ? h3.within10 - h2.within10
+          : null;
+      console.log(
+        `coverage_gain_pp=${covGain.toFixed(1)} MdAPE_delta_pp=${mdapeDelta == null ? "n/a" : mdapeDelta.toFixed(2)} within10_delta_pp=${within10Delta == null ? "n/a" : within10Delta.toFixed(2)} paired_worse=${holdout.v3.pairedWorse}`,
+      );
+
+      const coverageBetter = covGain >= 8;
+      const accuracyOk =
+        mdapeDelta == null ||
+        mdapeDelta <= 2.5 ||
+        (h3.mdape != null && h3.mdape <= 18);
+      const withinOk =
+        within10Delta == null ||
+        within10Delta >= -4 ||
+        (h3.within10 != null && h3.within10 >= 40);
+      const notTooManyWorse = holdout.v3.pairedWorse <= Math.max(8, Math.floor((h3.nValid || 1) * 0.25));
+
+      if (coverageBetter && accuracyOk && withinOk && notTooManyWorse) {
         console.log(
-          "V2 OUTPERFORMS V1 on holdout MdAPE with coverage not worse.",
+          "RECOMMENDATION: SHIP — coverage improves with acceptable accuracy tradeoff.",
         );
-      } else if (h2.mdape + 0.25 < h1.mdape && coverageWorse) {
+      } else if (coverageBetter && (!accuracyOk || !withinOk)) {
         console.log(
-          "V2 better MdAPE but worse coverage — tradeoff; review before ship.",
+          "RECOMMENDATION: REVISE — coverage up but accuracy regression needs tighter region/size guards.",
         );
-      } else if (h1.mdape + 0.25 < h2.mdape) {
+      } else if (!coverageBetter && accuracyOk) {
         console.log(
-          "V2 UNDERPERFORMS V1 on holdout MdAPE — do not ship on accuracy grounds alone.",
-        );
-      } else if (coverageBetter && (h2.within10 ?? 0) + 1 >= (h1.within10 ?? 0)) {
-        console.log(
-          "V2 ≈ V1 on MdAPE with better coverage — coverage improvement achieved.",
+          "RECOMMENDATION: REVISE — accuracy stable but coverage gain insufficient.",
         );
       } else {
         console.log(
-          "V2 ≈ V1 on holdout MdAPE; check ±10% hit-rate, coverage, and segment tables.",
+          "RECOMMENDATION: DO NOT SHIP — coverage/accuracy not acceptable on holdout.",
         );
       }
     }
@@ -582,6 +634,9 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("[backtest] failed", error instanceof Error ? error.message : error);
+  console.error(
+    "[backtest] failed",
+    error instanceof Error ? error.message : error,
+  );
   process.exit(1);
 });

@@ -389,14 +389,15 @@ function testMissingSqftPolicy() {
   assert.equal(requiresSubjectSqft("DETACHED"), false);
 
   const noSqftSubject = subject({ sqft: null });
+  // V3: freehold may match without exact sqft on either side.
   assert.equal(
     isEligibleSoldComp(
       sold({ soldPrice: 700_000, sqft: null }),
       noSqftSubject,
       { maxKm: 5, now },
     ),
-    false,
-    "comp without sqft excluded when subject sqft missing",
+    true,
+    "freehold comp without sqft allowed when subject sqft missing",
   );
   assert.equal(
     isEligibleSoldComp(
@@ -461,9 +462,11 @@ function testConfidenceClassification() {
     recentShare180d: 0.7,
     priceCv: 0.08,
     hasSubjectSqft: true,
+    hasReliableSize: true,
     hasBaths: true,
     allSameType: true,
     medianToBestScore: 0.7,
+    evidenceStage: "neighbourhood",
   });
   assert.equal(high, "high");
 
@@ -476,9 +479,11 @@ function testConfidenceClassification() {
     recentShare180d: 0.5,
     priceCv: 0.14,
     hasSubjectSqft: true,
+    hasReliableSize: true,
     hasBaths: true,
     allSameType: true,
     medianToBestScore: 0.55,
+    evidenceStage: "city",
   });
   assert.equal(medium, "medium");
 
@@ -491,9 +496,11 @@ function testConfidenceClassification() {
     recentShare180d: 0.2,
     priceCv: 0.22,
     hasSubjectSqft: false,
+    hasReliableSize: false,
     hasBaths: true,
     allSameType: true,
     medianToBestScore: 0.4,
+    evidenceStage: "city",
   });
   assert.equal(low, "low");
 
@@ -507,12 +514,34 @@ function testConfidenceClassification() {
     recentShare180d: 0.3,
     priceCv: 0.2,
     hasSubjectSqft: true,
+    hasReliableSize: true,
     hasBaths: true,
     allSameType: true,
     medianToBestScore: 0.5,
+    evidenceStage: "city",
   });
   assert.notEqual(weakMany, "high");
   assert.equal(weakMany, "low");
+
+  assert.equal(
+    classifyValuationConfidence({
+      soldCount: 8,
+      meanDistanceKm: 3,
+      primaryRadiusKm: 4,
+      sameCommunityShare: 0.8,
+      subjectCommunityKnown: true,
+      recentShare180d: 0.7,
+      priceCv: 0.08,
+      hasSubjectSqft: true,
+      hasReliableSize: true,
+      hasBaths: true,
+      allSameType: true,
+      medianToBestScore: 0.7,
+      evidenceStage: "region",
+    }),
+    "low",
+    "region stage always LOW",
+  );
   console.log("[confidence] low/medium/high PASS");
 }
 

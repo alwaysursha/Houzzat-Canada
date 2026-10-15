@@ -114,6 +114,7 @@ function estimatePayload(estimate: HomeValueEstimateOk) {
     activeCount: estimate.activeCount,
     method: estimate.method,
     confidence: estimate.confidence,
+    evidenceStage: estimate.evidenceStage,
     city: estimate.city,
     community: estimate.community,
     communityAvgSold: estimate.communityAvgSold,

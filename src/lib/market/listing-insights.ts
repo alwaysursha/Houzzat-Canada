@@ -17,6 +17,7 @@ import {
   parseBasementFinishFromFacts,
   type BasementFinish,
   type ValuationConfidence,
+  type ValuationEvidenceStage,
 } from "@/lib/market/home-value-estimate";
 import {
   homeValueInsufficientDisclaimer,
@@ -196,6 +197,7 @@ export type ListingInsightsPayload = {
     soldCount: number;
     method: string | null;
     confidence: ValuationConfidence | null;
+    evidenceStage: ValuationEvidenceStage | null;
     vsListPct: number | null;
     communityAvgSold: number | null;
     disclaimer: string;
@@ -613,6 +615,7 @@ export async function buildListingInsights(opts: {
     beds: listing.beds,
     baths: listing.baths,
     sqft: listing.sqft,
+    livingAreaRange: facts.livingAreaRange ?? null,
     basement: basementFromFacts(facts),
     propertyType: listing.propertyType,
     lat: listing.lat,
@@ -696,6 +699,8 @@ export async function buildListingInsights(opts: {
       soldCount: okEstimate?.soldCount ?? 0,
       method: signedIn && okEstimate ? okEstimate.method : null,
       confidence: signedIn && okEstimate ? okEstimate.confidence : null,
+      evidenceStage:
+        signedIn && okEstimate ? okEstimate.evidenceStage : null,
       vsListPct,
       communityAvgSold:
         signedIn && okEstimate ? okEstimate.communityAvgSold : null,

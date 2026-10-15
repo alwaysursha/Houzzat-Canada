@@ -1,5 +1,5 @@
 /**
- * Indicative home value from entitled, recent SOLD comparables only (V2 Phase 1).
+ * Indicative home value from entitled, recent SOLD comparables only (V3).
  * Returns INSUFFICIENT_DATA when evidence is missing — never fabricates dollars.
  *
  * Size adjustment (when both subject and comp have exact sqft):
@@ -7,11 +7,13 @@
  *   factor   = clamp(1 + SIZE_ELASTICITY * (rawRatio - 1), 1±MAX_SIZE_ADJ)
  *   adjusted = round(soldPrice * factor)
  * SIZE_ELASTICITY = 0.45 (sub-linear). MAX_SIZE_ADJ = 0.08 (±8% cap).
- * Never invents sqft from LivingAreaRange midpoints.
+ * Never invents sqft from LivingAreaRange midpoints for price adjustment.
+ * Condo LivingAreaRange may be used only as an eligibility band.
  */
 
 import type { PropertyType, Prisma } from "@prisma/client";
 import { haversineKm } from "@/lib/geo/distance";
+import { resolveRegionFromCity } from "@/lib/geo/regions";
 import { parseListingFacts } from "@/lib/listings/facts";
 import {
   filterHistoricalCandidates,
@@ -28,6 +30,9 @@ export type BasementFinish = "finished" | "unfinished" | "none" | "unknown";
 
 export type ValuationConfidence = "low" | "medium" | "high";
 
+/** Geographic evidence stage that produced the estimate (internal + API). */
+export type ValuationEvidenceStage = "neighbourhood" | "city" | "region";
+
 export type HomeValueEstimateOk = {
   status: "OK";
   low: number;
@@ -39,6 +44,7 @@ export type HomeValueEstimateOk = {
   activeCount: 0;
   method: "sold_comps";
   confidence: ValuationConfidence;
+  evidenceStage: ValuationEvidenceStage;
   city: string;
   community: string | null;
   communityAvgSold: number | null;
@@ -70,9 +76,18 @@ const RESIDENTIAL_TYPES = new Set<PropertyType>([
 
 const SOLD_WINDOW_MONTHS = 12;
 const MIN_ELIGIBLE_SOLDS = 3;
+/** Region stage needs denser evidence before disclosing dollars. */
+const MIN_REGION_ELIGIBLE_SOLDS = 5;
+/** Max haversine distance for Stage 3 region comps. */
+export const REGION_MAX_KM = 14;
+/**
+ * Reject sibling cities whose same-type median sold diverges too far from the
+ * subject city (region safety — do not average dissimilar markets).
+ */
+export const REGION_CITY_MEDIAN_RATIO_MAX = 1.25;
 /** Reject sets where highest/lowest sold stretch is too wide. */
 const MAX_PRICE_SPREAD_RATIO = 2.25;
-/** When subject sqft is unknown, comps must still be size-consistent with each other. */
+/** When subject sqft is unknown, comps with exact sizes must still be consistent. */
 const MIN_COMP_SQFT_RATIO = 0.7;
 /** Max share of total similarity weight any single sold may carry. */
 const MAX_SINGLE_COMP_WEIGHT_SHARE = 0.4;
@@ -136,7 +151,7 @@ export function parseResidentialPropertyType(
   return key;
 }
 
-/** Condo size is essential — never estimate without subject sqft. */
+/** Condo / condo-town — need exact sqft or a living-area range band. */
 export function requiresSubjectSqft(type: PropertyType): boolean {
   switch (type) {
     case "CONDO_APT":
@@ -158,6 +173,103 @@ export function requiresSubjectSqft(type: PropertyType): boolean {
       return _exhaustive;
     }
   }
+}
+
+export function isCondoPropertyFamily(type: PropertyType): boolean {
+  switch (type) {
+    case "CONDO_APT":
+    case "CONDO_TOWNHOUSE":
+      return true;
+    case "DETACHED":
+    case "SEMI_DETACHED":
+    case "TOWNHOUSE":
+    case "MULTIPLEX":
+    case "VACANT_LAND":
+    case "OFFICE":
+    case "RETAIL":
+    case "INDUSTRIAL":
+    case "MIXED_USE":
+    case "OTHER":
+      return false;
+    default: {
+      const _exhaustive: never = type;
+      return _exhaustive;
+    }
+  }
+}
+
+export function isFreeholdPropertyFamily(type: PropertyType): boolean {
+  switch (type) {
+    case "DETACHED":
+    case "SEMI_DETACHED":
+    case "TOWNHOUSE":
+    case "MULTIPLEX":
+      return true;
+    case "CONDO_APT":
+    case "CONDO_TOWNHOUSE":
+    case "VACANT_LAND":
+    case "OFFICE":
+    case "RETAIL":
+    case "INDUSTRIAL":
+    case "MIXED_USE":
+    case "OTHER":
+      return false;
+    default: {
+      const _exhaustive: never = type;
+      return _exhaustive;
+    }
+  }
+}
+
+/**
+ * Parse MLS LivingAreaRange into inclusive bounds. Pure.
+ * Never returns a midpoint — bounds are for eligibility overlap only.
+ */
+export function parseLivingAreaRangeBounds(
+  raw: string | null | undefined,
+): { low: number; high: number } | null {
+  const text = raw?.trim();
+  if (!text) return null;
+  const match = text.match(
+    /(\d+(?:,\d{3})*(?:\.\d+)?)\s*[-–—]\s*(\d+(?:,\d{3})*(?:\.\d+)?)/,
+  );
+  if (!match) return null;
+  const a = Number(match[1]!.replace(/,/g, ""));
+  const b = Number(match[2]!.replace(/,/g, ""));
+  if (!(Number.isFinite(a) && Number.isFinite(b) && a > 0 && b > 0)) return null;
+  const low = Math.min(a, b);
+  const high = Math.max(a, b);
+  if (high / low > 4) return null;
+  return { low: Math.round(low), high: Math.round(high) };
+}
+
+export function subjectHasSizeSignal(input: {
+  propertyType: PropertyType;
+  sqft?: number | null;
+  livingAreaRange?: string | null;
+}): boolean {
+  if (input.sqft != null && input.sqft > 0) return true;
+  if (!requiresSubjectSqft(input.propertyType)) return true;
+  return parseLivingAreaRangeBounds(input.livingAreaRange) != null;
+}
+
+function citiesMatchInsensitive(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  const left = a?.trim().toLowerCase();
+  const right = b?.trim().toLowerCase();
+  if (!left || !right) return false;
+  return left === right;
+}
+
+function cityInAllowedList(
+  city: string,
+  allowed: readonly string[] | null | undefined,
+): boolean {
+  if (!allowed || allowed.length === 0) return true;
+  const key = city.trim().toLowerCase();
+  return allowed.some((c) => c.trim().toLowerCase() === key);
 }
 
 export function distanceLimitsKm(type: PropertyType): {
@@ -201,6 +313,8 @@ export type SoldCompCandidate = {
   beds: number;
   baths: number;
   sqft: number | null;
+  /** PropTx LivingAreaRange string — eligibility band only, never a price midpoint. */
+  livingAreaRange?: string | null;
   lat: number;
   lng: number;
   propertyType: PropertyType;
@@ -220,6 +334,7 @@ export type SubjectForComps = {
   beds: number;
   baths: number | null;
   sqft: number | null;
+  livingAreaRange?: string | null;
   propertyType: PropertyType;
   lat: number;
   lng: number;
@@ -228,6 +343,73 @@ export type SubjectForComps = {
   parkingSpaces?: number | null;
   yearBuilt?: number | null;
 };
+
+/**
+ * Size eligibility (V3). Prefer exact sqft; allow freehold without size;
+ * condo may use LivingAreaRange bands. Never invents midpoints for dollars.
+ */
+export function soldCompSizeEligible(
+  row: SoldCompCandidate,
+  subject: SubjectForComps,
+): boolean {
+  const subjectSqft =
+    subject.sqft != null && subject.sqft > 0 ? subject.sqft : null;
+  const rowSqft = row.sqft != null && row.sqft > 0 ? row.sqft : null;
+  const subjectRange = parseLivingAreaRangeBounds(subject.livingAreaRange);
+  const rowRange = parseLivingAreaRangeBounds(row.livingAreaRange);
+
+  if (subjectSqft != null && rowSqft != null) {
+    const ratio =
+      Math.min(rowSqft, subjectSqft) / Math.max(rowSqft, subjectSqft);
+    return ratio >= 0.75;
+  }
+
+  if (subjectSqft != null && rowRange) {
+    // Exact subject vs range band — subject must land in a modestly expanded band.
+    const pad = 0.12;
+    const low = rowRange.low * (1 - pad);
+    const high = rowRange.high * (1 + pad);
+    return subjectSqft >= low && subjectSqft <= high;
+  }
+
+  if (rowSqft != null && subjectRange) {
+    const pad = 0.12;
+    const low = subjectRange.low * (1 - pad);
+    const high = subjectRange.high * (1 + pad);
+    return rowSqft >= low && rowSqft <= high;
+  }
+
+  if (subjectRange && rowRange) {
+    // Overlap of range bands (eligibility only).
+    return subjectRange.low <= rowRange.high && rowRange.low <= subjectRange.high;
+  }
+
+  // Incomplete size on one or both sides.
+  if (isCondoPropertyFamily(subject.propertyType)) {
+    // Condo still needs some size signal on both sides (exact or range).
+    const subjectOk = subjectSqft != null || subjectRange != null;
+    const rowOk = rowSqft != null || rowRange != null;
+    return subjectOk && rowOk;
+  }
+
+  if (isFreeholdPropertyFamily(subject.propertyType)) {
+    // Freehold: allow strong matches when size is missing on either/both sides.
+    return true;
+  }
+
+  return false;
+}
+
+export function hasReliableExactSize(input: {
+  subjectSqft?: number | null;
+  evidenceHasExactSqftShare: number;
+}): boolean {
+  return (
+    input.subjectSqft != null &&
+    input.subjectSqft > 0 &&
+    input.evidenceHasExactSqftShare >= 0.6
+  );
+}
 
 function soldSinceDate(now: Date): Date {
   const d = new Date(now);
@@ -335,7 +517,12 @@ export function sizeAdjustedSoldPrice(
 export function isEligibleSoldComp(
   row: SoldCompCandidate,
   subject: SubjectForComps,
-  opts: { maxKm: number; now?: Date },
+  opts: {
+    maxKm: number;
+    now?: Date;
+    /** When set, city must be in this inventory city list (region stage). */
+    allowedCities?: readonly string[] | null;
+  },
 ): boolean {
   const now = opts.now ?? new Date();
   const since = soldSinceDate(now);
@@ -346,7 +533,9 @@ export function isEligibleSoldComp(
   }
   if (row.soldAt.getTime() < since.getTime()) return false;
 
-  if (row.city.trim().toLowerCase() !== subject.city.trim().toLowerCase()) {
+  if (opts.allowedCities && opts.allowedCities.length > 0) {
+    if (!cityInAllowedList(row.city, opts.allowedCities)) return false;
+  } else if (!citiesMatchInsensitive(row.city, subject.city)) {
     return false;
   }
 
@@ -362,15 +551,7 @@ export function isEligibleSoldComp(
     if (Math.abs(row.baths - subject.baths) > 1.01) return false;
   }
 
-  if (subject.sqft != null && subject.sqft > 0) {
-    if (!row.sqft || row.sqft <= 0) return false;
-    const ratio =
-      Math.min(row.sqft, subject.sqft) / Math.max(row.sqft, subject.sqft);
-    if (ratio < 0.75) return false;
-  } else {
-    // Without subject size, still require measurable comp sqft (no invented sizes).
-    if (!row.sqft || row.sqft <= 0) return false;
-  }
+  if (!soldCompSizeEligible(row, subject)) return false;
 
   return true;
 }
@@ -391,6 +572,13 @@ export function scoreEligibleSoldComp(
   let score = Math.max(0.12, 1 - d / (limits.expanded * 1.05));
 
   if (row.propertyType === subject.propertyType) score *= 1.4;
+
+  // Prefer same-city evidence whenever the pool spans a region.
+  if (citiesMatchInsensitive(row.city, subject.city)) {
+    score *= 1.18;
+  } else {
+    score *= 0.82;
+  }
 
   const subjectCommunity = subject.community?.trim();
   const rowCommunity = row.community?.trim();
@@ -634,8 +822,8 @@ function coefficientOfVariation(values: number[]): number {
 }
 
 /**
- * Confidence V2 — quality of the evidence set, not quantity alone.
- * Weak / distant / mixed-neighbourhood sets never grade HIGH.
+ * Confidence V3 — quality of the evidence set, not quantity alone.
+ * Region stage and incomplete size never grade above LOW / MEDIUM respectively.
  */
 export function classifyValuationConfidence(input: {
   soldCount: number;
@@ -646,9 +834,11 @@ export function classifyValuationConfidence(input: {
   recentShare180d: number;
   priceCv: number;
   hasSubjectSqft: boolean;
+  hasReliableSize: boolean;
   hasBaths: boolean;
   allSameType: boolean;
   medianToBestScore: number;
+  evidenceStage: ValuationEvidenceStage;
 }): ValuationConfidence {
   const {
     soldCount,
@@ -659,12 +849,31 @@ export function classifyValuationConfidence(input: {
     recentShare180d,
     priceCv,
     hasSubjectSqft,
+    hasReliableSize,
     hasBaths,
     allSameType,
     medianToBestScore,
+    evidenceStage,
   } = input;
 
+  // Region evidence is always LOW.
+  if (evidenceStage === "region") return "low";
+
+  // Incomplete size never HIGH; usually LOW unless city set is otherwise strong.
+  if (!hasReliableSize) {
+    const mediumOk =
+      evidenceStage === "city" &&
+      soldCount >= 4 &&
+      hasBaths &&
+      allSameType &&
+      meanDistanceKm <= primaryRadiusKm &&
+      priceCv <= 0.16 &&
+      recentShare180d >= 0.4;
+    return mediumOk ? "medium" : "low";
+  }
+
   const high =
+    evidenceStage === "neighbourhood" &&
     soldCount >= 5 &&
     hasSubjectSqft &&
     hasBaths &&
@@ -680,14 +889,54 @@ export function classifyValuationConfidence(input: {
   const low =
     soldCount < 4 ||
     meanDistanceKm > primaryRadiusKm ||
-    (subjectCommunityKnown && sameCommunityShare < 0.34) ||
+    (subjectCommunityKnown &&
+      evidenceStage === "neighbourhood" &&
+      sameCommunityShare < 0.34) ||
     priceCv > 0.18 ||
-    !hasSubjectSqft ||
     recentShare180d < 0.34 ||
     medianToBestScore < 0.45;
 
   if (low) return "low";
   return "medium";
+}
+
+/** Median of positive numbers; null when empty. */
+export function medianPositive(values: number[]): number | null {
+  const known = values.filter((v) => v > 0 && Number.isFinite(v));
+  if (known.length === 0) return null;
+  const sorted = [...known].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1]! + sorted[mid]!) / 2;
+  }
+  return sorted[mid]!;
+}
+
+/**
+ * Cities in a market region whose same-type median sold aligns with the subject
+ * city (inventory city labels only — no zip/prefix or org inference).
+ */
+export function regionCitiesPriceAligned(opts: {
+  subjectCity: string;
+  regionCities: readonly string[];
+  cityMedians: Map<string, number>;
+  maxRatio?: number;
+}): string[] {
+  const maxRatio = opts.maxRatio ?? REGION_CITY_MEDIAN_RATIO_MAX;
+  const subjectKey = opts.subjectCity.trim().toLowerCase();
+  const subjectMedian = opts.cityMedians.get(subjectKey);
+  if (subjectMedian == null || !(subjectMedian > 0)) {
+    return opts.regionCities.filter((c) =>
+      citiesMatchInsensitive(c, opts.subjectCity),
+    );
+  }
+  return opts.regionCities.filter((city) => {
+    if (citiesMatchInsensitive(city, opts.subjectCity)) return true;
+    const med = opts.cityMedians.get(city.trim().toLowerCase());
+    if (med == null || !(med > 0)) return false;
+    const ratio = Math.max(med, subjectMedian) / Math.min(med, subjectMedian);
+    return ratio <= maxRatio;
+  });
 }
 
 /**
@@ -700,6 +949,7 @@ export async function estimateHomeValue(
     beds?: number | null;
     baths?: number | null;
     sqft?: number | null;
+    livingAreaRange?: string | null;
     basement?: BasementFinish | null;
     propertyType?: string | null;
     lat?: number | null;
@@ -717,6 +967,7 @@ export async function estimateHomeValue(
   const baths =
     opts.baths != null && Number.isFinite(opts.baths) ? opts.baths : null;
   const sqft = opts.sqft != null && opts.sqft > 0 ? opts.sqft : null;
+  const livingAreaRange = opts.livingAreaRange?.trim() || null;
   const hasCoords =
     opts.lat != null &&
     opts.lng != null &&
@@ -731,7 +982,13 @@ export async function estimateHomeValue(
     );
   }
 
-  if (requiresSubjectSqft(propertyType) && sqft == null) {
+  if (
+    !subjectHasSizeSignal({
+      propertyType,
+      sqft,
+      livingAreaRange,
+    })
+  ) {
     return insufficient("missing_subject_sqft", city, community);
   }
 
@@ -743,6 +1000,11 @@ export async function estimateHomeValue(
   const now = opts.now ?? new Date();
   const since = soldSinceDate(now);
   const limits = distanceLimitsKm(propertyType);
+  const regionResolved = resolveRegionFromCity(city);
+  const regionCityLabels =
+    regionResolved.region.cities.length > 0
+      ? regionResolved.region.cities
+      : [city];
 
   let candidatesRaw: SoldCompCandidate[];
 
@@ -758,10 +1020,13 @@ export async function estimateHomeValue(
       return insufficient("no_entitled_inventory", city, community);
     }
 
-    // Bounding box for primary expansion radius (avoid full-city scans).
-    const boxPad = limits.expanded / 111; // ~deg latitude
-    const lngPad =
-      limits.expanded / (111 * Math.cos((opts.lat! * Math.PI) / 180));
+    // Fetch through region radius so Stages 1–3 share one entitled pool.
+    const fetchKm = Math.max(limits.expanded, REGION_MAX_KM);
+    const boxPad = fetchKm / 111; // ~deg latitude
+    const lngPad = fetchKm / (111 * Math.cos((opts.lat! * Math.PI) / 180));
+    const cityOr: Prisma.ListingWhereInput[] = regionCityLabels.map((c) => ({
+      city: { equals: c, mode: "insensitive" },
+    }));
 
     const rows = await prisma.listing.findMany({
       where: {
@@ -773,7 +1038,7 @@ export async function estimateHomeValue(
             status: "SOLD",
             soldPrice: { gt: 50_000 },
             soldAt: { gte: since, not: null },
-            city: { equals: city, mode: "insensitive" },
+            OR: cityOr,
             propertyType: { in: [...allowedTypes] },
             beds: { gte: Math.max(beds - 1, 0), lte: beds + 1 },
             ...(baths != null
@@ -803,7 +1068,7 @@ export async function estimateHomeValue(
         mlsNumber: true,
         facts: true,
       },
-      take: 200,
+      take: 350,
       orderBy: [{ soldAt: "desc" }],
     });
 
@@ -820,6 +1085,7 @@ export async function estimateHomeValue(
           beds: r.beds,
           baths: r.baths,
           sqft: r.sqft,
+          livingAreaRange: facts?.livingAreaRange ?? null,
           lat: r.lat,
           lng: r.lng,
           propertyType: r.propertyType,
@@ -841,6 +1107,7 @@ export async function estimateHomeValue(
     beds,
     baths,
     sqft,
+    livingAreaRange,
     propertyType,
     lat: opts.lat!,
     lng: opts.lng!,
@@ -862,11 +1129,24 @@ export async function estimateHomeValue(
 
   type ScoredRow = { row: SoldCompCandidate; score: number; distanceKm: number };
 
-  function collect(maxKm: number, sameCommunityOnly: boolean): ScoredRow[] {
+  function collect(optsCollect: {
+    maxKm: number;
+    sameCommunityOnly: boolean;
+    allowedCities: readonly string[];
+    minCount: number;
+  }): ScoredRow[] {
     return candidates
       .filter((row) => {
-        if (!isEligibleSoldComp(row, subject, { maxKm, now })) return false;
-        if (!sameCommunityOnly) return true;
+        if (
+          !isEligibleSoldComp(row, subject, {
+            maxKm: optsCollect.maxKm,
+            now,
+            allowedCities: optsCollect.allowedCities,
+          })
+        ) {
+          return false;
+        }
+        if (!optsCollect.sameCommunityOnly) return true;
         return communitiesMatch(subject.community, row.community);
       })
       .map((row) => ({
@@ -877,34 +1157,100 @@ export async function estimateHomeValue(
       .sort((a, b) => b.score - a.score);
   }
 
-  // Progressive neighbourhood fallback (hard filters), then soft score ranking:
-  // 1) same-community @ primary radius
-  // 2) same-city family @ primary radius
-  // 3) same-community @ expanded radius
-  // 4) same-city family @ expanded radius
-  // Community / distance remain soft weights — not exclusion after expansion.
-  let scored = collect(limits.primary, Boolean(community));
-  if (scored.length < MIN_ELIGIBLE_SOLDS) {
-    scored = collect(limits.primary, false);
+  const subjectCityOnly = [city];
+
+  // Stage 1 — neighbourhood @ primary
+  let evidenceStage: ValuationEvidenceStage = "neighbourhood";
+  let scored = collect({
+    maxKm: limits.primary,
+    sameCommunityOnly: Boolean(community),
+    allowedCities: subjectCityOnly,
+    minCount: MIN_ELIGIBLE_SOLDS,
+  });
+  if (!community || scored.length < MIN_ELIGIBLE_SOLDS) {
+    // Stage 2 prelude — city @ primary
+    evidenceStage = "city";
+    scored = collect({
+      maxKm: limits.primary,
+      sameCommunityOnly: false,
+      allowedCities: subjectCityOnly,
+      minCount: MIN_ELIGIBLE_SOLDS,
+    });
   }
   if (scored.length < MIN_ELIGIBLE_SOLDS) {
-    scored = collect(limits.expanded, Boolean(community));
-  }
-  if (scored.length < MIN_ELIGIBLE_SOLDS) {
-    scored = collect(limits.expanded, false);
+    // Stage 2 — city @ expanded
+    evidenceStage = "city";
+    scored = collect({
+      maxKm: limits.expanded,
+      sameCommunityOnly: false,
+      allowedCities: subjectCityOnly,
+      minCount: MIN_ELIGIBLE_SOLDS,
+    });
   }
 
   if (scored.length < MIN_ELIGIBLE_SOLDS) {
+    // Stage 3 — price-aligned region cities @ REGION_MAX_KM
+    const cityMedians = new Map<string, number>();
+    for (const label of regionCityLabels) {
+      const prices = candidates
+        .filter(
+          (c) =>
+            citiesMatchInsensitive(c.city, label) &&
+            allowedTypes.includes(c.propertyType) &&
+            c.soldPrice > 50_000,
+        )
+        .map((c) => c.soldPrice);
+      const med = medianPositive(prices);
+      if (med != null) cityMedians.set(label.trim().toLowerCase(), med);
+    }
+    const alignedCities = regionCitiesPriceAligned({
+      subjectCity: city,
+      regionCities: regionCityLabels,
+      cityMedians,
+    });
+    if (alignedCities.length > 0) {
+      evidenceStage = "region";
+      scored = collect({
+        maxKm: REGION_MAX_KM,
+        sameCommunityOnly: false,
+        allowedCities: alignedCities,
+        minCount: MIN_REGION_ELIGIBLE_SOLDS,
+      });
+    }
+  }
+
+  const minNeeded =
+    evidenceStage === "region" ? MIN_REGION_ELIGIBLE_SOLDS : MIN_ELIGIBLE_SOLDS;
+
+  if (scored.length < minNeeded) {
     return insufficient("insufficient_sold_comps", city, community);
   }
 
-  const top = selectTopScoredEvidence(scored);
-  if (top.length < MIN_ELIGIBLE_SOLDS) {
+  // If we labeled neighbourhood but community filter was skipped, normalize.
+  if (
+    evidenceStage === "neighbourhood" &&
+    (!community ||
+      scored.filter((s) => communitiesMatch(community, s.row.community))
+        .length < MIN_ELIGIBLE_SOLDS)
+  ) {
+    evidenceStage = "city";
+  }
+
+  const top = selectTopScoredEvidence(scored, {
+    minCount: minNeeded,
+  });
+  if (top.length < minNeeded) {
     return insufficient("insufficient_sold_comps", city, community);
   }
   const bestScore = top[0]?.score ?? 0;
 
-  if (subject.sqft == null && !compsSqftConsistent(top.map((t) => t.row.sqft))) {
+  // Size consistency among exact-sqft comps when subject lacks exact sqft.
+  const exactSqfts = top.map((t) => t.row.sqft).filter((s): s is number => s != null && s > 0);
+  if (
+    subject.sqft == null &&
+    exactSqfts.length >= MIN_ELIGIBLE_SOLDS &&
+    !compsSqftConsistent(exactSqfts)
+  ) {
     return insufficient("inconsistent_comp_sizes", city, community);
   }
 
@@ -930,10 +1276,21 @@ export async function estimateHomeValue(
     {
       lowP: 0.25,
       highP: 0.75,
+      minScoreRatio: MIN_SCORE_RATIO_OF_BEST,
     },
   );
   if (!range) {
     return insufficient("inconsistent_sold_prices", city, community);
+  }
+
+  // Region sets still need the denser min after score filtering.
+  if (evidenceStage === "region") {
+    const regionEvidence = selectTopScoredEvidence(scored, {
+      minCount: MIN_REGION_ELIGIBLE_SOLDS,
+    });
+    if (regionEvidence.length < MIN_REGION_ELIGIBLE_SOLDS) {
+      return insufficient("insufficient_sold_comps", city, community);
+    }
   }
 
   const soldCount = top.length;
@@ -955,6 +1312,13 @@ export async function estimateHomeValue(
   const scores = adjustedEvidence.map((t) => t.score);
   const sortedScores = [...scores].sort((a, b) => a - b);
   const medianScore = sortedScores[Math.floor(sortedScores.length / 2)]!;
+  const exactSqftShare =
+    adjustedEvidence.filter((t) => t.row.sqft != null && t.row.sqft > 0).length /
+    soldCount;
+  const reliableSize = hasReliableExactSize({
+    subjectSqft: subject.sqft,
+    evidenceHasExactSqftShare: exactSqftShare,
+  });
   const confidence = classifyValuationConfidence({
     soldCount,
     meanDistanceKm,
@@ -964,9 +1328,11 @@ export async function estimateHomeValue(
     recentShare180d,
     priceCv: coefficientOfVariation(adjustedPrices),
     hasSubjectSqft: Boolean(subject.sqft),
+    hasReliableSize: reliableSize,
     hasBaths: baths != null,
     allSameType: top.every((t) => t.row.propertyType === propertyType),
     medianToBestScore: bestScore > 0 ? medianScore / bestScore : 0,
+    evidenceStage,
   });
 
   // Community sold average for context (same entitled query filters).
@@ -975,7 +1341,11 @@ export async function estimateHomeValue(
       if (!community) return false;
       return (
         communitiesMatch(community, c.community) &&
-        isEligibleSoldComp(c, subject, { maxKm: limits.expanded, now })
+        isEligibleSoldComp(c, subject, {
+          maxKm: limits.expanded,
+          now,
+          allowedCities: subjectCityOnly,
+        })
       );
     })
     .map((c) => c.soldPrice);
@@ -996,6 +1366,7 @@ export async function estimateHomeValue(
     activeCount: 0,
     method: "sold_comps",
     confidence,
+    evidenceStage,
     city,
     community,
     communityAvgSold,

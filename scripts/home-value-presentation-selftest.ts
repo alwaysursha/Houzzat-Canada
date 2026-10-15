@@ -31,20 +31,20 @@ function testConfidenceCopy() {
 
   assert.equal(
     valuationConfidenceDescription("low"),
-    "Limited comparable data",
+    "Limited or wider-area comparable data",
   );
   assert.equal(
     valuationConfidenceDescription("medium"),
-    "Moderate comparable support",
+    "Moderate city comparable support",
   );
   assert.equal(
     valuationConfidenceDescription("high"),
-    "Stronger comparable support",
+    "Stronger local comparable support",
   );
 
   assert.equal(
     formatValuationConfidence("high"),
-    "High · Stronger comparable support",
+    "High · Stronger local comparable support",
   );
   assert.ok(isValuationConfidence("low"));
   assert.ok(isValuationConfidence("medium"));
