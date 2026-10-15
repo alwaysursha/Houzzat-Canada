@@ -14,7 +14,9 @@ import { findComps } from "@/lib/market/cma";
 import { monthlyMortgagePayment } from "@/lib/market/affordability";
 import {
   estimateHomeValue,
+  parseBasementFinishFromFacts,
   type BasementFinish,
+  type ValuationConfidence,
 } from "@/lib/market/home-value-estimate";
 import type { MarketPulse } from "@/lib/market/pulse";
 import type { NearbyPoi } from "@/lib/poi/nearby";
@@ -189,7 +191,7 @@ export type ListingInsightsPayload = {
     sampleSize: number;
     soldCount: number;
     method: string | null;
-    confidence: "medium" | "high" | null;
+    confidence: ValuationConfidence | null;
     vsListPct: number | null;
     communityAvgSold: number | null;
     disclaimer: string;
@@ -391,12 +393,7 @@ function lifestyleFromPois(pois: NearbyPoi[]) {
 }
 
 function basementFromFacts(facts: ListingFacts): BasementFinish {
-  const raw = (facts.basement ?? []).join(" ").toLowerCase();
-  if (!raw.trim()) return "unknown";
-  if (/\bnone\b|no basement|crawl/.test(raw)) return "none";
-  if (/unfinish|part(ly|ial)?\s*finish|rough/.test(raw)) return "unfinished";
-  if (/finish|apart|rec\b|recreation|in-?law/.test(raw)) return "finished";
-  return "unknown";
+  return parseBasementFinishFromFacts(facts.basement);
 }
 
 function spaceHighlights(
