@@ -18,12 +18,14 @@ export {
   runInactiveLeadSmsAutomations,
 } from "./inactive";
 export {
+  runAgentNewLeadSignupSms,
   runCustomerIntroductionSmsAutomation,
   runCustomerIntroductionSmsAutomationsForCustomer,
   runLeadReturnedSmsAutomations,
   runSignupSmsAutomations,
   runUnsubscribeSmsAutomations,
   runViewingRequestedSmsAutomation,
+  scheduleAgentNewLeadSignupSms,
   scheduleCustomerIntroductionIfFirstValidE164,
   scheduleCustomerIntroductionSmsAutomationsForCustomer,
   scheduleCustomerIntroductionSmsAutomationsForLead,

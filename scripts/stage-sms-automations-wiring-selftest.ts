@@ -38,6 +38,7 @@ import { smsAutomationLeadProfileUrl } from "../src/lib/sms/automations/urls";
 import { resolveAssignedAgentNotifyDestination } from "../src/lib/sms/assigned-agent-inbound-notify";
 import { runInactiveLeadSmsAutomations } from "../src/lib/sms/automations/inactive";
 import {
+  runAgentNewLeadSignupSms,
   runCustomerIntroductionSmsAutomation,
   runLeadReturnedSmsAutomations,
   runSignupSmsAutomations,
@@ -55,6 +56,15 @@ import {
   SMS_MANUAL_USAGE_CATEGORIES,
 } from "../src/lib/sms/usage";
 import type { SendSmsResult } from "../src/lib/sms/types";
+
+/** Test helper: agent signup SMS + customer welcome (product splits these). */
+async function runSignupWithWelcome(
+  leadId: string,
+  deps: Parameters<typeof runSignupSmsAutomations>[1],
+) {
+  await runAgentNewLeadSignupSms(leadId, deps);
+  await runCustomerIntroductionSmsAutomation(leadId, deps);
+}
 
 const root = process.cwd();
 function read(rel: string) {
@@ -621,8 +631,13 @@ async function seedCatalog(db: FakeAutomationDb) {
 
 function testFilesAndWiring() {
   const intake = read("src/lib/agent/lead-intake.ts");
-  assert.ok(intake.includes("scheduleSignupSmsAutomations"));
+  assert.ok(intake.includes("scheduleAgentNewLeadSignupSms"));
   assert.ok(intake.includes('source === "SIGNUP"'));
+  assert.ok(
+    read("src/lib/sms/automations/triggers.ts").includes(
+      "runAgentNewLeadSignupSms",
+    ),
+  );
   const prefs = read("src/app/api/account/preferences/route.ts");
   assert.ok(prefs.includes("scheduleUnsubscribeSmsAutomations"));
   assert.ok(prefs.includes("scheduleCustomerIntroductionIfFirstValidE164"));
@@ -688,11 +703,22 @@ function testBucketBoundaries() {
   assert.equal(completedInactiveDays(new Date("2026-01-01"), new Date("2026-01-15")), 14);
 }
 
-async function testSignupFiresOnce() {
+
+async function testSignupAgentOnlyNoWelcome() {
   const db = new FakeAutomationDb();
   db.seedLead();
   await seedCatalog(db);
   await runSignupSmsAutomations(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
+  assert.equal(db.smsSendCalls, 1);
+  assert.ok(db.sent.every((row) => row.to === TO_AGENT));
+  assert.equal(db.messages.length, 0);
+}
+
+async function testSignupFiresOnce() {
+  const db = new FakeAutomationDb();
+  db.seedLead();
+  await seedCatalog(db);
+  await runSignupWithWelcome(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
   assert.equal(db.smsSendCalls, 2);
   assert.ok(db.sent.some((row) => row.to === TO_AGENT && row.smsClass === "staff"));
   assert.ok(db.sent.some((row) => row.to === TO_LEAD && row.smsClass === "conversational"));
@@ -749,7 +775,7 @@ async function testSignupFiresOnce() {
     }),
     "SMS · Agent Notification",
   );
-  await runSignupSmsAutomations(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
+  await runSignupWithWelcome(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
   assert.equal(db.smsSendCalls, 2);
 }
 
@@ -861,7 +887,7 @@ async function testEligibilityGates() {
     (row) => row.key === SMS_AUTOMATION_KEYS.leadWelcome,
   )!;
   welcome.active = false;
-  await runSignupSmsAutomations(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
+  await runSignupWithWelcome(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
   assert.equal(db.sent.filter((row) => row.to === TO_LEAD).length, 0);
   assert.equal(db.sent.filter((row) => row.to === TO_AGENT).length, 1);
 
@@ -874,14 +900,14 @@ async function testEligibilityGates() {
   for (const ver of db2.versions.filter((row) => row.definitionId === def.id)) {
     ver.status = "DRAFT";
   }
-  await runSignupSmsAutomations(LEAD_A, { db: asDb(db2), sendSms: db2.sendSms });
+  await runSignupWithWelcome(LEAD_A, { db: asDb(db2), sendSms: db2.sendSms });
   assert.equal(db2.sent.filter((row) => row.to === TO_LEAD).length, 0);
 
   const db3 = new FakeAutomationDb();
   db3.seedLead();
   db3.suppressions.add(`${WS_A}::${TO_LEAD}`);
   await seedCatalog(db3);
-  await runSignupSmsAutomations(LEAD_A, { db: asDb(db3), sendSms: db3.sendSms });
+  await runSignupWithWelcome(LEAD_A, { db: asDb(db3), sendSms: db3.sendSms });
   assert.equal(db3.sent.filter((row) => row.to === TO_LEAD).length, 0);
 
   const db4 = new FakeAutomationDb();
@@ -894,7 +920,7 @@ async function testEligibilityGates() {
     },
   });
   await seedCatalog(db4);
-  await runSignupSmsAutomations(LEAD_A, { db: asDb(db4), sendSms: db4.sendSms });
+  await runSignupWithWelcome(LEAD_A, { db: asDb(db4), sendSms: db4.sendSms });
   assert.equal(db4.sent.filter((row) => row.smsClass === "conversational").length, 0);
   assert.equal(
     db4.dispatches.filter(
@@ -915,7 +941,7 @@ async function testEligibilityGates() {
     },
   });
   await seedCatalog(db5);
-  await runSignupSmsAutomations(LEAD_A, { db: asDb(db5), sendSms: db5.sendSms });
+  await runSignupWithWelcome(LEAD_A, { db: asDb(db5), sendSms: db5.sendSms });
   assert.equal(db5.sent.filter((row) => row.smsClass === "staff").length, 0);
   assert.ok(db5.sent.some((row) => row.smsClass === "conversational"));
 
@@ -929,7 +955,7 @@ async function testEligibilityGates() {
     },
   });
   await seedCatalog(dbDrift);
-  await runSignupSmsAutomations(LEAD_A, {
+  await runSignupWithWelcome(LEAD_A, {
     db: asDb(dbDrift),
     sendSms: dbDrift.sendSms,
   });
@@ -958,21 +984,21 @@ async function testTenantIsolationAndFailureIsolation() {
     },
   });
   await seedCatalog(db);
-  await runSignupSmsAutomations(LEAD_B, { db: asDb(db), sendSms: db.sendSms });
+  await runSignupWithWelcome(LEAD_B, { db: asDb(db), sendSms: db.sendSms });
   assert.ok(db.sent.every((row) => row.workspaceId === WS_B));
 
   const dbFail = new FakeAutomationDb();
   dbFail.seedLead();
   await seedCatalog(dbFail);
   dbFail.failNext = true;
-  await runSignupSmsAutomations(LEAD_A, {
+  await runSignupWithWelcome(LEAD_A, {
     db: asDb(dbFail),
     sendSms: dbFail.sendSms,
   });
   assert.ok(dbFail.dispatches.some((row) => row.status === "FAILED"));
   assert.ok(dbFail.dispatches.some((row) => row.status === "SENT"));
   const beforeRetry = dbFail.smsSendCalls;
-  await runSignupSmsAutomations(LEAD_A, {
+  await runSignupWithWelcome(LEAD_A, {
     db: asDb(dbFail),
     sendSms: dbFail.sendSms,
   });
@@ -1008,7 +1034,7 @@ async function testManualAllowanceSplitAndInbound() {
     categories: SMS_MANUAL_USAGE_CATEGORIES,
   });
   assert.equal(manual.permitted, false);
-  await runSignupSmsAutomations(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
+  await runSignupWithWelcome(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
   assert.ok(db.sent.some((row) => row.smsClass === "staff"));
   assert.ok(db.sent.some((row) => row.smsClass === "conversational"));
 
@@ -1048,7 +1074,7 @@ async function testCustomerIntroductionFirstPhoneOnce() {
     customer: noPhoneCustomer(),
   });
   await seedCatalog(db);
-  await runSignupSmsAutomations(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
+  await runSignupWithWelcome(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
   assert.equal(db.sent.filter((row) => row.smsClass === "staff").length, 1);
   assert.equal(db.sent.filter((row) => row.smsClass === "conversational").length, 0);
   assert.equal(
@@ -1269,7 +1295,7 @@ async function testAgentNewLeadStaysAgentOnlyAndCollidesClosed() {
     },
   });
   await seedCatalog(db);
-  await runSignupSmsAutomations(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
+  await runSignupWithWelcome(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
   assert.equal(db.sent.filter((row) => row.smsClass === "staff").length, 0);
   assert.equal(db.sent.filter((row) => row.smsClass === "conversational").length, 1);
   assert.equal(db.messages.length, 1);
@@ -1290,7 +1316,7 @@ async function testCustomerIntroductionSuppressedStaysTerminal() {
   });
   db.suppressions.add(`${WS_A}::${TO_LEAD}`);
   await seedCatalog(db);
-  await runSignupSmsAutomations(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
+  await runSignupWithWelcome(LEAD_A, { db: asDb(db), sendSms: db.sendSms });
   const lead = db.leads.get(LEAD_A)!;
   lead.customer = {
     ...noPhoneCustomer(),
@@ -1317,6 +1343,7 @@ async function testCustomerIntroductionSuppressedStaysTerminal() {
 async function main() {
   testFilesAndWiring();
   testBucketBoundaries();
+  await testSignupAgentOnlyNoWelcome();
   await testSignupFiresOnce();
   await testCustomerIntroductionFirstPhoneOnce();
   await testHistoricalSkippedNoCustomerE164IsRetryableNotBackfill();

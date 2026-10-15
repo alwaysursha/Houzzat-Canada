@@ -30,8 +30,8 @@ import {
 } from "@/lib/crm-ownership";
 import { notifyNewLeadCapturedToStaff, scheduleLeadInfoUpdatedAfterIntake, scheduleNewLeadStaffEmail } from "@/lib/notifications/staff-events";
 import {
+  scheduleAgentNewLeadSignupSms,
   scheduleCustomerIntroductionSmsAutomationsForLead,
-  scheduleSignupSmsAutomations,
 } from "@/lib/sms/automations";
 import { resolveOrCreateWorkspaceLead } from "@/lib/agent/resolve-workspace-lead";
 import { assertUserMayBeLeadCustomer } from "@/lib/agent/lead-customer-workspace-guard";
@@ -401,8 +401,8 @@ export async function captureWebsiteLead(input: {
   /** Repeat capture of an existing Lead does not append another activity row. */
   activityOnReuse?: boolean;
   /**
-   * When true, skip immediate signup SMS automations (e.g. while transactional
-   * OTP SMS is about to send). Caller may schedule later after OTP step.
+   * Legacy flag — agent signup SMS now always fires on create.
+   * Customer Introduction welcome is deferred until post-qualification browse.
    */
   deferSignupSms?: boolean;
 }) {
@@ -519,9 +519,9 @@ export async function captureWebsiteLead(input: {
   }
 
   if (input.source === "SIGNUP") {
-    if (!input.deferSignupSms) {
-      scheduleSignupSmsAutomations(lead.id);
-    }
+    // Agent SMS at account/lead create (idempotent cycle). Welcome chat deferred.
+    void input.deferSignupSms;
+    scheduleAgentNewLeadSignupSms(lead.id);
   } else {
     scheduleCustomerIntroductionSmsAutomationsForLead(lead.id);
   }
@@ -551,6 +551,7 @@ export async function captureWebsiteLead(input: {
     scheduleNewLeadStaffEmail({
       leadId: lead.id,
       source: sourceKind,
+      brand,
       subject:
         input.source === "SIGNUP"
           ? formatSignupLeadEmailSubject(brand)

@@ -40,6 +40,7 @@ function testHelperOwnsDedupePrefCtaWorker() {
   assert.ok(staffEvents.includes("View lead in HouzzatPro"));
   assert.ok(staffEvents.includes("emailed.has(emailKey)"));
   assert.ok(staffEvents.includes("isAgentRole(user.role)"));
+  assert.ok(staffEvents.includes("buildSignupLeadNotifyContent"));
   assert.ok(
     !staffEvents.includes("void sendNotification"),
     "new lead email must not void-float sendNotification",

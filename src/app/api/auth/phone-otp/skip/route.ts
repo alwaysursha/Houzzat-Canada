@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireCustomerUser } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
-import { scheduleSignupSmsAutomations } from "@/lib/sms/automations/triggers";
+import { scheduleAgentNewLeadSignupSms } from "@/lib/sms/automations/triggers";
 
 /**
  * Skip OTP — retain phone, leave phoneOtpVerifiedAt null, continue funnel.
@@ -29,11 +29,10 @@ export async function POST() {
     return NextResponse.json({ error: "Account not found." }, { status: 404 });
   }
 
-  // Ensure signup SMS eventually runs if deferred at capture and OTP was skipped
-  // without a prior send.
+  // Idempotent agent SMS if create-time send was missed; never arms welcome chat.
   const leadId = row.leads[0]?.id;
   if (leadId) {
-    scheduleSignupSmsAutomations(leadId);
+    scheduleAgentNewLeadSignupSms(leadId);
   }
 
   return NextResponse.json({

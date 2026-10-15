@@ -51,18 +51,32 @@ function execDb(deps?: SmsAutomationTriggerDeps) {
   return deps?.db ?? prismaSmsAutomationExecuteDb(prisma);
 }
 
-export async function runSignupSmsAutomations(
+/**
+ * Agent-only signup SMS (CRM link). Customer Introduction welcome is delayed
+ * until post-qualification active browsing — see welcome-introduction API.
+ */
+export async function runAgentNewLeadSignupSms(
   leadId: string,
   deps: SmsAutomationTriggerDeps = {},
 ) {
   const db = execDb(deps);
-  const cycleKey = signupCycleKey();
   await safeDispatch(
     db,
-    { key: SMS_AUTOMATION_KEYS.agentNewLeadSignup, leadId, cycleKey },
+    {
+      key: SMS_AUTOMATION_KEYS.agentNewLeadSignup,
+      leadId,
+      cycleKey: signupCycleKey(),
+    },
     deps,
   );
-  await runCustomerIntroductionSmsAutomation(leadId, deps);
+}
+
+/** @deprecated Prefer runAgentNewLeadSignupSms — no longer sends customer welcome. */
+export async function runSignupSmsAutomations(
+  leadId: string,
+  deps: SmsAutomationTriggerDeps = {},
+) {
+  await runAgentNewLeadSignupSms(leadId, deps);
 }
 
 export async function runCustomerIntroductionSmsAutomation(
@@ -98,23 +112,28 @@ export async function runCustomerIntroductionSmsAutomationsForCustomer(
   }
 }
 
-export function scheduleSignupSmsAutomations(leadId: string): void {
+export function scheduleAgentNewLeadSignupSms(leadId: string): void {
   if (!leadId.trim()) return;
   try {
     scheduleWorkerSideEffect(
-      runSignupSmsAutomations(leadId).catch((error) => {
-        console.error("[sms:automation] signup failed", {
+      runAgentNewLeadSignupSms(leadId).catch((error) => {
+        console.error("[sms:automation] agent new lead signup failed", {
           leadId,
           error: error instanceof Error ? error.message : String(error),
         });
       }),
     );
   } catch (error) {
-    console.error("[sms:automation] signup schedule failed", {
+    console.error("[sms:automation] agent new lead signup schedule failed", {
       leadId,
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+/** Agent SMS only — customer welcome is armed after qualification + active browse. */
+export function scheduleSignupSmsAutomations(leadId: string): void {
+  scheduleAgentNewLeadSignupSms(leadId);
 }
 
 export function scheduleCustomerIntroductionSmsAutomationsForLead(
@@ -167,7 +186,36 @@ export function scheduleCustomerIntroductionIfFirstValidE164(input: {
   nextPhoneE164?: string | null;
 }): void {
   if (!becameFirstValidCustomerE164(input)) return;
-  scheduleCustomerIntroductionSmsAutomationsForCustomer(input.customerId);
+  const customerId = input.customerId.trim();
+  if (!customerId) return;
+  // Signup funnel: defer Customer Introduction until post-qualification active browse.
+  scheduleWorkerSideEffect(
+    (async () => {
+      const user = await prisma.user.findUnique({
+        where: { id: customerId },
+        select: {
+          qualificationCompletedAt: true,
+          leads: {
+            where: { source: "SIGNUP" },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      });
+      if (user?.leads[0] && !user.qualificationCompletedAt) {
+        console.info(
+          "[sms:automation] customer introduction deferred until qualification browse",
+          { customerIdPrefix: customerId.slice(0, 8) },
+        );
+        return;
+      }
+      await runCustomerIntroductionSmsAutomationsForCustomer(customerId);
+    })().catch((error) => {
+      console.error("[sms:automation] customer introduction gate failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }),
+  );
 }
 
 export async function runUnsubscribeSmsAutomations(

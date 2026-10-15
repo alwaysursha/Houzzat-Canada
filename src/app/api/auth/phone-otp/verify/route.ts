@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
 import { verifyPhoneOtp } from "@/lib/auth/phone-otp";
 import { prisma } from "@/lib/prisma";
-import { scheduleSignupSmsAutomations } from "@/lib/sms/automations/triggers";
+import { scheduleAgentNewLeadSignupSms } from "@/lib/sms/automations/triggers";
 
 const schema = z.object({
   code: z.string().trim().min(4).max(12),
@@ -46,7 +46,8 @@ export async function POST(request: Request) {
     where: { customerId: user.id, workspaceId: user.workspaceId },
     select: { id: true },
   });
-  if (lead) scheduleSignupSmsAutomations(lead.id);
+  // Idempotent agent SMS if create-time send was missed; never arms welcome chat.
+  if (lead) scheduleAgentNewLeadSignupSms(lead.id);
 
   return NextResponse.json({ ok: true });
 }

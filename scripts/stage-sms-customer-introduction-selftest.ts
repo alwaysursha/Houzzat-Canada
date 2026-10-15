@@ -160,8 +160,12 @@ function testContactAndSignupWiring() {
   const mobile = read("src/app/api/mobile/v2/leads/[leadId]/contact/route.ts");
   assert.ok(mobile.includes("scheduleCustomerIntroductionIfFirstValidE164"));
   const intake = read("src/lib/agent/lead-intake.ts");
-  assert.ok(intake.includes("scheduleSignupSmsAutomations"));
+  assert.ok(intake.includes("scheduleAgentNewLeadSignupSms"));
   assert.ok(intake.includes("scheduleCustomerIntroductionSmsAutomationsForLead"));
+  const triggers = read("src/lib/sms/automations/triggers.ts");
+  assert.ok(
+    triggers.includes("deferred until qualification browse"),
+  );
   const execute = read("src/lib/sms/automations/execute.ts");
   assert.ok(execute.includes("isCustomerIntroductionAutomationKey"));
   assert.ok(execute.includes("DEFERRED"));

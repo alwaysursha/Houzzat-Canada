@@ -125,9 +125,12 @@ assert.ok(agent.includes("PersonalizeHomepageBar"));
 assert.ok(team.includes("PersonalizeHomepageBar"));
 
 const funnel = read("src/components/auth/lead-funnel/LeadCaptureFunnel.tsx");
-assert.ok(funnel.includes("Is this search correct?"));
-assert.ok(funnel.includes("Yes, That&apos;s right"));
-assert.ok(funnel.includes("No, Edit Search"));
+assert.equal(funnel.includes("Is this search correct?"), false);
+assert.ok(funnel.includes("Have you been pre-approved for a mortgage?"));
+assert.ok(funnel.includes("void finish()"));
+const qualRoute = read("src/app/api/auth/qualification/route.ts");
+assert.ok(qualRoute.includes('source: "observed"'));
+assert.ok(qualRoute.includes("upsertQualificationSavedSearch"));
 
 const marketingLayout = read("src/app/(marketing)/layout.tsx");
 assert.ok(marketingLayout.includes("flex min-h-dvh flex-col"));

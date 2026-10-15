@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import type { PropertyType } from "@prisma/client";
-import { ArrowLeft } from "lucide-react";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import { FunnelProgress } from "@/components/auth/lead-funnel/FunnelProgress";
+import { QUALIFICATION_COMPLETED_EVENT } from "@/components/auth/CustomerWelcomeChatScheduler";
 import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import {
   peekPendingIntent,
@@ -16,16 +15,7 @@ import {
   reportPhoneVerificationSkipped,
   reportQualificationCompleted,
 } from "@/lib/auth/funnel-analytics";
-import {
-  formatConfirmSearchSummary,
-  formatCurrencyInputDisplay,
-  parseCurrencyInput,
-} from "@/lib/auth/buyer-confirmed-preference";
 import { CONSUMER_BUYING_TIMEFRAMES, purchaseTimeframeLabel } from "@/lib/agent/timeframe";
-import {
-  formatPriceCompact,
-  propertyTypeLabel,
-} from "@/lib/listings/constants";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,29 +26,14 @@ type FunnelStep =
   | "ownership"
   | "claimAddress"
   | "timeframe"
-  | "financing"
-  | "preference"
-  | "editSearch";
+  | "financing";
 
 const STEP_PROGRESS: Record<FunnelStep, number> = {
-  otp: 0.12,
-  ownership: 0.28,
-  claimAddress: 0.4,
-  timeframe: 0.55,
-  financing: 0.7,
-  preference: 0.88,
-  editSearch: 0.88,
-};
-
-type ObservedPreference = {
-  cities: string[];
-  maxPrice: number | null;
-  minPrice: number | null;
-  propertyTypes: string[];
-  minBeds: number | null;
-  minBaths: number | null;
-  transactionType: string | null;
-  summary: string | null;
+  otp: 0.15,
+  ownership: 0.35,
+  claimAddress: 0.5,
+  timeframe: 0.7,
+  financing: 0.9,
 };
 
 const answerBtn =
@@ -72,7 +47,6 @@ export function LeadCaptureFunnel({
   onComplete: (result: { showTour: boolean; mlsNumber: string | null }) => void;
 }) {
   const [step, setStep] = useState<FunnelStep>("otp");
-  const [history, setHistory] = useState<FunnelStep[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [pressed, setPressed] = useState<string | null>(null);
@@ -81,11 +55,7 @@ export function LeadCaptureFunnel({
   const [otpCode, setOtpCode] = useState("");
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneDraft, setPhoneDraft] = useState("");
-  const [observed, setObserved] = useState<ObservedPreference | null>(null);
   const [listingMls, setListingMls] = useState<string | null>(null);
-  const [minPrice, setMinPrice] = useState<number | null>(null);
-  const [maxPrice, setMaxPrice] = useState<number | null>(null);
-  const [editCity, setEditCity] = useState("");
   const [homeAddress, setHomeAddress] = useState("");
   const [homeUnit, setHomeUnit] = useState("");
   const [claimedPlace, setClaimedPlace] = useState<{
@@ -104,20 +74,8 @@ export function LeadCaptureFunnel({
 
   function go(next: FunnelStep) {
     touchIntent();
-    setHistory((h) => [...h, step]);
     startTransition(() => {
       setStep(next);
-      setError(null);
-      setPressed(null);
-    });
-  }
-
-  function back() {
-    const prev = history[history.length - 1];
-    if (!prev) return;
-    setHistory((h) => h.slice(0, -1));
-    startTransition(() => {
-      setStep(prev);
       setError(null);
       setPressed(null);
     });
@@ -130,19 +88,13 @@ export function LeadCaptureFunnel({
         const res = await fetch("/api/auth/qualification");
         if (res.ok) {
           const data = (await res.json()) as {
-            observedPreference?: ObservedPreference;
             listingMls?: string | null;
             phone?: string | null;
             phoneOtpVerifiedAt?: string | null;
           };
-          setObserved(data.observedPreference ?? null);
           setListingMls(data.listingMls ?? null);
-          setMinPrice(data.observedPreference?.minPrice ?? null);
-          setMaxPrice(data.observedPreference?.maxPrice ?? null);
-          setEditCity(data.observedPreference?.cities?.[0] ?? "");
           if (data.phoneOtpVerifiedAt) {
             setStep("ownership");
-            setHistory([]);
             return;
           }
         }
@@ -158,7 +110,6 @@ export function LeadCaptureFunnel({
         };
         if (data.alreadyVerified) {
           setStep("ownership");
-          setHistory([]);
           return;
         }
         if (res.ok && data.maskedPhone) {
@@ -263,6 +214,11 @@ export function LeadCaptureFunnel({
   async function finish() {
     reportQualificationCompleted();
     await postStep({ step: "complete" });
+    try {
+      window.dispatchEvent(new Event(QUALIFICATION_COMPLETED_EVENT));
+    } catch {
+      /* ignore */
+    }
     const peeked = peekPendingIntent(browserCaptureIntentStore(), {
       host: window.location.hostname,
       now: Date.now(),
@@ -280,75 +236,32 @@ export function LeadCaptureFunnel({
     });
   }
 
-  const confirmChips: string[] = [];
-  if (observed?.cities?.length) {
-    confirmChips.push(observed.cities.filter(Boolean).join(", "));
-  }
-  if (observed?.propertyTypes?.length === 1) {
-    confirmChips.push(
-      propertyTypeLabel(observed.propertyTypes[0] as PropertyType),
-    );
-  } else if (observed?.propertyTypes && observed.propertyTypes.length > 1) {
-    confirmChips.push(`${observed.propertyTypes.length} home types`);
-  }
-  if (observed?.minPrice != null || observed?.maxPrice != null) {
-    const min =
-      observed.minPrice != null
-        ? formatPriceCompact(observed.minPrice)
-        : null;
-    const max =
-      observed.maxPrice != null
-        ? formatPriceCompact(observed.maxPrice)
-        : null;
-    if (min && max) confirmChips.push(`${min}–${max}`);
-    else if (max) confirmChips.push(`Under ${max}`);
-    else if (min) confirmChips.push(`From ${min}`);
-  }
-  if (observed?.minBeds != null) {
-    confirmChips.push(`${observed.minBeds}+ Beds`);
-  }
-  if (observed?.minBaths != null) {
-    confirmChips.push(`${observed.minBaths}+ Baths`);
-  }
-
-  const hideBack = step === "preference" || step === "otp";
-
   return (
     <div className="relative px-5 pb-5 pt-6">
       <FunnelProgress value={STEP_PROGRESS[step]} />
-      {history.length > 0 && !hideBack ? (
-        <button
-          type="button"
-          onClick={back}
-          className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-ink/60 transition hover:text-ink"
-        >
-          <ArrowLeft className="size-3.5" />
-          Back
-        </button>
-      ) : (
-        <div className="mb-1 h-0" aria-hidden />
-      )}
 
       <div
         key={step}
-        className="motion-safe:animate-[funnelStepIn_200ms_ease-out]"
+        className="mt-5 animate-in fade-in duration-200"
       >
         {step === "otp" ? (
           <div className="space-y-3.5">
             <h3 className="font-display text-xl leading-snug text-ink">
-              Verify Your Mobile
+              Verify your phone
             </h3>
+            <p className="text-sm leading-relaxed text-ink/70">
+              {maskedPhone
+                ? `We sent a code to ${maskedPhone}.`
+                : "Enter the code we sent to your phone."}
+            </p>
             {editingPhone ? (
-              <>
-                <p className="text-sm leading-relaxed text-ink/70">
-                  Enter your corrected mobile number.
-                </p>
+              <div className="space-y-3">
                 <Input
-                  type="tel"
                   value={phoneDraft}
                   onChange={(e) => setPhoneDraft(e.target.value)}
-                  placeholder="(647) 555-1234"
+                  placeholder="Phone number"
                   className="h-11"
+                  inputMode="tel"
                 />
                 <Button
                   type="button"
@@ -356,31 +269,26 @@ export function LeadCaptureFunnel({
                   disabled={pending}
                   onClick={() => void savePhoneEdit()}
                 >
-                  Update & Send Code
+                  Send new code
                 </Button>
                 <button
                   type="button"
-                  className="w-full text-sm text-ink/60"
+                  className="w-full text-sm text-ink/50"
+                  disabled={pending}
                   onClick={() => setEditingPhone(false)}
                 >
                   Cancel
                 </button>
-              </>
+              </div>
             ) : (
               <>
-                <p className="text-sm leading-relaxed text-ink/70">
-                  We sent a verification code to{" "}
-                  <span className="font-medium text-ink">
-                    {maskedPhone ?? "your mobile"}
-                  </span>
-                </p>
                 <Input
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="6-digit code"
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value)}
-                  className="h-11 text-center text-lg tracking-[0.3em]"
+                  placeholder="6-digit code"
+                  className="h-11 tracking-widest"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
                 />
                 <Button
                   type="button"
@@ -388,33 +296,19 @@ export function LeadCaptureFunnel({
                   disabled={pending || otpCode.trim().length < 4}
                   onClick={() => void verifyOtp()}
                 >
-                  Verify & Continue
+                  Verify
                 </Button>
-                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <button
-                    type="button"
-                    className="font-medium text-canopy hover:underline"
-                    onClick={() => {
-                      void fetch("/api/auth/phone-otp/send", {
-                        method: "POST",
-                      }).then((r) => {
-                        if (r.ok) reportPhoneVerificationSent();
-                      });
-                    }}
-                  >
-                    Resend Code
-                  </button>
-                  <button
-                    type="button"
-                    className="font-medium text-ink/60 hover:underline"
-                    onClick={() => {
-                      setPhoneDraft("");
-                      setEditingPhone(true);
-                    }}
-                  >
-                    Edit Number
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="w-full text-sm text-ink/50 hover:text-ink/70"
+                  disabled={pending}
+                  onClick={() => {
+                    setPhoneDraft("");
+                    setEditingPhone(true);
+                  }}
+                >
+                  Edit number
+                </button>
                 <button
                   type="button"
                   className="w-full text-sm text-ink/50 hover:text-ink/70"
@@ -523,31 +417,25 @@ export function LeadCaptureFunnel({
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium" htmlFor="funnel-home-unit">
+              <label className="text-sm font-medium" htmlFor="funnel-unit">
                 Unit # (if applicable)
               </label>
               <Input
-                id="funnel-home-unit"
+                id="funnel-unit"
                 value={homeUnit}
                 onChange={(e) => setHomeUnit(e.target.value)}
-                placeholder="Optional"
-                autoComplete="address-line2"
                 className="h-11"
+                placeholder="Optional"
               />
             </div>
-            <p className="text-xs leading-relaxed text-ink/50">
-              Stay updated on new listings, sold homes and market activity around
-              your property.
-            </p>
             <Button
               type="button"
               className="h-11 w-full"
               disabled={pending || !claimedPlace?.address}
               onClick={() => {
-                setPressed("claim");
                 void postStep({
                   step: "claimAddress",
-                  homeAddress: claimedPlace?.address ?? homeAddress.trim(),
+                  homeAddress: claimedPlace?.address,
                   homeUnit: homeUnit.trim() || undefined,
                   homeLat: claimedPlace?.lat,
                   homeLng: claimedPlace?.lng,
@@ -561,7 +449,7 @@ export function LeadCaptureFunnel({
             </Button>
             <button
               type="button"
-              className="w-full text-sm font-medium text-ink/60 hover:text-ink"
+              className="w-full text-sm font-semibold text-ink/55 hover:text-ink/75"
               disabled={pending}
               onClick={() => {
                 void postStep({ step: "claimAddress", maybeLater: true }).then(
@@ -627,7 +515,7 @@ export function LeadCaptureFunnel({
                   setPressed(mortgageFinancing);
                   void postStep({ step: "financing", mortgageFinancing }).then(
                     (ok) => {
-                      if (ok) go("preference");
+                      if (ok) void finish();
                     },
                   );
                 }}
@@ -637,214 +525,13 @@ export function LeadCaptureFunnel({
             ))}
           </div>
         ) : null}
-
-        {step === "preference" ? (
-          <div className="space-y-3.5">
-            <h3 className="font-display text-xl leading-snug text-ink">
-              Is this search correct?
-            </h3>
-            {confirmChips.length > 0 ? (
-              <ul
-                className="flex flex-wrap gap-1.5"
-                aria-label="Search criteria"
-              >
-                {confirmChips.map((label) => (
-                  <li
-                    key={label}
-                    className="rounded-md border border-line bg-mist/70 px-2.5 py-1 text-xs font-semibold text-ink"
-                  >
-                    {label}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <button
-              type="button"
-              disabled={pending}
-              className={cn(
-                answerBtn,
-                pressed === "confirm" && answerBtnPressed,
-              )}
-              onClick={() => {
-                setPressed("confirm");
-                void postStep({
-                  step: "preference",
-                  confirm: true,
-                  cities: observed?.cities ?? [],
-                  propertyTypes: observed?.propertyTypes ?? [],
-                  minPrice: observed?.minPrice ?? null,
-                  maxPrice: observed?.maxPrice ?? null,
-                  minBeds: observed?.minBeds ?? null,
-                  minBaths: observed?.minBaths ?? null,
-                  transactionType: observed?.transactionType ?? null,
-                }).then((ok) => {
-                  if (ok) void finish();
-                });
-              }}
-            >
-              Yes, That&apos;s right
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              className={cn(answerBtn, pressed === "edit" && answerBtnPressed)}
-              onClick={() => {
-                setEditCity(observed?.cities?.[0] ?? editCity);
-                setMinPrice(observed?.minPrice ?? minPrice);
-                setMaxPrice(observed?.maxPrice ?? maxPrice);
-                go("editSearch");
-              }}
-            >
-              No, Edit Search
-            </button>
-          </div>
-        ) : null}
-
-        {step === "editSearch" ? (
-          <div className="space-y-3.5">
-            <h3 className="font-display text-xl leading-snug text-ink">
-              Edit Search
-            </h3>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium" htmlFor="funnel-edit-city">
-                Location
-              </label>
-              <AddressAutocomplete
-                source="listings"
-                fillOnly
-                fieldMenu
-                fieldMenuExpand
-                fieldMenuMaxItems={5}
-                locationScope="cityArea"
-                minChars={2}
-                placeholder="City / area"
-                inputClassName="h-11 text-sm"
-                initialQuery={editCity}
-                onQueryChange={(q) => setEditCity(q)}
-                onPlaceSelect={(place: AutocompleteSuggestion) => {
-                  if (
-                    place.type !== "city" &&
-                    place.group !== "cities" &&
-                    place.type !== "community" &&
-                    place.group !== "communities" &&
-                    place.group !== "popular"
-                  ) {
-                    return;
-                  }
-                  const city =
-                    place.type === "community" || place.group === "communities"
-                      ? place.city || place.label
-                      : place.label;
-                  if (city?.trim()) setEditCity(city.trim());
-                }}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium">Price range</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label
-                    className="text-xs font-medium text-ink/55"
-                    htmlFor="funnel-min-price"
-                  >
-                    Minimum
-                  </label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink/40">
-                      $
-                    </span>
-                    <Input
-                      id="funnel-min-price"
-                      inputMode="numeric"
-                      value={formatCurrencyInputDisplay(minPrice)}
-                      onChange={(e) =>
-                        setMinPrice(parseCurrencyInput(e.target.value))
-                      }
-                      placeholder="Any"
-                      className="h-11 pl-7"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label
-                    className="text-xs font-medium text-ink/55"
-                    htmlFor="funnel-max-price"
-                  >
-                    Maximum
-                  </label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink/40">
-                      $
-                    </span>
-                    <Input
-                      id="funnel-max-price"
-                      inputMode="numeric"
-                      value={formatCurrencyInputDisplay(maxPrice)}
-                      onChange={(e) =>
-                        setMaxPrice(parseCurrencyInput(e.target.value))
-                      }
-                      placeholder="Any"
-                      className="h-11 pl-7"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <Button
-              type="button"
-              className="h-11 w-full"
-              disabled={pending}
-              onClick={() => {
-                if (
-                  minPrice != null &&
-                  maxPrice != null &&
-                  minPrice > maxPrice
-                ) {
-                  setError("Minimum cannot be higher than maximum.");
-                  return;
-                }
-                const city = editCity.trim();
-                const cities = city
-                  ? [city]
-                  : (observed?.cities ?? []).filter(Boolean);
-                setPressed("update");
-                void postStep({
-                  step: "preference",
-                  confirm: false,
-                  cities,
-                  propertyTypes: observed?.propertyTypes ?? [],
-                  minPrice,
-                  maxPrice,
-                  minBeds: observed?.minBeds ?? null,
-                  minBaths: observed?.minBaths ?? null,
-                  transactionType: observed?.transactionType ?? null,
-                }).then((ok) => {
-                  if (!ok) return;
-                  setObserved((prev) => ({
-                    cities,
-                    minPrice,
-                    maxPrice,
-                    propertyTypes: prev?.propertyTypes ?? [],
-                    minBeds: prev?.minBeds ?? null,
-                    minBaths: prev?.minBaths ?? null,
-                    transactionType: prev?.transactionType ?? null,
-                    summary: formatConfirmSearchSummary({
-                      cities,
-                      minPrice,
-                      maxPrice,
-                    }),
-                  }));
-                  void finish();
-                });
-              }}
-            >
-              Update & Continue
-            </Button>
-          </div>
-        ) : null}
       </div>
 
-      {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
+      {error ? (
+        <p className="mt-4 text-center text-sm font-medium text-danger">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

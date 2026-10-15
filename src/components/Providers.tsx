@@ -12,6 +12,7 @@ import { isActivityBeaconEnabled } from "@/lib/analytics/activity-beacon-enabled
 import { AuthModalProvider } from "@/components/auth/AuthModalProvider";
 import { CaptureIntentResume } from "@/components/auth/CaptureIntentResume";
 import { ClientToolsVerificationProvider } from "@/components/auth/ClientToolsVerificationProvider";
+import { CustomerWelcomeChatScheduler } from "@/components/auth/CustomerWelcomeChatScheduler";
 import { RememberClientSession } from "@/components/auth/RememberClientSession";
 import { NavigationRecovery } from "@/components/feedback/NavigationRecovery";
 import { SoftNavShield } from "@/components/feedback/SoftNavShield";
@@ -50,6 +51,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                   <BiometricLockGate />
                   <RememberClientSession />
                   <CaptureIntentResume />
+                  <CustomerWelcomeChatScheduler />
                   <SoftNavShield />
                   <NavigationRecovery />
                   <BrowseStateSync />

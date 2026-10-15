@@ -68,6 +68,7 @@ export {
   SMS_MASS_V1_MAX_RECIPIENTS,
 } from "@/lib/sms/mass";
 export {
+  scheduleAgentNewLeadSignupSms,
   scheduleCustomerIntroductionIfFirstValidE164,
   scheduleCustomerIntroductionSmsAutomationsForCustomer,
   scheduleCustomerIntroductionSmsAutomationsForLead,

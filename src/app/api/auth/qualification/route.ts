@@ -13,6 +13,7 @@ import {
 import { upsertQualificationSavedSearch } from "@/lib/auth/qualification-saved-search";
 import { applyCanonicalCustomerContact } from "@/lib/agent/lead-info-change";
 import { isPurchaseTimeframe } from "@/lib/agent/timeframe";
+import { scheduleSignupQualificationCompletedNotify } from "@/lib/notifications/signup-lead-notify";
 import { prisma } from "@/lib/prisma";
 
 const ownershipSchema = z.object({
@@ -243,10 +244,69 @@ export async function POST(request: Request) {
       });
     }
     case "complete": {
+      const prior = await prisma.user.findFirst({
+        where: { id: user.id, workspaceId },
+        select: {
+          buyerConfirmedPreference: { select: { userId: true } },
+          leads: {
+            where: { workspaceId },
+            select: {
+              id: true,
+              assignedAgentId: true,
+              captureContext: true,
+            },
+            take: 1,
+          },
+        },
+      });
+      const lead = prior?.leads[0] ?? null;
+      // Auto-save observed search when the confirm step was removed from the funnel.
+      if (!prior?.buyerConfirmedPreference && lead) {
+        const observed = extractObservedPreference(lead.captureContext);
+        const hasCriteria =
+          observed.cities.length > 0 ||
+          observed.minPrice != null ||
+          observed.maxPrice != null ||
+          observed.propertyTypes.length > 0 ||
+          observed.minBeds != null ||
+          observed.minBaths != null;
+        if (hasCriteria) {
+          await upsertBuyerConfirmedPreference(prisma, {
+            workspaceId,
+            userId: user.id,
+            cities: observed.cities,
+            propertyTypes: observed.propertyTypes,
+            minPrice: observed.minPrice,
+            maxPrice: observed.maxPrice,
+            minBeds: observed.minBeds,
+            transactionType: observed.transactionType,
+            source: "observed",
+          });
+          await upsertQualificationSavedSearch(prisma, {
+            userId: user.id,
+            cities: observed.cities,
+            propertyTypes: observed.propertyTypes,
+            minPrice: observed.minPrice,
+            maxPrice: observed.maxPrice,
+            minBeds: observed.minBeds,
+            minBaths: observed.minBaths,
+            transactionType: observed.transactionType,
+          });
+        }
+      }
+
       await prisma.user.update({
         where: { id: user.id },
         data: { qualificationCompletedAt: new Date() },
       });
+
+      if (lead?.assignedAgentId) {
+        scheduleSignupQualificationCompletedNotify({
+          leadId: lead.id,
+          assigneeId: lead.assignedAgentId,
+        });
+      }
+
       return NextResponse.json({ ok: true });
     }
     default: {

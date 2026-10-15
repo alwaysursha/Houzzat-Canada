@@ -383,20 +383,19 @@ function testEnrichmentAndTimeframes() {
   assert.equal(funnel.includes("home-valuation"), false);
   assert.ok(funnel.includes("When are you planning to buy?"));
   assert.ok(funnel.includes("Have you been pre-approved for a mortgage?"));
-  assert.ok(funnel.includes("Yes, That&apos;s right"));
-  assert.ok(funnel.includes("No, Edit Search"));
-  assert.equal(funnel.includes("Edit Price Range"), false);
-  assert.ok(funnel.includes("Is this search correct?"));
-  assert.equal(funnel.includes("Confirm your home search"), false);
-  assert.ok(funnel.includes("formatConfirmSearchSummary"));
-  assert.ok(funnel.includes("confirmChips"));
+  assert.equal(funnel.includes("Yes, That&apos;s right"), false);
+  assert.equal(funnel.includes("No, Edit Search"), false);
+  assert.equal(funnel.includes("Is this search correct?"), false);
+  assert.equal(funnel.includes("editSearch"), false);
+  assert.equal(funnel.includes(">Back<") || funnel.includes("ArrowLeft"), false);
   assert.ok(funnel.includes("fieldMenuExpand"));
   assert.equal(funnel.includes("portalDesktopSuggestions"), false);
   assert.ok(funnel.includes('go("claimAddress")'));
-  assert.ok(funnel.includes('go("editSearch")'));
+  assert.ok(funnel.includes("void finish()"));
   assert.ok(funnel.includes("No / Rent"));
-  assert.ok(funnel.includes("parseCurrencyInput"));
-  assert.ok(funnel.includes("formatCurrencyInputDisplay"));
+  assert.ok(funnel.includes("QUALIFICATION_COMPLETED_EVENT"));
+  assert.ok(funnel.includes("Maybe Later"));
+  assert.ok(funnel.includes("Skip for now"));
   const progress = read("src/components/auth/lead-funnel/FunnelProgress.tsx");
   assert.ok(progress.includes("h-1"));
   assert.ok(progress.includes("duration-300"));
@@ -415,6 +414,8 @@ function testEnrichmentAndTimeframes() {
   assert.equal(qual.includes("propertyMonitor"), false);
   assert.ok(qual.includes("upsertBuyerConfirmedPreference"));
   assert.ok(qual.includes("savedSearchTouched: true"));
+  assert.ok(qual.includes("scheduleSignupQualificationCompletedNotify"));
+  assert.ok(qual.includes('source: "observed"'));
   assert.ok(qual.includes("PRE_APPROVED"));
   assert.ok(qual.includes("CASH"));
   const crm = read("src/components/agent/lead-profile-v2/LeadProfileV2InfoPanel.tsx");
@@ -643,16 +644,17 @@ function testFunnelUxPolish() {
   assert.ok(modal.includes("overflow-y-auto"));
   assert.ok(modal.includes("shadow-[0_12px_40px_-18px"));
   const funnel = read("src/components/auth/lead-funnel/LeadCaptureFunnel.tsx");
-  assert.ok(funnel.includes("funnelStepIn"));
+  assert.ok(funnel.includes("animate-in fade-in"));
   assert.ok(funnel.includes("STEP_PROGRESS"));
-  assert.ok(funnel.includes("editSearch"));
-  assert.equal(funnel.includes("editPrice"), false);
-  assert.ok(funnel.includes('locationScope="cityArea"'));
+  assert.equal(funnel.includes("editSearch"), false);
+  assert.equal(funnel.includes("Is this search correct?"), false);
+  assert.equal(funnel.includes("ArrowLeft"), false);
   assert.ok(funnel.includes('source="google"'));
   assert.ok(funnel.includes("fieldMenuExpand"));
+  assert.ok(funnel.includes("void finish()"));
   const progress = read("src/components/auth/lead-funnel/FunnelProgress.tsx");
   assert.ok(progress.includes("transition-[width] duration-300 ease-out"));
-  console.log("[ux] confirm/edit search + transitions + backdrop PASS");
+  console.log("[ux] funnel steps + transitions + backdrop PASS");
 }
 
 function testSearchContextToConfirmSummary() {

@@ -22,6 +22,7 @@ import {
   type StaffNotificationCategory,
 } from "@/lib/notifications/staff-categories";
 import { sendPushToUser, sendPushToUsers } from "@/lib/notifications/push";
+import { buildSignupLeadNotifyContent } from "@/lib/notifications/signup-lead-notify";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { isAgentRole, isConsumerRole } from "@/lib/roles";
 import { scheduleLeadReturnedSmsAutomations } from "@/lib/sms/automations";
@@ -30,6 +31,10 @@ import {
   authorizeStaffRecipientForTask,
   filterStaffRecipientsForLead,
 } from "@/lib/workspace-notification-recipients";
+import {
+  LEGACY_HOUZZAT_NOTIFICATION_BRAND,
+  type LeadNotificationBrand,
+} from "@/lib/tenancy/lead-notification-brand";
 
 function uniqueUserIds(
   ids: Array<string | null | undefined>,
@@ -71,6 +76,8 @@ export function scheduleNewLeadStaffEmail(input: {
   smsText?: string;
   whatsappText?: string;
   preferWhatsApp?: boolean;
+  html?: string;
+  brand?: LeadNotificationBrand;
 }): void {
   const deskById = new Map<string, NewLeadEmailRecipient>();
   for (const row of input.deskRecipients ?? []) {
@@ -89,7 +96,11 @@ export function scheduleNewLeadStaffEmail(input: {
   }
 
   const cta = absoluteLeadCrmUrl(input.leadId);
-  const text = [...input.detailLines, "", `View lead in HouzzatPro: ${cta}`]
+  const fallbackText = [
+    ...input.detailLines,
+    "",
+    `View lead in HouzzatPro: ${cta}`,
+  ]
     .filter((line) => line != null)
     .join("\n");
 
@@ -106,6 +117,26 @@ export function scheduleNewLeadStaffEmail(input: {
           source: input.source,
         });
         return;
+      }
+
+      let subject = input.subject;
+      let text = fallbackText;
+      let html = input.html;
+      let smsText = input.smsText;
+
+      if (input.source === "signup") {
+        const rich = await buildSignupLeadNotifyContent(
+          input.leadId,
+          "initial",
+          input.brand ?? LEGACY_HOUZZAT_NOTIFICATION_BRAND,
+        );
+        if (rich) {
+          subject = rich.subject;
+          text = rich.text;
+          html = rich.html;
+          // Agent SMS remains on agent.new_lead_signup automation — do not
+          // double-send via this email helper unless the caller opts in.
+        }
       }
 
       const [leadRow, users] = await Promise.all([
@@ -157,9 +188,10 @@ export function scheduleNewLeadStaffEmail(input: {
         const result = await sendNotification({
           toEmail,
           toPhone,
-          subject: input.subject,
+          subject,
           text,
-          smsText: input.smsText,
+          html,
+          smsText,
           workspaceId,
           smsClass: "staff",
           whatsappText: input.whatsappText,
