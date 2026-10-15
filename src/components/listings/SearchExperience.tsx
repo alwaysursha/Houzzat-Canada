@@ -50,10 +50,7 @@ import { SearchFiltersMenu } from "@/components/listings/SearchFiltersMenu";
 import { SearchFiltersSheet } from "@/components/listings/SearchFiltersSheet";
 import { SearchResultsPane } from "@/components/listings/SearchResultsPane";
 import { SearchesDropdown } from "@/components/listings/SearchesDropdown";
-import {
-  parseSearchQuery,
-  searchHrefFromParsed,
-} from "@/lib/listings/parse-search-query";
+import { routeFreeTextInventorySearch } from "@/lib/listings/unified-search-route";
 import { shouldResetMapAreaForPlaceChange } from "@/lib/listings/map-area-search";
 import {
   applyCommitPatch,
@@ -643,7 +640,7 @@ export function SearchExperience() {
     );
   }
 
-  function onBarSearchSubmit(raw: string) {
+  async function onBarSearchSubmit(raw: string) {
     const prev = committedRef.current;
     const recognized = withStructuredCity(prev.cities, raw);
     if (recognized) {
@@ -659,17 +656,15 @@ export function SearchExperience() {
       return;
     }
     setPlaceQueryCleared(false);
-    const parsed = parseSearchQuery(raw);
     const txn =
-      parsed.transactionType ??
-      (filters.transactionType === "LEASE" || filters.transactionType === "SALE"
+      filters.transactionType === "LEASE" || filters.transactionType === "SALE"
         ? filters.transactionType
-        : "SALE");
-    const href = searchHrefFromParsed(
-      { ...parsed, transactionType: txn, hasFilters: true },
-      { transactionType: txn, basePath: searchBasePath },
-    );
-    router.push(href);
+        : "SALE";
+    const routed = await routeFreeTextInventorySearch(raw, {
+      transactionType: txn,
+      basePath: searchBasePath,
+    });
+    router.push(routed.href);
   }
 
   function onMapBoundsChange(

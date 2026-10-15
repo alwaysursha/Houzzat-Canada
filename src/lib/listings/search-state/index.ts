@@ -23,6 +23,7 @@ export {
   buildCriteriaKey,
   buildListingsQuery,
   buildSavedSearchQuery,
+  shouldPinActiveStatusForBuyerQuery,
 } from "@/lib/listings/search-state/query";
 export { buildActiveChips } from "@/lib/listings/search-state/chips";
 export {

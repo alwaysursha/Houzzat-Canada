@@ -11,10 +11,7 @@ import { StaffHardLink } from "@/components/site/StaffHardLink";
 import { TenantHeaderBrand } from "@/components/tenancy/TenantHeaderBrand";
 import { Button } from "@/components/ui/button";
 import { pushHref } from "@/lib/listings/navigate-listing";
-import {
-  parseSearchQuery,
-  searchHrefFromParsed,
-} from "@/lib/listings/parse-search-query";
+import { routeFreeTextInventorySearch } from "@/lib/listings/unified-search-route";
 import { pushLocalRecentSearch } from "@/lib/listings/recent-searches-local";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { cn } from "@/lib/utils";
@@ -182,7 +179,7 @@ function BuySearchControls({
     );
   }
 
-  function onSearch(rawQuery?: string) {
+  async function onSearch(rawQuery?: string) {
     const q = (rawQuery ?? query).trim();
     if (!q) {
       router.push("/search?transactionType=SALE");
@@ -209,13 +206,10 @@ function BuySearchControls({
       goHref(`/search?${params.toString()}`, selected.label);
       return;
     }
-    const parsed = parseSearchQuery(q);
-    if (!parsed.transactionType) {
-      parsed.transactionType = "SALE";
-      parsed.hasFilters = true;
-    }
-    const href = searchHrefFromParsed(parsed, { transactionType: "SALE" });
-    goHref(href, q);
+    const routed = await routeFreeTextInventorySearch(q, {
+      transactionType: "SALE",
+    });
+    goHref(routed.href, q);
   }
 
   return (

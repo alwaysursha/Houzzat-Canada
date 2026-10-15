@@ -280,6 +280,17 @@ export function searchResultsCopy(input: SearchResultsCopyInput): SearchResultsC
       label: propertyTypeLabel(input.propertyTypes[0]!),
       clearable: true,
     });
+  } else if (
+    input.propertyTypes.length === 2 &&
+    input.propertyTypes.includes("TOWNHOUSE") &&
+    input.propertyTypes.includes("CONDO_TOWNHOUSE")
+  ) {
+    // NL + filter UI both emit this pair for “townhouse” — one clearable chip.
+    chips.push({
+      key: "types",
+      label: "Townhouse / Condo Townhouse",
+      clearable: true,
+    });
   } else if (input.propertyTypes.length > 1) {
     chips.push({
       key: "types",

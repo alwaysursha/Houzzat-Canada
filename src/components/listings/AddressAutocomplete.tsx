@@ -28,10 +28,15 @@ import {
   placeToAddressSuggestion,
   suggestionsAroundPlace,
 } from "@/lib/listings/address-suggest";
+import { isOffMarketPropertySearchEnabled } from "@/lib/property-address/feature-flag";
 import {
-  parseSearchQuery,
-  searchHrefFromParsed,
-} from "@/lib/listings/parse-search-query";
+  decideSearchAddressNavigation,
+  dedupeAddressSuggestions,
+  fetchPropertyAddressResolve,
+  isResidentialAddressSuggestion,
+  rememberPreparedPropertyAddress,
+} from "@/lib/property-address/search-integration";
+import { routeFreeTextInventorySearch } from "@/lib/listings/unified-search-route";
 import {
   clearLocalRecentSearches,
   pushLocalRecentSearch,
@@ -552,8 +557,8 @@ export function AddressAutocomplete({
         const placesData = (await placesRes.json()) as {
           suggestions: AutocompleteSuggestion[];
         };
-        let places = (placesData.suggestions ?? []).map((p) =>
-          placeToAddressSuggestion(p),
+        let places = dedupeAddressSuggestions(
+          (placesData.suggestions ?? []).map((p) => placeToAddressSuggestion(p)),
         );
 
         const addressLike = looksLikeStreetAddress(trimmed);
@@ -608,7 +613,9 @@ export function AddressAutocomplete({
 
         setResolvedNearHref(nearHref);
         setResolvedNearLabel(nearLabel);
-        setSuggestions([...listingRows, ...places, ...around]);
+        setSuggestions(
+          dedupeAddressSuggestions([...listingRows, ...places, ...around]),
+        );
         setOpen(true);
         setActiveIndex(-1);
       } catch {
@@ -822,15 +829,22 @@ export function AddressAutocomplete({
       return;
     }
 
+    // Inventory parents own submit routing (civic resolve + NL) via onSearchSubmit.
     if (onSearchSubmit) {
-      onSearchSubmit(trimmed);
+      void Promise.resolve(onSearchSubmit(trimmed));
       return;
     }
-    const parsed = parseSearchQuery(trimmed);
-    const href = searchHrefFromParsed(parsed, { transactionType });
-    remember(trimmed, href);
+
+    // Standalone autocomplete (no parent submit): one submit-time route.
     if (fillOnly) return;
-    pushHref(router, href);
+    void (async () => {
+      const routed = await routeFreeTextInventorySearch(trimmed, {
+        transactionType,
+        sessionToken,
+      });
+      remember(trimmed, routed.href);
+      pushHref(router, routed.href);
+    })();
   }
 
   async function choose(suggestion: AutocompleteSuggestion) {
@@ -881,8 +895,141 @@ export function AddressAutocomplete({
     }
 
     let resolved = suggestion;
+    let skipPlacesDetails = false;
 
-    if (suggestion.placeId) {
+    // Exact-address resolve on select only (never per keystroke).
+    // fillOnly valuation/forms skip resolve; inventory chrome (fillOnly +
+    // onSearchSubmit) still resolves so listing sheet matches homepage/header.
+    const allowSelectResolve = !fillOnly || Boolean(onSearchSubmit);
+    if (
+      isOffMarketPropertySearchEnabled() &&
+      source === "listings" &&
+      allowSelectResolve &&
+      isResidentialAddressSuggestion(suggestion)
+    ) {
+      setLoading(true);
+      try {
+        const queryForResolve = [
+          suggestion.label,
+          suggestion.city,
+          suggestion.province,
+        ]
+          .filter(Boolean)
+          .join(", ");
+        const apiResult = await fetchPropertyAddressResolve({
+          query: queryForResolve || query.trim(),
+          placeId: suggestion.placeId,
+          unitNumber: suggestion.unitNumber,
+          sessionToken,
+        });
+        if (!stillCurrent()) return;
+        const decision = decideSearchAddressNavigation(apiResult, {
+          transactionType,
+          fallbackLat: suggestion.lat,
+          fallbackLng: suggestion.lng,
+          fallbackCity: suggestion.city,
+        });
+
+        if (decision.kind === "listing") {
+          setOpen(false);
+          setMobileSheetOpen(false);
+          setSuggestions([]);
+          remember(suggestion.label, decision.href);
+          // Listing sheet chrome (fillOnly + onPlaceSelect) must keep the sheet
+          // stack via openListingSheet — not a bare router push.
+          if (fillOnly && onPlaceSelect) {
+            onPlaceSelect({
+              type: "listing",
+              group: "listings",
+              label: suggestion.label,
+              mlsNumber: decision.mlsNumber,
+              href: decision.href,
+            });
+            return;
+          }
+          pushHref(router, decision.href);
+          return;
+        }
+
+        if (decision.kind === "property_prepared") {
+          rememberPreparedPropertyAddress(decision.prepared);
+          setOpen(false);
+          setMobileSheetOpen(false);
+          setSuggestions([]);
+          remember(suggestion.label, decision.prepared.path);
+          if (fillOnly && onPlaceSelect) {
+            onPlaceSelect({
+              type: "place",
+              group: "addresses",
+              label: suggestion.label,
+              href: decision.prepared.path,
+              ...decision.suggestionPatch,
+            });
+            return;
+          }
+          pushHref(router, decision.prepared.path);
+          return;
+        }
+
+        if (decision.kind === "nearby") {
+          resolved = {
+            ...suggestion,
+            ...decision.suggestionPatch,
+            placeId: suggestion.placeId ?? decision.suggestionPatch.placeId,
+            type: "place",
+            group: "addresses",
+          };
+          skipPlacesDetails = true;
+
+          const addressRow = placeToAddressSuggestion(resolved);
+          const around = suggestionsAroundPlace(resolved, transactionType);
+          const filled =
+            resolved.city && resolved.province
+              ? `${resolved.label}, ${resolved.city}, ${resolved.province}`
+              : (resolved.subtitle ?? resolved.label);
+          selectedQueryRef.current = filled;
+          lastEmittedQueryRef.current = filled;
+          setQuery(filled);
+          onQueryChange?.(filled);
+          onPlaceResolvedRef.current?.(addressRow, "selected");
+          const nearHref =
+            decision.nearbyHref ??
+            nearAddressHref(resolved, transactionType);
+          setResolvedNearHref(nearHref);
+          setResolvedNearLabel(resolved.label || null);
+          setSuggestions([addressRow, ...around]);
+          setOpen(true);
+          setActiveIndex(around.length > 0 ? 1 : 0);
+          setGeoError(null);
+          return;
+        }
+
+        // UNRESOLVABLE — graceful nearby fallback when coords exist.
+        if (decision.kind === "unresolvable") {
+          if (decision.nearbyHref) {
+            setGeoError(null);
+            setResolvedNearHref(decision.nearbyHref);
+            setResolvedNearLabel(suggestion.label || null);
+            const addressRow = placeToAddressSuggestion(suggestion);
+            const around = suggestionsAroundPlace(suggestion, transactionType);
+            setSuggestions([addressRow, ...around]);
+            setOpen(true);
+            setActiveIndex(around.length > 0 ? 1 : 0);
+            return;
+          }
+          setGeoError(decision.message);
+          setOpen(false);
+          setMobileSheetOpen(false);
+          return;
+        }
+      } catch {
+        // Resolver optional — fall through to existing Places details / nearby.
+      } finally {
+        if (stillCurrent()) setLoading(false);
+      }
+    }
+
+    if (suggestion.placeId && !skipPlacesDetails) {
       setLoading(true);
       try {
         const params = new URLSearchParams({

@@ -27,10 +27,7 @@ import {
   setListingSheetSearchOpen,
   subscribeListingSheetSearchClose,
 } from "@/lib/mobile/listing-sheet-search";
-import {
-  parseSearchQuery,
-  searchHrefFromParsed,
-} from "@/lib/listings/parse-search-query";
+import { routeFreeTextInventorySearch } from "@/lib/listings/unified-search-route";
 import { pushLocalRecentSearch } from "@/lib/listings/recent-searches-local";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import { cn } from "@/lib/utils";
@@ -282,7 +279,7 @@ function useListingChromeSearchNav(onCloseSearch: () => void) {
     );
   }
 
-  function onSearch(rawQuery?: string) {
+  async function onSearch(rawQuery?: string) {
     const q = (rawQuery ?? query).trim();
     if (!q) {
       leaveSheetForSearch("/search?transactionType=SALE", "Search");
@@ -314,13 +311,15 @@ function useListingChromeSearchNav(onCloseSearch: () => void) {
       leaveSheetForSearch(`/search?${params.toString()}`, selected.label);
       return;
     }
-    const parsed = parseSearchQuery(q);
-    if (!parsed.transactionType) {
-      parsed.transactionType = "SALE";
-      parsed.hasFilters = true;
+    const routed = await routeFreeTextInventorySearch(q, {
+      transactionType: "SALE",
+    });
+    if (routed.via === "listing" && routed.href.startsWith("/listing/")) {
+      onCloseSearch();
+      openListingSheet(routed.href);
+      return;
     }
-    const href = searchHrefFromParsed(parsed, { transactionType: "SALE" });
-    leaveSheetForSearch(href, q);
+    leaveSheetForSearch(routed.href, q);
   }
 
   return {

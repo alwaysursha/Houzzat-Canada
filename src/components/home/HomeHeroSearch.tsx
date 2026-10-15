@@ -5,11 +5,8 @@ import { useRouter } from "next/navigation";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
 import { LazyAddressAutocomplete } from "@/components/listings/LazyAddressAutocomplete";
 import { Button } from "@/components/ui/button";
-import {
-  parseSearchQuery,
-  searchHrefFromParsed,
-  shouldUseExplicitPlace,
-} from "@/lib/listings/parse-search-query";
+import { shouldUseExplicitPlace } from "@/lib/listings/parse-search-query";
+import { routeFreeTextInventorySearch } from "@/lib/listings/unified-search-route";
 import { pushHref } from "@/lib/listings/navigate-listing";
 import { pushLocalRecentSearch } from "@/lib/listings/recent-searches-local";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
@@ -116,7 +113,7 @@ export function HomeHeroSearch({
     );
   }
 
-  function onInventorySearch(rawQuery?: string) {
+  async function onInventorySearch(rawQuery?: string) {
     const q = (rawQuery ?? query).trim();
     if (!q) {
       router.push(`/search?transactionType=${txn()}`);
@@ -146,13 +143,10 @@ export function HomeHeroSearch({
       }
     }
 
-    const parsed = parseSearchQuery(q);
-    if (!parsed.transactionType) {
-      parsed.transactionType = txn();
-      parsed.hasFilters = true;
-    }
-    const href = searchHrefFromParsed(parsed, { transactionType: txn() });
-    goHref(href, q);
+    const routed = await routeFreeTextInventorySearch(q, {
+      transactionType: txn(),
+    });
+    goHref(routed.href, q);
   }
 
   async function onGetEstimate() {
