@@ -40,6 +40,10 @@ import {
   isSuccessfulHandoffClientDestination,
   resolveHouzzatProPrivateStartupDestination,
 } from "@/lib/mobile/workspace-destination";
+import {
+  takePendingPushNavigationForTenantLanding,
+} from "@/lib/notifications/pending-push-nav";
+import { isBiometricGateLocked } from "@/lib/mobile/biometric-gate-state";
 
 function currentUserAgent(): string | null {
   if (typeof navigator === "undefined") return null;
@@ -594,9 +598,13 @@ class ProNativeAuthController {
         }
 
         if (bootstrap.kind === "tenant_destination") {
-          const destination = finalizeStaffStartupDestination(
+          const roleDefault = finalizeStaffStartupDestination(
             this.pendingReturnPath ?? bootstrap.destination,
           );
+          const pushHref = isBiometricGateLocked()
+            ? null
+            : await takePendingPushNavigationForTenantLanding();
+          const destination = pushHref ?? roleDefault;
           this.transitionTo("FINAL_NAVIGATION", {
             destination,
             activeWorkspaceId: bootstrap.membership.workspaceId,
@@ -753,7 +761,10 @@ class ProNativeAuthController {
           return { ok: false, error: safeError };
         }
 
-        const data = (await res.json()) as { destination?: string } | null;
+        const data = (await res.json()) as {
+          destination?: string;
+          userId?: string;
+        } | null;
         const destination = data?.destination;
 
         if (!isSuccessfulHandoffClientDestination(destination)) {
@@ -762,7 +773,15 @@ class ProNativeAuthController {
           return { ok: false, error: err };
         }
 
-        const finalDestination = finalizeStaffStartupDestination(destination);
+        const roleDefault = finalizeStaffStartupDestination(destination);
+        const expectedUserId =
+          typeof data?.userId === "string" ? data.userId.trim() : null;
+        const pushHref = isBiometricGateLocked()
+          ? null
+          : await takePendingPushNavigationForTenantLanding({
+              expectedUserId,
+            });
+        const finalDestination = pushHref ?? roleDefault;
 
         this.transitionTo("TENANT_SESSION_READY", {
           destination: finalDestination,

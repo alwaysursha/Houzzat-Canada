@@ -23,6 +23,7 @@ import { isHouzzatVercelTestHost } from "@/lib/auth/pro-sign-in-routing";
 import { authSessionLooksAuthenticated } from "@/lib/auth/logout-cookies";
 import { markManualSignInRequired } from "@/lib/auth/remembered-login";
 import { resolveAppShell } from "@/lib/mobile/app-shell";
+import { clearPendingPushNavigation } from "@/lib/notifications/pending-push-nav";
 
 export type HardSignOutResult = {
   sessionCleared: boolean;
@@ -130,6 +131,13 @@ export async function performHardSignOut(options?: {
   // Require an explicit Sign in click on the next visit (no silent auto-login).
   try {
     markManualSignInRequired();
+  } catch {
+    // ignore
+  }
+
+  // Drop push deep-links so the next account cannot inherit them.
+  try {
+    clearPendingPushNavigation();
   } catch {
     // ignore
   }

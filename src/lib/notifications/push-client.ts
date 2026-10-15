@@ -9,8 +9,12 @@ import { resolveAppShell } from "@/lib/mobile/app-shell";
 import { hardGo } from "@/lib/mobile/nav-back";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 import {
+  bindPendingPushNavigationUser,
+  clearPendingPushNavigation,
+  hydratePendingPushNavigation,
   markPushNavigationFinished,
   markPushNavigationStarted,
+  shouldDeferPushNavigationConsume,
   stashPendingPushNavigation,
   takePendingPushNavigation,
 } from "@/lib/notifications/pending-push-nav";
@@ -185,12 +189,24 @@ function navigateToPushHref(href: string) {
 }
 
 /** Consume a stashed tap destination exactly once (after biometric unlock if gated). */
-export function consumePendingPushNavigation(): void {
+export function consumePendingPushNavigation(options?: {
+  expectedUserId?: string | null;
+}): void {
   if (isBiometricGateLocked()) return;
-  const href = takePendingPushNavigation();
+  // Pro bootstrap / handoff must finish before CRM deep links run.
+  if (shouldDeferPushNavigationConsume()) return;
+  const href = takePendingPushNavigation({
+    expectedUserId: options?.expectedUserId,
+  });
   if (!href) return;
   navigateToPushHref(href);
 }
+
+export {
+  bindPendingPushNavigationUser,
+  clearPendingPushNavigation,
+  hydratePendingPushNavigation,
+};
 
 function handleActionPerformed(notification: {
   id?: string;
@@ -205,6 +221,8 @@ function handleActionPerformed(notification: {
   if (!stashPendingPushNavigation({ href: data.href, id: messageId })) return;
   // Keep destination pending while biometric lock covers the app.
   if (isBiometricGateLocked()) return;
+  // Cold-start on Pro bootstrap host: stash only — handoff restores later.
+  if (shouldDeferPushNavigationConsume()) return;
   const taken = takePendingPushNavigation();
   if (taken) navigateToPushHref(taken);
 }
@@ -217,6 +235,7 @@ export async function ensurePushActionListener(): Promise<void> {
   if (!isNative() || actionListenerAttached) return;
   actionListenerAttached = true;
   try {
+    await hydratePendingPushNavigation();
     await ensureHouzzatUpdatesChannel();
     await PushNotifications.addListener(
       "pushNotificationActionPerformed",

@@ -17,7 +17,12 @@ import {
   shouldRunProWorkspaceBootstrap,
 } from "@/lib/mobile/platform-bootstrap";
 import { hardGo } from "@/lib/mobile/nav-back";
-import { peekPendingPushNavigation } from "@/lib/notifications/pending-push-nav";
+import {
+  hydratePendingPushNavigation,
+  peekPendingPushNavigation,
+  takePendingPushNavigationForTenantLanding,
+} from "@/lib/notifications/pending-push-nav";
+import { isBiometricGateLocked } from "@/lib/mobile/biometric-gate-state";
 import {
   isMobileDiagnosticFreezePath,
   recordMobileDiagEvent,
@@ -188,6 +193,8 @@ export function ProWorkspaceBootstrap() {
       // Native Pro shell OR browser on dedicated app.houzzatpro.com bootstrap host.
       if (shell !== "houzzatpro" && !onAppBootstrapHost) return;
 
+      await hydratePendingPushNavigation();
+      if (cancelled || routed.current) return;
       const pendingHref = peekPendingPushNavigation()?.href ?? null;
       if (status !== "authenticated") {
         if (diagnosticFreeze && !freezeReleased) {
@@ -273,8 +280,12 @@ export function ProWorkspaceBootstrap() {
         } else if (bootstrap.destination === "/agent") {
           recordMobileDiagEvent("DESTINATION_AGENT");
         }
-        if (pendingHref) {
-          hardGo(pendingHref);
+        const pushHref = isBiometricGateLocked()
+          ? null
+          : await takePendingPushNavigationForTenantLanding();
+        if (cancelled) return;
+        if (pushHref) {
+          hardGo(pushHref);
           return;
         }
         const destination = resolveHouzzatProPrivateStartupDestination(
@@ -286,7 +297,7 @@ export function ProWorkspaceBootstrap() {
       }
 
       if (bootstrap.kind === "handoff") {
-        // Single-workspace fast path: mint + cross-host without intermediate stop.
+        // Keep pending push in Preferences across origins; exchange restores it.
         setNativeNavStage("HANDOFF_STARTED");
         recordMobileDiagEvent("WORKSPACE_COUNT_1", bootstrap.membership.slug);
         const handoffUrl = await proNativeAuthController.createHandoff(

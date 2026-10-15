@@ -139,6 +139,7 @@ export async function PUT(request: Request) {
     destination: peeked.destination,
     workspaceId: peeked.workspaceId,
     workspaceRole: peeked.workspaceRole,
+    userId: peeked.userId,
   });
   setDeskAgentCookie(res, peeked.userId);
   return res;
