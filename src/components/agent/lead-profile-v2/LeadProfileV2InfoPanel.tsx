@@ -13,6 +13,10 @@ import {
   purchaseTimeframeLabel,
   type PurchaseTimeframeValue,
 } from "@/lib/agent/timeframe";
+import {
+  formatSellerTimeframeState,
+  readSellerTimeframeState,
+} from "@/lib/property-address/seller-timeframe";
 
 function relativeAgo(iso: string | null) {
   if (!iso) return "—";
@@ -76,6 +80,12 @@ export function LeadProfileV2InfoPanel({
               }
             />
             <InfoRow
+              label="Selling timeframe"
+              value={formatSellerTimeframeState(
+                readSellerTimeframeState(data.lead.captureContext),
+              )}
+            />
+            <InfoRow
               label="Listing"
               value={
                 data.lead.listingMls ? (
@@ -89,7 +99,7 @@ export function LeadProfileV2InfoPanel({
               }
             />
             <InfoRow
-              label="Timeframe"
+              label="Buying timeframe"
               value={
                 data.lead.customer ? (
                   <select

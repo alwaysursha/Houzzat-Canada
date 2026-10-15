@@ -11,10 +11,21 @@ import {
   upsertBuyerConfirmedPreference,
 } from "@/lib/auth/buyer-confirmed-preference";
 import { upsertQualificationSavedSearch } from "@/lib/auth/qualification-saved-search";
-import { applyCanonicalCustomerContact } from "@/lib/agent/lead-info-change";
-import { isPurchaseTimeframe } from "@/lib/agent/timeframe";
-import { scheduleSignupQualificationCompletedNotify } from "@/lib/notifications/signup-lead-notify";
+import {
+  isPurchaseTimeframe,
+  type PurchaseTimeframeValue,
+} from "@/lib/agent/timeframe";
+import {
+  scheduleSellerClaimPropertyNotify,
+  scheduleSignupQualificationCompletedNotify,
+} from "@/lib/notifications/signup-lead-notify";
 import { prisma } from "@/lib/prisma";
+import { applySellerPropertyClaim } from "@/lib/property-address/apply-seller-claim";
+import {
+  mergeSellerTimeframeIntoCapture,
+  parseSellerTimeframeChoice,
+  sellerTimeframeLabel,
+} from "@/lib/property-address/seller-timeframe";
 
 const ownershipSchema = z.object({
   step: z.literal("ownership"),
@@ -29,11 +40,20 @@ const claimAddressSchema = z.object({
   homeLat: z.number().min(-90).max(90).optional(),
   homeLng: z.number().min(-180).max(180).optional(),
   placeId: z.string().trim().max(256).optional(),
+  propertyPath: z.string().trim().max(500).optional(),
 });
 
 const timeframeSchema = z.object({
   step: z.literal("timeframe"),
   purchaseTimeframe: z.string(),
+});
+
+/** Optional seller claim funnel step — allows NOW + exploring without buyer NOW reject. */
+const sellingTimeframeSchema = z.object({
+  step: z.literal("sellingTimeframe"),
+  purchaseTimeframe: z.string().optional().nullable(),
+  exploring: z.boolean().optional(),
+  skip: z.boolean().optional(),
 });
 
 const financingSchema = z.object({
@@ -62,6 +82,7 @@ const schema = z.discriminatedUnion("step", [
   ownershipSchema,
   claimAddressSchema,
   timeframeSchema,
+  sellingTimeframeSchema,
   financingSchema,
   preferenceSchema,
   completeSchema,
@@ -87,10 +108,11 @@ export async function GET() {
       homeUnit: true,
       homeLat: true,
       homeLng: true,
+      isSeller: true,
       buyerConfirmedPreference: true,
       leads: {
         where: { workspaceId: user.workspaceId },
-        select: { captureContext: true, listingMls: true },
+        select: { captureContext: true, listingMls: true, intent: true },
         take: 1,
       },
     },
@@ -112,6 +134,8 @@ export async function GET() {
     phoneE164: row.phoneE164,
     homeAddress: row.homeAddress,
     homeUnit: row.homeUnit,
+    isSeller: row.isSeller,
+    leadIntent: row.leads[0]?.intent ?? null,
     confirmedPreference: row.buyerConfirmedPreference,
     observedPreference: observed,
     listingMls: row.leads[0]?.listingMls ?? null,
@@ -153,31 +177,51 @@ export async function POST(request: Request) {
       if (data.maybeLater || !data.homeAddress?.trim()) {
         return NextResponse.json({ ok: true, skipped: true });
       }
-      const applied = await applyCanonicalCustomerContact(prisma, user.id, {
+      // Seller Claim Your Address always sends propertyPath → strict canonical.
+      // Buyer funnel ownership→claim omits it → soft Google-pick path preserved.
+      const sellerClaimEntry = Boolean(data.propertyPath?.trim());
+      const claimed = await applySellerPropertyClaim({
+        userId: user.id,
+        workspaceId,
         homeAddress: data.homeAddress.trim(),
-        homeLat: data.homeLat ?? null,
-        homeLng: data.homeLng ?? null,
+        homeUnit: data.homeUnit,
+        homeLat: data.homeLat,
+        homeLng: data.homeLng,
+        placeId: data.placeId,
+        propertyPath: data.propertyPath,
+        request,
+        requireCanonicalResolve: sellerClaimEntry,
       });
-      if (!applied.ok) {
+      if (!claimed.ok) {
         return NextResponse.json(
-          { error: applied.error },
-          { status: applied.status },
+          {
+            error: claimed.error,
+            retryable: claimed.retryable,
+          },
+          { status: claimed.status },
         );
       }
-      const unit = data.homeUnit?.trim() || null;
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          ownsHome: true,
-          isSeller: true,
-          homeUnit: unit,
-        },
-      });
+      // New-lead often fires at signup before property association. Idempotent
+      // claim update (separate cycle keys) — never a second new-lead event.
+      if (
+        sellerClaimEntry &&
+        claimed.leadId &&
+        !claimed.alreadyClaimed &&
+        claimed.assignedAgentId
+      ) {
+        scheduleSellerClaimPropertyNotify({
+          leadId: claimed.leadId,
+          assigneeId: claimed.assignedAgentId,
+        });
+      }
       return NextResponse.json({
         ok: true,
         addressSaved: true,
         savedSearchTouched: false,
-        monitorsCreated: false,
+        monitorsCreated: claimed.areaWatch === "created",
+        areaWatch: claimed.areaWatch,
+        alreadyClaimed: claimed.alreadyClaimed,
+        leadId: claimed.leadId,
       });
     }
     case "timeframe": {
@@ -200,6 +244,99 @@ export async function POST(request: Request) {
           purchaseTimeframe: data.purchaseTimeframe as PurchaseTimeframe,
         },
       });
+      return NextResponse.json({ ok: true });
+    }
+    case "sellingTimeframe": {
+      const lead = await prisma.lead.findFirst({
+        where: { customerId: user.id, workspaceId },
+        select: {
+          id: true,
+          assignedAgentId: true,
+          captureContext: true,
+        },
+        orderBy: { updatedAt: "desc" },
+      });
+
+      // Never write User.purchaseTimeframe — buyer field stays untouched.
+      if (data.skip) {
+        if (lead) {
+          const nextCtx = mergeSellerTimeframeIntoCapture(lead.captureContext, {
+            kind: "skipped",
+          });
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { captureContext: nextCtx as Prisma.InputJsonValue },
+          });
+          await prisma.leadActivity.create({
+            data: {
+              leadId: lead.id,
+              type: "updated",
+              userId: user.id,
+              body: "Selling timeframe skipped.",
+              meta: { sellingTimeframeStatus: "skipped" },
+            },
+          });
+        }
+        return NextResponse.json({ ok: true, skipped: true });
+      }
+
+      if (data.exploring || data.purchaseTimeframe === "JUST_EXPLORING") {
+        if (lead) {
+          const nextCtx = mergeSellerTimeframeIntoCapture(lead.captureContext, {
+            kind: "exploring",
+          });
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { captureContext: nextCtx as Prisma.InputJsonValue },
+          });
+          await prisma.leadActivity.create({
+            data: {
+              leadId: lead.id,
+              type: "updated",
+              userId: user.id,
+              body: "Selling timeframe: Just exploring my options.",
+              meta: {
+                sellingTimeframeStatus: "exploring",
+                sellingTimeframe: "JUST_EXPLORING",
+              },
+            },
+          });
+        }
+        return NextResponse.json({ ok: true, exploring: true });
+      }
+
+      const choice = parseSellerTimeframeChoice(data.purchaseTimeframe);
+      if (!choice || choice === "JUST_EXPLORING") {
+        return NextResponse.json(
+          { error: "Invalid selling timeframe." },
+          { status: 400 },
+        );
+      }
+
+      if (lead) {
+        const nextCtx = mergeSellerTimeframeIntoCapture(lead.captureContext, {
+          kind: "answered",
+          value: choice as PurchaseTimeframeValue,
+        });
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { captureContext: nextCtx as Prisma.InputJsonValue },
+        });
+        const label = sellerTimeframeLabel(choice);
+        await prisma.leadActivity.create({
+          data: {
+            leadId: lead.id,
+            type: "updated",
+            userId: user.id,
+            body: `Selling timeframe: ${label ?? choice}.`,
+            meta: {
+              sellingTimeframeStatus: "answered",
+              sellingTimeframe: choice,
+            },
+          },
+        });
+      }
+
       return NextResponse.json({ ok: true });
     }
     case "financing": {

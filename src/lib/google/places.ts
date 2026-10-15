@@ -12,6 +12,11 @@ export type GooglePlaceSuggestion = {
   postalCode?: string | null;
   lat?: number;
   lng?: number;
+  /**
+   * Provider-sourced civic number only. Null/undefined means street-level or
+   * approximate — callers must not treat a fabricated label number as exact.
+   */
+  houseNumber?: string | null;
 };
 
 type AutocompletePrediction = {
@@ -190,5 +195,6 @@ export async function googlePlaceDetails(
     postalCode,
     lat: data.location?.latitude,
     lng: data.location?.longitude,
+    houseNumber: streetNumber?.trim() || null,
   };
 }

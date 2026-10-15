@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import { FunnelProgress } from "@/components/auth/lead-funnel/FunnelProgress";
 import { QUALIFICATION_COMPLETED_EVENT } from "@/components/auth/CustomerWelcomeChatScheduler";
@@ -17,6 +18,14 @@ import {
 } from "@/lib/auth/funnel-analytics";
 import { CONSUMER_BUYING_TIMEFRAMES, purchaseTimeframeLabel } from "@/lib/agent/timeframe";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
+import {
+  clearClaimAddressContext,
+  readClaimAddressContext,
+} from "@/lib/property-address/claim-context";
+import {
+  SELLER_TIMEFRAME_OPTIONS,
+  type SellerTimeframeChoice,
+} from "@/lib/property-address/seller-timeframe";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -25,6 +34,8 @@ type FunnelStep =
   | "otp"
   | "ownership"
   | "claimAddress"
+  | "sellingTimeframe"
+  | "sellerDone"
   | "timeframe"
   | "financing";
 
@@ -32,6 +43,8 @@ const STEP_PROGRESS: Record<FunnelStep, number> = {
   otp: 0.15,
   ownership: 0.35,
   claimAddress: 0.5,
+  sellingTimeframe: 0.75,
+  sellerDone: 1,
   timeframe: 0.7,
   financing: 0.9,
 };
@@ -46,24 +59,43 @@ export function LeadCaptureFunnel({
 }: {
   onComplete: (result: { showTour: boolean; mlsNumber: string | null }) => void;
 }) {
+  const router = useRouter();
+  const claimBoot = readClaimAddressContext();
+  const [sellerClaimMode] = useState(() => Boolean(claimBoot?.formattedAddress));
+  const [returnPath] = useState(() => claimBoot?.propertyPath ?? null);
+  const claimAppliedRef = useRef(false);
+
   const [step, setStep] = useState<FunnelStep>("otp");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [pressed, setPressed] = useState<string | null>(null);
+  const [sellerChoice, setSellerChoice] =
+    useState<SellerTimeframeChoice | null>(null);
   const [, startTransition] = useTransition();
   const [maskedPhone, setMaskedPhone] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState("");
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneDraft, setPhoneDraft] = useState("");
   const [listingMls, setListingMls] = useState<string | null>(null);
-  const [homeAddress, setHomeAddress] = useState("");
-  const [homeUnit, setHomeUnit] = useState("");
+  const [homeAddress, setHomeAddress] = useState(
+    () => claimBoot?.formattedAddress ?? "",
+  );
+  const [homeUnit, setHomeUnit] = useState(() => claimBoot?.unitNumber ?? "");
   const [claimedPlace, setClaimedPlace] = useState<{
     address: string;
     lat?: number;
     lng?: number;
     placeId?: string;
-  } | null>(null);
+  } | null>(() =>
+    claimBoot?.formattedAddress
+      ? {
+          address: claimBoot.formattedAddress,
+          lat: claimBoot.lat ?? undefined,
+          lng: claimBoot.lng ?? undefined,
+          placeId: claimBoot.placeId ?? undefined,
+        }
+      : null,
+  );
 
   function touchIntent() {
     touchPendingCaptureIntent(browserCaptureIntentStore(), {
@@ -81,48 +113,15 @@ export function LeadCaptureFunnel({
     });
   }
 
-  useEffect(() => {
-    touchIntent();
-    void (async () => {
-      try {
-        const res = await fetch("/api/auth/qualification");
-        if (res.ok) {
-          const data = (await res.json()) as {
-            listingMls?: string | null;
-            phone?: string | null;
-            phoneOtpVerifiedAt?: string | null;
-          };
-          setListingMls(data.listingMls ?? null);
-          if (data.phoneOtpVerifiedAt) {
-            setStep("ownership");
-            return;
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-      try {
-        const res = await fetch("/api/auth/phone-otp/send", { method: "POST" });
-        const data = (await res.json()) as {
-          maskedPhone?: string;
-          alreadyVerified?: boolean;
-          error?: string;
-        };
-        if (data.alreadyVerified) {
-          setStep("ownership");
-          return;
-        }
-        if (res.ok && data.maskedPhone) {
-          setMaskedPhone(data.maskedPhone);
-          reportPhoneVerificationSent();
-        } else if (data.error) {
-          setError(data.error);
-        }
-      } catch {
-        setError("Could not send verification code.");
-      }
-    })();
-  }, []);
+  async function afterPhoneGate() {
+    if (sellerClaimMode) {
+      const claimed = await applySellerClaimFromContext();
+      if (!claimed) return; // keep claim context; do not advance without association
+      go("sellingTimeframe");
+      return;
+    }
+    go("ownership");
+  }
 
   async function postStep(body: Record<string, unknown>): Promise<boolean> {
     setPending(true);
@@ -149,6 +148,73 @@ export function LeadCaptureFunnel({
     }
   }
 
+  async function applySellerClaimFromContext(): Promise<boolean> {
+    if (claimAppliedRef.current) return true;
+    const claim = readClaimAddressContext();
+    if (!claim?.formattedAddress) return true;
+    const ok = await postStep({
+      step: "claimAddress",
+      homeAddress: claim.formattedAddress,
+      homeUnit: claim.unitNumber ?? undefined,
+      homeLat: claim.lat ?? undefined,
+      homeLng: claim.lng ?? undefined,
+      placeId: claim.placeId ?? undefined,
+      propertyPath: claim.propertyPath,
+    });
+    // Only mark applied on success — keep session claim context for retry.
+    if (ok) claimAppliedRef.current = true;
+    return ok;
+  }
+
+  useEffect(() => {
+    touchIntent();
+    void (async () => {
+      try {
+        const res = await fetch("/api/auth/qualification");
+        if (res.ok) {
+          const data = (await res.json()) as {
+            listingMls?: string | null;
+            phone?: string | null;
+            phoneOtpVerifiedAt?: string | null;
+          };
+          setListingMls(data.listingMls ?? null);
+          if (data.phoneOtpVerifiedAt) {
+            await afterPhoneGate();
+            return;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+      try {
+        // Best-effort early claim while OTP sends — retry on phone gate if needed.
+        if (sellerClaimMode) {
+          await applySellerClaimFromContext();
+        }
+        const res = await fetch("/api/auth/phone-otp/send", { method: "POST" });
+        const data = (await res.json()) as {
+          maskedPhone?: string;
+          alreadyVerified?: boolean;
+          error?: string;
+        };
+        if (data.alreadyVerified) {
+          await afterPhoneGate();
+          return;
+        }
+        if (res.ok && data.maskedPhone) {
+          setMaskedPhone(data.maskedPhone);
+          reportPhoneVerificationSent();
+        } else if (data.error) {
+          setError(data.error);
+        }
+      } catch {
+        setError("Could not send verification code.");
+      }
+    })();
+    // Seller claim boot + phone gate only on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount bootstrap
+  }, []);
+
   async function verifyOtp() {
     setPending(true);
     setError(null);
@@ -164,7 +230,7 @@ export function LeadCaptureFunnel({
         return;
       }
       reportPhoneVerified();
-      go("ownership");
+      await afterPhoneGate();
     } catch {
       setError("Something went wrong.");
     } finally {
@@ -177,7 +243,7 @@ export function LeadCaptureFunnel({
     try {
       await fetch("/api/auth/phone-otp/skip", { method: "POST" });
       reportPhoneVerificationSkipped();
-      go("ownership");
+      await afterPhoneGate();
     } finally {
       setPending(false);
     }
@@ -208,6 +274,22 @@ export function LeadCaptureFunnel({
       setError("Something went wrong.");
     } finally {
       setPending(false);
+    }
+  }
+
+  async function finishSeller() {
+    reportQualificationCompleted();
+    await postStep({ step: "complete" });
+    clearClaimAddressContext();
+    try {
+      window.dispatchEvent(new Event(QUALIFICATION_COMPLETED_EVENT));
+    } catch {
+      /* ignore */
+    }
+    onComplete({ showTour: false, mlsNumber: null });
+    if (returnPath) {
+      router.push(returnPath);
+      router.refresh();
     }
   }
 
@@ -461,6 +543,90 @@ export function LeadCaptureFunnel({
             >
               Maybe Later
             </button>
+          </div>
+        ) : null}
+
+        {step === "sellingTimeframe" ? (
+          <div className="space-y-3.5">
+            <h3 className="font-display text-xl leading-snug text-ink">
+              How soon are you looking to sell your property?
+            </h3>
+            <p className="text-sm leading-relaxed text-ink/70">
+              Optional — skip anytime. Eligible local listing activity updates
+              follow your notification preferences.
+            </p>
+            {SELLER_TIMEFRAME_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={pending}
+                className={cn(
+                  answerBtn,
+                  sellerChoice === opt.value && answerBtnPressed,
+                )}
+                onClick={() => setSellerChoice(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+            <Button
+              type="button"
+              className="h-11 w-full"
+              disabled={pending || !sellerChoice}
+              onClick={() => {
+                if (!sellerChoice) return;
+                setPressed(sellerChoice);
+                const body =
+                  sellerChoice === "JUST_EXPLORING"
+                    ? { step: "sellingTimeframe" as const, exploring: true }
+                    : {
+                        step: "sellingTimeframe" as const,
+                        purchaseTimeframe: sellerChoice,
+                      };
+                void postStep(body).then((ok) => {
+                  if (ok) go("sellerDone");
+                });
+              }}
+            >
+              Continue
+            </Button>
+            <button
+              type="button"
+              className="w-full text-sm font-semibold text-ink/55 hover:text-ink/75"
+              disabled={pending}
+              onClick={() => {
+                void postStep({
+                  step: "sellingTimeframe",
+                  skip: true,
+                }).then((ok) => {
+                  if (ok) go("sellerDone");
+                });
+              }}
+            >
+              Skip for now
+            </button>
+          </div>
+        ) : null}
+
+        {step === "sellerDone" ? (
+          <div className="space-y-3.5">
+            <h3 className="font-display text-xl leading-snug text-ink">
+              You&apos;re all set
+            </h3>
+            <p className="text-sm leading-relaxed text-ink/70">
+              We&apos;ve noted your seller interest for this address. Claiming
+              does not verify ownership. Eligible Just Listed, Just Sold (where
+              permitted), and weekly area updates follow your notification
+              preferences.
+            </p>
+            <Button
+              type="button"
+              className="h-11 w-full"
+              disabled={pending}
+              onClick={() => void finishSeller()}
+            >
+              Back to property
+            </Button>
           </div>
         ) : null}
 

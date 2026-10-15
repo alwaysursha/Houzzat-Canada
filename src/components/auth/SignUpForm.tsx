@@ -30,6 +30,7 @@ import { rememberLoginCredentials } from "@/lib/auth/remembered-login";
 import { authSuccessReturnPath } from "@/lib/auth/safe-callback-url";
 import { clearIntentionalSignOut } from "@/lib/mobile/biometrics";
 import { offerBiometricsAfterCredentialsSignIn } from "@/lib/mobile/offer-biometrics-opt-in";
+import { readClaimAddressContext } from "@/lib/property-address/claim-context";
 import { cn } from "@/lib/utils";
 
 export type SignUpSuccessResult = {
@@ -185,6 +186,8 @@ export function SignUpForm({
       now: Date.now(),
     });
     const pendingIntent = peeked.ok ? peeked.intent : null;
+    const claimContext = readClaimAddressContext();
+    const sellerClaim = Boolean(claimContext?.formattedAddress);
     const captureIntent = intent ?? pendingIntent?.type ?? null;
     const mlsNumber =
       pendingIntent && "mlsNumber" in pendingIntent
@@ -194,10 +197,15 @@ export function SignUpForm({
     const captureContext = buildCaptureContext({
       intent: captureIntent,
       mlsNumber,
-      pathname: window.location.pathname,
-      callbackUrl: callbackUrl ?? pendingIntent?.callbackPath ?? null,
-      searchUrl: resolveSearchUrl(),
-      searchFilters: resolveSearchFilters(),
+      listingAddress: claimContext?.formattedAddress ?? null,
+      pathname: claimContext?.propertyPath ?? window.location.pathname,
+      callbackUrl:
+        claimContext?.propertyPath ??
+        callbackUrl ??
+        pendingIntent?.callbackPath ??
+        null,
+      searchUrl: sellerClaim ? null : resolveSearchUrl(),
+      searchFilters: sellerClaim ? null : resolveSearchFilters(),
       visitorKey,
       sessionKey,
       utmSource: utm.utmSource ?? null,
@@ -221,6 +229,7 @@ export function SignUpForm({
           phone: trimmedPhone,
           acceptTerms: true,
           credentialMode: "phone_e164",
+          ...(sellerClaim ? { intent: "seller" } : {}),
           captureContext,
           ...utm,
           ...clickIds,
@@ -322,6 +331,28 @@ export function SignUpForm({
 
     const needsQualification = data.needsQualification !== false;
     onSuccess?.({ needsQualification });
+
+    // Associate Claim Your Address property immediately after signup+session
+    // so the seller lead exists even if the timeframe step is abandoned.
+    if (sellerClaim && claimContext) {
+      try {
+        await fetch("/api/auth/qualification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            step: "claimAddress",
+            homeAddress: claimContext.formattedAddress,
+            homeUnit: claimContext.unitNumber ?? undefined,
+            homeLat: claimContext.lat ?? undefined,
+            homeLng: claimContext.lng ?? undefined,
+            placeId: claimContext.placeId ?? undefined,
+            propertyPath: claimContext.propertyPath,
+          }),
+        });
+      } catch {
+        /* funnel re-applies claim; do not block OTP */
+      }
+    }
 
     // Advance qualification UI before optional post-auth prompts / refresh.
     if (needsQualification) {

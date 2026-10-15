@@ -406,10 +406,11 @@ function testEnrichmentAndTimeframes() {
   const qual = read("src/app/api/auth/qualification/route.ts");
   assert.ok(qual.includes('step: z.literal("claimAddress")'));
   assert.ok(qual.includes("homeUnit"));
-  assert.ok(qual.includes("applyCanonicalCustomerContact"));
+  assert.ok(qual.includes("applySellerPropertyClaim"));
   assert.equal(qual.includes('step: z.literal("valuation")'), false);
   assert.equal(qual.includes("/api/valuation"), false);
   assert.ok(qual.includes("upsertQualificationSavedSearch"));
+  // Area Watch creation lives in apply-seller-claim — not inline in this route.
   assert.equal(qual.includes("areaMonitor"), false);
   assert.equal(qual.includes("propertyMonitor"), false);
   assert.ok(qual.includes("upsertBuyerConfirmedPreference"));
@@ -417,6 +418,7 @@ function testEnrichmentAndTimeframes() {
   assert.ok(qual.includes("scheduleSignupQualificationCompletedNotify"));
   assert.ok(qual.includes('source: "observed"'));
   assert.ok(qual.includes("PRE_APPROVED"));
+  assert.ok(qual.includes('step: z.literal("sellingTimeframe")'));
   assert.ok(qual.includes("CASH"));
   const crm = read("src/components/agent/lead-profile-v2/LeadProfileV2InfoPanel.tsx");
   assert.ok(crm.includes("Claimed property"));
@@ -428,7 +430,9 @@ function testEnrichmentAndTimeframes() {
   assert.ok(funnel.includes("homeLng"));
   assert.ok(funnel.includes("homeUnit"));
   assert.ok(funnel.includes("Maybe Later"));
-  assert.ok(qual.includes("monitorsCreated: false"));
+  assert.ok(qual.includes("monitorsCreated:"));
+  assert.ok(funnel.includes("How soon are you looking to sell your property?"));
+  assert.ok(funnel.includes("sellingTimeframe"));
   console.log("[enrichment] ownership/claim-address/timeframe/financing/preference PASS");
 }
 

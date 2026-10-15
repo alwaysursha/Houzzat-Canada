@@ -183,6 +183,8 @@ export async function photonAddressAutocomplete(
       postalCode,
       lat,
       lng,
+      // Only OSM housenumber — never the typed number painted onto a street hit.
+      houseNumber: props.housenumber?.trim() || null,
     });
 
     if (out.length >= 7) break;

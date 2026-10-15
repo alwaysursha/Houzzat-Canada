@@ -4,6 +4,10 @@
  */
 
 import { purchaseTimeframeLabel } from "@/lib/agent/timeframe";
+import {
+  formatSellerTimeframeState,
+  readSellerTimeframeState,
+} from "@/lib/property-address/seller-timeframe";
 import { openLeadHandoffHref } from "@/lib/agent/lead-profile-query";
 import { SITE_URL } from "@/lib/constants";
 import {
@@ -35,8 +39,14 @@ export const SIGNUP_QUALIFICATION_EMAIL_CYCLE_KEY =
   "qualification:email" as const;
 export const SIGNUP_QUALIFICATION_SMS_CYCLE_KEY = "qualification:sms" as const;
 
+/** Idempotent post-claim update (separate from new-lead and qualification). */
+export const SIGNUP_CLAIM_PROPERTY_EMAIL_CYCLE_KEY =
+  "claim_address:email" as const;
+export const SIGNUP_CLAIM_PROPERTY_SMS_CYCLE_KEY = "claim_address:sms" as const;
+
 type QualificationNotifyChannel = "email" | "sms";
 type QualificationNotifyDelivery = "sent" | "skipped" | "failed";
+type SignupLeadNotifyMode = "initial" | "qualification" | "claim";
 
 function qualificationNotifyCycleKey(
   channel: QualificationNotifyChannel,
@@ -44,6 +54,16 @@ function qualificationNotifyCycleKey(
   return channel === "email"
     ? SIGNUP_QUALIFICATION_EMAIL_CYCLE_KEY
     : SIGNUP_QUALIFICATION_SMS_CYCLE_KEY;
+}
+
+function claimPropertyNotifyCycleKey(
+  channel: QualificationNotifyChannel,
+):
+  | typeof SIGNUP_CLAIM_PROPERTY_EMAIL_CYCLE_KEY
+  | typeof SIGNUP_CLAIM_PROPERTY_SMS_CYCLE_KEY {
+  return channel === "email"
+    ? SIGNUP_CLAIM_PROPERTY_EMAIL_CYCLE_KEY
+    : SIGNUP_CLAIM_PROPERTY_SMS_CYCLE_KEY;
 }
 
 /** Map sendNotification channel result → SmsAutomationDispatch status. */
@@ -99,22 +119,26 @@ async function hasLegacyQualificationNotifyClaim(
  * Per-channel claim via SmsAutomationDispatch.
  * SENT/SKIPPED/in-flight block; FAILED is reclaimable for retry.
  */
-async function claimQualificationNotifyChannel(input: {
+async function claimDispatchChannel(input: {
   workspaceId: string;
   leadId: string;
-  channel: QualificationNotifyChannel;
+  cycleKey: string;
+  /** When true, honor legacy qualification cycleKey "qualification". */
+  honorLegacyQualification?: boolean;
 }): Promise<string | null> {
-  if (await hasLegacyQualificationNotifyClaim(input.workspaceId, input.leadId)) {
+  if (
+    input.honorLegacyQualification &&
+    (await hasLegacyQualificationNotifyClaim(input.workspaceId, input.leadId))
+  ) {
     return null;
   }
-  const cycleKey = qualificationNotifyCycleKey(input.channel);
   try {
     const row = await prisma.smsAutomationDispatch.create({
       data: {
         workspaceId: input.workspaceId,
         leadId: input.leadId,
         automationKey: SIGNUP_QUALIFICATION_UPDATE_KEY,
-        cycleKey,
+        cycleKey: input.cycleKey,
         status: "PROCESSING",
         processedAt: new Date(),
       },
@@ -128,7 +152,7 @@ async function claimQualificationNotifyChannel(input: {
           workspaceId: input.workspaceId,
           leadId: input.leadId,
           automationKey: SIGNUP_QUALIFICATION_UPDATE_KEY,
-          cycleKey,
+          cycleKey: input.cycleKey,
         },
       },
       select: { id: true, status: true },
@@ -145,6 +169,32 @@ async function claimQualificationNotifyChannel(input: {
     });
     return claimed.count === 1 ? existing.id : null;
   }
+}
+
+async function claimQualificationNotifyChannel(input: {
+  workspaceId: string;
+  leadId: string;
+  channel: QualificationNotifyChannel;
+}): Promise<string | null> {
+  return claimDispatchChannel({
+    workspaceId: input.workspaceId,
+    leadId: input.leadId,
+    cycleKey: qualificationNotifyCycleKey(input.channel),
+    honorLegacyQualification: true,
+  });
+}
+
+async function claimPropertyNotifyChannel(input: {
+  workspaceId: string;
+  leadId: string;
+  channel: QualificationNotifyChannel;
+}): Promise<string | null> {
+  return claimDispatchChannel({
+    workspaceId: input.workspaceId,
+    leadId: input.leadId,
+    cycleKey: claimPropertyNotifyCycleKey(input.channel),
+    honorLegacyQualification: false,
+  });
 }
 
 async function finishQualificationNotifyChannel(
@@ -252,8 +302,6 @@ function extractObservedFromCapture(
   };
 }
 
-type SignupLeadNotifyMode = "initial" | "qualification";
-
 export type SignupLeadNotifyContent = {
   subject: string;
   text: string;
@@ -311,6 +359,17 @@ export async function buildSignupLeadNotifyContent(
   const c = lead.customer;
   const crmUrl = absoluteLeadCrmUrl(lead.id);
   const observed = extractObservedFromCapture(lead.captureContext);
+  const capture =
+    lead.captureContext &&
+    typeof lead.captureContext === "object" &&
+    !Array.isArray(lead.captureContext)
+      ? (lead.captureContext as Record<string, unknown>)
+      : null;
+  const claimSource =
+    capture?.claimSource === "claim_your_address"
+      ? "Claim Your Address"
+      : null;
+  const isSellerLead = lead.intent === "SELLER" || Boolean(claimSource);
   const pref = c.buyerConfirmedPreference;
   const searchSummary =
     (pref
@@ -325,9 +384,11 @@ export async function buildSignupLeadNotifyContent(
     resolveCommunicationsE164(c.phone, c.phoneE164) || c.phone?.trim() || null;
   const ownership =
     c.ownsHome === true ? "Homeowner" : c.ownsHome === false ? "Renter / no" : null;
-  const timeframe = c.purchaseTimeframe
+  const buyTimeframe = c.purchaseTimeframe
     ? purchaseTimeframeLabel(c.purchaseTimeframe)
     : null;
+  const sellerTfState = readSellerTimeframeState(lead.captureContext);
+  const sellTimeframe = formatSellerTimeframeState(sellerTfState);
   const financing =
     c.mortgageFinancing === "PRE_APPROVED"
       ? "Pre-approved"
@@ -339,6 +400,17 @@ export async function buildSignupLeadNotifyContent(
   const claimed = [c.homeAddress?.trim(), c.homeUnit?.trim()]
     .filter(Boolean)
     .join(", ");
+  const cityLine =
+    typeof capture?.homeCity === "string" && capture.homeCity.trim()
+      ? [
+          capture.homeCity.trim(),
+          typeof capture.homeProvince === "string"
+            ? capture.homeProvince.trim()
+            : null,
+        ]
+          .filter(Boolean)
+          .join(", ")
+      : null;
   const acquisition = [
     lead.utmSource ? `utm_source=${lead.utmSource}` : null,
     lead.utmMedium ? `utm_medium=${lead.utmMedium}` : null,
@@ -347,12 +419,19 @@ export async function buildSignupLeadNotifyContent(
     .filter(Boolean)
     .join(" · ");
 
+  const intro =
+    mode === "claim"
+      ? "Seller claimed a property address (Claim Your Address)."
+      : mode === "qualification"
+        ? isSellerLead
+          ? "Seller updated qualification with additional details."
+          : "Buyer completed qualification with additional details."
+        : brand.isHouzzatWorkspace
+          ? "A new customer signed up on Houzzat."
+          : `A new customer signed up on ${brand.displayName}.`;
+
   const detailLines = [
-    mode === "qualification"
-      ? "Buyer completed qualification with additional details."
-      : brand.isHouzzatWorkspace
-        ? "A new customer signed up on Houzzat."
-        : `A new customer signed up on ${brand.displayName}.`,
+    intro,
     row("Name", c.name),
     row("Email", c.email),
     row("Phone", phone),
@@ -364,22 +443,34 @@ export async function buildSignupLeadNotifyContent(
       "Phone verified",
       c.phoneOtpVerifiedAt ? "Yes" : "Pending / skipped",
     ),
-    row("Intent", lead.intent === "SELLER" ? "Seller" : "Buyer"),
+    row("Intent", isSellerLead ? "Seller" : "Buyer"),
+    row("Lead source", claimSource),
     row("Homeownership", ownership),
     row("Claimed address", claimed || null),
-    row("Buying timeframe", timeframe),
-    row("Financing", financing),
-    row("Search preferences", searchSummary),
+    row("City", cityLine),
+    isSellerLead
+      ? row("Selling timeframe", sellTimeframe)
+      : row("Buying timeframe", buyTimeframe),
+    // Dual-intent: keep buyer purchase timeframe visible when present.
+    isSellerLead && buyTimeframe
+      ? row("Buying timeframe", buyTimeframe)
+      : null,
+    isSellerLead ? null : row("Financing", financing),
+    isSellerLead ? null : row("Search preferences", searchSummary),
     row("Registration property", lead.listingMls ? `MLS ${lead.listingMls}` : null),
     row("Acquisition", acquisition || null),
   ].filter((line): line is string => Boolean(line));
 
   const subject =
-    mode === "qualification"
+    mode === "claim"
       ? brand.isHouzzatWorkspace
-        ? "Signup lead — qualification update"
-        : `${brand.displayName} signup — qualification update`
-      : formatSignupLeadEmailSubject(brand);
+        ? "Signup lead — property claim update"
+        : `${brand.displayName} signup — property claim update`
+      : mode === "qualification"
+        ? brand.isHouzzatWorkspace
+          ? "Signup lead — qualification update"
+          : `${brand.displayName} signup — qualification update`
+        : formatSignupLeadEmailSubject(brand);
 
   const text = [...detailLines, "", `View lead in HouzzatPro: ${crmUrl}`].join(
     "\n",
@@ -402,12 +493,19 @@ export async function buildSignupLeadNotifyContent(
   const rendered: RenderedEmail = {
     subject,
     text,
-    kind: mode === "qualification" ? "signup_qualification_update" : "signup_lead",
+    kind:
+      mode === "qualification"
+        ? "signup_qualification_update"
+        : mode === "claim"
+          ? "signup_claim_property_update"
+          : "signup_lead",
     html: emailLayout({
       title:
         mode === "qualification"
           ? "Qualification update"
-          : "New signup lead",
+          : mode === "claim"
+            ? "Property claim update"
+            : "New signup lead",
       subtitle: detailLines[0] ?? undefined,
       preheader: subject,
       bodyHtml: `
@@ -420,10 +518,20 @@ export async function buildSignupLeadNotifyContent(
 
   const name = c.name?.trim() || "New signup";
   const smsBits = [
-    mode === "qualification" ? `${name} updated qualification` : `${name} signed up`,
-    timeframe ? `Buy: ${timeframe}` : null,
-    financing ? financing : null,
-    searchSummary,
+    mode === "qualification"
+      ? `${name} updated qualification`
+      : mode === "claim"
+        ? `${name} claimed address`
+        : `${name} signed up`,
+    isSellerLead && claimSource ? claimSource : null,
+    isSellerLead && claimed ? claimed : null,
+    isSellerLead && sellTimeframe
+      ? `Sell: ${sellTimeframe}`
+      : !isSellerLead && buyTimeframe
+        ? `Buy: ${buyTimeframe}`
+        : null,
+    !isSellerLead && financing ? financing : null,
+    !isSellerLead ? searchSummary : null,
     crmUrl,
   ].filter(Boolean);
   const smsText = smsBits.join(" · ").slice(0, 480);
@@ -442,10 +550,146 @@ function hasMeaningfulQualificationUpdate(lines: string[]): boolean {
     "Homeownership:",
     "Claimed address:",
     "Buying timeframe:",
+    "Selling timeframe:",
+    "Lead source:",
     "Financing:",
     "Search preferences:",
   ];
   return lines.some((line) => keys.some((k) => line.startsWith(k)));
+}
+
+function hasMeaningfulClaimPropertyUpdate(lines: string[]): boolean {
+  return lines.some((line) => line.startsWith("Claimed address:"));
+}
+
+async function deliverStaffLeadUpdateNotify(input: {
+  leadId: string;
+  assigneeId: string;
+  mode: "qualification" | "claim";
+  brand: LeadNotificationBrand;
+  logLabel: string;
+}): Promise<void> {
+  const lead = await prisma.lead.findUnique({
+    where: { id: input.leadId },
+    select: { id: true, workspaceId: true, assignedAgentId: true },
+  });
+  if (!lead?.workspaceId) return;
+  const agentId = lead.assignedAgentId ?? input.assigneeId;
+  if (!agentId) return;
+
+  const content = await buildSignupLeadNotifyContent(
+    lead.id,
+    input.mode,
+    input.brand,
+  );
+  if (!content) return;
+  if (
+    input.mode === "qualification" &&
+    !hasMeaningfulQualificationUpdate(content.detailLines)
+  ) {
+    return;
+  }
+  if (
+    input.mode === "claim" &&
+    !hasMeaningfulClaimPropertyUpdate(content.detailLines)
+  ) {
+    return;
+  }
+
+  const authorized = await filterStaffRecipientsForLead(
+    lead.id,
+    [agentId],
+    "new_lead_email",
+  );
+  if (authorized.length === 0) return;
+
+  const user = await prisma.user.findUnique({
+    where: { id: agentId },
+    select: {
+      id: true,
+      email: true,
+      phone: true,
+      role: true,
+      disabledAt: true,
+      pushNotificationPrefs: true,
+    },
+  });
+  if (!user || user.disabledAt || !isAgentRole(user.role)) return;
+  if (!isStaffEmailCategoryEnabled(user.pushNotificationPrefs, "new_leads")) {
+    return;
+  }
+
+  const claimChannel =
+    input.mode === "claim"
+      ? claimPropertyNotifyChannel
+      : claimQualificationNotifyChannel;
+
+  const toEmail = user.email?.trim();
+  if (toEmail) {
+    const emailDispatchId = await claimChannel({
+      workspaceId: lead.workspaceId,
+      leadId: lead.id,
+      channel: "email",
+    });
+    if (!emailDispatchId) {
+      console.info(`[staff-notify] ${input.logLabel} email skipped: duplicate`, {
+        leadId: lead.id,
+      });
+    } else {
+      try {
+        const result = await sendNotification({
+          toEmail,
+          subject: content.subject,
+          text: content.text,
+          html: content.html,
+          workspaceId: lead.workspaceId,
+        });
+        await finishQualificationNotifyChannel(emailDispatchId, result.email);
+        if (result.email === "failed") {
+          console.error(`[staff-notify] ${input.logLabel} email failed`, {
+            leadId: lead.id,
+          });
+        }
+      } catch (error) {
+        await finishQualificationNotifyChannel(emailDispatchId, "failed");
+        throw error;
+      }
+    }
+  }
+
+  const toPhone = user.phone?.trim();
+  if (toPhone && content.smsText) {
+    const smsDispatchId = await claimChannel({
+      workspaceId: lead.workspaceId,
+      leadId: lead.id,
+      channel: "sms",
+    });
+    if (!smsDispatchId) {
+      console.info(`[staff-notify] ${input.logLabel} sms skipped: duplicate`, {
+        leadId: lead.id,
+      });
+    } else {
+      try {
+        const result = await sendNotification({
+          toPhone,
+          subject: content.subject,
+          text: content.text,
+          smsText: content.smsText,
+          workspaceId: lead.workspaceId,
+          smsClass: "staff",
+        });
+        await finishQualificationNotifyChannel(smsDispatchId, result.sms);
+        if (result.sms === "failed") {
+          console.error(`[staff-notify] ${input.logLabel} sms failed`, {
+            leadId: lead.id,
+          });
+        }
+      } catch (error) {
+        await finishQualificationNotifyChannel(smsDispatchId, "failed");
+        throw error;
+      }
+    }
+  }
 }
 
 /**
@@ -462,121 +706,43 @@ export function scheduleSignupQualificationCompletedNotify(input: {
   if (!assigneeId) return;
 
   scheduleWorkerSideEffect(
-    (async () => {
-      const lead = await prisma.lead.findUnique({
-        where: { id: input.leadId },
-        select: { id: true, workspaceId: true, assignedAgentId: true },
-      });
-      if (!lead?.workspaceId) return;
-      const agentId = lead.assignedAgentId ?? assigneeId;
-      if (!agentId) return;
-
-      const content = await buildSignupLeadNotifyContent(
-        lead.id,
-        "qualification",
-        input.brand ?? LEGACY_HOUZZAT_NOTIFICATION_BRAND,
-      );
-      if (!content || !hasMeaningfulQualificationUpdate(content.detailLines)) {
-        return;
-      }
-
-      const authorized = await filterStaffRecipientsForLead(
-        lead.id,
-        [agentId],
-        "new_lead_email",
-      );
-      if (authorized.length === 0) return;
-
-      const user = await prisma.user.findUnique({
-        where: { id: agentId },
-        select: {
-          id: true,
-          email: true,
-          phone: true,
-          role: true,
-          disabledAt: true,
-          pushNotificationPrefs: true,
-        },
-      });
-      if (!user || user.disabledAt || !isAgentRole(user.role)) return;
-      if (!isStaffEmailCategoryEnabled(user.pushNotificationPrefs, "new_leads")) {
-        return;
-      }
-
-      const toEmail = user.email?.trim();
-      if (toEmail) {
-        const emailDispatchId = await claimQualificationNotifyChannel({
-          workspaceId: lead.workspaceId,
-          leadId: lead.id,
-          channel: "email",
-        });
-        if (!emailDispatchId) {
-          console.info(
-            "[staff-notify] qualification update email skipped: duplicate",
-            { leadId: lead.id },
-          );
-        } else {
-          try {
-            const result = await sendNotification({
-              toEmail,
-              subject: content.subject,
-              text: content.text,
-              html: content.html,
-              workspaceId: lead.workspaceId,
-            });
-            await finishQualificationNotifyChannel(
-              emailDispatchId,
-              result.email,
-            );
-            if (result.email === "failed") {
-              console.error(
-                "[staff-notify] qualification update email failed",
-                { leadId: lead.id },
-              );
-            }
-          } catch (error) {
-            await finishQualificationNotifyChannel(emailDispatchId, "failed");
-            throw error;
-          }
-        }
-      }
-
-      const toPhone = user.phone?.trim();
-      if (toPhone && content.smsText) {
-        const smsDispatchId = await claimQualificationNotifyChannel({
-          workspaceId: lead.workspaceId,
-          leadId: lead.id,
-          channel: "sms",
-        });
-        if (!smsDispatchId) {
-          console.info(
-            "[staff-notify] qualification update sms skipped: duplicate",
-            { leadId: lead.id },
-          );
-        } else {
-          try {
-            const result = await sendNotification({
-              toPhone,
-              subject: content.subject,
-              text: content.text,
-              smsText: content.smsText,
-              workspaceId: lead.workspaceId,
-              smsClass: "staff",
-            });
-            await finishQualificationNotifyChannel(smsDispatchId, result.sms);
-            if (result.sms === "failed") {
-              console.error("[staff-notify] qualification update sms failed", {
-                leadId: lead.id,
-              });
-            }
-          } catch (error) {
-            await finishQualificationNotifyChannel(smsDispatchId, "failed");
-            throw error;
-          }
-        }
-      }
-    })().catch((error) => {
+    deliverStaffLeadUpdateNotify({
+      leadId: input.leadId,
+      assigneeId,
+      mode: "qualification",
+      brand: input.brand ?? LEGACY_HOUZZAT_NOTIFICATION_BRAND,
+      logLabel: "qualification update",
+    }).catch((error) => {
       console.error("[staff-notify] qualification update failed", {
+        leadId: input.leadId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }),
+  );
+}
+
+/**
+ * After Claim Your Address persists — ensures agent gets property context even
+ * when the visitor abandons the optional timeframe. Separate cycle keys from
+ * new-lead and qualification (never duplicates new-lead signup).
+ */
+export function scheduleSellerClaimPropertyNotify(input: {
+  leadId: string;
+  assigneeId?: string | null;
+  brand?: LeadNotificationBrand;
+}): void {
+  const assigneeId = input.assigneeId?.trim();
+  if (!assigneeId) return;
+
+  scheduleWorkerSideEffect(
+    deliverStaffLeadUpdateNotify({
+      leadId: input.leadId,
+      assigneeId,
+      mode: "claim",
+      brand: input.brand ?? LEGACY_HOUZZAT_NOTIFICATION_BRAND,
+      logLabel: "claim property update",
+    }).catch((error) => {
+      console.error("[staff-notify] claim property update failed", {
         leadId: input.leadId,
         error: error instanceof Error ? error.message : String(error),
       });
