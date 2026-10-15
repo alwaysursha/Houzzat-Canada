@@ -8,6 +8,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   canAccessLead,
+  evaluateWorkspaceCrmFlagPairing,
+  isActiveHostnameBoundReadMode,
   leadScopeWhere,
   leadTenantWhere,
   parseCrmReadScope,
@@ -40,12 +42,46 @@ function ctx(overrides: Partial<CrmScopeContext> = {}): CrmScopeContext {
 }
 
 function withScope(mode: string) {
-  const prev = process.env.WORKSPACE_READ_SCOPE;
+  const prevRead = process.env.WORKSPACE_READ_SCOPE;
+  const prevDomain = process.env.TENANT_DOMAIN_SCOPE;
   process.env.WORKSPACE_READ_SCOPE = mode;
+  // Hostname-bound workspace CRM requires TENANT_DOMAIN_SCOPE=workspace too.
+  if (mode === "workspace") {
+    process.env.TENANT_DOMAIN_SCOPE = "workspace";
+  }
   return () => {
-    if (prev === undefined) delete process.env.WORKSPACE_READ_SCOPE;
-    else process.env.WORKSPACE_READ_SCOPE = prev;
+    if (prevRead === undefined) delete process.env.WORKSPACE_READ_SCOPE;
+    else process.env.WORKSPACE_READ_SCOPE = prevRead;
+    if (prevDomain === undefined) delete process.env.TENANT_DOMAIN_SCOPE;
+    else process.env.TENANT_DOMAIN_SCOPE = prevDomain;
   };
+}
+
+function testFlagPairingRequired() {
+  const prevRead = process.env.WORKSPACE_READ_SCOPE;
+  const prevDomain = process.env.TENANT_DOMAIN_SCOPE;
+  process.env.WORKSPACE_READ_SCOPE = "workspace";
+  delete process.env.TENANT_DOMAIN_SCOPE;
+  try {
+    assert.equal(isActiveHostnameBoundReadMode(), false);
+    assert.equal(evaluateWorkspaceCrmFlagPairing().ok, false);
+    assert.deepEqual(leadTenantWhere(ctx()), {
+      organizationId: { in: [ORG] },
+    });
+  } finally {
+    if (prevRead === undefined) delete process.env.WORKSPACE_READ_SCOPE;
+    else process.env.WORKSPACE_READ_SCOPE = prevRead;
+    if (prevDomain === undefined) delete process.env.TENANT_DOMAIN_SCOPE;
+    else process.env.TENANT_DOMAIN_SCOPE = prevDomain;
+  }
+
+  const restore = withScope("workspace");
+  try {
+    assert.equal(isActiveHostnameBoundReadMode(), true);
+    assert.equal(evaluateWorkspaceCrmFlagPairing().ok, true);
+  } finally {
+    restore();
+  }
 }
 
 function testSemantics() {
@@ -74,10 +110,12 @@ function testSemantics() {
 
 function testFailClosedNoOrgFallback() {
   const scope = read("src/lib/crm-read-scope.ts");
-  // Workspace branch must not fall back to organizationId
+  // Hostname-bound branch must not fall back to organizationId
   const wsLeadFn = scope.slice(scope.indexOf("export function leadTenantWhere"));
+  const boundIdx = wsLeadFn.indexOf("isActiveHostnameBoundReadMode()");
+  assert.ok(boundIdx >= 0, "leadTenantWhere must gate on hostname-bound mode");
   const wsBranch = wsLeadFn.slice(
-    wsLeadFn.indexOf('if (mode === "workspace")'),
+    boundIdx,
     wsLeadFn.indexOf("return { organizationId"),
   );
   assert.ok(wsBranch.includes("id: { in: [] }") || wsBranch.includes("NO_LEADS"));
@@ -172,7 +210,10 @@ function testAppointmentsTenantBound() {
 
 function testAssignableAgentsWorkspaceAware() {
   const helper = read("src/lib/agent/assignable-agents.ts");
-  assert.ok(helper.includes("isWorkspaceReadMode"));
+  assert.ok(
+    helper.includes("isActiveHostnameBoundReadMode") ||
+      helper.includes("isWorkspaceReadMode"),
+  );
   assert.ok(helper.includes("workspaceMember.findMany"));
   const leadsPage = read("src/app/(agent)/agent/leads/page.tsx");
   assert.ok(leadsPage.includes("listAssignableCrmAgents"));
@@ -244,6 +285,7 @@ function testSyncBrokerageSeatsDocumentedRisk() {
 }
 
 async function main() {
+  testFlagPairingRequired();
   testSemantics();
   testFailClosedNoOrgFallback();
   testIsolationMatrix();

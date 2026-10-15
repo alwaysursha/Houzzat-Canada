@@ -14,6 +14,7 @@ import {
   canAccessLead as canAccessLeadScoped,
   leadScopeWhere as leadScopeWhereScoped,
   parseCrmReadScope,
+  warnWorkspaceCrmFlagPairingOnce,
   type CrmReadScopeMode,
 } from "@/lib/crm-read-scope";
 import { isAdminRole, isAgentRole } from "@/lib/constants";
@@ -331,6 +332,8 @@ export async function requireAgentContextForRequest(
   options?: AgentContextFromRequestOptions,
 ): Promise<AgentOrgContext | null> {
   const allowSideEffects = options?.sideEffects === true;
+  // Misconfigured flag pair: warn only — does not alter lead query semantics.
+  warnWorkspaceCrmFlagPairingOnce();
   const user = await requireAgentUser();
   if (!user) return null;
 
@@ -425,6 +428,7 @@ export const requireAgentContextFromRequest = requireAgentContextForRequest;
  */
 export const requireAgentContext = cache(
   async (): Promise<AgentOrgContext | null> => {
+    warnWorkspaceCrmFlagPairingOnce();
     const user = await requireAgentUser();
     if (!user) return null;
     const request = await buildSyntheticRequestFromHeaders();

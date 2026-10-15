@@ -49,11 +49,18 @@ function baseCtx(overrides: Partial<CrmScopeContext> = {}): CrmScopeContext {
 }
 
 function withScope(mode: "legacy" | "shadow" | "workspace") {
-  const prev = process.env.WORKSPACE_READ_SCOPE;
+  const prevRead = process.env.WORKSPACE_READ_SCOPE;
+  const prevDomain = process.env.TENANT_DOMAIN_SCOPE;
   process.env.WORKSPACE_READ_SCOPE = mode;
+  // Hostname-bound workspace CRM requires TENANT_DOMAIN_SCOPE=workspace too.
+  if (mode === "workspace") {
+    process.env.TENANT_DOMAIN_SCOPE = "workspace";
+  }
   return () => {
-    if (prev === undefined) delete process.env.WORKSPACE_READ_SCOPE;
-    else process.env.WORKSPACE_READ_SCOPE = prev;
+    if (prevRead === undefined) delete process.env.WORKSPACE_READ_SCOPE;
+    else process.env.WORKSPACE_READ_SCOPE = prevRead;
+    if (prevDomain === undefined) delete process.env.TENANT_DOMAIN_SCOPE;
+    else process.env.TENANT_DOMAIN_SCOPE = prevDomain;
   };
 }
 

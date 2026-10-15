@@ -8,8 +8,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   canAccessLead,
+  evaluateWorkspaceCrmFlagPairing,
+  isActiveHostnameBoundReadMode,
   leadTenantWhere,
   parseCrmReadScope,
+  resetWorkspaceCrmFlagPairingWarningForTests,
+  warnWorkspaceCrmFlagPairingOnce,
 } from "../src/lib/crm-read-scope";
 import {
   BROKERAGE,
@@ -35,13 +39,77 @@ function read(rel: string) {
   return readFileSync(join(root, rel), "utf8");
 }
 
+/**
+ * Hostname-bound workspace CRM requires BOTH flags.
+ * WORKSPACE_READ_SCOPE=workspace alone is org-scoped and not multi-workspace safe.
+ */
 function withWorkspaceMode() {
-  const prev = process.env.WORKSPACE_READ_SCOPE;
+  const prevRead = process.env.WORKSPACE_READ_SCOPE;
+  const prevDomain = process.env.TENANT_DOMAIN_SCOPE;
   process.env.WORKSPACE_READ_SCOPE = "workspace";
+  process.env.TENANT_DOMAIN_SCOPE = "workspace";
   return () => {
-    if (prev === undefined) delete process.env.WORKSPACE_READ_SCOPE;
-    else process.env.WORKSPACE_READ_SCOPE = prev;
+    if (prevRead === undefined) delete process.env.WORKSPACE_READ_SCOPE;
+    else process.env.WORKSPACE_READ_SCOPE = prevRead;
+    if (prevDomain === undefined) delete process.env.TENANT_DOMAIN_SCOPE;
+    else process.env.TENANT_DOMAIN_SCOPE = prevDomain;
   };
+}
+
+/**
+ * Negative regression: mismatched flags must NOT be treated as workspace isolation.
+ * Documents the insecure org-fallback configuration.
+ */
+function testMismatchedFlagsDoNotIsolate() {
+  const prevRead = process.env.WORKSPACE_READ_SCOPE;
+  const prevDomain = process.env.TENANT_DOMAIN_SCOPE;
+  process.env.WORKSPACE_READ_SCOPE = "workspace";
+  delete process.env.TENANT_DOMAIN_SCOPE;
+  resetWorkspaceCrmFlagPairingWarningForTests();
+  try {
+    assert.equal(
+      isActiveHostnameBoundReadMode(),
+      false,
+      "mismatched flags must not activate hostname-bound mode",
+    );
+    const pairing = evaluateWorkspaceCrmFlagPairing();
+    assert.equal(pairing.ok, false);
+    if (!pairing.ok) {
+      assert.equal(pairing.reason, "workspace_read_without_domain_scope");
+    }
+
+    const ownerA = ctxFor("a", "OWNER", USERS.ownerA);
+    const tenant = leadTenantWhere(ownerA);
+    assert.deepEqual(tenant, {
+      organizationId: { in: ["org_legacy"] },
+    });
+
+    const aTeam = visibleLeadIds(ownerA, "team");
+    assert.ok(
+      aTeam.some((id) => id.startsWith("lead_b")),
+      "mismatched flags leak Workspace B leads via shared organizationId — not secure",
+    );
+
+    const warnings: string[] = [];
+    const prevWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      warnWorkspaceCrmFlagPairingOnce();
+      warnWorkspaceCrmFlagPairingOnce();
+    } finally {
+      console.warn = prevWarn;
+    }
+    assert.equal(warnings.length, 1, "warn once on mismatch");
+    assert.ok(warnings[0]!.includes("TENANT_DOMAIN_SCOPE"));
+  } finally {
+    if (prevRead === undefined) delete process.env.WORKSPACE_READ_SCOPE;
+    else process.env.WORKSPACE_READ_SCOPE = prevRead;
+    if (prevDomain === undefined) delete process.env.TENANT_DOMAIN_SCOPE;
+    else process.env.TENANT_DOMAIN_SCOPE = prevDomain;
+    resetWorkspaceCrmFlagPairingWarningForTests();
+  }
 }
 
 function assertDenied(ctx: ReturnType<typeof ctxFor>, leadId: string) {
@@ -283,9 +351,17 @@ function run(name: string, fn: () => void) {
 }
 
 async function main() {
+  run("mismatchedFlagsDoNotIsolate", testMismatchedFlagsDoNotIsolate);
+
   const restore = withWorkspaceMode();
   try {
     assert.equal(parseCrmReadScope(), "workspace");
+    assert.equal(
+      isActiveHostnameBoundReadMode(),
+      true,
+      "workspace isolation tests require hostname-bound mode (both flags)",
+    );
+    assert.equal(evaluateWorkspaceCrmFlagPairing().ok, true);
     run("fixtureShape", testFixtureShape);
     run("leadListIsolation", testLeadListIsolation);
     run("leadDetailIsolation", testLeadDetailIsolation);

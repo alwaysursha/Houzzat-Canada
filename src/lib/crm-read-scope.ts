@@ -41,6 +41,50 @@ export function isActiveHostnameBoundReadMode(): boolean {
   return isWorkspaceReadMode() && isTenantDomainScopeWorkspace();
 }
 
+/**
+ * Flag pairing for multi-workspace CRM isolation.
+ * WORKSPACE_READ_SCOPE=workspace alone is NOT hostname-bound isolation —
+ * leadTenantWhere stays organization-scoped until TENANT_DOMAIN_SCOPE=workspace.
+ */
+export type WorkspaceCrmFlagPairing =
+  | { ok: true; mode: "legacy_or_shadow" | "hostname_bound" }
+  | {
+      ok: false;
+      reason: "workspace_read_without_domain_scope";
+      message: string;
+    };
+
+export function evaluateWorkspaceCrmFlagPairing(): WorkspaceCrmFlagPairing {
+  if (isActiveHostnameBoundReadMode()) {
+    return { ok: true, mode: "hostname_bound" };
+  }
+  if (isWorkspaceReadMode() && !isTenantDomainScopeWorkspace()) {
+    return {
+      ok: false,
+      reason: "workspace_read_without_domain_scope",
+      message:
+        "[crm-read-scope] WORKSPACE_READ_SCOPE=workspace without TENANT_DOMAIN_SCOPE=workspace does not enable workspace CRM isolation (organizationId fallback). Not secure for multi-workspace tenants.",
+    };
+  }
+  return { ok: true, mode: "legacy_or_shadow" };
+}
+
+let workspaceCrmFlagPairingWarned = false;
+
+/** One-shot stderr warning — does not change query semantics. */
+export function warnWorkspaceCrmFlagPairingOnce(): void {
+  if (workspaceCrmFlagPairingWarned) return;
+  const pairing = evaluateWorkspaceCrmFlagPairing();
+  if (pairing.ok) return;
+  workspaceCrmFlagPairingWarned = true;
+  console.warn(pairing.message);
+}
+
+/** Test-only: reset one-shot warning latch. */
+export function resetWorkspaceCrmFlagPairingWarningForTests(): void {
+  workspaceCrmFlagPairingWarned = false;
+}
+
 export function leadTenantWhere(ctx: CrmScopeContext): Prisma.LeadWhereInput {
   if (isActiveHostnameBoundReadMode()) {
     if (
