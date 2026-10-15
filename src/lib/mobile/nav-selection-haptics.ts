@@ -1,26 +1,23 @@
 /**
- * Subtle selection haptics for HouzzatPro Private staff bottom tabs.
- * Private UI + native Capacitor only — no-ops on production PRO InstantShell
- * and mobile Chrome. Native plugin only — no web Vibration API fallback.
+ * Subtle selection haptics for HouzzatPro FullCRM staff bottom tabs.
+ * FullCRM Pro native only (Private UI marker or production FullCRM marker) —
+ * no-ops on legacy InstantShell Play builds and mobile Chrome.
+ * Native plugin only — no web Vibration API fallback.
  *
  * Important: the Capacitor selection-arm API alone does NOT vibrate on
  * Android. Use impact(Light) for a single tap.
  */
 import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
-import { HOUZZATPRO_PRIVATE_UI_UA_MARKER } from "@/lib/mobile/app-shell";
+import { prefersProFullCrmExperience } from "@/lib/mobile/app-shell";
 
 let lastHapticAt = 0;
 const MIN_GAP_MS = 80;
 
-function isPrivateProUi(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return navigator.userAgent.includes(HOUZZATPRO_PRIVATE_UI_UA_MARKER);
-}
-
 /** Light impact feedback for intentional bottom-nav taps only. */
 export function triggerStaffNavSelectionHaptic(): void {
-  if (!isPrivateProUi()) return;
+  if (typeof navigator === "undefined") return;
+  if (!prefersProFullCrmExperience(navigator.userAgent)) return;
   if (!Capacitor.isNativePlatform()) return;
 
   const now = Date.now();

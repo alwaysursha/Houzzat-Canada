@@ -114,7 +114,7 @@ function testWiring() {
 
   const haptics = read("src/lib/mobile/nav-selection-haptics.ts");
   assert.ok(haptics.includes("@capacitor/haptics"));
-  assert.ok(haptics.includes("HOUZZATPRO_PRIVATE_UI_UA_MARKER"));
+  assert.ok(haptics.includes("prefersProFullCrmExperience"));
   assert.ok(haptics.includes("ImpactStyle.Light"));
   assert.ok(haptics.includes("Haptics.impact"));
   assert.equal(haptics.includes("navigator.vibrate"), false);
@@ -130,9 +130,10 @@ function testWiring() {
   const manifest = read("android-pro-private/app/src/main/AndroidManifest.xml");
   assert.ok(manifest.includes("android.permission.VIBRATE"));
 
-  // Production PRO tree must not pick up private VIBRATE / haptics edits casually.
+  // Production FullCRM candidate also carries VIBRATE; Private tree remains intact.
   const prodManifest = read("android-pro/app/src/main/AndroidManifest.xml");
-  assert.equal(prodManifest.includes("android.permission.VIBRATE"), false);
+  assert.ok(prodManifest.includes("android.permission.VIBRATE"));
+  assert.equal(prodManifest.includes("PrivateFirebaseApp"), false);
 }
 
 function main() {

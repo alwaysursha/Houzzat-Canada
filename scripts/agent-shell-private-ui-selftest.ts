@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  HOUZZATPRO_FULL_CRM_UA_MARKER,
   HOUZZATPRO_PRIVATE_UI_UA_MARKER,
   mapNativeAppId,
   nativeAppIdFromUserAgent,
@@ -23,6 +24,8 @@ function read(rel: string) {
 
 const PROD_PRO_UA =
   "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 HouzzatNative/1 (com.houzzat.pro)";
+const FULLCRM_PRO_UA =
+  `Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 HouzzatNative/1 (com.houzzat.pro) ${HOUZZATPRO_FULL_CRM_UA_MARKER}`;
 const PRIVATE_PRO_UA =
   "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 HouzzatNative/1 (com.houzzat.pro) HouzzatProPrivateUI/1";
 const CHROME_MOBILE_UA =
@@ -32,9 +35,13 @@ const UNKNOWN_NATIVE_UA =
 
 function testInstantShellMatrix() {
   assert.equal(HOUZZATPRO_PRIVATE_UI_UA_MARKER, "HouzzatProPrivateUI/1");
+  assert.equal(HOUZZATPRO_FULL_CRM_UA_MARKER, "HouzzatProFullCRM/1");
 
-  // Production PRO → InstantShell
+  // Legacy Play PRO (no FullCRM marker) → InstantShell
   assert.equal(shouldUseProNativeInstantShell(PROD_PRO_UA), true);
+
+  // Production FullCRM candidate → full responsive CRM
+  assert.equal(shouldUseProNativeInstantShell(FULLCRM_PRO_UA), false);
 
   // Private PRO → full responsive CRM (bypass InstantShell)
   assert.equal(shouldUseProNativeInstantShell(PRIVATE_PRO_UA), false);
@@ -118,12 +125,15 @@ function testWiring() {
   assert.ok(privateCap.includes("HouzzatProPrivateUI/1"));
 
   // Production PRO Capacitor config must NOT carry the private UI marker.
+  // FullCRM marker is expected on the 1.0.7+ candidate (after cap sync).
   const prodCap = read("android-pro/app/src/main/assets/capacitor.config.json");
   assert.ok(prodCap.includes("HouzzatNative/1 (com.houzzat.pro)"));
   assert.equal(prodCap.includes("HouzzatProPrivateUI"), false);
+  assert.ok(prodCap.includes(HOUZZATPRO_FULL_CRM_UA_MARKER));
 
   const prodConfigTs = read("capacitor.config.pro.ts");
   assert.equal(prodConfigTs.includes("HouzzatProPrivateUI"), false);
+  assert.ok(prodConfigTs.includes(HOUZZATPRO_FULL_CRM_UA_MARKER));
 }
 
 function main() {

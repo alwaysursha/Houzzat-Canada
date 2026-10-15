@@ -37,6 +37,25 @@ export function nativeUserAgentMarker(appId: string): string {
  */
 export const HOUZZATPRO_PRIVATE_UI_UA_MARKER = "HouzzatProPrivateUI/1";
 
+/**
+ * Production Pro candidate / Play update capability marker.
+ * Enables full responsive CRM, Launchpad default landing, and nav haptics.
+ * Older installed Play builds without this marker keep InstantShell until update.
+ * Never used for auth or authorization. Distinct from Private UI marker.
+ */
+export const HOUZZATPRO_FULL_CRM_UA_MARKER = "HouzzatProFullCRM/1";
+
+/** Full CRM experience (Private sideload OR production FullCRM candidate). */
+export function prefersProFullCrmExperience(
+  userAgent: string | null | undefined,
+): boolean {
+  if (!userAgent) return false;
+  return (
+    userAgent.includes(HOUZZATPRO_PRIVATE_UI_UA_MARKER) ||
+    userAgent.includes(HOUZZATPRO_FULL_CRM_UA_MARKER)
+  );
+}
+
 const NATIVE_UA_PATTERN = new RegExp(
   `${NATIVE_UA_PRODUCT}\\/\\d+\\s*\\(([^)]*)\\)`,
 );
@@ -125,8 +144,8 @@ export function nativeAppIdFromUserAgent(
  * Whether AgentShell should mount AgentMobileInstantShell.
  * UX / layout selection only — never grants roles or bypasses gates.
  *
- * - Production PRO UA (`com.houzzat.pro`, no private marker) → InstantShell
- * - Private PRO UA (private marker present) → full responsive CRM
+ * - Legacy Play PRO UA (`com.houzzat.pro`, no FullCRM/Private marker) → InstantShell
+ * - Production FullCRM candidate / Private PRO UA → full responsive CRM
  * - Mobile Chrome / no PRO claim → full responsive CRM
  * - Unknown native appId → no InstantShell (staff routes still gated elsewhere)
  */
@@ -134,7 +153,7 @@ export function shouldUseProNativeInstantShell(
   userAgent: string | null | undefined,
 ): boolean {
   if (!userAgent) return false;
-  if (userAgent.includes(HOUZZATPRO_PRIVATE_UI_UA_MARKER)) return false;
+  if (prefersProFullCrmExperience(userAgent)) return false;
   return nativeAppIdFromUserAgent(userAgent) === HOUZZATPRO_APP_ID;
 }
 

@@ -1,14 +1,17 @@
 /** Stage 3K.5.10 — tenant mobile destination from WorkspaceMember role. */
 import type { WorkspaceMemberRole } from "@prisma/client";
-import { HOUZZATPRO_PRIVATE_UI_UA_MARKER } from "@/lib/mobile/app-shell";
+import {
+  HOUZZATPRO_PRIVATE_UI_UA_MARKER,
+  prefersProFullCrmExperience,
+} from "@/lib/mobile/app-shell";
 
 /** Allowlisted owner onboarding post-handoff path (Stage 6.10C.3). */
 export const MOBILE_HANDOFF_ONBOARDING_PATH = "/onboarding" as const;
 
 /**
  * Agent Launchpad (`AgentLaunchpadPage` + Quick Modules) — default cold-start
- * landing for HouzzatPro Private Android only. Not used by production PRO /
- * mobile Chrome.
+ * landing for FullCRM Pro shells (Private sideload + production FullCRM
+ * candidate). Legacy InstantShell Play builds and mobile Chrome unchanged.
  */
 export const PRIVATE_PRO_DEFAULT_LANDING_PATH = "/agent" as const;
 
@@ -25,17 +28,17 @@ export function isHouzzatProPrivateUiUserAgent(
 }
 
 /**
- * Remap role CRM defaults for the private sideload shell only.
- * OWNER/ADMIN role default `/admin` → Launchpad `/agent`. AGENT already lands
- * on `/agent`. Preserves onboarding, deep agent/admin paths, and any
- * non-default destination (push / pending intent / explicit return).
- * Does not change production PRO or mobile Chrome.
+ * Remap role CRM defaults for FullCRM Pro shells (Private UI or production
+ * FullCRM marker). OWNER/ADMIN role default `/admin` → Launchpad `/agent`.
+ * AGENT already lands on `/agent`. Preserves onboarding, deep agent/admin
+ * paths, and any non-default destination (push / pending intent / explicit
+ * return). Legacy Play PRO without FullCRM marker stays on `/admin`.
  */
 export function resolveHouzzatProPrivateStartupDestination(
   destination: string,
   userAgent?: string | null,
 ): string {
-  if (!isHouzzatProPrivateUiUserAgent(userAgent)) return destination;
+  if (!prefersProFullCrmExperience(userAgent)) return destination;
   if (destination === "/admin") {
     return PRIVATE_PRO_DEFAULT_LANDING_PATH;
   }

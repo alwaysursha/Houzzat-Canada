@@ -20,11 +20,18 @@ const PRODUCTION_PRO_SERVER_URL = "https://app.houzzatpro.com/pro/sign-in";
 const proServerUrl =
   process.env.HOUZZAT_CAP_PRO_SERVER_URL?.trim() || PRODUCTION_PRO_SERVER_URL;
 
+/**
+ * HouzzatProFullCRM/1 — production candidate capability marker (not Private UI).
+ * Web gates full responsive CRM + Launchpad default + nav haptics on this token.
+ * Installed Play builds without the marker keep InstantShell until users update.
+ */
+const PRO_FULL_CRM_UA_MARKER = "HouzzatProFullCRM/1";
+
 const config: CapacitorConfig = {
   appId: "com.houzzat.pro",
   appName: "HouzzatPro",
   webDir: "mobile/www",
-  appendUserAgent: "HouzzatNative/1 (com.houzzat.pro)",
+  appendUserAgent: `HouzzatNative/1 (com.houzzat.pro) ${PRO_FULL_CRM_UA_MARKER}`,
   server: {
     url: proServerUrl,
     cleartext: false,
