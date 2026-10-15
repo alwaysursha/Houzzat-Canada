@@ -89,7 +89,7 @@ export async function GET(request: Request, { params }: Params) {
     : [];
 
   const session = await auth();
-  const user = session?.user?.email
+  const user = session?.user?.id
     ? await prisma.user.findUnique({
         where: { id: session.user.id },
         select: { id: true, emailVerified: true, createdAt: true },

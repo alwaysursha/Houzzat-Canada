@@ -181,7 +181,9 @@ export default async function ListingDetailPage({
 
   const session = await auth();
   // Access fields only on SSR — save/watch/note/phone/prefs load after paint.
-  const user = session?.user?.email
+  // Resolve by session user id (not email): phone/OAuth sessions may omit email
+  // on the JWT briefly while still being a registered client.
+  const user = session?.user?.id
     ? await prisma.user.findUnique({
         where: { id: session.user.id },
         select: {

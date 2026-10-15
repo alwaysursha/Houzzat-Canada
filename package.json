@@ -57,6 +57,7 @@
     "search-results-copy:selftest": "node --import tsx scripts/search-results-copy-selftest.ts",
     "nl-search-parser-v2:selftest": "node --import tsx scripts/nl-search-parser-v2-selftest.ts",
     "unified-search-routing:selftest": "node --import tsx scripts/unified-search-routing-selftest.ts",
+    "prod-search-hotfix:selftest": "node --import tsx scripts/prod-search-hotfix-selftest.ts",
     "nl-search-chips-saved:selftest": "node --import tsx scripts/nl-search-chips-saved-selftest.ts",
     "final-integrated-qa:selftest": "node --import tsx scripts/final-integrated-qa-selftest.ts",
     "capture-intent:selftest": "node --import tsx scripts/capture-intent-selftest.ts",

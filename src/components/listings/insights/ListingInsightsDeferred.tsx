@@ -36,10 +36,13 @@ export function ListingInsightsDeferred({
   mlsNumber,
   callbackPath,
   needsEmailVerification = false,
+  canSeeRestricted = false,
 }: {
   mlsNumber: string;
   callbackPath: string;
   needsEmailVerification?: boolean;
+  /** SSR client/VOW access — used to detect stale guest-cached insights. */
+  canSeeRestricted?: boolean;
 }) {
   const brandDisplayName = useTenantDisplayName("Houzzat");
   const [insights, setInsights] = useState<ListingInsightsPayload | null>(null);
@@ -53,12 +56,40 @@ export function ListingInsightsDeferred({
       try {
         const res = await fetch(
           `/api/listings/${encodeURIComponent(mlsNumber)}/insights`,
-          { signal: controller.signal },
+          {
+            signal: controller.signal,
+            cache: "no-store",
+            credentials: "same-origin",
+          },
         );
         if (!res.ok) throw new Error(`insights ${res.status}`);
         const data = (await res.json()) as { insights?: ListingInsightsPayload };
         if (cancelled) return;
         if (!data.insights) throw new Error("missing insights");
+
+        // SSR says client access but payload is still guest-locked — one retry
+        // in case a prior private cache served a visitor response.
+        if (canSeeRestricted && !data.insights.signedIn) {
+          const retry = await fetch(
+            `/api/listings/${encodeURIComponent(mlsNumber)}/insights`,
+            {
+              signal: controller.signal,
+              cache: "no-store",
+              credentials: "same-origin",
+              headers: { "Cache-Control": "no-cache" },
+            },
+          );
+          if (retry.ok) {
+            const retryData = (await retry.json()) as {
+              insights?: ListingInsightsPayload;
+            };
+            if (!cancelled && retryData.insights) {
+              setInsights(retryData.insights);
+              return;
+            }
+          }
+        }
+
         setInsights(data.insights);
       } catch (error) {
         if (cancelled || controller.signal.aborted) return;
@@ -72,7 +103,7 @@ export function ListingInsightsDeferred({
       cancelled = true;
       controller.abort();
     };
-  }, [mlsNumber]);
+  }, [mlsNumber, canSeeRestricted]);
 
   if (insights) {
     return (

@@ -580,6 +580,7 @@ export function ListingDetailView({
             mlsNumber={listing.mlsNumber}
             callbackPath={canonicalPath}
             needsEmailVerification={verifyLocked}
+            canSeeRestricted={canSeeRestricted}
           />
 
           <ListingRelatedSection

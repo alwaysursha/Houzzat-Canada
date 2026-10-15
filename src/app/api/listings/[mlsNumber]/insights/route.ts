@@ -51,7 +51,7 @@ export async function GET(request: Request, { params }: Params) {
   }
 
   const session = await auth();
-  const userId = session?.user?.id;
+  const userId = session?.user?.id?.trim() || null;
   const user = userId
     ? await prisma.user
         .findUnique({
@@ -122,8 +122,8 @@ export async function GET(request: Request, { params }: Params) {
       { insights },
       {
         headers: {
-          // Short private cache — page navigations reuse while warm.
-          "Cache-Control": "private, max-age=30",
+          // Auth-dependent (VOW / sold). Never reuse a guest payload after sign-in.
+          "Cache-Control": "private, no-store",
         },
       },
     );
