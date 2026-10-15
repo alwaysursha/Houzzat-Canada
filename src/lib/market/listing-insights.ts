@@ -18,6 +18,10 @@ import {
   type BasementFinish,
   type ValuationConfidence,
 } from "@/lib/market/home-value-estimate";
+import {
+  homeValueInsufficientDisclaimer,
+  homeValueOkDisclaimer,
+} from "@/lib/market/home-value-presentation";
 import type { MarketPulse } from "@/lib/market/pulse";
 import type { NearbyPoi } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
@@ -697,8 +701,8 @@ export async function buildListingInsights(opts: {
         signedIn && okEstimate ? okEstimate.communityAvgSold : null,
       disclaimer:
         homeValue.status === "INSUFFICIENT_DATA"
-          ? "Insufficient reliable sold comparables for an indicative estimate."
-          : "Houzzat Estimated Value is an indicative range from recent sold comparables in entitled inventory. Not an appraisal, formal CMA, or lender valuation.",
+          ? homeValueInsufficientDisclaimer()
+          : homeValueOkDisclaimer(),
     },
     timing: {
       possessionLabel: possessionBits.length ? possessionBits.join(" · ") : null,

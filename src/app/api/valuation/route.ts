@@ -25,6 +25,7 @@ import {
   type EstimateHomeValueResult,
   type HomeValueEstimateOk,
 } from "@/lib/market/home-value-estimate";
+import { homeValueOkDisclaimer } from "@/lib/market/home-value-presentation";
 import { sendNotification } from "@/lib/notifications";
 import {
   notifyNewLeadCapturedToStaff,
@@ -112,8 +113,7 @@ function estimatePayload(estimate: HomeValueEstimateOk) {
     community: estimate.community,
     communityAvgSold: estimate.communityAvgSold,
     communitySoldCount: estimate.communitySoldCount,
-    disclaimer:
-      "Indicative range from recent sold comparables in Houzzat’s entitled inventory. Not a formal appraisal or guarantee of sale price. A local review sharpens the number for your specific property.",
+    disclaimer: homeValueOkDisclaimer(),
   };
 }
 

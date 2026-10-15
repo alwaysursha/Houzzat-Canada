@@ -20,7 +20,16 @@ import { Input } from "@/components/ui/input";
 import { useExpertWhatsAppNumber } from "@/components/whatsapp/useExpertWhatsAppNumber";
 import { formatPrice, propertyTypeLabel } from "@/lib/listings/constants";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
-import type { BasementFinish } from "@/lib/market/home-value-estimate";
+import type {
+  BasementFinish,
+  ValuationConfidence,
+} from "@/lib/market/home-value-estimate";
+import {
+  HOME_VALUE_CONFIDENCE_EVIDENCE_NOTE,
+  HOME_VALUE_DISCLAIMER,
+  formatValuationConfidence,
+  isValuationConfidence,
+} from "@/lib/market/home-value-presentation";
 import { cn } from "@/lib/utils";
 import { buildValuationMeetingWhatsAppUrl } from "@/lib/whatsapp";
 
@@ -34,6 +43,7 @@ type EstimateResult = {
   soldCount?: number;
   activeCount?: number;
   method?: string;
+  confidence?: ValuationConfidence | null;
   city?: string | null;
   community?: string | null;
   communityAvgSold?: number | null;
@@ -216,10 +226,15 @@ function EstimatePreviewWindow({
               </p>
               <p className="mt-2 text-sm text-ink/55">
                 Midpoint{" "}
-                <span className="font-semibold text-ink">
+                <span className="font-medium text-ink/80">
                   {formatPrice(result.mid)}
                 </span>
               </p>
+              {isValuationConfidence(result.confidence) ? (
+                <p className="mt-3 text-xs font-medium text-ink/65">
+                  {formatValuationConfidence(result.confidence)}
+                </p>
+              ) : null}
             </>
           ) : insufficient ? (
             <p className="mx-auto max-w-sm text-sm leading-relaxed text-ink/60">
@@ -272,6 +287,14 @@ function EstimatePreviewWindow({
                   Based on{" "}
                   {(result.soldCount ?? 0) + (result.activeCount ?? 0)} nearby
                   homes in Houzzat inventory
+                </p>
+              ) : null}
+              <p className="text-[11px] leading-relaxed text-ink/45">
+                {result.disclaimer?.trim() || HOME_VALUE_DISCLAIMER}
+              </p>
+              {isValuationConfidence(result.confidence) ? (
+                <p className="text-[11px] leading-relaxed text-ink/40">
+                  {HOME_VALUE_CONFIDENCE_EVIDENCE_NOTE}
                 </p>
               ) : null}
               <a
@@ -1044,8 +1067,18 @@ export function HomeValuationForm({
                     Your range is on the right
                   </h2>
                   <p className="mt-2 text-sm leading-relaxed text-ink/65">
-                    {result.disclaimer}
+                    {result.disclaimer?.trim() || HOME_VALUE_DISCLAIMER}
                   </p>
+                  {isValuationConfidence(result.confidence) ? (
+                    <p className="mt-2 text-sm text-ink/60">
+                      <span className="font-semibold text-ink">
+                        {formatValuationConfidence(result.confidence)}
+                      </span>
+                      <span className="mt-1 block text-xs text-ink/45">
+                        {HOME_VALUE_CONFIDENCE_EVIDENCE_NOTE}
+                      </span>
+                    </p>
+                  ) : null}
                 </div>
 
                 {result.communityAvgSold != null &&

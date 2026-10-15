@@ -2,17 +2,22 @@ export const ESTIMATOR_FAQS = [
   {
     question: "How is my home value calculated?",
     answer:
-      "We look at similar homes in Houzzat’s Ontario inventory—especially recent sales near your address—then cross-check with comparable homes currently listed. You get an indicative low-to-high range, not a single guaranteed price.",
+      "We look at similar sold homes in Houzzat’s entitled Ontario inventory near your address. You get an automated low-to-high range with a midpoint for reference—not a single guaranteed price.",
   },
   {
     question: "Is this the same as a professional appraisal?",
     answer:
-      "No. An appraisal is a formal opinion prepared by a licensed appraiser, often for a lender. This tool gives a market-based starting range so you can understand local pricing before you talk to a professional.",
+      "No. An appraisal is a formal opinion prepared by a licensed appraiser, often for a lender. This tool is an automated estimate based on available sold properties so you can understand local pricing before you talk to a professional.",
+  },
+  {
+    question: "What does Low, Medium, or High confidence mean?",
+    answer:
+      "Confidence describes comparable evidence quality—how much nearby sold support we found—not a verified prediction accuracy rate. Low means limited comparable data; Medium means moderate support; High means stronger comparable support.",
   },
   {
     question: "Why do I get a range instead of one number?",
     answer:
-      "Two homes on the same street can sell for different amounts based on condition, upgrades, lot, and timing. A range reflects that natural spread in nearby sales and listings.",
+      "Two homes on the same street can sell for different amounts based on condition, upgrades, lot, and timing. A range reflects that natural spread in nearby sold properties; the midpoint is a secondary reference within that range.",
   },
   {
     question: "What property types can I estimate?",

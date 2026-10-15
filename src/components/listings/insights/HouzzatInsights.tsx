@@ -26,6 +26,12 @@ import {
 } from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
 import type { ListingInsightsPayload } from "@/lib/market/listing-insights";
+import {
+  HOME_VALUE_CONFIDENCE_EVIDENCE_NOTE,
+  HOME_VALUE_DISCLAIMER,
+  formatValuationConfidence,
+  isValuationConfidence,
+} from "@/lib/market/home-value-presentation";
 import { cn } from "@/lib/utils";
 
 function formatCompAddress(comp: {
@@ -263,7 +269,7 @@ export function HouzzatInsights({
           <PanelTitle
             eyebrow={`${brandDisplayName} Estimated Value`}
             title="What this home looks worth today"
-            hint="Value is just an estimate using AI technology, not an appraisal."
+            hint={HOME_VALUE_DISCLAIMER}
           />
           {valuation.restricted ? (
             <InsightGate
@@ -274,14 +280,14 @@ export function HouzzatInsights({
               }
               body={
                 needsEmailVerification
-                  ? "Verify your email to unlock the low–mid–high estimate built from recent sold comparables."
-                  : `Sign in as a ${brandDisplayName} client to unlock the low–mid–high estimate built from recent sold comparables.`
+                  ? "Verify your email to unlock the estimated value range built from recent sold comparables."
+                  : `Sign in as a ${brandDisplayName} client to unlock the estimated value range built from recent sold comparables.`
               }
               callbackPath={callbackPath}
               needsEmailVerification={needsEmailVerification}
             >
               <div className="flex h-40 flex-col items-center justify-end gap-3 px-6 pb-5">
-                <p className="font-display text-3xl text-canopy/40">$—,———,———</p>
+                <p className="font-display text-3xl text-canopy/40">$— – $—</p>
                 <div className="flex w-full max-w-md items-end justify-center gap-4">
                   <div className="h-14 flex-1 rounded-t-lg bg-canopy/15" />
                   <div className="h-28 flex-1 rounded-t-lg bg-canopy/30" />
@@ -298,16 +304,33 @@ export function HouzzatInsights({
                 We don&apos;t have enough reliable comparable property data to
                 provide an accurate estimate for this home.
               </p>
+              <p className="text-[11px] text-ink/45">
+                {valuation.disclaimer}
+              </p>
             </div>
           ) : (
             <div>
               <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink/40">
-                    Estimated value
+                    Estimated range
                   </p>
-                  <p className="font-display text-4xl text-canopy sm:text-5xl">
-                    <ResponsivePrice amount={valuation.mid} />
+                  <p className="font-display text-3xl text-canopy sm:text-4xl">
+                    {valuation.low != null && valuation.high != null ? (
+                      <>
+                        <ResponsivePrice amount={valuation.low} />
+                        {" – "}
+                        <ResponsivePrice amount={valuation.high} />
+                      </>
+                    ) : (
+                      <ResponsivePrice amount={valuation.mid} />
+                    )}
+                  </p>
+                  <p className="mt-2 text-sm text-ink/55">
+                    Midpoint{" "}
+                    <span className="font-medium text-ink/80">
+                      <ResponsivePrice amount={valuation.mid} />
+                    </span>
                   </p>
                   {valuation.vsListPct != null ? (
                     <p className="mt-1 text-sm text-ink/55">
@@ -316,7 +339,12 @@ export function HouzzatInsights({
                         {valuation.vsListPct > 0 ? "+" : ""}
                         {valuation.vsListPct}%
                       </span>{" "}
-                      vs this estimate
+                      vs midpoint
+                    </p>
+                  ) : null}
+                  {isValuationConfidence(valuation.confidence) ? (
+                    <p className="mt-2 text-xs font-medium text-ink/65">
+                      {formatValuationConfidence(valuation.confidence)}
                     </p>
                   ) : null}
                 </div>
@@ -330,34 +358,6 @@ export function HouzzatInsights({
                     : ""}
                 </p>
               </div>
-              <div className="mt-5 grid grid-cols-3 gap-3 text-center">
-                <div className="rounded-xl border border-line bg-mist/50 px-3 py-3">
-                  <p className="text-[11px] text-ink/45">Low</p>
-                  <p className="font-display text-xl text-ink">
-                    {valuation.low != null ? (
-                      <ResponsivePrice amount={valuation.low} />
-                    ) : (
-                      "—"
-                    )}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-canopy/30 bg-canopy/5 px-3 py-3">
-                  <p className="text-[11px] text-canopy">Mid</p>
-                  <p className="font-display text-xl text-canopy">
-                    <ResponsivePrice amount={valuation.mid} />
-                  </p>
-                </div>
-                <div className="rounded-xl border border-line bg-mist/50 px-3 py-3">
-                  <p className="text-[11px] text-ink/45">High</p>
-                  <p className="font-display text-xl text-ink">
-                    {valuation.high != null ? (
-                      <ResponsivePrice amount={valuation.high} />
-                    ) : (
-                      "—"
-                    )}
-                  </p>
-                </div>
-              </div>
               {valuation.communityAvgSold != null ? (
                 <p className="mt-3 text-xs text-ink/50">
                   Area avg recent sold:{" "}
@@ -366,7 +366,14 @@ export function HouzzatInsights({
                   </span>
                 </p>
               ) : null}
-              <p className="mt-3 text-[11px] text-ink/45">{valuation.disclaimer}</p>
+              <p className="mt-3 text-[11px] text-ink/45">
+                {valuation.disclaimer?.trim() || HOME_VALUE_DISCLAIMER}
+              </p>
+              {isValuationConfidence(valuation.confidence) ? (
+                <p className="mt-1 text-[11px] text-ink/40">
+                  {HOME_VALUE_CONFIDENCE_EVIDENCE_NOTE}
+                </p>
+              ) : null}
             </div>
           )}
         </Panel>

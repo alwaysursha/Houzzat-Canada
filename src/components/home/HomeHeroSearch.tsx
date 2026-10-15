@@ -10,6 +10,7 @@ import { routeFreeTextInventorySearch } from "@/lib/listings/unified-search-rout
 import { pushHref } from "@/lib/listings/navigate-listing";
 import { pushLocalRecentSearch } from "@/lib/listings/recent-searches-local";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
+import { HOME_VALUE_DISCLAIMER } from "@/lib/market/home-value-presentation";
 import { cn } from "@/lib/utils";
 
 type Mode = "buy" | "rent" | "sell";
@@ -384,8 +385,8 @@ export function HomeHeroSearch({
                   : "text-white/70",
             )}
           >
-            Estimated value is pulled using technology. For a precise valuation,
-            book an appointment with us.
+            {HOME_VALUE_DISCLAIMER} For a precise valuation, book an appointment
+            with us.
           </p>
           {error ? (
             <p

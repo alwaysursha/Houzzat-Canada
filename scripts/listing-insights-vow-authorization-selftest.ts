@@ -229,7 +229,20 @@ function main() {
   const rangesStillGated = lib.includes(
     "rangeLow: signedIn ? rangeLow",
   );
-  const valuationStillGated = lib.includes("const valMid = signedIn ? homeValue.mid : null");
+  // V2 estimate path: dollars + confidence only when signedIn && OK estimate.
+  const valuationStillGated =
+    lib.includes(
+      "const valMid = signedIn && okEstimate ? okEstimate.mid : null",
+    ) &&
+    lib.includes(
+      "const valLow = signedIn && okEstimate ? okEstimate.low : null",
+    ) &&
+    lib.includes(
+      "const valHigh = signedIn && okEstimate ? okEstimate.high : null",
+    ) &&
+    lib.includes(
+      "confidence: signedIn && okEstimate ? okEstimate.confidence : null",
+    );
   assert.ok(compsStillGated && rangesStillGated && valuationStillGated);
 
   console.log("listing-insights-vow-authorization selftest: ok");
