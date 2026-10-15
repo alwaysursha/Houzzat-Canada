@@ -1071,6 +1071,74 @@ export function AddressAutocomplete({
         if (stillCurrent()) setLoading(false);
       }
 
+      // Valuation / fillOnly Google forms: if Places details omitted city/coords,
+      // try the civic address resolver (exact house only — never invent pins).
+      const needsCivicFallback =
+        fillOnly &&
+        source === "google" &&
+        (typeof resolved.lat !== "number" ||
+          typeof resolved.lng !== "number" ||
+          !resolved.city?.trim());
+      if (needsCivicFallback) {
+        setLoading(true);
+        try {
+          const queryForResolve = [
+            suggestion.label,
+            suggestion.city,
+            suggestion.province,
+          ]
+            .filter(Boolean)
+            .join(", ")
+            .trim() || query.trim();
+          const apiResult = await fetchPropertyAddressResolve({
+            query: queryForResolve,
+            placeId: suggestion.placeId,
+            unitNumber: suggestion.unitNumber,
+            sessionToken,
+          });
+          if (!stillCurrent()) return;
+          if (apiResult.ok) {
+            const patch = {
+              label: apiResult.address.streetNumber
+                ? [
+                    apiResult.address.streetNumber,
+                    apiResult.address.streetName,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                : suggestion.label,
+              city: apiResult.address.city ?? undefined,
+              community: apiResult.address.community,
+              province: apiResult.address.province ?? undefined,
+              postalCode: apiResult.address.postalCode,
+              unitNumber: apiResult.address.unitNumber,
+              lat: apiResult.address.lat ?? undefined,
+              lng: apiResult.address.lng ?? undefined,
+              placeId: apiResult.address.placeId ?? suggestion.placeId,
+              houseNumber: apiResult.address.streetNumber,
+            };
+            // Reject street-centroid resolves (no civic number).
+            if (
+              typeof patch.lat === "number" &&
+              typeof patch.lng === "number" &&
+              patch.city?.trim() &&
+              patch.houseNumber?.trim()
+            ) {
+              resolved = {
+                ...resolved,
+                ...patch,
+                type: "place",
+                group: "addresses",
+              };
+            }
+          }
+        } catch {
+          // Resolver optional — parent form may still attempt verify on submit.
+        } finally {
+          if (stillCurrent()) setLoading(false);
+        }
+      }
+
       // Selecting a Google address on Buy/Rent → show around-options in-panel
       // when caller didn't pass a custom handler that navigates immediately.
       if (source === "listings" && !fillOnly) {

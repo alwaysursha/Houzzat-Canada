@@ -25,11 +25,21 @@ import type {
   ValuationConfidence,
 } from "@/lib/market/home-value-estimate";
 import {
+  VALUATION_ADDRESS_RESELECT_MESSAGE,
+  VALUATION_ADDRESS_UNVERIFIED_MESSAGE,
+  addressQueryMatchesVerified,
+  isVerifiedValuationLocation,
+  verifiedLocationFromResolve,
+  verifiedLocationFromSuggestion,
+  type VerifiedValuationLocation,
+} from "@/lib/market/home-value-address";
+import {
   HOME_VALUE_CONFIDENCE_EVIDENCE_NOTE,
   HOME_VALUE_DISCLAIMER,
   formatValuationConfidence,
   isValuationConfidence,
 } from "@/lib/market/home-value-presentation";
+import { fetchPropertyAddressResolve } from "@/lib/property-address/search-integration";
 import { cn } from "@/lib/utils";
 import { buildValuationMeetingWhatsAppUrl } from "@/lib/whatsapp";
 
@@ -111,12 +121,14 @@ function nearbySoldHref(opts: {
 function EstimatePreviewWindow({
   result,
   address,
+  locationVerified,
   pending,
   showCommunityAvg,
   estimateStatus,
 }: {
   result: EstimateResult | null;
   address: string;
+  locationVerified: boolean;
   pending: boolean;
   showCommunityAvg: boolean;
   estimateStatus: "OK" | "INSUFFICIENT_DATA" | "AUTH_REQUIRED" | null;
@@ -124,6 +136,7 @@ function EstimatePreviewWindow({
   const revealed = Boolean(result);
   const insufficient = estimateStatus === "INSUFFICIENT_DATA";
   const authRequired = estimateStatus === "AUTH_REQUIRED";
+  const showAddress = locationVerified && Boolean(address.trim());
 
   return (
     <aside
@@ -253,9 +266,14 @@ function EstimatePreviewWindow({
           )}
         </div>
 
-        {address.trim() ? (
+        {showAddress ? (
           <p className="mt-4 line-clamp-2 text-center text-xs text-ink/50">
             {address}
+          </p>
+        ) : address.trim() ? (
+          <p className="mt-4 text-center text-xs text-ink/45">
+            Address entered — select a suggestion or continue so we can verify
+            the map location.
           </p>
         ) : (
           <p className="mt-4 text-center text-xs text-ink/40">
@@ -313,14 +331,18 @@ function EstimatePreviewWindow({
                     ? "Insufficient Market Data"
                     : authRequired
                       ? "Client access required"
-                      : "Waiting for your address"}
+                      : showAddress
+                        ? "Ready for home details"
+                        : "Waiting for a verified address"}
               </p>
               <p className="mt-1 text-xs leading-relaxed text-ink/55">
                 {insufficient
                   ? "Contact a real estate expert for a local review."
                   : authRequired
                     ? "Register or sign in to unlock sold-based estimates."
-                    : "Your indicative range updates here as you add home details."}
+                    : showAddress
+                      ? "Your indicative range updates here as you add home details."
+                      : "Waiting for a verified address with city and map location."}
               </p>
             </div>
           )}
@@ -403,6 +425,16 @@ export function HomeValuationForm({
     const n = Number(initialLng);
     return Number.isFinite(n) ? n : undefined;
   });
+  const [placeId, setPlaceId] = useState<string | null>(null);
+  const [verifiedAddress, setVerifiedAddress] = useState<string | null>(() => {
+    const prefillOk = isVerifiedValuationLocation({
+      city: initialCity,
+      lat: initialLat ? Number(initialLat) : null,
+      lng: initialLng ? Number(initialLng) : null,
+      label: initialAddress,
+    });
+    return prefillOk ? initialAddress : null;
+  });
   const [firstName, setFirstName] = useState(initialContact?.firstName ?? "");
   const [lastName, setLastName] = useState(initialContact?.lastName ?? "");
   const [email, setEmail] = useState(initialContact?.email ?? "");
@@ -418,16 +450,92 @@ export function HomeValuationForm({
   const estimateRequestId = useRef(0);
   const submitLockRef = useRef(false);
 
+  const locationVerified = isVerifiedValuationLocation({
+    city,
+    lat,
+    lng,
+    label: verifiedAddress ?? address,
+  });
+
+  function applyVerifiedLocation(loc: VerifiedValuationLocation) {
+    setAddress(loc.address);
+    setVerifiedAddress(loc.address);
+    setCity(loc.city);
+    setCommunity(loc.community);
+    setLat(loc.lat);
+    setLng(loc.lng);
+    setPlaceId(loc.placeId);
+    setError(null);
+  }
+
+  function clearVerifiedLocation() {
+    setVerifiedAddress(null);
+    setCity("");
+    setCommunity(null);
+    setLat(undefined);
+    setLng(undefined);
+    setPlaceId(null);
+    setResult(null);
+    setEstimateStatus(null);
+  }
+
+  function onAddressQueryChange(query: string) {
+    setAddress(query);
+    if (
+      verifiedAddress &&
+      !addressQueryMatchesVerified(query, verifiedAddress)
+    ) {
+      clearVerifiedLocation();
+    }
+  }
+
   function onPlace(suggestion: AutocompleteSuggestion) {
-    setAddress(
-      suggestion.city && suggestion.province
-        ? `${suggestion.label}, ${suggestion.city}, ${suggestion.province}`
-        : suggestion.label,
-    );
-    if (suggestion.city) setCity(suggestion.city);
-    if (suggestion.community) setCommunity(suggestion.community);
-    if (typeof suggestion.lat === "number") setLat(suggestion.lat);
-    if (typeof suggestion.lng === "number") setLng(suggestion.lng);
+    const verified = verifiedLocationFromSuggestion(suggestion);
+    if (verified) {
+      applyVerifiedLocation(verified);
+      return;
+    }
+    // Incomplete suggestion (e.g. Places details failed) — keep typed label,
+    // clear any prior false verification so the panel cannot look "confirmed".
+    const label = (suggestion.subtitle ?? suggestion.label).trim();
+    if (label) setAddress(label);
+    clearVerifiedLocation();
+  }
+
+  async function ensureVerifiedLocation(): Promise<VerifiedValuationLocation | null> {
+    if (
+      locationVerified &&
+      lat != null &&
+      lng != null &&
+      city.trim()
+    ) {
+      return {
+        address: verifiedAddress?.trim() || address.trim(),
+        city: city.trim(),
+        community,
+        province: null,
+        lat,
+        lng,
+        placeId,
+        streetNumber: "",
+      };
+    }
+
+    const query = address.trim();
+    if (!query) return null;
+
+    try {
+      const resolved = await fetchPropertyAddressResolve({
+        query,
+        placeId,
+      });
+      const verified = verifiedLocationFromResolve(resolved);
+      if (!verified) return null;
+      applyVerifiedLocation(verified);
+      return verified;
+    } catch {
+      return null;
+    }
   }
 
   function featurePayload() {
@@ -447,9 +555,15 @@ export function HomeValuationForm({
   }
 
   async function refreshEstimate(opts?: { silent?: boolean }) {
-    if (!address.trim()) return;
+    if (!address.trim() || !locationVerified) return;
     const features = featurePayload();
-    if (!features.propertyType || features.beds == null || lat == null || lng == null) {
+    if (
+      !features.propertyType ||
+      features.beds == null ||
+      lat == null ||
+      lng == null ||
+      !city.trim()
+    ) {
       setEstimateStatus(null);
       setResult(null);
       return;
@@ -497,13 +611,13 @@ export function HomeValuationForm({
   }
 
   useEffect(() => {
-    if (step !== "features" || !address.trim()) return;
+    if (step !== "features" || !address.trim() || !locationVerified) return;
     const handle = window.setTimeout(() => {
       void refreshEstimate({ silent: true });
     }, 450);
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional feature-driven refresh
-  }, [beds, baths, sqft, basement, propertyType, step]);
+  }, [beds, baths, sqft, basement, propertyType, step, locationVerified]);
 
   async function submitAddress(event: React.FormEvent) {
     event.preventDefault();
@@ -517,15 +631,21 @@ export function HomeValuationForm({
     setError(null);
 
     try {
+      const verified = await ensureVerifiedLocation();
+      if (!verified) {
+        setError(VALUATION_ADDRESS_UNVERIFIED_MESSAGE);
+        return;
+      }
+
       const res = await fetch("/api/valuation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          address: address.trim(),
-          city: city.trim() || undefined,
-          community: community || undefined,
-          lat,
-          lng,
+          address: verified.address,
+          city: verified.city,
+          community: verified.community || undefined,
+          lat: verified.lat,
+          lng: verified.lng,
           intent: fromHero ? "sell" : "curious",
           quick: true,
           ...featurePayload(),
@@ -677,7 +797,8 @@ export function HomeValuationForm({
               </label>
               <AddressAutocomplete
                 onPlaceSelect={onPlace}
-                onQueryChange={setAddress}
+                onPlaceResolved={onPlace}
+                onQueryChange={onAddressQueryChange}
                 initialQuery={address}
                 fillOnly
                 source="google"
@@ -686,9 +807,20 @@ export function HomeValuationForm({
                 inputClassName="h-12 text-base"
               />
               <p className="text-xs text-ink/50">
-                Pick an address from the suggestions when possible so city and
-                map location are accurate. Unit numbers are welcome.
+                Select a suggestion so we can verify city and map location.
+                Typing alone is OK when we can confirm the exact civic address.
+                Unit numbers are welcome.
               </p>
+              {locationVerified ? (
+                <p className="text-xs font-medium text-canopy">
+                  Location verified — ready for your estimate.
+                </p>
+              ) : address.trim() ? (
+                <p className="text-xs text-ink/55">
+                  Location not verified yet. Choose a suggestion or continue to
+                  let us confirm the address.
+                </p>
+              ) : null}
             </div>
 
             {error ? (
@@ -720,10 +852,9 @@ export function HomeValuationForm({
                 setError("Enter bedrooms to continue.");
                 return;
               }
-              if (lat == null || lng == null || !city.trim()) {
-                setError(
-                  "Please re-select your address from suggestions so city and map location are set.",
-                );
+              if (!locationVerified || lat == null || lng == null || !city.trim()) {
+                setError(VALUATION_ADDRESS_RESELECT_MESSAGE);
+                setStep("address");
                 return;
               }
               setStep("contact");
@@ -739,10 +870,16 @@ export function HomeValuationForm({
                 bedrooms, and a verified location are required — we never invent
                 missing details.
               </p>
-              <p className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full bg-mist px-3 py-1 text-xs font-medium text-ink/70">
-                <MapPin className="size-3.5 shrink-0 text-canopy" aria-hidden />
-                <span className="truncate">{address}</span>
-              </p>
+              {locationVerified ? (
+                <p className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full bg-mist px-3 py-1 text-xs font-medium text-ink/70">
+                  <MapPin className="size-3.5 shrink-0 text-canopy" aria-hidden />
+                  <span className="truncate">{address}</span>
+                </p>
+              ) : (
+                <p className="mt-3 text-xs font-medium text-danger">
+                  {VALUATION_ADDRESS_RESELECT_MESSAGE}
+                </p>
+              )}
             </div>
 
             <fieldset className="space-y-2">
@@ -1204,6 +1341,8 @@ export function HomeValuationForm({
               onClick={() => {
                 setResult(null);
                 setEstimateStatus(null);
+                clearVerifiedLocation();
+                setAddress("");
                 setStep("address");
                 setError(null);
               }}
@@ -1217,6 +1356,7 @@ export function HomeValuationForm({
       <EstimatePreviewWindow
         result={result}
         address={address}
+        locationVerified={locationVerified}
         pending={pending || estimating}
         showCommunityAvg={step === "result" || step === "features"}
         estimateStatus={estimateStatus}

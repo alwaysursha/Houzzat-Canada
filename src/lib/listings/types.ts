@@ -147,6 +147,11 @@ export type AutocompleteSuggestion = {
   province?: string;
   postalCode?: string | null;
   unitNumber?: string | null;
+  /**
+   * Provider civic number when known. Null/absent means street-level or
+   * approximate — callers must not invent a house pin from a street centroid.
+   */
+  houseNumber?: string | null;
   lat?: number;
   lng?: number;
   href?: string;
