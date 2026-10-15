@@ -28,6 +28,7 @@ import {
   placeToAddressSuggestion,
   suggestionsAroundPlace,
 } from "@/lib/listings/address-suggest";
+import { parseExactAddressQuery } from "@/lib/listings/search-match";
 import { isOffMarketPropertySearchEnabled } from "@/lib/property-address/feature-flag";
 import {
   decideSearchAddressNavigation,
@@ -810,8 +811,18 @@ export function AddressAutocomplete({
     setOpen(false);
     setMobileSheetOpen(false);
 
+    // Exact civic + off-market flag → submit router (listing / property / safe
+    // fallback). Do not short-circuit to a prior "near address" href.
+    const exactCivic =
+      isOffMarketPropertySearchEnabled() &&
+      parseExactAddressQuery(trimmed) != null;
+
     // Prefer map search near the resolved Google address when available.
-    if (resolvedNearHref && looksLikeStreetAddress(trimmed)) {
+    if (
+      !exactCivic &&
+      resolvedNearHref &&
+      looksLikeStreetAddress(trimmed)
+    ) {
       remember(trimmed, resolvedNearHref);
       const nearLabel = resolvedNearLabel
         ? `Search near ${resolvedNearLabel}`
@@ -909,15 +920,21 @@ export function AddressAutocomplete({
     ) {
       setLoading(true);
       try {
-        const queryForResolve = [
+        // Prefer the typed civic phrase when it parses — Photon may paint a
+        // house number onto a street-level hit without a placeId/housenumber.
+        const typedExact = parseExactAddressQuery(query.trim());
+        const suggestionLine = [
           suggestion.label,
           suggestion.city,
           suggestion.province,
         ]
           .filter(Boolean)
           .join(", ");
+        const queryForResolve = typedExact
+          ? query.trim()
+          : suggestionLine || query.trim();
         const apiResult = await fetchPropertyAddressResolve({
-          query: queryForResolve || query.trim(),
+          query: queryForResolve,
           placeId: suggestion.placeId,
           unitNumber: suggestion.unitNumber,
           sessionToken,

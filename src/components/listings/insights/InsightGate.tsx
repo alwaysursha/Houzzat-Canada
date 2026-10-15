@@ -79,6 +79,10 @@ export function InsightGate({
                 <p className="mx-auto text-sm leading-relaxed text-ink/60 break-words">
                   {body}
                 </p>
+                <p className="mx-auto text-xs leading-relaxed text-ink/45 break-words">
+                  Sold prices require a registered client account with a verified
+                  email (or an active post-signup grace period).
+                </p>
               </div>
               <div className="flex flex-col gap-2.5 sm:flex-row sm:gap-3">
                 <AuthOpenButton

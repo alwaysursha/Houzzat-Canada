@@ -12,10 +12,16 @@
 
 import { ON_MARKET_LISTING_STATUSES } from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
-import { parseExactAddressQuery } from "@/lib/listings/search-match";
+import {
+  canonicalizeStreetSuffixesInQuery,
+  parseExactAddressQuery,
+} from "@/lib/listings/search-match";
 import { photonAddressAutocomplete } from "@/lib/geo/photon-autocomplete";
 import type { GooglePlaceSuggestion } from "@/lib/google/places";
-import { googlePlaceDetails } from "@/lib/google/places";
+import {
+  googlePlaceDetails,
+  googlePlacesAutocomplete,
+} from "@/lib/google/places";
 import { getPropTxIdxConfig, getPropTxVowConfig } from "@/lib/proptx/config";
 import {
   AddressHistoryLookupError,
@@ -133,6 +139,11 @@ export type ResolveAddressDeps = {
     placeId: string,
     sessionToken?: string,
   ) => Promise<PlaceResolveHit | null>;
+  /** Optional Google Autocomplete for civic confirm when Photon is street-level. */
+  resolveGoogleAutocomplete?: (
+    query: string,
+    sessionToken?: string,
+  ) => Promise<Array<{ placeId: string }>>;
   resolvePhotonPlaces: (query: string) => Promise<PlaceResolveHit[]>;
   findNeonActiveAtAddress: (input: {
     streetNumber: string;
@@ -224,6 +235,14 @@ export const defaultResolveAddressDeps: ResolveAddressDeps = {
     });
     if (!place) return null;
     return suggestionToHit(place, "google");
+  },
+  async resolveGoogleAutocomplete(query, sessionToken) {
+    const suggestions = await googlePlacesAutocomplete(query, {
+      sessionToken: sessionToken || undefined,
+    });
+    return suggestions
+      .map((s) => ({ placeId: s.placeId?.trim() || "" }))
+      .filter((s) => Boolean(s.placeId));
   },
   async resolvePhotonPlaces(query) {
     const suggestions = await photonAddressAutocomplete(query);
@@ -447,9 +466,53 @@ async function resolvePlaceHit(
     return { ok: false, reason: "place_unresolvable" };
   }
 
+  const photonQuery = canonicalizeStreetSuffixesInQuery(parsed.query);
+
   try {
-    const hits = await deps.resolvePhotonPlaces(parsed.query);
-    const best = pickBestPlaceHit(parsed.query, hits);
+    const hits = await deps.resolvePhotonPlaces(photonQuery);
+    let best = pickBestPlaceHit(parsed.query, hits);
+
+    // Photon often returns street centroids for Crt/Ct abbreviations even after
+    // canonicalization. When Google Places is billing-enabled, confirm the civic
+    // address via Autocomplete → Details (provider housenumber required).
+    const needsCivicConfirm =
+      Boolean(parseExactAddressQuery(parsed.query)?.streetNumber) &&
+      (!best?.houseNumber?.trim() || best.lat == null || best.lng == null);
+    if (
+      needsCivicConfirm &&
+      deps.googlePlacesEnabled() &&
+      deps.resolveGoogleAutocomplete
+    ) {
+      try {
+        const predictions = await deps.resolveGoogleAutocomplete(
+          photonQuery,
+          parsed.sessionToken ?? undefined,
+        );
+        for (const prediction of predictions.slice(0, 3)) {
+          const googleHit = await deps.resolveGooglePlace(
+            prediction.placeId,
+            parsed.sessionToken ?? undefined,
+          );
+          if (!googleHit?.houseNumber?.trim()) continue;
+          if (googleHit.lat == null || googleHit.lng == null) continue;
+          const identity = evaluateExactAddressIdentity({
+            query: parsed.query,
+            requestedUnit: null,
+            hit: {
+              label: googleHit.label,
+              city: googleHit.city,
+              houseNumber: googleHit.houseNumber,
+            },
+          });
+          if (identity.ok) {
+            return { ok: true, hit: googleHit };
+          }
+        }
+      } catch {
+        // Fall through to Photon best / failure — never invent housenumbers.
+      }
+    }
+
     if (best?.lat != null && best.lng != null) {
       return { ok: true, hit: best };
     }

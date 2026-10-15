@@ -54,6 +54,23 @@ for (const group of STREET_SUFFIX_GROUPS) {
   }
 }
 
+/**
+ * Rewrite common street-suffix abbreviations to canonical OSM/MLS spellings
+ * (e.g. Crt/Ct → Court) so geocoders and inventory probes hit house-level results.
+ * Only whole-word suffix tokens are rewritten; street names stay unchanged.
+ */
+export function canonicalizeStreetSuffixesInQuery(q: string): string {
+  return q.replace(/\b([A-Za-z]+)\b/g, (token) => {
+    const canon = STREET_SUFFIX_CANONICAL.get(token.toLowerCase());
+    if (!canon || canon === token.toLowerCase()) return token;
+    if (token === token.toUpperCase()) return canon.toUpperCase();
+    if (token[0] && token[0] === token[0].toUpperCase()) {
+      return `${canon.charAt(0).toUpperCase()}${canon.slice(1)}`;
+    }
+    return canon;
+  });
+}
+
 export function tokenizeSearchQuery(q: string): string[] {
   return q
     .trim()

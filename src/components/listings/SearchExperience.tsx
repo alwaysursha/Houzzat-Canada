@@ -50,6 +50,8 @@ import { SearchFiltersMenu } from "@/components/listings/SearchFiltersMenu";
 import { SearchFiltersSheet } from "@/components/listings/SearchFiltersSheet";
 import { SearchResultsPane } from "@/components/listings/SearchResultsPane";
 import { SearchesDropdown } from "@/components/listings/SearchesDropdown";
+import { mergeParsedSearchIntoCommitted } from "@/lib/listings/merge-parsed-search";
+import { parseSearchQuery } from "@/lib/listings/parse-search-query";
 import { routeFreeTextInventorySearch } from "@/lib/listings/unified-search-route";
 import { shouldResetMapAreaForPlaceChange } from "@/lib/listings/map-area-search";
 import {
@@ -664,6 +666,16 @@ export function SearchExperience() {
       transactionType: txn,
       basePath: searchBasePath,
     });
+    // Civic → listing/property/nearby replaces the URL. NL / traditional
+    // inventory search merges into committed so city+beds accumulate.
+    if (routed.via === "search" || routed.via === "empty") {
+      const parsed = parseSearchQuery(raw.trim());
+      const merged = mergeParsedSearchIntoCommitted(prev, parsed);
+      router.push(
+        serializeSearchUrl(merged, { pathname: searchBasePath || "/search" }),
+      );
+      return;
+    }
     router.push(routed.href);
   }
 
@@ -843,7 +855,7 @@ export function SearchExperience() {
     <div className="flex min-h-0 flex-1 flex-col">
       <div
         className={cn(
-          "shrink-0 border-b border-line/70 bg-surface px-3 py-2 sm:px-4 sm:py-2.5",
+          "relative z-40 shrink-0 border-b border-line/70 bg-surface px-3 py-2 sm:px-4 sm:py-2.5",
           !isNarrow &&
             "bg-surface/95 px-4 py-3 shadow-[0_1px_0_rgba(20,32,28,0.04)] backdrop-blur-[2px] lg:px-5",
         )}
@@ -857,6 +869,7 @@ export function SearchExperience() {
             <AddressAutocomplete
               key={`${citiesQueryParam || filters.city || "none"}:${cityEntryToken}`}
               initialQuery={searchBarQuery}
+              portalDesktopSuggestions
               transactionType={
                 filters.transactionType === "LEASE" ||
                 filters.transactionType === "SALE"
@@ -970,6 +983,7 @@ export function SearchExperience() {
               <AddressAutocomplete
                 key={`${citiesQueryParam || filters.city || "none"}:${cityEntryToken}`}
                 initialQuery={searchBarQuery}
+                portalDesktopSuggestions
                 transactionType={
                   filters.transactionType === "LEASE" ||
                   filters.transactionType === "SALE"
