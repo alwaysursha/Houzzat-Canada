@@ -2,7 +2,7 @@
 
 import type { PropertyType } from "@prisma/client";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -103,13 +103,17 @@ function EstimatePreviewWindow({
   address,
   pending,
   showCommunityAvg,
+  estimateStatus,
 }: {
   result: EstimateResult | null;
   address: string;
   pending: boolean;
   showCommunityAvg: boolean;
+  estimateStatus: "OK" | "INSUFFICIENT_DATA" | "AUTH_REQUIRED" | null;
 }) {
   const revealed = Boolean(result);
+  const insufficient = estimateStatus === "INSUFFICIENT_DATA";
+  const authRequired = estimateStatus === "AUTH_REQUIRED";
 
   return (
     <aside
@@ -192,7 +196,11 @@ function EstimatePreviewWindow({
         <p className="text-center text-sm font-semibold text-ink/70">
           {revealed
             ? "Your property’s estimated value"
-            : "Your property’s estimated value will appear here"}
+            : insufficient
+              ? "Insufficient Market Data"
+              : authRequired
+                ? "Client access required"
+                : "Your property’s estimated value will appear here"}
         </p>
 
         <div
@@ -213,6 +221,16 @@ function EstimatePreviewWindow({
                 </span>
               </p>
             </>
+          ) : insufficient ? (
+            <p className="mx-auto max-w-sm text-sm leading-relaxed text-ink/60">
+              We don&apos;t have enough reliable comparable property data to
+              provide an accurate estimate for this home.
+            </p>
+          ) : authRequired ? (
+            <p className="mx-auto max-w-sm text-sm leading-relaxed text-ink/60">
+              Continue with your details to register as a client and unlock a
+              sold-based estimate when enough comparables exist.
+            </p>
           ) : (
             <p className="font-display text-4xl font-semibold tracking-tight text-canopy/45 sm:text-5xl">
               $— – $—
@@ -268,10 +286,18 @@ function EstimatePreviewWindow({
               <p className="text-sm font-semibold text-ink">
                 {pending
                   ? "Pulling neighbourhood sales…"
-                  : "Waiting for your address"}
+                  : insufficient
+                    ? "Insufficient Market Data"
+                    : authRequired
+                      ? "Client access required"
+                      : "Waiting for your address"}
               </p>
               <p className="mt-1 text-xs leading-relaxed text-ink/55">
-                Your indicative range updates here as you add home details.
+                {insufficient
+                  ? "Contact a real estate expert for a local review."
+                  : authRequired
+                    ? "Register or sign in to unlock sold-based estimates."
+                    : "Your indicative range updates here as you add home details."}
               </p>
             </div>
           )}
@@ -289,33 +315,45 @@ export type HomeValuationInitialContact = {
   authenticated: boolean;
 };
 
+export type HomeValuationVerifiedPrefill = {
+  address: string;
+  city: string;
+  community: string | null;
+  lat: number | null;
+  lng: number | null;
+  unitNumber?: string | null;
+};
+
 export function HomeValuationForm({
   initialContact = null,
+  verifiedPrefill = null,
 }: {
   initialContact?: HomeValuationInitialContact | null;
+  /** Server-resolved property address — preferred over raw query params. */
+  verifiedPrefill?: HomeValuationVerifiedPrefill | null;
 } = {}) {
   const searchParams = useSearchParams();
   const { digits: whatsappDigits } = useExpertWhatsAppNumber();
-  const initialAddress = searchParams.get("address") ?? "";
-  const initialCity = searchParams.get("city") ?? "";
-  const initialCommunity = searchParams.get("community") ?? "";
+  const initialAddress =
+    verifiedPrefill?.address ?? searchParams.get("address") ?? "";
+  const initialCity = verifiedPrefill?.city ?? searchParams.get("city") ?? "";
+  const initialCommunity =
+    verifiedPrefill?.community ?? searchParams.get("community") ?? "";
   const initialLeadId = searchParams.get("leadId");
-  const initialLow = searchParams.get("low");
-  const initialHigh = searchParams.get("high");
-  const initialLat = searchParams.get("lat");
-  const initialLng = searchParams.get("lng");
+  const initialLat =
+    verifiedPrefill?.lat != null
+      ? String(verifiedPrefill.lat)
+      : searchParams.get("lat");
+  const initialLng =
+    verifiedPrefill?.lng != null
+      ? String(verifiedPrefill.lng)
+      : searchParams.get("lng");
   const fromHero = searchParams.get("from") === "hero";
+  const fromProperty = Boolean(verifiedPrefill);
 
-  const heroEstimate = useMemo(() => {
-    if (!initialLow || !initialHigh) return null;
-    const low = Number(initialLow);
-    const high = Number(initialHigh);
-    if (!Number.isFinite(low) || !Number.isFinite(high)) return null;
-    return { low, high, mid: Math.round((low + high) / 2) };
-  }, [initialLow, initialHigh]);
-
+  // Never treat URL low/high as authoritative — server recomputes after features.
   const [step, setStep] = useState<Step>(
-    heroEstimate && initialAddress ? "features" : "address",
+    (fromHero || fromProperty) && initialAddress ? "features" : "address",
   );
   const [address, setAddress] = useState(initialAddress);
   const [city, setCity] = useState(initialCity);
@@ -323,13 +361,15 @@ export function HomeValuationForm({
     initialCommunity || null,
   );
   const [areaCommunity, setAreaCommunity] = useState<string | null>(null);
-  const [beds, setBeds] = useState("3");
-  const [baths, setBaths] = useState("2");
+  // No silent DETACHED / 3-bed / 2-bath defaults — user must provide characteristics.
+  const [beds, setBeds] = useState("");
+  const [baths, setBaths] = useState("");
   const [sqft, setSqft] = useState("");
   const [basement, setBasement] = useState<BasementFinish>("unknown");
-  const [propertyType, setPropertyType] = useState<PropertyType | "">(
-    "DETACHED",
-  );
+  const [propertyType, setPropertyType] = useState<PropertyType | "">("");
+  const [estimateStatus, setEstimateStatus] = useState<
+    "OK" | "INSUFFICIENT_DATA" | "AUTH_REQUIRED" | null
+  >(null);
   const [lat, setLat] = useState<number | undefined>(() => {
     if (!initialLat) return undefined;
     const n = Number(initialLat);
@@ -351,17 +391,7 @@ export function HomeValuationForm({
   const [error, setError] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(initialLeadId);
   const [accountCreated, setAccountCreated] = useState(false);
-  const [result, setResult] = useState<EstimateResult | null>(
-    heroEstimate
-      ? {
-          low: heroEstimate.low,
-          mid: heroEstimate.mid,
-          high: heroEstimate.high,
-          disclaimer:
-            "Indicative range from Houzzat’s Ontario listing inventory. Not a formal appraisal.",
-        }
-      : null,
-  );
+  const [result, setResult] = useState<EstimateResult | null>(null);
   const estimateRequestId = useRef(0);
   const submitLockRef = useRef(false);
 
@@ -395,6 +425,12 @@ export function HomeValuationForm({
 
   async function refreshEstimate(opts?: { silent?: boolean }) {
     if (!address.trim()) return;
+    const features = featurePayload();
+    if (!features.propertyType || features.beds == null || lat == null || lng == null) {
+      setEstimateStatus(null);
+      setResult(null);
+      return;
+    }
     const requestId = ++estimateRequestId.current;
     if (!opts?.silent) setEstimating(true);
 
@@ -410,21 +446,28 @@ export function HomeValuationForm({
           lng,
           intent: "curious",
           estimateOnly: true,
-          ...featurePayload(),
+          ...features,
         }),
       });
       const data = (await res.json()) as {
         error?: string;
-        estimate?: EstimateResult;
+        status?: "OK" | "INSUFFICIENT_DATA" | "AUTH_REQUIRED";
+        estimate?: EstimateResult | null;
+        message?: string;
       };
       if (requestId !== estimateRequestId.current) return;
-      if (res.ok && data.estimate) {
+      if (!res.ok) return;
+      if (data.status === "OK" && data.estimate) {
+        setEstimateStatus("OK");
         setResult(data.estimate);
         if (data.estimate.community) setAreaCommunity(data.estimate.community);
         if (data.estimate.city && !city) setCity(data.estimate.city);
+        return;
       }
+      setResult(null);
+      setEstimateStatus(data.status ?? "INSUFFICIENT_DATA");
     } catch {
-      // Keep the last good estimate visible.
+      // Keep prior status.
     } finally {
       if (requestId === estimateRequestId.current) setEstimating(false);
     }
@@ -462,13 +505,6 @@ export function HomeValuationForm({
           lng,
           intent: fromHero ? "sell" : "curious",
           quick: true,
-          ...(result
-            ? {
-                estimatedLow: result.low,
-                estimatedHigh: result.high,
-                estimatedMid: result.mid,
-              }
-            : {}),
           ...featurePayload(),
           ...loadPersistedUtm(),
         }),
@@ -477,21 +513,31 @@ export function HomeValuationForm({
       const data = (await res.json()) as {
         error?: string;
         leadId?: string;
-        estimate?: EstimateResult;
+        status?: string;
+        estimate?: EstimateResult | null;
       };
 
-      if (!res.ok || !data.leadId || !data.estimate) {
-        setError(data.error ?? "Could not pull neighbourhood sales. Try again.");
+      // Lead capture can succeed without a dollar estimate (insufficient / auth).
+      if (!res.ok || !data.leadId) {
+        setError(data.error ?? "Could not start your valuation. Try again.");
         return;
       }
 
       setLeadId(data.leadId);
-      setResult(data.estimate);
-      if (data.estimate.community) setAreaCommunity(data.estimate.community);
-      if (data.estimate.city && !city) setCity(data.estimate.city);
+      if (data.estimate) {
+        setResult(data.estimate);
+        setEstimateStatus("OK");
+        if (data.estimate.community) setAreaCommunity(data.estimate.community);
+        if (data.estimate.city && !city) setCity(data.estimate.city);
+      } else {
+        setResult(null);
+        setEstimateStatus(
+          data.status === "AUTH_REQUIRED" ? "AUTH_REQUIRED" : "INSUFFICIENT_DATA",
+        );
+      }
       setStep("features");
     } catch {
-      setError("Could not pull neighbourhood sales. Try again.");
+      setError("Could not start your valuation. Try again.");
     } finally {
       submitLockRef.current = false;
       setPending(false);
@@ -540,13 +586,6 @@ export function HomeValuationForm({
           acceptTerms: true,
           marketPulseOptIn,
           neighbourhoodSalesOptIn,
-          ...(result
-            ? {
-                estimatedLow: result.low,
-                estimatedHigh: result.high,
-                estimatedMid: result.mid,
-              }
-            : {}),
           ...featurePayload(),
           ...loadPersistedUtm(),
         }),
@@ -556,21 +595,28 @@ export function HomeValuationForm({
         error?: string;
         leadId?: string;
         accountCreated?: boolean;
-        estimate?: EstimateResult;
+        status?: "OK" | "INSUFFICIENT_DATA" | "AUTH_REQUIRED";
+        estimate?: EstimateResult | null;
       };
 
-      if (!res.ok || !data.leadId || !data.estimate) {
-        setError(data.error ?? "Could not save your estimate. Try again.");
+      if (!res.ok || !data.leadId) {
+        setError(data.error ?? "Could not save your request. Try again.");
         return;
       }
 
       setLeadId(data.leadId);
       setAccountCreated(Boolean(data.accountCreated));
-      setResult(data.estimate);
-      if (data.estimate.community) setAreaCommunity(data.estimate.community);
+      if (data.estimate) {
+        setResult(data.estimate);
+        setEstimateStatus("OK");
+        if (data.estimate.community) setAreaCommunity(data.estimate.community);
+      } else {
+        setResult(null);
+        setEstimateStatus(data.status ?? "INSUFFICIENT_DATA");
+      }
       setStep("result");
     } catch {
-      setError("Could not save your estimate. Try again.");
+      setError("Could not save your request. Try again.");
     } finally {
       submitLockRef.current = false;
       setPending(false);
@@ -643,6 +689,20 @@ export function HomeValuationForm({
             onSubmit={(event) => {
               event.preventDefault();
               setError(null);
+              if (!propertyType) {
+                setError("Select a property type to continue.");
+                return;
+              }
+              if (!beds.trim() || !Number.isFinite(Number(beds))) {
+                setError("Enter bedrooms to continue.");
+                return;
+              }
+              if (lat == null || lng == null || !city.trim()) {
+                setError(
+                  "Please re-select your address from suggestions so city and map location are set.",
+                );
+                return;
+              }
               setStep("contact");
             }}
             className="space-y-5"
@@ -652,8 +712,9 @@ export function HomeValuationForm({
                 Tell us about your home
               </h2>
               <p className="mt-1.5 text-sm text-ink/60">
-                We’ll refine the range on the right using similar homes in
-                Houzzat inventory.
+                Estimates use recent sold comparables only. Property type,
+                bedrooms, and a verified location are required — we never invent
+                missing details.
               </p>
               <p className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full bg-mist px-3 py-1 text-xs font-medium text-ink/70">
                 <MapPin className="size-3.5 shrink-0 text-canopy" aria-hidden />
@@ -971,40 +1032,58 @@ export function HomeValuationForm({
           </form>
         ) : null}
 
-        {step === "result" && result ? (
+        {step === "result" ? (
           <div className="space-y-5">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-canopy">
-                Estimate ready
-              </p>
-              <h2 className="mt-1 font-display text-2xl tracking-tight text-ink">
-                Your range is on the right
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-ink/65">
-                {result.disclaimer}
-              </p>
-            </div>
+            {result ? (
+              <>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-canopy">
+                    Estimate ready
+                  </p>
+                  <h2 className="mt-1 font-display text-2xl tracking-tight text-ink">
+                    Your range is on the right
+                  </h2>
+                  <p className="mt-2 text-sm leading-relaxed text-ink/65">
+                    {result.disclaimer}
+                  </p>
+                </div>
 
-            {result.communityAvgSold != null && result.communityAvgSold > 0 ? (
-              <div className="rounded-xl border border-line bg-mist/50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
-                  Area sales context
+                {result.communityAvgSold != null &&
+                result.communityAvgSold > 0 ? (
+                  <div className="rounded-xl border border-line bg-mist/50 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                      Area sales context
+                    </p>
+                    <p className="mt-1 text-sm text-ink/80">
+                      Average sold in{" "}
+                      <span className="font-semibold text-ink">
+                        {result.community ??
+                          areaCommunity ??
+                          result.city ??
+                          (city || "your area")}
+                      </span>
+                      :{" "}
+                      <span className="font-semibold text-canopy">
+                        {formatPrice(result.communityAvgSold)}
+                      </span>
+                    </p>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-canopy">
+                  Market check
                 </p>
-                <p className="mt-1 text-sm text-ink/80">
-                  Average sold in{" "}
-                  <span className="font-semibold text-ink">
-                    {result.community ??
-                      areaCommunity ??
-                      result.city ??
-                      (city || "your area")}
-                  </span>
-                  :{" "}
-                  <span className="font-semibold text-canopy">
-                    {formatPrice(result.communityAvgSold)}
-                  </span>
+                <h2 className="mt-1 font-display text-2xl tracking-tight text-ink">
+                  Insufficient Market Data
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-ink/65">
+                  We don&apos;t have enough reliable comparable property data
+                  to provide an accurate estimate for this home.
                 </p>
               </div>
-            ) : null}
+            )}
 
             <div className="space-y-2 rounded-xl border border-line bg-mist/50 p-4 text-sm text-ink/75">
               <p className="flex items-start gap-2">
@@ -1012,7 +1091,7 @@ export function HomeValuationForm({
                   className="mt-0.5 size-4 shrink-0 text-canopy"
                   aria-hidden
                 />
-                Estimate saved
+                {result ? "Estimate saved" : "Request saved"}
                 {leadId ? ` (ref ${leadId.slice(0, 8)})` : ""}.
               </p>
               {accountCreated ? (
@@ -1036,7 +1115,9 @@ export function HomeValuationForm({
             </div>
 
             <p className="text-sm leading-relaxed text-ink/65">
-              For a more accurate value,{" "}
+              {result
+                ? "For a more accurate value, "
+                : "A local expert can review your home directly. "}
               {meetingHref ? (
                 <a
                   href={meetingHref}
@@ -1044,14 +1125,16 @@ export function HomeValuationForm({
                   rel="noopener noreferrer"
                   className="font-semibold text-canopy underline-offset-2 hover:underline"
                 >
-                  book a meeting with an agent
+                  {result
+                    ? "book a meeting with an agent"
+                    : "Contact a Real Estate Expert"}
                 </a>
               ) : (
                 <span className="font-semibold text-ink">
-                  book a meeting with an agent
+                  Contact a Real Estate Expert
                 </span>
               )}
-              .
+              {result ? "." : "."}
             </p>
 
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -1062,7 +1145,7 @@ export function HomeValuationForm({
                   rel="noopener noreferrer"
                   className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-canopy px-5 text-sm font-semibold text-white transition hover:bg-canopy-deep"
                 >
-                  Book a meeting
+                  {result ? "Book a meeting" : "Contact a Real Estate Expert"}
                 </a>
               ) : (
                 <Link
@@ -1072,12 +1155,14 @@ export function HomeValuationForm({
                   Sign in
                 </Link>
               )}
-              <Link
-                href={soldBrowseHref}
-                className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 text-sm font-semibold text-ink transition hover:border-canopy/40"
-              >
-                Browse recent sold
-              </Link>
+              {result ? (
+                <Link
+                  href={soldBrowseHref}
+                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 text-sm font-semibold text-ink transition hover:border-canopy/40"
+                >
+                  Browse recent sold
+                </Link>
+              ) : null}
             </div>
 
             <button
@@ -1085,6 +1170,7 @@ export function HomeValuationForm({
               className="w-full text-center text-sm font-medium text-canopy hover:underline"
               onClick={() => {
                 setResult(null);
+                setEstimateStatus(null);
                 setStep("address");
                 setError(null);
               }}
@@ -1100,6 +1186,7 @@ export function HomeValuationForm({
         address={address}
         pending={pending || estimating}
         showCommunityAvg={step === "result" || step === "features"}
+        estimateStatus={estimateStatus}
       />
     </div>
   );

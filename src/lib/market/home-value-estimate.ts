@@ -1,350 +1,441 @@
-import type { PropertyType } from "@prisma/client";
+/**
+ * Indicative home value from entitled, recent SOLD comparables only.
+ * Returns INSUFFICIENT_DATA when evidence is missing — never fabricates dollars.
+ */
+
+import type { PropertyType, Prisma } from "@prisma/client";
 import { haversineKm } from "@/lib/geo/distance";
 import { prisma } from "@/lib/prisma";
+import {
+  buildPrismaEntitledInventoryWhere,
+  type WorkspaceListingEntitlement,
+} from "@/lib/tenancy/listing-entitlement";
 
 export type BasementFinish = "finished" | "unfinished" | "none" | "unknown";
 
-export type HomeValueEstimate = {
+export type HomeValueEstimateOk = {
+  status: "OK";
   low: number;
   mid: number;
   high: number;
   sampleSize: number;
   soldCount: number;
-  activeCount: number;
-  method: "sold_comps" | "active_listings" | "blended" | "fallback";
-  city: string | null;
+  /** Always 0 — actives are never valuation evidence. */
+  activeCount: 0;
+  method: "sold_comps";
+  confidence: "medium" | "high";
+  city: string;
   community: string | null;
-  /** Average sold price in the resolved community (recent sales). */
   communityAvgSold: number | null;
   communitySoldCount: number;
 };
 
-const PROPERTY_TYPES = new Set<string>([
+export type HomeValueEstimateInsufficient = {
+  status: "INSUFFICIENT_DATA";
+  reason: string;
+  city: string | null;
+  community: string | null;
+};
+
+export type EstimateHomeValueResult =
+  | HomeValueEstimateOk
+  | HomeValueEstimateInsufficient;
+
+/** @deprecated Prefer EstimateHomeValueResult — kept for import compatibility. */
+export type HomeValueEstimate = HomeValueEstimateOk;
+
+const RESIDENTIAL_TYPES = new Set<PropertyType>([
   "DETACHED",
   "SEMI_DETACHED",
   "TOWNHOUSE",
   "CONDO_APT",
   "CONDO_TOWNHOUSE",
   "MULTIPLEX",
-  "VACANT_LAND",
-  "OFFICE",
-  "RETAIL",
-  "INDUSTRIAL",
-  "MIXED_USE",
-  "OTHER",
 ]);
 
-/** Closely related types used when exact-type sample is thin. */
-const RELATED_PROPERTY_TYPES: Record<PropertyType, PropertyType[]> = {
-  DETACHED: ["DETACHED"],
-  SEMI_DETACHED: ["SEMI_DETACHED", "DETACHED"],
-  TOWNHOUSE: ["TOWNHOUSE", "CONDO_TOWNHOUSE"],
-  CONDO_TOWNHOUSE: ["CONDO_TOWNHOUSE", "TOWNHOUSE"],
-  CONDO_APT: ["CONDO_APT"],
-  MULTIPLEX: ["MULTIPLEX", "SEMI_DETACHED"],
-  VACANT_LAND: ["VACANT_LAND"],
-  OFFICE: ["OFFICE", "MIXED_USE"],
-  RETAIL: ["RETAIL", "MIXED_USE"],
-  INDUSTRIAL: ["INDUSTRIAL"],
-  MIXED_USE: ["MIXED_USE", "OFFICE", "RETAIL"],
-  OTHER: ["OTHER", "DETACHED", "TOWNHOUSE", "CONDO_APT"],
-};
+const SOLD_WINDOW_MONTHS = 12;
+const MIN_ELIGIBLE_SOLDS = 3;
+/** Reject sets where highest/lowest sold stretch is too wide. */
+const MAX_PRICE_SPREAD_RATIO = 2.25;
+/** When subject sqft is unknown, comps must still be size-consistent with each other. */
+const MIN_COMP_SQFT_RATIO = 0.7;
+/** Max share of total similarity weight any single sold may carry. */
+const MAX_SINGLE_COMP_WEIGHT_SHARE = 0.4;
+/** Drop comps whose score is far below the best (dissimilar noise). */
+const MIN_SCORE_RATIO_OF_BEST = 0.4;
 
-function parsePropertyType(
-  value: string | null | undefined,
-): PropertyType | null {
-  if (!value) return null;
-  const key = value.trim().toUpperCase();
-  return PROPERTY_TYPES.has(key) ? (key as PropertyType) : null;
-}
-
-function relatedTypes(type: PropertyType | null): PropertyType[] | null {
-  if (!type) return null;
-  return RELATED_PROPERTY_TYPES[type];
-}
-
-function basementFactor(basement: BasementFinish | null | undefined): number {
-  const finish: BasementFinish = basement ?? "unknown";
-  switch (finish) {
-    case "finished":
-      return 1.035;
-    case "unfinished":
-      return 0.985;
-    case "none":
-      return 0.965;
-    case "unknown":
-      return 1;
+/**
+ * Strict type families — condo apt, condo town, and freehold stay distinct.
+ * No detached↔condo, no town↔condo-town, no commercial mix.
+ */
+export function compatiblePropertyTypes(
+  type: PropertyType,
+): readonly PropertyType[] {
+  switch (type) {
+    case "DETACHED":
+      return ["DETACHED"];
+    case "SEMI_DETACHED":
+      return ["SEMI_DETACHED"];
+    case "TOWNHOUSE":
+      return ["TOWNHOUSE"];
+    case "CONDO_TOWNHOUSE":
+      return ["CONDO_TOWNHOUSE"];
+    case "CONDO_APT":
+      return ["CONDO_APT"];
+    case "MULTIPLEX":
+      return ["MULTIPLEX"];
+    case "VACANT_LAND":
+    case "OFFICE":
+    case "RETAIL":
+    case "INDUSTRIAL":
+    case "MIXED_USE":
+    case "OTHER":
+      return [];
     default: {
-      const _exhaustive: never = finish;
+      const _exhaustive: never = type;
       return _exhaustive;
     }
   }
 }
 
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  if (sorted.length === 1) return sorted[0]!;
-  const idx = (sorted.length - 1) * p;
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo]!;
-  const w = idx - lo;
-  return sorted[lo]! * (1 - w) + sorted[hi]! * w;
+export function parseResidentialPropertyType(
+  value: string | null | undefined,
+): PropertyType | null {
+  if (!value) return null;
+  const key = value.trim().toUpperCase() as PropertyType;
+  if (!RESIDENTIAL_TYPES.has(key)) return null;
+  return key;
+}
+
+/** Condo size is essential — never estimate without subject sqft. */
+export function requiresSubjectSqft(type: PropertyType): boolean {
+  switch (type) {
+    case "CONDO_APT":
+    case "CONDO_TOWNHOUSE":
+      return true;
+    case "DETACHED":
+    case "SEMI_DETACHED":
+    case "TOWNHOUSE":
+    case "MULTIPLEX":
+    case "VACANT_LAND":
+    case "OFFICE":
+    case "RETAIL":
+    case "INDUSTRIAL":
+    case "MIXED_USE":
+    case "OTHER":
+      return false;
+    default: {
+      const _exhaustive: never = type;
+      return _exhaustive;
+    }
+  }
+}
+
+export function distanceLimitsKm(type: PropertyType): {
+  primary: number;
+  expanded: number;
+} {
+  switch (type) {
+    case "CONDO_APT":
+      return { primary: 1.5, expanded: 2.5 };
+    case "CONDO_TOWNHOUSE":
+      return { primary: 2.5, expanded: 4 };
+    case "TOWNHOUSE":
+    case "SEMI_DETACHED":
+      return { primary: 3.5, expanded: 5 };
+    case "DETACHED":
+    case "MULTIPLEX":
+      return { primary: 4, expanded: 6 };
+    default:
+      return { primary: 3, expanded: 4.5 };
+  }
+}
+
+export type SoldCompCandidate = {
+  soldPrice: number;
+  soldAt: Date;
+  beds: number;
+  baths: number;
+  sqft: number | null;
+  lat: number;
+  lng: number;
+  propertyType: PropertyType;
+  city: string;
+  community: string | null;
+  parkingSpaces?: number | null;
+  yearBuilt?: number | null;
+};
+
+export type SubjectForComps = {
+  city: string;
+  beds: number;
+  baths: number | null;
+  sqft: number | null;
+  propertyType: PropertyType;
+  lat: number;
+  lng: number;
+  community?: string | null;
+  basement?: BasementFinish | null;
+  parkingSpaces?: number | null;
+  yearBuilt?: number | null;
+};
+
+function soldSinceDate(now: Date): Date {
+  const d = new Date(now);
+  d.setMonth(d.getMonth() - SOLD_WINDOW_MONTHS);
+  return d;
 }
 
 function roundToNearest(n: number, step = 1000): number {
   return Math.round(n / step) * step;
 }
 
-async function resolveCommunityAvg(opts: {
-  city: string | null;
-  community: string | null;
-  propertyTypes?: PropertyType[] | null;
-  lat?: number | null;
-  lng?: number | null;
-}): Promise<{
-  community: string | null;
-  communityAvgSold: number | null;
-  communitySoldCount: number;
-}> {
-  const soldSince = new Date();
-  soldSince.setMonth(soldSince.getMonth() - 14);
-  let community = opts.community?.trim() || null;
+/**
+ * Hard eligibility for a sold comparable. Pure — used by tests.
+ */
+export function isEligibleSoldComp(
+  row: SoldCompCandidate,
+  subject: SubjectForComps,
+  opts: { maxKm: number; now?: Date },
+): boolean {
+  const now = opts.now ?? new Date();
+  const since = soldSinceDate(now);
 
-  const hasCoords =
-    opts.lat != null &&
-    opts.lng != null &&
-    Number.isFinite(opts.lat) &&
-    Number.isFinite(opts.lng);
+  if (!(row.soldPrice > 50_000)) return false;
+  if (!(row.soldAt instanceof Date) || Number.isNaN(row.soldAt.getTime())) {
+    return false;
+  }
+  if (row.soldAt.getTime() < since.getTime()) return false;
 
-  // Infer community from nearby solds when the address didn't carry one.
-  if (!community && hasCoords) {
-    const nearby = await prisma.listing.findMany({
-      where: {
-        transactionType: "SALE",
-        status: "SOLD",
-        community: { not: null },
-        soldPrice: { gt: 50_000 },
-        ...(opts.propertyTypes?.length
-          ? { propertyType: { in: opts.propertyTypes } }
-          : {}),
-        lat: {
-          gte: opts.lat! - 0.045,
-          lte: opts.lat! + 0.045,
-        },
-        lng: {
-          gte: opts.lng! - 0.055,
-          lte: opts.lng! + 0.055,
-        },
-      },
-      select: { community: true, lat: true, lng: true },
-      take: 40,
-      orderBy: { soldAt: "desc" },
-    });
-    const votes = new Map<string, number>();
-    for (const row of nearby) {
-      if (!row.community) continue;
-      const d = haversineKm(opts.lat!, opts.lng!, row.lat, row.lng);
-      if (d > 4) continue;
-      votes.set(row.community, (votes.get(row.community) ?? 0) + (4 - d));
-    }
-    let best: string | null = null;
-    let bestScore = 0;
-    for (const [name, score] of votes) {
-      if (score > bestScore) {
-        best = name;
-        bestScore = score;
-      }
-    }
-    community = best;
+  if (row.city.trim().toLowerCase() !== subject.city.trim().toLowerCase()) {
+    return false;
   }
 
-  if (!community && !opts.city) {
-    return { community: null, communityAvgSold: null, communitySoldCount: 0 };
+  const allowed = compatiblePropertyTypes(subject.propertyType);
+  if (!allowed.includes(row.propertyType)) return false;
+
+  const d = haversineKm(subject.lat, subject.lng, row.lat, row.lng);
+  if (d > opts.maxKm) return false;
+
+  if (Math.abs(row.beds - subject.beds) > 1.01) return false;
+
+  if (subject.baths != null) {
+    if (Math.abs(row.baths - subject.baths) > 1.01) return false;
   }
 
-  const areaWhere = {
-    transactionType: "SALE" as const,
-    status: "SOLD" as const,
-    soldPrice: { gt: 50_000 },
-    OR: [{ soldAt: { gte: soldSince } }, { soldAt: null }],
-    ...(opts.propertyTypes?.length
-      ? { propertyType: { in: opts.propertyTypes } }
-      : {}),
-    ...(community
-      ? {
-          community: {
-            equals: community,
-            mode: "insensitive" as const,
-          },
-        }
-      : opts.city
-        ? { city: { equals: opts.city, mode: "insensitive" as const } }
-        : {}),
-  };
-
-  const communitySolds = await prisma.listing.findMany({
-    where: areaWhere,
-    select: { soldPrice: true, listPrice: true },
-    take: 80,
-    orderBy: [{ soldAt: "desc" }],
-  });
-  const prices = communitySolds
-    .map((r) => r.soldPrice ?? r.listPrice)
-    .filter((p): p is number => p != null && p > 50_000);
-  if (prices.length === 0) {
-    return { community, communityAvgSold: null, communitySoldCount: 0 };
-  }
-  const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
-  return {
-    community,
-    communityAvgSold: roundToNearest(avg),
-    communitySoldCount: prices.length,
-  };
-}
-
-type CompRow = {
-  soldPrice: number | null;
-  listPrice: number;
-  beds: number;
-  baths: number;
-  sqft: number | null;
-  lat: number;
-  lng: number;
-  soldAt: Date | null;
-  propertyType: PropertyType;
-  status: "SOLD" | "ACTIVE";
-};
-
-type Priced = { price: number; weight: number };
-
-function scoreComp(
-  row: CompRow,
-  opts: {
-    beds: number | null;
-    baths: number | null;
-    sqft: number | null;
-    propertyType: PropertyType | null;
-    lat?: number | null;
-    lng?: number | null;
-    maxKm: number;
-    minSqftRatio: number;
-  },
-): Priced | null {
-  const price =
-    row.status === "SOLD" && row.soldPrice ? row.soldPrice : row.listPrice;
-  if (!price || price < 50_000) return null;
-
-  let weight = row.status === "SOLD" ? 1 : 0.52;
-  const hasCoords =
-    opts.lat != null &&
-    opts.lng != null &&
-    Number.isFinite(opts.lat) &&
-    Number.isFinite(opts.lng);
-
-  if (hasCoords) {
-    const d = haversineKm(opts.lat!, opts.lng!, row.lat, row.lng);
-    if (d > opts.maxKm) return null;
-    // Stronger distance preference than before.
-    weight *= Math.max(0.25, 1 - d / (opts.maxKm * 1.05));
+  if (subject.sqft != null && subject.sqft > 0) {
+    if (!row.sqft || row.sqft <= 0) return false;
+    const ratio =
+      Math.min(row.sqft, subject.sqft) / Math.max(row.sqft, subject.sqft);
+    if (ratio < 0.75) return false;
+  } else {
+    // Without subject size, still require measurable comp sqft (no invented sizes).
+    if (!row.sqft || row.sqft <= 0) return false;
   }
 
-  if (opts.propertyType) {
-    if (row.propertyType === opts.propertyType) {
-      weight *= 1.35;
-    } else {
-      weight *= 0.72;
-    }
-  }
-
-  if (opts.beds != null) {
-    const bedDelta = Math.abs(row.beds - opts.beds);
-    if (bedDelta > 1.01) return null;
-    weight *= bedDelta < 0.01 ? 1.25 : bedDelta <= 0.5 ? 1.05 : 0.78;
-  }
-
-  if (opts.baths != null) {
-    const bathDelta = Math.abs(row.baths - opts.baths);
-    if (bathDelta > 1.01) return null;
-    weight *= bathDelta < 0.01 ? 1.15 : bathDelta <= 0.5 ? 1.02 : 0.82;
-  }
-
-  if (opts.sqft && row.sqft && row.sqft > 0) {
-    const ratio = Math.min(row.sqft, opts.sqft) / Math.max(row.sqft, opts.sqft);
-    if (ratio < opts.minSqftRatio) return null;
-    weight *= 0.55 + 0.45 * ratio;
-  } else if (opts.sqft && !row.sqft) {
-    weight *= 0.85;
-  }
-
-  if (row.status === "SOLD" && row.soldAt) {
-    const ageDays =
-      (Date.now() - row.soldAt.getTime()) / (1000 * 60 * 60 * 24);
-    weight *= ageDays <= 120 ? 1.22 : ageDays <= 240 ? 1.08 : ageDays <= 365 ? 1 : 0.8;
-  }
-
-  return { price, weight };
-}
-
-function weightedSorted(items: Priced[]): number[] {
-  if (items.length === 0) return [];
-  const expanded: number[] = [];
-  for (const item of items) {
-    const copies = Math.max(1, Math.round(item.weight * 4));
-    for (let i = 0; i < copies; i++) expanded.push(item.price);
-  }
-  return expanded.sort((a, b) => a - b);
-}
-
-function pickPriced(
-  rows: CompRow[],
-  opts: {
-    beds: number | null;
-    baths: number | null;
-    sqft: number | null;
-    propertyType: PropertyType | null;
-    lat?: number | null;
-    lng?: number | null;
-  },
-): { sold: Priced[]; active: Priced[] } {
-  // Progressive tightening: prefer close, similar homes first.
-  const passes: Array<{ maxKm: number; minSqftRatio: number }> = [
-    { maxKm: 3.5, minSqftRatio: 0.78 },
-    { maxKm: 6, minSqftRatio: 0.68 },
-    { maxKm: 10, minSqftRatio: 0.58 },
-    { maxKm: 14, minSqftRatio: 0.5 },
-  ];
-
-  for (const pass of passes) {
-    const sold: Priced[] = [];
-    const active: Priced[] = [];
-    for (const row of rows) {
-      const scored = scoreComp(row, { ...opts, ...pass });
-      if (!scored) continue;
-      if (row.status === "SOLD") sold.push(scored);
-      else active.push(scored);
-    }
-    if (sold.length >= 4 || sold.length + active.length >= 6) {
-      return { sold, active };
-    }
-  }
-
-  // Last resort: keep whatever scored on the loosest pass.
-  const sold: Priced[] = [];
-  const active: Priced[] = [];
-  const loose = passes[passes.length - 1]!;
-  for (const row of rows) {
-    const scored = scoreComp(row, { ...opts, ...loose });
-    if (!scored) continue;
-    if (row.status === "SOLD") sold.push(scored);
-    else active.push(scored);
-  }
-  return { sold, active };
+  return true;
 }
 
 /**
- * Indicative home value range from Houzzat inventory.
- * Prefers recent solds of the same property type near the subject home.
+ * Similarity score for ranking eligible solds (higher = better). Pure.
+ */
+export function scoreEligibleSoldComp(
+  row: SoldCompCandidate,
+  subject: SubjectForComps,
+): number {
+  const d = haversineKm(subject.lat, subject.lng, row.lat, row.lng);
+  const limits = distanceLimitsKm(subject.propertyType);
+  let score = Math.max(0.15, 1 - d / (limits.expanded * 1.05));
+
+  if (row.propertyType === subject.propertyType) score *= 1.4;
+
+  if (
+    subject.community?.trim() &&
+    row.community?.trim() &&
+    subject.community.trim().toLowerCase() === row.community.trim().toLowerCase()
+  ) {
+    score *= 1.2;
+  }
+
+  const bedDelta = Math.abs(row.beds - subject.beds);
+  score *= bedDelta < 0.01 ? 1.25 : bedDelta <= 0.5 ? 1.08 : 0.85;
+
+  if (subject.baths != null) {
+    const bathDelta = Math.abs(row.baths - subject.baths);
+    score *= bathDelta < 0.01 ? 1.12 : bathDelta <= 0.5 ? 1.02 : 0.88;
+  }
+
+  if (subject.sqft && row.sqft && row.sqft > 0) {
+    const ratio =
+      Math.min(row.sqft, subject.sqft) / Math.max(row.sqft, subject.sqft);
+    score *= 0.55 + 0.45 * ratio;
+  }
+
+  const ageDays =
+    (Date.now() - row.soldAt.getTime()) / (1000 * 60 * 60 * 24);
+  score *=
+    ageDays <= 90 ? 1.25 : ageDays <= 180 ? 1.12 : ageDays <= 270 ? 1 : 0.88;
+
+  // Soft boosts only when both sides have reliable values — no price multipliers.
+  if (
+    subject.parkingSpaces != null &&
+    subject.parkingSpaces >= 0 &&
+    row.parkingSpaces != null &&
+    row.parkingSpaces >= 0
+  ) {
+    const parkDelta = Math.abs(row.parkingSpaces - subject.parkingSpaces);
+    if (parkDelta <= 1) score *= 1.04;
+  }
+  if (
+    subject.yearBuilt != null &&
+    subject.yearBuilt > 1800 &&
+    row.yearBuilt != null &&
+    row.yearBuilt > 1800
+  ) {
+    const yearDelta = Math.abs(row.yearBuilt - subject.yearBuilt);
+    if (yearDelta <= 10) score *= 1.05;
+    else if (yearDelta <= 20) score *= 1.02;
+  }
+
+  return score;
+}
+
+function insufficient(
+  reason: string,
+  city: string | null,
+  community: string | null,
+): HomeValueEstimateInsufficient {
+  return { status: "INSUFFICIENT_DATA", reason, city, community };
+}
+
+function pricesConsistent(sorted: number[]): boolean {
+  if (sorted.length < MIN_ELIGIBLE_SOLDS) return false;
+  const low = sorted[0]!;
+  const high = sorted[sorted.length - 1]!;
+  if (low <= 0) return false;
+  return high / low <= MAX_PRICE_SPREAD_RATIO;
+}
+
+/** Comp-set size consistency when subject sqft is unknown. */
+export function compsSqftConsistent(
+  sqfts: Array<number | null | undefined>,
+): boolean {
+  const known = sqfts.filter((s): s is number => s != null && s > 0);
+  if (known.length < MIN_ELIGIBLE_SOLDS) return false;
+  const min = Math.min(...known);
+  const max = Math.max(...known);
+  if (min <= 0) return false;
+  return min / max >= MIN_COMP_SQFT_RATIO;
+}
+
+export type ScoredSoldPrice = { soldPrice: number; score: number };
+
+/**
+ * Normalize scores to weights with a hard per-comp share cap.
+ * Excess mass is redistributed to remaining comps by relative score.
+ */
+export function cappedNormalizedWeights(
+  scores: number[],
+  maxShare = MAX_SINGLE_COMP_WEIGHT_SHARE,
+): number[] {
+  const n = scores.length;
+  if (n === 0) return [];
+  const cap = Math.min(1, Math.max(maxShare, 1 / n));
+  const raw = scores.map((s) => Math.max(s, 1e-12));
+  const order = raw
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => b.s - a.s);
+
+  const out = new Array<number>(n).fill(0);
+  let remaining = 1;
+  let remainingScore = order.reduce((a, x) => a + x.s, 0);
+
+  for (let k = 0; k < order.length; k++) {
+    const left = order.length - k;
+    if (left <= 0 || remainingScore <= 0) break;
+    const { s, i } = order[k]!;
+    const natural = remaining * (s / remainingScore);
+    if (natural > cap + 1e-12 && left > 1) {
+      out[i] = cap;
+      remaining -= cap;
+      remainingScore -= s;
+      continue;
+    }
+    for (let j = k; j < order.length; j++) {
+      const o = order[j]!;
+      out[o.i] = remaining * (o.s / remainingScore);
+    }
+    break;
+  }
+  return out;
+}
+
+/**
+ * Similarity-weighted low/mid/high from scored solds.
+ * Caps any single comp’s weight share; clamps to the sold price range.
+ */
+export function weightedSoldEstimate(
+  scored: ScoredSoldPrice[],
+  opts?: { lowP?: number; highP?: number },
+): { low: number; mid: number; high: number } | null {
+  if (scored.length < MIN_ELIGIBLE_SOLDS) return null;
+
+  const positive = scored
+    .filter((s) => s.soldPrice > 0 && Number.isFinite(s.score) && s.score > 0)
+    .map((s) => ({ soldPrice: s.soldPrice, score: s.score }));
+  if (positive.length < MIN_ELIGIBLE_SOLDS) return null;
+
+  const best = Math.max(...positive.map((s) => s.score));
+  const evidence = positive.filter(
+    (s) => s.score >= best * MIN_SCORE_RATIO_OF_BEST,
+  );
+  if (evidence.length < MIN_ELIGIBLE_SOLDS) return null;
+
+  const weights = cappedNormalizedWeights(evidence.map((s) => s.score));
+  const weighted = evidence.map((s, i) => ({
+    soldPrice: s.soldPrice,
+    score: weights[i]!,
+  }));
+  const total = weighted.reduce((a, b) => a + b.score, 0);
+  if (!(total > 0)) return null;
+
+  const sorted = [...weighted].sort((a, b) => a.soldPrice - b.soldPrice);
+  const minP = sorted[0]!.soldPrice;
+  const maxP = sorted[sorted.length - 1]!.soldPrice;
+  if (!pricesConsistent(sorted.map((s) => s.soldPrice))) return null;
+
+  function weightedPercentile(p: number): number {
+    const target = Math.min(Math.max(p, 0), 1) * total;
+    let cum = 0;
+    for (let i = 0; i < sorted.length; i++) {
+      const prev = cum;
+      const row = sorted[i]!;
+      cum += row.score;
+      if (cum >= target) {
+        if (i === 0 || target <= prev) return row.soldPrice;
+        const w = (target - prev) / row.score;
+        const prevPrice = sorted[i - 1]!.soldPrice;
+        return prevPrice * (1 - w) + row.soldPrice * w;
+      }
+    }
+    return maxP;
+  }
+
+  const lowP = opts?.lowP ?? 0.25;
+  const highP = opts?.highP ?? 0.75;
+  const low = weightedPercentile(lowP);
+  const mid = weightedPercentile(0.5);
+  const high = weightedPercentile(highP);
+
+  return {
+    low: Math.min(maxP, Math.max(minP, low)),
+    mid: Math.min(maxP, Math.max(minP, mid)),
+    high: Math.min(maxP, Math.max(minP, high)),
+  };
+}
+
+/**
+ * Indicative home value from entitled recent solds only.
  */
 export async function estimateHomeValue(opts: {
   city?: string | null;
@@ -356,243 +447,213 @@ export async function estimateHomeValue(opts: {
   propertyType?: string | null;
   lat?: number | null;
   lng?: number | null;
-}): Promise<HomeValueEstimate> {
+  parkingSpaces?: number | null;
+  yearBuilt?: number | null;
+  entitlement?: WorkspaceListingEntitlement;
+  now?: Date;
+}): Promise<EstimateHomeValueResult> {
   const city = opts.city?.trim() || null;
-  const beds = opts.beds != null && Number.isFinite(opts.beds) ? opts.beds : null;
+  const community = opts.community?.trim() || null;
+  const propertyType = parseResidentialPropertyType(opts.propertyType);
+  const beds =
+    opts.beds != null && Number.isFinite(opts.beds) ? opts.beds : null;
   const baths =
     opts.baths != null && Number.isFinite(opts.baths) ? opts.baths : null;
   const sqft = opts.sqft != null && opts.sqft > 0 ? opts.sqft : null;
-  const propertyType = parsePropertyType(opts.propertyType);
-  const typeFamily = relatedTypes(propertyType);
   const hasCoords =
     opts.lat != null &&
     opts.lng != null &&
     Number.isFinite(opts.lat) &&
     Number.isFinite(opts.lng);
 
-  const soldSince = new Date();
-  soldSince.setMonth(soldSince.getMonth() - 14);
-
-  // Candidate pool: same/related property type first; soft beds window.
-  const candidateWhere = {
-    transactionType: "SALE" as const,
-    segment: { in: ["RESIDENTIAL" as const, "COMMERCIAL" as const] },
-    ...(city ? { city: { equals: city, mode: "insensitive" as const } } : {}),
-    ...(typeFamily ? { propertyType: { in: typeFamily } } : {}),
-    ...(beds != null
-      ? { beds: { gte: Math.max(beds - 1, 0), lte: beds + 1 } }
-      : {}),
-    ...(baths != null
-      ? { baths: { gte: Math.max(baths - 1, 0), lte: baths + 1 } }
-      : {}),
-  };
-
-  const [soldRows, activeRows, communityStats] = await Promise.all([
-    prisma.listing.findMany({
-      where: {
-        ...candidateWhere,
-        status: "SOLD",
-        soldPrice: { gt: 50_000 },
-        OR: [{ soldAt: { gte: soldSince } }, { soldAt: null }],
-      },
-      select: {
-        soldPrice: true,
-        listPrice: true,
-        beds: true,
-        baths: true,
-        sqft: true,
-        lat: true,
-        lng: true,
-        soldAt: true,
-        propertyType: true,
-      },
-      take: 160,
-      orderBy: [{ soldAt: "desc" }, { updatedAtMls: "desc" }],
-    }),
-    prisma.listing.findMany({
-      where: {
-        ...candidateWhere,
-        status: "ACTIVE",
-        listPrice: { gt: 50_000 },
-      },
-      select: {
-        listPrice: true,
-        beds: true,
-        baths: true,
-        sqft: true,
-        lat: true,
-        lng: true,
-        propertyType: true,
-      },
-      take: 100,
-      orderBy: [{ listedAt: "desc" }],
-    }),
-    resolveCommunityAvg({
+  if (!city || !propertyType || beds == null || !hasCoords) {
+    return insufficient(
+      "missing_subject_characteristics",
       city,
-      community: opts.community?.trim() || null,
-      propertyTypes: typeFamily,
-      lat: opts.lat,
-      lng: opts.lng,
-    }),
-  ]);
-
-  let rows: CompRow[] = [
-    ...soldRows.map((row) => ({
-      ...row,
-      status: "SOLD" as const,
-    })),
-    ...activeRows.map((row) => ({
-      ...row,
-      soldPrice: null,
-      soldAt: null,
-      status: "ACTIVE" as const,
-    })),
-  ];
-
-  // If exact/related type + beds produced too few rows, widen type family only.
-  if (rows.length < 8 && propertyType) {
-    const wider = await prisma.listing.findMany({
-      where: {
-        transactionType: "SALE",
-        segment: { in: ["RESIDENTIAL", "COMMERCIAL"] },
-        ...(city ? { city: { equals: city, mode: "insensitive" } } : {}),
-        propertyType,
-        status: { in: ["SOLD", "ACTIVE"] },
-        OR: [
-          { status: "SOLD", soldPrice: { gt: 50_000 } },
-          { status: "ACTIVE", listPrice: { gt: 50_000 } },
-        ],
-      },
-      select: {
-        soldPrice: true,
-        listPrice: true,
-        beds: true,
-        baths: true,
-        sqft: true,
-        lat: true,
-        lng: true,
-        soldAt: true,
-        propertyType: true,
-        status: true,
-      },
-      take: 120,
-      orderBy: [{ updatedAtMls: "desc" }],
-    });
-    rows = wider.map((row) => ({
-      soldPrice: row.soldPrice,
-      listPrice: row.listPrice,
-      beds: row.beds,
-      baths: row.baths,
-      sqft: row.sqft,
-      lat: row.lat,
-      lng: row.lng,
-      soldAt: row.soldAt,
-      propertyType: row.propertyType,
-      status: row.status === "SOLD" ? "SOLD" : "ACTIVE",
-    }));
+      community,
+    );
   }
 
-  const { sold: soldPriced, active: activePriced } = pickPriced(rows, {
+  if (requiresSubjectSqft(propertyType) && sqft == null) {
+    return insufficient("missing_subject_sqft", city, community);
+  }
+
+  const allowedTypes = compatiblePropertyTypes(propertyType);
+  if (allowedTypes.length === 0) {
+    return insufficient("unsupported_property_type", city, community);
+  }
+
+  const inventory = buildPrismaEntitledInventoryWhere({
+    entitlement: opts.entitlement,
+    dataSource: "mls",
+    statuses: ["SOLD"],
+  });
+  if (inventory.kind === "empty") {
+    return insufficient("no_entitled_inventory", city, community);
+  }
+
+  const now = opts.now ?? new Date();
+  const since = soldSinceDate(now);
+  const limits = distanceLimitsKm(propertyType);
+  // Bounding box for primary expansion radius (avoid full-city scans).
+  const boxPad = limits.expanded / 111; // ~deg latitude
+  const lngPad = limits.expanded / (111 * Math.cos((opts.lat! * Math.PI) / 180));
+
+  const rows = await prisma.listing.findMany({
+    where: {
+      AND: [
+        inventory.where,
+        {
+          transactionType: "SALE",
+          segment: "RESIDENTIAL",
+          status: "SOLD",
+          soldPrice: { gt: 50_000 },
+          soldAt: { gte: since, not: null },
+          city: { equals: city, mode: "insensitive" },
+          propertyType: { in: [...allowedTypes] },
+          beds: { gte: Math.max(beds - 1, 0), lte: beds + 1 },
+          ...(baths != null
+            ? { baths: { gte: Math.max(baths - 1, 0), lte: baths + 1 } }
+            : {}),
+          lat: { gte: opts.lat! - boxPad, lte: opts.lat! + boxPad },
+          lng: { gte: opts.lng! - lngPad, lte: opts.lng! + lngPad },
+        } satisfies Prisma.ListingWhereInput,
+      ],
+    },
+    select: {
+      soldPrice: true,
+      soldAt: true,
+      beds: true,
+      baths: true,
+      sqft: true,
+      lat: true,
+      lng: true,
+      propertyType: true,
+      city: true,
+      community: true,
+      parkingSpaces: true,
+      yearBuilt: true,
+    },
+    take: 200,
+    orderBy: [{ soldAt: "desc" }],
+  });
+
+  const subject: SubjectForComps = {
+    city,
     beds,
     baths,
     sqft,
     propertyType,
-    lat: opts.lat,
-    lng: opts.lng,
-  });
+    lat: opts.lat!,
+    lng: opts.lng!,
+    community,
+    basement: opts.basement,
+    parkingSpaces: opts.parkingSpaces,
+    yearBuilt: opts.yearBuilt,
+  };
 
-  const soldSorted = weightedSorted(soldPriced);
-  const activeSorted = weightedSorted(activePriced);
-  const soldCount = soldPriced.length;
-  const activeCount = activePriced.length;
+  const candidates: SoldCompCandidate[] = rows
+    .filter(
+      (r): r is typeof r & { soldPrice: number; soldAt: Date } =>
+        r.soldPrice != null && r.soldAt != null,
+    )
+    .map((r) => ({
+      soldPrice: r.soldPrice,
+      soldAt: r.soldAt,
+      beds: r.beds,
+      baths: r.baths,
+      sqft: r.sqft,
+      lat: r.lat,
+      lng: r.lng,
+      propertyType: r.propertyType,
+      city: r.city,
+      community: r.community,
+      parkingSpaces: r.parkingSpaces,
+      yearBuilt: r.yearBuilt,
+    }));
 
-  let method: HomeValueEstimate["method"] = "fallback";
-  let prices: number[] = [];
-
-  if (soldSorted.length >= 4) {
-    method = activeSorted.length >= 3 ? "blended" : "sold_comps";
-    prices =
-      method === "blended"
-        ? [...soldSorted, ...activeSorted.map((p) => Math.round(p * 0.97))].sort(
-            (a, b) => a - b,
-          )
-        : soldSorted;
-  } else if (soldSorted.length + activeSorted.length >= 4) {
-    method = soldSorted.length > 0 ? "blended" : "active_listings";
-    prices = [...soldSorted, ...activeSorted].sort((a, b) => a - b);
-  } else if (soldSorted.length + activeSorted.length > 0) {
-    method = soldSorted.length > 0 ? "sold_comps" : "active_listings";
-    prices = [...soldSorted, ...activeSorted].sort((a, b) => a - b);
+  function collect(maxKm: number) {
+    return candidates
+      .filter((row) => isEligibleSoldComp(row, subject, { maxKm, now }))
+      .map((row) => ({
+        row,
+        score: scoreEligibleSoldComp(row, subject),
+      }))
+      .sort((a, b) => b.score - a.score);
   }
 
-  if (prices.length < 3) {
-    const fallback = await prisma.listing.findMany({
-      where: {
-        transactionType: "SALE",
-        status: { in: ["ACTIVE", "SOLD"] },
-        ...(city ? { city: { equals: city, mode: "insensitive" } } : {}),
-        ...(propertyType ? { propertyType } : {}),
-        listPrice: { gt: 100_000 },
-      },
-      select: { listPrice: true, soldPrice: true, status: true },
-      take: 50,
-      orderBy: { updatedAtMls: "desc" },
-    });
-    prices = fallback
-      .map((r) =>
-        r.status === "SOLD" && r.soldPrice ? r.soldPrice : r.listPrice,
-      )
-      .filter((p) => p > 50_000)
-      .sort((a, b) => a - b);
-    method = "fallback";
+  let scored = collect(limits.primary);
+  if (scored.length < MIN_ELIGIBLE_SOLDS) {
+    scored = collect(limits.expanded);
   }
 
-  const factor = basementFactor(opts.basement);
+  if (scored.length < MIN_ELIGIBLE_SOLDS) {
+    return insufficient("insufficient_sold_comps", city, community);
+  }
 
-  // Slightly tighter band when we have strong feature match (type + beds + geo).
+  // Use top evidence set (cap), then drop weak similarity tails.
+  const ranked = scored.slice(0, Math.min(12, scored.length));
+  const bestScore = ranked[0]?.score ?? 0;
+  const top = ranked.filter(
+    (t) => t.score >= bestScore * MIN_SCORE_RATIO_OF_BEST,
+  );
+  if (top.length < MIN_ELIGIBLE_SOLDS) {
+    return insufficient("insufficient_sold_comps", city, community);
+  }
+
+  if (subject.sqft == null && !compsSqftConsistent(top.map((t) => t.row.sqft))) {
+    return insufficient("inconsistent_comp_sizes", city, community);
+  }
+
+  const range = weightedSoldEstimate(
+    top.map((t) => ({ soldPrice: t.row.soldPrice, score: t.score })),
+    {
+      lowP: 0.25,
+      highP: 0.75,
+    },
+  );
+  if (!range) {
+    return insufficient("inconsistent_sold_prices", city, community);
+  }
+
+  const soldCount = top.length;
   const confident =
-    Boolean(propertyType) &&
-    beds != null &&
-    hasCoords &&
     soldCount >= 5 &&
-    method !== "fallback";
+    Boolean(subject.sqft) &&
+    baths != null &&
+    top.every((t) => t.row.propertyType === propertyType) &&
+    top.every((t) => t.row.sqft != null && t.row.sqft > 0);
 
-  if (prices.length === 0) {
-    return {
-      low: roundToNearest(650_000 * factor),
-      mid: roundToNearest(875_000 * factor),
-      high: roundToNearest(1_150_000 * factor),
-      sampleSize: 0,
-      soldCount: 0,
-      activeCount: 0,
-      method: "fallback",
-      city,
-      community: communityStats.community,
-      communityAvgSold: communityStats.communityAvgSold,
-      communitySoldCount: communityStats.communitySoldCount,
-    };
-  }
-
-  let low = percentile(prices, confident ? 0.28 : 0.22) * factor;
-  let mid = percentile(prices, 0.5) * factor;
-  let high = percentile(prices, confident ? 0.72 : 0.78) * factor;
-
-  if (high - low < mid * (confident ? 0.06 : 0.08)) {
-    low = mid * (confident ? 0.94 : 0.92);
-    high = mid * (confident ? 1.06 : 1.08);
-  }
+  // Community sold average for context (same entitled query filters).
+  const communityPrices = candidates
+    .filter((c) => {
+      if (!community) return false;
+      return (
+        c.community?.trim().toLowerCase() === community.toLowerCase() &&
+        isEligibleSoldComp(c, subject, { maxKm: limits.expanded, now })
+      );
+    })
+    .map((c) => c.soldPrice);
+  const communityAvgSold =
+    communityPrices.length > 0
+      ? roundToNearest(
+          communityPrices.reduce((a, b) => a + b, 0) / communityPrices.length,
+        )
+      : null;
 
   return {
-    low: roundToNearest(low),
-    mid: roundToNearest(mid),
-    high: roundToNearest(high),
-    sampleSize: prices.length,
+    status: "OK",
+    low: roundToNearest(range.low),
+    mid: roundToNearest(range.mid),
+    high: roundToNearest(range.high),
+    sampleSize: top.length,
     soldCount,
-    activeCount,
-    method,
+    activeCount: 0,
+    method: "sold_comps",
+    confidence: confident ? "high" : "medium",
     city,
-    community: communityStats.community,
-    communityAvgSold: communityStats.communityAvgSold,
-    communitySoldCount: communityStats.communitySoldCount,
+    community,
+    communityAvgSold,
+    communitySoldCount: communityPrices.length,
   };
 }

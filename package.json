@@ -223,6 +223,7 @@
     "property-address-phase4b:selftest": "node --import tsx scripts/property-address-phase4b-selftest.ts",
     "property-address-phase4c:selftest": "node --import tsx scripts/property-address-phase4c-selftest.ts",
     "seller-claim-registration:selftest": "node --import tsx scripts/seller-claim-registration-selftest.ts",
+    "home-value-estimate-v1:selftest": "node --import tsx scripts/home-value-estimate-v1-selftest.ts",
     "chat-rich-messaging:selftest": "node --import tsx scripts/chat-rich-messaging-selftest.ts",
     "chat-voice-notes:selftest": "node --import tsx scripts/chat-voice-notes-selftest.ts",
     "agent-conversation-voice-auth:selftest": "node --import tsx scripts/agent-conversation-voice-auth-selftest.ts",

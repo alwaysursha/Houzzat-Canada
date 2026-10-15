@@ -199,10 +199,12 @@ export function HomeHeroSearch({
       const data = (await res.json()) as {
         error?: string;
         leadId?: string;
-        estimate?: { low: number; high: number; disclaimer: string };
+        status?: string;
+        estimate?: { low: number; high: number; disclaimer: string } | null;
       };
 
-      if (!res.ok || !data.estimate || !data.leadId) {
+      // Hero quick capture may succeed without dollars (features still required).
+      if (!res.ok || !data.leadId) {
         setError(data.error ?? "Could not start your estimate.");
         setPending(false);
         estimateLockRef.current = false;
@@ -213,10 +215,12 @@ export function HomeHeroSearch({
         address,
         city,
         leadId: data.leadId,
-        low: String(data.estimate.low),
-        high: String(data.estimate.high),
         from: "hero",
       });
+      if (data.estimate) {
+        params.set("low", String(data.estimate.low));
+        params.set("high", String(data.estimate.high));
+      }
       if (selected?.community) params.set("community", selected.community);
       if (typeof selected?.lat === "number") {
         params.set("lat", String(selected.lat));

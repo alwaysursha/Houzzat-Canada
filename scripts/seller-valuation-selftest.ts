@@ -57,12 +57,13 @@ function testFlatWritePlan() {
 }
 
 function testSuccessGate() {
+  /** V1: lead capture succeeds without dollars (INSUFFICIENT_DATA / AUTH_REQUIRED). */
   function clientAccepts(res: {
     ok: boolean;
     leadId?: string;
-    estimate?: { low: number; high: number };
+    estimate?: { low: number; high: number } | null;
   }) {
-    return Boolean(res.ok && res.leadId && res.estimate);
+    return Boolean(res.ok && res.leadId);
   }
 
   assert.equal(
@@ -71,6 +72,10 @@ function testSuccessGate() {
       leadId: "lead_1",
       estimate: { low: 1, high: 2 },
     }),
+    true,
+  );
+  assert.equal(
+    clientAccepts({ ok: true, leadId: "lead_1", estimate: null }),
     true,
   );
   assert.equal(

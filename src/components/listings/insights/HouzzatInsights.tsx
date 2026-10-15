@@ -274,8 +274,8 @@ export function HouzzatInsights({
               }
               body={
                 needsEmailVerification
-                  ? "Verify your email to unlock the low–mid–high estimate built from nearby solds and actives."
-                  : `Sign in as a ${brandDisplayName} client to unlock the low–mid–high estimate built from nearby solds and actives.`
+                  ? "Verify your email to unlock the low–mid–high estimate built from recent sold comparables."
+                  : `Sign in as a ${brandDisplayName} client to unlock the low–mid–high estimate built from recent sold comparables.`
               }
               callbackPath={callbackPath}
               needsEmailVerification={needsEmailVerification}
@@ -290,10 +290,15 @@ export function HouzzatInsights({
               </div>
             </InsightGate>
           ) : valuation.mid == null ? (
-            <p className="text-sm text-ink/55">
-              Not enough comparable inventory yet to generate an estimate for
-              this home.
-            </p>
+            <div className="space-y-2">
+              <p className="font-display text-xl text-ink">
+                Insufficient Market Data
+              </p>
+              <p className="text-sm text-ink/55">
+                We don&apos;t have enough reliable comparable property data to
+                provide an accurate estimate for this home.
+              </p>
+            </div>
           ) : (
             <div>
               <div className="flex flex-wrap items-end justify-between gap-4">

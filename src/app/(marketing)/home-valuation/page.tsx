@@ -11,7 +11,9 @@ import { splitCustomerDisplayName } from "@/lib/agent/lead-info-change";
 import { LEAD_IDENTITY_SENTINEL_EMAILS } from "@/lib/agent/lead-identity";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { loadHomeValuationPrefillFromRequest } from "@/lib/property-address/valuation-prefill";
 import { isConsumerRole } from "@/lib/roles";
+import { resolveListingEntitlementContextForServerPage } from "@/lib/tenancy/listing-entitlement";
 import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
 import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
@@ -66,7 +68,11 @@ function faqJsonLd(input: {
   };
 }
 
-export default async function HomeValuationPage() {
+type PageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function HomeValuationPage({ searchParams }: PageProps) {
   const brand = await resolveMarketingPresentationBrand();
   const siteName = brand?.displayName ?? "Real Estate";
   const siteUrl =
@@ -76,6 +82,14 @@ export default async function HomeValuationPage() {
   const pageUrl =
     absoluteUrlForOrigin(siteUrl, "/home-valuation") ??
     `${siteUrl.replace(/\/$/, "")}/home-valuation`;
+
+  const sp = await searchParams;
+  const { entitlement } =
+    await resolveListingEntitlementContextForServerPage();
+  const verifiedPrefill = await loadHomeValuationPrefillFromRequest({
+    searchParams: sp,
+    entitlement,
+  });
 
   const session = await auth();
   let initialContact: {
@@ -142,7 +156,21 @@ export default async function HomeValuationPage() {
                 </div>
               }
             >
-              <HomeValuationForm initialContact={initialContact} />
+              <HomeValuationForm
+                initialContact={initialContact}
+                verifiedPrefill={
+                  verifiedPrefill
+                    ? {
+                        address: verifiedPrefill.address,
+                        city: verifiedPrefill.city,
+                        community: verifiedPrefill.community,
+                        lat: verifiedPrefill.lat,
+                        lng: verifiedPrefill.lng,
+                        unitNumber: verifiedPrefill.unitNumber,
+                      }
+                    : null
+                }
+              />
             </Suspense>
           </div>
 

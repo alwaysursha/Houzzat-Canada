@@ -20,7 +20,11 @@ import {
   resolveLeadIntent,
 } from "@/lib/agent/lead-intake";
 import { TERMS_ACCEPT_KIND, TERMS_VERSION } from "@/lib/consent";
-import { estimateHomeValue } from "@/lib/market/home-value-estimate";
+import {
+  estimateHomeValue,
+  type EstimateHomeValueResult,
+  type HomeValueEstimateOk,
+} from "@/lib/market/home-value-estimate";
 import { sendNotification } from "@/lib/notifications";
 import {
   notifyNewLeadCapturedToStaff,
@@ -33,9 +37,10 @@ import {
   isInvalidContactPhoneError,
   parsePhoneColumnsForWrite,
 } from "@/lib/sms/e164";
-import { VOW_VERSION } from "@/lib/vow";
+import { hasClientAccess, VOW_VERSION } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import { resolveLeadCaptureTenancy } from "@/lib/agent/lead-intake";
+import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
 
 const basementSchema = z.enum(["finished", "unfinished", "none", "unknown"]);
 
@@ -83,6 +88,7 @@ const schema = z.object({
   quick: z.boolean().optional(),
   /** Live preview refresh — estimate only, no lead / account side effects. */
   estimateOnly: z.boolean().optional(),
+  /** Ignored — client-supplied ranges are not authoritative (V1). */
   estimatedLow: z.number().optional(),
   estimatedHigh: z.number().optional(),
   estimatedMid: z.number().optional(),
@@ -92,7 +98,7 @@ const schema = z.object({
   utmContent: z.string().optional(),
 });
 
-function estimatePayload(estimate: Awaited<ReturnType<typeof estimateHomeValue>>) {
+function estimatePayload(estimate: HomeValueEstimateOk) {
   return {
     low: estimate.low,
     mid: estimate.mid,
@@ -101,13 +107,32 @@ function estimatePayload(estimate: Awaited<ReturnType<typeof estimateHomeValue>>
     soldCount: estimate.soldCount,
     activeCount: estimate.activeCount,
     method: estimate.method,
+    confidence: estimate.confidence,
     city: estimate.city,
     community: estimate.community,
     communityAvgSold: estimate.communityAvgSold,
     communitySoldCount: estimate.communitySoldCount,
     disclaimer:
-      "Indicative range from Houzzat’s Ontario listing inventory (recent solds and active homes). Not a formal appraisal or guarantee of sale price. A local review sharpens the number for your specific property.",
+      "Indicative range from recent sold comparables in Houzzat’s entitled inventory. Not a formal appraisal or guarantee of sale price. A local review sharpens the number for your specific property.",
   };
+}
+
+function valuationNotesEstimateLines(
+  result: EstimateHomeValueResult,
+): string[] {
+  if (result.status !== "OK") {
+    return [
+      "Estimate status: INSUFFICIENT_DATA",
+      `Reason: ${result.reason}`,
+    ];
+  }
+  return [
+    `Indicative range: $${result.low.toLocaleString()} – $${result.high.toLocaleString()} (mid $${result.mid.toLocaleString()})`,
+    `Method: sold comps; confidence=${result.confidence}; sample=${result.sampleSize}; sold=${result.soldCount}`,
+    result.communityAvgSold
+      ? `Community avg sold: $${result.communityAvgSold.toLocaleString()} (n=${result.communitySoldCount})`
+      : null,
+  ].filter((line): line is string => Boolean(line));
 }
 
 function requestClientMeta(request: Request) {
@@ -294,39 +319,64 @@ export async function POST(request: Request) {
     }
 
     const session = await auth();
-    const estimate =
-      data.estimatedLow && data.estimatedHigh
-        ? {
-            low: data.estimatedLow,
-            mid:
-              data.estimatedMid ??
-              Math.round((data.estimatedLow + data.estimatedHigh) / 2),
-            high: data.estimatedHigh,
-            sampleSize: 0,
-            soldCount: 0,
-            activeCount: 0,
-            method: "fallback" as const,
-            city: data.city ?? null,
-            community: data.community ?? null,
-            communityAvgSold: null,
-            communitySoldCount: 0,
-          }
-        : await estimateHomeValue({
-            city: data.city,
-            community: data.community,
-            beds: data.beds,
-            baths: data.baths,
-            sqft: data.sqft,
-            basement: data.basement,
-            propertyType: data.propertyType,
-            lat: data.lat,
-            lng: data.lng,
-          });
+    const { entitlement } =
+      await resolveListingEntitlementContextForRequest(request);
+
+    // Sold-derived dollars require VOW/client access (server-side).
+    let accessUser: {
+      id: string;
+      emailVerified: Date | null;
+      createdAt: Date;
+    } | null = null;
+    if (session?.user?.id) {
+      accessUser = await prisma.user
+        .findUnique({
+          where: { id: session.user.id },
+          select: { id: true, emailVerified: true, createdAt: true },
+        })
+        .catch(() => null);
+    }
+    const canSeeSoldValuation = hasClientAccess(accessUser);
 
     if (estimateOnly) {
+      if (!canSeeSoldValuation) {
+        return NextResponse.json({
+          ok: true,
+          status: "AUTH_REQUIRED",
+          estimate: null,
+          message:
+            "Sign in as a registered client to view sold-based home estimates.",
+        });
+      }
+      // Never trust client estimatedLow/High — always recompute when authorized.
+      const estimateResult = await estimateHomeValue({
+        city: data.city,
+        community: data.community,
+        beds: data.beds,
+        baths: data.baths,
+        sqft: data.sqft,
+        basement: data.basement,
+        propertyType: data.propertyType,
+        lat: data.lat,
+        lng: data.lng,
+        entitlement,
+      });
+      if (estimateResult.status === "INSUFFICIENT_DATA") {
+        return NextResponse.json({
+          ok: true,
+          status: "INSUFFICIENT_DATA",
+          estimate: null,
+          reason: estimateResult.reason,
+          city: estimateResult.city,
+          community: estimateResult.community,
+          message:
+            "We don't have enough reliable comparable property data to provide an accurate estimate for this home.",
+        });
+      }
       return NextResponse.json({
         ok: true,
-        estimate: estimatePayload(estimate),
+        status: "OK",
+        estimate: estimatePayload(estimateResult),
       });
     }
 
@@ -447,14 +497,19 @@ export async function POST(request: Request) {
     const utm = pickUtm(data);
     const adCampaignId = await resolveAdCampaignId(utm);
 
-    const methodLabel =
-      estimate.method === "sold_comps"
-        ? "recent sold comps"
-        : estimate.method === "active_listings"
-          ? "active listings"
-          : estimate.method === "blended"
-            ? "sold comps + active listings"
-            : "market fallback";
+    // Recompute after customer ensure so notes always use server authority.
+    const estimateForLead = await estimateHomeValue({
+      city: data.city,
+      community: data.community,
+      beds: data.beds,
+      baths: data.baths,
+      sqft: data.sqft,
+      basement: data.basement,
+      propertyType: data.propertyType,
+      lat: data.lat,
+      lng: data.lng,
+      entitlement,
+    });
 
     const resolved = await publicResolveOrCreateLead({
       request,
@@ -475,8 +530,8 @@ export async function POST(request: Request) {
       notes: [
         `Home valuation for ${data.address}`,
         data.city ? `City: ${data.city}` : null,
-        estimate.community
-          ? `Community: ${estimate.community}`
+        estimateForLead.community
+          ? `Community: ${estimateForLead.community}`
           : data.community
             ? `Community: ${data.community}`
             : null,
@@ -485,16 +540,12 @@ export async function POST(request: Request) {
         data.baths != null ? `Baths: ${data.baths}` : null,
         data.sqft != null ? `Sqft: ${data.sqft}` : null,
         data.basement ? `Basement: ${data.basement}` : null,
-        estimate.communityAvgSold
-          ? `Community avg sold: $${estimate.communityAvgSold.toLocaleString()} (n=${estimate.communitySoldCount})`
-          : null,
         `Intent: ${data.intent}`,
         accountCreated
           ? "Seller profile created (buyer+seller, owner desk)"
           : null,
         isQuick ? "Captured from homepage Sell a Home → Get Estimate" : null,
-        `Indicative range: $${estimate.low.toLocaleString()} – $${estimate.high.toLocaleString()} (mid $${estimate.mid.toLocaleString()})`,
-        `Method: ${methodLabel}; sample=${estimate.sampleSize}; sold=${estimate.soldCount}; active=${estimate.activeCount}`,
+        ...valuationNotesEstimateLines(estimateForLead),
         `Contact: ${contactNameResolved} <${contactEmail}>`,
         data.phone ? `Phone: ${data.phone}` : null,
         data.marketingOptIn ||
@@ -519,7 +570,9 @@ export async function POST(request: Request) {
           intent: data.intent,
           quick: isQuick,
           accountCreated,
-          estimate,
+          estimateStatus: estimateForLead.status,
+          estimate:
+            estimateForLead.status === "OK" ? estimateForLead : null,
         },
       },
     });
@@ -565,7 +618,9 @@ export async function POST(request: Request) {
           `Address: ${data.address}`,
           `Contact: ${contactNameResolved}`,
           `Email: ${contactEmail}`,
-          `Estimate range: $${estimate.low.toLocaleString()}–$${estimate.high.toLocaleString()}`,
+          estimateForLead.status === "OK"
+            ? `Estimate range: $${estimateForLead.low.toLocaleString()}–$${estimateForLead.high.toLocaleString()}`
+            : `Estimate: INSUFFICIENT_DATA (${estimateForLead.reason})`,
           accountCreated ? "Owner account created" : null,
         ].filter((line): line is string => Boolean(line)),
         assigneeId: assignedAgentId,
@@ -593,11 +648,36 @@ export async function POST(request: Request) {
       }
     }
 
+    // Sold-derived dollars: session must pass hasClientAccess (VOW policy).
+    // Registration / customerId alone must never bypass — lead capture still succeeds.
+    const mayDiscloseSoldEstimate = canSeeSoldValuation;
+
+    const disclosedEstimate =
+      mayDiscloseSoldEstimate && estimateForLead.status === "OK"
+        ? estimatePayload(estimateForLead)
+        : null;
+
     return NextResponse.json({
       ok: true,
       leadId: lead.id,
       accountCreated,
-      estimate: estimatePayload(estimate),
+      status:
+        disclosedEstimate
+          ? "OK"
+          : estimateForLead.status === "INSUFFICIENT_DATA"
+            ? "INSUFFICIENT_DATA"
+            : "AUTH_REQUIRED",
+      estimate: disclosedEstimate,
+      reason:
+        estimateForLead.status === "INSUFFICIENT_DATA"
+          ? estimateForLead.reason
+          : undefined,
+      message:
+        disclosedEstimate
+          ? undefined
+          : estimateForLead.status === "INSUFFICIENT_DATA"
+            ? "We don't have enough reliable comparable property data to provide an accurate estimate for this home."
+            : "Sign in as a registered client to view sold-based home estimates.",
     });
   } catch (error) {
     if (isInvalidContactPhoneError(error)) {

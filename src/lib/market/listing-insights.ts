@@ -19,6 +19,7 @@ import {
 import type { MarketPulse } from "@/lib/market/pulse";
 import type { NearbyPoi } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
+import type { WorkspaceListingEntitlement } from "@/lib/tenancy/listing-entitlement";
 
 export type InsightTemperature = {
   label: "Buyer-friendly" | "Balanced" | "Competitive";
@@ -181,12 +182,14 @@ export type ListingInsightsPayload = {
   };
   valuation: {
     restricted: boolean;
+    status: "OK" | "INSUFFICIENT_DATA";
     low: number | null;
     mid: number | null;
     high: number | null;
     sampleSize: number;
     soldCount: number;
     method: string | null;
+    confidence: "medium" | "high" | null;
     vsListPct: number | null;
     communityAvgSold: number | null;
     disclaimer: string;
@@ -469,8 +472,9 @@ export async function buildListingInsights(opts: {
   pulse: MarketPulse;
   pois: NearbyPoi[];
   signedIn: boolean;
+  entitlement?: WorkspaceListingEntitlement;
 }): Promise<ListingInsightsPayload> {
-  const { listing, pulse, pois, signedIn } = opts;
+  const { listing, pulse, pois, signedIn, entitlement } = opts;
   const facts = parseListingFacts(listing.facts) ?? {};
   const thisDom = daysOnMarketFromListedAt(listing);
   const placeLabel = listing.community
@@ -612,15 +616,17 @@ export async function buildListingInsights(opts: {
     propertyType: listing.propertyType,
     lat: listing.lat,
     lng: listing.lng,
+    entitlement,
   });
 
-  const valMid = signedIn ? homeValue.mid : null;
-  const valLow = signedIn ? homeValue.low : null;
-  const valHigh = signedIn ? homeValue.high : null;
+  const okEstimate = homeValue.status === "OK" ? homeValue : null;
+  const valMid = signedIn && okEstimate ? okEstimate.mid : null;
+  const valLow = signedIn && okEstimate ? okEstimate.low : null;
+  const valHigh = signedIn && okEstimate ? okEstimate.high : null;
   const vsListPct =
-    signedIn && homeValue.mid > 0
+    signedIn && okEstimate && okEstimate.mid > 0
       ? Math.round(
-          ((listing.listPrice - homeValue.mid) / homeValue.mid) * 1000,
+          ((listing.listPrice - okEstimate.mid) / okEstimate.mid) * 1000,
         ) / 10
       : null;
 
@@ -681,16 +687,21 @@ export async function buildListingInsights(opts: {
     },
     valuation: {
       restricted: !signedIn,
+      status: homeValue.status,
       low: valLow,
       mid: valMid,
       high: valHigh,
-      sampleSize: homeValue.sampleSize,
-      soldCount: homeValue.soldCount,
-      method: signedIn ? homeValue.method : null,
+      sampleSize: okEstimate?.sampleSize ?? 0,
+      soldCount: okEstimate?.soldCount ?? 0,
+      method: signedIn && okEstimate ? okEstimate.method : null,
+      confidence: signedIn && okEstimate ? okEstimate.confidence : null,
       vsListPct,
-      communityAvgSold: signedIn ? homeValue.communityAvgSold : null,
+      communityAvgSold:
+        signedIn && okEstimate ? okEstimate.communityAvgSold : null,
       disclaimer:
-        "Houzzat Estimated Value is an indicative range from Houzzat inventory (nearby solds and actives). Not an appraisal, formal CMA, or lender valuation.",
+        homeValue.status === "INSUFFICIENT_DATA"
+          ? "Insufficient reliable sold comparables for an indicative estimate."
+          : "Houzzat Estimated Value is an indicative range from recent sold comparables in entitled inventory. Not an appraisal, formal CMA, or lender valuation.",
     },
     timing: {
       possessionLabel: possessionBits.length ? possessionBits.join(" · ") : null,
