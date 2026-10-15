@@ -25,6 +25,7 @@ import {
   type EstimateHomeValueResult,
   type HomeValueEstimateOk,
 } from "@/lib/market/home-value-estimate";
+import { valuationSoldAccessDenial } from "@/lib/market/home-value-access";
 import { homeValueOkDisclaimer } from "@/lib/market/home-value-presentation";
 import { sendNotification } from "@/lib/notifications";
 import {
@@ -38,10 +39,14 @@ import {
   isInvalidContactPhoneError,
   parsePhoneColumnsForWrite,
 } from "@/lib/sms/e164";
-import { hasClientAccess, VOW_VERSION } from "@/lib/vow";
+import { VOW_VERSION } from "@/lib/vow";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import { resolveLeadCaptureTenancy } from "@/lib/agent/lead-intake";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
+
+const NO_STORE_HEADERS = {
+  "Cache-Control": "private, no-store",
+} as const;
 
 const basementSchema = z.enum(["finished", "unfinished", "none", "unknown"]);
 
@@ -323,6 +328,7 @@ export async function POST(request: Request) {
       await resolveListingEntitlementContextForRequest(request);
 
     // Sold-derived dollars require VOW/client access (server-side).
+    // Same hasFullClientAccess policy as listing-insights (verified email or grace).
     let accessUser: {
       id: string;
       emailVerified: Date | null;
@@ -336,17 +342,21 @@ export async function POST(request: Request) {
         })
         .catch(() => null);
     }
-    const canSeeSoldValuation = hasClientAccess(accessUser);
+    const soldAccessDenial = valuationSoldAccessDenial(accessUser);
+    const canSeeSoldValuation = soldAccessDenial == null;
 
     if (estimateOnly) {
-      if (!canSeeSoldValuation) {
-        return NextResponse.json({
-          ok: true,
-          status: "AUTH_REQUIRED",
-          estimate: null,
-          message:
-            "Sign in as a registered client to view sold-based home estimates.",
-        });
+      if (soldAccessDenial) {
+        return NextResponse.json(
+          {
+            ok: true,
+            status: soldAccessDenial.status,
+            estimate: null,
+            accessKind: soldAccessDenial.accessKind,
+            message: soldAccessDenial.message,
+          },
+          { headers: NO_STORE_HEADERS },
+        );
       }
       // Never trust client estimatedLow/High — always recompute when authorized.
       const estimateResult = await estimateHomeValue({
@@ -362,22 +372,28 @@ export async function POST(request: Request) {
         entitlement,
       });
       if (estimateResult.status === "INSUFFICIENT_DATA") {
-        return NextResponse.json({
-          ok: true,
-          status: "INSUFFICIENT_DATA",
-          estimate: null,
-          reason: estimateResult.reason,
-          city: estimateResult.city,
-          community: estimateResult.community,
-          message:
-            "We don't have enough reliable comparable property data to provide an accurate estimate for this home.",
-        });
+        return NextResponse.json(
+          {
+            ok: true,
+            status: "INSUFFICIENT_DATA",
+            estimate: null,
+            reason: estimateResult.reason,
+            city: estimateResult.city,
+            community: estimateResult.community,
+            message:
+              "We don't have enough reliable comparable property data to provide an accurate estimate for this home.",
+          },
+          { headers: NO_STORE_HEADERS },
+        );
       }
-      return NextResponse.json({
-        ok: true,
-        status: "OK",
-        estimate: estimatePayload(estimateResult),
-      });
+      return NextResponse.json(
+        {
+          ok: true,
+          status: "OK",
+          estimate: estimatePayload(estimateResult),
+        },
+        { headers: NO_STORE_HEADERS },
+      );
     }
 
     const contactNameResolved =
@@ -657,28 +673,36 @@ export async function POST(request: Request) {
         ? estimatePayload(estimateForLead)
         : null;
 
-    return NextResponse.json({
-      ok: true,
-      leadId: lead.id,
-      accountCreated,
-      status:
-        disclosedEstimate
+    const denialForLead =
+      disclosedEstimate || estimateForLead.status === "INSUFFICIENT_DATA"
+        ? null
+        : soldAccessDenial;
+
+    return NextResponse.json(
+      {
+        ok: true,
+        leadId: lead.id,
+        accountCreated,
+        status: disclosedEstimate
           ? "OK"
           : estimateForLead.status === "INSUFFICIENT_DATA"
             ? "INSUFFICIENT_DATA"
-            : "AUTH_REQUIRED",
-      estimate: disclosedEstimate,
-      reason:
-        estimateForLead.status === "INSUFFICIENT_DATA"
-          ? estimateForLead.reason
-          : undefined,
-      message:
-        disclosedEstimate
+            : (denialForLead?.status ?? "AUTH_REQUIRED"),
+        estimate: disclosedEstimate,
+        accessKind: denialForLead?.accessKind,
+        reason:
+          estimateForLead.status === "INSUFFICIENT_DATA"
+            ? estimateForLead.reason
+            : undefined,
+        message: disclosedEstimate
           ? undefined
           : estimateForLead.status === "INSUFFICIENT_DATA"
             ? "We don't have enough reliable comparable property data to provide an accurate estimate for this home."
-            : "Sign in as a registered client to view sold-based home estimates.",
-    });
+            : (denialForLead?.message ??
+              "Create a free client account or sign in to view sold-based home estimates."),
+      },
+      { headers: NO_STORE_HEADERS },
+    );
   } catch (error) {
     if (isInvalidContactPhoneError(error)) {
       return NextResponse.json({ error: error.message }, { status: 400 });

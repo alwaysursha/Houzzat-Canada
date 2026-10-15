@@ -234,6 +234,7 @@
     "home-value-historical-backtest:selftest": "node --import tsx scripts/home-value-historical-backtest-selftest.ts",
     "home-value-presentation:selftest": "node --import tsx scripts/home-value-presentation-selftest.ts",
     "home-value-address:selftest": "node --import tsx scripts/home-value-address-selftest.ts",
+    "home-value-access:selftest": "node --import tsx scripts/home-value-access-selftest.ts",
     "chat-rich-messaging:selftest": "node --import tsx scripts/chat-rich-messaging-selftest.ts",
     "chat-voice-notes:selftest": "node --import tsx scripts/chat-voice-notes-selftest.ts",
     "agent-conversation-voice-auth:selftest": "node --import tsx scripts/agent-conversation-voice-auth-selftest.ts",

@@ -135,6 +135,7 @@ function testApiPresentationAndVow() {
   assert.ok(route.includes("homeValueOkDisclaimer"));
   assert.ok(route.includes("confidence: estimate.confidence"));
   assert.ok(route.includes("AUTH_REQUIRED"));
+  assert.ok(route.includes("valuationSoldAccessDenial"));
   assert.ok(route.includes("hasClientAccess"));
   assert.ok(route.includes("INSUFFICIENT_DATA"));
   assert.ok(route.includes("Never trust client estimatedLow"));

@@ -14,10 +14,12 @@ import {
   Newspaper,
 } from "lucide-react";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
+import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useExpertWhatsAppNumber } from "@/components/whatsapp/useExpertWhatsAppNumber";
+import { useClientAccess } from "@/hooks/use-client-access";
 import { formatPrice, propertyTypeLabel } from "@/lib/listings/constants";
 import type { AutocompleteSuggestion } from "@/lib/listings/types";
 import type {
@@ -34,6 +36,11 @@ import {
   type VerifiedValuationLocation,
 } from "@/lib/market/home-value-address";
 import {
+  HOME_VALUE_DRAFT_STORAGE_KEY,
+  parseHomeValueDraft,
+  serializeHomeValueDraft,
+} from "@/lib/market/home-value-access";
+import {
   HOME_VALUE_CONFIDENCE_EVIDENCE_NOTE,
   HOME_VALUE_DISCLAIMER,
   formatValuationConfidence,
@@ -44,6 +51,13 @@ import { cn } from "@/lib/utils";
 import { buildValuationMeetingWhatsAppUrl } from "@/lib/whatsapp";
 
 type Step = "address" | "features" | "contact" | "result";
+
+type EstimateAccessStatus =
+  | "OK"
+  | "INSUFFICIENT_DATA"
+  | "AUTH_REQUIRED"
+  | "EMAIL_VERIFY_REQUIRED"
+  | null;
 
 type EstimateResult = {
   low: number;
@@ -125,17 +139,27 @@ function EstimatePreviewWindow({
   pending,
   showCommunityAvg,
   estimateStatus,
+  authMessage,
+  callbackPath,
+  inPersonHref,
+  onAuthIntent,
 }: {
   result: EstimateResult | null;
   address: string;
   locationVerified: boolean;
   pending: boolean;
   showCommunityAvg: boolean;
-  estimateStatus: "OK" | "INSUFFICIENT_DATA" | "AUTH_REQUIRED" | null;
+  estimateStatus: EstimateAccessStatus;
+  authMessage: string | null;
+  callbackPath: string;
+  inPersonHref: string | null;
+  onAuthIntent?: () => void;
 }) {
   const revealed = Boolean(result);
   const insufficient = estimateStatus === "INSUFFICIENT_DATA";
   const authRequired = estimateStatus === "AUTH_REQUIRED";
+  const verifyRequired = estimateStatus === "EMAIL_VERIFY_REQUIRED";
+  const accessGate = authRequired || verifyRequired;
   const showAddress = locationVerified && Boolean(address.trim());
 
   return (
@@ -221,9 +245,11 @@ function EstimatePreviewWindow({
             ? "Your property’s estimated value"
             : insufficient
               ? "Insufficient Market Data"
-              : authRequired
-                ? "Client access required"
-                : "Your property’s estimated value will appear here"}
+              : verifyRequired
+                ? "Email verification required"
+                : authRequired
+                  ? "Sign in to view your estimate"
+                  : "Your property’s estimated value will appear here"}
         </p>
 
         <div
@@ -254,11 +280,44 @@ function EstimatePreviewWindow({
               We don&apos;t have enough reliable comparable property data to
               provide an accurate estimate for this home.
             </p>
-          ) : authRequired ? (
-            <p className="mx-auto max-w-sm text-sm leading-relaxed text-ink/60">
-              Continue with your details to register as a client and unlock a
-              sold-based estimate when enough comparables exist.
-            </p>
+          ) : accessGate ? (
+            <div className="mx-auto max-w-sm space-y-3">
+              <p className="text-sm leading-relaxed text-ink/60">
+                {authMessage ??
+                  (verifyRequired
+                    ? "Verify your email to unlock the sold-based estimate for this home."
+                    : "Create a free client account or sign in to unlock the sold-based estimate for this home.")}
+              </p>
+              <div className="flex flex-col gap-2">
+                {verifyRequired ? (
+                  <Link
+                    href={`/auth/verify-email?callbackUrl=${encodeURIComponent(callbackPath)}`}
+                    className="inline-flex h-10 items-center justify-center rounded-lg bg-canopy px-4 text-sm font-semibold text-white transition hover:bg-canopy-deep"
+                  >
+                    Verify email
+                  </Link>
+                ) : (
+                  <>
+                    <AuthOpenButton
+                      mode="sign-up"
+                      callbackUrl={callbackPath}
+                      className="inline-flex h-10 items-center justify-center rounded-lg bg-canopy px-4 text-sm font-semibold text-white transition hover:bg-canopy-deep"
+                      onClick={onAuthIntent}
+                    >
+                      Create free account
+                    </AuthOpenButton>
+                    <AuthOpenButton
+                      mode="sign-in"
+                      callbackUrl={callbackPath}
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-line bg-mist px-4 text-sm font-semibold text-ink transition hover:border-canopy/40"
+                      onClick={onAuthIntent}
+                    >
+                      Sign in
+                    </AuthOpenButton>
+                  </>
+                )}
+              </div>
+            </div>
           ) : (
             <p className="font-display text-4xl font-semibold tracking-tight text-canopy/45 sm:text-5xl">
               $— – $—
@@ -323,27 +382,41 @@ function EstimatePreviewWindow({
               </a>
             </div>
           ) : (
-            <div className="text-center">
+            <div className="space-y-3 text-center">
               <p className="text-sm font-semibold text-ink">
                 {pending
                   ? "Pulling neighbourhood sales…"
                   : insufficient
                     ? "Insufficient Market Data"
-                    : authRequired
-                      ? "Client access required"
-                      : showAddress
-                        ? "Ready for home details"
-                        : "Waiting for a verified address"}
+                    : verifyRequired
+                      ? "Email verification required"
+                      : authRequired
+                        ? "Sign in to view your estimate"
+                        : showAddress
+                          ? "Ready for home details"
+                          : "Waiting for a verified address"}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-ink/55">
+              <p className="text-xs leading-relaxed text-ink/55">
                 {insufficient
                   ? "Contact a real estate expert for a local review."
-                  : authRequired
-                    ? "Register or sign in to unlock sold-based estimates."
-                    : showAddress
-                      ? "Your indicative range updates here as you add home details."
-                      : "Waiting for a verified address with city and map location."}
+                  : verifyRequired
+                    ? "Verify your email, then we’ll show your range automatically."
+                    : authRequired
+                      ? "Your details stay saved — unlock the range after you sign in."
+                      : showAddress
+                        ? "Your indicative range updates here as you add home details."
+                        : "Waiting for a verified address with city and map location."}
               </p>
+              {inPersonHref ? (
+                <a
+                  href={inPersonHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex text-xs font-semibold text-canopy underline-offset-2 hover:underline"
+                >
+                  Request an In-Person Valuation
+                </a>
+              ) : null}
             </div>
           )}
         </div>
@@ -378,6 +451,7 @@ export function HomeValuationForm({
   verifiedPrefill?: HomeValuationVerifiedPrefill | null;
 } = {}) {
   const searchParams = useSearchParams();
+  const clientAccess = useClientAccess();
   const { digits: whatsappDigits } = useExpertWhatsAppNumber();
   const initialAddress =
     verifiedPrefill?.address ?? searchParams.get("address") ?? "";
@@ -395,6 +469,7 @@ export function HomeValuationForm({
       : searchParams.get("lng");
   const fromHero = searchParams.get("from") === "hero";
   const fromProperty = Boolean(verifiedPrefill);
+  const callbackPath = "/home-valuation";
 
   // Never treat URL low/high as authoritative — server recomputes after features.
   const [step, setStep] = useState<Step>(
@@ -412,9 +487,9 @@ export function HomeValuationForm({
   const [sqft, setSqft] = useState("");
   const [basement, setBasement] = useState<BasementFinish>("unknown");
   const [propertyType, setPropertyType] = useState<PropertyType | "">("");
-  const [estimateStatus, setEstimateStatus] = useState<
-    "OK" | "INSUFFICIENT_DATA" | "AUTH_REQUIRED" | null
-  >(null);
+  const [estimateStatus, setEstimateStatus] =
+    useState<EstimateAccessStatus>(null);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [lat, setLat] = useState<number | undefined>(() => {
     if (!initialLat) return undefined;
     const n = Number(initialLat);
@@ -447,8 +522,10 @@ export function HomeValuationForm({
   const [leadId, setLeadId] = useState<string | null>(initialLeadId);
   const [accountCreated, setAccountCreated] = useState(false);
   const [result, setResult] = useState<EstimateResult | null>(null);
+  const [draftRestored, setDraftRestored] = useState(false);
   const estimateRequestId = useRef(0);
   const submitLockRef = useRef(false);
+  const lastAccessRetryKey = useRef<string | null>(null);
 
   const locationVerified = isVerifiedValuationLocation({
     city,
@@ -477,6 +554,59 @@ export function HomeValuationForm({
     setPlaceId(null);
     setResult(null);
     setEstimateStatus(null);
+    setAuthMessage(null);
+  }
+
+  function persistValuationDraft(nextStep: Step = step) {
+    if (typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(
+        HOME_VALUE_DRAFT_STORAGE_KEY,
+        serializeHomeValueDraft({
+          address: address.trim(),
+          city: city.trim(),
+          community,
+          lat: lat ?? null,
+          lng: lng ?? null,
+          placeId,
+          verifiedAddress,
+          beds,
+          baths,
+          sqft,
+          basement,
+          propertyType,
+          step: nextStep === "result" ? "features" : nextStep,
+        }),
+      );
+    } catch {
+      // sessionStorage may be unavailable
+    }
+  }
+
+  function clearValuationDraft() {
+    if (typeof window === "undefined") return;
+    try {
+      window.sessionStorage.removeItem(HOME_VALUE_DRAFT_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  }
+
+  function applyAccessStatus(
+    status: EstimateAccessStatus,
+    message?: string | null,
+  ) {
+    setEstimateStatus(status);
+    if (
+      status === "AUTH_REQUIRED" ||
+      status === "EMAIL_VERIFY_REQUIRED"
+    ) {
+      setAuthMessage(message ?? null);
+      persistValuationDraft(step === "address" ? "features" : step);
+      return;
+    }
+    setAuthMessage(null);
+    if (status === "OK") clearValuationDraft();
   }
 
   function onAddressQueryChange(query: string) {
@@ -564,7 +694,7 @@ export function HomeValuationForm({
       lng == null ||
       !city.trim()
     ) {
-      setEstimateStatus(null);
+      applyAccessStatus(null);
       setResult(null);
       return;
     }
@@ -588,21 +718,31 @@ export function HomeValuationForm({
       });
       const data = (await res.json()) as {
         error?: string;
-        status?: "OK" | "INSUFFICIENT_DATA" | "AUTH_REQUIRED";
+        status?:
+          | "OK"
+          | "INSUFFICIENT_DATA"
+          | "AUTH_REQUIRED"
+          | "EMAIL_VERIFY_REQUIRED";
         estimate?: EstimateResult | null;
         message?: string;
       };
       if (requestId !== estimateRequestId.current) return;
       if (!res.ok) return;
       if (data.status === "OK" && data.estimate) {
-        setEstimateStatus("OK");
+        applyAccessStatus("OK");
         setResult(data.estimate);
         if (data.estimate.community) setAreaCommunity(data.estimate.community);
         if (data.estimate.city && !city) setCity(data.estimate.city);
         return;
       }
       setResult(null);
-      setEstimateStatus(data.status ?? "INSUFFICIENT_DATA");
+      const nextStatus: EstimateAccessStatus =
+        data.status === "AUTH_REQUIRED" ||
+        data.status === "EMAIL_VERIFY_REQUIRED" ||
+        data.status === "INSUFFICIENT_DATA"
+          ? data.status
+          : "INSUFFICIENT_DATA";
+      applyAccessStatus(nextStatus, data.message);
     } catch {
       // Keep prior status.
     } finally {
@@ -610,6 +750,52 @@ export function HomeValuationForm({
     }
   }
 
+  // Restore verified address + property details after signup/login modal.
+  useEffect(() => {
+    if (draftRestored || typeof window === "undefined") return;
+    setDraftRestored(true);
+    try {
+      const draft = parseHomeValueDraft(
+        window.sessionStorage.getItem(HOME_VALUE_DRAFT_STORAGE_KEY),
+      );
+      if (!draft?.address.trim()) return;
+      setAddress(draft.address);
+      setCity(draft.city);
+      setCommunity(draft.community);
+      setLat(draft.lat ?? undefined);
+      setLng(draft.lng ?? undefined);
+      setPlaceId(draft.placeId);
+      setVerifiedAddress(draft.verifiedAddress);
+      setBeds(draft.beds);
+      setBaths(draft.baths);
+      setSqft(draft.sqft);
+      if (
+        draft.basement === "finished" ||
+        draft.basement === "unfinished" ||
+        draft.basement === "none" ||
+        draft.basement === "unknown"
+      ) {
+        setBasement(draft.basement);
+      }
+      if (draft.propertyType) {
+        setPropertyType(draft.propertyType as PropertyType);
+      }
+      if (draft.step === "features" || draft.step === "contact") {
+        setStep(draft.step);
+      } else if (
+        draft.verifiedAddress &&
+        draft.city &&
+        draft.lat != null &&
+        draft.lng != null
+      ) {
+        setStep("features");
+      }
+    } catch {
+      // ignore corrupt draft
+    }
+  }, [draftRestored]);
+
+  // Feature-driven estimate refresh (authorized or gated messaging).
   useEffect(() => {
     if (step !== "features" || !address.trim() || !locationVerified) return;
     const handle = window.setTimeout(() => {
@@ -618,6 +804,44 @@ export function HomeValuationForm({
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional feature-driven refresh
   }, [beds, baths, sqft, basement, propertyType, step, locationVerified]);
+
+  // After modal auth / email verify, retry once client access unlocks.
+  useEffect(() => {
+    if (clientAccess.loading) return;
+    if (!clientAccess.hasClientAccess) {
+      lastAccessRetryKey.current = null;
+      return;
+    }
+    if (!locationVerified || !address.trim()) return;
+    const features = featurePayload();
+    if (!features.propertyType || features.beds == null) return;
+    const retryKey = [
+      clientAccess.kind,
+      address.trim(),
+      city.trim(),
+      features.propertyType,
+      features.beds,
+      features.baths ?? "",
+      features.sqft ?? "",
+      basement,
+    ].join("|");
+    if (lastAccessRetryKey.current === retryKey && result) return;
+    lastAccessRetryKey.current = retryKey;
+    void refreshEstimate({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- access unlock retry
+  }, [
+    clientAccess.loading,
+    clientAccess.hasClientAccess,
+    clientAccess.kind,
+    locationVerified,
+    address,
+    city,
+    beds,
+    baths,
+    sqft,
+    basement,
+    propertyType,
+  ]);
 
   async function submitAddress(event: React.FormEvent) {
     event.preventDefault();
@@ -656,8 +880,13 @@ export function HomeValuationForm({
       const data = (await res.json()) as {
         error?: string;
         leadId?: string;
-        status?: string;
+        status?:
+          | "OK"
+          | "INSUFFICIENT_DATA"
+          | "AUTH_REQUIRED"
+          | "EMAIL_VERIFY_REQUIRED";
         estimate?: EstimateResult | null;
+        message?: string;
       };
 
       // Lead capture can succeed without a dollar estimate (insufficient / auth).
@@ -669,16 +898,21 @@ export function HomeValuationForm({
       setLeadId(data.leadId);
       if (data.estimate) {
         setResult(data.estimate);
-        setEstimateStatus("OK");
+        applyAccessStatus("OK");
         if (data.estimate.community) setAreaCommunity(data.estimate.community);
         if (data.estimate.city && !city) setCity(data.estimate.city);
       } else {
         setResult(null);
-        setEstimateStatus(
-          data.status === "AUTH_REQUIRED" ? "AUTH_REQUIRED" : "INSUFFICIENT_DATA",
-        );
+        const nextStatus: EstimateAccessStatus =
+          data.status === "AUTH_REQUIRED" ||
+          data.status === "EMAIL_VERIFY_REQUIRED" ||
+          data.status === "INSUFFICIENT_DATA"
+            ? data.status
+            : "INSUFFICIENT_DATA";
+        applyAccessStatus(nextStatus, data.message);
       }
       setStep("features");
+      persistValuationDraft("features");
     } catch {
       setError("Could not start your valuation. Try again.");
     } finally {
@@ -738,8 +972,13 @@ export function HomeValuationForm({
         error?: string;
         leadId?: string;
         accountCreated?: boolean;
-        status?: "OK" | "INSUFFICIENT_DATA" | "AUTH_REQUIRED";
+        status?:
+          | "OK"
+          | "INSUFFICIENT_DATA"
+          | "AUTH_REQUIRED"
+          | "EMAIL_VERIFY_REQUIRED";
         estimate?: EstimateResult | null;
+        message?: string;
       };
 
       if (!res.ok || !data.leadId) {
@@ -751,11 +990,17 @@ export function HomeValuationForm({
       setAccountCreated(Boolean(data.accountCreated));
       if (data.estimate) {
         setResult(data.estimate);
-        setEstimateStatus("OK");
+        applyAccessStatus("OK");
         if (data.estimate.community) setAreaCommunity(data.estimate.community);
       } else {
         setResult(null);
-        setEstimateStatus(data.status ?? "INSUFFICIENT_DATA");
+        const nextStatus: EstimateAccessStatus =
+          data.status === "AUTH_REQUIRED" ||
+          data.status === "EMAIL_VERIFY_REQUIRED" ||
+          data.status === "INSUFFICIENT_DATA"
+            ? data.status
+            : "INSUFFICIENT_DATA";
+        applyAccessStatus(nextStatus, data.message);
       }
       setStep("result");
     } catch {
@@ -1240,6 +1485,56 @@ export function HomeValuationForm({
                   </div>
                 ) : null}
               </>
+            ) : estimateStatus === "EMAIL_VERIFY_REQUIRED" ? (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-canopy">
+                  Almost there
+                </p>
+                <h2 className="mt-1 font-display text-2xl tracking-tight text-ink">
+                  Verify your email
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-ink/65">
+                  {authMessage ??
+                    "Verify your email to unlock the sold-based estimate for this home."}
+                </p>
+                <Link
+                  href={`/auth/verify-email?callbackUrl=${encodeURIComponent(callbackPath)}`}
+                  className="mt-4 inline-flex h-11 items-center justify-center rounded-lg bg-canopy px-5 text-sm font-semibold text-white transition hover:bg-canopy-deep"
+                >
+                  Verify email
+                </Link>
+              </div>
+            ) : estimateStatus === "AUTH_REQUIRED" ? (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-canopy">
+                  Client access
+                </p>
+                <h2 className="mt-1 font-display text-2xl tracking-tight text-ink">
+                  Sign in to view your estimate
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-ink/65">
+                  {authMessage ??
+                    "Create a free client account or sign in to unlock the sold-based estimate for this home."}
+                </p>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <AuthOpenButton
+                    mode="sign-up"
+                    callbackUrl={callbackPath}
+                    className="inline-flex h-11 flex-1 items-center justify-center rounded-lg bg-canopy px-5 text-sm font-semibold text-white transition hover:bg-canopy-deep"
+                    onClick={() => persistValuationDraft("features")}
+                  >
+                    Create free account
+                  </AuthOpenButton>
+                  <AuthOpenButton
+                    mode="sign-in"
+                    callbackUrl={callbackPath}
+                    className="inline-flex h-11 flex-1 items-center justify-center rounded-lg border border-line bg-surface px-5 text-sm font-semibold text-ink transition hover:border-canopy/40"
+                    onClick={() => persistValuationDraft("features")}
+                  >
+                    Sign in
+                  </AuthOpenButton>
+                </div>
+              </div>
             ) : (
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-canopy">
@@ -1360,6 +1655,12 @@ export function HomeValuationForm({
         pending={pending || estimating}
         showCommunityAvg={step === "result" || step === "features"}
         estimateStatus={estimateStatus}
+        authMessage={authMessage}
+        callbackPath={callbackPath}
+        inPersonHref={meetingHref}
+        onAuthIntent={() =>
+          persistValuationDraft(step === "address" ? "features" : step)
+        }
       />
     </div>
   );
