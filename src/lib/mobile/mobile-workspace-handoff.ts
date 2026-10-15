@@ -232,6 +232,7 @@ export async function peekMobileWorkspaceHandoff(input: {
 }): Promise<
   | {
       ok: true;
+      userId: string;
       workspaceId: string;
       destination: MobileStaffDestination;
       workspaceRole: WorkspaceMemberRole;
@@ -242,6 +243,7 @@ export async function peekMobileWorkspaceHandoff(input: {
   if (!looked.ok) return looked;
   return {
     ok: true,
+    userId: looked.parsed.userId,
     workspaceId: looked.parsed.workspaceId,
     destination: looked.destination,
     workspaceRole: looked.memberRole,

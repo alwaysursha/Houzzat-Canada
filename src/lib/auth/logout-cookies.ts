@@ -1,3 +1,5 @@
+import { DESK_AGENT_COOKIE } from "@/lib/agent/desk-constants";
+
 /**
  * Auth.js / NextAuth cookie names to expire on hard logout.
  * Shared by `/api/auth/logout` (Workers-safe clear; no Auth.js signOut()).
@@ -14,6 +16,8 @@ const ALWAYS_CLEAR = [
   "__Secure-authjs.csrf-token",
   "authjs.callback-url",
   "__Secure-authjs.callback-url",
+  // Desk selection must not survive into the next login session.
+  DESK_AGENT_COOKIE,
 ] as const;
 
 const AUTH_COOKIE_NAME_RE =

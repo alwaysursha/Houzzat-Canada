@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { DESK_AGENT_COOKIE } from "../src/lib/agent/desk-constants";
 import {
   authSessionLooksAuthenticated,
   collectAuthCookieNamesToClear,
@@ -11,12 +12,14 @@ function testCollectCookies() {
   assert.ok(names.includes("__Secure-authjs.session-token"));
   assert.ok(names.includes("__Secure-authjs.session-token.0"));
   assert.ok(names.includes("__Secure-authjs.session-token.1"));
+  assert.ok(names.includes(DESK_AGENT_COOKIE));
   assert.ok(!names.includes("other"));
 }
 
 function testMinimalClearWithoutSession() {
   const names = collectAuthCookieNamesToClear("");
   assert.ok(names.includes("__Secure-authjs.session-token"));
+  assert.ok(names.includes(DESK_AGENT_COOKIE));
   assert.equal(
     names.filter((n) => /\.\d+$/.test(n)).length,
     0,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth, signIn } from "@/lib/auth";
 import { isValidWorkspaceIdShape } from "@/lib/active-workspace";
+import { setDeskAgentCookie } from "@/lib/agent/desk-cookie";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 import {
   createMobileWorkspaceHandoff,
@@ -130,10 +131,15 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Handoff sign-in failed" }, { status: 401 });
   }
 
-  return NextResponse.json({
+  // Fresh tenant session: start on the authenticated user's own desk (no sticky
+  // prior agent selection). Explicit Access Launchpad / Team overview still work
+  // after this via POST /api/agent/desk.
+  const res = NextResponse.json({
     ok: true,
     destination: peeked.destination,
     workspaceId: peeked.workspaceId,
     workspaceRole: peeked.workspaceRole,
   });
+  setDeskAgentCookie(res, peeked.userId);
+  return res;
 }

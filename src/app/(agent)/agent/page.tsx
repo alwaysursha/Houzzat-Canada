@@ -8,8 +8,10 @@ import {
   LaunchpadDeferredQuickModules,
 } from "@/components/agent/LaunchpadDeferredSections";
 import { LaunchpadTodoCarousel } from "@/components/agent/LaunchpadTodoCarousel";
+import { LaunchpadDeskIdentity } from "@/components/agent/LaunchpadDeskIdentity";
 import { requireAgentContext } from "@/lib/agent";
 import { DESK_AGENT_COOKIE, resolveDeskView } from "@/lib/agent/brokerage";
+import { launchpadIdentityPresentation } from "@/lib/agent/resolve-desk-view";
 import {
   agentTaskTenantWhere,
   leadWhereForDesk,
@@ -35,6 +37,11 @@ export default async function AgentLaunchpadPage() {
   const desk = await resolveDeskView({ ...ctx, deskCookie });
   const deskView = (ctx.canSeeTeamLeads ? "team" : "mine") as "mine" | "team";
   const focusAgentId = desk.deskAgentId;
+  const identity = launchpadIdentityPresentation({
+    viewerUserId: ctx.user.id,
+    deskAgentId: desk.deskAgentId,
+    deskLabel: desk.deskLabel,
+  });
   const deskLeadBase = leadWhereForDesk(ctx, focusAgentId);
 
   const followUpStatuses = [
@@ -169,6 +176,15 @@ export default async function AgentLaunchpadPage() {
   return (
     <div className="min-w-0 space-y-4 overflow-x-hidden">
       <div>
+        {ctx.canSeeTeamLeads ? (
+          <div className="mb-2">
+            <LaunchpadDeskIdentity
+              text={identity.text}
+              mode={identity.mode}
+              ownUserId={ctx.user.id}
+            />
+          </div>
+        ) : null}
         <h1 className="text-[22px] font-bold leading-tight tracking-tight text-[#1e2a38] sm:text-[28px]">
           {dateLabel}
         </h1>

@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  DESK_AGENT_ALL,
-  DESK_AGENT_COOKIE,
-} from "@/lib/agent/desk-constants";
+import { DESK_AGENT_ALL } from "@/lib/agent/desk-constants";
+import { setDeskAgentCookie } from "@/lib/agent/desk-cookie";
 import { listTeamAgents } from "@/lib/agent/brokerage";
 import { requireAgentContextFromRequest } from "@/lib/agent";
 
@@ -51,12 +49,6 @@ export async function POST(request: Request) {
   }
 
   const res = NextResponse.json({ ok: true, deskAgentId: value });
-  res.cookies.set(DESK_AGENT_COOKIE, value, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 180,
-    secure: process.env.NODE_ENV === "production",
-  });
+  setDeskAgentCookie(res, value);
   return res;
 }

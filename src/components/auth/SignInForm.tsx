@@ -89,6 +89,20 @@ export function SignInForm({
 
     await rememberLoginCredentials({ email: normalizedEmail, password });
     const session = await getSession();
+    // Fresh login on this host: reset desk to the signed-in user when they are
+    // a team leader (API no-ops / 403 for ordinary agents and consumers).
+    const staffUserId = session?.user?.id;
+    const staffRole = session?.user?.role;
+    if (
+      staffUserId &&
+      (staffRole === "AGENT" || staffRole === "ADMIN")
+    ) {
+      void fetch("/api/agent/desk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deskAgentId: staffUserId }),
+      }).catch(() => {});
+    }
     await clearIntentionalSignOut({ userId: session?.user?.id });
     await offerBiometricsAfterCredentialsSignIn({
       email: normalizedEmail,

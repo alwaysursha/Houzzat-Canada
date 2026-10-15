@@ -1,20 +1,22 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import type { OrgMembershipRole } from "@prisma/client";
-import {
-  DESK_AGENT_ALL,
-  DESK_AGENT_COOKIE,
-} from "@/lib/agent/desk-constants";
+import { DESK_AGENT_COOKIE } from "@/lib/agent/desk-constants";
 import {
   isWorkspaceScopedBrokerageSeatSync,
   resolveHouzzatWorkspaceIdForOrgRewrite,
   resolveLegacyBrokerageSeatTargets,
 } from "@/lib/agent/brokerage-seat-sync";
+import { resolveDeskViewFromFieldAgents } from "@/lib/agent/resolve-desk-view";
 import { isActiveHostnameBoundReadMode } from "@/lib/crm-read-scope";
 import { SITE_NAME } from "@/lib/constants";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 
 export { DESK_AGENT_ALL, DESK_AGENT_COOKIE } from "@/lib/agent/desk-constants";
+export {
+  launchpadIdentityPresentation,
+  resolveDeskViewFromFieldAgents,
+} from "@/lib/agent/resolve-desk-view";
 
 export type TeamAgentOption = {
   id: string;
@@ -291,38 +293,16 @@ const resolveDeskViewCached = cache(
   }> => {
     const teamAgents = await listTeamAgents(organizationId, workspaceId);
     const fieldAgents = teamAgents.filter((a) => a.role === "AGENT");
-
-    if (!canSeeTeamLeads) {
-      return {
-        deskAgentId: userId,
-        teamAgents: fieldAgents,
-        deskLabel: "My desk",
-      };
-    }
-
-    const raw = deskCookie?.trim() || DESK_AGENT_ALL;
-
-    if (raw === DESK_AGENT_ALL) {
-      return {
-        deskAgentId: null,
-        teamAgents: fieldAgents,
-        deskLabel: "Team overview",
-      };
-    }
-
-    const match = fieldAgents.find((a) => a.id === raw);
-    if (match) {
-      return {
-        deskAgentId: match.id,
-        teamAgents: fieldAgents,
-        deskLabel: match.name || match.email,
-      };
-    }
-
+    const resolved = resolveDeskViewFromFieldAgents({
+      userId,
+      canSeeTeamLeads,
+      deskCookie,
+      fieldAgents,
+    });
     return {
-      deskAgentId: null,
+      deskAgentId: resolved.deskAgentId,
       teamAgents: fieldAgents,
-      deskLabel: "Team overview",
+      deskLabel: resolved.deskLabel,
     };
   },
 );
@@ -330,7 +310,8 @@ const resolveDeskViewCached = cache(
 /**
  * Which agent's desk is in view.
  * Field agents always see their own desk.
- * Team Leaders (Admin) pick a desk from Admin HQ; CRM respects that cookie.
+ * Team Leaders (Admin) who are field agents default to their own desk when
+ * no explicit cookie is set; Team overview requires explicit "all".
  */
 export async function resolveDeskView(ctx: {
   user: { id: string };

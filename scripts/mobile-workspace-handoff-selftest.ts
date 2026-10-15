@@ -143,6 +143,8 @@ function testSecurityWiring() {
   );
   assert.ok(route.includes("createMobileWorkspaceHandoff"));
   assert.ok(route.includes("peekMobileWorkspaceHandoff"));
+  assert.ok(route.includes("setDeskAgentCookie"));
+  assert.ok(route.includes("peeked.userId"));
   assert.ok(route.includes('signIn("mobile-workspace-handoff"'));
   assert.ok(route.includes("isMobileHandoffSignInErrorResult"));
   assert.ok(route.includes("isTrustedStaffMutationOriginForRequest"));
