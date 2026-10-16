@@ -17,6 +17,14 @@ import {
   type AreaWatchTemplateVars,
 } from "@/lib/email/workspace-templates/area-watch";
 import {
+  fillPublishedAgentEmailTemplate,
+  fillPublishedCmaShareTemplate,
+  fillPublishedShortlistTemplate,
+  type AgentEmailTemplateVars,
+  type CmaShareTemplateVars,
+  type ShortlistTemplateVars,
+} from "@/lib/email/workspace-templates/agent-share-templates";
+import {
   fillPublishedSavedSearchDigestTemplate,
   fillPublishedSellerNeighbourhoodDigestTemplate,
   type SavedSearchDigestTemplateVars,
@@ -53,6 +61,21 @@ export type SavedSearchDigestPublishedTemplateInput = {
 /** Optional published SELLER_NEIGHBOURHOOD_DIGEST override (Phase 2C-3). Drafts never pass here. */
 export type SellerNeighbourhoodDigestPublishedTemplateInput = {
   publishedSellerNeighbourhoodDigestTemplate?: EmailTemplateContentFields | null;
+};
+
+/** Optional published AGENT_EMAIL override (Phase 2C-4). Drafts never pass here. */
+export type AgentEmailPublishedTemplateInput = {
+  publishedAgentEmailTemplate?: EmailTemplateContentFields | null;
+};
+
+/** Optional published SHORTLIST override (Phase 2C-4). Drafts never pass here. */
+export type ShortlistPublishedTemplateInput = {
+  publishedShortlistTemplate?: EmailTemplateContentFields | null;
+};
+
+/** Optional published CMA_SHARE override (Phase 2C-4). Drafts never pass here. */
+export type CmaSharePublishedTemplateInput = {
+  publishedCmaShareTemplate?: EmailTemplateContentFields | null;
 };
 
 function layoutBrandProps(brand?: EmailBrandChrome | null) {
@@ -189,6 +212,48 @@ function sellerNeighbourhoodDigestOverrideCopy(
   if (!published) return applyFilledWatchOverride(null, fallback, brand);
   return applyFilledWatchOverride(
     fillPublishedSellerNeighbourhoodDigestTemplate(published, vars),
+    fallback,
+    brand,
+  );
+}
+
+function agentEmailOverrideCopy(
+  published: EmailTemplateContentFields | null | undefined,
+  vars: AgentEmailTemplateVars,
+  fallback: WatchOverrideFallback,
+  brand: EmailBrandChrome | null | undefined,
+): WatchOverrideCopy {
+  if (!published) return applyFilledWatchOverride(null, fallback, brand);
+  return applyFilledWatchOverride(
+    fillPublishedAgentEmailTemplate(published, vars),
+    fallback,
+    brand,
+  );
+}
+
+function shortlistOverrideCopy(
+  published: EmailTemplateContentFields | null | undefined,
+  vars: ShortlistTemplateVars,
+  fallback: WatchOverrideFallback,
+  brand: EmailBrandChrome | null | undefined,
+): WatchOverrideCopy {
+  if (!published) return applyFilledWatchOverride(null, fallback, brand);
+  return applyFilledWatchOverride(
+    fillPublishedShortlistTemplate(published, vars),
+    fallback,
+    brand,
+  );
+}
+
+function cmaShareOverrideCopy(
+  published: EmailTemplateContentFields | null | undefined,
+  vars: CmaShareTemplateVars,
+  fallback: WatchOverrideFallback,
+  brand: EmailBrandChrome | null | undefined,
+): WatchOverrideCopy {
+  if (!published) return applyFilledWatchOverride(null, fallback, brand);
+  return applyFilledWatchOverride(
+    fillPublishedCmaShareTemplate(published, vars),
     fallback,
     brand,
   );
@@ -917,12 +982,33 @@ export function renderShortlistEmail(
     listingLines?: string[];
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
-  } & EmailBrandChrome,
+  } & EmailBrandChrome &
+    ShortlistPublishedTemplateInput,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const cards = input.listings ?? [];
   const count = cards.length || (input.listingLines?.length ?? 0);
-  const subject = `${count} home${count === 1 ? "" : "s"} for you`;
+  const hasCustomIntro = Boolean(
+    input.publishedShortlistTemplate?.introText?.trim(),
+  );
+  const legacyIntroHtml = `<strong style="color:#064e3b">${escapeHtml(input.agentName)}</strong> put together a shortlist of homes that match what you’ve been looking at.`;
+  const override = shortlistOverrideCopy(
+    input.publishedShortlistTemplate,
+    {
+      recipientName: input.name,
+      tenantName: input.brandLabel,
+      agentName: input.agentName,
+      listingCount: count,
+    },
+    {
+      subject: `${count} home${count === 1 ? "" : "s"} for you`,
+      introHtml: legacyIntroHtml,
+      introText: `${input.agentName} put together a shortlist for you.`,
+      cta: "View shortlist",
+    },
+    input,
+  );
+  const subject = override.subject;
   const textLines =
     cards.length > 0
       ? cards.map(
@@ -934,23 +1020,29 @@ export function renderShortlistEmail(
     [
       greet,
       "",
-      `${input.agentName} put together a shortlist for you.`,
+      override.introText,
+      override.paragraphsText.trim(),
       input.note ? `\n${input.note}\n` : "",
       `View all: ${input.shareUrl}`,
       "",
       ...textLines,
-    ].join("\n"),
+    ]
+      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+      .join("\n"),
     input.agentSignatureText,
   );
   const html = emailLayout({
     title: "Homes selected for you",
-    subtitle: `${input.agentName} put together a shortlist for you.`,
+    subtitle: hasCustomIntro
+      ? override.introText
+      : `${input.agentName} put together a shortlist for you.`,
     preheader: `${input.agentName} shared a shortlist`,
-    ...layoutBrandProps(input),
+    ...override.brandProps,
     bodyHtml: appendAgentSignatureHtml(
       `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px;color:#115e59"><strong style="color:#064e3b">${escapeHtml(input.agentName)}</strong> put together a shortlist of homes that match what you’ve been looking at.</p>
+      <p style="margin:0 0 12px;color:#115e59">${override.introHtml}</p>
+      ${override.paragraphsHtml}
       ${input.note ? infoCard(`<p style="margin:0;color:#115e59">${escapeHtml(input.note)}</p>`) : ""}
       ${cards.map((l) => renderEmailPropertyCard(l)).join("")}
       ${
@@ -958,7 +1050,7 @@ export function renderShortlistEmail(
           ? `<ol style="margin:0;padding-left:18px;color:#115e59">${input.listingLines.map((line) => `<li style="margin:0 0 8px">${escapeHtml(line)}</li>`).join("")}</ol>`
           : ""
       }
-      ${ctaButton(input.shareUrl, "View shortlist")}
+      ${ctaButton(input.shareUrl, override.cta)}
     `,
       input.agentSignatureHtml,
     ),
@@ -976,26 +1068,58 @@ export function renderAgentMessageEmail(
     listings?: EmailPropertyCard[];
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
-  } & EmailBrandChrome,
+  } & EmailBrandChrome &
+    AgentEmailPublishedTemplateInput,
 ): RenderedEmail {
+  // Agent-authored subject and body always win — never replaced by templates.
+  const agentSubject = input.subject;
+  const agentBody = input.body;
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
-  const paragraphs = input.body
+  const paragraphs = agentBody
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean);
   const cards = input.listings ?? [];
   const fromLabel = input.agentFromLabel?.trim();
-  const subtitle = fromLabel
+  const legacySubtitle = fromLabel
     ? `A message from ${fromLabel}.`
     : "A message from your Houzzat agent.";
+  const hasCustomIntro = Boolean(
+    input.publishedAgentEmailTemplate?.introText?.trim(),
+  );
+  const override = agentEmailOverrideCopy(
+    input.publishedAgentEmailTemplate,
+    {
+      recipientName: input.name,
+      tenantName: input.brandLabel,
+      agentName: fromLabel || input.agentFromLabel,
+    },
+    {
+      // Fallback subject unused — agent subject always applied below.
+      subject: agentSubject,
+      introHtml: escapeHtml(legacySubtitle),
+      introText: legacySubtitle,
+      cta: "",
+    },
+    input,
+  );
+  const wrapperParagraphsText = override.paragraphsText.trim();
+  const textParts = [greet];
+  if (wrapperParagraphsText) textParts.push(wrapperParagraphsText);
+  textParts.push(agentBody);
+  const text = appendAgentSignatureText(
+    textParts.join("\n\n"),
+    input.agentSignatureText,
+  );
   const html = emailLayout({
-    title: input.subject,
-    subtitle,
-    preheader: input.subject,
-    ...layoutBrandProps(input),
+    title: agentSubject,
+    subtitle: hasCustomIntro ? override.introText : legacySubtitle,
+    preheader: agentSubject,
+    ...override.brandProps,
     bodyHtml: appendAgentSignatureHtml(
       `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      ${override.paragraphsHtml}
       ${paragraphs.map((p) => `<p style="margin:0 0 12px;white-space:pre-wrap;color:#115e59">${escapeHtml(p)}</p>`).join("")}
       ${cards.map((l) => renderEmailPropertyCard(l)).join("")}
     `,
@@ -1005,11 +1129,8 @@ export function renderAgentMessageEmail(
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
   });
   return {
-    subject: input.subject,
-    text: appendAgentSignatureText(
-      `${greet}\n\n${input.body}`,
-      input.agentSignatureText,
-    ),
+    subject: agentSubject,
+    text,
     html,
     kind: "agent_message",
   };
@@ -1384,7 +1505,8 @@ export function renderCmaEmail(
     recommendedListPrice?: number | null;
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
-  } & EmailBrandChrome,
+  } & EmailBrandChrome &
+    CmaSharePublishedTemplateInput,
 ): RenderedEmail {
   const greet = input.recipientName?.trim()
     ? `Hi ${input.recipientName.trim()},`
@@ -1393,11 +1515,33 @@ export function renderCmaEmail(
     input.brandLabel?.trim() ||
     input.tenantDisplayName.trim() ||
     "your brokerage";
+  const hasCustomIntro = Boolean(
+    input.publishedCmaShareTemplate?.introText?.trim(),
+  );
+  const legacyIntroHtml = `I've prepared a Comparative Market Analysis for <strong style="color:#064e3b">${escapeHtml(input.subjectAddress)}</strong>${input.subjectCity ? `, ${escapeHtml(input.subjectCity)}` : ""} using recent comparable sales and current competition.`;
+  const override = cmaShareOverrideCopy(
+    input.publishedCmaShareTemplate,
+    {
+      recipientName: input.recipientName,
+      tenantName: brand,
+      agentName: input.agentName,
+      subjectAddress: input.subjectAddress,
+      subjectCity: input.subjectCity,
+    },
+    {
+      subject: "Your Comparative Market Analysis is ready",
+      introHtml: legacyIntroHtml,
+      introText: `${input.agentName} at ${brand} prepared a Comparative Market Analysis for ${input.subjectAddress}, ${input.subjectCity}.`,
+      cta: "View Your CMA",
+    },
+    input,
+  );
   const accent =
+    override.brandProps.brandPrimaryColor?.trim() ||
     input.brandPrimaryColor?.trim() ||
     input.tenantPrimaryColor?.trim() ||
     "#0F766E";
-  const subject = `Your Comparative Market Analysis is ready`;
+  const subject = override.subject;
   const priceLine =
     input.recommendedListPrice != null
       ? `Recommended list price: ${money(input.recommendedListPrice)}`
@@ -1406,8 +1550,8 @@ export function renderCmaEmail(
     [
       greet,
       "",
-      `${input.agentName} at ${brand} prepared a Comparative Market Analysis for ${input.subjectAddress}, ${input.subjectCity}.`,
-      "",
+      override.introText,
+      override.paragraphsText.trim(),
       "It reviews recent comparable sales and current competition to help you understand how the property is positioned today.",
       priceLine ? `\n${priceLine}\n` : "",
       `View your CMA: ${input.cmaUrl}`,
@@ -1418,6 +1562,7 @@ export function renderCmaEmail(
       "",
       "Powered by HouzzatPRO",
     ]
+      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
       .filter((line) => line !== "")
       .join("\n"),
     // CMA already includes agent contact in-body; skip duplicate signature text
@@ -1427,7 +1572,9 @@ export function renderCmaEmail(
 
   const html = emailLayout({
     title: "Your market analysis is ready",
-    subtitle: `${brand} · Comparative Market Analysis`,
+    subtitle: hasCustomIntro
+      ? override.introText
+      : `${brand} · Comparative Market Analysis`,
     preheader: `CMA for ${input.subjectAddress}`,
     footerNote:
       input.footerNote?.trim() ||
@@ -1442,7 +1589,8 @@ export function renderCmaEmail(
     }),
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px;color:#115e59">I've prepared a Comparative Market Analysis for <strong style="color:#064e3b">${escapeHtml(input.subjectAddress)}</strong>${input.subjectCity ? `, ${escapeHtml(input.subjectCity)}` : ""} using recent comparable sales and current competition.</p>
+      <p style="margin:0 0 12px;color:#115e59">${override.introHtml}</p>
+      ${override.paragraphsHtml}
       ${infoCard(`
         <p style="margin:0 0 6px;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#047857;font-weight:700">${escapeHtml(brand)}</p>
         <p style="margin:0;font-size:17px;color:#064e3b;font-weight:700">${escapeHtml(input.subjectAddress)}</p>
@@ -1450,7 +1598,7 @@ export function renderCmaEmail(
       `)}
       <p style="margin:16px 0 0;color:#115e59">This is a market analysis for discussion — not a formal appraisal.</p>
       <p style="margin:22px 0 8px;text-align:center">
-        <a href="${escapeAttr(input.cmaUrl)}" style="display:inline-block;background:${escapeAttr(accent)};color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;padding:12px 22px;border-radius:999px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">View Your CMA</a>
+        <a href="${escapeAttr(input.cmaUrl)}" style="display:inline-block;background:${escapeAttr(accent)};color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;padding:12px 22px;border-radius:999px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">${escapeHtml(override.cta)}</a>
       </p>
       <p style="margin:20px 0 0;color:#115e59">
         <strong style="color:#064e3b">${escapeHtml(input.agentName)}</strong><br/>

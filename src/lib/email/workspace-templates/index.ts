@@ -38,6 +38,20 @@ export type {
   SellerNeighbourhoodDigestTemplateVars,
 } from "@/lib/email/workspace-templates/digest-templates";
 export {
+  fillPublishedAgentEmailTemplate,
+  fillPublishedCmaShareTemplate,
+  fillPublishedShortlistTemplate,
+  loadPublishedAgentEmailOverride,
+  loadPublishedCmaShareOverride,
+  loadPublishedShortlistOverride,
+} from "@/lib/email/workspace-templates/agent-share-templates";
+export type {
+  AgentEmailTemplateVars,
+  CmaShareTemplateVars,
+  FilledAgentShareTemplate,
+  ShortlistTemplateVars,
+} from "@/lib/email/workspace-templates/agent-share-templates";
+export {
   assertTenantScopedEmailTemplateMutation,
   canManageWorkspaceEmailTemplates,
   getWorkspaceEmailTemplate,

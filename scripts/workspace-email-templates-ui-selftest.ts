@@ -197,22 +197,18 @@ function testNoLiveSenderWiring() {
   const shortlist = read("src/lib/agent/send-shortlist-email.ts");
   const cma = read("src/lib/cma/send-cma-email.ts");
 
-  // Phase 2C wires Property/Area Watch + digests; agent/shortlist/CMA stay unwired.
+  // Phase 2C wires watches, digests, agent/shortlist/CMA; newsletter stays unwired.
   assert.match(monitors, /loadPublishedPropertyWatchOverride/);
   assert.match(monitors, /loadPublishedAreaWatchOverride/);
   assert.match(buyer, /loadPublishedSavedSearchDigestOverride/);
   assert.match(seller, /loadPublishedSellerNeighbourhoodDigestOverride/);
-  for (const [name, src] of [
-    ["agent", agent],
-    ["shortlist", shortlist],
-    ["cma", cma],
-  ] as const) {
-    assert.doesNotMatch(
-      src,
-      /workspace-templates|resolvePublishedEmailTemplate|loadPublishedPropertyWatchOverride|loadPublishedAreaWatchOverride|loadPublishedSavedSearchDigestOverride|loadPublishedSellerNeighbourhoodDigestOverride/,
-      `${name} must not consume template overrides yet`,
-    );
-  }
+  assert.match(agent, /loadPublishedAgentEmailOverride/);
+  assert.match(shortlist, /loadPublishedShortlistOverride/);
+  assert.match(cma, /loadPublishedCmaShareOverride/);
+  assert.match(
+    read("src/app/api/mobile/v2/leads/[leadId]/conversations/route.ts"),
+    /loadPublishedAgentEmailOverride/,
+  );
 
   const client = read("src/components/admin/EmailTemplatesAdminClient.tsx");
   assert.doesNotMatch(client, /resend|sendEmail|nodemailer/i);

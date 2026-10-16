@@ -401,7 +401,7 @@ function testNoLiveSenderWiring() {
   const cma = read("src/lib/cma/send-cma-email.ts");
   const brand = read("src/lib/email/tenant-email-brand.ts");
 
-  // Phase 2C: Property Watch + Area Watch + buyer/seller digests.
+  // Phase 2C: watches, digests, agent email, shortlist, CMA.
   assert.match(monitors, /loadPublishedPropertyWatchOverride/);
   assert.match(monitors, /loadPublishedAreaWatchOverride/);
   assert.match(monitors, /watchCategory === "property_watch"/);
@@ -411,16 +411,31 @@ function testNoLiveSenderWiring() {
   assert.match(seller, /loadPublishedSellerNeighbourhoodDigestOverride/);
   assert.doesNotMatch(buyer, /loadPublishedSellerNeighbourhoodDigestOverride/);
   assert.doesNotMatch(seller, /loadPublishedSavedSearchDigestOverride/);
+  assert.match(agent, /loadPublishedAgentEmailOverride/);
+  assert.match(shortlist, /loadPublishedShortlistOverride/);
+  assert.match(cma, /loadPublishedCmaShareOverride/);
+  assert.doesNotMatch(agent, /loadPublishedShortlistOverride|loadPublishedCmaShareOverride/);
+  assert.doesNotMatch(shortlist, /loadPublishedAgentEmailOverride|loadPublishedCmaShareOverride/);
+  assert.doesNotMatch(cma, /loadPublishedAgentEmailOverride|loadPublishedShortlistOverride/);
 
-  for (const [name, src] of [
+  const mobileAgent = read(
+    "src/app/api/mobile/v2/leads/[leadId]/conversations/route.ts",
+  );
+  assert.match(mobileAgent, /loadPublishedAgentEmailOverride/);
+
+  const newsletterUnwired = [
     ["agent", agent],
     ["shortlist", shortlist],
     ["cma", cma],
-  ] as const) {
+    ["buyer", buyer],
+    ["seller", seller],
+    ["monitors", monitors],
+  ] as const;
+  for (const [name, src] of newsletterUnwired) {
     assert.doesNotMatch(
       src,
-      /workspace-templates|resolvePublishedEmailTemplate|loadPublishedPropertyWatchOverride|loadPublishedAreaWatchOverride|loadPublishedSavedSearchDigestOverride|loadPublishedSellerNeighbourhoodDigestOverride/,
-      `${name} must not consume template overrides yet`,
+      /loadPublishedNewsletter|NEWSLETTER/,
+      `${name} must not wire NEWSLETTER`,
     );
   }
   assert.match(brand, /TENANT_EMAIL_BRANDING/);

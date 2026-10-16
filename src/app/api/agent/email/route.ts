@@ -15,6 +15,8 @@ import {
   resolveTenantEmailBrand,
   toEmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
+import { loadPublishedAgentEmailOverride } from "@/lib/email/workspace-templates/agent-share-templates";
+import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
 import { prisma } from "@/lib/prisma";
 
 const singleSchema = z.object({
@@ -119,12 +121,20 @@ export async function POST(request: Request) {
           customerId: lead.customer?.id,
         })
       : null;
+    // Phase 2C-4 — published AGENT_EMAIL only. Agent subject/body always win.
+    let publishedAgentEmail: EmailTemplateContentFields | null = null;
+    if (lead.workspaceId) {
+      publishedAgentEmail = await loadPublishedAgentEmailOverride({
+        workspaceId: lead.workspaceId,
+      });
+    }
     const rendered = renderAgentMessageEmail({
       name: lead.customer?.name,
       subject: parsed.data.subject,
       body: parsed.data.body,
       ...preferenceFooterFields(chrome),
       ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
+      publishedAgentEmailTemplate: publishedAgentEmail,
     });
 
     const result = await sendAndLogClientEmail({

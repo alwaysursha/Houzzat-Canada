@@ -18,6 +18,7 @@ import {
   resolveTenantEmailBrand,
   toEmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
+import { loadPublishedCmaShareOverride } from "@/lib/email/workspace-templates/agent-share-templates";
 import { prisma } from "@/lib/prisma";
 import { resolveWorkspaceBrand } from "@/lib/tenancy/resolve-workspace-brand";
 import type { WorkspaceMemberRole } from "@prisma/client";
@@ -153,6 +154,10 @@ export async function sendCmaEmailToLead(input: {
         email: toEmail,
       })
     : null;
+  // Phase 2C-4 — published CMA_SHARE for verified workspace only.
+  const publishedCmaShare = await loadPublishedCmaShareOverride({
+    workspaceId: input.workspaceId,
+  });
   const rendered = renderCmaEmail({
     recipientName: lead.customer?.name,
     agentName,
@@ -168,6 +173,7 @@ export async function sendCmaEmailToLead(input: {
     recommendedListPrice: report.recommendedListPrice,
     ...preferenceFooterFields(chrome),
     ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
+    publishedCmaShareTemplate: publishedCmaShare,
   });
 
   const result = await sendAndLogClientEmail({

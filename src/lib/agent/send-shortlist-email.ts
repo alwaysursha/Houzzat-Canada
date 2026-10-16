@@ -14,6 +14,8 @@ import {
   resolveTenantEmailBrand,
   toEmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
+import { loadPublishedShortlistOverride } from "@/lib/email/workspace-templates/agent-share-templates";
+import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
 import {
   formatListPrice,
   formatListingAddressOneLine,
@@ -234,6 +236,13 @@ export async function sendShortlistEmail(
         customerId: lead.customerId,
       })
     : null;
+  // Phase 2C-4 — published SHORTLIST only. Agent note + optional subject preserved.
+  let publishedShortlist: EmailTemplateContentFields | null = null;
+  if (lead.workspaceId) {
+    publishedShortlist = await loadPublishedShortlistOverride({
+      workspaceId: lead.workspaceId,
+    });
+  }
   const rendered = renderShortlistEmail({
     name: lead.customer?.name,
     agentName,
@@ -242,7 +251,9 @@ export async function sendShortlistEmail(
     listings: emailListings,
     ...preferenceFooterFields(chrome),
     ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
+    publishedShortlistTemplate: publishedShortlist,
   });
+  // Explicit agent-authored subject takes precedence over template/legacy subject.
   if (input.subject?.trim()) {
     rendered.subject = input.subject.trim();
   }

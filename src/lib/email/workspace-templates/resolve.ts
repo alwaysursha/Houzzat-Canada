@@ -2,9 +2,8 @@
  * Phase 2A — published template resolution (merged with registry defaults).
  *
  * Phase 2C live sends use sparse published loaders (Property Watch, Area Watch,
- * Saved Search Digest, Seller Neighbourhood Digest) so empty values keep
- * event-specific legacy wording. Agent email, shortlist, and CMA must not
- * consume overrides until their cutover phases.
+ * digests, Agent Email, Shortlist, CMA Share) so empty values keep
+ * event-specific legacy wording. Newsletter remains unwired.
  */
 
 import type { WorkspaceEmailTemplateType } from "@prisma/client";
