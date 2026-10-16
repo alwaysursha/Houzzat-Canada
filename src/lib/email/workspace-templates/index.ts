@@ -27,6 +27,17 @@ export type {
   FilledAreaWatchTemplate,
 } from "@/lib/email/workspace-templates/area-watch";
 export {
+  fillPublishedSavedSearchDigestTemplate,
+  fillPublishedSellerNeighbourhoodDigestTemplate,
+  loadPublishedSavedSearchDigestOverride,
+  loadPublishedSellerNeighbourhoodDigestOverride,
+} from "@/lib/email/workspace-templates/digest-templates";
+export type {
+  FilledDigestTemplate,
+  SavedSearchDigestTemplateVars,
+  SellerNeighbourhoodDigestTemplateVars,
+} from "@/lib/email/workspace-templates/digest-templates";
+export {
   assertTenantScopedEmailTemplateMutation,
   canManageWorkspaceEmailTemplates,
   getWorkspaceEmailTemplate,

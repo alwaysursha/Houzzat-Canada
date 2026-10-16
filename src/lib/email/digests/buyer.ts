@@ -27,6 +27,8 @@ import {
   resolveTenantEmailBrand,
   toEmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
+import { loadPublishedSavedSearchDigestOverride } from "@/lib/email/workspace-templates/digest-templates";
+import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
 import { formatListPrice } from "@/lib/listings/constants";
 import { withPropertyAlertUtm } from "@/lib/email/property-alert-links";
 import { listingPath } from "@/lib/listings/listing-path";
@@ -236,6 +238,15 @@ export async function runBuyerSavedSearchDigests(opts?: {
             customerId: user.id,
           })
         : null;
+      // Phase 2C-3 — published SAVED_SEARCH_DIGEST only (drafts ignored).
+      // Seller digest templates never load here.
+      let publishedSavedSearchDigest: EmailTemplateContentFields | null = null;
+      if (user.workspaceId) {
+        publishedSavedSearchDigest =
+          await loadPublishedSavedSearchDigestOverride({
+            workspaceId: user.workspaceId,
+          });
+      }
       const rendered = renderSavedSearchDigestEmail({
         name: user.name,
         searchName,
@@ -246,6 +257,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
         ),
         ...preferenceFooterFields(chrome),
         ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
+        publishedSavedSearchDigestTemplate: publishedSavedSearchDigest,
       });
 
       if (opts?.dryRun) {

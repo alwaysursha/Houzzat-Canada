@@ -401,23 +401,25 @@ function testNoLiveSenderWiring() {
   const cma = read("src/lib/cma/send-cma-email.ts");
   const brand = read("src/lib/email/tenant-email-brand.ts");
 
-  // Phase 2C: Property Watch + Area Watch only.
+  // Phase 2C: Property Watch + Area Watch + buyer/seller digests.
   assert.match(monitors, /loadPublishedPropertyWatchOverride/);
   assert.match(monitors, /loadPublishedAreaWatchOverride/);
   assert.match(monitors, /watchCategory === "property_watch"/);
   assert.match(monitors, /watchCategory === "area_watch"/);
   assert.doesNotMatch(monitors, /SAVED_SEARCH_DIGEST|NEWSLETTER|SHORTLIST|CMA_SHARE/);
+  assert.match(buyer, /loadPublishedSavedSearchDigestOverride/);
+  assert.match(seller, /loadPublishedSellerNeighbourhoodDigestOverride/);
+  assert.doesNotMatch(buyer, /loadPublishedSellerNeighbourhoodDigestOverride/);
+  assert.doesNotMatch(seller, /loadPublishedSavedSearchDigestOverride/);
 
   for (const [name, src] of [
-    ["buyer", buyer],
-    ["seller", seller],
     ["agent", agent],
     ["shortlist", shortlist],
     ["cma", cma],
   ] as const) {
     assert.doesNotMatch(
       src,
-      /workspace-templates|resolvePublishedEmailTemplate|loadPublishedPropertyWatchOverride|loadPublishedAreaWatchOverride/,
+      /workspace-templates|resolvePublishedEmailTemplate|loadPublishedPropertyWatchOverride|loadPublishedAreaWatchOverride|loadPublishedSavedSearchDigestOverride|loadPublishedSellerNeighbourhoodDigestOverride/,
       `${name} must not consume template overrides yet`,
     );
   }

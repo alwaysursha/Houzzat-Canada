@@ -16,6 +16,8 @@ import {
   resolveTenantEmailBrand,
   toEmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
+import { loadPublishedSellerNeighbourhoodDigestOverride } from "@/lib/email/workspace-templates/digest-templates";
+import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
 import { formatListPrice, formatPrice } from "@/lib/listings/constants";
 import { prisma } from "@/lib/prisma";
 
@@ -189,6 +191,16 @@ export async function runSellerNeighborhoodReports(opts?: {
             customerId: user.id,
           })
         : null;
+      // Phase 2C-3 — published SELLER_NEIGHBOURHOOD_DIGEST only (drafts ignored).
+      // Buyer digest templates never load here.
+      let publishedSellerNeighbourhoodDigest: EmailTemplateContentFields | null =
+        null;
+      if (user.workspaceId) {
+        publishedSellerNeighbourhoodDigest =
+          await loadPublishedSellerNeighbourhoodDigestOverride({
+            workspaceId: user.workspaceId,
+          });
+      }
       const rendered = renderNeighborhoodWeeklyEmail({
         name: user.name,
         homeLabel: label,
@@ -205,6 +217,8 @@ export async function runSellerNeighborhoodReports(opts?: {
         ctaUrl: `${SITE_URL}/owner`,
         ...preferenceFooterFields(chrome),
         ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
+        publishedSellerNeighbourhoodDigestTemplate:
+          publishedSellerNeighbourhoodDigest,
       });
 
       if (opts?.dryRun) {

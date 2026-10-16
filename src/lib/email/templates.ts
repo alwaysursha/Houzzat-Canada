@@ -17,6 +17,12 @@ import {
   type AreaWatchTemplateVars,
 } from "@/lib/email/workspace-templates/area-watch";
 import {
+  fillPublishedSavedSearchDigestTemplate,
+  fillPublishedSellerNeighbourhoodDigestTemplate,
+  type SavedSearchDigestTemplateVars,
+  type SellerNeighbourhoodDigestTemplateVars,
+} from "@/lib/email/workspace-templates/digest-templates";
+import {
   fillPublishedPropertyWatchTemplate,
   type PropertyWatchTemplateVars,
 } from "@/lib/email/workspace-templates/property-watch";
@@ -37,6 +43,16 @@ export type PropertyWatchPublishedTemplateInput = {
 /** Optional published AREA_WATCH override (Phase 2C-2). Drafts never pass here. */
 export type AreaWatchPublishedTemplateInput = {
   publishedAreaWatchTemplate?: EmailTemplateContentFields | null;
+};
+
+/** Optional published SAVED_SEARCH_DIGEST override (Phase 2C-3). Drafts never pass here. */
+export type SavedSearchDigestPublishedTemplateInput = {
+  publishedSavedSearchDigestTemplate?: EmailTemplateContentFields | null;
+};
+
+/** Optional published SELLER_NEIGHBOURHOOD_DIGEST override (Phase 2C-3). Drafts never pass here. */
+export type SellerNeighbourhoodDigestPublishedTemplateInput = {
+  publishedSellerNeighbourhoodDigestTemplate?: EmailTemplateContentFields | null;
 };
 
 function layoutBrandProps(brand?: EmailBrandChrome | null) {
@@ -145,6 +161,34 @@ function areaWatchOverrideCopy(
   if (!published) return applyFilledWatchOverride(null, fallback, brand);
   return applyFilledWatchOverride(
     fillPublishedAreaWatchTemplate(published, vars),
+    fallback,
+    brand,
+  );
+}
+
+function savedSearchDigestOverrideCopy(
+  published: EmailTemplateContentFields | null | undefined,
+  vars: SavedSearchDigestTemplateVars,
+  fallback: WatchOverrideFallback,
+  brand: EmailBrandChrome | null | undefined,
+): WatchOverrideCopy {
+  if (!published) return applyFilledWatchOverride(null, fallback, brand);
+  return applyFilledWatchOverride(
+    fillPublishedSavedSearchDigestTemplate(published, vars),
+    fallback,
+    brand,
+  );
+}
+
+function sellerNeighbourhoodDigestOverrideCopy(
+  published: EmailTemplateContentFields | null | undefined,
+  vars: SellerNeighbourhoodDigestTemplateVars,
+  fallback: WatchOverrideFallback,
+  brand: EmailBrandChrome | null | undefined,
+): WatchOverrideCopy {
+  if (!published) return applyFilledWatchOverride(null, fallback, brand);
+  return applyFilledWatchOverride(
+    fillPublishedSellerNeighbourhoodDigestTemplate(published, vars),
     fallback,
     brand,
   );
@@ -1122,27 +1166,52 @@ export function renderSavedSearchDigestEmail(
     unsubscribeUrl?: string | null;
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
-  } & EmailBrandChrome,
+  } & EmailBrandChrome &
+    SavedSearchDigestPublishedTemplateInput,
 ): RenderedEmail {
   const count = input.listings.length;
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
-  const subject =
+  const legacySubject =
     count === 1
       ? `New listing alert · ${input.listings[0]?.addressLine ?? input.searchName}`
       : `${count} new homes matching your search`;
+  const legacyIntroHtml = `Here ${count === 1 ? "is a fresh match" : `are ${count} fresh matches`} for <strong style="color:#064e3b">${escapeHtml(input.searchName)}</strong>.`;
+  const hasCustomIntro = Boolean(
+    input.publishedSavedSearchDigestTemplate?.introText?.trim(),
+  );
+  const override = savedSearchDigestOverrideCopy(
+    input.publishedSavedSearchDigestTemplate,
+    {
+      recipientName: input.name,
+      tenantName: input.brandLabel,
+      agentName: input.agentFromLabel,
+      searchName: input.searchName,
+      listingCount: count,
+    },
+    {
+      subject: legacySubject,
+      introHtml: legacyIntroHtml,
+      introText: `New listings matched “${input.searchName}”:`,
+      cta: "Browse all matching homes →",
+    },
+    input,
+  );
+  const subject = override.subject;
   const text = appendAgentSignatureText(
     [
       greet,
       "",
-      `New listings matched “${input.searchName}”:`,
-      "",
+      override.introText,
+      override.paragraphsText.trim(),
       ...input.listings.map(
         (l) =>
           `• ${l.addressLine}, ${l.city} · ${l.priceLabel}${l.metaLabel ? ` · ${l.metaLabel}` : ""} — ${l.listingUrl}`,
       ),
       "",
       `Browse all matches: ${input.searchUrl}`,
-    ].join("\n"),
+    ]
+      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+      .join("\n"),
     input.agentSignatureText,
   );
 
@@ -1154,24 +1223,29 @@ export function renderSavedSearchDigestEmail(
       }),
     )
     .join("");
+  const introLine = hasCustomIntro
+    ? `${escapeHtml(greet)} ${override.introHtml}`
+    : `${escapeHtml(greet)} ${legacyIntroHtml}`;
   const previewNote =
-    count > 0
-      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><p style="margin:0 0 16px;max-width:580px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;line-height:1.45;color:#115e59;text-align:left">${escapeHtml(greet)} Here ${count === 1 ? "is a fresh match" : `are ${count} fresh matches`} for <strong style="color:#064e3b">${escapeHtml(input.searchName)}</strong>.</p></td></tr></table>`
+    count > 0 || override.paragraphsHtml
+      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><p style="margin:0 0 16px;max-width:580px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;line-height:1.45;color:#115e59;text-align:left">${count > 0 || hasCustomIntro ? introLine : ""}</p>${override.paragraphsHtml}</td></tr></table>`
       : "";
 
   const html = emailLayout({
     title: "New listings found!",
-    subtitle: "We've found new homes that match your criteria—take a look.",
+    subtitle: hasCustomIntro
+      ? override.introText
+      : "We've found new homes that match your criteria—take a look.",
     preheader: `${count} new home${count === 1 ? "" : "s"} for ${input.searchName}`,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
-    ...layoutBrandProps(input),
+    ...override.brandProps,
     bodyHtml: appendAgentSignatureHtml(
       `
       ${previewNote}
       ${cards}
-      ${ctaButton(input.searchUrl, "Browse all matching homes →")}
+      ${ctaButton(input.searchUrl, override.cta)}
     `,
       input.agentSignatureHtml,
     ),
@@ -1193,15 +1267,38 @@ export function renderNeighborhoodWeeklyEmail(
     unsubscribeUrl?: string | null;
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
-  } & EmailBrandChrome,
+  } & EmailBrandChrome &
+    SellerNeighbourhoodDigestPublishedTemplateInput,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
-  const subject = `Neighborhood weekly · ${input.homeLabel}`;
+  const hasCustomIntro = Boolean(
+    input.publishedSellerNeighbourhoodDigestTemplate?.introText?.trim(),
+  );
+  const override = sellerNeighbourhoodDigestOverrideCopy(
+    input.publishedSellerNeighbourhoodDigestTemplate,
+    {
+      recipientName: input.name,
+      tenantName: input.brandLabel,
+      agentName: input.agentFromLabel,
+      homeLabel: input.homeLabel,
+      newCount: input.newCount,
+      soldCount: input.soldCount,
+    },
+    {
+      subject: `Neighborhood weekly · ${input.homeLabel}`,
+      introHtml: `Here’s what happened near <strong style="color:#064e3b">${escapeHtml(input.homeLabel)}</strong> over the past week (≈${input.radiusKm} km).`,
+      introText: `This week near ${input.homeLabel} (≈${input.radiusKm} km):`,
+      cta: "View seller tools",
+    },
+    input,
+  );
+  const subject = override.subject;
   const text = appendAgentSignatureText(
     [
       greet,
       "",
-      `This week near ${input.homeLabel} (≈${input.radiusKm} km):`,
+      override.introText,
+      override.paragraphsText.trim(),
       `• ${input.newCount} new listing${input.newCount === 1 ? "" : "s"}`,
       `• ${input.soldCount} sold/leased`,
       input.medianSoldLabel ? `• Median sold ${input.medianSoldLabel}` : "",
@@ -1218,6 +1315,7 @@ export function renderNeighborhoodWeeklyEmail(
       "",
       input.ctaUrl,
     ]
+      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
       .filter(Boolean)
       .join("\n"),
     input.agentSignatureText,
@@ -1245,22 +1343,25 @@ export function renderNeighborhoodWeeklyEmail(
 
   const html = emailLayout({
     title: "Neighborhood weekly report",
-    subtitle: `Here’s what happened near ${input.homeLabel} this week.`,
+    subtitle: hasCustomIntro
+      ? override.introText
+      : `Here’s what happened near ${input.homeLabel} this week.`,
     preheader: `${input.newCount} new · ${input.soldCount} sold near ${input.homeLabel}`,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
-    ...layoutBrandProps(input),
+    ...override.brandProps,
     bodyHtml: appendAgentSignatureHtml(
       `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 16px;color:#115e59">Here’s what happened near <strong style="color:#064e3b">${escapeHtml(input.homeLabel)}</strong> over the past week (≈${input.radiusKm} km).</p>
+      <p style="margin:0 0 16px;color:#115e59">${override.introHtml}</p>
+      ${override.paragraphsHtml}
       ${infoCard(`
         <p style="margin:0;font-size:16px;color:#064e3b"><strong>${input.newCount}</strong> new · <strong>${input.soldCount}</strong> sold/leased${input.medianSoldLabel ? ` · median sold <strong>${escapeHtml(input.medianSoldLabel)}</strong>` : ""}</p>
       `)}
       ${listBlock("New listings", input.newListings, "New listing")}
       ${listBlock("Sold & leased", input.soldListings, "Sold")}
-      ${ctaButton(input.ctaUrl, "View seller tools")}
+      ${ctaButton(input.ctaUrl, override.cta)}
     `,
       input.agentSignatureHtml,
     ),
