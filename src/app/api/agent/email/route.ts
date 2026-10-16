@@ -11,6 +11,10 @@ import {
   preferenceFooterFields,
 } from "@/lib/communications/preference-email-chrome";
 import { renderAgentMessageEmail } from "@/lib/email/templates";
+import {
+  resolveTenantEmailBrand,
+  toEmailBrandChrome,
+} from "@/lib/email/tenant-email-brand";
 import { prisma } from "@/lib/prisma";
 
 const singleSchema = z.object({
@@ -107,11 +111,20 @@ export async function POST(request: Request) {
             email: toEmail,
           })
         : null;
+    const tenantBrand = lead.workspaceId
+      ? await resolveTenantEmailBrand({
+          workspaceId: lead.workspaceId,
+          preferredAgentUserId: ctx.user.id,
+          leadId: lead.id,
+          customerId: lead.customer?.id,
+        })
+      : null;
     const rendered = renderAgentMessageEmail({
       name: lead.customer?.name,
       subject: parsed.data.subject,
       body: parsed.data.body,
       ...preferenceFooterFields(chrome),
+      ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
     });
 
     const result = await sendAndLogClientEmail({
@@ -122,7 +135,8 @@ export async function POST(request: Request) {
       leadId: lead.id,
       sentById: ctx.user.id,
       organizationId: lead.organizationId ?? ctx.organizationId,
-      replyTo: ctx.user.email,
+      // Prefer sending agent; fall back to tenant-configured reply-to only.
+      replyTo: ctx.user.email || tenantBrand?.replyTo || null,
     });
 
     if (!result.ok) {

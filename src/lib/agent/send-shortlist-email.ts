@@ -11,6 +11,10 @@ import {
 } from "@/lib/communications/category-email-gate";
 import { renderShortlistEmail } from "@/lib/email/templates";
 import {
+  resolveTenantEmailBrand,
+  toEmailBrandChrome,
+} from "@/lib/email/tenant-email-brand";
+import {
   formatListPrice,
   formatListingAddressOneLine,
   formatListingBedsLabel,
@@ -222,6 +226,14 @@ export async function sendShortlistEmail(
           email: toEmail,
         })
       : null;
+  const tenantBrand = lead.workspaceId
+    ? await resolveTenantEmailBrand({
+        workspaceId: lead.workspaceId,
+        preferredAgentUserId: input.actorUserId,
+        leadId: lead.id,
+        customerId: lead.customerId,
+      })
+    : null;
   const rendered = renderShortlistEmail({
     name: lead.customer?.name,
     agentName,
@@ -229,6 +241,7 @@ export async function sendShortlistEmail(
     note,
     listings: emailListings,
     ...preferenceFooterFields(chrome),
+    ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
   });
   if (input.subject?.trim()) {
     rendered.subject = input.subject.trim();
@@ -242,7 +255,7 @@ export async function sendShortlistEmail(
     leadId: lead.id,
     sentById: input.actorUserId,
     organizationId: lead.organizationId ?? input.actorOrganizationId,
-    replyTo: input.actorEmail,
+    replyTo: input.actorEmail || tenantBrand?.replyTo || null,
   });
 
   if (!result.ok) {

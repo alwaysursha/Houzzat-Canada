@@ -14,6 +14,10 @@ import {
   loadCategoryEmailEnabled,
 } from "@/lib/communications/category-email-gate";
 import { renderCmaEmail } from "@/lib/email/templates";
+import {
+  resolveTenantEmailBrand,
+  toEmailBrandChrome,
+} from "@/lib/email/tenant-email-brand";
 import { prisma } from "@/lib/prisma";
 import { resolveWorkspaceBrand } from "@/lib/tenancy/resolve-workspace-brand";
 import type { WorkspaceMemberRole } from "@prisma/client";
@@ -132,6 +136,12 @@ export async function sendCmaEmailToLead(input: {
   }
 
   const brand = await resolveWorkspaceBrand(input.workspaceId);
+  const tenantBrand = await resolveTenantEmailBrand({
+    workspaceId: input.workspaceId,
+    preferredAgentUserId: report.agent.id,
+    leadId: lead.id,
+    customerId: lead.customer?.id,
+  });
   const cmaUrl = `${SITE_URL}/cma/${report.token}`;
   const agentName =
     report.agent.name?.trim() || report.agent.email || "Your agent";
@@ -148,13 +158,16 @@ export async function sendCmaEmailToLead(input: {
     agentName,
     agentEmail: report.agent.email,
     agentPhone: report.agent.agentProfile?.phone ?? null,
-    tenantDisplayName: brand.displayName,
-    tenantPrimaryColor: brand.colors.primary,
+    tenantDisplayName:
+      tenantBrand?.displayName ?? brand.displayName,
+    tenantPrimaryColor:
+      tenantBrand?.primaryColor ?? brand.colors.primary,
     subjectAddress: report.subjectAddress ?? report.city,
     subjectCity: report.city,
     cmaUrl,
     recommendedListPrice: report.recommendedListPrice,
     ...preferenceFooterFields(chrome),
+    ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
   });
 
   const result = await sendAndLogClientEmail({
@@ -165,7 +178,7 @@ export async function sendCmaEmailToLead(input: {
     sentById: input.actorUserId,
     mlsNumber: report.subjectMls ?? report.listingMls,
     organizationId: lead.organizationId,
-    replyTo: report.agent.email,
+    replyTo: report.agent.email || tenantBrand?.replyTo || null,
   });
 
   if (!result.ok) {

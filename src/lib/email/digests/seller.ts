@@ -12,6 +12,10 @@ import {
   type DigestListingCard,
 } from "@/lib/email/digests/search";
 import { renderNeighborhoodWeeklyEmail } from "@/lib/email/templates";
+import {
+  resolveTenantEmailBrand,
+  toEmailBrandChrome,
+} from "@/lib/email/tenant-email-brand";
 import { formatListPrice, formatPrice } from "@/lib/listings/constants";
 import { prisma } from "@/lib/prisma";
 
@@ -179,6 +183,12 @@ export async function runSellerNeighborhoodReports(opts?: {
             email: user.email,
           })
         : null;
+      const tenantBrand = user.workspaceId
+        ? await resolveTenantEmailBrand({
+            workspaceId: user.workspaceId,
+            customerId: user.id,
+          })
+        : null;
       const rendered = renderNeighborhoodWeeklyEmail({
         name: user.name,
         homeLabel: label,
@@ -194,6 +204,7 @@ export async function runSellerNeighborhoodReports(opts?: {
         ),
         ctaUrl: `${SITE_URL}/owner`,
         ...preferenceFooterFields(chrome),
+        ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
       });
 
       if (opts?.dryRun) {
@@ -213,6 +224,7 @@ export async function runSellerNeighborhoodReports(opts?: {
         rendered,
         stream: "alerts",
         customerId: user.id,
+        replyTo: tenantBrand?.replyTo,
       });
 
       if (!result.ok) {

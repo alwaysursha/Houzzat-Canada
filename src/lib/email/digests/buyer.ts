@@ -23,6 +23,10 @@ import {
   savedSearchDigestCursorUpdate,
 } from "@/lib/email/digests/buyer-digest-plan";
 import { renderSavedSearchDigestEmail } from "@/lib/email/templates";
+import {
+  resolveTenantEmailBrand,
+  toEmailBrandChrome,
+} from "@/lib/email/tenant-email-brand";
 import { formatListPrice } from "@/lib/listings/constants";
 import { withPropertyAlertUtm } from "@/lib/email/property-alert-links";
 import { listingPath } from "@/lib/listings/listing-path";
@@ -226,6 +230,12 @@ export async function runBuyerSavedSearchDigests(opts?: {
             email: user.email,
           })
         : null;
+      const tenantBrand = user.workspaceId
+        ? await resolveTenantEmailBrand({
+            workspaceId: user.workspaceId,
+            customerId: user.id,
+          })
+        : null;
       const rendered = renderSavedSearchDigestEmail({
         name: user.name,
         searchName,
@@ -235,6 +245,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
           "saved_search",
         ),
         ...preferenceFooterFields(chrome),
+        ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
       });
 
       if (opts?.dryRun) {
@@ -253,6 +264,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
         rendered,
         stream: "alerts",
         customerId: user.id,
+        replyTo: tenantBrand?.replyTo,
       });
 
       if (!result.ok) {

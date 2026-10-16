@@ -9,7 +9,7 @@ export function emailLayout(input: {
   /** Optional line under the hero title. */
   subtitle?: string | null;
   bodyHtml: string;
-  footerNote?: string;
+  footerNote?: string | null;
   unsubscribeUrl?: string | null;
   preferencesManageUrl?: string | null;
   /** Presentation-only GET intent. Must not be a mutating endpoint. */
@@ -20,9 +20,13 @@ export function emailLayout(input: {
   brandLogoUrl?: string | null;
   /** Tenant primary accent for hero text (optional). */
   brandPrimaryColor?: string | null;
+  /** Tenant public website origin (footer link). Defaults to SITE_URL. */
+  brandWebsiteUrl?: string | null;
 }): string {
   const brandLabel = input.brandLabel?.trim() || SITE_NAME;
   const brandColor = input.brandPrimaryColor?.trim() || "#047857";
+  const websiteUrl = input.brandWebsiteUrl?.trim() || SITE_URL;
+  const websiteHost = websiteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
   const logo = input.brandLogoUrl?.trim()
     ? `<img src="${escapeAttr(input.brandLogoUrl.trim())}" alt="${escapeHtml(brandLabel)}" width="140" style="display:block;max-width:140px;height:auto;margin:0 0 14px;border:0" />`
     : "";
@@ -80,7 +84,7 @@ export function emailLayout(input: {
                 ${escapeHtml(input.footerNote ?? "GTA Real Estate — Just a click away.")}
               </p>
               <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#115e59">
-                <a href="${escapeAttr(SITE_URL)}" style="color:#064e3b;text-decoration:none;font-weight:600">${escapeHtml(SITE_URL.replace(/^https?:\/\//, ""))}</a>
+                <a href="${escapeAttr(websiteUrl)}" style="color:#064e3b;text-decoration:none;font-weight:600">${escapeHtml(websiteHost)}</a>
               </p>
               ${unsub}
             </td>

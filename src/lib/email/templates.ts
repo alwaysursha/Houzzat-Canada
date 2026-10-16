@@ -7,6 +7,11 @@ import {
   infoCard,
   EMAIL_MINT_GRADIENT,
 } from "@/lib/email/layout";
+import {
+  appendAgentSignatureHtml,
+  appendAgentSignatureText,
+  type EmailBrandChrome,
+} from "@/lib/email/tenant-email-brand";
 
 export type RenderedEmail = {
   subject: string;
@@ -14,6 +19,17 @@ export type RenderedEmail = {
   html: string;
   kind: string;
 };
+
+function layoutBrandProps(brand?: EmailBrandChrome | null) {
+  if (!brand) return {};
+  return {
+    brandLabel: brand.brandLabel ?? undefined,
+    brandLogoUrl: brand.brandLogoUrl ?? undefined,
+    brandPrimaryColor: brand.brandPrimaryColor ?? undefined,
+    brandWebsiteUrl: brand.brandWebsiteUrl ?? undefined,
+    footerNote: brand.footerNote ?? undefined,
+  };
+}
 
 function money(n: number) {
   return new Intl.NumberFormat("en-CA", {
@@ -373,20 +389,24 @@ export function renderPriceReductionEmail(
     unsubscribeUrl?: string | null;
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
-  } & ListingCardExtras,
+  } & ListingCardExtras &
+    EmailBrandChrome,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const subject = `Price reduced · ${input.addressLine}`;
   const drop = input.oldPrice - input.newPrice;
-  const text = [
-    greet,
-    "",
-    `A home you’re watching dropped in price.`,
-    `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
-    `${money(input.oldPrice)} → ${money(input.newPrice)} (−${money(drop)})`,
-    "",
-    input.listingUrl,
-  ].join("\n");
+  const text = appendAgentSignatureText(
+    [
+      greet,
+      "",
+      `A home you’re watching dropped in price.`,
+      `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
+      `${money(input.oldPrice)} → ${money(input.newPrice)} (−${money(drop)})`,
+      "",
+      input.listingUrl,
+    ].join("\n"),
+    input.agentSignatureText,
+  );
   const html = emailLayout({
     title: "Price reduced",
     subtitle: "A home on your watch list just dropped in price.",
@@ -394,7 +414,9 @@ export function renderPriceReductionEmail(
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
-    bodyHtml: `
+    ...layoutBrandProps(input),
+    bodyHtml: appendAgentSignatureHtml(
+      `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 12px;color:#115e59">A property on your watch list just reduced its price.</p>
       ${renderEmailPropertyCard({
@@ -412,6 +434,8 @@ export function renderPriceReductionEmail(
       })}
       ${ctaButton(input.listingUrl, "View listing")}
     `,
+      input.agentSignatureHtml,
+    ),
   });
   return { subject, text, html, kind: "price_reduction" };
 }
@@ -428,19 +452,23 @@ export function renderSoldAlertEmail(
     unsubscribeUrl?: string | null;
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
-  } & ListingCardExtras,
+  } & ListingCardExtras &
+    EmailBrandChrome,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const subject = `${input.statusLabel} · ${input.addressLine}`;
-  const text = [
-    greet,
-    "",
-    `A watched home is now ${input.statusLabel.toLowerCase()}.`,
-    `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
-    input.priceLabel,
-    "",
-    input.listingUrl,
-  ].join("\n");
+  const text = appendAgentSignatureText(
+    [
+      greet,
+      "",
+      `A watched home is now ${input.statusLabel.toLowerCase()}.`,
+      `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
+      input.priceLabel,
+      "",
+      input.listingUrl,
+    ].join("\n"),
+    input.agentSignatureText,
+  );
   const html = emailLayout({
     title: input.statusLabel,
     subtitle: "A property you’re watching changed status.",
@@ -448,7 +476,9 @@ export function renderSoldAlertEmail(
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
-    bodyHtml: `
+    ...layoutBrandProps(input),
+    bodyHtml: appendAgentSignatureHtml(
+      `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 12px;color:#115e59">A property you’re watching changed status.</p>
       ${renderEmailPropertyCard({
@@ -465,6 +495,8 @@ export function renderSoldAlertEmail(
       })}
       ${ctaButton(input.listingUrl, "View details")}
     `,
+      input.agentSignatureHtml,
+    ),
   });
   return { subject, text, html, kind: "sold_alert" };
 }
@@ -481,18 +513,22 @@ export function renderJustListedEmail(
     unsubscribeUrl?: string | null;
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
-  } & ListingCardExtras,
+  } & ListingCardExtras &
+    EmailBrandChrome,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const subject = `Just listed in ${input.areaName}`;
-  const text = [
-    greet,
-    "",
-    `New listing in ${input.areaName}:`,
-    `${input.addressLine}, ${input.city} · ${money(input.price)} (${input.mlsNumber})`,
-    "",
-    input.listingUrl,
-  ].join("\n");
+  const text = appendAgentSignatureText(
+    [
+      greet,
+      "",
+      `New listing in ${input.areaName}:`,
+      `${input.addressLine}, ${input.city} · ${money(input.price)} (${input.mlsNumber})`,
+      "",
+      input.listingUrl,
+    ].join("\n"),
+    input.agentSignatureText,
+  );
   const html = emailLayout({
     title: `Just listed · ${input.areaName}`,
     subtitle: "A new home matched your area alert.",
@@ -500,7 +536,9 @@ export function renderJustListedEmail(
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
-    bodyHtml: `
+    ...layoutBrandProps(input),
+    bodyHtml: appendAgentSignatureHtml(
+      `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 12px;color:#115e59">A new home matched your area alert for <strong style="color:#064e3b">${escapeHtml(input.areaName)}</strong>.</p>
       ${renderEmailPropertyCard({
@@ -517,6 +555,8 @@ export function renderJustListedEmail(
       })}
       ${ctaButton(input.listingUrl, "View listing")}
     `,
+      input.agentSignatureHtml,
+    ),
   });
   return { subject, text, html, kind: "just_listed" };
 }
@@ -533,19 +573,23 @@ export function renderPropertyUpdateEmail(
     unsubscribeUrl?: string | null;
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
-  } & ListingCardExtras,
+  } & ListingCardExtras &
+    EmailBrandChrome,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const subject = input.title;
-  const text = [
-    greet,
-    "",
-    input.title,
-    `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
-    ...input.changes,
-    "",
-    input.listingUrl,
-  ].join("\n");
+  const text = appendAgentSignatureText(
+    [
+      greet,
+      "",
+      input.title,
+      `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
+      ...input.changes,
+      "",
+      input.listingUrl,
+    ].join("\n"),
+    input.agentSignatureText,
+  );
   const html = emailLayout({
     title: "Property update",
     subtitle: "There’s an update on a home you’re watching.",
@@ -553,7 +597,9 @@ export function renderPropertyUpdateEmail(
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
-    bodyHtml: `
+    ...layoutBrandProps(input),
+    bodyHtml: appendAgentSignatureHtml(
+      `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 12px;color:#115e59">There’s an update on a home you’re watching.</p>
       ${renderEmailPropertyCard({
@@ -571,21 +617,25 @@ export function renderPropertyUpdateEmail(
       })}
       ${ctaButton(input.listingUrl, "View listing")}
     `,
+      input.agentSignatureHtml,
+    ),
   });
   return { subject, text, html, kind: "property_update" };
 }
 
-export function renderShortlistEmail(input: {
-  name?: string | null;
-  agentName: string;
-  shareUrl: string;
-  note?: string | null;
-  listings?: EmailPropertyCard[];
-  /** Fallback text lines when structured listings are not provided. */
-  listingLines?: string[];
-  preferencesManageUrl?: string | null;
-  unsubscribeIntentUrl?: string | null;
-}): RenderedEmail {
+export function renderShortlistEmail(
+  input: {
+    name?: string | null;
+    agentName: string;
+    shareUrl: string;
+    note?: string | null;
+    listings?: EmailPropertyCard[];
+    /** Fallback text lines when structured listings are not provided. */
+    listingLines?: string[];
+    preferencesManageUrl?: string | null;
+    unsubscribeIntentUrl?: string | null;
+  } & EmailBrandChrome,
+): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const cards = input.listings ?? [];
   const count = cards.length || (input.listingLines?.length ?? 0);
@@ -597,20 +647,25 @@ export function renderShortlistEmail(input: {
             `• ${l.addressLine}, ${l.city} · ${l.priceLabel} — ${l.listingUrl}`,
         )
       : (input.listingLines ?? []);
-  const text = [
-    greet,
-    "",
-    `${input.agentName} put together a shortlist for you.`,
-    input.note ? `\n${input.note}\n` : "",
-    `View all: ${input.shareUrl}`,
-    "",
-    ...textLines,
-  ].join("\n");
+  const text = appendAgentSignatureText(
+    [
+      greet,
+      "",
+      `${input.agentName} put together a shortlist for you.`,
+      input.note ? `\n${input.note}\n` : "",
+      `View all: ${input.shareUrl}`,
+      "",
+      ...textLines,
+    ].join("\n"),
+    input.agentSignatureText,
+  );
   const html = emailLayout({
     title: "Homes selected for you",
     subtitle: `${input.agentName} put together a shortlist for you.`,
     preheader: `${input.agentName} shared a shortlist`,
-    bodyHtml: `
+    ...layoutBrandProps(input),
+    bodyHtml: appendAgentSignatureHtml(
+      `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 12px;color:#115e59"><strong style="color:#064e3b">${escapeHtml(input.agentName)}</strong> put together a shortlist of homes that match what you’ve been looking at.</p>
       ${input.note ? infoCard(`<p style="margin:0;color:#115e59">${escapeHtml(input.note)}</p>`) : ""}
@@ -622,41 +677,56 @@ export function renderShortlistEmail(input: {
       }
       ${ctaButton(input.shareUrl, "View shortlist")}
     `,
+      input.agentSignatureHtml,
+    ),
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
   });
   return { subject, text, html, kind: "shortlist" };
 }
 
-export function renderAgentMessageEmail(input: {
-  name?: string | null;
-  subject: string;
-  body: string;
-  listings?: EmailPropertyCard[];
-  preferencesManageUrl?: string | null;
-  unsubscribeIntentUrl?: string | null;
-}): RenderedEmail {
+export function renderAgentMessageEmail(
+  input: {
+    name?: string | null;
+    subject: string;
+    body: string;
+    listings?: EmailPropertyCard[];
+    preferencesManageUrl?: string | null;
+    unsubscribeIntentUrl?: string | null;
+  } & EmailBrandChrome,
+): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const paragraphs = input.body
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean);
   const cards = input.listings ?? [];
+  const fromLabel = input.agentFromLabel?.trim();
+  const subtitle = fromLabel
+    ? `A message from ${fromLabel}.`
+    : "A message from your Houzzat agent.";
   const html = emailLayout({
     title: input.subject,
-    subtitle: "A message from your Houzzat agent.",
+    subtitle,
     preheader: input.subject,
-    bodyHtml: `
+    ...layoutBrandProps(input),
+    bodyHtml: appendAgentSignatureHtml(
+      `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       ${paragraphs.map((p) => `<p style="margin:0 0 12px;white-space:pre-wrap;color:#115e59">${escapeHtml(p)}</p>`).join("")}
       ${cards.map((l) => renderEmailPropertyCard(l)).join("")}
     `,
+      input.agentSignatureHtml,
+    ),
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
   });
   return {
     subject: input.subject,
-    text: `${greet}\n\n${input.body}`,
+    text: appendAgentSignatureText(
+      `${greet}\n\n${input.body}`,
+      input.agentSignatureText,
+    ),
     html,
     kind: "agent_message",
   };
@@ -804,33 +874,38 @@ export function renderEmailPropertyCard(listing: EmailPropertyCard) {
     </table>`;
 }
 
-export function renderSavedSearchDigestEmail(input: {
-  name?: string | null;
-  searchName: string;
-  listings: DigestListingLine[];
-  searchUrl: string;
-  unsubscribeUrl?: string | null;
-  preferencesManageUrl?: string | null;
-  unsubscribeIntentUrl?: string | null;
-}): RenderedEmail {
+export function renderSavedSearchDigestEmail(
+  input: {
+    name?: string | null;
+    searchName: string;
+    listings: DigestListingLine[];
+    searchUrl: string;
+    unsubscribeUrl?: string | null;
+    preferencesManageUrl?: string | null;
+    unsubscribeIntentUrl?: string | null;
+  } & EmailBrandChrome,
+): RenderedEmail {
   const count = input.listings.length;
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const subject =
     count === 1
       ? `New listing alert · ${input.listings[0]?.addressLine ?? input.searchName}`
       : `${count} new homes matching your search`;
-  const text = [
-    greet,
-    "",
-    `New listings matched “${input.searchName}”:`,
-    "",
-    ...input.listings.map(
-      (l) =>
-        `• ${l.addressLine}, ${l.city} · ${l.priceLabel}${l.metaLabel ? ` · ${l.metaLabel}` : ""} — ${l.listingUrl}`,
-    ),
-    "",
-    `Browse all matches: ${input.searchUrl}`,
-  ].join("\n");
+  const text = appendAgentSignatureText(
+    [
+      greet,
+      "",
+      `New listings matched “${input.searchName}”:`,
+      "",
+      ...input.listings.map(
+        (l) =>
+          `• ${l.addressLine}, ${l.city} · ${l.priceLabel}${l.metaLabel ? ` · ${l.metaLabel}` : ""} — ${l.listingUrl}`,
+      ),
+      "",
+      `Browse all matches: ${input.searchUrl}`,
+    ].join("\n"),
+    input.agentSignatureText,
+  );
 
   const cards = input.listings
     .map((l) =>
@@ -852,53 +927,62 @@ export function renderSavedSearchDigestEmail(input: {
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
-    bodyHtml: `
+    ...layoutBrandProps(input),
+    bodyHtml: appendAgentSignatureHtml(
+      `
       ${previewNote}
       ${cards}
       ${ctaButton(input.searchUrl, "Browse all matching homes →")}
     `,
+      input.agentSignatureHtml,
+    ),
   });
   return { subject, text, html, kind: "saved_search_digest" };
 }
 
-export function renderNeighborhoodWeeklyEmail(input: {
-  name?: string | null;
-  homeLabel: string;
-  radiusKm: number;
-  newCount: number;
-  soldCount: number;
-  medianSoldLabel?: string | null;
-  newListings: DigestListingLine[];
-  soldListings: DigestListingLine[];
-  ctaUrl: string;
-  unsubscribeUrl?: string | null;
-  preferencesManageUrl?: string | null;
-  unsubscribeIntentUrl?: string | null;
-}): RenderedEmail {
+export function renderNeighborhoodWeeklyEmail(
+  input: {
+    name?: string | null;
+    homeLabel: string;
+    radiusKm: number;
+    newCount: number;
+    soldCount: number;
+    medianSoldLabel?: string | null;
+    newListings: DigestListingLine[];
+    soldListings: DigestListingLine[];
+    ctaUrl: string;
+    unsubscribeUrl?: string | null;
+    preferencesManageUrl?: string | null;
+    unsubscribeIntentUrl?: string | null;
+  } & EmailBrandChrome,
+): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const subject = `Neighborhood weekly · ${input.homeLabel}`;
-  const text = [
-    greet,
-    "",
-    `This week near ${input.homeLabel} (≈${input.radiusKm} km):`,
-    `• ${input.newCount} new listing${input.newCount === 1 ? "" : "s"}`,
-    `• ${input.soldCount} sold/leased`,
-    input.medianSoldLabel ? `• Median sold ${input.medianSoldLabel}` : "",
-    "",
-    "New:",
-    ...input.newListings.map(
-      (l) => `• ${l.addressLine} · ${l.priceLabel} — ${l.listingUrl}`,
-    ),
-    "",
-    "Sold / leased:",
-    ...input.soldListings.map(
-      (l) => `• ${l.addressLine} · ${l.priceLabel} — ${l.listingUrl}`,
-    ),
-    "",
-    input.ctaUrl,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const text = appendAgentSignatureText(
+    [
+      greet,
+      "",
+      `This week near ${input.homeLabel} (≈${input.radiusKm} km):`,
+      `• ${input.newCount} new listing${input.newCount === 1 ? "" : "s"}`,
+      `• ${input.soldCount} sold/leased`,
+      input.medianSoldLabel ? `• Median sold ${input.medianSoldLabel}` : "",
+      "",
+      "New:",
+      ...input.newListings.map(
+        (l) => `• ${l.addressLine} · ${l.priceLabel} — ${l.listingUrl}`,
+      ),
+      "",
+      "Sold / leased:",
+      ...input.soldListings.map(
+        (l) => `• ${l.addressLine} · ${l.priceLabel} — ${l.listingUrl}`,
+      ),
+      "",
+      input.ctaUrl,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    input.agentSignatureText,
+  );
 
   const listBlock = (
     title: string,
@@ -927,7 +1011,9 @@ export function renderNeighborhoodWeeklyEmail(input: {
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
-    bodyHtml: `
+    ...layoutBrandProps(input),
+    bodyHtml: appendAgentSignatureHtml(
+      `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 16px;color:#115e59">Here’s what happened near <strong style="color:#064e3b">${escapeHtml(input.homeLabel)}</strong> over the past week (≈${input.radiusKm} km).</p>
       ${infoCard(`
@@ -937,58 +1023,83 @@ export function renderNeighborhoodWeeklyEmail(input: {
       ${listBlock("Sold & leased", input.soldListings, "Sold")}
       ${ctaButton(input.ctaUrl, "View seller tools")}
     `,
+      input.agentSignatureHtml,
+    ),
   });
   return { subject, text, html, kind: "neighborhood_weekly" };
 }
 
 /** Stage 5.12A — tenant-branded CMA ready email (client-facing). */
-export function renderCmaEmail(input: {
-  recipientName?: string | null;
-  agentName: string;
-  agentEmail?: string | null;
-  agentPhone?: string | null;
-  tenantDisplayName: string;
-  tenantPrimaryColor?: string | null;
-  subjectAddress: string;
-  subjectCity: string;
-  cmaUrl: string;
-  recommendedListPrice?: number | null;
-  preferencesManageUrl?: string | null;
-  unsubscribeIntentUrl?: string | null;
-}): RenderedEmail {
+export function renderCmaEmail(
+  input: {
+    recipientName?: string | null;
+    agentName: string;
+    agentEmail?: string | null;
+    agentPhone?: string | null;
+    tenantDisplayName: string;
+    tenantPrimaryColor?: string | null;
+    subjectAddress: string;
+    subjectCity: string;
+    cmaUrl: string;
+    recommendedListPrice?: number | null;
+    preferencesManageUrl?: string | null;
+    unsubscribeIntentUrl?: string | null;
+  } & EmailBrandChrome,
+): RenderedEmail {
   const greet = input.recipientName?.trim()
     ? `Hi ${input.recipientName.trim()},`
     : "Hi there,";
-  const brand = input.tenantDisplayName.trim() || "your brokerage";
-  const accent = input.tenantPrimaryColor?.trim() || "#0F766E";
+  const brand =
+    input.brandLabel?.trim() ||
+    input.tenantDisplayName.trim() ||
+    "your brokerage";
+  const accent =
+    input.brandPrimaryColor?.trim() ||
+    input.tenantPrimaryColor?.trim() ||
+    "#0F766E";
   const subject = `Your Comparative Market Analysis is ready`;
   const priceLine =
     input.recommendedListPrice != null
       ? `Recommended list price: ${money(input.recommendedListPrice)}`
       : null;
-  const text = [
-    greet,
-    "",
-    `${input.agentName} at ${brand} prepared a Comparative Market Analysis for ${input.subjectAddress}, ${input.subjectCity}.`,
-    "",
-    "It reviews recent comparable sales and current competition to help you understand how the property is positioned today.",
-    priceLine ? `\n${priceLine}\n` : "",
-    `View your CMA: ${input.cmaUrl}`,
-    "",
-    input.agentName,
-    input.agentPhone ? input.agentPhone : "",
-    input.agentEmail ? input.agentEmail : "",
-    "",
-    "Powered by HouzzatPRO",
-  ]
-    .filter((line) => line !== "")
-    .join("\n");
+  const text = appendAgentSignatureText(
+    [
+      greet,
+      "",
+      `${input.agentName} at ${brand} prepared a Comparative Market Analysis for ${input.subjectAddress}, ${input.subjectCity}.`,
+      "",
+      "It reviews recent comparable sales and current competition to help you understand how the property is positioned today.",
+      priceLine ? `\n${priceLine}\n` : "",
+      `View your CMA: ${input.cmaUrl}`,
+      "",
+      input.agentName,
+      input.agentPhone ? input.agentPhone : "",
+      input.agentEmail ? input.agentEmail : "",
+      "",
+      "Powered by HouzzatPRO",
+    ]
+      .filter((line) => line !== "")
+      .join("\n"),
+    // CMA already includes agent contact in-body; skip duplicate signature text
+    // unless chrome supplies a distinct fallback-only signature without agent block.
+    null,
+  );
 
   const html = emailLayout({
     title: "Your market analysis is ready",
     subtitle: `${brand} · Comparative Market Analysis`,
     preheader: `CMA for ${input.subjectAddress}`,
-    footerNote: `Prepared by ${input.agentName} · Powered by HouzzatPRO`,
+    footerNote:
+      input.footerNote?.trim() ||
+      `Prepared by ${input.agentName} · Powered by HouzzatPRO`,
+    ...layoutBrandProps({
+      ...input,
+      brandLabel: brand,
+      brandPrimaryColor: accent,
+      footerNote:
+        input.footerNote?.trim() ||
+        `Prepared by ${input.agentName} · Powered by HouzzatPRO`,
+    }),
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 12px;color:#115e59">I've prepared a Comparative Market Analysis for <strong style="color:#064e3b">${escapeHtml(input.subjectAddress)}</strong>${input.subjectCity ? `, ${escapeHtml(input.subjectCity)}` : ""} using recent comparable sales and current competition.</p>

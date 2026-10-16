@@ -19,6 +19,10 @@ import {
   renderPropertyUpdateEmail,
   renderSoldAlertEmail,
 } from "@/lib/email/templates";
+import {
+  resolveTenantEmailBrand,
+  toEmailBrandChrome,
+} from "@/lib/email/tenant-email-brand";
 import { formatBedsPlusLabel, formatListingSqftLabel, parseListingFacts } from "@/lib/listings/facts";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { prisma } from "@/lib/prisma";
@@ -200,6 +204,13 @@ async function createAlert(input: {
         })
       : null;
   const footer = preferenceFooterFields(chrome);
+  const tenantBrand = input.workspaceId
+    ? await resolveTenantEmailBrand({
+        workspaceId: input.workspaceId,
+        customerId: input.userId,
+      })
+    : null;
+  const brandChrome = tenantBrand ? toEmailBrandChrome(tenantBrand) : {};
 
   const rendered = (() => {
     const t = input.template;
@@ -214,6 +225,7 @@ async function createAlert(input: {
         newPrice: t.newPrice,
         listingUrl: listingUrl(t.mlsNumber),
         ...footer,
+        ...brandChrome,
         imageUrl: t.imageUrl,
         bedsLabel: t.bedsLabel,
         bathsLabel: t.bathsLabel,
@@ -230,6 +242,7 @@ async function createAlert(input: {
         priceLabel: t.priceLabel,
         listingUrl: listingUrl(t.mlsNumber),
         ...footer,
+        ...brandChrome,
         imageUrl: t.imageUrl,
         bedsLabel: t.bedsLabel,
         bathsLabel: t.bathsLabel,
@@ -246,6 +259,7 @@ async function createAlert(input: {
         price: t.price,
         listingUrl: listingUrl(t.mlsNumber),
         ...footer,
+        ...brandChrome,
         imageUrl: t.imageUrl,
         bedsLabel: t.bedsLabel,
         bathsLabel: t.bathsLabel,
@@ -261,6 +275,7 @@ async function createAlert(input: {
       changes: t.changes,
       listingUrl: listingUrl(t.mlsNumber),
       ...footer,
+      ...brandChrome,
       imageUrl: t.imageUrl,
       bedsLabel: t.bedsLabel,
       bathsLabel: t.bathsLabel,
@@ -275,6 +290,7 @@ async function createAlert(input: {
       customerId: input.userId,
       mlsNumber: input.mlsNumber,
       communicationCategory: input.watchCategory,
+      replyTo: tenantBrand?.replyTo,
       rendered: renderPropertyUpdateEmail({
         name: input.name,
         title: input.title,
@@ -286,6 +302,7 @@ async function createAlert(input: {
           ? listingUrl(input.mlsNumber)
           : SITE_URL,
         ...footer,
+        ...brandChrome,
       }),
     });
     return;
@@ -297,6 +314,7 @@ async function createAlert(input: {
     customerId: input.userId,
     mlsNumber: input.mlsNumber,
     communicationCategory: input.watchCategory,
+    replyTo: tenantBrand?.replyTo,
     rendered,
   });
 }

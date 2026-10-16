@@ -16,6 +16,10 @@ import {
 } from "@/lib/communications/category-email-gate";
 import { renderAgentMessageEmail } from "@/lib/email/templates";
 import {
+  resolveTenantEmailBrand,
+  toEmailBrandChrome,
+} from "@/lib/email/tenant-email-brand";
+import {
   buildCustomerPreferenceEmailChrome,
   preferenceFooterFields,
 } from "@/lib/communications/preference-email-chrome";
@@ -284,11 +288,18 @@ export async function POST(
           email: toEmail,
         })
       : null;
+    const tenantBrand = await resolveTenantEmailBrand({
+      workspaceId: access.workspaceId,
+      preferredAgentUserId: access.userId,
+      leadId: lead.id,
+      customerId: lead.customer?.id,
+    });
     const rendered = renderAgentMessageEmail({
       name: lead.customer?.name,
       subject: parsed.data.subject,
       body: parsed.data.body,
       ...preferenceFooterFields(chrome),
+      ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
     });
 
     // Canonical web send path — Resend + LeadEmailLog + LeadActivity.
@@ -300,7 +311,8 @@ export async function POST(
       leadId: lead.id,
       sentById: access.userId,
       organizationId: lead.organizationId,
-      replyTo: membership?.user.email ?? null,
+      replyTo:
+        membership?.user.email || tenantBrand?.replyTo || null,
     });
 
     if (!result.ok) {
