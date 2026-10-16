@@ -8,13 +8,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isTenantCommandCentrePathAllowed } from "../src/lib/admin/tenant-command-centre-auth";
 import {
-  buildEmailTemplatePreviewHtml,
-  EMAIL_TEMPLATE_PREVIEW_SAMPLE,
   canManageWorkspaceEmailTemplates,
   listMasterEmailTemplates,
 } from "../src/lib/email/workspace-templates";
-import { isTenantCommandCentrePathAllowed } from "../src/lib/admin/tenant-command-centre-auth";
+import { EMAIL_TEMPLATE_PREVIEW_SAMPLE } from "../src/lib/email/workspace-templates/preview-catalog";
+import { buildEmailTemplatePreviewHtml } from "../src/lib/email/workspace-templates/preview";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -79,6 +79,7 @@ function testTenantScopedApiUsage() {
   assert.match(client, /\/publish/);
   assert.match(client, /\/restore/);
   assert.match(client, /\/versions/);
+  assert.match(client, /\/preview/);
   assert.match(client, /credentials:\s*"same-origin"/);
   // No cross-tenant or platform admin API hosts.
   assert.doesNotMatch(client, /houzzatpro\.com\/api/);
@@ -200,10 +201,25 @@ function testPreviewSafety() {
   assert.match(client, /previewMode/);
   assert.match(client, /previewVariant/);
   assert.match(client, /listEmailTemplatePreviewVariants/);
+  assert.match(client, /preview-catalog/);
+  assert.doesNotMatch(client, /buildEmailTemplatePreviewHtml/);
+  assert.doesNotMatch(
+    client,
+    /from ["']@\/lib\/email\/workspace-templates\/preview["']/,
+  );
+  assert.match(client, /\/preview/);
   assert.match(client, /Live renderer preview/);
   assert.match(client, /Desktop/);
   assert.match(client, /Mobile/);
   assert.match(client, /max-w-\[390px\]/);
+
+  const previewRoute = read(
+    "src/app/api/admin/email-templates/[type]/preview/route.ts",
+  );
+  assert.match(previewRoute, /requireTenantEmailTemplateAdmin/);
+  assert.match(previewRoute, /buildEmailTemplatePreviewHtml/);
+  assert.match(previewRoute, /TENANT_MISMATCH/);
+  assert.doesNotMatch(previewRoute, /migrate|resend|sendEmail/i);
 }
 
 function testNoLiveSenderWiring() {

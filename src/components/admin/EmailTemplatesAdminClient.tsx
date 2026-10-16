@@ -27,13 +27,12 @@ import {
   type EmailTemplateEditorForm,
 } from "@/lib/email/workspace-templates/editor-form";
 import {
-  buildEmailTemplatePreviewHtml,
   defaultEmailTemplatePreviewVariant,
   listEmailTemplatePreviewVariants,
   type EmailTemplatePreviewBrand,
   type EmailTemplatePreviewMode,
   type EmailTemplatePreviewVariantId,
-} from "@/lib/email/workspace-templates/preview";
+} from "@/lib/email/workspace-templates/preview-catalog";
 import { isWorkspaceEmailTemplateType } from "@/lib/email/workspace-templates/registry";
 import type {
   EmailTemplateContentFields,
@@ -140,6 +139,9 @@ export function EmailTemplatesAdminClient({
     useState<EmailTemplatePreviewMode>("desktop");
   const [previewVariant, setPreviewVariant] =
     useState<EmailTemplatePreviewVariantId>("price_reduction");
+  const [previewHtml, setPreviewHtml] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [versions, setVersions] = useState<VersionRow[] | null>(null);
   const [activeField, setActiveField] = useState<
     "subject" | "introText" | "bodyParagraphs" | "ctaText"
@@ -150,6 +152,7 @@ export function EmailTemplatesAdminClient({
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const ctaRef = useRef<HTMLInputElement>(null);
   const loadSeqRef = useRef(0);
+  const previewSeqRef = useRef(0);
 
   const selected = useMemo(
     () => templates.find((t) => t.type === selectedType) ?? null,
@@ -164,21 +167,70 @@ export function EmailTemplatesAdminClient({
     [selectedType],
   );
 
-  const previewHtml = useMemo(() => {
-    if (!selectedType) return "";
-    return buildEmailTemplatePreviewHtml({
-      templateType: selectedType,
-      content: contentFieldsFromForm(form),
-      brand,
-      mode: previewMode,
-      variant: previewVariant,
-    });
-  }, [selectedType, form, brand, previewMode, previewVariant]);
-
   useEffect(() => {
     if (!selectedType) return;
     setPreviewVariant(defaultEmailTemplatePreviewVariant(selectedType));
   }, [selectedType]);
+
+  // Live HTML is generated on the server (production renderers + Prisma stay
+  // out of the client bundle). Draft content is POSTed; nothing is published.
+  useEffect(() => {
+    if (!selectedType) {
+      setPreviewHtml("");
+      setPreviewError(null);
+      setPreviewLoading(false);
+      return;
+    }
+
+    const seq = ++previewSeqRef.current;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setPreviewLoading(true);
+      setPreviewError(null);
+      try {
+        const res = await fetch(
+          `/api/admin/email-templates/${encodeURIComponent(selectedType)}/preview`,
+          {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({
+              content: contentFieldsFromForm(form),
+              mode: previewMode,
+              variant: previewVariant,
+            }),
+          },
+        );
+        const data = (await res.json().catch(() => null)) as {
+          ok?: boolean;
+          html?: string;
+          error?: string;
+        } | null;
+        if (seq !== previewSeqRef.current) return;
+        if (!res.ok || typeof data?.html !== "string") {
+          setPreviewHtml("");
+          setPreviewError(data?.error || "Preview unavailable");
+          return;
+        }
+        setPreviewHtml(data.html);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        if (seq !== previewSeqRef.current) return;
+        setPreviewHtml("");
+        setPreviewError(
+          err instanceof Error ? err.message : "Preview unavailable",
+        );
+      } finally {
+        if (seq === previewSeqRef.current) setPreviewLoading(false);
+      }
+    }, 280);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [selectedType, form, previewMode, previewVariant]);
 
   const loadDetail = useCallback(async (type: WorkspaceEmailTemplateType) => {
     const seq = ++loadSeqRef.current;
@@ -842,12 +894,22 @@ export function EmailTemplatesAdminClient({
                   event-specific live wording; the amber subject bar is
                   preview chrome only.
                 </p>
+                {previewError ? (
+                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-900">
+                    {previewError}
+                  </p>
+                ) : null}
                 <div
                   className={cn(
-                    "mx-auto overflow-hidden rounded-xl border border-line bg-[#ecfdf5]",
+                    "relative mx-auto overflow-hidden rounded-xl border border-line bg-[#ecfdf5]",
                     previewMode === "mobile" ? "max-w-[390px]" : "max-w-full",
                   )}
                 >
+                  {previewLoading ? (
+                    <p className="absolute inset-x-0 top-0 z-10 bg-white/90 px-3 py-2 text-center text-[11px] font-medium text-ink/55">
+                      Rendering preview…
+                    </p>
+                  ) : null}
                   <iframe
                     title="Email template preview"
                     sandbox=""

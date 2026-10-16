@@ -401,6 +401,13 @@ function testUiWiring() {
   assert.match(client, /Sample data only/);
   assert.match(client, /preview chrome only/);
   assert.match(client, /Illustrative preview only/);
+  assert.match(client, /preview-catalog/);
+  assert.match(client, /\/preview/);
+  assert.doesNotMatch(client, /buildEmailTemplatePreviewHtml/);
+  assert.doesNotMatch(
+    client,
+    /from ["']@\/lib\/email\/workspace-templates\/preview["']/,
+  );
   const previewSrc = read("src/lib/email/workspace-templates/preview.ts");
   assert.match(
     previewSrc,
@@ -409,6 +416,12 @@ function testUiWiring() {
   assert.doesNotMatch(previewSrc, /mergeWithSystemDefaults/);
   assert.match(previewSrc, /data-preview-chrome="subject"/);
   assert.match(previewSrc, /inbox header only/);
+  assert.match(previewSrc, /SERVER-ONLY|server-only|Client Component/i);
+  const previewRoute = read(
+    "src/app/api/admin/email-templates/[type]/preview/route.ts",
+  );
+  assert.match(previewRoute, /buildEmailTemplatePreviewHtml/);
+  assert.match(previewRoute, /requireTenantEmailTemplateAdmin/);
 }
 
 function testDefaultVsExplicitOverrides() {

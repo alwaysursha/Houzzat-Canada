@@ -86,17 +86,19 @@ export type {
   EmailTemplateEditorForm,
 } from "@/lib/email/workspace-templates/editor-form";
 export {
-  buildEmailTemplatePreviewHtml,
   defaultEmailTemplatePreviewVariant,
   EMAIL_TEMPLATE_PREVIEW_SAMPLE,
+  isEmailTemplatePreviewVariantId,
   listEmailTemplatePreviewVariants,
-} from "@/lib/email/workspace-templates/preview";
+} from "@/lib/email/workspace-templates/preview-catalog";
 export type {
   EmailTemplatePreviewBrand,
   EmailTemplatePreviewMode,
   EmailTemplatePreviewVariant,
   EmailTemplatePreviewVariantId,
-} from "@/lib/email/workspace-templates/preview";
+} from "@/lib/email/workspace-templates/preview-catalog";
+// Intentionally NOT re-exporting buildEmailTemplatePreviewHtml here — importing
+// it from this barrel would pull Prisma into any client that uses the barrel.
 export type {
   EmailTemplateBodySections,
   EmailTemplateContentFields,
