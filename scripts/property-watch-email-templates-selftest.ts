@@ -585,7 +585,7 @@ function testNoDuplicateSendsAndScopedIntegration() {
   assert.match(monitors, /publishedTemplate: publishedPropertyWatch/);
   assert.match(
     monitors,
-    /Area Watch sold alerts must not consume PROPERTY_WATCH/,
+    /Category isolation: property vs area published templates never cross/,
   );
 
   // just_listed renderer must not accept PROPERTY_WATCH publishedTemplate wiring in monitors.

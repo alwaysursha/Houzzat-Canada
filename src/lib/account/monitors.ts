@@ -23,6 +23,7 @@ import {
   resolveTenantEmailBrand,
   toEmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
+import { loadPublishedAreaWatchOverride } from "@/lib/email/workspace-templates/area-watch";
 import { loadPublishedPropertyWatchOverride } from "@/lib/email/workspace-templates/property-watch";
 import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
 import { formatBedsPlusLabel, formatListingSqftLabel, parseListingFacts } from "@/lib/listings/facts";
@@ -135,6 +136,8 @@ async function createAlert(input: {
         mlsNumber: string;
         statusLabel: string;
         priceLabel: string;
+        /** Present for Area Watch sold alerts (template variable {{areaName}}). */
+        areaName?: string;
       } & ListingCardExtras)
     | ({
         type: "just_listed";
@@ -214,13 +217,20 @@ async function createAlert(input: {
     : null;
   const brandChrome = tenantBrand ? toEmailBrandChrome(tenantBrand) : {};
 
-  // Phase 2C-1 — PROPERTY_WATCH published overrides only (drafts ignored).
+  // Phase 2C — published watch overrides (drafts ignored). Categories stay isolated.
   // Brand + template share the same verified workspaceId from the monitor user.
   let publishedPropertyWatch: EmailTemplateContentFields | null = null;
-  if (input.watchCategory === "property_watch" && input.workspaceId) {
-    publishedPropertyWatch = await loadPublishedPropertyWatchOverride({
-      workspaceId: input.workspaceId,
-    });
+  let publishedAreaWatch: EmailTemplateContentFields | null = null;
+  if (input.workspaceId) {
+    if (input.watchCategory === "property_watch") {
+      publishedPropertyWatch = await loadPublishedPropertyWatchOverride({
+        workspaceId: input.workspaceId,
+      });
+    } else if (input.watchCategory === "area_watch") {
+      publishedAreaWatch = await loadPublishedAreaWatchOverride({
+        workspaceId: input.workspaceId,
+      });
+    }
   }
 
   const rendered = (() => {
@@ -253,17 +263,20 @@ async function createAlert(input: {
         statusLabel: t.statusLabel,
         priceLabel: t.priceLabel,
         listingUrl: listingUrl(t.mlsNumber),
+        areaName: t.areaName,
         ...footer,
         ...brandChrome,
         imageUrl: t.imageUrl,
         bedsLabel: t.bedsLabel,
         bathsLabel: t.bathsLabel,
         sqftLabel: t.sqftLabel,
-        // Area Watch sold alerts must not consume PROPERTY_WATCH overrides.
+        // Category isolation: property vs area published templates never cross.
         publishedTemplate:
           input.watchCategory === "property_watch"
             ? publishedPropertyWatch
             : null,
+        publishedAreaWatchTemplate:
+          input.watchCategory === "area_watch" ? publishedAreaWatch : null,
       });
     }
     if (t.type === "just_listed") {
@@ -281,6 +294,7 @@ async function createAlert(input: {
         bedsLabel: t.bedsLabel,
         bathsLabel: t.bathsLabel,
         sqftLabel: t.sqftLabel,
+        publishedAreaWatchTemplate: publishedAreaWatch,
       });
     }
     return renderPropertyUpdateEmail({
@@ -689,6 +703,7 @@ async function processAreaEventPages(input: {
               mlsNumber: listing.mlsNumber,
               statusLabel: listing.status === "LEASED" ? "Leased" : "Sold",
               priceLabel: formatPrice(price),
+              areaName: input.monitor.name,
               ...listingCardExtras(listing),
             },
           });

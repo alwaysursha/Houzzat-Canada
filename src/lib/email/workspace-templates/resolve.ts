@@ -1,10 +1,10 @@
 /**
  * Phase 2A — published template resolution (merged with registry defaults).
  *
- * Phase 2C-1 Property Watch live sends use loadPublishedPropertyWatchOverride
- * instead, which returns sparse published fields so empty values keep
- * event-specific legacy wording. Digests, agent email, shortlist, CMA, and
- * Area Watch must not consume overrides until their cutover phases.
+ * Phase 2C live sends use loadPublishedPropertyWatchOverride /
+ * loadPublishedAreaWatchOverride, which return sparse published fields so
+ * empty values keep event-specific legacy wording. Digests, agent email,
+ * shortlist, and CMA must not consume overrides until their cutover phases.
  */
 
 import type { WorkspaceEmailTemplateType } from "@prisma/client";

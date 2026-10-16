@@ -197,8 +197,9 @@ function testNoLiveSenderWiring() {
   const shortlist = read("src/lib/agent/send-shortlist-email.ts");
   const cma = read("src/lib/cma/send-cma-email.ts");
 
-  // Phase 2C-1 wires Property Watch only; other senders stay unwired.
+  // Phase 2C wires Property Watch + Area Watch only; other senders stay unwired.
   assert.match(monitors, /loadPublishedPropertyWatchOverride/);
+  assert.match(monitors, /loadPublishedAreaWatchOverride/);
   for (const [name, src] of [
     ["buyer", buyer],
     ["seller", seller],
@@ -208,7 +209,7 @@ function testNoLiveSenderWiring() {
   ] as const) {
     assert.doesNotMatch(
       src,
-      /workspace-templates|resolvePublishedEmailTemplate|loadPublishedPropertyWatchOverride/,
+      /workspace-templates|resolvePublishedEmailTemplate|loadPublishedPropertyWatchOverride|loadPublishedAreaWatchOverride/,
       `${name} must not consume template overrides yet`,
     );
   }

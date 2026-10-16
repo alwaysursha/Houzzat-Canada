@@ -19,6 +19,14 @@ export type {
   PropertyWatchTemplateVars,
 } from "@/lib/email/workspace-templates/property-watch";
 export {
+  fillPublishedAreaWatchTemplate,
+  loadPublishedAreaWatchOverride,
+} from "@/lib/email/workspace-templates/area-watch";
+export type {
+  AreaWatchTemplateVars,
+  FilledAreaWatchTemplate,
+} from "@/lib/email/workspace-templates/area-watch";
+export {
   assertTenantScopedEmailTemplateMutation,
   canManageWorkspaceEmailTemplates,
   getWorkspaceEmailTemplate,

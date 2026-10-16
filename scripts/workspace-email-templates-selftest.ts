@@ -401,10 +401,12 @@ function testNoLiveSenderWiring() {
   const cma = read("src/lib/cma/send-cma-email.ts");
   const brand = read("src/lib/email/tenant-email-brand.ts");
 
-  // Phase 2C-1: Property Watch monitors may load PROPERTY_WATCH only.
+  // Phase 2C: Property Watch + Area Watch only.
   assert.match(monitors, /loadPublishedPropertyWatchOverride/);
+  assert.match(monitors, /loadPublishedAreaWatchOverride/);
   assert.match(monitors, /watchCategory === "property_watch"/);
-  assert.doesNotMatch(monitors, /AREA_WATCH|SAVED_SEARCH_DIGEST|NEWSLETTER/);
+  assert.match(monitors, /watchCategory === "area_watch"/);
+  assert.doesNotMatch(monitors, /SAVED_SEARCH_DIGEST|NEWSLETTER|SHORTLIST|CMA_SHARE/);
 
   for (const [name, src] of [
     ["buyer", buyer],
@@ -415,14 +417,14 @@ function testNoLiveSenderWiring() {
   ] as const) {
     assert.doesNotMatch(
       src,
-      /workspace-templates|resolvePublishedEmailTemplate|loadPublishedPropertyWatchOverride/,
+      /workspace-templates|resolvePublishedEmailTemplate|loadPublishedPropertyWatchOverride|loadPublishedAreaWatchOverride/,
       `${name} must not consume template overrides yet`,
     );
   }
   assert.match(brand, /TENANT_EMAIL_BRANDING/);
   assert.match(
     read("src/lib/email/workspace-templates/resolve.ts"),
-    /Phase 2C-1/,
+    /Phase 2C/,
   );
   assert.match(
     read("src/lib/email/workspace-templates/feature-flag.ts"),

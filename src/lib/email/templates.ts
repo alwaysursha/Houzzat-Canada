@@ -13,6 +13,10 @@ import {
   type EmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
 import {
+  fillPublishedAreaWatchTemplate,
+  type AreaWatchTemplateVars,
+} from "@/lib/email/workspace-templates/area-watch";
+import {
   fillPublishedPropertyWatchTemplate,
   type PropertyWatchTemplateVars,
 } from "@/lib/email/workspace-templates/property-watch";
@@ -30,6 +34,11 @@ export type PropertyWatchPublishedTemplateInput = {
   publishedTemplate?: EmailTemplateContentFields | null;
 };
 
+/** Optional published AREA_WATCH override (Phase 2C-2). Drafts never pass here. */
+export type AreaWatchPublishedTemplateInput = {
+  publishedAreaWatchTemplate?: EmailTemplateContentFields | null;
+};
+
 function layoutBrandProps(brand?: EmailBrandChrome | null) {
   if (!brand) return {};
   return {
@@ -41,12 +50,14 @@ function layoutBrandProps(brand?: EmailBrandChrome | null) {
   };
 }
 
-function propertyWatchOverrideCopy(
-  published: EmailTemplateContentFields | null | undefined,
-  vars: PropertyWatchTemplateVars,
-  fallback: { subject: string; introHtml: string; introText: string; cta: string },
-  brand: EmailBrandChrome | null | undefined,
-): {
+type WatchOverrideFallback = {
+  subject: string;
+  introHtml: string;
+  introText: string;
+  cta: string;
+};
+
+type WatchOverrideCopy = {
   subject: string;
   introHtml: string;
   introText: string;
@@ -54,8 +65,20 @@ function propertyWatchOverrideCopy(
   paragraphsHtml: string;
   paragraphsText: string;
   brandProps: ReturnType<typeof layoutBrandProps>;
-} {
-  if (!published) {
+};
+
+function applyFilledWatchOverride(
+  filled: {
+    subject: string;
+    introText: string;
+    ctaText: string;
+    paragraphs: string[];
+    primaryColor: string | null;
+  } | null,
+  fallback: WatchOverrideFallback,
+  brand: EmailBrandChrome | null | undefined,
+): WatchOverrideCopy {
+  if (!filled) {
     return {
       subject: fallback.subject,
       introHtml: fallback.introHtml,
@@ -67,7 +90,6 @@ function propertyWatchOverrideCopy(
     };
   }
 
-  const filled = fillPublishedPropertyWatchTemplate(published, vars);
   // Empty published fields keep event-specific legacy wording (not registry defaults).
   const subject = filled.subject || fallback.subject;
   const introText = filled.introText || fallback.introText;
@@ -98,6 +120,34 @@ function propertyWatchOverrideCopy(
         filled.primaryColor || brand?.brandPrimaryColor || undefined,
     }),
   };
+}
+
+function propertyWatchOverrideCopy(
+  published: EmailTemplateContentFields | null | undefined,
+  vars: PropertyWatchTemplateVars,
+  fallback: WatchOverrideFallback,
+  brand: EmailBrandChrome | null | undefined,
+): WatchOverrideCopy {
+  if (!published) return applyFilledWatchOverride(null, fallback, brand);
+  return applyFilledWatchOverride(
+    fillPublishedPropertyWatchTemplate(published, vars),
+    fallback,
+    brand,
+  );
+}
+
+function areaWatchOverrideCopy(
+  published: EmailTemplateContentFields | null | undefined,
+  vars: AreaWatchTemplateVars,
+  fallback: WatchOverrideFallback,
+  brand: EmailBrandChrome | null | undefined,
+): WatchOverrideCopy {
+  if (!published) return applyFilledWatchOverride(null, fallback, brand);
+  return applyFilledWatchOverride(
+    fillPublishedAreaWatchTemplate(published, vars),
+    fallback,
+    brand,
+  );
 }
 
 function money(n: number) {
@@ -545,29 +595,55 @@ export function renderSoldAlertEmail(
     unsubscribeUrl?: string | null;
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
+    /** Area name when this sold alert originates from Area Watch. */
+    areaName?: string | null;
   } & ListingCardExtras &
     EmailBrandChrome &
-    PropertyWatchPublishedTemplateInput,
+    PropertyWatchPublishedTemplateInput &
+    AreaWatchPublishedTemplateInput,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
-  const override = propertyWatchOverrideCopy(
-    input.publishedTemplate,
-    {
-      recipientName: input.name,
-      tenantName: input.brandLabel,
-      agentName: input.agentFromLabel,
-      addressLine: input.addressLine,
-      city: input.city,
-      mlsNumber: input.mlsNumber,
-    },
-    {
-      subject: `${input.statusLabel} · ${input.addressLine}`,
-      introHtml: "A property you’re watching changed status.",
-      introText: `A watched home is now ${input.statusLabel.toLowerCase()}.`,
-      cta: "View details",
-    },
-    input,
-  );
+  const soldFallback = {
+    subject: `${input.statusLabel} · ${input.addressLine}`,
+    introHtml: "A property you’re watching changed status.",
+    introText: `A watched home is now ${input.statusLabel.toLowerCase()}.`,
+    cta: "View details",
+  };
+  // Category isolation: never mix PROPERTY_WATCH and AREA_WATCH overrides.
+  // If both are somehow provided, fall back to legacy event copy.
+  const hasProperty = Boolean(input.publishedTemplate);
+  const hasArea = Boolean(input.publishedAreaWatchTemplate);
+  const override =
+    hasProperty && hasArea
+      ? applyFilledWatchOverride(null, soldFallback, input)
+      : hasArea
+        ? areaWatchOverrideCopy(
+            input.publishedAreaWatchTemplate,
+            {
+              recipientName: input.name,
+              tenantName: input.brandLabel,
+              agentName: input.agentFromLabel,
+              areaName: input.areaName,
+              addressLine: input.addressLine,
+              city: input.city,
+              mlsNumber: input.mlsNumber,
+            },
+            soldFallback,
+            input,
+          )
+        : propertyWatchOverrideCopy(
+            input.publishedTemplate,
+            {
+              recipientName: input.name,
+              tenantName: input.brandLabel,
+              agentName: input.agentFromLabel,
+              addressLine: input.addressLine,
+              city: input.city,
+              mlsNumber: input.mlsNumber,
+            },
+            soldFallback,
+            input,
+          );
   const subject = override.subject;
   const text = appendAgentSignatureText(
     [
@@ -630,33 +706,57 @@ export function renderJustListedEmail(
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
   } & ListingCardExtras &
-    EmailBrandChrome,
+    EmailBrandChrome &
+    AreaWatchPublishedTemplateInput,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
-  const subject = `Just listed in ${input.areaName}`;
+  const override = areaWatchOverrideCopy(
+    input.publishedAreaWatchTemplate,
+    {
+      recipientName: input.name,
+      tenantName: input.brandLabel,
+      agentName: input.agentFromLabel,
+      areaName: input.areaName,
+      addressLine: input.addressLine,
+      city: input.city,
+      mlsNumber: input.mlsNumber,
+    },
+    {
+      subject: `Just listed in ${input.areaName}`,
+      introHtml: `A new home matched your area alert for <strong style="color:#064e3b">${escapeHtml(input.areaName)}</strong>.`,
+      introText: `New listing in ${input.areaName}:`,
+      cta: "View listing",
+    },
+    input,
+  );
+  const subject = override.subject;
   const text = appendAgentSignatureText(
     [
       greet,
       "",
-      `New listing in ${input.areaName}:`,
+      override.introText,
+      override.paragraphsText.trim(),
       `${input.addressLine}, ${input.city} · ${money(input.price)} (${input.mlsNumber})`,
       "",
       input.listingUrl,
-    ].join("\n"),
+    ]
+      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+      .join("\n"),
     input.agentSignatureText,
   );
   const html = emailLayout({
     title: `Just listed · ${input.areaName}`,
-    subtitle: "A new home matched your area alert.",
+    subtitle: override.introText,
     preheader: `${input.addressLine} · ${money(input.price)}`,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
-    ...layoutBrandProps(input),
+    ...override.brandProps,
     bodyHtml: appendAgentSignatureHtml(
       `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px;color:#115e59">A new home matched your area alert for <strong style="color:#064e3b">${escapeHtml(input.areaName)}</strong>.</p>
+      <p style="margin:0 0 12px;color:#115e59">${override.introHtml}</p>
+      ${override.paragraphsHtml}
       ${renderEmailPropertyCard({
         mlsNumber: input.mlsNumber,
         addressLine: input.addressLine,
@@ -669,7 +769,7 @@ export function renderJustListedEmail(
         sqftLabel: input.sqftLabel,
         badgeLabel: "New listing",
       })}
-      ${ctaButton(input.listingUrl, "View listing")}
+      ${ctaButton(input.listingUrl, override.cta)}
     `,
       input.agentSignatureHtml,
     ),
