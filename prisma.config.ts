@@ -1,8 +1,12 @@
-import { config } from "dotenv";
 import { defineConfig } from "prisma/config";
+import {
+  loadPrismaEnv,
+  resolvePrismaDatasourceUrl,
+} from "./prisma/load-prisma-env";
 
-config();
-config({ path: ".env.local", override: true });
+// Explicit DATABASE_URL / DIRECT_URL (shell/CI/Vercel) take precedence over
+// .env.local. See prisma/load-prisma-env.ts.
+loadPrismaEnv();
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -11,6 +15,6 @@ export default defineConfig({
     seed: "node --import tsx prisma/seed.ts",
   },
   datasource: {
-    url: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
+    url: resolvePrismaDatasourceUrl(),
   },
 });

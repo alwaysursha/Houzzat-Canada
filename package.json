@@ -13,6 +13,7 @@
     "db:push": "prisma db push",
     "db:seed": "node --import tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "prisma-env-precedence:selftest": "node --import tsx scripts/prisma-env-precedence-selftest.ts",
     "mls:sync": "node --import tsx scripts/mls-sync.ts",
     "mls:sync:fast": "node --import tsx scripts/mls-sync.ts --fast",
     "mls:fast-sync:selftest": "node --import tsx scripts/mls-fast-sync-selftest.ts",
