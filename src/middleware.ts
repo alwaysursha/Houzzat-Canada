@@ -198,7 +198,9 @@ export default auth((request) => {
         pathOnly === "/admin/people" ||
         pathOnly === "/admin/analytics" ||
         pathOnly === "/admin/notifications" ||
-        pathOnly === "/admin/search";
+        pathOnly === "/admin/search" ||
+        pathOnly === "/admin/email-templates" ||
+        pathOnly.startsWith("/admin/email-templates/");
       if (!tenantAdminAllowed) {
         return redirectToPath(request, "/admin");
       }

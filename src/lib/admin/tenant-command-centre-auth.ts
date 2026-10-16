@@ -37,7 +37,7 @@ export const TENANT_COMMAND_CENTRE_PATH_ALLOWLIST = [
   "/admin/analytics",
   "/admin/notifications",
   "/admin/search",
-  /** Phase 2A foundation — UI editor lands in a later phase. */
+  /** Phase 2B — tenant Email Templates manager UI. */
   "/admin/email-templates",
 ] as const;
 
@@ -58,7 +58,9 @@ export const TENANT_COMMAND_CENTRE_BLOCKED_MODULES = [
 export function isTenantCommandCentrePathAllowed(pathname: string): boolean {
   const path = pathname.split("?")[0] || "/";
   return (TENANT_COMMAND_CENTRE_PATH_ALLOWLIST as readonly string[]).some(
-    (allowed) => path === allowed,
+    (allowed) =>
+      path === allowed ||
+      (allowed !== "/admin" && path.startsWith(`${allowed}/`)),
   );
 }
 

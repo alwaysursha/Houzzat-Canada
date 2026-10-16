@@ -12,6 +12,7 @@ import {
   Eye,
   Handshake,
   LayoutDashboard,
+  Mail,
   Menu,
   Megaphone,
   PanelLeftClose,
@@ -72,6 +73,7 @@ const TENANT_NAV: NavItem[] = [
   { href: "/admin/lead-routing", label: "Lead routing", icon: Percent },
   { href: "/admin/people", label: "People", icon: Users },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/admin/email-templates", label: "Email Templates", icon: Mail },
   { href: "/agent", label: "CRM desk", icon: Briefcase },
   { href: "/agent/team", label: "Team", icon: UsersRound },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
@@ -86,10 +88,10 @@ const PLATFORM_MOBILE_TABS = [
 ] as const;
 
 const TENANT_MOBILE_TABS = [
-  TENANT_NAV[0],
-  TENANT_NAV[2],
-  TENANT_NAV[3],
-  TENANT_NAV[5],
+  TENANT_NAV[0], // Overview
+  TENANT_NAV[2], // Lead routing
+  TENANT_NAV[3], // People
+  TENANT_NAV[6], // CRM desk (keep after Email Templates insert)
 ] as const;
 
 function navActive(pathname: string, href: string, exact?: boolean) {

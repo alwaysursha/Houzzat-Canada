@@ -113,6 +113,11 @@ function testPathAllowlistAndMiddleware() {
   assert.equal(isTenantCommandCentrePathAllowed("/admin/lead-routing"), true);
   assert.equal(isTenantCommandCentrePathAllowed("/admin/people"), true);
   assert.equal(isTenantCommandCentrePathAllowed("/admin/analytics"), true);
+  assert.equal(isTenantCommandCentrePathAllowed("/admin/email-templates"), true);
+  assert.equal(
+    isTenantCommandCentrePathAllowed("/admin/email-templates/PROPERTY_WATCH"),
+    true,
+  );
   assert.equal(isTenantCommandCentrePathAllowed("/admin/visitors"), false);
   assert.equal(isTenantCommandCentrePathAllowed("/admin/ads"), false);
   assert.equal(isTenantCommandCentrePathAllowed("/admin/landings"), false);

@@ -29,6 +29,14 @@ export {
   mergeWithSystemDefaults,
   validateWorkspaceEmailTemplateDraft,
 } from "@/lib/email/workspace-templates/validation";
+export {
+  buildEmailTemplatePreviewHtml,
+  EMAIL_TEMPLATE_PREVIEW_SAMPLE,
+} from "@/lib/email/workspace-templates/preview";
+export type {
+  EmailTemplatePreviewBrand,
+  EmailTemplatePreviewMode,
+} from "@/lib/email/workspace-templates/preview";
 export type {
   EmailTemplateBodySections,
   EmailTemplateContentFields,

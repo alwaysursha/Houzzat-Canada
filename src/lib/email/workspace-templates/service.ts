@@ -67,6 +67,7 @@ export type EmailTemplateCatalogItem = {
   hasPublished: boolean;
   publishedVersionNumber: number | null;
   publishedAt: Date | null;
+  draftUpdatedAt: Date | null;
   /** Live resolution source if senders were switched (they are not yet). */
   resolved: ResolvedEmailTemplate;
 };
@@ -112,6 +113,7 @@ export async function listWorkspaceEmailTemplates(input: {
       hasPublished: Boolean(row?.published),
       publishedVersionNumber: row?.publishedVersionNumber ?? null,
       publishedAt: row?.publishedAt ?? null,
+      draftUpdatedAt: row?.draftUpdatedAt ?? null,
       resolved,
     });
   }
