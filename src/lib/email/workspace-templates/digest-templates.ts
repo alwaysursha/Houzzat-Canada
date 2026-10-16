@@ -3,13 +3,13 @@
  * seller (SELLER_NEIGHBOURHOOD_DIGEST) digest emails.
  *
  * Same safety model as Property/Area Watch:
- * - TENANT_EMAIL_TEMPLATES=on (default off → no DB)
+ * - TENANT_EMAIL_TEMPLATES=on + workspace allowlist (default off → no DB)
  * - Drafts never applied
  * - Sparse published fields; empty → digest-specific legacy wording
  * - Buyer and seller types never cross
  */
 
-import { isTenantEmailTemplatesEnabled } from "@/lib/email/workspace-templates/feature-flag";
+import { isTenantEmailTemplatesEnabledForWorkspace } from "@/lib/email/workspace-templates/feature-flag";
 import {
   prismaWorkspaceEmailTemplateStore,
   type WorkspaceEmailTemplateStore,
@@ -55,9 +55,10 @@ async function loadPublishedDigestOverride(input: {
   env?: NodeJS.ProcessEnv;
   logLabel: string;
 }): Promise<EmailTemplateContentFields | null> {
-  if (!isTenantEmailTemplatesEnabled(input.env)) return null;
-
   const workspaceId = input.workspaceId?.trim();
+  if (!isTenantEmailTemplatesEnabledForWorkspace(workspaceId, input.env)) {
+    return null;
+  }
   if (!workspaceId) return null;
 
   try {

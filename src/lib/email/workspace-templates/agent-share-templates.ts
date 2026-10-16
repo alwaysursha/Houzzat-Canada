@@ -2,7 +2,7 @@
  * Phase 2C-4 — published overrides for AGENT_EMAIL, SHORTLIST, and CMA_SHARE.
  *
  * Same safety model as digests / Property Watch:
- * - TENANT_EMAIL_TEMPLATES=on (default off → no DB)
+ * - TENANT_EMAIL_TEMPLATES=on + workspace allowlist (default off → no DB)
  * - Drafts never applied
  * - Sparse published fields; empty → path-specific legacy wording
  * - Types never cross
@@ -11,7 +11,7 @@
  * Template fields only customize presentation (subtitle, wrapper paragraphs, style).
  */
 
-import { isTenantEmailTemplatesEnabled } from "@/lib/email/workspace-templates/feature-flag";
+import { isTenantEmailTemplatesEnabledForWorkspace } from "@/lib/email/workspace-templates/feature-flag";
 import {
   prismaWorkspaceEmailTemplateStore,
   type WorkspaceEmailTemplateStore,
@@ -61,9 +61,10 @@ async function loadPublishedAgentShareOverride(input: {
   env?: NodeJS.ProcessEnv;
   logLabel: string;
 }): Promise<EmailTemplateContentFields | null> {
-  if (!isTenantEmailTemplatesEnabled(input.env)) return null;
-
   const workspaceId = input.workspaceId?.trim();
+  if (!isTenantEmailTemplatesEnabledForWorkspace(workspaceId, input.env)) {
+    return null;
+  }
   if (!workspaceId) return null;
 
   try {

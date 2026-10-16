@@ -19,6 +19,7 @@ export {
   appendAgentSignatureText,
   assembleTenantEmailBrand,
   isTenantEmailBrandingEnabled,
+  isTenantEmailBrandingEnabledForWorkspace,
   isValidReplyToEmail,
   resolveTenantEmailBrand,
   toEmailBrandChrome,

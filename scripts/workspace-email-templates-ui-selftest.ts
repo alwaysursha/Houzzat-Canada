@@ -61,6 +61,12 @@ function testNavigationVisibility() {
     page,
     /tenancy\.workspaceId !== surface\.auth\.workspaceId/,
   );
+  assert.match(
+    page,
+    /Published templates apply to outgoing emails only\s+when tenant email templates are enabled/,
+  );
+  assert.doesNotMatch(page, /live senders are not wired yet/);
+  assert.match(page, /Newsletter\s+campaign sending is not wired yet/);
 }
 
 function testTenantScopedApiUsage() {

@@ -1,9 +1,12 @@
 /**
  * Phase 1 — tenant-aware chrome for existing customer-facing emails.
  *
- * Feature flag TENANT_EMAIL_BRANDING=on (default off).
- * When off: resolveTenantEmailBrand returns null; callers keep legacy Houzzat layout.
- * When on: brand from the recipient workspace only — never another tenant's identity.
+ * Global: TENANT_EMAIL_BRANDING=on (default off).
+ * Allowlist: TENANT_EMAIL_BRANDING_WORKSPACE_IDS (comma/whitespace-separated).
+ *
+ * When global off: resolveTenantEmailBrand returns null; callers keep legacy layout.
+ * When global on: only allowlisted workspace IDs resolve (unset/empty allowlist → none).
+ * Brand is always loaded for the recipient workspace only — never another tenant.
  *
  * From addresses are never overridden here (custom domains stay VERIFIED-gated later).
  *
@@ -21,6 +24,7 @@ import type {
 } from "@prisma/client";
 import { SITE_URL } from "@/lib/constants";
 import { escapeHtml } from "@/lib/email/layout";
+import { isWorkspaceIdAllowlisted } from "@/lib/email/workspace-id-allowlist";
 import { prisma } from "@/lib/prisma";
 import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import { buildNeutralTenantBrand } from "@/lib/tenancy/neutral-tenant-brand";
@@ -95,11 +99,26 @@ export type TenantEmailBrandDeps = {
   resolveWebsiteUrl: (workspaceId: string) => Promise<string>;
 };
 
-/** Feature flag — default OFF. Set TENANT_EMAIL_BRANDING=on to activate. */
+/** Global feature flag — default OFF. Set TENANT_EMAIL_BRANDING=on to activate. */
 export function isTenantEmailBrandingEnabled(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   return env.TENANT_EMAIL_BRANDING?.trim().toLowerCase() === "on";
+}
+
+/**
+ * Workspace-scoped branding activation.
+ * Global OFF, empty allowlist, malformed ID, or non-listed workspace → false.
+ */
+export function isTenantEmailBrandingEnabledForWorkspace(
+  workspaceId: string | null | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (!isTenantEmailBrandingEnabled(env)) return false;
+  return isWorkspaceIdAllowlisted(
+    workspaceId,
+    env.TENANT_EMAIL_BRANDING_WORKSPACE_IDS,
+  );
 }
 
 export function isValidReplyToEmail(value: string | null | undefined): boolean {
@@ -404,9 +423,10 @@ export async function resolveTenantEmailBrand(
   deps: TenantEmailBrandDeps = createDefaultTenantEmailBrandDeps(),
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<TenantEmailBrand | null> {
-  if (!isTenantEmailBrandingEnabled(env)) return null;
-
   const workspaceId = input.workspaceId?.trim();
+  if (!isTenantEmailBrandingEnabledForWorkspace(workspaceId, env)) {
+    return null;
+  }
   if (!workspaceId) return null;
 
   const [branding, identity, websiteUrl] = await Promise.all([

@@ -2,13 +2,13 @@
  * Phase 2C-2 — AREA_WATCH published override for live Area Watch emails.
  *
  * Same safety model as PROPERTY_WATCH (Phase 2C-1):
- * - TENANT_EMAIL_TEMPLATES=on required (default off → no DB)
+ * - TENANT_EMAIL_TEMPLATES=on + workspace allowlist required (default off → no DB)
  * - Drafts never applied
  * - Sparse published fields; empty → event-specific legacy wording
  * - Never merges registry defaults into live send copy
  */
 
-import { isTenantEmailTemplatesEnabled } from "@/lib/email/workspace-templates/feature-flag";
+import { isTenantEmailTemplatesEnabledForWorkspace } from "@/lib/email/workspace-templates/feature-flag";
 import {
   prismaWorkspaceEmailTemplateStore,
   type WorkspaceEmailTemplateStore,
@@ -61,9 +61,10 @@ export async function loadPublishedAreaWatchOverride(input: {
   store?: WorkspaceEmailTemplateStore;
   env?: NodeJS.ProcessEnv;
 }): Promise<EmailTemplateContentFields | null> {
-  if (!isTenantEmailTemplatesEnabled(input.env)) return null;
-
   const workspaceId = input.workspaceId?.trim();
+  if (!isTenantEmailTemplatesEnabledForWorkspace(workspaceId, input.env)) {
+    return null;
+  }
   if (!workspaceId) return null;
 
   try {

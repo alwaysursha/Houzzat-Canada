@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ type: string }> };
 
-/** POST — promote draft to a new published version (not wired into senders yet). */
+/** POST — promote draft to a new published version (live only when templates enabled for workspace). */
 export async function POST(request: Request, context: RouteContext) {
   const authz = await requireTenantEmailTemplateAdmin(request);
   if (!authz.ok) return authz.response;

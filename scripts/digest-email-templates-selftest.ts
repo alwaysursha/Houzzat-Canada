@@ -38,7 +38,10 @@ import {
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HOUZZAT_WS = "ws_houzzat_fixture";
 const CANARY_WS = TENANT_B_TEST_WORKSPACE_ID;
-const ENV_ON = { TENANT_EMAIL_TEMPLATES: "on" } as NodeJS.ProcessEnv;
+const ENV_ON = {
+  TENANT_EMAIL_TEMPLATES: "on",
+  TENANT_EMAIL_TEMPLATES_WORKSPACE_IDS: `${HOUZZAT_WS},${CANARY_WS}`,
+} as NodeJS.ProcessEnv;
 const ENV_OFF = { TENANT_EMAIL_TEMPLATES: "off" } as NodeJS.ProcessEnv;
 
 const SAMPLE_LISTING: DigestListingLine = {

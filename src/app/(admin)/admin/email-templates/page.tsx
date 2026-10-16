@@ -72,8 +72,9 @@ export default async function AdminEmailTemplatesPage({
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-ink/60">
           Customize outbound email copy for {brand.displayName}. Drafts never
-          affect live sends. Published versions are stored for this workspace —
-          live senders are not wired yet.
+          affect live sends. Published templates apply to outgoing emails only
+          when tenant email templates are enabled for this workspace. Newsletter
+          campaign sending is not wired yet.
         </p>
       </div>
       <EmailTemplatesAdminClient

@@ -10,7 +10,7 @@
  * the tenant explicitly customized that field.
  */
 
-import { isTenantEmailTemplatesEnabled } from "@/lib/email/workspace-templates/feature-flag";
+import { isTenantEmailTemplatesEnabledForWorkspace } from "@/lib/email/workspace-templates/feature-flag";
 import {
   prismaWorkspaceEmailTemplateStore,
   type WorkspaceEmailTemplateStore,
@@ -62,9 +62,10 @@ export async function loadPublishedPropertyWatchOverride(input: {
   store?: WorkspaceEmailTemplateStore;
   env?: NodeJS.ProcessEnv;
 }): Promise<EmailTemplateContentFields | null> {
-  if (!isTenantEmailTemplatesEnabled(input.env)) return null;
-
   const workspaceId = input.workspaceId?.trim();
+  if (!isTenantEmailTemplatesEnabledForWorkspace(workspaceId, input.env)) {
+    return null;
+  }
   if (!workspaceId) return null;
 
   try {

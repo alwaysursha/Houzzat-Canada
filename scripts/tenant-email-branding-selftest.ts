@@ -202,15 +202,19 @@ async function testHouzzatVsCanaryIsolation() {
     ]),
   });
 
+  const brandingOnBoth = {
+    TENANT_EMAIL_BRANDING: "on",
+    TENANT_EMAIL_BRANDING_WORKSPACE_IDS: `${HOUZZAT_WS},${CANARY_WS}`,
+  } as NodeJS.ProcessEnv;
   const houzzat = await resolveTenantEmailBrand(
     { workspaceId: HOUZZAT_WS, customerId: "cust_h" },
     deps,
-    { TENANT_EMAIL_BRANDING: "on" },
+    brandingOnBoth,
   );
   const canary = await resolveTenantEmailBrand(
     { workspaceId: CANARY_WS, customerId: "cust_c" },
     deps,
-    { TENANT_EMAIL_BRANDING: "on" },
+    brandingOnBoth,
   );
   assert.ok(houzzat && canary);
   assert.equal(houzzat.displayName, "Houzzat");
@@ -275,7 +279,10 @@ async function testMissingBrandingNeutralFallback() {
   const brand = await resolveTenantEmailBrand(
     { workspaceId: "ws_empty" },
     deps,
-    { TENANT_EMAIL_BRANDING: "on" },
+    {
+      TENANT_EMAIL_BRANDING: "on",
+      TENANT_EMAIL_BRANDING_WORKSPACE_IDS: "ws_empty",
+    },
   );
   assert.ok(brand);
   assert.equal(brand.displayName, "Real Estate");
@@ -310,7 +317,10 @@ async function testCrossTenantAgentRejected() {
       preferredAgentUserId: "agent_houzzat",
     },
     deps,
-    { TENANT_EMAIL_BRANDING: "on" },
+    {
+      TENANT_EMAIL_BRANDING: "on",
+      TENANT_EMAIL_BRANDING_WORKSPACE_IDS: CANARY_WS,
+    },
   );
   assert.ok(brand);
   assert.equal(brand.agent, null);
