@@ -45,6 +45,7 @@
     "area-watch-email-templates:selftest": "node --import tsx scripts/area-watch-email-templates-selftest.ts",
     "digest-email-templates:selftest": "node --import tsx scripts/digest-email-templates-selftest.ts",
     "agent-share-email-templates:selftest": "node --import tsx scripts/agent-share-email-templates-selftest.ts",
+    "email-template-preview:selftest": "node --import tsx scripts/email-template-preview-selftest.ts",
     "communications-phase1:selftest": "node --import tsx scripts/communications-phase1-selftest.ts",
     "communications-phase2a:selftest": "node --import tsx scripts/communications-phase2a-selftest.ts",
     "communications-phase2b1:selftest": "node --import tsx scripts/communications-phase2b1-selftest.ts",

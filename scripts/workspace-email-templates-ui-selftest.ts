@@ -107,8 +107,14 @@ function testDraftPublishRestoreWorkflow() {
   assert.match(client, /Unsaved changes/);
   assert.match(client, /beforeunload/);
   assert.match(client, /Draft saved\. Live emails are unchanged/);
-  assert.match(client, /Drafts never affect live[\s\S]*outgoing emails/);
-  assert.match(client, /Live senders are not wired yet/);
+  assert.match(client, /Drafts never affect[\s\S]*outgoing mail/);
+  assert.match(client, /Blank fields keep event-specific live wording/);
+  assert.match(client, /formFromStoredContent/);
+  assert.match(client, /formToDraftPayload/);
+  assert.match(client, /contentFieldsFromForm/);
+  assert.match(client, /Leave fields blank to keep event-specific/);
+  assert.match(client, /Placeholders show registry defaults/);
+  assert.match(client, /Illustrative preview only/);
 }
 
 function testVariableInsertion() {
@@ -149,6 +155,7 @@ function testPreviewSafety() {
       footerNote: "Acme footer",
     },
     mode: "desktop",
+    variant: "price_reduction",
   });
 
   assert.match(html, /Alex Sample/);
@@ -157,6 +164,7 @@ function testPreviewSafety() {
   assert.match(html, /Acme Realty/);
   assert.match(html, /Jordan Sample/);
   assert.match(html, /Sample agent signature/);
+  assert.match(html, /Price drop|Was/);
   assert.doesNotMatch(html, /SELECT\s+.*FROM/i);
   assert.doesNotMatch(html, /leadId/i);
   assert.doesNotMatch(html, /workspaceId/i);
@@ -184,6 +192,9 @@ function testPreviewSafety() {
   assert.match(client, /Sample data only/);
   assert.match(client, /sandbox=""/);
   assert.match(client, /previewMode/);
+  assert.match(client, /previewVariant/);
+  assert.match(client, /listEmailTemplatePreviewVariants/);
+  assert.match(client, /Live renderer preview/);
   assert.match(client, /Desktop/);
   assert.match(client, /Mobile/);
   assert.match(client, /max-w-\[390px\]/);

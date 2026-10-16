@@ -1,18 +1,36 @@
 /**
- * Phase 2B — branded preview HTML for the tenant Email Templates manager.
- * Uses only sample data — never real leads from any workspace.
+ * Phase 2D-1 — accurate tenant email preview via production renderers.
+ *
+ * Preview HTML is built by calling the same render* functions used for live
+ * sends, with deterministic sample data and sparse draft/published fields.
+ * Never loads CRM leads or cross-tenant records.
+ *
+ * Remaining differences (documented, not redesigned here):
+ * - Preview-only subject bar + HTML comment watermark (live subjects live in
+ *   the email headers, not the HTML body for most templates).
+ * - Desktop/mobile width constraint for the iframe frame.
+ * - NEWSLETTER has no live sparse cutover yet — preview fills via defaults +
+ *   renderNewsletterEmail (campaign product not wired; no tenant brand chrome).
+ * - Sample listing images use a static placeholder URL (not MLS media).
+ * - Registry defaults appear only as editor placeholders; blank fields preview
+ *   event-specific live fallbacks (same sparse semantics as Save/Publish).
  */
 
 import {
-  ctaButton,
-  emailLayout,
-  escapeHtml,
-  infoCard,
-} from "@/lib/email/layout";
-import {
-  applyAllowedTemplateVariables,
-  mergeWithSystemDefaults,
-} from "@/lib/email/workspace-templates/validation";
+  renderAgentMessageEmail,
+  renderCmaEmail,
+  renderJustListedEmail,
+  renderNeighborhoodWeeklyEmail,
+  renderNewsletterEmail,
+  renderPriceReductionEmail,
+  renderPropertyUpdateEmail,
+  renderSavedSearchDigestEmail,
+  renderShortlistEmail,
+  renderSoldAlertEmail,
+  type DigestListingLine,
+} from "@/lib/email/templates";
+import { escapeHtml } from "@/lib/email/layout";
+import { applyAllowedTemplateVariables } from "@/lib/email/workspace-templates/validation";
 import type { WorkspaceEmailTemplateType } from "@prisma/client";
 import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
 
@@ -33,7 +51,27 @@ export const EMAIL_TEMPLATE_PREVIEW_SAMPLE = {
   subjectAddress: "123 Sample Street",
   subjectCity: "Toronto",
   headline: "Sample market notes",
+  oldPrice: 899_000,
+  newPrice: 849_000,
+  listPrice: 849_000,
+  recommendedListPrice: 875_000,
+  /** Preview-only watermark copy (also shown outside the iframe in Admin UI). */
   notice: "Sample preview data — not a real lead or listing",
+  /** Deterministic placeholder — not a real MLS photo. */
+  imageUrl: "https://placehold.co/580x360/ecfdf5/064e3b?text=Sample+Listing",
+  listingUrl: "https://example.com/sample/listing/SAMPLE123",
+  shareUrl: "https://example.com/sample/share/homes",
+  cmaUrl: "https://example.com/sample/cma/preview-token",
+  searchUrl: "https://example.com/sample/search",
+  ctaUrl: "https://example.com/sample/owner",
+  agentEmail: "jordan.sample@example.com",
+  agentPhone: "(416) 555-0100",
+  agentSubject: "Sample agent subject — takes precedence",
+  agentBody:
+    "Hi Alex — this is a sample message composed by your agent.\n\nAgent-authored subject and body always take precedence over template defaults.",
+  agentNote: "Sample personal note from your agent (always preserved).",
+  preferencesManageUrl: "#sample-preferences",
+  unsubscribeIntentUrl: "#sample-unsubscribe",
 } as const;
 
 export type EmailTemplatePreviewBrand = {
@@ -46,115 +84,412 @@ export type EmailTemplatePreviewBrand = {
 
 export type EmailTemplatePreviewMode = "desktop" | "mobile";
 
-function sampleValues(brand: EmailTemplatePreviewBrand) {
+export type EmailTemplatePreviewVariantId =
+  | "price_reduction"
+  | "sold"
+  | "property_update"
+  | "just_listed"
+  | "area_sold"
+  | "buyer_digest"
+  | "seller_digest"
+  | "agent_email"
+  | "shortlist"
+  | "cma_share"
+  | "newsletter";
+
+export type EmailTemplatePreviewVariant = {
+  id: EmailTemplatePreviewVariantId;
+  label: string;
+};
+
+const VARIANT_CATALOG: Record<
+  WorkspaceEmailTemplateType,
+  readonly EmailTemplatePreviewVariant[]
+> = {
+  PROPERTY_WATCH: [
+    { id: "price_reduction", label: "Price reduction" },
+    { id: "sold", label: "Sold" },
+    { id: "property_update", label: "Property update" },
+  ],
+  AREA_WATCH: [
+    { id: "just_listed", label: "Just listed" },
+    { id: "area_sold", label: "Sold" },
+  ],
+  SAVED_SEARCH_DIGEST: [{ id: "buyer_digest", label: "Buyer digest" }],
+  SELLER_NEIGHBOURHOOD_DIGEST: [
+    { id: "seller_digest", label: "Seller neighbourhood digest" },
+  ],
+  AGENT_EMAIL: [{ id: "agent_email", label: "Agent email" }],
+  SHORTLIST: [{ id: "shortlist", label: "Shortlist" }],
+  CMA_SHARE: [{ id: "cma_share", label: "CMA share" }],
+  NEWSLETTER: [{ id: "newsletter", label: "Newsletter (preview only)" }],
+};
+
+export function listEmailTemplatePreviewVariants(
+  templateType: WorkspaceEmailTemplateType,
+): readonly EmailTemplatePreviewVariant[] {
+  return VARIANT_CATALOG[templateType] ?? [];
+}
+
+export function defaultEmailTemplatePreviewVariant(
+  templateType: WorkspaceEmailTemplateType,
+): EmailTemplatePreviewVariantId {
+  const first = listEmailTemplatePreviewVariants(templateType)[0];
+  return first?.id ?? "newsletter";
+}
+
+function sampleListing(overrides?: Partial<DigestListingLine>): DigestListingLine {
   return {
-    ...EMAIL_TEMPLATE_PREVIEW_SAMPLE,
-    tenantName: brand.displayName || EMAIL_TEMPLATE_PREVIEW_SAMPLE.tenantName,
+    mlsNumber: EMAIL_TEMPLATE_PREVIEW_SAMPLE.mlsNumber,
+    addressLine: EMAIL_TEMPLATE_PREVIEW_SAMPLE.addressLine,
+    city: EMAIL_TEMPLATE_PREVIEW_SAMPLE.city,
+    priceLabel: "$849,000",
+    listingUrl: EMAIL_TEMPLATE_PREVIEW_SAMPLE.listingUrl,
+    imageUrl: EMAIL_TEMPLATE_PREVIEW_SAMPLE.imageUrl,
+    bedsLabel: "3",
+    bathsLabel: "2",
+    sqftLabel: "1,450 sqft",
+    isNew: true,
+    ...overrides,
   };
 }
 
-function fill(
-  type: WorkspaceEmailTemplateType,
-  text: string | null | undefined,
-  values: Record<string, string>,
-  fallback: string,
-): string {
-  const raw = text?.trim() || fallback;
-  return applyAllowedTemplateVariables(type, raw, values);
+function brandChrome(brand: EmailTemplatePreviewBrand) {
+  const agent = EMAIL_TEMPLATE_PREVIEW_SAMPLE.agentName;
+  const tenant =
+    brand.displayName?.trim() || EMAIL_TEMPLATE_PREVIEW_SAMPLE.tenantName;
+  return {
+    brandLabel: tenant,
+    brandLogoUrl: brand.logoUrl,
+    brandPrimaryColor: brand.primaryColor || "#0F766E",
+    brandWebsiteUrl: brand.websiteUrl,
+    footerNote:
+      brand.footerNote?.trim() || `${tenant} — Powered by HouzzatPRO`,
+    agentFromLabel: agent,
+    agentSignatureHtml: `<strong style="color:#064e3b">${escapeHtml(agent)}</strong><br/>${escapeHtml(tenant)}<br/><span style="color:#047857">Sample agent signature</span>`,
+    agentSignatureText: `${agent}\n${tenant}\nSample agent signature`,
+  };
+}
+
+function preferenceChrome() {
+  return {
+    preferencesManageUrl: EMAIL_TEMPLATE_PREVIEW_SAMPLE.preferencesManageUrl,
+    unsubscribeIntentUrl: EMAIL_TEMPLATE_PREVIEW_SAMPLE.unsubscribeIntentUrl,
+  };
 }
 
 /**
- * Build escaped preview HTML. Safe for iframe srcDoc.
- * Never includes live lead PII.
+ * Preview-only chrome: live renderers often keep the email subject outside
+ * the HTML body (inbox header). Surface it here so admins see the real subject.
+ */
+function withPreviewChrome(subject: string, html: string): string {
+  const subjectBar = `<div data-preview-subject="1" data-preview-chrome="subject" style="margin:0;padding:10px 14px;background:#fffbeb;border-bottom:1px solid #fcd34d;font:12px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#92400e"><strong style="color:#78350f">Preview subject line</strong> <span style="font-weight:500">(inbox header only — not part of the email body)</span><br/><span style="color:#78350f">${escapeHtml(subject)}</span></div>`;
+  const marked = html.includes(EMAIL_TEMPLATE_PREVIEW_SAMPLE.notice)
+    ? html
+    : html.replace(
+        "<body",
+        `<!-- ${EMAIL_TEMPLATE_PREVIEW_SAMPLE.notice} -->\n<body`,
+      );
+  return marked.replace(/<body([^>]*)>/i, `<body$1>${subjectBar}`);
+}
+
+function applyPreviewFrame(
+  subject: string,
+  html: string,
+  mode?: EmailTemplatePreviewMode,
+): string {
+  const width = mode === "mobile" ? "390px" : "680px";
+  return withPreviewChrome(subject, html).replace(
+    "max-width:680px",
+    `max-width:${width}`,
+  );
+}
+
+function resolveVariant(
+  templateType: WorkspaceEmailTemplateType,
+  variant?: EmailTemplatePreviewVariantId | null,
+): EmailTemplatePreviewVariantId {
+  const allowed = listEmailTemplatePreviewVariants(templateType);
+  if (variant && allowed.some((v) => v.id === variant)) return variant;
+  return defaultEmailTemplatePreviewVariant(templateType);
+}
+
+/**
+ * Build escaped preview HTML from production renderers. Safe for iframe srcDoc.
+ * `content` is the current editor draft (sparse) — never writes or publishes.
  */
 export function buildEmailTemplatePreviewHtml(input: {
   templateType: WorkspaceEmailTemplateType;
   content: EmailTemplateContentFields | null;
   brand: EmailTemplatePreviewBrand;
   mode?: EmailTemplatePreviewMode;
+  variant?: EmailTemplatePreviewVariantId | null;
 }): string {
-  const merged = mergeWithSystemDefaults(
-    input.templateType,
-    input.content,
-  );
-  const values = sampleValues(input.brand);
-  const accent =
-    merged.style.primaryColor?.trim() || input.brand.primaryColor || "#0F766E";
+  const variant = resolveVariant(input.templateType, input.variant);
+  const chrome = brandChrome(input.brand);
+  const prefs = preferenceChrome();
+  const sparse = input.content;
+  const sample = EMAIL_TEMPLATE_PREVIEW_SAMPLE;
+  const name = sample.recipientName;
 
-  const subject = fill(
-    input.templateType,
-    merged.subject,
-    values,
-    "Email preview",
-  );
-  const intro = fill(
-    input.templateType,
-    merged.introText,
-    values,
-    "Introductory text appears here.",
-  );
-  const cta = fill(
-    input.templateType,
-    merged.ctaText,
-    values,
-    "View details",
-  );
-  const paragraphs = (merged.bodySections.paragraphs ?? []).map((p) =>
-    fill(input.templateType, p, values, ""),
-  );
+  let rendered: { subject: string; html: string };
 
-  const sampleCard = infoCard(`
-    <p style="margin:0 0 6px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#047857;font-weight:700">Sample listing</p>
-    <p style="margin:0;font-size:16px;color:#064e3b;font-weight:700">${escapeHtml(values.addressLine)}</p>
-    <p style="margin:6px 0 0;font-size:14px;color:#115e59">${escapeHtml(values.city)} · MLS® ${escapeHtml(values.mlsNumber)}</p>
-    <p style="margin:10px 0 0;font-size:12px;color:#047857">${escapeHtml(EMAIL_TEMPLATE_PREVIEW_SAMPLE.notice)}</p>
-  `);
+  switch (variant) {
+    case "price_reduction": {
+      rendered = renderPriceReductionEmail({
+        name,
+        addressLine: sample.addressLine,
+        city: sample.city,
+        mlsNumber: sample.mlsNumber,
+        oldPrice: sample.oldPrice,
+        newPrice: sample.newPrice,
+        listingUrl: sample.listingUrl,
+        imageUrl: sample.imageUrl,
+        bedsLabel: "3",
+        bathsLabel: "2",
+        sqftLabel: "1,450 sqft",
+        ...prefs,
+        ...chrome,
+        publishedTemplate: sparse,
+      });
+      break;
+    }
+    case "sold": {
+      rendered = renderSoldAlertEmail({
+        name,
+        addressLine: sample.addressLine,
+        city: sample.city,
+        mlsNumber: sample.mlsNumber,
+        statusLabel: "Sold",
+        priceLabel: "$849,000",
+        listingUrl: sample.listingUrl,
+        imageUrl: sample.imageUrl,
+        bedsLabel: "3",
+        bathsLabel: "2",
+        sqftLabel: "1,450 sqft",
+        ...prefs,
+        ...chrome,
+        publishedTemplate: sparse,
+        publishedAreaWatchTemplate: null,
+      });
+      break;
+    }
+    case "property_update": {
+      rendered = renderPropertyUpdateEmail({
+        name,
+        title: "Status / details updated",
+        addressLine: sample.addressLine,
+        city: sample.city,
+        mlsNumber: sample.mlsNumber,
+        changes: [
+          "Sample change: status updated",
+          "Sample change: photos refreshed",
+        ],
+        listingUrl: sample.listingUrl,
+        imageUrl: sample.imageUrl,
+        bedsLabel: "3",
+        bathsLabel: "2",
+        sqftLabel: "1,450 sqft",
+        ...prefs,
+        ...chrome,
+        publishedTemplate: sparse,
+      });
+      break;
+    }
+    case "just_listed": {
+      rendered = renderJustListedEmail({
+        name,
+        areaName: sample.areaName,
+        addressLine: sample.addressLine,
+        city: sample.city,
+        mlsNumber: sample.mlsNumber,
+        price: sample.listPrice,
+        listingUrl: sample.listingUrl,
+        imageUrl: sample.imageUrl,
+        bedsLabel: "3",
+        bathsLabel: "2",
+        sqftLabel: "1,450 sqft",
+        ...prefs,
+        ...chrome,
+        publishedAreaWatchTemplate: sparse,
+      });
+      break;
+    }
+    case "area_sold": {
+      rendered = renderSoldAlertEmail({
+        name,
+        addressLine: sample.addressLine,
+        city: sample.city,
+        mlsNumber: sample.mlsNumber,
+        statusLabel: "Sold",
+        priceLabel: "$849,000",
+        listingUrl: sample.listingUrl,
+        areaName: sample.areaName,
+        imageUrl: sample.imageUrl,
+        bedsLabel: "3",
+        bathsLabel: "2",
+        sqftLabel: "1,450 sqft",
+        ...prefs,
+        ...chrome,
+        publishedTemplate: null,
+        publishedAreaWatchTemplate: sparse,
+      });
+      break;
+    }
+    case "buyer_digest": {
+      rendered = renderSavedSearchDigestEmail({
+        name,
+        searchName: sample.searchName,
+        listings: [
+          sampleListing(),
+          sampleListing({
+            mlsNumber: "SAMPLE124",
+            addressLine: "45 Sample Avenue",
+            priceLabel: "$725,000",
+            listingUrl: "https://example.com/sample/listing/SAMPLE124",
+          }),
+          sampleListing({
+            mlsNumber: "SAMPLE125",
+            addressLine: "9 Sample Court",
+            priceLabel: "$990,000",
+            listingUrl: "https://example.com/sample/listing/SAMPLE125",
+            isNew: false,
+          }),
+        ],
+        searchUrl: sample.searchUrl,
+        ...prefs,
+        ...chrome,
+        publishedSavedSearchDigestTemplate: sparse,
+      });
+      break;
+    }
+    case "seller_digest": {
+      rendered = renderNeighborhoodWeeklyEmail({
+        name,
+        homeLabel: sample.homeLabel,
+        radiusKm: 2,
+        newCount: Number(sample.newCount),
+        soldCount: Number(sample.soldCount),
+        medianSoldLabel: "$875,000",
+        newListings: [sampleListing()],
+        soldListings: [
+          sampleListing({
+            mlsNumber: "SAMPLE200",
+            addressLine: "77 Sample Road",
+            priceLabel: "$875,000",
+            badgeLabel: "Sold",
+            isNew: false,
+          }),
+        ],
+        ctaUrl: sample.ctaUrl,
+        ...prefs,
+        ...chrome,
+        publishedSellerNeighbourhoodDigestTemplate: sparse,
+      });
+      break;
+    }
+    case "agent_email": {
+      // Agent-authored subject/body always win — sample demonstrates precedence.
+      rendered = renderAgentMessageEmail({
+        name,
+        subject: sample.agentSubject,
+        body: sample.agentBody,
+        ...prefs,
+        ...chrome,
+        publishedAgentEmailTemplate: sparse,
+      });
+      break;
+    }
+    case "shortlist": {
+      rendered = renderShortlistEmail({
+        name,
+        agentName: sample.agentName,
+        shareUrl: sample.shareUrl,
+        note: sample.agentNote,
+        listings: [
+          sampleListing(),
+          sampleListing({
+            mlsNumber: "SAMPLE301",
+            addressLine: "18 Sample Lane",
+            priceLabel: "$650,000",
+          }),
+        ],
+        ...prefs,
+        ...chrome,
+        publishedShortlistTemplate: sparse,
+      });
+      break;
+    }
+    case "cma_share": {
+      rendered = renderCmaEmail({
+        recipientName: name,
+        agentName: sample.agentName,
+        agentEmail: sample.agentEmail,
+        agentPhone: sample.agentPhone,
+        tenantDisplayName: chrome.brandLabel,
+        tenantPrimaryColor: chrome.brandPrimaryColor,
+        subjectAddress: sample.subjectAddress,
+        subjectCity: sample.subjectCity,
+        cmaUrl: sample.cmaUrl,
+        recommendedListPrice: sample.recommendedListPrice,
+        ...prefs,
+        ...chrome,
+        publishedCmaShareTemplate: sparse,
+      });
+      break;
+    }
+    case "newsletter": {
+      // No live sparse cutover — fill from content/defaults for preview only.
+      const values = {
+        recipientName: sample.recipientName,
+        tenantName: chrome.brandLabel,
+        agentName: sample.agentName,
+        headline: sample.headline,
+      };
+      const fill = (text: string | null | undefined, fallback: string) => {
+        const raw = text?.trim() || fallback;
+        return applyAllowedTemplateVariables("NEWSLETTER", raw, values);
+      };
+      const subject = fill(sparse?.subject, "Sample market update");
+      const intro = fill(
+        sparse?.introText,
+        "Fresh market notes from your local team.",
+      );
+      const cta = fill(sparse?.ctaText, "Read more");
+      const paragraphs = (sparse?.bodySections.paragraphs ?? [])
+        .map((p) => fill(p, ""))
+        .filter(Boolean);
+      const bodyHtml = [
+        `<p style="margin:0 0 12px;color:#115e59">${escapeHtml(intro)}</p>`,
+        ...paragraphs.map(
+          (p) =>
+            `<p style="margin:0 0 12px;color:#115e59;white-space:pre-wrap">${escapeHtml(p)}</p>`,
+        ),
+      ].join("");
+      rendered = renderNewsletterEmail({
+        name,
+        subject,
+        headline: sample.headline,
+        bodyHtml,
+        ctaUrl: "#sample-cta",
+        ctaLabel: cta,
+        ...prefs,
+      });
+      break;
+    }
+    default: {
+      const _exhaustive: never = variant;
+      void _exhaustive;
+      rendered = renderAgentMessageEmail({
+        name,
+        subject: sample.agentSubject,
+        body: sample.agentBody,
+        ...prefs,
+        ...chrome,
+      });
+      break;
+    }
+  }
 
-  const bodyParagraphs = paragraphs
-    .filter(Boolean)
-    .map(
-      (p) =>
-        `<p style="margin:0 0 12px;color:#115e59;white-space:pre-wrap">${escapeHtml(p)}</p>`,
-    )
-    .join("");
-
-  const signature = `
-    <div style="margin:24px 0 0;padding-top:16px;border-top:1px solid #a7f3d0;font-size:13px;line-height:1.5;color:#115e59">
-      <strong style="color:#064e3b">${escapeHtml(values.agentName)}</strong><br/>
-      ${escapeHtml(values.tenantName)}<br/>
-      <span style="color:#047857">Sample agent signature</span>
-    </div>`;
-
-  const width = input.mode === "mobile" ? "390px" : "680px";
-  const inner = emailLayout({
-    title: subject,
-    subtitle: intro,
-    preheader: subject,
-    brandLabel: input.brand.displayName,
-    brandLogoUrl: input.brand.logoUrl,
-    brandPrimaryColor: accent,
-    brandWebsiteUrl: input.brand.websiteUrl,
-    footerNote:
-      input.brand.footerNote?.trim() ||
-      `${input.brand.displayName} — Powered by HouzzatPRO`,
-    preferencesManageUrl: "#sample-preferences",
-    unsubscribeIntentUrl: "#sample-unsubscribe",
-    bodyHtml: `
-      <p style="margin:0 0 10px;padding:8px 10px;border-radius:8px;background:#ecfdf5;border:1px solid #a7f3d0;font-size:12px;color:#047857;font-weight:600">
-        ${escapeHtml(EMAIL_TEMPLATE_PREVIEW_SAMPLE.notice)}
-      </p>
-      <p style="margin:0 0 12px;color:#115e59">Hi ${escapeHtml(values.recipientName)},</p>
-      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(intro)}</p>
-      ${bodyParagraphs}
-      ${sampleCard}
-      ${cta ? ctaButton("#sample-cta", cta) : ""}
-      ${signature}
-    `,
-  });
-
-  // Constrain preview frame width for desktop/mobile toggle.
-  return inner.replace(
-    "max-width:680px",
-    `max-width:${width}`,
-  );
+  return applyPreviewFrame(rendered.subject, rendered.html, input.mode);
 }

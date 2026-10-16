@@ -72,12 +72,27 @@ export {
   validateWorkspaceEmailTemplateDraft,
 } from "@/lib/email/workspace-templates/validation";
 export {
+  contentFieldsFromForm,
+  emptyEmailTemplateEditorForm,
+  formFromStoredContent,
+  formToDraftPayload,
+} from "@/lib/email/workspace-templates/editor-form";
+export type {
+  EmailTemplateDraftPayload,
+  EmailTemplateEditorDefaults,
+  EmailTemplateEditorForm,
+} from "@/lib/email/workspace-templates/editor-form";
+export {
   buildEmailTemplatePreviewHtml,
+  defaultEmailTemplatePreviewVariant,
   EMAIL_TEMPLATE_PREVIEW_SAMPLE,
+  listEmailTemplatePreviewVariants,
 } from "@/lib/email/workspace-templates/preview";
 export type {
   EmailTemplatePreviewBrand,
   EmailTemplatePreviewMode,
+  EmailTemplatePreviewVariant,
+  EmailTemplatePreviewVariantId,
 } from "@/lib/email/workspace-templates/preview";
 export type {
   EmailTemplateBodySections,

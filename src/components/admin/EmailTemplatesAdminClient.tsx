@@ -20,9 +20,19 @@ import {
 } from "lucide-react";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
 import {
+  contentFieldsFromForm,
+  emptyEmailTemplateEditorForm,
+  formFromStoredContent,
+  formToDraftPayload,
+  type EmailTemplateEditorForm,
+} from "@/lib/email/workspace-templates/editor-form";
+import {
   buildEmailTemplatePreviewHtml,
+  defaultEmailTemplatePreviewVariant,
+  listEmailTemplatePreviewVariants,
   type EmailTemplatePreviewBrand,
   type EmailTemplatePreviewMode,
+  type EmailTemplatePreviewVariantId,
 } from "@/lib/email/workspace-templates/preview";
 import { isWorkspaceEmailTemplateType } from "@/lib/email/workspace-templates/registry";
 import type {
@@ -51,13 +61,7 @@ export type EmailTemplateCatalogRow = {
   resolvedSource: "system" | "workspace_published";
 };
 
-type EditorForm = {
-  subject: string;
-  introText: string;
-  bodyParagraphs: string;
-  ctaText: string;
-  primaryColor: string;
-};
+type EditorForm = EmailTemplateEditorForm;
 
 type VersionRow = {
   id: string;
@@ -65,64 +69,6 @@ type VersionRow = {
   publishedAt: string;
   content: EmailTemplateContentFields;
 };
-
-function emptyForm(): EditorForm {
-  return {
-    subject: "",
-    introText: "",
-    bodyParagraphs: "",
-    ctaText: "",
-    primaryColor: "",
-  };
-}
-
-function formFromContent(
-  content: EmailTemplateContentFields | null | undefined,
-  defaults: EmailTemplateCatalogRow["systemDefaults"],
-): EditorForm {
-  return {
-    subject: content?.subject ?? defaults.subject ?? "",
-    introText: content?.introText ?? defaults.introText ?? "",
-    bodyParagraphs: (content?.bodySections.paragraphs ?? []).join("\n\n"),
-    ctaText: content?.ctaText ?? defaults.ctaText ?? "",
-    primaryColor: content?.style.primaryColor ?? "",
-  };
-}
-
-function formToPayload(form: EditorForm): {
-  subject: string | null;
-  introText: string | null;
-  bodySections: { paragraphs: string[] } | null;
-  ctaText: string | null;
-  style: { primaryColor: string | null } | null;
-} {
-  const paragraphs = form.bodyParagraphs
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return {
-    subject: form.subject.trim() || null,
-    introText: form.introText.trim() || null,
-    bodySections: paragraphs.length ? { paragraphs } : null,
-    ctaText: form.ctaText.trim() || null,
-    style: form.primaryColor.trim()
-      ? { primaryColor: form.primaryColor.trim() }
-      : null,
-  };
-}
-
-function contentFromForm(form: EditorForm): EmailTemplateContentFields {
-  const payload = formToPayload(form);
-  return {
-    subject: payload.subject,
-    introText: payload.introText,
-    bodySections: payload.bodySections ?? {},
-    ctaText: payload.ctaText,
-    style: payload.style?.primaryColor
-      ? { primaryColor: payload.style.primaryColor }
-      : {},
-  };
-}
 
 function formatWhen(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -182,7 +128,7 @@ export function EmailTemplatesAdminClient({
       }
       return initialTemplates[0]?.type ?? null;
     });
-  const [form, setForm] = useState<EditorForm>(emptyForm);
+  const [form, setForm] = useState<EditorForm>(emptyEmailTemplateEditorForm);
   const [baseline, setBaseline] = useState("");
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [busy, setBusy] = useState<
@@ -192,6 +138,8 @@ export function EmailTemplatesAdminClient({
   const [success, setSuccess] = useState<string | null>(null);
   const [previewMode, setPreviewMode] =
     useState<EmailTemplatePreviewMode>("desktop");
+  const [previewVariant, setPreviewVariant] =
+    useState<EmailTemplatePreviewVariantId>("price_reduction");
   const [versions, setVersions] = useState<VersionRow[] | null>(null);
   const [activeField, setActiveField] = useState<
     "subject" | "introText" | "bodyParagraphs" | "ctaText"
@@ -210,15 +158,27 @@ export function EmailTemplatesAdminClient({
 
   const dirty = baseline !== "" && serializeForm(form) !== baseline;
 
+  const previewVariants = useMemo(
+    () =>
+      selectedType ? listEmailTemplatePreviewVariants(selectedType) : [],
+    [selectedType],
+  );
+
   const previewHtml = useMemo(() => {
     if (!selectedType) return "";
     return buildEmailTemplatePreviewHtml({
       templateType: selectedType,
-      content: contentFromForm(form),
+      content: contentFieldsFromForm(form),
       brand,
       mode: previewMode,
+      variant: previewVariant,
     });
-  }, [selectedType, form, brand, previewMode]);
+  }, [selectedType, form, brand, previewMode, previewVariant]);
+
+  useEffect(() => {
+    if (!selectedType) return;
+    setPreviewVariant(defaultEmailTemplatePreviewVariant(selectedType));
+  }, [selectedType]);
 
   const loadDetail = useCallback(async (type: WorkspaceEmailTemplateType) => {
     const seq = ++loadSeqRef.current;
@@ -247,15 +207,22 @@ export function EmailTemplatesAdminClient({
         setError(data?.error ?? "Could not load template");
         return;
       }
-      const defaults = data?.master?.defaults ?? {
-        subject: "",
-        introText: "",
-        ctaText: "",
-      };
-      // Edit draft when present; otherwise start from system defaults.
-      const next = formFromContent(data?.record?.draft ?? null, defaults);
+      // Load stored draft only. Null fields stay blank — registry defaults are
+      // placeholders in the UI, never auto-written as tenant overrides.
+      const next = formFromStoredContent(data?.record?.draft ?? null);
       setForm(next);
       setBaseline(serializeForm(next));
+      // Keep catalog defaults in sync when detail returns fresher master copy.
+      if (data?.master?.defaults) {
+        const masterDefaults = data.master.defaults;
+        setTemplates((rows) =>
+          rows.map((row) =>
+            row.type === type
+              ? { ...row, systemDefaults: masterDefaults }
+              : row,
+          ),
+        );
+      }
     } finally {
       if (seq === loadSeqRef.current) setLoadingDetail(false);
     }
@@ -338,7 +305,7 @@ export function EmailTemplatesAdminClient({
           method: "PUT",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formToPayload(form)),
+          body: JSON.stringify(formToDraftPayload(form)),
         },
       );
       const data = (await res.json().catch(() => null)) as {
@@ -364,7 +331,7 @@ export function EmailTemplatesAdminClient({
     const ok = await confirm({
       title: "Publish template?",
       message:
-        "Publishing creates a new version for this workspace. Live senders are not wired yet — drafts still never affect outgoing mail until a future cutover.",
+        "Publishing creates a new version for this workspace. Blank fields keep event-specific live wording; only filled fields become tenant overrides. Drafts never affect outgoing mail until published.",
       confirmLabel: "Publish",
       cancelLabel: "Cancel",
     });
@@ -381,7 +348,7 @@ export function EmailTemplatesAdminClient({
             method: "PUT",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(formToPayload(form)),
+            body: JSON.stringify(formToDraftPayload(form)),
           },
         );
         const saveData = (await saveRes.json().catch(() => null)) as {
@@ -664,6 +631,11 @@ export function EmailTemplatesAdminClient({
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink/45">
                   Editor
                 </p>
+                <p className="text-[11px] text-ink/45">
+                  Leave fields blank to keep event-specific live wording.
+                  Placeholders show registry defaults for reference only — they
+                  are not saved unless you type them.
+                </p>
                 {loadingDetail ? (
                   <p className="text-sm text-ink/50">Loading template…</p>
                 ) : (
@@ -680,7 +652,11 @@ export function EmailTemplatesAdminClient({
                           setForm((f) => ({ ...f, subject: e.target.value }))
                         }
                         maxLength={200}
-                        className="w-full rounded-xl border border-line px-3 py-2 text-sm text-ink outline-none focus:border-ink/30"
+                        placeholder={
+                          selected?.systemDefaults.subject ||
+                          "Event-specific subject"
+                        }
+                        className="w-full rounded-xl border border-line px-3 py-2 text-sm text-ink outline-none focus:border-ink/30 placeholder:text-ink/35"
                       />
                     </label>
                     <label className="block space-y-1.5">
@@ -696,7 +672,11 @@ export function EmailTemplatesAdminClient({
                         }
                         rows={3}
                         maxLength={2000}
-                        className="w-full resize-y rounded-xl border border-line px-3 py-2 text-sm text-ink outline-none focus:border-ink/30"
+                        placeholder={
+                          selected?.systemDefaults.introText ||
+                          "Event-specific introduction"
+                        }
+                        className="w-full resize-y rounded-xl border border-line px-3 py-2 text-sm text-ink outline-none focus:border-ink/30 placeholder:text-ink/35"
                       />
                     </label>
                     <label className="block space-y-1.5">
@@ -714,8 +694,8 @@ export function EmailTemplatesAdminClient({
                           }))
                         }
                         rows={6}
-                        placeholder="Separate paragraphs with a blank line"
-                        className="w-full resize-y rounded-xl border border-line px-3 py-2 text-sm text-ink outline-none focus:border-ink/30"
+                        placeholder="Optional paragraphs — leave blank for no extra body copy. Separate paragraphs with a blank line."
+                        className="w-full resize-y rounded-xl border border-line px-3 py-2 text-sm text-ink outline-none focus:border-ink/30 placeholder:text-ink/35"
                       />
                     </label>
                     <label className="block space-y-1.5">
@@ -730,7 +710,11 @@ export function EmailTemplatesAdminClient({
                           setForm((f) => ({ ...f, ctaText: e.target.value }))
                         }
                         maxLength={80}
-                        className="w-full rounded-xl border border-line px-3 py-2 text-sm text-ink outline-none focus:border-ink/30"
+                        placeholder={
+                          selected?.systemDefaults.ctaText ||
+                          "Event-specific CTA"
+                        }
+                        className="w-full rounded-xl border border-line px-3 py-2 text-sm text-ink outline-none focus:border-ink/30 placeholder:text-ink/35"
                       />
                     </label>
                     <label className="block space-y-1.5">
@@ -789,7 +773,7 @@ export function EmailTemplatesAdminClient({
               <section className="space-y-3 rounded-2xl border border-line bg-white p-4 shadow-sm sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink/45">
-                    Branded preview
+                    Live renderer preview
                   </p>
                   <div className="flex gap-1 rounded-xl border border-line p-0.5">
                     <button
@@ -820,9 +804,43 @@ export function EmailTemplatesAdminClient({
                     </button>
                   </div>
                 </div>
+                {previewVariants.length > 1 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {previewVariants.map((variant) => (
+                      <button
+                        key={variant.id}
+                        type="button"
+                        onClick={() => setPreviewVariant(variant.id)}
+                        className={cn(
+                          "rounded-lg border px-2.5 py-1.5 text-xs font-semibold",
+                          previewVariant === variant.id
+                            ? "border-ink bg-ink text-white"
+                            : "border-line bg-ink/[0.03] text-ink/70 hover:bg-ink/[0.06]",
+                        )}
+                      >
+                        {variant.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {selectedType === "AGENT_EMAIL" ? (
+                  <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] font-medium text-sky-950">
+                    Sample agent-authored subject and message take precedence
+                    over template subject/body defaults — matching live sends.
+                  </p>
+                ) : null}
+                {selectedType === "NEWSLETTER" ? (
+                  <p className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[11px] font-medium text-violet-950">
+                    Illustrative preview only — Newsletter campaign sending is
+                    not integrated yet. This does not reflect a live send path.
+                  </p>
+                ) : null}
                 <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-950">
-                  Sample data only — not a real lead. Preview never loads CRM
-                  records from this or any other workspace.
+                  Sample data only — not a real lead. Preview uses the same
+                  production email renderers as live sends and never loads CRM
+                  records from this or any other workspace. Blank fields show
+                  event-specific live wording; the amber subject bar is
+                  preview chrome only.
                 </p>
                 <div
                   className={cn(
