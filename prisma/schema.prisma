@@ -473,6 +473,25 @@ enum SmsAutomationVersionStatus {
   PUBLISHED
 }
 
+/**
+ * Phase 2A — tenant email template catalog keys (code registry is source of defaults).
+ */
+enum WorkspaceEmailTemplateType {
+  PROPERTY_WATCH
+  AREA_WATCH
+  SAVED_SEARCH_DIGEST
+  SELLER_NEIGHBOURHOOD_DIGEST
+  AGENT_EMAIL
+  SHORTLIST
+  CMA_SHARE
+  NEWSLETTER
+}
+
+enum WorkspaceEmailTemplateVersionStatus {
+  DRAFT
+  PUBLISHED
+}
+
 enum SmsUsageCategory {
   AUTOMATION
   AGENT_INDIVIDUAL
@@ -715,6 +734,12 @@ model Workspace {
   entitlements                      WorkspaceEntitlement[]
   addOnGrants                       AddOnGrant[]
   emailIdentity                     WorkspaceEmailIdentity?
+  /**
+   * Phase 2A — tenant email template overrides (draft + published history).
+   * Live senders are not switched to these overrides yet.
+   */
+  emailTemplates                    WorkspaceEmailTemplate[]
+  emailTemplateVersions             WorkspaceEmailTemplateVersion[]
   statusEvents                      WorkspaceStatusEvent[]
   billingCustomer                   BillingCustomer?
   commercialOffers                  CommercialOffer[]
@@ -1189,6 +1214,10 @@ model User {
   createdTasks                  AgentTask[]                    @relation("TaskCreator")
   leadNotesAuthored             LeadNote[]                     @relation("LeadNoteAuthor")
   leadEmailsSent                LeadEmailLog[]                 @relation("LeadEmailSender")
+  emailTemplatesDraftUpdated    WorkspaceEmailTemplate[]       @relation("EmailTemplateDraftUpdatedBy")
+  emailTemplatesPublished       WorkspaceEmailTemplate[]       @relation("EmailTemplatePublishedBy")
+  emailTemplateVersionsCreated  WorkspaceEmailTemplateVersion[] @relation("EmailTemplateVersionCreatedBy")
+  emailTemplateVersionsPublished WorkspaceEmailTemplateVersion[] @relation("EmailTemplateVersionPublishedBy")
   listingAgentFor               CrmRoutingSettings[]           @relation("ListingAgentSettings")
   routingWeights                CrmRoutingWeight[]
   pushDevices                   PushDevice[]
@@ -3851,6 +3880,71 @@ model WorkspaceEmailIdentity {
   updatedAt         DateTime                   @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+/**
+ * Phase 2A — one override row per workspace + template type.
+ * Draft fields live here; published snapshots are version rows.
+ * Live Resend senders must not read drafts. Published resolution is opt-in later.
+ */
+model WorkspaceEmailTemplate {
+  id                   String                     @id @default(cuid())
+  workspaceId          String
+  templateType         WorkspaceEmailTemplateType
+  draftSubject         String?
+  draftIntroText       String?                    @db.Text
+  draftBodySectionsJson Json?
+  draftCtaText         String?
+  draftStyleJson       Json?
+  draftUpdatedAt       DateTime?
+  draftUpdatedByUserId String?
+  publishedVersionId   String?                    @unique
+  publishedAt          DateTime?
+  publishedByUserId    String?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  workspace        Workspace                       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  draftUpdatedBy   User?                           @relation("EmailTemplateDraftUpdatedBy", fields: [draftUpdatedByUserId], references: [id], onDelete: SetNull)
+  publishedBy      User?                           @relation("EmailTemplatePublishedBy", fields: [publishedByUserId], references: [id], onDelete: SetNull)
+  publishedVersion WorkspaceEmailTemplateVersion?  @relation("EmailTemplatePublishedVersion", fields: [publishedVersionId], references: [id], onDelete: SetNull)
+  versions         WorkspaceEmailTemplateVersion[] @relation("EmailTemplateVersions")
+
+  @@unique([workspaceId, templateType])
+  @@index([workspaceId])
+  @@index([workspaceId, publishedAt])
+}
+
+/**
+ * Phase 2A — immutable published snapshots for a workspace email template.
+ * status is always PUBLISHED for rows in this table (drafts stay on parent).
+ */
+model WorkspaceEmailTemplateVersion {
+  id                String                               @id @default(cuid())
+  templateId        String
+  workspaceId       String
+  templateType      WorkspaceEmailTemplateType
+  versionNumber     Int
+  status            WorkspaceEmailTemplateVersionStatus  @default(PUBLISHED)
+  subject           String?
+  introText         String?                              @db.Text
+  bodySectionsJson  Json?
+  ctaText           String?
+  styleJson         Json?
+  createdAt         DateTime                             @default(now())
+  createdByUserId   String?
+  publishedAt       DateTime                             @default(now())
+  publishedByUserId String?
+
+  template      WorkspaceEmailTemplate  @relation("EmailTemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
+  workspace     Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy     User?                   @relation("EmailTemplateVersionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  publishedBy   User?                   @relation("EmailTemplateVersionPublishedBy", fields: [publishedByUserId], references: [id], onDelete: SetNull)
+  publishedFor  WorkspaceEmailTemplate? @relation("EmailTemplatePublishedVersion")
+
+  @@unique([templateId, versionNumber])
+  @@index([workspaceId, templateType, publishedAt])
+  @@index([templateId, status])
 }
 
 /**

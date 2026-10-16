@@ -37,6 +37,8 @@ export const TENANT_COMMAND_CENTRE_PATH_ALLOWLIST = [
   "/admin/analytics",
   "/admin/notifications",
   "/admin/search",
+  /** Phase 2A foundation — UI editor lands in a later phase. */
+  "/admin/email-templates",
 ] as const;
 
 /**
