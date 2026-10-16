@@ -23,6 +23,8 @@ import {
   resolveTenantEmailBrand,
   toEmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
+import { loadPublishedPropertyWatchOverride } from "@/lib/email/workspace-templates/property-watch";
+import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
 import { formatBedsPlusLabel, formatListingSqftLabel, parseListingFacts } from "@/lib/listings/facts";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { prisma } from "@/lib/prisma";
@@ -212,6 +214,15 @@ async function createAlert(input: {
     : null;
   const brandChrome = tenantBrand ? toEmailBrandChrome(tenantBrand) : {};
 
+  // Phase 2C-1 — PROPERTY_WATCH published overrides only (drafts ignored).
+  // Brand + template share the same verified workspaceId from the monitor user.
+  let publishedPropertyWatch: EmailTemplateContentFields | null = null;
+  if (input.watchCategory === "property_watch" && input.workspaceId) {
+    publishedPropertyWatch = await loadPublishedPropertyWatchOverride({
+      workspaceId: input.workspaceId,
+    });
+  }
+
   const rendered = (() => {
     const t = input.template;
     if (!t) return null;
@@ -230,6 +241,7 @@ async function createAlert(input: {
         bedsLabel: t.bedsLabel,
         bathsLabel: t.bathsLabel,
         sqftLabel: t.sqftLabel,
+        publishedTemplate: publishedPropertyWatch,
       });
     }
     if (t.type === "sold") {
@@ -247,6 +259,11 @@ async function createAlert(input: {
         bedsLabel: t.bedsLabel,
         bathsLabel: t.bathsLabel,
         sqftLabel: t.sqftLabel,
+        // Area Watch sold alerts must not consume PROPERTY_WATCH overrides.
+        publishedTemplate:
+          input.watchCategory === "property_watch"
+            ? publishedPropertyWatch
+            : null,
       });
     }
     if (t.type === "just_listed") {
@@ -280,6 +297,7 @@ async function createAlert(input: {
       bedsLabel: t.bedsLabel,
       bathsLabel: t.bathsLabel,
       sqftLabel: t.sqftLabel,
+      publishedTemplate: publishedPropertyWatch,
     });
   })();
 
@@ -303,6 +321,7 @@ async function createAlert(input: {
           : SITE_URL,
         ...footer,
         ...brandChrome,
+        publishedTemplate: publishedPropertyWatch,
       }),
     });
     return;

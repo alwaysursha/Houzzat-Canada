@@ -12,12 +12,22 @@ import {
   appendAgentSignatureText,
   type EmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
+import {
+  fillPublishedPropertyWatchTemplate,
+  type PropertyWatchTemplateVars,
+} from "@/lib/email/workspace-templates/property-watch";
+import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
 
 export type RenderedEmail = {
   subject: string;
   text: string;
   html: string;
   kind: string;
+};
+
+/** Optional published PROPERTY_WATCH override (Phase 2C-1). Drafts never pass here. */
+export type PropertyWatchPublishedTemplateInput = {
+  publishedTemplate?: EmailTemplateContentFields | null;
 };
 
 function layoutBrandProps(brand?: EmailBrandChrome | null) {
@@ -28,6 +38,65 @@ function layoutBrandProps(brand?: EmailBrandChrome | null) {
     brandPrimaryColor: brand.brandPrimaryColor ?? undefined,
     brandWebsiteUrl: brand.brandWebsiteUrl ?? undefined,
     footerNote: brand.footerNote ?? undefined,
+  };
+}
+
+function propertyWatchOverrideCopy(
+  published: EmailTemplateContentFields | null | undefined,
+  vars: PropertyWatchTemplateVars,
+  fallback: { subject: string; introHtml: string; introText: string; cta: string },
+  brand: EmailBrandChrome | null | undefined,
+): {
+  subject: string;
+  introHtml: string;
+  introText: string;
+  cta: string;
+  paragraphsHtml: string;
+  paragraphsText: string;
+  brandProps: ReturnType<typeof layoutBrandProps>;
+} {
+  if (!published) {
+    return {
+      subject: fallback.subject,
+      introHtml: fallback.introHtml,
+      introText: fallback.introText,
+      cta: fallback.cta,
+      paragraphsHtml: "",
+      paragraphsText: "",
+      brandProps: layoutBrandProps(brand),
+    };
+  }
+
+  const filled = fillPublishedPropertyWatchTemplate(published, vars);
+  // Empty published fields keep event-specific legacy wording (not registry defaults).
+  const subject = filled.subject || fallback.subject;
+  const introText = filled.introText || fallback.introText;
+  const introHtml = filled.introText
+    ? escapeHtml(filled.introText)
+    : fallback.introHtml;
+  const cta = filled.ctaText || fallback.cta;
+  const paragraphsHtml = filled.paragraphs
+    .map(
+      (p) =>
+        `<p style="margin:0 0 12px;color:#115e59;white-space:pre-wrap">${escapeHtml(p)}</p>`,
+    )
+    .join("");
+  const paragraphsText = filled.paragraphs.length
+    ? `\n${filled.paragraphs.join("\n\n")}\n`
+    : "";
+
+  return {
+    subject,
+    introHtml,
+    introText,
+    cta,
+    paragraphsHtml,
+    paragraphsText,
+    brandProps: layoutBrandProps({
+      ...brand,
+      brandPrimaryColor:
+        filled.primaryColor || brand?.brandPrimaryColor || undefined,
+    }),
   };
 }
 
@@ -390,35 +459,59 @@ export function renderPriceReductionEmail(
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
   } & ListingCardExtras &
-    EmailBrandChrome,
+    EmailBrandChrome &
+    PropertyWatchPublishedTemplateInput,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
-  const subject = `Price reduced · ${input.addressLine}`;
   const drop = input.oldPrice - input.newPrice;
+  const override = propertyWatchOverrideCopy(
+    input.publishedTemplate,
+    {
+      recipientName: input.name,
+      tenantName: input.brandLabel,
+      agentName: input.agentFromLabel,
+      addressLine: input.addressLine,
+      city: input.city,
+      mlsNumber: input.mlsNumber,
+    },
+    {
+      subject: `Price reduced · ${input.addressLine}`,
+      introHtml:
+        "A property on your watch list just reduced its price.",
+      introText: "A home you’re watching dropped in price.",
+      cta: "View listing",
+    },
+    input,
+  );
+  const subject = override.subject;
   const text = appendAgentSignatureText(
     [
       greet,
       "",
-      `A home you’re watching dropped in price.`,
+      override.introText,
+      override.paragraphsText.trim(),
       `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
       `${money(input.oldPrice)} → ${money(input.newPrice)} (−${money(drop)})`,
       "",
       input.listingUrl,
-    ].join("\n"),
+    ]
+      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+      .join("\n"),
     input.agentSignatureText,
   );
   const html = emailLayout({
     title: "Price reduced",
-    subtitle: "A home on your watch list just dropped in price.",
+    subtitle: override.introText,
     preheader: `${input.addressLine} is now ${money(input.newPrice)}`,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
-    ...layoutBrandProps(input),
+    ...override.brandProps,
     bodyHtml: appendAgentSignatureHtml(
       `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px;color:#115e59">A property on your watch list just reduced its price.</p>
+      <p style="margin:0 0 12px;color:#115e59">${override.introHtml}</p>
+      ${override.paragraphsHtml}
       ${renderEmailPropertyCard({
         mlsNumber: input.mlsNumber,
         addressLine: input.addressLine,
@@ -432,7 +525,7 @@ export function renderPriceReductionEmail(
         badgeLabel: "Price drop",
         priceNote: `Was ${money(input.oldPrice)} · Down ${money(drop)}`,
       })}
-      ${ctaButton(input.listingUrl, "View listing")}
+      ${ctaButton(input.listingUrl, override.cta)}
     `,
       input.agentSignatureHtml,
     ),
@@ -453,34 +546,57 @@ export function renderSoldAlertEmail(
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
   } & ListingCardExtras &
-    EmailBrandChrome,
+    EmailBrandChrome &
+    PropertyWatchPublishedTemplateInput,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
-  const subject = `${input.statusLabel} · ${input.addressLine}`;
+  const override = propertyWatchOverrideCopy(
+    input.publishedTemplate,
+    {
+      recipientName: input.name,
+      tenantName: input.brandLabel,
+      agentName: input.agentFromLabel,
+      addressLine: input.addressLine,
+      city: input.city,
+      mlsNumber: input.mlsNumber,
+    },
+    {
+      subject: `${input.statusLabel} · ${input.addressLine}`,
+      introHtml: "A property you’re watching changed status.",
+      introText: `A watched home is now ${input.statusLabel.toLowerCase()}.`,
+      cta: "View details",
+    },
+    input,
+  );
+  const subject = override.subject;
   const text = appendAgentSignatureText(
     [
       greet,
       "",
-      `A watched home is now ${input.statusLabel.toLowerCase()}.`,
+      override.introText,
+      override.paragraphsText.trim(),
       `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
       input.priceLabel,
       "",
       input.listingUrl,
-    ].join("\n"),
+    ]
+      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+      .join("\n"),
     input.agentSignatureText,
   );
   const html = emailLayout({
     title: input.statusLabel,
-    subtitle: "A property you’re watching changed status.",
+    subtitle: override.introText,
     preheader: `${input.addressLine} · ${input.statusLabel}`,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
-    ...layoutBrandProps(input),
+    ...override.brandProps,
     bodyHtml: appendAgentSignatureHtml(
       `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px;color:#115e59">A property you’re watching changed status.</p>
+      <p style="margin:0 0 12px;color:#115e59">${override.introHtml}</p>
+      ${override.paragraphsHtml}
       ${renderEmailPropertyCard({
         mlsNumber: input.mlsNumber,
         addressLine: input.addressLine,
@@ -493,7 +609,7 @@ export function renderSoldAlertEmail(
         sqftLabel: input.sqftLabel,
         badgeLabel: input.statusLabel,
       })}
-      ${ctaButton(input.listingUrl, "View details")}
+      ${ctaButton(input.listingUrl, override.cta)}
     `,
       input.agentSignatureHtml,
     ),
@@ -574,34 +690,57 @@ export function renderPropertyUpdateEmail(
     preferencesManageUrl?: string | null;
     unsubscribeIntentUrl?: string | null;
   } & ListingCardExtras &
-    EmailBrandChrome,
+    EmailBrandChrome &
+    PropertyWatchPublishedTemplateInput,
 ): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
-  const subject = input.title;
+  const override = propertyWatchOverrideCopy(
+    input.publishedTemplate,
+    {
+      recipientName: input.name,
+      tenantName: input.brandLabel,
+      agentName: input.agentFromLabel,
+      addressLine: input.addressLine,
+      city: input.city,
+      mlsNumber: input.mlsNumber,
+    },
+    {
+      subject: input.title,
+      introHtml: "There’s an update on a home you’re watching.",
+      introText: input.title,
+      cta: "View listing",
+    },
+    input,
+  );
+  const subject = override.subject;
   const text = appendAgentSignatureText(
     [
       greet,
       "",
-      input.title,
+      override.introText,
+      override.paragraphsText.trim(),
       `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
       ...input.changes,
       "",
       input.listingUrl,
-    ].join("\n"),
+    ]
+      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+      .join("\n"),
     input.agentSignatureText,
   );
   const html = emailLayout({
     title: "Property update",
-    subtitle: "There’s an update on a home you’re watching.",
+    subtitle: override.introText,
     preheader: input.title,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
-    ...layoutBrandProps(input),
+    ...override.brandProps,
     bodyHtml: appendAgentSignatureHtml(
       `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px;color:#115e59">There’s an update on a home you’re watching.</p>
+      <p style="margin:0 0 12px;color:#115e59">${override.introHtml}</p>
+      ${override.paragraphsHtml}
       ${renderEmailPropertyCard({
         mlsNumber: input.mlsNumber,
         addressLine: input.addressLine,
@@ -615,7 +754,7 @@ export function renderPropertyUpdateEmail(
         badgeLabel: "Update",
         detailLines: input.changes,
       })}
-      ${ctaButton(input.listingUrl, "View listing")}
+      ${ctaButton(input.listingUrl, override.cta)}
     `,
       input.agentSignatureHtml,
     ),

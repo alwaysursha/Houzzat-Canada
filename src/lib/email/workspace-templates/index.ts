@@ -9,6 +9,15 @@ export {
   resolvePublishedEmailTemplate,
   resolveSystemEmailTemplate,
 } from "@/lib/email/workspace-templates/resolve";
+export { isTenantEmailTemplatesEnabled } from "@/lib/email/workspace-templates/feature-flag";
+export {
+  fillPublishedPropertyWatchTemplate,
+  loadPublishedPropertyWatchOverride,
+} from "@/lib/email/workspace-templates/property-watch";
+export type {
+  FilledPropertyWatchTemplate,
+  PropertyWatchTemplateVars,
+} from "@/lib/email/workspace-templates/property-watch";
 export {
   assertTenantScopedEmailTemplateMutation,
   canManageWorkspaceEmailTemplates,

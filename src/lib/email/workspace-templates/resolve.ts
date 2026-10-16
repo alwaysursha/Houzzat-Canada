@@ -1,9 +1,10 @@
 /**
- * Phase 2A — published template resolution.
+ * Phase 2A — published template resolution (merged with registry defaults).
  *
- * IMPORTANT: Live Resend senders (monitors, digests, agent email, shortlist, CMA)
- * must NOT call this yet. Phase 2A stores + resolves only; production paths keep
- * Phase 1 branding / existing renderers unchanged.
+ * Phase 2C-1 Property Watch live sends use loadPublishedPropertyWatchOverride
+ * instead, which returns sparse published fields so empty values keep
+ * event-specific legacy wording. Digests, agent email, shortlist, CMA, and
+ * Area Watch must not consume overrides until their cutover phases.
  */
 
 import type { WorkspaceEmailTemplateType } from "@prisma/client";
