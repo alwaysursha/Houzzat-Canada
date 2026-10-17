@@ -22,6 +22,10 @@ export {
   type AgentUserProfilePhotoResult,
 } from "./agent-user-profile-photo";
 export {
+  clearAgentEmailHeadshotAssociation,
+  persistAgentEmailHeadshotAssociationIfCurrent,
+} from "./agent-email-headshot-association";
+export {
   isManagedAgentProfileUrlReferenced,
   deleteManagedAgentProfileUrlIfUnreferenced,
   type ManagedProfileCdnDeleteResult,

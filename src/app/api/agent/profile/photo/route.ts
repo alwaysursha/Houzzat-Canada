@@ -126,6 +126,7 @@ export async function POST(request: Request) {
       primaryAgentUnset: result.primaryAgentUnset,
       // Availability only — never a CDN URL / never a signature preference.
       emailHeadshotStored: result.emailHeadshotStored,
+      emailHeadshotAssociated: result.emailHeadshotAssociated,
     });
   } catch (error) {
     const mapped = mapAssetError(error);

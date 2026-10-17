@@ -149,14 +149,23 @@ type BrandingRow = {
   version: number;
 };
 
+type HeadshotAssoc = {
+  workspaceId: string;
+  userId: string;
+  sourceUniqueId: string;
+  emailHeadshotObjectKey: string;
+};
+
 type State = {
   primaryAgentId: string | null;
   flipPrimaryDuringTxTo: string | null;
   users: Map<string, { id: string; image: string | null; name: string }>;
   members: Member[];
   brandings: Map<string, BrandingRow>;
+  associations: Map<string, HeadshotAssoc>;
   onboardingStatus: string;
   txFailOnce: boolean;
+  associationPersistFailOnce: boolean;
 };
 
 function createState(primaryAgentId: string | null): State {
@@ -202,9 +211,15 @@ function createState(primaryAgentId: string | null): State {
         },
       ],
     ]),
+    associations: new Map(),
     onboardingStatus: "COMPLETE",
     txFailOnce: false,
+    associationPersistFailOnce: false,
   };
+}
+
+function assocKey(workspaceId: string, userId: string) {
+  return `${workspaceId}::${userId}`;
 }
 
 function mockPrisma(state: State): PrismaClient {
@@ -324,6 +339,66 @@ function mockPrisma(state: State): PrismaClient {
         u.image = data.image;
         return { id: u.id, image: u.image };
       },
+    },
+    agentEmailHeadshot: {
+      deleteMany: async ({
+        where,
+      }: {
+        where: { workspaceId: string; userId: string };
+      }) => {
+        const key = assocKey(where.workspaceId, where.userId);
+        const existed = state.associations.delete(key);
+        return { count: existed ? 1 : 0 };
+      },
+      upsert: async ({
+        where,
+        create,
+        update,
+      }: {
+        where: { workspaceId_userId: { workspaceId: string; userId: string } };
+        create: {
+          workspaceId: string;
+          userId: string;
+          sourceUniqueId: string;
+          emailHeadshotObjectKey: string;
+        };
+        update: {
+          sourceUniqueId: string;
+          emailHeadshotObjectKey: string;
+        };
+      }) => {
+        if (state.associationPersistFailOnce) {
+          state.associationPersistFailOnce = false;
+          throw new Error("forced_association_persist_failure");
+        }
+        const { workspaceId, userId } = where.workspaceId_userId;
+        const key = assocKey(workspaceId, userId);
+        if (state.associations.has(key)) {
+          state.associations.set(key, {
+            workspaceId,
+            userId,
+            sourceUniqueId: update.sourceUniqueId,
+            emailHeadshotObjectKey: update.emailHeadshotObjectKey,
+          });
+        } else {
+          state.associations.set(key, {
+            workspaceId,
+            userId,
+            sourceUniqueId: create.sourceUniqueId,
+            emailHeadshotObjectKey: create.emailHeadshotObjectKey,
+          });
+        }
+        return state.associations.get(key);
+      },
+    },
+    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const sql = strings.join("?");
+      if (sql.includes("FOR UPDATE") && sql.includes('"User"')) {
+        const userId = String(values[0] ?? "");
+        const u = state.users.get(userId);
+        return u ? [{ id: u.id, image: u.image }] : [];
+      }
+      return [];
     },
     $executeRaw: async (
       strings: TemplateStringsArray,

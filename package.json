@@ -180,6 +180,7 @@
     "email-headshot-storage:selftest": "node --import tsx scripts/email-headshot-storage-selftest.ts",
     "email-headshot-upload:selftest": "node --import tsx scripts/email-headshot-upload-selftest.ts",
     "email-headshot-png-validate:selftest": "node --import tsx scripts/email-headshot-png-validate-selftest.ts",
+    "email-headshot-association:selftest": "node --import tsx scripts/email-headshot-association-selftest.ts",
     "stage-6.11c3-brand-assets-safety:selftest": "node --import tsx scripts/stage-6.11c3-brand-assets-safety-selftest.ts",
     "stage-6.11d-professional-identity:selftest": "node --import tsx scripts/stage-6.11d-professional-identity-selftest.ts",
     "stage-6.11d1-website-setup-requirements:selftest": "node --import tsx scripts/stage-6.11d1-website-setup-requirements-selftest.ts",

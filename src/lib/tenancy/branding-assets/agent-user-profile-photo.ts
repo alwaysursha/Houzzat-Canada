@@ -14,6 +14,10 @@
 import { OwnerActivationError } from "@/lib/platform/activation/errors";
 import { ensureWorkspaceOnboardingState } from "@/lib/platform/activation/onboarding-state";
 import { prisma as defaultPrisma } from "@/lib/prisma";
+import {
+  clearAgentEmailHeadshotAssociation,
+  persistAgentEmailHeadshotAssociationIfCurrent,
+} from "@/lib/tenancy/branding-assets/agent-email-headshot-association";
 import { buildAgentEmailHeadshotObjectKey } from "@/lib/tenancy/branding-assets/email-headshot-storage";
 import { buildAgentUserProfileObjectKey } from "@/lib/tenancy/branding-assets/keys";
 import { deleteManagedAgentProfileUrlIfUnreferenced } from "@/lib/tenancy/branding-assets/managed-profile-cdn";
@@ -47,6 +51,11 @@ export type AgentUserProfilePhotoResult = {
    * Never a signature preference / never a public thumbnail URL.
    */
   emailHeadshotStored: boolean;
+  /**
+   * True only after the durable association row was inserted/updated for this
+   * upload (Phase 3D.4.1). Independent of signature preference.
+   */
+  emailHeadshotAssociated: boolean;
 };
 
 type PhotoDb = Pick<
@@ -55,6 +64,7 @@ type PhotoDb = Pick<
   | "workspaceMember"
   | "workspaceBranding"
   | "user"
+  | "agentEmailHeadshot"
   | "$transaction"
   | "$executeRaw"
 >;
@@ -144,17 +154,26 @@ async function syncBrandingPortraitIfStillPrimary(
   return Number(updated) > 0;
 }
 
+type EmailHeadshotStoreResult = {
+  stored: boolean;
+  associated: boolean;
+};
+
 /**
- * Phase 3D.3 — optional sibling email headshot after canonical photo is durable.
- * Never throws: original upload must succeed even if thumb validation/storage fails.
+ * Phase 3D.3/3D.4.1 — optional sibling email headshot after canonical photo is durable.
+ * Never throws: original upload must succeed even if thumb validation/storage/association fails.
  * Object key is derived server-side from authenticated workspace/user + upload uniqueId.
+ * Association is persisted only when User.image still matches this upload
+ * (short TX: User FOR UPDATE, then upsert — never spanning R2 I/O).
  */
 async function tryStoreEmailHeadshotSibling(input: {
   workspaceId: string;
   userId: string;
   uniqueId: string;
+  expectedCanonicalImageUrl: string;
   file: File;
-}): Promise<boolean> {
+  prisma: PhotoDb & PrismaClient;
+}): Promise<EmailHeadshotStoreResult> {
   try {
     const buffer = await input.file.arrayBuffer();
     const validated = validateEmailHeadshotBytes(buffer);
@@ -164,7 +183,7 @@ async function tryStoreEmailHeadshotSibling(input: {
         workspaceId: input.workspaceId,
         userId: input.userId,
       });
-      return false;
+      return { stored: false, associated: false };
     }
 
     const objectKey = buildAgentEmailHeadshotObjectKey({
@@ -177,7 +196,7 @@ async function tryStoreEmailHeadshotSibling(input: {
         workspaceId: input.workspaceId,
         userId: input.userId,
       });
-      return false;
+      return { stored: false, associated: false };
     }
 
     await putBrandingAssetObject({
@@ -185,14 +204,23 @@ async function tryStoreEmailHeadshotSibling(input: {
       bytes: validated.bytes,
       contentType: "image/png",
     });
-    return true;
+
+    const associated = await persistAgentEmailHeadshotAssociationIfCurrent({
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      sourceUniqueId: input.uniqueId,
+      emailHeadshotObjectKey: objectKey,
+      expectedCanonicalImageUrl: input.expectedCanonicalImageUrl,
+      prisma: input.prisma,
+    });
+    return { stored: true, associated };
   } catch (error) {
     console.error("[agent-profile-photo] email headshot storage failed", {
       workspaceId: input.workspaceId,
       userId: input.userId,
       error,
     });
-    return false;
+    return { stored: false, associated: false };
   }
 }
 
@@ -321,6 +349,8 @@ export async function uploadAgentUserProfilePhoto(input: {
         where: { id: userId },
         data: { image: nextUrl },
       });
+      // Replace invalidates any prior email-headshot association for this agent.
+      await clearAgentEmailHeadshotAssociation(tx, { workspaceId, userId });
       // Conditional: only sync branding while this user is still primary.
       return syncBrandingPortraitIfStillPrimary(
         tx,
@@ -362,15 +392,20 @@ export async function uploadAgentUserProfilePhoto(input: {
     });
   }
 
-  // After canonical photo is durable: optional sibling thumb (best-effort).
+  // After canonical photo is durable: optional sibling thumb + association.
   let emailHeadshotStored = false;
+  let emailHeadshotAssociated = false;
   if (input.emailHeadshot instanceof File) {
-    emailHeadshotStored = await tryStoreEmailHeadshotSibling({
+    const thumb = await tryStoreEmailHeadshotSibling({
       workspaceId,
       userId,
       uniqueId,
+      expectedCanonicalImageUrl: nextUrl,
       file: input.emailHeadshot,
+      prisma: db,
     });
+    emailHeadshotStored = thumb.stored;
+    emailHeadshotAssociated = thumb.associated;
   }
 
   return {
@@ -379,6 +414,7 @@ export async function uploadAgentUserProfilePhoto(input: {
     syncedBrandingPortrait,
     primaryAgentUnset,
     emailHeadshotStored,
+    emailHeadshotAssociated,
   };
 }
 
@@ -427,9 +463,12 @@ export async function removeAgentUserProfilePhoto(input: {
 
   const previousUserImage = trimUrl(target.image);
 
-  await db.user.update({
-    where: { id: userId },
-    data: { image: null },
+  await db.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: { image: null },
+    });
+    await clearAgentEmailHeadshotAssociation(tx, { workspaceId, userId });
   });
 
   if (previousUserImage) {
@@ -448,6 +487,7 @@ export async function removeAgentUserProfilePhoto(input: {
     syncedBrandingPortrait: false,
     primaryAgentUnset,
     emailHeadshotStored: false,
+    emailHeadshotAssociated: false,
   };
 }
 

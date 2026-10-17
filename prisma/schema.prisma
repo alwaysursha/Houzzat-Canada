@@ -800,6 +800,10 @@ model Workspace {
    * Phase 2A — tenant-scoped visitor→registration funnel analytics (not CRM).
    */
   funnelEvents                      FunnelEvent[]
+  /**
+   * Phase 3D.4.1 — verified email-headshot associations (workspace-scoped).
+   */
+  agentEmailHeadshots               AgentEmailHeadshot[]
 
   @@index([status])
 }
@@ -994,6 +998,39 @@ model WorkspaceMember {
   @@unique([workspaceId, userId])
   @@index([userId])
   @@index([workspaceId, status])
+}
+
+/**
+ * Phase 3D.4.1 — durable association between a workspace agent's current
+ * User.image uniqueId and a successfully stored email-headshot sibling key.
+ *
+ * One row per (workspaceId, userId). Never stores a client-supplied URL.
+ * Deleting this row does not delete User or Workspace (FKs cascade from parents).
+ * Hot-path photo replace/remove invalidates the row; R2 thumb GC is deferred.
+ */
+model AgentEmailHeadshot {
+  id                     String   @id @default(cuid())
+  workspaceId            String
+  userId                 String
+  /**
+   * uniqueId segment of the canonical managed profile object that this thumb
+   * was generated for (must match current User.image to be preferred later).
+   */
+  sourceUniqueId         String
+  /**
+   * Server-derived object key:
+   * workspaces/{workspaceId}/agents/{userId}/profile/{uniqueId}-email-240.png
+   */
+  emailHeadshotObjectKey String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@index([workspaceId])
 }
 
 model WorkspaceInvite {
@@ -1224,6 +1261,7 @@ model User {
   workspaceMemberships          WorkspaceMember[]
   workspaceMembersInvited       WorkspaceMember[]              @relation("WorkspaceMemberInvitedBy")
   workspaceInvitesSent          WorkspaceInvite[]              @relation("WorkspaceInviteInvitedBy")
+  agentEmailHeadshots           AgentEmailHeadshot[]
   workspacesBillingOwned        Workspace[]                    @relation("WorkspaceBillingOwner")
   workspacesPrimaryAgentFor     Workspace[]                    @relation("WorkspacePrimaryAgent")
   /**

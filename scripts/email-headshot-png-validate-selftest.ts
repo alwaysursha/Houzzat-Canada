@@ -349,6 +349,9 @@ function mockPrisma(): PrismaClient {
         return user;
       },
     },
+    agentEmailHeadshot: {
+      deleteMany: async () => ({ count: 0 }),
+    },
     $executeRaw: async () => {
       branding.agentProfilePhotoUrl = user.image;
       branding.version += 1;
