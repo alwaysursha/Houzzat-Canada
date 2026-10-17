@@ -14,6 +14,45 @@ const KEY_RE =
 const AGENT_USER_KEY_RE =
   /^workspaces\/([a-zA-Z0-9_-]+)\/agents\/([a-zA-Z0-9_-]+)\/profile\/([a-zA-Z0-9_-]+)\.(jpg|png|webp)$/;
 
+export type AgentUserProfileObjectKeyExt = "jpg" | "png" | "webp";
+
+export type ParsedAgentUserProfileObjectKey = {
+  workspaceId: string;
+  userId: string;
+  uniqueId: string;
+  ext: AgentUserProfileObjectKeyExt;
+  objectKey: string;
+};
+
+/**
+ * Parse a full agent profile object key (exact match). Rejects traversal,
+ * partial paths, and non-profile layouts.
+ */
+export function parseAgentUserProfileObjectKey(
+  objectKey: string | null | undefined,
+): ParsedAgentUserProfileObjectKey | null {
+  if (typeof objectKey !== "string") return null;
+  const trimmed = objectKey.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes("..") || trimmed.includes("//") || trimmed.startsWith("/")) {
+    return null;
+  }
+
+  const match = AGENT_USER_KEY_RE.exec(trimmed);
+  if (!match || match[0] !== trimmed) return null;
+
+  const ext = match[4];
+  if (ext !== "jpg" && ext !== "png" && ext !== "webp") return null;
+
+  return {
+    workspaceId: match[1]!,
+    userId: match[2]!,
+    uniqueId: match[3]!,
+    ext,
+    objectKey: match[0],
+  };
+}
+
 function pathFromPersistedUrl(url: string): string | null {
   const trimmed = url.trim();
   if (!trimmed) return null;

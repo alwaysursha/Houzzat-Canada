@@ -11,6 +11,9 @@ export {
   buildAgentUserProfileObjectKey,
   extractAgentUserProfileObjectKeyFromUrl,
   extractManagedProfileObjectKeyFromUrl,
+  parseAgentUserProfileObjectKey,
+  type ParsedAgentUserProfileObjectKey,
+  type AgentUserProfileObjectKeyExt,
 } from "./keys";
 export {
   uploadAgentUserProfilePhoto,
@@ -23,6 +26,25 @@ export {
   deleteManagedAgentProfileUrlIfUnreferenced,
   type ManagedProfileCdnDeleteResult,
 } from "./managed-profile-cdn";
+export {
+  AGENT_EMAIL_HEADSHOT_SUFFIX,
+  AGENT_EMAIL_HEADSHOT_EXT,
+  AGENT_EMAIL_HEADSHOT_FILENAME_SUFFIX,
+  buildAgentEmailHeadshotObjectKey,
+  buildAgentEmailHeadshotPublicUrl,
+  buildTrustedBrandingAssetPublicUrl,
+  resolveTrustedBrandingAssetsPublicBase,
+  deriveAgentEmailHeadshotObjectKey,
+  deriveAgentEmailHeadshotObjectKeyFromUrl,
+  extractAgentEmailHeadshotObjectKeyFromUrl,
+  isAgentEmailHeadshotObjectKey,
+  parseAgentEmailHeadshotObjectKey,
+  deleteAgentEmailHeadshotSiblingIfUnreferenced,
+  setEmailHeadshotStorageTestDeps,
+  type ParsedAgentEmailHeadshotObjectKey,
+  type AgentEmailHeadshotDeleteResult,
+  type EmailHeadshotStorageTestDeps,
+} from "./email-headshot-storage";
 export {
   validateBrandingImageBytes,
   BRANDING_ASSET_MAX_BYTES,

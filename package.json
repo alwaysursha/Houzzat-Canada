@@ -177,6 +177,7 @@
     "agent-user-profile-photo:selftest": "node --import tsx scripts/agent-user-profile-photo-selftest.ts",
     "agent-photo:selftest": "node --import tsx scripts/agent-photo-selftest.ts",
     "email-headshot:selftest": "node --import tsx scripts/email-headshot-selftest.ts",
+    "email-headshot-storage:selftest": "node --import tsx scripts/email-headshot-storage-selftest.ts",
     "stage-6.11c3-brand-assets-safety:selftest": "node --import tsx scripts/stage-6.11c3-brand-assets-safety-selftest.ts",
     "stage-6.11d-professional-identity:selftest": "node --import tsx scripts/stage-6.11d-professional-identity-selftest.ts",
     "stage-6.11d1-website-setup-requirements:selftest": "node --import tsx scripts/stage-6.11d1-website-setup-requirements-selftest.ts",
