@@ -519,6 +519,186 @@ function testHtmlEscapingAndProtectedContent() {
   assert.equal(cmaMail.kind, "cma_share");
 }
 
+/** Auto-injected greeting paragraph (exact renderer markup). */
+function autoGreetHtml(name: string | null): string {
+  const greet = name?.trim() ? `Hi ${name.trim()},` : "Hi there,";
+  return `<p style="margin:0 0 12px;color:#115e59">${greet}</p>`;
+}
+
+function assertAgentGreetingDecision(input: {
+  label: string;
+  name: string | null;
+  body: string;
+  expectInjected: boolean;
+  published?: EmailTemplateContentFields | null;
+}) {
+  const mail = renderAgentMessageEmail({
+    name: input.name,
+    subject: "Agent subject stays authoritative",
+    body: input.body,
+    agentFromLabel: "Jordan",
+    agentSignatureHtml: "<strong>Jordan</strong>",
+    agentSignatureText: "Jordan",
+    publishedAgentEmailTemplate: input.published ?? null,
+  });
+
+  assert.equal(mail.subject, "Agent subject stays authoritative", input.label);
+  // Agent body preserved verbatim in plain text (after optional greeting / wrappers).
+  if (input.body.length > 0) {
+    assert.ok(
+      mail.text.includes(input.body),
+      `${input.label}: agent body must appear unchanged in text`,
+    );
+  }
+
+  const greet = input.name?.trim()
+    ? `Hi ${input.name.trim()},`
+    : "Hi there,";
+  const greetP = autoGreetHtml(input.name);
+  const textStartsWithGreet = mail.text.startsWith(`${greet}\n\n`);
+
+  if (input.expectInjected) {
+    assert.ok(
+      mail.html.includes(greetP),
+      `${input.label}: expected injected greet HTML`,
+    );
+    assert.ok(textStartsWithGreet, `${input.label}: expected injected greet text`);
+  } else {
+    assert.ok(
+      !mail.html.includes(greetP),
+      `${input.label}: must not inject greet HTML`,
+    );
+    assert.ok(
+      !textStartsWithGreet,
+      `${input.label}: must not inject greet text`,
+    );
+  }
+
+  // No empty greeting paragraph when suppressed.
+  assert.doesNotMatch(mail.html, /<p[^>]*>\s*<\/p>/);
+  assert.match(mail.html, /Jordan/);
+  assert.match(mail.text, /Jordan/);
+}
+
+function testAgentMessageGreetingDedup() {
+  const published: EmailTemplateContentFields = {
+    subject: "TEMPLATE SUBJECT MUST LOSE",
+    introText: "A personal note from {{agentName}} at {{tenantName}}.",
+    bodySections: { paragraphs: [] },
+    ctaText: null,
+    style: { primaryColor: "#0F766E" },
+  };
+
+  // A — body already greets by name
+  assertAgentGreetingDecision({
+    label: "A",
+    name: "Heather",
+    body: "Hi Heather, I wanted to follow up...",
+    expectInjected: false,
+  });
+  // B — no salutation → keep personalized auto greeting
+  assertAgentGreetingDecision({
+    label: "B",
+    name: "Heather",
+    body: "I wanted to follow up...",
+    expectInjected: true,
+  });
+  // C — Hello…
+  assertAgentGreetingDecision({
+    label: "C",
+    name: "Heather",
+    body: "Hello Heather, how is your search going?",
+    expectInjected: false,
+  });
+  // D — compose-default style "Hi,"
+  assertAgentGreetingDecision({
+    label: "D",
+    name: "Heather",
+    body: "Hi,\n\nJust checking in...",
+    expectInjected: false,
+  });
+  // E — Dear…
+  assertAgentGreetingDecision({
+    label: "E",
+    name: "Heather",
+    body: "Dear Heather,",
+    expectInjected: false,
+  });
+  // F/G/H — word-boundary negatives
+  assertAgentGreetingDecision({
+    label: "F",
+    name: "Heather",
+    body: "Higher prices are affecting buyers.",
+    expectInjected: true,
+  });
+  assertAgentGreetingDecision({
+    label: "G",
+    name: "Heather",
+    body: "History of the property...",
+    expectInjected: true,
+  });
+  assertAgentGreetingDecision({
+    label: "H",
+    name: "Heather",
+    body: "HelloWorld is a project name.",
+    expectInjected: true,
+  });
+  // I — leading whitespace / line breaks before Hey
+  assertAgentGreetingDecision({
+    label: "I",
+    name: "Heather",
+    body: "\n  Hey Heather,",
+    expectInjected: false,
+  });
+  // J — empty / whitespace-only: retain auto greeting (API still validates min length)
+  assertAgentGreetingDecision({
+    label: "J-empty",
+    name: "Heather",
+    body: "",
+    expectInjected: true,
+  });
+  assertAgentGreetingDecision({
+    label: "J-whitespace",
+    name: "Heather",
+    body: "   \n\t  ",
+    expectInjected: true,
+  });
+  // Nameless recipient → "Hi there," when injected
+  assertAgentGreetingDecision({
+    label: "B-no-name",
+    name: null,
+    body: "I wanted to follow up...",
+    expectInjected: true,
+  });
+  // Published template override must not change the greeting decision
+  assertAgentGreetingDecision({
+    label: "A-with-published",
+    name: "Heather",
+    body: "Hi Heather, I wanted to follow up...",
+    expectInjected: false,
+    published,
+  });
+  assertAgentGreetingDecision({
+    label: "B-with-published",
+    name: "Heather",
+    body: "I wanted to follow up...",
+    expectInjected: true,
+    published,
+  });
+  // Body with HTML-special chars still escaped; greeting still suppressed
+  const escaped = renderAgentMessageEmail({
+    name: "Heather",
+    subject: "Sub",
+    body: "Hi Heather, see A&B <listing>",
+    publishedAgentEmailTemplate: published,
+  });
+  assert.equal(escaped.subject, "Sub");
+  assert.match(escaped.html, /A&amp;B/);
+  assert.match(escaped.html, /&lt;listing&gt;/);
+  assert.ok(!escaped.html.includes(autoGreetHtml("Heather")));
+  assert.match(escaped.text, /Hi Heather, see A&B <listing>/);
+}
+
 function testLegacyPreservedAndWiring() {
   const agent = renderAgentMessageEmail({
     name: "Alex",
@@ -616,6 +796,7 @@ async function main() {
   await testFeatureFlagOff();
   await testPartialOverrideAndTypeIsolation();
   testHtmlEscapingAndProtectedContent();
+  testAgentMessageGreetingDedup();
   testLegacyPreservedAndWiring();
   await testShortlistAgentSubjectPrecedence();
   console.log("agent-share-email-templates-selftest: ok");

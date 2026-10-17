@@ -1060,6 +1060,16 @@ export function renderShortlistEmail(
   return { subject, text, html, kind: "shortlist" };
 }
 
+/**
+ * True when agent-authored body already opens with a salutation so the
+ * renderer should not inject another "Hi {name}," / "Hi there," line.
+ * Word-boundary match only — does not treat Higher / History / HelloWorld
+ * as greetings. Leading whitespace and line breaks are ignored.
+ */
+function agentBodyStartsWithSalutation(body: string): boolean {
+  return /^\s*(hi|hello|hey|dear)\b/i.test(body);
+}
+
 export function renderAgentMessageEmail(
   input: {
     name?: string | null;
@@ -1075,6 +1085,7 @@ export function renderAgentMessageEmail(
   const agentSubject = input.subject;
   const agentBody = input.body;
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
+  const injectGreeting = !agentBodyStartsWithSalutation(agentBody);
   const paragraphs = agentBody
     .split(/\n{2,}/)
     .map((p) => p.trim())
@@ -1104,13 +1115,17 @@ export function renderAgentMessageEmail(
     input,
   );
   const wrapperParagraphsText = override.paragraphsText.trim();
-  const textParts = [greet];
+  const textParts: string[] = [];
+  if (injectGreeting) textParts.push(greet);
   if (wrapperParagraphsText) textParts.push(wrapperParagraphsText);
   textParts.push(agentBody);
   const text = appendAgentSignatureText(
     textParts.join("\n\n"),
     input.agentSignatureText,
   );
+  const greetHtml = injectGreeting
+    ? `<p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>`
+    : "";
   const html = emailLayout({
     title: agentSubject,
     subtitle: hasCustomIntro ? override.introText : legacySubtitle,
@@ -1118,7 +1133,7 @@ export function renderAgentMessageEmail(
     ...override.brandProps,
     bodyHtml: appendAgentSignatureHtml(
       `
-      <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+      ${greetHtml}
       ${override.paragraphsHtml}
       ${paragraphs.map((p) => `<p style="margin:0 0 12px;white-space:pre-wrap;color:#115e59">${escapeHtml(p)}</p>`).join("")}
       ${cards.map((l) => renderEmailPropertyCard(l)).join("")}
